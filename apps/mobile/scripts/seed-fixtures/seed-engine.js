@@ -49,7 +49,12 @@ const RESET_TABLE_DELETE_ORDER = [
   "recurring_payments",
   "budgets",
   "debts",
-  "metal_rate_references",
+  // `metal_rate_references` is protected by the
+  // `metal_rate_references_guard_immutable` trigger, so it must never be
+  // passed through the generic hard-delete cleanup. The manual QA seed inserts
+  // deterministic, id-scoped references with an ignore-duplicates upsert, so a
+  // reseed retains and reuses them instead of failing after tombstoning
+  // lifecycle rows. Ownership and historical evidence are preserved.
   "metal_holding_states",
   "metal_lifecycle_events",
   "metal_action_evidence",
@@ -563,6 +568,15 @@ async function upsertRowsIfAny(client, table, rows, options) {
   }
 
   await upsertRows(client, table, rows, options);
+}
+
+async function linkMetalAcquisitionActions(client, assets) {
+  await updateRowsByIds(
+    client,
+    "assets",
+    assets.filter((row) => row.acquisition_action_id != null),
+    (row) => ({ acquisition_action_id: row.acquisition_action_id })
+  );
 }
 
 async function deleteRowsByIds(client, table, rows) {
@@ -1166,7 +1180,12 @@ async function seedFixtureData(client, config, fixtureOverrides = {}) {
   await upsertRows(client, "account_sms_senders", rows.accountSmsSenders, {
     onConflict: "id",
   });
-  await upsertRowsIfAny(client, "assets", rows.assets, { onConflict: "id" });
+  await upsertRowsIfAny(
+    client,
+    "assets",
+    rows.assets.map((row) => ({ ...row, acquisition_action_id: null })),
+    { onConflict: "id" }
+  );
   await upsertRowsIfAny(client, "asset_metals", rows.assetMetals, {
     onConflict: "id",
   });
@@ -1183,6 +1202,7 @@ async function seedFixtureData(client, config, fixtureOverrides = {}) {
     rows.metalActionEvidence,
     { ignoreDuplicates: true, onConflict: "id" }
   );
+  await linkMetalAcquisitionActions(client, rows.assets);
   await upsertRowsIfAny(
     client,
     "metal_lifecycle_events",

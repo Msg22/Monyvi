@@ -31,6 +31,25 @@ export const MIC_BUTTON_SIZE = 64;
 /** Size of quick action buttons */
 export const QUICK_ACTION_SIZE = 48;
 
+/** Visible diameter of the floating quick-action control. */
+export const QUICK_ACTION_FAB_SIZE = 56;
+
+/** Breathing room kept between scroll content and floating tab controls. */
+export const TAB_CONTENT_BOTTOM_GUTTER = 24;
+
+/**
+ * Keeps final scroll content above both the raised microphone and quick-action
+ * controls that sit over the absolute tab bar.
+ */
+export function getTabContentBottomClearance(tabBarHeight: number): number {
+  const raisedMicClearance = MIC_BUTTON_SIZE / 2 - 8;
+  return (
+    tabBarHeight +
+    Math.max(raisedMicClearance, QUICK_ACTION_FAB_SIZE) +
+    TAB_CONTENT_BOTTOM_GUTTER
+  );
+}
+
 /** Tab bar blur intensity */
 export const TAB_BAR_BLUR_INTENSITY = 80;
 

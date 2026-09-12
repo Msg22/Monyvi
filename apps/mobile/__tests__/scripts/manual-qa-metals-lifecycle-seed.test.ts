@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { reduceMetalLifecycle, type LifecycleKind } from "@monyvi/logic";
 
 const { buildSeedIds, inspectFixtureData, resetFixtureData, seedFixtureData } =
   jest.requireActual<{
@@ -90,7 +91,76 @@ function rowsFor(
   return Array.from(client.tables.get(table)?.values() ?? []);
 }
 
+interface ManualQaAssetRow {
+  readonly acquisition_action_id: string;
+  readonly id: string;
+  readonly type: string;
+}
+
+interface ManualQaMetalRow {
+  readonly item_form: string;
+}
+
+interface ManualQaLifecycleEventRow {
+  readonly action_id: string;
+  readonly holding_id: string;
+  readonly id: string;
+  readonly kind: "add" | "dispose" | "sell";
+  readonly occurred_at: string;
+  readonly payload_json: unknown;
+  readonly predecessor_event_id: string | null;
+  readonly reverses_event_id: string | null;
+}
+
+interface ManualQaLifecycleRows {
+  readonly assetMetals: readonly ManualQaMetalRow[];
+  readonly assets: readonly ManualQaAssetRow[];
+  readonly metalActionEvidence: readonly Readonly<Record<string, unknown>>[];
+  readonly metalLifecycleEvents: readonly ManualQaLifecycleEventRow[];
+}
+
+const REDUCER_KIND_BY_FIXTURE_KIND: Readonly<
+  Record<ManualQaLifecycleEventRow["kind"], LifecycleKind>
+> = Object.freeze({
+  add: "created",
+  dispose: "disposed",
+  sell: "sold",
+});
+
+function isRecursivelyKeySorted(value: unknown): boolean {
+  if (Array.isArray(value)) {
+    return value.every(isRecursivelyKeySorted);
+  }
+  if (value && typeof value === "object") {
+    const keys = Object.keys(value);
+    const sorted = [...keys].sort((a, b) =>
+      Buffer.compare(Buffer.from(a, "utf8"), Buffer.from(b, "utf8"))
+    );
+    return (
+      keys.every((key, index) => key === sorted[index]) &&
+      Object.values(value).every(isRecursivelyKeySorted)
+    );
+  }
+  return true;
+}
+
 describe("manual QA Metals lifecycle fixture", () => {
+  it("serializes every action envelope in DB-canonical key order", () => {
+    const groups = buildRows().financialActionGroups as readonly Record<
+      string,
+      any
+    >[];
+    expect(groups.length).toBeGreaterThan(0);
+    for (const group of groups) {
+      expect(isRecursivelyKeySorted(JSON.parse(group.payload_json))).toBe(
+        true
+      );
+      expect(group.payload_hash).toBe(
+        createHash("sha256").update(String(group.payload_json)).digest("hex")
+      );
+    }
+  });
+
   it("preserves active holdings and adds deterministic sold/disposed History rows", () => {
     const first = buildRows();
     const second = buildRows();
@@ -102,9 +172,10 @@ describe("manual QA Metals lifecycle fixture", () => {
     expect(states.filter((row) => row.status === "active")).toHaveLength(3);
     expect(states.filter((row) => row.status === "sold")).toHaveLength(1);
     expect(states.filter((row) => row.status === "disposed")).toHaveLength(1);
-    expect(first.metalLifecycleEvents).toHaveLength(2);
-    expect(first.financialActionGroups).toHaveLength(2);
-    expect(first.metalActionEvidence).toHaveLength(2);
+    expect(first.metalLifecycleEvents).toHaveLength(7);
+    expect(first.financialActionGroups).toHaveLength(7);
+    expect(first.metalActionEvidence).toHaveLength(7);
+    expect(first.marketRateObservations).toHaveLength(4);
     expect(
       (first.metalLifecycleEvents as readonly Record<string, unknown>[]).map(
         (row) => row.id
@@ -114,6 +185,139 @@ describe("manual QA Metals lifecycle fixture", () => {
         (row) => row.id
       )
     );
+    expect(first.marketRateObservations).toEqual(second.marketRateObservations);
+  });
+
+  it("seeds canonical physical forms and a complete acquisition chain for every holding", () => {
+    const rows = buildRows() as unknown as ManualQaLifecycleRows;
+    const assets = rows.assets;
+    const metals = rows.assetMetals;
+    const events = rows.metalLifecycleEvents;
+    const evidence = rows.metalActionEvidence;
+
+    expect(metals.map((metal) => metal.item_form)).toEqual([
+      "jewelry",
+      "coin",
+      "bar",
+      "coin",
+      "bar",
+    ]);
+
+    for (const asset of assets.filter(
+      (candidate) => candidate.type === "METAL"
+    )) {
+      expect(asset.acquisition_action_id).toEqual(expect.any(String));
+      const acquisitionEvent = events.find(
+        (event) => event.id === asset.acquisition_action_id
+      );
+      expect(acquisitionEvent).toMatchObject({
+        action_id: asset.acquisition_action_id,
+        holding_id: asset.id,
+        kind: "add",
+        predecessor_event_id: null,
+        reverses_event_id: null,
+      });
+      const acquisitionPayload = asJsonObject(acquisitionEvent?.payload_json);
+      expect(acquisitionPayload).toMatchObject({
+        expectedHoldingRevision: null,
+        holdingId: asset.id,
+        predecessorEventId: null,
+        reversesEventId: null,
+      });
+      expect(acquisitionPayload.rateSnapshots).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ role: "acquisition_metal" }),
+          expect.objectContaining({ role: "acquisition_purchase_currency" }),
+        ])
+      );
+      expect(evidence).toContainEqual(
+        expect.objectContaining({
+          action_id: asset.acquisition_action_id,
+          canonical_holding_revision: "1",
+          expected_holding_revision: null,
+          holding_id: asset.id,
+        })
+      );
+    }
+
+    for (const terminalEvent of events.filter(
+      (event) => event.kind === "sell" || event.kind === "dispose"
+    )) {
+      expect(terminalEvent.predecessor_event_id).toEqual(expect.any(String));
+      expect(events).toContainEqual(
+        expect.objectContaining({
+          holding_id: terminalEvent.holding_id,
+          id: terminalEvent.predecessor_event_id,
+          kind: "add",
+        })
+      );
+      const reduced = reduceMetalLifecycle(
+        events
+          .filter((event) => event.holding_id === terminalEvent.holding_id)
+          .map((event) => ({
+            canonicalCasStatus: "accepted" as const,
+            evidenceState: "effective" as const,
+            fingerprint: `${event.action_id}:${event.kind}`,
+            id: event.id,
+            kind: REDUCER_KIND_BY_FIXTURE_KIND[event.kind],
+            occurredAt: Date.parse(event.occurred_at),
+            predecessorEventId: event.predecessor_event_id,
+            reversesEventId: event.reverses_event_id,
+          }))
+      );
+      expect(reduced.rejectedEvents).toEqual([]);
+      expect(reduced.acceptedEvents).toHaveLength(2);
+      expect(reduced.projection).toMatchObject({
+        effectiveEventId: terminalEvent.id,
+        status: terminalEvent.kind === "sell" ? "sold" : "disposed",
+      });
+    }
+  });
+
+  it("supplies deterministic observation-backed rates for every seeded Metals currency", () => {
+    const observations = buildRows().marketRateObservations as readonly Record<
+      string,
+      unknown
+    >[];
+
+    expect(observations.map((row) => row.instrument_code).sort()).toEqual([
+      "currency:EGP",
+      "currency:USD",
+      "metal:GOLD",
+      "metal:SILVER",
+    ]);
+    expect(observations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          instrument_code: "currency:EGP",
+          orientation: "quote_per_base",
+          quality: "valid",
+          unit: "usd_per_currency_unit",
+          value_decimal: "0.02",
+        }),
+        expect.objectContaining({
+          instrument_code: "currency:USD",
+          value_decimal: "1",
+        }),
+        expect.objectContaining({
+          instrument_code: "metal:GOLD",
+          unit: "usd_per_pure_gram",
+          value_decimal: "75",
+        }),
+        expect.objectContaining({
+          instrument_code: "metal:SILVER",
+          unit: "usd_per_pure_gram",
+          value_decimal: "0.95",
+        }),
+      ])
+    );
+    expect(
+      observations.every(
+        (row) =>
+          row.provider_observed_at === "2026-01-15T12:00:01.000Z" &&
+          row.source === "manual_qa_fixture:manual-qa"
+      )
+    ).toBe(true);
   });
 
   it("keeps terminal ownership and action/event provenance internally consistent", () => {
@@ -130,7 +334,7 @@ describe("manual QA Metals lifecycle fixture", () => {
 
     for (const state of states) {
       expect(state.user_id).toBe(USER_ID);
-      expect(state.financial_revision).toBe("1");
+      expect(state.financial_revision).toBe("2");
       const event = events.find(
         (candidate) => candidate.id === state.effective_event_id
       );
@@ -160,8 +364,8 @@ describe("manual QA Metals lifecycle fixture", () => {
             action_id: state.effective_action_id,
             holding_id: state.holding_id,
             user_id: USER_ID,
-            expected_holding_revision: "0",
-            canonical_holding_revision: "1",
+            expected_holding_revision: "1",
+            canonical_holding_revision: "2",
           }),
         ])
       );
@@ -179,7 +383,8 @@ describe("manual QA Metals lifecycle fixture", () => {
     expect(soldEvent).toBeDefined();
     expect(soldAction?.account_guards_json).toEqual([]);
     const payload = asJsonObject(soldEvent?.payload_json);
-    expect(payload.expectedHoldingRevision).toBe("0");
+    expect(payload.expectedHoldingRevision).toBe("1");
+    expect(payload.predecessorEventId).toEqual(expect.any(String));
     expect(payload.grossProceedsMinorUnits).toBe("3600000");
     expect(payload.feeMinorUnits).toBe("50000");
     expect(payload.netProceedsMinorUnits).toBe("3550000");
@@ -229,10 +434,25 @@ describe("manual QA Metals lifecycle fixture", () => {
     await seedFixtureData(client, config, fixture);
     await seedFixtureData(client, config, fixture);
 
-    expect(rowsFor(client, "financial_action_groups")).toHaveLength(2);
-    expect(rowsFor(client, "metal_action_evidence")).toHaveLength(2);
-    expect(rowsFor(client, "metal_lifecycle_events")).toHaveLength(2);
+    expect(rowsFor(client, "financial_action_groups")).toHaveLength(7);
+    expect(rowsFor(client, "metal_action_evidence")).toHaveLength(7);
+    expect(rowsFor(client, "metal_lifecycle_events")).toHaveLength(7);
     expect(rowsFor(client, "metal_holding_states")).toHaveLength(5);
+    expect(rowsFor(client, "market_rate_observations")).toHaveLength(4);
+    expect(
+      rowsFor(client, "assets").filter((row) => row.type === "METAL")
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ acquisition_action_id: expect.any(String) }),
+      ])
+    );
+    expect(
+      rowsFor(client, "assets").every(
+        (row) =>
+          row.type !== "METAL" ||
+          typeof row.acquisition_action_id === "string"
+      )
+    ).toBe(true);
     expect(
       rowsFor(client, "metal_lifecycle_events").every(
         (row) => row.user_id === USER_ID
@@ -241,13 +461,13 @@ describe("manual QA Metals lifecycle fixture", () => {
 
     const inspection = await inspectFixtureData(client, config, fixture);
     expect(inspection.tables.financial_action_groups).toMatchObject({
-      expected: 2,
+      expected: 7,
     });
     expect(inspection.tables.metal_action_evidence).toMatchObject({
-      expected: 2,
+      expected: 7,
     });
     expect(inspection.tables.metal_lifecycle_events).toMatchObject({
-      expected: 2,
+      expected: 7,
     });
 
     client.tables.get("assets")?.set("unrelated-asset", {
@@ -266,7 +486,7 @@ describe("manual QA Metals lifecycle fixture", () => {
       rowsFor(client, "financial_action_groups").filter(
         (row) => row.user_id === USER_ID && !row.deleted
       )
-    ).toHaveLength(2);
+    ).toHaveLength(7);
     expect(
       rowsFor(client, "metal_action_evidence").filter((row) => !row.deleted)
     ).toHaveLength(0);
@@ -294,7 +514,7 @@ describe("manual QA Metals lifecycle fixture", () => {
       rowsFor(client, "metal_lifecycle_events").filter(
         (row) => row.is_effective && row.is_history_visible && !row.deleted
       )
-    ).toHaveLength(2);
+    ).toHaveLength(7);
     expect(
       rowsFor(client, "metal_holding_states").filter((row) => !row.deleted)
     ).toHaveLength(5);
@@ -334,6 +554,27 @@ function immutableLifecycleFacts(
   return Object.fromEntries(
     IMMUTABLE_LIFECYCLE_FIELDS.map((field) => [field, row[field]])
   );
+}
+
+function metalAcquisitionKindMismatch(
+  tableRows: (table: string) => Map<string, Record<string, any>>,
+  candidate: Readonly<Record<string, any>>
+): Readonly<{ message: string }> | null {
+  if (candidate.acquisition_action_id == null) {
+    return null;
+  }
+  const hasEvidence = Array.from(
+    tableRows("metal_action_evidence").values()
+  ).some(
+    (evidence) =>
+      evidence.user_id === candidate.user_id &&
+      evidence.action_id === candidate.acquisition_action_id &&
+      evidence.holding_id === candidate.id &&
+      (evidence.kind === "add" || evidence.kind === "correct")
+  );
+  return hasEvidence
+    ? null
+    : { message: "metal_acquisition_action_kind_mismatch" };
 }
 
 function createMemoryClient(): {
@@ -406,6 +647,12 @@ function createMemoryClient(): {
       for (const row of rows) {
         const existing = tableRows(table).get(String(row.id));
         if (existing && options.ignoreDuplicates) continue;
+        if (table === "assets") {
+          const mismatch = metalAcquisitionKindMismatch(tableRows, row);
+          if (mismatch) {
+            return { error: mismatch };
+          }
+        }
         const existingLifecycle = existing as
           | Readonly<Record<string, unknown>>
           | undefined;
@@ -441,6 +688,18 @@ function createMemoryClient(): {
           try {
             for (const [id, row] of tableRows(table)) {
               if (filters.every(([column, value]) => row[column] === value)) {
+                if (
+                  table === "assets" &&
+                  "acquisition_action_id" in patch
+                ) {
+                  const mismatch = metalAcquisitionKindMismatch(tableRows, {
+                    ...row,
+                    ...patch,
+                  });
+                  if (mismatch) {
+                    return Promise.resolve(resolve({ error: mismatch }));
+                  }
+                }
                 if (
                   table === "financial_action_groups" &&
                   patch.deleted === true

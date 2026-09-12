@@ -3,9 +3,16 @@ import React from "react";
 
 let mockTabBarHeight = 114;
 
-jest.mock("@react-navigation/bottom-tabs", () => ({
-  useBottomTabBarHeight: (): number => mockTabBarHeight,
-}));
+jest.mock("@react-navigation/bottom-tabs", () => {
+  const actual = jest.requireActual<
+    typeof import("@react-navigation/bottom-tabs")
+  >("@react-navigation/bottom-tabs");
+
+  return {
+    ...actual,
+    useBottomTabBarHeight: (): number => mockTabBarHeight,
+  };
+});
 
 jest.mock("react-i18next", () => ({
   useTranslation: (): { readonly t: (key: string) => string } => ({
@@ -20,18 +27,27 @@ jest.mock("react-native-safe-area-context", () => ({
 jest.mock("@/components/navigation/PageHeader", () => ({
   PageHeader: (): null => null,
 }));
-jest.mock("@/components/metals", () => ({
+jest.mock("@/components/metals/AddHoldingModal", () => ({
   AddHoldingModal: (): null => null,
-  EmptyMetalsState: (): null => null,
-  HoldingCard: (): null => null,
-  LiveRatesStrip: ({ bottomOffset }: { readonly bottomOffset: number }) => {
-    const { View } =
+}));
+jest.mock("@/components/metals/MetalPortfolioScreen", () => ({
+  MetalPortfolioScreen: ({
+    bottomInset,
+  }: {
+    readonly bottomInset: number;
+  }): React.JSX.Element => {
+    const { ScrollView, View } =
       jest.requireActual<typeof import("react-native")>("react-native");
-    return <View testID="metals-live-rates" style={{ bottom: bottomOffset }} />;
+
+    return (
+      <ScrollView
+        testID="metals-list"
+        contentContainerStyle={{ paddingBottom: bottomInset + 80 }}
+      >
+        <View testID="metals-live-rates" style={{ bottom: bottomInset }} />
+      </ScrollView>
+    );
   },
-  MetalSplitCards: (): null => null,
-  MetalTabs: (): null => null,
-  MetalsHeroCard: (): null => null,
 }));
 jest.mock("@/components/stats/CategoryDrilldownCard", () => ({
   CategoryDrilldownCard: (): null => null,
@@ -42,20 +58,15 @@ jest.mock("@/components/stats/MonthlyExpenseChart", () => ({
 jest.mock("@/components/stats/QuickStats", () => ({
   QuickStats: (): null => null,
 }));
-jest.mock("@/hooks/useMarketRates", () => ({
-  useMarketRates: () => ({
-    latestRates: { goldUsdPerGram: 100, silverUsdPerGram: 2 },
-    previousDayRate: { goldUsdPerGram: 99, silverUsdPerGram: 1.9 },
-  }),
-}));
-jest.mock("@/hooks/useMetalHoldings", () => ({
-  useMetalHoldings: () => ({
-    goldHoldings: [{ asset: { id: "gold-1" } }],
-    silverHoldings: [],
-    totalValue: 100,
-    profitLoss: { amount: 0, percent: 0 },
-    portfolioSplit: {},
+jest.mock("@/hooks/useMetalPortfolio", () => ({
+  useMetalPortfolio: () => ({
+    error: null,
     isLoading: false,
+    isOffline: false,
+    onFilterChange: jest.fn(),
+    portfolio: null,
+    refresh: jest.fn(),
+    selectedFilter: "all",
   }),
 }));
 jest.mock("@/hooks/usePreferredCurrency", () => ({
