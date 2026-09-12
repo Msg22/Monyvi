@@ -129,27 +129,19 @@ describe("recurring-payment transaction-time state protection", () => {
       }
     );
 
-    const updateData = {
-      name: "Renamed subscription",
-      amount: 250,
-      currency: "EGP",
-      type: "EXPENSE",
-      accountId: "account-1",
-      categoryId: "category-1",
-      frequency: "MONTHLY",
-      startDate: loadedNextDueDate,
-      expectedNextDueDate: loadedNextDueDate,
-      expectedState: {
-        startDate: loadedStartDate,
-        endDate: null,
-        frequency: "MONTHLY",
-        status: "ACTIVE",
-      },
-      action: "NOTIFY",
-    } as unknown as Parameters<typeof updateRecurringPayment>[1];
-
     await expect(
-      updateRecurringPayment("payment-1", updateData)
+      updateRecurringPayment("payment-1", {
+        name: "Renamed subscription",
+        amount: 250,
+        currency: "EGP",
+        type: "EXPENSE",
+        accountId: "account-1",
+        categoryId: "category-1",
+        frequency: "MONTHLY",
+        startDate: loadedNextDueDate,
+        expectedNextDueDate: loadedNextDueDate,
+        action: "NOTIFY",
+      })
     ).rejects.toThrow(RECURRING_PAYMENT_SERVICE_ERROR_CODES.STALE_SCHEDULE);
 
     expect(payment.frequency).toBe("WEEKLY");
