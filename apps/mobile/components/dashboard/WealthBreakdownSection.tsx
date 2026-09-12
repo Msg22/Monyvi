@@ -2,7 +2,10 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { palette } from "@/constants/colors";
 import { shouldUseCompactLayout } from "@/constants/ui";
 import type { CurrencyType } from "@monyvi/db";
-import { formatCanonicalDecimalForDisplay } from "@monyvi/logic";
+import {
+  formatCanonicalDecimalForDisplay,
+  resolveMetalsCurrencyMinorUnits,
+} from "@monyvi/logic";
 import { LinearGradient } from "expo-linear-gradient";
 import React, { useMemo } from "react";
 import { Pressable, Text, useWindowDimensions, View } from "react-native";
@@ -334,11 +337,15 @@ function formatDecimalCurrency(
   locale: string
 ): string {
   if (value === null) return "—";
+  const maximumFractionDigits = resolveMetalsCurrencyMinorUnits(
+    `currency:${currency}`
+  );
+  if (maximumFractionDigits === null) return "—";
   try {
     const amount = formatCanonicalDecimalForDisplay(value, {
       locale,
       minimumFractionDigits: 0,
-      maximumFractionDigits: 2,
+      maximumFractionDigits,
     });
     return `${amount} ${currency}`;
   } catch {
