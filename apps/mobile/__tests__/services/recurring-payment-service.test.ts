@@ -171,7 +171,7 @@ describe("recurring-payment-service", () => {
   });
 
   beforeEach(() => {
-    jest.setSystemTime(new Date("2026-06-01T12:00:00.000Z"));
+    jest.setSystemTime(new Date(2026, 5, 1, 12, 0, 0));
     jest.clearAllMocks();
     mockWrite.mockImplementation(
       async (callback: () => Promise<unknown>): Promise<unknown> => callback()
@@ -316,8 +316,8 @@ describe("recurring-payment-service", () => {
 
     it.each([
       new Date(Number.NaN),
-      new Date("2026-05-31T23:59:59.000Z"),
-      new Date("2027-06-02T00:00:00.000Z"),
+      new Date(2026, 4, 31, 23, 59, 59),
+      new Date(2027, 5, 2, 0, 0, 0),
     ])("rejects invalid or out-of-range create date %p before writing", async (startDate) => {
       await expect(
         createRecurringPayment({ ...validCreateData, startDate })
