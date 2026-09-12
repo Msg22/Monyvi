@@ -233,24 +233,42 @@ transition, or variant facts:
    require exit status 0.
 2. Confirm the sidecar records `Binding metadata approval: APPROVED` and the
    explicit approval evidence/reference required by that workflow.
-3. Recompute its current binding-facts fingerprint, verify
-   `Approved binding metadata revision` equals `Binding metadata revision`, and
-   verify the approval evidence/reference identifies that revision.
-4. Recompute SHA-256 over the exact current reference image bytes and verify it
-   exactly equals `Approved reference image revision`; filename equality is not
-   image identity.
-5. Verify the approval evidence/reference identifies the same approved-image
-   revision as well as the binding-metadata revision.
+3. Confirm `Approved binding metadata revision` equals
+   `Binding metadata revision` and `Approved binding approval revision` equals
+   `Binding approval revision`.
+4. Confirm the approval evidence/reference identifies the approved combined
+   `Approved binding approval revision`. The verifier already authenticates the
+   exact current image bytes and exact original Binding Facts bytes; do not
+   require the evidence text to repeat the component digests individually.
+
+If `scripts/verify-mockup-binding.js` is in the target diff, do not treat that
+target-branch verifier as independent authority. Run the verifier from a trusted
+base revision only when that trusted implementation enforces the same complete
+sidecar authority contract. Otherwise, independently validate the complete
+sidecar authority contract from the reviewed bytes and the governing
+`.agent/workflows/mockup-implementation.md` contract. The independent fallback
+MUST, without relying on the target-branch verifier:
+
+- require valid UTF-8/LF input and locate exactly one real level-two `Binding Facts` heading using Markdown semantics, ignoring fenced/comment-only content when determining section boundaries;
+- require every canonical required Binding Facts key exactly once with a non-empty visible value, recognizing supported Markdown unordered-list markers and indentation and ignoring commented/fenced examples;
+- require all approval fields and SHA-256 revisions to be present and well formed, including `Binding metadata approval: APPROVED`;
+- recompute the current approved image SHA-256 and exact original Binding Facts SHA-256 from the reviewed bytes and require them to match the declared image and `Binding metadata revision`;
+- require `Approved binding metadata revision` to equal `Binding metadata revision`, rebuild the combined `Binding approval revision`, and require `Approved binding approval revision` to equal `Binding approval revision`; and
+- require the approval evidence/reference to identify the approved combined `Approved binding approval revision`.
+
+If any part of that independent validation cannot be performed, mark the binding
+context unverified and the changed governed UI not approvable. A target-branch
+verifier result alone is insufficient in this case.
 
 If an approved reference predates the sidecar rule, complete the workflow's
 **Legacy Approved Mockup Metadata Migration** and explicit sidecar approval
 before using reconstructed metadata for review. A missing sidecar, failed
 verifier, missing/malformed approved image revision, current-image digest
-mismatch, failed metadata revision check, sidecar still marked `PENDING`, missing
-approval reference, or sidecar/image materially changed after approval is
-non-authoritative: mark the binding context unverified and the changed governed
-UI not approvable rather than inferring binding facts or image identity from the
-filename/export.
+mismatch, failed metadata or combined revision check, sidecar still marked
+`PENDING`, missing approval reference, or sidecar/image materially changed after
+approval is non-authoritative: mark the binding context unverified and the
+changed governed UI not approvable rather than inferring binding facts or image
+identity from the filename/export.
 
 Establish the selected mockup's declared UI viewport or component context only
 from its authoritative approved sidecar. Treat presentation-only device
