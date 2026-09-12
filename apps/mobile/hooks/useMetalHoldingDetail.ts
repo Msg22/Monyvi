@@ -174,13 +174,24 @@ export function useMetalHoldingDetail(
       setIsLoading(false);
     };
     setObservationError(null);
+
+    let metalSubscription: { unsubscribe(): void } | null = null;
+    const holdingSubscription = observeMetalDetailHolding(userId, holdingId)
+      .observeWithColumns([...DETAIL_ASSET_COLUMNS])
+      .subscribe({
+        error: onObservationError,
+        next: (assets): void => {
+          onChange();
+          metalSubscription?.unsubscribe();
+          const query = observeMetalDetailAssetMetal(userId, assets);
+          metalSubscription =
+            query
+              ?.observeWithColumns([...DETAIL_METAL_COLUMNS])
+              .subscribe({ error: onObservationError, next: onChange }) ?? null;
+        },
+      });
     const subscriptions = [
-      observeMetalDetailHolding(userId, holdingId)
-        .observeWithColumns([...DETAIL_ASSET_COLUMNS])
-        .subscribe({ error: onObservationError, next: onChange }),
-      observeMetalDetailAssetMetal(holdingId)
-        .observeWithColumns([...DETAIL_METAL_COLUMNS])
-        .subscribe({ error: onObservationError, next: onChange }),
+      holdingSubscription,
       observeMetalDetailHoldingState(userId, holdingId)
         .observeWithColumns([...DETAIL_HOLDING_STATE_COLUMNS])
         .subscribe({ error: onObservationError, next: onChange }),
@@ -194,8 +205,10 @@ export function useMetalHoldingDetail(
         .observe()
         .subscribe({ error: onObservationError, next: onChange }),
     ];
-    return () =>
+    return () => {
+      metalSubscription?.unsubscribe();
       subscriptions.forEach((subscription) => subscription.unsubscribe());
+    };
   }, [holdingId, isFocused, isResolvingUser, retryIndex, userId]);
 
   useEffect(() => {
