@@ -68,6 +68,15 @@ type CurrentUserDataScope = Awaited<
   ReturnType<typeof getCurrentUserDataScope>
 >;
 
+type RecurringPaymentDecisionState = Readonly<{
+  startDate: Date;
+  endDate: Date | null;
+  nextDueDate: Date;
+  frequency: RecurringPayment["frequency"];
+  status: RecurringPayment["status"];
+  deleted: boolean;
+}>;
+
 function isEligibleDueDate(
   dueDate: Date,
   endDate: Date | null | undefined
@@ -111,6 +120,51 @@ function assertExpectedNextDueDate(
     expectedNextDueDate !== undefined &&
     (!isValidDate(expectedNextDueDate) ||
       !isSameLocalCalendarDay(payment.nextDueDate, expectedNextDueDate))
+  ) {
+    throw new Error(RECURRING_PAYMENT_SERVICE_ERROR_CODES.STALE_SCHEDULE);
+  }
+}
+
+function captureRecurringPaymentDecisionState(
+  payment: Pick<
+    RecurringPayment,
+    "startDate" | "endDate" | "nextDueDate" | "frequency" | "status" | "deleted"
+  >
+): RecurringPaymentDecisionState {
+  return {
+    startDate: new Date(payment.startDate),
+    endDate:
+      payment.endDate === undefined || payment.endDate === null
+        ? null
+        : new Date(payment.endDate),
+    nextDueDate: new Date(payment.nextDueDate),
+    frequency: payment.frequency,
+    status: payment.status,
+    deleted: payment.deleted,
+  };
+}
+
+function assertExpectedRecurringPaymentDecisionState(
+  payment: Pick<
+    RecurringPayment,
+    "startDate" | "endDate" | "nextDueDate" | "frequency" | "status" | "deleted"
+  >,
+  expected: RecurringPaymentDecisionState
+): void {
+  const currentEndDate = payment.endDate ?? null;
+  const endDateMatches =
+    currentEndDate === null
+      ? expected.endDate === null
+      : expected.endDate !== null &&
+        isSameLocalCalendarDay(currentEndDate, expected.endDate);
+
+  if (
+    !isSameLocalCalendarDay(payment.startDate, expected.startDate) ||
+    !endDateMatches ||
+    !isSameLocalCalendarDay(payment.nextDueDate, expected.nextDueDate) ||
+    payment.frequency !== expected.frequency ||
+    payment.status !== expected.status ||
+    payment.deleted !== expected.deleted
   ) {
     throw new Error(RECURRING_PAYMENT_SERVICE_ERROR_CODES.STALE_SCHEDULE);
   }
@@ -270,31 +324,9 @@ export async function updateRecurringPayment(
   const recurringCollection =
     database.get<RecurringPayment>("recurring_payments");
   const payment = await scope.findOwned(recurringCollection, paymentId);
-
   assertExpectedNextDueDate(payment, data.expectedNextDueDate);
+  const expectedDecisionState = captureRecurringPaymentDecisionState(payment);
 
-  const dataMatchesStoredAnchor = isSameLocalCalendarDay(
-    payment.startDate,
-    data.startDate
-  );
-  const dataMatchesCurrentDueDate = isSameLocalCalendarDay(
-    payment.nextDueDate,
-    data.startDate
-  );
-  const didDuePaymentChange =
-    data.expectedNextDueDate !== undefined
-      ? !isSameLocalCalendarDay(data.expectedNextDueDate, data.startDate)
-      : !dataMatchesStoredAnchor && !dataMatchesCurrentDueDate;
-  const originalEditableDate =
-    data.expectedNextDueDate ??
-    (dataMatchesStoredAnchor ? payment.startDate : payment.nextDueDate);
-  const requestedDueDate = didDuePaymentChange
-    ? data.startDate
-    : payment.nextDueDate;
-
-  const referenceDate = new Date();
-  assertStartDateAllowed(data.startDate, referenceDate, originalEditableDate);
-  assertEndDateAllowsDuePayment(requestedDueDate, data.endDate);
   const account = await resolveRecurringPaymentReferences(
     scope,
     data.accountId,
@@ -307,24 +339,53 @@ export async function updateRecurringPayment(
   await database.write(async () => {
     const currentPayment = await scope.findOwned(recurringCollection, paymentId);
     assertExpectedNextDueDate(currentPayment, data.expectedNextDueDate);
+    assertExpectedRecurringPaymentDecisionState(
+      currentPayment,
+      expectedDecisionState
+    );
 
-    const previousEndDate = payment.endDate;
+    const dataMatchesStoredAnchor = isSameLocalCalendarDay(
+      currentPayment.startDate,
+      data.startDate
+    );
+    const dataMatchesCurrentDueDate = isSameLocalCalendarDay(
+      currentPayment.nextDueDate,
+      data.startDate
+    );
+    const didDuePaymentChange =
+      data.expectedNextDueDate !== undefined
+        ? !isSameLocalCalendarDay(data.expectedNextDueDate, data.startDate)
+        : !dataMatchesStoredAnchor && !dataMatchesCurrentDueDate;
+    const originalEditableDate =
+      data.expectedNextDueDate ??
+      (dataMatchesStoredAnchor
+        ? currentPayment.startDate
+        : currentPayment.nextDueDate);
+    const requestedDueDate = didDuePaymentChange
+      ? data.startDate
+      : currentPayment.nextDueDate;
+
+    const referenceDate = new Date();
+    assertStartDateAllowed(data.startDate, referenceDate, originalEditableDate);
+    assertEndDateAllowsDuePayment(requestedDueDate, data.endDate);
+
+    const previousEndDate = currentPayment.endDate;
     const nextEndDate = data.endDate ?? null;
-    const previousStatus = payment.status;
+    const previousStatus = currentPayment.status;
     const wasCompletedByPreviousEndDate =
       previousStatus === "COMPLETED" &&
       previousEndDate !== undefined &&
       previousEndDate !== null;
     const wasCompletedAtPreviousBoundary =
       wasCompletedByPreviousEndDate &&
-      isOnOrBeforeDay(payment.nextDueDate, previousEndDate);
+      isOnOrBeforeDay(currentPayment.nextDueDate, previousEndDate);
     const didRelaxEndDate =
       nextEndDate === null ||
       (nextEndDate !== null &&
         previousEndDate !== undefined &&
         previousEndDate !== null &&
         !isOnOrBeforeDay(nextEndDate, previousEndDate));
-    const didFrequencyChange = payment.frequency !== data.frequency;
+    const didFrequencyChange = currentPayment.frequency !== data.frequency;
     const shouldRetainFinalPaidOccurrence =
       wasCompletedAtPreviousBoundary &&
       !didRelaxEndDate &&
@@ -332,11 +393,11 @@ export async function updateRecurringPayment(
     const recurrenceAnchorDate = didDuePaymentChange
       ? data.startDate
       : didFrequencyChange
-        ? payment.nextDueDate
+        ? currentPayment.nextDueDate
         : dataMatchesStoredAnchor
           ? data.startDate
-          : payment.startDate;
-    let nextDueDate = payment.nextDueDate;
+          : currentPayment.startDate;
+    let nextDueDate = currentPayment.nextDueDate;
     if (didDuePaymentChange) {
       nextDueDate = data.startDate;
     } else if (
@@ -345,13 +406,13 @@ export async function updateRecurringPayment(
     ) {
       nextDueDate = getNextRecurringOccurrenceAfter({
         startDate: recurrenceAnchorDate,
-        currentOccurrence: payment.nextDueDate,
+        currentOccurrence: currentPayment.nextDueDate,
         frequency: data.frequency,
       });
     } else if (didFrequencyChange) {
       nextDueDate = getNextRecurringOccurrenceAfter({
         startDate: recurrenceAnchorDate,
-        currentOccurrence: payment.nextDueDate,
+        currentOccurrence: currentPayment.nextDueDate,
         frequency: data.frequency,
       });
     }
