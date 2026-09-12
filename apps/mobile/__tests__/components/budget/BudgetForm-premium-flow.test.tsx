@@ -1,4 +1,6 @@
 /* eslint-disable @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return */
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import React from "react";
 import {
   Text as MockText,
@@ -167,6 +169,11 @@ jest.mock("@/utils/dateHelpers", () => ({
 
 import { BudgetForm } from "@/components/budget/BudgetForm";
 
+const BUDGET_FORM_SECTIONS_SOURCE = readFileSync(
+  path.resolve(__dirname, "../../../components/budget/BudgetFormSections.tsx"),
+  "utf8"
+);
+
 const RENEWAL_SOURCE = {
   id: "expired-budget",
   name: "Food budget",
@@ -244,10 +251,25 @@ describe("BudgetForm premium flow", () => {
   });
 
   it("uses the NativeWind minimum touch-height utility for currency selection", () => {
-    render(<BudgetForm />);
+    const selectorStart = BUDGET_FORM_SECTIONS_SOURCE.indexOf(
+      'testID="budget-currency-selector"'
+    );
+    expect(selectorStart).toBeGreaterThanOrEqual(0);
 
-    const selector = screen.getByTestId("budget-currency-selector");
-    expect(selector).toHaveStyle({ minHeight: 44 });
+    const selectorEnd = BUDGET_FORM_SECTIONS_SOURCE.indexOf(
+      "</TouchableOpacity>",
+      selectorStart
+    );
+    expect(selectorEnd).toBeGreaterThan(selectorStart);
+
+    const selectorSource = BUDGET_FORM_SECTIONS_SOURCE.slice(
+      selectorStart,
+      selectorEnd
+    );
+    expect(selectorSource).toContain(
+      'className="me-2 min-h-11 flex-row items-center"'
+    );
+    expect(selectorSource).not.toContain("minHeight");
   });
 
   it("uses palette tokens for white action icons", () => {
