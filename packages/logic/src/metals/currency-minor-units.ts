@@ -1,3 +1,6 @@
+import type { CurrencyType } from "@monyvi/db";
+
+import { CURRENCY_PRECISION, DEFAULT_PRECISION } from "../utils/currency";
 import {
   isSupportedMetalsIsoCurrencyCode,
   type CurrencyInstrumentCode,
@@ -31,4 +34,16 @@ export function resolveMetalsCurrencyMinorUnits(
     return 3;
   }
   return ZERO_MINOR_UNIT_CURRENCIES.has(code) ? 0 : 2;
+}
+
+export function resolveCurrencyDisplayMinorUnits(
+  currency: CurrencyType
+): number {
+  if (isSupportedMetalsIsoCurrencyCode(currency)) {
+    return (
+      resolveMetalsCurrencyMinorUnits(`currency:${currency}`) ??
+      DEFAULT_PRECISION
+    );
+  }
+  return CURRENCY_PRECISION[currency] ?? DEFAULT_PRECISION;
 }
