@@ -93,7 +93,7 @@ jest.mock("expo-router", () => ({
 }));
 
 jest.mock("@/services/budget-service", () => ({
-  createBudget: mockCreateBudget,
+  createBudget: (input: CreateBudgetInput) => mockCreateBudget(input),
   updateBudget: jest.fn(),
 }));
 
