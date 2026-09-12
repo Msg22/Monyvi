@@ -1,7 +1,11 @@
 import { palette } from "@/constants/colors";
 import { TotalNetWorthSkeleton } from "@/components/dashboard/skeletons/TotalNetWorthSkeleton";
 import { CurrencyType } from "@monyvi/db";
-import { formatCurrency } from "@monyvi/logic";
+import {
+  formatCanonicalDecimalForDisplay,
+  formatCurrency,
+  resolveMetalsCurrencyMinorUnits,
+} from "@monyvi/logic";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useTranslation } from "react-i18next";
@@ -10,8 +14,8 @@ import { Dimensions, Text, View } from "react-native";
 import Svg, { Defs, RadialGradient, Rect, Stop } from "react-native-svg";
 
 interface Props {
-  totalNetWorth: number | null;
-  totalNetWorthUsd: number | null;
+  totalNetWorth: number | string | null;
+  totalNetWorthUsd: number | string | null;
   preferredCurrency: CurrencyType;
   monthlyPercentageChange: number | null;
   isLoading: boolean;
@@ -26,7 +30,7 @@ function TotalNetWorthCardComponent({
   monthlyPercentageChange,
   isLoading,
 }: Props): React.JSX.Element {
-  const { t } = useTranslation("common");
+  const { t, i18n } = useTranslation("common");
 
   if (isLoading) {
     return <TotalNetWorthSkeleton />;
@@ -44,6 +48,7 @@ function TotalNetWorthCardComponent({
       : null;
   const glowWidth = width;
   const glowHeight = 60;
+  const locale = i18n.resolvedLanguage === "ar" ? "ar-EG" : "en-US";
 
   return (
     <View className="relative my-4 items-center justify-center">
@@ -101,20 +106,11 @@ function TotalNetWorthCardComponent({
             adjustsFontSizeToFit
             minimumFontScale={0.6}
           >
-            {totalNetWorth === null
-              ? "—"
-              : formatCurrency({
-                  amount: totalNetWorth,
-                  currency: preferredCurrency,
-                })}
+            {formatNetWorthAmount(totalNetWorth, preferredCurrency, locale)}
           </Text>
           {!isPreferredCurrencyUSD && totalNetWorthUsd !== null && (
             <Text className="text-base font-medium text-slate-100 opacity-80">
-              ≈
-              {formatCurrency({
-                amount: totalNetWorthUsd,
-                currency: "USD",
-              })}
+              ≈{formatNetWorthAmount(totalNetWorthUsd, "USD", locale)}
             </Text>
           )}
           {monthlyPercentageChangeFormatted && (
@@ -134,6 +130,29 @@ function TotalNetWorthCardComponent({
       </LinearGradient>
     </View>
   );
+}
+
+function formatNetWorthAmount(
+  value: number | string | null,
+  currency: CurrencyType,
+  locale: string
+): string {
+  if (value === null) return "—";
+  if (typeof value === "number") {
+    return formatCurrency({ amount: value, currency });
+  }
+  const precision = resolveMetalsCurrencyMinorUnits(`currency:${currency}`);
+  if (precision === null) return "—";
+  try {
+    const amount = formatCanonicalDecimalForDisplay(value, {
+      locale,
+      minimumFractionDigits: precision,
+      maximumFractionDigits: precision,
+    });
+    return `${currency} ${amount}`;
+  } catch {
+    return "—";
+  }
 }
 
 export const TotalNetWorthCard = React.memo(TotalNetWorthCardComponent);
