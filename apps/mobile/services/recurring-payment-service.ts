@@ -211,6 +211,42 @@ function assertEndDateAllowsDuePayment(
   }
 }
 
+function resolveUpdateDuePaymentIntent(
+  payment: Pick<RecurringPayment, "startDate" | "nextDueDate">,
+  data: Pick<UpdateRecurringPaymentData, "startDate" | "expectedNextDueDate">
+): {
+  readonly dataMatchesStoredAnchor: boolean;
+  readonly didDuePaymentChange: boolean;
+  readonly originalEditableDate: Date;
+  readonly requestedDueDate: Date;
+} {
+  const dataMatchesStoredAnchor = isSameLocalCalendarDay(
+    payment.startDate,
+    data.startDate
+  );
+  const dataMatchesCurrentDueDate = isSameLocalCalendarDay(
+    payment.nextDueDate,
+    data.startDate
+  );
+  const didDuePaymentChange =
+    data.expectedNextDueDate !== undefined
+      ? !isSameLocalCalendarDay(data.expectedNextDueDate, data.startDate)
+      : !dataMatchesStoredAnchor && !dataMatchesCurrentDueDate;
+  const originalEditableDate =
+    data.expectedNextDueDate ??
+    (dataMatchesStoredAnchor ? payment.startDate : payment.nextDueDate);
+  const requestedDueDate = didDuePaymentChange
+    ? data.startDate
+    : payment.nextDueDate;
+
+  return {
+    dataMatchesStoredAnchor,
+    didDuePaymentChange,
+    originalEditableDate,
+    requestedDueDate,
+  };
+}
+
 function resolveCreateNextDueDate(
   data: RecurringPaymentData,
   referenceDate: Date
@@ -326,6 +362,17 @@ export async function updateRecurringPayment(
   const payment = await scope.findOwned(recurringCollection, paymentId);
   assertExpectedNextDueDate(payment, data.expectedNextDueDate);
   const expectedDecisionState = captureRecurringPaymentDecisionState(payment);
+  const initialDuePaymentIntent = resolveUpdateDuePaymentIntent(payment, data);
+  const initialReferenceDate = new Date();
+  assertStartDateAllowed(
+    data.startDate,
+    initialReferenceDate,
+    initialDuePaymentIntent.originalEditableDate
+  );
+  assertEndDateAllowsDuePayment(
+    initialDuePaymentIntent.requestedDueDate,
+    data.endDate
+  );
 
   const account = await resolveRecurringPaymentReferences(
     scope,
@@ -344,30 +391,20 @@ export async function updateRecurringPayment(
       expectedDecisionState
     );
 
-    const dataMatchesStoredAnchor = isSameLocalCalendarDay(
-      currentPayment.startDate,
-      data.startDate
+    const currentDuePaymentIntent = resolveUpdateDuePaymentIntent(
+      currentPayment,
+      data
     );
-    const dataMatchesCurrentDueDate = isSameLocalCalendarDay(
-      currentPayment.nextDueDate,
-      data.startDate
-    );
-    const didDuePaymentChange =
-      data.expectedNextDueDate !== undefined
-        ? !isSameLocalCalendarDay(data.expectedNextDueDate, data.startDate)
-        : !dataMatchesStoredAnchor && !dataMatchesCurrentDueDate;
-    const originalEditableDate =
-      data.expectedNextDueDate ??
-      (dataMatchesStoredAnchor
-        ? currentPayment.startDate
-        : currentPayment.nextDueDate);
-    const requestedDueDate = didDuePaymentChange
-      ? data.startDate
-      : currentPayment.nextDueDate;
-
     const referenceDate = new Date();
-    assertStartDateAllowed(data.startDate, referenceDate, originalEditableDate);
-    assertEndDateAllowsDuePayment(requestedDueDate, data.endDate);
+    assertStartDateAllowed(
+      data.startDate,
+      referenceDate,
+      currentDuePaymentIntent.originalEditableDate
+    );
+    assertEndDateAllowsDuePayment(
+      currentDuePaymentIntent.requestedDueDate,
+      data.endDate
+    );
 
     const previousEndDate = currentPayment.endDate;
     const nextEndDate = data.endDate ?? null;
@@ -390,15 +427,15 @@ export async function updateRecurringPayment(
       wasCompletedAtPreviousBoundary &&
       !didRelaxEndDate &&
       data.reactivateAfterSaving !== true;
-    const recurrenceAnchorDate = didDuePaymentChange
+    const recurrenceAnchorDate = currentDuePaymentIntent.didDuePaymentChange
       ? data.startDate
       : didFrequencyChange
         ? currentPayment.nextDueDate
-        : dataMatchesStoredAnchor
+        : currentDuePaymentIntent.dataMatchesStoredAnchor
           ? data.startDate
           : currentPayment.startDate;
     let nextDueDate = currentPayment.nextDueDate;
-    if (didDuePaymentChange) {
+    if (currentDuePaymentIntent.didDuePaymentChange) {
       nextDueDate = data.startDate;
     } else if (
       wasCompletedAtPreviousBoundary &&
