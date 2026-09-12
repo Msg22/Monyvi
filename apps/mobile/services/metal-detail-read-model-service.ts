@@ -12,12 +12,10 @@ import {
   calculateMetalReferenceValue,
   calculatePureGrams,
   calculateUnrealizedAttribution,
-  hasCanonicalDecimalPrecision,
   isSupportedMetalsIsoCurrencyCode,
   parseCanonicalDecimal,
   reduceMetalLifecycle,
   resolveMetalsCurrencyMinorUnits,
-  resolvePuritySelection,
   roundDecimal,
   serializeDecimal,
   validateAndNormalizeRateReference,
@@ -30,6 +28,7 @@ import {
 import { Q, type Query } from "@nozbe/watermelondb";
 import {
   getCurrentUserDataScope,
+  queryChildrenOfOwnedParents,
   queryOwned,
   type CurrentUserDataScope,
   USER_DATA_ACCESS_ERROR_CODES,
@@ -43,6 +42,7 @@ import {
 import {
   buildTimeline,
   copyValidDate,
+  getUnavailableExactFacts,
   isSupportedMetalType,
   normalizePhysicalForm,
   toDetailAssetInput,
@@ -194,11 +194,17 @@ export function observeMetalDetailHolding(
 }
 
 export function observeMetalDetailAssetMetal(
-  holdingId: string
-): Query<AssetMetal> {
-  return database
-    .get<AssetMetal>("asset_metals")
-    .query(Q.where("asset_id", holdingId), Q.where("deleted", false));
+  userId: string,
+  assets: readonly Asset[]
+): Query<AssetMetal> | null {
+  if (assets.length === 0) return null;
+  return queryChildrenOfOwnedParents(
+    database.get<AssetMetal>("asset_metals"),
+    assets,
+    userId,
+    "asset_id",
+    Q.where("deleted", false)
+  );
 }
 
 export function observeMetalDetailEvents(
@@ -593,81 +599,6 @@ function toLifecycleKind(
     undo: "reversed",
   };
   return mappedKinds[kind];
-}
-
-function getUnavailableExactFacts(
-  input: BuildMetalDetailReadModelInput
-): MetalDetailReadModel["unavailableExactFacts"] {
-  const unavailable: Array<"weight" | "purity" | "purchase_cost"> = [];
-  if (!isValidWeight(input.metal.weightGramsDecimal))
-    unavailable.push("weight");
-  if (!hasCompletePurityTuple(input.metal)) unavailable.push("purity");
-  if (
-    !isValidPurchaseCost(
-      input.asset.purchasePriceDecimal,
-      input.asset.purchaseCurrency
-    )
-  )
-    unavailable.push("purchase_cost");
-  return Object.freeze(unavailable);
-}
-
-function hasCompletePurityTuple(input: MetalDetailMetalInput): boolean {
-  if (
-    input.purityCatalogVersion !== "1" ||
-    input.purityCode === null ||
-    input.purityFactorDecimal === null
-  ) {
-    return false;
-  }
-  const resolution = resolvePuritySelection(input.metalType, input.purityCode);
-  return (
-    resolution.available &&
-    resolution.entry.factorDecimal === input.purityFactorDecimal
-  );
-}
-
-function isPositiveDecimal(value: string | null): boolean {
-  if (value === null) return false;
-  try {
-    return parseCanonicalDecimal(value).greaterThan("0");
-  } catch {
-    return false;
-  }
-}
-
-function isValidWeight(value: string | null): boolean {
-  return (
-    value !== null &&
-    hasCanonicalDecimalPrecision(value) &&
-    hasAtMostDecimalPlaces(value, 3) &&
-    isPositiveDecimal(value)
-  );
-}
-
-function isValidPurchaseCost(
-  value: string | null,
-  currency: string | null
-): boolean {
-  const instrumentCode = toCurrencyInstrumentCode(currency);
-  if (
-    value === null ||
-    instrumentCode === null ||
-    !hasCanonicalDecimalPrecision(value)
-  ) {
-    return false;
-  }
-  const decimalPlaces = resolveMetalsCurrencyMinorUnits(instrumentCode);
-  return (
-    decimalPlaces !== null &&
-    hasAtMostDecimalPlaces(value, decimalPlaces) &&
-    isPositiveDecimal(value)
-  );
-}
-
-function hasAtMostDecimalPlaces(value: string, maximum: number): boolean {
-  const fractional = value.split(".")[1];
-  return fractional === undefined || fractional.length <= maximum;
 }
 
 function convertDetailValueForDisplay(
