@@ -438,8 +438,10 @@ Business rules:
   invalid amount with `Math.abs` or silently rounds it.
 - When a historical transaction is saved and marked recurring, the transaction
   keeps its historical date. The recurring template starts at the first
-  frequency-aligned occurrence on or after today, so no historical template Due
-  payment is created.
+  frequency-aligned occurrence after the recorded occurrence and on or after
+  today. A transaction recorded today therefore starts at the next aligned
+  occurrence, while an earlier transaction may start today when today is aligned,
+  so no historical template Due payment is created.
 - Unexpected recurring-payment failures are logged with the original error and
   shown to the user through generic localized copy; internal error messages are
   never placed directly in a toast.
