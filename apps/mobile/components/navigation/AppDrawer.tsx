@@ -15,6 +15,7 @@ import {
 } from "@/components/navigation/DrawerMenuSection";
 import { useTheme } from "@/context/ThemeContext";
 import { useAuth } from "@/context/AuthContext";
+import { useLocale } from "@/context/LocaleContext";
 import { useLogoutFlow } from "@/hooks/useLogoutFlow";
 import { useModalBottomInset } from "@/hooks/useModalBottomInset";
 import { useProfile } from "@/hooks/useProfile";
@@ -139,6 +140,7 @@ export function AppDrawer({
 }: AppDrawerProps): React.JSX.Element {
   const { isDark, toggleTheme } = useTheme();
   const { user } = useAuth();
+  const { isRTL } = useLocale();
   const { profile, isLoading: isProfileLoading } = useProfile();
   const { t } = useTranslation("settings");
   const { t: tCommon } = useTranslation("common");
@@ -157,7 +159,8 @@ export function AppDrawer({
 
   const insets = useSafeAreaInsets();
   const bottomInset = useModalBottomInset();
-  const slideAnim = useRef(new Animated.Value(-DRAWER_WIDTH)).current;
+  const hiddenTranslateX = isRTL ? DRAWER_WIDTH : -DRAWER_WIDTH;
+  const slideAnim = useRef(new Animated.Value(hiddenTranslateX)).current;
 
   // Avatar image loading state
   const [avatarError, setAvatarError] = useState(false);
@@ -179,11 +182,11 @@ export function AppDrawer({
 
   useEffect(() => {
     Animated.timing(slideAnim, {
-      toValue: visible ? 0 : -DRAWER_WIDTH,
+      toValue: visible ? 0 : hiddenTranslateX,
       duration: 250,
       useNativeDriver: true,
     }).start();
-  }, [visible, slideAnim]);
+  }, [hiddenTranslateX, slideAnim, visible]);
 
   const handleNavigation = useCallback(
     (route: string): void => {
@@ -206,7 +209,11 @@ export function AppDrawer({
       <Pressable className="flex-1 bg-black/50" onPress={onClose}>
         {/* Drawer */}
         <Animated.View
+          testID="app-drawer-panel"
           style={{
+            position: "absolute",
+            left: isRTL ? undefined : 0,
+            right: isRTL ? 0 : undefined,
             width: DRAWER_WIDTH,
             height: "100%",
             transform: [{ translateX: slideAnim }],
