@@ -30,6 +30,14 @@ interface HistoryModelState {
   readonly userId: string | null;
 }
 
+const HISTORY_STATE_OBSERVED_COLUMNS = [
+  "status",
+  "effective_action_id",
+  "effective_event_id",
+  "is_visible",
+  "reconciliation_state",
+] as const;
+
 const EMPTY_COUNTS = Object.freeze({ all: 0, sold: 0, disposed: 0 });
 const EMPTY_HISTORY: MetalHistoryReadModel = Object.freeze({
   counts: EMPTY_COUNTS,
@@ -59,11 +67,14 @@ export function useMetalHistory(): UseMetalHistoryResult {
   const [observedStates, setObservedStates] = useState<
     readonly MetalHoldingState[]
   >([]);
+  const [observedStatesUserId, setObservedStatesUserId] = useState<string | null>(
+    null
+  );
   const lastLoadedRef = useRef<{
     filter: MetalHistoryFilter;
-    itemCount: number;
+    hasLoaded: boolean;
     userId: string | null;
-  }>({ filter: "all", itemCount: 0, userId: null });
+  }>({ filter: "all", hasLoaded: false, userId: null });
   const retry = useCallback(
     (): void => setRetryIndex((value) => value + 1),
     []
@@ -79,16 +90,23 @@ export function useMetalHistory(): UseMetalHistoryResult {
   useEffect(() => {
     if (!isFocused || isResolvingUser || userId === null) {
       setObservedStates([]);
+      setObservedStatesUserId(null);
       return;
     }
-    const subscription = observeMetalHistoryHoldingStates(userId, "all")
-      .observe()
+    setObservedStates([]);
+    setObservedStatesUserId(null);
+    const currentUserId = userId;
+    const subscription = observeMetalHistoryHoldingStates(currentUserId, "all")
+      .observeWithColumns([...HISTORY_STATE_OBSERVED_COLUMNS])
       .subscribe({
         next: (states): void => {
           setObservedStates(states);
+          setObservedStatesUserId(currentUserId);
           setLocalRevision((value) => value + 1);
         },
         error: (reason: unknown): void => {
+          setObservedStates([]);
+          setObservedStatesUserId(null);
           setError(
             reason instanceof Error ? reason : new Error("History unavailable")
           );
@@ -98,7 +116,14 @@ export function useMetalHistory(): UseMetalHistoryResult {
   }, [isFocused, isResolvingUser, retryIndex, userId]);
 
   useEffect(() => {
-    if (!isFocused || isResolvingUser || userId === null) return;
+    if (
+      !isFocused ||
+      isResolvingUser ||
+      userId === null ||
+      observedStatesUserId !== userId
+    ) {
+      return;
+    }
     const observerInput = {
       holdings: observedStates.map((state) => ({
         id: state.holdingId,
@@ -125,7 +150,14 @@ export function useMetalHistory(): UseMetalHistoryResult {
       eventsSubscription?.unsubscribe();
       evidenceSubscription?.unsubscribe();
     };
-  }, [isFocused, isResolvingUser, observedStates, retryIndex, userId]);
+  }, [
+    isFocused,
+    isResolvingUser,
+    observedStates,
+    observedStatesUserId,
+    retryIndex,
+    userId,
+  ]);
 
   useEffect(() => {
     let isCurrent = true;
@@ -155,7 +187,7 @@ export function useMetalHistory(): UseMetalHistoryResult {
     const isSameVisitWithData =
       lastLoadedRef.current.userId === userId &&
       lastLoadedRef.current.filter === filter &&
-      lastLoadedRef.current.itemCount > 0;
+      lastLoadedRef.current.hasLoaded;
     if (!isSameVisitWithData) {
       setHistoryState({ history: emptyHistory(filter), userId });
       setIsLoading(true);
@@ -167,7 +199,7 @@ export function useMetalHistory(): UseMetalHistoryResult {
           setHistoryState({ history: next, userId });
           lastLoadedRef.current = {
             filter,
-            itemCount: next.items.length,
+            hasLoaded: true,
             userId,
           };
         }
@@ -175,7 +207,7 @@ export function useMetalHistory(): UseMetalHistoryResult {
       .catch((cause: unknown) => {
         if (isCurrent) {
           setHistoryState({ history: emptyHistory(filter), userId });
-          lastLoadedRef.current = { filter, itemCount: 0, userId };
+          lastLoadedRef.current = { filter, hasLoaded: false, userId };
           setError(
             cause instanceof Error ? cause : new Error("History unavailable")
           );
