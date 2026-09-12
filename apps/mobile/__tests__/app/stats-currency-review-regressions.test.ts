@@ -44,6 +44,15 @@ describe("Stats currency review regressions", () => {
     expect(chart).not.toContain("ActivityIndicator");
   });
 
+  it("uses Skeleton rather than ActivityIndicator while Quick Stats reloads", () => {
+    const quickStats = read("../../components/stats/QuickStats.tsx");
+
+    expect(quickStats).toContain(
+      'import { Skeleton } from "@/components/ui/Skeleton"'
+    );
+    expect(quickStats).not.toContain("ActivityIndicator");
+  });
+
   it("keeps every available transaction currency selectable in a virtualized list", () => {
     const source = read("../../components/stats/StatsCurrencyFilter.tsx");
 
@@ -54,6 +63,15 @@ describe("Stats currency review regressions", () => {
     expect(source).toContain("selected: isSelected");
     expect(source).toContain("useLocale");
     expect(source).toContain("currencyDisplay: \"name\"");
+  });
+
+  it("clamps the currency menu to the remaining viewport height", () => {
+    const source = read("../../components/stats/StatsCurrencyFilter.tsx");
+
+    expect(source).toContain("useWindowDimensions");
+    expect(source).toContain("measureInWindow");
+    expect(source).toContain("maxHeight: menuMaxHeight");
+    expect(source).not.toContain('className="max-h-72"');
   });
 
   it("uses the page-selected currency in every drilldown row", () => {
