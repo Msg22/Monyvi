@@ -68,7 +68,8 @@ describe("Stats currency review regressions", () => {
   it("clamps the currency menu to the remaining viewport height", () => {
     const source = read("../../components/stats/StatsCurrencyFilter.tsx");
 
-    expect(source).toContain("useWindowDimensions");
+    expect(source).toContain('Dimensions.get("window").height');
+    expect(source).toContain('Dimensions.addEventListener("change"');
     expect(source).toContain("measureInWindow");
     expect(source).toContain("maxHeight: menuMaxHeight");
     expect(source).not.toContain('className="max-h-72"');
