@@ -901,5 +901,9 @@ function getRecurringPaymentErrorMessage(
     return t("recurring_payment_category_unavailable");
   }
 
+  if (message === RECURRING_PAYMENT_SERVICE_ERROR_CODES.INVALID_START_DATE) {
+    return t("due_payment_date_range");
+  }
+
   return null;
 }
