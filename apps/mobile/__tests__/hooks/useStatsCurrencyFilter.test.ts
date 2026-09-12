@@ -12,13 +12,17 @@ interface MockObserver {
 
 const observerRef: { current: MockObserver | null } = { current: null };
 const unsubscribe = jest.fn();
+const subscribe = (observer: MockObserver): { unsubscribe: typeof unsubscribe } => {
+  observerRef.current = observer;
+  return { unsubscribe };
+};
+const mockObserve = jest.fn(() => ({ subscribe }));
+const mockObserveWithColumns = jest.fn((_columns: readonly string[]) => ({
+  subscribe,
+}));
 const mockObserveStatsCurrencyTransactions = jest.fn((_input: unknown) => ({
-  observe: () => ({
-    subscribe: (observer: MockObserver) => {
-      observerRef.current = observer;
-      return { unsubscribe };
-    },
-  }),
+  observe: mockObserve,
+  observeWithColumns: mockObserveWithColumns,
 }));
 
 function mockBuildStatsCurrencies(
@@ -91,6 +95,13 @@ describe("useStatsCurrencyFilter", () => {
       expect(result.current.selectedCurrency).toBe("EGP");
       expect(result.current.isLoading).toBe(false);
     });
+  });
+
+  it("observes currency-column edits while Stats remains mounted", () => {
+    renderHook(() => useStatsCurrencyFilter("EGP"));
+
+    expect(mockObserveWithColumns).toHaveBeenCalledWith(["currency"]);
+    expect(mockObserve).not.toHaveBeenCalled();
   });
 
   it("falls back to the first available transaction currency when preferred is absent", async () => {
