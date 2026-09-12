@@ -287,7 +287,9 @@ describe("RecurringPaymentForm", () => {
     expect(screen.getByText("due_payment_hint")).toBeTruthy();
     expect(screen.getByText("end_date_hint")).toBeTruthy();
     expect(screen.getByText("optional")).toBeTruthy();
-    expect(screen.getByTestId("recurring-payment-end-date-row-action")).toBeTruthy();
+    expect(
+      screen.getByTestId("recurring-payment-end-date-row-action")
+    ).toBeTruthy();
     expect(
       screen.getByTestId("recurring-payment-end-date-row-value-action")
     ).toHaveProp("className", expect.stringContaining("items-end"));
@@ -355,17 +357,19 @@ describe("RecurringPaymentForm", () => {
     fireEvent.press(screen.getByTestId("recurring-payment-frequency-row"));
     fireEvent.press(screen.getByTestId("select-weekly-frequency"));
 
-    expect(screen.getByTestId("recurring-payment-summary-due-value")).toHaveTextContent("Jul 8, 2026");
+    expect(
+      screen.getByTestId("recurring-payment-summary-due-value")
+    ).toHaveTextContent("Jul 8, 2026");
   });
 
   it("treats a same-day Due payment time edit as unchanged in the summary", () => {
     renderForm({
       mode: "edit",
       status: "ACTIVE",
-      dueDate: new Date("2026-07-01T00:00:00.000Z"),
+      dueDate: new Date(2026, 6, 1),
       initialValues: {
         ...initialValues,
-        startDate: new Date("2026-06-01T08:00:00.000Z"),
+        startDate: new Date(2026, 5, 1, 8),
       },
     });
 
@@ -385,11 +389,11 @@ describe("RecurringPaymentForm", () => {
     renderForm({
       mode: "edit",
       status: "COMPLETED",
-      dueDate: new Date("2026-07-01T00:00:00.000Z"),
+      dueDate: new Date(2026, 6, 1),
       initialValues: {
         ...initialValues,
-        startDate: new Date("2026-06-01T08:00:00.000Z"),
-        endDate: new Date("2026-07-01T00:00:00.000Z"),
+        startDate: new Date(2026, 5, 1, 8),
+        endDate: new Date(2026, 6, 1),
       },
     });
 
@@ -440,7 +444,9 @@ describe("RecurringPaymentForm", () => {
 
     fireEvent.press(screen.getByTestId("recurring-payment-frequency-row"));
     fireEvent.press(screen.getByTestId("select-weekly-frequency"));
-    fireEvent.press(screen.getByTestId("recurring-payment-end-date-row-action"));
+    fireEvent.press(
+      screen.getByTestId("recurring-payment-end-date-row-action")
+    );
 
     expect(
       screen.getByTestId("recurring-payment-summary-due-value")
@@ -475,7 +481,9 @@ describe("RecurringPaymentForm", () => {
       },
     });
 
-    fireEvent.press(screen.getByTestId("recurring-payment-end-date-row-action"));
+    fireEvent.press(
+      screen.getByTestId("recurring-payment-end-date-row-action")
+    );
     fireEvent.press(
       screen.getByTestId("recurring-payment-reactivate-after-saving")
     );
@@ -520,9 +528,13 @@ describe("RecurringPaymentForm", () => {
     });
 
     fireEvent.press(screen.getByTestId("recurring-payment-end-date-row"));
-    fireEvent.press(screen.getByTestId("set-recurring-payment-date-july-15"));
+    fireEvent.press(
+      screen.getByTestId("set-recurring-payment-date-july-15")
+    );
     fireEvent.press(screen.getByTestId("recurring-payment-start-date-row"));
-    fireEvent.press(screen.getByTestId("set-recurring-payment-date-july-15"));
+    fireEvent.press(
+      screen.getByTestId("set-recurring-payment-date-july-15")
+    );
 
     expect(
       screen.getByTestId("recurring-payment-reactivate-after-saving")
@@ -545,10 +557,16 @@ describe("RecurringPaymentForm", () => {
       onSubmit,
     });
 
-    fireEvent.press(screen.getByTestId("recurring-payment-end-date-row-action"));
-    fireEvent.press(screen.getByTestId("recurring-payment-reactivate-after-saving"));
+    fireEvent.press(
+      screen.getByTestId("recurring-payment-end-date-row-action")
+    );
+    fireEvent.press(
+      screen.getByTestId("recurring-payment-reactivate-after-saving")
+    );
     fireEvent.press(screen.getByTestId("recurring-payment-end-date-row"));
-    fireEvent.press(screen.getByTestId("set-recurring-payment-date-july-15"));
+    fireEvent.press(
+      screen.getByTestId("set-recurring-payment-date-july-15")
+    );
 
     await waitFor(() => {
       expect(
@@ -1097,7 +1115,8 @@ describe("RecurringPaymentForm", () => {
     ].forEach((testID: string) => {
       expect(screen.getByTestId(testID)).toHaveProp(
         "className",
-        expect.stringContaining("bg-nileGreen-100"));
+        expect.stringContaining("bg-nileGreen-100")
+      );
     });
   });
 
