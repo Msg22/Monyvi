@@ -1,4 +1,4 @@
-/* eslint-disable max-lines -- Physical-device QA coverage keeps the form interactions together. */
+/* eslint-disable max-lines, @typescript-eslint/no-unsafe-assignment -- Physical-device QA coverage keeps the form interactions together; RNTL screen query values are safe renderer handles. */
 import {
   fireEvent,
   render,
