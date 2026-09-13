@@ -55,10 +55,17 @@ const TIMESTAMP_FIELDS = [
   "period_start",
   "period_end",
   "snapshot_date",
+  "compensated_at",
 ];
 
 // Fields that should be indexed in WatermelonDB
 const INDEXED_FIELDS = ["user_id", "sms_fingerprint"];
+
+const EXACT_TEXT_COLUMNS = new Set([
+  "accepted_account_revision",
+  "amount_minor_units",
+  "financial_revision",
+]);
 
 // =============================================================================
 // SQL TYPE MAPPING
@@ -74,6 +81,9 @@ function sqlTypeToWatermelon(sqlType, columnName) {
   // Timestamp fields always map to "number" in WatermelonDB
   if (TIMESTAMP_FIELDS.includes(columnName)) {
     return "number";
+  }
+  if (EXACT_TEXT_COLUMNS.has(columnName)) {
+    return "string";
   }
 
   const normalized = sqlType.toLowerCase().trim();
@@ -115,7 +125,9 @@ function parseSql(sql) {
   const warnings = [];
 
   // Normalize: remove block comments
-  const cleaned = sql.replace(/\/\*[\s\S]*?\*\//g, "");
+  const cleaned = sql
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/^\s*--.*$/gm, "");
 
   // Split into individual statements
   const statements = cleaned
@@ -168,14 +180,17 @@ function parseSql(sql) {
 function parseAlterTableAddColumn(stmt, result) {
   // Match ALTER TABLE with ADD COLUMN
   const alterMatch = stmt.match(
-    /^ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?(?:\w+\.)?(\w+)/i
+    /^ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?(?:(\w+)\.)?(\w+)/i
   );
   if (!alterMatch) return false;
 
   // Check if it contains ADD COLUMN
   if (!/ADD\s+COLUMN/i.test(stmt)) return false;
 
-  const tableName = alterMatch[1];
+  const schemaName = alterMatch[1];
+  const tableName = alterMatch[2];
+
+  if (schemaName && schemaName.toLowerCase() !== "public") return true;
 
   // Skip excluded tables
   if (EXCLUDED_TABLES.includes(tableName)) return true;
@@ -232,13 +247,16 @@ function parseAlterTableAddColumn(stmt, result) {
  */
 function parseCreateTable(stmt, result) {
   const createMatch = stmt.match(
-    /^CREATE\s+TABLE\s+(IF\s+NOT\s+EXISTS\s+)?(?:\w+\.)?(\w+)\s*\(([\s\S]+)\)/i
+    /^CREATE\s+TABLE\s+(IF\s+NOT\s+EXISTS\s+)?(?:(\w+)\.)?(\w+)\s*\(([\s\S]+)\)/i
   );
   if (!createMatch) return false;
 
   const isIfNotExists = Boolean(createMatch[1]);
-  const tableName = createMatch[2];
-  const columnsBlock = createMatch[3];
+  const schemaName = createMatch[2];
+  const tableName = createMatch[3];
+  const columnsBlock = createMatch[4];
+
+  if (schemaName && schemaName.toLowerCase() !== "public") return true;
 
   // Skip excluded tables
   if (EXCLUDED_TABLES.includes(tableName)) return true;

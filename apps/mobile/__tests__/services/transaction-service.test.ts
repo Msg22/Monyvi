@@ -166,12 +166,17 @@ jest.mock("@/services/supabase", () => ({
   getCurrentUserId: jest.fn(() => Promise.resolve("test-user-id")),
 }));
 
+jest.mock("@/services/transaction-financial-action-production", () => ({
+  createGuardedTransaction: jest.fn(),
+}));
+
 // ---------------------------------------------------------------------------
 // Import module under test
 // ---------------------------------------------------------------------------
 
 import {
   createTransaction,
+  prepareTransactionCreateWithBalance,
   updateTransaction,
   deleteTransaction,
   convertTransactionToTransfer,
@@ -180,10 +185,15 @@ import {
   INVALID_TRANSACTION_AMOUNT_ERROR_CODE,
   TRANSACTION_ACCOUNT_CURRENCY_MISMATCH_ERROR_CODE,
 } from "@/services/transaction-service";
-import { USER_DATA_ACCESS_ERROR_CODES } from "@/services/user-data-access";
+import {
+  getCurrentUserDataScope,
+  USER_DATA_ACCESS_ERROR_CODES,
+} from "@/services/user-data-access";
+import { commitPreparedBatch } from "@/services/watermelon-atomic-batch";
 import { MAX_TRANSACTION_AMOUNT } from "@monyvi/logic";
 
 import type { DisplayTransaction } from "@/hooks/useTransactionsGrouping";
+import { createGuardedTransaction } from "@/services/transaction-financial-action-production";
 
 // ---------------------------------------------------------------------------
 // Grab mock helpers (typed via MockDbApi)
@@ -254,6 +264,32 @@ describe("transaction-service", () => {
     mockDb.adapter.batch.mockClear();
     mockDb.adapter.unsafeQueryRaw.mockClear();
     mockRewire();
+    jest.mocked(createGuardedTransaction).mockReset();
+    jest.mocked(createGuardedTransaction).mockImplementation(
+      async (data, expectedUserId) => {
+        const scope = await getCurrentUserDataScope();
+        if (
+          expectedUserId !== undefined &&
+          scope.userId !== expectedUserId
+        ) {
+          throw new Error(USER_DATA_ACCESS_ERROR_CODES.AUTH_SCOPE_CHANGED);
+        }
+        return mockDb.write(async () => {
+          const prepared = await prepareTransactionCreateWithBalance(
+            data,
+            scope,
+            expectedUserId
+          );
+          try {
+            await commitPreparedBatch(prepared.operations as never);
+            return prepared.transaction;
+          } catch (error) {
+            prepared.restoreCachedAccount();
+            throw error;
+          }
+        }) as never;
+      }
+    );
 
     const supabaseMock = jest.requireMock<{ getCurrentUserId: jest.Mock }>(
       "@/services/supabase"
@@ -267,6 +303,34 @@ describe("transaction-service", () => {
   // createTransaction
   // =========================================================================
   describe("createTransaction", () => {
+    it("routes plain creation through the guarded financial-action boundary", async () => {
+      const guardedResult = seedTx(
+        "guarded-transaction"
+      ) as unknown as import("@monyvi/db").Transaction;
+      jest.mocked(createGuardedTransaction).mockResolvedValueOnce(
+        guardedResult
+      );
+      const data = {
+        amount: 200,
+        currency: "EGP" as const,
+        categoryId: "cat-food",
+        accountId: "acc-1",
+        type: "EXPENSE" as const,
+        source: "MANUAL" as const,
+      };
+
+      await expect(createTransaction(data, "test-user-id")).resolves.toBe(
+        guardedResult
+      );
+
+      expect(createGuardedTransaction).toHaveBeenCalledWith(
+        data,
+        "test-user-id"
+      );
+      expect(mockDb.write).not.toHaveBeenCalled();
+      expect(mockDb.batch).not.toHaveBeenCalled();
+    });
+
     it("should decrease balance for EXPENSE", async () => {
       const acc = seedAccount("acc-1", 1000);
       await createTransaction({

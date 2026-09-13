@@ -9,6 +9,7 @@ import { setGenerator } from "@nozbe/watermelondb/utils/common/randomId";
 
 // Import all models
 import { Account } from "./models/Account";
+import { AccountFinancialEffect } from "./models/AccountFinancialEffect";
 import { AccountSmsSender } from "./models/AccountSmsSender";
 import { Asset } from "./models/Asset";
 import { AssetMetal } from "./models/AssetMetal";
@@ -115,6 +116,7 @@ export const database = new Database({
   modelClasses: [
     Profile,
     Account,
+    AccountFinancialEffect,
     AccountSmsSender,
     BankDetails,
     Asset,

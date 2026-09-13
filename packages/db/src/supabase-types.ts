@@ -34,6 +34,82 @@ export type Database = {
   };
   public: {
     Tables: {
+      account_financial_effects: {
+        Row: {
+          accepted_account_revision: number;
+          account_id: string;
+          action_id: string;
+          amount_minor_units: number;
+          compensated_at: string | null;
+          created_at: string;
+          currency: Database["public"]["Enums"]["currency_type"];
+          deleted: boolean;
+          domain: string;
+          id: string;
+          is_effective: boolean;
+          kind: string;
+          reverses_effect_id: string | null;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          accepted_account_revision: number;
+          account_id: string;
+          action_id: string;
+          amount_minor_units: number;
+          compensated_at?: string | null;
+          created_at?: string;
+          currency: Database["public"]["Enums"]["currency_type"];
+          deleted?: boolean;
+          domain: string;
+          id?: string;
+          is_effective?: boolean;
+          kind: string;
+          reverses_effect_id?: string | null;
+          updated_at?: string;
+          user_id: string;
+        };
+        Update: {
+          accepted_account_revision?: number;
+          account_id?: string;
+          action_id?: string;
+          amount_minor_units?: number;
+          compensated_at?: string | null;
+          created_at?: string;
+          currency?: Database["public"]["Enums"]["currency_type"];
+          deleted?: boolean;
+          domain?: string;
+          id?: string;
+          is_effective?: boolean;
+          kind?: string;
+          reverses_effect_id?: string | null;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "account_financial_effect_account_owner_fk";
+            columns: ["user_id", "account_id"];
+            isOneToOne: false;
+            referencedRelation: "accounts";
+            referencedColumns: ["user_id", "id"];
+          },
+          {
+            foreignKeyName: "account_financial_effect_action_owner_fk";
+            columns: ["user_id", "action_id"];
+            isOneToOne: false;
+            referencedRelation: "financial_action_groups";
+            referencedColumns: ["user_id", "action_id"];
+          },
+          {
+            foreignKeyName: "account_financial_effect_reversal_owner_fk";
+            columns: ["user_id", "reverses_effect_id"];
+            isOneToOne: false;
+            referencedRelation: "account_financial_effects";
+            referencedColumns: ["user_id", "id"];
+          },
+        ];
+      };
       account_sms_senders: {
         Row: {
           account_id: string;
@@ -78,6 +154,7 @@ export type Database = {
           created_at: string;
           currency: Database["public"]["Enums"]["currency_type"];
           deleted: boolean;
+          financial_revision: number;
           id: string;
           institution_id: string | null;
           is_default: boolean;
@@ -92,6 +169,7 @@ export type Database = {
           created_at?: string;
           currency?: Database["public"]["Enums"]["currency_type"];
           deleted?: boolean;
+          financial_revision?: number;
           id?: string;
           institution_id?: string | null;
           is_default?: boolean;
@@ -106,6 +184,7 @@ export type Database = {
           created_at?: string;
           currency?: Database["public"]["Enums"]["currency_type"];
           deleted?: boolean;
+          financial_revision?: number;
           id?: string;
           institution_id?: string | null;
           is_default?: boolean;
@@ -1177,6 +1256,7 @@ export type Database = {
           currency: Database["public"]["Enums"]["currency_type"];
           deleted: boolean;
           end_date: string | null;
+          financial_revision: number;
           frequency: Database["public"]["Enums"]["recurring_frequency"];
           frequency_value: number | null;
           id: string;
@@ -1199,6 +1279,7 @@ export type Database = {
           currency?: Database["public"]["Enums"]["currency_type"];
           deleted?: boolean;
           end_date?: string | null;
+          financial_revision?: number;
           frequency: Database["public"]["Enums"]["recurring_frequency"];
           frequency_value?: number | null;
           id?: string;
@@ -1221,6 +1302,7 @@ export type Database = {
           currency?: Database["public"]["Enums"]["currency_type"];
           deleted?: boolean;
           end_date?: string | null;
+          financial_revision?: number;
           frequency?: Database["public"]["Enums"]["recurring_frequency"];
           frequency_value?: number | null;
           id?: string;
@@ -1642,6 +1724,10 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      apply_account_financial_action_v1: {
+        Args: { p_payload_hash: string; p_payload_json: string };
+        Returns: Json;
+      };
       apply_metal_action_v1: {
         Args: { p_payload_hash: string; p_payload_json: string };
         Returns: Json;

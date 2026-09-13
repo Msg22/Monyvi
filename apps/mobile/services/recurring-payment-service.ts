@@ -17,13 +17,8 @@ import {
 import { getCurrentUserDataScope } from "@/services/user-data-access";
 import {
   assertValidTransactionAmount,
-  prepareTransactionCreateWithBalance,
 } from "./transaction-service";
-import {
-  captureCachedModelSnapshot,
-  restoreCachedModelSnapshot,
-} from "./watermelon-cache-snapshot";
-import { commitPreparedBatch } from "./watermelon-atomic-batch";
+import { submitGuardedRecurringPayment } from "./recurring-payment-financial-action-production";
 
 export interface RecurringPaymentData {
   name: string;
@@ -129,6 +124,7 @@ export async function createRecurringPayment(
       rec.accountId = data.accountId;
       rec.categoryId = data.categoryId;
       rec.frequency = data.frequency;
+      rec.financialRevision = "0";
       rec.startDate = data.startDate;
       rec.endDate = data.endDate ?? undefined;
       rec.nextDueDate =
@@ -334,72 +330,10 @@ export async function submitRecurringPayment(params: {
 }): Promise<void> {
   const { payment, accountId, amount, note } = params;
   assertValidTransactionAmount(amount);
-
-  const scope = await getCurrentUserDataScope();
-  const recurringCollection =
-    database.get<RecurringPayment>("recurring_payments");
-
-  await database.write(async () => {
-    const persistedPayment = await scope.findOwned(
-      recurringCollection,
-      payment.id
-    );
-    const hasEligibleDuePayment =
-      persistedPayment.endDate === undefined ||
-      persistedPayment.endDate === null ||
-      isOnOrBeforeDay(persistedPayment.nextDueDate, persistedPayment.endDate);
-    if (
-      persistedPayment.deleted ||
-      persistedPayment.status !== "ACTIVE" ||
-      !hasEligibleDuePayment
-    ) {
-      throw new Error(
-        RECURRING_PAYMENT_SERVICE_ERROR_CODES.PAYMENT_UNAVAILABLE
-      );
-    }
-
-    const transactionData = {
-      amount,
-      currency: persistedPayment.currency,
-      categoryId: persistedPayment.categoryId,
-      accountId,
-      note,
-      type: persistedPayment.type,
-      source: "MANUAL" as const,
-      date: new Date(),
-      linkedRecurringId: persistedPayment.id,
-    };
-    const preparedTransaction = await prepareTransactionCreateWithBalance(
-      transactionData,
-      scope,
-      scope.userId
-    );
-    const paymentSnapshot = captureCachedModelSnapshot(persistedPayment);
-    try {
-      const scheduleUpdate = persistedPayment.prepareUpdate((record) => {
-        const nextDueDate = calculateNextDueDate(
-          persistedPayment.nextDueDate,
-          persistedPayment.frequency
-        );
-        const hasReachedFinalEligibleOccurrence =
-          persistedPayment.endDate !== undefined &&
-          persistedPayment.endDate !== null &&
-          !isOnOrBeforeDay(nextDueDate, persistedPayment.endDate);
-        if (hasReachedFinalEligibleOccurrence) {
-          record.status = "COMPLETED";
-          return;
-        }
-        record.nextDueDate = nextDueDate;
-      });
-
-      await commitPreparedBatch([
-        ...preparedTransaction.operations,
-        scheduleUpdate,
-      ]);
-    } catch (error) {
-      preparedTransaction.restoreCachedAccount();
-      restoreCachedModelSnapshot(paymentSnapshot);
-      throw error;
-    }
+  await submitGuardedRecurringPayment({
+    accountId,
+    amount,
+    note,
+    paymentId: payment.id,
   });
 }

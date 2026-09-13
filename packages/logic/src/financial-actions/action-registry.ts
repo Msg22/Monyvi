@@ -2,6 +2,7 @@ import {
   createMetalsActionPayloadRegistry,
   type MetalsSellPayloadV1,
 } from "./metals-action-payload-registry";
+import { createAccountBalanceEffectsDefinitions } from "./account-balance-effects-registry";
 
 export const ACTION_REGISTRY_ERROR_CODES = {
   DUPLICATE_DEFINITION: "financial_action_duplicate_definition",
@@ -147,6 +148,9 @@ export type { MetalsSellPayloadV1 };
 /** @deprecated Kept as an explicit legacy-registry validator; production uses sell/v2. */
 export const validateMetalsSellPayloadV1 = metalsRegistry.validateLegacySellV1;
 
-export const DEFAULT_FINANCIAL_ACTION_REGISTRY = createFinancialActionRegistry(
-  metalsRegistry.definitions
-);
+export const DEFAULT_FINANCIAL_ACTION_REGISTRY = createFinancialActionRegistry([
+  ...metalsRegistry.definitions,
+  ...createAccountBalanceEffectsDefinitions(
+    ACTION_REGISTRY_ERROR_CODES.INVALID_PAYLOAD
+  ),
+]);
