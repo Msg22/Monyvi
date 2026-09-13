@@ -16,6 +16,8 @@ const mockUnsubscribe = jest.fn<void, []>();
 const mockDatabase = { id: "database" };
 const mockTrustObservers: MockTrustObserver[] = [];
 let mockLatestRates: unknown = {};
+let mockIsConnected = true;
+let mockSummarizedTrust: "fresh" | "missing" = "missing";
 
 jest.mock("@/hooks/useMarketRates", () => ({
   useMarketRates: (): {
@@ -25,7 +27,7 @@ jest.mock("@/hooks/useMarketRates", () => ({
     readonly latestRates: unknown;
     readonly previousDayRate: null;
   } => ({
-    isConnected: true,
+    isConnected: mockIsConnected,
     isLoading: false,
     lastUpdated: new Date("2026-09-07T00:00:00.000Z"),
     latestRates: mockLatestRates,
@@ -63,7 +65,7 @@ jest.mock("@/services/live-rates-trust-read-model-service", () => ({
       return { unsubscribe: mockUnsubscribe };
     },
   }),
-  summarizeLiveRatesTrust: (): "missing" => "missing",
+  summarizeLiveRatesTrust: (): "fresh" | "missing" => mockSummarizedTrust,
 }));
 
 jest.mock("@monyvi/logic", () => ({
@@ -105,6 +107,8 @@ describe("useLiveRatesScreen", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockLatestRates = {};
+    mockIsConnected = true;
+    mockSummarizedTrust = "missing";
     mockTrustObservers.splice(0);
   });
 
@@ -169,5 +173,47 @@ describe("useLiveRatesScreen", () => {
     await waitFor(() =>
       expect(result.current.rateTrust.gold.ageText).toBe("2 minutes ago")
     );
+  });
+
+  it("reports live only when online, error-free, and every rate group is fresh", async () => {
+    mockSummarizedTrust = "fresh";
+    const { result } = renderHook(() => useLiveRatesScreen());
+
+    act(() => {
+      mockTrustObservers[0]?.next(trustedRates);
+    });
+
+    await waitFor(() => expect(result.current.hasData).toBe(true));
+    expect(result.current.isLive).toBe(true);
+
+    act(() => {
+      mockTrustObservers[0]?.error(new Error("observer failed"));
+    });
+
+    await waitFor(() => expect(result.current.refreshError).not.toBeNull());
+    expect(result.current.isLive).toBe(false);
+  });
+
+  it("is not live when a rate group is stale or the device is offline", async () => {
+    mockSummarizedTrust = "fresh";
+    const { result } = renderHook(() => useLiveRatesScreen());
+
+    act(() => {
+      mockTrustObservers[0]?.next({
+        ...trustedRates,
+        silver: { ...trustedRates.silver, state: "stale" },
+      });
+    });
+
+    await waitFor(() => expect(result.current.hasData).toBe(true));
+    expect(result.current.isLive).toBe(false);
+
+    mockIsConnected = false;
+    const offline = renderHook(() => useLiveRatesScreen());
+    act(() => {
+      mockTrustObservers.at(-1)?.next(trustedRates);
+    });
+    await waitFor(() => expect(offline.result.current.hasData).toBe(true));
+    expect(offline.result.current.isLive).toBe(false);
   });
 });

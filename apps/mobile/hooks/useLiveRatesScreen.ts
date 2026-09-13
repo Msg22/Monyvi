@@ -84,6 +84,7 @@ type LiveRatesRefreshError = "cached_refresh_failed" | "initial_refresh_failed";
 interface UseLiveRatesScreenResult {
   readonly isLoading: boolean;
   readonly isConnected: boolean;
+  readonly isLive: boolean;
   readonly isStale: boolean;
   readonly hasData: boolean;
   readonly metals: MetalDisplayData;
@@ -392,9 +393,16 @@ export function useLiveRatesScreen(): UseLiveRatesScreenResult {
     })();
   }, [database, latestRates, trustObservationError]);
 
+  const effectiveRefreshError = trustObservationError ?? refreshError;
   return {
     isLoading: isLoading || isTrustLoading,
     isConnected,
+    isLive:
+      isConnected &&
+      effectiveRefreshError === null &&
+      rateTrust.gold.state === "fresh" &&
+      rateTrust.silver.state === "fresh" &&
+      rateTrust.currencies.state === "fresh",
     isStale: Object.values(rateTrust).some(({ state }) => state !== "fresh"),
     hasData: latestRates !== null && !isTrustLoading,
     metals,
@@ -407,7 +415,7 @@ export function useLiveRatesScreen(): UseLiveRatesScreenResult {
     onSearchChange,
     lastUpdatedText,
     isRefreshing,
-    refreshError: trustObservationError ?? refreshError,
+    refreshError: effectiveRefreshError,
     onRefresh,
     rateTrust,
   };

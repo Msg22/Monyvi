@@ -162,19 +162,23 @@ describe("metal History pagination", () => {
       metal_holding_states: states,
       metal_lifecycle_events: events,
     };
-    mockScopeQueryChildren.mockImplementation((): unknown =>
-      fetchedRows([
-        {
-          assetId: "sold-latest",
-          deleted: false,
-          itemForm: "coin",
-          metalType: "GOLD",
-          purityCatalogVersion: "1",
-          purityCode: "gold-999",
-          purityFactorDecimal: "0.999",
-          weightGramsDecimal: "8",
-        },
-      ])
+    mockScopeQueryChildren.mockImplementation(
+      (
+        _collection: unknown,
+        parents: readonly { readonly id: string }[]
+      ): unknown =>
+        fetchedRows(
+          parents.map((parent) => ({
+            assetId: parent.id,
+            deleted: false,
+            itemForm: "coin",
+            metalType: "GOLD",
+            purityCatalogVersion: "1",
+            purityCode: "gold-999",
+            purityFactorDecimal: "0.999",
+            weightGramsDecimal: "8",
+          }))
+        )
     );
     mockGetCurrentUserDataScope.mockResolvedValue({
       queryChildrenOfOwnedParents: mockScopeQueryChildren,
@@ -231,5 +235,27 @@ describe("metal History pagination", () => {
       hasMore: false,
       items: [],
     });
+  });
+
+  it("does not let unrenderable lifecycle states consume visible page slots", async () => {
+    mockRowsByTable = {
+      ...mockRowsByTable,
+      assets: (
+        mockRowsByTable.assets as readonly Record<string, unknown>[]
+      ).filter((asset) => asset["id"] !== "sold-latest"),
+    };
+
+    const model = await readMetalHistoryReadModel({
+      filter: "sold",
+      pageSize: 1,
+      userId: "user-1",
+    });
+
+    expect(model).toMatchObject({
+      counts: { all: 3, disposed: 1, sold: 2 },
+      filter: "sold",
+      hasMore: false,
+    });
+    expect(model.items.map((item) => item.holdingId)).toEqual(["sold-older"]);
   });
 });

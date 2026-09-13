@@ -68,6 +68,7 @@ interface CommonTranslations {
   // Errors
   readonly error_generic: string;
   readonly error_network: string;
+  readonly money_summary_error: string;
 
   // Currency
   readonly currency: string;
@@ -775,6 +776,7 @@ interface AuthTranslations {
 /** Metals namespace */
 interface MetalsTranslations {
   readonly live_rates: string;
+  readonly rates: string;
   readonly gold: string;
   readonly silver: string;
   readonly platinum: string;

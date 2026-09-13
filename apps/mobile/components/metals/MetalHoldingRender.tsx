@@ -1,11 +1,13 @@
 import { Image, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 
+import type { SupportedMetal } from "@monyvi/logic";
+
 import { getMetalRenderEntry } from "@/assets/images/metals/manifest";
 
 interface MetalHoldingRenderProps {
   readonly itemForm: "bar" | "coin" | "jewelry" | null;
-  readonly metalType: "GOLD" | "SILVER";
+  readonly metalType: SupportedMetal;
   readonly size?: "card" | "detail";
 }
 

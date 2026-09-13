@@ -10,6 +10,7 @@ import {
 import {
   calculateMetalReferenceValue,
   hasCanonicalDecimalPrecision,
+  isSupportedMetal,
   isSupportedMetalsIsoCurrencyCode,
   parseCanonicalDecimal,
   resolveMetalsCurrencyMinorUnits,
@@ -18,6 +19,7 @@ import {
   serializeDecimal,
   type CurrencyInstrumentCode,
   type MetalsIsoCurrencyCode,
+  type SupportedMetal,
 } from "@monyvi/logic";
 import { Q, type Query } from "@nozbe/watermelondb";
 
@@ -32,7 +34,7 @@ import type {
 
 const RECENT_HISTORY_LIMIT = 3;
 
-export type MetalPortfolioFilter = "ALL" | "GOLD" | "SILVER";
+export type MetalPortfolioFilter = "ALL" | SupportedMetal;
 
 export interface PortfolioRateStatus {
   readonly ageMs: number | null;
@@ -45,7 +47,7 @@ export interface MetalPortfolioHoldingInput {
   readonly id: string;
   readonly isEffective: boolean;
   readonly isVisible: boolean;
-  readonly metalType: "GOLD" | "SILVER";
+  readonly metalType: SupportedMetal;
   readonly name: string;
   readonly occurredAt: Date;
   readonly physicalForm: string | null;
@@ -625,7 +627,7 @@ function normalizePurchasePrice(
 function calculateHoldingCardValues(input: {
   readonly currentRates: LiveRatesTrustReadModel;
   readonly facts: ExactHoldingFacts;
-  readonly metalType: "GOLD" | "SILVER";
+  readonly metalType: SupportedMetal;
   readonly preferredCurrency: CurrencyType;
 }): HoldingCardValues {
   if (
@@ -767,10 +769,6 @@ function copyValidDate(value: Date | null): Date | null {
     return null;
   }
   return new Date(value.getTime());
-}
-
-function isSupportedMetal(value: string): value is "GOLD" | "SILVER" {
-  return value === "GOLD" || value === "SILVER";
 }
 
 function normalizeHoldingStatus(

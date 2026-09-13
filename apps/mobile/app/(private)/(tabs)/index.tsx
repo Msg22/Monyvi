@@ -3,6 +3,7 @@ import { AccountsSection } from "@/components/dashboard/AccountsSection";
 import { CashAccountTooltip } from "@/components/dashboard/CashAccountTooltip";
 import { LiveRates } from "@/components/dashboard/LiveRates";
 import { MicButtonTooltip } from "@/components/dashboard/MicButtonTooltip";
+import { MoneySummaryErrorState } from "@/components/dashboard/MoneySummaryErrorState";
 import { OnboardingGuideCard } from "@/components/dashboard/OnboardingGuideCard";
 import { RecentTransactions } from "@/components/dashboard/RecentTransactions";
 import { DashboardSkeleton } from "@/components/dashboard/skeletons/DashboardSkeleton";
@@ -73,11 +74,15 @@ export default function DashboardScreen(): React.JSX.Element {
   const { transactions, isLoading: transactionsLoading } =
     useRecentTransactions(3);
   const { totalAccounts, isLoading: netWorthLoading } = useNetWorth();
-  const { wealthBreakdown, isSummaryLoading: isPortfolioSummaryLoading } =
-    useMetalPortfolio({
-      accountsValueDecimal:
-        totalAccounts === null ? null : String(totalAccounts),
-    });
+  const {
+    wealthBreakdown,
+    isSummaryLoading: isPortfolioSummaryLoading,
+    error: portfolioError,
+    refresh: refreshMoneySummary,
+  } = useMetalPortfolio({
+    accountsValueDecimal:
+      totalAccounts === null ? null : String(totalAccounts),
+  });
   const lifecycleAwareNetWorth = wealthBreakdown?.totalNetWorthDecimal ?? null;
   const lifecycleAwareNetWorthUsd =
     wealthBreakdown?.totalNetWorthUsdDecimal ?? null;
@@ -207,26 +212,49 @@ export default function DashboardScreen(): React.JSX.Element {
           <SectionErrorBoundary name={t("section_onboarding_guide")}>
             <OnboardingGuideCard />
           </SectionErrorBoundary>
-          <SectionErrorBoundary name={t("section_net_worth")}>
-            <TotalNetWorthCard
-              totalNetWorth={lifecycleAwareNetWorth}
-              totalNetWorthUsd={lifecycleAwareNetWorthUsd}
-              preferredCurrency={preferredCurrency}
-              monthlyPercentageChange={
-                lifecycleAwareNetWorth === null ? null : monthlyPercentageChange
-              }
-              isLoading={isLoading || isPortfolioSummaryLoading}
-            />
-          </SectionErrorBoundary>
-          <SectionErrorBoundary name={t("section_net_worth")}>
-            <WealthBreakdownSection
-              currency={preferredCurrency}
-              isLoading={netWorthLoading || isPortfolioSummaryLoading}
-              breakdown={wealthBreakdown}
-              onAccountsPress={() => router.push("/accounts")}
-              onMetalsPress={() => router.push("/metals")}
-            />
-          </SectionErrorBoundary>
+          {portfolioError !== null && wealthBreakdown === null ? (
+            <SectionErrorBoundary name={t("section_net_worth")}>
+              <MoneySummaryErrorState
+                message={t("money_summary_error")}
+                onRetry={refreshMoneySummary}
+                retryLabel={t("retry")}
+                testID="home-money-summary-error"
+              />
+            </SectionErrorBoundary>
+          ) : (
+            <>
+              <SectionErrorBoundary name={t("section_net_worth")}>
+                <TotalNetWorthCard
+                  totalNetWorth={lifecycleAwareNetWorth}
+                  totalNetWorthUsd={lifecycleAwareNetWorthUsd}
+                  preferredCurrency={preferredCurrency}
+                  monthlyPercentageChange={
+                    lifecycleAwareNetWorth === null
+                      ? null
+                      : monthlyPercentageChange
+                  }
+                  isLoading={isLoading || isPortfolioSummaryLoading}
+                />
+              </SectionErrorBoundary>
+              <SectionErrorBoundary name={t("section_net_worth")}>
+                <WealthBreakdownSection
+                  currency={preferredCurrency}
+                  isLoading={netWorthLoading || isPortfolioSummaryLoading}
+                  breakdown={wealthBreakdown}
+                  onAccountsPress={() => router.push("/accounts")}
+                  onMetalsPress={() => router.push("/metals")}
+                />
+              </SectionErrorBoundary>
+              {portfolioError !== null ? (
+                <MoneySummaryErrorState
+                  message={t("money_summary_error")}
+                  onRetry={refreshMoneySummary}
+                  retryLabel={t("retry")}
+                  testID="home-money-summary-retry-notice"
+                />
+              ) : null}
+            </>
+          )}
           <SectionErrorBoundary name={t("section_live_rates")}>
             <LiveRates
               latestRates={latestRates}

@@ -12,6 +12,7 @@ import {
   calculateMetalReferenceValue,
   calculatePureGrams,
   calculateUnrealizedAttribution,
+  isSupportedMetal,
   isSupportedMetalsIsoCurrencyCode,
   parseCanonicalDecimal,
   reduceMetalLifecycle,
@@ -24,6 +25,7 @@ import {
   type MetalInstrumentCode,
   type NormalizedRateReference,
   type RateReferenceExpectation,
+  type SupportedMetal,
 } from "@monyvi/logic";
 import { Q, type Query } from "@nozbe/watermelondb";
 import {
@@ -43,7 +45,6 @@ import {
   buildTimeline,
   copyValidDate,
   getUnavailableExactFacts,
-  isSupportedMetalType,
   normalizePhysicalForm,
   toDetailAssetInput,
   toDetailHoldingStateInput,
@@ -65,7 +66,7 @@ export interface MetalDetailAssetInput {
 
 export interface MetalDetailMetalInput {
   readonly itemForm: string | null;
-  readonly metalType: "GOLD" | "SILVER";
+  readonly metalType: SupportedMetal;
   readonly purityCatalogVersion: string | null;
   readonly purityCode: string | null;
   readonly purityFactorDecimal: string | null;
@@ -144,7 +145,7 @@ export interface MetalDetailReadModel {
   readonly isActiveOwnership: boolean;
   readonly isFinancialActionLocked: boolean;
   readonly itemForm: MetalDetailPhysicalForm | null;
-  readonly metalType: "GOLD" | "SILVER";
+  readonly metalType: SupportedMetal;
   readonly name: string;
   readonly purchaseCurrency: string | null;
   readonly purchaseDate: Date | null;
@@ -290,7 +291,7 @@ interface MetalDetailDependencies {
   readonly events: readonly MetalLifecycleEvent[];
   readonly holdingState: MetalHoldingState;
   readonly metal: AssetMetal;
-  readonly metalType: "GOLD" | "SILVER";
+  readonly metalType: SupportedMetal;
   readonly rateReferences: readonly MetalRateReference[];
 }
 
@@ -320,7 +321,7 @@ async function readDetailDependencies(
   ]);
   if (metals.length !== 1 || holdingStates.length !== 1) return null;
   const metal = metals[0];
-  if (!isSupportedMetalType(metal.metalType)) return null;
+  if (!isSupportedMetal(metal.metalType)) return null;
   return {
     ...evidenceAndEvents,
     holdingState: holdingStates[0],
@@ -860,7 +861,7 @@ function toCurrencyInstrumentCode(
 }
 
 function toMetalInstrumentCode(
-  metalType: "GOLD" | "SILVER"
+  metalType: SupportedMetal
 ): MetalInstrumentCode {
   return metalType === "GOLD" ? "metal:GOLD" : "metal:SILVER";
 }

@@ -143,6 +143,31 @@ describe("PR #271 review follow-up regressions", () => {
     expect(value).not.toContain("maximumFractionDigits: 2");
   });
 
+  it("surfaces a recoverable money-summary error on Home", () => {
+    const value = source("apps/mobile/app/(private)/(tabs)/index.tsx");
+    expect(value).toContain("error: portfolioError");
+    expect(value).toContain("refresh: refreshMoneySummary");
+    expect(
+      value.includes("portfolioError !== null && wealthBreakdown === null") &&
+        value.includes("home-money-summary-error") &&
+        value.includes("home-money-summary-retry-notice")
+    ).toBe(true);
+    const en = JSON.parse(source("apps/mobile/locales/en/common.json")) as Record<
+      string,
+      string
+    >;
+    const ar = JSON.parse(source("apps/mobile/locales/ar/common.json")) as Record<
+      string,
+      string
+    >;
+    expect(en.money_summary_error).toBe(
+      "We couldn't load your money summary. Try again."
+    );
+    expect(ar.money_summary_error).toBe(
+      "تعذّر عرض ملخص أموالك. حاول مرة أخرى."
+    );
+  });
+
   it("uses plain-language sold-metal result copy", () => {
     const en = JSON.parse(source("apps/mobile/locales/en/metals.json")) as Record<
       string,

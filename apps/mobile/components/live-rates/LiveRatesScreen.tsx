@@ -108,7 +108,7 @@ export function LiveRatesScreen(): React.JSX.Element {
   const {
     isLoading,
     isConnected,
-    isStale,
+    isLive,
     hasData,
     metals,
     currencies,
@@ -136,7 +136,7 @@ export function LiveRatesScreen(): React.JSX.Element {
 
   return (
     <View className="flex-1 bg-slate-50 dark:bg-slate-900">
-      <LiveRatesHeader isConnected={isConnected} isStale={isStale} />
+      <LiveRatesHeader isLive={isLive} />
 
       {isLoading && !hasData ? (
         <LiveRatesScreenSkeleton />

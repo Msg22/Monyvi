@@ -17,6 +17,7 @@ import {
   parseCanonicalDecimal,
   roundDecimal,
   serializeDecimal,
+  type SupportedMetal,
 } from "@monyvi/logic";
 
 import {
@@ -47,7 +48,7 @@ export interface WealthBreakdownHolding {
   readonly currentValueDecimal: string | null;
   readonly isEffective: boolean;
   readonly isVisible: boolean;
-  readonly metalType: "GOLD" | "SILVER";
+  readonly metalType: SupportedMetal;
   readonly status: "active" | "sold" | "disposed";
 }
 

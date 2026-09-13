@@ -160,6 +160,7 @@ const REQUIRED_SCALAR_KEYS: Record<string, readonly string[]> = {
     "cancel",
     "retry",
     "error",
+    "money_summary_error",
     "language_change_error_title",
     "language_change_failed",
     "onboarding_step_bank_account",

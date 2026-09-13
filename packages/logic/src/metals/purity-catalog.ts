@@ -106,6 +106,6 @@ function entry(
   });
 }
 
-function isSupportedMetal(metal: string): metal is SupportedMetal {
+export function isSupportedMetal(metal: string): metal is SupportedMetal {
   return metal === "GOLD" || metal === "SILVER";
 }

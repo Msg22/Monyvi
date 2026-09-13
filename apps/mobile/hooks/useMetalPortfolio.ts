@@ -31,6 +31,7 @@ import type {
   MetalHoldingState,
   MetalLifecycleEvent,
 } from "@monyvi/db";
+import type { SupportedMetal } from "@monyvi/logic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AppState } from "react-native";
 
@@ -67,8 +68,6 @@ const PORTFOLIO_HOLDING_STATE_OBSERVED_COLUMNS = [
   "is_visible",
   "reconciliation_state",
 ] as const;
-
-type ActiveMetalType = "GOLD" | "SILVER";
 
 interface UseMetalPortfolioResult {
   readonly error: Error | null;
@@ -570,7 +569,7 @@ export function useMetalPortfolio(
           )
           .map((holding) => holding.metalType)
       )
-    ) as ActiveMetalType[];
+    );
     const activePurchaseCurrencies = Array.from(
       new Set(
         portfolioShapedHoldings
@@ -698,7 +697,7 @@ function recordObserverError(
 function getPortfolioRateValues(
   currentRates: LiveRatesTrustReadModel,
   preferredCurrency: string,
-  activeMetalTypes: readonly ActiveMetalType[],
+  activeMetalTypes: readonly SupportedMetal[],
   activePurchaseCurrencies: readonly string[]
 ): readonly LiveRatesTrustReadModel["gold"][] {
   return [
@@ -726,7 +725,7 @@ function getPortfolioRateValues(
 function getPortfolioRateStatus(
   currentRates: LiveRatesTrustReadModel,
   preferredCurrency: string,
-  activeMetalTypes: readonly ActiveMetalType[],
+  activeMetalTypes: readonly SupportedMetal[],
   activePurchaseCurrencies: readonly string[]
 ): PortfolioRateStatus {
   const values = getPortfolioRateValues(
@@ -754,7 +753,7 @@ function getPortfolioProviderObservedAt(
   if (activeHoldings.length === 0) return null;
   const activeMetalTypes = Array.from(
     new Set(activeHoldings.map((holding) => holding.metalType))
-  ) as ActiveMetalType[];
+  );
   const activePurchaseCurrencies = Array.from(
     new Set(
       activeHoldings.flatMap((holding) =>

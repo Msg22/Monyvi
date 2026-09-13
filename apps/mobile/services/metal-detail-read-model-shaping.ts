@@ -13,6 +13,7 @@ import {
   resolveMetalsCurrencyMinorUnits,
   resolvePuritySelection,
   type LifecycleEvent,
+  type SupportedMetal,
 } from "@monyvi/logic";
 
 import type {
@@ -96,7 +97,7 @@ export function toDetailAssetInput(
 
 export function toDetailMetalInput(
   metal: AssetMetal,
-  metalType: "GOLD" | "SILVER"
+  metalType: SupportedMetal
 ): MetalDetailMetalInput {
   return {
     itemForm: metal.itemForm ?? null,
@@ -174,12 +175,6 @@ export function toRateReferenceInput(
   };
 }
 
-export function isSupportedMetalType(
-  value: string
-): value is "GOLD" | "SILVER" {
-  return value === "GOLD" || value === "SILVER";
-}
-
 export function normalizePhysicalForm(
   value: string | null
 ): MetalDetailPhysicalForm | null {
@@ -192,7 +187,7 @@ export function normalizePhysicalForm(
 }
 
 export function toRenderKey(
-  metalType: "GOLD" | "SILVER",
+  metalType: SupportedMetal,
   itemForm: MetalDetailPhysicalForm | null
 ): MetalDetailRenderKey | null {
   return itemForm === null

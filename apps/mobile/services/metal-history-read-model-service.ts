@@ -6,6 +6,10 @@ import {
   type MetalHoldingState,
   type MetalLifecycleEvent,
 } from "@monyvi/db";
+import {
+  isSupportedMetal,
+  type SupportedMetal,
+} from "@monyvi/logic";
 import { Q, type Query } from "@nozbe/watermelondb";
 import {
   getCurrentUserDataScope,
@@ -52,7 +56,7 @@ export interface BuildMetalHistoryReadModelInput {
 export interface MetalHistoryItem {
   readonly holdingId: string;
   readonly itemForm: "bar" | "coin" | "jewelry" | null;
-  readonly metalType: "GOLD" | "SILVER";
+  readonly metalType: SupportedMetal;
   readonly name: string;
   readonly occurredAt: Date;
   readonly purityCatalogVersion: string | null;
@@ -137,30 +141,54 @@ export async function readMetalHistoryReadModel(
   }
 
   const counts = countTerminalStates(lifecycleValidatedStates);
-  const filteredStates = lifecycleValidatedStates.filter(
+  const candidateStates = lifecycleValidatedStates.filter(
     (state) => options.filter === "all" || state.status === options.filter
   );
-  const pageStates = filteredStates.slice(0, pageSize);
-  if (pageStates.length === 0) return emptyHistory(options.filter, counts);
-
-  const assets = await readHistoryAssets(scope, pageStates);
-  if (assets.length === 0) return emptyHistory(options.filter, counts);
-  const dependencies = await readHistoryDependencies(
+  // One extra renderable item is collected to answer hasMore without
+  // exposing it, so lifecycle rows that cannot be rendered (missing owned
+  // asset, metal, or invalid detail model) never consume a visible slot.
+  const collected = await readRenderableHistoryItems(
     scope,
-    assets,
-    pageStates
+    candidateStates,
+    options.filter,
+    pageSize,
+    pageSize + 1
   );
-  const page = buildMetalHistoryReadModel({
-    filter: options.filter,
-    holdings: shapeReadHistoryHoldings(assets, pageStates, dependencies),
-    userId: scope.userId,
-  });
   return Object.freeze({
     counts: Object.freeze({ ...counts }),
     filter: options.filter,
-    hasMore: filteredStates.length > pageStates.length,
-    items: page.items,
+    hasMore: collected.length > pageSize,
+    items: Object.freeze(collected.slice(0, pageSize)),
   });
+}
+
+async function readRenderableHistoryItems(
+  scope: CurrentUserDataScope,
+  candidates: readonly MetalHoldingState[],
+  filter: MetalHistoryFilter,
+  batchSize: number,
+  limit: number
+): Promise<readonly MetalHistoryItem[]> {
+  const collected: MetalHistoryItem[] = [];
+  for (
+    let offset = 0;
+    offset < candidates.length && collected.length < limit;
+    offset += batchSize
+  ) {
+    const batch = candidates.slice(offset, offset + batchSize);
+    const assets = await readHistoryAssets(scope, batch);
+    if (assets.length === 0) {
+      continue;
+    }
+    const dependencies = await readHistoryDependencies(scope, assets, batch);
+    const page = buildMetalHistoryReadModel({
+      filter,
+      holdings: shapeReadHistoryHoldings(assets, batch, dependencies),
+      userId: scope.userId,
+    });
+    collected.push(...page.items);
+  }
+  return collected;
 }
 
 async function readReportableTerminalStates(
@@ -313,7 +341,7 @@ function shapeReadHistoryHoldings(
     if (
       asset === undefined ||
       metal === undefined ||
-      !isSupportedMetalType(metal.metalType)
+      !isSupportedMetal(metal.metalType)
     ) {
       return [];
     }
@@ -424,7 +452,7 @@ function toDetailAssetInput(asset: Asset): MetalDetailAssetInput {
 
 function toDetailMetalInput(
   metal: AssetMetal,
-  metalType: "GOLD" | "SILVER"
+  metalType: SupportedMetal
 ): MetalDetailMetalInput {
   return {
     itemForm: metal.itemForm ?? null,
@@ -448,10 +476,6 @@ function toDetailHoldingStateInput(
     status: state.status,
     userId: state.userId,
   };
-}
-
-function isSupportedMetalType(value: string): value is "GOLD" | "SILVER" {
-  return value === "GOLD" || value === "SILVER";
 }
 
 function isTerminalStatus(value: string): value is "sold" | "disposed" {
