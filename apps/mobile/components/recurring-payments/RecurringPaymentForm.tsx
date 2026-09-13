@@ -25,12 +25,16 @@ import type {
 } from "@monyvi/db";
 import {
   getNextRecurringOccurrenceAfter,
+  getRecurringStartDateMaximum,
   isOnOrBeforeDay,
   isSameLocalCalendarDay,
+  isValidDate,
   MAX_TRANSACTION_AMOUNT,
 } from "@monyvi/logic";
 import { Ionicons } from "@expo/vector-icons";
-import DateTimePicker, { type DateTimePickerEvent } from "@react-native-community/datetimepicker";
+import DateTimePicker, {
+  type DateTimePickerEvent,
+} from "@react-native-community/datetimepicker";
 import React, {
   useCallback,
   useEffect,
@@ -175,7 +179,9 @@ export const RecurringPaymentForm = React.forwardRef<
   const [showAccountModal, setShowAccountModal] = useState(false);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [showFrequencyModal, setShowFrequencyModal] = useState(false);
-  const [datePickerField, setDatePickerField] = useState<"startDate" | "endDate" | null>(null);
+  const [datePickerField, setDatePickerField] = useState<
+    "startDate" | "endDate" | null
+  >(null);
   const isSubmitInFlightRef = useRef(false);
   const dirtyFieldsRef = useRef<Set<RecurringPaymentFormField>>(new Set());
   const nameFieldRef = getFieldRef("name");
@@ -259,7 +265,24 @@ export const RecurringPaymentForm = React.forwardRef<
     hasScheduleChanges,
     status,
   });
-  const startDateMinimumDate = getStartDateMinimumDate(mode, form.startDate);
+  const startDateMinimumDate = getLocalCalendarDate(new Date());
+  const startDateMaximumDate = getRecurringStartDateMaximum(
+    startDateMinimumDate
+  );
+  const startDatePickerValue = getConstrainedStartDatePickerValue(
+    form.startDate,
+    startDateMinimumDate,
+    startDateMaximumDate
+  );
+  const endDateMinimumDate = isValidDate(form.startDate)
+    ? form.startDate
+    : startDateMinimumDate;
+  const endDatePickerValue =
+    form.endDate !== null &&
+    isValidDate(form.endDate) &&
+    isOnOrBeforeDay(endDateMinimumDate, form.endDate)
+      ? form.endDate
+      : endDateMinimumDate;
   const hasNoFurtherEligibleRecurrence = hasNoFurtherEligiblePayment(
     form.startDate,
     effectiveRecurrenceAnchorDate,
@@ -328,7 +351,9 @@ export const RecurringPaymentForm = React.forwardRef<
   );
 
   useEffect(() => {
-    if (form.reactivateAfterSaving && !isReactivationAvailable) updateField("reactivateAfterSaving", false);
+    if (form.reactivateAfterSaving && !isReactivationAvailable) {
+      updateField("reactivateAfterSaving", false);
+    }
   }, [form.reactivateAfterSaving, isReactivationAvailable, updateField]);
 
   const handleSubmit = useCallback(async (): Promise<void> => {
@@ -355,6 +380,7 @@ export const RecurringPaymentForm = React.forwardRef<
           }),
           amountPrecision: (precision) =>
             t("amount_precision_error", { precision }),
+          amountDecimalSeparator: tCommon("amount_decimal_separator_error"),
           invalidStartDate: t("invalid_due_payment_date"),
           startDateRange: t("due_payment_date_range"),
           invalidEndDate: t("invalid_end_date"),
@@ -385,6 +411,7 @@ export const RecurringPaymentForm = React.forwardRef<
     scrollToFirstError,
     selectedCurrency,
     t,
+    tCommon,
   ]);
 
   useImperativeHandle(
@@ -560,14 +587,22 @@ export const RecurringPaymentForm = React.forwardRef<
                   icon="calendar-outline"
                   label={t("end_date")}
                   labelSuffix={t("optional")}
-                  value={form.endDate ? formatDate(form.endDate, "MMM d, yyyy") : t("end_date_not_set")}
+                  value={
+                    form.endDate
+                      ? formatDate(form.endDate, "MMM d, yyyy")
+                      : t("end_date_not_set")
+                  }
                   description={
                     hasNoFurtherEligibleRecurrence
                       ? t("end_date_no_further_payments")
                       : t("end_date_hint")
                   }
                   actionLabel={form.endDate ? t("clear") : undefined}
-                  onAction={form.endDate ? () => updateField("endDate", null) : undefined}
+                  onAction={
+                    form.endDate
+                      ? () => updateField("endDate", null)
+                      : undefined
+                  }
                   onPress={() =>
                     setDatePickerField((current) =>
                       current === "endDate" ? null : "endDate"
@@ -624,7 +659,11 @@ export const RecurringPaymentForm = React.forwardRef<
               }`}
             >
               {form.reactivateAfterSaving ? (
-                <Ionicons name="checkmark" size={16} color={palette.slate[25]} />
+                <Ionicons
+                  name="checkmark"
+                  size={16}
+                  color={palette.slate[25]}
+                />
               ) : null}
             </View>
             <View className="flex-1">
@@ -732,11 +771,28 @@ export const RecurringPaymentForm = React.forwardRef<
 
       {datePickerField ? (
         <DateTimePicker
-          value={datePickerField === "startDate" ? form.startDate : (form.endDate ?? form.startDate)}
+          value={
+            datePickerField === "startDate"
+              ? startDatePickerValue
+              : endDatePickerValue
+          }
           mode="date"
           display="default"
-          minimumDate={datePickerField === "startDate" ? startDateMinimumDate : form.startDate}
-          onChange={datePickerField === "startDate" ? handleDateChange : handleEndDateChange}
+          minimumDate={
+            datePickerField === "startDate"
+              ? startDateMinimumDate
+              : endDateMinimumDate
+          }
+          maximumDate={
+            datePickerField === "startDate"
+              ? startDateMaximumDate
+              : undefined
+          }
+          onChange={
+            datePickerField === "startDate"
+              ? handleDateChange
+              : handleEndDateChange
+          }
         />
       ) : null}
 
@@ -910,17 +966,21 @@ function getReactivationDueDate(
     : dueDate;
 }
 
-function getStartDateMinimumDate(
-  mode: RecurringPaymentFormProps["mode"],
-  startDate: Date
+function getLocalCalendarDate(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function getConstrainedStartDatePickerValue(
+  startDate: Date,
+  minimumDate: Date,
+  maximumDate: Date
 ): Date {
-  const today = new Date();
+  const isSelectable =
+    isValidDate(startDate) &&
+    isOnOrBeforeDay(minimumDate, startDate) &&
+    isOnOrBeforeDay(startDate, maximumDate);
 
-  if (mode === "edit" && startDate.getTime() < today.getTime()) {
-    return startDate;
-  }
-
-  return today;
+  return isSelectable ? startDate : minimumDate;
 }
 
 function mergePristineInitialValues(
