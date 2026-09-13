@@ -129,6 +129,19 @@ function MonthlyExpenseChartData({
     });
   });
 
+  // Initial focus: scroll to the earliest chronological month with any
+  // income or expense activity so it is visible without horizontal scrolling.
+  // Leading empty months stay in the chart and remain scrollable backwards.
+  // Each month renders an income + expense bar pair, so the first bar of
+  // month `i` sits at bar index `2 * i`. GiftedCharts skips repositioning for
+  // index 0, so an already-visible first month and an all-empty period both
+  // keep the normal default position.
+  const firstActiveMonthIndex = expenseData.findIndex(
+    (expense, index) => expense.value > 0 || (incomeData[index]?.value ?? 0) > 0
+  );
+  const scrollToIndex =
+    firstActiveMonthIndex > 0 ? firstActiveMonthIndex * 2 : 0;
+
   const totalExpenses = expenseData.reduce((sum, d) => sum + d.value, 0);
   const totalIncome = incomeData.reduce((sum, d) => sum + d.value, 0);
   const netSavings = totalIncome - totalExpenses;
@@ -146,6 +159,7 @@ function MonthlyExpenseChartData({
             barWidth={14}
             spacing={period === "6m" ? 24 : 10}
             initialSpacing={10}
+            scrollToIndex={scrollToIndex}
             noOfSections={4}
             yAxisThickness={0}
             xAxisThickness={1}

@@ -13,6 +13,7 @@ import {
   FlatList,
   Text,
   TouchableOpacity,
+  useWindowDimensions,
   View,
   type LayoutChangeEvent,
   type ListRenderItemInfo,
@@ -20,6 +21,7 @@ import {
 import { useTranslation } from "react-i18next";
 
 import { palette } from "@/constants/colors";
+import { shouldUseCompactLayout } from "@/constants/ui";
 import { useLocale } from "@/context/LocaleContext";
 
 const MAX_MENU_HEIGHT = 288;
@@ -44,6 +46,8 @@ export function StatsCurrencyFilter({
 }: StatsCurrencyFilterProps): React.JSX.Element | null {
   const { t } = useTranslation("common");
   const { language } = useLocale();
+  const { width, fontScale } = useWindowDimensions();
+  const isCompactLayout = shouldUseCompactLayout(width, fontScale);
   const filterRowRef = useRef<View>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [filterRowHeight, setFilterRowHeight] = useState(0);
@@ -104,20 +108,19 @@ export function StatsCurrencyFilter({
         onLayout={(event: LayoutChangeEvent): void => {
           setFilterRowHeight(event.nativeEvent.layout.height);
         }}
-        className="flex-row items-center justify-between gap-3"
+        className={
+          isCompactLayout
+            ? "flex-col items-start gap-2"
+            : "flex-row items-center justify-between gap-3"
+        }
       >
-        <View className="min-w-0 flex-1">
-          <Text className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-            {t("currency")}
-          </Text>
-          <Text
-            testID="stats-currency-scope"
-            numberOfLines={1}
-            className="mt-0.5 text-sm text-text-secondary dark:text-text-secondary-dark"
-          >
-            {t("transactions")} · {selectedCurrency}
-          </Text>
-        </View>
+        <Text
+          testID="stats-currency-label"
+          numberOfLines={1}
+          className="min-w-0 text-sm font-semibold text-text-secondary dark:text-text-secondary-dark"
+        >
+          {t("transaction_currency")}
+        </Text>
 
         <TouchableOpacity
           testID="stats-currency-trigger"
@@ -127,7 +130,9 @@ export function StatsCurrencyFilter({
           activeOpacity={0.7}
           disabled={isDisabled}
           onPress={() => setIsOpen((current) => !current)}
-          className="min-h-11 flex-row items-center rounded-2xl border border-slate-200 bg-white px-3 dark:border-slate-700 dark:bg-slate-800"
+          className={`min-h-11 flex-row items-center self-start rounded-2xl border border-slate-200 bg-white px-3 dark:border-slate-700 dark:bg-slate-800 ${
+            isCompactLayout ? "" : "shrink-0"
+          }`}
         >
           {selectedItem ? (
             <Text className="me-2 text-lg">{selectedItem.flag}</Text>

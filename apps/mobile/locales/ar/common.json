@@ -30,6 +30,7 @@
   "error_generic": "حدث خطأ ما. يرجى المحاولة مرة أخرى.",
   "error_network": "خطأ في الشبكة. يرجى التحقق من اتصالك.",
   "currency": "العملة",
+  "transaction_currency": "عملة المعاملات",
   "just_now": "الآن",
   "minutes_ago_one": "منذ دقيقة",
   "minutes_ago_two": "منذ دقيقتين",

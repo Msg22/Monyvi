@@ -19,7 +19,8 @@ import { useTheme } from "@/context/ThemeContext";
 import type { CurrencyType } from "@monyvi/db";
 import { formatCurrency } from "@monyvi/logic";
 import { Ionicons } from "@expo/vector-icons";
-import React, { useEffect, useMemo, useState } from "react";
+import { useFocusEffect } from "expo-router";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Text, View } from "react-native";
 import { PieChart } from "react-native-gifted-charts";
 import { useTranslation } from "react-i18next";
@@ -58,6 +59,22 @@ export function CategoryDrilldownCard({
   useEffect(() => {
     setBreadcrumbs((prev) => [rootBreadcrumb, ...prev.slice(1)]);
   }, [rootBreadcrumb]);
+
+  // Category navigation state is transient view state, not user data. It must
+  // return to root categories when the user leaves and re-enters Stats, or when
+  // the selected currency changes, instead of preserving a stale child
+  // drilldown. Navigation focus (not component unmount) drives the leave/return
+  // reset because the tab screen stays mounted in the navigator.
+  const resetNavigation = useCallback((): void => {
+    setCurrentParentId(null);
+    setBreadcrumbs([rootBreadcrumb]);
+  }, [rootBreadcrumb]);
+
+  useFocusEffect(resetNavigation);
+
+  useEffect(() => {
+    resetNavigation();
+  }, [currency, resetNavigation]);
 
   // Build category map with children info
   const categoryMap = useMemo(() => {
@@ -161,9 +178,37 @@ export function CategoryDrilldownCard({
   // Calculate total for current view
   const totalAmount = currentLevelData.reduce((sum, c) => sum + c.amount, 0);
 
+  // A category is drillable only when at least one descendant branch has
+  // spending in the current scope (period + selected currency). Direct
+  // spending on the parent alone must not expose the drilldown affordance.
+  const drillableCategoryIds = useMemo(() => {
+    const spendingCategoryIds = new Set(
+      transactions
+        .map((tx) => tx.categoryId)
+        .filter((id): id is string => id !== null && id !== undefined)
+    );
+
+    const hasSpendingInSubtree = (categoryId: string): boolean => {
+      const category = categoryMap.get(categoryId);
+      if (!category) return false;
+      return category.childrenIds.some(
+        (childId) =>
+          spendingCategoryIds.has(childId) || hasSpendingInSubtree(childId)
+      );
+    };
+
+    const result = new Set<string>();
+    categoryMap.forEach((category) => {
+      if (hasSpendingInSubtree(category.id)) {
+        result.add(category.id);
+      }
+    });
+    return result;
+  }, [transactions, categoryMap]);
+
   // Handle drill-down
   const handleDrillDown = (category: CategoryData): void => {
-    if (category.childrenIds.length === 0) return;
+    if (!drillableCategoryIds.has(category.id)) return;
 
     setCurrentParentId(category.id);
     setBreadcrumbs((prev) => [
@@ -276,7 +321,7 @@ export function CategoryDrilldownCard({
                 key={cat.id}
                 category={cat}
                 onPress={() => handleDrillDown(cat)}
-                hasChildren={cat.childrenIds.length > 0}
+                canDrillDown={drillableCategoryIds.has(cat.id)}
                 currency={currency}
               />
             ))}

@@ -17,14 +17,14 @@ import { Text, TouchableOpacity, View } from "react-native";
 interface DrilldownCategoryItemProps {
   readonly category: CategoryData;
   readonly onPress: () => void;
-  readonly hasChildren: boolean;
+  readonly canDrillDown: boolean;
   readonly currency: CurrencyType;
 }
 
 export function DrilldownCategoryItem({
   category,
   onPress,
-  hasChildren,
+  canDrillDown,
   currency,
 }: DrilldownCategoryItemProps): React.JSX.Element {
   const { isDark } = useTheme();
@@ -32,15 +32,16 @@ export function DrilldownCategoryItem({
 
   return (
     <TouchableOpacity
+      testID={`drilldown-category-${category.id}`}
       onPress={onPress}
-      disabled={!hasChildren}
+      disabled={!canDrillDown}
       className="flex-row items-center py-2"
       accessible
-      accessibilityRole={hasChildren ? "button" : "text"}
+      accessibilityRole={canDrillDown ? "button" : "text"}
       accessibilityLanguage={language}
       accessibilityLabel={`${category.displayName}, ${formatCurrency({ amount: category.amount, currency })}, ${category.percentage.toFixed(1)}%`}
-      accessibilityHint={hasChildren ? "Tap to drill down" : undefined}
-      accessibilityState={{ disabled: !hasChildren }}
+      accessibilityHint={canDrillDown ? "Tap to drill down" : undefined}
+      accessibilityState={{ disabled: !canDrillDown }}
     >
       <View
         className="w-3 h-3 rounded-full me-3"
@@ -60,8 +61,9 @@ export function DrilldownCategoryItem({
       <Text className="text-xs text-slate-400 dark:text-slate-500">
         {category.percentage.toFixed(1)}%
       </Text>
-      {hasChildren && (
+      {canDrillDown && (
         <Ionicons
+          testID={`drilldown-chevron-${category.id}`}
           name="chevron-forward"
           size={16}
           color={isDark ? palette.slate[500] : palette.slate[400]}
