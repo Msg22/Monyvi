@@ -338,7 +338,6 @@ describe("RecurringPaymentForm physical-device QA", () => {
 
     fireEvent.press(screen.getByTestId("set-picker-minimum-date"));
     fireEvent.press(screen.getByTestId("recurring-payment-start-date-row"));
-    fireEvent.press(screen.getByTestId("recurring-payment-start-date-row"));
     pickerProps = getLatestDatePickerProps();
     expectSameLocalDay(pickerProps.maximumDate, new Date(2027, 5, 1));
     fireEvent.press(screen.getByTestId("set-picker-maximum-date"));
