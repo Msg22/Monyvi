@@ -2,6 +2,7 @@ import {
   createPuritySnapshot,
   getPurityCatalog,
   getPurityEntry,
+  isSupportedMetal,
   PURITY_CATALOG_VERSION,
   resolvePuritySelection,
 } from "../purity-catalog";
@@ -53,6 +54,13 @@ const EXPECTED_CATALOG_V1 = [
 ];
 
 describe("Metals purity catalog v1", () => {
+  it("owns the single supported-metal runtime guard", () => {
+    expect(isSupportedMetal("GOLD")).toBe(true);
+    expect(isSupportedMetal("SILVER")).toBe(true);
+    expect(isSupportedMetal("PLATINUM")).toBe(false);
+    expect(isSupportedMetal("BTC")).toBe(false);
+  });
+
   it("publishes exactly the approved Gold and Silver catalog with stable literal codes", () => {
     const { PURITY_CATALOG_VERSION, getPurityCatalog } = loadPurityCatalogApi();
 

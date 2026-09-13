@@ -47,6 +47,11 @@ interface CurrencyDisplayItem {
   readonly flag: string;
   readonly rate: string;
   readonly changePercent: number;
+  readonly trust?: {
+    readonly quality: string | null;
+    readonly source: string | null;
+    readonly state: "fresh" | "stale" | "unknown" | "missing" | "invalid";
+  };
 }
 
 interface CurrencySectionProps {
@@ -110,6 +115,7 @@ export function CurrencySection({
         name={item.name}
         rate={item.rate}
         changePercent={item.changePercent}
+        trust={item.trust}
       />
     ),
     []

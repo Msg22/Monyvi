@@ -29,6 +29,7 @@
   "budgets": "Budgets",
   "error_generic": "Something went wrong. Please try again.",
   "error_network": "Network error. Please check your connection.",
+  "money_summary_error": "We couldn't load your money summary. Try again.",
   "currency": "Currency",
   "transaction_currency": "Transaction currency",
   "just_now": "Just now",

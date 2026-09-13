@@ -1,4 +1,7 @@
-import { resolveMetalsCurrencyMinorUnits } from "../currency-minor-units";
+import {
+  resolveCurrencyDisplayMinorUnits,
+  resolveMetalsCurrencyMinorUnits,
+} from "../currency-minor-units";
 import type { CurrencyInstrumentCode } from "../rate-reference";
 
 describe("Metals ISO currency minor units", () => {
@@ -19,5 +22,16 @@ describe("Metals ISO currency minor units", () => {
         "currency:ZZZ" as CurrencyInstrumentCode
       )
     ).toBeNull();
+  });
+});
+
+describe("canonical currency display minor units", () => {
+  it.each([
+    ["EGP", 2],
+    ["KWD", 3],
+    ["JPY", 0],
+    ["BTC", 8],
+  ] as const)("resolves %s display precision to %s", (currency, expected) => {
+    expect(resolveCurrencyDisplayMinorUnits(currency)).toBe(expected);
   });
 });

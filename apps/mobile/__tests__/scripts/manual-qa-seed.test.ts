@@ -396,7 +396,7 @@ describe("manual-qa-seed script helpers", () => {
       expect.arrayContaining([
         expect.objectContaining({
           metal_type: "GOLD",
-          item_form: "Jewelry",
+          item_form: "jewelry",
           weight_grams_decimal: "24.5",
           purity_code: "gold-875",
           purity_factor_decimal: "0.875",
@@ -404,7 +404,7 @@ describe("manual-qa-seed script helpers", () => {
         }),
         expect.objectContaining({
           metal_type: "SILVER",
-          item_form: "Coins",
+          item_form: "coin",
           weight_grams_decimal: "250",
           purity_code: "silver-999",
           purity_factor_decimal: "0.999",
@@ -412,7 +412,7 @@ describe("manual-qa-seed script helpers", () => {
         }),
         expect.objectContaining({
           metal_type: "GOLD",
-          item_form: "Bar",
+          item_form: "bar",
           weight_grams_decimal: "10",
           purity_code: "gold-999",
           purity_factor_decimal: "0.999",
@@ -431,17 +431,17 @@ describe("manual-qa-seed script helpers", () => {
       expect.arrayContaining([
         expect.objectContaining({
           status: "active",
-          financial_revision: "0",
+          financial_revision: "1",
           reconciliation_state: "accepted",
         }),
         expect.objectContaining({
           status: "sold",
-          financial_revision: "1",
+          financial_revision: "2",
           reconciliation_state: "accepted",
         }),
         expect.objectContaining({
           status: "disposed",
-          financial_revision: "1",
+          financial_revision: "2",
           reconciliation_state: "accepted",
         }),
       ])

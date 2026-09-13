@@ -165,15 +165,120 @@ function buildManualQaExtraRows({
   const soldSaleDate = dateFromReference(fixedNow, -10);
   const disposedPurchaseDate = dateFromReference(fixedNow, -50);
   const disposedDisposalDate = dateFromReference(fixedNow, -5);
+  const goldChainPurchaseDate = dateFromReference(fixedNow, -90);
+  const silverCoinsPurchaseDate = dateFromReference(fixedNow, -45);
+  const goldBarPurchaseDate = dateFromReference(fixedNow, -20);
+  const goldChainAcquisition = createMetalAcquisitionFixture({
+    currentTimestamp,
+    deterministicUuid,
+    fixedNow,
+    holdingId: seedIds.assets.goldChain,
+    itemForm: "jewelry",
+    metalType: "GOLD",
+    name: "21k Gold Chain",
+    notes: "Jewelry purchase for metal asset QA",
+    purchaseCurrency: "EGP",
+    purchaseDate: goldChainPurchaseDate,
+    purchasePriceDecimal: "18500",
+    purityCatalogVersion: "1",
+    purityCode: "gold-875",
+    purityFactorDecimal: "0.875",
+    seedScope,
+    userId,
+    weightGramsDecimal: "24.5",
+  });
+  const silverCoinsAcquisition = createMetalAcquisitionFixture({
+    currentTimestamp,
+    deterministicUuid,
+    fixedNow,
+    holdingId: seedIds.assets.silverCoins,
+    itemForm: "coin",
+    metalType: "SILVER",
+    name: "Silver Coin Stack",
+    notes: "Small silver holding",
+    purchaseCurrency: "EGP",
+    purchaseDate: silverCoinsPurchaseDate,
+    purchasePriceDecimal: "7800",
+    purityCatalogVersion: "1",
+    purityCode: "silver-999",
+    purityFactorDecimal: "0.999",
+    seedScope,
+    userId,
+    weightGramsDecimal: "250",
+  });
+  const goldBarAcquisition = createMetalAcquisitionFixture({
+    currentTimestamp,
+    deterministicUuid,
+    fixedNow,
+    holdingId: seedIds.assets.goldBar,
+    itemForm: "bar",
+    metalType: "GOLD",
+    name: "Gold Test Bar",
+    notes: "Foreign-currency precious metal",
+    purchaseCurrency: "USD",
+    purchaseDate: goldBarPurchaseDate,
+    purchasePriceDecimal: "12500",
+    purityCatalogVersion: "1",
+    purityCode: "gold-999",
+    purityFactorDecimal: "0.999",
+    seedScope,
+    userId,
+    weightGramsDecimal: "10",
+  });
+  const soldAcquisition = createMetalAcquisitionFixture({
+    currentTimestamp,
+    deterministicUuid,
+    fixedNow,
+    holdingId: soldHoldingId,
+    itemForm: "coin",
+    metalType: "GOLD",
+    name: "QA Sold Gold Coin",
+    notes: "Manual QA terminal sold holding",
+    purchaseCurrency: "EGP",
+    purchaseDate: soldPurchaseDate,
+    purchasePriceDecimal: "30000",
+    purityCatalogVersion: "1",
+    purityCode: "gold-9999",
+    purityFactorDecimal: "0.9999",
+    seedScope,
+    userId,
+    weightGramsDecimal: "15",
+  });
+  const disposedAcquisition = createMetalAcquisitionFixture({
+    currentTimestamp,
+    deterministicUuid,
+    fixedNow,
+    holdingId: disposedHoldingId,
+    itemForm: "bar",
+    metalType: "SILVER",
+    name: "QA Given Away Silver Bar",
+    notes: "Manual QA terminal disposed holding",
+    purchaseCurrency: "EGP",
+    purchaseDate: disposedPurchaseDate,
+    purchasePriceDecimal: "4500",
+    purityCatalogVersion: "1",
+    purityCode: "silver-999",
+    purityFactorDecimal: "0.999",
+    seedScope,
+    userId,
+    weightGramsDecimal: "100",
+  });
+  const metalAcquisitions = [
+    goldChainAcquisition,
+    silverCoinsAcquisition,
+    goldBarAcquisition,
+    soldAcquisition,
+    disposedAcquisition,
+  ];
   const soldPayload = {
-    expectedHoldingRevision: "0",
+    expectedHoldingRevision: "1",
     feeMinorUnits: "50000",
     grossProceedsMinorUnits: "3600000",
     holdingId: soldHoldingId,
     metalType: "GOLD",
     netProceedsMinorUnits: "3550000",
     notes: "Manual QA whole-holding sale without account credit",
-    predecessorEventId: null,
+    predecessorEventId: soldAcquisition.actionId,
     purchaseCurrency: "EGP",
     rateSnapshots: [],
     reversesEventId: null,
@@ -182,10 +287,10 @@ function buildManualQaExtraRows({
   };
   const disposedPayload = {
     disposalDate: disposedDisposalDate,
-    expectedHoldingRevision: "0",
+    expectedHoldingRevision: "1",
     holdingId: disposedHoldingId,
     notes: "Manual QA given-away disposal fixture",
-    predecessorEventId: null,
+    predecessorEventId: disposedAcquisition.actionId,
     reason: "given_away",
     reversesEventId: null,
   };
@@ -480,10 +585,10 @@ function buildManualQaExtraRows({
         type: "METAL",
         purchase_price: 18500,
         purchase_price_decimal: "18500",
-        purchase_date: dateFromToday(-90),
+        purchase_date: goldChainPurchaseDate,
         currency: "EGP",
         purchase_currency: "EGP",
-        acquisition_action_id: null,
+        acquisition_action_id: goldChainAcquisition.actionId,
         is_liquid: true,
         notes: "Jewelry purchase for metal asset QA",
         deleted: false,
@@ -497,10 +602,10 @@ function buildManualQaExtraRows({
         type: "METAL",
         purchase_price: 7800,
         purchase_price_decimal: "7800",
-        purchase_date: dateFromToday(-45),
+        purchase_date: silverCoinsPurchaseDate,
         currency: "EGP",
         purchase_currency: "EGP",
-        acquisition_action_id: null,
+        acquisition_action_id: silverCoinsAcquisition.actionId,
         is_liquid: true,
         notes: "Small silver holding",
         deleted: false,
@@ -514,10 +619,10 @@ function buildManualQaExtraRows({
         type: "METAL",
         purchase_price: 12500,
         purchase_price_decimal: "12500",
-        purchase_date: dateFromToday(-20),
+        purchase_date: goldBarPurchaseDate,
         currency: "USD",
         purchase_currency: "USD",
-        acquisition_action_id: null,
+        acquisition_action_id: goldBarAcquisition.actionId,
         is_liquid: true,
         notes: "Foreign-currency precious metal",
         deleted: false,
@@ -534,7 +639,7 @@ function buildManualQaExtraRows({
         purchase_date: soldPurchaseDate,
         currency: "EGP",
         purchase_currency: "EGP",
-        acquisition_action_id: null,
+        acquisition_action_id: soldAcquisition.actionId,
         is_liquid: true,
         notes: "Manual QA terminal sold holding",
         deleted: false,
@@ -551,7 +656,7 @@ function buildManualQaExtraRows({
         purchase_date: disposedPurchaseDate,
         currency: "EGP",
         purchase_currency: "EGP",
-        acquisition_action_id: null,
+        acquisition_action_id: disposedAcquisition.actionId,
         is_liquid: true,
         notes: "Manual QA terminal disposed holding",
         deleted: false,
@@ -598,7 +703,7 @@ function buildManualQaExtraRows({
         purity_code: "gold-875",
         purity_factor_decimal: "0.875",
         purity_catalog_version: "1",
-        item_form: "Jewelry",
+        item_form: "jewelry",
         deleted: false,
         created_at: fixedNow,
         updated_at: currentTimestamp,
@@ -613,7 +718,7 @@ function buildManualQaExtraRows({
         purity_code: "silver-999",
         purity_factor_decimal: "0.999",
         purity_catalog_version: "1",
-        item_form: "Coins",
+        item_form: "coin",
         deleted: false,
         created_at: fixedNow,
         updated_at: currentTimestamp,
@@ -628,7 +733,7 @@ function buildManualQaExtraRows({
         purity_code: "gold-999",
         purity_factor_decimal: "0.999",
         purity_catalog_version: "1",
-        item_form: "Bar",
+        item_form: "bar",
         deleted: false,
         created_at: fixedNow,
         updated_at: currentTimestamp,
@@ -643,7 +748,7 @@ function buildManualQaExtraRows({
         purity_code: "gold-9999",
         purity_factor_decimal: "0.9999",
         purity_catalog_version: "1",
-        item_form: "COIN",
+        item_form: "coin",
         deleted: false,
         created_at: fixedNow,
         updated_at: currentTimestamp,
@@ -658,13 +763,14 @@ function buildManualQaExtraRows({
         purity_code: "silver-999",
         purity_factor_decimal: "0.999",
         purity_catalog_version: "1",
-        item_form: "BAR",
+        item_form: "bar",
         deleted: false,
         created_at: fixedNow,
         updated_at: currentTimestamp,
       },
     ],
     financialActionGroups: [
+      ...metalAcquisitions.map((acquisition) => acquisition.actionGroup),
       createFinancialActionGroup({
         actionId: soldActionId,
         currentTimestamp,
@@ -687,6 +793,7 @@ function buildManualQaExtraRows({
       }),
     ],
     metalActionEvidence: [
+      ...metalAcquisitions.map((acquisition) => acquisition.evidence),
       createMetalActionEvidence({
         actionId: soldActionId,
         currentTimestamp,
@@ -694,6 +801,7 @@ function buildManualQaExtraRows({
         holdingId: soldHoldingId,
         kind: "sell",
         payload: soldPayload,
+        canonicalHoldingRevision: "2",
         userId,
       }),
       createMetalActionEvidence({
@@ -703,10 +811,12 @@ function buildManualQaExtraRows({
         holdingId: disposedHoldingId,
         kind: "dispose",
         payload: disposedPayload,
+        canonicalHoldingRevision: "2",
         userId,
       }),
     ],
     metalLifecycleEvents: [
+      ...metalAcquisitions.map((acquisition) => acquisition.event),
       createMetalLifecycleEvent({
         actionId: soldActionId,
         currentTimestamp,
@@ -729,18 +839,14 @@ function buildManualQaExtraRows({
       }),
     ],
     metalHoldingStates: [
-      ...[
-        seedIds.assets.goldChain,
-        seedIds.assets.silverCoins,
-        seedIds.assets.goldBar,
-      ].map((holdingId) => ({
-        id: holdingId,
+      ...metalAcquisitions.slice(0, 3).map((acquisition) => ({
+        id: acquisition.holdingId,
         user_id: userId,
-        holding_id: holdingId,
+        holding_id: acquisition.holdingId,
         status: "active",
-        financial_revision: "0",
-        effective_event_id: null,
-        effective_action_id: null,
+        financial_revision: "1",
+        effective_event_id: acquisition.actionId,
+        effective_action_id: acquisition.actionId,
         is_visible: true,
         reconciliation_state: "accepted",
         deleted: false,
@@ -764,6 +870,12 @@ function buildManualQaExtraRows({
         userId,
       }),
     ],
+    marketRateObservations: createManualQaMarketRateObservations({
+      currentTimestamp,
+      deterministicUuid,
+      seedScope,
+      userId,
+    }),
     debts: [
       {
         id: seedIds.debts.activeLent,
@@ -1510,6 +1622,204 @@ function buildManualQaExtraRows({
   };
 }
 
+function createMetalAcquisitionFixture({
+  currentTimestamp,
+  deterministicUuid,
+  fixedNow,
+  holdingId,
+  itemForm,
+  metalType,
+  name,
+  notes,
+  purchaseCurrency,
+  purchaseDate,
+  purchasePriceDecimal,
+  purityCatalogVersion,
+  purityCode,
+  purityFactorDecimal,
+  seedScope,
+  userId,
+  weightGramsDecimal,
+}) {
+  const actionId = deterministicUuid(
+    seedScope,
+    userId,
+    `metal-action:acquire:${holdingId}`
+  );
+  const groupId = deterministicUuid(
+    seedScope,
+    userId,
+    `financial-action-group:acquire:${holdingId}`
+  );
+  const occurredAt = `${purchaseDate}T09:00:00.000Z`;
+  const payload = {
+    expectedHoldingRevision: null,
+    holdingId,
+    materialFacts: {
+      physicalForm: itemForm.toUpperCase(),
+      purchaseCurrency,
+      purchaseDate,
+      purchasePriceDecimal,
+      purityCatalogVersion,
+      purityCode,
+      purityFactorDecimal,
+      weightGramsDecimal,
+    },
+    metadata: { name, notes },
+    metalType,
+    predecessorEventId: null,
+    rateSnapshots: createAcquisitionRateSnapshots({
+      actionId,
+      deterministicUuid,
+      metalType,
+      occurredAt,
+      purchaseCurrency,
+      seedScope,
+      userId,
+    }),
+    reversesEventId: null,
+  };
+  const envelope = createMetalActionEnvelope({
+    actionId,
+    holdingId,
+    kind: "add",
+    occurredAt,
+    payload,
+    payloadVersion: "metals.add/v1",
+    userId,
+  });
+  return {
+    actionGroup: createFinancialActionGroup({
+      actionId,
+      currentTimestamp,
+      envelope,
+      fixedNow,
+      groupId,
+      holdingId,
+      kind: "add",
+      userId,
+    }),
+    actionId,
+    evidence: createMetalActionEvidence({
+      actionId,
+      currentTimestamp,
+      fixedNow,
+      holdingId,
+      kind: "add",
+      payload,
+      userId,
+    }),
+    event: createMetalLifecycleEvent({
+      actionId,
+      currentTimestamp,
+      fixedNow,
+      holdingId,
+      kind: "add",
+      occurredAt,
+      payload,
+      userId,
+    }),
+    holdingId,
+  };
+}
+
+function createAcquisitionRateSnapshots({
+  actionId,
+  deterministicUuid,
+  metalType,
+  occurredAt,
+  purchaseCurrency,
+  seedScope,
+  userId,
+}) {
+  const shared = {
+    capturedAt: occurredAt,
+    capturedFreshness: "fresh",
+    orientation: "quote_per_base",
+    providerObservedAt: occurredAt,
+    quality: "valid",
+    source: `manual_qa_fixture:${seedScope}`,
+  };
+  return [
+    {
+      ...shared,
+      instrumentCode: `metal:${metalType}`,
+      kind: "metal",
+      referenceId: deterministicUuid(
+        seedScope,
+        userId,
+        `metal-rate-reference:${actionId}:metal`
+      ),
+      role: "acquisition_metal",
+      unit: "usd_per_pure_gram",
+      valueDecimal: metalType === "GOLD" ? "75" : "0.95",
+    },
+    {
+      ...shared,
+      instrumentCode: `currency:${purchaseCurrency}`,
+      kind: "currency",
+      referenceId: deterministicUuid(
+        seedScope,
+        userId,
+        `metal-rate-reference:${actionId}:currency`
+      ),
+      role: "acquisition_purchase_currency",
+      unit: "usd_per_currency_unit",
+      valueDecimal: purchaseCurrency === "USD" ? "1" : "0.02",
+    },
+  ];
+}
+
+function createManualQaMarketRateObservations({
+  currentTimestamp,
+  deterministicUuid,
+  seedScope,
+  userId,
+}) {
+  const batchId = deterministicUuid(
+    seedScope,
+    userId,
+    "market-rate-observation-batch"
+  );
+  return [
+    ["metal:GOLD", "75", "usd_per_pure_gram"],
+    ["metal:SILVER", "0.95", "usd_per_pure_gram"],
+    ["currency:EGP", "0.02", "usd_per_currency_unit"],
+    ["currency:USD", "1", "usd_per_currency_unit"],
+  ].map(([instrumentCode, valueDecimal, unit]) => ({
+    id: deterministicUuid(
+      seedScope,
+      userId,
+      `market-rate-observation:${instrumentCode}`
+    ),
+    batch_id: batchId,
+    instrument_code: instrumentCode,
+    value_decimal: valueDecimal,
+    unit,
+    orientation: "quote_per_base",
+    provider_observed_at: currentTimestamp,
+    source: `manual_qa_fixture:${seedScope}`,
+    quality: "valid",
+    created_at: currentTimestamp,
+  }));
+}
+
+function canonicalizeJsonKeys(value) {
+  if (Array.isArray(value)) {
+    return value.map(canonicalizeJsonKeys);
+  }
+  if (value && typeof value === "object") {
+    const sorted = {};
+    for (const key of Object.keys(value).sort((a, b) =>
+      Buffer.compare(Buffer.from(a, "utf8"), Buffer.from(b, "utf8"))
+    )) {
+      sorted[key] = canonicalizeJsonKeys(value[key]);
+    }
+    return sorted;
+  }
+  return value;
+}
+
 function createMetalActionEnvelope({
   actionId,
   holdingId,
@@ -1519,18 +1829,20 @@ function createMetalActionEnvelope({
   payloadVersion,
   userId,
 }) {
-  return JSON.stringify({
-    accountGuards: [],
-    actionId,
-    domain: "metals",
-    domainReferenceId: holdingId,
-    envelopeVersion: "monyvi.financial-action/v1",
-    kind,
-    occurredAt,
-    payload,
-    payloadVersion,
-    userId,
-  });
+  return JSON.stringify(
+    canonicalizeJsonKeys({
+      accountGuards: [],
+      actionId,
+      domain: "metals",
+      domainReferenceId: holdingId,
+      envelopeVersion: "monyvi.financial-action/v1",
+      kind,
+      occurredAt,
+      payload,
+      payloadVersion,
+      userId,
+    })
+  );
 }
 
 function createFinancialActionGroup({
@@ -1565,6 +1877,7 @@ function createFinancialActionGroup({
 
 function createMetalActionEvidence({
   actionId,
+  canonicalHoldingRevision = "1",
   currentTimestamp,
   fixedNow,
   holdingId,
@@ -1578,8 +1891,8 @@ function createMetalActionEvidence({
     action_id: actionId,
     holding_id: holdingId,
     kind,
-    expected_holding_revision: "0",
-    canonical_holding_revision: "1",
+    expected_holding_revision: payload.expectedHoldingRevision,
+    canonical_holding_revision: canonicalHoldingRevision,
     domain_payload_json: payload,
     deleted: false,
     created_at: fixedNow,
@@ -1605,8 +1918,8 @@ function createMetalLifecycleEvent({
     kind,
     occurred_at: occurredAt,
     payload_json: payload,
-    predecessor_event_id: null,
-    reverses_event_id: null,
+    predecessor_event_id: payload.predecessorEventId,
+    reverses_event_id: payload.reversesEventId,
     is_effective: true,
     is_history_visible: true,
     deleted: false,
@@ -1634,7 +1947,7 @@ function createTerminalHoldingState({
     user_id: userId,
     holding_id: holdingId,
     status,
-    financial_revision: "1",
+    financial_revision: "2",
     effective_event_id: actionId,
     effective_action_id: actionId,
     is_visible: true,

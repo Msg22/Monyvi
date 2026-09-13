@@ -1,0 +1,21 @@
+appId: com.monyvi.app
+---
+# Slice 4-owned deterministic fixture profile must expose provider-observation
+# states to this flow. This slice deliberately does not alter fixture registry.
+- runFlow: ../helpers/setup.yaml
+- openLink: monyvi://live-rates
+- extendedWaitUntil:
+    visible:
+      id: "live-rates-trust-gold"
+    timeout: 30000
+- assertVisible:
+    id: "live-rates-trust-gold"
+- assertVisible:
+    id: "live-rates-trust-silver"
+- assertVisible:
+    id: "live-rates-trust-currencies"
+- assertNotVisible: "Platinum"
+- swipe:
+    direction: DOWN
+- assertVisible:
+    id: "live-rates-trust-gold"

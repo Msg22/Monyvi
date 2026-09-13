@@ -1,0 +1,24 @@
+appId: com.monyvi.app
+---
+# Requires Slice 4 deterministic portfolio fixture profile. No fixture writes in this lane.
+- runFlow: ../helpers/setup.yaml
+- openLink: monyvi://home
+- extendedWaitUntil:
+    visible:
+      id: wealth-breakdown-root
+    timeout: 30000
+- tapOn:
+    id: wealth-breakdown-metals
+- assertVisible:
+    id: metal-portfolio-root
+- assertVisible:
+    id: metal-portfolio-filter-ALL
+- tapOn:
+    id: metal-portfolio-filter-GOLD
+- assertVisible:
+    id: metal-portfolio-filter-GOLD
+- openLink: monyvi://live-rates
+- assertVisible:
+    id: live-rates-trust-gold
+- assertVisible:
+    id: live-rates-trust-silver

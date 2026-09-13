@@ -1,0 +1,270 @@
+import { act, renderHook, waitFor } from "@testing-library/react-native";
+
+interface Observer {
+  readonly next: (value: unknown) => void;
+  readonly error: (cause: unknown) => void;
+}
+
+const mockTrustObservers: Observer[] = [];
+const mockDatabase = { id: "database" };
+const mockEmptyTrustReadModel = {
+  gold: { state: "missing", ageMs: null, providerObservedAt: null },
+  silver: { state: "missing", ageMs: null, providerObservedAt: null },
+  currencies: new Map(),
+};
+
+interface MockLocalQuery {
+  readonly observe: () => unknown;
+  readonly observeWithColumns: () => unknown;
+}
+
+function mockImmediateQuery<T>(rows: readonly T[]): MockLocalQuery {
+  const observeWithColumns = (): unknown => ({
+    subscribe: (observer: Observer): { unsubscribe: () => void } => {
+      observer.next(rows);
+      return { unsubscribe: (): void => undefined };
+    },
+  });
+  return {
+    observeWithColumns,
+    observe: observeWithColumns,
+  };
+}
+
+jest.mock("@react-navigation/native", () => ({
+  useIsFocused: (): boolean => true,
+}));
+
+let mockAuthUserId = "user-1";
+
+jest.mock("@/context/AuthContext", () => ({
+  useAuth: () => ({ user: { id: mockAuthUserId }, isLoading: false }),
+}));
+
+jest.mock("@/providers/DatabaseProvider", () => ({
+  useDatabase: (): unknown => mockDatabase,
+}));
+
+jest.mock("@/utils/logger", () => ({
+  logger: {
+    error: jest.fn(),
+    warn: jest.fn(),
+    info: jest.fn(),
+    debug: jest.fn(),
+  },
+}));
+
+jest.mock("@/hooks/useMarketRates", () => ({
+  useMarketRates: (): { isConnected: boolean } => ({ isConnected: true }),
+}));
+
+jest.mock("@/hooks/usePreferredCurrency", () => ({
+  usePreferredCurrency: () => ({
+    preferredCurrency: "EGP",
+    isLoading: false,
+  }),
+}));
+
+const mockWealthBreakdown = { totalNetWorthDecimal: "1000" };
+let mockActiveHoldings: readonly Record<string, unknown>[] = [];
+
+jest.mock("@/services/net-worth-read-model-service", () => ({
+  buildWealthBreakdownReadModel: (): unknown => mockWealthBreakdown,
+}));
+
+jest.mock("@/services/metal-portfolio-read-model-service", () => ({
+  observePortfolioAssets: (): unknown => mockImmediateQuery([]),
+  observePortfolioHoldingStates: (): unknown => mockImmediateQuery([]),
+  observePortfolioAssetMetals: (): null => null,
+  observePortfolioRecentHistory: (): null => null,
+  observePortfolioEffectiveActionEvidence: (): null => null,
+  shapeMetalPortfolioHoldings: (): readonly unknown[] => [],
+  buildMetalPortfolioReadModel: (input: Record<string, unknown>): unknown => ({
+    activeHoldings: mockActiveHoldings,
+    holdings: mockActiveHoldings,
+    recentHistory: [],
+    allocation: { gold: "0", silver: "0" },
+    rateStatus: input.rateStatus,
+    ...input,
+  }),
+}));
+
+jest.mock("@/services/live-rates-trust-read-model-service", () => ({
+  observeLiveRatesTrust: () => ({
+    refresh: jest.fn(),
+    subscribe: (observer: Observer): { unsubscribe: () => void } => {
+      mockTrustObservers.push(observer);
+      return { unsubscribe: (): void => undefined };
+    },
+  }),
+  summarizeLiveRatesTrust: (): string => "missing",
+}));
+
+import { useMetalPortfolio } from "@/hooks/useMetalPortfolio";
+
+describe("useMetalPortfolio summary loading signal", () => {
+  beforeEach(() => {
+    mockAuthUserId = "user-1";
+    mockTrustObservers.length = 0;
+    mockActiveHoldings = [];
+  });
+
+  it("keeps the dashboard summary loading until rates settle while holdings are ready", async () => {
+    const { result } = renderHook(() =>
+      useMetalPortfolio({ accountsValueDecimal: "1000" })
+    );
+
+    // My Metals section readiness can render the (empty) holdings section
+    // immediately, so the screen-level flag settles.
+    await waitFor(() => expect(result.current.readiness.holdings).toBe(true));
+    expect(result.current.isLoading).toBe(false);
+
+    // The dashboard-facing signal must stay loading until the wealth summary
+    // inputs (rates + preferred currency) are ready, so the total never
+    // collapses to a temporary dash.
+    expect(result.current.isSummaryLoading).toBe(true);
+    expect(result.current.readiness.summary).toBe(false);
+    expect(result.current.wealthBreakdown).toBeNull();
+  });
+
+  it("releases summary loading and exposes the wealth breakdown once rates arrive", async () => {
+    const { result } = renderHook(() =>
+      useMetalPortfolio({ accountsValueDecimal: "1000" })
+    );
+    await waitFor(() => expect(result.current.readiness.holdings).toBe(true));
+
+    act(() => {
+      mockTrustObservers[0]?.next(mockEmptyTrustReadModel);
+    });
+
+    await waitFor(() => expect(result.current.isSummaryLoading).toBe(false));
+    expect(result.current.readiness.summary).toBe(true);
+    expect(result.current.wealthBreakdown).toBe(mockWealthBreakdown);
+  });
+
+  it("settles readiness after an initial rate error so the screen shows unavailable values instead of an endless skeleton", async () => {
+    const { result } = renderHook(() =>
+      useMetalPortfolio({ accountsValueDecimal: "1000" })
+    );
+    await waitFor(() => expect(result.current.readiness.holdings).toBe(true));
+    expect(result.current.isSummaryLoading).toBe(true);
+    expect(result.current.readiness.summary).toBe(false);
+
+    act(() => {
+      mockTrustObservers[0]?.error(new Error("rate observer failed"));
+    });
+
+    await waitFor(() => expect(result.current.error).toBeInstanceOf(Error));
+    // The failed initial rate observation is a settled unavailable state, not a
+    // permanent loading state, for both the dashboard flag and the My Metals
+    // section readiness derived from it.
+    expect(result.current.readiness.summary).toBe(true);
+    expect(result.current.isSummaryLoading).toBe(false);
+  });
+
+  it("clears a previous account's observer error when the signed-in user changes", async () => {
+    const { result, rerender } = renderHook(() =>
+      useMetalPortfolio({ accountsValueDecimal: "1000" })
+    );
+    await waitFor(() => expect(result.current.readiness.holdings).toBe(true));
+
+    act(() => {
+      mockTrustObservers[0]?.error(new Error("user A rate observer failed"));
+    });
+    await waitFor(() => expect(result.current.error).toBeInstanceOf(Error));
+
+    mockAuthUserId = "user-2";
+    rerender(undefined);
+
+    // The new account must not inherit account A's generic failure/retry state.
+    expect(result.current.error).toBeNull();
+  });
+});
+
+describe("useMetalPortfolio conservative provider timestamp", () => {
+  beforeEach(() => {
+    mockTrustObservers.length = 0;
+  });
+
+  it("returns null when a consumed rate lacks a timestamp even though another has one", async () => {
+    mockActiveHoldings = [
+      {
+        metalType: "GOLD",
+        purchaseCurrency: null,
+        purchasePriceDecimal: null,
+        status: "active",
+        isVisible: true,
+        isEffective: true,
+      },
+    ];
+    const { result } = renderHook(() => useMetalPortfolio());
+    await waitFor(() => expect(result.current.readiness.holdings).toBe(true));
+
+    act(() => {
+      mockTrustObservers[0]?.next({
+        gold: {
+          state: "fresh",
+          ageMs: 1_000,
+          providerObservedAt: new Date("2026-09-08T10:00:00.000Z"),
+          valueDecimal: "81.5",
+        },
+        silver: { state: "missing", ageMs: null, providerObservedAt: null },
+        currencies: new Map([
+          ["EGP", { state: "unknown", ageMs: null, providerObservedAt: null }],
+        ]),
+      });
+    });
+
+    await waitFor(() =>
+      expect(result.current.readiness.rateCurrency).toBe(true)
+    );
+    // Gold has a timestamp but the preferred currency rate's age is unknown, so
+    // the aggregate cannot truthfully claim a single "last updated" time.
+    expect(result.current.rateProviderObservedAt).toBeNull();
+  });
+
+  it("returns the oldest timestamp when every consumed rate has one", async () => {
+    mockActiveHoldings = [
+      {
+        metalType: "GOLD",
+        purchaseCurrency: null,
+        purchasePriceDecimal: null,
+        status: "active",
+        isVisible: true,
+        isEffective: true,
+      },
+    ];
+    const { result } = renderHook(() => useMetalPortfolio());
+    await waitFor(() => expect(result.current.readiness.holdings).toBe(true));
+
+    act(() => {
+      mockTrustObservers[0]?.next({
+        gold: {
+          state: "fresh",
+          ageMs: 1_000,
+          providerObservedAt: new Date("2026-09-08T10:00:00.000Z"),
+          valueDecimal: "81.5",
+        },
+        silver: { state: "missing", ageMs: null, providerObservedAt: null },
+        currencies: new Map([
+          [
+            "EGP",
+            {
+              state: "fresh",
+              ageMs: 2_000,
+              providerObservedAt: new Date("2026-09-08T09:00:00.000Z"),
+              valueDecimal: "0.02",
+            },
+          ],
+        ]),
+      });
+    });
+
+    await waitFor(() =>
+      expect(result.current.readiness.rateCurrency).toBe(true)
+    );
+    expect(result.current.rateProviderObservedAt?.toISOString()).toBe(
+      "2026-09-08T09:00:00.000Z"
+    );
+  });
+});

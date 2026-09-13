@@ -29,6 +29,7 @@
   "budgets": "الميزانيات",
   "error_generic": "حدث خطأ ما. يرجى المحاولة مرة أخرى.",
   "error_network": "خطأ في الشبكة. يرجى التحقق من اتصالك.",
+  "money_summary_error": "تعذّر عرض ملخص أموالك. حاول مرة أخرى.",
   "currency": "العملة",
   "transaction_currency": "عملة المعاملات",
   "just_now": "الآن",

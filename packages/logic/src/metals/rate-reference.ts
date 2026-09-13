@@ -6,6 +6,7 @@ import {
   parseCanonicalDecimal,
   serializeDecimal,
 } from "./decimal";
+import type { SupportedMetal } from "./purity-catalog";
 
 export type MetalRateRole =
   | "acquisition_metal"
@@ -21,7 +22,7 @@ export type CurrencyRateRole =
   | "display_preferred_currency";
 
 export type MetalsIsoCurrencyCode = Exclude<CurrencyType, "BTC">;
-export type MetalInstrumentCode = `metal:${"GOLD" | "SILVER"}`;
+export type MetalInstrumentCode = `metal:${SupportedMetal}`;
 export type CurrencyInstrumentCode = `currency:${MetalsIsoCurrencyCode}`;
 export type RateInstrumentCode = MetalInstrumentCode | CurrencyInstrumentCode;
 

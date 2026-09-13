@@ -16,6 +16,7 @@ import { palette } from "@/constants/colors";
 import { MaterialIcons } from "@expo/vector-icons";
 import React from "react";
 import { Text, View } from "react-native";
+import { useTranslation } from "react-i18next";
 
 // =============================================================================
 // Constants
@@ -33,6 +34,11 @@ interface CurrencyRowProps {
   readonly name: string;
   readonly rate: string;
   readonly changePercent: number;
+  readonly trust?: {
+    readonly quality: string | null;
+    readonly source: string | null;
+    readonly state: "fresh" | "stale" | "unknown" | "missing" | "invalid";
+  };
 }
 
 // =============================================================================
@@ -45,7 +51,9 @@ export function CurrencyRow({
   name,
   rate,
   changePercent,
+  trust,
 }: CurrencyRowProps): React.JSX.Element {
+  const { t } = useTranslation("metals");
   const roundedChange = Number(changePercent.toFixed(2));
   const isUp = roundedChange > 0;
   const isFlat = roundedChange === 0;
@@ -63,6 +71,20 @@ export function CurrencyRow({
     : isUp
       ? palette.nileGreen[500]
       : palette.red[500];
+  const trustLabel =
+    trust === undefined
+      ? null
+      : [
+          t(`rate.short_${trust.state}`),
+          trust.source === null
+            ? null
+            : t("rate.source", { source: trust.source }),
+          trust.quality === null
+            ? null
+            : t("rate.quality", { quality: trust.quality }),
+        ]
+          .filter((value): value is string => value !== null)
+          .join(" · ");
 
   return (
     <View
@@ -81,7 +103,7 @@ export function CurrencyRow({
           className="text-[11px] text-slate-500 dark:text-slate-400"
           numberOfLines={1}
         >
-          {name}
+          {trustLabel === null ? name : `${name} · ${trustLabel}`}
         </Text>
       </View>
 
