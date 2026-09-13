@@ -1,11 +1,16 @@
 import { Ionicons } from "@expo/vector-icons";
 import type { CurrencyType, TransactionType } from "@monyvi/db";
-import { formatAmountInput, parseAmountInput } from "@monyvi/logic";
-import type { ReactElement, RefObject } from "react";
+import {
+  formatAmountInput,
+  MAX_TRANSACTION_AMOUNT,
+  resolveAmountInputChange,
+} from "@monyvi/logic";
+import { useState, type ReactElement, type RefObject } from "react";
 import { useTranslation } from "react-i18next";
 import { Text, TextInput, TouchableOpacity, View } from "react-native";
 
 import { palette } from "@/constants/colors";
+import { getRecurringPaymentAmountError } from "@/validation/recurring-payment-validation";
 import { ErrorText } from "./RecurringPaymentFormRows";
 
 const TYPE_OPTIONS: ReadonlyArray<{
@@ -38,6 +43,29 @@ export function AmountField({
   onFocus,
   onChangeText,
 }: AmountFieldProps): ReactElement {
+  const { t } = useTranslation("transactions");
+  const { t: tCommon } = useTranslation("common");
+  const [hasBlurred, setHasBlurred] = useState(false);
+  const [isFocused, setIsFocused] = useState(false);
+  const liveError = hasBlurred
+    ? getRecurringPaymentAmountError(value, {
+        currency,
+        allowSafeIntermediate: isFocused,
+        messages: {
+          amountRequired: t("amount_required"),
+          invalidAmount: t("invalid_amount"),
+          positiveAmount: t("amount_must_be_positive"),
+          amountMaximum: t("amount_maximum_error", {
+            maximum: MAX_TRANSACTION_AMOUNT.toLocaleString("en-US"),
+          }),
+          amountPrecision: (precision) =>
+            t("amount_precision_error", { precision }),
+          amountDecimalSeparator: tCommon("amount_decimal_separator_error"),
+        },
+      })
+    : undefined;
+  const visibleError = liveError ?? error;
+
   return (
     <View
       ref={fieldRef}
@@ -47,7 +75,9 @@ export function AmountField({
       <Text className="input-label">{label}</Text>
       <View
         className={`flex-row items-center rounded-2xl border bg-white dark:bg-slate-800 ${
-          error ? "border-red-500" : "border-slate-200 dark:border-slate-700"
+          visibleError
+            ? "border-red-500"
+            : "border-slate-200 dark:border-slate-700"
         }`}
       >
         <Text
@@ -59,10 +89,20 @@ export function AmountField({
         <TextInput
           testID="recurring-payment-amount-input"
           value={formatAmountInput(value)}
-          onChangeText={(text) =>
-            onChangeText(parseAmountInput(text, value))
-          }
-          onFocus={onFocus}
+          onChangeText={(text) => {
+            const resolution = resolveAmountInputChange(text, value);
+            onChangeText(
+              resolution.status === "rejected" ? text : resolution.value
+            );
+          }}
+          onFocus={() => {
+            setIsFocused(true);
+            onFocus();
+          }}
+          onBlur={() => {
+            setIsFocused(false);
+            setHasBlurred(true);
+          }}
           placeholder="0.00"
           placeholderTextColor={
             isDark ? palette.slate[600] : palette.slate[400]
@@ -71,7 +111,7 @@ export function AmountField({
           className="flex-1 p-4 ps-2 text-base font-semibold text-slate-900 dark:text-white"
         />
       </View>
-      {error ? <ErrorText>{error}</ErrorText> : null}
+      {visibleError ? <ErrorText>{visibleError}</ErrorText> : null}
     </View>
   );
 }
