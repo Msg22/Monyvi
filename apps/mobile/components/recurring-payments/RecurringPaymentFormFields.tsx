@@ -91,9 +91,7 @@ export function AmountField({
           value={formatAmountInput(value)}
           onChangeText={(text) => {
             const resolution = resolveAmountInputChange(text, value);
-            onChangeText(
-              resolution.status === "rejected" ? text : resolution.value
-            );
+            onChangeText(resolution.accepted ? resolution.value : text);
           }}
           onFocus={() => {
             setIsFocused(true);
