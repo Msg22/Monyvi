@@ -42,6 +42,7 @@ export interface RecurringPaymentValidationMessages {
   readonly positiveAmount: string;
   readonly amountMaximum: string;
   readonly amountPrecision: (precision: number) => string;
+  readonly amountDecimalSeparator: string;
   readonly invalidStartDate: string;
   readonly startDateRange: string;
   readonly invalidEndDate: string;
@@ -52,6 +53,12 @@ export interface RecurringPaymentValidationOptions {
   readonly currency?: CurrencyType;
   readonly referenceDate?: Date;
   readonly originalStartDate?: Date | null;
+  readonly messages?: Partial<RecurringPaymentValidationMessages>;
+}
+
+export interface RecurringPaymentAmountValidationOptions {
+  readonly currency?: CurrencyType;
+  readonly allowSafeIntermediate?: boolean;
   readonly messages?: Partial<RecurringPaymentValidationMessages>;
 }
 
@@ -73,6 +80,8 @@ const DEFAULT_MESSAGES: RecurringPaymentValidationMessages = {
   )}`,
   amountPrecision: (precision) =>
     `Amount must have at most ${precision} decimal places`,
+  amountDecimalSeparator:
+    "Use a dot (.) for decimals. Commas can only separate groups of three digits.",
   invalidStartDate: "Please enter a valid Due payment date",
   startDateRange: "Due payment must be between today and one year from today",
   invalidEndDate: "Please enter a valid End date",
@@ -80,6 +89,7 @@ const DEFAULT_MESSAGES: RecurringPaymentValidationMessages = {
 };
 
 function getAmountValidationMessage(
+  amount: string,
   reason: StrictAmountParseFailureReason,
   precision: number,
   messages: RecurringPaymentValidationMessages
@@ -94,9 +104,53 @@ function getAmountValidationMessage(
     case "exceeds-precision":
       return messages.amountPrecision(precision);
     case "invalid-format":
+      return amount.includes(",")
+        ? messages.amountDecimalSeparator
+        : messages.invalidAmount;
     default:
       return messages.invalidAmount;
   }
+}
+
+function isSafeIntermediateAmountInput(amount: string): boolean {
+  const value = amount.trim();
+  return /^(?:\d+|\d{1,3}(?:,\d{3})+)\.$/.test(value);
+}
+
+/**
+ * Returns the recurring amount error for inline or submit-time validation.
+ * Focused inputs may preserve a trailing decimal point while the user types.
+ */
+export function getRecurringPaymentAmountError(
+  amount: string,
+  options: RecurringPaymentAmountValidationOptions = {}
+): string | undefined {
+  if (
+    options.allowSafeIntermediate === true &&
+    isSafeIntermediateAmountInput(amount)
+  ) {
+    return undefined;
+  }
+
+  const currency = options.currency ?? DEFAULT_CURRENCY;
+  const precision = getCurrencyPrecision(currency);
+  const messages: RecurringPaymentValidationMessages = {
+    ...DEFAULT_MESSAGES,
+    ...options.messages,
+  };
+  const amountResult = parseStrictAmountInput(amount, {
+    maxAmount: MAX_TRANSACTION_AMOUNT,
+    maxFractionDigits: precision,
+  });
+
+  return amountResult.success
+    ? undefined
+    : getAmountValidationMessage(
+        amount,
+        amountResult.reason,
+        precision,
+        messages
+      );
 }
 
 // ---------------------------------------------------------------------------
@@ -140,18 +194,12 @@ export function validateRecurringPaymentForm(
     });
   }
 
-  const currency = options.currency ?? DEFAULT_CURRENCY;
-  const precision = getCurrencyPrecision(currency);
-  const amountResult = parseStrictAmountInput(formData.amount, {
-    maxAmount: MAX_TRANSACTION_AMOUNT,
-    maxFractionDigits: precision,
+  const amountError = getRecurringPaymentAmountError(formData.amount, {
+    currency: options.currency,
+    messages,
   });
-  if (!amountResult.success) {
-    errors.amount = getAmountValidationMessage(
-      amountResult.reason,
-      precision,
-      messages
-    );
+  if (amountError) {
+    errors.amount = amountError;
   }
 
   const referenceDate = options.referenceDate ?? new Date();
