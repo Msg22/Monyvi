@@ -93,4 +93,49 @@ describe("Stats currency review regressions", () => {
     expect(source).toContain("readonly retry: () => void");
     expect(source).toContain("retryVersion");
   });
+
+  it("focuses the monthly chart on the earliest month with activity", () => {
+    const chart = read("../../components/stats/MonthlyExpenseChart.tsx");
+
+    expect(chart).toContain("firstActiveMonthIndex");
+    expect(chart).toContain(
+      "expense.value > 0 || (incomeData[index]?.value ?? 0) > 0"
+    );
+    expect(chart).toContain("firstActiveMonthIndex * 2 : 0");
+    expect(chart).toContain("scrollToIndex={scrollToIndex}");
+  });
+
+  it("renders a single localized transaction-currency label without repeating the code", () => {
+    const source = read("../../components/stats/StatsCurrencyFilter.tsx");
+
+    expect(source).toContain('t("transaction_currency")');
+    expect(source).not.toContain("stats-currency-scope");
+    expect(source).toContain("shouldUseCompactLayout");
+    expect(source).toContain("useWindowDimensions");
+    expect(source).toContain("flex-col items-start gap-2");
+    expect(source).toContain("flex-row items-center justify-between gap-3");
+    expect(source).toContain("min-h-11");
+  });
+
+  it("shows the drilldown chevron only for categories with descendant spending", () => {
+    const card = read("../../components/stats/CategoryDrilldownCard.tsx");
+    const row = read(
+      "../../components/stats/drilldown/DrilldownCategoryItem.tsx"
+    );
+
+    expect(card).toContain("drillableCategoryIds");
+    expect(card).toContain("hasSpendingInSubtree");
+    expect(card).toContain("canDrillDown={drillableCategoryIds.has(cat.id)}");
+    expect(row).toContain("readonly canDrillDown: boolean");
+    expect(row).not.toContain("hasChildren");
+    expect(row).toContain("accessibilityRole={canDrillDown ?");
+  });
+
+  it("resets category drilldown navigation on screen focus and currency change", () => {
+    const card = read("../../components/stats/CategoryDrilldownCard.tsx");
+
+    expect(card).toContain('import { useFocusEffect } from "expo-router"');
+    expect(card).toContain("useFocusEffect(resetNavigation)");
+    expect(card).toContain("}, [currency, resetNavigation]);");
+  });
 });

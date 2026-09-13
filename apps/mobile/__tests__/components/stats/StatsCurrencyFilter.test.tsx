@@ -1,7 +1,30 @@
 import { fireEvent, render, screen } from "@testing-library/react-native";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import React from "react";
 
-import { StatsCurrencyFilter } from "@/components/stats/StatsCurrencyFilter";
+let mockViewportWidth = 390;
+let mockViewportFontScale = 1;
+
+jest.mock("react-native/Libraries/Utilities/useWindowDimensions", () => ({
+  __esModule: true,
+  default: (): {
+    readonly width: number;
+    readonly height: number;
+    readonly scale: number;
+    readonly fontScale: number;
+  } => ({
+    width: mockViewportWidth,
+    height: 844,
+    scale: 3,
+    fontScale: mockViewportFontScale,
+  }),
+}));
+
+function mockViewport(width: number, fontScale: number): void {
+  mockViewportWidth = width;
+  mockViewportFontScale = fontScale;
+}
 
 function MockIonicons(): React.JSX.Element {
   const ReactNative =
@@ -31,7 +54,13 @@ jest.mock("react-i18next", () => ({
   }),
 }));
 
+import { StatsCurrencyFilter } from "@/components/stats/StatsCurrencyFilter";
+
 describe("StatsCurrencyFilter", () => {
+  beforeEach(() => {
+    mockViewport(390, 1);
+  });
+
   it("shows only currencies with transaction data and selects another currency", () => {
     const onSelectCurrency = jest.fn();
 
@@ -43,10 +72,6 @@ describe("StatsCurrencyFilter", () => {
       />
     );
 
-    expect(screen.getByTestId("stats-currency-scope")).toHaveTextContent(
-      "transactions · EGP"
-    );
-
     fireEvent.press(screen.getByTestId("stats-currency-trigger"));
 
     expect(screen.getByTestId("stats-currency-option-EGP")).toBeOnTheScreen();
@@ -56,6 +81,144 @@ describe("StatsCurrencyFilter", () => {
     fireEvent.press(screen.getByTestId("stats-currency-option-USD"));
     expect(onSelectCurrency).toHaveBeenCalledWith("USD");
     expect(screen.queryByTestId("stats-currency-menu")).toBeNull();
+  });
+
+  it("replaces the two-line currency block with a single localized label", () => {
+    render(
+      <StatsCurrencyFilter
+        availableCurrencies={["EGP", "USD"]}
+        selectedCurrency="EGP"
+        onSelectCurrency={jest.fn()}
+      />
+    );
+
+    expect(screen.getByTestId("stats-currency-label")).toHaveTextContent(
+      "transaction_currency"
+    );
+    expect(screen.queryByTestId("stats-currency-scope")).toBeNull();
+    expect(screen.queryByText(/transactions · EGP/)).toBeNull();
+  });
+
+  it("keeps the flag and selected currency code inside the selector only", () => {
+    render(
+      <StatsCurrencyFilter
+        availableCurrencies={["EGP", "USD"]}
+        selectedCurrency="EGP"
+        onSelectCurrency={jest.fn()}
+      />
+    );
+
+    expect(screen.getByText("🇪🇬")).toBeOnTheScreen();
+    expect(screen.getAllByText("EGP")).toHaveLength(1);
+  });
+
+  it("renders label and selector on one vertically centered row on ordinary phones", () => {
+    mockViewport(390, 1);
+
+    render(
+      <StatsCurrencyFilter
+        availableCurrencies={["EGP", "USD"]}
+        selectedCurrency="EGP"
+        onSelectCurrency={jest.fn()}
+      />
+    );
+
+    expect(screen.getByTestId("stats-currency-filter-row")).toHaveProp(
+      "className",
+      expect.stringContaining("flex-row")
+    );
+    expect(screen.getByTestId("stats-currency-filter-row")).toHaveProp(
+      "className",
+      expect.stringContaining("items-center")
+    );
+    expect(screen.getByTestId("stats-currency-filter-row")).toHaveProp(
+      "className",
+      expect.not.stringContaining("flex-col")
+    );
+  });
+
+  it("stacks label and selector cleanly on compact phones", () => {
+    mockViewport(320, 1);
+
+    render(
+      <StatsCurrencyFilter
+        availableCurrencies={["EGP", "USD"]}
+        selectedCurrency="EGP"
+        onSelectCurrency={jest.fn()}
+      />
+    );
+
+    expect(screen.getByTestId("stats-currency-filter-row")).toHaveProp(
+      "className",
+      expect.stringContaining("flex-col")
+    );
+    expect(screen.getByTestId("stats-currency-filter-row")).toHaveProp(
+      "className",
+      expect.stringContaining("items-start")
+    );
+    expect(screen.getByTestId("stats-currency-filter-row")).toHaveProp(
+      "className",
+      expect.not.stringContaining("flex-row")
+    );
+  });
+
+  it("stacks label and selector under enlarged font scale", () => {
+    mockViewport(390, 2);
+
+    render(
+      <StatsCurrencyFilter
+        availableCurrencies={["EGP", "USD"]}
+        selectedCurrency="EGP"
+        onSelectCurrency={jest.fn()}
+      />
+    );
+
+    expect(screen.getByTestId("stats-currency-filter-row")).toHaveProp(
+      "className",
+      expect.stringContaining("flex-col")
+    );
+    expect(screen.getByTestId("stats-currency-filter-row")).toHaveProp(
+      "className",
+      expect.not.stringContaining("flex-row")
+    );
+  });
+
+  it("uses logical spacing classes only so the row mirrors correctly in RTL", () => {
+    const source = readFileSync(
+      resolve(
+        __dirname,
+        "../../../components/stats/StatsCurrencyFilter.tsx"
+      ),
+      "utf8"
+    );
+
+    expect(source).not.toMatch(/\bml-\d/);
+    expect(source).not.toMatch(/\bmr-\d/);
+    expect(source).toMatch(/\bme-\d/);
+  });
+
+  it("preserves the accessible label and 44pt-class touch target on the selector", () => {
+    render(
+      <StatsCurrencyFilter
+        availableCurrencies={["EGP", "USD"]}
+        selectedCurrency="EGP"
+        onSelectCurrency={jest.fn()}
+      />
+    );
+
+    expect(screen.getByTestId("stats-currency-trigger")).toHaveProp(
+      "accessibilityLabel",
+      "select_currency"
+    );
+
+    const source = readFileSync(
+      resolve(
+        __dirname,
+        "../../../components/stats/StatsCurrencyFilter.tsx"
+      ),
+      "utf8"
+    );
+    expect(source).toContain("min-h-11");
   });
 
   it("positions the menu below the measured filter row height", () => {
