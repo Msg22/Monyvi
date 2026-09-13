@@ -190,6 +190,7 @@
     "acquired": "Acquired",
     "value_unavailable": "Value unavailable",
     "retry": "Try again",
+    "retry_sync": "Try sync again",
     "offline": "Offline mode",
     "history": "History",
     "view_all": "View all",

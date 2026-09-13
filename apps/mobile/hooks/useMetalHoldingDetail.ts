@@ -46,6 +46,10 @@ const DETAIL_METAL_COLUMNS = [
   "purity_factor_decimal",
   "weight_grams_decimal",
 ] as const;
+const DETAIL_LIFECYCLE_EVENT_COLUMNS = [
+  "is_effective",
+  "is_history_visible",
+] as const;
 
 interface UseMetalHoldingDetailResult {
   readonly error: Error | null;
@@ -196,7 +200,7 @@ export function useMetalHoldingDetail(
         .observeWithColumns([...DETAIL_HOLDING_STATE_COLUMNS])
         .subscribe({ error: onObservationError, next: onChange }),
       observeMetalDetailEvents(userId, holdingId)
-        .observe()
+        .observeWithColumns([...DETAIL_LIFECYCLE_EVENT_COLUMNS])
         .subscribe({ error: onObservationError, next: onChange }),
       observeMetalDetailActionEvidence(userId, holdingId)
         .observe()

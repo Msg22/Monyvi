@@ -445,12 +445,12 @@ function AllocationBar({
       <View className="h-3 flex-row overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
         <View
           testID="metal-portfolio-allocation-gold"
-          className="h-full rounded-l-full bg-gold-600"
+          className="h-full rounded-s-full bg-gold-600"
           style={{ width: `${goldShare}%` }}
         />
         <View
           testID="metal-portfolio-allocation-silver"
-          className="h-full rounded-r-full bg-silver-500"
+          className="h-full rounded-e-full bg-silver-500"
           style={{ width: `${silverShare}%` }}
         />
       </View>
@@ -546,9 +546,9 @@ function FilterBar({
         const hasDivider = index < FILTERS.length - 1;
         const selectedBorderRadius =
           index === 0
-            ? "rounded-l-[11px]"
+            ? "rounded-s-[11px]"
             : index === FILTERS.length - 1
-              ? "rounded-r-[11px]"
+              ? "rounded-e-[11px]"
               : "";
         return (
           <Pressable
@@ -567,7 +567,7 @@ function FilterBar({
               isSelected ? "z-10" : "z-0"
             } ${
               hasDivider
-                ? "border-r border-slate-300 dark:border-slate-700"
+                ? "border-e border-slate-300 dark:border-slate-700"
                 : ""
             }`}
             onPress={(): void => onFilterChange(filter)}

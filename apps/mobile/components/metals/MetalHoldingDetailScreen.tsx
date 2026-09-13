@@ -4,7 +4,6 @@ import {
   FlatList,
   Pressable,
   Text,
-  useColorScheme,
   useWindowDimensions,
   View,
 } from "react-native";
@@ -33,6 +32,7 @@ import type {
 import { Skeleton } from "@/components/ui/Skeleton";
 import { palette } from "@/constants/colors";
 import { shouldUseCompactLayout } from "@/constants/ui";
+import { useTheme } from "@/context/ThemeContext";
 import type {
   MetalDetailReadModel,
   MetalDetailTimelineItem,
@@ -238,14 +238,16 @@ function ReconciliationStatus({
       <Text className="text-sm text-text-secondary dark:text-text-secondary-dark">
         {t(key)}
       </Text>
-      {state === "sync_failed" ? (
+      {state === "sync_failed" || state === "reconciliation_incomplete" ? (
         <Pressable
           accessibilityRole="button"
           className="mt-1 min-h-11 justify-center"
           onPress={onRetry}
         >
           <Text className="font-semibold text-nileGreen-700 dark:text-nileGreen-400">
-            {t("detail.retry")}
+            {state === "reconciliation_incomplete"
+              ? t("detail.retry_sync")
+              : t("detail.retry")}
           </Text>
         </Pressable>
       ) : null}
@@ -368,7 +370,13 @@ function ValueSummary({
           )}
         </View>
       )}
-      {model.totalGainDecimal === null ? null : (
+      {model.totalGainDecimal === null ? (
+        <Text className="mt-1 text-sm text-text-secondary dark:text-text-secondary-dark">
+          {model.unavailableExactFacts.includes("purchase_cost")
+            ? t("portfolio.performance_unavailable")
+            : t("portfolio.performance_unavailable_rate_reference")}
+        </Text>
+      ) : (
         <Text className={`mt-1 text-base ${getGainTextClass(gainSign)}`}>
           {t("detail.since_purchase", {
             amount: signedAmount(model.totalGainDecimal, currency, locale),
@@ -386,8 +394,6 @@ function ValueJourney({
 }): React.JSX.Element | null {
   const { t, i18n } = useTranslation("metals");
   const locale = resolveLocale(i18n.resolvedLanguage);
-  const currency =
-    model.currentValueCurrency ?? model.purchaseCurrency ?? "EGP";
   const currentValueObservedAt = model.currentValueObservedAt ?? null;
   const hasAcquisition =
     model.purchaseDate !== null || model.purchasePriceDecimal !== null;
@@ -439,12 +445,13 @@ function ValueJourney({
                   {formatShortDate(model.purchaseDate, locale)}
                 </Text>
               )}
-              {model.purchasePriceDecimal === null ? null : (
+              {model.purchasePriceDecimal === null ||
+              model.purchaseCurrency === null ? null : (
                 <Text className="mt-1 text-base text-text-primary dark:text-text-primary-dark">
                   {t("detail.paid", {
                     amount: displayAmount(
                       model.purchasePriceDecimal,
-                      model.purchaseCurrency ?? currency,
+                      model.purchaseCurrency,
                       locale
                     ),
                   })}
@@ -478,9 +485,8 @@ function CalculationDisclosure({
   readonly onPress: () => void;
 }): React.JSX.Element {
   const { t } = useTranslation("metals");
-  const colorScheme = useColorScheme();
-  const iconColor =
-    colorScheme === "dark" ? palette.slate[300] : palette.slate[500];
+  const { isDark } = useTheme();
+  const iconColor = isDark ? palette.slate[300] : palette.slate[500];
   return (
     <Pressable
       accessibilityRole="button"
@@ -625,9 +631,8 @@ function FactRow({
   readonly value: string;
 }): React.JSX.Element {
   const { t } = useTranslation("metals");
-  const colorScheme = useColorScheme();
-  const iconColor =
-    colorScheme === "dark" ? palette.nileGreen[400] : palette.nileGreen[700];
+  const { isDark } = useTheme();
+  const iconColor = isDark ? palette.nileGreen[400] : palette.nileGreen[700];
   return (
     <View
       accessible

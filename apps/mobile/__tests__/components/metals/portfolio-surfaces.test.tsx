@@ -494,10 +494,6 @@ describe("US1 portfolio surfaces", () => {
         width: "20%",
       }
     );
-    expect(screen.getByTestId("metal-portfolio-filter-border-ALL")).toHaveProp(
-      "className",
-      expect.stringContaining("rounded-l-")
-    );
   });
 
   it("keeps ordinary-phone holding cards readable above floating tab controls", () => {
@@ -725,7 +721,7 @@ describe("US1 portfolio surfaces", () => {
     expect(screen.queryByText("Realized result")).toBeNull();
   });
 
-  it("mirrors forward chevrons in RTL", () => {
+  it("mirrors forward chevrons and filter chrome in RTL", () => {
     const originalIsRTL = I18nManager.isRTL;
     Object.defineProperty(I18nManager, "isRTL", {
       configurable: true,
@@ -744,6 +740,13 @@ describe("US1 portfolio surfaces", () => {
 
       expect(screen.getAllByTestId("icon-chevron-back")).toHaveLength(2);
       expect(screen.queryByTestId("icon-chevron-forward")).toBeNull();
+      expect(
+        screen.getByTestId("metal-portfolio-filter-border-ALL")
+      ).toHaveProp("className", expect.stringContaining("rounded-s-[11px]"));
+      expect(screen.getByTestId("metal-portfolio-filter-ALL")).toHaveProp(
+        "className",
+        expect.stringContaining("border-e")
+      );
     } finally {
       Object.defineProperty(I18nManager, "isRTL", {
         configurable: true,

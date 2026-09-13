@@ -252,6 +252,22 @@ describe("useMetalHoldingDetail", () => {
     expect(result.current.model).toBe(model);
   });
 
+  it("observes mutable lifecycle-event columns for the detail stream", async () => {
+    mockReadMetalDetailReadModel.mockResolvedValue({ holdingId: "holding-1" });
+    const eventsQuery = mockCreateLocalQuery();
+    const observeWithColumns = jest.spyOn(eventsQuery, "observeWithColumns");
+    mockObserveMetalDetailEvents.mockReturnValueOnce(eventsQuery);
+
+    renderHook(() => useMetalHoldingDetail("holding-1"));
+
+    await waitFor(() =>
+      expect(observeWithColumns).toHaveBeenCalledWith([
+        "is_effective",
+        "is_history_visible",
+      ])
+    );
+  });
+
   it.each([
     ["holding", 0],
     ["holding state", 1],

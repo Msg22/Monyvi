@@ -17,6 +17,13 @@ export interface HoldingActionDescriptor {
 export function getHoldingActionDescriptors(
   model: MetalDetailReadModel
 ): readonly HoldingActionDescriptor[] {
+  // Incomplete reconciliation locks every financial action — including Undo
+  // of a pending terminal transition — until recovery completes.
+  if (model.isFinancialActionLocked) {
+    return Object.freeze([
+      { id: "edit", labelKey: "actions.edit", tone: "secondary" },
+    ]);
+  }
   if (!model.isActiveOwnership) {
     return Object.freeze([
       {
@@ -27,11 +34,6 @@ export function getHoldingActionDescriptors(
             : "actions.undo_disposal",
         tone: "primary",
       },
-      { id: "edit", labelKey: "actions.edit", tone: "secondary" },
-    ]);
-  }
-  if (model.isFinancialActionLocked) {
-    return Object.freeze([
       { id: "edit", labelKey: "actions.edit", tone: "secondary" },
     ]);
   }
