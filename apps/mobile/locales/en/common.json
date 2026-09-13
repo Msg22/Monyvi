@@ -30,6 +30,7 @@
   "error_generic": "Something went wrong. Please try again.",
   "error_network": "Network error. Please check your connection.",
   "currency": "Currency",
+  "transaction_currency": "Transaction currency",
   "just_now": "Just now",
   "minutes_ago_one": "1 minute ago",
   "minutes_ago_other": "{{count}} minutes ago",
