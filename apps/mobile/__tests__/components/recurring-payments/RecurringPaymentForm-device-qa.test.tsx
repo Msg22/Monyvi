@@ -1,5 +1,6 @@
 /* eslint-disable max-lines, @typescript-eslint/no-unsafe-assignment -- Physical-device QA coverage keeps the form interactions together; RNTL screen query values are safe renderer handles. */
 import {
+  act,
   fireEvent,
   render,
   screen,
@@ -332,20 +333,35 @@ describe("RecurringPaymentForm physical-device QA", () => {
     });
 
     fireEvent.press(screen.getByTestId("recurring-payment-start-date-row"));
-    let pickerProps = getLatestDatePickerProps();
+    const pickerProps = getLatestDatePickerProps();
     expectSameLocalDay(pickerProps.minimumDate, new Date(2026, 5, 1));
     expectSameLocalDay(pickerProps.maximumDate, new Date(2027, 5, 1));
 
-    fireEvent.press(screen.getByTestId("set-picker-minimum-date"));
-    fireEvent.press(screen.getByTestId("recurring-payment-start-date-row"));
-    pickerProps = getLatestDatePickerProps();
-    expectSameLocalDay(pickerProps.maximumDate, new Date(2027, 5, 1));
-    fireEvent.press(screen.getByTestId("set-picker-maximum-date"));
+    const minimumDate = pickerProps.minimumDate;
+    const maximumDate = pickerProps.maximumDate;
+    if (!minimumDate || !maximumDate) {
+      throw new Error("Expected inclusive Due-payment picker boundaries");
+    }
+
+    act(() => {
+      pickerProps.onChange({ type: "set" }, minimumDate);
+    });
+    expect(
+      screen.getByTestId("recurring-payment-summary-due-value")
+    ).toHaveTextContent("Jun 1, 2026");
+
+    act(() => {
+      pickerProps.onChange({ type: "set" }, maximumDate);
+    });
+    expect(
+      screen.getByTestId("recurring-payment-summary-due-value")
+    ).toHaveTextContent("Jun 1, 2027");
+
     fireEvent.press(screen.getByText("save"));
 
     await waitFor(() => {
       expect(onSubmit).toHaveBeenCalledWith(
-        expect.objectContaining({ startDate: pickerProps.maximumDate })
+        expect.objectContaining({ startDate: maximumDate })
       );
     });
   });
