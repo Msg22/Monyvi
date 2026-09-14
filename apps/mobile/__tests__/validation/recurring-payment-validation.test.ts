@@ -60,10 +60,19 @@ describe("validateRecurringPaymentForm", () => {
       }
     );
 
+    it.each(["12,5", "1,23", "1,2345"])(
+      "gives friendly separator guidance for malformed comma amount %p",
+      (amount) => {
+        const result = validateAmount(amount);
+
+        expect(result.isValid).toBe(false);
+        expect(result.errors.amount).toBe(
+          "Use a dot (.) for decimals. Commas can only separate groups of three digits."
+        );
+      }
+    );
+
     it.each([
-      "12,5",
-      "1,23",
-      "1,2345",
       "1e3",
       "+5",
       "abc",
