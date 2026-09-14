@@ -8,6 +8,14 @@ import { RecurringPaymentEditActions } from "./RecurringPaymentEditActions";
 import { AmountField, TypeTabs } from "./RecurringPaymentFormFields";
 import { RecurringPaymentSummaryCard } from "./RecurringPaymentSummaryCard";
 import { Divider, ErrorText, FormRow } from "./RecurringPaymentFormRows";
+import {
+  areSameOptionalLocalCalendarDays,
+  getConstrainedStartDatePickerValue,
+  getDisplayDueDate,
+  getLocalCalendarDate,
+  getReactivationDueDate,
+  hasNoFurtherEligiblePayment,
+} from "./recurring-payment-form-schedule";
 import { TextField } from "@/components/ui/TextField";
 import { palette } from "@/constants/colors";
 import { useTheme } from "@/context/ThemeContext";
@@ -24,7 +32,6 @@ import type {
   TransactionType,
 } from "@monyvi/db";
 import {
-  getNextRecurringOccurrenceAfter,
   getRecurringStartDateMaximum,
   isOnOrBeforeDay,
   isSameLocalCalendarDay,
@@ -830,157 +837,6 @@ function getFrequencyTypeLabel(
   const typeLabel = toTitleCase(t(type === "INCOME" ? "income" : "expense"));
 
   return `${frequencyLabel} ${typeLabel}`;
-}
-
-function getDisplayDueDate({
-  dueDate,
-  recurrenceAnchorDate,
-  initialValues,
-  form,
-  hasScheduleChanges,
-  status,
-}: {
-  readonly dueDate?: Date;
-  readonly recurrenceAnchorDate: Date;
-  readonly initialValues: RecurringPaymentFormValues;
-  readonly form: RecurringPaymentFormValues;
-  readonly hasScheduleChanges: boolean;
-  readonly status?: RecurringStatus;
-}): Date {
-  if (dueDate && !hasScheduleChanges) {
-    return dueDate;
-  }
-
-  if (dueDate && status === "COMPLETED" && !form.reactivateAfterSaving) {
-    return dueDate;
-  }
-
-  const shouldRetainFinalPaidOccurrence =
-    dueDate !== undefined &&
-    status === "COMPLETED" &&
-    form.reactivateAfterSaving &&
-    initialValues.endDate !== null &&
-    isOnOrBeforeDay(dueDate, initialValues.endDate) &&
-    !didRelaxEndDate(initialValues.endDate, form.endDate);
-  if (shouldRetainFinalPaidOccurrence) {
-    return dueDate;
-  }
-
-  const didStartDateChange = !isSameLocalCalendarDay(
-    initialValues.startDate,
-    form.startDate
-  );
-  const didFrequencyChange = initialValues.frequency !== form.frequency;
-  const didRelaxCompletedEndDate =
-    dueDate !== undefined &&
-    status === "COMPLETED" &&
-    initialValues.endDate !== null &&
-    didRelaxEndDate(initialValues.endDate, form.endDate);
-  if (
-    dueDate &&
-    !didStartDateChange &&
-    didRelaxCompletedEndDate &&
-    isOnOrBeforeDay(dueDate, initialValues.endDate)
-  ) {
-    return getNextRecurringOccurrenceAfter({
-      startDate: recurrenceAnchorDate,
-      currentOccurrence: dueDate,
-      frequency: form.frequency,
-    });
-  }
-  if (
-    dueDate &&
-    !didStartDateChange &&
-    didFrequencyChange &&
-    !(
-      status === "COMPLETED" &&
-      initialValues.endDate !== null &&
-      !isOnOrBeforeDay(dueDate, initialValues.endDate)
-    )
-  ) {
-    return getNextRecurringOccurrenceAfter({
-      startDate: recurrenceAnchorDate,
-      currentOccurrence: dueDate,
-      frequency: form.frequency,
-    });
-  }
-
-  if (dueDate && status === "COMPLETED") {
-    return dueDate;
-  }
-
-  return form.startDate;
-}
-
-function didRelaxEndDate(
-  initialEndDate: Date,
-  nextEndDate: Date | null
-): boolean {
-  return nextEndDate === null || !isOnOrBeforeDay(nextEndDate, initialEndDate);
-}
-
-function areSameOptionalLocalCalendarDays(
-  firstDate: Date | null,
-  secondDate: Date | null
-): boolean {
-  if (firstDate === null || secondDate === null) {
-    return firstDate === secondDate;
-  }
-
-  return isSameLocalCalendarDay(firstDate, secondDate);
-}
-
-function hasNoFurtherEligiblePayment(
-  duePayment: Date,
-  recurrenceAnchorDate: Date,
-  frequency: RecurringFrequency,
-  endDate: Date | null
-): boolean {
-  if (endDate === null || !isOnOrBeforeDay(duePayment, endDate)) {
-    return false;
-  }
-
-  const nextDueDate = getNextRecurringOccurrenceAfter({
-    startDate: recurrenceAnchorDate,
-    currentOccurrence: duePayment,
-    frequency,
-  });
-
-  return !isOnOrBeforeDay(nextDueDate, endDate);
-}
-
-function getReactivationDueDate(
-  dueDate: Date | undefined,
-  recurrenceAnchorDate: Date,
-  initialEndDate: Date | null,
-  frequency: RecurringFrequency
-): Date | null {
-  if (!dueDate) return null;
-
-  return initialEndDate !== null && isOnOrBeforeDay(dueDate, initialEndDate)
-    ? getNextRecurringOccurrenceAfter({
-        startDate: recurrenceAnchorDate,
-        currentOccurrence: dueDate,
-        frequency,
-      })
-    : dueDate;
-}
-
-function getLocalCalendarDate(date: Date): Date {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
-}
-
-function getConstrainedStartDatePickerValue(
-  startDate: Date,
-  minimumDate: Date,
-  maximumDate: Date
-): Date {
-  const isSelectable =
-    isValidDate(startDate) &&
-    isOnOrBeforeDay(minimumDate, startDate) &&
-    isOnOrBeforeDay(startDate, maximumDate);
-
-  return isSelectable ? startDate : minimumDate;
 }
 
 function mergePristineInitialValues(
