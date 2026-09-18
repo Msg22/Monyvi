@@ -56,7 +56,7 @@ describe("Budget form approved mockup fidelity contract", () => {
     );
     expect(ALERT_SLIDER_SOURCE).toContain("palette.nileGreen[500]");
     expect(ALERT_SLIDER_SOURCE).toContain("palette.slate[25]");
-    expect(ALERT_SLIDER_SOURCE).toContain("variant === \"default\"");
+    expect(ALERT_SLIDER_SOURCE).toContain('variant === "default"');
   });
 
   it("uses the compact preview and approved gradient action surface", () => {
@@ -71,7 +71,7 @@ describe("Budget form approved mockup fidelity contract", () => {
     expect(FORM_SECTIONS_SOURCE).toContain("palette.nileGreen[500]");
     expect(FORM_SECTIONS_SOURCE).toContain("color={palette.slate[900]}");
     expect(FORM_SECTIONS_SOURCE).toContain(
-      "bg-background px-5 pt-3 dark:bg-slate-950"
+      "bg-background px-4 pt-3 dark:bg-slate-950"
     );
     expect(FORM_SECTIONS_SOURCE).not.toContain(
       "border-t border-slate-200 bg-white px-5 pt-3"
@@ -79,9 +79,7 @@ describe("Budget form approved mockup fidelity contract", () => {
   });
 
   it("uses sentence-case approved English copy", () => {
-    expect(EN_BUDGETS_SOURCE).toContain(
-      '\"create_budget\": \"Create budget\"'
-    );
-    expect(EN_BUDGETS_SOURCE).toContain('\"budget_limit\": \"Limit\"');
+    expect(EN_BUDGETS_SOURCE).toContain('"create_budget": "Create budget"');
+    expect(EN_BUDGETS_SOURCE).toContain('"budget_limit": "Limit"');
   });
 });
