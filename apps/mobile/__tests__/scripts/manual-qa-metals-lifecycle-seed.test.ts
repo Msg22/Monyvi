@@ -60,7 +60,9 @@ const { buildSeedIds, inspectFixtureData, resetFixtureData, seedFixtureData } =
   }>("../../scripts/seed-fixtures/seed-engine");
 const { MANUAL_QA_SEED_FIXTURE, buildManualQaExtraRows } = jest.requireActual<{
   readonly MANUAL_QA_SEED_FIXTURE: Record<string, unknown>;
-  readonly buildManualQaExtraRows: (context: ManualQaSeedContext) => ManualQaExtraRows;
+  readonly buildManualQaExtraRows: (
+    context: ManualQaSeedContext
+  ) => ManualQaExtraRows;
 }>("../../scripts/seed-fixtures/manual-qa-fixture");
 
 const USER_ID = "11111111-1111-4111-8111-111111111111";
@@ -213,7 +215,9 @@ describe("manual QA Metals lifecycle fixture", () => {
 
     expect(states.filter((row) => row["status"] === "active")).toHaveLength(3);
     expect(states.filter((row) => row["status"] === "sold")).toHaveLength(1);
-    expect(states.filter((row) => row["status"] === "disposed")).toHaveLength(1);
+    expect(states.filter((row) => row["status"] === "disposed")).toHaveLength(
+      1
+    );
     expect(first.metalLifecycleEvents).toHaveLength(7);
     expect(first.financialActionGroups).toHaveLength(7);
     expect(first.metalActionEvidence).toHaveLength(7);
@@ -663,10 +667,7 @@ function createMemoryClient(): MemoryClient {
           }),
       }),
       delete: () => ({
-        eq: (
-          column: string,
-          value: unknown
-        ): Promise<MemoryQueryResult> => {
+        eq: (column: string, value: unknown): Promise<MemoryQueryResult> => {
           if (
             table === "metal_lifecycle_events" &&
             Array.from(tableRows(table).values()).some(

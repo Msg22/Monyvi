@@ -25,7 +25,8 @@ jest.mock("@monyvi/db", () => ({
         metal_lifecycle_events: mockEventsCollection,
       };
       const collection = collections[table];
-      if (collection === undefined) throw new Error(`Unexpected table: ${table}`);
+      if (collection === undefined)
+        throw new Error(`Unexpected table: ${table}`);
       return collection;
     },
   },
@@ -162,19 +163,23 @@ describe("metal History pagination", () => {
       metal_holding_states: states,
       metal_lifecycle_events: events,
     };
-    mockScopeQueryChildren.mockImplementation((): unknown =>
-      fetchedRows([
-        {
-          assetId: "sold-latest",
-          deleted: false,
-          itemForm: "coin",
-          metalType: "GOLD",
-          purityCatalogVersion: "1",
-          purityCode: "gold-999",
-          purityFactorDecimal: "0.999",
-          weightGramsDecimal: "8",
-        },
-      ])
+    mockScopeQueryChildren.mockImplementation(
+      (
+        _collection: unknown,
+        parents: ReadonlyArray<{ readonly id: string }>
+      ): unknown =>
+        fetchedRows(
+          parents.map((parent) => ({
+            assetId: parent.id,
+            deleted: false,
+            itemForm: "coin",
+            metalType: "GOLD",
+            purityCatalogVersion: "1",
+            purityCode: "gold-999",
+            purityFactorDecimal: "0.999",
+            weightGramsDecimal: "8",
+          }))
+        )
     );
     mockGetCurrentUserDataScope.mockResolvedValue({
       queryChildrenOfOwnedParents: mockScopeQueryChildren,
@@ -204,14 +209,22 @@ describe("metal History pagination", () => {
     );
     expect(mockScopeQueryOwned).toHaveBeenCalledWith(
       mockEventsCollection,
-      { column: "holding_id", kind: "where", value: { oneOf: ["sold-latest"] } },
+      {
+        column: "holding_id",
+        kind: "where",
+        value: { oneOf: ["sold-latest"] },
+      },
       { column: "deleted", kind: "where", value: false },
       { column: "is_history_visible", kind: "where", value: true },
       { column: "occurred_at", kind: "sortBy", value: "desc" }
     );
     expect(mockScopeQueryOwned).toHaveBeenCalledWith(
       mockEvidenceCollection,
-      { column: "holding_id", kind: "where", value: { oneOf: ["sold-latest"] } },
+      {
+        column: "holding_id",
+        kind: "where",
+        value: { oneOf: ["sold-latest"] },
+      },
       { column: "deleted", kind: "where", value: false }
     );
   });
@@ -231,5 +244,27 @@ describe("metal History pagination", () => {
       hasMore: false,
       items: [],
     });
+  });
+
+  it("does not let unrenderable lifecycle states consume visible page slots", async () => {
+    mockRowsByTable = {
+      ...mockRowsByTable,
+      assets: (
+        mockRowsByTable.assets as ReadonlyArray<Record<string, unknown>>
+      ).filter((asset) => asset["id"] !== "sold-latest"),
+    };
+
+    const model = await readMetalHistoryReadModel({
+      filter: "sold",
+      pageSize: 1,
+      userId: "user-1",
+    });
+
+    expect(model).toMatchObject({
+      counts: { all: 3, disposed: 1, sold: 2 },
+      filter: "sold",
+      hasMore: false,
+    });
+    expect(model.items.map((item) => item.holdingId)).toEqual(["sold-older"]);
   });
 });

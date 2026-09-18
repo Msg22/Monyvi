@@ -1,12 +1,15 @@
 const { MANUAL_QA_SEED_FIXTURE } = jest.requireActual<{
-  readonly MANUAL_QA_SEED_FIXTURE: Record<string, unknown>;
+  readonly MANUAL_QA_SEED_FIXTURE: {
+    readonly seedScope: string;
+    readonly [key: string]: unknown;
+  };
 }>("../../scripts/seed-fixtures/manual-qa-fixture");
-const { buildManualQaMetalRateReferenceRows } = jest.requireActual<{
-  readonly buildManualQaMetalRateReferenceRows: (
+const { seedManualQaMetalRateReferences } = jest.requireActual<{
+  readonly seedManualQaMetalRateReferences: (
+    client: unknown,
     userId: string,
-    seedScope?: string,
-    currentTimestamp?: string
-  ) => readonly Record<string, unknown>[];
+    seedScope: string
+  ) => Promise<readonly Record<string, unknown>[]>;
 }>("../../scripts/seed-fixtures/manual-qa-metal-rate-reference-seed");
 const { resetFixtureData, seedFixtureData } = jest.requireActual<{
   readonly resetFixtureData: (
@@ -30,7 +33,6 @@ const FIXTURE = {
 interface MemoryClient {
   readonly tables: Map<string, Map<string, Record<string, unknown>>>;
   readonly deleteAttempts: string[];
-  readonly seedReferences: (userId: string) => void;
   readonly from: (table: string) => unknown;
 }
 
@@ -82,13 +84,6 @@ function createMemoryClient(): MemoryClient {
   const client: MemoryClient = {
     tables,
     deleteAttempts,
-    seedReferences: (userId: string): void => {
-      const referenceRows = tableRows("metal_rate_references");
-      for (const row of buildManualQaMetalRateReferenceRows(userId)) {
-        const id = String(row["id"]);
-        if (!referenceRows.has(id)) referenceRows.set(id, { ...row });
-      }
-    },
     from: (table: string): unknown => ({
       select: () => ({
         eq: (column: string, value: unknown) => ({
@@ -170,7 +165,7 @@ describe("manual QA immutable rate-reference seed/reset", () => {
     const config = { mode: "local", userId: USER_ID };
 
     await seedFixtureData(client, config, FIXTURE);
-    client.seedReferences(USER_ID);
+    await seedManualQaMetalRateReferences(client, USER_ID, FIXTURE.seedScope);
     const referenceCount = rowsFor(client, "metal_rate_references").length;
     expect(referenceCount).toBeGreaterThan(0);
 
@@ -195,14 +190,14 @@ describe("manual QA immutable rate-reference seed/reset", () => {
     const config = { mode: "local", userId: USER_ID };
 
     await seedFixtureData(client, config, FIXTURE);
-    client.seedReferences(USER_ID);
+    await seedManualQaMetalRateReferences(client, USER_ID, FIXTURE.seedScope);
     const firstIds = rowsFor(client, "metal_rate_references")
       .map((row) => String(row["id"]))
       .sort();
 
     await resetFixtureData(client, config, FIXTURE);
     await seedFixtureData(client, config, FIXTURE);
-    client.seedReferences(USER_ID);
+    await seedManualQaMetalRateReferences(client, USER_ID, FIXTURE.seedScope);
 
     const secondIds = rowsFor(client, "metal_rate_references")
       .map((row) => String(row["id"]))

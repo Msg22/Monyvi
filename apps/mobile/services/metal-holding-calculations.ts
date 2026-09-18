@@ -16,7 +16,11 @@
  */
 
 import type { Asset, AssetMetal, CurrencyType } from "@monyvi/db";
-import { convertCurrency, getMetalPriceUsd } from "@monyvi/logic";
+import {
+  convertSelectedCurrentAmount,
+  getSelectedCurrentMetalPrice,
+} from "@/services/current-market-snapshot-calculations";
+import type { SelectedMarketRateSnapshot } from "@/services/market-rate-snapshot-read-model-service";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -109,29 +113,35 @@ function joinAssetsWithMetals(
  */
 function enrichHolding(
   raw: RawHolding,
-  latestRates: NonNullable<Parameters<typeof getMetalPriceUsd>[1]>,
+  currentSnapshot: SelectedMarketRateSnapshot,
   preferredCurrency: CurrencyType
-): MetalHolding {
-  const pricePerGramUsd = getMetalPriceUsd(
-    raw.assetMetal.metalType,
-    latestRates
-  );
+): MetalHolding | null {
+  const pricePerGramUsd = getSelectedCurrentMetalPrice({
+    metal: raw.assetMetal.metalType,
+    toCurrency: "USD",
+    currentSnapshot,
+  });
+  const pricePerGramPreferred = getSelectedCurrentMetalPrice({
+    metal: raw.assetMetal.metalType,
+    toCurrency: preferredCurrency,
+    currentSnapshot,
+  });
+  const purchasePriceInPref = convertSelectedCurrentAmount({
+    amount: raw.asset.purchasePrice,
+    fromCurrency: raw.asset.currency,
+    toCurrency: preferredCurrency,
+    currentSnapshot,
+  });
+  if (
+    pricePerGramUsd === null ||
+    pricePerGramPreferred === null ||
+    purchasePriceInPref === null
+  ) {
+    return null;
+  }
+
   const currentValueUsd = raw.assetMetal.calculateValue(pricePerGramUsd);
-  const currentValue =
-    preferredCurrency === "USD"
-      ? currentValueUsd
-      : convertCurrency(currentValueUsd, "USD", preferredCurrency, latestRates);
-
-  const purchasePriceInPref =
-    raw.asset.currency === preferredCurrency
-      ? raw.asset.purchasePrice
-      : convertCurrency(
-          raw.asset.purchasePrice,
-          raw.asset.currency,
-          preferredCurrency,
-          latestRates
-        );
-
+  const currentValue = raw.assetMetal.calculateValue(pricePerGramPreferred);
   const profitLossAmount = currentValue - purchasePriceInPref;
   const profitLossPercent =
     purchasePriceInPref > 0

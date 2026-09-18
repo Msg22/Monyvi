@@ -131,12 +131,22 @@ export function soldInput(
   const payload = soldPayload();
   return {
     actionGroups: [soldGroup(payload)],
+    actionEvidence: [
+      {
+        actionId: SELL_ACTION_ID,
+        deleted: false,
+        holdingId: SOLD_HOLDING_ID,
+        kind: "sell",
+        userId: USER_ID,
+      },
+    ],
     assetMetals: [soldHoldingMetal()],
     assets: [soldHoldingAsset()],
     currentRates: buildCurrentRates(),
     holdingStates: [
       {
         deleted: false,
+        effectiveActionId: SELL_ACTION_ID,
         effectiveEventId: SELL_ACTION_ID,
         holdingId: SOLD_HOLDING_ID,
         isVisible: true,

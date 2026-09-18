@@ -41,8 +41,8 @@ jest.mock("react-i18next", () => ({
 }));
 
 jest.mock("@expo/vector-icons", () => {
-  const createElement = jest.requireActual<typeof import("react")>("react")
-    .createElement;
+  const createElement =
+    jest.requireActual<typeof import("react")>("react").createElement;
   const { View } =
     jest.requireActual<typeof import("react-native")>("react-native");
   return {

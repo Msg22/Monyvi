@@ -120,7 +120,7 @@ describe("PR #271 validated Metals review regressions", () => {
   });
 
   it("validates purity tuples against the canonical catalog", () => {
-    const value = source("services/metal-detail-read-model-service.ts");
+    const value = source("services/metal-detail-read-model-shaping.ts");
     expect(value).toContain("resolvePuritySelection");
     expect(value).toContain("entry.factorDecimal");
   });
@@ -170,10 +170,9 @@ describe("PR #271 validated Metals review regressions", () => {
   it("reclassifies cached portfolio trust over time and retains last valid rates on observer errors", () => {
     const value = source("hooks/useMetalPortfolio.ts");
     expect(value).toContain("RATE_STATUS_REFRESH_INTERVAL_MS");
-    expect(value).toContain("trustObservationRef.current?.refresh()");
-    expect(value).not.toMatch(
-      /error:[\s\S]{0,300}setCurrentRates\(createEmptyTrustReadModel\(\)\)/
-    );
+    expect(value).toContain("refreshSelectedSnapshot()");
+    expect(value).toContain("selectedSnapshot?.trust");
+    expect(value).toContain("currentError: marketRatesError");
   });
 
   it("resets the portfolio filter on a new focused visit", () => {
@@ -215,10 +214,10 @@ describe("PR #271 validated Metals review regressions", () => {
     );
   });
 
-  it("bounds observation subscriptions to one latest row per instrument", () => {
-    expect(source("services/live-rates-trust-read-model-service.ts")).toContain(
-      "Q.take(1)"
-    );
+  it("bounds complete snapshot candidates and joins observations by snapshot identity", () => {
+    const value = source("services/market-rate-snapshot-read-model-service.ts");
+    expect(value).toContain("Q.take(MAX_SNAPSHOT_CANDIDATES)");
+    expect(value).toContain('Q.where("batch_id", Q.oneOf([...batchIds]))');
   });
 
   it("supplies a conservative timestamp for summarized fresh currency trust", () => {

@@ -50,6 +50,14 @@ const translations: Readonly<Record<string, string>> = {
   "detail.physical_facts": "Physical facts",
   "detail.purchase_premium_costs": "Purchase premium and costs",
   "detail.restored": "Restored to Active",
+  "detail.retry": "Try again",
+  "detail.retry_sync": "Try sync again",
+  "portfolio.performance_unavailable":
+    "Since-purchase result unavailable. Purchase cost is not available.",
+  "portfolio.performance_unavailable_rate_reference":
+    "Since-purchase result unavailable. A purchase-currency rate is not available.",
+  "reconciliation.incomplete":
+    "Changes are still being checked. The last complete state remains active.",
   "detail.since_purchase": "{{amount}} since purchase",
   "detail.timeline_current_value": "Current value",
   "form.bar": "Bar",
@@ -92,10 +100,9 @@ jest.mock("@expo/vector-icons", () => {
   }: {
     readonly testID?: string;
   }): React.JSX.Element => {
-    const { View } = jest.requireActual(
-      "react-native"
-    ) as typeof import("react-native");
-    return <View testID={testID} />;
+    const ReactNative =
+      jest.requireActual<typeof import("react-native")>("react-native");
+    return <ReactNative.View testID={testID} />;
   };
   return {
     Ionicons: renderIcon,
@@ -105,6 +112,10 @@ jest.mock("@expo/vector-icons", () => {
 
 jest.mock("@/components/ui/Skeleton", () => ({
   Skeleton: (): null => null,
+}));
+
+jest.mock("@/context/ThemeContext", () => ({
+  useTheme: (): { readonly isDark: boolean } => ({ isDark: false }),
 }));
 
 jest.mock("react-native-safe-area-context", () => ({
@@ -510,5 +521,73 @@ describe("approved active holding-detail fidelity", () => {
       "className",
       expect.stringContaining("flex-col")
     );
+  });
+
+  it("offers sync recovery while reconciliation is incomplete", () => {
+    const onRetry = jest.fn();
+    render(
+      <MetalHoldingDetailScreen
+        actions={[]}
+        error={null}
+        isLoading={false}
+        isOffline={false}
+        model={activeDetail({
+          reconciliationState: "reconciliation_incomplete",
+        })}
+        onAction={jest.fn()}
+        onRetry={onRetry}
+      />
+    );
+
+    expect(
+      screen.getByText(
+        "Changes are still being checked. The last complete state remains active."
+      )
+    ).toBeTruthy();
+    fireEvent.press(screen.getByText("Try sync again"));
+    expect(onRetry).toHaveBeenCalledTimes(1);
+  });
+
+  it("explains why the since-purchase result is unavailable instead of omitting it", () => {
+    render(
+      <MetalHoldingDetailScreen
+        actions={[]}
+        error={null}
+        isLoading={false}
+        isOffline={false}
+        model={activeDetail({
+          totalGainDecimal: null,
+          unavailableExactFacts: ["purchase_cost"],
+        })}
+        onRetry={jest.fn()}
+      />
+    );
+
+    expect(
+      screen.getByText(
+        "Since-purchase result unavailable. Purchase cost is not available."
+      )
+    ).toBeTruthy();
+    expect(screen.getByText("EGP 162,317.87")).toBeTruthy();
+  });
+
+  it("omits the paid amount when the recorded purchase currency is unknown", () => {
+    render(
+      <MetalHoldingDetailScreen
+        actions={[]}
+        error={null}
+        isLoading={false}
+        isOffline={false}
+        model={activeDetail({
+          purchaseCurrency: null,
+          totalGainDecimal: null,
+          unavailableExactFacts: ["purchase_cost"],
+        })}
+        onRetry={jest.fn()}
+      />
+    );
+
+    expect(screen.queryByText(/paid/)).toBeNull();
+    expect(screen.getByText("EGP 162,317.87")).toBeTruthy();
   });
 });

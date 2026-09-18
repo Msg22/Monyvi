@@ -94,12 +94,14 @@ handoff from `.agent/workflows/mockup-implementation.md` before implementation
 begins. The sidecar must record `Binding metadata approval: APPROVED` plus the
 explicit approval evidence/reference. Recompute its current fingerprint and
 verify that `Approved binding metadata revision` equals
-`Binding metadata revision` and that the approval evidence identifies that same
-revision. For an approved legacy mockup without a sidecar, complete that
-workflow's legacy metadata migration and explicit sidecar approval first. A
-fidelity-affecting `UNKNOWN`, failed revision check, missing approval record,
-pending sidecar, or materially changed/unapproved binding fact blocks
-implementation rather than being inferred.
+`Binding metadata revision`, that `Approved binding approval revision` equals
+`Binding approval revision`, and that the approval evidence/reference identifies
+the approved combined `Approved binding approval revision`. For an approved
+legacy mockup without a sidecar, complete that workflow's legacy metadata
+migration and explicit sidecar approval first. A fidelity-affecting `UNKNOWN`,
+failed revision check, missing approval record, pending sidecar, or materially
+changed/unapproved binding fact blocks implementation rather than being
+inferred.
 
 Implement the approved direction through `.agent/workflows/applying-mockups.md`.
 If coding reveals a meaningful design change, stop and ask for approval again

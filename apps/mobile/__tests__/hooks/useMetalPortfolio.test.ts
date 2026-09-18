@@ -1,20 +1,64 @@
 import { act, renderHook, waitFor } from "@testing-library/react-native";
+import type { LiveRatesTrustReadModel } from "@/services/live-rates-trust-read-model-service";
 
 interface Observer {
   readonly next: (value: unknown) => void;
   readonly error: (cause: unknown) => void;
 }
 
-const mockTrustObservers: Observer[] = [];
 const mockSaleGroupObservers: Observer[] = [];
 const mockSaleRefObservers: Observer[] = [];
 const mockDatabase = { id: "database" };
-const mockShapeHoldingsInputs: Record<string, unknown>[] = [];
-const mockEmptyTrustReadModel = {
+const mockShapeHoldingsInputs: Array<Record<string, unknown>> = [];
+const mockEmptyTrustReadModel: LiveRatesTrustReadModel = {
   gold: { state: "missing", ageMs: null, providerObservedAt: null },
   silver: { state: "missing", ageMs: null, providerObservedAt: null },
   currencies: new Map(),
 };
+const mockRefreshSelectedSnapshot = jest.fn();
+const mockMarketRateListeners = new Set<() => void>();
+
+interface MockMarketRatesState {
+  readonly currentError: Error | null;
+  readonly isConnected: boolean;
+  readonly isCurrentLoading: boolean;
+  readonly refreshSelectedSnapshot: () => void;
+  readonly selectedSnapshot: {
+    readonly snapshotId: string;
+    readonly trust: typeof mockEmptyTrustReadModel;
+  } | null;
+}
+
+let mockMarketRatesState: MockMarketRatesState;
+
+function resetMockMarketRates(): void {
+  mockRefreshSelectedSnapshot.mockReset();
+  mockMarketRatesState = {
+    currentError: null,
+    isConnected: true,
+    isCurrentLoading: true,
+    refreshSelectedSnapshot: mockRefreshSelectedSnapshot,
+    selectedSnapshot: null,
+  };
+}
+
+function emitMarketRates(
+  next: Omit<MockMarketRatesState, "isConnected" | "refreshSelectedSnapshot">
+): void {
+  mockMarketRatesState = {
+    ...mockMarketRatesState,
+    ...next,
+  };
+  for (const listener of mockMarketRateListeners) listener();
+}
+
+function selectedSnapshot(
+  trust: typeof mockEmptyTrustReadModel
+): MockMarketRatesState["selectedSnapshot"] {
+  return { snapshotId: "snapshot-1", trust };
+}
+
+resetMockMarketRates();
 
 interface MockLocalQuery {
   readonly observe: () => unknown;
@@ -50,8 +94,10 @@ jest.mock("@react-navigation/native", () => ({
   useIsFocused: (): boolean => true,
 }));
 
+let mockAuthUserId = "user-1";
+
 jest.mock("@/context/AuthContext", () => ({
-  useAuth: () => ({ user: { id: "user-1" }, isLoading: false }),
+  useAuth: () => ({ user: { id: mockAuthUserId }, isLoading: false }),
 }));
 
 jest.mock("@/providers/DatabaseProvider", () => ({
@@ -68,7 +114,19 @@ jest.mock("@/utils/logger", () => ({
 }));
 
 jest.mock("@/hooks/useMarketRates", () => ({
-  useMarketRates: (): { isConnected: boolean } => ({ isConnected: true }),
+  useMarketRates: (): MockMarketRatesState => {
+    const React = jest.requireActual<typeof import("react")>("react");
+    return React.useSyncExternalStore(
+      (listener) => {
+        mockMarketRateListeners.add(listener);
+        return (): void => {
+          mockMarketRateListeners.delete(listener);
+        };
+      },
+      () => mockMarketRatesState,
+      () => mockMarketRatesState
+    );
+  },
 }));
 
 jest.mock("@/hooks/usePreferredCurrency", () => ({
@@ -79,7 +137,7 @@ jest.mock("@/hooks/usePreferredCurrency", () => ({
 }));
 
 const mockWealthBreakdown = { totalNetWorthDecimal: "1000" };
-let mockActiveHoldings: readonly Record<string, unknown>[] = [];
+let mockActiveHoldings: ReadonlyArray<Record<string, unknown>> = [];
 
 jest.mock("@/services/net-worth-read-model-service", () => ({
   buildWealthBreakdownReadModel: (): unknown => mockWealthBreakdown,
@@ -90,11 +148,14 @@ jest.mock("@/services/metal-portfolio-read-model-service", () => ({
   observePortfolioHoldingStates: (): unknown => mockImmediateQuery([]),
   observePortfolioAssetMetals: (): null => null,
   observePortfolioRecentHistory: (): null => null,
+  observePortfolioEffectiveActionEvidence: (): null => null,
   observePortfolioMetalSellGroups: (): unknown =>
     mockDeferredQuery(mockSaleGroupObservers),
   observePortfolioSaleRateReferences: (): unknown =>
     mockDeferredQuery(mockSaleRefObservers),
-  shapeMetalPortfolioHoldings: (input: Record<string, unknown>): readonly unknown[] => {
+  shapeMetalPortfolioHoldings: (
+    input: Record<string, unknown>
+  ): readonly unknown[] => {
     mockShapeHoldingsInputs.push(input);
     return [];
   },
@@ -109,13 +170,6 @@ jest.mock("@/services/metal-portfolio-read-model-service", () => ({
 }));
 
 jest.mock("@/services/live-rates-trust-read-model-service", () => ({
-  observeLiveRatesTrust: () => ({
-    refresh: jest.fn(),
-    subscribe: (observer: Observer): { unsubscribe: () => void } => {
-      mockTrustObservers.push(observer);
-      return { unsubscribe: (): void => undefined };
-    },
-  }),
   summarizeLiveRatesTrust: (): string => "missing",
 }));
 
@@ -123,7 +177,8 @@ import { useMetalPortfolio } from "@/hooks/useMetalPortfolio";
 
 describe("useMetalPortfolio summary loading signal", () => {
   beforeEach(() => {
-    mockTrustObservers.length = 0;
+    mockAuthUserId = "user-1";
+    resetMockMarketRates();
     mockSaleGroupObservers.length = 0;
     mockSaleRefObservers.length = 0;
     mockActiveHoldings = [];
@@ -154,7 +209,11 @@ describe("useMetalPortfolio summary loading signal", () => {
     await waitFor(() => expect(result.current.readiness.holdings).toBe(true));
 
     act(() => {
-      mockTrustObservers[0]?.next(mockEmptyTrustReadModel);
+      emitMarketRates({
+        currentError: null,
+        isCurrentLoading: false,
+        selectedSnapshot: selectedSnapshot(mockEmptyTrustReadModel),
+      });
     });
 
     await waitFor(() => expect(result.current.isSummaryLoading).toBe(false));
@@ -171,7 +230,11 @@ describe("useMetalPortfolio summary loading signal", () => {
     expect(result.current.readiness.summary).toBe(false);
 
     act(() => {
-      mockTrustObservers[0]?.error(new Error("rate observer failed"));
+      emitMarketRates({
+        currentError: new Error("rate observer failed"),
+        isCurrentLoading: false,
+        selectedSnapshot: null,
+      });
     });
 
     await waitFor(() => expect(result.current.error).toBeInstanceOf(Error));
@@ -181,11 +244,31 @@ describe("useMetalPortfolio summary loading signal", () => {
     expect(result.current.readiness.summary).toBe(true);
     expect(result.current.isSummaryLoading).toBe(false);
   });
+
+  it("clears a previous account's portfolio observer error when the signed-in user changes", async () => {
+    const { result, rerender } = renderHook(() =>
+      useMetalPortfolio({ accountsValueDecimal: "1000" })
+    );
+    await waitFor(() => expect(result.current.readiness.holdings).toBe(true));
+
+    act(() => {
+      mockSaleGroupObservers[0]?.error(
+        new Error("user A sale evidence observer failed")
+      );
+    });
+    await waitFor(() => expect(result.current.error).toBeInstanceOf(Error));
+
+    mockAuthUserId = "user-2";
+    rerender(undefined);
+
+    // The new account must not inherit account A's generic failure/retry state.
+    expect(result.current.error).toBeNull();
+  });
 });
 
 describe("useMetalPortfolio conservative provider timestamp", () => {
   beforeEach(() => {
-    mockTrustObservers.length = 0;
+    resetMockMarketRates();
     mockSaleGroupObservers.length = 0;
     mockSaleRefObservers.length = 0;
   });
@@ -205,17 +288,24 @@ describe("useMetalPortfolio conservative provider timestamp", () => {
     await waitFor(() => expect(result.current.readiness.holdings).toBe(true));
 
     act(() => {
-      mockTrustObservers[0]?.next({
-        gold: {
-          state: "fresh",
-          ageMs: 1_000,
-          providerObservedAt: new Date("2026-09-08T10:00:00.000Z"),
-          valueDecimal: "81.5",
-        },
-        silver: { state: "missing", ageMs: null, providerObservedAt: null },
-        currencies: new Map([
-          ["EGP", { state: "unknown", ageMs: null, providerObservedAt: null }],
-        ]),
+      emitMarketRates({
+        currentError: null,
+        isCurrentLoading: false,
+        selectedSnapshot: selectedSnapshot({
+          gold: {
+            state: "fresh",
+            ageMs: 1_000,
+            providerObservedAt: new Date("2026-09-08T10:00:00.000Z"),
+            valueDecimal: "81.5",
+          },
+          silver: { state: "missing", ageMs: null, providerObservedAt: null },
+          currencies: new Map([
+            [
+              "EGP",
+              { state: "unknown", ageMs: null, providerObservedAt: null },
+            ],
+          ]),
+        }),
       });
     });
 
@@ -242,25 +332,29 @@ describe("useMetalPortfolio conservative provider timestamp", () => {
     await waitFor(() => expect(result.current.readiness.holdings).toBe(true));
 
     act(() => {
-      mockTrustObservers[0]?.next({
-        gold: {
-          state: "fresh",
-          ageMs: 1_000,
-          providerObservedAt: new Date("2026-09-08T10:00:00.000Z"),
-          valueDecimal: "81.5",
-        },
-        silver: { state: "missing", ageMs: null, providerObservedAt: null },
-        currencies: new Map([
-          [
-            "EGP",
-            {
-              state: "fresh",
-              ageMs: 2_000,
-              providerObservedAt: new Date("2026-09-08T09:00:00.000Z"),
-              valueDecimal: "0.02",
-            },
-          ],
-        ]),
+      emitMarketRates({
+        currentError: null,
+        isCurrentLoading: false,
+        selectedSnapshot: selectedSnapshot({
+          gold: {
+            state: "fresh",
+            ageMs: 1_000,
+            providerObservedAt: new Date("2026-09-08T10:00:00.000Z"),
+            valueDecimal: "81.5",
+          },
+          silver: { state: "missing", ageMs: null, providerObservedAt: null },
+          currencies: new Map([
+            [
+              "EGP",
+              {
+                state: "fresh",
+                ageMs: 2_000,
+                providerObservedAt: new Date("2026-09-08T09:00:00.000Z"),
+                valueDecimal: "0.02",
+              },
+            ],
+          ]),
+        }),
       });
     });
 
@@ -275,7 +369,7 @@ describe("useMetalPortfolio conservative provider timestamp", () => {
 
 describe("useMetalPortfolio realized-sale readiness", () => {
   beforeEach(() => {
-    mockTrustObservers.length = 0;
+    resetMockMarketRates();
     mockSaleGroupObservers.length = 0;
     mockSaleRefObservers.length = 0;
   });
@@ -299,7 +393,9 @@ describe("useMetalPortfolio realized-sale readiness", () => {
     act(() => {
       mockSaleRefObservers[0]?.next([]);
     });
-    await waitFor(() => expect(result.current.readiness.realizedSale).toBe(true));
+    await waitFor(() =>
+      expect(result.current.readiness.realizedSale).toBe(true)
+    );
     // Holdings stayed visible the whole time (no second blocking readiness).
     expect(result.current.readiness.holdings).toBe(true);
   });
@@ -311,7 +407,9 @@ describe("useMetalPortfolio realized-sale readiness", () => {
       mockSaleGroupObservers[0]?.next([]);
       mockSaleRefObservers[0]?.next([]);
     });
-    await waitFor(() => expect(result.current.readiness.realizedSale).toBe(true));
+    await waitFor(() =>
+      expect(result.current.readiness.realizedSale).toBe(true)
+    );
 
     // A dependency refresh re-arms the loading flags before the fresh stream
     // resolves, so a stale snapshot is never rendered as current-user data.
@@ -325,15 +423,15 @@ describe("useMetalPortfolio realized-sale readiness", () => {
 describe("useMetalPortfolio calendar boundary rollover", () => {
   afterEach(() => {
     jest.useRealTimers();
-    mockTrustObservers.length = 0;
+    resetMockMarketRates();
     mockSaleGroupObservers.length = 0;
     mockSaleRefObservers.length = 0;
     mockShapeHoldingsInputs.length = 0;
   });
 
   function boundaryDates(): string[] {
-    return mockShapeHoldingsInputs.map(
-      (input) => String(input.latestAllowedCalendarDate)
+    return mockShapeHoldingsInputs.map((input) =>
+      String(input.latestAllowedCalendarDate)
     );
   }
 
@@ -343,9 +441,6 @@ describe("useMetalPortfolio calendar boundary rollover", () => {
     mockShapeHoldingsInputs.length = 0;
 
     const { result } = renderHook(() => useMetalPortfolio());
-    act(() => {
-      mockTrustObservers[0]?.next(mockEmptyTrustReadModel);
-    });
 
     expect(result.current.readiness.holdings).toBe(true);
     expect(boundaryDates()).toContain("2026-01-15");

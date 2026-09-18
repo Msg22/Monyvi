@@ -42,7 +42,7 @@ export function useTransactionsGrouping(
   const [isDataLoading, setIsDataLoading] = useState(true);
   const [refetchTrigger, setRefetchTrigger] = useState(0);
   const { totalNetWorth, isLoading: isNetWorthLoading } = useNetWorth();
-  const { latestRates, isLoading: isRatesLoading } = useMarketRates();
+  const { selectedSnapshot, isLoading: isRatesLoading } = useMarketRates();
   const { preferredCurrency } = usePreferredCurrency();
   const { userId, isResolvingUser } = useCurrentUser();
   const selectedTypesKey = selectedTypes.join(",");
@@ -122,7 +122,7 @@ export function useTransactionsGrouping(
     return buildTransactionGroups({
       ...readModel,
       totalNetWorth,
-      latestRates,
+      selectedSnapshot,
       preferredCurrency,
       period,
       searchQuery,
@@ -130,7 +130,7 @@ export function useTransactionsGrouping(
   }, [
     readModel,
     totalNetWorth,
-    latestRates,
+    selectedSnapshot,
     preferredCurrency,
     period,
     searchQuery,

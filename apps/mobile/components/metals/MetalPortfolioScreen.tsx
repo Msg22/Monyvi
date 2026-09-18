@@ -1,11 +1,20 @@
 import { Skeleton } from "@/components/ui/Skeleton";
 import { palette } from "@/constants/colors";
-import { getTabContentBottomClearance } from "@/constants/ui";
+import {
+  getTabContentBottomClearance,
+  shouldUseCompactLayout,
+} from "@/constants/ui";
 import type { MetalPortfolioSectionReadiness } from "@/hooks/metal-portfolio-readiness";
 import type { CurrencyType } from "@monyvi/db";
 import { Ionicons } from "@expo/vector-icons";
 import React from "react";
-import { FlatList, Pressable, Text, View } from "react-native";
+import {
+  FlatList,
+  Pressable,
+  Text,
+  useWindowDimensions,
+  View,
+} from "react-native";
 import { useTranslation } from "react-i18next";
 
 import type {
@@ -128,7 +137,8 @@ export function MetalPortfolioScreen({
         }
         ListFooterComponent={
           sectionReadiness.recentHistory ? (
-            displayedHistory === null || displayedHistory.length === 0 ? null : (
+            displayedHistory === null ||
+            displayedHistory.length === 0 ? null : (
               <RecentHistory
                 currency={currency}
                 holdings={displayedHistory}
@@ -290,15 +300,11 @@ function PortfolioSummary({
   readonly realizedSaleReady: boolean;
 }): React.JSX.Element {
   const { t, i18n } = useTranslation("metals");
+  const { fontScale, width } = useWindowDimensions();
+  const isCompact = shouldUseCompactLayout(width, fontScale);
   const locale = resolveLocale(i18n?.resolvedLanguage);
   const holdingCount = portfolio.activeHoldings.length;
-  const performanceValue = parseOptionalNumber(
-    portfolio.currentPerformanceDecimal
-  );
   const realizedProfitLoss = portfolio.soldResultDecimal;
-  const performanceUnavailable =
-    portfolio.currentPerformanceDecimal === null &&
-    portfolio.activeTotalDecimal !== null;
   const rateAccessibilityCopy = getPortfolioRateAccessibilityCopy(
     portfolio.rateStatus.state,
     rateProviderObservedAt,
@@ -310,7 +316,12 @@ function PortfolioSummary({
       <Text className="text-base font-medium text-nileGreen-700 dark:text-nileGreen-400">
         {t("portfolio.active_portfolio")}
       </Text>
-      <View className="mt-4 flex-row items-start justify-between gap-5">
+      <View
+        testID="metal-portfolio-summary-layout"
+        className={`mt-4 items-start gap-5 ${
+          isCompact ? "flex-col" : "flex-row justify-between"
+        }`}
+      >
         <View
           accessible
           accessibilityLabel={t("portfolio.total_accessibility", {
@@ -319,10 +330,7 @@ function PortfolioSummary({
               currency,
               locale
             ),
-            status: t(
-              rateAccessibilityCopy.key,
-              rateAccessibilityCopy.values
-            ),
+            status: t(rateAccessibilityCopy.key, rateAccessibilityCopy.values),
           })}
           className="min-w-0 flex-1"
         >
@@ -338,7 +346,7 @@ function PortfolioSummary({
             {t("portfolio.active_portfolio_value")}
           </Text>
         </View>
-        <View className="w-[156px] pt-1">
+        <View className={isCompact ? "w-full" : "w-[156px] pt-1"}>
           <View className="flex-row items-baseline gap-2">
             <Text className="text-[28px] font-medium text-text-primary dark:text-text-primary-dark">
               {holdingCount}
@@ -347,38 +355,12 @@ function PortfolioSummary({
               {t("portfolio.active_holdings", { count: holdingCount })}
             </Text>
           </View>
-          {portfolio.currentPerformanceDecimal === null ? (
-            <Text className="mt-3 text-sm text-text-secondary dark:text-text-secondary-dark">
-              {performanceUnavailable
-                ? t(
-                    portfolio.currentPerformanceUnavailableReason ===
-                      "rate_reference"
-                      ? "portfolio.performance_unavailable_rate_reference"
-                      : "portfolio.performance_unavailable"
-                  )
-                : t("portfolio.current_value_unavailable", {
-                    reason: t(`rate.${portfolio.rateStatus.state}`),
-                  })}
-            </Text>
-          ) : (
-            <>
-              <Text
-                numberOfLines={1}
-                className={`mt-3 text-sm font-medium ${getPerformanceTextClass(
-                  performanceValue
-                )}`}
-              >
-                {formatCodeAmount(
-                  portfolio.currentPerformanceDecimal,
-                  currency,
-                  locale,
-                  true
-                )}
-              </Text>
-              <Text className="mt-1 text-xs text-text-secondary dark:text-text-secondary-dark">
-                {t("portfolio.since_purchase_label")}
-              </Text>
-            </>
+          {holdingCount === 0 ? null : (
+            <PerformanceMetric
+              currency={currency}
+              locale={locale}
+              portfolio={portfolio}
+            />
           )}
         </View>
       </View>
@@ -412,6 +394,54 @@ function PortfolioSummary({
   );
 }
 
+function PerformanceMetric({
+  currency,
+  locale,
+  portfolio,
+}: {
+  readonly currency: CurrencyType;
+  readonly locale: string;
+  readonly portfolio: MetalPortfolioReadModel;
+}): React.JSX.Element {
+  const { t } = useTranslation("metals");
+  if (portfolio.currentPerformanceDecimal === null) {
+    const performanceUnavailable = portfolio.activeTotalDecimal !== null;
+    return (
+      <Text className="mt-3 text-sm text-text-secondary dark:text-text-secondary-dark">
+        {performanceUnavailable
+          ? t(
+              portfolio.currentPerformanceUnavailableReason === "rate_reference"
+                ? "portfolio.performance_unavailable_rate_reference"
+                : "portfolio.performance_unavailable"
+            )
+          : t("portfolio.current_value_unavailable", {
+              reason: t(`rate.${portfolio.rateStatus.state}`),
+            })}
+      </Text>
+    );
+  }
+  return (
+    <>
+      <Text
+        numberOfLines={1}
+        className={`mt-3 text-sm font-medium ${getPerformanceTextClass(
+          parseOptionalNumber(portfolio.currentPerformanceDecimal)
+        )}`}
+      >
+        {formatCodeAmount(
+          portfolio.currentPerformanceDecimal,
+          currency,
+          locale,
+          true
+        )}
+      </Text>
+      <Text className="mt-1 text-xs text-text-secondary dark:text-text-secondary-dark">
+        {t("portfolio.since_purchase_label")}
+      </Text>
+    </>
+  );
+}
+
 function AllocationBar({
   allocation,
 }: {
@@ -426,12 +456,12 @@ function AllocationBar({
       <View className="h-3 flex-row overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
         <View
           testID="metal-portfolio-allocation-gold"
-          className="h-full rounded-l-full bg-gold-600"
+          className="h-full rounded-s-full bg-gold-600"
           style={{ width: `${goldShare}%` }}
         />
         <View
           testID="metal-portfolio-allocation-silver"
-          className="h-full rounded-r-full bg-silver-500"
+          className="h-full rounded-e-full bg-silver-500"
           style={{ width: `${silverShare}%` }}
         />
       </View>
@@ -527,9 +557,9 @@ function FilterBar({
         const hasDivider = index < FILTERS.length - 1;
         const selectedBorderRadius =
           index === 0
-            ? "rounded-l-[11px]"
+            ? "rounded-s-[11px]"
             : index === FILTERS.length - 1
-              ? "rounded-r-[11px]"
+              ? "rounded-e-[11px]"
               : "";
         return (
           <Pressable
@@ -548,7 +578,7 @@ function FilterBar({
               isSelected ? "z-10" : "z-0"
             } ${
               hasDivider
-                ? "border-r border-slate-300 dark:border-slate-700"
+                ? "border-e border-slate-300 dark:border-slate-700"
                 : ""
             }`}
             onPress={(): void => onFilterChange(filter)}
@@ -758,4 +788,3 @@ function ErrorState({
     </View>
   );
 }
-

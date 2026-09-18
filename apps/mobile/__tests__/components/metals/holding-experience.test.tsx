@@ -82,6 +82,10 @@ jest.mock("@/components/ui/Skeleton", () => ({
   Skeleton: () => null,
 }));
 
+jest.mock("@/context/ThemeContext", () => ({
+  useTheme: (): { readonly isDark: boolean } => ({ isDark: false }),
+}));
+
 function detail(
   overrides: Partial<MetalDetailReadModel> = {}
 ): MetalDetailReadModel {
@@ -189,6 +193,28 @@ describe("US3 holding experience", () => {
     expect(screen.getByText("Sell holding")).toBeTruthy();
     fireEvent.press(screen.getByText("Sell holding"));
     expect(onAction).toHaveBeenCalledWith("sell");
+  });
+
+  it("locks terminal financial actions while reconciliation is incomplete", () => {
+    const lockedSold = getHoldingActionDescriptors(
+      detail({
+        isActiveOwnership: false,
+        isFinancialActionLocked: true,
+        reconciliationState: "reconciliation_incomplete",
+        status: "sold",
+      })
+    );
+    const lockedDisposed = getHoldingActionDescriptors(
+      detail({
+        isActiveOwnership: false,
+        isFinancialActionLocked: true,
+        reconciliationState: "reconciliation_incomplete",
+        status: "disposed",
+      })
+    );
+
+    expect(lockedSold.map((action) => action.id)).toEqual(["edit"]);
+    expect(lockedDisposed.map((action) => action.id)).toEqual(["edit"]);
   });
 
   it("renders Sold, Disposed, and restored states without active valuation claims", () => {

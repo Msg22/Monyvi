@@ -7,15 +7,15 @@ import {
 import { FontAwesome5, Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import React, { useCallback, useMemo } from "react";
-import {
-  ActivityIndicator,
-  ScrollView,
-  Text,
-  TouchableOpacity,
-  View,
-} from "react-native";
+import { ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { palette } from "@/constants/colors";
 import { LiveRatesSkeleton } from "@/components/dashboard/skeletons/LiveRatesSkeleton";
+import { Skeleton } from "@/components/ui/Skeleton";
+import {
+  getSelectedCurrentCurrencyRate,
+  getSelectedCurrentMetalPrice,
+} from "@/services/current-market-snapshot-calculations";
+import type { SelectedMarketRateSnapshot } from "@/services/market-rate-snapshot-read-model-service";
 import { useTheme } from "@/context/ThemeContext";
 import { useTranslation } from "react-i18next";
 import { formatTimeAgo } from "@/utils/dateHelpers";
@@ -29,7 +29,7 @@ interface Rate {
 }
 
 interface LiveRatesProps {
-  readonly latestRates: MarketRate | null;
+  readonly selectedSnapshot: SelectedMarketRateSnapshot | null;
   readonly previousDayRate: MarketRate | null;
   readonly isLoading: boolean;
   readonly lastUpdated: Date | null;
@@ -73,13 +73,20 @@ function calculateTrend(
  * When the preferred currency IS USD, uses EUR as a reference instead.
  */
 function buildCurrencyRate(
-  latestRates: MarketRate,
+  selectedSnapshot: SelectedMarketRateSnapshot,
   previousDayRate: MarketRate | null,
   preferredCurrency: CurrencyType
-): Rate {
+): Rate | null {
   const displayCurrency: CurrencyType =
     preferredCurrency === "USD" ? "EUR" : preferredCurrency;
-  const currencyRate = getCurrencyRate(latestRates, "USD", displayCurrency);
+  const currencyRate = getSelectedCurrentCurrencyRate({
+    fromCurrency: "USD",
+    toCurrency: displayCurrency,
+    currentSnapshot: selectedSnapshot,
+  });
+  if (currencyRate === null) {
+    return null;
+  }
   const previousRate = previousDayRate
     ? getCurrencyRate(previousDayRate, "USD", displayCurrency)
     : null;
@@ -97,14 +104,21 @@ function buildCurrencyRate(
  * Build the gold 24K rate entry, priced per gram in the preferred currency.
  */
 function buildGoldRate(
-  latestRates: MarketRate,
+  selectedSnapshot: SelectedMarketRateSnapshot,
   previousDayRate: MarketRate | null,
   preferredCurrency: CurrencyType,
   t: (key: string) => string
-): Rate {
+): Rate | null {
   const symbol =
     CURRENCY_INFO_MAP[preferredCurrency]?.symbol ?? preferredCurrency;
-  const goldInPreferred = getMetalPrice("GOLD", latestRates, preferredCurrency);
+  const goldInPreferred = getSelectedCurrentMetalPrice({
+    metal: "GOLD",
+    toCurrency: preferredCurrency,
+    currentSnapshot: selectedSnapshot,
+  });
+  if (goldInPreferred === null) {
+    return null;
+  }
   const prevGoldInPreferred = previousDayRate
     ? getMetalPrice("GOLD", previousDayRate, preferredCurrency)
     : null;
@@ -122,18 +136,21 @@ function buildGoldRate(
  * Build the silver rate entry, priced per gram in the preferred currency.
  */
 function buildSilverRate(
-  latestRates: MarketRate,
+  selectedSnapshot: SelectedMarketRateSnapshot,
   previousDayRate: MarketRate | null,
   preferredCurrency: CurrencyType,
   t: (key: string) => string
-): Rate {
+): Rate | null {
   const symbol =
     CURRENCY_INFO_MAP[preferredCurrency]?.symbol ?? preferredCurrency;
-  const silverInPreferred = getMetalPrice(
-    "SILVER",
-    latestRates,
-    preferredCurrency
-  );
+  const silverInPreferred = getSelectedCurrentMetalPrice({
+    metal: "SILVER",
+    toCurrency: preferredCurrency,
+    currentSnapshot: selectedSnapshot,
+  });
+  if (silverInPreferred === null) {
+    return null;
+  }
   const prevSilverInPreferred = previousDayRate
     ? getMetalPrice("SILVER", previousDayRate, preferredCurrency)
     : null;
@@ -152,20 +169,21 @@ function buildSilverRate(
  * Returns an empty array when no rate data is available.
  */
 function buildRatesDisplay(
-  latestRates: MarketRate | null,
+  selectedSnapshot: SelectedMarketRateSnapshot | null,
   previousDayRate: MarketRate | null,
   preferredCurrency: CurrencyType,
   t: (key: string) => string
 ): Rate[] {
-  if (!latestRates) {
+  if (!selectedSnapshot) {
     return [];
   }
 
-  return [
-    buildCurrencyRate(latestRates, previousDayRate, preferredCurrency),
-    buildGoldRate(latestRates, previousDayRate, preferredCurrency, t),
-    buildSilverRate(latestRates, previousDayRate, preferredCurrency, t),
+  const candidates = [
+    buildCurrencyRate(selectedSnapshot, previousDayRate, preferredCurrency),
+    buildGoldRate(selectedSnapshot, previousDayRate, preferredCurrency, t),
+    buildSilverRate(selectedSnapshot, previousDayRate, preferredCurrency, t),
   ];
+  return candidates.filter((rate): rate is Rate => rate !== null);
 }
 
 /**
@@ -208,7 +226,7 @@ function getPillIcon(
  * @returns The React element rendering the live rates pills, status indicators, and timestamp.
  */
 function LiveRatesComponent({
-  latestRates,
+  selectedSnapshot,
   previousDayRate,
   isLoading = false,
   lastUpdated,
@@ -221,22 +239,21 @@ function LiveRatesComponent({
   const ratesDisplay = useMemo(
     () =>
       buildRatesDisplay(
-        latestRates,
+        selectedSnapshot,
         previousDayRate,
         preferredCurrency,
         tMetals
       ),
-    [latestRates, previousDayRate, preferredCurrency, tMetals]
+    [selectedSnapshot, previousDayRate, preferredCurrency, tMetals]
   );
 
   const handlePress = useCallback((): void => {
-    router.push("/live-rates" as never);
+    router.push("/live-rates");
   }, []);
 
   // Show the skeleton only on the true first load (no cached rates yet).
   // During a pull-to-refresh of existing rates, keep the stale pills on
-  // screen and rely on the small inline spinner in the header — that's a
-  // "refresh indicator", not a "content loading" state. Both guards are
+  // screen and rely on the small inline skeleton in the header.
   // required: `isLoading` alone would clobber existing pills on refresh;
   // `ratesDisplay.length === 0` alone would render an empty block when
   // the first load fails.
@@ -253,11 +270,9 @@ function LiveRatesComponent({
             {t("live_rates")}
           </Text>
           {isLoading && (
-            <ActivityIndicator
-              size="small"
-              className="ms-2"
-              color={palette.nileGreen[500]}
-            />
+            <View className="ms-2">
+              <Skeleton width={16} height={16} borderRadius={8} />
+            </View>
           )}
           {isStale && (
             <View className="ms-2 flex-row items-center">

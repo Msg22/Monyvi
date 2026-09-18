@@ -57,23 +57,25 @@ jest.mock("../../services/user-data-access", () => {
     "@nozbe/watermelondb"
   );
   return {
-    getCurrentUserDataScope: jest.fn(() => Promise.resolve({
-      userId: mockSqliteCurrentUserId,
-      queryOwned: (
-        collection: { query: (...clauses: unknown[]) => unknown },
-        ...clauses: unknown[]
-      ) =>
-        collection.query(
-          Q.where("user_id", mockSqliteCurrentUserId),
-          ...clauses
-        ),
-      assertOwned: <T extends { userId: string }>(record: T): T => {
-        if (record.userId !== mockSqliteCurrentUserId) {
-          throw new Error("ownership_failed");
-        }
-        return record;
-      },
-    })),
+    getCurrentUserDataScope: jest.fn(() =>
+      Promise.resolve({
+        userId: mockSqliteCurrentUserId,
+        queryOwned: (
+          collection: { query: (...clauses: unknown[]) => unknown },
+          ...clauses: unknown[]
+        ) =>
+          collection.query(
+            Q.where("user_id", mockSqliteCurrentUserId),
+            ...clauses
+          ),
+        assertOwned: <T extends { userId: string }>(record: T): T => {
+          if (record.userId !== mockSqliteCurrentUserId) {
+            throw new Error("ownership_failed");
+          }
+          return record;
+        },
+      })
+    ),
     assertExpectedCurrentUser: jest.fn(
       (expectedUserId: string): Promise<void> => {
         if (expectedUserId !== mockSqliteCurrentUserId) {
@@ -99,7 +101,9 @@ const USER_ID = "018f0c7a-1234-7abc-8def-000000000003";
 const FOREIGN_USER_ID = "018f0c7a-1234-7abc-8def-000000000099";
 const sha256Provider: Sha256Provider = {
   digestUtf8: (canonicalText: string): Promise<string> =>
-    Promise.resolve(createHash("sha256").update(canonicalText, "utf8").digest("hex")),
+    Promise.resolve(
+      createHash("sha256").update(canonicalText, "utf8").digest("hex")
+    ),
 };
 
 function envelope(userId = USER_ID): FinancialActionEnvelopeV1 {
@@ -208,26 +212,25 @@ function createRepository(
 ): ReturnType<typeof createFinancialActionFoundationRepository> {
   return createFinancialActionFoundationRepository({
     database: db,
-    getCurrentUserDataScope: () => Promise.resolve({
-      userId: mockSqliteCurrentUserId,
-      queryOwned: (collection, ...clauses) =>
-        collection.query(
-          jest
-            .requireActual<
-              typeof import("@nozbe/watermelondb")
-            >("@nozbe/watermelondb")
-            .Q.where("user_id", mockSqliteCurrentUserId),
-          ...clauses
-        ),
-      assertOwned: <T extends { userId: string }>(record: T): T => {
-        if (record.userId !== mockSqliteCurrentUserId)
-          throw new Error("ownership_failed");
-        return record;
-      },
-    }),
-    assertExpectedCurrentUser: (
-      expectedUserId: string
-    ): Promise<void> => {
+    getCurrentUserDataScope: () =>
+      Promise.resolve({
+        userId: mockSqliteCurrentUserId,
+        queryOwned: (collection, ...clauses) =>
+          collection.query(
+            jest
+              .requireActual<
+                typeof import("@nozbe/watermelondb")
+              >("@nozbe/watermelondb")
+              .Q.where("user_id", mockSqliteCurrentUserId),
+            ...clauses
+          ),
+        assertOwned: <T extends { userId: string }>(record: T): T => {
+          if (record.userId !== mockSqliteCurrentUserId)
+            throw new Error("ownership_failed");
+          return record;
+        },
+      }),
+    assertExpectedCurrentUser: (expectedUserId: string): Promise<void> => {
       if (expectedUserId !== mockSqliteCurrentUserId) {
         throw new Error("auth_scope_changed");
       }
@@ -273,7 +276,9 @@ describe("financial action foundation SQLite persistence", () => {
       DEFAULT_FINANCIAL_ACTION_REGISTRY
     );
     const actionEnvelope = datedAddEnvelope();
-    const validationInput = { latestAllowedCalendarDate: "2026-09-01" } as const;
+    const validationInput = {
+      latestAllowedCalendarDate: "2026-09-01",
+    } as const;
     const input = {
       envelope: actionEnvelope,
       hashProvider: sha256Provider,
@@ -359,7 +364,7 @@ describe("financial action foundation SQLite persistence", () => {
       envelope: envelope(),
       hashProvider: sha256Provider,
     });
-    const created = (await fetchAll(database))[0]!;
+    const created = (await fetchAll(database))[0];
     await database.write(async (): Promise<void> => {
       await created.update((record) => {
         record.state = "sync_failed";

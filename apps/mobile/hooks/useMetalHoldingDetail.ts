@@ -1,16 +1,13 @@
 import { useIsFocused } from "@react-navigation/native";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useMarketRates } from "@/hooks/useMarketRates";
 import { usePreferredCurrency } from "@/hooks/usePreferredCurrency";
 import { useDatabase } from "@/providers/DatabaseProvider";
+import type { LiveRatesTrustReadModel } from "@/services/live-rates-trust-read-model-service";
 import {
-  observeLiveRatesTrust,
-  type LiveRatesTrustObservationStream,
-  type LiveRatesTrustReadModel,
-} from "@/services/live-rates-trust-read-model-service";
-import {
+  observeMetalDetailAssetMetal,
   observeMetalDetailEvents,
   observeMetalDetailHolding,
   observeMetalDetailHoldingState,
@@ -23,6 +20,32 @@ import { syncDatabase } from "@/services/sync";
 import { AppState } from "react-native";
 
 const RATE_STATUS_REFRESH_INTERVAL_MS = 60_000;
+const DETAIL_ASSET_COLUMNS = [
+  "name",
+  "purchase_date",
+  "purchase_price_decimal",
+  "purchase_currency",
+  "acquisition_action_id",
+] as const;
+const DETAIL_HOLDING_STATE_COLUMNS = [
+  "status",
+  "effective_action_id",
+  "effective_event_id",
+  "is_visible",
+  "reconciliation_state",
+] as const;
+const DETAIL_METAL_COLUMNS = [
+  "metal_type",
+  "item_form",
+  "purity_catalog_version",
+  "purity_code",
+  "purity_factor_decimal",
+  "weight_grams_decimal",
+] as const;
+const DETAIL_LIFECYCLE_EVENT_COLUMNS = [
+  "is_effective",
+  "is_history_visible",
+] as const;
 
 interface UseMetalHoldingDetailResult {
   readonly error: Error | null;
@@ -57,27 +80,30 @@ export function useMetalHoldingDetail(
   const database = useDatabase();
   const isFocused = useIsFocused();
   const { userId, isResolvingUser } = useCurrentUser();
-  const { isConnected } = useMarketRates();
+  const {
+    currentError: marketRatesError,
+    isConnected,
+    refreshSelectedSnapshot,
+    selectedSnapshot,
+  } = useMarketRates();
+  const currentRates = useMemo<LiveRatesTrustReadModel>(
+    () => selectedSnapshot?.trust ?? createEmptyTrustReadModel(),
+    [selectedSnapshot]
+  );
+  const blockingMarketRatesError =
+    selectedSnapshot === null ? marketRatesError : null;
   const { preferredCurrency, isLoading: isCurrencyLoading } =
     usePreferredCurrency();
   const detailIdentity = createDetailIdentity(userId, holdingId);
   const [model, setModel] = useState<MetalDetailReadModel | null>(null);
   const [observationError, setObservationError] = useState<Error | null>(null);
   const [readError, setReadError] = useState<Error | null>(null);
-  const [ratesError, setRatesError] = useState<Error | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [retryIndex, setRetryIndex] = useState(0);
   const [localRevision, setLocalRevision] = useState(0);
   const hasLoadedOnceRef = useRef(false);
   const detailIdentityRef = useRef(detailIdentity);
   const modelIdentityRef = useRef<string | null>(null);
-  const trustObservationRef = useRef<LiveRatesTrustObservationStream | null>(
-    null
-  );
-  const [currentRates, setCurrentRates] = useState<LiveRatesTrustReadModel>(
-    createEmptyTrustReadModel
-  );
-  const [isRatesLoading, setIsRatesLoading] = useState(true);
   if (detailIdentityRef.current !== detailIdentity) {
     detailIdentityRef.current = detailIdentity;
     modelIdentityRef.current = null;
@@ -86,44 +112,22 @@ export function useMetalHoldingDetail(
 
   const retry = useCallback((): void => {
     setRetryIndex((value) => value + 1);
+    refreshSelectedSnapshot();
     void syncDatabase(database).catch((cause: unknown) => {
       setReadError(toError(cause, "Holding sync unavailable"));
     });
-  }, [database]);
-
-  useEffect(() => {
-    const observation = observeLiveRatesTrust(database);
-    trustObservationRef.current = observation;
-    setIsRatesLoading(true);
-    const subscription = observation.subscribe({
-      next: (rates): void => {
-        setCurrentRates(rates);
-        setRatesError(null);
-        setIsRatesLoading(false);
-      },
-      error: (cause: unknown): void => {
-        setRatesError(toError(cause, "Holding rates unavailable"));
-        setIsRatesLoading(false);
-      },
-    });
-    return () => {
-      if (trustObservationRef.current === observation) {
-        trustObservationRef.current = null;
-      }
-      subscription.unsubscribe();
-    };
-  }, [database, retryIndex]);
+  }, [database, refreshSelectedSnapshot]);
 
   useEffect(() => {
     const timer = setInterval(
-      () => trustObservationRef.current?.refresh(),
+      refreshSelectedSnapshot,
       RATE_STATUS_REFRESH_INTERVAL_MS
     );
     const appStateSubscription = AppState.addEventListener(
       "change",
       (state) => {
         if (state === "active") {
-          trustObservationRef.current?.refresh();
+          refreshSelectedSnapshot();
         }
       }
     );
@@ -131,7 +135,7 @@ export function useMetalHoldingDetail(
       clearInterval(timer);
       appStateSubscription.remove();
     };
-  }, []);
+  }, [refreshSelectedSnapshot]);
 
   useEffect(() => {
     if (
@@ -151,15 +155,29 @@ export function useMetalHoldingDetail(
       setIsLoading(false);
     };
     setObservationError(null);
+
+    let metalSubscription: { unsubscribe(): void } | null = null;
+    const holdingSubscription = observeMetalDetailHolding(userId, holdingId)
+      .observeWithColumns([...DETAIL_ASSET_COLUMNS])
+      .subscribe({
+        error: onObservationError,
+        next: (assets): void => {
+          onChange();
+          metalSubscription?.unsubscribe();
+          const query = observeMetalDetailAssetMetal(userId, assets);
+          metalSubscription =
+            query
+              ?.observeWithColumns([...DETAIL_METAL_COLUMNS])
+              .subscribe({ error: onObservationError, next: onChange }) ?? null;
+        },
+      });
     const subscriptions = [
-      observeMetalDetailHolding(userId, holdingId)
-        .observe()
-        .subscribe({ error: onObservationError, next: onChange }),
+      holdingSubscription,
       observeMetalDetailHoldingState(userId, holdingId)
-        .observe()
+        .observeWithColumns([...DETAIL_HOLDING_STATE_COLUMNS])
         .subscribe({ error: onObservationError, next: onChange }),
       observeMetalDetailEvents(userId, holdingId)
-        .observe()
+        .observeWithColumns([...DETAIL_LIFECYCLE_EVENT_COLUMNS])
         .subscribe({ error: onObservationError, next: onChange }),
       observeMetalDetailActionEvidence(userId, holdingId)
         .observe()
@@ -168,8 +186,10 @@ export function useMetalHoldingDetail(
         .observe()
         .subscribe({ error: onObservationError, next: onChange }),
     ];
-    return () =>
+    return () => {
+      metalSubscription?.unsubscribe();
       subscriptions.forEach((subscription) => subscription.unsubscribe());
+    };
   }, [holdingId, isFocused, isResolvingUser, retryIndex, userId]);
 
   useEffect(() => {
@@ -184,7 +204,7 @@ export function useMetalHoldingDetail(
         isCurrent = false;
       };
     }
-    if (!isFocused || isCurrencyLoading || isRatesLoading) {
+    if (!isFocused || isCurrencyLoading) {
       setIsLoading(isFocused);
       return () => {
         isCurrent = false;
@@ -201,7 +221,11 @@ export function useMetalHoldingDetail(
       };
     }
 
-    if (observationError !== null || ratesError !== null) {
+    if (observationError !== null || blockingMarketRatesError !== null) {
+      if (blockingMarketRatesError !== null) {
+        modelIdentityRef.current = null;
+        setModel(null);
+      }
       setIsLoading(false);
       return () => {
         isCurrent = false;
@@ -213,6 +237,7 @@ export function useMetalHoldingDetail(
     void readMetalDetailReadModel({
       currentRates,
       holdingId,
+      snapshotId: selectedSnapshot?.snapshotId ?? null,
       preferredCurrency,
       userId,
     })
@@ -238,22 +263,22 @@ export function useMetalHoldingDetail(
     };
   }, [
     currentRates,
+    blockingMarketRatesError,
     detailIdentity,
     holdingId,
     isCurrencyLoading,
     isFocused,
-    isRatesLoading,
     isResolvingUser,
     localRevision,
     observationError,
     preferredCurrency,
-    ratesError,
     retryIndex,
+    selectedSnapshot,
     userId,
   ]);
 
   return {
-    error: observationError ?? ratesError ?? readError,
+    error: observationError ?? blockingMarketRatesError ?? readError,
     isLoading,
     isOffline: !isConnected,
     model: modelIdentityRef.current === detailIdentity ? model : null,

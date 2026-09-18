@@ -10,7 +10,7 @@ import { synchronize, type SyncPullResult } from "@nozbe/watermelondb/sync";
 
 import { logger } from "@/utils/logger";
 
-import { pullChanges } from "./sync/pull-strategies";
+import { pullChanges } from "./sync/atomic-pull-strategies";
 import { pushChanges } from "./sync/push-service";
 import { getCurrentUserId } from "./supabase";
 

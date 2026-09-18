@@ -1,13 +1,39 @@
+import type { Account, Category, Transaction, Transfer } from "@monyvi/db";
+import type { CurrentMarketInstrument } from "@monyvi/logic";
 import type {
-  Account,
-  Category,
-  MarketRate,
-  Transaction,
-  Transfer,
-} from "@monyvi/db";
+  SelectedCurrentMarketRate,
+  SelectedMarketRateSnapshot,
+} from "@/services/market-rate-snapshot-read-model-service";
 
-const LOADED_MARKET_RATES_PARTIAL: Partial<MarketRate> = {};
-const LOADED_MARKET_RATES = LOADED_MARKET_RATES_PARTIAL as MarketRate;
+const loadedRates = new Map<CurrentMarketInstrument, SelectedCurrentMarketRate>(
+  [
+    [
+      "currency:EGP",
+      {
+        instrumentCode: "currency:EGP",
+        valueDecimal: "0.02",
+        normalizedUsdPerBaseDecimal: "0.02",
+        unit: "usd_per_currency_unit",
+        orientation: "quote_per_base",
+        providerObservedAt: new Date("2026-09-10T08:00:00.000Z"),
+        source: "test",
+        quality: "valid",
+        freshness: "fresh",
+        ageMs: 0,
+      },
+    ],
+  ]
+);
+const LOADED_MARKET_RATES: SelectedMarketRateSnapshot = {
+  snapshotId: "snapshot-1",
+  capturedAt: new Date("2026-09-10T08:00:00.000Z"),
+  ratesByInstrument: loadedRates,
+  trust: {
+    gold: { state: "missing", ageMs: null, providerObservedAt: null },
+    silver: { state: "missing", ageMs: null, providerObservedAt: null },
+    currencies: new Map(),
+  },
+};
 
 const mockTransactionsCollection = { table: "transactions" };
 const mockTransfersCollection = { table: "transfers" };
@@ -510,7 +536,7 @@ describe("transaction-list-read-model-service", () => {
       displayedItems: [expense, income],
       totalNetWorth: 1000,
       preferredCurrency: "EGP",
-      latestRates: LOADED_MARKET_RATES,
+      selectedSnapshot: LOADED_MARKET_RATES,
       period: "this_month",
       searchQuery: "",
     });
@@ -590,7 +616,7 @@ describe("transaction-list-read-model-service", () => {
       displayedItems: [food, rent],
       totalNetWorth: 5000,
       preferredCurrency: "EGP",
-      latestRates: LOADED_MARKET_RATES,
+      selectedSnapshot: LOADED_MARKET_RATES,
       period: "this_month",
       searchQuery: "rent",
     });

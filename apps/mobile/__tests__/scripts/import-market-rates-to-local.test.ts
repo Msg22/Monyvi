@@ -2,7 +2,11 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 interface ImportMarketRatesModule {
-  getLinkedMarketRatesQueryArgs(): readonly string[];
+  getLinkedMarketRateSnapshotsQueryArgs(request: {
+    readonly cursor: null;
+    readonly limit: number;
+    readonly upperWatermark: null;
+  }): readonly string[];
   getSupabaseSpawnArgs(args: readonly string[]): readonly string[];
   parseImportMarketRatesArgs(argv?: readonly string[]): {
     readonly bestEffort: boolean;
@@ -24,15 +28,21 @@ describe("import-market-rates-to-local helpers", () => {
     ]);
   });
 
-  it("passes the remote market-rate query directly to the CLI", () => {
-    expect(marketRatesImporter.getLinkedMarketRatesQueryArgs()).toEqual([
+  it("queries complete remote snapshot pages through the linked RPC", () => {
+    expect(
+      marketRatesImporter.getLinkedMarketRateSnapshotsQueryArgs({
+        cursor: null,
+        limit: 50,
+        upperWatermark: null,
+      })
+    ).toEqual([
       "db",
       "query",
       "--agent=no",
       "--linked",
       "-o",
       "json",
-      "select * from public.market_rates order by created_at asc;",
+      expect.stringContaining("pull_market_rate_snapshots_page_v1"),
     ]);
   });
 

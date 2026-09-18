@@ -137,7 +137,7 @@ export default function Accounts(): ReactElement {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { t: tCommon } = useTranslation("common");
-  const { latestRates } = useMarketRates();
+  const { selectedSnapshot } = useMarketRates();
 
   const [selectedFilter, setSelectedFilter] = useState<FilterType>("ALL");
   const { totalAccountsBalance, accounts, isLoading } = useAccounts();
@@ -178,7 +178,7 @@ export default function Accounts(): ReactElement {
         return (
           <AccountCard
             account={item}
-            latestRates={latestRates}
+            selectedSnapshot={selectedSnapshot}
             displayName={displayNames.get(item.id) ?? item.name}
             providerLabel={presentation?.providerLabel ?? null}
             institutionLogo={presentation?.asset.logo ?? null}
@@ -186,7 +186,7 @@ export default function Accounts(): ReactElement {
           />
         );
       },
-      [latestRates, displayNames, handleCardPress]
+      [selectedSnapshot, displayNames, handleCardPress]
     );
 
   const keyExtractor = useCallback(

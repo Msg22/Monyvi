@@ -12,12 +12,11 @@ import {
   calculateMetalReferenceValue,
   calculatePureGrams,
   calculateUnrealizedAttribution,
-  hasCanonicalDecimalPrecision,
+  isSupportedMetal,
   isSupportedMetalsIsoCurrencyCode,
   parseCanonicalDecimal,
   reduceMetalLifecycle,
   resolveMetalsCurrencyMinorUnits,
-  resolvePuritySelection,
   roundDecimal,
   serializeDecimal,
   validateAndNormalizeRateReference,
@@ -26,10 +25,12 @@ import {
   type MetalInstrumentCode,
   type NormalizedRateReference,
   type RateReferenceExpectation,
+  type SupportedMetal,
 } from "@monyvi/logic";
 import { Q, type Query } from "@nozbe/watermelondb";
 import {
   getCurrentUserDataScope,
+  queryChildrenOfOwnedParents,
   queryOwned,
   type CurrentUserDataScope,
   USER_DATA_ACCESS_ERROR_CODES,
@@ -43,7 +44,7 @@ import {
 import {
   buildTimeline,
   copyValidDate,
-  isSupportedMetalType,
+  getUnavailableExactFacts,
   normalizePhysicalForm,
   toDetailAssetInput,
   toDetailHoldingStateInput,
@@ -65,7 +66,7 @@ export interface MetalDetailAssetInput {
 
 export interface MetalDetailMetalInput {
   readonly itemForm: string | null;
-  readonly metalType: "GOLD" | "SILVER";
+  readonly metalType: SupportedMetal;
   readonly purityCatalogVersion: string | null;
   readonly purityCode: string | null;
   readonly purityFactorDecimal: string | null;
@@ -144,7 +145,7 @@ export interface MetalDetailReadModel {
   readonly isActiveOwnership: boolean;
   readonly isFinancialActionLocked: boolean;
   readonly itemForm: MetalDetailPhysicalForm | null;
-  readonly metalType: "GOLD" | "SILVER";
+  readonly metalType: SupportedMetal;
   readonly name: string;
   readonly purchaseCurrency: string | null;
   readonly purchaseDate: Date | null;
@@ -168,6 +169,7 @@ export interface ReadMetalDetailReadModelOptions {
   readonly currentRates?: LiveRatesTrustReadModel;
   readonly holdingId: string;
   readonly preferredCurrency?: CurrencyType;
+  readonly snapshotId?: string | null;
   readonly userId: string;
 }
 
@@ -189,6 +191,20 @@ export function observeMetalDetailHolding(
     database.get<Asset>("assets"),
     userId,
     Q.where("id", holdingId),
+    Q.where("deleted", false)
+  );
+}
+
+export function observeMetalDetailAssetMetal(
+  userId: string,
+  assets: readonly Asset[]
+): Query<AssetMetal> | null {
+  if (assets.length === 0) return null;
+  return queryChildrenOfOwnedParents(
+    database.get<AssetMetal>("asset_metals"),
+    assets,
+    userId,
+    "asset_id",
     Q.where("deleted", false)
   );
 }
@@ -276,7 +292,7 @@ interface MetalDetailDependencies {
   readonly events: readonly MetalLifecycleEvent[];
   readonly holdingState: MetalHoldingState;
   readonly metal: AssetMetal;
-  readonly metalType: "GOLD" | "SILVER";
+  readonly metalType: SupportedMetal;
   readonly rateReferences: readonly MetalRateReference[];
 }
 
@@ -306,7 +322,7 @@ async function readDetailDependencies(
   ]);
   if (metals.length !== 1 || holdingStates.length !== 1) return null;
   const metal = metals[0];
-  if (!isSupportedMetalType(metal.metalType)) return null;
+  if (!isSupportedMetal(metal.metalType)) return null;
   return {
     ...evidenceAndEvents,
     holdingState: holdingStates[0],
@@ -587,81 +603,6 @@ function toLifecycleKind(
   return mappedKinds[kind];
 }
 
-function getUnavailableExactFacts(
-  input: BuildMetalDetailReadModelInput
-): MetalDetailReadModel["unavailableExactFacts"] {
-  const unavailable: Array<"weight" | "purity" | "purchase_cost"> = [];
-  if (!isValidWeight(input.metal.weightGramsDecimal))
-    unavailable.push("weight");
-  if (!hasCompletePurityTuple(input.metal)) unavailable.push("purity");
-  if (
-    !isValidPurchaseCost(
-      input.asset.purchasePriceDecimal,
-      input.asset.purchaseCurrency
-    )
-  )
-    unavailable.push("purchase_cost");
-  return Object.freeze(unavailable);
-}
-
-function hasCompletePurityTuple(input: MetalDetailMetalInput): boolean {
-  if (
-    input.purityCatalogVersion !== "1" ||
-    input.purityCode === null ||
-    input.purityFactorDecimal === null
-  ) {
-    return false;
-  }
-  const resolution = resolvePuritySelection(input.metalType, input.purityCode);
-  return (
-    resolution.available &&
-    resolution.entry.factorDecimal === input.purityFactorDecimal
-  );
-}
-
-function isPositiveDecimal(value: string | null): boolean {
-  if (value === null) return false;
-  try {
-    return parseCanonicalDecimal(value).greaterThan("0");
-  } catch {
-    return false;
-  }
-}
-
-function isValidWeight(value: string | null): boolean {
-  return (
-    value !== null &&
-    hasCanonicalDecimalPrecision(value) &&
-    hasAtMostDecimalPlaces(value, 3) &&
-    isPositiveDecimal(value)
-  );
-}
-
-function isValidPurchaseCost(
-  value: string | null,
-  currency: string | null
-): boolean {
-  const instrumentCode = toCurrencyInstrumentCode(currency);
-  if (
-    value === null ||
-    instrumentCode === null ||
-    !hasCanonicalDecimalPrecision(value)
-  ) {
-    return false;
-  }
-  const decimalPlaces = resolveMetalsCurrencyMinorUnits(instrumentCode);
-  return (
-    decimalPlaces !== null &&
-    hasAtMostDecimalPlaces(value, decimalPlaces) &&
-    isPositiveDecimal(value)
-  );
-}
-
-function hasAtMostDecimalPlaces(value: string, maximum: number): boolean {
-  const fractional = value.split(".")[1];
-  return fractional === undefined || fractional.length <= maximum;
-}
-
 function convertDetailValueForDisplay(
   valueDecimal: string,
   input: BuildMetalDetailReadModelInput
@@ -823,12 +764,27 @@ function buildCurrentReference(
   value: LiveRatesTrustValue | undefined,
   expectation: RateReferenceExpectation
 ): NormalizedRateReference | null {
+  if (expectation.instrumentCode === "currency:USD") {
+    return Object.freeze({
+      capturedAt: 0,
+      capturedFreshness: "unknown",
+      instrumentCode: "currency:USD",
+      kind: "currency",
+      normalizedUsdPerBaseDecimal: "1",
+      orientation: "quote_per_base",
+      providerObservedAt: null,
+      quality: "valid",
+      role: expectation.role,
+      source: null,
+      unit: "usd_per_currency_unit",
+      valueDecimal: "1",
+    });
+  }
   if (
     !hasTrustedCurrentRate(value) ||
     value.capturedAt === undefined ||
     value.capturedAt === null ||
-    value.quality !== "valid" ||
-    typeof value.source !== "string"
+    value.quality !== "valid"
   ) {
     return null;
   }
@@ -842,7 +798,7 @@ function buildCurrentReference(
       providerObservedAt: value.providerObservedAt?.getTime() ?? null,
       quality: value.quality,
       role: expectation.role,
-      source: value.source,
+      source: value.source ?? null,
       unit: isMetal ? "usd_per_pure_gram" : "usd_per_currency_unit",
       valueDecimal: value.valueDecimal,
     },
@@ -905,9 +861,7 @@ function toCurrencyInstrumentCode(
     : null;
 }
 
-function toMetalInstrumentCode(
-  metalType: "GOLD" | "SILVER"
-): MetalInstrumentCode {
+function toMetalInstrumentCode(metalType: SupportedMetal): MetalInstrumentCode {
   return metalType === "GOLD" ? "metal:GOLD" : "metal:SILVER";
 }
 

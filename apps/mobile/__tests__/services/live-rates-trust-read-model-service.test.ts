@@ -1,187 +1,153 @@
-import {
-  buildLiveRatesTrustReadModel,
-  observeLiveRatesTrust,
-  summarizeLiveRatesTrust,
-  type LiveRatesTrustObservation,
-} from "@/services/live-rates-trust-read-model-service";
-import type { Database } from "@nozbe/watermelondb";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
-const NOW_MS = Date.parse("2026-09-01T12:00:00.000Z");
+import * as liveRatesTrustModule from "@/services/live-rates-trust-read-model-service";
+import type { SelectedCurrentMarketRate } from "@/services/market-rate-snapshot-read-model-service";
+import {
+  isCurrentMarketInstrumentCode,
+  type CurrentMarketInstrument,
+} from "@monyvi/logic";
+
+const { buildTrustFromSelectedSnapshot, summarizeLiveRatesTrust } =
+  liveRatesTrustModule;
+type SelectedSnapshotTrustInput =
+  liveRatesTrustModule.SelectedSnapshotTrustInput;
+
+const NOW_MS = Date.parse("2026-09-09T11:00:00.000Z");
 const DAY_MS = 86_400_000;
 
-function observation(
-  instrumentCode: string,
-  overrides: Partial<LiveRatesTrustObservation> = {}
-): LiveRatesTrustObservation {
+interface RateSeed {
+  readonly valueDecimal?: string;
+  readonly providerObservedAt?: Date | null;
+  readonly source?: string;
+}
+
+function createTrustInput(
+  rates: Readonly<Partial<Record<CurrentMarketInstrument, RateSeed>>>
+): SelectedSnapshotTrustInput {
+  const ratesByInstrument = new Map<
+    CurrentMarketInstrument,
+    SelectedCurrentMarketRate
+  >();
+
+  for (const instrumentCode of Object.keys(rates)) {
+    if (!isCurrentMarketInstrumentCode(instrumentCode)) {
+      throw new Error(`unexpected test instrument: ${instrumentCode}`);
+    }
+    const seed = rates[instrumentCode];
+    if (!seed) {
+      continue;
+    }
+    const providerObservedAt =
+      seed.providerObservedAt === undefined
+        ? new Date(NOW_MS - 1_000)
+        : seed.providerObservedAt;
+    const ageMs =
+      providerObservedAt === null
+        ? null
+        : NOW_MS - providerObservedAt.getTime();
+    const freshness: SelectedCurrentMarketRate["freshness"] =
+      providerObservedAt === null
+        ? "unknown"
+        : (ageMs ?? 0) > DAY_MS
+          ? "stale"
+          : "fresh";
+    const isMetal = instrumentCode.startsWith("metal:");
+
+    ratesByInstrument.set(instrumentCode, {
+      instrumentCode,
+      valueDecimal: seed.valueDecimal ?? "100.25",
+      normalizedUsdPerBaseDecimal: seed.valueDecimal ?? "100.25",
+      unit: isMetal ? "usd_per_pure_gram" : "usd_per_currency_unit",
+      orientation: "quote_per_base",
+      providerObservedAt,
+      source: seed.source ?? "metals.dev",
+      quality: "valid",
+      freshness,
+      ageMs,
+    });
+  }
+
   return {
-    id: `${instrumentCode}-default`,
-    instrumentCode,
-    valueDecimal: "100.25",
-    unit: instrumentCode.startsWith("metal:")
-      ? "usd_per_pure_gram"
-      : "usd_per_currency_unit",
-    orientation: "quote_per_base",
-    quality: "valid",
-    source: "test-provider",
-    providerObservedAt: new Date(NOW_MS - 1_000),
-    createdAt: new Date(NOW_MS),
-    ...overrides,
+    capturedAt: new Date(NOW_MS),
+    ratesByInstrument,
   };
 }
 
-describe("live-rates trust read model", () => {
-  it("derives Gold, Silver, and currency trust independently from newest provider observations", () => {
-    const readModel = buildLiveRatesTrustReadModel(
-      [
-        observation("metal:GOLD", {
+function readModuleExport(moduleValue: unknown, name: string): unknown {
+  if (typeof moduleValue !== "object" || moduleValue === null) {
+    return undefined;
+  }
+  return Object.entries(moduleValue).find(([key]) => key === name)?.[1];
+}
+
+describe("buildTrustFromSelectedSnapshot", () => {
+  it("maps only the selected snapshot's exact values and trust evidence", () => {
+    const trust = buildTrustFromSelectedSnapshot(
+      createTrustInput({
+        "metal:GOLD": { valueDecimal: "3738.74000000" },
+        "metal:SILVER": {
+          valueDecimal: "43.73874000",
           providerObservedAt: new Date(NOW_MS - DAY_MS - 1),
-          createdAt: new Date(NOW_MS - DAY_MS - 1),
-        }),
-        observation("metal:GOLD"),
-        observation("metal:SILVER", {
-          providerObservedAt: new Date(NOW_MS - DAY_MS - 1),
-        }),
-        observation("currency:EGP", { providerObservedAt: null }),
-      ],
-      NOW_MS
+        },
+        "currency:EGP": { valueDecimal: "0.0210523309" },
+        "currency:USD": { valueDecimal: "1" },
+      })
     );
 
-    expect(readModel.gold.state).toBe("fresh");
-    expect(readModel.gold.valueDecimal).toBe("100.25");
-    expect(readModel.gold).toMatchObject({
-      quality: "valid",
-      source: "test-provider",
-    });
-    expect(readModel.silver.state).toBe("stale");
-    expect(readModel.currencies.get("EGP")?.state).toBe("unknown");
-  });
-
-  it("does not use created-at, sync time, or a historical observation to make current trust fresh", () => {
-    const readModel = buildLiveRatesTrustReadModel(
-      [
-        observation("metal:GOLD", {
-          providerObservedAt: new Date(NOW_MS - DAY_MS - 1),
-          createdAt: new Date(NOW_MS),
-        }),
-        observation("metal:SILVER", {
-          providerObservedAt: new Date(NOW_MS - 1_000),
-          createdAt: new Date(NOW_MS - DAY_MS - 1),
-        }),
-      ],
-      NOW_MS
-    );
-
-    expect(readModel.gold).toMatchObject({ state: "stale", ageMs: DAY_MS + 1 });
-    expect(readModel.silver).toMatchObject({ state: "unknown", ageMs: null });
-  });
-
-  it("breaks equal created-at observations by immutable id", () => {
-    const readModel = buildLiveRatesTrustReadModel(
-      [
-        observation("metal:GOLD", {
-          id: "gold-observation-a",
-          valueDecimal: "100.25",
-        }),
-        observation("metal:GOLD", {
-          id: "gold-observation-b",
-          valueDecimal: "101.75",
-        }),
-      ],
-      NOW_MS
-    );
-
-    expect(readModel.gold.valueDecimal).toBe("101.75");
-  });
-
-  it.each([
-    [null, "unknown"],
-    [new Date(NOW_MS + 1), "unknown"],
-  ] as const)(
-    "marks provider observation %p as %s without hiding valid cached values",
-    (providerObservedAt, state) => {
-      const readModel = buildLiveRatesTrustReadModel(
-        [observation("metal:GOLD", { providerObservedAt })],
-        NOW_MS
-      );
-
-      expect(readModel.gold.state).toBe(state);
-    }
-  );
-
-  it("marks a missing or invalid observed value unavailable without changing unrelated instruments", () => {
-    const readModel = buildLiveRatesTrustReadModel(
-      [
-        observation("metal:SILVER", { valueDecimal: "0" }),
-        observation("currency:EGP"),
-      ],
-      NOW_MS
-    );
-
-    expect(readModel.gold.state).toBe("missing");
-    expect(readModel.gold.valueDecimal).toBeNull();
-    expect(readModel.silver.state).toBe("invalid");
-    expect(readModel.silver.valueDecimal).toBeNull();
-    expect(readModel.currencies.get("EGP")?.state).toBe("fresh");
-  });
-
-  it("exposes only validated normalized exact values for portfolio valuation", () => {
-    const readModel = buildLiveRatesTrustReadModel(
-      [
-        observation("currency:EGP", {
-          valueDecimal: "50",
-          unit: "currency_units_per_usd",
-          orientation: "base_per_quote",
-        }),
-        observation("metal:GOLD", { valueDecimal: "01" }),
-      ],
-      NOW_MS
-    );
-
-    expect(readModel.currencies.get("EGP")).toMatchObject({
+    expect(trust.gold).toMatchObject({
       state: "fresh",
-      valueDecimal: "0.02",
+      valueDecimal: "3738.74000000",
+      source: "metals.dev",
+      quality: "valid",
     });
-    expect(readModel.gold).toMatchObject({
-      state: "invalid",
-      valueDecimal: null,
+    expect(trust.silver).toMatchObject({
+      state: "stale",
+      ageMs: DAY_MS + 1,
+      valueDecimal: "43.73874000",
     });
+    expect(trust.currencies.get("EGP")?.valueDecimal).toBe("0.0210523309");
+    expect(trust.currencies.get("USD")?.valueDecimal).toBe("1");
   });
 
-  it("marks an empty summary missing until local observations arrive", () => {
+  it("keeps Unknown freshness when the selected snapshot has null provider time", () => {
+    const trust = buildTrustFromSelectedSnapshot(
+      createTrustInput({ "metal:GOLD": { providerObservedAt: null } })
+    );
+
+    expect(trust.gold.state).toBe("unknown");
+    expect(trust.gold.providerObservedAt).toBeNull();
+    expect(trust.gold.valueDecimal).not.toBeNull();
+  });
+
+  it("never queries observations independently and never mixes another snapshot", () => {
+    const serviceText = readFileSync(
+      join(__dirname, "../../services/live-rates-trust-read-model-service.ts"),
+      "utf8"
+    );
+
+    expect(serviceText).not.toContain("observeLiveRatesTrust");
+    expect(serviceText).not.toContain("buildLiveRatesTrustReadModel");
+    expect(serviceText).not.toContain(".query(");
+    expect(serviceText).not.toContain(".observe(");
+    expect(serviceText).not.toContain("watermelondb");
+
+    const moduleExports: unknown = liveRatesTrustModule;
+    expect(
+      readModuleExport(moduleExports, "observeLiveRatesTrust")
+    ).toBeUndefined();
+    expect(
+      readModuleExport(moduleExports, "buildLiveRatesTrustReadModel")
+    ).toBeUndefined();
+  });
+
+  it("summarizes worst-case trust states", () => {
     expect(summarizeLiveRatesTrust([])).toBe("missing");
-  });
-
-  it("waits for every initial instrument query before publishing and reclassifies without rebuilding observers", () => {
-    const emissions: Array<(rows: readonly never[]) => void> = [];
-    const unsubscribe = jest.fn();
-    const database = {
-      get: () => ({
-        query: () => ({
-          observe: () => ({
-            subscribe: ({
-              next,
-            }: {
-              readonly next: (rows: readonly never[]) => void;
-            }) => {
-              emissions.push(next);
-              return { unsubscribe };
-            },
-          }),
-        }),
-      }),
-    } as unknown as Database;
-    const next = jest.fn();
-    const stream = observeLiveRatesTrust(database, () => NOW_MS);
-    const subscription = stream.subscribe({ next });
-
-    emissions.slice(0, -1).forEach((emit) => emit([]));
-    expect(next).not.toHaveBeenCalled();
-    emissions.at(-1)?.([]);
-    expect(next).toHaveBeenCalledTimes(1);
-
-    stream.refresh();
-    expect(next).toHaveBeenCalledTimes(2);
-    subscription.unsubscribe();
-    expect(unsubscribe).toHaveBeenCalledTimes(emissions.length);
+    expect(
+      summarizeLiveRatesTrust([
+        { state: "fresh", ageMs: 1, providerObservedAt: new Date(NOW_MS) },
+        { state: "stale", ageMs: DAY_MS + 1, providerObservedAt: null },
+      ])
+    ).toBe("stale");
   });
 });

@@ -6,6 +6,7 @@ import {
   type MetalHoldingState,
   type MetalLifecycleEvent,
 } from "@monyvi/db";
+import { isSupportedMetal, type SupportedMetal } from "@monyvi/logic";
 import { Q, type Query } from "@nozbe/watermelondb";
 import {
   getCurrentUserDataScope,
@@ -23,6 +24,7 @@ import {
   type MetalDetailMetalInput,
   type MetalDetailRenderKey,
 } from "@/services/metal-detail-read-model-service";
+import { hasBoundEffectiveActionEvidence } from "@/services/metal-portfolio-read-model-service";
 
 export const METAL_HISTORY_PAGE_SIZE = 50;
 
@@ -51,7 +53,7 @@ export interface BuildMetalHistoryReadModelInput {
 export interface MetalHistoryItem {
   readonly holdingId: string;
   readonly itemForm: "bar" | "coin" | "jewelry" | null;
-  readonly metalType: "GOLD" | "SILVER";
+  readonly metalType: SupportedMetal;
   readonly name: string;
   readonly occurredAt: Date;
   readonly purityCatalogVersion: string | null;
@@ -127,37 +129,61 @@ export async function readMetalHistoryReadModel(
   const terminalStates = await readReportableTerminalStates(scope);
   if (terminalStates.length === 0) return emptyHistory(options.filter);
 
-  const orderedStates = await orderTerminalStatesByEffectiveEventTime(
-    scope,
-    terminalStates
-  );
-  if (orderedStates.length === 0) return emptyHistory(options.filter);
+  const lifecycleValidatedStates =
+    await orderTerminalStatesByEffectiveEventTime(scope, terminalStates);
+  if (lifecycleValidatedStates.length === 0) {
+    return emptyHistory(options.filter);
+  }
 
-  const counts = countTerminalStates(orderedStates);
-  const filteredStates = orderedStates.filter(
+  const counts = countTerminalStates(lifecycleValidatedStates);
+  const candidateStates = lifecycleValidatedStates.filter(
     (state) => options.filter === "all" || state.status === options.filter
   );
-  const pageStates = filteredStates.slice(0, pageSize);
-  if (pageStates.length === 0) return emptyHistory(options.filter, counts);
-
-  const assets = await readHistoryAssets(scope, pageStates);
-  if (assets.length === 0) return emptyHistory(options.filter, counts);
-  const dependencies = await readHistoryDependencies(
+  // One extra renderable item is collected to answer hasMore without
+  // exposing it, so lifecycle rows that cannot be rendered (missing owned
+  // asset, metal, or invalid detail model) never consume a visible slot.
+  const collected = await readRenderableHistoryItems(
     scope,
-    assets,
-    pageStates
+    candidateStates,
+    options.filter,
+    pageSize,
+    pageSize + 1
   );
-  const page = buildMetalHistoryReadModel({
-    filter: options.filter,
-    holdings: shapeReadHistoryHoldings(assets, pageStates, dependencies),
-    userId: scope.userId,
-  });
   return Object.freeze({
     counts: Object.freeze({ ...counts }),
     filter: options.filter,
-    hasMore: filteredStates.length > pageStates.length,
-    items: page.items,
+    hasMore: collected.length > pageSize,
+    items: Object.freeze(collected.slice(0, pageSize)),
   });
+}
+
+async function readRenderableHistoryItems(
+  scope: CurrentUserDataScope,
+  candidates: readonly MetalHoldingState[],
+  filter: MetalHistoryFilter,
+  batchSize: number,
+  limit: number
+): Promise<readonly MetalHistoryItem[]> {
+  const collected: MetalHistoryItem[] = [];
+  for (
+    let offset = 0;
+    offset < candidates.length && collected.length < limit;
+    offset += batchSize
+  ) {
+    const batch = candidates.slice(offset, offset + batchSize);
+    const assets = await readHistoryAssets(scope, batch);
+    if (assets.length === 0) {
+      continue;
+    }
+    const dependencies = await readHistoryDependencies(scope, assets, batch);
+    const page = buildMetalHistoryReadModel({
+      filter,
+      holdings: shapeReadHistoryHoldings(assets, batch, dependencies),
+      userId: scope.userId,
+    });
+    collected.push(...page.items);
+  }
+  return collected;
 }
 
 async function readReportableTerminalStates(
@@ -187,17 +213,33 @@ async function orderTerminalStatesByEffectiveEventTime(
 ): Promise<readonly MetalHoldingState[]> {
   if (states.length === 0) return [];
 
-  const eventIds = states
-    .map((state) => state.effectiveEventId)
-    .filter((id): id is string => id !== null);
-  const events = await scope
-    .queryOwned(
-      database.get<MetalLifecycleEvent>("metal_lifecycle_events"),
-      Q.where("id", Q.oneOf(eventIds)),
-      Q.where("deleted", false),
-      Q.where("is_effective", true)
+  const eventIds = Array.from(
+    new Set(
+      states
+        .map((state) => state.effectiveEventId)
+        .filter((id): id is string => id !== null)
     )
-    .fetch();
+  ).sort();
+  const holdingIds = Array.from(
+    new Set(states.map((state) => state.holdingId))
+  ).sort();
+  const [events, evidence] = await Promise.all([
+    scope
+      .queryOwned(
+        database.get<MetalLifecycleEvent>("metal_lifecycle_events"),
+        Q.where("id", Q.oneOf(eventIds)),
+        Q.where("deleted", false),
+        Q.where("is_effective", true)
+      )
+      .fetch(),
+    scope
+      .queryOwned(
+        database.get<MetalActionEvidence>("metal_action_evidence"),
+        Q.where("holding_id", Q.oneOf(holdingIds)),
+        Q.where("deleted", false)
+      )
+      .fetch(),
+  ]);
   const eventsById = new Map(events.map((event) => [event.id, event] as const));
 
   return states
@@ -207,8 +249,8 @@ async function orderTerminalStatesByEffectiveEventTime(
         : undefined;
       return (
         event !== undefined &&
-        event.holdingId === state.holdingId &&
-        Number.isFinite(event.occurredAt.getTime())
+        Number.isFinite(event.occurredAt.getTime()) &&
+        hasBoundEffectiveActionEvidence(state, event, evidence)
       );
     })
     .sort((left, right) => {
@@ -294,7 +336,7 @@ function shapeReadHistoryHoldings(
     if (
       asset === undefined ||
       metal === undefined ||
-      !isSupportedMetalType(metal.metalType)
+      !isSupportedMetal(metal.metalType)
     ) {
       return [];
     }
@@ -405,7 +447,7 @@ function toDetailAssetInput(asset: Asset): MetalDetailAssetInput {
 
 function toDetailMetalInput(
   metal: AssetMetal,
-  metalType: "GOLD" | "SILVER"
+  metalType: SupportedMetal
 ): MetalDetailMetalInput {
   return {
     itemForm: metal.itemForm ?? null,
@@ -431,10 +473,6 @@ function toDetailHoldingStateInput(
   };
 }
 
-function isSupportedMetalType(value: string): value is "GOLD" | "SILVER" {
-  return value === "GOLD" || value === "SILVER";
-}
-
 function isTerminalStatus(value: string): value is "sold" | "disposed" {
   return value === "sold" || value === "disposed";
 }
@@ -449,19 +487,17 @@ function isReportableReconciliationState(value: string): boolean {
   );
 }
 
-function countItems(items: readonly MetalHistoryItem[]): MetalHistoryCounts {
-  const sold = items.filter((item) => item.status === "sold").length;
-  const disposed = items.filter((item) => item.status === "disposed").length;
-  return { all: sold + disposed, disposed, sold };
-}
-
 function countTerminalStates(
   states: readonly MetalHoldingState[]
 ): MetalHistoryCounts {
   const sold = states.filter((state) => state.status === "sold").length;
-  const disposed = states.filter(
-    (state) => state.status === "disposed"
-  ).length;
+  const disposed = states.filter((state) => state.status === "disposed").length;
+  return { all: sold + disposed, disposed, sold };
+}
+
+function countItems(items: readonly MetalHistoryItem[]): MetalHistoryCounts {
+  const sold = items.filter((item) => item.status === "sold").length;
+  const disposed = items.filter((item) => item.status === "disposed").length;
   return { all: sold + disposed, disposed, sold };
 }
 

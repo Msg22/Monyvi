@@ -180,6 +180,7 @@ describe("metal portfolio realized sale results", () => {
           holdingStates: [
             {
               deleted: false,
+              effectiveActionId: SELL_ACTION_ID,
               effectiveEventId: "undo-event",
               holdingId: SOLD_HOLDING_ID,
               isVisible: true,
@@ -197,6 +198,7 @@ describe("metal portfolio realized sale results", () => {
           holdingStates: [
             {
               deleted: false,
+              effectiveActionId: SELL_ACTION_ID,
               effectiveEventId: SELL_ACTION_ID,
               holdingId: SOLD_HOLDING_ID,
               isVisible: true,
@@ -214,6 +216,7 @@ describe("metal portfolio realized sale results", () => {
           holdingStates: [
             {
               deleted: false,
+              effectiveActionId: SELL_ACTION_ID,
               effectiveEventId: SELL_ACTION_ID,
               holdingId: SOLD_HOLDING_ID,
               isVisible: false,
@@ -279,6 +282,13 @@ describe("metal portfolio realized sale results", () => {
       const [holding] = shapeMetalPortfolioHoldings(build());
 
       expect(holding?.soldResultDecimal).toBeNull();
+      if (_label === "a sold event that is no longer the current head") {
+        expect(holding).toMatchObject({
+          soldEvidence: null,
+          status: "active",
+        });
+        return;
+      }
       if (
         holding?.soldEvidence === null ||
         holding?.soldEvidence === undefined
@@ -301,7 +311,6 @@ describe("metal portfolio realized sale results", () => {
         userId: USER_ID,
       });
       const isExcluded =
-        _label === "a sold event that is no longer the current head" ||
         _label === "a reconciliation-incomplete sold holding" ||
         _label === "a hidden sold holding";
       expect(model.soldResultDecimal).toBe(isExcluded ? "5500" : null);

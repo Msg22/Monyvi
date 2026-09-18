@@ -108,7 +108,7 @@ export function LiveRatesScreen(): React.JSX.Element {
   const {
     isLoading,
     isConnected,
-    isStale,
+    isLive,
     hasData,
     metals,
     currencies,
@@ -136,7 +136,7 @@ export function LiveRatesScreen(): React.JSX.Element {
 
   return (
     <View className="flex-1 bg-slate-50 dark:bg-slate-900">
-      <LiveRatesHeader isConnected={isConnected} isStale={isStale} />
+      <LiveRatesHeader isLive={isLive} />
 
       {isLoading && !hasData ? (
         <LiveRatesScreenSkeleton />
@@ -183,13 +183,17 @@ export function LiveRatesScreen(): React.JSX.Element {
               currencySymbol={metals.currencySymbol}
             />
 
-            <View className="flex-row mt-3">
+            <View className="flex-row mt-3" style={{ gap: 12 }}>
               <MetalCard
                 metalName={t("silver")}
                 price={metals.silverPrice}
                 trendPercent={metals.silverTrendPercent}
                 borderColor={palette.silver[500]}
                 currencySymbol={metals.currencySymbol}
+              />
+              <View
+                testID="live-rates-silver-layout-spacer"
+                className="flex-1"
               />
             </View>
 
