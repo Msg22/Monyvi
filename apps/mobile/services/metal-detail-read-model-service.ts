@@ -169,6 +169,7 @@ export interface ReadMetalDetailReadModelOptions {
   readonly currentRates?: LiveRatesTrustReadModel;
   readonly holdingId: string;
   readonly preferredCurrency?: CurrencyType;
+  readonly snapshotId?: string | null;
   readonly userId: string;
 }
 
@@ -860,9 +861,7 @@ function toCurrencyInstrumentCode(
     : null;
 }
 
-function toMetalInstrumentCode(
-  metalType: SupportedMetal
-): MetalInstrumentCode {
+function toMetalInstrumentCode(metalType: SupportedMetal): MetalInstrumentCode {
   return metalType === "GOLD" ? "metal:GOLD" : "metal:SILVER";
 }
 

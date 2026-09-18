@@ -18,9 +18,7 @@ describe("Metals ISO currency minor units", () => {
 
   it("returns null for an unsupported runtime instrument", () => {
     expect(
-      resolveMetalsCurrencyMinorUnits(
-        "currency:ZZZ" as CurrencyInstrumentCode
-      )
+      resolveMetalsCurrencyMinorUnits("currency:ZZZ" as CurrencyInstrumentCode)
     ).toBeNull();
   });
 });

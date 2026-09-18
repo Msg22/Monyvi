@@ -26,7 +26,7 @@ function flatten(
 
 function interpolation(value: string): string[] {
   return [...value.matchAll(/{{\s*([a-zA-Z0-9_]+)\s*}}/g)]
-    .map((match) => match[1]!)
+    .map((match) => match[1])
     .sort();
 }
 
@@ -78,10 +78,11 @@ describe("Metals EN/AR content contract", () => {
     for (const key of enKeys) {
       // Plural forms pass `count` implicitly; English plural copy may omit it.
       const normalize = isPluralFormKey(key, enKeys)
-        ? (names: string[]): string[] => names.filter((name) => name !== "count")
+        ? (names: string[]): string[] =>
+            names.filter((name) => name !== "count")
         : (names: string[]): string[] => names;
-      expect(normalize(interpolation(arFlat[key]!))).toEqual(
-        normalize(interpolation(enFlat[key]!))
+      expect(normalize(interpolation(arFlat[key]))).toEqual(
+        normalize(interpolation(enFlat[key]))
       );
     }
   });
@@ -140,9 +141,9 @@ describe("Metals EN/AR content contract", () => {
         "أسعار السوق: تعذر التحديث. نعرض آخر سعر متاح.",
       "rate.retry_refresh": "أعد محاولة التحديث",
     });
-    expect(`${Object.values(enFlat).join(" ")} ${Object.values(arFlat).join(" ")}`).not.toMatch(
-      /older than 24 hours|24h|24 ساعة/iu
-    );
+    expect(
+      `${Object.values(enFlat).join(" ")} ${Object.values(arFlat).join(" ")}`
+    ).not.toMatch(/older than 24 hours|24h|24 ساعة/iu);
   });
 
   it("retains the legacy Platinum label while Live Rates V1 excludes the card", () => {

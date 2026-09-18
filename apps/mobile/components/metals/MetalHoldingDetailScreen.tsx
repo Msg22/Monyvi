@@ -837,11 +837,7 @@ function displayAmount(
   }
 }
 
-function signedAmount(
-  value: string,
-  currency: string,
-  locale: string
-): string {
+function signedAmount(value: string, currency: string, locale: string): string {
   const sign = getCurrencyDisplaySign(value, currency);
   if (sign === null) return "—";
   const prefix = sign === "positive" ? "+ " : sign === "negative" ? "- " : "";

@@ -25,7 +25,8 @@ jest.mock("@monyvi/db", () => ({
         metal_lifecycle_events: mockEventsCollection,
       };
       const collection = collections[table];
-      if (collection === undefined) throw new Error(`Unexpected table: ${table}`);
+      if (collection === undefined)
+        throw new Error(`Unexpected table: ${table}`);
       return collection;
     },
   },
@@ -165,7 +166,7 @@ describe("metal History pagination", () => {
     mockScopeQueryChildren.mockImplementation(
       (
         _collection: unknown,
-        parents: readonly { readonly id: string }[]
+        parents: ReadonlyArray<{ readonly id: string }>
       ): unknown =>
         fetchedRows(
           parents.map((parent) => ({
@@ -208,14 +209,22 @@ describe("metal History pagination", () => {
     );
     expect(mockScopeQueryOwned).toHaveBeenCalledWith(
       mockEventsCollection,
-      { column: "holding_id", kind: "where", value: { oneOf: ["sold-latest"] } },
+      {
+        column: "holding_id",
+        kind: "where",
+        value: { oneOf: ["sold-latest"] },
+      },
       { column: "deleted", kind: "where", value: false },
       { column: "is_history_visible", kind: "where", value: true },
       { column: "occurred_at", kind: "sortBy", value: "desc" }
     );
     expect(mockScopeQueryOwned).toHaveBeenCalledWith(
       mockEvidenceCollection,
-      { column: "holding_id", kind: "where", value: { oneOf: ["sold-latest"] } },
+      {
+        column: "holding_id",
+        kind: "where",
+        value: { oneOf: ["sold-latest"] },
+      },
       { column: "deleted", kind: "where", value: false }
     );
   });
@@ -241,7 +250,7 @@ describe("metal History pagination", () => {
     mockRowsByTable = {
       ...mockRowsByTable,
       assets: (
-        mockRowsByTable.assets as readonly Record<string, unknown>[]
+        mockRowsByTable.assets as ReadonlyArray<Record<string, unknown>>
       ).filter((asset) => asset["id"] !== "sold-latest"),
     };
 

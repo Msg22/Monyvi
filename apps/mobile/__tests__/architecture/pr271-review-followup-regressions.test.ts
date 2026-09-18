@@ -17,12 +17,16 @@ describe("PR #271 review follow-up regressions", () => {
   it("bounds Kong health fetches and sleeps by the deadline", () => {
     const value = source("scripts/restart-local-kong.js");
     expect(value).toContain("AbortSignal.timeout");
-    expect(value).toMatch(/Math\.min\(\s*HEALTH_POLL_INTERVAL_MS,\s*remainingMs\s*\)/s);
+    expect(value).toMatch(
+      /Math\.min\(\s*HEALTH_POLL_INTERVAL_MS,\s*remainingMs\s*\)/s
+    );
   });
 
   it("observes mutable detail columns including asset-metal facts", () => {
     const hook = source("apps/mobile/hooks/useMetalHoldingDetail.ts");
-    const service = source("apps/mobile/services/metal-detail-read-model-service.ts");
+    const service = source(
+      "apps/mobile/services/metal-detail-read-model-service.ts"
+    );
     expect(hook).toContain("observeWithColumns");
     expect(hook).toContain("observeMetalDetailAssetMetal");
     expect(service).toContain("export function observeMetalDetailAssetMetal");
@@ -49,21 +53,27 @@ describe("PR #271 review follow-up regressions", () => {
   });
 
   it("uses exact USD identity for current detail attribution without a redundant observation", () => {
-    const value = source("apps/mobile/services/metal-detail-read-model-service.ts");
+    const value = source(
+      "apps/mobile/services/metal-detail-read-model-service.ts"
+    );
     expect(value).toContain('instrumentCode === "currency:USD"');
     expect(value).toContain('valueDecimal: "1"');
-    expect(value).toContain('source: null');
+    expect(value).toContain("source: null");
   });
 
   it("keeps nullable current-rate source usable for attribution", () => {
-    const value = source("apps/mobile/services/metal-detail-read-model-service.ts");
+    const value = source(
+      "apps/mobile/services/metal-detail-read-model-service.ts"
+    );
     expect(value).not.toContain('typeof value.source !== "string"');
     expect(value).toContain("source: value.source ?? null");
   });
 
   it("keeps Home hero totals as canonical decimal strings", () => {
     const route = source("apps/mobile/app/(private)/(tabs)/index.tsx");
-    const card = source("apps/mobile/components/dashboard/TotalNetWorthCard.tsx");
+    const card = source(
+      "apps/mobile/components/dashboard/TotalNetWorthCard.tsx"
+    );
     expect(route).not.toMatch(/const parsed = Number\(value\)/);
     expect(card).toMatch(/totalNetWorth:\s*number \| string \| null/);
     expect(card).toMatch(/totalNetWorthUsd:\s*number \| string \| null/);
@@ -71,14 +81,20 @@ describe("PR #271 review follow-up regressions", () => {
   });
 
   it("validates History lifecycle entries before counts and pagination", () => {
-    const value = source("apps/mobile/services/metal-history-read-model-service.ts");
+    const value = source(
+      "apps/mobile/services/metal-history-read-model-service.ts"
+    );
     expect(value).not.toContain("countTerminalStates(orderedStates)");
     expect(value).not.toContain("pageTerminalStatesByEffectiveEventTime(");
-    expect(value).toMatch(/shapeReadHistoryHoldings[\s\S]*buildMetalHistoryReadModel/);
+    expect(value).toMatch(
+      /shapeReadHistoryHoldings[\s\S]*buildMetalHistoryReadModel/
+    );
   });
 
   it("renders trust and provenance when detail current value is available", () => {
-    const value = source("apps/mobile/components/metals/MetalHoldingDetailScreen.tsx");
+    const value = source(
+      "apps/mobile/components/metals/MetalHoldingDetailScreen.tsx"
+    );
     expect(value).toContain("metal-holding-detail-rate-trust");
     expect(value).toContain("rate.short_");
     expect(value).toContain("rate.source");
@@ -91,14 +107,18 @@ describe("PR #271 review follow-up regressions", () => {
     ) as Record<string, unknown>;
     const portfolio = ar.portfolio as Record<string, unknown>;
     for (const suffix of ["zero", "one", "two", "few", "many", "other"]) {
-      expect(portfolio[`active_holdings_${suffix}`]).toEqual(expect.any(String));
+      expect(portfolio[`active_holdings_${suffix}`]).toEqual(
+        expect.any(String)
+      );
     }
     const schema = source("apps/mobile/i18n/translation-schemas.ts");
     expect(schema).toContain('"portfolio.active_holdings"');
   });
 
   it("reflows the portfolio summary through the shared responsive helper", () => {
-    const value = source("apps/mobile/components/metals/MetalPortfolioScreen.tsx");
+    const value = source(
+      "apps/mobile/components/metals/MetalPortfolioScreen.tsx"
+    );
     expect(value).toContain("shouldUseCompactLayout");
     expect(value).toContain("useWindowDimensions");
     expect(value).toContain("metal-portfolio-summary-layout");
@@ -106,7 +126,9 @@ describe("PR #271 review follow-up regressions", () => {
   });
 
   it("preserves Silver's established half-row Live Rates footprint", () => {
-    const value = source("apps/mobile/components/live-rates/LiveRatesScreen.tsx");
+    const value = source(
+      "apps/mobile/components/live-rates/LiveRatesScreen.tsx"
+    );
     expect(value).toContain("live-rates-silver-layout-spacer");
     expect(value).toMatch(/flex-row mt-3[\s\S]*gap:\s*12/);
   });
@@ -128,7 +150,9 @@ describe("PR #271 review follow-up regressions", () => {
   });
 
   it("requires effective action evidence before terminal portfolio projection", () => {
-    const service = source("apps/mobile/services/metal-portfolio-read-model-service.ts");
+    const service = source(
+      "apps/mobile/services/metal-portfolio-read-model-service.ts"
+    );
     const hook = source("apps/mobile/hooks/useMetalPortfolio.ts");
     expect(service).toContain("MetalActionEvidence");
     expect(service).toContain("observePortfolioEffectiveActionEvidence");
@@ -138,7 +162,9 @@ describe("PR #271 review follow-up regressions", () => {
   });
 
   it("formats Home breakdown amounts using the selected currency minor units", () => {
-    const value = source("apps/mobile/components/dashboard/WealthBreakdownSection.tsx");
+    const value = source(
+      "apps/mobile/components/dashboard/WealthBreakdownSection.tsx"
+    );
     expect(value).toContain("resolveCurrencyDisplayMinorUnits");
     expect(value).not.toContain("maximumFractionDigits: 2");
   });
@@ -152,14 +178,12 @@ describe("PR #271 review follow-up regressions", () => {
         value.includes("home-money-summary-error") &&
         value.includes("home-money-summary-retry-notice")
     ).toBe(true);
-    const en = JSON.parse(source("apps/mobile/locales/en/common.json")) as Record<
-      string,
-      string
-    >;
-    const ar = JSON.parse(source("apps/mobile/locales/ar/common.json")) as Record<
-      string,
-      string
-    >;
+    const en = JSON.parse(
+      source("apps/mobile/locales/en/common.json")
+    ) as Record<string, string>;
+    const ar = JSON.parse(
+      source("apps/mobile/locales/ar/common.json")
+    ) as Record<string, string>;
     expect(en.money_summary_error).toBe(
       "We couldn't load your money summary. Try again."
     );
@@ -169,14 +193,12 @@ describe("PR #271 review follow-up regressions", () => {
   });
 
   it("uses plain-language sold-metal result copy", () => {
-    const en = JSON.parse(source("apps/mobile/locales/en/metals.json")) as Record<
-      string,
-      unknown
-    >;
-    const ar = JSON.parse(source("apps/mobile/locales/ar/metals.json")) as Record<
-      string,
-      unknown
-    >;
+    const en = JSON.parse(
+      source("apps/mobile/locales/en/metals.json")
+    ) as Record<string, unknown>;
+    const ar = JSON.parse(
+      source("apps/mobile/locales/ar/metals.json")
+    ) as Record<string, unknown>;
     const enPortfolio = en.portfolio as Record<string, string>;
     const arPortfolio = ar.portfolio as Record<string, string>;
     for (const key of [

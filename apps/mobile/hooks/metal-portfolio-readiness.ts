@@ -7,12 +7,14 @@ export interface MetalPortfolioReadinessInput {
   readonly holdingStatesKey: string;
   readonly holdingStatesReady: boolean;
   readonly ratesReady: boolean;
+  readonly saleEvidenceReady: boolean;
 }
 
 export interface MetalPortfolioSectionReadiness {
   readonly holdings: boolean;
   readonly rateCurrency: boolean;
   readonly recentHistory: boolean;
+  readonly realizedSale: boolean;
   readonly summary: boolean;
 }
 
@@ -32,11 +34,17 @@ export function resolveMetalPortfolioReadiness(
     input.historyDependencyKey === input.holdingStatesKey;
   const lifecycleFactsReady = holdingFactsReady && lifecycleEventsReady;
   const rateCurrency = input.ratesReady && input.currencyReady;
+  // Realized sale results additionally depend on the sell-group and captured
+  // sale rate-reference snapshots. Active holdings and their current values
+  // stay visible while these secondary streams settle; only the realized-sale
+  // dependent presentation waits.
+  const realizedSale = lifecycleFactsReady && input.saleEvidenceReady;
 
   return Object.freeze({
     holdings: lifecycleFactsReady,
     rateCurrency,
     recentHistory: lifecycleFactsReady,
+    realizedSale,
     summary: lifecycleFactsReady && rateCurrency,
   });
 }

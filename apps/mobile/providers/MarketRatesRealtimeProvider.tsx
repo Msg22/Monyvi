@@ -37,18 +37,10 @@ import { supabase } from "../services/supabase";
 import { logger } from "../utils/logger";
 import { useSync } from "./SyncProvider";
 
-// =============================================================================
-// Types
-// =============================================================================
-
 interface MarketRatesRealtimeContextValue {
   /** Whether the realtime channel is actively subscribed */
   readonly isConnected: boolean;
 }
-
-// =============================================================================
-// Context
-// =============================================================================
 
 const MarketRatesRealtimeContext =
   createContext<MarketRatesRealtimeContextValue | null>(null);
@@ -75,10 +67,6 @@ function enqueueMarketRatesRealtimeRemoval(channel: RealtimeChannel): void {
     );
 }
 
-// =============================================================================
-// Provider
-// =============================================================================
-
 interface MarketRatesRealtimeProviderProps {
   readonly children: ReactNode;
 }
@@ -91,14 +79,19 @@ export function MarketRatesRealtimeProvider({
   const [isConnected, setIsConnected] = useState(false);
   const channelRef = useRef<RealtimeChannel | null>(null);
 
-  // Stable reference to sync so the channel callback doesn't cause re-subscribes
+  // Stable reference to sync so the channel callback doesn't cause re-subscribes.
   const syncRef = useRef(sync);
   useEffect(() => {
     syncRef.current = sync;
   }, [sync]);
 
   const handleInsert = useCallback((): void => {
-    syncRef.current().catch(console.error);
+    // The notification carries no authority. Normal sync must pull and validate
+    // the complete root-plus-observations envelope before local selection can
+    // change.
+    void syncRef.current().catch((error: unknown) => {
+      logger.error("marketRatesRealtime.sync.failed", error);
+    });
   }, []);
 
   useEffect(() => {
@@ -119,7 +112,6 @@ export function MarketRatesRealtimeProvider({
     };
 
     if (!isAuthenticated) {
-      // Tear down channel when logged out
       removeCurrentChannel(true);
       return;
     }
@@ -172,10 +164,6 @@ export function MarketRatesRealtimeProvider({
     </MarketRatesRealtimeContext.Provider>
   );
 }
-
-// =============================================================================
-// Hook
-// =============================================================================
 
 /**
  * Access the market-rates realtime connection state.

@@ -100,10 +100,9 @@ jest.mock("@expo/vector-icons", () => {
   }: {
     readonly testID?: string;
   }): React.JSX.Element => {
-    const { View } = jest.requireActual(
-      "react-native"
-    ) as typeof import("react-native");
-    return <View testID={testID} />;
+    const ReactNative =
+      jest.requireActual<typeof import("react-native")>("react-native");
+    return <ReactNative.View testID={testID} />;
   };
   return {
     Ionicons: renderIcon,
@@ -532,7 +531,9 @@ describe("approved active holding-detail fidelity", () => {
         error={null}
         isLoading={false}
         isOffline={false}
-        model={activeDetail({ reconciliationState: "reconciliation_incomplete" })}
+        model={activeDetail({
+          reconciliationState: "reconciliation_incomplete",
+        })}
         onAction={jest.fn()}
         onRetry={onRetry}
       />

@@ -65,7 +65,7 @@ export default function DashboardScreen(): React.JSX.Element {
   const { sync } = useSync();
   const { accounts, isLoading: accountsLoading } = useAccounts();
   const {
-    latestRates,
+    selectedSnapshot,
     previousDayRate,
     isLoading: ratesLoading,
     lastUpdated,
@@ -80,8 +80,7 @@ export default function DashboardScreen(): React.JSX.Element {
     error: portfolioError,
     refresh: refreshMoneySummary,
   } = useMetalPortfolio({
-    accountsValueDecimal:
-      totalAccounts === null ? null : String(totalAccounts),
+    accountsValueDecimal: totalAccounts === null ? null : String(totalAccounts),
   });
   const lifecycleAwareNetWorth = wealthBreakdown?.totalNetWorthDecimal ?? null;
   const lifecycleAwareNetWorthUsd =
@@ -257,7 +256,7 @@ export default function DashboardScreen(): React.JSX.Element {
           )}
           <SectionErrorBoundary name={t("section_live_rates")}>
             <LiveRates
-              latestRates={latestRates}
+              selectedSnapshot={selectedSnapshot}
               previousDayRate={previousDayRate}
               isLoading={ratesLoading}
               lastUpdated={lastUpdated}

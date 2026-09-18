@@ -129,9 +129,7 @@ const CURRENCY_ROLES: readonly string[] = Object.freeze([
 ]);
 
 const METALS_ISO_CURRENCIES: ReadonlySet<string> = new Set(
-  SUPPORTED_CURRENCIES
-    .map(({ code }) => code)
-    .filter((code) => code !== "BTC")
+  SUPPORTED_CURRENCIES.map(({ code }) => code).filter((code) => code !== "BTC")
 );
 
 const FRESHNESS_WINDOW_MS = 86_400_000;
@@ -200,9 +198,13 @@ function unavailable(
   return { available: false, reason };
 }
 
-function isSupportedRole(role: unknown): role is MetalRateRole | CurrencyRateRole {
-  return typeof role === "string" &&
-    (METAL_ROLES.includes(role) || CURRENCY_ROLES.includes(role));
+function isSupportedRole(
+  role: unknown
+): role is MetalRateRole | CurrencyRateRole {
+  return (
+    typeof role === "string" &&
+    (METAL_ROLES.includes(role) || CURRENCY_ROLES.includes(role))
+  );
 }
 
 function isSupportedInstrument(code: unknown): code is RateInstrumentCode {
@@ -218,18 +220,18 @@ function isSupportedInstrument(code: unknown): code is RateInstrumentCode {
 export function isSupportedMetalsIsoCurrencyCode(
   code: unknown
 ): code is MetalsIsoCurrencyCode {
-  return typeof code === "string" &&
+  return (
+    typeof code === "string" &&
     code !== "BTC" &&
-    METALS_ISO_CURRENCIES.has(code);
+    METALS_ISO_CURRENCIES.has(code)
+  );
 }
 
 function doesRoleMatchKind(
   role: MetalRateRole | CurrencyRateRole,
   kind: unknown
 ): kind is "metal" | "currency" {
-  return METAL_ROLES.includes(role)
-    ? kind === "metal"
-    : kind === "currency";
+  return METAL_ROLES.includes(role) ? kind === "metal" : kind === "currency";
 }
 
 function doesInstrumentMatchKind(
@@ -245,8 +247,10 @@ function isLegalUnitOrientation(
   reference: Readonly<Record<string, unknown>>
 ): boolean {
   if (reference.kind === "metal") {
-    return reference.unit === "usd_per_pure_gram" &&
-      reference.orientation === "quote_per_base";
+    return (
+      reference.unit === "usd_per_pure_gram" &&
+      reference.orientation === "quote_per_base"
+    );
   }
   return (
     (reference.unit === "usd_per_currency_unit" &&

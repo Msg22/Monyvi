@@ -655,7 +655,15 @@ export type Database = {
           unit?: string;
           value_decimal?: string;
         };
-        Relationships: [];
+        Relationships: [
+          {
+            foreignKeyName: "market_rate_observations_batch_id_fkey";
+            columns: ["batch_id"];
+            isOneToOne: false;
+            referencedRelation: "market_rates";
+            referencedColumns: ["id"];
+          },
+        ];
       };
       market_rates: {
         Row: {
@@ -1648,6 +1656,24 @@ export type Database = {
       };
       apply_metal_metadata_patch_v1: {
         Args: { p_holding_id: string; p_patch: Json };
+        Returns: Json;
+      };
+      persist_market_rate_snapshot_v1: {
+        Args: {
+          p_captured_at: string;
+          p_observations: Json;
+          p_root: Json;
+          p_snapshot_id: string;
+        };
+        Returns: Json;
+      };
+      pull_market_rate_snapshots_page_v1: {
+        Args: {
+          p_cursor_created_at?: string;
+          p_cursor_id?: string;
+          p_limit?: number;
+          p_upper_watermark?: string;
+        };
         Returns: Json;
       };
       pull_metal_observations_page_v1: {

@@ -38,9 +38,7 @@ export function formatPortfolioRateUpdatedParts(
 
   return {
     date,
-    time: isArabic
-      ? localizedTime
-      : normalizeEnglishDayPeriod(localizedTime),
+    time: isArabic ? localizedTime : normalizeEnglishDayPeriod(localizedTime),
   };
 }
 

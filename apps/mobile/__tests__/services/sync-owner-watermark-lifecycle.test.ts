@@ -16,10 +16,12 @@ jest.mock("@/services/supabase", () => ({
     mockGetCurrentUserId() as Promise<string | null>,
 }));
 
-jest.mock("../../services/sync/pull-strategies", () => ({
+jest.mock("../../services/sync/atomic-pull-strategies", () => ({
   pullChanges: (...args: readonly unknown[]): Promise<SyncPullResult> =>
     mockPullChanges(...args) as Promise<SyncPullResult>,
 }));
+
+jest.mock("@monyvi/db", () => ({ schema: { tables: {} } }));
 
 jest.mock("../../services/sync/push-service", () => ({
   pushChanges: (...args: readonly unknown[]): Promise<unknown> =>
@@ -95,10 +97,10 @@ function successfulPull(
 function getUpdatedRows(
   result: StandardSyncPullResult,
   table: string
-): readonly Record<string, unknown>[] {
+): ReadonlyArray<Record<string, unknown>> {
   const changes = result.changes as unknown as Record<
     string,
-    { readonly updated?: readonly Record<string, unknown>[] }
+    { readonly updated?: ReadonlyArray<Record<string, unknown>> }
   >;
   return changes[table]?.updated ?? [];
 }
@@ -173,7 +175,7 @@ describe("sync owner watermark lifecycle", () => {
   it("full-pulls the next user even when Watermelon advanced its global timestamp", async () => {
     const harness = createOwnerMarkerHarness(USER_A);
     const olderUserRow = { id: "older-user-b-row", user_id: USER_B };
-    let appliedRows: readonly Record<string, unknown>[] = [];
+    let appliedRows: ReadonlyArray<Record<string, unknown>> = [];
     mockPullChanges.mockImplementation(
       (lastPulledAt: number | null): Promise<StandardSyncPullResult> =>
         Promise.resolve(

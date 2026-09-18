@@ -23,7 +23,9 @@ describe("manual QA acquisition rate-reference seed", () => {
       "manual-qa",
       NOW
     );
-    const holdingIds = new Set(references.map((reference) => reference.holding_id));
+    const holdingIds = new Set(
+      references.map((reference) => reference.holding_id)
+    );
 
     expect(holdingIds.size).toBe(5);
     expect(references).toHaveLength(10);
@@ -49,7 +51,8 @@ describe("manual QA acquisition rate-reference seed", () => {
       expect(acquisitionReferences).toHaveLength(2);
       expect(
         acquisitionReferences.every(
-          (reference) => reference.action_id === acquisitionReferences[0]?.action_id
+          (reference) =>
+            reference.action_id === acquisitionReferences[0]?.action_id
         )
       ).toBe(true);
     }

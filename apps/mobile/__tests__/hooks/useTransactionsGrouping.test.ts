@@ -101,8 +101,8 @@ jest.mock("../../hooks/useCurrentUser", () => ({
 }));
 
 jest.mock("../../hooks/useMarketRates", () => ({
-  useMarketRates: (): { latestRates: null; isLoading: false } => ({
-    latestRates: null,
+  useMarketRates: (): { selectedSnapshot: null; isLoading: false } => ({
+    selectedSnapshot: null,
     isLoading: false,
   }),
 }));
@@ -158,7 +158,7 @@ describe("useTransactionsGrouping", () => {
     expect(mockBuildTransactionGroups).toHaveBeenCalledWith({
       ...readModel,
       totalNetWorth: 1000,
-      latestRates: null,
+      selectedSnapshot: null,
       preferredCurrency: "EGP",
       period: "this_month",
       searchQuery: "",
@@ -220,7 +220,7 @@ describe("useTransactionsGrouping", () => {
       expect(mockBuildTransactionGroups).toHaveBeenLastCalledWith({
         ...readModel,
         totalNetWorth: 1000,
-        latestRates: null,
+        selectedSnapshot: null,
         preferredCurrency: "EGP",
         period: "this_month",
         searchQuery: "rent",

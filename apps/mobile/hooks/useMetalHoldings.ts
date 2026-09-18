@@ -85,7 +85,7 @@ const ZERO_PROFIT_LOSS: ProfitLoss = { amount: 0, percent: 0 };
  * values, profit/loss, and portfolio split.
  */
 export function useMetalHoldings(): UseMetalHoldingsResult {
-  const { latestRates, isLoading: ratesLoading } = useMarketRates();
+  const { selectedSnapshot, isLoading: ratesLoading } = useMarketRates();
   const { preferredCurrency } = usePreferredCurrency();
   const { userId, isResolvingUser } = useCurrentUser();
 
@@ -175,7 +175,7 @@ export function useMetalHoldings(): UseMetalHoldingsResult {
     UseMetalHoldingsResult,
     "isLoading"
   > => {
-    if (!latestRates || assets.length === 0) {
+    if (!selectedSnapshot || assets.length === 0) {
       return {
         goldHoldings: EMPTY_HOLDINGS,
         silverHoldings: EMPTY_HOLDINGS,
@@ -190,8 +190,21 @@ export function useMetalHoldings(): UseMetalHoldingsResult {
     const rawHoldings = joinAssetsWithMetals(assets, assetMetals);
 
     // 2. Enrich with computed values
-    const enriched = rawHoldings.map((raw) =>
-      enrichHolding(raw, latestRates, preferredCurrency)
+    const candidates = rawHoldings.map((raw) =>
+      enrichHolding(raw, selectedSnapshot, preferredCurrency)
+    );
+    if (candidates.some((holding) => holding === null)) {
+      return {
+        goldHoldings: EMPTY_HOLDINGS,
+        silverHoldings: EMPTY_HOLDINGS,
+        totalValue: 0,
+        totalPurchasePrice: 0,
+        profitLoss: ZERO_PROFIT_LOSS,
+        portfolioSplit: EMPTY_SPLIT,
+      };
+    }
+    const enriched = candidates.filter(
+      (holding): holding is MetalHolding => holding !== null
     );
 
     // 3. Group and sort (FR-024: newest first)
@@ -221,7 +234,7 @@ export function useMetalHoldings(): UseMetalHoldingsResult {
       profitLoss: { amount: profitLossAmount, percent: profitLossPercent },
       portfolioSplit,
     };
-  }, [assets, assetMetals, latestRates, preferredCurrency]);
+  }, [assets, assetMetals, selectedSnapshot, preferredCurrency]);
 
   return {
     ...computedData,

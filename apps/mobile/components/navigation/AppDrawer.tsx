@@ -192,7 +192,7 @@ export function AppDrawer({
     (route: string): void => {
       onClose();
       setTimeout(() => {
-        router.push(route as never);
+        router.push(route);
       }, 100);
     },
     [onClose]

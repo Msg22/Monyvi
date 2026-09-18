@@ -67,9 +67,9 @@ export function useMetalHistory(): UseMetalHistoryResult {
   const [observedStates, setObservedStates] = useState<
     readonly MetalHoldingState[]
   >([]);
-  const [observedStatesUserId, setObservedStatesUserId] = useState<string | null>(
-    null
-  );
+  const [observedStatesUserId, setObservedStatesUserId] = useState<
+    string | null
+  >(null);
   const lastLoadedRef = useRef<{
     filter: MetalHistoryFilter;
     hasLoaded: boolean;

@@ -1,21 +1,39 @@
 import { act, renderHook, waitFor } from "@testing-library/react-native";
 import type { MarketRate } from "@monyvi/db";
-import { MARKET_RATE_MODEL_VALUE_FIELDS } from "@monyvi/logic";
+import {
+  MARKET_RATE_MODEL_VALUE_FIELDS,
+  type CurrentMarketInstrument,
+} from "@monyvi/logic";
+import type {
+  SelectedCurrentMarketRate,
+  SelectedMarketRateSnapshot,
+} from "@/services/market-rate-snapshot-read-model-service";
 
 const mockFetch = jest.fn<Promise<MarketRate[]>, []>();
-const mockUnsubscribe = jest.fn();
+const mockUnsubscribe = jest.fn<void, []>();
 const mockLoggerError = jest.fn();
 let mockObservedRates: MarketRate[] = [];
 let mockLatestRatesObserver: ((rates: MarketRate[]) => void) | null = null;
+let mockSnapshotObserver: {
+  readonly next: (snapshot: SelectedMarketRateSnapshot | null) => void;
+  readonly error?: (cause: unknown) => void;
+} | null = null;
+const mockSnapshotRefresh = jest.fn<void, []>();
 
 const mockCollection = {
   query: jest.fn((...queryClauses: readonly unknown[]) => {
     if (queryClauses.length === 2) {
       return {
         observe: () => ({
-          subscribe: (callback: (rates: MarketRate[]) => void) => {
-            mockLatestRatesObserver = callback;
-            callback(mockObservedRates);
+          subscribe: (
+            observer:
+              | ((rates: MarketRate[]) => void)
+              | { readonly next: (rates: MarketRate[]) => void }
+          ) => {
+            const next =
+              typeof observer === "function" ? observer : observer.next;
+            mockLatestRatesObserver = next;
+            next(mockObservedRates);
             return { unsubscribe: mockUnsubscribe };
           },
         }),
@@ -36,6 +54,18 @@ jest.mock("@/providers/DatabaseProvider", () => ({
 
 jest.mock("@/providers/MarketRatesRealtimeProvider", () => ({
   useMarketRatesRealtime: () => ({ isConnected: true }),
+}));
+
+jest.mock("@/services/market-rate-snapshot-read-model-service", () => ({
+  observeSelectedMarketRateSnapshot: () => ({
+    refresh: mockSnapshotRefresh,
+    subscribe: (
+      observer: NonNullable<typeof mockSnapshotObserver>
+    ): { readonly unsubscribe: jest.Mock<void, []> } => {
+      mockSnapshotObserver = observer;
+      return { unsubscribe: mockUnsubscribe };
+    },
+  }),
 }));
 
 jest.mock("@/utils/logger", () => ({
@@ -65,11 +95,57 @@ function createMarketRate(
   return rate;
 }
 
+function createSelectedSnapshot(
+  providerObservedAt: Date
+): SelectedMarketRateSnapshot {
+  const ageMs = Date.now() - providerObservedAt.getTime();
+  const freshness: "stale" | "fresh" =
+    ageMs > 24 * 60 * 60 * 1000 ? "stale" : "fresh";
+  const trustValue = {
+    ageMs,
+    providerObservedAt,
+    source: "provider",
+    state: freshness,
+    valueDecimal: "1",
+  };
+  const snapshot: SelectedMarketRateSnapshot = {
+    snapshotId: "snapshot-1",
+    capturedAt: new Date("2026-07-16T12:00:00.000Z"),
+    ratesByInstrument: new Map<
+      CurrentMarketInstrument,
+      SelectedCurrentMarketRate
+    >([
+      [
+        "metal:GOLD",
+        {
+          instrumentCode: "metal:GOLD",
+          valueDecimal: "1",
+          normalizedUsdPerBaseDecimal: "1",
+          unit: "usd_per_pure_gram",
+          orientation: "quote_per_base",
+          providerObservedAt,
+          source: "provider",
+          quality: "valid",
+          freshness,
+          ageMs,
+        },
+      ],
+    ]),
+    trust: {
+      gold: trustValue,
+      silver: trustValue,
+      currencies: new Map(),
+    },
+  };
+  return snapshot;
+}
+
 describe("useMarketRates", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockObservedRates = [];
     mockLatestRatesObserver = null;
+    mockSnapshotObserver = null;
     mockFetch.mockResolvedValue([]);
   });
 
@@ -81,6 +157,10 @@ describe("useMarketRates", () => {
 
     const { result } = renderHook(() => useMarketRates());
 
+    act(() => {
+      mockSnapshotObserver?.next(createSelectedSnapshot(initialCreatedAt));
+    });
+
     await waitFor(() => {
       expect(result.current.lastUpdated).toEqual(initialCreatedAt);
       expect(result.current.isStale).toBe(false);
@@ -89,6 +169,7 @@ describe("useMarketRates", () => {
     await act(async () => {
       rate.createdAt = correctedCreatedAt;
       mockLatestRatesObserver?.([rate]);
+      mockSnapshotObserver?.next(createSelectedSnapshot(correctedCreatedAt));
       await Promise.resolve();
     });
 
@@ -107,7 +188,7 @@ describe("useMarketRates", () => {
       expect(mockFetch).toHaveBeenCalled();
       expect(result.current.previousDayRate).toBeNull();
       expect(mockLoggerError).toHaveBeenCalledWith(
-        "Invalid cached previous-day market rate",
+        "marketRates.historicalRow.invalid",
         expect.any(Error)
       );
     });

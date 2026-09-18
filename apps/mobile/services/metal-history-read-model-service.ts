@@ -6,10 +6,7 @@ import {
   type MetalHoldingState,
   type MetalLifecycleEvent,
 } from "@monyvi/db";
-import {
-  isSupportedMetal,
-  type SupportedMetal,
-} from "@monyvi/logic";
+import { isSupportedMetal, type SupportedMetal } from "@monyvi/logic";
 import { Q, type Query } from "@nozbe/watermelondb";
 import {
   getCurrentUserDataScope,
@@ -132,10 +129,8 @@ export async function readMetalHistoryReadModel(
   const terminalStates = await readReportableTerminalStates(scope);
   if (terminalStates.length === 0) return emptyHistory(options.filter);
 
-  const lifecycleValidatedStates = await orderTerminalStatesByEffectiveEventTime(
-    scope,
-    terminalStates
-  );
+  const lifecycleValidatedStates =
+    await orderTerminalStatesByEffectiveEventTime(scope, terminalStates);
   if (lifecycleValidatedStates.length === 0) {
     return emptyHistory(options.filter);
   }
@@ -496,9 +491,7 @@ function countTerminalStates(
   states: readonly MetalHoldingState[]
 ): MetalHistoryCounts {
   const sold = states.filter((state) => state.status === "sold").length;
-  const disposed = states.filter(
-    (state) => state.status === "disposed"
-  ).length;
+  const disposed = states.filter((state) => state.status === "disposed").length;
   return { all: sold + disposed, disposed, sold };
 }
 

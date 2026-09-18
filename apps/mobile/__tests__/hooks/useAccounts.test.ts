@@ -128,11 +128,6 @@ jest.mock("@monyvi/db", () => ({
   },
 }));
 
-jest.mock("@monyvi/logic", () => ({
-  calculateAccountsTotalBalance: jest.fn(() => 0),
-  convertCurrency: jest.fn(() => 0),
-}));
-
 jest.mock("@nozbe/watermelondb", () => ({
   Q: {
     where: (...args: readonly unknown[]) => ({ kind: "where", args }),
@@ -144,7 +139,9 @@ jest.mock("@nozbe/watermelondb", () => ({
 }));
 
 jest.mock("../../hooks/useMarketRates", () => ({
-  useMarketRates: (): { latestRates: null } => ({ latestRates: null }),
+  useMarketRates: (): { selectedSnapshot: null } => ({
+    selectedSnapshot: null,
+  }),
 }));
 
 jest.mock("../../hooks/usePreferredCurrency", () => ({
