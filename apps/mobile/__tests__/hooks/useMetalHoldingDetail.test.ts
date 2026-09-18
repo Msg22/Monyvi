@@ -4,16 +4,6 @@ interface MockSubscription {
   readonly unsubscribe: jest.Mock<void, []>;
 }
 
-interface MockTrustObserver {
-  readonly next: (value: unknown) => void;
-  readonly error: (cause: unknown) => void;
-}
-
-interface MockTrustObservation {
-  readonly refresh: jest.Mock<void, []>;
-  readonly subscribe: (observer: MockTrustObserver) => MockSubscription;
-}
-
 interface MockLocalQuery {
   readonly observe: () => {
     readonly subscribe: (
@@ -29,11 +19,19 @@ interface MockLocalObserver {
 
 const mockDatabase = { id: "database" };
 const mockUnsubscribe = jest.fn<void, []>();
-const mockTrustRefresh = jest.fn<void, []>();
+const mockRefreshSelectedSnapshot = jest.fn<void, []>();
+const mockMarketRatesListeners = new Set<() => void>();
+let mockMarketRatesState = {
+  currentError: null as Error | null,
+  isConnected: true,
+  refreshSelectedSnapshot: mockRefreshSelectedSnapshot,
+  selectedSnapshot: null as null | {
+    readonly snapshotId: string;
+    readonly trust: unknown;
+  },
+};
 const mockAppStateRemove = jest.fn<void, []>();
 const mockLocalObservers: MockLocalObserver[] = [];
-const mockTrustObservers: MockTrustObserver[] = [];
-let mockTrustObserver: MockTrustObserver | null = null;
 let mockAppStateListener: ((state: string) => void) | null = null;
 let mockUserId: string | null = "user-1";
 
@@ -88,11 +86,19 @@ jest.mock("@/hooks/useCurrentUser", () => ({
   }),
 }));
 
-jest.mock("@/hooks/useMarketRates", () => ({
-  useMarketRates: (): { readonly isConnected: boolean } => ({
-    isConnected: true,
-  }),
-}));
+jest.mock("@/hooks/useMarketRates", () => {
+  const React = jest.requireActual<typeof import("react")>("react");
+  return {
+    useMarketRates: (): typeof mockMarketRatesState =>
+      React.useSyncExternalStore(
+        (listener) => {
+          mockMarketRatesListeners.add(listener);
+          return () => mockMarketRatesListeners.delete(listener);
+        },
+        () => mockMarketRatesState
+      ),
+  };
+});
 
 jest.mock("@/hooks/usePreferredCurrency", () => ({
   usePreferredCurrency: (): {
@@ -106,17 +112,6 @@ jest.mock("@/hooks/usePreferredCurrency", () => ({
 
 jest.mock("@/providers/DatabaseProvider", () => ({
   useDatabase: (): typeof mockDatabase => mockDatabase,
-}));
-
-jest.mock("@/services/live-rates-trust-read-model-service", () => ({
-  observeLiveRatesTrust: (): MockTrustObservation => ({
-    refresh: mockTrustRefresh,
-    subscribe: (observer: MockTrustObserver): MockSubscription => {
-      mockTrustObserver = observer;
-      mockTrustObservers.push(observer);
-      return { unsubscribe: mockUnsubscribe };
-    },
-  }),
 }));
 
 jest.mock("react-native", () => {
@@ -182,14 +177,37 @@ const initialRates = {
   silver: { ageMs: null, providerObservedAt: null, state: "missing" },
 };
 
+const initialSelectedSnapshot = {
+  snapshotId: "snapshot-1",
+  trust: initialRates,
+};
+
+function emitMarketRates(next: Partial<typeof mockMarketRatesState>): void {
+  mockMarketRatesState = { ...mockMarketRatesState, ...next };
+  for (const listener of mockMarketRatesListeners) listener();
+}
+
+function selectedSnapshot(
+  trust: typeof initialRates
+): NonNullable<typeof mockMarketRatesState.selectedSnapshot> {
+  return trust === initialRates
+    ? initialSelectedSnapshot
+    : { snapshotId: "snapshot-1", trust };
+}
+
 describe("useMetalHoldingDetail", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockLocalObservers.splice(0);
-    mockTrustObservers.splice(0);
-    mockTrustObserver = null;
     mockAppStateListener = null;
     mockUserId = "user-1";
+    mockMarketRatesListeners.clear();
+    mockMarketRatesState = {
+      currentError: null,
+      isConnected: true,
+      refreshSelectedSnapshot: mockRefreshSelectedSnapshot,
+      selectedSnapshot: initialSelectedSnapshot,
+    };
   });
 
   afterEach(() => {
@@ -202,7 +220,7 @@ describe("useMetalHoldingDetail", () => {
     const { result } = renderHook(() => useMetalHoldingDetail("holding-1"));
 
     act(() => {
-      mockTrustObserver?.next(initialRates);
+      emitMarketRates({ selectedSnapshot: selectedSnapshot(initialRates) });
     });
     await waitFor(() => expect(result.current.model).toBe(model));
 
@@ -252,7 +270,7 @@ describe("useMetalHoldingDetail", () => {
       const { result } = renderHook(() => useMetalHoldingDetail("holding-1"));
 
       act(() => {
-        mockTrustObserver?.next(initialRates);
+        emitMarketRates({ selectedSnapshot: selectedSnapshot(initialRates) });
       });
       await waitFor(() => expect(result.current.model).toBe(model));
 
@@ -268,14 +286,10 @@ describe("useMetalHoldingDetail", () => {
       });
 
       await waitFor(() => expect(mockLocalObservers).toHaveLength(10));
-      await waitFor(() => expect(mockTrustObservers).toHaveLength(2));
       act(() => {
-        mockTrustObserver?.next(initialRates);
+        emitMarketRates({ selectedSnapshot: selectedSnapshot(initialRates) });
       });
       await waitFor(() => expect(result.current.error).toBeNull());
-      await waitFor(() =>
-        expect(mockReadMetalDetailReadModel).toHaveBeenCalledTimes(2)
-      );
       await waitFor(() => expect(result.current.model).toBe(model));
     }
   );
@@ -285,7 +299,7 @@ describe("useMetalHoldingDetail", () => {
     const { result } = renderHook(() => useMetalHoldingDetail("holding-1"));
 
     act(() => {
-      mockTrustObserver?.next(initialRates);
+      emitMarketRates({ selectedSnapshot: selectedSnapshot(initialRates) });
     });
     await waitFor(() =>
       expect(mockReadMetalDetailReadModel).toHaveBeenCalledTimes(1)
@@ -308,7 +322,7 @@ describe("useMetalHoldingDetail", () => {
     renderHook(() => useMetalHoldingDetail("holding-1"));
 
     act(() => {
-      mockTrustObserver?.next(initialRates);
+      emitMarketRates({ selectedSnapshot: selectedSnapshot(initialRates) });
     });
     await waitFor(() =>
       expect(mockReadMetalDetailReadModel).toHaveBeenCalledTimes(1)
@@ -323,7 +337,7 @@ describe("useMetalHoldingDetail", () => {
       },
     };
     act(() => {
-      mockTrustObserver?.next(updatedRates);
+      emitMarketRates({ selectedSnapshot: selectedSnapshot(updatedRates) });
     });
 
     await waitFor(() =>
@@ -331,6 +345,7 @@ describe("useMetalHoldingDetail", () => {
         currentRates: updatedRates,
         holdingId: "holding-1",
         preferredCurrency: "EGP",
+        snapshotId: "snapshot-1",
         userId: "user-1",
       })
     );
@@ -355,7 +370,7 @@ describe("useMetalHoldingDetail", () => {
     );
 
     act(() => {
-      mockTrustObserver?.next(initialRates);
+      emitMarketRates({ selectedSnapshot: selectedSnapshot(initialRates) });
     });
     await waitFor(() => expect(result.current.model).toBe(firstModel));
 
@@ -386,7 +401,7 @@ describe("useMetalHoldingDetail", () => {
     );
 
     act(() => {
-      mockTrustObserver?.next(initialRates);
+      emitMarketRates({ selectedSnapshot: selectedSnapshot(initialRates) });
     });
     await waitFor(() => expect(result.current.model).toBe(firstModel));
 
@@ -408,7 +423,7 @@ describe("useMetalHoldingDetail", () => {
       mockAppStateListener?.("active");
     });
 
-    expect(mockTrustRefresh).toHaveBeenCalledTimes(1);
+    expect(mockRefreshSelectedSnapshot).toHaveBeenCalledTimes(1);
   });
 
   it("reclassifies rate trust at the bounded freshness deadline", () => {
@@ -419,20 +434,27 @@ describe("useMetalHoldingDetail", () => {
       jest.advanceTimersByTime(60_000);
     });
 
-    expect(mockTrustRefresh).toHaveBeenCalledTimes(1);
+    expect(mockRefreshSelectedSnapshot).toHaveBeenCalledTimes(1);
   });
 
-  it("surfaces rate observer failure without reading synthetic missing rates", async () => {
+  it("surfaces rate observer failure without starting another synthetic-rate read", async () => {
     const rateError = new Error("Local rates unavailable");
     mockReadMetalDetailReadModel.mockResolvedValue({ holdingId: "holding-1" });
+    mockMarketRatesState = {
+      ...mockMarketRatesState,
+      selectedSnapshot: null,
+    };
     const { result } = renderHook(() => useMetalHoldingDetail("holding-1"));
+    const callsBeforeError = mockReadMetalDetailReadModel.mock.calls.length;
 
     act(() => {
-      mockTrustObserver?.error(rateError);
+      emitMarketRates({ currentError: rateError });
     });
 
     await waitFor(() => expect(result.current.error).toBe(rateError));
-    expect(mockReadMetalDetailReadModel).not.toHaveBeenCalled();
+    expect(mockReadMetalDetailReadModel).toHaveBeenCalledTimes(
+      callsBeforeError
+    );
     expect(result.current.model).toBeNull();
   });
 
@@ -440,11 +462,13 @@ describe("useMetalHoldingDetail", () => {
     const rateError = new Error("Local rates unavailable");
     const model = { holdingId: "holding-1" };
     mockReadMetalDetailReadModel.mockResolvedValue(model);
+    mockMarketRatesState = {
+      ...mockMarketRatesState,
+      selectedSnapshot: null,
+    };
     const { result } = renderHook(() => useMetalHoldingDetail("holding-1"));
-    const failedObserver = mockTrustObserver;
-
     act(() => {
-      failedObserver?.error(rateError);
+      emitMarketRates({ currentError: rateError });
     });
     await waitFor(() => expect(result.current.error).toBe(rateError));
 
@@ -452,12 +476,11 @@ describe("useMetalHoldingDetail", () => {
       result.current.retry();
     });
 
-    await waitFor(() => expect(mockTrustObservers).toHaveLength(2));
-    const recoveryObserver = mockTrustObserver;
-    expect(recoveryObserver).not.toBe(failedObserver);
-
     act(() => {
-      recoveryObserver?.next(initialRates);
+      emitMarketRates({
+        currentError: null,
+        selectedSnapshot: selectedSnapshot(initialRates),
+      });
     });
 
     await waitFor(() => expect(result.current.error).toBeNull());

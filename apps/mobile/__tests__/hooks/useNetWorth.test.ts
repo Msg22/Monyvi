@@ -89,9 +89,14 @@ jest.mock("@/utils/logger", () => ({
   },
 }));
 
+const mockSelectedSnapshot = { snapshotId: "snapshot-1" };
+
 jest.mock("../../hooks/useMarketRates", () => ({
-  useMarketRates: (): { latestRates: object; isLoading: boolean } => ({
-    latestRates: {},
+  useMarketRates: (): {
+    selectedSnapshot: typeof mockSelectedSnapshot;
+    isLoading: boolean;
+  } => ({
+    selectedSnapshot: mockSelectedSnapshot,
     isLoading: false,
   }),
 }));
@@ -185,7 +190,7 @@ describe("useNetWorth", () => {
     expect(mockBuildNetWorthReadModel).toHaveBeenCalledWith({
       accounts: [{ id: "account-1" }],
       assetMetals: [{ id: "metal-1" }],
-      latestRates: {},
+      currentSnapshot: mockSelectedSnapshot,
       preferredCurrency: "USD",
     });
     expect(result.current).toMatchObject(netWorthModel);

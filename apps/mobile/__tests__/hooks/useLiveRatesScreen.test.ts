@@ -1,37 +1,44 @@
 import { act, renderHook, waitFor } from "@testing-library/react-native";
 
-interface MockSubscription {
-  readonly unsubscribe: jest.Mock<void, []>;
-}
-
-interface MockTrustObserver {
-  readonly error: (cause: unknown) => void;
-  readonly next: (value: unknown) => void;
-}
-
 const mockRefreshLiveMarketRates = jest.fn<Promise<void>, [unknown]>(() =>
   Promise.resolve()
 );
-const mockUnsubscribe = jest.fn<void, []>();
 const mockDatabase = { id: "database" };
-const mockTrustObservers: MockTrustObserver[] = [];
-let mockLatestRates: unknown = {};
+const mockRefreshSelectedSnapshot = jest.fn<void, []>();
+const mockMarketRatesListeners = new Set<() => void>();
+let mockMarketRatesState = {
+  currentError: null as Error | null,
+  isConnected: true,
+  isCurrentLoading: true,
+  lastUpdated: null as Date | null,
+  previousDayRate: null,
+  refreshSelectedSnapshot: mockRefreshSelectedSnapshot,
+  selectedSnapshot: null as null | {
+    readonly capturedAt: Date;
+    readonly ratesByInstrument: ReadonlyMap<string, unknown>;
+    readonly snapshotId: string;
+    readonly trust: typeof trustedRates;
+  },
+};
 
-jest.mock("@/hooks/useMarketRates", () => ({
-  useMarketRates: (): {
-    readonly isConnected: boolean;
-    readonly isLoading: boolean;
-    readonly lastUpdated: Date | null;
-    readonly latestRates: unknown;
-    readonly previousDayRate: null;
-  } => ({
-    isConnected: true,
-    isLoading: false,
-    lastUpdated: new Date("2026-09-07T00:00:00.000Z"),
-    latestRates: mockLatestRates,
-    previousDayRate: null,
-  }),
-}));
+function emitMarketRates(next: Partial<typeof mockMarketRatesState>): void {
+  mockMarketRatesState = { ...mockMarketRatesState, ...next };
+  for (const listener of mockMarketRatesListeners) listener();
+}
+
+jest.mock("@/hooks/useMarketRates", () => {
+  const React = jest.requireActual<typeof import("react")>("react");
+  return {
+    useMarketRates: (): typeof mockMarketRatesState =>
+      React.useSyncExternalStore(
+        (listener) => {
+          mockMarketRatesListeners.add(listener);
+          return () => mockMarketRatesListeners.delete(listener);
+        },
+        () => mockMarketRatesState
+      ),
+  };
+});
 
 jest.mock("@/hooks/usePreferredCurrency", () => ({
   usePreferredCurrency: (): { readonly preferredCurrency: "EGP" } => ({
@@ -53,16 +60,6 @@ jest.mock("@/utils/logger", () => ({
 }));
 
 jest.mock("@/services/live-rates-trust-read-model-service", () => ({
-  observeLiveRatesTrust: (): {
-    readonly refresh: jest.Mock<void, []>;
-    readonly subscribe: (observer: MockTrustObserver) => MockSubscription;
-  } => ({
-    refresh: jest.fn<void, []>(),
-    subscribe: (observer: MockTrustObserver): MockSubscription => {
-      mockTrustObservers.push(observer);
-      return { unsubscribe: mockUnsubscribe };
-    },
-  }),
   summarizeLiveRatesTrust: (): "missing" => "missing",
 }));
 
@@ -101,11 +98,30 @@ const trustedRates = {
   },
 };
 
+function selectedSnapshot(
+  trust = trustedRates
+): NonNullable<typeof mockMarketRatesState.selectedSnapshot> {
+  return {
+    capturedAt: new Date("2026-09-07T00:00:00.000Z"),
+    ratesByInstrument: new Map(),
+    snapshotId: "snapshot-1",
+    trust,
+  };
+}
+
 describe("useLiveRatesScreen", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockLatestRates = {};
-    mockTrustObservers.splice(0);
+    mockMarketRatesListeners.clear();
+    mockMarketRatesState = {
+      currentError: null,
+      isConnected: true,
+      isCurrentLoading: true,
+      lastUpdated: null,
+      previousDayRate: null,
+      refreshSelectedSnapshot: mockRefreshSelectedSnapshot,
+      selectedSnapshot: null,
+    };
   });
 
   it("keeps the screen loading while cached rates wait for trust initialization", async () => {
@@ -115,7 +131,11 @@ describe("useLiveRatesScreen", () => {
     expect(result.current.isLoading).toBe(true);
 
     act(() => {
-      mockTrustObservers[0]?.next(trustedRates);
+      emitMarketRates({
+        isCurrentLoading: false,
+        lastUpdated: new Date("2026-09-07T00:00:00.000Z"),
+        selectedSnapshot: selectedSnapshot(),
+      });
     });
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
@@ -124,10 +144,14 @@ describe("useLiveRatesScreen", () => {
 
   it("surfaces observer failure and resubscribes on accessible refresh retry", async () => {
     const { result } = renderHook(() => useLiveRatesScreen());
-    const failedObserver = mockTrustObservers[0];
 
     act(() => {
-      failedObserver?.error(new Error("Local observation read failed"));
+      emitMarketRates({
+        selectedSnapshot: selectedSnapshot(),
+        lastUpdated: new Date("2026-09-07T00:00:00.000Z"),
+        currentError: new Error("Local observation read failed"),
+        isCurrentLoading: false,
+      });
     });
 
     await waitFor(() =>
@@ -138,9 +162,11 @@ describe("useLiveRatesScreen", () => {
       result.current.onRefresh();
     });
 
-    await waitFor(() => expect(mockTrustObservers).toHaveLength(2));
     act(() => {
-      mockTrustObservers[1]?.next(trustedRates);
+      emitMarketRates({
+        currentError: null,
+        selectedSnapshot: selectedSnapshot(),
+      });
     });
 
     await waitFor(() => expect(result.current.refreshError).toBeNull());
@@ -151,7 +177,7 @@ describe("useLiveRatesScreen", () => {
     const { result } = renderHook(() => useLiveRatesScreen());
 
     act(() => {
-      mockTrustObservers[0]?.next({
+      const trust = {
         currencies: new Map(),
         gold: {
           ageMs: 120_000,
@@ -163,6 +189,10 @@ describe("useLiveRatesScreen", () => {
           providerObservedAt: new Date("2026-09-07T00:00:00.000Z"),
           state: "fresh",
         },
+      };
+      emitMarketRates({
+        isCurrentLoading: false,
+        selectedSnapshot: selectedSnapshot(trust),
       });
     });
 

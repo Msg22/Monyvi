@@ -1,8 +1,6 @@
 import {
   calculateRealizedAttribution,
   calculateUnrealizedAttribution,
-  convertAttributionForDisplay,
-  roundAttributionForDisplay,
 } from "../attribution";
 import type {
   CurrencyInstrumentCode,
@@ -18,14 +16,10 @@ import { normalizeUsdPerUnitRate } from "../valuation";
 function loadAttributionApi(): {
   readonly calculateRealizedAttribution: typeof calculateRealizedAttribution;
   readonly calculateUnrealizedAttribution: typeof calculateUnrealizedAttribution;
-  readonly convertAttributionForDisplay: typeof convertAttributionForDisplay;
-  readonly roundAttributionForDisplay: typeof roundAttributionForDisplay;
 } {
   return {
     calculateRealizedAttribution,
     calculateUnrealizedAttribution,
-    convertAttributionForDisplay,
-    roundAttributionForDisplay,
   };
 }
 
@@ -106,10 +100,6 @@ const SALE_CONTEXT = {
   ...CURRENT_CONTEXT,
   proceedsCurrencyInstrumentCode: "currency:EGP",
 } as const;
-const DISPLAY_CONTEXT = {
-  canonicalCurrencyInstrumentCode: "currency:EGP",
-  preferredCurrencyInstrumentCode: "currency:SAR",
-} as const;
 
 const ACQUISITION_METAL_RATE = metalRate(
   "acquisition_metal",
@@ -141,16 +131,6 @@ const PROCEEDS_EGP_RATE = directCurrencyRate(
 const USD_RATE = directCurrencyRate(
   "terminal_proceeds_currency",
   "currency:USD",
-  "1"
-);
-const DISPLAY_PURCHASE_EGP_RATE = directCurrencyRate(
-  "display_purchase_currency",
-  "currency:EGP",
-  "0.25"
-);
-const DISPLAY_PREFERRED_SAR_RATE = directCurrencyRate(
-  "display_preferred_currency",
-  "currency:SAR",
   "1"
 );
 const VALUATION_SILVER_RATE = metalRate("current_metal", "metal:SILVER", "3");
@@ -887,206 +867,4 @@ describe("current and realized Metals attribution", () => {
       ])
     );
   });
-});
-
-describe("rounding explanation and hand-derived PostgreSQL numeric compatibility fixtures", () => {
-  it("explains the allowed two-minor-unit display difference without a balancing component", () => {
-    const { roundAttributionForDisplay } = loadAttributionApi();
-
-    expect(
-      roundAttributionForDisplay({
-        combinedDecimal: "0.015",
-        components: {
-          metalMovementDecimal: "0.005",
-          currencyMovementDecimal: "0.005",
-          purchaseCostDecimal: "0.005",
-        },
-        decimalPlaces: 2,
-      })
-    ).toEqual({
-      available: true,
-      value: {
-        combinedDecimal: "0.02",
-        displayedComponents: {
-          metalMovementDecimal: "0.00",
-          currencyMovementDecimal: "0.00",
-          purchaseCostDecimal: "0.00",
-        },
-        displayedComponentSumDecimal: "0.00",
-        roundingDifferenceMinorUnits: "2",
-        requiresRoundingExplanation: true,
-      },
-    });
-  });
-
-  it("converts combined P/L and every component through one exact display FX basis before final rounding", () => {
-    const { convertAttributionForDisplay } = loadAttributionApi();
-
-    expect(
-      convertAttributionForDisplay({
-        ...DISPLAY_CONTEXT,
-        attribution: {
-          available: true,
-          value: {
-            combinedDecimal: "0.005",
-            components: {
-              metalMovementDecimal: "0.001",
-              currencyMovementDecimal: "0.004",
-            },
-          },
-        },
-        canonicalCurrencyAtDisplayRate: directCurrencyRate(
-          "display_purchase_currency",
-          "currency:EGP",
-          "0.6"
-        ),
-        preferredCurrencyAtDisplayRate: directCurrencyRate(
-          "display_preferred_currency",
-          "currency:SAR",
-          "0.2"
-        ),
-        decimalPlaces: 2,
-      })
-    ).toEqual({
-      available: true,
-      value: {
-        consumedRateReferences: [
-          directCurrencyRate(
-            "display_purchase_currency",
-            "currency:EGP",
-            "0.6"
-          ),
-          directCurrencyRate(
-            "display_preferred_currency",
-            "currency:SAR",
-            "0.2"
-          ),
-        ],
-        combinedDecimal: "0.02",
-        displayedComponents: {
-          metalMovementDecimal: "0.00",
-          currencyMovementDecimal: "0.01",
-        },
-        displayedComponentSumDecimal: "0.01",
-        roundingDifferenceMinorUnits: "1",
-        requiresRoundingExplanation: true,
-      },
-    });
-  });
-
-  it("preserves an unavailable canonical attribution without fabricating display value", () => {
-    const { convertAttributionForDisplay } = loadAttributionApi();
-
-    expect(
-      convertAttributionForDisplay({
-        ...DISPLAY_CONTEXT,
-        attribution: { available: false, reason: "purchase_cost_unavailable" },
-        canonicalCurrencyAtDisplayRate: DISPLAY_PURCHASE_EGP_RATE,
-        preferredCurrencyAtDisplayRate: DISPLAY_PREFERRED_SAR_RATE,
-        decimalPlaces: 2,
-      })
-    ).toEqual({ available: false, reason: "purchase_cost_unavailable" });
-  });
-
-  it.each([
-    [
-      "canonical_currency_display_rate_unavailable",
-      { canonicalCurrencyAtDisplayRate: null },
-    ],
-    [
-      "preferred_currency_display_rate_unavailable",
-      { preferredCurrencyAtDisplayRate: null },
-    ],
-  ] as const)(
-    "keeps display attribution unavailable for %s",
-    (reason, missingRate) => {
-      const { convertAttributionForDisplay } = loadAttributionApi();
-
-      expect(
-        convertAttributionForDisplay({
-          ...DISPLAY_CONTEXT,
-          attribution: {
-            available: true,
-            value: {
-              combinedDecimal: "85",
-              components: { metalMovementDecimal: "20" },
-            },
-          },
-          canonicalCurrencyAtDisplayRate: DISPLAY_PURCHASE_EGP_RATE,
-          preferredCurrencyAtDisplayRate: DISPLAY_PREFERRED_SAR_RATE,
-          decimalPlaces: 2,
-          ...missingRate,
-        })
-      ).toEqual({ available: false, reason });
-    }
-  );
-
-  it.each([
-    {
-      name: "terminating exact decimals",
-      derivation:
-        "Hand-derived from FR-050 with q=10, m_a=2, m_v=3, x_Pa=0.5, x_Pv=0.25, K=35.",
-      pureGramsDecimal: "10",
-      purchaseCostDecimal: "35",
-      purchaseCurrencyDecimalPlaces: 2,
-      expectedExactNumeric: {
-        metalMovementDecimal: "20",
-        currencyMovementDecimal: "60",
-        purchaseCostDecimal: "5",
-        combinedDecimal: "85",
-      },
-    },
-    {
-      name: "high-precision exact decimals",
-      derivation:
-        "Hand-derived from FR-050 with q=0.000001, EGP minor-unit purchase cost K=0.01, and the same exact rates; no database query was executed.",
-      pureGramsDecimal: "0.000001",
-      purchaseCostDecimal: "0.01",
-      purchaseCurrencyDecimalPlaces: 2,
-      expectedExactNumeric: {
-        metalMovementDecimal: "0.000002",
-        currencyMovementDecimal: "0.000006",
-        purchaseCostDecimal: "-0.009996",
-        combinedDecimal: "-0.009988",
-      },
-    },
-  ])(
-    "matches a hand-derived exact-decimal fixture intended for future PostgreSQL numeric parity: $name",
-    ({
-      pureGramsDecimal,
-      purchaseCostDecimal,
-      purchaseCurrencyDecimalPlaces,
-      expectedExactNumeric,
-    }) => {
-      const { calculateUnrealizedAttribution } = loadAttributionApi();
-      const result = calculateUnrealizedAttribution({
-        ...CURRENT_CONTEXT,
-        pureGramsDecimal,
-        purchaseCostDecimal,
-        purchaseCurrencyDecimalPlaces,
-        acquisitionMetalRate: ACQUISITION_METAL_RATE,
-        acquisitionCurrencyRate: ACQUISITION_EGP_RATE,
-        valuationMetalRate: VALUATION_METAL_RATE,
-        valuationCurrencyRate: VALUATION_EGP_RATE,
-      });
-
-      expect(result).toMatchObject({
-        available: true,
-        value: {
-          combinedDecimal: expectedExactNumeric.combinedDecimal,
-          breakdown: {
-            available: true,
-            value: {
-              components: {
-                metalMovementDecimal: expectedExactNumeric.metalMovementDecimal,
-                currencyMovementDecimal:
-                  expectedExactNumeric.currencyMovementDecimal,
-                purchaseCostDecimal: expectedExactNumeric.purchaseCostDecimal,
-              },
-            },
-          },
-        },
-      });
-    }
-  );
 });

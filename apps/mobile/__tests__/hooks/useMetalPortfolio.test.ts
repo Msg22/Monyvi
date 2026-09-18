@@ -1,4 +1,5 @@
 import { act, renderHook, waitFor } from "@testing-library/react-native";
+import type { LiveRatesTrustReadModel } from "@/services/live-rates-trust-read-model-service";
 
 interface Observer {
   readonly next: (value: unknown) => void;
@@ -9,7 +10,7 @@ const mockSaleGroupObservers: Observer[] = [];
 const mockSaleRefObservers: Observer[] = [];
 const mockDatabase = { id: "database" };
 const mockShapeHoldingsInputs: Array<Record<string, unknown>> = [];
-const mockEmptyTrustReadModel = {
+const mockEmptyTrustReadModel: LiveRatesTrustReadModel = {
   gold: { state: "missing", ageMs: null, providerObservedAt: null },
   silver: { state: "missing", ageMs: null, providerObservedAt: null },
   currencies: new Map(),
@@ -116,7 +117,9 @@ jest.mock("@/hooks/useMarketRates", () => ({
     return React.useSyncExternalStore(
       (listener) => {
         mockMarketRateListeners.add(listener);
-        return (): void => mockMarketRateListeners.delete(listener);
+        return (): void => {
+          mockMarketRateListeners.delete(listener);
+        };
       },
       () => mockMarketRatesState,
       () => mockMarketRatesState

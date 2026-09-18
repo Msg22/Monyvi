@@ -54,6 +54,7 @@ export function useMetalHoldingDetail(
   const isFocused = useIsFocused();
   const { userId, isResolvingUser } = useCurrentUser();
   const {
+    currentError: marketRatesError,
     isConnected,
     refreshSelectedSnapshot,
     selectedSnapshot,
@@ -62,6 +63,8 @@ export function useMetalHoldingDetail(
     () => selectedSnapshot?.trust ?? createEmptyTrustReadModel(),
     [selectedSnapshot]
   );
+  const blockingMarketRatesError =
+    selectedSnapshot === null ? marketRatesError : null;
   const { preferredCurrency, isLoading: isCurrencyLoading } =
     usePreferredCurrency();
   const detailIdentity = createDetailIdentity(userId, holdingId);
@@ -175,7 +178,11 @@ export function useMetalHoldingDetail(
       };
     }
 
-    if (observationError !== null) {
+    if (observationError !== null || blockingMarketRatesError !== null) {
+      if (blockingMarketRatesError !== null) {
+        modelIdentityRef.current = null;
+        setModel(null);
+      }
       setIsLoading(false);
       return () => {
         isCurrent = false;
@@ -213,6 +220,7 @@ export function useMetalHoldingDetail(
     };
   }, [
     currentRates,
+    blockingMarketRatesError,
     detailIdentity,
     holdingId,
     isCurrencyLoading,
@@ -227,7 +235,7 @@ export function useMetalHoldingDetail(
   ]);
 
   return {
-    error: observationError ?? readError,
+    error: observationError ?? blockingMarketRatesError ?? readError,
     isLoading,
     isOffline: !isConnected,
     model: modelIdentityRef.current === detailIdentity ? model : null,
