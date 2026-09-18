@@ -142,11 +142,18 @@ function enterRecurringName(name: string): void {
   fireEvent.changeText(screen.getByPlaceholderText("recurring_name_placeholder"), name);
 }
 
-function measureField(field: "amount" | "recurringName", y: number): void {
+function measureField(
+  field: "amount" | "recurringName",
+  y: number,
+  viewport?: { readonly top: number; readonly height: number }
+): void {
   const scrollView = mockFormScroll?.scrollViewRef.current;
   const fieldView = mockFormScroll?.getFieldRef(field).current;
   if (scrollView) {
     jest.spyOn(scrollView, "scrollTo").mockImplementation(mockNativeScrollTo);
+    jest.spyOn(scrollView, "measureInWindow").mockImplementation((callback) => {
+      callback(0, viewport?.top ?? 0, 300, viewport?.height ?? Dimensions.get("window").height);
+    });
   }
   if (fieldView) {
     jest.spyOn(fieldView, "measureInWindow").mockImplementation((callback) => {
@@ -299,6 +306,31 @@ describe("Add Transaction recurring-name QA", () => {
       expect(screen.getByText("amount_required")).toBeTruthy();
       expect(mockNativeScrollTo).toHaveBeenCalledWith({ y: 276, animated: true });
       expect(mockNativeScrollTo).not.toHaveBeenCalledWith({ y: 724, animated: true });
+      expect(transactions.createTransaction).not.toHaveBeenCalled();
+    });
+
+    it("places an error below the header instead of behind the ScrollView top edge", () => {
+      render(<AddTransaction />);
+      fireEvent.scroll(screen.UNSAFE_getByType(ScrollView), {
+        nativeEvent: { contentOffset: { x: 0, y: 500 } },
+      });
+      fireEvent.press(screen.getByTestId("header-save"));
+      measureField("amount", 80, { top: 120, height: 400 });
+      flushScrollFrames();
+
+      expect(screen.getByText("amount_required")).toBeTruthy();
+      expect(mockNativeScrollTo).toHaveBeenCalledWith({ y: 436, animated: true });
+    });
+
+    it("brings the error above a fixed footer using the actual scroll viewport", () => {
+      render(<AddTransaction />);
+      fireEvent.press(screen.getByTestId("key-1"));
+      enableRecurring();
+      fireEvent.press(screen.getByTestId("header-save"));
+      measureField("recurringName", 550, { top: 120, height: 400 });
+      flushScrollFrames();
+
+      expect(mockNativeScrollTo).toHaveBeenCalledWith({ y: 154, animated: true });
       expect(transactions.createTransaction).not.toHaveBeenCalled();
     });
 
