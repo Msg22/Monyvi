@@ -147,6 +147,30 @@ describe("metal disposed evidence shaper", () => {
     ).toMatchObject({ available: true, value: { notes: null } });
   });
 
+  it("uses device-local today as the trusted date boundary when none is injected", () => {
+    jest.useFakeTimers().setSystemTime(new Date("2026-09-01T12:00:00.000Z"));
+    try {
+      const input = inputOf(disposalPayload());
+      const { latestAllowedCalendarDate: _omitted, ...withoutBoundary } = input;
+
+      expect(shapeMetalDisposedEvidence(withoutBoundary)).toMatchObject({
+        available: true,
+      });
+      expect(
+        shapeMetalDisposedEvidence({
+          ...withoutBoundary,
+          event: disposalEvent(disposalPayload({ disposalDate: "2026-09-02" })),
+          group: disposalGroup(disposalPayload({ disposalDate: "2026-09-02" })),
+        })
+      ).toEqual({
+        available: false,
+        reason: "unsupported_disposal_evidence",
+      });
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   it.each([
     ["foreign holding", { holding: disposalHolding({ userId: "user-2" }) }],
     ["foreign event", { event: disposalEvent(disposalPayload(), { userId: "user-2" }) }],

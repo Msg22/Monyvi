@@ -83,6 +83,7 @@ const history: MetalHistoryReadModel = {
       purityFactorDecimal: "0.875",
       renderKey: "gold:coin",
       status: "sold",
+      terminalFacts: null,
     },
   ],
 };

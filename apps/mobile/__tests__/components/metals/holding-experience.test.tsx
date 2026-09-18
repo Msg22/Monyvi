@@ -128,6 +128,7 @@ function detail(
     unavailableExactFacts: [],
     weightGramsDecimal: "31.125",
     ...overrides,
+    terminalFacts: overrides.terminalFacts ?? null,
   };
 }
 
@@ -150,6 +151,7 @@ function history(
         purityFactorDecimal: "0.875",
         renderKey: "gold:jewelry",
         status: "sold",
+        terminalFacts: null,
       },
       {
         holdingId: "disposed-bar",
@@ -162,6 +164,7 @@ function history(
         purityFactorDecimal: "0.999",
         renderKey: "silver:bar",
         status: "disposed",
+        terminalFacts: null,
       },
     ],
     ...overrides,
