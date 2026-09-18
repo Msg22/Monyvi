@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { CURRENCY_PRECISION, DEFAULT_PRECISION } from "@monyvi/logic";
+import { LinearGradient } from "expo-linear-gradient";
 import { useTranslation } from "react-i18next";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { palette } from "@/constants/colors";
@@ -49,6 +50,11 @@ function formatPreviewAmount(
   return currency ? `${currency} ${formattedValue}` : formattedValue;
 }
 
+function capitalizeFirst(value: string): string {
+  if (value.length === 0) return value;
+  return `${value[0]?.toUpperCase()}${value.slice(1)}`;
+}
+
 interface ScopeCardProps {
   readonly type: BudgetFormState["type"];
   readonly selected: boolean;
@@ -61,11 +67,31 @@ interface ScopeCardProps {
   readonly onPress: (type: BudgetFormState["type"]) => void;
 }
 
+function ScopeIndicator({
+  type,
+  selected,
+}: Pick<ScopeCardProps, "type" | "selected">): React.JSX.Element {
+  return (
+    <View
+      testID={`budget-scope-${type.toLowerCase()}-indicator`}
+      className={`ms-2 h-6 w-6 shrink-0 items-center justify-center rounded-full ${
+        selected
+          ? "bg-nileGreen-400"
+          : "border-2 border-slate-400 dark:border-slate-600"
+      }`}
+    >
+      {selected ? (
+        <Ionicons name="checkmark" size={18} color={palette.slate[900]} />
+      ) : null}
+    </View>
+  );
+}
+
 function ScopeCard(props: ScopeCardProps): React.JSX.Element {
   const selectedStyle = props.selected
     ? {
         backgroundColor: props.isDark
-          ? `${palette.nileGreen[500]}33`
+          ? `${palette.nileGreen[500]}1F`
           : palette.nileGreen[50],
       }
     : undefined;
@@ -79,26 +105,27 @@ function ScopeCard(props: ScopeCardProps): React.JSX.Element {
       accessibilityState={{ checked: props.selected, disabled: props.disabled }}
       activeOpacity={0.82}
       style={selectedStyle}
-      className={`relative flex-1 rounded-2xl border p-4 ${
+      className={`relative min-h-20 flex-1 flex-row items-center rounded-2xl border px-3 py-3 ${
         props.selected
           ? "border-nileGreen-500"
-          : "border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800"
+          : "border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900"
       }`}
     >
-      <View className="mb-3 h-11 w-11 items-center justify-center rounded-xl bg-nileGreen-100 dark:bg-nileGreen-900/50">
-        <Ionicons name={props.icon} size={24} color={palette.nileGreen[500]} />
+      <View className="me-3 h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-nileGreen-100 dark:bg-nileGreen-900/50">
+        <Ionicons name={props.icon} size={22} color={palette.nileGreen[400]} />
       </View>
-      <Text className="text-base font-bold text-slate-900 dark:text-white">
-        {props.title}
-      </Text>
-      <Text className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
-        {props.description}
-      </Text>
-      {props.selected ? (
-        <View className="absolute end-3 top-3 h-7 w-7 items-center justify-center rounded-full bg-nileGreen-500">
-          <Ionicons name="checkmark" size={18} color={palette.slate[25]} />
-        </View>
-      ) : null}
+      <View className="min-w-0 flex-1">
+        <Text className="text-base font-bold text-slate-900 dark:text-white">
+          {props.title}
+        </Text>
+        <Text
+          numberOfLines={2}
+          className="mt-0.5 text-xs leading-4 text-slate-500 dark:text-slate-400"
+        >
+          {props.description}
+        </Text>
+      </View>
+      <ScopeIndicator type={props.type} selected={props.selected} />
     </TouchableOpacity>
   );
 }
@@ -112,10 +139,10 @@ function BudgetScopeSection({
   const { isDark } = useTheme();
   return (
     <>
-      <Text className="mb-3 mt-2 text-base font-semibold text-slate-500 dark:text-slate-400">
+      <Text className="mb-3 text-base font-semibold text-slate-500 dark:text-slate-400">
         1. {t("budget_scope")}
       </Text>
-      <View testID="budget-scope-selector" className="mb-7 flex-row gap-3">
+      <View testID="budget-scope-selector" className="mb-6 flex-row gap-2.5">
         <ScopeCard
           type="GLOBAL"
           selected={controller.form.type === "GLOBAL"}
@@ -150,10 +177,18 @@ function BudgetGeneralError({
 }): React.JSX.Element | null {
   if (!controller.errors.general) return null;
   return (
-    <View className="mb-4 rounded-xl bg-red-50 p-3 dark:bg-red-900/20">
+    <View className="mb-3 rounded-xl bg-red-50 p-3 dark:bg-red-900/20">
       <Text className="text-sm font-medium text-red-600 dark:text-red-400">
         {controller.errors.general}
       </Text>
+    </View>
+  );
+}
+
+function FieldIcon({ name }: { readonly name: IconName }): React.JSX.Element {
+  return (
+    <View className="me-3 h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-nileGreen-100 dark:bg-nileGreen-900/50">
+      <Ionicons name={name} size={21} color={palette.nileGreen[400]} />
     </View>
   );
 }
@@ -167,14 +202,8 @@ function BudgetNameField({
   const { isDark } = useTheme();
   return (
     <>
-      <View className="mb-3 flex-row items-center rounded-2xl border border-slate-200 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-800">
-        <View className="me-3 h-11 w-11 items-center justify-center rounded-xl bg-nileGreen-100 dark:bg-nileGreen-900/50">
-          <Ionicons
-            name="document-text-outline"
-            size={22}
-            color={palette.nileGreen[500]}
-          />
-        </View>
+      <View className="mb-2.5 flex-row items-center rounded-2xl border border-slate-200 bg-white px-3 py-2.5 dark:border-slate-700 dark:bg-slate-900">
+        <FieldIcon name="document-text-outline" />
         <View className="flex-1">
           <Text className="text-xs text-slate-500 dark:text-slate-400">
             {t("budget_name")}
@@ -191,7 +220,7 @@ function BudgetNameField({
         </View>
       </View>
       {controller.errors.name ? (
-        <Text className="mb-3 text-xs font-medium text-red-500">
+        <Text className="mb-2.5 text-xs font-medium text-red-500">
           {controller.errors.name}
         </Text>
       ) : null}
@@ -208,13 +237,13 @@ function CategoryLoadError({
   return (
     <View
       testID="budget-category-load-error"
-      className="rounded-2xl border border-red-300 bg-red-50 p-4 dark:border-red-700 dark:bg-red-900/20"
+      className="rounded-2xl border border-red-300 bg-red-50 p-3 dark:border-red-700 dark:bg-red-900/20"
     >
       <Text className="text-sm text-red-600 dark:text-red-300">
         {t("category_load_error")}
       </Text>
       <TouchableOpacity
-        className="mt-2 min-h-11 self-start justify-center"
+        className="mt-1 min-h-11 self-start justify-center"
         accessibilityRole="button"
         accessibilityLabel={t("retry")}
         onPress={controller.retryCategories}
@@ -238,15 +267,9 @@ function CategorySelectorField({
     <TouchableOpacity
       onPress={controller.openCategoryModal}
       activeOpacity={0.82}
-      className="flex-row items-center rounded-2xl border border-slate-200 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-800"
+      className="flex-row items-center rounded-2xl border border-slate-200 bg-white px-3 py-2.5 dark:border-slate-700 dark:bg-slate-900"
     >
-      <View className="me-3 h-11 w-11 items-center justify-center rounded-xl bg-nileGreen-100 dark:bg-nileGreen-900/50">
-        <Ionicons
-          name="restaurant-outline"
-          size={22}
-          color={palette.nileGreen[500]}
-        />
-      </View>
+      <FieldIcon name="restaurant-outline" />
       <View className="flex-1">
         <Text className="text-xs text-slate-500 dark:text-slate-400">
           {t("category_type")}
@@ -256,7 +279,7 @@ function CategorySelectorField({
           className={`mt-0.5 text-base font-medium ${
             controller.categoryDisplayName
               ? "text-slate-900 dark:text-white"
-              : "text-slate-400"
+              : "text-slate-400 dark:text-slate-500"
           }`}
         >
           {controller.categoryDisplayName ?? t("select_a_category")}
@@ -278,7 +301,7 @@ function BudgetCategoryField({
 }): React.JSX.Element | null {
   if (controller.form.type !== "CATEGORY") return null;
   return (
-    <View className="mb-3">
+    <View className="mb-2.5">
       {controller.categoryError ? (
         <CategoryLoadError controller={controller} />
       ) : (
@@ -338,17 +361,11 @@ function BudgetLimitField({
   const { isDark } = useTheme();
   return (
     <>
-      <View className="mb-3 flex-row items-center rounded-2xl border border-slate-200 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-800">
-        <View className="me-3 h-11 w-11 items-center justify-center rounded-xl bg-nileGreen-100 dark:bg-nileGreen-900/50">
-          <Ionicons
-            name="wallet-outline"
-            size={22}
-            color={palette.nileGreen[500]}
-          />
-        </View>
+      <View className="mb-2.5 flex-row items-center rounded-2xl border border-slate-200 bg-white px-3 py-2.5 dark:border-slate-700 dark:bg-slate-900">
+        <FieldIcon name="wallet-outline" />
         <View className="flex-1">
           <Text className="text-xs text-slate-500 dark:text-slate-400">
-            {t("budget_limit")}
+            {capitalizeFirst(t("limit_label"))}
           </Text>
           <View className="mt-0.5 flex-row items-center">
             <BudgetCurrencyControl controller={controller} />
@@ -366,32 +383,11 @@ function BudgetLimitField({
         </View>
       </View>
       {controller.errors.amount ? (
-        <Text className="mb-3 text-xs font-medium text-red-500">
+        <Text className="mb-2.5 text-xs font-medium text-red-500">
           {controller.errors.amount}
         </Text>
       ) : null}
     </>
-  );
-}
-
-function BudgetCurrencyNotice({
-  controller,
-}: {
-  readonly controller: BudgetFormController;
-}): React.JSX.Element | null {
-  const { t } = useTranslation("budgets");
-  if (controller.isEditMode) return null;
-  return (
-    <View className="mb-3 flex-row items-center gap-2 rounded-xl bg-nileGreen-50 p-3 dark:bg-nileGreen-900/20">
-      <Ionicons
-        name="information-circle-outline"
-        size={18}
-        color={palette.nileGreen[500]}
-      />
-      <Text className="flex-1 text-xs text-nileGreen-700 dark:text-nileGreen-400">
-        {t("budget_currency_immutable_info")}
-      </Text>
-    </View>
   );
 }
 
@@ -402,11 +398,17 @@ function BudgetPeriodField({
 }): React.JSX.Element {
   const { t } = useTranslation("budgets");
   return (
-    <View className="mb-3 rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800">
-      <Text className="mb-3 text-sm font-medium text-slate-600 dark:text-slate-300">
+    <View
+      testID="budget-period-card"
+      className="mb-2.5 rounded-2xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900"
+    >
+      <Text className="mb-2 text-sm font-medium text-slate-600 dark:text-slate-300">
         {t("period")}
       </Text>
-      <View className="flex-row rounded-xl bg-slate-100 p-1 dark:bg-slate-900">
+      <View
+        testID="budget-period-segmented"
+        className="flex-row rounded-xl bg-slate-100 p-1 dark:bg-slate-950"
+      >
         {BUDGET_PERIOD_KEYS.map((key) => {
           const selected = controller.form.period === key;
           return (
@@ -416,7 +418,7 @@ function BudgetPeriodField({
               onPress={() => controller.updateField("period", key)}
               accessibilityRole="radio"
               accessibilityState={{ checked: selected }}
-              className={`flex-1 items-center rounded-lg py-2.5 ${
+              className={`flex-1 items-center rounded-lg py-2 ${
                 selected ? "bg-nileGreen-500" : "bg-transparent"
               }`}
             >
@@ -448,12 +450,12 @@ function CustomDateButton({
 }): React.JSX.Element {
   return (
     <View className="flex-1">
-      <Text className="mb-2 text-sm font-medium text-slate-600 dark:text-slate-300">
+      <Text className="mb-1.5 text-sm font-medium text-slate-600 dark:text-slate-300">
         {label}
       </Text>
       <TouchableOpacity
         onPress={onPress}
-        className="rounded-xl border border-slate-200 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-800"
+        className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 dark:border-slate-700 dark:bg-slate-900"
       >
         <Text className="text-sm font-medium text-slate-900 dark:text-white">
           {formatDate(value, "MMM d, yyyy")}
@@ -471,8 +473,8 @@ function BudgetCustomDates({
   const { t } = useTranslation("budgets");
   if (controller.form.period !== "CUSTOM") return null;
   return (
-    <View className="mb-3">
-      <View className="flex-row gap-3">
+    <View className="mb-2.5">
+      <View className="flex-row gap-2.5">
         <CustomDateButton
           label={t("start_date")}
           value={controller.form.periodStart}
@@ -493,28 +495,54 @@ function BudgetCustomDates({
   );
 }
 
+function BudgetAlertSentence({
+  amount,
+}: {
+  readonly amount: string;
+}): React.JSX.Element {
+  const { t } = useTranslation("budgets");
+  const marker = "__BUDGET_ALERT_AMOUNT__";
+  const sentence = t("warn_me_when_spent", { amount: marker });
+  const markerIndex = sentence.indexOf(marker);
+  if (markerIndex < 0) {
+    return (
+      <Text className="mt-1.5 text-sm text-slate-500 dark:text-slate-400">
+        {t("warn_me_when_spent", { amount })}
+      </Text>
+    );
+  }
+  const prefix = sentence.slice(0, markerIndex);
+  const suffix = sentence.slice(markerIndex + marker.length);
+  return (
+    <Text className="mt-1.5 text-sm text-slate-500 dark:text-slate-400">
+      {prefix}
+      <Text className="font-medium text-nileGreen-500">{amount}</Text>
+      {suffix}
+    </Text>
+  );
+}
+
 function BudgetAlertField({
   controller,
 }: {
   readonly controller: BudgetFormController;
 }): React.JSX.Element {
-  const { t, i18n } = useTranslation("budgets");
+  const { i18n } = useTranslation("budgets");
   const amount = formatPreviewAmount(
     controller.preview.alertAmount,
     controller.form.currency,
     i18n.language
   );
   return (
-    <View className="mb-7 rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800">
+    <View className="mb-6 rounded-2xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900">
       <AlertThresholdSlider
+        variant="mockup"
         value={controller.form.alertThreshold}
         onValueChange={(value) =>
           controller.updateField("alertThreshold", value)
         }
       />
-      <Text className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-        {t("warn_me_when_spent", { amount })}
-      </Text>
+      <BudgetAlertSentence amount={amount} />
     </View>
   );
 }
@@ -533,11 +561,45 @@ function BudgetDetailsSection({
       <BudgetNameField controller={controller} />
       <BudgetCategoryField controller={controller} />
       <BudgetLimitField controller={controller} />
-      <BudgetCurrencyNotice controller={controller} />
       <BudgetPeriodField controller={controller} />
       <BudgetCustomDates controller={controller} />
       <BudgetAlertField controller={controller} />
     </>
+  );
+}
+
+function PreviewIdentityColumn({
+  label,
+  value,
+  detail,
+  bordered,
+}: {
+  readonly label: string;
+  readonly value: string;
+  readonly detail: string;
+  readonly bordered: boolean;
+}): React.JSX.Element {
+  const borderClass = bordered
+    ? "border-e border-slate-200 pe-3 dark:border-slate-700/70"
+    : "ps-3";
+  return (
+    <View className={`min-w-0 flex-1 ${borderClass}`}>
+      <Text className="text-xs text-slate-500 dark:text-slate-400">
+        {label}
+      </Text>
+      <Text
+        numberOfLines={1}
+        className="mt-0.5 text-sm font-bold text-nileGreen-500"
+      >
+        {value}
+      </Text>
+      <Text
+        numberOfLines={1}
+        className="mt-0.5 text-xs text-slate-500 dark:text-slate-400"
+      >
+        {detail}
+      </Text>
+    </View>
   );
 }
 
@@ -552,39 +614,35 @@ function PreviewIdentityRow({
     controller.form.type === "GLOBAL"
       ? t("global_type")
       : (controller.categoryDisplayName ?? t("category_type"));
+  const periodDetail =
+    controller.form.period === "CUSTOM"
+      ? `${t("preview_ends_on")} ${controller.preview.secondaryDate}`
+      : `${t("preview_resets_on")} ${controller.preview.secondaryDate}`;
   return (
-    <View className="flex-row items-stretch px-4 py-4">
-      <View className="me-3 h-12 w-12 items-center justify-center rounded-xl bg-nileGreen-100 dark:bg-nileGreen-900/50">
+    <View className="flex-row items-stretch px-3 py-3">
+      <View className="me-3 h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-nileGreen-100 dark:bg-nileGreen-900/50">
         <Ionicons
           name="calendar-outline"
-          size={24}
-          color={palette.nileGreen[500]}
+          size={22}
+          color={palette.nileGreen[400]}
         />
       </View>
-      <View className="flex-1 border-e border-slate-200 pe-3 dark:border-slate-700">
-        <Text className="text-xs text-slate-500 dark:text-slate-400">
-          {t("period")}
-        </Text>
-        <Text className="mt-0.5 font-bold text-nileGreen-500">
-          {periodLabel}
-        </Text>
-        <Text className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-          {controller.form.period === "CUSTOM"
-            ? `${t("preview_ends_on")} ${controller.preview.secondaryDate}`
-            : `${t("preview_resets_on")} ${controller.preview.secondaryDate}`}
-        </Text>
-      </View>
-      <View className="flex-1 ps-4">
-        <Text className="text-xs text-slate-500 dark:text-slate-400">
-          {controller.form.type === "GLOBAL"
+      <PreviewIdentityColumn
+        label={t("period")}
+        value={periodLabel}
+        detail={periodDetail}
+        bordered={true}
+      />
+      <PreviewIdentityColumn
+        label={
+          controller.form.type === "GLOBAL"
             ? t("budget_type")
-            : t("category_type")}
-        </Text>
-        <Text className="mt-0.5 font-bold text-nileGreen-500">{identity}</Text>
-        <Text className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-          {controller.form.name.trim() || t("budget_name_placeholder")}
-        </Text>
-      </View>
+            : t("category_type")
+        }
+        value={identity}
+        detail={controller.form.name.trim() || t("budget_name_placeholder")}
+        bordered={false}
+      />
     </View>
   );
 }
@@ -602,10 +660,14 @@ function PreviewMetric({
 }): React.JSX.Element {
   const containerClass = compact
     ? `w-full items-start px-1 py-2 ${
-        bordered ? "border-b border-slate-200 dark:border-slate-700" : ""
+        bordered
+          ? "border-b border-slate-200 dark:border-slate-700/70"
+          : ""
       }`
     : `flex-1 items-center px-1 ${
-        bordered ? "border-e border-slate-200 dark:border-slate-700" : ""
+        bordered
+          ? "border-e border-slate-200 dark:border-slate-700/70"
+          : ""
       }`;
   const textAlignmentClass = compact ? "text-start" : "text-center";
   return (
@@ -616,7 +678,8 @@ function PreviewMetric({
         {label}
       </Text>
       <Text
-        className={`mt-1 ${textAlignmentClass} text-sm font-bold text-nileGreen-500`}
+        numberOfLines={1}
+        className={`mt-0.5 ${textAlignmentClass} text-sm font-bold text-nileGreen-500`}
       >
         {value}
       </Text>
@@ -645,7 +708,7 @@ function PreviewMetrics({
   return (
     <View
       testID="budget-preview-metrics"
-      className={`${compact ? "flex-col" : "flex-row"} border-t border-slate-200 px-3 py-4 dark:border-slate-700`}
+      className={`${compact ? "flex-col" : "flex-row"} border-t border-slate-200 px-3 py-3 dark:border-slate-700/70`}
     >
       <PreviewMetric
         label={t("preview_budget_limit")}
@@ -680,7 +743,7 @@ function BudgetPreviewSection({
       </Text>
       <View
         testID="budget-live-preview"
-        className="overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800"
+        className="overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900"
       >
         <PreviewIdentityRow controller={controller} />
         <PreviewMetrics controller={controller} />
@@ -689,16 +752,34 @@ function BudgetPreviewSection({
   );
 }
 
+interface SubmitPresentation {
+  readonly labelKey: string;
+  readonly accessibilityLabelKey: string;
+  readonly icon: IconName;
+}
+
 function getSubmitPresentation(
   controller: BudgetFormController
-): { readonly labelKey: string; readonly icon: IconName } {
+): SubmitPresentation {
   if (controller.isEditMode) {
-    return { labelKey: "save_changes", icon: "checkmark-circle-outline" };
+    return {
+      labelKey: "save_changes",
+      accessibilityLabelKey: "save_changes",
+      icon: "checkmark-circle-outline",
+    };
   }
   if (controller.isRenewalMode) {
-    return { labelKey: "renew_budget", icon: "refresh-outline" };
+    return {
+      labelKey: "renew_budget",
+      accessibilityLabelKey: "renew_budget",
+      icon: "refresh-outline",
+    };
   }
-  return { labelKey: "create_budget", icon: "add-circle-outline" };
+  return {
+    labelKey: "accessibility_create_budget",
+    accessibilityLabelKey: "create_budget",
+    icon: "add-circle-outline",
+  };
 }
 
 function BudgetPrimaryAction({
@@ -709,31 +790,40 @@ function BudgetPrimaryAction({
   const { t } = useTranslation("budgets");
   const presentation = getSubmitPresentation(controller);
   return (
-    <TouchableOpacity
-      testID="budget-form-submit"
-      onPress={() => void controller.handleSubmit()}
-      accessibilityRole="button"
-      accessibilityLabel={t(presentation.labelKey)}
-      disabled={controller.isSubmitDisabled}
-      accessibilityState={{ disabled: controller.isSubmitDisabled }}
-      activeOpacity={0.85}
-      className="items-center rounded-2xl bg-nileGreen-500 py-4"
-    >
-      {controller.isSubmitting ? (
-        <ActivityIndicator color="white" />
-      ) : (
-        <View className="flex-row items-center gap-2">
-          <Ionicons
-            name={presentation.icon}
-            size={22}
-            color={palette.slate[25]}
-          />
-          <Text className="text-base font-bold text-white">
-            {t(presentation.labelKey)}
-          </Text>
-        </View>
-      )}
-    </TouchableOpacity>
+    <View className="overflow-hidden rounded-2xl">
+      <LinearGradient
+        testID="budget-form-submit-gradient"
+        colors={[palette.nileGreen[400], palette.nileGreen[500]]}
+        start={{ x: 0, y: 0.5 }}
+        end={{ x: 1, y: 0.5 }}
+      >
+        <TouchableOpacity
+          testID="budget-form-submit"
+          onPress={() => void controller.handleSubmit()}
+          accessibilityRole="button"
+          accessibilityLabel={t(presentation.accessibilityLabelKey)}
+          disabled={controller.isSubmitDisabled}
+          accessibilityState={{ disabled: controller.isSubmitDisabled }}
+          activeOpacity={0.85}
+          className="min-h-11 items-center justify-center px-4"
+        >
+          {controller.isSubmitting ? (
+            <ActivityIndicator color={palette.slate[900]} />
+          ) : (
+            <View className="flex-row items-center gap-2">
+              <Ionicons
+                name={presentation.icon}
+                size={22}
+                color={palette.slate[900]}
+              />
+              <Text className="text-base font-bold text-slate-900">
+                {t(presentation.labelKey)}
+              </Text>
+            </View>
+          )}
+        </TouchableOpacity>
+      </LinearGradient>
+    </View>
   );
 }
 
@@ -746,7 +836,7 @@ function BudgetCancelAction({
   return (
     <TouchableOpacity
       testID="budget-form-cancel"
-      className="mt-2 items-center py-2"
+      className="mt-1 min-h-10 items-center justify-center"
       onPress={controller.cancelForm}
       disabled={controller.isSubmitting}
       accessibilityRole="button"
@@ -766,8 +856,8 @@ function BudgetFormActions({
   return (
     <View
       testID="budget-form-actions"
-      style={{ paddingBottom: bottom + 16 }}
-      className="border-t border-slate-200 bg-white px-5 pt-3 dark:border-slate-800 dark:bg-slate-950"
+      style={{ paddingBottom: bottom + 8 }}
+      className="bg-background px-4 pt-3 dark:bg-slate-950"
     >
       <BudgetPrimaryAction controller={controller} />
       <BudgetCancelAction controller={controller} />
@@ -782,14 +872,14 @@ export function BudgetFormScreen({
 }): React.JSX.Element {
   return (
     <KeyboardAvoidingView
-      className="flex-1"
+      className="flex-1 bg-background dark:bg-slate-950"
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
       <ScrollView
-        className="flex-1 px-5"
+        className="flex-1 px-4"
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 28, paddingTop: 8 }}
+        contentContainerStyle={{ paddingBottom: 16, paddingTop: 16 }}
       >
         <BudgetGeneralError controller={controller} />
         <BudgetScopeSection controller={controller} />
