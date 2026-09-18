@@ -4,6 +4,7 @@ import React from "react";
 
 interface MockDateTimePickerProps {
   readonly minimumDate?: Date;
+  readonly maximumDate?: Date;
   readonly value: Date;
   readonly onChange: (
     event: DateTimePickerEvent,
@@ -100,7 +101,7 @@ const initialValues: RecurringPaymentFormValues = {
   accountId: "account-1",
   categoryId: "category-1",
   frequency: "MONTHLY",
-  startDate: new Date("2026-06-01T00:00:00.000Z"),
+  startDate: new Date(2026, 5, 1),
   endDate: null,
   reactivateAfterSaving: false,
   action: "NOTIFY",
@@ -108,13 +109,22 @@ const initialValues: RecurringPaymentFormValues = {
 };
 
 describe("RecurringPaymentForm date picker", () => {
+  beforeAll(() => {
+    jest.useFakeTimers();
+  });
+
+  afterAll(() => {
+    jest.useRealTimers();
+  });
+
   beforeEach(() => {
     mockDateTimePicker.mockClear();
     latestDateTimePickerProps = null;
+    jest.setSystemTime(new Date(2026, 5, 1, 12));
   });
 
-  it("allows an existing past start date to stay selectable in edit mode", () => {
-    const historicalStartDate = new Date("2020-01-15T00:00:00.000Z");
+  it("constrains replacement choices for an existing past start date in edit mode", () => {
+    const historicalStartDate = new Date(2020, 0, 15);
 
     render(
       <RecurringPaymentForm
@@ -133,15 +143,16 @@ describe("RecurringPaymentForm date picker", () => {
 
     expect(mockDateTimePicker).toHaveBeenLastCalledWith(
       expect.objectContaining({
-        minimumDate: historicalStartDate,
-        value: historicalStartDate,
+        minimumDate: new Date(2026, 5, 1),
+        maximumDate: new Date(2027, 5, 1),
+        value: new Date(2026, 5, 1),
       })
     );
   });
 
   it("uses the due payment date as the minimum end date", () => {
-    const duePaymentDate = new Date("2026-06-01T00:00:00.000Z");
-    const endDate = new Date("2026-08-01T00:00:00.000Z");
+    const duePaymentDate = new Date(2026, 5, 1);
+    const endDate = new Date(2026, 7, 1);
 
     render(
       <RecurringPaymentForm
@@ -172,7 +183,7 @@ describe("RecurringPaymentForm date picker", () => {
         mode="edit"
         initialValues={{
           ...initialValues,
-          endDate: new Date("2026-08-01T00:00:00.000Z"),
+          endDate: new Date(2026, 7, 1),
         }}
         accounts={[account] as unknown as readonly Account[]}
         expenseCategories={[category] as unknown as readonly Category[]}
@@ -210,7 +221,7 @@ describe("RecurringPaymentForm date picker", () => {
     act(() => {
       latestDateTimePickerProps?.onChange(
         dismissedEvent,
-        new Date("2026-08-24T00:00:00.000Z")
+        new Date(2026, 7, 24)
       );
     });
 
@@ -247,8 +258,8 @@ describe("RecurringPaymentForm date picker", () => {
         mode="create"
         initialValues={{
           ...initialValues,
-          startDate: new Date("2026-06-10T00:00:00.000Z"),
-          endDate: new Date("2026-06-01T00:00:00.000Z"),
+          startDate: new Date(2026, 5, 10),
+          endDate: new Date(2026, 5, 1),
         }}
         accounts={[account] as unknown as readonly Account[]}
         expenseCategories={[category] as unknown as readonly Category[]}
@@ -272,10 +283,7 @@ describe("RecurringPaymentForm date picker", () => {
       nativeEvent: { timestamp: 0, utcOffset: 0 },
     };
     act(() => {
-      datePickerProps.onChange(
-        datePickerEvent,
-        new Date("2026-05-20T00:00:00.000Z")
-      );
+      datePickerProps.onChange(datePickerEvent, new Date(2026, 5, 1));
     });
 
     expect(screen.queryByText("end_date_before_due")).toBeNull();

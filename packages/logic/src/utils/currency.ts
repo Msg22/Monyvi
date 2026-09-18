@@ -181,6 +181,11 @@ export const CURRENCY_PRECISION: Partial<Record<CurrencyType, number>> = {
 /** Default precision for currencies not listed in CURRENCY_PRECISION (ISO 4217 standard) */
 export const DEFAULT_PRECISION = 2;
 
+/** Returns the authoritative fractional precision for a supported currency. */
+export function getCurrencyPrecision(currency: CurrencyType): number {
+  return CURRENCY_PRECISION[currency] ?? DEFAULT_PRECISION;
+}
+
 function hasNonZeroFractionAtPrecision(
   amount: number,
   precision: number
@@ -204,7 +209,7 @@ export const formatCurrency = ({
   maximumFractionDigits?: number;
 }): string => {
   // Use currency-specific precision when caller doesn't override
-  const precision = CURRENCY_PRECISION[currency] ?? DEFAULT_PRECISION;
+  const precision = getCurrencyPrecision(currency);
   // Normalize -0 to 0 (IEEE 754 artifact from floating-point arithmetic)
   const normalizedAmount = amount || 0;
   const hasFraction = hasNonZeroFractionAtPrecision(
@@ -266,6 +271,6 @@ export function roundForCurrency(
   value: number,
   currency: CurrencyType
 ): number {
-  const decimals = CURRENCY_PRECISION[currency] ?? DEFAULT_PRECISION;
+  const decimals = getCurrencyPrecision(currency);
   return roundCurrency(value, decimals);
 }

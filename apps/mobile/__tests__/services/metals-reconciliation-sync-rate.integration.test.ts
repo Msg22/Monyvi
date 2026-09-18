@@ -1,11 +1,10 @@
 import {
   classifyMetalServerOutcome,
   createMetalReconciliationService,
+  type CanonicalMetalHolding,
   type MetalRpcOutcome,
 } from "../../services/metal-reconciliation-service";
 import { Database, type Model } from "@nozbe/watermelondb";
-import SQLiteAdapter from "@nozbe/watermelondb/adapters/sqlite";
-import { schema } from "../../../../packages/db/src/schema";
 import { Asset } from "../../../../packages/db/src/models/Asset";
 import { MetalHoldingState } from "../../../../packages/db/src/models/MetalHoldingState";
 import {
@@ -16,6 +15,10 @@ import {
   applyMetalMetadataPatch,
   createMetalMetadataService,
 } from "../../services/metal-metadata-service";
+import {
+  createMetalMetadataFixtureDatabase,
+  type MetalMetadataFixtureDatabase,
+} from "./metal-metadata-test-database";
 
 jest.mock("@monyvi/db", (): unknown => {
   const schemaModule: unknown = jest.requireActual(
@@ -55,56 +58,12 @@ jest.mock("@nozbe/watermelondb/adapters/sqlite/makeDispatcher", (): unknown =>
   )
 );
 
-async function createMetadataDatabase(): Promise<{
-  readonly adapter: SQLiteAdapter;
-  readonly database: Database;
-}> {
-  const adapter = new SQLiteAdapter({ schema });
-  await adapter.initializingPromise;
-  const database = new Database({
-    adapter,
-    modelClasses: [Asset, MetalHoldingState] as Array<typeof Model>,
+const createMetadataDatabase = (): Promise<MetalMetadataFixtureDatabase> =>
+  createMetalMetadataFixtureDatabase({
+    userId: USER_ID,
+    acquisitionActionId: ACTION_ID,
+    holdingId: HOLDING_ID,
   });
-  await database.write(async (): Promise<void> => {
-    const asset = database.get<Asset>("assets").prepareCreate((row) => {
-      row._raw.id = HOLDING_ID;
-      row.acquisitionActionId = ACTION_ID;
-      row.currency = "EGP";
-      row.deleted = false;
-      row.isLiquid = false;
-      row.name = "Baseline";
-      row.notes = "Baseline note";
-      row.purchaseCurrency = "EGP";
-      row.purchaseDate = new Date("2026-08-01T00:00:00.000Z");
-      row.purchasePrice = 100;
-      row.purchasePriceDecimal = "100";
-      row.type = "METAL";
-      row.updatedAt = new Date();
-      row.userId = USER_ID;
-    });
-    const state = database
-      .get<MetalHoldingState>("metal_holding_states")
-      .prepareCreate((row) => {
-        row._raw.id = HOLDING_ID;
-        row.deleted = false;
-        row.effectiveActionId = ACTION_ID;
-        row.effectiveEventId = ACTION_ID;
-        row.financialRevision = "4";
-        row.holdingId = HOLDING_ID;
-        row.isVisible = true;
-        row.nameWrittenAt = null;
-        row.nameWriterId = null;
-        row.notesWrittenAt = null;
-        row.notesWriterId = null;
-        row.reconciliationState = "accepted";
-        row.status = "sold";
-        row.updatedAt = new Date();
-        row.userId = USER_ID;
-      });
-    await database.batch(asset, state);
-  });
-  return { adapter, database };
-}
 
 type StaleMetalRpcOutcome = Extract<
   MetalRpcOutcome,
@@ -121,6 +80,40 @@ function staleOutcome(
     canonicalHoldingRevision: "3",
     canonicalHoldingActionId: HOLDING_ACTION_ID,
     canonicalHoldingEvidenceHash: HASH,
+    canonicalHolding: {
+      asset: {
+        acquisitionActionId: HOLDING_ACTION_ID,
+        currency: "EGP",
+        name: "Canonical gold",
+        notes: null,
+        purchaseCurrency: "EGP",
+        purchaseDate: "2026-08-01",
+        purchasePrice: 100,
+        purchasePriceDecimal: "100",
+      },
+      holdingId: HOLDING_ID,
+      metal: {
+        metalType: "GOLD",
+        physicalForm: "BAR",
+        purityCatalogVersion: "1",
+        purityCode: "gold-9999",
+        purityFactorDecimal: "0.9999",
+        purityFraction: 0.9999,
+        weightGrams: 10,
+        weightGramsDecimal: "10",
+      },
+      state: {
+        effectiveActionId: HOLDING_ACTION_ID,
+        effectiveEventId: HOLDING_ACTION_ID,
+        financialRevision: "3",
+        isVisible: true,
+        nameWrittenAt: null,
+        nameWriterId: null,
+        notesWrittenAt: null,
+        notesWriterId: null,
+        status: "active",
+      },
+    },
     canonicalAccounts: [],
     staleAccountIds: [],
     userId: USER_ID,
@@ -185,12 +178,73 @@ describe("Metals reconciliation, sync, rates, and metadata", () => {
         code: "ACCOUNT_REVISION_STALE",
         canonicalHoldingActionId: HOLDING_ACTION_ID,
       }),
+      staleOutcome({
+        canonicalHolding: {
+          ...staleOutcome().canonicalHolding,
+          asset: {
+            ...staleOutcome().canonicalHolding.asset,
+            purchaseDate: "2026-02-31",
+          },
+        },
+      }),
     ];
     for (const outcome of malformed) {
       expect(classifyMetalServerOutcome(outcome, USER_ID)).toBe(
         "reconciliation_incomplete"
       );
     }
+  });
+
+  it("accepts a preserved legacy holding winner with null exact facts", () => {
+    const base = staleOutcome().canonicalHolding;
+    const legacyWinner: CanonicalMetalHolding = {
+      ...base,
+      asset: { ...base.asset, purchasePrice: 0, purchasePriceDecimal: null },
+      metal: {
+        ...base.metal,
+        purityCatalogVersion: null,
+        purityCode: null,
+        purityFactorDecimal: null,
+        purityFraction: 0,
+        weightGrams: 0,
+        weightGramsDecimal: null,
+      },
+    };
+
+    expect(
+      classifyMetalServerOutcome(
+        staleOutcome({ canonicalHolding: legacyWinner }),
+        USER_ID
+      )
+    ).toBe("stale_ready");
+    expect(
+      classifyMetalServerOutcome(
+        staleOutcome({
+          canonicalHolding: {
+            ...legacyWinner,
+            asset: {
+              ...legacyWinner.asset,
+              purchasePriceDecimal: "0",
+            },
+          },
+        }),
+        USER_ID
+      )
+    ).toBe("reconciliation_incomplete");
+    expect(
+      classifyMetalServerOutcome(
+        staleOutcome({
+          canonicalHolding: {
+            ...legacyWinner,
+            asset: {
+              ...legacyWinner.asset,
+              purchasePrice: Number.NaN,
+            },
+          },
+        }),
+        USER_ID
+      )
+    ).toBe("reconciliation_incomplete");
   });
 
   it("uses one lock and one durable atomic recovery across retry/restart", async () => {
@@ -464,6 +518,42 @@ describe("Metals reconciliation, sync, rates, and metadata", () => {
     });
   });
 
+  it("rejects an equal-clock metadata conflict before applying another field", async () => {
+    const { database } = await createMetadataDatabase();
+    const service = createMetalMetadataService({
+      database,
+      getCurrentUserId: () => Promise.resolve(USER_ID),
+    });
+    await service.applyPatch({
+      holdingId: HOLDING_ID,
+      userId: USER_ID,
+      fields: {
+        name: { value: "Server winner", writtenAt: 10, writerId: ACTION_ID },
+        notes: { value: "Old note", writtenAt: 9, writerId: ACTION_ID },
+      },
+    });
+
+    await expect(
+      service.applyPatch({
+        holdingId: HOLDING_ID,
+        userId: USER_ID,
+        fields: {
+          name: { value: "Conflict", writtenAt: 10, writerId: ACTION_ID },
+          notes: {
+            value: "Would otherwise win",
+            writtenAt: 11,
+            writerId: ACTION_ID,
+          },
+        },
+      })
+    ).rejects.toThrow("metal_metadata_tuple_conflict");
+    const [asset] = await database.get<Asset>("assets").query().fetch();
+    expect(asset).toMatchObject({
+      name: "Server winner",
+      notes: "Old note",
+    });
+  });
+
   it("dedicates action-owned tables and strips protected generic fragments", () => {
     expect([...DEDICATED_SYNC_TABLES]).toEqual(
       expect.arrayContaining([
@@ -561,6 +651,7 @@ describe("Metals reconciliation, sync, rates, and metadata", () => {
   });
 
   it("submits complete Metals roots before metadata and acknowledges only accepted RPC groups", async () => {
+    const commitMetadataOutcome = jest.fn().mockResolvedValue(undefined);
     const rpc = jest
       .fn()
       .mockResolvedValueOnce({
@@ -575,7 +666,18 @@ describe("Metals reconciliation, sync, rates, and metadata", () => {
         error: null,
       })
       .mockResolvedValueOnce({
-        data: { status: "applied", holdingId: HOLDING_ID },
+        data: {
+          status: "applied",
+          holdingId: HOLDING_ID,
+          canonicalMetadata: {
+            name: {
+              value: "Renamed",
+              writtenAt: 1_788_229_200_000,
+              writerId: "018f0c7a-1234-7abc-8def-000000000020",
+            },
+            notes: null,
+          },
+        },
         error: null,
       });
     const payloadJson = JSON.stringify({
@@ -653,9 +755,12 @@ describe("Metals reconciliation, sync, rates, and metadata", () => {
           },
         },
         USER_ID,
-        rpc
+        rpc,
+        undefined,
+        commitMetadataOutcome
       )
     ).resolves.toEqual({ acknowledgeAllDedicatedRows: true });
+    expect(commitMetadataOutcome).toHaveBeenCalledTimes(1);
     expect(rpc).toHaveBeenNthCalledWith(1, "apply_metal_action_v1", {
       p_payload_hash: HASH,
       p_payload_json: payloadJson,
@@ -708,8 +813,20 @@ describe("Metals reconciliation, sync, rates, and metadata", () => {
   });
 
   it("acknowledges a metadata-only Metals patch after the dedicated RPC accepts it", async () => {
+    const commitMetadataOutcome = jest.fn().mockResolvedValue(undefined);
     const rpc = jest.fn().mockResolvedValueOnce({
-      data: { status: "applied", holdingId: HOLDING_ID },
+      data: {
+        status: "applied",
+        holdingId: HOLDING_ID,
+        canonicalMetadata: {
+          name: {
+            value: "Canonical name",
+            writtenAt: 1_788_229_200_001,
+            writerId: HOLDING_ACTION_ID,
+          },
+          notes: null,
+        },
+      },
       error: null,
     });
 
@@ -736,9 +853,23 @@ describe("Metals reconciliation, sync, rates, and metadata", () => {
           },
         },
         USER_ID,
-        rpc
+        rpc,
+        undefined,
+        commitMetadataOutcome
       )
     ).resolves.toEqual({ acknowledgeAllDedicatedRows: true });
+    expect(commitMetadataOutcome).toHaveBeenCalledWith({
+      canonicalMetadata: {
+        name: {
+          value: "Canonical name",
+          writtenAt: 1_788_229_200_001,
+          writerId: HOLDING_ACTION_ID,
+        },
+        notes: null,
+      },
+      holdingId: HOLDING_ID,
+      status: "applied",
+    });
     expect(rpc).toHaveBeenCalledTimes(1);
     expect(rpc).toHaveBeenCalledWith("apply_metal_metadata_patch_v1", {
       p_holding_id: HOLDING_ID,

@@ -152,6 +152,24 @@ jest.mock("@/components/add-transaction/CalculatorKeypad", () => ({
           <ReactNative.Text>1</ReactNative.Text>
         </ReactNative.Pressable>
         <ReactNative.Pressable
+          testID="key-2"
+          onPress={() => void props.onKeyPress("2")}
+        >
+          <ReactNative.Text>2</ReactNative.Text>
+        </ReactNative.Pressable>
+        <ReactNative.Pressable
+          testID="key-plus"
+          onPress={() => void props.onKeyPress("+")}
+        >
+          <ReactNative.Text>+</ReactNative.Text>
+        </ReactNative.Pressable>
+        <ReactNative.Pressable
+          testID="key-3"
+          onPress={() => void props.onKeyPress("3")}
+        >
+          <ReactNative.Text>3</ReactNative.Text>
+        </ReactNative.Pressable>
+        <ReactNative.Pressable
           testID="key-done"
           onPress={() => void props.onKeyPress("DONE")}
         >
@@ -338,6 +356,26 @@ describe("AddTransaction account selection", () => {
     rerender(<AddTransaction />);
 
     await waitFor(() => expect(screen.getByText("Bank")).toBeTruthy());
+  });
+
+  it("submits a supported calculator expression when DONE is pressed before equals", async () => {
+    mockAccounts = [account("cash-1", "Cash", true)];
+    transactionServiceMocks().createTransaction.mockResolvedValueOnce({
+      id: "transaction-1",
+    });
+    render(<AddTransaction />);
+
+    await waitFor(() => expect(screen.getByText("Cash")).toBeTruthy());
+    fireEvent.press(screen.getByTestId("key-2"));
+    fireEvent.press(screen.getByTestId("key-plus"));
+    fireEvent.press(screen.getByTestId("key-3"));
+    fireEvent.press(screen.getByTestId("key-done"));
+
+    await waitFor(() => {
+      expect(transactionServiceMocks().createTransaction).toHaveBeenCalledWith(
+        expect.objectContaining({ amount: 5 })
+      );
+    });
   });
 
   it("shows a friendly error when recurring template creation preflight fails", async () => {

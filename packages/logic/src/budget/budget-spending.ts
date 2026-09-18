@@ -64,6 +64,20 @@ export function calculateSpentPercentage(spent: number, limit: number): number {
 }
 
 /**
+ * Calculate the budget amount that corresponds to an alert threshold.
+ *
+ * @param limit - Budget limit amount
+ * @param alertThreshold - Alert threshold percentage
+ * @returns Budget amount at which the alert threshold is reached
+ */
+export function calculateBudgetAlertAmount(
+  limit: number,
+  alertThreshold: number
+): number {
+  return limit * (alertThreshold / 100);
+}
+
+/**
  * Calculate remaining budget amount, clamped to 0.
  *
  * @param spent - Amount spent
