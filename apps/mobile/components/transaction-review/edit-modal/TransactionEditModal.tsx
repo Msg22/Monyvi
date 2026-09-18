@@ -259,7 +259,7 @@ export function TransactionEditModal(
                     <TextInput
                       value={formatAmountInput(state.amount)}
                       onChangeText={(text) => {
-                        setters.setAmount(parseAmountInput(text));
+                        setters.setAmount(parseAmountInput(text, state.amount));
                         if (state.formErrors.amount) {
                           setters.setFormErrors((prev) => ({
                             ...prev,
@@ -567,7 +567,7 @@ function SmsReviewEditFields({
   };
 
   const updateAmount = (text: string): void => {
-    setters.setAmount(parseAmountInput(text));
+    setters.setAmount(parseAmountInput(text, state.amount));
     if (state.formErrors.amount) {
       setters.setFormErrors((previous) => ({ ...previous, amount: undefined }));
     }

@@ -19,6 +19,7 @@ import { useTheme } from "@/context/ThemeContext";
 import { useAccounts } from "@/hooks/useAccounts";
 import { useCategories } from "@/hooks/useCategories";
 import { useCategoryChildren } from "@/hooks/useCategoryChildren";
+import { useFormScroll } from "@/hooks/useFormScroll";
 import { useMarketRates } from "@/hooks/useMarketRates";
 import {
   createRecurringPayment,
@@ -55,11 +56,21 @@ import { ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { usePreferredCurrency } from "@/hooks/usePreferredCurrency";
 
+const TRANSACTION_FIELD_ORDER: readonly (keyof TransactionValidationErrors)[] = [
+  "amount",
+  "accountId",
+  "categoryId",
+  "fromAccountId",
+  "toAccountId",
+  "recurringName",
+];
+
 export default function AddTransaction(): React.ReactNode {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const budgetAlert = useBudgetAlert();
   const { t } = useTranslation("transactions");
+  const { t: tCommon } = useTranslation("common");
 
   const { accounts } = useAccounts();
 
@@ -108,6 +119,21 @@ export default function AddTransaction(): React.ReactNode {
   const { latestRates } = useMarketRates();
   const { showToast } = useToast();
   const { preferredCurrency } = usePreferredCurrency();
+  const { scrollViewRef, getFieldRef, onScroll, scrollToFirstError } =
+    useFormScroll<keyof TransactionValidationErrors>({
+      bottomInset: insets.bottom,
+    });
+
+  useEffect(() => {
+    if (!Object.values(formErrors).some(Boolean)) return;
+
+    // Let newly expanded details and their error messages mount before the
+    // scrolling hook measures native layout. A new submit retriggers this effect.
+    const frame = requestAnimationFrame(() => {
+      scrollToFirstError(formErrors, TRANSACTION_FIELD_ORDER);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [formErrors, scrollToFirstError]);
 
   // Derived Values
   const selectedAccount = accounts.find((a) => a.id === selectedAccountId);
@@ -285,19 +311,29 @@ export default function AddTransaction(): React.ReactNode {
       throw new Error(t("please_select_an_account"));
     }
 
-    const recurring = await createRecurringPayment({
-      name: recurringName,
-      amount,
-      currency,
-      type,
-      accountId: selectedAccountId,
-      categoryId: selectedCategoryId,
-      frequency: recurringFrequency,
-      startDate: date,
-      initialOccurrenceRecorded: true,
-      action: recurringAutoCreate ? "AUTO_CREATE" : "NOTIFY",
-    });
-    return recurring.id;
+    try {
+      const recurring = await createRecurringPayment({
+        name: recurringName.trim(),
+        amount,
+        currency,
+        type,
+        accountId: selectedAccountId,
+        categoryId: selectedCategoryId,
+        frequency: recurringFrequency,
+        startDate: date,
+        initialOccurrenceRecorded: true,
+        action: recurringAutoCreate ? "AUTO_CREATE" : "NOTIFY",
+      });
+      return recurring.id;
+    } catch (error: unknown) {
+      if (getRecurringPaymentErrorMessage(error, t) === null) {
+        logger.error("Recurring payment operation failed", error, {
+          operation: "create",
+          source: "add-transaction",
+        });
+      }
+      throw error;
+    }
   };
 
   const validateAndCreateTransfer = async (amount: number): Promise<void> => {
@@ -337,7 +373,6 @@ export default function AddTransaction(): React.ReactNode {
         convertedAmount: parsedTargetAmount ?? undefined,
         exchangeRate,
       });
-
       showToast({
         type: "success",
         title: t("transfer_created"),
@@ -389,27 +424,53 @@ export default function AddTransaction(): React.ReactNode {
     // Clear previous errors
     setFormErrors({});
 
+    const evaluatedAmount = calculateResult(amount);
+    const amountForValidation =
+      evaluatedAmount === null ? amount : evaluatedAmount.toString();
+
     // Build form data for validation
     const formData =
       type === "TRANSFER"
-        ? { amount, fromAccountId: selectedAccountId, toAccountId }
+        ? {
+            amount: amountForValidation,
+            fromAccountId: selectedAccountId,
+            toAccountId,
+          }
         : {
-            amount,
+            amount: amountForValidation,
             accountId: selectedAccountId,
             categoryId: selectedCategoryId,
+            isRecurring,
+            recurringName,
           };
 
-    const { isValid, errors } = validateTransactionForm(type, formData, {
-      accountRequired: t("please_select_an_account"),
-      sourceAccountRequired: t("please_select_source_account"),
-      destinationAccountRequired: t("please_select_destination_account"),
-    });
+    const { isValid, errors } = validateTransactionForm(
+      type,
+      formData,
+      {
+        amountRequired: t("amount_required"),
+        invalidAmount: t("invalid_amount"),
+        amountMustBePositive: t("amount_must_be_positive"),
+        amountMaximum: (maximum) =>
+          t("amount_maximum_error", {
+            maximum: maximum.toLocaleString("en-US"),
+          }),
+        amountPrecision: (precision) =>
+          t("amount_precision_error", { precision }),
+        accountRequired: t("please_select_an_account"),
+        sourceAccountRequired: t("please_select_source_account"),
+        destinationAccountRequired: t("please_select_destination_account"),
+        recurringNameRequired: tCommon("recurring_name_required"),
+      },
+      { currency: selectedAccount?.currency }
+    );
     if (!isValid) {
       setFormErrors(errors);
+      if (errors.recurringName) setIsOptionalExpanded(true);
       return;
     }
 
-    const finalAmount = calculateResult(amount);
+    const finalAmount = evaluatedAmount;
     if (finalAmount === null || finalAmount <= 0) {
       setFormErrors({ amount: t("invalid_amount") });
       return;
@@ -425,7 +486,7 @@ export default function AddTransaction(): React.ReactNode {
         let createdRecurringPaymentId: string | undefined;
         let linkedRecurringId: string | undefined;
 
-        if (isRecurring && recurringName && selectedAccount) {
+        if (isRecurring && selectedAccount) {
           createdRecurringPaymentId = await createRecurring(
             finalAmount,
             type,
@@ -513,6 +574,9 @@ export default function AddTransaction(): React.ReactNode {
       />
 
       <ScrollView
+        ref={scrollViewRef}
+        onScroll={onScroll}
+        scrollEventThrottle={16}
         className="flex-1 bg-slate-50 dark:bg-slate-900"
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 40 }}
@@ -524,7 +588,7 @@ export default function AddTransaction(): React.ReactNode {
 
         {/* Amount Display — hidden when transfer has no valid accounts */}
         {!(type === "TRANSFER" && !canTransfer) && (
-          <>
+          <View ref={getFieldRef("amount")} collapsable={false}>
             {/* Insufficient balance warning */}
             {type === "EXPENSE" &&
               selectedAccount &&
@@ -561,7 +625,7 @@ export default function AddTransaction(): React.ReactNode {
                 {formErrors.amount}
               </Text>
             )}
-          </>
+          </View>
         )}
 
         {/* Form Content */}
@@ -593,6 +657,8 @@ export default function AddTransaction(): React.ReactNode {
                 onChangeTargetAmount={setTargetAmount}
                 fromAccountError={formErrors.fromAccountId}
                 toAccountError={formErrors.toAccountId}
+                fromAccountRef={getFieldRef("fromAccountId")}
+                toAccountRef={getFieldRef("toAccountId")}
                 exchangeRate={
                   selectedAccount && toAccount
                     ? latestRates
@@ -624,7 +690,11 @@ export default function AddTransaction(): React.ReactNode {
             <>
               <View className="flex-row gap-4 mb-4">
                 {/* Account Field */}
-                <View className="flex-1">
+                <View
+                  ref={getFieldRef("accountId")}
+                  collapsable={false}
+                  className="flex-1"
+                >
                   <Text className="input-label">
                     {t("account").toUpperCase()}
                   </Text>
@@ -689,7 +759,11 @@ export default function AddTransaction(): React.ReactNode {
                 </View>
 
                 {/* Category Field */}
-                <View className="flex-1">
+                <View
+                  ref={getFieldRef("categoryId")}
+                  collapsable={false}
+                  className="flex-1"
+                >
                   <Text className="input-label">
                     {t("category").toUpperCase()}
                   </Text>
@@ -763,6 +837,8 @@ export default function AddTransaction(): React.ReactNode {
               expanded={isOptionalExpanded}
               onToggleExpand={() => setIsOptionalExpanded(false)}
               transactionType={type}
+              recurringNameError={formErrors.recurringName}
+              recurringNameRef={getFieldRef("recurringName")}
               fields={{
                 counterparty,
                 note,
@@ -785,6 +861,16 @@ export default function AddTransaction(): React.ReactNode {
                   setRecurringFrequency(updates.recurringFrequency);
                 if (updates.recurringAutoCreate !== undefined)
                   setRecurringAutoCreate(updates.recurringAutoCreate);
+                if (
+                  updates.isRecurring === false ||
+                  (updates.recurringName !== undefined &&
+                    updates.recurringName.trim().length > 0)
+                ) {
+                  setFormErrors((previous) => ({
+                    ...previous,
+                    recurringName: undefined,
+                  }));
+                }
               }}
             />
           )}
@@ -875,6 +961,10 @@ function getRecurringPaymentErrorMessage(
 
   if (message === RECURRING_PAYMENT_SERVICE_ERROR_CODES.CATEGORY_UNAVAILABLE) {
     return t("recurring_payment_category_unavailable");
+  }
+
+  if (message === RECURRING_PAYMENT_SERVICE_ERROR_CODES.INVALID_START_DATE) {
+    return t("due_payment_date_range");
   }
 
   return null;

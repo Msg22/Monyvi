@@ -54,27 +54,51 @@ export function useFormScroll<TField extends string>({
       activeKeyboardTargetRef.current = targetRef;
 
       requestAnimationFrame(() => {
-        targetRef.current?.measureInWindow((_x, y, _width, height) => {
-          const visibleBottom =
-            windowHeight - keyboardHeightRef.current - bottomInset - fieldGap;
-          const overflow = y + height - visibleBottom;
-          const underTopGap = fieldGap - y;
+        const scrollWithinViewport = (
+          viewportTop: number,
+          viewportHeight: number
+        ): void => {
+          targetRef.current?.measureInWindow((_x, y, _width, height) => {
+            const visibleTop = viewportTop + fieldGap;
+            const visibleBottom =
+              Math.min(
+                viewportTop + viewportHeight,
+                windowHeight - keyboardHeightRef.current - bottomInset
+              ) - fieldGap;
+            const overflow = y + height - visibleBottom;
+            const underTopGap = visibleTop - y;
 
-          if (underTopGap > 0) {
-            scrollViewRef.current?.scrollTo({
-              y: Math.max(0, currentScrollYRef.current - underTopGap),
-              animated: true,
-            });
-            return;
-          }
+            if (underTopGap > 0) {
+              scrollViewRef.current?.scrollTo({
+                y: Math.max(0, currentScrollYRef.current - underTopGap),
+                animated: true,
+              });
+              return;
+            }
 
-          if (overflow > 0) {
-            scrollViewRef.current?.scrollTo({
-              y: currentScrollYRef.current + overflow,
-              animated: true,
-            });
-          }
-        });
+            if (overflow > 0) {
+              scrollViewRef.current?.scrollTo({
+                y: currentScrollYRef.current + overflow,
+                animated: true,
+              });
+            }
+          });
+        };
+
+        // The window also contains the header and fixed footer; measure the
+        // native scroll viewport so validation messages cannot hide behind them.
+        const nativeScrollView = scrollViewRef.current?.getNativeScrollRef?.();
+        if (nativeScrollView?.measureInWindow) {
+          nativeScrollView.measureInWindow((_x, y, _width, height) => {
+            if (height > 0) {
+              scrollWithinViewport(y, height);
+            } else {
+              scrollWithinViewport(0, windowHeight);
+            }
+          });
+        } else {
+          scrollWithinViewport(0, windowHeight);
+        }
       });
     },
     [bottomInset, fieldGap, windowHeight]
