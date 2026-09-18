@@ -1,20 +1,22 @@
 import { getCurrentUserId } from "./supabase";
 import {
-  Account,
   CurrencyType,
   database,
-  Transaction,
   Transfer,
   type TransactionType,
 } from "@monyvi/db";
 import { ensureCashAccount } from "./account-service";
 import {
-  assertExpectedCurrentUser,
   getCurrentUserDataScope,
   type CurrentUserDataScope,
 } from "@/services/user-data-access";
-import { USER_DATA_ACCESS_ERROR_CODES } from "@/services/user-data-access-error-codes";
 import { isValidTransactionAmount } from "@monyvi/logic";
+import {
+  convertGuardedTransferToTransaction,
+  createGuardedTransfer,
+  deleteGuardedTransfer,
+  updateGuardedTransfer,
+} from "./transfer-core-writer-production";
 
 export interface TransferData {
   amount: number;
@@ -31,19 +33,8 @@ export interface TransferData {
 
 export const INVALID_TRANSFER_AMOUNT_ERROR_CODE = "INVALID_TRANSACTION_AMOUNT";
 
-function accountsCollection(): ReturnType<typeof database.get<Account>> {
-  return database.get<Account>("accounts");
-}
-
 function transfersCollection(): ReturnType<typeof database.get<Transfer>> {
   return database.get<Transfer>("transfers");
-}
-
-async function getOwnedAccount(
-  accountId: string,
-  scope: CurrentUserDataScope
-): Promise<Account> {
-  return scope.findOwned(accountsCollection(), accountId);
 }
 
 async function getOwnedTransfer(
@@ -171,55 +162,17 @@ export async function createTransfer(
     assertValidTransferAmount(data.convertedAmount);
   }
 
-  const scope = await getCurrentUserDataScope();
-  if (expectedUserId !== undefined && scope.userId !== expectedUserId) {
-    throw new Error(USER_DATA_ACCESS_ERROR_CODES.AUTH_SCOPE_CHANGED);
-  }
-
-  const transferCollection = transfersCollection();
-
-  await database.write(async () => {
-    const fromAccount = await getOwnedAccount(data.fromAccountId, scope);
-    const toAccount = await getOwnedAccount(data.toAccountId, scope);
-    if (expectedUserId !== undefined) {
-      await assertExpectedCurrentUser(expectedUserId);
-    }
-
-    // 1. Create Transfer Record
-    await transferCollection.create((transfer: Transfer) => {
-      transfer.userId = scope.userId;
-      transfer.fromAccountId = data.fromAccountId;
-      transfer.toAccountId = data.toAccountId;
-      transfer.amount = Math.abs(data.amount);
-      transfer.currency = data.currency;
-      transfer.date = data.date || new Date();
-      transfer.notes = data.notes;
-      transfer.smsFingerprint = data.smsFingerprint;
-
-      // Multi-currency fields
-      if (data.convertedAmount) {
-        transfer.convertedAmount = Math.abs(data.convertedAmount);
-        transfer.exchangeRate = data.exchangeRate;
-      }
-
-      transfer.deleted = false;
-    });
-
-    // 2. Update From Account (Decrease Balance)
-    await fromAccount.update((acc) => {
-      acc.balance -= Math.abs(data.amount);
-    });
-
-    // 3. Update To Account (Increase Balance)
-    await toAccount.update((acc) => {
-      // Use converted amount if available, otherwise original amount
-      const depositAmount = data.convertedAmount
-        ? Math.abs(data.convertedAmount)
-        : Math.abs(data.amount);
-
-      acc.balance += depositAmount;
-    });
-  });
+  await createGuardedTransfer(
+    {
+      ...data,
+      amount: Math.abs(data.amount),
+      convertedAmount:
+        data.convertedAmount === undefined
+          ? undefined
+          : Math.abs(data.convertedAmount),
+    },
+    expectedUserId
+  );
 }
 
 /**
@@ -250,75 +203,29 @@ export async function updateTransfer(
     assertValidTransferAmount(updates.convertedAmount);
   }
 
+  const hasFinancialUpdate =
+    updates.amount !== undefined ||
+    updates.convertedAmount !== undefined ||
+    updates.fromAccountId !== undefined ||
+    updates.toAccountId !== undefined;
+  if (hasFinancialUpdate) {
+    await updateGuardedTransfer(transferId, {
+      ...updates,
+      amount:
+        updates.amount === undefined ? undefined : Math.abs(updates.amount),
+      convertedAmount:
+        updates.convertedAmount === undefined
+          ? undefined
+          : Math.abs(updates.convertedAmount),
+    });
+    return;
+  }
   const scope = await getCurrentUserDataScope();
-
   await database.write(async () => {
     const transfer = await getOwnedTransfer(transferId, scope);
-
-    const oldFromId = transfer.fromAccountId;
-    const oldToId = transfer.toAccountId;
-    const oldAmount = transfer.amount;
-    const oldConvertedAmount = transfer.convertedAmount;
-
-    const newFromId = updates.fromAccountId ?? oldFromId;
-    const newToId = updates.toAccountId ?? oldToId;
-    const newAmount =
-      updates.amount !== undefined ? Math.abs(updates.amount) : oldAmount;
-
-    const isFromChanging = newFromId !== oldFromId;
-    const isToChanging = newToId !== oldToId;
-    const isAmountChanging = newAmount !== oldAmount;
-
-    // Only adjust balances when amount or accounts change
-    if (isFromChanging || isToChanging || isAmountChanging) {
-      // --- Revert old from-account (add back withdrawn amount) ---
-      const oldFromAccount = await getOwnedAccount(oldFromId, scope);
-      await oldFromAccount.update((acc) => {
-        acc.balance += oldAmount;
-      });
-
-      // --- Revert old to-account (subtract deposited amount) ---
-      const oldToAccount = await getOwnedAccount(oldToId, scope);
-      const oldDepositAmount = oldConvertedAmount ?? oldAmount;
-      await oldToAccount.update((acc) => {
-        acc.balance -= oldDepositAmount;
-      });
-
-      // --- Apply new from-account (withdraw new amount) ---
-      const newFromAccount = isFromChanging
-        ? await getOwnedAccount(newFromId, scope)
-        : oldFromAccount;
-      await newFromAccount.update((acc) => {
-        acc.balance -= newAmount;
-      });
-
-      // --- Apply new to-account (deposit new amount) ---
-      // For same-currency transfers, deposit = withdrawal amount
-      // For cross-currency, convertedAmount is preserved unless amount changed
-      const newToAccount = isToChanging
-        ? await getOwnedAccount(newToId, scope)
-        : oldToAccount;
-      const newDepositAmount =
-        updates.convertedAmount !== undefined
-          ? Math.abs(updates.convertedAmount)
-          : !isAmountChanging && oldConvertedAmount
-            ? oldConvertedAmount
-            : newAmount;
-      await newToAccount.update((acc) => {
-        acc.balance += newDepositAmount;
-      });
-    }
-
-    await transfer.update((t) => {
-      if (updates.amount !== undefined) t.amount = Math.abs(updates.amount);
-      if (updates.convertedAmount !== undefined)
-        t.convertedAmount = Math.abs(updates.convertedAmount);
-      if (updates.notes !== undefined) t.notes = updates.notes;
-      if (updates.date !== undefined) t.date = updates.date;
-      if (updates.fromAccountId !== undefined)
-        t.fromAccountId = updates.fromAccountId;
-      if (updates.toAccountId !== undefined)
-        t.toAccountId = updates.toAccountId;
+    await transfer.update((record) => {
+      if (updates.notes !== undefined) record.notes = updates.notes;
+      if (updates.date !== undefined) record.date = updates.date;
     });
   });
 }
@@ -332,29 +239,7 @@ export async function updateTransfer(
  * Atomically reverses both account balance changes and soft-deletes the record.
  */
 export async function deleteTransfer(transferId: string): Promise<void> {
-  const scope = await getCurrentUserDataScope();
-
-  await database.write(async () => {
-    const transfer = await getOwnedTransfer(transferId, scope);
-
-    // Revert from-account (add back withdrawn amount)
-    const fromAccount = await getOwnedAccount(transfer.fromAccountId, scope);
-    await fromAccount.update((acc) => {
-      acc.balance += transfer.amount;
-    });
-
-    // Revert to-account (subtract deposited amount)
-    const toAccount = await getOwnedAccount(transfer.toAccountId, scope);
-    const depositAmount = transfer.convertedAmount ?? transfer.amount;
-    await toAccount.update((acc) => {
-      acc.balance -= depositAmount;
-    });
-
-    // Soft delete
-    await transfer.update((t) => {
-      t.deleted = true;
-    });
-  });
+  await deleteGuardedTransfer(transferId);
 }
 
 // =============================================================================
@@ -383,54 +268,5 @@ interface ConvertToTransactionPayload {
 export async function convertTransferToTransaction(
   payload: ConvertToTransactionPayload
 ): Promise<void> {
-  const scope = await getCurrentUserDataScope();
-
-  const transactionsCollection = database.get<Transaction>("transactions");
-
-  await database.write(async () => {
-    const transfer = await getOwnedTransfer(payload.transferId, scope);
-    const targetAccount = await getOwnedAccount(payload.accountId, scope);
-
-    // 1. Revert transfer balance effects
-    const fromAccount = await getOwnedAccount(transfer.fromAccountId, scope);
-    await fromAccount.update((acc) => {
-      acc.balance += transfer.amount; // was -amount, revert
-    });
-
-    const toAccount = await getOwnedAccount(transfer.toAccountId, scope);
-    const depositAmount = transfer.convertedAmount ?? transfer.amount;
-    await toAccount.update((acc) => {
-      acc.balance -= depositAmount; // was +depositAmount, revert
-    });
-
-    // 2. Soft-delete the transfer
-    await transfer.update((t) => {
-      t.deleted = true;
-    });
-
-    // 3. Create the new transaction
-    await transactionsCollection.create((tx: Transaction) => {
-      tx.userId = scope.userId;
-      tx.accountId = payload.accountId;
-      tx.amount = transfer.amount;
-      tx.currency = transfer.currency;
-      tx.type = payload.type;
-      tx.categoryId = payload.categoryId;
-      tx.counterparty = payload.counterparty;
-      tx.date = transfer.date;
-      tx.note = transfer.notes;
-      tx.source = "MANUAL";
-      tx.isDraft = false;
-      tx.deleted = false;
-    });
-
-    // 4. Apply transaction balance effect on the chosen account
-    await targetAccount.update((acc) => {
-      if (payload.type === "EXPENSE") {
-        acc.balance -= transfer.amount;
-      } else {
-        acc.balance += transfer.amount;
-      }
-    });
-  });
+  await convertGuardedTransferToTransaction(payload);
 }
