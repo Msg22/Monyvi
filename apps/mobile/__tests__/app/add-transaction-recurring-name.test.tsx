@@ -1,10 +1,11 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 import React from "react";
-import { Dimensions, ScrollView, Switch } from "react-native";
+import { Dimensions, ScrollView, Switch, View } from "react-native";
 
 const mockBack = jest.fn();
 const mockShowToast = jest.fn();
 const mockNativeScrollTo = jest.fn<void, Parameters<ScrollView["scrollTo"]>>();
+const mockViewportRef = React.createRef<View>();
 let mockFormScroll: ReturnType<typeof import("@/hooks/useFormScroll").useFormScroll> | undefined;
 
 // Keep the real scrolling logic; only native measurement is supplied by the tests.
@@ -142,6 +143,10 @@ function enterRecurringName(name: string): void {
   fireEvent.changeText(screen.getByPlaceholderText("recurring_name_placeholder"), name);
 }
 
+function renderScrollableForm(): void {
+  render(<View ref={mockViewportRef}><AddTransaction /></View>);
+}
+
 function measureField(
   field: "amount" | "recurringName",
   y: number,
@@ -149,9 +154,12 @@ function measureField(
 ): void {
   const scrollView = mockFormScroll?.scrollViewRef.current;
   const fieldView = mockFormScroll?.getFieldRef(field).current;
-  if (scrollView) {
+  const viewportView = mockViewportRef.current;
+  if (scrollView && viewportView) {
     jest.spyOn(scrollView, "scrollTo").mockImplementation(mockNativeScrollTo);
-    jest.spyOn(scrollView, "measureInWindow").mockImplementation((callback) => {
+    // Supply native layout through the public ScrollView host-ref contract.
+    scrollView.getNativeScrollRef = (): ReturnType<ScrollView["getNativeScrollRef"]> => viewportView;
+    jest.spyOn(viewportView, "measureInWindow").mockImplementation((callback): void => {
       callback(0, viewport?.top ?? 0, 300, viewport?.height ?? Dimensions.get("window").height);
     });
   }
@@ -258,7 +266,7 @@ describe("Add Transaction recurring-name QA", () => {
     });
 
     it("scrolls to an offscreen recurring name after header Save, including repeated attempts", () => {
-      render(<AddTransaction />);
+      renderScrollableForm();
       fireEvent.press(screen.getByTestId("key-1"));
       enableRecurring();
       fireEvent.press(screen.getByTestId("header-save"));
@@ -277,7 +285,7 @@ describe("Add Transaction recurring-name QA", () => {
     });
 
     it.each(["header-save", "key-done"])("reveals and scrolls to a collapsed recurring name after %s", (button) => {
-      render(<AddTransaction />);
+      renderScrollableForm();
       fireEvent.press(screen.getByTestId("key-1"));
       enableRecurring();
       fireEvent.press(screen.getByText("hide_details"));
@@ -293,7 +301,7 @@ describe("Add Transaction recurring-name QA", () => {
     });
 
     it("scrolls to the earlier amount error rather than the later recurring name", () => {
-      render(<AddTransaction />);
+      renderScrollableForm();
       enableRecurring();
       fireEvent.scroll(screen.UNSAFE_getByType(ScrollView), {
         nativeEvent: { contentOffset: { x: 0, y: 500 } },
@@ -310,7 +318,7 @@ describe("Add Transaction recurring-name QA", () => {
     });
 
     it("places an error below the header instead of behind the ScrollView top edge", () => {
-      render(<AddTransaction />);
+      renderScrollableForm();
       fireEvent.scroll(screen.UNSAFE_getByType(ScrollView), {
         nativeEvent: { contentOffset: { x: 0, y: 500 } },
       });
@@ -323,7 +331,7 @@ describe("Add Transaction recurring-name QA", () => {
     });
 
     it("brings the error above a fixed footer using the actual scroll viewport", () => {
-      render(<AddTransaction />);
+      renderScrollableForm();
       fireEvent.press(screen.getByTestId("key-1"));
       enableRecurring();
       fireEvent.press(screen.getByTestId("header-save"));
@@ -335,7 +343,7 @@ describe("Add Transaction recurring-name QA", () => {
     });
 
     it("does not scroll when the invalid field is already visible or after correction", () => {
-      render(<AddTransaction />);
+      renderScrollableForm();
       fireEvent.press(screen.getByTestId("key-1"));
       enableRecurring();
       fireEvent.press(screen.getByTestId("header-save"));
