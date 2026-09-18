@@ -2,14 +2,7 @@
  * AlertThresholdSlider Component
  *
  * Slider control for selecting the budget alert threshold (50-100%).
- * Shows real-time percentage text in amber color.
- *
- * Architecture & Design Rationale:
- * - Pattern: Controlled Presentational Component
- * - SOLID: SRP — renders only the threshold slider.
- * - Uses React Native's built-in PanResponder instead of
- *   react-native-gesture-handler to avoid global gesture capture
- *   that interferes with Modal touch handling on Android.
+ * Supports the standard control and the compact approved-budget-mockup style.
  *
  * @module AlertThresholdSlider
  */
@@ -23,177 +16,257 @@ import {
   type GestureResponderEvent,
   type LayoutChangeEvent,
   type PanResponderGestureState,
+  type PanResponderInstance,
 } from "react-native";
 import { useTranslation } from "react-i18next";
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
 interface AlertThresholdSliderProps {
-  /** Current threshold value (50-100) */
   readonly value: number;
-  /** Callback when value changes */
   readonly onValueChange: (value: number) => void;
+  readonly variant?: "default" | "mockup";
 }
 
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
+interface SliderGeometry {
+  readonly isMeasured: boolean;
+  readonly fillWidth: number;
+  readonly thumbLeft: number;
+  readonly handleLayout: (event: LayoutChangeEvent) => void;
+  readonly panResponder: PanResponderInstance;
+  readonly trackRef: React.RefObject<View | null>;
+}
 
 const MIN_THRESHOLD = 50;
 const MAX_THRESHOLD = 100;
 const STEP = 5;
-const THUMB_SIZE = 24;
-const TRACK_HEIGHT = 6;
+const DEFAULT_THUMB_SIZE = 24;
+const MOCKUP_THUMB_SIZE = 16;
+const DEFAULT_TRACK_HEIGHT = 6;
+const MOCKUP_TRACK_HEIGHT = 4;
 
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
+function thresholdFromPageX(
+  pageX: number,
+  trackX: number,
+  trackWidth: number,
+  currentValue: number
+): number {
+  if (trackWidth === 0) return currentValue;
+  const relativeX = pageX - trackX;
+  const clampedX = Math.max(0, Math.min(relativeX, trackWidth));
+  const raw =
+    MIN_THRESHOLD +
+    (clampedX / trackWidth) * (MAX_THRESHOLD - MIN_THRESHOLD);
+  const stepped = Math.round(raw / STEP) * STEP;
+  return Math.max(MIN_THRESHOLD, Math.min(MAX_THRESHOLD, stepped));
+}
 
-export function AlertThresholdSlider({
-  value,
-  onValueChange,
-}: AlertThresholdSliderProps): React.JSX.Element {
-  const { t } = useTranslation("budgets");
+function createSliderPanResponder(
+  trackRef: React.RefObject<View | null>,
+  trackXRef: React.MutableRefObject<number>,
+  trackWidthRef: React.MutableRefObject<number>,
+  valueRef: React.MutableRefObject<number>,
+  onValueChangeRef: React.MutableRefObject<(value: number) => void>
+): PanResponderInstance {
+  const updateFromPageX = (pageX: number): void => {
+    onValueChangeRef.current(
+      thresholdFromPageX(
+        pageX,
+        trackXRef.current,
+        trackWidthRef.current,
+        valueRef.current
+      )
+    );
+  };
+  return PanResponder.create({
+    onStartShouldSetPanResponder: () => false,
+    onMoveShouldSetPanResponder: (_event, gestureState) =>
+      Math.abs(gestureState.dx) > Math.abs(gestureState.dy) &&
+      Math.abs(gestureState.dx) > 5,
+    onPanResponderGrant: (
+      event: GestureResponderEvent,
+      _gestureState: PanResponderGestureState
+    ) => {
+      trackRef.current?.measure(
+        (_x, _y, _width, _height, pageX: number) => {
+          trackXRef.current = pageX;
+          updateFromPageX(event.nativeEvent.pageX);
+        }
+      );
+    },
+    onPanResponderMove: (event: GestureResponderEvent) => {
+      updateFromPageX(event.nativeEvent.pageX);
+    },
+  });
+}
+
+function useSliderGeometry(
+  value: number,
+  onValueChange: (value: number) => void,
+  thumbSize: number
+): SliderGeometry {
   const [isMeasured, setIsMeasured] = useState(false);
   const [trackWidth, setTrackWidth] = useState(0);
   const trackWidthRef = useRef(0);
   const trackXRef = useRef(0);
   const trackRef = useRef<View>(null);
-
-  // Use refs for callbacks to avoid PanResponder stale closures
+  const valueRef = useRef(value);
   const onValueChangeRef = useRef(onValueChange);
+  valueRef.current = value;
   onValueChangeRef.current = onValueChange;
 
-  const valueRef = useRef(value);
-  valueRef.current = value;
-
-  const handleLayout = useCallback((e: LayoutChangeEvent): void => {
-    const width = e.nativeEvent.layout.width;
+  const handleLayout = useCallback((event: LayoutChangeEvent): void => {
+    const width = event.nativeEvent.layout.width;
     trackWidthRef.current = width;
     setTrackWidth(width);
-
-    // Measure the absolute X position of the track using the ref
-    trackRef.current?.measure(
-      (_x: number, _y: number, _w: number, _h: number, pageX: number) => {
-        trackXRef.current = pageX;
-        setIsMeasured(true);
-      }
-    );
+    trackRef.current?.measure((_x, _y, _width, _height, pageX: number) => {
+      trackXRef.current = pageX;
+      setIsMeasured(true);
+    });
   }, []);
-
-  const computeValueFromX = useCallback((pageX: number): number => {
-    const trackWidth = trackWidthRef.current;
-    if (trackWidth === 0) return valueRef.current;
-
-    const relativeX = pageX - trackXRef.current;
-    const clampedX = Math.max(0, Math.min(relativeX, trackWidth));
-    const raw =
-      MIN_THRESHOLD + (clampedX / trackWidth) * (MAX_THRESHOLD - MIN_THRESHOLD);
-    const stepped = Math.round(raw / STEP) * STEP;
-    return Math.max(MIN_THRESHOLD, Math.min(MAX_THRESHOLD, stepped));
-  }, []);
-
   const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => false,
-      onMoveShouldSetPanResponder: (_evt, gestureState) => {
-        // Only capture horizontal drags that exceed a small threshold
-        return (
-          Math.abs(gestureState.dx) > Math.abs(gestureState.dy) &&
-          Math.abs(gestureState.dx) > 5
-        );
-      },
-      onPanResponderGrant: (
-        evt: GestureResponderEvent,
-        _gestureState: PanResponderGestureState
-      ) => {
-        // Re-measure on grant to ensure trackXRef is accurate even if view scrolled
-        trackRef.current?.measure(
-          (_x: number, _y: number, _w: number, _h: number, pageX: number) => {
-            trackXRef.current = pageX;
-            const newValue = computeValueFromX(evt.nativeEvent.pageX);
-            onValueChangeRef.current(newValue);
-          }
-        );
-      },
-      onPanResponderMove: (
-        evt: GestureResponderEvent,
-        _gestureState: PanResponderGestureState
-      ) => {
-        const newValue = computeValueFromX(evt.nativeEvent.pageX);
-        onValueChangeRef.current(newValue);
-      },
-    })
+    createSliderPanResponder(
+      trackRef,
+      trackXRef,
+      trackWidthRef,
+      valueRef,
+      onValueChangeRef
+    )
   ).current;
-
   const normalizedValue =
     (value - MIN_THRESHOLD) / (MAX_THRESHOLD - MIN_THRESHOLD);
-  const thumbLeft =
-    trackWidth > 0 ? normalizedValue * (trackWidth - THUMB_SIZE) : 0;
-  const fillWidth = trackWidth > 0 ? normalizedValue * trackWidth : 0;
+  return {
+    isMeasured,
+    fillWidth: trackWidth > 0 ? normalizedValue * trackWidth : 0,
+    thumbLeft:
+      trackWidth > 0 ? normalizedValue * (trackWidth - thumbSize) : 0,
+    handleLayout,
+    panResponder,
+    trackRef,
+  };
+}
 
+function SliderHeader({
+  value,
+  variant,
+}: {
+  readonly value: number;
+  readonly variant: NonNullable<AlertThresholdSliderProps["variant"]>;
+}): React.JSX.Element {
+  const { t } = useTranslation("budgets");
+  const percentageColor =
+    variant === "mockup" ? palette.nileGreen[500] : palette.gold[600];
+  const spacingClass = variant === "mockup" ? "mb-0.5" : "mb-1.5";
+  const percentageClass = variant === "mockup" ? "text-base" : "text-sm";
   return (
-    <View>
-      <View className="flex-row items-center justify-between mb-2">
-        <Text className="text-sm font-medium text-slate-700 dark:text-slate-300">
-          {t("alert_threshold")}
-        </Text>
-        <Text
-          className="text-sm font-bold"
-          style={{ color: palette.gold[600] }}
-        >
-          {Math.round(value)}%
-        </Text>
-      </View>
-
-      <View
-        ref={trackRef}
-        onLayout={handleLayout}
-        className="justify-center"
-        style={{ height: THUMB_SIZE + 8 }}
-        {...panResponder.panHandlers}
+    <View
+      className={`${spacingClass} flex-row items-center justify-between`}
+    >
+      <Text className="text-sm font-medium text-slate-700 dark:text-slate-300">
+        {t("alert_threshold")}
+      </Text>
+      <Text
+        className={`${percentageClass} font-bold`}
+        style={{ color: percentageColor }}
       >
-        {/* Track background */}
-        <View
-          className="w-full rounded-full bg-slate-200 dark:bg-slate-700"
-          style={{ height: TRACK_HEIGHT }}
-        />
+        {Math.round(value)}%
+      </Text>
+    </View>
+  );
+}
 
-        {isMeasured && (
-          <>
-            {/* Fill */}
-            <View
-              className="absolute rounded-full"
-              style={{
-                height: TRACK_HEIGHT,
-                width: fillWidth,
-                backgroundColor: palette.gold[600],
-              }}
-            />
+function SliderFill({
+  width,
+  height,
+  color,
+}: {
+  readonly width: number;
+  readonly height: number;
+  readonly color: string;
+}): React.JSX.Element {
+  return (
+    <View
+      className="absolute rounded-full"
+      style={{ height, width, backgroundColor: color }}
+    />
+  );
+}
 
-            {/* Thumb */}
-            <View
-              className="absolute rounded-full"
-              // eslint-disable-next-line react-native/no-inline-styles
-              style={{
-                width: THUMB_SIZE,
-                height: THUMB_SIZE,
-                left: thumbLeft,
-                backgroundColor: palette.gold[600],
-                shadowColor: "#000",
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.2,
-                shadowRadius: 3,
-                elevation: 3,
-              }}
-            />
-          </>
-        )}
-      </View>
+function SliderThumb({
+  left,
+  size,
+  color,
+}: {
+  readonly left: number;
+  readonly size: number;
+  readonly color: string;
+}): React.JSX.Element {
+  return (
+    <View
+      className="absolute rounded-full"
+      style={{
+        width: size,
+        height: size,
+        left,
+        backgroundColor: color,
+        shadowColor: palette.slate[950],
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.22,
+        shadowRadius: 3,
+        elevation: 3,
+      }}
+    />
+  );
+}
 
-      <View className="flex-row justify-between mt-1">
+function SliderTrack({
+  geometry,
+  variant,
+  thumbSize,
+}: {
+  readonly geometry: SliderGeometry;
+  readonly variant: NonNullable<AlertThresholdSliderProps["variant"]>;
+  readonly thumbSize: number;
+}): React.JSX.Element {
+  const trackHeight =
+    variant === "mockup" ? MOCKUP_TRACK_HEIGHT : DEFAULT_TRACK_HEIGHT;
+  const fillColor =
+    variant === "mockup" ? palette.nileGreen[500] : palette.gold[600];
+  const thumbColor =
+    variant === "mockup" ? palette.slate[25] : palette.gold[600];
+  return (
+    <View
+      ref={geometry.trackRef}
+      onLayout={geometry.handleLayout}
+      className="justify-center"
+      style={{ height: thumbSize + (variant === "mockup" ? 4 : 8) }}
+      {...geometry.panResponder.panHandlers}
+    >
+      <View
+        className="w-full rounded-full bg-slate-200 dark:bg-slate-700"
+        style={{ height: trackHeight }}
+      />
+      {geometry.isMeasured ? (
+        <>
+          <SliderFill
+            width={geometry.fillWidth}
+            height={trackHeight}
+            color={fillColor}
+          />
+          <SliderThumb
+            left={geometry.thumbLeft}
+            size={thumbSize}
+            color={thumbColor}
+          />
+        </>
+      ) : null}
+    </View>
+  );
+}
+
+function DefaultSliderHelp(): React.JSX.Element {
+  const { t } = useTranslation("budgets");
+  return (
+    <>
+      <View className="mt-1 flex-row justify-between">
         <Text className="text-xs text-slate-400 dark:text-slate-500">
           {MIN_THRESHOLD}%
         </Text>
@@ -201,10 +274,30 @@ export function AlertThresholdSlider({
           {MAX_THRESHOLD}%
         </Text>
       </View>
-
-      <Text className="text-xs text-slate-400 dark:text-slate-500 mt-1">
+      <Text className="mt-1 text-xs text-slate-400 dark:text-slate-500">
         {t("alert_help_percentage")}
       </Text>
+    </>
+  );
+}
+
+export function AlertThresholdSlider({
+  value,
+  onValueChange,
+  variant = "default",
+}: AlertThresholdSliderProps): React.JSX.Element {
+  const thumbSize =
+    variant === "mockup" ? MOCKUP_THUMB_SIZE : DEFAULT_THUMB_SIZE;
+  const geometry = useSliderGeometry(value, onValueChange, thumbSize);
+  return (
+    <View>
+      <SliderHeader value={value} variant={variant} />
+      <SliderTrack
+        geometry={geometry}
+        variant={variant}
+        thumbSize={thumbSize}
+      />
+      {variant === "default" ? <DefaultSliderHelp /> : null}
     </View>
   );
 }
