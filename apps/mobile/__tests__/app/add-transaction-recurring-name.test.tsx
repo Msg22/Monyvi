@@ -67,7 +67,7 @@ jest.mock("@/hooks/useBudgetAlert", () => ({
     readonly viewBudget: () => void;
   } => ({
     alert: null, isVisible: false,
-    checkAfterTransaction: async (): Promise<boolean> => false,
+    checkAfterTransaction: (): Promise<boolean> => Promise.resolve(false),
     dismiss: (): void => undefined,
     viewBudget: (): void => undefined,
   }),
