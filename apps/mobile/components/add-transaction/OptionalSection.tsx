@@ -36,6 +36,7 @@ interface OptionalSectionProps {
   transactionType: "EXPENSE" | "INCOME" | "TRANSFER";
   hideRecurring?: boolean;
   readonly recurringNameError?: string;
+  readonly recurringNameRef?: React.RefObject<View | null>;
 }
 
 export function OptionalSection({
@@ -46,6 +47,7 @@ export function OptionalSection({
   transactionType,
   hideRecurring = false,
   recurringNameError,
+  recurringNameRef,
 }: OptionalSectionProps): React.JSX.Element {
   const { isDark } = useTheme();
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -200,13 +202,15 @@ export function OptionalSection({
             {fields.isRecurring && (
               <View className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 gap-4">
                 {/* Recurring logic will be implemented here later or simply show basic name/frequency for now as placeholders */}
-                <TextField
-                  label={`${t("recurring_name_label")} *`}
-                  placeholder={t("recurring_name_placeholder")}
-                  value={fields.recurringName}
-                  onChangeText={(t) => onChange({ recurringName: t })}
-                  error={recurringNameError}
-                />
+                <View ref={recurringNameRef} collapsable={false}>
+                  <TextField
+                    label={`${t("recurring_name_label")} *`}
+                    placeholder={t("recurring_name_placeholder")}
+                    value={fields.recurringName}
+                    onChangeText={(t) => onChange({ recurringName: t })}
+                    error={recurringNameError}
+                  />
+                </View>
 
                 {/* Frequency Picker */}
                 <View>

@@ -19,6 +19,7 @@ import { useTheme } from "@/context/ThemeContext";
 import { useAccounts } from "@/hooks/useAccounts";
 import { useCategories } from "@/hooks/useCategories";
 import { useCategoryChildren } from "@/hooks/useCategoryChildren";
+import { useFormScroll } from "@/hooks/useFormScroll";
 import { useMarketRates } from "@/hooks/useMarketRates";
 import {
   createRecurringPayment,
@@ -54,6 +55,15 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { usePreferredCurrency } from "@/hooks/usePreferredCurrency";
+
+const TRANSACTION_FIELD_ORDER: readonly (keyof TransactionValidationErrors)[] = [
+  "amount",
+  "accountId",
+  "categoryId",
+  "fromAccountId",
+  "toAccountId",
+  "recurringName",
+];
 
 export default function AddTransaction(): React.ReactNode {
   const router = useRouter();
@@ -109,6 +119,21 @@ export default function AddTransaction(): React.ReactNode {
   const { latestRates } = useMarketRates();
   const { showToast } = useToast();
   const { preferredCurrency } = usePreferredCurrency();
+  const { scrollViewRef, getFieldRef, onScroll, scrollToFirstError } =
+    useFormScroll<keyof TransactionValidationErrors>({
+      bottomInset: insets.bottom,
+    });
+
+  useEffect(() => {
+    if (!Object.values(formErrors).some(Boolean)) return;
+
+    // Let newly expanded details and their error messages mount before the
+    // scrolling hook measures native layout. A new submit retriggers this effect.
+    const frame = requestAnimationFrame(() => {
+      scrollToFirstError(formErrors, TRANSACTION_FIELD_ORDER);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [formErrors, scrollToFirstError]);
 
   // Derived Values
   const selectedAccount = accounts.find((a) => a.id === selectedAccountId);
@@ -549,6 +574,9 @@ export default function AddTransaction(): React.ReactNode {
       />
 
       <ScrollView
+        ref={scrollViewRef}
+        onScroll={onScroll}
+        scrollEventThrottle={16}
         className="flex-1 bg-slate-50 dark:bg-slate-900"
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 40 }}
@@ -560,7 +588,7 @@ export default function AddTransaction(): React.ReactNode {
 
         {/* Amount Display — hidden when transfer has no valid accounts */}
         {!(type === "TRANSFER" && !canTransfer) && (
-          <>
+          <View ref={getFieldRef("amount")} collapsable={false}>
             {/* Insufficient balance warning */}
             {type === "EXPENSE" &&
               selectedAccount &&
@@ -597,7 +625,7 @@ export default function AddTransaction(): React.ReactNode {
                 {formErrors.amount}
               </Text>
             )}
-          </>
+          </View>
         )}
 
         {/* Form Content */}
@@ -629,6 +657,8 @@ export default function AddTransaction(): React.ReactNode {
                 onChangeTargetAmount={setTargetAmount}
                 fromAccountError={formErrors.fromAccountId}
                 toAccountError={formErrors.toAccountId}
+                fromAccountRef={getFieldRef("fromAccountId")}
+                toAccountRef={getFieldRef("toAccountId")}
                 exchangeRate={
                   selectedAccount && toAccount
                     ? latestRates
@@ -660,7 +690,11 @@ export default function AddTransaction(): React.ReactNode {
             <>
               <View className="flex-row gap-4 mb-4">
                 {/* Account Field */}
-                <View className="flex-1">
+                <View
+                  ref={getFieldRef("accountId")}
+                  collapsable={false}
+                  className="flex-1"
+                >
                   <Text className="input-label">
                     {t("account").toUpperCase()}
                   </Text>
@@ -725,7 +759,11 @@ export default function AddTransaction(): React.ReactNode {
                 </View>
 
                 {/* Category Field */}
-                <View className="flex-1">
+                <View
+                  ref={getFieldRef("categoryId")}
+                  collapsable={false}
+                  className="flex-1"
+                >
                   <Text className="input-label">
                     {t("category").toUpperCase()}
                   </Text>
@@ -800,6 +838,7 @@ export default function AddTransaction(): React.ReactNode {
               onToggleExpand={() => setIsOptionalExpanded(false)}
               transactionType={type}
               recurringNameError={formErrors.recurringName}
+              recurringNameRef={getFieldRef("recurringName")}
               fields={{
                 counterparty,
                 note,
