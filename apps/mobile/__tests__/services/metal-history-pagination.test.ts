@@ -7,6 +7,9 @@ interface QueryCondition {
 const mockAssetsCollection = { table: "assets" };
 const mockAssetMetalsCollection = { table: "asset_metals" };
 const mockEvidenceCollection = { table: "metal_action_evidence" };
+const mockFinancialActionGroupsCollection = {
+  table: "financial_action_groups",
+};
 const mockStatesCollection = { table: "metal_holding_states" };
 const mockEventsCollection = { table: "metal_lifecycle_events" };
 const mockGetCurrentUserDataScope = jest.fn();
@@ -20,6 +23,7 @@ jest.mock("@monyvi/db", () => ({
       const collections: Readonly<Record<string, unknown>> = {
         assets: mockAssetsCollection,
         asset_metals: mockAssetMetalsCollection,
+        financial_action_groups: mockFinancialActionGroupsCollection,
         metal_action_evidence: mockEvidenceCollection,
         metal_holding_states: mockStatesCollection,
         metal_lifecycle_events: mockEventsCollection,
@@ -159,6 +163,7 @@ describe("metal History pagination", () => {
     );
     mockRowsByTable = {
       assets,
+      financial_action_groups: [],
       metal_action_evidence: evidence,
       metal_holding_states: states,
       metal_lifecycle_events: events,

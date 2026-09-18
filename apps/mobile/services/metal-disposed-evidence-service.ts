@@ -104,8 +104,10 @@ export function shapeMetalDisposedEvidence(
 
   let envelope;
   try {
+    const latestAllowedCalendarDate =
+      input.latestAllowedCalendarDate ?? currentCalendarDate();
     envelope = parseFinancialActionEnvelopeJson(group.payloadJson, undefined, {
-      latestAllowedCalendarDate: input.latestAllowedCalendarDate,
+      latestAllowedCalendarDate,
     });
   } catch {
     return { available: false, reason: "unsupported_disposal_evidence" };
@@ -293,4 +295,11 @@ function isCanonicalJsonArray(
   value: CanonicalJsonValue
 ): value is readonly CanonicalJsonValue[] {
   return Array.isArray(value);
+}
+
+function currentCalendarDate(): string {
+  const now = new Date();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${now.getFullYear()}-${month}-${day}`;
 }

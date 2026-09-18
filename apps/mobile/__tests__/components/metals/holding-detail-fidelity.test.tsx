@@ -169,6 +169,7 @@ function activeDetail(
     unavailableExactFacts: [],
     weightGramsDecimal: "31.125",
     ...overrides,
+    terminalFacts: overrides.terminalFacts ?? null,
   };
 }
 

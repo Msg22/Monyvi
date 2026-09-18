@@ -3,6 +3,7 @@ import {
   type Asset,
   type AssetMetal,
   type CurrencyType,
+  type FinancialActionGroup,
   type MetalActionEvidence,
   type MetalHoldingState,
   type MetalLifecycleEvent,
@@ -53,6 +54,10 @@ import {
   toRateReferenceInput,
   toRenderKey,
 } from "@/services/metal-detail-read-model-shaping";
+import {
+  shapeMetalTerminalFacts,
+  type MetalTerminalFacts,
+} from "@/services/metal-terminal-read-model-service";
 
 export interface MetalDetailAssetInput {
   readonly acquisitionActionId: string | null;
@@ -104,6 +109,7 @@ export interface BuildMetalDetailReadModelInput {
   readonly metal: MetalDetailMetalInput;
   readonly preferredCurrency?: CurrencyType;
   readonly rateReferences: readonly unknown[];
+  readonly terminalFacts?: MetalTerminalFacts | null;
   readonly userId: string;
 }
 
@@ -157,6 +163,7 @@ export interface MetalDetailReadModel {
   readonly requiresCompleteMaterialCorrection: boolean;
   readonly renderKey: MetalDetailRenderKey | null;
   readonly status: "active" | "sold" | "disposed";
+  readonly terminalFacts: MetalTerminalFacts | null;
   readonly timeline: readonly MetalDetailTimelineItem[];
   readonly totalGainDecimal: string | null;
   readonly unavailableExactFacts: ReadonlyArray<
@@ -170,6 +177,7 @@ export interface ReadMetalDetailReadModelOptions {
   readonly holdingId: string;
   readonly preferredCurrency?: CurrencyType;
   readonly snapshotId?: string | null;
+  readonly latestAllowedCalendarDate?: string;
   readonly userId: string;
 }
 
@@ -256,8 +264,30 @@ export async function readMetalDetailReadModel(
   if (asset === null) return null;
   const dependencies = await readDetailDependencies(scope, asset);
   if (dependencies === null) return null;
-  const { evidence, events, holdingState, metal, metalType, rateReferences } =
-    dependencies;
+  const {
+    evidence,
+    events,
+    groups,
+    holdingState,
+    metal,
+    metalType,
+    rateReferences,
+  } = dependencies;
+  const terminalFacts = shapeMetalTerminalFacts({
+    asset,
+    event:
+      events.find((event) => event.id === holdingState.effectiveEventId) ??
+      null,
+    group:
+      groups.find(
+        (group) => group.actionId === holdingState.effectiveActionId
+      ) ?? null,
+    holdingState,
+    latestAllowedCalendarDate: options.latestAllowedCalendarDate,
+    metal: { ...metal, metalType },
+    rateReferences,
+    userId: scope.userId,
+  });
 
   return buildMetalDetailReadModel({
     asset: toDetailAssetInput(asset),
@@ -267,6 +297,7 @@ export async function readMetalDetailReadModel(
     metal: toDetailMetalInput(metal, metalType),
     preferredCurrency: options.preferredCurrency,
     rateReferences: rateReferences.map(toRateReferenceInput),
+    terminalFacts,
     userId: scope.userId,
   });
 }
@@ -290,6 +321,7 @@ async function readOwnedDetailAsset(
 interface MetalDetailDependencies {
   readonly evidence: readonly MetalActionEvidence[];
   readonly events: readonly MetalLifecycleEvent[];
+  readonly groups: readonly FinancialActionGroup[];
   readonly holdingState: MetalHoldingState;
   readonly metal: AssetMetal;
   readonly metalType: SupportedMetal;
@@ -335,9 +367,12 @@ async function readDetailEvidenceAndEvents(
   scope: CurrentUserDataScope,
   holdingId: string
 ): Promise<
-  Pick<MetalDetailDependencies, "evidence" | "events" | "rateReferences">
+  Pick<
+    MetalDetailDependencies,
+    "evidence" | "events" | "groups" | "rateReferences"
+  >
 > {
-  const [events, evidence, rateReferences] = await Promise.all([
+  const [events, evidence, groups, rateReferences] = await Promise.all([
     scope
       .queryOwned(
         database.get<MetalLifecycleEvent>("metal_lifecycle_events"),
@@ -355,6 +390,14 @@ async function readDetailEvidenceAndEvents(
       .fetch(),
     scope
       .queryOwned(
+        database.get<FinancialActionGroup>("financial_action_groups"),
+        Q.where("domain", "metals"),
+        Q.where("domain_reference_id", holdingId),
+        Q.where("deleted", false)
+      )
+      .fetch(),
+    scope
+      .queryOwned(
         database.get<MetalRateReference>("metal_rate_references"),
         Q.where("holding_id", holdingId),
         Q.where("deleted", false),
@@ -362,7 +405,7 @@ async function readDetailEvidenceAndEvents(
       )
       .fetch(),
   ]);
-  return { evidence, events, rateReferences };
+  return { evidence, events, groups, rateReferences };
 }
 
 export function shapeMetalDetailLifecycleEvents(
@@ -435,6 +478,8 @@ export function buildMetalDetailReadModel(
     requiresCompleteMaterialCorrection: unavailableExactFacts.length > 0,
     renderKey: toRenderKey(input.metal.metalType, itemForm),
     status,
+    terminalFacts:
+      input.terminalFacts?.kind === status ? input.terminalFacts : null,
     timeline:
       projection === null
         ? []
