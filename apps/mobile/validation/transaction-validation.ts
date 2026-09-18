@@ -15,6 +15,8 @@ export interface TransactionFormData {
   readonly amount: string;
   readonly accountId: string | null;
   readonly categoryId: string;
+  readonly isRecurring?: boolean;
+  readonly recurringName?: string;
 }
 
 export interface TransferFormData {
@@ -32,6 +34,7 @@ export interface TransactionValidationMessages {
   readonly accountRequired: string;
   readonly sourceAccountRequired: string;
   readonly destinationAccountRequired: string;
+  readonly recurringNameRequired: string;
 }
 
 export interface TransactionValidationOptions {
@@ -49,6 +52,7 @@ const defaultValidationMessages: TransactionValidationMessages = {
   accountRequired: "Account is required",
   sourceAccountRequired: "Source account is required",
   destinationAccountRequired: "Destination account is required",
+  recurringNameRequired: "Enter a name for this recurring payment.",
 };
 
 function requiredIdSchema(message: string): z.ZodType<string | null> {
@@ -111,11 +115,21 @@ function createBaseTransactionSchema(
   messages: TransactionValidationMessages,
   options: TransactionValidationOptions
 ): z.ZodType<TransactionFormData> {
-  return z.object({
-    amount: createAmountSchema(options, messages),
-    accountId: requiredIdSchema(messages.accountRequired),
-    categoryId: z.string().min(1, "Category is required"),
-  });
+  return z
+    .object({
+      amount: createAmountSchema(options, messages),
+      accountId: requiredIdSchema(messages.accountRequired),
+      categoryId: z.string().min(1, "Category is required"),
+      isRecurring: z.boolean().optional(),
+      recurringName: z.string().optional(),
+    })
+    .refine(
+      (data) => !data.isRecurring || Boolean(data.recurringName?.trim()),
+      {
+        message: messages.recurringNameRequired,
+        path: ["recurringName"],
+      }
+    );
 }
 
 /**
@@ -140,7 +154,12 @@ function createTransferSchema(
 /** Union of all possible form field keys for error display */
 export type TransactionValidationErrors = Partial<
   Record<
-    "amount" | "accountId" | "categoryId" | "fromAccountId" | "toAccountId",
+    | "amount"
+    | "accountId"
+    | "categoryId"
+    | "fromAccountId"
+    | "toAccountId"
+    | "recurringName",
     string
   >
 >;

@@ -60,6 +60,7 @@ export default function AddTransaction(): React.ReactNode {
   const insets = useSafeAreaInsets();
   const budgetAlert = useBudgetAlert();
   const { t } = useTranslation("transactions");
+  const { t: tCommon } = useTranslation("common");
 
   const { accounts } = useAccounts();
 
@@ -287,7 +288,7 @@ export default function AddTransaction(): React.ReactNode {
 
     try {
       const recurring = await createRecurringPayment({
-        name: recurringName,
+        name: recurringName.trim(),
         amount,
         currency,
         type,
@@ -347,7 +348,6 @@ export default function AddTransaction(): React.ReactNode {
         convertedAmount: parsedTargetAmount ?? undefined,
         exchangeRate,
       });
-
       showToast({
         type: "success",
         title: t("transfer_created"),
@@ -415,6 +415,8 @@ export default function AddTransaction(): React.ReactNode {
             amount: amountForValidation,
             accountId: selectedAccountId,
             categoryId: selectedCategoryId,
+            isRecurring,
+            recurringName,
           };
 
     const { isValid, errors } = validateTransactionForm(
@@ -433,11 +435,13 @@ export default function AddTransaction(): React.ReactNode {
         accountRequired: t("please_select_an_account"),
         sourceAccountRequired: t("please_select_source_account"),
         destinationAccountRequired: t("please_select_destination_account"),
+        recurringNameRequired: tCommon("recurring_name_required"),
       },
       { currency: selectedAccount?.currency }
     );
     if (!isValid) {
       setFormErrors(errors);
+      if (errors.recurringName) setIsOptionalExpanded(true);
       return;
     }
 
@@ -457,7 +461,7 @@ export default function AddTransaction(): React.ReactNode {
         let createdRecurringPaymentId: string | undefined;
         let linkedRecurringId: string | undefined;
 
-        if (isRecurring && recurringName && selectedAccount) {
+        if (isRecurring && selectedAccount) {
           createdRecurringPaymentId = await createRecurring(
             finalAmount,
             type,
@@ -795,6 +799,7 @@ export default function AddTransaction(): React.ReactNode {
               expanded={isOptionalExpanded}
               onToggleExpand={() => setIsOptionalExpanded(false)}
               transactionType={type}
+              recurringNameError={formErrors.recurringName}
               fields={{
                 counterparty,
                 note,
@@ -817,6 +822,16 @@ export default function AddTransaction(): React.ReactNode {
                   setRecurringFrequency(updates.recurringFrequency);
                 if (updates.recurringAutoCreate !== undefined)
                   setRecurringAutoCreate(updates.recurringAutoCreate);
+                if (
+                  updates.isRecurring === false ||
+                  (updates.recurringName !== undefined &&
+                    updates.recurringName.trim().length > 0)
+                ) {
+                  setFormErrors((previous) => ({
+                    ...previous,
+                    recurringName: undefined,
+                  }));
+                }
               }}
             />
           )}
