@@ -18,6 +18,7 @@ import {
 } from "./user-data-access";
 
 const coreFinancialActionService = createCoreAccountFinancialActionService({
+  createEffectId: () => Crypto.randomUUID(),
   executeAccountBalanceCommand: productionAccountBalanceCommandService.execute,
   hashProvider: productionFinancialActionHashProvider,
 });

@@ -17,6 +17,10 @@ import type { CurrentUserDataScope } from "../../services/user-data-access";
 
 const USER_ID = "10000000-0000-4000-8000-000000000001";
 const ACTION_ID = "20000000-0000-4000-8000-000000000002";
+
+function effectId(sequence: number): string {
+  return `80000000-0000-4000-8000-${String(sequence).padStart(12, "0")}`;
+}
 const OLD_ACCOUNT_ID = "30000000-0000-4000-8000-000000000003";
 const NEW_ACCOUNT_ID = "40000000-0000-4000-8000-000000000004";
 const TRANSFER_ACCOUNT_ID = "41000000-0000-4000-8000-000000000004";
@@ -192,7 +196,10 @@ function createHarness(): {
       ) as unknown as FinancialActionGroup,
     };
   });
+  let effectIdSequence = 0;
   const coreService = createCoreAccountFinancialActionService({
+    createEffectId: () =>
+      `80000000-0000-4000-8000-${String(++effectIdSequence).padStart(12, "0")}`,
     executeAccountBalanceCommand: command,
     hashProvider: {
       digestUtf8: jest.fn(() => Promise.resolve("a".repeat(64))),
@@ -254,6 +261,7 @@ describe("transaction core writer service", () => {
         accountId: OLD_ACCOUNT_ID,
         amountMinorUnits: "-15000",
         currency: "EGP",
+        effectId: effectId(1),
       },
     ]);
   });
@@ -268,6 +276,7 @@ describe("transaction core writer service", () => {
         accountId: OLD_ACCOUNT_ID,
         amountMinorUnits: "20000",
         currency: "EGP",
+        effectId: effectId(1),
       },
     ]);
     expect(harness.accounts.get(OLD_ACCOUNT_ID)?.balance).toBe(1100);
@@ -291,11 +300,13 @@ describe("transaction core writer service", () => {
         accountId: OLD_ACCOUNT_ID,
         amountMinorUnits: "10000",
         currency: "EGP",
+        effectId: effectId(1),
       },
       {
         accountId: NEW_ACCOUNT_ID,
         amountMinorUnits: "-10000",
         currency: "USD",
+        effectId: effectId(2),
       },
     ]);
     expect(harness.transactions.get(TRANSACTION_ID)?.currency).toBe("USD");
@@ -460,11 +471,13 @@ describe("transaction core writer service", () => {
         accountId: OLD_ACCOUNT_ID,
         amountMinorUnits: "15000",
         currency: "EGP",
+        effectId: effectId(1),
       },
       {
         accountId: NEW_ACCOUNT_ID,
         amountMinorUnits: "-100",
         currency: "USD",
+        effectId: effectId(2),
       },
     ]);
     expect(envelope.payload.operationCode).toBe("transaction.batch-delete");

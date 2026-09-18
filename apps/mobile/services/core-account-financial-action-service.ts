@@ -65,6 +65,7 @@ export interface ExecuteCoreAccountFinancialActionInput {
 }
 
 export interface CoreAccountFinancialActionDependencies {
+  readonly createEffectId: () => string;
   readonly executeAccountBalanceCommand: AccountBalanceCommandService["execute"];
   readonly hashProvider: Sha256Provider;
 }
@@ -78,6 +79,7 @@ export interface CoreAccountFinancialActionService {
 interface CanonicalAccountEffect {
   readonly account: Account;
   readonly amountMinorUnits: string;
+  readonly effectId: string;
   readonly expectedRevision: string;
   readonly isPreparedCreate: boolean;
   readonly nextBalance: number;
@@ -157,7 +159,8 @@ function assertMinorUnits(value: string): bigint {
 
 function canonicalizeEffects(
   effects: readonly CoreAccountEffectInput[],
-  userId: string
+  userId: string,
+  createEffectId: () => string
 ): readonly CanonicalAccountEffect[] {
   const byAccountId = new Map<
     string,
@@ -213,6 +216,7 @@ function canonicalizeEffects(
       return {
         account: effect.account,
         amountMinorUnits: effect.amountMinorUnits.toString(),
+        effectId: createEffectId(),
         expectedRevision,
         isPreparedCreate,
         nextBalance,
@@ -397,6 +401,7 @@ function buildEnvelope(
         accountId: effect.account.id,
         amountMinorUnits: effect.amountMinorUnits,
         currency: effect.account.currency,
+        effectId: effect.effectId,
       })),
       domainMutation: {
         records: mutations.map((mutation) => ({
@@ -424,7 +429,11 @@ export function createCoreAccountFinancialActionService(
     execute: async (
       input: ExecuteCoreAccountFinancialActionInput
     ): Promise<CommitFinancialActionGroupLocallyResult> => {
-      const effects = canonicalizeEffects(input.accountEffects, input.userId);
+      const effects = canonicalizeEffects(
+        input.accountEffects,
+        input.userId,
+        dependencies.createEffectId
+      );
       const command: ExecuteAccountBalanceCommandInput = {
         envelope: buildEnvelope(input, effects),
         hashProvider: dependencies.hashProvider,

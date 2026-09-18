@@ -17,6 +17,10 @@ import type { CurrentUserDataScope } from "../../services/user-data-access";
 
 const USER_ID = "10000000-0000-4000-8000-000000000001";
 const ACTION_ID = "20000000-0000-4000-8000-000000000002";
+
+function effectId(sequence: number): string {
+  return `80000000-0000-4000-8000-${String(sequence).padStart(12, "0")}`;
+}
 const FROM_ID = "30000000-0000-4000-8000-000000000003";
 const TO_ID = "40000000-0000-4000-8000-000000000004";
 const ALT_ID = "41000000-0000-4000-8000-000000000004";
@@ -177,7 +181,10 @@ function createHarness(): {
       ) as unknown as FinancialActionGroup,
     };
   });
+  let effectIdSequence = 0;
   const core = createCoreAccountFinancialActionService({
+    createEffectId: () =>
+      `80000000-0000-4000-8000-${String(++effectIdSequence).padStart(12, "0")}`,
     executeAccountBalanceCommand: command,
     hashProvider: {
       digestUtf8: jest.fn(() => Promise.resolve("a".repeat(64))),
@@ -238,8 +245,18 @@ describe("transfer core writer service", () => {
     });
 
     expect(envelope(harness.command).payload.accountEffects).toEqual([
-      { accountId: FROM_ID, amountMinorUnits: "-15000", currency: "EGP" },
-      { accountId: TO_ID, amountMinorUnits: "300", currency: "USD" },
+      {
+        accountId: FROM_ID,
+        amountMinorUnits: "-15000",
+        currency: "EGP",
+        effectId: effectId(1),
+      },
+      {
+        accountId: TO_ID,
+        amountMinorUnits: "300",
+        currency: "USD",
+        effectId: effectId(2),
+      },
     ]);
     expect(harness.accounts.get(FROM_ID)?.financialRevision).toBe("8");
     expect(harness.accounts.get(TO_ID)?.financialRevision).toBe("12");
@@ -251,7 +268,12 @@ describe("transfer core writer service", () => {
     await harness.service.update(TRANSFER_ID, { convertedAmount: 4 });
 
     expect(envelope(harness.command).payload.accountEffects).toEqual([
-      { accountId: TO_ID, amountMinorUnits: "200", currency: "USD" },
+      {
+        accountId: TO_ID,
+        amountMinorUnits: "200",
+        currency: "USD",
+        effectId: effectId(1),
+      },
     ]);
     expect(harness.accounts.get(TO_ID)?.balance).toBe(14);
     expect(harness.transfers.get(TRANSFER_ID)?.convertedAmount).toBe(4);
@@ -263,8 +285,18 @@ describe("transfer core writer service", () => {
     await harness.service.update(TRANSFER_ID, { fromAccountId: ALT_ID });
 
     expect(envelope(harness.command).payload.accountEffects).toEqual([
-      { accountId: FROM_ID, amountMinorUnits: "10000", currency: "EGP" },
-      { accountId: ALT_ID, amountMinorUnits: "-10000", currency: "EGP" },
+      {
+        accountId: FROM_ID,
+        amountMinorUnits: "10000",
+        currency: "EGP",
+        effectId: effectId(1),
+      },
+      {
+        accountId: ALT_ID,
+        amountMinorUnits: "-10000",
+        currency: "EGP",
+        effectId: effectId(2),
+      },
     ]);
     expect(harness.accounts.get(FROM_ID)?.balance).toBe(1000);
     expect(harness.accounts.get(ALT_ID)?.balance).toBe(300);
@@ -345,8 +377,18 @@ describe("transfer core writer service", () => {
     await harness.service.delete(TRANSFER_ID);
 
     expect(envelope(harness.command).payload.accountEffects).toEqual([
-      { accountId: FROM_ID, amountMinorUnits: "10000", currency: "EGP" },
-      { accountId: TO_ID, amountMinorUnits: "-200", currency: "USD" },
+      {
+        accountId: FROM_ID,
+        amountMinorUnits: "10000",
+        currency: "EGP",
+        effectId: effectId(1),
+      },
+      {
+        accountId: TO_ID,
+        amountMinorUnits: "-200",
+        currency: "USD",
+        effectId: effectId(2),
+      },
     ]);
     expect(harness.transfers.get(TRANSFER_ID)?.deleted).toBe(true);
   });
@@ -366,7 +408,12 @@ describe("transfer core writer service", () => {
       "transfer.convert-to-transaction"
     );
     expect(action.payload.accountEffects).toEqual([
-      { accountId: FROM_ID, amountMinorUnits: "10000", currency: "EGP" },
+      {
+        accountId: FROM_ID,
+        amountMinorUnits: "10000",
+        currency: "EGP",
+        effectId: effectId(1),
+      },
     ]);
     expect(harness.transactions.get(TRANSACTION_ID)?.amount).toBe(2);
     expect(harness.transactions.get(TRANSACTION_ID)?.currency).toBe("USD");

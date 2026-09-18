@@ -17,6 +17,8 @@ const ACTION_ID = "20000000-0000-4000-8000-000000000002";
 const ACCOUNT_A_ID = "30000000-0000-4000-8000-000000000003";
 const ACCOUNT_B_ID = "40000000-0000-4000-8000-000000000004";
 const TRANSFER_ID = "50000000-0000-4000-8000-000000000005";
+const EFFECT_A_ID = "80000000-0000-4000-8000-000000000001";
+const EFFECT_B_ID = "80000000-0000-4000-8000-000000000002";
 const OCCURRED_AT = "2026-09-06T10:00:00.000Z";
 
 interface FakeModel extends Model {
@@ -109,9 +111,12 @@ function createHarness(input?: {
         };
       })
   );
+  const effectIds = [EFFECT_A_ID, EFFECT_B_ID];
+  let effectIdIndex = 0;
   return {
     execute,
     service: createCoreAccountFinancialActionService({
+      createEffectId: () => effectIds[effectIdIndex++] ?? EFFECT_B_ID,
       executeAccountBalanceCommand: execute,
       hashProvider: {
         digestUtf8: jest.fn(() => Promise.resolve("a".repeat(64))),
@@ -271,11 +276,13 @@ describe("core account financial action service", () => {
         accountId: ACCOUNT_A_ID,
         amountMinorUnits: "-10000",
         currency: "EGP",
+        effectId: EFFECT_A_ID,
       },
       {
         accountId: ACCOUNT_B_ID,
         amountMinorUnits: "200",
         currency: "USD",
+        effectId: EFFECT_B_ID,
       },
     ]);
     expect(accountA.balance).toBe(800);
