@@ -101,7 +101,7 @@ export default function CreateBudgetScreen(): React.JSX.Element {
   return (
     <View
       testID="create-budget-screen"
-      className="flex-1 bg-background dark:bg-slate-950"
+      className="flex-1 bg-background dark:bg-background-dark"
     >
       <PageHeader
         title={getBudgetFormTitle(isEdit, isRenewal, t)}

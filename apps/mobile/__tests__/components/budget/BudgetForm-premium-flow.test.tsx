@@ -174,7 +174,12 @@ jest.mock("react-i18next", () => ({
 }));
 
 jest.mock("@/utils/dateHelpers", () => ({
-  formatDate: (date: Date): string => date.toISOString().slice(0, 10),
+  formatDate: (date: Date): string => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  },
 }));
 
 import { BudgetForm } from "@/components/budget/BudgetForm";

@@ -14,6 +14,7 @@ const FORM_SECTIONS_SOURCE = readMobileSource(
 const ALERT_SLIDER_SOURCE = readMobileSource(
   "../../../components/budget/AlertThresholdSlider.tsx"
 );
+const EN_BUDGET_COPY = readMobileSource("../../../locales/en/budgets.json");
 
 describe("Budget form approved mockup fidelity contract", () => {
   it("uses the compact safe-area header and approved create title", () => {
@@ -23,7 +24,8 @@ describe("Budget form approved mockup fidelity contract", () => {
     expect(CREATE_BUDGET_SOURCE).not.toContain(
       'isEdit ? t("edit_budget") : t("new_budget")'
     );
-    expect(CREATE_BUDGET_SOURCE).toContain("dark:bg-slate-950");
+    expect(CREATE_BUDGET_SOURCE).toContain("dark:bg-background-dark");
+    expect(CREATE_BUDGET_SOURCE).not.toContain("dark:bg-slate-950");
   });
 
   it("keeps scope cards compact, horizontal, and radio-like", () => {
@@ -36,6 +38,8 @@ describe("Budget form approved mockup fidelity contract", () => {
     expect(FORM_SECTIONS_SOURCE).toContain(
       "border-2 border-slate-400 dark:border-slate-600"
     );
+    expect(FORM_SECTIONS_SOURCE).toContain('icon="globe-outline"');
+    expect(FORM_SECTIONS_SOURCE).not.toContain("numberOfLines={2}");
     expect(FORM_SECTIONS_SOURCE).not.toContain(
       "mb-3 h-11 w-11 items-center justify-center"
     );
@@ -44,11 +48,14 @@ describe("Budget form approved mockup fidelity contract", () => {
   it("uses compact mockup fields without the extra currency notice", () => {
     expect(FORM_SECTIONS_SOURCE).not.toContain("BudgetCurrencyNotice");
     expect(FORM_SECTIONS_SOURCE).toContain(
-      "rounded-2xl border border-slate-200 bg-white px-3 py-2.5"
+      "rounded-xl border border-slate-200 bg-white px-3 py-2.5"
     );
     expect(FORM_SECTIONS_SOURCE).toContain('testID="budget-period-card"');
     expect(FORM_SECTIONS_SOURCE).toContain('testID="budget-period-segmented"');
     expect(FORM_SECTIONS_SOURCE).toContain('capitalizeFirst(t("limit_label"))');
+    expect(FORM_SECTIONS_SOURCE).toContain("dark:bg-surface-dark");
+    expect(FORM_SECTIONS_SOURCE).not.toContain("dark:bg-slate-900");
+    expect(EN_BUDGET_COPY).toContain('"budget_name": "Budget name"');
   });
 
   it("uses the approved compact green alert treatment", () => {
@@ -57,6 +64,13 @@ describe("Budget form approved mockup fidelity contract", () => {
     expect(ALERT_SLIDER_SOURCE).toContain("palette.nileGreen[500]");
     expect(ALERT_SLIDER_SOURCE).toContain("palette.slate[25]");
     expect(ALERT_SLIDER_SOURCE).toContain('variant === "default"');
+    expect(ALERT_SLIDER_SOURCE).toContain(
+      'testID="budget-alert-threshold-track-row"'
+    );
+    expect(ALERT_SLIDER_SOURCE).toContain(
+      'testID="budget-alert-threshold-percentage"'
+    );
+    expect(EN_BUDGET_COPY).toContain('"alert_threshold": "Alert threshold"');
   });
 
   it("uses the compact preview and approved gradient action surface", () => {
@@ -73,7 +87,7 @@ describe("Budget form approved mockup fidelity contract", () => {
     expect(FORM_SECTIONS_SOURCE).toContain("palette.nileGreen[500]");
     expect(FORM_SECTIONS_SOURCE).toContain("color={palette.slate[900]}");
     expect(FORM_SECTIONS_SOURCE).toContain(
-      "bg-background px-4 pt-3 dark:bg-slate-950"
+      "bg-background px-4 pt-3 dark:bg-background-dark"
     );
     expect(FORM_SECTIONS_SOURCE).not.toContain(
       "border-t border-slate-200 bg-white px-5 pt-3"

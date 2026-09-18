@@ -74,14 +74,14 @@ function ScopeIndicator({
   return (
     <View
       testID={`budget-scope-${type.toLowerCase()}-indicator`}
-      className={`ms-2 h-6 w-6 shrink-0 items-center justify-center rounded-full ${
+      className={`ms-2 h-5 w-5 shrink-0 items-center justify-center rounded-full ${
         selected
           ? "bg-nileGreen-400"
           : "border-2 border-slate-400 dark:border-slate-600"
       }`}
     >
       {selected ? (
-        <Ionicons name="checkmark" size={18} color={palette.slate[900]} />
+        <Ionicons name="checkmark" size={15} color={palette.slate[900]} />
       ) : null}
     </View>
   );
@@ -108,20 +108,17 @@ function ScopeCard(props: ScopeCardProps): React.JSX.Element {
       className={`relative min-h-20 flex-1 flex-row items-center rounded-2xl border px-3 py-3 ${
         props.selected
           ? "border-nileGreen-500"
-          : "border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900"
+          : "border-slate-200 bg-white dark:border-slate-700 dark:bg-surface-dark"
       }`}
     >
-      <View className="me-3 h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-nileGreen-100 dark:bg-nileGreen-900/50">
+      <View className="me-2.5 h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-nileGreen-100 dark:bg-nileGreen-700/50">
         <Ionicons name={props.icon} size={22} color={palette.nileGreen[400]} />
       </View>
       <View className="min-w-0 flex-1">
-        <Text className="text-base font-bold text-slate-900 dark:text-white">
+        <Text className="text-sm font-bold text-slate-900 dark:text-white">
           {props.title}
         </Text>
-        <Text
-          numberOfLines={2}
-          className="mt-0.5 text-xs leading-4 text-slate-500 dark:text-slate-400"
-        >
+        <Text className="mt-0.5 text-xs leading-4 text-slate-500 dark:text-slate-400">
           {props.description}
         </Text>
       </View>
@@ -139,7 +136,7 @@ function BudgetScopeSection({
   const { isDark } = useTheme();
   return (
     <>
-      <Text className="mb-3 text-base font-semibold text-slate-500 dark:text-slate-400">
+      <Text className="mb-3 text-sm font-semibold text-slate-500 dark:text-slate-400">
         1. {t("budget_scope")}
       </Text>
       <View testID="budget-scope-selector" className="mb-6 flex-row gap-2.5">
@@ -147,7 +144,7 @@ function BudgetScopeSection({
           type="GLOBAL"
           selected={controller.form.type === "GLOBAL"}
           disabled={controller.isEditMode}
-          icon="earth-outline"
+          icon="globe-outline"
           title={t("global_type")}
           description={t("scope_global_description")}
           accessibilityLabel={t("accessibility_global_budget_type")}
@@ -187,7 +184,7 @@ function BudgetGeneralError({
 
 function FieldIcon({ name }: { readonly name: IconName }): React.JSX.Element {
   return (
-    <View className="me-3 h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-nileGreen-100 dark:bg-nileGreen-900/50">
+    <View className="me-3 h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-nileGreen-100 dark:bg-nileGreen-700/50">
       <Ionicons name={name} size={21} color={palette.nileGreen[400]} />
     </View>
   );
@@ -202,7 +199,7 @@ function BudgetNameField({
   const { isDark } = useTheme();
   return (
     <>
-      <View className="mb-2.5 flex-row items-center rounded-2xl border border-slate-200 bg-white px-3 py-2.5 dark:border-slate-700 dark:bg-slate-900">
+      <View className="mb-2.5 flex-row items-center rounded-xl border border-slate-200 bg-white px-3 py-2.5 dark:border-slate-700 dark:bg-surface-dark">
         <FieldIcon name="document-text-outline" />
         <View className="flex-1">
           <Text className="text-xs text-slate-500 dark:text-slate-400">
@@ -267,7 +264,7 @@ function CategorySelectorField({
     <TouchableOpacity
       onPress={controller.openCategoryModal}
       activeOpacity={0.82}
-      className="flex-row items-center rounded-2xl border border-slate-200 bg-white px-3 py-2.5 dark:border-slate-700 dark:bg-slate-900"
+      className="flex-row items-center rounded-xl border border-slate-200 bg-white px-3 py-2.5 dark:border-slate-700 dark:bg-surface-dark"
     >
       <FieldIcon name="restaurant-outline" />
       <View className="flex-1">
@@ -361,7 +358,7 @@ function BudgetLimitField({
   const { isDark } = useTheme();
   return (
     <>
-      <View className="mb-2.5 flex-row items-center rounded-2xl border border-slate-200 bg-white px-3 py-2.5 dark:border-slate-700 dark:bg-slate-900">
+      <View className="mb-2.5 flex-row items-center rounded-xl border border-slate-200 bg-white px-3 py-2.5 dark:border-slate-700 dark:bg-surface-dark">
         <FieldIcon name="wallet-outline" />
         <View className="flex-1">
           <Text className="text-xs text-slate-500 dark:text-slate-400">
@@ -400,9 +397,9 @@ function BudgetPeriodField({
   return (
     <View
       testID="budget-period-card"
-      className="mb-2.5 rounded-2xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900"
+      className="mb-2.5 rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-surface-dark"
     >
-      <Text className="mb-2 text-sm font-medium text-slate-600 dark:text-slate-300">
+      <Text className="mb-2 text-xs font-medium text-slate-600 dark:text-slate-300">
         {t("period")}
       </Text>
       <View
@@ -424,9 +421,7 @@ function BudgetPeriodField({
             >
               <Text
                 className={`text-sm font-bold ${
-                  selected
-                    ? "text-white"
-                    : "text-slate-600 dark:text-slate-300"
+                  selected ? "text-white" : "text-slate-600 dark:text-slate-300"
                 }`}
               >
                 {t(BUDGET_PERIOD_LABELS[key])}
@@ -455,7 +450,7 @@ function CustomDateButton({
       </Text>
       <TouchableOpacity
         onPress={onPress}
-        className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 dark:border-slate-700 dark:bg-slate-900"
+        className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 dark:border-slate-700 dark:bg-surface-dark"
       >
         <Text className="text-sm font-medium text-slate-900 dark:text-white">
           {formatDate(value, "MMM d, yyyy")}
@@ -534,7 +529,7 @@ function BudgetAlertField({
     i18n.language
   );
   return (
-    <View className="mb-6 rounded-2xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900">
+    <View className="mb-6 rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-surface-dark">
       <AlertThresholdSlider
         variant="mockup"
         value={controller.form.alertThreshold}
@@ -555,7 +550,7 @@ function BudgetDetailsSection({
   const { t } = useTranslation("budgets");
   return (
     <>
-      <Text className="mb-3 text-base font-semibold text-slate-500 dark:text-slate-400">
+      <Text className="mb-3 text-sm font-semibold text-slate-500 dark:text-slate-400">
         2. {t("budget_details")}
       </Text>
       <BudgetNameField controller={controller} />
@@ -620,7 +615,7 @@ function PreviewIdentityRow({
       : `${t("preview_resets_on")} ${controller.preview.secondaryDate}`;
   return (
     <View className="flex-row items-stretch px-3 py-3">
-      <View className="me-3 h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-nileGreen-100 dark:bg-nileGreen-900/50">
+      <View className="me-3 h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-nileGreen-100 dark:bg-nileGreen-700/50">
         <Ionicons
           name="calendar-outline"
           size={22}
@@ -660,14 +655,10 @@ function PreviewMetric({
 }): React.JSX.Element {
   const containerClass = compact
     ? `w-full items-start px-1 py-2 ${
-        bordered
-          ? "border-b border-slate-200 dark:border-slate-700/70"
-          : ""
+        bordered ? "border-b border-slate-200 dark:border-slate-700/70" : ""
       }`
     : `flex-1 items-center px-1 ${
-        bordered
-          ? "border-e border-slate-200 dark:border-slate-700/70"
-          : ""
+        bordered ? "border-e border-slate-200 dark:border-slate-700/70" : ""
       }`;
   const textAlignmentClass = compact ? "text-start" : "text-center";
   return (
@@ -738,12 +729,12 @@ function BudgetPreviewSection({
   const { t } = useTranslation("budgets");
   return (
     <>
-      <Text className="mb-3 text-base font-semibold text-slate-500 dark:text-slate-400">
+      <Text className="mb-3 text-sm font-semibold text-slate-500 dark:text-slate-400">
         3. {t("preview")}
       </Text>
       <View
         testID="budget-live-preview"
-        className="overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900"
+        className="overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-surface-dark"
       >
         <PreviewIdentityRow controller={controller} />
         <PreviewMetrics controller={controller} />
@@ -857,7 +848,7 @@ function BudgetFormActions({
     <View
       testID="budget-form-actions"
       style={{ paddingBottom: bottom + 8 }}
-      className="bg-background px-4 pt-3 dark:bg-slate-950"
+      className="bg-background px-4 pt-3 dark:bg-background-dark"
     >
       <BudgetPrimaryAction controller={controller} />
       <BudgetCancelAction controller={controller} />
@@ -872,7 +863,7 @@ export function BudgetFormScreen({
 }): React.JSX.Element {
   return (
     <KeyboardAvoidingView
-      className="flex-1 bg-background dark:bg-slate-950"
+      className="flex-1 bg-background dark:bg-background-dark"
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
       <ScrollView

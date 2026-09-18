@@ -53,8 +53,7 @@ function thresholdFromPageX(
   const relativeX = pageX - trackX;
   const clampedX = Math.max(0, Math.min(relativeX, trackWidth));
   const raw =
-    MIN_THRESHOLD +
-    (clampedX / trackWidth) * (MAX_THRESHOLD - MIN_THRESHOLD);
+    MIN_THRESHOLD + (clampedX / trackWidth) * (MAX_THRESHOLD - MIN_THRESHOLD);
   const stepped = Math.round(raw / STEP) * STEP;
   return Math.max(MIN_THRESHOLD, Math.min(MAX_THRESHOLD, stepped));
 }
@@ -85,12 +84,10 @@ function createSliderPanResponder(
       event: GestureResponderEvent,
       _gestureState: PanResponderGestureState
     ) => {
-      trackRef.current?.measure(
-        (_x, _y, _width, _height, pageX: number) => {
-          trackXRef.current = pageX;
-          updateFromPageX(event.nativeEvent.pageX);
-        }
-      );
+      trackRef.current?.measure((_x, _y, _width, _height, pageX: number) => {
+        trackXRef.current = pageX;
+        updateFromPageX(event.nativeEvent.pageX);
+      });
     },
     onPanResponderMove: (event: GestureResponderEvent) => {
       updateFromPageX(event.nativeEvent.pageX);
@@ -136,8 +133,7 @@ function useSliderGeometry(
   return {
     isMeasured,
     fillWidth: trackWidth > 0 ? normalizedValue * trackWidth : 0,
-    thumbLeft:
-      trackWidth > 0 ? normalizedValue * (trackWidth - thumbSize) : 0,
+    thumbLeft: trackWidth > 0 ? normalizedValue * (trackWidth - thumbSize) : 0,
     handleLayout,
     panResponder,
     trackRef,
@@ -152,20 +148,49 @@ function SliderHeader({
   readonly variant: NonNullable<AlertThresholdSliderProps["variant"]>;
 }): React.JSX.Element {
   const { t } = useTranslation("budgets");
-  const percentageColor =
-    variant === "mockup" ? palette.nileGreen[500] : palette.gold[600];
-  const spacingClass = variant === "mockup" ? "mb-0.5" : "mb-1.5";
-  const percentageClass = variant === "mockup" ? "text-base" : "text-sm";
+  if (variant === "mockup") {
+    return (
+      <Text className="mb-1 text-xs font-medium text-slate-700 dark:text-slate-300">
+        {t("alert_threshold")}
+      </Text>
+    );
+  }
   return (
-    <View
-      className={`${spacingClass} flex-row items-center justify-between`}
-    >
+    <View className="mb-1.5 flex-row items-center justify-between">
       <Text className="text-sm font-medium text-slate-700 dark:text-slate-300">
         {t("alert_threshold")}
       </Text>
+      <Text className="text-sm font-bold text-gold-600">
+        {Math.round(value)}%
+      </Text>
+    </View>
+  );
+}
+
+function MockupSliderTrackRow({
+  geometry,
+  thumbSize,
+  value,
+}: {
+  readonly geometry: SliderGeometry;
+  readonly thumbSize: number;
+  readonly value: number;
+}): React.JSX.Element {
+  return (
+    <View
+      testID="budget-alert-threshold-track-row"
+      className="flex-row items-center gap-3"
+    >
+      <View className="flex-1">
+        <SliderTrack
+          geometry={geometry}
+          variant="mockup"
+          thumbSize={thumbSize}
+        />
+      </View>
       <Text
-        className={`${percentageClass} font-bold`}
-        style={{ color: percentageColor }}
+        testID="budget-alert-threshold-percentage"
+        className="text-base font-bold text-nileGreen-500"
       >
         {Math.round(value)}%
       </Text>
@@ -292,11 +317,19 @@ export function AlertThresholdSlider({
   return (
     <View>
       <SliderHeader value={value} variant={variant} />
-      <SliderTrack
-        geometry={geometry}
-        variant={variant}
-        thumbSize={thumbSize}
-      />
+      {variant === "mockup" ? (
+        <MockupSliderTrackRow
+          geometry={geometry}
+          thumbSize={thumbSize}
+          value={value}
+        />
+      ) : (
+        <SliderTrack
+          geometry={geometry}
+          variant={variant}
+          thumbSize={thumbSize}
+        />
+      )}
       {variant === "default" ? <DefaultSliderHelp /> : null}
     </View>
   );

@@ -81,10 +81,7 @@ jest.mock("@/components/modals/ConfirmationModal", () => ({
     readonly onConfirm: () => void;
   }): React.JSX.Element | null =>
     visible ? (
-      <MockTouchableOpacity
-        testID="confirm-budget-renewal"
-        onPress={onConfirm}
-      >
+      <MockTouchableOpacity testID="confirm-budget-renewal" onPress={onConfirm}>
         <MockText>confirm_budget_renewal_action</MockText>
       </MockTouchableOpacity>
     ) : null,
@@ -335,13 +332,13 @@ describe("BudgetForm category recovery", () => {
     expect(mockedCreateBudgetService).not.toHaveBeenCalled();
   });
 
-  it("lets creation select a supported currency and explains the choice is final", () => {
+  it("lets creation select a supported currency without adding mockup-external copy", () => {
     mockCategoryError = null;
     render(<BudgetForm />);
 
     expect(
-      screen.getByText("budget_currency_immutable_info")
-    ).toBeOnTheScreen();
+      screen.queryByText("budget_currency_immutable_info")
+    ).not.toBeOnTheScreen();
     fireEvent.press(screen.getByTestId("budget-currency-selector"));
     fireEvent.press(screen.getByTestId("currency-picker-option-usd"));
 
