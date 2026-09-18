@@ -152,22 +152,24 @@ function measureField(
   y: number,
   viewport?: { readonly top: number; readonly height: number }
 ): void {
-  const scrollView = mockFormScroll?.scrollViewRef.current;
-  const fieldView = mockFormScroll?.getFieldRef(field).current;
+  if (!mockFormScroll) throw new Error("The transaction form did not attach its scrolling hook");
+  const scrollView = mockFormScroll.scrollViewRef.current;
+  const fieldView = mockFormScroll.getFieldRef(field).current;
   const viewportView = mockViewportRef.current;
-  if (scrollView && viewportView) {
-    jest.spyOn(scrollView, "scrollTo").mockImplementation(mockNativeScrollTo);
-    // Supply native layout through the public ScrollView host-ref contract.
-    scrollView.getNativeScrollRef = (): ReturnType<ScrollView["getNativeScrollRef"]> => viewportView;
-    jest.spyOn(viewportView, "measureInWindow").mockImplementation((callback): void => {
-      callback(0, viewport?.top ?? 0, 300, viewport?.height ?? Dimensions.get("window").height);
-    });
-  }
-  if (fieldView) {
-    jest.spyOn(fieldView, "measureInWindow").mockImplementation((callback) => {
-      callback(0, y, 300, 100);
-    });
-  }
+  if (!scrollView) throw new Error("The transaction ScrollView ref is not mounted");
+  if (!viewportView) throw new Error("The native viewport ref is not mounted");
+  if (!fieldView) throw new Error(`The validation field ${field} ref is not mounted`);
+
+  scrollView.scrollTo = mockNativeScrollTo;
+  scrollView.getNativeScrollRef = (): ReturnType<ScrollView["getNativeScrollRef"]> => viewportView;
+  // RN's default native-method mocks are shared through the component prototype.
+  // Own-instance mocks keep viewport and field measurements independent.
+  viewportView.measureInWindow = jest.fn<void, Parameters<View["measureInWindow"]>>((callback): void => {
+    callback(0, viewport?.top ?? 0, 300, viewport?.height ?? Dimensions.get("window").height);
+  });
+  fieldView.measureInWindow = jest.fn<void, Parameters<View["measureInWindow"]>>((callback): void => {
+    callback(0, y, 300, 100);
+  });
 }
 
 function flushScrollFrames(): void {
