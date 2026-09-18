@@ -4,6 +4,16 @@ description:
   in tasks.md
 ---
 
+## Approved Mockup Binding Gate
+
+When this workflow consumes an approved mockup or sidecar, run
+`node scripts/verify-mockup-binding.js <path/to/mockup.binding.md>` before using
+binding facts, rendered evidence, or approval status. Require exit status zero:
+current image bytes, exact UTF-8/LF Binding Facts bytes, both approved
+revisions, and approval evidence for the approved combined
+`Binding approval revision` must all verify. A failed verifier blocks governed
+UI work; follow `.agent/workflows/mockup-implementation.md` to renew approval.
+
 ## User Input
 
 ```text
@@ -67,11 +77,13 @@ You **MUST** consider the user input before proceeding (if not empty).
      `Binding metadata approval: APPROVED` and the explicit approval
      evidence/reference required by that workflow. Recompute its current
      fingerprint, verify `Approved binding metadata revision` equals
-     `Binding metadata revision`, and verify the approval evidence/reference
-     identifies that same revision. A missing sidecar, failed revision check,
-     sidecar still marked `PENDING`, missing approval reference, or sidecar
-     materially changed after approval is not authoritative and MUST block
-     governed UI implementation until explicit approval is restored. If an
+     `Binding metadata revision`, verify `Approved binding approval revision`
+     equals `Binding approval revision`, and verify the approval
+     evidence/reference identifies the approved combined
+     `Approved binding approval revision`. A missing sidecar, failed revision
+     check, sidecar still marked `PENDING`, missing approval reference, or
+     sidecar materially changed after approval is not authoritative and MUST
+     block governed UI implementation until explicit approval is restored. If an
      approved reference predates the sidecar rule and has no sidecar, follow
      that workflow's **Legacy Approved Mockup Metadata Migration** procedure or
      require its generated prerequisite task to complete; the migrated sidecar
@@ -186,7 +198,9 @@ You **MUST** consider the user input before proceeding (if not empty).
      `Binding metadata approval: APPROVED` is present with its explicit approval
      evidence/reference, its recomputed current fingerprint is valid,
      `Approved binding metadata revision` equals `Binding metadata revision`,
-     and the evidence identifies that revision. If this check fails, keep the
+     `Approved binding approval revision` equals `Binding approval revision`,
+     and the approval evidence/reference identifies the approved combined
+     `Approved binding approval revision`. If this check fails, keep the
      governed UI blocked rather than accepting evidence against stale or
      unapproved metadata.
    - For any changed UI governed by an approved mockup, verify the required

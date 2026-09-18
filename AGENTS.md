@@ -689,12 +689,40 @@ For multi-step tasks, state a brief plan:
 Strong success criteria let you loop independently. Weak criteria ("make it
 work") require constant clarification.
 
+## Output style
+
+The reader has ADHD. Shape every response so it can be acted on:
+
+1. Lead with the answer or next action: command, path, or snippet first.
+2. Number multi-step work; one bounded action per step.
+3. End with one next action doable in under two minutes.
+4. Finish the current issue before raising a new one.
+5. Restate progress each turn ("step 3 of 5 done").
+6. Give time estimates in concrete units, never "a bit".
+7. After a change, show what now works.
+8. Errors: state location, cause, and fix. No drama.
+9. Cap lists to 5 items.
+10. No preamble, no recaps, no closers.
+
+Exceptions: explain fully when asked to explain. Confirm before destructive
+actions. After three failed fixes, stop and name the doubtful assumption. If the
+request is ambiguous, ask one short question.
+
 ## Active Technologies
-- TypeScript strict mode; React Native Expo mobile app + Expo Router, React Native, NativeWind v4, WatermelonDB, Zod, DateTimePicker, i18next (386-recurring-end-date)
-- Existing WatermelonDB and synced recurring-payments record; existing optional end-date column (386-recurring-end-date)
-- Existing synced recurring-payment end-date field in WatermelonDB (386-recurring-end-date)
-- TypeScript 5.9 strict; React 19.2; React Native 0.83.6 + Expo 55, Expo Router 55, WatermelonDB 0.28, Supabase JS 2.106, Decimal.js (035-metals-module-redesign)
-- WatermelonDB/SQLite local source of truth; Supabase PostgreSQL with exact numeric, grouped CAS RPC, and immutable Metals evidence (035-metals-module-redesign)
+
+- TypeScript strict mode; React Native Expo mobile app + Expo Router, React
+  Native, NativeWind v4, WatermelonDB, Zod, DateTimePicker, i18next
+  (386-recurring-end-date)
+- Existing WatermelonDB and synced recurring-payments record; existing optional
+  end-date column (386-recurring-end-date)
+- Existing synced recurring-payment end-date field in WatermelonDB
+  (386-recurring-end-date)
+- TypeScript 5.9 strict; React 19.2; React Native 0.83.6 + Expo 55, Expo Router
+  55, WatermelonDB 0.28, Supabase JS 2.106, Decimal.js
+  (035-metals-module-redesign)
+- WatermelonDB/SQLite local source of truth; Supabase PostgreSQL with exact
+  numeric, grouped CAS RPC, and immutable Metals evidence
+  (035-metals-module-redesign)
 
 - TypeScript 5.9 strict mode, React 19.2, React Native + Expo Router, React
   Navigation, NativeWind v4, (034-budget-detail-redesign)

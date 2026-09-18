@@ -4,6 +4,16 @@ This workflow applies when working GitHub sprint issues for Monyvi. GitHub
 issues may be AI-generated and not yet reviewed by Mohamed, so issue text is an
 input to verify, not an automatic product decision.
 
+## Approved Mockup Binding Gate
+
+When this workflow consumes an approved mockup or sidecar, run
+`node scripts/verify-mockup-binding.js <path/to/mockup.binding.md>` before using
+binding facts, rendered evidence, or approval status. Require exit status zero:
+current image bytes, exact UTF-8/LF Binding Facts bytes, both approved
+revisions, and approval evidence for the approved combined
+`Binding approval revision` must all verify. A failed verifier blocks governed
+UI work; follow `.agent/workflows/mockup-implementation.md` to renew approval.
+
 ## 1. Pick And Verify The Issue
 
 1. Pick the next issue by priority and sprint order unless Mohamed gives a
@@ -84,12 +94,14 @@ handoff from `.agent/workflows/mockup-implementation.md` before implementation
 begins. The sidecar must record `Binding metadata approval: APPROVED` plus the
 explicit approval evidence/reference. Recompute its current fingerprint and
 verify that `Approved binding metadata revision` equals
-`Binding metadata revision` and that the approval evidence identifies that same
-revision. For an approved legacy mockup without a sidecar, complete that
-workflow's legacy metadata migration and explicit sidecar approval first. A
-fidelity-affecting `UNKNOWN`, failed revision check, missing approval record,
-pending sidecar, or materially changed/unapproved binding fact blocks
-implementation rather than being inferred.
+`Binding metadata revision`, that `Approved binding approval revision` equals
+`Binding approval revision`, and that the approval evidence/reference identifies
+the approved combined `Approved binding approval revision`. For an approved
+legacy mockup without a sidecar, complete that workflow's legacy metadata
+migration and explicit sidecar approval first. A fidelity-affecting `UNKNOWN`,
+failed revision check, missing approval record, pending sidecar, or materially
+changed/unapproved binding fact blocks implementation rather than being
+inferred.
 
 Implement the approved direction through `.agent/workflows/applying-mockups.md`.
 If coding reveals a meaningful design change, stop and ask for approval again

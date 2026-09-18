@@ -18,6 +18,7 @@ import {
 } from "@/validation/transaction-validation";
 import type { Category, CurrencyType, TransactionType } from "@monyvi/db";
 import {
+  formatStoredAmountInput,
   parseAmountInput,
   type ParsedSmsTransaction,
   type ReviewableTransaction,
@@ -148,7 +149,9 @@ export function useTransactionEditState({
   };
 
   // Local editable state
-  const [amount, setAmount] = useState(transaction.amount.toString());
+  const [amount, setAmount] = useState(
+    formatStoredAmountInput(transaction.amount)
+  );
   const [note, setNote] = useState(readTransactionNote(transaction));
 
   const [counterparty, setCounterparty] = useState(
@@ -311,7 +314,7 @@ export function useTransactionEditState({
     if (initializedForIdentityRef.current === transactionIdentity) return;
     initializedForIdentityRef.current = transactionIdentity;
 
-    setAmount(transaction.amount.toString());
+    setAmount(formatStoredAmountInput(transaction.amount));
     setNewAccountCurrency(transaction.currency);
     setNote(readTransactionNote(transaction));
     setCounterparty(transaction.counterparty || "");
@@ -550,11 +553,26 @@ export function useTransactionEditState({
       }
     }
 
-    const { isValid, errors } = validateTransactionForm(txType, {
-      amount,
-      accountId: resolvedAccountId,
-      categoryId: selectedCategoryId,
-    });
+    const { isValid, errors } = validateTransactionForm(
+      txType,
+      {
+        amount,
+        accountId: resolvedAccountId,
+        categoryId: selectedCategoryId,
+      },
+      {
+        amountRequired: t("amount_required"),
+        invalidAmount: t("invalid_amount"),
+        amountMustBePositive: t("amount_must_be_positive"),
+        amountMaximum: (maximum) =>
+          t("amount_maximum_error", {
+            maximum: maximum.toLocaleString("en-US"),
+          }),
+        amountPrecision: (precision) =>
+          t("amount_precision_error", { precision }),
+      },
+      { currency: selectedAccountCurrency }
+    );
 
     const requiresToAccount = formConfig.showToAccount;
     const isToAccountValid =

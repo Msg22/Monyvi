@@ -2,7 +2,7 @@ import { palette } from "@/constants/colors";
 import { Account } from "@monyvi/db";
 import { Ionicons } from "@expo/vector-icons";
 import { Text, TouchableOpacity, View } from "react-native";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type RefObject } from "react";
 import { AccountSelectorModal } from "../modals/AccountSelectorModal";
 import { formatAmountInput } from "@monyvi/logic";
 import { useTranslation } from "react-i18next";
@@ -25,6 +25,8 @@ interface TransferFieldsProps {
   fromAccountError?: string;
   /** Destination account validation message, shown after submit attempts */
   toAccountError?: string;
+  readonly fromAccountRef?: RefObject<View | null>;
+  readonly toAccountRef?: RefObject<View | null>;
 }
 
 export function TransferFields({
@@ -40,6 +42,8 @@ export function TransferFields({
   onFocusTargetAmount,
   fromAccountError,
   toAccountError,
+  fromAccountRef,
+  toAccountRef,
 }: TransferFieldsProps): React.JSX.Element {
   const [isFromModalOpen, setIsFromModalOpen] = useState(false);
   const [isToModalOpen, setIsToModalOpen] = useState(false);
@@ -81,7 +85,7 @@ export function TransferFields({
     <View className="mb-4">
       <View className="flex-row items-center gap-2">
         {/* From Account */}
-        <View className="flex-1">
+        <View ref={fromAccountRef} collapsable={false} className="flex-1">
           <Text className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-2 px-1 uppercase tracking-wider">
             {t("from_label").toUpperCase()}
           </Text>
@@ -129,7 +133,7 @@ export function TransferFields({
         </View>
 
         {/* To Account */}
-        <View className="flex-1">
+        <View ref={toAccountRef} collapsable={false} className="flex-1">
           <Text className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-2 px-1 uppercase tracking-wider">
             {t("to_label")}
           </Text>

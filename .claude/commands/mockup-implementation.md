@@ -240,12 +240,28 @@ mockup-1-v2.png mockup-2-v2.png
 
 ---
 
-### 9.5 Purpose
+### 9.5 Approved Binding Context
 
-- These images become the **single source of truth for UI implementation**
-- They MUST be used by:
-  - Developers → for pixel-perfect implementation
-  - Review agents → for visual validation against code
+Every approved image needs a matching `<mockup-basename>.binding.md` sidecar
+created from `.specify/templates/mockup-binding-template.md`. Before
+implementation or review consumes it, run
+`node scripts/verify-mockup-binding.js <path/to/mockup.binding.md>` and require
+exit status zero.
+
+During explicit approval, compute and store `Binding approval revision` from the
+approved image revision plus Binding Facts revision, copy it to
+`Approved binding approval revision`, and record approval evidence/reference
+identifying that same approved combined revision. If image bytes or Binding
+Facts bytes change, reset approval status and both approved revision fields to
+`PENDING`, recompute revisions, and obtain renewed explicit approval. Follow
+`.agent/workflows/mockup-implementation.md` for the complete binding-fact,
+legacy-migration, and verification contract.
+
+### 9.6 Purpose
+
+- Approved image plus authoritative sidecar become implementation source of
+  truth.
+- Developers and reviewers consume only sidecars whose verifier passes.
 
 ---
 

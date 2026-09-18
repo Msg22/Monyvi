@@ -7,6 +7,8 @@ interface MetroConfigShape {
     readonly sourceExts: readonly string[];
     readonly nodeModulesPaths?: readonly string[];
     readonly disableHierarchicalLookup?: boolean;
+    readonly unstable_enableSymlinks?: boolean;
+    readonly unstable_enablePackageExports?: boolean;
     readonly blockList?: readonly RegExp[];
   };
   readonly transformer: Record<string, unknown>;
@@ -25,7 +27,8 @@ function readWorkspaceOptOut(): string | undefined {
 
 function loadMetroConfig(
   realNodeModulesRoot: string = workspaceNodeModules,
-  hasWorkspaceNodeModules: boolean = true
+  hasWorkspaceNodeModules: boolean = true,
+  sentryIncludesWorkspaceNodeModules: boolean = true
 ): MetroConfigShape {
   jest.resetModules();
 
@@ -37,19 +40,15 @@ function loadMetroConfig(
   }));
   jest.doMock("@sentry/react-native/metro", () => ({
     getSentryExpoConfig: jest.fn(() => ({
-      watchFolders: [
-        workspaceNodeModules,
-        projectRoot,
-        packageLogicRoot,
-        packageDbRoot,
-      ],
+      watchFolders: sentryIncludesWorkspaceNodeModules
+        ? [workspaceNodeModules, projectRoot, packageLogicRoot, packageDbRoot]
+        : [projectRoot, packageLogicRoot, packageDbRoot],
       resolver: {
         assetExts: ["png", "svg"],
         sourceExts: ["js", "ts"],
-        nodeModulesPaths: [
-          path.resolve(projectRoot, "node_modules"),
-          workspaceNodeModules,
-        ],
+        nodeModulesPaths: sentryIncludesWorkspaceNodeModules
+          ? [path.resolve(projectRoot, "node_modules"), workspaceNodeModules]
+          : [path.resolve(projectRoot, "node_modules")],
         disableHierarchicalLookup: false,
         blockList: [],
       },
@@ -131,6 +130,19 @@ describe("metro config", () => {
         pattern.test(path.join(mainNodeModules, "react-native-url-polyfill"))
       )
     ).toBe(false);
+  });
+
+  it("adds the real linked dependency root even when Sentry omits the junction", () => {
+    const mainNodeModules = path.resolve(
+      workspaceRoot,
+      "../main-checkout/node_modules"
+    );
+    const config = loadMetroConfig(mainNodeModules, true, false);
+
+    expect(config.watchFolders).toContain(mainNodeModules);
+    expect(config.resolver.nodeModulesPaths).toContain(mainNodeModules);
+    expect(config.resolver.unstable_enableSymlinks).toBe(true);
+    expect(config.resolver.unstable_enablePackageExports).toBe(true);
   });
 
   it("keeps Sentry paths when node_modules is unavailable", () => {
