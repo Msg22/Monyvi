@@ -1,9 +1,25 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react-native";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 import React from "react";
-import { Switch } from "react-native";
+import { Dimensions, ScrollView, Switch } from "react-native";
 
 const mockBack = jest.fn();
 const mockShowToast = jest.fn();
+const mockNativeScrollTo = jest.fn<void, Parameters<ScrollView["scrollTo"]>>();
+let mockFormScroll: ReturnType<typeof import("@/hooks/useFormScroll").useFormScroll> | undefined;
+
+// Keep the real scrolling logic; only native measurement is supplied by the tests.
+jest.mock("@/hooks/useFormScroll", () => {
+  const actual = jest.requireActual<typeof import("@/hooks/useFormScroll")>("@/hooks/useFormScroll");
+  return {
+    useFormScroll: (
+      options: Parameters<typeof actual.useFormScroll>[0]
+    ): ReturnType<typeof actual.useFormScroll> => {
+      const result = actual.useFormScroll(options);
+      mockFormScroll = result;
+      return result;
+    },
+  };
+});
 
 jest.mock("expo-router", () => ({
   useRouter: (): { readonly back: jest.Mock; readonly push: jest.Mock } => ({
@@ -126,6 +142,23 @@ function enterRecurringName(name: string): void {
   fireEvent.changeText(screen.getByPlaceholderText("recurring_name_placeholder"), name);
 }
 
+function measureField(field: "amount" | "recurringName", y: number): void {
+  const scrollView = mockFormScroll?.scrollViewRef.current;
+  const fieldView = mockFormScroll?.getFieldRef(field).current;
+  if (scrollView) {
+    jest.spyOn(scrollView, "scrollTo").mockImplementation(mockNativeScrollTo);
+  }
+  if (fieldView) {
+    jest.spyOn(fieldView, "measureInWindow").mockImplementation((callback) => {
+      callback(0, y, 300, 100);
+    });
+  }
+}
+
+function flushScrollFrames(): void {
+  act(() => { jest.advanceTimersByTime(50); });
+}
+
 describe("Add Transaction recurring-name QA", () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -203,5 +236,86 @@ describe("Add Transaction recurring-name QA", () => {
     expect(transactions.createTransaction).toHaveBeenCalledWith(expect.objectContaining({
       linkedRecurringId: undefined,
     }));
+  });
+
+  describe("validation viewport recovery", () => {
+    beforeEach(() => {
+      jest.useFakeTimers();
+      mockFormScroll = undefined;
+    });
+
+    afterEach(() => {
+      jest.clearAllTimers();
+      jest.restoreAllMocks();
+      jest.useRealTimers();
+    });
+
+    it("scrolls to an offscreen recurring name after header Save, including repeated attempts", () => {
+      render(<AddTransaction />);
+      fireEvent.press(screen.getByTestId("key-1"));
+      enableRecurring();
+      fireEvent.press(screen.getByTestId("header-save"));
+      measureField("recurringName", Dimensions.get("window").height + 100);
+      flushScrollFrames();
+
+      expect(screen.getByText("recurring_name_required")).toBeTruthy();
+      expect(mockNativeScrollTo).toHaveBeenCalledWith({ y: 224, animated: true });
+      expect(recurring.createRecurringPayment).not.toHaveBeenCalled();
+      expect(transactions.createTransaction).not.toHaveBeenCalled();
+
+      mockNativeScrollTo.mockClear();
+      fireEvent.press(screen.getByTestId("header-save"));
+      flushScrollFrames();
+      expect(mockNativeScrollTo).toHaveBeenCalledWith({ y: 224, animated: true });
+    });
+
+    it.each(["header-save", "key-done"])("reveals and scrolls to a collapsed recurring name after %s", (button) => {
+      render(<AddTransaction />);
+      fireEvent.press(screen.getByTestId("key-1"));
+      enableRecurring();
+      fireEvent.press(screen.getByText("hide_details"));
+      fireEvent.press(screen.getByTestId(button));
+      measureField("recurringName", Dimensions.get("window").height + 100);
+      flushScrollFrames();
+
+      expect(screen.getByPlaceholderText("recurring_name_placeholder")).toBeTruthy();
+      expect(screen.getByText("recurring_name_required")).toBeTruthy();
+      expect(mockNativeScrollTo).toHaveBeenCalledWith({ y: 224, animated: true });
+      expect(recurring.createRecurringPayment).not.toHaveBeenCalled();
+      expect(transactions.createTransaction).not.toHaveBeenCalled();
+    });
+
+    it("scrolls to the earlier amount error rather than the later recurring name", () => {
+      render(<AddTransaction />);
+      enableRecurring();
+      fireEvent.scroll(screen.UNSAFE_getByType(ScrollView), {
+        nativeEvent: { contentOffset: { x: 0, y: 500 } },
+      });
+      fireEvent.press(screen.getByTestId("header-save"));
+      measureField("amount", -200);
+      measureField("recurringName", Dimensions.get("window").height + 100);
+      flushScrollFrames();
+
+      expect(screen.getByText("amount_required")).toBeTruthy();
+      expect(mockNativeScrollTo).toHaveBeenCalledWith({ y: 276, animated: true });
+      expect(mockNativeScrollTo).not.toHaveBeenCalledWith({ y: 724, animated: true });
+      expect(transactions.createTransaction).not.toHaveBeenCalled();
+    });
+
+    it("does not scroll when the invalid field is already visible or after correction", () => {
+      render(<AddTransaction />);
+      fireEvent.press(screen.getByTestId("key-1"));
+      enableRecurring();
+      fireEvent.press(screen.getByTestId("header-save"));
+      measureField("recurringName", 100);
+      flushScrollFrames();
+      expect(mockNativeScrollTo).not.toHaveBeenCalled();
+
+      enterRecurringName("Internet bill");
+      measureField("recurringName", Dimensions.get("window").height + 100);
+      flushScrollFrames();
+      expect(screen.queryByText("recurring_name_required")).toBeNull();
+      expect(mockNativeScrollTo).not.toHaveBeenCalled();
+    });
   });
 });
