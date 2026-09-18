@@ -19,9 +19,7 @@ describe("Budget form approved mockup fidelity contract", () => {
   it("uses the compact safe-area header and approved create title", () => {
     expect(CREATE_BUDGET_SOURCE).toContain('variant="review"');
     expect(CREATE_BUDGET_SOURCE).toContain("includeTopSafeAreaInset={true}");
-    expect(CREATE_BUDGET_SOURCE).toContain(
-      't("accessibility_create_budget")'
-    );
+    expect(CREATE_BUDGET_SOURCE).toContain('t("accessibility_create_budget")');
     expect(CREATE_BUDGET_SOURCE).not.toContain(
       'isEdit ? t("edit_budget") : t("new_budget")'
     );
@@ -33,7 +31,7 @@ describe("Budget form approved mockup fidelity contract", () => {
       "relative min-h-20 flex-1 flex-row items-center rounded-2xl border px-3 py-3"
     );
     expect(FORM_SECTIONS_SOURCE).toContain(
-      "budget-scope-${props.type.toLowerCase()}-indicator"
+      "budget-scope-${type.toLowerCase()}-indicator"
     );
     expect(FORM_SECTIONS_SOURCE).toContain(
       "border-2 border-slate-400 dark:border-slate-600"
@@ -50,24 +48,22 @@ describe("Budget form approved mockup fidelity contract", () => {
     );
     expect(FORM_SECTIONS_SOURCE).toContain('testID="budget-period-card"');
     expect(FORM_SECTIONS_SOURCE).toContain('testID="budget-period-segmented"');
-    expect(FORM_SECTIONS_SOURCE).toContain(
-      'capitalizeFirst(t("limit_label"))'
-    );
+    expect(FORM_SECTIONS_SOURCE).toContain('capitalizeFirst(t("limit_label"))');
   });
 
   it("uses the approved compact green alert treatment", () => {
     expect(FORM_SECTIONS_SOURCE).toContain('variant="mockup"');
-    expect(ALERT_SLIDER_SOURCE).toContain(
-      'variant?: "default" | "mockup"'
-    );
+    expect(ALERT_SLIDER_SOURCE).toContain('variant?: "default" | "mockup"');
     expect(ALERT_SLIDER_SOURCE).toContain("palette.nileGreen[500]");
     expect(ALERT_SLIDER_SOURCE).toContain("palette.slate[25]");
     expect(ALERT_SLIDER_SOURCE).toContain('variant === "default"');
   });
 
   it("uses the compact preview and approved gradient action surface", () => {
+    expect(FORM_SECTIONS_SOURCE).toContain('testID="budget-preview-metrics"');
+    expect(FORM_SECTIONS_SOURCE).toContain('compact ? "flex-col" : "flex-row"');
     expect(FORM_SECTIONS_SOURCE).toContain(
-      "flex-row border-t border-slate-200 px-3 py-3 dark:border-slate-700/70"
+      "border-t border-slate-200 px-3 py-3 dark:border-slate-700/70"
     );
     expect(FORM_SECTIONS_SOURCE).toContain(
       'testID="budget-form-submit-gradient"'

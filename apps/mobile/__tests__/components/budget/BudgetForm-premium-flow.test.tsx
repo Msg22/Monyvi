@@ -23,9 +23,7 @@ interface CreatedBudgetStub {
 }
 
 function buildCategoryLookup(): Map<string, CategoryLookupFixture> {
-  return new Map([
-    ["food", { id: "food", displayName: "Food & Dining" }],
-  ]);
+  return new Map([["food", { id: "food", displayName: "Food & Dining" }]]);
 }
 
 let mockCategoryMap = buildCategoryLookup();
@@ -36,9 +34,8 @@ const mockCreateBudget = jest.fn<
 const mockShouldUseCompactLayout = jest.fn(() => false);
 
 jest.mock("@/constants/ui", () => {
-  const actual = jest.requireActual<typeof import("@/constants/ui")>(
-    "@/constants/ui"
-  );
+  const actual =
+    jest.requireActual<typeof import("@/constants/ui")>("@/constants/ui");
   return {
     ...actual,
     shouldUseCompactLayout: () => mockShouldUseCompactLayout(),
@@ -274,7 +271,7 @@ describe("BudgetForm premium flow", () => {
     render(<BudgetForm />);
 
     expect(screen.getByTestId("budget-form-actions")).toHaveStyle({
-      paddingBottom: 40,
+      paddingBottom: 32,
     });
   });
 
@@ -315,16 +312,16 @@ describe("BudgetForm premium flow", () => {
     expect(selectorSource).not.toContain("minHeight");
   });
 
-  it("uses palette tokens for white action icons", () => {
+  it("uses palette tokens for dark action icons", () => {
     render(<BudgetForm />);
 
     expect(screen.getByTestId("icon-checkmark")).toHaveProp(
       "accessibilityLabel",
-      palette.slate[25]
+      palette.slate[900]
     );
     expect(screen.getByTestId("icon-add-circle-outline")).toHaveProp(
       "accessibilityLabel",
-      palette.slate[25]
+      palette.slate[900]
     );
   });
 
@@ -333,7 +330,7 @@ describe("BudgetForm premium flow", () => {
 
     expect(screen.getByTestId("budget-preview-metrics")).toHaveProp(
       "className",
-      "flex-row border-t border-slate-200 px-3 py-4 dark:border-slate-700"
+      "flex-row border-t border-slate-200 px-3 py-3 dark:border-slate-700/70"
     );
   });
 
@@ -344,7 +341,7 @@ describe("BudgetForm premium flow", () => {
 
     expect(screen.getByTestId("budget-preview-metrics")).toHaveProp(
       "className",
-      "flex-col border-t border-slate-200 px-3 py-4 dark:border-slate-700"
+      "flex-col border-t border-slate-200 px-3 py-3 dark:border-slate-700/70"
     );
   });
 
@@ -362,7 +359,9 @@ describe("BudgetForm premium flow", () => {
 
     expect(mockCreateBudget).not.toHaveBeenCalled();
     expect(screen.getByText("confirm_budget_renewal_title")).toBeOnTheScreen();
-    expect(screen.getByText("confirm_budget_renewal_message")).toBeOnTheScreen();
+    expect(
+      screen.getByText("confirm_budget_renewal_message")
+    ).toBeOnTheScreen();
 
     fireEvent.press(
       screen.getByRole("button", { name: "confirm_budget_renewal_action" })
