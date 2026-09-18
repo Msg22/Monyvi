@@ -1,5 +1,7 @@
-import { TransactionType } from "@monyvi/db";
+import type { CurrencyType, TransactionType } from "@monyvi/db";
 import {
+  CURRENCY_PRECISION,
+  DEFAULT_PRECISION,
   MAX_TRANSACTION_AMOUNT,
   parsePositiveFiniteAmountInput,
 } from "@monyvi/logic";
@@ -13,22 +15,26 @@ export interface TransactionFormData {
   readonly amount: string;
   readonly accountId: string | null;
   readonly categoryId: string;
+  readonly currency?: CurrencyType;
 }
 
 export interface TransferFormData {
   readonly amount: string;
   readonly fromAccountId: string | null;
   readonly toAccountId: string | null;
+  readonly currency?: CurrencyType;
 }
 
 export interface TransactionValidationMessages {
   readonly accountRequired: string;
+  readonly amountPrecision: string;
   readonly sourceAccountRequired: string;
   readonly destinationAccountRequired: string;
 }
 
 const defaultValidationMessages: TransactionValidationMessages = {
   accountRequired: "Account is required",
+  amountPrecision: "Use no more than the currency's supported decimals",
   sourceAccountRequired: "Source account is required",
   destinationAccountRequired: "Destination account is required",
 };
@@ -70,13 +76,24 @@ function isWithinTransactionAmountLimit(value: string): boolean {
   return amount === null || amount <= MAX_TRANSACTION_AMOUNT;
 }
 
+function hasSupportedCurrencyPrecision(
+  value: string,
+  currency: CurrencyType | undefined
+): boolean {
+  if (currency === undefined || !isFiniteAmountInput(value)) return true;
+  const normalized = value.trim().replace(/,/g, "");
+  const fractionalDigits = normalized.split(".")[1]?.length ?? 0;
+  return fractionalDigits <= (CURRENCY_PRECISION[currency] ?? DEFAULT_PRECISION);
+}
+
 /**
  * Zod schema for expense/income transaction form validation.
  */
 function createBaseTransactionSchema(
   messages: TransactionValidationMessages
 ): z.ZodType<TransactionFormData> {
-  return z.object({
+  return z
+    .object({
     amount: z
       .string()
       .min(1, "Amount is required")
@@ -89,9 +106,19 @@ function createBaseTransactionSchema(
         (val) => isWithinTransactionAmountLimit(val),
         TRANSACTION_AMOUNT_LIMIT_MESSAGE
       ),
-    accountId: requiredIdSchema(messages.accountRequired),
-    categoryId: z.string().min(1, "Category is required"),
-  });
+      accountId: requiredIdSchema(messages.accountRequired),
+      categoryId: z.string().min(1, "Category is required"),
+      currency: z.custom<CurrencyType>().optional(),
+    })
+    .superRefine((data, context) => {
+      if (!hasSupportedCurrencyPrecision(data.amount, data.currency)) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: messages.amountPrecision,
+          path: ["amount"],
+        });
+      }
+    });
 }
 
 /**
@@ -116,6 +143,16 @@ function createTransferSchema(
         ),
       fromAccountId: requiredIdSchema(messages.sourceAccountRequired),
       toAccountId: requiredIdSchema(messages.destinationAccountRequired),
+      currency: z.custom<CurrencyType>().optional(),
+    })
+    .superRefine((data, context) => {
+      if (!hasSupportedCurrencyPrecision(data.amount, data.currency)) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: messages.amountPrecision,
+          path: ["amount"],
+        });
+      }
     })
     .refine((data) => data.fromAccountId !== data.toAccountId, {
       message: "Source and destination accounts must be different",

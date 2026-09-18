@@ -127,9 +127,11 @@ jobs:
         timeout-minutes: 10
 
       - name: Run financial action pgTAP
-        run:
-          npx supabase test db --local
-          supabase/tests/financial_action_canonicalization_test.sql
+        run: |
+          npx supabase test db --local supabase/tests/financial_action_canonicalization_test.sql
+          npx supabase test db --local supabase/tests/account_financial_action_rpc_test.sql
+          npx supabase test db --local supabase/tests/account_financial_effects_test.sql
+
   android-build:
     name: Android Build Verification
     runs-on: ubuntu-latest

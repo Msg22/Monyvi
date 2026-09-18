@@ -166,6 +166,17 @@ jest.mock("@/services/supabase", () => ({
   getCurrentUserId: jest.fn(() => Promise.resolve("test-user-id")),
 }));
 
+jest.mock("@/services/transaction-financial-action-production", () => ({
+  createGuardedTransaction: jest.fn(),
+}));
+
+jest.mock("@/services/transaction-core-writer-production", () => ({
+  batchDeleteGuardedTransactions: jest.fn(),
+  convertGuardedTransactionToTransfer: jest.fn(),
+  deleteGuardedTransaction: jest.fn(),
+  updateGuardedTransaction: jest.fn(),
+}));
+
 // ---------------------------------------------------------------------------
 // Import module under test
 // ---------------------------------------------------------------------------
@@ -184,6 +195,14 @@ import { USER_DATA_ACCESS_ERROR_CODES } from "@/services/user-data-access";
 import { MAX_TRANSACTION_AMOUNT } from "@monyvi/logic";
 
 import type { DisplayTransaction } from "@/hooks/useTransactionsGrouping";
+import { createGuardedTransaction } from "@/services/transaction-financial-action-production";
+import { installTransactionServiceGuardedMocks } from "./transaction-service-guarded-mocks";
+import {
+  batchDeleteGuardedTransactions,
+  convertGuardedTransactionToTransfer,
+  deleteGuardedTransaction,
+  updateGuardedTransaction,
+} from "@/services/transaction-core-writer-production";
 
 // ---------------------------------------------------------------------------
 // Grab mock helpers (typed via MockDbApi)
@@ -254,6 +273,9 @@ describe("transaction-service", () => {
     mockDb.adapter.batch.mockClear();
     mockDb.adapter.unsafeQueryRaw.mockClear();
     mockRewire();
+    installTransactionServiceGuardedMocks(
+      BALANCE_REVERSAL_ACCOUNT_NOT_FOUND_ERROR_CODE
+    );
 
     const supabaseMock = jest.requireMock<{ getCurrentUserId: jest.Mock }>(
       "@/services/supabase"
@@ -267,6 +289,34 @@ describe("transaction-service", () => {
   // createTransaction
   // =========================================================================
   describe("createTransaction", () => {
+    it("routes plain creation through the guarded financial-action boundary", async () => {
+      const guardedResult = seedTx(
+        "guarded-transaction"
+      ) as unknown as import("@monyvi/db").Transaction;
+      jest
+        .mocked(createGuardedTransaction)
+        .mockResolvedValueOnce(guardedResult);
+      const data = {
+        amount: 200,
+        currency: "EGP" as const,
+        categoryId: "cat-food",
+        accountId: "acc-1",
+        type: "EXPENSE" as const,
+        source: "MANUAL" as const,
+      };
+
+      await expect(createTransaction(data, "test-user-id")).resolves.toBe(
+        guardedResult
+      );
+
+      expect(createGuardedTransaction).toHaveBeenCalledWith(
+        data,
+        "test-user-id"
+      );
+      expect(mockDb.write).not.toHaveBeenCalled();
+      expect(mockDb.batch).not.toHaveBeenCalled();
+    });
+
     it("should decrease balance for EXPENSE", async () => {
       const acc = seedAccount("acc-1", 1000);
       await createTransaction({
@@ -554,6 +604,9 @@ describe("transaction-service", () => {
       seedTx("tx-1", { accountId: "acc-1", amount: 100, type: "EXPENSE" });
       await updateTransaction("tx-1", { amount: 300 });
       expect(acc.balance).toBe(700);
+      expect(updateGuardedTransaction).toHaveBeenCalledWith("tx-1", {
+        amount: 300,
+      });
     });
 
     it("should adjust balance when amount changes (INCOME)", async () => {
@@ -663,6 +716,7 @@ describe("transaction-service", () => {
       await deleteTransaction("tx-1");
       expect(acc.balance).toBe(1000);
       expect(tx.deleted).toBe(true);
+      expect(deleteGuardedTransaction).toHaveBeenCalledWith("tx-1");
     });
 
     it("should revert INCOME balance and soft-delete", async () => {
@@ -718,6 +772,11 @@ describe("transaction-service", () => {
       expect(tx.deleted).toBe(true);
       expect(from.balance).toBe(800);
       expect(to.balance).toBe(700);
+      expect(convertGuardedTransactionToTransfer).toHaveBeenCalledWith({
+        notes: "xfer",
+        toAccountId: "acc-to",
+        transactionId: "tx-1",
+      });
     });
 
     it("should throw when user is not authenticated", async () => {
@@ -813,6 +872,7 @@ describe("transaction-service", () => {
       expect(i1.deleted).toBe(true);
       expect(i2.deleted).toBe(true);
       expect(mockDb.batch).toHaveBeenCalledTimes(1);
+      expect(batchDeleteGuardedTransactions).toHaveBeenCalledTimes(1);
     });
 
     it("should handle mixed transactions and transfers", async () => {

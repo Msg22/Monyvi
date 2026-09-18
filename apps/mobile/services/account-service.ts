@@ -189,6 +189,7 @@ export async function createCashAccountWithinWriter(
     acc.type = CASH_ACCOUNT_TYPE;
     acc.currency = currency;
     acc.balance = 0;
+    acc.financialRevision = "0";
     acc.deleted = false;
     acc.isDefault = isFirstAccount;
   });
@@ -241,6 +242,7 @@ export async function prepareCashAccount(
     account.type = CASH_ACCOUNT_TYPE;
     account.currency = currency;
     account.balance = initialBalance;
+    account.financialRevision = "0";
     account.deleted = false;
     account.isDefault = activeAccountCount === 0;
   });
@@ -314,6 +316,7 @@ export async function prepareNamedCashAccount(
     account.type = CASH_ACCOUNT_TYPE;
     account.currency = currency;
     account.balance = initialBalance;
+    account.financialRevision = "0";
     account.deleted = false;
     account.isDefault = activeAccountCount === 0;
   });
@@ -467,6 +470,7 @@ export async function createAccountForUser(
           validatedData.currency
         );
         acc.currency = validatedData.currency;
+        acc.financialRevision = "0";
         acc.deleted = false;
         acc.isDefault = isFirstAccount;
       });
