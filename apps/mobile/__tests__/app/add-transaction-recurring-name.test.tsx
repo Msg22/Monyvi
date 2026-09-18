@@ -47,7 +47,7 @@ jest.mock("@/hooks/useCategories", () => {
   };
 });
 jest.mock("@/context/CategoriesContext", () => ({
-  useCategoryLookup: (): ReadonlyMap<string, never> => new Map(),
+  useCategoryLookup: (): ReadonlyMap<string, never> => new Map<string, never>(),
 }));
 jest.mock("@/hooks/useCategoryChildren", () => ({
   useCategoryChildren: (): { readonly children: readonly [] } => ({ children: [] }),
