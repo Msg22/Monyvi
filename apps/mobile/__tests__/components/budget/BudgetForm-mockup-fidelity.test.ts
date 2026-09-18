@@ -18,7 +18,7 @@ const EN_BUDGETS_SOURCE = readMobileSource("../../../locales/en/budgets.json");
 
 describe("Budget form approved mockup fidelity contract", () => {
   it("uses the compact safe-area header and approved create title", () => {
-    expect(CREATE_BUDGET_SOURCE).toContain('variant="compact"');
+    expect(CREATE_BUDGET_SOURCE).toContain('variant="review"');
     expect(CREATE_BUDGET_SOURCE).toContain("includeTopSafeAreaInset={true}");
     expect(CREATE_BUDGET_SOURCE).toContain('t("create_budget")');
     expect(CREATE_BUDGET_SOURCE).not.toContain(
@@ -34,7 +34,9 @@ describe("Budget form approved mockup fidelity contract", () => {
     expect(FORM_SECTIONS_SOURCE).toContain(
       "budget-scope-${props.type.toLowerCase()}-indicator"
     );
-    expect(FORM_SECTIONS_SOURCE).toContain("border-2 border-slate-600");
+    expect(FORM_SECTIONS_SOURCE).toContain(
+      "border-2 border-slate-400 dark:border-slate-600"
+    );
     expect(FORM_SECTIONS_SOURCE).not.toContain(
       "mb-3 h-11 w-11 items-center justify-center"
     );
@@ -61,7 +63,7 @@ describe("Budget form approved mockup fidelity contract", () => {
 
   it("uses the compact preview and approved gradient action surface", () => {
     expect(FORM_SECTIONS_SOURCE).toContain(
-      "flex-row border-t border-slate-700/70 px-3 py-3"
+      "flex-row border-t border-slate-200 px-3 py-3 dark:border-slate-700/70"
     );
     expect(FORM_SECTIONS_SOURCE).toContain(
       'testID="budget-form-submit-gradient"'
