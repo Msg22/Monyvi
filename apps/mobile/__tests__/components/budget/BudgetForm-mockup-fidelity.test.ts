@@ -14,13 +14,14 @@ const FORM_SECTIONS_SOURCE = readMobileSource(
 const ALERT_SLIDER_SOURCE = readMobileSource(
   "../../../components/budget/AlertThresholdSlider.tsx"
 );
-const EN_BUDGETS_SOURCE = readMobileSource("../../../locales/en/budgets.json");
 
 describe("Budget form approved mockup fidelity contract", () => {
   it("uses the compact safe-area header and approved create title", () => {
     expect(CREATE_BUDGET_SOURCE).toContain('variant="review"');
     expect(CREATE_BUDGET_SOURCE).toContain("includeTopSafeAreaInset={true}");
-    expect(CREATE_BUDGET_SOURCE).toContain('t("create_budget")');
+    expect(CREATE_BUDGET_SOURCE).toContain(
+      't("accessibility_create_budget")'
+    );
     expect(CREATE_BUDGET_SOURCE).not.toContain(
       'isEdit ? t("edit_budget") : t("new_budget")'
     );
@@ -49,6 +50,9 @@ describe("Budget form approved mockup fidelity contract", () => {
     );
     expect(FORM_SECTIONS_SOURCE).toContain('testID="budget-period-card"');
     expect(FORM_SECTIONS_SOURCE).toContain('testID="budget-period-segmented"');
+    expect(FORM_SECTIONS_SOURCE).toContain(
+      'capitalizeFirst(t("limit_label"))'
+    );
   });
 
   it("uses the approved compact green alert treatment", () => {
@@ -80,8 +84,12 @@ describe("Budget form approved mockup fidelity contract", () => {
     );
   });
 
-  it("uses sentence-case approved English copy", () => {
-    expect(EN_BUDGETS_SOURCE).toContain('"create_budget": "Create budget"');
-    expect(EN_BUDGETS_SOURCE).toContain('"budget_limit": "Limit"');
+  it("uses the exact sentence-case form action without changing accessibility", () => {
+    expect(FORM_SECTIONS_SOURCE).toContain(
+      'labelKey: "accessibility_create_budget"'
+    );
+    expect(FORM_SECTIONS_SOURCE).toContain(
+      'accessibilityLabelKey: "create_budget"'
+    );
   });
 });
