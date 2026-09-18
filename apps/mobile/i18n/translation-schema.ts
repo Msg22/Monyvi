@@ -72,6 +72,7 @@ interface CommonTranslations {
   // Currency
   readonly currency: string;
   readonly change_currency: string;
+  readonly transaction_currency: string;
 
   // Dates (relative)
   readonly just_now: string;
