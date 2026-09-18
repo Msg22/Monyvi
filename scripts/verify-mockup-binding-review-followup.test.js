@@ -234,7 +234,10 @@ test("source-command independent fallback validates the complete sidecar authori
 
   assert.match(fallback, /complete\s+sidecar authority contract/i);
   assert.match(fallback, /valid UTF-8\/LF/i);
-  assert.match(fallback, /exactly one[^\n]*Binding Facts[^\n]*heading/i);
+  assert.match(
+    fallback,
+    /exactly one\s+real\s+level-two\s+`Binding Facts`\s+heading/i
+  );
   assert.match(
     fallback,
     /required Binding Facts keys?[\s\S]*exactly once[\s\S]*non-empty/i
