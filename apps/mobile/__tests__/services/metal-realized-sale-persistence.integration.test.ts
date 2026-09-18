@@ -161,6 +161,10 @@ async function readPortfolioFrom(
     .get<FinancialActionGroup>("financial_action_groups")
     .query()
     .fetch();
+  const actionEvidence = await database
+    .get<MetalActionEvidence>("metal_action_evidence")
+    .query()
+    .fetch();
   const rateReferences = await database
     .get<MetalRateReference>("metal_rate_references")
     .query()
@@ -168,6 +172,7 @@ async function readPortfolioFrom(
 
   return shapeMetalPortfolioHoldings({
     actionGroups,
+    actionEvidence,
     assetMetals,
     assets,
     currentRates: EMPTY_RATES,
