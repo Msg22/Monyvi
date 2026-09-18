@@ -469,7 +469,7 @@ package-lock.json                          # exact root dependency lock update
 .github/workflows/ci.yml                   # Market Rate Edge Contract step
 
 supabase/
-├── migrations/069_atomic_market_rate_snapshots.sql
+├── migrations/070_atomic_market_rate_snapshots.sql
 ├── functions/
 │   ├── _shared/
 │   │   ├── market-rate-snapshot-contract.ts

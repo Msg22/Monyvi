@@ -55,7 +55,7 @@ valuation/conversion inputs because they cross JavaScript/SQLite numeric
 representation.
 
 The existing PostgreSQL wide columns use legacy `numeric(15,4)` scale caps.
-Migration 069 widens those columns to unconstrained `numeric` so exact producer
+Migration 070 widens those columns to unconstrained `numeric` so exact producer
 values are not rounded before replay or pull validation; it adds no columns and
 does not change the Watermelon field shape.
 
@@ -219,7 +219,7 @@ would create intentionally untrusted root-only data.
 
 ## Decision 20: Schema generation impact
 
-Use `069_atomic_market_rate_snapshots.sql`. The migration adds functions, a
+Use `070_atomic_market_rate_snapshots.sql`. The migration adds functions, a
 future-write FK, and an index but no Watermelon table columns. Expected
 generated change is primarily RPC signatures in
 `packages/db/src/supabase-types.ts`; generated output must still be produced

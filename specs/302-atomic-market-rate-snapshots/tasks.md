@@ -278,7 +278,7 @@ evidence.
 ### Database / generated contracts
 
 - [x] **T031** [US2] Add
-      `supabase/migrations/069_atomic_market_rate_snapshots.sql` persistence
+`supabase/migrations/070_atomic_market_rate_snapshots.sql` persistence
       half to satisfy T025: remove legacy four-decimal numeric scale caps that
       would round exact provider values; add a `NOT VALID` FK with
       `ON DELETE CASCADE`, safe lookup index, service-role-only
