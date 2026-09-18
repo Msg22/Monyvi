@@ -10,6 +10,11 @@ jest.mock("@monyvi/db", () => ({
   MetalRateReference: class {},
 }));
 
+jest.mock("../../services/supabase", () => ({
+  getCurrentUserId: jest.fn(),
+  supabase: {},
+}));
+
 import {
   assertCanonicalActionGroup,
   canonicalMetalJson,
@@ -196,10 +201,10 @@ describe("PR #293 review follow-up regressions", () => {
     ).resolves.toEqual(group);
   });
 
-  it("checks an existing accepted replay before migration-071 sale-date revalidation", () => {
+  it("checks an existing accepted replay before migration-070 sale-date revalidation", () => {
     const migrationPath = path.resolve(
       __dirname,
-      "../../../../supabase/migrations/071_metals_canonical_group_reconciliation.sql"
+      "../../../../supabase/migrations/070_metals_canonical_group_reconciliation.sql"
     );
     const sql = fs.readFileSync(migrationPath, "utf8");
     const lockIndex = sql.indexOf("pg_advisory_xact_lock");
@@ -208,7 +213,10 @@ describe("PR #293 review follow-up regressions", () => {
       "v_existing.state = 'accepted'",
       replayIndex
     );
-    const saleDateIndex = sql.indexOf("IF v_envelope ->> 'kind' = 'sell'", lockIndex);
+    const saleDateIndex = sql.indexOf(
+      "IF v_envelope ->> 'kind' = 'sell'",
+      lockIndex
+    );
 
     expect(replayIndex).toBeGreaterThan(lockIndex);
     expect(acceptedReplayIndex).toBeGreaterThan(replayIndex);

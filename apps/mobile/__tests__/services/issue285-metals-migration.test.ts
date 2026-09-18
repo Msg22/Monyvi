@@ -2,10 +2,10 @@ import fs from "fs";
 import path from "path";
 
 describe("issue #285 post-068 migration contract", () => {
-  it("uses reserved migration 070 and installs the reconciliation hardening", () => {
+  it("uses migration 069 and installs the reconciliation hardening", () => {
     const migrationPath = path.resolve(
       __dirname,
-      "../../../../supabase/migrations/070_metals_reconciliation_hardening.sql"
+      "../../../../supabase/migrations/069_metals_reconciliation_hardening.sql"
     );
     expect(fs.existsSync(migrationPath)).toBe(true);
     const sql = fs.readFileSync(migrationPath, "utf8");
@@ -17,16 +17,19 @@ describe("issue #285 post-068 migration contract", () => {
     expect(sql).not.toContain("metal_sale_before_acquisition");
   });
 
-  it("uses migration 071 to replay accepted actions before sale-date checks and share the holding lock with metadata", () => {
+  it("uses migration 070 to replay accepted actions before sale-date checks and share the holding lock with metadata", () => {
     const migrationPath = path.resolve(
       __dirname,
-      "../../../../supabase/migrations/071_metals_canonical_group_reconciliation.sql"
+      "../../../../supabase/migrations/070_metals_canonical_group_reconciliation.sql"
     );
     expect(fs.existsSync(migrationPath)).toBe(true);
     const sql = fs.readFileSync(migrationPath, "utf8");
     const hashIndex = sql.indexOf("extensions.digest");
     const actionLockIndex = sql.indexOf("pg_advisory_xact_lock");
-    const replayIndex = sql.indexOf("SELECT * INTO v_existing", actionLockIndex);
+    const replayIndex = sql.indexOf(
+      "SELECT * INTO v_existing",
+      actionLockIndex
+    );
     const acceptedReplayIndex = sql.indexOf(
       "v_existing.state = 'accepted'",
       replayIndex

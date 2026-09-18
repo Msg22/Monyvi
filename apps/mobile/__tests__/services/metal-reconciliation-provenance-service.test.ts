@@ -21,7 +21,9 @@ function event(input: {
     isEffective: input.isEffective,
     kind: input.kind,
     payloadJson: JSON.stringify({
-      materialCorrection: input.materialCorrection ? { before: {}, after: {} } : null,
+      materialCorrection: input.materialCorrection
+        ? { before: {}, after: {} }
+        : null,
     }),
     predecessorEventId: input.predecessorEventId,
   } as unknown as MetalLifecycleEvent;
@@ -46,16 +48,19 @@ describe("metal reconciliation acquisition provenance", () => {
       .fn<Promise<MetalLifecycleEvent[]>, []>()
       .mockResolvedValueOnce([loser])
       .mockResolvedValueOnce([acceptedAdd]);
-    const rootFetch = jest.fn<Promise<readonly unknown[]>, []>().mockResolvedValueOnce([
-      {
-        actionId: ACCEPTED_ADD_ID,
-        deleted: false,
-        domain: "metals",
-        domainReferenceId: HOLDING_ID,
-        state: "accepted",
-        userId: USER_ID,
-      },
-    ]);
+    const rootFetch = jest
+      .fn<Promise<readonly unknown[]>, []>()
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        {
+          actionId: ACCEPTED_ADD_ID,
+          deleted: false,
+          domain: "metals",
+          domainReferenceId: HOLDING_ID,
+          state: "accepted",
+          userId: USER_ID,
+        },
+      ]);
     const database = {
       get: (table: string) => ({
         query: () => ({
@@ -80,6 +85,54 @@ describe("metal reconciliation acquisition provenance", () => {
         HOLDING_ID
       )
     ).resolves.toBe(ACCEPTED_ADD_ID);
-    expect(rootFetch).toHaveBeenCalledTimes(1);
+    expect(rootFetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("restores accepted acquisition facts behind an accepted metadata-only successor", async () => {
+    const acceptedAdd = event({
+      actionId: ACCEPTED_ADD_ID,
+      kind: "add",
+      predecessorEventId: null,
+      isEffective: false,
+    });
+    const lifecycleFetch = jest
+      .fn<Promise<MetalLifecycleEvent[]>, []>()
+      .mockResolvedValueOnce([acceptedAdd]);
+    const rootFetch = jest
+      .fn<Promise<readonly unknown[]>, []>()
+      .mockResolvedValueOnce([
+        {
+          actionId: ACCEPTED_ADD_ID,
+          deleted: false,
+          domain: "metals",
+          domainReferenceId: HOLDING_ID,
+          state: "accepted",
+          userId: USER_ID,
+        },
+      ]);
+    const database = {
+      get: (table: string) => ({
+        query: () => ({
+          fetch: () =>
+            table === "metal_lifecycle_events" ? lifecycleFetch() : rootFetch(),
+        }),
+      }),
+    } as unknown as Database;
+    const rejectedCorrection = event({
+      actionId: REJECTED_CORRECTION_ID,
+      kind: "correct",
+      predecessorEventId: ACCEPTED_ADD_ID,
+      isEffective: true,
+      materialCorrection: true,
+    });
+
+    await expect(
+      findPriorAcquisitionActionId(
+        database,
+        rejectedCorrection,
+        USER_ID,
+        HOLDING_ID
+      )
+    ).resolves.toBe(ACCEPTED_ADD_ID);
   });
 });

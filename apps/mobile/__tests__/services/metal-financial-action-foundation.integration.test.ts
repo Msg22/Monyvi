@@ -87,6 +87,27 @@ async function count(database: Database, table: string): Promise<number> {
   return database.get<Model>(table).query().fetchCount();
 }
 
+async function acceptAction(
+  database: Database,
+  acceptedActionId: string,
+  holdingRevision: string
+): Promise<void> {
+  await commitMetalRpcOutcomeLocally(
+    database,
+    {
+      accountRevisions: [],
+      actionId: acceptedActionId,
+      effectiveEventId: acceptedActionId,
+      holdingRevision,
+      payloadHashMatches: true,
+      serverAcceptedAt: "2026-08-31T10:16:00.123Z",
+      status: "accepted",
+      userId: USER_ID,
+    },
+    USER_ID
+  );
+}
+
 describe("Metals financial action foundation", () => {
   it.each(METAL_ACTION_KINDS)(
     "builds the approved canonical %s envelope with no account effect",
@@ -457,6 +478,7 @@ describe("Metals financial action foundation", () => {
     const { database } = await createDatabase();
     const service = createService(database);
     await service.execute(commandInput("add", actionId(1), null, null));
+    await acceptAction(database, actionId(1), "0");
     await service.execute(
       commandInput("correct", actionId(2), "0", actionId(1))
     );
@@ -505,9 +527,11 @@ describe("Metals financial action foundation", () => {
     const { database } = await createDatabase();
     const service = createService(database);
     await service.execute(commandInput("add", actionId(1), null, null));
+    await acceptAction(database, actionId(1), "0");
     await service.execute(
       commandInput("correct", actionId(2), "0", actionId(1))
     );
+    await acceptAction(database, actionId(2), "1");
 
     const metadataOnly = commandInput("correct", actionId(3), "1", actionId(2));
     await service.execute({
@@ -521,6 +545,7 @@ describe("Metals financial action foundation", () => {
         },
       },
     });
+    await acceptAction(database, actionId(3), "2");
     const rejectedCorrection = commandInput(
       "correct",
       actionId(4),
@@ -566,6 +591,7 @@ describe("Metals financial action foundation", () => {
     const { database } = await createDatabase();
     const service = createService(database);
     await service.execute(commandInput("add", actionId(1), null, null));
+    await acceptAction(database, actionId(1), "0");
     await service.execute(
       commandInput("correct", actionId(2), "0", actionId(1))
     );

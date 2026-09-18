@@ -93,9 +93,9 @@ export async function findPriorAcquisitionActionId(
     if (!predecessor || predecessor.holdingId !== holdingId) break;
     const isAcquisitionEvent =
       predecessor.kind === "add" ||
-      (predecessor.kind === "correct" && isMaterialCorrectionEvent(predecessor));
+      (predecessor.kind === "correct" &&
+        isMaterialCorrectionEvent(predecessor));
     if (
-      predecessor.isEffective &&
       isAcquisitionEvent &&
       (await hasAcceptedRoot(database, predecessor, userId, holdingId))
     ) {
