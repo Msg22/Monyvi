@@ -94,17 +94,22 @@ export type MetalRealizedSaleUnavailableReason =
   | "unsupported_sale_evidence"
   | AttributionUnavailableReason;
 
-export interface MetalRealizedSaleEvidence {
+export interface MetalSaleTerminalFacts {
   readonly actionId: string;
-  readonly attribution: RealizedAttribution;
-  readonly breakdownAvailable: boolean;
-  readonly breakdownReasons: readonly AttributionUnavailableReason[];
-  readonly combinedDecimal: string;
   readonly feeDecimal: string;
   readonly grossProceedsDecimal: string;
   readonly holdingId: string;
   readonly netProceedsDecimal: string;
+  readonly notes: string | null;
   readonly proceedsCurrency: MetalsIsoCurrencyCode;
+  readonly saleDate: string;
+}
+
+export interface MetalRealizedSaleEvidence extends MetalSaleTerminalFacts {
+  readonly attribution: RealizedAttribution;
+  readonly breakdownAvailable: boolean;
+  readonly breakdownReasons: readonly AttributionUnavailableReason[];
+  readonly combinedDecimal: string;
   readonly purchaseCurrency: MetalsIsoCurrencyCode;
 }
 
@@ -112,6 +117,7 @@ export type MetalRealizedSaleOutcome =
   | { readonly available: true; readonly value: MetalRealizedSaleEvidence }
   | {
       readonly available: false;
+      readonly facts?: MetalSaleTerminalFacts;
       readonly reason: MetalRealizedSaleUnavailableReason;
     };
 
@@ -346,6 +352,16 @@ export function shapeMetalRealizedSaleEvidence(
     amounts.netMinorUnits,
     proceedsCurrencyMinorUnits
   );
+  const terminalFacts: MetalSaleTerminalFacts = {
+    actionId: event.actionId,
+    feeDecimal: feesDecimal,
+    grossProceedsDecimal,
+    holdingId: holding.holdingId,
+    netProceedsDecimal,
+    notes: payload.notes,
+    proceedsCurrency,
+    saleDate: payload.saleDate,
+  };
   const metalInstrumentCode: MetalInstrumentCode = `metal:${holding.metalType}`;
   const result = calculateRealizedAttribution({
     acquisitionCurrencyRate: findAcquisitionReference(input, {
@@ -374,24 +390,19 @@ export function shapeMetalRealizedSaleEvidence(
     saleMetalRate: snapshots.terminal_metal,
   });
   if (!result.available) {
-    return { available: false, reason: result.reason };
+    return { available: false, facts: terminalFacts, reason: result.reason };
   }
 
   return {
     available: true,
     value: {
-      actionId: event.actionId,
+      ...terminalFacts,
       attribution: result.value,
       breakdownAvailable: result.value.breakdown.available,
       breakdownReasons: result.value.breakdown.available
         ? []
         : result.value.breakdown.reasons,
       combinedDecimal: result.value.combinedDecimal,
-      feeDecimal: feesDecimal,
-      grossProceedsDecimal,
-      holdingId: holding.holdingId,
-      netProceedsDecimal,
-      proceedsCurrency,
       purchaseCurrency,
     },
   };
@@ -620,11 +631,11 @@ function isRevision(value: unknown): boolean {
   );
 }
 
-function isNullableString(value: unknown): boolean {
+function isNullableString(value: unknown): value is string | null {
   return typeof value === "string" || value === null;
 }
 
-function isCalendarDate(value: unknown): boolean {
+function isCalendarDate(value: unknown): value is string {
   if (typeof value !== "string" || !CALENDAR_DATE_PATTERN.test(value)) {
     return false;
   }
