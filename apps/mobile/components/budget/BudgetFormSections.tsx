@@ -21,6 +21,10 @@ import { useTheme } from "@/context/ThemeContext";
 import { formatDate } from "@/utils/dateHelpers";
 import { AlertThresholdSlider } from "./AlertThresholdSlider";
 import {
+  BudgetFieldIcon,
+  BudgetRequiredFieldLabel,
+} from "./BudgetFormFieldChrome";
+import {
   BUDGET_PERIOD_KEYS,
   BUDGET_PERIOD_LABELS,
   type BudgetFormController,
@@ -182,14 +186,6 @@ function BudgetGeneralError({
   );
 }
 
-function FieldIcon({ name }: { readonly name: IconName }): React.JSX.Element {
-  return (
-    <View className="me-3 h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-nileGreen-100 dark:bg-nileGreen-700/50">
-      <Ionicons name={name} size={21} color={palette.nileGreen[400]} />
-    </View>
-  );
-}
-
 function BudgetNameField({
   controller,
 }: {
@@ -199,12 +195,14 @@ function BudgetNameField({
   const { isDark } = useTheme();
   return (
     <>
-      <View className="mb-2.5 flex-row items-center rounded-xl border border-slate-200 bg-white px-3 py-2.5 dark:border-slate-700 dark:bg-surface-dark">
-        <FieldIcon name="document-text-outline" />
+      <View className="mb-2.5 flex-row items-center rounded-xl border border-slate-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-surface-dark">
+        <BudgetFieldIcon name="document-text-outline" />
         <View className="flex-1">
-          <Text className="text-xs text-slate-500 dark:text-slate-400">
-            {t("budget_name")}
-          </Text>
+          <BudgetRequiredFieldLabel
+            label={t("budget_name")}
+            testID="budget-required-name"
+            className="text-xs text-slate-500 dark:text-slate-400"
+          />
           <TextInput
             value={controller.form.name}
             onChangeText={(value) => controller.updateField("name", value)}
@@ -212,6 +210,8 @@ function BudgetNameField({
             placeholderTextColor={
               isDark ? palette.slate[600] : palette.slate[400]
             }
+            cursorColor={palette.nileGreen[500]}
+            selectionColor={palette.nileGreen[500]}
             className="mt-0.5 p-0 text-base font-medium text-slate-900 dark:text-white"
           />
         </View>
@@ -264,13 +264,15 @@ function CategorySelectorField({
     <TouchableOpacity
       onPress={controller.openCategoryModal}
       activeOpacity={0.82}
-      className="flex-row items-center rounded-xl border border-slate-200 bg-white px-3 py-2.5 dark:border-slate-700 dark:bg-surface-dark"
+      className="flex-row items-center rounded-xl border border-slate-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-surface-dark"
     >
-      <FieldIcon name="restaurant-outline" />
+      <BudgetFieldIcon name="restaurant-outline" />
       <View className="flex-1">
-        <Text className="text-xs text-slate-500 dark:text-slate-400">
-          {t("category_type")}
-        </Text>
+        <BudgetRequiredFieldLabel
+          label={t("category_type")}
+          testID="budget-required-category"
+          className="text-xs text-slate-500 dark:text-slate-400"
+        />
         <Text
           numberOfLines={1}
           className={`mt-0.5 text-base font-medium ${
@@ -358,12 +360,14 @@ function BudgetLimitField({
   const { isDark } = useTheme();
   return (
     <>
-      <View className="mb-2.5 flex-row items-center rounded-xl border border-slate-200 bg-white px-3 py-2.5 dark:border-slate-700 dark:bg-surface-dark">
-        <FieldIcon name="wallet-outline" />
+      <View className="mb-2.5 flex-row items-center rounded-xl border border-slate-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-surface-dark">
+        <BudgetFieldIcon name="wallet-outline" />
         <View className="flex-1">
-          <Text className="text-xs text-slate-500 dark:text-slate-400">
-            {capitalizeFirst(t("limit_label"))}
-          </Text>
+          <BudgetRequiredFieldLabel
+            label={capitalizeFirst(t("limit_label"))}
+            testID="budget-required-limit"
+            className="text-xs text-slate-500 dark:text-slate-400"
+          />
           <View className="mt-0.5 flex-row items-center">
             <BudgetCurrencyControl controller={controller} />
             <TextInput
@@ -373,6 +377,8 @@ function BudgetLimitField({
               placeholderTextColor={
                 isDark ? palette.slate[600] : palette.slate[400]
               }
+              cursorColor={palette.nileGreen[500]}
+              selectionColor={palette.nileGreen[500]}
               keyboardType="decimal-pad"
               className="flex-1 p-0 text-base font-semibold text-slate-900 dark:text-white"
             />
@@ -399,12 +405,14 @@ function BudgetPeriodField({
       testID="budget-period-card"
       className="mb-2.5 rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-surface-dark"
     >
-      <Text className="mb-2 text-xs font-medium text-slate-600 dark:text-slate-300">
-        {t("period")}
-      </Text>
+      <BudgetRequiredFieldLabel
+        label={t("period")}
+        testID="budget-required-period"
+        className="mb-2 text-xs font-medium text-slate-600 dark:text-slate-300"
+      />
       <View
         testID="budget-period-segmented"
-        className="flex-row rounded-xl bg-slate-100 p-1 dark:bg-slate-950"
+        className="flex-row rounded-xl bg-slate-100 p-1 dark:bg-slate-800"
       >
         {BUDGET_PERIOD_KEYS.map((key) => {
           const selected = controller.form.period === key;
@@ -436,21 +444,25 @@ function BudgetPeriodField({
 
 function CustomDateButton({
   label,
+  requiredTestID,
   value,
   onPress,
 }: {
   readonly label: string;
+  readonly requiredTestID: string;
   readonly value: Date;
   readonly onPress: () => void;
 }): React.JSX.Element {
   return (
     <View className="flex-1">
-      <Text className="mb-1.5 text-sm font-medium text-slate-600 dark:text-slate-300">
-        {label}
-      </Text>
+      <BudgetRequiredFieldLabel
+        label={label}
+        testID={requiredTestID}
+        className="mb-1.5 text-xs font-medium text-slate-600 dark:text-slate-300"
+      />
       <TouchableOpacity
         onPress={onPress}
-        className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 dark:border-slate-700 dark:bg-surface-dark"
+        className="min-h-12 justify-center rounded-xl border border-slate-200 bg-white px-3 py-2.5 dark:border-slate-700 dark:bg-surface-dark"
       >
         <Text className="text-sm font-medium text-slate-900 dark:text-white">
           {formatDate(value, "MMM d, yyyy")}
@@ -469,14 +481,16 @@ function BudgetCustomDates({
   if (controller.form.period !== "CUSTOM") return null;
   return (
     <View className="mb-2.5">
-      <View className="flex-row gap-2.5">
+      <View testID="budget-custom-date-row" className="flex-row gap-2.5 px-3">
         <CustomDateButton
           label={t("start_date")}
+          requiredTestID="budget-required-start-date"
           value={controller.form.periodStart}
           onPress={controller.openStartPicker}
         />
         <CustomDateButton
           label={t("end_date")}
+          requiredTestID="budget-required-end-date"
           value={controller.form.periodEnd}
           onPress={controller.openEndPicker}
         />
@@ -571,7 +585,7 @@ function PreviewIdentityColumn({
 }: {
   readonly label: string;
   readonly value: string;
-  readonly detail: string;
+  readonly detail?: string;
   readonly bordered: boolean;
 }): React.JSX.Element {
   const borderClass = bordered
@@ -588,12 +602,14 @@ function PreviewIdentityColumn({
       >
         {value}
       </Text>
-      <Text
-        numberOfLines={1}
-        className="mt-0.5 text-xs text-slate-500 dark:text-slate-400"
-      >
-        {detail}
-      </Text>
+      {detail ? (
+        <Text
+          numberOfLines={1}
+          className="mt-0.5 text-xs text-slate-500 dark:text-slate-400"
+        >
+          {detail}
+        </Text>
+      ) : null}
     </View>
   );
 }
@@ -635,7 +651,7 @@ function PreviewIdentityRow({
             : t("category_type")
         }
         value={identity}
-        detail={controller.form.name.trim() || t("budget_name_placeholder")}
+        detail={controller.form.name.trim() || undefined}
         bordered={false}
       />
     </View>

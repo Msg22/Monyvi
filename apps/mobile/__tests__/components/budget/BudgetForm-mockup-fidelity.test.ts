@@ -11,6 +11,9 @@ const CREATE_BUDGET_SOURCE = readMobileSource(
 const FORM_SECTIONS_SOURCE = readMobileSource(
   "../../../components/budget/BudgetFormSections.tsx"
 );
+const FIELD_CHROME_SOURCE = readMobileSource(
+  "../../../components/budget/BudgetFormFieldChrome.tsx"
+);
 const ALERT_SLIDER_SOURCE = readMobileSource(
   "../../../components/budget/AlertThresholdSlider.tsx"
 );
@@ -56,6 +59,28 @@ describe("Budget form approved mockup fidelity contract", () => {
     expect(FORM_SECTIONS_SOURCE).toContain("dark:bg-surface-dark");
     expect(FORM_SECTIONS_SOURCE).not.toContain("dark:bg-slate-900");
     expect(EN_BUDGET_COPY).toContain('"budget_name": "Budget name"');
+  });
+
+  it("keeps field rhythm and custom dates visually aligned", () => {
+    expect(FIELD_CHROME_SOURCE).toContain(
+      'className="me-3 h-9 w-9 shrink-0 items-center justify-center'
+    );
+    expect(FORM_SECTIONS_SOURCE).toContain(
+      'className="mb-2.5 flex-row items-center rounded-xl border border-slate-200 bg-white px-3 py-2'
+    );
+    expect(FORM_SECTIONS_SOURCE).toContain(
+      'testID="budget-custom-date-row" className="flex-row gap-2.5 px-3"'
+    );
+    expect(FORM_SECTIONS_SOURCE).toContain(
+      'className="min-h-12 justify-center rounded-xl border border-slate-200 bg-white px-3 py-2.5'
+    );
+  });
+
+  it("uses the approved raised period track in dark mode", () => {
+    expect(FORM_SECTIONS_SOURCE).toContain(
+      'className="flex-row rounded-xl bg-slate-100 p-1 dark:bg-slate-800"'
+    );
+    expect(FORM_SECTIONS_SOURCE).not.toContain("dark:bg-slate-950");
   });
 
   it("uses the approved compact green alert treatment", () => {

@@ -256,6 +256,53 @@ describe("BudgetForm premium flow", () => {
     ).toBeOnTheScreen();
   });
 
+  it("marks visible required fields and reveals custom-date requirements", () => {
+    render(<BudgetForm />);
+
+    expect(screen.getByTestId("budget-required-name")).toBeOnTheScreen();
+    expect(screen.getByTestId("budget-required-category")).toBeOnTheScreen();
+    expect(screen.getByTestId("budget-required-limit")).toBeOnTheScreen();
+    expect(screen.getByTestId("budget-required-period")).toBeOnTheScreen();
+    expect(screen.queryByTestId("budget-required-start-date")).not.toBeOnTheScreen();
+    expect(screen.queryByTestId("budget-required-end-date")).not.toBeOnTheScreen();
+
+    fireEvent.press(screen.getByTestId("budget-period-custom"));
+
+    expect(screen.getByTestId("budget-required-start-date")).toBeOnTheScreen();
+    expect(screen.getByTestId("budget-required-end-date")).toBeOnTheScreen();
+  });
+
+  it("omits the budget-name example from an empty category preview", () => {
+    render(<BudgetForm />);
+
+    expect(
+      within(screen.getByTestId("budget-live-preview")).queryByText(
+        "budget_name_placeholder"
+      )
+    ).not.toBeOnTheScreen();
+  });
+
+  it("uses the standard green caret and selection indicator for text inputs", () => {
+    render(<BudgetForm />);
+
+    expect(screen.getByPlaceholderText("budget_name_placeholder")).toHaveProp(
+      "cursorColor",
+      palette.nileGreen[500]
+    );
+    expect(screen.getByPlaceholderText("budget_name_placeholder")).toHaveProp(
+      "selectionColor",
+      palette.nileGreen[500]
+    );
+    expect(screen.getByPlaceholderText("0.00")).toHaveProp(
+      "cursorColor",
+      palette.nileGreen[500]
+    );
+    expect(screen.getByPlaceholderText("0.00")).toHaveProp(
+      "selectionColor",
+      palette.nileGreen[500]
+    );
+  });
+
   it("shows an unavailable preview instead of malformed non-empty amount text", () => {
     render(<BudgetForm />);
 
