@@ -16,6 +16,7 @@ import {
   roundDecimal,
   serializeDecimal,
   type MetalsIsoCurrencyCode,
+  type SupportedMetal,
 } from "@monyvi/logic";
 
 import type { SelectedMarketRateSnapshot } from "@/services/market-rate-snapshot-read-model-service";
@@ -71,7 +72,7 @@ export interface WealthBreakdownHolding {
   readonly currentValueDecimal: string | null;
   readonly isEffective: boolean;
   readonly isVisible: boolean;
-  readonly metalType: "GOLD" | "SILVER";
+  readonly metalType: SupportedMetal;
   readonly status: "active" | "sold" | "disposed";
 }
 
@@ -377,7 +378,7 @@ function sumAvailableDecimals(
 }
 
 function sumAvailableDecimalStrings(
-  values: readonly (string | null)[]
+  values: ReadonlyArray<string | null>
 ): string | null {
   let total = parseCanonicalDecimal("0");
 

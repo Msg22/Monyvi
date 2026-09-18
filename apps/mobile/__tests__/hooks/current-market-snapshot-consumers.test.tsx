@@ -151,6 +151,7 @@ const portfolioShapeInputs: Array<Record<string, unknown>> = [];
 jest.mock("@/services/metal-portfolio-read-model-service", () => ({
   observePortfolioAssets: () => mockCreateQuery([]),
   observePortfolioAssetMetals: () => mockCreateQuery([]),
+  observePortfolioEffectiveActionEvidence: () => mockCreateQuery([]),
   observePortfolioHoldingStates: () => mockCreateQuery([]),
   observePortfolioMetalSellGroups: () => mockCreateQuery([]),
   observePortfolioRecentHistory: () => mockCreateQuery([]),
@@ -171,6 +172,7 @@ jest.mock("@/services/metal-action-evidence-observer-service", () => ({
   observeMetalDetailActionEvidence: () => mockCreateQuery([]),
 }));
 jest.mock("@/services/metal-detail-read-model-service", () => ({
+  observeMetalDetailAssetMetal: () => null,
   observeMetalDetailHolding: () => mockCreateQuery([]),
   observeMetalDetailEvents: () => mockCreateQuery([]),
   observeMetalDetailHoldingState: () => mockCreateQuery([]),

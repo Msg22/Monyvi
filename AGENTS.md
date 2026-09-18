@@ -195,6 +195,8 @@ Dependency direction: `apps/ → packages/logic → packages/db`. **Never revers
 
 ## TypeScript & React Native
 
+- Follow **Canonical Types & End-to-End Type Safety** below for every typed
+  boundary, including tests and backend code.
 - Write concise, technical TypeScript with strict mode. Prefer interfaces over
   types. Avoid enums — use maps.
 - Use functional components with hooks. No class components.
@@ -246,6 +248,79 @@ Dependency direction: `apps/ → packages/logic → packages/db`. **Never revers
   error-code comparisons, and control-flow decisions MUST stay language-neutral
   (for example booleans, enums, or stable English codes), then translate only
   the message that is actually rendered to the user.
+
+## Canonical Types & End-to-End Type Safety
+
+These rules apply across apps, packages, services, hooks, components, forms,
+navigation payloads, sync, edge functions, tests, fixtures, and mocks.
+
+- **Find the authoritative type before declaring one.** Trace the field to its
+  database/schema, generated API contract, or owning domain module. For
+  persisted data, inspect the generated database types and the corresponding
+  local model; SQLite's broad storage types do not replace domain constraints.
+  Reuse the existing public type export with `import type`. If contracts
+  disagree, resolve the mismatch at its source within the approved scope; do not
+  hide it with a local replacement type or cast. Never hand-edit generated
+  types.
+- **Derive; do not duplicate.** Reuse canonical types such as `MetalType`, or
+  derive field types through indexed access and shapes through `Pick`/`Omit`. Do
+  not redeclare a database enum as a handwritten literal union or widen it to
+  `string`. The same rule applies to IDs, currencies, statuses, amounts,
+  nullability, and required/optional fields. A canonical generated alias should
+  reference its source contract rather than copy its current members.
+- **Preserve types through the entire path.** Service parameters/results, hook
+  state, component props, callbacks, collections, and test builders must retain
+  the relevant canonical field types. Do not weaken a shared component or helper
+  to accept arbitrary strings when a constrained generic can preserve the
+  caller's type. Prefer inference when it preserves the correct type; retain
+  required explicit function return annotations.
+- **New shapes are allowed; competing definitions are not.** DTOs, read models,
+  form drafts, and presentation props may have distinct shapes and UI-only
+  fields. Reuse canonical types for fields whose meaning is unchanged. Model
+  actual transformations explicitly, including validated conversions between
+  transport and domain representations. Do not pass database model instances
+  into pure logic or presentation merely to reuse types; preserve package
+  boundaries and use plain typed shapes.
+- **Intentional subsets must be explicit.** A feature restricted by an approved
+  rule to certain values may define one centrally owned subset derived from the
+  canonical type, with a runtime guard/schema at the narrowing boundary. Name
+  and document that restriction; do not repeat the subset throughout consumers.
+  Adding a database enum member does not automatically approve new product
+  behavior. Conversely, code that accepts the full domain must not silently
+  treat every non-gold metal as silver.
+- **Make missing cases visible.** For logic that must handle every union member,
+  use exhaustive switches with a `never` check or complete maps checked with
+  `satisfies Record<CanonicalType, ValueType>`. Use `Partial` only when missing
+  entries have a real, explicitly handled meaning. An array checked with
+  `satisfies readonly CanonicalType[]` validates its members but does not prove
+  completeness. Schema changes must trigger review of validators, mappings,
+  supported subsets, and affected consumers.
+- **Validate external values; assertions do not validate.** Treat untrusted
+  JSON, storage, navigation input, native events, and API responses as `unknown`
+  until validated with the canonical runtime schema or a checked parser. Derive
+  types from Zod where Zod owns the contract; for database-owned fields, reuse
+  generated runtime values where available or verify schema/type agreement.
+  Handle invalid or unsupported values explicitly instead of coercing them to a
+  valid member.
+- **No casts to silence errors.** Prefer narrowing, validated parsing, typed
+  adapters, and `satisfies` over `as SomeType`. Never use `any`, double
+  assertions such as `as unknown as T`, non-null assertions, `@ts-ignore`, or
+  weaker compiler settings to bypass a mismatch. An unavoidable assertion at an
+  interop boundary must be narrowly scoped, explain the invariant and why
+  TypeScript cannot prove it, and have evidence/tests protecting that invariant.
+  `as const` is appropriate for preserving literal inference; it is not runtime
+  validation.
+- **Verify the contract, not just compilation.** When changing a shared type,
+  run the affected packages' type checks and focused tests for impacted callers.
+  For reusable type utilities or intentional subsets, add focused compile-time
+  contract tests when needed to prove invalid values are rejected. Keep fixtures
+  typed; do not cast incomplete fixtures into complete domain entities. Report
+  pre-existing failures separately instead of relaxing types to obtain a pass.
+
+Example: a property representing any persisted metal uses `metal: MetalType`
+from `@monyvi/db`, not `metal: string` or a copied `"GOLD" | "SILVER"` union. A
+genuinely gold/silver-only feature uses its approved, centrally defined subset
+and validates before narrowing from `MetalType`.
 
 ## User-Facing Copy & UX Writing
 
@@ -374,6 +449,10 @@ chore, perf, ci.
 
 - For GitHub sprint issue branches, follow the branch base selection rules in
   `.agent/workflows/sprint-issue.md`.
+- OpenCode implementation handoff is opt-in only. When Mohamed explicitly asks
+  Codex to plan and then delegate approved implementation to Qwen or GLM, follow
+  `.agent/workflows/opencode-implementation-handoff.md`. Do not auto-trigger it,
+  and do not perform a Codex PR review unless Mohamed separately requests one.
 
 ## Pull Request Review Comments
 
@@ -690,11 +769,20 @@ Strong success criteria let you loop independently. Weak criteria ("make it
 work") require constant clarification.
 
 ## Active Technologies
-- TypeScript strict mode; React Native Expo mobile app + Expo Router, React Native, NativeWind v4, WatermelonDB, Zod, DateTimePicker, i18next (386-recurring-end-date)
-- Existing WatermelonDB and synced recurring-payments record; existing optional end-date column (386-recurring-end-date)
-- Existing synced recurring-payment end-date field in WatermelonDB (386-recurring-end-date)
-- TypeScript 5.9 strict; React 19.2; React Native 0.83.6 + Expo 55, Expo Router 55, WatermelonDB 0.28, Supabase JS 2.106, Decimal.js (035-metals-module-redesign)
-- WatermelonDB/SQLite local source of truth; Supabase PostgreSQL with exact numeric, grouped CAS RPC, and immutable Metals evidence (035-metals-module-redesign)
+
+- TypeScript strict mode; React Native Expo mobile app + Expo Router, React
+  Native, NativeWind v4, WatermelonDB, Zod, DateTimePicker, i18next
+  (386-recurring-end-date)
+- Existing WatermelonDB and synced recurring-payments record; existing optional
+  end-date column (386-recurring-end-date)
+- Existing synced recurring-payment end-date field in WatermelonDB
+  (386-recurring-end-date)
+- TypeScript 5.9 strict; React 19.2; React Native 0.83.6 + Expo 55, Expo Router
+  55, WatermelonDB 0.28, Supabase JS 2.106, Decimal.js
+  (035-metals-module-redesign)
+- WatermelonDB/SQLite local source of truth; Supabase PostgreSQL with exact
+  numeric, grouped CAS RPC, and immutable Metals evidence
+  (035-metals-module-redesign)
 
 - TypeScript 5.9 strict mode, React 19.2, React Native + Expo Router, React
   Navigation, NativeWind v4, (034-budget-detail-redesign)

@@ -4,6 +4,7 @@ import {
   type AssetMetal,
   type CurrencyType,
   type FinancialActionGroup,
+  type MetalActionEvidence,
   type MetalHoldingState,
   type MetalLifecycleEvent,
   type MetalRateReference,
@@ -11,6 +12,7 @@ import {
 import {
   calculateMetalReferenceValue,
   hasCanonicalDecimalPrecision,
+  isSupportedMetal,
   isSupportedMetalsIsoCurrencyCode,
   parseCanonicalDecimal,
   resolveMetalsCurrencyMinorUnits,
@@ -18,6 +20,7 @@ import {
   roundDecimal,
   serializeDecimal,
   type MetalsIsoCurrencyCode,
+  type SupportedMetal,
 } from "@monyvi/logic";
 import { Q, type Query } from "@nozbe/watermelondb";
 
@@ -34,13 +37,17 @@ import {
   toMetalSellEventSnapshot,
   type MetalRealizedSaleOutcome,
   type MetalSellGroupSnapshot,
-  type MetalSellHoldingSnapshot,
   type MetalSellRateReferenceSnapshot,
 } from "@/services/metal-realized-sale-read-model-service";
+import {
+  convertSoldAmountForPreferredDisplay,
+  toPortfolioSaleGroup,
+  toPortfolioSaleHolding,
+} from "@/services/metal-portfolio-sale-result-service";
 
 const RECENT_HISTORY_LIMIT = 3;
 
-export type MetalPortfolioFilter = "ALL" | "GOLD" | "SILVER";
+export type MetalPortfolioFilter = "ALL" | SupportedMetal;
 
 export interface PortfolioRateStatus {
   readonly ageMs: number | null;
@@ -53,7 +60,7 @@ export interface MetalPortfolioHoldingInput {
   readonly id: string;
   readonly isEffective: boolean;
   readonly isVisible: boolean;
-  readonly metalType: "GOLD" | "SILVER";
+  readonly metalType: SupportedMetal;
   readonly name: string;
   readonly occurredAt: Date;
   readonly physicalForm: string | null;
@@ -101,6 +108,7 @@ export interface MetalPortfolioAssetMetalSnapshot {
 
 export interface MetalPortfolioHoldingStateSnapshot {
   readonly deleted: boolean;
+  readonly effectiveActionId?: string | null;
   readonly effectiveEventId: string | null;
   readonly holdingId: string;
   readonly isVisible: boolean;
@@ -110,7 +118,7 @@ export interface MetalPortfolioHoldingStateSnapshot {
 }
 
 export interface MetalPortfolioLifecycleEventSnapshot {
-  readonly actionId?: string;
+  readonly actionId?: string | null;
   readonly deleted: boolean;
   readonly holdingId: string;
   readonly id: string;
@@ -121,8 +129,17 @@ export interface MetalPortfolioLifecycleEventSnapshot {
   readonly userId: string;
 }
 
+export interface MetalPortfolioActionEvidenceSnapshot {
+  readonly actionId: string;
+  readonly deleted: boolean;
+  readonly holdingId: string;
+  readonly kind: string;
+  readonly userId: string;
+}
+
 export interface ShapeMetalPortfolioHoldingsInput {
   readonly actionGroups?: readonly MetalSellGroupSnapshot[];
+  readonly actionEvidence?: readonly MetalPortfolioActionEvidenceSnapshot[];
   readonly assetMetals: readonly MetalPortfolioAssetMetalSnapshot[];
   readonly assets: readonly MetalPortfolioAssetSnapshot[];
   readonly currentRates: LiveRatesTrustReadModel;
@@ -266,6 +283,32 @@ export function observePortfolioRecentHistory(
   );
 }
 
+export function observePortfolioEffectiveActionEvidence(
+  input: ObservePortfolioRecentHistoryInput
+): Query<MetalActionEvidence> | null {
+  const actionIds = Array.from(
+    new Set(
+      input.holdingStates
+        .filter(
+          (state) =>
+            state.userId === input.userId &&
+            !state.deleted &&
+            state.effectiveActionId !== null &&
+            state.effectiveActionId !== undefined
+        )
+        .map((state) => state.effectiveActionId)
+        .filter((id): id is string => typeof id === "string")
+    )
+  ).sort();
+  if (actionIds.length === 0) return null;
+  return queryOwned(
+    database.get<MetalActionEvidence>("metal_action_evidence"),
+    input.userId,
+    Q.where("action_id", Q.oneOf(actionIds)),
+    Q.where("deleted", false)
+  );
+}
+
 export function shapeMetalPortfolioHoldings(
   input: ShapeMetalPortfolioHoldingsInput
 ): readonly MetalPortfolioHoldingInput[] {
@@ -303,6 +346,7 @@ export function shapeMetalPortfolioHoldings(
       existing === undefined ? [reference] : [...existing, reference]
     );
   }
+  const actionEvidence = input.actionEvidence ?? [];
 
   return input.assets.flatMap((asset) => {
     if (asset.userId !== input.userId) {
@@ -313,9 +357,9 @@ export function shapeMetalPortfolioHoldings(
     if (!metal || !state || !isSupportedMetal(metal.metalType)) {
       return [];
     }
-    const status = normalizeHoldingStatus(state.status);
+    const persistedStatus = normalizeHoldingStatus(state.status);
     const createdAt = copyValidDate(asset.createdAt);
-    if (status === null || createdAt === null) {
+    if (persistedStatus === null || createdAt === null) {
       return [];
     }
 
@@ -328,6 +372,11 @@ export function shapeMetalPortfolioHoldings(
         event.holdingId === asset.id &&
         event.isEffective &&
         copyValidDate(event.occurredAt) !== null);
+    const hasValidTerminalEvidence =
+      persistedStatus === "active" ||
+      hasBoundEffectiveActionEvidence(state, event, actionEvidence);
+    const status = hasValidTerminalEvidence ? persistedStatus : "active";
+    const effectiveEvent = status === persistedStatus ? event : undefined;
     const exactFacts = normalizeExactHoldingFacts(asset, metal);
     const values = calculateHoldingCardValues({
       currentRates: input.currentRates,
@@ -393,7 +442,9 @@ export function shapeMetalPortfolioHoldings(
         isVisible: state.isVisible,
         metalType: metal.metalType,
         name: asset.name,
-        occurredAt: event ? new Date(event.occurredAt.getTime()) : createdAt,
+        occurredAt: effectiveEvent
+          ? new Date(effectiveEvent.occurredAt.getTime())
+          : createdAt,
         physicalForm: normalizeOptionalText(metal.itemForm),
         performanceUnavailableReason: values.performanceUnavailableReason,
         purchaseCurrency: exactFacts.purchaseCurrency,
@@ -415,6 +466,33 @@ export function shapeMetalPortfolioHoldings(
       },
     ];
   });
+}
+
+export function hasBoundEffectiveActionEvidence(
+  state: MetalPortfolioHoldingStateSnapshot,
+  event: MetalPortfolioLifecycleEventSnapshot | undefined,
+  evidence: readonly MetalPortfolioActionEvidenceSnapshot[]
+): boolean {
+  const actionId = state.effectiveActionId;
+  if (
+    actionId === null ||
+    actionId === undefined ||
+    event === undefined ||
+    event.actionId !== actionId ||
+    event.holdingId !== state.holdingId ||
+    !event.isEffective ||
+    event.kind !== (state.status === "sold" ? "sell" : "dispose")
+  ) {
+    return false;
+  }
+  return evidence.some(
+    (candidate) =>
+      !candidate.deleted &&
+      candidate.userId === state.userId &&
+      candidate.holdingId === state.holdingId &&
+      candidate.actionId === actionId &&
+      candidate.kind === event.kind
+  );
 }
 
 export function buildMetalPortfolioReadModel(
@@ -468,10 +546,13 @@ export function buildMetalPortfolioReadModel(
       gold: calculateDisplayedShare(goldTotalDecimal, activeTotalDecimal),
       silver: calculateDisplayedShare(silverTotalDecimal, activeTotalDecimal),
     },
-    currentPerformanceDecimal: sumAvailableDecimals(
-      activeHoldings.map((holding) => holding.currentPerformanceDecimal),
-      "0"
-    ),
+    currentPerformanceDecimal:
+      activeHoldings.length === 0
+        ? null
+        : sumAvailableDecimals(
+            activeHoldings.map((holding) => holding.currentPerformanceDecimal),
+            "0"
+          ),
     currentPerformanceUnavailableReason:
       resolvePortfolioPerformanceUnavailableReason(activeHoldings),
     filter: input.filter,
@@ -555,74 +636,6 @@ function determineListState(
   }
 
   return selectedHoldings.length === 0 ? "FILTER_EMPTY" : "POPULATED";
-}
-
-function toPortfolioSaleGroup(
-  event: MetalPortfolioLifecycleEventSnapshot | undefined,
-  groupsByActionId: ReadonlyMap<string, MetalSellGroupSnapshot>
-): MetalSellGroupSnapshot | null {
-  const actionId = event?.actionId;
-  if (actionId === undefined) {
-    return null;
-  }
-  return groupsByActionId.get(actionId) ?? null;
-}
-
-function toPortfolioSaleHolding(
-  asset: MetalPortfolioAssetSnapshot,
-  metalType: "GOLD" | "SILVER",
-  state: MetalPortfolioHoldingStateSnapshot,
-  facts: ExactHoldingFacts,
-  status: "active" | "sold" | "disposed"
-): MetalSellHoldingSnapshot {
-  return {
-    acquisitionActionId: asset.acquisitionActionId ?? null,
-    effectiveEventId: state.effectiveEventId,
-    holdingId: asset.id,
-    isVisible: state.isVisible,
-    metalType,
-    purityFactorDecimal: facts.purityFactorDecimal,
-    purchaseCurrency: facts.purchaseCurrency,
-    purchasePriceDecimal: facts.purchasePriceDecimal,
-    reconciliationState: state.reconciliationState,
-    status,
-    userId: asset.userId,
-    weightGramsDecimal: facts.weightGramsDecimal,
-  };
-}
-
-function convertSoldAmountForPreferredDisplay(input: {
-  readonly amountCurrency: MetalsIsoCurrencyCode;
-  readonly amountDecimal: string;
-  readonly currentRates: LiveRatesTrustReadModel;
-  readonly preferredCurrency: CurrencyType;
-}): string | null {
-  if (!isSupportedMetalsIsoCurrencyCode(input.preferredCurrency)) {
-    return null;
-  }
-  if (input.preferredCurrency === input.amountCurrency) {
-    return serializeDecimal(parseCanonicalDecimal(input.amountDecimal));
-  }
-  const amountRate = readCurrentCurrencyRate(
-    input.currentRates,
-    input.amountCurrency
-  );
-  const preferredRate = readCurrentCurrencyRate(
-    input.currentRates,
-    input.preferredCurrency
-  );
-  if (amountRate === null || preferredRate === null) {
-    return null;
-  }
-  try {
-    return serializeDecimal(
-      parseCanonicalDecimal(input.amountDecimal)
-        .times(amountRate)
-        .dividedBy(preferredRate)
-    );
-  } catch {
-    return null;
-  }
 }
 
 interface ExactHoldingFacts {
@@ -734,7 +747,7 @@ function normalizePurchasePrice(
 function calculateHoldingCardValues(input: {
   readonly currentRates: LiveRatesTrustReadModel;
   readonly facts: ExactHoldingFacts;
-  readonly metalType: "GOLD" | "SILVER";
+  readonly metalType: SupportedMetal;
   readonly preferredCurrency: CurrencyType;
 }): HoldingCardValues {
   if (
@@ -876,10 +889,6 @@ function copyValidDate(value: Date | null): Date | null {
     return null;
   }
   return new Date(value.getTime());
-}
-
-function isSupportedMetal(value: string): value is "GOLD" | "SILVER" {
-  return value === "GOLD" || value === "SILVER";
 }
 
 function normalizeHoldingStatus(

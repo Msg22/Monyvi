@@ -20,6 +20,9 @@ const MOCK_RATE_COPY: Readonly<
     "rate.short_stale": "Older than 24h",
     "rate.source": "Source: {{source}}",
     "rate.quality": "Quality: {{quality}}",
+    live_rates: "Live Rates",
+    rates: "Rates",
+    live_badge: "Live",
   },
   ar: {
     "rate.fresh":
@@ -34,6 +37,9 @@ const MOCK_RATE_COPY: Readonly<
     "rate.short_stale": "أقدم من 24 ساعة",
     "rate.source": "المصدر: {{source}}",
     "rate.quality": "الجودة: {{quality}}",
+    live_rates: "الأسعار المباشرة",
+    rates: "أسعار السوق",
+    live_badge: "مباشر",
   },
 };
 
@@ -92,6 +98,7 @@ function screenState(
   return {
     isLoading: false,
     isConnected: true,
+    isLive: false,
     isStale: false,
     hasData: true,
     metals: {
@@ -252,5 +259,32 @@ describe("LiveRatesScreen Metals V1 trust presentation", () => {
       "الأسعار المباشرة: سعر حديث. تم تحديث الأسعار في 1 Sep 2026, 12:00";
     expect(screen.getByText("gold · " + freshCopy)).toBeOnTheScreen();
     expect(screen.getByLabelText("gold: " + freshCopy)).toBeOnTheScreen();
+  });
+
+  it("reserves the Live Rates title and Live badge for confirmed-fresh rates", () => {
+    mockUseLiveRatesScreen.mockReturnValue(
+      screenState({
+        isLive: true,
+        rateTrust: {
+          gold: { state: "fresh", dateTime: "1 Sep 2026, 12:00" },
+          silver: { state: "fresh", dateTime: "1 Sep 2026, 12:00" },
+          currencies: { state: "fresh", dateTime: "1 Sep 2026, 12:00" },
+        },
+      })
+    );
+
+    render(<LiveRatesScreen />);
+
+    expect(screen.getByText("Live Rates")).toBeOnTheScreen();
+    expect(screen.getByText("Live")).toBeOnTheScreen();
+    expect(screen.queryByText("Rates")).toBeNull();
+  });
+
+  it("falls back to the neutral Rates title without a Live badge when trust is unconfirmed", () => {
+    render(<LiveRatesScreen />);
+
+    expect(screen.getByText("Rates")).toBeOnTheScreen();
+    expect(screen.queryByText("Live Rates")).toBeNull();
+    expect(screen.queryByText("Live")).toBeNull();
   });
 });

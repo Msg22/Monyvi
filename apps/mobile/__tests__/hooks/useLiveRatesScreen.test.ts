@@ -59,10 +59,6 @@ jest.mock("@/utils/logger", () => ({
   logger: { error: jest.fn(), warn: jest.fn() },
 }));
 
-jest.mock("@/services/live-rates-trust-read-model-service", () => ({
-  summarizeLiveRatesTrust: (): "missing" => "missing",
-}));
-
 jest.mock("@monyvi/logic", () => ({
   CURRENCY_INFO_MAP: { EGP: { code: "EGP", symbol: "EGP" } },
   SUPPORTED_CURRENCIES: [],
@@ -85,7 +81,16 @@ jest.mock("react-i18next", () => ({
 import { useLiveRatesScreen } from "@/hooks/useLiveRatesScreen";
 
 const trustedRates = {
-  currencies: new Map(),
+  currencies: new Map([
+    [
+      "EGP",
+      {
+        ageMs: 1_000,
+        providerObservedAt: new Date("2026-09-07T00:00:00.000Z"),
+        state: "fresh" as const,
+      },
+    ],
+  ]),
   gold: {
     ageMs: 1_000,
     providerObservedAt: new Date("2026-09-07T00:00:00.000Z"),
@@ -199,5 +204,52 @@ describe("useLiveRatesScreen", () => {
     await waitFor(() =>
       expect(result.current.rateTrust.gold.ageText).toBe("2 minutes ago")
     );
+  });
+
+  it("reports live only when online, error-free, and every rate group is fresh", async () => {
+    const { result } = renderHook(() => useLiveRatesScreen());
+
+    act(() => {
+      emitMarketRates({
+        isCurrentLoading: false,
+        selectedSnapshot: selectedSnapshot(),
+      });
+    });
+
+    await waitFor(() => expect(result.current.hasData).toBe(true));
+    expect(result.current.isLive).toBe(true);
+
+    act(() => {
+      emitMarketRates({ currentError: new Error("observer failed") });
+    });
+
+    await waitFor(() => expect(result.current.refreshError).not.toBeNull());
+    expect(result.current.isLive).toBe(false);
+  });
+
+  it("is not live when a rate group is stale or the device is offline", async () => {
+    const { result } = renderHook(() => useLiveRatesScreen());
+
+    act(() => {
+      emitMarketRates({
+        isCurrentLoading: false,
+        selectedSnapshot: selectedSnapshot({
+          ...trustedRates,
+          silver: { ...trustedRates.silver, state: "stale" as const },
+        }),
+      });
+    });
+
+    await waitFor(() => expect(result.current.hasData).toBe(true));
+    expect(result.current.isLive).toBe(false);
+
+    act(() => {
+      emitMarketRates({
+        isConnected: false,
+        selectedSnapshot: selectedSnapshot(),
+      });
+    });
+    await waitFor(() => expect(result.current.hasData).toBe(true));
+    expect(result.current.isLive).toBe(false);
   });
 });

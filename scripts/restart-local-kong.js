@@ -37,15 +37,21 @@ function sleep(ms) {
 async function waitForKongHealth() {
   const deadline = Date.now() + HEALTH_TIMEOUT_MS;
   while (Date.now() < deadline) {
+    const remainingBeforeFetch = deadline - Date.now();
+    if (remainingBeforeFetch <= 0) break;
     try {
-      const response = await fetch(LOCAL_KONG_HEALTH_URL);
-      if (response.ok) {
+      const response = await fetch(LOCAL_KONG_HEALTH_URL, {
+        signal: AbortSignal.timeout(Math.max(1, remainingBeforeFetch)),
+      });
+      if (response.ok && Date.now() < deadline) {
         return true;
       }
     } catch {
       // Kong is still restarting; keep polling until the deadline.
     }
-    await sleep(HEALTH_POLL_INTERVAL_MS);
+    const remainingMs = deadline - Date.now();
+    if (remainingMs <= 0) break;
+    await sleep(Math.min(HEALTH_POLL_INTERVAL_MS, remainingMs));
   }
   return false;
 }

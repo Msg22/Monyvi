@@ -420,10 +420,6 @@ describe("US1 portfolio surfaces", () => {
         width: "20%",
       }
     );
-    expect(screen.getByTestId("metal-portfolio-filter-border-ALL")).toHaveProp(
-      "className",
-      expect.stringContaining("rounded-l-")
-    );
   });
 
   it("keeps ordinary-phone holding cards readable above floating tab controls", () => {
@@ -576,7 +572,82 @@ describe("US1 portfolio surfaces", () => {
     expect(screen.getByText(/Sold coin/)).toBeTruthy();
   });
 
-  it("mirrors forward chevrons in RTL", () => {
+  it("speaks tile amounts and shares for screen readers", () => {
+    render(
+      <WealthBreakdownSection
+        currency={currency}
+        isLoading={false}
+        breakdown={breakdown}
+        onAccountsPress={jest.fn()}
+        onMetalsPress={jest.fn()}
+      />
+    );
+
+    expect(
+      screen.getByLabelText(
+        /Accounts\. 1,062,237\.75 EGP\. 85\.4% of net worth/
+      )
+    ).toBeTruthy();
+  });
+
+  it("uses loss language for negative realized P/L in summary and History", () => {
+    renderPortfolio({
+      portfolio: {
+        ...portfolio,
+        soldResultDecimal: "-1250",
+        recentHistory: [
+          {
+            ...portfolio.activeHoldings[0],
+            id: "sold-loss",
+            name: "Sold at a loss",
+            soldResultDecimal: "-1250",
+            status: "sold",
+          },
+        ],
+      },
+    });
+
+    expect(screen.getByText("loss from sold metals")).toBeTruthy();
+    expect(screen.getByText(/Loss from this sale/)).toBeTruthy();
+    expect(screen.queryByText("Net proceeds")).toBeNull();
+  });
+
+  it("opens active and recent holdings while keeping disposed History free of realized P/L", () => {
+    const onHoldingPress = jest.fn();
+    const onHistoryPress = jest.fn();
+    renderPortfolio({
+      onHoldingPress,
+      onHistoryPress,
+      portfolio: {
+        ...portfolio,
+        holdings: portfolio.activeHoldings,
+        recentHistory: [
+          {
+            ...portfolio.activeHoldings[0],
+            id: "disposed-ring",
+            name: "Gifted ring",
+            soldResultDecimal: null,
+            status: "disposed",
+          },
+        ],
+      },
+    });
+
+    fireEvent.press(screen.getByTestId("metal-portfolio-holding-gold-coin"));
+    expect(onHoldingPress).toHaveBeenCalledWith("gold-coin");
+
+    fireEvent.press(screen.getByTestId("metal-portfolio-view-all"));
+    expect(onHistoryPress).toHaveBeenCalledTimes(1);
+
+    fireEvent.press(
+      screen.getByTestId("metal-portfolio-history-disposed-ring")
+    );
+    expect(onHoldingPress).toHaveBeenCalledWith("disposed-ring");
+    expect(screen.getByText(/Disposed.*Gifted ring/)).toBeTruthy();
+    expect(screen.queryByText("Realized result")).toBeNull();
+  });
+
+  it("mirrors forward chevrons and filter chrome in RTL", () => {
     const originalIsRTL = I18nManager.isRTL;
     Object.defineProperty(I18nManager, "isRTL", {
       configurable: true,
@@ -595,6 +666,13 @@ describe("US1 portfolio surfaces", () => {
 
       expect(screen.getAllByTestId("icon-chevron-back")).toHaveLength(2);
       expect(screen.queryByTestId("icon-chevron-forward")).toBeNull();
+      expect(
+        screen.getByTestId("metal-portfolio-filter-border-ALL")
+      ).toHaveProp("className", expect.stringContaining("rounded-s-[11px]"));
+      expect(screen.getByTestId("metal-portfolio-filter-ALL")).toHaveProp(
+        "className",
+        expect.stringContaining("border-e")
+      );
     } finally {
       Object.defineProperty(I18nManager, "isRTL", {
         configurable: true,
@@ -613,6 +691,8 @@ describe("US1 portfolio surfaces", () => {
       },
     });
     expect(screen.getByText("Start tracking your metals")).toBeTruthy();
+    // An empty portfolio has no active purchase: no signed performance metric.
+    expect(screen.queryByText("since purchase")).toBeNull();
 
     renderPortfolio({
       portfolio: {
@@ -684,11 +764,13 @@ describe("US1 portfolio surfaces", () => {
       rateProviderObservedAt: new Date("2026-08-24T10:30:00.000Z"),
     });
 
-    expect(screen.getByLabelText(/^Metals portfolio value/)).toBeTruthy();
+    // The trust status must live inside the single spoken total label.
     expect(
-      screen.queryByLabelText(/Metals portfolio value .*Current rate\.$/)
+      screen.getByLabelText(/^Metals portfolio value .*Prices last updated/)
+    ).toBeTruthy();
+    expect(
+      screen.queryByLabelText(/^Metals portfolio value .*Current rate\.$/)
     ).toBeNull();
-    expect(screen.queryByLabelText(/Prices last updated/)).toBeTruthy();
   });
 
   it("speaks unavailable when the required rate evidence is missing", () => {

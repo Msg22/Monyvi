@@ -142,7 +142,7 @@ export interface MetalSellEventSnapshot {
 }
 
 export interface MetalSellEventCandidate {
-  readonly actionId?: string;
+  readonly actionId?: string | null;
   readonly deleted: boolean;
   readonly holdingId: string;
   readonly id: string;
@@ -157,7 +157,7 @@ export function toMetalSellEventSnapshot(
 ): MetalSellEventSnapshot | null {
   if (
     event === undefined ||
-    event.actionId === undefined ||
+    typeof event.actionId !== "string" ||
     event.kind === undefined ||
     event.payloadJson === undefined
   ) {

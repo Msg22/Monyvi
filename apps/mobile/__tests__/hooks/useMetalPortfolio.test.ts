@@ -94,8 +94,10 @@ jest.mock("@react-navigation/native", () => ({
   useIsFocused: (): boolean => true,
 }));
 
+let mockAuthUserId = "user-1";
+
 jest.mock("@/context/AuthContext", () => ({
-  useAuth: () => ({ user: { id: "user-1" }, isLoading: false }),
+  useAuth: () => ({ user: { id: mockAuthUserId }, isLoading: false }),
 }));
 
 jest.mock("@/providers/DatabaseProvider", () => ({
@@ -146,6 +148,7 @@ jest.mock("@/services/metal-portfolio-read-model-service", () => ({
   observePortfolioHoldingStates: (): unknown => mockImmediateQuery([]),
   observePortfolioAssetMetals: (): null => null,
   observePortfolioRecentHistory: (): null => null,
+  observePortfolioEffectiveActionEvidence: (): null => null,
   observePortfolioMetalSellGroups: (): unknown =>
     mockDeferredQuery(mockSaleGroupObservers),
   observePortfolioSaleRateReferences: (): unknown =>
@@ -174,6 +177,7 @@ import { useMetalPortfolio } from "@/hooks/useMetalPortfolio";
 
 describe("useMetalPortfolio summary loading signal", () => {
   beforeEach(() => {
+    mockAuthUserId = "user-1";
     resetMockMarketRates();
     mockSaleGroupObservers.length = 0;
     mockSaleRefObservers.length = 0;
@@ -239,6 +243,26 @@ describe("useMetalPortfolio summary loading signal", () => {
     // section readiness derived from it.
     expect(result.current.readiness.summary).toBe(true);
     expect(result.current.isSummaryLoading).toBe(false);
+  });
+
+  it("clears a previous account's portfolio observer error when the signed-in user changes", async () => {
+    const { result, rerender } = renderHook(() =>
+      useMetalPortfolio({ accountsValueDecimal: "1000" })
+    );
+    await waitFor(() => expect(result.current.readiness.holdings).toBe(true));
+
+    act(() => {
+      mockSaleGroupObservers[0]?.error(
+        new Error("user A sale evidence observer failed")
+      );
+    });
+    await waitFor(() => expect(result.current.error).toBeInstanceOf(Error));
+
+    mockAuthUserId = "user-2";
+    rerender(undefined);
+
+    // The new account must not inherit account A's generic failure/retry state.
+    expect(result.current.error).toBeNull();
   });
 });
 

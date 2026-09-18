@@ -63,6 +63,10 @@ jest.mock("react-native-safe-area-context", () => ({
   } => ({ bottom: 0 }),
 }));
 
+jest.mock("@/context/ThemeContext", () => ({
+  useTheme: (): { readonly isDark: boolean } => ({ isDark: false }),
+}));
+
 const history: MetalHistoryReadModel = {
   counts: { all: 1, disposed: 0, sold: 1 },
   filter: "all",

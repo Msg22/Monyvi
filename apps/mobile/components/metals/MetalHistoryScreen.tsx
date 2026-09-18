@@ -1,12 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import {
-  FlatList,
-  I18nManager,
-  Pressable,
-  Text,
-  useColorScheme,
-  View,
-} from "react-native";
+import { FlatList, I18nManager, Pressable, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { resolvePuritySelection } from "@monyvi/logic";
@@ -14,6 +7,7 @@ import { resolvePuritySelection } from "@monyvi/logic";
 import { MetalHoldingRender } from "@/components/metals/MetalHoldingRender";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { palette } from "@/constants/colors";
+import { useTheme } from "@/context/ThemeContext";
 import type {
   MetalHistoryCounts,
   MetalHistoryFilter,
@@ -108,7 +102,7 @@ function HistoryRow({
   readonly onPress: () => void;
 }): React.JSX.Element {
   const { t } = useTranslation("metals");
-  const colorScheme = useColorScheme();
+  const { isDark } = useTheme();
   const metalLabel = t(
     item.metalType === "GOLD" ? "metal.gold" : "metal.silver"
   );
@@ -147,7 +141,7 @@ function HistoryRow({
       <Ionicons
         accessibilityElementsHidden
         importantForAccessibility="no"
-        color={colorScheme === "dark" ? palette.slate[300] : palette.slate[500]}
+        color={isDark ? palette.slate[300] : palette.slate[500]}
         name={I18nManager.isRTL ? "chevron-back" : "chevron-forward"}
         size={20}
       />

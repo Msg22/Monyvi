@@ -83,6 +83,7 @@ type LiveRatesRefreshError = "cached_refresh_failed" | "initial_refresh_failed";
 interface UseLiveRatesScreenResult {
   readonly isLoading: boolean;
   readonly isConnected: boolean;
+  readonly isLive: boolean;
   readonly isStale: boolean;
   readonly hasData: boolean;
   readonly metals: MetalDisplayData;
@@ -245,8 +246,7 @@ export function useLiveRatesScreen(): UseLiveRatesScreenResult {
       if (!isSupportedMetalsIsoCurrencyCode(currency.code)) {
         throw new Error(`Unsupported current currency: ${currency.code}`);
       }
-      const instrumentCode: CurrentMarketInstrument =
-        `currency:${currency.code}`;
+      const instrumentCode: CurrentMarketInstrument = `currency:${currency.code}`;
       const fromUsd = currentRateDecimal(selectedSnapshot, instrumentCode);
       const rate =
         fromUsd === null
@@ -261,10 +261,7 @@ export function useLiveRatesScreen(): UseLiveRatesScreenResult {
         code: currency.code,
         name: currency.name,
         flag: currency.flag,
-        rate:
-          rate === null
-            ? "—"
-            : `${formatRate(rate)} ${currencySymbol}`,
+        rate: rate === null ? "—" : `${formatRate(rate)} ${currencySymbol}`,
         changePercent: calculateAvailableTrend(rate, previousRate),
         trust: toCombinedTrustDisplay(
           [
@@ -339,18 +336,8 @@ export function useLiveRatesScreen(): UseLiveRatesScreenResult {
       : createEmptyTrustReadModel();
     const currencyTrustValues = Array.from(trust.currencies.values());
     return {
-      gold: toTrustDisplayValue(
-        trust.gold,
-        undefined,
-        undefined,
-        locale
-      ),
-      silver: toTrustDisplayValue(
-        trust.silver,
-        undefined,
-        undefined,
-        locale
-      ),
+      gold: toTrustDisplayValue(trust.gold, undefined, undefined, locale),
+      silver: toTrustDisplayValue(trust.silver, undefined, undefined, locale),
       currencies: toTrustDisplayValue(
         summarizeLiveRatesTrust(currencyTrustValues),
         getConservativeObservedAt(currencyTrustValues),
@@ -399,9 +386,16 @@ export function useLiveRatesScreen(): UseLiveRatesScreenResult {
       : "initial_refresh_failed"
     : null;
 
+  const effectiveRefreshError = observationError ?? refreshError;
   return {
     isLoading: isCurrentLoading,
     isConnected,
+    isLive:
+      isConnected &&
+      effectiveRefreshError === null &&
+      rateTrust.gold.state === "fresh" &&
+      rateTrust.silver.state === "fresh" &&
+      rateTrust.currencies.state === "fresh",
     isStale: Object.values(rateTrust).some(({ state }) => state !== "fresh"),
     hasData: selectedSnapshot !== null,
     metals,
@@ -414,7 +408,7 @@ export function useLiveRatesScreen(): UseLiveRatesScreenResult {
     onSearchChange,
     lastUpdatedText,
     isRefreshing,
-    refreshError: observationError ?? refreshError,
+    refreshError: effectiveRefreshError,
     onRefresh,
     rateTrust,
   };
@@ -563,8 +557,7 @@ function preferredRateDecimal(
   if (preferredCurrency === "USD") {
     return "1";
   }
-  const instrumentCode: CurrentMarketInstrument =
-    `currency:${preferredCurrency}`;
+  const instrumentCode: CurrentMarketInstrument = `currency:${preferredCurrency}`;
   return currentRateDecimal(snapshot, instrumentCode);
 }
 
@@ -573,7 +566,9 @@ function multiplyExact(left: string, right: string): string {
 }
 
 function divideExact(numerator: string, denominator: string): string {
-  return serializeDecimal(parseCanonicalDecimal(numerator).dividedBy(denominator));
+  return serializeDecimal(
+    parseCanonicalDecimal(numerator).dividedBy(denominator)
+  );
 }
 
 function displayNumber(exactDecimal: string): number {

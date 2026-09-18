@@ -7,6 +7,7 @@ import { usePreferredCurrency } from "@/hooks/usePreferredCurrency";
 import { useDatabase } from "@/providers/DatabaseProvider";
 import type { LiveRatesTrustReadModel } from "@/services/live-rates-trust-read-model-service";
 import {
+  observeMetalDetailAssetMetal,
   observeMetalDetailEvents,
   observeMetalDetailHolding,
   observeMetalDetailHoldingState,
@@ -19,6 +20,32 @@ import { syncDatabase } from "@/services/sync";
 import { AppState } from "react-native";
 
 const RATE_STATUS_REFRESH_INTERVAL_MS = 60_000;
+const DETAIL_ASSET_COLUMNS = [
+  "name",
+  "purchase_date",
+  "purchase_price_decimal",
+  "purchase_currency",
+  "acquisition_action_id",
+] as const;
+const DETAIL_HOLDING_STATE_COLUMNS = [
+  "status",
+  "effective_action_id",
+  "effective_event_id",
+  "is_visible",
+  "reconciliation_state",
+] as const;
+const DETAIL_METAL_COLUMNS = [
+  "metal_type",
+  "item_form",
+  "purity_catalog_version",
+  "purity_code",
+  "purity_factor_decimal",
+  "weight_grams_decimal",
+] as const;
+const DETAIL_LIFECYCLE_EVENT_COLUMNS = [
+  "is_effective",
+  "is_history_visible",
+] as const;
 
 interface UseMetalHoldingDetailResult {
   readonly error: Error | null;
@@ -128,15 +155,29 @@ export function useMetalHoldingDetail(
       setIsLoading(false);
     };
     setObservationError(null);
+
+    let metalSubscription: { unsubscribe(): void } | null = null;
+    const holdingSubscription = observeMetalDetailHolding(userId, holdingId)
+      .observeWithColumns([...DETAIL_ASSET_COLUMNS])
+      .subscribe({
+        error: onObservationError,
+        next: (assets): void => {
+          onChange();
+          metalSubscription?.unsubscribe();
+          const query = observeMetalDetailAssetMetal(userId, assets);
+          metalSubscription =
+            query
+              ?.observeWithColumns([...DETAIL_METAL_COLUMNS])
+              .subscribe({ error: onObservationError, next: onChange }) ?? null;
+        },
+      });
     const subscriptions = [
-      observeMetalDetailHolding(userId, holdingId)
-        .observe()
-        .subscribe({ error: onObservationError, next: onChange }),
+      holdingSubscription,
       observeMetalDetailHoldingState(userId, holdingId)
-        .observe()
+        .observeWithColumns([...DETAIL_HOLDING_STATE_COLUMNS])
         .subscribe({ error: onObservationError, next: onChange }),
       observeMetalDetailEvents(userId, holdingId)
-        .observe()
+        .observeWithColumns([...DETAIL_LIFECYCLE_EVENT_COLUMNS])
         .subscribe({ error: onObservationError, next: onChange }),
       observeMetalDetailActionEvidence(userId, holdingId)
         .observe()
@@ -145,8 +186,10 @@ export function useMetalHoldingDetail(
         .observe()
         .subscribe({ error: onObservationError, next: onChange }),
     ];
-    return () =>
+    return () => {
+      metalSubscription?.unsubscribe();
       subscriptions.forEach((subscription) => subscription.unsubscribe());
+    };
   }, [holdingId, isFocused, isResolvingUser, retryIndex, userId]);
 
   useEffect(() => {

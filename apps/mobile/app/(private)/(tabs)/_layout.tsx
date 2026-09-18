@@ -198,25 +198,25 @@ function TabLayoutInner(): React.ReactElement {
           <Tabs.Screen
             name="index"
             options={{
-              title: "Home",
+              title: tCommon("home"),
             }}
           />
           <Tabs.Screen
             name="accounts"
             options={{
-              title: "Accounts",
+              title: tCommon("accounts"),
             }}
           />
           <Tabs.Screen
             name="transactions"
             options={{
-              title: "Transactions",
+              title: tCommon("transactions"),
             }}
           />
           <Tabs.Screen
             name="metals"
             options={{
-              title: "Metals",
+              title: tCommon("metals"),
             }}
           />
         </Tabs>

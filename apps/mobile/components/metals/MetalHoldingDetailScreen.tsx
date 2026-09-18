@@ -4,7 +4,6 @@ import {
   FlatList,
   Pressable,
   Text,
-  useColorScheme,
   useWindowDimensions,
   View,
 } from "react-native";
@@ -33,6 +32,7 @@ import type {
 import { Skeleton } from "@/components/ui/Skeleton";
 import { palette } from "@/constants/colors";
 import { shouldUseCompactLayout } from "@/constants/ui";
+import { useTheme } from "@/context/ThemeContext";
 import type {
   MetalDetailReadModel,
   MetalDetailTimelineItem,
@@ -238,14 +238,16 @@ function ReconciliationStatus({
       <Text className="text-sm text-text-secondary dark:text-text-secondary-dark">
         {t(key)}
       </Text>
-      {state === "sync_failed" ? (
+      {state === "sync_failed" || state === "reconciliation_incomplete" ? (
         <Pressable
           accessibilityRole="button"
           className="mt-1 min-h-11 justify-center"
           onPress={onRetry}
         >
           <Text className="font-semibold text-nileGreen-700 dark:text-nileGreen-400">
-            {t("detail.retry")}
+            {state === "reconciliation_incomplete"
+              ? t("detail.retry_sync")
+              : t("detail.retry")}
           </Text>
         </Pressable>
       ) : null}
@@ -337,6 +339,7 @@ function ValueSummary({
     model.totalGainDecimal === null
       ? null
       : getCurrencyDisplaySign(model.totalGainDecimal, currency);
+  const rateStatus = model.currentValueRateStatus;
   return (
     <View className="border-t border-slate-200 pt-6 dark:border-slate-800">
       <Text className="text-base text-text-secondary dark:text-text-secondary-dark">
@@ -350,7 +353,30 @@ function ValueSummary({
       >
         {displayAmount(model.currentValueDecimal, currency, locale)}
       </Text>
-      {model.totalGainDecimal === null ? null : (
+      {rateStatus === null ? null : (
+        <View testID="metal-holding-detail-rate-trust" className="mt-2 gap-1">
+          <Text className="text-xs font-medium text-text-secondary dark:text-text-secondary-dark">
+            {t(`rate.short_${rateStatus.state}`)}
+          </Text>
+          {rateStatus.source === null ? null : (
+            <Text className="text-xs text-text-muted dark:text-text-muted-dark">
+              {t("rate.source", { source: rateStatus.source })}
+            </Text>
+          )}
+          {rateStatus.quality === null ? null : (
+            <Text className="text-xs text-text-muted dark:text-text-muted-dark">
+              {t("rate.quality", { quality: rateStatus.quality })}
+            </Text>
+          )}
+        </View>
+      )}
+      {model.totalGainDecimal === null ? (
+        <Text className="mt-1 text-sm text-text-secondary dark:text-text-secondary-dark">
+          {model.unavailableExactFacts.includes("purchase_cost")
+            ? t("portfolio.performance_unavailable")
+            : t("portfolio.performance_unavailable_rate_reference")}
+        </Text>
+      ) : (
         <Text className={`mt-1 text-base ${getGainTextClass(gainSign)}`}>
           {t("detail.since_purchase", {
             amount: signedAmount(model.totalGainDecimal, currency, locale),
@@ -368,8 +394,6 @@ function ValueJourney({
 }): React.JSX.Element | null {
   const { t, i18n } = useTranslation("metals");
   const locale = resolveLocale(i18n.resolvedLanguage);
-  const currency =
-    model.currentValueCurrency ?? model.purchaseCurrency ?? "EGP";
   const currentValueObservedAt = model.currentValueObservedAt ?? null;
   const hasAcquisition =
     model.purchaseDate !== null || model.purchasePriceDecimal !== null;
@@ -421,12 +445,13 @@ function ValueJourney({
                   {formatShortDate(model.purchaseDate, locale)}
                 </Text>
               )}
-              {model.purchasePriceDecimal === null ? null : (
+              {model.purchasePriceDecimal === null ||
+              model.purchaseCurrency === null ? null : (
                 <Text className="mt-1 text-base text-text-primary dark:text-text-primary-dark">
                   {t("detail.paid", {
                     amount: displayAmount(
                       model.purchasePriceDecimal,
-                      model.purchaseCurrency ?? currency,
+                      model.purchaseCurrency,
                       locale
                     ),
                   })}
@@ -460,9 +485,8 @@ function CalculationDisclosure({
   readonly onPress: () => void;
 }): React.JSX.Element {
   const { t } = useTranslation("metals");
-  const colorScheme = useColorScheme();
-  const iconColor =
-    colorScheme === "dark" ? palette.slate[300] : palette.slate[500];
+  const { isDark } = useTheme();
+  const iconColor = isDark ? palette.slate[300] : palette.slate[500];
   return (
     <Pressable
       accessibilityRole="button"
@@ -607,9 +631,8 @@ function FactRow({
   readonly value: string;
 }): React.JSX.Element {
   const { t } = useTranslation("metals");
-  const colorScheme = useColorScheme();
-  const iconColor =
-    colorScheme === "dark" ? palette.nileGreen[400] : palette.nileGreen[700];
+  const { isDark } = useTheme();
+  const iconColor = isDark ? palette.nileGreen[400] : palette.nileGreen[700];
   return (
     <View
       accessible
