@@ -36,7 +36,7 @@ the nested logical root payload does not carry a second independent ID.
 
 ### Authority rules
 
-1. Migration 069 removes the legacy `numeric(15,4)` scale caps from root rate
+1. Migration 070 removes the legacy `numeric(15,4)` scale caps from root rate
    columns so PostgreSQL can retain the RPC's exact plain-decimal values;
    insert/replay acceptance validates those values exactly.
 2. `created_at` is immutable ordering metadata only, never freshness evidence.
