@@ -36,11 +36,27 @@ import type { MetalsIsoCurrencyCode } from "@monyvi/logic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AppState } from "react-native";
 
+import {
+  resolveMetalPortfolioReadiness,
+  type MetalPortfolioSectionReadiness,
+} from "./metal-portfolio-readiness";
 import { useMarketRates } from "./useMarketRates";
 import { usePreferredCurrency } from "./usePreferredCurrency";
 import { runUserScopedEffect, useCurrentUser } from "./useCurrentUser";
 
 const RATE_STATUS_REFRESH_INTERVAL_MS = 60_000;
+
+// Device-local calendar date in `YYYY-MM-DD`, used as the trusted "not in the
+// future" boundary for realized-sale validation. Recomputed as the local day
+// advances so a sale dated after a midnight rollover while this hook stays
+// mounted does not go stale; the pure logic/service layers still accept an
+// explicit override for deterministic tests.
+function currentCalendarDate(): string {
+  const now = new Date();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${now.getFullYear()}-${month}-${day}`;
+}
 
 const PORTFOLIO_ASSET_OBSERVED_COLUMNS = [
   "name",
@@ -91,8 +107,12 @@ interface UseMetalPortfolioResult {
   readonly error: Error | null;
   readonly isLoading: boolean;
   readonly isOffline: boolean;
+  readonly isSummaryLoading: boolean;
   readonly onFilterChange: (filter: MetalPortfolioFilter) => void;
   readonly portfolio: MetalPortfolioReadModel | null;
+  readonly rateProviderObservedAt: Date | null;
+  readonly readiness: MetalPortfolioSectionReadiness;
+  readonly recentHistory: MetalPortfolioReadModel["recentHistory"] | null;
   readonly refresh: () => void;
   readonly selectedFilter: MetalPortfolioFilter;
   readonly wealthBreakdown: WealthBreakdownReadModel | null;
@@ -117,7 +137,9 @@ export function useMetalPortfolio(
   const { preferredCurrency, isLoading: isCurrencyLoading } =
     usePreferredCurrency();
   const {
+    currentError: marketRatesError,
     isConnected,
+    isCurrentLoading,
     refreshSelectedSnapshot,
     selectedSnapshot,
   } = useMarketRates();
@@ -129,25 +151,45 @@ export function useMetalPortfolio(
     useState<MetalPortfolioFilter>("ALL");
   const [assets, setAssets] = useState<readonly Asset[]>([]);
   const assetsRef = useRef<readonly Asset[]>([]);
+  const [assetsSnapshotUserId, setAssetsSnapshotUserId] = useState<
+    string | null
+  >(null);
   const [assetMetals, setAssetMetals] = useState<readonly AssetMetal[]>([]);
+  const [assetMetalsDependencyKey, setAssetMetalsDependencyKey] = useState<
+    string | null
+  >(null);
   const [holdingStates, setHoldingStates] = useState<
     readonly MetalHoldingState[]
   >([]);
+  const [holdingStatesSnapshotUserId, setHoldingStatesSnapshotUserId] =
+    useState<string | null>(null);
   const [lifecycleEvents, setLifecycleEvents] = useState<
     readonly MetalLifecycleEvent[]
   >([]);
+  const [historyDependencyKey, setHistoryDependencyKey] = useState<
+    string | null
+  >(null);
   const [metalSellGroups, setMetalSellGroups] = useState<
     readonly FinancialActionGroup[]
   >([]);
   const [saleRateReferences, setSaleRateReferences] = useState<
     readonly MetalRateReference[]
   >([]);
+  // Trusted device-local calendar date supplied to realized-sale validation so
+  // a sale can never be validated against its own future `saleDate`. Refreshed
+  // when the device-local day rolls over (see the refresh interval/AppState
+  // effect below) so a long-lived mount does not strand a newly-allowed sale;
+  // overridable at the service layer for deterministic tests.
+  const [latestAllowedCalendarDate, setLatestAllowedCalendarDate] =
+    useState<string>(() => currentCalendarDate());
   const [isAssetsLoading, setIsAssetsLoading] = useState(true);
   const [isAssetMetalsLoading, setIsAssetMetalsLoading] = useState(true);
   const [isHoldingStatesLoading, setIsHoldingStatesLoading] = useState(true);
   const [isHistoryLoading, setIsHistoryLoading] = useState(true);
-  const [, setIsMetalSellGroupsLoading] = useState(true);
-  const [, setIsSaleRateReferencesLoading] = useState(true);
+  const [isMetalSellGroupsLoading, setIsMetalSellGroupsLoading] =
+    useState(true);
+  const [isSaleRateReferencesLoading, setIsSaleRateReferencesLoading] =
+    useState(true);
   const [error, setError] = useState<Error | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
 
@@ -173,15 +215,23 @@ export function useMetalPortfolio(
   }, [assets]);
 
   useEffect(() => {
-    const timer = setInterval(
-      refreshSelectedSnapshot,
-      RATE_STATUS_REFRESH_INTERVAL_MS
-    );
+    const syncCalendarBoundary = (): void => {
+      const next = currentCalendarDate();
+      // Returning the previous value when the local day is unchanged avoids a
+      // needless re-render on every refresh tick.
+      setLatestAllowedCalendarDate((prev) => (prev === next ? prev : next));
+    };
+    syncCalendarBoundary();
+    const timer = setInterval(() => {
+      refreshSelectedSnapshot();
+      syncCalendarBoundary();
+    }, RATE_STATUS_REFRESH_INTERVAL_MS);
     const appStateSubscription = AppState.addEventListener(
       "change",
       (state) => {
         if (state === "active") {
           refreshSelectedSnapshot();
+          syncCalendarBoundary();
         }
       }
     );
@@ -197,16 +247,22 @@ export function useMetalPortfolio(
       isResolvingUser,
       onResolving: () => {
         assetsRef.current = [];
-        resetAssets(setAssets, setIsAssetsLoading);
+        setAssets([]);
+        setAssetsSnapshotUserId(null);
+        setIsAssetsLoading(true);
       },
       onSignedOut: () => {
         assetsRef.current = [];
         setAssets([]);
+        setAssetsSnapshotUserId(null);
         setIsAssetsLoading(false);
       },
       onAuthenticated: (currentUserId) => {
-        assetsRef.current = [];
-        setAssets([]);
+        if (assetsSnapshotUserId !== currentUserId) {
+          assetsRef.current = [];
+          setAssets([]);
+          setAssetsSnapshotUserId(null);
+        }
         setIsAssetsLoading(true);
         const subscription = observePortfolioAssets(currentUserId)
           .observeWithColumns([...PORTFOLIO_ASSET_OBSERVED_COLUMNS])
@@ -214,6 +270,7 @@ export function useMetalPortfolio(
             next: (result): void => {
               assetsRef.current = result;
               setAssets(result);
+              setAssetsSnapshotUserId(currentUserId);
               setIsAssetsLoading(false);
             },
             error: (reason: unknown): void => {
@@ -228,10 +285,14 @@ export function useMetalPortfolio(
         return () => subscription.unsubscribe();
       },
     });
-  }, [refreshKey, isResolvingUser, userId]);
+  }, [assetsSnapshotUserId, refreshKey, isResolvingUser, userId]);
 
   const assetIdsKey = useMemo(
-    (): string => assets.map((asset) => asset.id).join(","),
+    (): string =>
+      assets
+        .map((asset) => asset.id)
+        .sort()
+        .join(","),
     [assets]
   );
 
@@ -241,10 +302,12 @@ export function useMetalPortfolio(
       isResolvingUser,
       onResolving: () => {
         setAssetMetals([]);
+        setAssetMetalsDependencyKey(null);
         setIsAssetMetalsLoading(true);
       },
       onSignedOut: () => {
         setAssetMetals([]);
+        setAssetMetalsDependencyKey(null);
         setIsAssetMetalsLoading(false);
       },
       onAuthenticated: (currentUserId) => {
@@ -258,16 +321,17 @@ export function useMetalPortfolio(
         });
         if (query === null) {
           setAssetMetals([]);
+          setAssetMetalsDependencyKey(assetIdsKey);
           setIsAssetMetalsLoading(false);
           return;
         }
-        setAssetMetals([]);
         setIsAssetMetalsLoading(true);
         const subscription = query
           .observeWithColumns([...PORTFOLIO_ASSET_METAL_OBSERVED_COLUMNS])
           .subscribe({
             next: (result): void => {
               setAssetMetals(result);
+              setAssetMetalsDependencyKey(assetIdsKey);
               setIsAssetMetalsLoading(false);
             },
             error: (reason: unknown): void => {
@@ -285,25 +349,58 @@ export function useMetalPortfolio(
   }, [assetIdsKey, isResolvingUser, refreshKey, userId]);
 
   useEffect(() => {
-    return subscribeForCurrentUser({
-      isResolvingUser,
-      onAuthenticated: (currentUserId) =>
-        observePortfolioHoldingStates(currentUserId).observeWithColumns([
-          ...PORTFOLIO_HOLDING_STATE_OBSERVED_COLUMNS,
-        ]),
-      onError: (reason) =>
-        recordObserverError(
-          "metalPortfolio.holdingStates.observe.failed",
-          reason,
-          setError
-        ),
-      onNext: setHoldingStates,
-      onSignedOut: () => setHoldingStates([]),
-      onResolving: () => setHoldingStates([]),
-      setLoading: setIsHoldingStatesLoading,
+    return runUserScopedEffect({
       userId,
+      isResolvingUser,
+      onResolving: () => {
+        setHoldingStates([]);
+        setHoldingStatesSnapshotUserId(null);
+        setIsHoldingStatesLoading(true);
+      },
+      onSignedOut: () => {
+        setHoldingStates([]);
+        setHoldingStatesSnapshotUserId(null);
+        setIsHoldingStatesLoading(false);
+      },
+      onAuthenticated: (currentUserId) => {
+        if (holdingStatesSnapshotUserId !== currentUserId) {
+          setHoldingStates([]);
+          setHoldingStatesSnapshotUserId(null);
+        }
+        setIsHoldingStatesLoading(true);
+        const subscription = observePortfolioHoldingStates(currentUserId)
+          .observeWithColumns([...PORTFOLIO_HOLDING_STATE_OBSERVED_COLUMNS])
+          .subscribe({
+            next: (result): void => {
+              setHoldingStates(result);
+              setHoldingStatesSnapshotUserId(currentUserId);
+              setIsHoldingStatesLoading(false);
+            },
+            error: (reason: unknown): void => {
+              recordObserverError(
+                "metalPortfolio.holdingStates.observe.failed",
+                reason,
+                setError
+              );
+              setIsHoldingStatesLoading(false);
+            },
+          });
+        return () => subscription.unsubscribe();
+      },
     });
-  }, [isResolvingUser, refreshKey, userId]);
+  }, [holdingStatesSnapshotUserId, isResolvingUser, refreshKey, userId]);
+
+  const holdingStatesKey = useMemo(
+    () =>
+      holdingStates
+        .map(
+          (state) =>
+            `${state.holdingId}:${state.status}:${state.effectiveEventId ?? ""}:${state.effectiveActionId ?? ""}:${state.isVisible ? "1" : "0"}:${state.reconciliationState}`
+        )
+        .sort()
+        .join(","),
+    [holdingStates]
+  );
 
   useEffect(() => {
     return runUserScopedEffect({
@@ -311,10 +408,12 @@ export function useMetalPortfolio(
       isResolvingUser,
       onResolving: () => {
         setLifecycleEvents([]);
+        setHistoryDependencyKey(null);
         setIsHistoryLoading(true);
       },
       onSignedOut: () => {
         setLifecycleEvents([]);
+        setHistoryDependencyKey(null);
         setIsHistoryLoading(false);
       },
       onAuthenticated: (currentUserId) => {
@@ -324,6 +423,7 @@ export function useMetalPortfolio(
         });
         if (query === null) {
           setLifecycleEvents([]);
+          setHistoryDependencyKey(holdingStatesKey);
           setIsHistoryLoading(false);
           return;
         }
@@ -331,6 +431,7 @@ export function useMetalPortfolio(
         const subscription = query.observe().subscribe({
           next: (result): void => {
             setLifecycleEvents(result);
+            setHistoryDependencyKey(holdingStatesKey);
             setIsHistoryLoading(false);
           },
           error: (reason: unknown): void => {
@@ -345,7 +446,7 @@ export function useMetalPortfolio(
         return () => subscription.unsubscribe();
       },
     });
-  }, [holdingStates, isResolvingUser, refreshKey, userId]);
+  }, [holdingStates, holdingStatesKey, isResolvingUser, refreshKey, userId]);
 
   useEffect(() => {
     return subscribeForCurrentUser({
@@ -389,35 +490,121 @@ export function useMetalPortfolio(
     });
   }, [isResolvingUser, refreshKey, userId]);
 
-  const portfolio = useMemo((): MetalPortfolioReadModel | null => {
-    if (
-      userId === null ||
-      isResolvingUser ||
-      isAssetsLoading ||
-      isAssetMetalsLoading ||
-      isHoldingStatesLoading ||
-      isHistoryLoading ||
-      isCurrencyLoading ||
-      error !== null
-    ) {
+  const saleEvidenceReady =
+    !isMetalSellGroupsLoading && !isSaleRateReferencesLoading;
+
+  const readiness = useMemo(
+    () =>
+      resolveMetalPortfolioReadiness({
+        assetIdsKey,
+        assetMetalsDependencyKey,
+        assetsReady: userId !== null && assetsSnapshotUserId === userId,
+        currencyReady: !isCurrencyLoading,
+        historyDependencyKey,
+        holdingStatesKey,
+        holdingStatesReady:
+          userId !== null && holdingStatesSnapshotUserId === userId,
+        ratesReady: !isCurrentLoading,
+        saleEvidenceReady,
+      }),
+    [
+      assetIdsKey,
+      assetMetalsDependencyKey,
+      assetsSnapshotUserId,
+      historyDependencyKey,
+      holdingStatesKey,
+      holdingStatesSnapshotUserId,
+      isCurrencyLoading,
+      isCurrentLoading,
+      saleEvidenceReady,
+      userId,
+    ]
+  );
+
+  const portfolioShapedHoldings = useMemo(() => {
+    if (userId === null || isResolvingUser || !readiness.holdings) {
       return null;
     }
-
-    const holdings = shapeMetalPortfolioHoldings({
+    return shapeMetalPortfolioHoldings({
       actionGroups: metalSellGroups,
       assetMetals,
       assets,
       currentRates,
       snapshotId: selectedSnapshot?.snapshotId ?? null,
       holdingStates,
+      latestAllowedCalendarDate,
       lifecycleEvents,
       preferredCurrency,
       rateReferences: saleRateReferences,
       userId,
     });
+  }, [
+    assetMetals,
+    assets,
+    currentRates,
+    holdingStates,
+    isResolvingUser,
+    latestAllowedCalendarDate,
+    lifecycleEvents,
+    metalSellGroups,
+    preferredCurrency,
+    readiness.holdings,
+    saleRateReferences,
+    selectedSnapshot,
+    userId,
+  ]);
+
+  const historyShapedHoldings = useMemo(() => {
+    if (userId === null || isResolvingUser || !readiness.recentHistory) {
+      return null;
+    }
+    return shapeMetalPortfolioHoldings({
+      assetMetals,
+      assets,
+      currentRates,
+      holdingStates,
+      lifecycleEvents,
+      preferredCurrency,
+      snapshotId: selectedSnapshot?.snapshotId ?? null,
+      userId,
+    });
+  }, [
+    assetMetals,
+    assets,
+    currentRates,
+    holdingStates,
+    isResolvingUser,
+    lifecycleEvents,
+    preferredCurrency,
+    readiness.recentHistory,
+    selectedSnapshot,
+    userId,
+  ]);
+
+  const recentHistory = useMemo<
+    MetalPortfolioReadModel["recentHistory"] | null
+  >(() => {
+    if (userId === null || historyShapedHoldings === null) return null;
+    return buildMetalPortfolioReadModel({
+      filter: "ALL",
+      holdings: historyShapedHoldings,
+      rateStatus: { ageMs: null, state: "missing" },
+      userId,
+    }).recentHistory;
+  }, [historyShapedHoldings, userId]);
+
+  const portfolio = useMemo((): MetalPortfolioReadModel | null => {
+    if (
+      userId === null ||
+      isResolvingUser ||
+      !readiness.holdings ||
+      portfolioShapedHoldings === null
+    ) {
+      return null;
+    }
     const activeMetalTypes = Array.from(
       new Set<ActiveMetalType>(
-        holdings
+        portfolioShapedHoldings
           .filter(
             (holding) =>
               holding.isEffective &&
@@ -429,7 +616,7 @@ export function useMetalPortfolio(
     );
     const activePurchaseCurrencies = Array.from(
       new Set<MetalsIsoCurrencyCode>(
-        holdings
+        portfolioShapedHoldings
           .filter(
             (holding) =>
               holding.isEffective &&
@@ -446,7 +633,7 @@ export function useMetalPortfolio(
 
     return buildMetalPortfolioReadModel({
       filter: selectedFilter,
-      holdings,
+      holdings: portfolioShapedHoldings,
       rateStatus: getPortfolioRateStatus(
         currentRates,
         preferredCurrency,
@@ -456,28 +643,30 @@ export function useMetalPortfolio(
       userId,
     });
   }, [
-    assetMetals,
-    assets,
     currentRates,
-    error,
-    holdingStates,
-    isAssetMetalsLoading,
-    isAssetsLoading,
-    isCurrencyLoading,
-    isHistoryLoading,
-    isHoldingStatesLoading,
     isResolvingUser,
-    lifecycleEvents,
-    metalSellGroups,
+    portfolioShapedHoldings,
     preferredCurrency,
-    saleRateReferences,
+    readiness.holdings,
     selectedFilter,
-    selectedSnapshot,
     userId,
   ]);
 
+  const rateProviderObservedAt = useMemo(
+    () =>
+      readiness.rateCurrency
+        ? getPortfolioProviderObservedAt(
+            currentRates,
+            portfolio?.activeHoldings ?? [],
+            preferredCurrency
+          )
+        : null,
+    [currentRates, portfolio, preferredCurrency, readiness.rateCurrency]
+  );
+
   const wealthBreakdown = useMemo((): WealthBreakdownReadModel | null => {
     if (
+      !readiness.summary ||
       portfolio === null ||
       input.accountsValueDecimal === undefined ||
       input.accountsValueDecimal === null
@@ -492,20 +681,52 @@ export function useMetalPortfolio(
         getTrustedRateDecimal(currentRates.currencies.get(preferredCurrency)) ??
         (preferredCurrency === "USD" ? "1" : null),
     });
-  }, [currentRates, input.accountsValueDecimal, portfolio, preferredCurrency]);
+  }, [
+    currentRates,
+    input.accountsValueDecimal,
+    portfolio,
+    preferredCurrency,
+    readiness.summary,
+  ]);
+
+  const isAnySubscriptionLoading =
+    isAssetsLoading ||
+    isAssetMetalsLoading ||
+    isHoldingStatesLoading ||
+    isHistoryLoading ||
+    isCurrentLoading ||
+    isCurrencyLoading;
+  const hasAnyReadySection =
+    readiness.summary || readiness.holdings || readiness.recentHistory;
+
+  // The My Metals screen renders each section from `readiness`, so its
+  // screen-level `isLoading` can settle as soon as any section is usable.
+  // Dashboard net-worth and wealth-breakdown consumers have the opposite
+  // requirement: they must keep their own skeletons until the wealth summary
+  // (holdings + lifecycle events + rates + preferred currency) is ready, and a
+  // pending rate or currency must never collapse the total into a dash. An
+  // observer error stops the loading state so the consumer shows its
+  // unavailable state instead of spinning forever.
+  const isSummaryLoading =
+    isResolvingUser ||
+    (userId !== null &&
+      error === null &&
+      marketRatesError === null &&
+      !readiness.summary);
+
+  const combinedError = error ?? marketRatesError;
 
   return {
-    error,
+    error: combinedError,
     isLoading:
-      isResolvingUser ||
-      isAssetsLoading ||
-      isAssetMetalsLoading ||
-      isHoldingStatesLoading ||
-      isHistoryLoading ||
-      isCurrencyLoading,
+      isResolvingUser || (isAnySubscriptionLoading && !hasAnyReadySection),
     isOffline: !isConnected,
+    isSummaryLoading,
     onFilterChange,
     portfolio,
+    rateProviderObservedAt,
+    readiness,
+    recentHistory,
     refresh,
     selectedFilter,
     wealthBreakdown,
@@ -521,14 +742,6 @@ function getTrustedRateDecimal(
     typeof value.valueDecimal === "string"
     ? value.valueDecimal
     : null;
-}
-
-function resetAssets(
-  setAssets: (value: readonly Asset[]) => void,
-  setIsLoading: (value: boolean) => void
-): void {
-  setAssets([]);
-  setIsLoading(true);
 }
 
 function recordObserverError(
@@ -593,12 +806,12 @@ function subscribeForCurrentUser<T>({
   });
 }
 
-function getPortfolioRateStatus(
+function getPortfolioRateValues(
   currentRates: LiveRatesTrustReadModel,
   preferredCurrency: CurrencyType,
   activeMetalTypes: readonly ActiveMetalType[],
   activePurchaseCurrencies: readonly MetalsIsoCurrencyCode[]
-): PortfolioRateStatus {
+): readonly LiveRatesTrustValue[] {
   const values: LiveRatesTrustValue[] = [
     ...activeMetalTypes.map((metalType) =>
       metalType === "GOLD" ? currentRates.gold : currentRates.silver
@@ -611,6 +824,21 @@ function getPortfolioRateStatus(
           currentRates.currencies.get(currency) ?? missingTrustValue()
       ),
   ];
+  return values;
+}
+
+function getPortfolioRateStatus(
+  currentRates: LiveRatesTrustReadModel,
+  preferredCurrency: CurrencyType,
+  activeMetalTypes: readonly ActiveMetalType[],
+  activePurchaseCurrencies: readonly MetalsIsoCurrencyCode[]
+): PortfolioRateStatus {
+  const values = getPortfolioRateValues(
+    currentRates,
+    preferredCurrency,
+    activeMetalTypes,
+    activePurchaseCurrencies
+  );
   const state = summarizeLiveRatesTrust(values);
   return {
     ageMs: maximumAge(values),
@@ -634,6 +862,46 @@ function missingTrustValue(): LiveRatesTrustValue {
     ageMs: null,
     providerObservedAt: null,
   };
+}
+
+function getPortfolioProviderObservedAt(
+  currentRates: LiveRatesTrustReadModel,
+  activeHoldings: MetalPortfolioReadModel["activeHoldings"],
+  preferredCurrency: CurrencyType
+): Date | null {
+  if (activeHoldings.length === 0) return null;
+  const activeMetalTypes = Array.from(
+    new Set<ActiveMetalType>(activeHoldings.map((holding) => holding.metalType))
+  );
+  const activePurchaseCurrencies = Array.from(
+    new Set<MetalsIsoCurrencyCode>(
+      activeHoldings.flatMap((holding) =>
+        holding.purchasePriceDecimal !== null &&
+        holding.purchaseCurrency !== null
+          ? [holding.purchaseCurrency]
+          : []
+      )
+    )
+  );
+  const values = getPortfolioRateValues(
+    currentRates,
+    preferredCurrency,
+    activeMetalTypes,
+    activePurchaseCurrencies
+  );
+  // Mirror `conservativeObservedAt` in the detail read model: only report a
+  // single "last updated" time when every consumed rate has a valid provider
+  // timestamp. Otherwise the aggregate would claim an observation time that
+  // does not cover an unknown/missing input, contradicting the rate state.
+  const timestamps = values.flatMap((value) =>
+    value.providerObservedAt === null ||
+    !Number.isFinite(value.providerObservedAt.getTime())
+      ? []
+      : [value.providerObservedAt.getTime()]
+  );
+  return timestamps.length > 0 && timestamps.length === values.length
+    ? new Date(Math.min(...timestamps))
+    : null;
 }
 
 function toPortfolioRateState(

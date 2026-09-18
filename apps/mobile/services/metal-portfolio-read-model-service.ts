@@ -127,6 +127,7 @@ export interface ShapeMetalPortfolioHoldingsInput {
   readonly assets: readonly MetalPortfolioAssetSnapshot[];
   readonly currentRates: LiveRatesTrustReadModel;
   readonly holdingStates: readonly MetalPortfolioHoldingStateSnapshot[];
+  readonly latestAllowedCalendarDate?: string;
   readonly lifecycleEvents: readonly MetalPortfolioLifecycleEventSnapshot[];
   readonly preferredCurrency: CurrencyType;
   readonly rateReferences?: readonly MetalSellRateReferenceSnapshot[];
@@ -348,6 +349,7 @@ export function shapeMetalPortfolioHoldings(
               exactFacts,
               status
             ),
+            latestAllowedCalendarDate: input.latestAllowedCalendarDate,
             userId: input.userId,
           })
         : null;

@@ -162,6 +162,7 @@ function inputOf(
     group: saleGroup(payload),
     holding: saleHolding(),
     acquisitionReferences: [],
+    latestAllowedCalendarDate: "2026-09-01",
     userId: USER_ID,
     ...overrides,
   };
@@ -184,6 +185,32 @@ describe("metal realized sale evidence shaper", () => {
         proceedsCurrency: "EGP",
         breakdownAvailable: false,
       },
+    });
+  });
+
+  it("accepts a past and current-day sale date against the trusted boundary", () => {
+    expect(
+      shapeMetalRealizedSaleEvidence(
+        inputOf(salePayload({ saleDate: "2026-08-01" }))
+      )
+    ).toMatchObject({ available: true });
+    expect(
+      shapeMetalRealizedSaleEvidence(
+        inputOf(salePayload({ saleDate: "2026-09-01" }))
+      )
+    ).toMatchObject({ available: true });
+  });
+
+  it("rejects a sale date later than the trusted boundary instead of self-validating", () => {
+    // The boundary is supplied independently of the payload; a future sale date
+    // must not validate against its own value.
+    const outcome = shapeMetalRealizedSaleEvidence(
+      inputOf(salePayload({ saleDate: "2026-09-02" }))
+    );
+
+    expect(outcome).toEqual({
+      available: false,
+      reason: "unsupported_sale_evidence",
     });
   });
 
