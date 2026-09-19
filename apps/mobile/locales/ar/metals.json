@@ -46,6 +46,8 @@
     "tile_accessibility": "{{label}}. المبلغ {{amount}}. {{share}}"
   },
   "portfolio": {
+    "sold_result_unavailable": "الربح أو الخسارة من البيع غير متاح",
+    "sale_result_unavailable": "الربح أو الخسارة غير متاح",
     "total": "قيمة محفظة المعادن",
     "total_accessibility": "قيمة محفظة المعادن {{amount}}. الحالة: {{status}}.",
     "current_rate": "سعر حديث",

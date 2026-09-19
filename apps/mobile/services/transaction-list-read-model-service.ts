@@ -58,7 +58,7 @@ interface TransactionDisplayItem {
   readonly categoryName: string;
   readonly categoryIconName: string;
   readonly categoryIconLibrary: string;
-  readonly displayNetWorth?: number;
+  readonly displayNetWorth?: number | null;
 }
 
 interface TransferDisplayItem {
@@ -76,21 +76,21 @@ interface TransferDisplayItem {
   readonly notes?: string;
   readonly fromAccountName: string;
   readonly toAccountName: string;
-  readonly displayNetWorth?: number;
+  readonly displayNetWorth?: number | null;
 }
 
 export type DisplayListItem = TransactionDisplayItem | TransferDisplayItem;
 
 export type DisplayTransaction =
-  | (TransactionDisplayItem & { readonly displayNetWorth: number })
-  | (TransferDisplayItem & { readonly displayNetWorth: number });
+  | (TransactionDisplayItem & { readonly displayNetWorth: number | null })
+  | (TransferDisplayItem & { readonly displayNetWorth: number | null });
 
 export interface GroupedTransaction {
   readonly title: string;
   readonly transactions: readonly DisplayTransaction[];
-  readonly groupNetWorth?: number;
-  readonly groupTotalIncome: number;
-  readonly groupTotalExpense: number;
+  readonly groupNetWorth?: number | null;
+  readonly groupTotalIncome: number | null;
+  readonly groupTotalExpense: number | null;
 }
 
 export interface TransactionListReadModel {
@@ -200,9 +200,6 @@ export function buildTransactionGroups(
   input: BuildTransactionGroupsInput
 ): GroupedTransaction[] {
   const selectedSnapshot = input.selectedSnapshot;
-  if (input.totalNetWorth === null || selectedSnapshot === null) {
-    return [];
-  }
 
   const toPreferred = (amount: number, currency: CurrencyType): number | null =>
     convertSelectedCurrentAmount({
@@ -211,13 +208,13 @@ export function buildTransactionGroups(
       toCurrency: input.preferredCurrency,
       currentSnapshot: selectedSnapshot,
     });
-  const getSignedAmount = (item: DisplayListItem): number => {
+  const getSignedAmount = (item: DisplayListItem): number | null => {
     if (item._type !== "transaction") {
       return 0;
     }
 
     const preferredAmount = toPreferred(item.amount, item.currency);
-    if (preferredAmount === null) return 0;
+    if (preferredAmount === null) return null;
     if (item.isIncome) return preferredAmount;
     if (item.isExpense) return -preferredAmount;
     return 0;
@@ -229,8 +226,9 @@ export function buildTransactionGroups(
       transaction.amount,
       transaction.currency
     );
-    if (preferredAmount === null) {
-      return [];
+    if (preferredAmount === null || anchorNetWorth === null) {
+      anchorNetWorth = null;
+      continue;
     }
     if (transaction.isIncome) anchorNetWorth -= preferredAmount;
     if (transaction.isExpense) anchorNetWorth += preferredAmount;
@@ -246,7 +244,11 @@ export function buildTransactionGroups(
       ...item,
       displayNetWorth: runningNetWorth,
     };
-    runningNetWorth -= getSignedAmount(item);
+    const signedAmount = getSignedAmount(item);
+    runningNetWorth =
+      runningNetWorth === null || signedAmount === null
+        ? null
+        : runningNetWorth - signedAmount;
     return itemWithNetWorth;
   });
 
@@ -552,15 +554,15 @@ function createTransferDisplayItem(
 function groupDisplayItems(
   items: readonly DisplayTransaction[],
   input: BuildTransactionGroupsInput,
-  selectedSnapshot: SelectedMarketRateSnapshot
+  selectedSnapshot: SelectedMarketRateSnapshot | null
 ): GroupedTransaction[] {
   const groups: GroupedTransaction[] = [];
   let currentGroup: {
     title: string;
     transactions: DisplayTransaction[];
-    groupNetWorth?: number;
-    groupTotalIncome: number;
-    groupTotalExpense: number;
+    groupNetWorth?: number | null;
+    groupTotalIncome: number | null;
+    groupTotalExpense: number | null;
   } | null = null;
 
   for (const item of items) {
@@ -585,13 +587,16 @@ function groupDisplayItems(
         toCurrency: input.preferredCurrency,
         currentSnapshot: selectedSnapshot,
       });
-      if (preferredAmount === null) {
-        return [];
-      }
       if (item.isIncome) {
-        currentGroup.groupTotalIncome += preferredAmount;
+        currentGroup.groupTotalIncome =
+          currentGroup.groupTotalIncome === null || preferredAmount === null
+            ? null
+            : currentGroup.groupTotalIncome + preferredAmount;
       } else if (item.isExpense) {
-        currentGroup.groupTotalExpense += preferredAmount;
+        currentGroup.groupTotalExpense =
+          currentGroup.groupTotalExpense === null || preferredAmount === null
+            ? null
+            : currentGroup.groupTotalExpense + preferredAmount;
       }
     }
   }

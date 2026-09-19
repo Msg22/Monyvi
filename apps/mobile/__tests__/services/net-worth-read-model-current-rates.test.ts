@@ -74,6 +74,23 @@ function goldHolding(weightGramsDecimal: string): NetWorthAssetMetalInput {
 }
 
 describe("net-worth current rates consume the exact selected snapshot", () => {
+  it.each(["PLATINUM", "PALLADIUM"] as const)(
+    "ignores unsupported legacy %s without hiding supported balances",
+    (metalType) => {
+      const input = {
+        accounts: [account(100, "USD")],
+        currentSnapshot: snapshotFor(completeFixtureA()),
+        preferredCurrency: "USD" as const,
+      };
+      const supported = goldHolding("2");
+      expect(
+        buildNetWorthReadModel({
+          ...input,
+          assetMetals: [supported, { ...supported, metalType }],
+        })
+      ).toEqual(buildNetWorthReadModel({ ...input, assetMetals: [supported] }));
+    }
+  );
   it("converts account balances with exact snapshot decimals", () => {
     const snapshot = snapshotFor(completeFixtureA());
     const result = buildNetWorthReadModel({
@@ -86,6 +103,25 @@ describe("net-worth current rates consume the exact selected snapshot", () => {
     expect(result).not.toBeNull();
     const expectedUsd = new Decimal("1000").times("0.0210523309").plus(100);
     expect(result?.totalNetWorthUsd).toBeCloseTo(Number(expectedUsd), 8);
+  });
+
+  it("accepts a finite balance whose JavaScript string uses exponent notation", () => {
+    expect(() =>
+      buildNetWorthReadModel({
+        accounts: [account(1e-7, "USD")],
+        assetMetals: [],
+        currentSnapshot: snapshotFor(completeFixtureA()),
+        preferredCurrency: "USD",
+      })
+    ).not.toThrow();
+    expect(
+      buildNetWorthReadModel({
+        accounts: [account(1e-7, "USD")],
+        assetMetals: [],
+        currentSnapshot: snapshotFor(completeFixtureA()),
+        preferredCurrency: "USD",
+      })?.totalNetWorthUsd
+    ).toBe(1e-7);
   });
 
   it("values metal holdings from exact metal USD-per-gram decimals", () => {

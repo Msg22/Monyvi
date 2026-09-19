@@ -169,6 +169,15 @@ function inputOf(
 }
 
 describe("metal realized sale evidence shaper", () => {
+  it("keeps the effective sale reportable after a rejected undo restores its holding", () => {
+    expect(shapeMetalRealizedSaleEvidence(inputOf(salePayload(), {
+      holding: saleHolding({ reconciliationState: "reconciled" }),
+    }))).toMatchObject({ available: true, value: { combinedDecimal: "5500" } });
+    expect(shapeMetalRealizedSaleEvidence(inputOf(salePayload(), {
+      holding: saleHolding({ reconciliationState: "reconciled" }),
+      event: saleEvent(salePayload(), { isEffective: false }),
+    }))).toMatchObject({ available: false, reason: "excluded_sale" });
+  });
   it("publishes the manual-QA same-currency fixture as an exact EGP 5,500 profit", () => {
     const outcome = shapeMetalRealizedSaleEvidence(inputOf(salePayload()));
 

@@ -76,6 +76,7 @@ const REPORTABLE_RECONCILIATION_STATES: readonly string[] = Object.freeze([
   "sync_pending",
   "sync_failed",
   "accepted",
+  "reconciled",
 ]);
 const CANONICAL_MINOR_UNITS_PATTERN = /^(0|[1-9][0-9]*)$/;
 const MAX_CANONICAL_MINOR_UNIT_DIGITS = 50;

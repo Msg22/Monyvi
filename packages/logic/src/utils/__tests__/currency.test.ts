@@ -21,6 +21,22 @@ import {
 } from "../currency";
 import type { MarketRate } from "@monyvi/db";
 
+it("formats currency numbers in an explicitly supplied Arabic locale", () => {
+  const input = {
+    amount: 1234.5,
+    currency: "EGP" as const,
+    locale: "ar-EG",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  };
+  expect(formatCurrency(input)).toContain(
+    new Intl.NumberFormat("ar-EG", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(1234.5)
+  );
+});
+
 // =============================================================================
 // Helpers
 // =============================================================================

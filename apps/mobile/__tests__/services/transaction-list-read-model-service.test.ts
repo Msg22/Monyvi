@@ -554,6 +554,51 @@ describe("transaction-list-read-model-service", () => {
     expect(groups[0].transactions.map((item) => item.displayNetWorth)).toEqual([
       1050, 1150,
     ]);
+
+    const unavailableGroups = buildTransactionGroups({
+      futureTransactions: [],
+      displayedItems: [{ ...expense, currency: "USD" }, income],
+      totalNetWorth: null,
+      preferredCurrency: "EGP",
+      selectedSnapshot: null,
+      period: "this_month",
+      searchQuery: "",
+    });
+    expect(unavailableGroups).toHaveLength(1);
+    expect(unavailableGroups[0].transactions.map((item) => item.id)).toEqual([
+      "expense",
+      "income",
+    ]);
+    expect(unavailableGroups[0]).toMatchObject({
+      groupNetWorth: null,
+      groupTotalIncome: 300,
+      groupTotalExpense: null,
+    });
+    expect(unavailableGroups[0].transactions[0].displayNetWorth).toBeNull();
+
+    const missingFutureRate = buildTransactionGroups({
+      futureTransactions: [
+        createTransaction({
+          id: "future-usd",
+          amount: 10,
+          currency: "USD",
+          type: "EXPENSE",
+          date: new Date("2026-06-01T10:00:00.000Z"),
+        }),
+      ],
+      displayedItems: [expense, income],
+      totalNetWorth: 1000,
+      preferredCurrency: "EGP",
+      selectedSnapshot: null,
+      period: "this_month",
+      searchQuery: "",
+    });
+    expect(missingFutureRate[0]).toMatchObject({
+      groupNetWorth: null,
+      groupTotalIncome: 300,
+      groupTotalExpense: 100,
+    });
+    expect(missingFutureRate[0].transactions).toHaveLength(2);
   });
 
   it("filters grouped display items by search query without changing the read model", () => {

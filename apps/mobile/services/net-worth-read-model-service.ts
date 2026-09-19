@@ -7,6 +7,7 @@ import {
   type DailySnapshotNetWorth,
 } from "@monyvi/db";
 import { Q, type Query } from "@nozbe/watermelondb";
+import Decimal from "decimal.js";
 import {
   convertCurrentAmountExact,
   getMetalUsdPerPureGramDecimal,
@@ -165,7 +166,7 @@ export function buildNetWorthReadModel(
       return null;
     }
     const inUsd = convertCurrentAmountExact({
-      amountDecimal: String(account.balance),
+      amountDecimal: new Decimal(account.balance).toFixed(),
       fromCurrency: account.currency,
       toCurrency: "USD",
       rates,
@@ -179,7 +180,7 @@ export function buildNetWorthReadModel(
   let totalAssetsUsd = parseCanonicalDecimal("0");
   for (const metal of input.assetMetals) {
     if (metal.metalType !== "GOLD" && metal.metalType !== "SILVER") {
-      return null;
+      continue;
     }
     const metalUsdPerGram = getMetalUsdPerPureGramDecimal(
       rates,

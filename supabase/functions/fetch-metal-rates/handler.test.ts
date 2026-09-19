@@ -92,8 +92,7 @@ function createHarness(options?: {
 }
 
 function requireRecord(value: unknown): Record<string, unknown> {
-  assert.equal(typeof value, "object");
-  assert.notEqual(value, null);
+  assert.ok(typeof value === "object" && value !== null);
   assert.equal(Array.isArray(value), false);
   return Object.fromEntries(Object.entries(value));
 }
@@ -101,7 +100,10 @@ function requireRecord(value: unknown): Record<string, unknown> {
 async function invoke(
   method: string,
   harness: Harness
-): Promise<{ readonly body: Record<string, unknown>; readonly response: Response }> {
+): Promise<{
+  readonly body: Record<string, unknown>;
+  readonly response: Response;
+}> {
   const handler = createFetchMetalRatesHandler(harness.dependencies);
   const response = await handler(
     new Request("https://example.test/fetch-metal-rates", { method })
@@ -119,7 +121,10 @@ test("OPTIONS returns CORS success without fetching or persisting", async () => 
 
   assert.equal(response.status, 200);
   assert.equal(response.headers.get("access-control-allow-origin"), "*");
-  assert.equal(response.headers.get("access-control-allow-methods"), "GET, POST, OPTIONS");
+  assert.equal(
+    response.headers.get("access-control-allow-methods"),
+    "POST, OPTIONS"
+  );
   assert.equal(harness.fetchUrls.length, 0);
   assert.equal(harness.persistenceCalls.length, 0);
 });
@@ -145,9 +150,51 @@ test("unsupported methods fail before provider or persistence access", async () 
   assert.equal(harness.persistenceCalls.length, 0);
 });
 
-test("GET persists one exact atomic snapshot from response text", async () => {
+test("GET fails without fetching or persisting a snapshot", async () => {
   const harness = createHarness();
   const { response, body } = await invoke("GET", harness);
+
+  assert.equal(response.status, 405);
+  assert.equal(body["code"], "method_not_allowed");
+  assert.equal(harness.fetchUrls.length, 0);
+  assert.equal(harness.persistenceCalls.length, 0);
+});
+
+test("capture time follows complete response receipt and retains provider time during the request", async () => {
+  let bodyReceived = false;
+  const receivedAt = "2026-09-08T10:00:02.000Z";
+  const providerObservedAt = "2026-09-08T10:00:01Z";
+  const providerResponse = new Response(RAW_PROVIDER_SUCCESS);
+  Object.defineProperty(providerResponse, "text", {
+    value: async (): Promise<string> => {
+      bodyReceived = true;
+      return RAW_PROVIDER_SUCCESS.replace(
+        "2026-09-08T09:55:00Z",
+        providerObservedAt
+      );
+    },
+  });
+  const harness = createHarness({ providerResponse });
+  const handler = createFetchMetalRatesHandler({
+    ...harness.dependencies,
+    now: (): Date => new Date(bodyReceived ? receivedAt : CAPTURED_AT),
+  });
+
+  const response = await handler(
+    new Request("https://example.test/fetch-metal-rates", { method: "POST" })
+  );
+
+  assert.equal(response.status, 200);
+  assert.equal(harness.persistenceCalls[0].p_captured_at, receivedAt);
+  assert.equal(
+    harness.persistenceCalls[0].p_root.providerMetalObservedAt,
+    providerObservedAt
+  );
+});
+
+test("POST persists one exact atomic snapshot from response text", async () => {
+  const harness = createHarness();
+  const { response, body } = await invoke("POST", harness);
 
   assert.equal(response.status, 200);
   assert.equal(harness.fetchUrls.length, 1);
@@ -180,7 +227,7 @@ test("GET persists one exact atomic snapshot from response text", async () => {
 
 test("reports replayed persistence without issuing a second write path", async () => {
   const harness = createHarness({ persistenceStatus: "replayed" });
-  const { response, body } = await invoke("GET", harness);
+  const { response, body } = await invoke("POST", harness);
 
   assert.equal(response.status, 200);
   assert.equal(body["persistenceStatus"], "replayed");
@@ -189,7 +236,7 @@ test("reports replayed persistence without issuing a second write path", async (
 
 test("missing provider key fails before provider or database access", async () => {
   const harness = createHarness({ apiKey: "" });
-  const { response, body } = await invoke("GET", harness);
+  const { response, body } = await invoke("POST", harness);
 
   assert.equal(response.status, 500);
   assert.equal(body["code"], "configuration_error");
@@ -201,7 +248,7 @@ test("provider failure never calls persistence", async () => {
   const harness = createHarness({
     providerResponse: new Response("upstream unavailable", { status: 503 }),
   });
-  const { response, body } = await invoke("GET", harness);
+  const { response, body } = await invoke("POST", harness);
 
   assert.equal(response.status, 502);
   assert.equal(body["code"], "provider_error");
@@ -210,7 +257,7 @@ test("provider failure never calls persistence", async () => {
 
 test("RPC failure returns an honest error after exactly one atomic attempt", async () => {
   const harness = createHarness({ persistenceError: "database unavailable" });
-  const { response, body } = await invoke("GET", harness);
+  const { response, body } = await invoke("POST", harness);
 
   assert.equal(response.status, 502);
   assert.equal(body["code"], "persistence_error");

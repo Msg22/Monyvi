@@ -67,6 +67,45 @@ const currentSnapshot = snapshot([
 ]);
 
 describe("selected current market snapshot calculations", () => {
+  it("keeps same-currency recorded amounts available without market data", () => {
+    expect(
+      convertSelectedCurrentAmount({
+        amount: 300,
+        fromCurrency: "EGP",
+        toCurrency: "EGP",
+        currentSnapshot: null,
+      })
+    ).toBe(300);
+    expect(
+      convertSelectedCurrentAmountDecimal({
+        amountDecimal: "bad",
+        fromCurrency: "EGP",
+        toCurrency: "EGP",
+        currentSnapshot: null,
+      })
+    ).toBeNull();
+  });
+  it.each([1e-7, 1e21])(
+    "accepts finite numeric amounts written in exponent notation: %s",
+    (amount) => {
+      const identitySnapshot = snapshot([["currency:USD", "1"]]);
+      expect(
+        convertSelectedCurrentAmount({
+          amount,
+          fromCurrency: "USD",
+          toCurrency: "USD",
+          currentSnapshot: identitySnapshot,
+        })
+      ).toBe(amount);
+      expect(
+        sumSelectedCurrentAmounts({
+          entries: [{ amount, currency: "USD" }],
+          toCurrency: "USD",
+          currentSnapshot: identitySnapshot,
+        })
+      ).toBe(amount);
+    }
+  );
   it("keeps the exact decimal result until the display boundary", () => {
     expect(
       convertSelectedCurrentAmountDecimal({

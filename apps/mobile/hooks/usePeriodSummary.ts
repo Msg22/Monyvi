@@ -33,11 +33,11 @@ export type PeriodFilter =
   | "all_time";
 
 export interface PeriodSummary {
-  totalIncome: number;
-  totalExpenses: number;
-  savings: number;
-  savingsPercentage: number;
-  spentPercentage: number;
+  totalIncome: number | null;
+  totalExpenses: number | null;
+  savings: number | null;
+  savingsPercentage: number | null;
+  spentPercentage: number | null;
 }
 
 export interface UsePeriodSummaryResult {
@@ -168,7 +168,7 @@ export function usePeriodSummary(
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
-  const { selectedSnapshot, isLoading: isRatesLoading } = useMarketRates();
+  const { selectedSnapshot } = useMarketRates();
   const { preferredCurrency } = usePreferredCurrency();
   const { userId, isResolvingUser } = useCurrentUser();
 
@@ -253,11 +253,11 @@ export function usePeriodSummary(
     });
     if (totalExpenses === null || totalIncome === null) {
       return {
-        totalIncome: 0,
-        totalExpenses: 0,
-        savings: 0,
-        savingsPercentage: 0,
-        spentPercentage: 0,
+        totalIncome,
+        totalExpenses,
+        savings: null,
+        savingsPercentage: null,
+        spentPercentage: null,
       };
     }
     const totals = { totalExpenses, totalIncome };
@@ -282,5 +282,5 @@ export function usePeriodSummary(
     };
   }, [transactions, selectedSnapshot, preferredCurrency]);
 
-  return { data, isLoading: isLoading || isRatesLoading, error, refetch };
+  return { data, isLoading, error, refetch };
 }

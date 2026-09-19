@@ -199,11 +199,13 @@ export const formatCurrency = ({
   amount,
   currency,
   signDisplay = "auto",
+  locale = "en-US",
   minimumFractionDigits,
   maximumFractionDigits,
 }: {
   amount: number;
   currency: CurrencyType;
+  locale?: string;
   signDisplay?: "always" | "exceptZero" | "negative" | "never" | "auto";
   minimumFractionDigits?: number;
   maximumFractionDigits?: number;
@@ -221,7 +223,7 @@ export const formatCurrency = ({
   const minDigits =
     minimumFractionDigits ?? Math.min(inferredMinDigits, maxDigits);
 
-  const formattedNumber = new Intl.NumberFormat("en-US", {
+  const formattedNumber = new Intl.NumberFormat(locale, {
     style: "decimal",
     minimumFractionDigits: minDigits,
     maximumFractionDigits: maxDigits,

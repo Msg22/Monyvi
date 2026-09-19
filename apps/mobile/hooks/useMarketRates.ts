@@ -57,7 +57,7 @@ function getSnapshotProviderTime(
   }
 
   const observedTimes = Array.from(snapshot.ratesByInstrument.values())
-    .map((rate) => rate.providerObservedAt?.getTime() ?? null)
+    .map((rate): number | null => rate.providerObservedAt?.getTime() ?? null)
     .filter((time): time is number => time !== null && Number.isFinite(time));
 
   return observedTimes.length === 0

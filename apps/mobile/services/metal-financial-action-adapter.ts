@@ -25,7 +25,9 @@ export interface CreateMetalFinancialActionEnvelopeInput {
   readonly expectedHoldingRevision: string | null;
   readonly occurredAt: string;
   readonly domainPayload: Readonly<Record<string, unknown>>;
-  readonly validationInput?: FinancialActionValidationInput;
+  readonly validationInput: FinancialActionValidationInput & {
+    readonly latestAllowedCalendarDate: string;
+  };
 }
 
 const MAX_REVISION = "9223372036854775807";

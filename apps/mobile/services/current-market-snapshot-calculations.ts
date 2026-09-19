@@ -1,4 +1,5 @@
 import type { Account, CurrencyType, MetalType } from "@monyvi/db";
+import Decimal from "decimal.js";
 import {
   convertCurrentAmountExact,
   getMetalUsdPerPureGramDecimal,
@@ -63,6 +64,13 @@ export function convertSelectedCurrentAmountDecimal(
   input: CurrentAmountDecimalInput
 ): string | null {
   const { currentSnapshot } = input;
+  if (input.fromCurrency === input.toCurrency) {
+    try {
+      return serializeDecimal(parseCanonicalDecimal(input.amountDecimal));
+    } catch {
+      return null;
+    }
+  }
   if (
     currentSnapshot === null ||
     !isSupportedMetalsIsoCurrencyCode(input.fromCurrency) ||
@@ -88,7 +96,7 @@ export function convertSelectedCurrentAmount(
   }
 
   const value = convertSelectedCurrentAmountDecimal({
-    amountDecimal: String(input.amount),
+    amountDecimal: new Decimal(input.amount).toFixed(),
     fromCurrency: input.fromCurrency,
     toCurrency: input.toCurrency,
     currentSnapshot: input.currentSnapshot,
@@ -112,7 +120,7 @@ export function sumSelectedCurrentAmounts(
       return null;
     }
     const converted = convertSelectedCurrentAmountDecimal({
-      amountDecimal: String(entry.amount),
+      amountDecimal: new Decimal(entry.amount).toFixed(),
       fromCurrency: entry.currency,
       toCurrency: input.toCurrency,
       currentSnapshot: input.currentSnapshot,
@@ -167,7 +175,7 @@ export function calculateSelectedCurrentAssetBreakdown(
 
   for (const account of input.accounts) {
     const balanceUsd = convertSelectedCurrentAmountDecimal({
-      amountDecimal: String(account.balance),
+      amountDecimal: new Decimal(account.balance).toFixed(),
       fromCurrency: account.currency,
       toCurrency: "USD",
       currentSnapshot: input.currentSnapshot,

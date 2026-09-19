@@ -9,7 +9,7 @@ const CORS_HEADERS: Readonly<Record<string, string>> = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
 export interface PersistSnapshotResult {
@@ -54,11 +54,8 @@ export function createFetchMetalRatesHandler(
       return new Response("ok", { status: 200, headers: CORS_HEADERS });
     }
 
-    if (request.method !== "GET" && request.method !== "POST") {
-      return jsonResponse(
-        { success: false, code: "method_not_allowed" },
-        405
-      );
+    if (request.method !== "POST") {
+      return jsonResponse({ success: false, code: "method_not_allowed" }, 405);
     }
 
     try {
@@ -68,13 +65,6 @@ export function createFetchMetalRatesHandler(
       if (!apiKey) {
         throw new FetchMetalRatesHandlerError("configuration_error", 500);
       }
-
-      const capturedAtDate = dependencies.now();
-      if (!Number.isFinite(capturedAtDate.getTime())) {
-        throw new FetchMetalRatesHandlerError("internal_error", 500);
-      }
-      const capturedAt = capturedAtDate.toISOString();
-      const snapshotId = dependencies.createSnapshotId();
 
       const providerUrl = new URL("https://api.metals.dev/v1/latest");
       providerUrl.searchParams.set("api_key", apiKey);
@@ -87,6 +77,12 @@ export function createFetchMetalRatesHandler(
       }
 
       const rawResponseText = await providerResponse.text();
+      const capturedAtDate = dependencies.now();
+      if (!Number.isFinite(capturedAtDate.getTime())) {
+        throw new FetchMetalRatesHandlerError("internal_error", 500);
+      }
+      const capturedAt = capturedAtDate.toISOString();
+      const snapshotId = dependencies.createSnapshotId();
       const envelope = buildMarketRateSnapshotEnvelope({
         rawResponseText,
         snapshotId,
@@ -114,21 +110,12 @@ export function createFetchMetalRatesHandler(
       );
     } catch (error: unknown) {
       if (error instanceof FetchMetalRatesHandlerError) {
-        return jsonResponse(
-          { success: false, code: error.code },
-          error.status
-        );
+        return jsonResponse({ success: false, code: error.code }, error.status);
       }
       if (error instanceof MarketRateSnapshotContractError) {
-        return jsonResponse(
-          { success: false, code: "provider_error" },
-          502
-        );
+        return jsonResponse({ success: false, code: "provider_error" }, 502);
       }
-      return jsonResponse(
-        { success: false, code: "internal_error" },
-        500
-      );
+      return jsonResponse({ success: false, code: "internal_error" }, 500);
     }
   };
 }

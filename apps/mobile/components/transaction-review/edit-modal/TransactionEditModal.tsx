@@ -18,9 +18,8 @@ import type { PendingAccount } from "@/services/pending-account-service";
 import type { AccountWithBankDetails } from "@/services/sms-account-matcher";
 import type { TransactionEdits } from "@/services/sms-edit-modal-service";
 import { formatToLocalDateString } from "@/utils/dateHelpers";
-import type { Category, CurrencyType } from "@monyvi/db";
+import type { Category } from "@monyvi/db";
 import {
-  formatCurrency,
   formatAmountInput,
   parseAmountInput,
   CURRENCY_INFO_MAP,
@@ -50,10 +49,7 @@ import {
   type UseTransactionEditStateReturn,
 } from "@/hooks/useTransactionEditState";
 import { useModalBottomInset } from "@/hooks/useModalBottomInset";
-import {
-  convertSelectedCurrentAmount,
-  getSelectedCurrentCurrencyRate,
-} from "@/services/current-market-snapshot-calculations";
+import { formatSelectedSnapshotConversionPreview } from "@/services/transaction-conversion-preview-service";
 import type { SelectedMarketRateSnapshot } from "@/services/market-rate-snapshot-read-model-service";
 
 export interface TransactionEditModalProps {
@@ -88,65 +84,6 @@ export interface TransactionEditModalProps {
   readonly onClose: () => void;
 }
 
-function formatSelectedSnapshotConversionPreview(
-  amount: number | string,
-  fromCurrency: CurrencyType,
-  toCurrency: CurrencyType,
-  currentSnapshot: SelectedMarketRateSnapshot | null
-): string {
-  if (currentSnapshot === null) return "Exchange rate unavailable";
-  const parsedAmount = typeof amount === "string" ? Number(amount) : amount;
-  const safeAmount = Number.isFinite(parsedAmount) ? parsedAmount : 0;
-  if (fromCurrency === toCurrency) {
-    return formatCurrency({
-      amount: safeAmount,
-      currency: toCurrency,
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    });
-  }
-
-  const converted = convertSelectedCurrentAmount({
-    amount: safeAmount,
-    fromCurrency,
-    toCurrency,
-    currentSnapshot,
-  });
-  const forwardRate = getSelectedCurrentCurrencyRate({
-    fromCurrency,
-    toCurrency,
-    currentSnapshot,
-  });
-  if (converted === null || forwardRate === null) {
-    return "Conversion unavailable";
-  }
-
-  const baseCurrency = forwardRate >= 1 ? fromCurrency : toCurrency;
-  const quoteCurrency = forwardRate >= 1 ? toCurrency : fromCurrency;
-  const displayRate =
-    forwardRate >= 1
-      ? forwardRate
-      : getSelectedCurrentCurrencyRate({
-          fromCurrency: toCurrency,
-          toCurrency: fromCurrency,
-          currentSnapshot,
-        });
-  if (displayRate === null) {
-    return "Conversion unavailable";
-  }
-  const formattedRate = new Intl.NumberFormat("en-US", {
-    maximumFractionDigits: forwardRate >= 1 ? 2 : 4,
-    minimumFractionDigits: 2,
-  }).format(displayRate);
-
-  return `≈ ${formatCurrency({
-    amount: converted,
-    currency: toCurrency,
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })} at rate 1 ${baseCurrency} = ${formattedRate} ${quoteCurrency}`;
-}
-
 export function TransactionEditModal(
   props: TransactionEditModalProps
 ): React.JSX.Element {
@@ -158,7 +95,7 @@ export function TransactionEditModal(
     sourceVariant = "default",
   } = props;
   const isSmsWorkspace = sourceVariant === "sms";
-  const { t } = useTranslation("transactions");
+  const { t, i18n } = useTranslation("transactions");
   const bottomInset = useModalBottomInset();
 
   const { state, setters, accountHandlers } = useTransactionEditState({
@@ -358,7 +295,9 @@ export function TransactionEditModal(
                           state.amount,
                           transaction.currency,
                           state.selectedAccountCurrency,
-                          selectedSnapshot
+                          selectedSnapshot,
+                          t,
+                          i18n.resolvedLanguage ?? i18n.language
                         )}
                       </Text>
                     </View>
@@ -617,7 +556,7 @@ function SmsReviewEditFields({
   accountHandlers,
   selectedSnapshot,
 }: SmsReviewEditFieldsProps): React.JSX.Element {
-  const { t } = useTranslation("transactions");
+  const { t, i18n } = useTranslation("transactions");
   const [focusedField, setFocusedField] = useState<SmsEditableField>(null);
 
   const openCategory = (): void => {
@@ -845,7 +784,9 @@ function SmsReviewEditFields({
               state.amount,
               state.editedTransactionCurrency,
               state.selectedAccountCurrency,
-              selectedSnapshot
+              selectedSnapshot,
+              t,
+              i18n.resolvedLanguage ?? i18n.language
             )}
           </Text>
         </View>
