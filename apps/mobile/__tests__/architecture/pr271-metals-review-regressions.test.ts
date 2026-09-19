@@ -203,7 +203,10 @@ describe("PR #271 validated Metals review regressions", () => {
   });
 
   it("excludes BTC and all non-ISO Metals instruments from Live Rates currencies", () => {
-    expect(source("hooks/useLiveRatesScreen.ts")).toMatch(
+    expect(source("hooks/useLiveRatesScreen.ts")).toContain(
+      "buildLiveRatesScreenReadModel"
+    );
+    expect(source("services/live-rates-screen-read-model-service.ts")).toMatch(
       /SUPPORTED_CURRENCIES\.filter\([\s\S]*isSupportedMetalsIsoCurrencyCode/
     );
   });
@@ -221,9 +224,9 @@ describe("PR #271 validated Metals review regressions", () => {
   });
 
   it("supplies a conservative timestamp for summarized fresh currency trust", () => {
-    expect(source("hooks/useLiveRatesScreen.ts")).toContain(
-      "getConservativeObservedAt"
-    );
+    expect(
+      source("services/live-rates-screen-read-model-service.ts")
+    ).toContain("getConservativeObservedAt");
   });
 
   it("formats detail money with the resolved app locale", () => {
