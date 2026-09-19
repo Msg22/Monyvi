@@ -88,8 +88,7 @@ function buildEnvelope(
 }
 
 function requireRecord(value: unknown): Record<string, unknown> {
-  assert.equal(typeof value, "object");
-  assert.notEqual(value, null);
+  assert.ok(typeof value === "object" && value !== null);
   assert.equal(Array.isArray(value), false);
   return Object.fromEntries(Object.entries(value));
 }
@@ -216,6 +215,45 @@ test("root and bound observations agree exactly", () => {
   assert.equal(gold.batchId, envelope.snapshotId);
 });
 
+test("USD accepts exact numeric identity regardless of decimal or exponent spelling", () => {
+  for (const token of [
+    "1",
+    "1.0",
+    "1.000",
+    "1e0",
+    "1.0e0",
+    "10e-1",
+    "0.1e1",
+    "0.010e2",
+  ]) {
+    const envelope = buildEnvelope(
+      withRawReplacements({ '"USD":1,': `"USD":${token},` })
+    );
+    assert.equal(
+      envelope.observations.find(
+        ({ instrumentCode }) => instrumentCode === "currency:USD"
+      )?.valueDecimal,
+      "1"
+    );
+  }
+});
+
+test("USD rejects non-identity values without binary rounding or string coercion", () => {
+  for (const token of [
+    "1.00000000000000001",
+    "0.99999999999999999",
+    "0",
+    "-1",
+    '"1"',
+  ]) {
+    assertThrowsContract(
+      () =>
+        buildEnvelope(withRawReplacements({ '"USD":1,': `"USD":${token},` })),
+      "invalid_rate"
+    );
+  }
+});
+
 test("persist RPC payload carries exact strings, one identity, and no nesting ID", () => {
   const envelope = buildEnvelope();
   const payload = buildPersistRpcPayload(envelope);
@@ -274,10 +312,7 @@ test("provider status failure is rejected", () => {
     '"status":"success"',
     '"status":"error"'
   );
-  assertThrowsContract(
-    () => buildEnvelope(raw),
-    "invalid_provider_shape"
-  );
+  assertThrowsContract(() => buildEnvelope(raw), "invalid_provider_shape");
 });
 
 test("provider base currency must be USD", () => {
@@ -285,18 +320,12 @@ test("provider base currency must be USD", () => {
     '"currency":"USD"',
     '"currency":"EUR"'
   );
-  assertThrowsContract(
-    () => buildEnvelope(raw),
-    "invalid_provider_shape"
-  );
+  assertThrowsContract(() => buildEnvelope(raw), "invalid_provider_shape");
 });
 
 test("provider unit must be grams", () => {
   const raw = RAW_PROVIDER_SUCCESS.replace('"unit":"g"', '"unit":"oz"');
-  assertThrowsContract(
-    () => buildEnvelope(raw),
-    "invalid_provider_shape"
-  );
+  assertThrowsContract(() => buildEnvelope(raw), "invalid_provider_shape");
 });
 
 test("missing BTC compatibility rate is rejected before persistence", () => {

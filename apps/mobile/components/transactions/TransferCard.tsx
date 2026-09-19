@@ -13,7 +13,7 @@ interface TransferCardProps {
   fromAccountName: string;
   toAccountName: string;
   notes?: string;
-  displayNetWorth: number;
+  displayNetWorth: number | null;
   currencyCode: CurrencyType;
   isSelectionMode: boolean;
   isSelected: boolean;

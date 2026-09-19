@@ -13,9 +13,9 @@ export const USER_ID = "018f0c7a-1234-7abc-8def-000000000003";
 export const FOREIGN_USER_ID = "018f0c7a-1234-7abc-8def-000000000099";
 export const HOLDING_ID = "018f0c7a-1234-7abc-8def-000000000004";
 
-export const VALIDATION_INPUT: FinancialActionValidationInput = {
+export const VALIDATION_INPUT = {
   latestAllowedCalendarDate: "2026-09-01",
-};
+} satisfies FinancialActionValidationInput;
 
 export const sha256Provider: Sha256Provider = {
   digestUtf8: (value: string): Promise<string> =>

@@ -109,7 +109,7 @@ function TotalBalanceCard({
   balance,
   currencyCode,
 }: {
-  balance: number;
+  balance: number | null;
   currencyCode: CurrencyType;
 }): ReactElement {
   const { t } = useTranslation("accounts");
@@ -119,7 +119,9 @@ function TotalBalanceCard({
         {t("total_balance")}
       </Text>
       <Text className="text-3xl font-black text-slate-900 dark:text-white">
-        {formatCurrency({ amount: balance, currency: currencyCode })}
+        {balance === null
+          ? "—"
+          : formatCurrency({ amount: balance, currency: currencyCode })}
       </Text>
     </View>
   );

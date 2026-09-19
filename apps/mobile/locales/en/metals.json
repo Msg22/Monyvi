@@ -46,6 +46,8 @@
     "tile_accessibility": "{{label}}. {{amount}}. {{share}}"
   },
   "portfolio": {
+    "sold_result_unavailable": "Profit or loss from sales unavailable",
+    "sale_result_unavailable": "Profit or loss unavailable",
     "total": "Metals portfolio value",
     "total_accessibility": "Metals portfolio value {{amount}}. {{status}}.",
     "current_rate": "Current rate",

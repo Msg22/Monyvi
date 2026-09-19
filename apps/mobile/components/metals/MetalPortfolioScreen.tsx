@@ -372,7 +372,13 @@ function PortfolioSummary({
           <Skeleton width={120} height={20} borderRadius={8} />
           <Skeleton width="40%" height={16} borderRadius={8} />
         </View>
-      ) : realizedProfitLoss === null ? null : (
+      ) : realizedProfitLoss === null ? (
+        portfolio.soldResultUnavailable ? (
+          <Text className="mt-7 text-sm text-text-secondary dark:text-text-secondary-dark">
+            {t("portfolio.sold_result_unavailable")}
+          </Text>
+        ) : null
+      ) : (
         <View className="mt-7 flex-row flex-wrap items-baseline gap-x-2 gap-y-1">
           <Text className="text-base font-medium text-text-primary dark:text-text-primary-dark">
             {formatCodeAmount(realizedProfitLoss, currency, locale)}
@@ -745,6 +751,10 @@ function RecentHistory({
                       locale
                     )}
                   </Text>
+                </Text>
+              ) : isSold ? (
+                <Text className="text-right text-xs text-text-secondary dark:text-text-secondary-dark">
+                  {t("portfolio.sale_result_unavailable")}
                 </Text>
               ) : null}
               <Ionicons

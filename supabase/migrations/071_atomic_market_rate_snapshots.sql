@@ -1,4 +1,4 @@
--- Migration 070 binds exact current market-rate evidence to one immutable root and exposes
+-- Migration 071 binds exact current market-rate evidence to one immutable root and exposes
 -- transactional persistence plus fail-closed snapshot paging.
 
 -- Legacy market-rate columns used numeric(15,4), which silently rounded exact

@@ -25,22 +25,42 @@ export function sortPayments(
   sort: SortOption,
   options: SortPaymentsOptions = {}
 ): RecurringPayment[] {
+  const comparisonOptions = {
+    ...options,
+    preferredCurrency: options.preferredCurrency ?? payments[0]?.currency,
+  };
+  if (
+    (sort === "highest_amount" || sort === "lowest_amount") &&
+    payments.some(
+      (payment) => getComparableAmount(payment, comparisonOptions) === null
+    )
+  ) {
+    return [...payments];
+  }
   return [...payments].sort((a, b) => {
     switch (sort) {
       case "highest_amount":
-        return (
-          getComparableAmount(b, options) - getComparableAmount(a, options)
-        );
+        return compareAmounts(b, a, comparisonOptions);
       case "lowest_amount":
-        return (
-          getComparableAmount(a, options) - getComparableAmount(b, options)
-        );
+        return compareAmounts(a, b, comparisonOptions);
       case "name_a_z":
         return a.name.localeCompare(b.name);
       case "next_due":
         return a.nextDueDate.getTime() - b.nextDueDate.getTime();
     }
   });
+}
+
+function compareAmounts(
+  first: RecurringPayment,
+  second: RecurringPayment,
+  options: SortPaymentsOptions
+): number {
+  const firstAmount = getComparableAmount(first, options);
+  const secondAmount = getComparableAmount(second, options);
+  return firstAmount === null || secondAmount === null
+    ? 0
+    : firstAmount - secondAmount;
 }
 
 export function groupPaymentsByDueDate(
@@ -72,17 +92,15 @@ function getDueGroupKey(payment: RecurringPayment): string {
 function getComparableAmount(
   payment: RecurringPayment,
   options: SortPaymentsOptions
-): number {
-  if (!options.preferredCurrency || !options.selectedSnapshot) {
-    return payment.amount;
+): number | null {
+  if (!options.preferredCurrency) {
+    return null;
   }
 
-  return (
-    convertSelectedCurrentAmount({
-      amount: payment.amount,
-      fromCurrency: payment.currency,
-      toCurrency: options.preferredCurrency,
-      currentSnapshot: options.selectedSnapshot,
-    }) ?? payment.amount
-  );
+  return convertSelectedCurrentAmount({
+    amount: payment.amount,
+    fromCurrency: payment.currency,
+    toCurrency: options.preferredCurrency,
+    currentSnapshot: options.selectedSnapshot ?? null,
+  });
 }

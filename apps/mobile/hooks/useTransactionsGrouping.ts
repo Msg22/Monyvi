@@ -42,7 +42,7 @@ export function useTransactionsGrouping(
   const [isDataLoading, setIsDataLoading] = useState(true);
   const [refetchTrigger, setRefetchTrigger] = useState(0);
   const { totalNetWorth, isLoading: isNetWorthLoading } = useNetWorth();
-  const { selectedSnapshot, isLoading: isRatesLoading } = useMarketRates();
+  const { selectedSnapshot } = useMarketRates();
   const { preferredCurrency } = usePreferredCurrency();
   const { userId, isResolvingUser } = useCurrentUser();
   const selectedTypesKey = selectedTypes.join(",");
@@ -121,7 +121,7 @@ export function useTransactionsGrouping(
 
     return buildTransactionGroups({
       ...readModel,
-      totalNetWorth,
+      totalNetWorth: isNetWorthLoading ? null : totalNetWorth,
       selectedSnapshot,
       preferredCurrency,
       period,
@@ -130,6 +130,7 @@ export function useTransactionsGrouping(
   }, [
     readModel,
     totalNetWorth,
+    isNetWorthLoading,
     selectedSnapshot,
     preferredCurrency,
     period,
@@ -138,7 +139,7 @@ export function useTransactionsGrouping(
 
   return {
     groupedData,
-    isLoading: isDataLoading || isNetWorthLoading || isRatesLoading,
+    isLoading: isDataLoading,
     refetch: (): void => {
       setRefetchTrigger((prev) => prev + 1);
     },

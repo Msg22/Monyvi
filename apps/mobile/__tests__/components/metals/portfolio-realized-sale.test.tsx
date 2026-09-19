@@ -28,6 +28,8 @@ const mockTranslations: Record<string, string> = {
   "portfolio.profit_from_this_sale": "Profit from this sale",
   "portfolio.loss_from_this_sale": "Loss from this sale",
   "portfolio.no_loss_from_this_sale": "No profit or loss from this sale",
+  "portfolio.sold_result_unavailable": "Profit or loss from sales unavailable",
+  "portfolio.sale_result_unavailable": "Profit or loss unavailable",
   gold: "Gold",
   silver: "Silver",
   "portfolio.recent_history": "History",
@@ -226,7 +228,7 @@ describe("portfolio realized-sale presentation", () => {
     expect(screen.getByText(/Profit from this sale/)).toBeTruthy();
   });
 
-  it("omits the sold result row without a dash when the result is unavailable", () => {
+  it("explains unavailable sold results without inventing zero or hiding the sale", () => {
     renderPortfolio({
       portfolio: {
         ...portfolio,
@@ -248,7 +250,10 @@ describe("portfolio realized-sale presentation", () => {
     expect(screen.getByText(/Sold without trustworthy evidence/)).toBeTruthy();
     expect(screen.queryByText("—")).toBeNull();
     expect(screen.queryByText(/realized/i)).toBeNull();
-    expect(screen.queryByText(/this sale/i)).toBeNull();
+    expect(
+      screen.getByText("Profit or loss from sales unavailable")
+    ).toBeTruthy();
+    expect(screen.getByText("Profit or loss unavailable")).toBeTruthy();
   });
 
   it("uses profit language and exact canonical amounts for a positive sold result", () => {

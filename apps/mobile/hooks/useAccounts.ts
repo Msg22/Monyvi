@@ -21,7 +21,7 @@ interface UseAccountsResult {
   readonly accounts: Account[];
   readonly isLoading: boolean;
   readonly error: Error | null;
-  readonly totalAccountsBalance: number;
+  readonly totalAccountsBalance: number | null;
   readonly refetch: () => void;
 }
 
@@ -76,7 +76,7 @@ export function useAccounts(): UseAccountsResult {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
-  const { selectedSnapshot, isLoading: isRatesLoading } = useMarketRates();
+  const { selectedSnapshot } = useMarketRates();
   const { preferredCurrency } = usePreferredCurrency();
   const { userId, isResolvingUser } = useCurrentUser();
 
@@ -134,12 +134,12 @@ export function useAccounts(): UseAccountsResult {
       toCurrency: preferredCurrency,
       currentSnapshot: selectedSnapshot,
     });
-    return total ?? 0;
+    return total;
   }, [accounts, selectedSnapshot, preferredCurrency]);
 
   return {
     accounts,
-    isLoading: isLoading || isRatesLoading,
+    isLoading,
     error,
     totalAccountsBalance,
     refetch,

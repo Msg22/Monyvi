@@ -45,10 +45,10 @@ interface UseRecurringPaymentsResult {
   readonly allPayments: readonly RecurringPayment[];
   readonly filteredPayments: readonly RecurringPayment[];
   readonly counts: Record<RecurringStatus, number>;
-  readonly next7DaysTotal: number;
-  readonly totalDueThisMonth: number;
-  readonly totalDueFiltered: number;
-  readonly totalIncomeThisMonth: number;
+  readonly next7DaysTotal: number | null;
+  readonly totalDueThisMonth: number | null;
+  readonly totalDueFiltered: number | null;
+  readonly totalIncomeThisMonth: number | null;
   readonly isLoading: boolean;
   readonly statusFilter: RecurringStatus;
   readonly setStatusFilter: (tab: RecurringStatus) => void;
@@ -145,7 +145,7 @@ export function useRecurringPayments(
   const [statusFilter, setStatusFilter] = useState<RecurringStatus>(
     status || "ACTIVE"
   );
-  const { selectedSnapshot, isLoading: isRatesLoading } = useMarketRates();
+  const { selectedSnapshot } = useMarketRates();
   const { preferredCurrency } = usePreferredCurrency();
   const { userId, isResolvingUser } = useCurrentUser();
 
@@ -232,16 +232,13 @@ export function useRecurringPayments(
 
   /** Convert a payment amount to the user's preferred currency. */
   const toPreferred = useCallback(
-    (amount: number, currency: CurrencyType): number => {
+    (amount: number, currency: CurrencyType): number | null => {
       const converted = convertSelectedCurrentAmount({
         amount,
         fromCurrency: currency,
         toCurrency: preferredCurrency,
         currentSnapshot: selectedSnapshot,
       });
-      if (converted === null) {
-        throw new Error("MARKET_RATES_NOT_READY");
-      }
       return converted;
     },
     [selectedSnapshot, preferredCurrency]
@@ -249,13 +246,6 @@ export function useRecurringPayments(
 
   const { next7DaysTotal, totalDueThisMonth, totalIncomeThisMonth } =
     useMemo(() => {
-      if (!selectedSnapshot) {
-        return {
-          next7DaysTotal: 0,
-          totalDueThisMonth: 0,
-          totalIncomeThisMonth: 0,
-        };
-      }
       const activeExpenses = allPayments.filter(
         (p) => p.isActive && p.isExpense
       );
@@ -270,22 +260,17 @@ export function useRecurringPayments(
         totalDueThisMonth: dueThisMonth,
         totalIncomeThisMonth: incomeThisMonth,
       };
-    }, [allPayments, calendarRevision, selectedSnapshot, toPreferred]);
+    }, [allPayments, calendarRevision, toPreferred]);
 
   /** Total due for filtered period, computed from the FULL matching set (not limit-truncated). */
-  const totalDueFiltered = useMemo((): number => {
-    if (!selectedSnapshot) return 0;
+  const totalDueFiltered = useMemo((): number | null => {
     if (!dateRange) return totalDueThisMonth;
     return matchingPayments
       .filter((p) => p.isExpense)
-      .reduce((sum, p) => sum + toPreferred(p.amount, p.currency), 0);
-  }, [
-    matchingPayments,
-    dateRange,
-    selectedSnapshot,
-    totalDueThisMonth,
-    toPreferred,
-  ]);
+      .reduce<
+        number | null
+      >((sum, p) => addAvailableAmount(sum, toPreferred(p.amount, p.currency)), 0);
+  }, [matchingPayments, dateRange, totalDueThisMonth, toPreferred]);
 
   return {
     allPayments,
@@ -295,7 +280,7 @@ export function useRecurringPayments(
     totalDueThisMonth,
     totalDueFiltered,
     totalIncomeThisMonth,
-    isLoading: isLoading || isRatesLoading,
+    isLoading,
     statusFilter,
     setStatusFilter,
   };
@@ -313,14 +298,17 @@ export function useRecurringPayments(
 
 function getNext7DaysTotal(
   activeExpenses: RecurringPayment[],
-  toPreferred: (amount: number, currency: CurrencyType) => number
-): number {
+  toPreferred: (amount: number, currency: CurrencyType) => number | null
+): number | null {
   return activeExpenses
     .filter((p) => {
       const daysUntilDue = calculateCalendarDaysUntil(p.nextDueDate);
       return daysUntilDue >= 0 && daysUntilDue <= 7;
     })
-    .reduce((sum, p) => sum + toPreferred(p.amount, p.currency), 0);
+    .reduce<number | null>(
+      (sum, p) => addAvailableAmount(sum, toPreferred(p.amount, p.currency)),
+      0
+    );
 }
 
 /**
@@ -332,11 +320,20 @@ function getNext7DaysTotal(
  */
 function getThisMonthTotal(
   payments: RecurringPayment[],
-  toPreferred: (amount: number, currency: CurrencyType) => number
-): number {
+  toPreferred: (amount: number, currency: CurrencyType) => number | null
+): number | null {
   return payments
     .filter((p) => isInCurrentLocalMonth(p.nextDueDate))
-    .reduce((sum, p) => sum + toPreferred(p.amount, p.currency), 0);
+    .reduce<
+      number | null
+    >((sum, p) => addAvailableAmount(sum, toPreferred(p.amount, p.currency)), 0);
+}
+
+function addAvailableAmount(
+  total: number | null,
+  amount: number | null
+): number | null {
+  return total === null || amount === null ? null : total + amount;
 }
 
 function sortRecurringPaymentsByDueDate(

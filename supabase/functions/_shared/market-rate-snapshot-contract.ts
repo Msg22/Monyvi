@@ -311,8 +311,10 @@ function buildRoot(
     throw new MarketRateSnapshotContractError("snapshot_incomplete");
   }
 
-  const usdToken = extractDecimalToken(currencies["USD"]);
-  if (usdToken !== "1") {
+  const usdToken = normalizeDecimalToken(
+    extractDecimalToken(currencies["USD"])
+  );
+  if (!/^0*1(?:\.0+)?$/.test(usdToken)) {
     throw new MarketRateSnapshotContractError("invalid_rate");
   }
 

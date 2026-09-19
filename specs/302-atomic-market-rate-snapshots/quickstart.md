@@ -188,7 +188,7 @@ script, and CI step exist and the command has passed.
 Create:
 
 ```text
-supabase/migrations/070_atomic_market_rate_snapshots.sql
+supabase/migrations/071_atomic_market_rate_snapshots.sql
 supabase/tests/atomic_market_rate_snapshots_test.sql
 ```
 

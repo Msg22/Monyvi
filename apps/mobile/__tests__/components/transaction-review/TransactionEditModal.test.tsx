@@ -165,6 +165,18 @@ describe("TransactionEditModal SMS workspace", () => {
     mockStateOverrides = {};
   });
 
+  it("uses translated unavailable copy for a missing conversion snapshot", () => {
+    mockStateOverrides = {
+      hasCurrencyMismatch: true,
+      selectedAccountCurrency: "USD",
+    };
+    const view = render(
+      <TransactionEditModal {...baseProps} sourceVariant="sms" />
+    );
+    expect(view.getByText("conversion_unavailable")).toBeTruthy();
+    expect(view.queryByText("Exchange rate unavailable")).toBeNull();
+  });
+
   it("renders the approved bounded grouped fields without type tabs", () => {
     const view = render(
       <TransactionEditModal {...baseProps} sourceVariant="sms" />

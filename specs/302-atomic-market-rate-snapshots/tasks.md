@@ -278,7 +278,7 @@ evidence.
 ### Database / generated contracts
 
 - [x] **T031** [US2] Add
-`supabase/migrations/070_atomic_market_rate_snapshots.sql` persistence
+`supabase/migrations/071_atomic_market_rate_snapshots.sql` persistence
       half to satisfy T025: remove legacy four-decimal numeric scale caps that
       would round exact provider values; add a `NOT VALID` FK with
       `ON DELETE CASCADE`, safe lookup index, service-role-only
@@ -335,8 +335,8 @@ evidence.
       explicit `--best-effort` behavior.
 
 **Checkpoint**: US1 + US2 are the minimum releasable trust guarantee.
-Producer-only or consumer-only completion must not be deployed/merged as issue
-#302 completion.
+Producer-only or consumer-only completion must not be deployed/merged as
+issue #302 completion.
 
 ---
 

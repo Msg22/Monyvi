@@ -56,14 +56,15 @@ import { ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { usePreferredCurrency } from "@/hooks/usePreferredCurrency";
 
-const TRANSACTION_FIELD_ORDER: readonly (keyof TransactionValidationErrors)[] = [
-  "amount",
-  "accountId",
-  "categoryId",
-  "fromAccountId",
-  "toAccountId",
-  "recurringName",
-];
+const TRANSACTION_FIELD_ORDER: readonly (keyof TransactionValidationErrors)[] =
+  [
+    "amount",
+    "accountId",
+    "categoryId",
+    "fromAccountId",
+    "toAccountId",
+    "recurringName",
+  ];
 
 export default function AddTransaction(): React.ReactNode {
   const router = useRouter();
@@ -281,6 +282,7 @@ export default function AddTransaction(): React.ReactNode {
 
   // Auto-calculate target amount for transfers
   useEffect(() => {
+    setTargetAmount("");
     if (
       type === "TRANSFER" &&
       selectedAccount &&
@@ -351,10 +353,12 @@ export default function AddTransaction(): React.ReactNode {
       return;
     }
 
-    const parsedTargetAmount = targetAmount
-      ? parsePositiveFiniteAmountInput(targetAmount)
-      : null;
-    if (targetAmount && parsedTargetAmount === null) {
+    const isCrossCurrency = selectedAccount.currency !== toAccount?.currency;
+    const parsedTargetAmount =
+      isCrossCurrency && targetAmount
+        ? parsePositiveFiniteAmountInput(targetAmount)
+        : null;
+    if (isCrossCurrency && targetAmount && parsedTargetAmount === null) {
       setFormErrors({ amount: t("invalid_amount") });
       return;
     }

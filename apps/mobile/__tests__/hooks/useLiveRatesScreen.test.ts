@@ -1,4 +1,5 @@
 import { act, renderHook, waitFor } from "@testing-library/react-native";
+import type { LiveRatesTrustReadModel } from "@/services/live-rates-trust-read-model-service";
 
 const mockRefreshLiveMarketRates = jest.fn<Promise<void>, [unknown]>(() =>
   Promise.resolve()
@@ -80,7 +81,7 @@ jest.mock("react-i18next", () => ({
 
 import { useLiveRatesScreen } from "@/hooks/useLiveRatesScreen";
 
-const trustedRates = {
+const trustedRates: LiveRatesTrustReadModel = {
   currencies: new Map([
     [
       "EGP",
@@ -115,6 +116,44 @@ function selectedSnapshot(
 }
 
 describe("useLiveRatesScreen", () => {
+  it("clears a failed initial refresh when the first complete snapshot arrives", async () => {
+    mockRefreshLiveMarketRates.mockRejectedValueOnce(new Error("offline"));
+    const { result } = renderHook(() => useLiveRatesScreen());
+    act(() => result.current.onRefresh());
+    await waitFor(() =>
+      expect(result.current.refreshError).toBe("initial_refresh_failed")
+    );
+    act(() =>
+      emitMarketRates({
+        selectedSnapshot: selectedSnapshot(),
+        isCurrentLoading: false,
+      })
+    );
+    await waitFor(() => expect(result.current.refreshError).toBeNull());
+  });
+
+  it("includes preferred currency trust in both converted metal prices", () => {
+    mockMarketRatesState = {
+      ...mockMarketRatesState,
+      selectedSnapshot: selectedSnapshot({
+        ...trustedRates,
+        currencies: new Map([
+          [
+            "EGP",
+            {
+              ageMs: 90_000_000,
+              providerObservedAt: new Date("2026-09-05T00:00:00.000Z"),
+              state: "stale",
+            },
+          ],
+        ]),
+      }),
+    };
+    const { result } = renderHook(() => useLiveRatesScreen());
+    expect(result.current.rateTrust.gold.state).toBe("stale");
+    expect(result.current.rateTrust.silver.state).toBe("stale");
+  });
+
   beforeEach(() => {
     jest.clearAllMocks();
     mockMarketRatesListeners.clear();
@@ -182,7 +221,7 @@ describe("useLiveRatesScreen", () => {
     const { result } = renderHook(() => useLiveRatesScreen());
 
     act(() => {
-      const trust = {
+      const trust: Parameters<typeof selectedSnapshot>[0] = {
         currencies: new Map(),
         gold: {
           ageMs: 120_000,

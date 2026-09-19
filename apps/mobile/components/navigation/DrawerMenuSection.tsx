@@ -9,6 +9,7 @@
 import { palette } from "@/constants/colors";
 import { useTheme } from "@/context/ThemeContext";
 import { Ionicons } from "@expo/vector-icons";
+import type { Href } from "expo-router";
 import React, { memo } from "react";
 import { useTranslation } from "react-i18next";
 import { Text, TouchableOpacity, View } from "react-native";
@@ -21,13 +22,13 @@ export interface DrawerMenuItem {
   readonly id: string;
   readonly labelKey: string;
   readonly icon: keyof typeof Ionicons.glyphMap;
-  readonly route?: string;
+  readonly route?: Href;
 }
 
 interface DrawerMenuSectionProps {
   readonly titleKey: string;
   readonly items: readonly DrawerMenuItem[];
-  readonly onItemPress: (route: string) => void;
+  readonly onItemPress: (route: Href) => void;
   readonly className?: string;
 }
 

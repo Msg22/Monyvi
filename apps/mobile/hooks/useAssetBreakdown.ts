@@ -21,7 +21,7 @@ import {
 import { runUserScopedEffect, useCurrentUser } from "./useCurrentUser";
 
 interface UseAssetBreakdownResult {
-  breakdown: AssetBreakdownPercentage[];
+  breakdown: AssetBreakdownPercentage[] | null;
   isLoading: boolean;
 }
 
@@ -142,7 +142,7 @@ export function useAssetBreakdown(): UseAssetBreakdownResult {
     });
   }, [assets, assetIdsKey, userId, isResolvingUser]);
 
-  const breakdown = useMemo((): AssetBreakdownPercentage[] => {
+  const breakdown = useMemo((): AssetBreakdownPercentage[] | null => {
     const rawBreakdown = calculateSelectedCurrentAssetBreakdown({
       accounts: accounts.map((account) => ({
         balance: account.balance,
@@ -157,7 +157,7 @@ export function useAssetBreakdown(): UseAssetBreakdownResult {
       currentSnapshot: selectedSnapshot,
     });
     return rawBreakdown === null
-      ? []
+      ? null
       : calculateAssetBreakdownPercentages(rawBreakdown);
   }, [accounts, assetMetals, selectedSnapshot]);
 

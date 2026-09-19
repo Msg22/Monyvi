@@ -8,6 +8,7 @@ on:
       - main
       - codex/035-metals-module-redesign
       - codex/issue282-realized-metal-sale-results
+      - codex/035-metals-slice5-integration
 
 concurrency:
   group: ci-${{ github.event.pull_request.number || github.ref }}
@@ -109,7 +110,9 @@ jobs:
     if: >-
       github.event_name == 'pull_request' && (github.event.pull_request.base.ref
       == 'main' || github.event.pull_request.base.ref ==
-      'codex/035-metals-module-redesign')
+      'codex/035-metals-module-redesign' || github.event.pull_request.base.ref ==
+      'codex/issue282-realized-metal-sale-results' || github.event.pull_request.base.ref ==
+      'codex/035-metals-slice5-integration')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
@@ -137,6 +140,7 @@ jobs:
           npx supabase test db --local
           supabase/tests/financial_action_canonicalization_test.sql
           supabase/tests/metals_issue285_reconciliation_test.sql
+          supabase/tests/atomic_market_rate_snapshots_test.sql
   android-build:
     name: Android Build Verification
     runs-on: ubuntu-latest

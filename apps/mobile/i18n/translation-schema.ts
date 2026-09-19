@@ -128,6 +128,8 @@ interface CommonTranslations {
 
 /** Transactions namespace */
 interface TransactionsTranslations {
+  readonly conversion_unavailable: string;
+  readonly conversion_preview: string;
   readonly partial_sms_title: string;
   readonly partial_sms_description: string;
   readonly partial_sms_try_later_at: string;
