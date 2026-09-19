@@ -27,7 +27,7 @@ appId: com.monyvi.app
 - assertVisible:
     id: metal-sold-net-proceeds
 - assertVisible:
-    id: metal-sold-realized-result
+    text: "EGP 5,500.00 profit from this sale"
 - takeScreenshot: metals-16-sold-holding-detail
 - scrollUntilVisible:
     element:
@@ -39,6 +39,8 @@ appId: com.monyvi.app
     id: metal-detail-calculation-disclosure
 - assertVisible:
     id: metal-sold-calculation-breakdown
+- assertVisible:
+    text: "Breakdown unavailable. The total is based on your recorded details."
 - tapOn:
     id: metal-detail-calculation-disclosure
 - assertNotVisible:

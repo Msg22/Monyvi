@@ -168,6 +168,21 @@ function inputOf(
   };
 }
 
+it.each(["netProceedsMinorUnits", "netProceedsMinor\\u0055nits"])(
+  "rejects ambiguous sold event evidence with duplicate %s",
+  (key): void => {
+    const payload = salePayload();
+    const input = inputOf(payload);
+    const event = saleEvent(payload, {
+      payloadJson: `{"${key}":"1",${JSON.stringify(payload).slice(1)}`,
+    });
+    expect(shapeMetalRealizedSaleEvidence({ ...input, event })).toEqual({
+      available: false,
+      reason: "unsupported_sale_evidence",
+    });
+  }
+);
+
 describe("metal realized sale evidence shaper", () => {
   it("keeps the effective sale reportable after a rejected undo restores its holding", () => {
     expect(shapeMetalRealizedSaleEvidence(inputOf(salePayload(), {

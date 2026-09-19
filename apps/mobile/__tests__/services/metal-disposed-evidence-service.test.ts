@@ -176,7 +176,7 @@ describe("metal disposed evidence shaper", () => {
   });
 
   it("uses device-local today as the trusted date boundary when none is injected", () => {
-    jest.useFakeTimers().setSystemTime(new Date("2026-09-01T12:00:00.000Z"));
+    jest.useFakeTimers().setSystemTime(new Date(2026, 8, 1, 12));
     try {
       const input = inputOf(disposalPayload());
       const { latestAllowedCalendarDate: _omitted, ...withoutBoundary } = input;

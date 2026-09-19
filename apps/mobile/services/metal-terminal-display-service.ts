@@ -11,6 +11,7 @@ import {
 import type { LiveRatesTrustReadModel } from "./live-rates-trust-read-model-service";
 import type {
   MetalSoldTerminalFacts,
+  MetalDisplayRateTrust,
   MetalTerminalFacts,
 } from "./metal-terminal-read-model-service";
 import { convertSoldAmountForPreferredDisplay } from "./metal-portfolio-sale-result-service";
@@ -46,6 +47,7 @@ export function buildMetalTerminalDisplayFacts(
     return {
       ...facts,
       displayAttribution: null,
+      displayRateTrust: [],
       realizedResultCurrency: null,
       realizedResultDecimal: null,
     };
@@ -80,6 +82,23 @@ export function buildMetalTerminalDisplayFacts(
     ...facts,
     realizedResultCurrency: result === null ? null : currency,
     realizedResultDecimal: result,
+    displayRateTrust:
+      result === null || currency === amountCurrency
+        ? []
+        : [amountCurrency, currency].flatMap(
+            (consumedCurrency): MetalDisplayRateTrust[] => {
+              const rate = currentRates?.currencies.get(consumedCurrency);
+              return consumedCurrency === "USD" || rate === undefined
+                ? []
+                : [
+                    {
+                      currency: consumedCurrency,
+                      state: rate.state,
+                      providerObservedAt: rate.providerObservedAt,
+                    },
+                  ];
+            }
+          ),
     displayAttribution:
       result === null
         ? null

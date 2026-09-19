@@ -54,6 +54,59 @@ const facts: MetalSoldTerminalFacts = {
 };
 
 describe("terminal preferred-currency display", () => {
+  it.each(["fresh", "stale", "unknown"] as const)(
+    "retains only consumed %s display FX trust alongside the converted result",
+    (state): void => {
+      const providerObservedAt =
+        state === "unknown" ? null : rate.providerObservedAt;
+      const currentRates: LiveRatesTrustReadModel = {
+        ...rates,
+        currencies: new Map([["EGP", { ...rate, state, providerObservedAt }]]),
+      };
+      expect(
+        buildMetalTerminalDisplayFacts(facts, currentRates, "USD")
+      ).toMatchObject({
+        realizedResultDecimal: "110",
+        displayRateTrust: [{ currency: "EGP", state, providerObservedAt }],
+      });
+      expect(
+        buildMetalTerminalDisplayFacts(facts, currentRates, "EGP")
+      ).toMatchObject({
+        displayRateTrust: [],
+      });
+    }
+  );
+
+  it("tracks both non-identity currencies but ignores unrelated stale metal inputs", () => {
+    const currentRates: LiveRatesTrustReadModel = {
+      ...rates,
+      gold: { ...rate, state: "stale" },
+      currencies: new Map([
+        ["EGP", rate],
+        [
+          "EUR",
+          {
+            ...rate,
+            valueDecimal: "1.2",
+            state: "unknown",
+            providerObservedAt: null,
+          },
+        ],
+      ]),
+    };
+    expect(
+      buildMetalTerminalDisplayFacts(facts, currentRates, "EUR")
+    ).toMatchObject({
+      displayRateTrust: [
+        {
+          currency: "EGP",
+          state: "fresh",
+          providerObservedAt: rate.providerObservedAt,
+        },
+        { currency: "EUR", state: "unknown", providerObservedAt: null },
+      ],
+    });
+  });
   it("converts combined result and all five components from the same FX snapshot, preserving recorded proceeds and canonical evidence", () => {
     const before = JSON.stringify(facts);
     const result = buildMetalTerminalDisplayFacts(facts, rates, "USD");
@@ -105,6 +158,7 @@ describe("terminal preferred-currency display", () => {
       netProceedsDecimal: "35500",
       realizedResultDecimal: null,
       displayAttribution: null,
+      displayRateTrust: [],
     });
   });
 
