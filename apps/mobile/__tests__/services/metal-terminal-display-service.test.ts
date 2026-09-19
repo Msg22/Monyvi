@@ -59,15 +59,20 @@ describe("terminal preferred-currency display", () => {
     (state): void => {
       const providerObservedAt =
         state === "unknown" ? null : rate.providerObservedAt;
+      const ageMs = state === "unknown" ? null : 172_800_000;
       const currentRates: LiveRatesTrustReadModel = {
         ...rates,
-        currencies: new Map([["EGP", { ...rate, state, providerObservedAt }]]),
+        currencies: new Map([
+          ["EGP", { ...rate, state, providerObservedAt, ageMs }],
+        ]),
       };
       expect(
         buildMetalTerminalDisplayFacts(facts, currentRates, "USD")
       ).toMatchObject({
         realizedResultDecimal: "110",
-        displayRateTrust: [{ currency: "EGP", state, providerObservedAt }],
+        displayRateTrust: [
+          { currency: "EGP", state, providerObservedAt, ageMs },
+        ],
       });
       expect(
         buildMetalTerminalDisplayFacts(facts, currentRates, "EGP")

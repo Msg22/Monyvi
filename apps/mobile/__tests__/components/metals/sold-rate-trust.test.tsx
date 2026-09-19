@@ -1,5 +1,7 @@
 import { render, screen } from "@testing-library/react-native";
 import { MetalSoldRateTrust } from "@/components/metals/MetalSoldRateTrust";
+import type { MetalDisplayRateTrust } from "@/services/metal-terminal-read-model-service";
+import { formatRateAge } from "@monyvi/logic";
 
 jest.mock("react-i18next", () => ({
   useTranslation: (): unknown => ({
@@ -14,7 +16,14 @@ jest.mock("react-i18next", () => ({
 it("shows unknown age without inventing a provider timestamp", () => {
   render(
     <MetalSoldRateTrust
-      rates={[{ currency: "EUR", state: "unknown", providerObservedAt: null }]}
+      rates={[
+        {
+          currency: "EUR",
+          state: "unknown",
+          providerObservedAt: null,
+          ageMs: null,
+        },
+      ]}
     />
   );
   expect(screen.getByText("EUR · rate.short_unknown")).toBeTruthy();
@@ -28,16 +37,43 @@ it("shows the known provider date with fresh status", () => {
         {
           currency: "EGP",
           state: "fresh",
+          ageMs: 60_000,
           providerObservedAt: new Date(2026, 8, 1, 12),
         },
       ]}
     />
   );
   expect(screen.getByText("EGP · rate.short_fresh")).toBeTruthy();
+  expect(screen.queryByText(/minute ago/)).toBeNull();
   expect(screen.getByText(/Updated 01 Sept 2026 .*PM/)).toBeTruthy();
+});
+
+it.each([null, -1, Number.NaN, Number.POSITIVE_INFINITY])(
+  "does not invent a relative age for %s",
+  (ageMs): void => {
+    expect(formatRateAge(ageMs, "en")).toBeNull();
+  }
+);
+
+it("uses the existing localized age formatter for Arabic", () => {
+  expect(formatRateAge(172_800_000, "ar")).toBe(
+    new Intl.RelativeTimeFormat("ar", { numeric: "always" }).format(-2, "day")
+  );
 });
 
 it("renders no trust block without consumed display rates", () => {
   render(<MetalSoldRateTrust rates={[]} />);
   expect(screen.queryByTestId("metal-sold-display-rate-trust")).toBeNull();
+});
+
+it("shows the consumed stale rate age alongside status and provider date", () => {
+  const rate: MetalDisplayRateTrust = {
+    currency: "EGP",
+    state: "stale",
+    providerObservedAt: new Date(2026, 8, 1, 12),
+    ageMs: 172_800_000,
+  };
+  render(<MetalSoldRateTrust rates={[rate]} />);
+  expect(screen.getByText("EGP · rate.short_stale · 2 days ago")).toBeTruthy();
+  expect(screen.getByText(/Updated 01 Sept 2026 .*PM/)).toBeTruthy();
 });
