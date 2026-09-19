@@ -51,7 +51,7 @@ const translations: Readonly<Record<string, string>> = {
   "detail.offline": "Offline mode",
   "detail.paid": "{{amount}} paid",
   "detail.net_proceeds": "Net proceeds",
-  "detail.no_longer_active": "No longer in your active portfolio.",
+  "detail.no_longer_active": "No longer among your gold and silver.",
   "detail.no_longer_possession": "No longer in my possession",
   "detail.notes": "Notes",
   "detail.physical_facts": "Physical facts",
@@ -768,7 +768,7 @@ describe("approved active holding-detail fidelity", () => {
     );
 
     expect(
-      screen.getByText("No longer in your active portfolio.")
+      screen.getByText("No longer among your gold and silver.")
     ).toBeTruthy();
     expect(screen.getByText("Holding story")).toBeTruthy();
     expect(screen.getByText("No longer in my possession")).toBeTruthy();
