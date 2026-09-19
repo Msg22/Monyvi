@@ -749,6 +749,9 @@ describe("manual-qa-seed script helpers", () => {
     expect(ACCOUNT_SWITCH_QA_EMAIL).toBe("manual-qa-secondary@monyvi.test");
     expect(ACCOUNT_SWITCH_QA_PASSWORD).toBe("123456");
     expect(createdAuthUsers).toContainEqual({
+      id: expect.stringMatching(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
+      ),
       email: ACCOUNT_SWITCH_QA_EMAIL,
       password: ACCOUNT_SWITCH_QA_PASSWORD,
       email_confirm: true,
@@ -764,6 +767,7 @@ describe("manual-qa-seed script helpers", () => {
 });
 
 interface AuthUserSeedInput {
+  readonly id?: string;
   readonly email: string;
   readonly password: string;
   readonly email_confirm: boolean;

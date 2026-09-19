@@ -468,6 +468,11 @@ async function ensureSeedUser(client, config, fixture = BASE_SEED_FIXTURE) {
 
   const createResult = await assertNoError(
     await client.auth.admin.createUser({
+      ...(config.mode === "local"
+        ? {
+            id: deterministicUuid(fixture.seedScope, config.email, "auth-user"),
+          }
+        : {}),
       email: config.email,
       password: config.password,
       email_confirm: true,
