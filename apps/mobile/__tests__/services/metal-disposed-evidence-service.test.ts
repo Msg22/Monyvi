@@ -113,6 +113,34 @@ function inputOf(
 }
 
 describe("metal disposed evidence shaper", () => {
+  it("keeps canonical disposal facts after holding reconciliation", () => {
+    expect(
+      shapeMetalDisposedEvidence(
+        inputOf(disposalPayload(), {
+          holding: disposalHolding({ reconciliationState: "reconciled" }),
+        })
+      )
+    ).toMatchObject({ available: true, value: { reason: "given_away" } });
+  });
+
+  it.each(["reason", "reas\\u006fn"])(
+    "rejects duplicate event keys including %s",
+    (key) => {
+      const payload = disposalPayload();
+      const payloadJson = JSON.stringify(payload).replace(
+        '"reason":"given_away"',
+        `"reason":"donated","${key}":"given_away"`
+      );
+      expect(
+        shapeMetalDisposedEvidence(
+          inputOf(payload, {
+            event: disposalEvent(payload, { payloadJson }),
+          })
+        )
+      ).toEqual({ available: false, reason: "invalid_disposal_evidence" });
+    }
+  );
+
   it.each([
     ["lost_or_stolen", "lost_or_stolen", "write_off"],
     ["destroyed_or_damaged", "destroyed_or_damaged", "write_off"],
@@ -173,8 +201,14 @@ describe("metal disposed evidence shaper", () => {
 
   it.each([
     ["foreign holding", { holding: disposalHolding({ userId: "user-2" }) }],
-    ["foreign event", { event: disposalEvent(disposalPayload(), { userId: "user-2" }) }],
-    ["foreign group", { group: disposalGroup(disposalPayload(), { userId: "user-2" }) }],
+    [
+      "foreign event",
+      { event: disposalEvent(disposalPayload(), { userId: "user-2" }) },
+    ],
+    [
+      "foreign group",
+      { group: disposalGroup(disposalPayload(), { userId: "user-2" }) },
+    ],
   ] as const)("rejects %s evidence", (_label, overrides) => {
     expect(
       shapeMetalDisposedEvidence(inputOf(disposalPayload(), overrides))
@@ -187,23 +221,65 @@ describe("metal disposed evidence shaper", () => {
   it.each([
     ["hidden holding", { holding: disposalHolding({ isVisible: false }) }],
     ["active holding", { holding: disposalHolding({ status: "active" }) }],
-    ["ineffective event", { event: disposalEvent(disposalPayload(), { isEffective: false }) }],
-    ["deleted event", { event: disposalEvent(disposalPayload(), { deleted: true }) }],
-    ["deleted group", { group: disposalGroup(disposalPayload(), { deleted: true }) }],
-    ["rejected group", { group: disposalGroup(disposalPayload(), { state: "reconciled", serverOutcome: "rejected", outcomeJson: "{}", rejectionCode: "stale" }) }],
-    ["incomplete group", { group: disposalGroup(disposalPayload(), { state: "reconciliation_incomplete" }) }],
-    ["wrong effective event", { holding: disposalHolding({ effectiveEventId: ADD_EVENT_ID }) }],
-    ["wrong effective action", { holding: disposalHolding({ effectiveActionId: ADD_EVENT_ID }) }],
-  ] as const)("excludes %s from reportable disposal facts", (_label, overrides) => {
-    expect(
-      shapeMetalDisposedEvidence(inputOf(disposalPayload(), overrides))
-    ).toEqual({ available: false, reason: "excluded_disposal" });
-  });
+    [
+      "ineffective event",
+      { event: disposalEvent(disposalPayload(), { isEffective: false }) },
+    ],
+    [
+      "deleted event",
+      { event: disposalEvent(disposalPayload(), { deleted: true }) },
+    ],
+    [
+      "deleted group",
+      { group: disposalGroup(disposalPayload(), { deleted: true }) },
+    ],
+    [
+      "rejected group",
+      {
+        group: disposalGroup(disposalPayload(), {
+          state: "reconciled",
+          serverOutcome: "rejected",
+          outcomeJson: "{}",
+          rejectionCode: "stale",
+        }),
+      },
+    ],
+    [
+      "incomplete group",
+      {
+        group: disposalGroup(disposalPayload(), {
+          state: "reconciliation_incomplete",
+        }),
+      },
+    ],
+    [
+      "wrong effective event",
+      { holding: disposalHolding({ effectiveEventId: ADD_EVENT_ID }) },
+    ],
+    [
+      "wrong effective action",
+      { holding: disposalHolding({ effectiveActionId: ADD_EVENT_ID }) },
+    ],
+  ] as const)(
+    "excludes %s from reportable disposal facts",
+    (_label, overrides) => {
+      expect(
+        shapeMetalDisposedEvidence(inputOf(disposalPayload(), overrides))
+      ).toEqual({ available: false, reason: "excluded_disposal" });
+    }
+  );
 
   it.each([
     ["unknown reason", disposalPayload({ reason: "gifted" })],
     ["future date", disposalPayload({ disposalDate: "2026-09-02" })],
-    ["missing notes field", (() => { const value = disposalPayload(); delete value.notes; return value; })()],
+    [
+      "missing notes field",
+      (() => {
+        const value = disposalPayload();
+        delete value.notes;
+        return value;
+      })(),
+    ],
   ] as const)("rejects malformed payload: %s", (_label, payload) => {
     expect(shapeMetalDisposedEvidence(inputOf(payload))).toEqual({
       available: false,

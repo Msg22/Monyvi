@@ -384,10 +384,8 @@ describe("terminal metal read-model integration", () => {
       assets: ownedRows.assets?.slice(0, 1) ?? [],
       financial_action_groups:
         ownedRows.financial_action_groups?.slice(0, 1) ?? [],
-      metal_action_evidence:
-        ownedRows.metal_action_evidence?.slice(0, 2) ?? [],
-      metal_holding_states:
-        ownedRows.metal_holding_states?.slice(0, 1) ?? [],
+      metal_action_evidence: ownedRows.metal_action_evidence?.slice(0, 2) ?? [],
+      metal_holding_states: ownedRows.metal_holding_states?.slice(0, 1) ?? [],
       metal_lifecycle_events:
         ownedRows.metal_lifecycle_events?.slice(0, 2) ?? [],
     };
@@ -400,8 +398,13 @@ describe("terminal metal read-model integration", () => {
       userId: USER_ID,
     });
 
-    expect(model?.terminalFacts).toEqual({
+    expect(model?.terminalFacts).toMatchObject({
       actionId: GOLD_SELL_ACTION_ID,
+      canonicalAttribution: {
+        combinedDecimal: "5500",
+        breakdown: { available: false },
+      },
+      displayAttribution: null,
       feeDecimal: "500",
       grossProceedsDecimal: "36000",
       kind: "sold",
@@ -412,6 +415,18 @@ describe("terminal metal read-model integration", () => {
       realizedResultDecimal: "5500",
       realizedResultUnavailableReason: null,
       terminalDate: "2026-08-23",
+    });
+    const withoutDisplayFx = await readMetalDetailReadModel({
+      holdingId: SOLD_HOLDING_ID,
+      preferredCurrency: "USD",
+      userId: USER_ID,
+    });
+    expect(withoutDisplayFx?.terminalFacts).toMatchObject({
+      netProceedsDecimal: "35500",
+      realizedResultDecimal: null,
+      canonicalAttribution: {
+        combinedDecimal: "5500",
+      },
     });
   });
 
@@ -428,6 +443,8 @@ describe("terminal metal read-model integration", () => {
     ]);
     expect(model.items[0]?.terminalFacts).toMatchObject({
       kind: "sold",
+      canonicalAttribution: { breakdown: { available: false } },
+      displayAttribution: null,
       netProceedsDecimal: "35500",
       proceedsCurrency: "EGP",
       terminalDate: "2026-08-23",
@@ -440,5 +457,22 @@ describe("terminal metal read-model integration", () => {
       terminalDate: "2026-08-22",
       treatment: "external_transfer",
     });
+  });
+
+  it("excludes a terminal candidate with missing action facts without hiding another valid row", async () => {
+    ownedRows = {
+      ...ownedRows,
+      financial_action_groups:
+        ownedRows.financial_action_groups?.slice(1) ?? [],
+    };
+    const model = await readMetalHistoryReadModel({
+      filter: "all",
+      pageSize: 1,
+      userId: USER_ID,
+    });
+    expect(model.items.map((item) => item.holdingId)).toEqual([
+      DISPOSED_HOLDING_ID,
+    ]);
+    expect(model.hasMore).toBe(false);
   });
 });

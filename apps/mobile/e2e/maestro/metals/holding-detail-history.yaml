@@ -29,6 +29,20 @@ appId: com.monyvi.app
 - assertVisible:
     id: metal-sold-realized-result
 - takeScreenshot: metals-16-sold-holding-detail
+- scrollUntilVisible:
+    element:
+      id: metal-detail-calculation-disclosure
+    direction: DOWN
+- assertNotVisible:
+    id: metal-sold-calculation-breakdown
+- tapOn:
+    id: metal-detail-calculation-disclosure
+- assertVisible:
+    id: metal-sold-calculation-breakdown
+- tapOn:
+    id: metal-detail-calculation-disclosure
+- assertNotVisible:
+    id: metal-sold-calculation-breakdown
 - assertVisible:
     id: metal-holding-action-undo
 - openLink: monyvi://metals/history

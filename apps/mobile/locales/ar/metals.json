@@ -195,6 +195,7 @@
     "display_rounding": "الأرقام المعروضة مقربة، لذلك قد يختلف مجموع الأجزاء قليلًا عن الإجمالي.",
     "rate_source": "المصدر: {{source}}",
     "metal_movement": "أثر حركة سعر المعدن",
+    "sale_difference": "الفرق عن سعر السوق",
     "currency_movement": "أثر حركة سعر العملة",
     "purchase_premium_costs": "علاوة الشراء والتكاليف",
     "paid": "تم الدفع {{amount}}",

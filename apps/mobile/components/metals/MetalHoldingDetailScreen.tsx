@@ -20,6 +20,7 @@ import {
 } from "@/components/metals/holding-detail-presentation";
 import { MetalHoldingRender } from "@/components/metals/MetalHoldingRender";
 import { MetalTerminalDetail } from "@/components/metals/MetalTerminalDetail";
+import { MetalSoldCalculationBreakdown } from "./MetalSoldCalculationBreakdown";
 import {
   getCurrencyDisplaySign,
   resolveCurrencyDisplayDecimalPlaces,
@@ -156,9 +157,11 @@ function DetailHeader({
     model.isActiveOwnership &&
     model.timeline.some((item) => item.kind === "undo");
   const canExplainCalculation =
-    model.isActiveOwnership &&
-    model.currentValueDecimal !== null &&
-    (model.attribution !== null || model.totalGainDecimal !== null);
+    (model.isActiveOwnership &&
+      model.currentValueDecimal !== null &&
+      (model.attribution !== null || model.totalGainDecimal !== null)) ||
+    (model.terminalFacts?.kind === "sold" &&
+      model.terminalFacts.realizedResultDecimal !== null);
 
   return (
     <View className="px-5">
@@ -187,7 +190,13 @@ function DetailHeader({
             expanded={showCalculation}
             onPress={onToggleCalculation}
           />
-          {showCalculation ? <CalculationBreakdown model={model} /> : null}
+          {showCalculation ? (
+            model.terminalFacts?.kind === "sold" ? (
+              <MetalSoldCalculationBreakdown facts={model.terminalFacts} />
+            ) : (
+              <CalculationBreakdown model={model} />
+            )
+          ) : null}
         </>
       ) : null}
       {model.isActiveOwnership ? <PhysicalFacts model={model} /> : null}
@@ -505,6 +514,7 @@ function CalculationDisclosure({
   const iconColor = isDark ? palette.slate[300] : palette.slate[500];
   return (
     <Pressable
+      testID="metal-detail-calculation-disclosure"
       accessibilityRole="button"
       accessibilityState={{ expanded }}
       className="mt-5 min-h-14 flex-row items-center gap-3 rounded-xl border border-slate-300 px-4 dark:border-slate-700"

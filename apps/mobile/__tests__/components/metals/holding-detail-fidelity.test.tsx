@@ -642,6 +642,19 @@ describe("approved active holding-detail fidelity", () => {
             proceedsCurrency: "EGP",
             realizedResultCurrency: "EGP",
             realizedResultDecimal: "1550",
+            displayAttribution: {
+              combinedDecimal: "1550.00",
+              displayedComponentSumDecimal: "1550.00",
+              roundingDifferenceMinorUnits: "0",
+              requiresRoundingExplanation: false,
+              displayedComponents: {
+                metalMovementDecimal: "1000.00",
+                currencyMovementDecimal: "200.00",
+                purchaseCostDecimal: "300.00",
+                saleDifferenceDecimal: "200.00",
+                feeDecimal: "-150.00",
+              },
+            },
             realizedResultUnavailableReason: null,
             terminalDate: "2026-08-22",
           },
@@ -665,6 +678,11 @@ describe("approved active holding-detail fidelity", () => {
     expect(screen.queryByText("sale-action")).toBeNull();
     expect(screen.queryByText("Physical facts")).toBeNull();
     expect(screen.queryByText("Current value")).toBeNull();
+    expect(screen.queryByText("EGP 1,000.00")).toBeNull();
+    fireEvent.press(screen.getByText("How this value was calculated"));
+    expect(screen.getByText("EGP 1,000.00")).toBeTruthy();
+    expect(screen.getByText("EGP -150.00")).toBeTruthy();
+    expect(screen.getByText("EGP 1,550.00 profit from this sale")).toBeTruthy();
   });
 
   it("renders an evidence-backed Sold loss without substituting current value", () => {
@@ -699,6 +717,9 @@ describe("approved active holding-detail fidelity", () => {
 
     expect(screen.getByText("EGP 650.00 loss from this sale")).toBeTruthy();
     expect(screen.queryByText("Current value")).toBeNull();
+    fireEvent.press(screen.getByText("How this value was calculated"));
+    expect(screen.getByTestId("metal-sold-calculation-breakdown")).toBeTruthy();
+    expect(screen.getByText("EGP 650.00 loss from this sale")).toBeTruthy();
   });
 
   it("keeps exact sold proceeds visible when realized result evidence is unavailable", () => {
@@ -857,6 +878,8 @@ describe("approved active holding-detail fidelity", () => {
     const { rerender } = render(<MetalHoldingDetailScreen {...props} />);
 
     expect(screen.getByText("Recorded details are unavailable.")).toBeTruthy();
+    expect(screen.getByText("Acquired")).toBeTruthy();
+    expect(screen.getByText(/151,278.20/)).toBeTruthy();
     expect(screen.queryByText("Net proceeds")).toBeNull();
     expect(screen.getByTestId("metal-holding-detail-hero")).toHaveProp(
       "className",

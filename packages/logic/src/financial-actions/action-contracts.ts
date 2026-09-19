@@ -475,6 +475,18 @@ function assertNoDuplicateJsonKeys(rawText: string): void {
   if (end !== rawText.length) fail(FINANCIAL_ACTION_ERROR_CODES.INVALID_JSON);
 }
 
+export function parseFinancialActionEvidenceJson(rawText: string): unknown {
+  if (
+    getFinancialActionUtf8ByteLength(rawText) > MAX_CANONICAL_ACTION_UTF8_BYTES
+  ) {
+    fail(FINANCIAL_ACTION_ERROR_CODES.PAYLOAD_TOO_LARGE);
+  }
+  const parsed: unknown = JSON.parse(rawText);
+  assertNoDuplicateJsonKeys(rawText);
+  inspectRuntimeValue(parsed);
+  return parsed;
+}
+
 export function parseFinancialActionEnvelopeJson(
   rawText: string,
   registry: FinancialActionRegistry = DEFAULT_FINANCIAL_ACTION_REGISTRY,

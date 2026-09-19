@@ -26,12 +26,11 @@ export function MetalTerminalDetail({
 
   if (terminalFacts === null || terminalFacts.kind !== model.status) {
     return (
-      <Text
-        testID="metal-terminal-facts-unavailable"
-        className="border-t border-slate-200 py-6 text-base text-text-secondary dark:border-slate-800 dark:text-text-secondary-dark"
-      >
-        {t("detail.terminal_facts_unavailable")}
-      </Text>
+      <TerminalStory
+        model={model}
+        terminalDate={null}
+        terminalLabel={t("detail.terminal_facts_unavailable")}
+      />
     );
   }
 
@@ -209,7 +208,7 @@ function TerminalStory({
   terminalLabel,
 }: {
   readonly model: MetalDetailReadModel;
-  readonly terminalDate: string;
+  readonly terminalDate: string | null;
   readonly terminalLabel: string;
 }): React.JSX.Element {
   const { t, i18n } = useTranslation("metals");
@@ -251,12 +250,21 @@ function TerminalStory({
             )}
           </View>
           <View>
-            <Text className="text-base font-medium text-nileGreen-800 dark:text-nileGreen-400">
+            <Text
+              testID={
+                terminalDate === null
+                  ? "metal-terminal-facts-unavailable"
+                  : undefined
+              }
+              className="text-base font-medium text-nileGreen-800 dark:text-nileGreen-400"
+            >
               {terminalLabel}
             </Text>
-            <Text className="mt-1 text-sm text-text-secondary dark:text-text-secondary-dark">
-              {formatTerminalDate(terminalDate, locale)}
-            </Text>
+            {terminalDate === null ? null : (
+              <Text className="mt-1 text-sm text-text-secondary dark:text-text-secondary-dark">
+                {formatTerminalDate(terminalDate, locale)}
+              </Text>
+            )}
           </View>
         </View>
       </View>

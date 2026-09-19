@@ -187,6 +187,7 @@
     "display_rounding": "Displayed amounts are rounded, so the parts may differ slightly from the total.",
     "rate_source": "Source: {{source}}",
     "metal_movement": "Metal movement",
+    "sale_difference": "Difference from market price",
     "currency_movement": "Currency movement",
     "purchase_premium_costs": "Purchase premium and costs",
     "paid": "Paid {{amount}}",

@@ -1,3 +1,11 @@
+import { terminalFactsFixture } from "./terminal-facts-fixture";
+
+jest.mock("@/services/metal-terminal-read-model-service", () =>
+  jest.requireActual<typeof import("./terminal-facts-fixture")>(
+    "./terminal-facts-fixture"
+  )
+);
+
 interface QueryCondition {
   readonly column?: string;
   readonly kind: "take" | "where" | "sortBy";
@@ -227,6 +235,7 @@ function historyHolding(
       userId,
     },
     lifecycleEvents,
+    terminalFacts: terminalFactsFixture(),
     metal: {
       itemForm: "coin",
       metalType: "GOLD",
