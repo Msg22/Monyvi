@@ -340,6 +340,42 @@ test("non-positive rate token is rejected", () => {
   assertThrowsContract(() => buildEnvelope(raw), "invalid_rate");
 });
 
+test("rates outside the mobile compatibility range are rejected before persistence", (): void => {
+  for (const token of ["1e400", "1e-400", "1e999999999", "1e-999999999"]) {
+    for (const field of [
+      '"gold":3738.74',
+      '"EGP":0.0210523309',
+      '"BTC":95000.5',
+    ]) {
+      const key = field.slice(0, field.indexOf(":"));
+      assertThrowsContract(
+        (): MarketRateSnapshotEnvelope =>
+          buildEnvelope(withRawReplacements({ [field]: `${key}:${token}` })),
+        "invalid_rate"
+      );
+    }
+  }
+});
+
+test("finite subnormal and high-precision rates retain their exact decimal evidence", (): void => {
+  for (const token of [
+    "5e-324",
+    "1.7976931348623157e308",
+    "0.10000000000000001",
+  ]) {
+    const envelope = buildEnvelope(
+      withRawReplacements({ '"gold":3738.74': `"gold":${token}` })
+    );
+    assert.equal(envelope.root.goldUsdPerGram, normalizeDecimalToken(token));
+    assert.equal(
+      envelope.observations.find(
+        ({ instrumentCode }): boolean => instrumentCode === "metal:GOLD"
+      )?.valueDecimal,
+      normalizeDecimalToken(token)
+    );
+  }
+});
+
 test("malformed rate token is rejected", () => {
   const raw = withRawReplacements({
     '"EGP":0.0210523309': '"EGP":0.02105233O9',

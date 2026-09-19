@@ -42,7 +42,7 @@ describe("import-market-rates-to-local helpers", () => {
       "--linked",
       "-o",
       "json",
-      expect.stringContaining("pull_market_rate_snapshots_page_v1"),
+      expect.stringContaining("pull_market_rate_snapshots_page_v2"),
     ]);
   });
 

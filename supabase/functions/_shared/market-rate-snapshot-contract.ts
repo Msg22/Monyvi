@@ -184,6 +184,12 @@ export function parseLosslessJson(text: string): unknown {
 }
 
 export function normalizeDecimalToken(token: string): string {
+  // Validate only compatibility here; the original token remains financial truth.
+  // Check before exponent expansion so invalid exponents cannot allocate huge strings.
+  const compatibilityValue = Number(token);
+  if (!Number.isFinite(compatibilityValue) || compatibilityValue <= 0) {
+    throw new MarketRateSnapshotContractError("invalid_rate");
+  }
   const match = EXPONENT_TOKEN.exec(token);
   if (!match) {
     return token;

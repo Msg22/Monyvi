@@ -34,6 +34,7 @@ const CURRENCY_TIME = "2026-09-09T09:50:00.000Z";
 interface RpcPageOptions {
   readonly snapshotId?: string;
   readonly capturedAt?: string;
+  readonly publishedAt?: string;
   readonly source?: string;
   readonly omitInstrument?: string;
   readonly observationBatchId?: string;
@@ -83,6 +84,7 @@ function successfulPage(
         {
           snapshotId,
           capturedAt,
+          publishedAt: options.publishedAt ?? capturedAt,
           root,
           observations,
         },
@@ -183,6 +185,39 @@ function requireUpdatedRows(
 }
 
 describe("pullMarketRateSnapshotsWithClient", () => {
+  it("pages delayed publication without changing capture or provider evidence", async () => {
+    const publication = "2026-09-09T11:30:00.000Z";
+    const nextCursor = { createdAt: publication, id: SNAPSHOT_A };
+    const client = new FakeRpcClient([
+      successfulPage({ publishedAt: publication, nextCursor }),
+      successfulPage({
+        snapshotId: SNAPSHOT_B,
+        capturedAt: CAPTURED_A,
+        publishedAt: "2026-09-09T11:45:00.000Z",
+      }),
+    ]);
+
+    const result = await pullMarketRateSnapshotsWithClient(client, {
+      createdAt: CAPTURED_B,
+      id: "ffffffff-ffff-ffff-ffff-ffffffffffff",
+    });
+
+    expect(client.requests[1]?.cursor).toEqual(nextCursor);
+    expect(requireUpdatedRows(result.changes.market_rates)).toEqual([
+      expect.objectContaining({ created_at: Date.parse(CAPTURED_A) }),
+      expect.objectContaining({ created_at: Date.parse(CAPTURED_A) }),
+    ]);
+  });
+
+  it("rejects publication outside the pinned window", async () => {
+    const client = new FakeRpcClient([
+      successfulPage({ publishedAt: "2026-09-09T12:00:00.001Z" }),
+    ]);
+    await expect(
+      pullMarketRateSnapshotsWithClient(client, null)
+    ).rejects.toThrow("sync_invalid_market_rate_snapshot_page");
+  });
+
   it("validates one complete envelope before producing root and observation changes", async () => {
     const client = new FakeRpcClient([successfulPage()]);
 

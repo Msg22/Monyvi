@@ -66,14 +66,11 @@ const REQUIRED_INSTRUMENT_CODES = Object.freeze([
 ]);
 const REQUIRED_INSTRUMENT_SET = new Set(REQUIRED_INSTRUMENT_CODES);
 
-const PAGE_KEYS = Object.freeze([
-  "nextCursor",
-  "snapshots",
-  "upperWatermark",
-]);
+const PAGE_KEYS = Object.freeze(["nextCursor", "snapshots", "upperWatermark"]);
 const CURSOR_KEYS = Object.freeze(["createdAt", "id"]);
 const ENVELOPE_KEYS = Object.freeze([
   "capturedAt",
+  "publishedAt",
   "observations",
   "root",
   "snapshotId",
@@ -164,7 +161,7 @@ function parseSupabaseQueryRows(output) {
 
 function buildLinkedSnapshotPageQuery(request) {
   const normalized = validatePageRequest(request);
-  return `select public.pull_market_rate_snapshots_page_v1(
+  return `select public.pull_market_rate_snapshots_page_v2(
   p_upper_watermark => ${sqlNullableTimestamp(normalized.upperWatermark)},
   p_cursor_created_at => ${sqlNullableTimestamp(normalized.cursor?.createdAt ?? null)},
   p_cursor_id => ${sqlNullableUuid(normalized.cursor?.id ?? null)},
@@ -290,7 +287,7 @@ function validateSnapshotPage(value, expectedUpperWatermark) {
     if (
       !lastUnit ||
       lastUnit.root.id !== nextCursor.id ||
-      !timestampsEqual(lastUnit.root.created_at, nextCursor.createdAt)
+      !timestampsEqual(lastUnit.publishedAt, nextCursor.createdAt)
     ) {
       invalidSnapshot("page cursor did not identify the last snapshot");
     }
@@ -303,8 +300,15 @@ function validateSnapshotEnvelope(value, upperWatermark) {
   const envelope = requireExactRecord(value, ENVELOPE_KEYS, "envelope");
   const snapshotId = requireUuid(envelope.snapshotId, "snapshot identity");
   const capturedAt = requireTimestamp(envelope.capturedAt, "capture time");
-  if (Date.parse(capturedAt) > Date.parse(upperWatermark)) {
-    invalidSnapshot("capture time exceeded the page watermark");
+  const publishedAt = requireTimestamp(
+    envelope.publishedAt,
+    "publication time"
+  );
+  if (
+    Date.parse(publishedAt) > Date.parse(upperWatermark) ||
+    Date.parse(capturedAt) > Date.parse(upperWatermark)
+  ) {
+    invalidSnapshot("publication or capture time exceeded the page watermark");
   }
 
   const parsedRoot = validateRoot(envelope.root, capturedAt);
@@ -343,6 +347,7 @@ function validateSnapshotEnvelope(value, upperWatermark) {
 
   return {
     root: toRootRow(snapshotId, capturedAt, parsedRoot),
+    publishedAt,
     observations,
   };
 }
@@ -419,10 +424,7 @@ function validateObservation(value, snapshotId, capturedAt, root) {
   }
   const isMetal = instrumentCode.startsWith("metal:");
   const unit = requireNonEmptyString(observation.unit, "observation unit");
-  if (
-    unit !==
-    (isMetal ? "usd_per_pure_gram" : "usd_per_currency_unit")
-  ) {
+  if (unit !== (isMetal ? "usd_per_pure_gram" : "usd_per_currency_unit")) {
     invalidSnapshot(`invalid unit for ${instrumentCode}`);
   }
   if (observation.orientation !== "quote_per_base") {
@@ -453,10 +455,7 @@ function validateObservation(value, snapshotId, capturedAt, root) {
     ? root.providerMetalObservedAt
     : root.providerCurrencyObservedAt;
   if (
-    !nullableTimestampsEqual(
-      providerObservedAt,
-      expectedProviderObservedAt
-    )
+    !nullableTimestampsEqual(providerObservedAt, expectedProviderObservedAt)
   ) {
     invalidSnapshot(`provider time mismatch for ${instrumentCode}`);
   }
@@ -688,8 +687,7 @@ function nullableTimestampsEqual(left, right) {
 }
 
 function compareSnapshotUnits(left, right) {
-  const byTime =
-    Date.parse(left.root.created_at) - Date.parse(right.root.created_at);
+  const byTime = Date.parse(left.publishedAt) - Date.parse(right.publishedAt);
   return byTime !== 0 ? byTime : left.root.id.localeCompare(right.root.id);
 }
 
