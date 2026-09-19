@@ -207,6 +207,10 @@ describe("pullMarketRateSnapshotsWithClient", () => {
       expect.objectContaining({ created_at: Date.parse(CAPTURED_A) }),
       expect.objectContaining({ created_at: Date.parse(CAPTURED_A) }),
     ]);
+    expect(result.checkpoint).toEqual({
+      createdAt: "2026-09-09T11:45:00.000Z",
+      id: SNAPSHOT_B,
+    });
   });
 
   it("rejects publication outside the pinned window", async () => {
@@ -231,6 +235,10 @@ describe("pullMarketRateSnapshotsWithClient", () => {
       },
     ]);
     expect(result.upperWatermark).toBe(WATERMARK);
+    expect(result.checkpoint).toEqual({
+      createdAt: CAPTURED_A,
+      id: SNAPSHOT_A,
+    });
 
     const roots = requireUpdatedRows(result.changes.market_rates);
     const observations = requireUpdatedRows(
@@ -269,6 +277,10 @@ describe("pullMarketRateSnapshotsWithClient", () => {
     expect(
       requireUpdatedRows(result.changes.market_rate_observations)
     ).toHaveLength(74);
+    expect(result.checkpoint).toEqual({
+      createdAt: CAPTURED_B,
+      id: SNAPSHOT_B,
+    });
   });
 
   it.each([
@@ -327,6 +339,10 @@ describe("pullMarketRateSnapshotsWithClient", () => {
     expect(requireUpdatedRows(result.changes.market_rate_observations)).toEqual(
       []
     );
+    expect(result.checkpoint).toEqual({
+      createdAt: CAPTURED_A,
+      id: SNAPSHOT_A,
+    });
   });
 
   it("fails the whole pull when a later page fails instead of returning page one", async () => {

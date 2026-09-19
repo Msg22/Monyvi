@@ -117,6 +117,10 @@ describe("atomic pullChanges market-rate composition", () => {
         market_rates: MARKET_ROOT_CHANGES,
         market_rate_observations: MARKET_OBSERVATION_CHANGES,
       },
+      checkpoint: {
+        createdAt: UPPER_WATERMARK,
+        id: "11111111-1111-4111-8111-111111111111",
+      },
       upperWatermark: UPPER_WATERMARK,
     });
     mockPullCategories.mockResolvedValue(EMPTY_CHANGES);

@@ -45,6 +45,7 @@ const PULL_RESULT: MarketRateSnapshotPullResult = {
     market_rates: ROOT_CHANGES,
     market_rate_observations: OBSERVATION_CHANGES,
   },
+  checkpoint: CURSOR,
   upperWatermark: "2030-01-02T04:00:00.000Z",
 };
 
@@ -59,9 +60,13 @@ interface RefreshHarness {
     Promise<MarketRateSnapshotPullResult>,
     [MarketRateSnapshotCursor | null]
   >;
-  readonly readLatestSnapshotCursor: jest.Mock<
+  readonly readPublicationCheckpoint: jest.Mock<
     Promise<MarketRateSnapshotCursor | null>,
     []
+  >;
+  readonly savePublicationCheckpoint: jest.Mock<
+    Promise<void>,
+    [MarketRateSnapshotCursor]
   >;
 }
 
@@ -69,10 +74,14 @@ function createHarness(): RefreshHarness {
   const consumeArmedFixtureMarker = jest.fn<Promise<boolean>, []>(() =>
     Promise.resolve(false)
   );
-  const readLatestSnapshotCursor = jest.fn<
+  const readPublicationCheckpoint = jest.fn<
     Promise<MarketRateSnapshotCursor | null>,
     []
   >(() => Promise.resolve(CURSOR));
+  const savePublicationCheckpoint = jest.fn<
+    Promise<void>,
+    [MarketRateSnapshotCursor]
+  >(() => Promise.resolve());
   const pullSnapshots = jest.fn<
     Promise<MarketRateSnapshotPullResult>,
     [MarketRateSnapshotCursor | null]
@@ -89,10 +98,12 @@ function createHarness(): RefreshHarness {
       applyChanges,
       consumeArmedFixtureMarker,
       pullSnapshots,
-      readLatestSnapshotCursor,
+      readPublicationCheckpoint,
+      savePublicationCheckpoint,
     },
     pullSnapshots,
-    readLatestSnapshotCursor,
+    readPublicationCheckpoint,
+    savePublicationCheckpoint,
   };
 }
 
@@ -104,13 +115,14 @@ describe("refreshLiveMarketRatesWithDependencies", () => {
       refreshLiveMarketRatesWithDependencies(harness.dependencies)
     ).resolves.toBeUndefined();
 
-    expect(harness.readLatestSnapshotCursor).toHaveBeenCalledTimes(1);
+    expect(harness.readPublicationCheckpoint).toHaveBeenCalledTimes(1);
     expect(harness.pullSnapshots).toHaveBeenCalledWith(CURSOR);
     expect(harness.applyChanges).toHaveBeenCalledTimes(1);
     expect(harness.applyChanges).toHaveBeenCalledWith({
       market_rates: ROOT_CHANGES,
       market_rate_observations: OBSERVATION_CHANGES,
     });
+    expect(harness.savePublicationCheckpoint).toHaveBeenCalledWith(CURSOR);
   });
 
   it("does not open a local apply when the complete-envelope pull fails", async () => {
@@ -123,6 +135,7 @@ describe("refreshLiveMarketRatesWithDependencies", () => {
       refreshLiveMarketRatesWithDependencies(harness.dependencies)
     ).rejects.toThrow("remote snapshot unavailable");
     expect(harness.applyChanges).not.toHaveBeenCalled();
+    expect(harness.savePublicationCheckpoint).not.toHaveBeenCalled();
   });
 
   it("propagates atomic local apply failure without retrying or clearing cache", async () => {
@@ -134,6 +147,7 @@ describe("refreshLiveMarketRatesWithDependencies", () => {
     ).rejects.toThrow("local write failed");
     expect(harness.pullSnapshots).toHaveBeenCalledTimes(1);
     expect(harness.applyChanges).toHaveBeenCalledTimes(1);
+    expect(harness.savePublicationCheckpoint).not.toHaveBeenCalled();
   });
 
   it("consumes an armed development failure before reading or pulling rates", async () => {
@@ -143,9 +157,41 @@ describe("refreshLiveMarketRatesWithDependencies", () => {
     await expect(
       refreshLiveMarketRatesWithDependencies(harness.dependencies)
     ).rejects.toThrow("e2e_live_rates_refresh_failure_once");
-    expect(harness.readLatestSnapshotCursor).not.toHaveBeenCalled();
+    expect(harness.readPublicationCheckpoint).not.toHaveBeenCalled();
     expect(harness.pullSnapshots).not.toHaveBeenCalled();
     expect(harness.applyChanges).not.toHaveBeenCalled();
+    expect(harness.savePublicationCheckpoint).not.toHaveBeenCalled();
+  });
+
+  it("starts safely without a checkpoint and does not invent one for an empty pull", async () => {
+    const harness = createHarness();
+    harness.readPublicationCheckpoint.mockResolvedValueOnce(null);
+    harness.pullSnapshots.mockResolvedValueOnce({
+      ...PULL_RESULT,
+      changes: {
+        market_rates: { created: [], updated: [], deleted: [] },
+        market_rate_observations: { created: [], updated: [], deleted: [] },
+      },
+      checkpoint: null,
+    });
+
+    await refreshLiveMarketRatesWithDependencies(harness.dependencies);
+
+    expect(harness.pullSnapshots).toHaveBeenCalledWith(null);
+    expect(harness.savePublicationCheckpoint).not.toHaveBeenCalled();
+  });
+
+  it("surfaces checkpoint persistence failure only after the local changes apply", async () => {
+    const harness = createHarness();
+    harness.savePublicationCheckpoint.mockRejectedValueOnce(
+      new Error("checkpoint write failed")
+    );
+
+    await expect(
+      refreshLiveMarketRatesWithDependencies(harness.dependencies)
+    ).rejects.toThrow("checkpoint write failed");
+    expect(harness.applyChanges).toHaveBeenCalledTimes(1);
+    expect(harness.savePublicationCheckpoint).toHaveBeenCalledWith(CURSOR);
   });
 
   it("uses the same atomic pull contract and one Watermelon writer in production", () => {
@@ -155,7 +201,9 @@ describe("refreshLiveMarketRatesWithDependencies", () => {
     );
 
     expect(source).toContain("pullMarketRateSnapshots");
-    expect(source).toContain("readSelectedMarketRateSnapshot");
+    expect(source).toContain("readMarketRatePublicationCheckpoint");
+    expect(source).toContain("saveMarketRatePublicationCheckpoint");
+    expect(source).not.toContain("readSelectedMarketRateSnapshot");
     expect(source).toContain("database.write");
     expect(source).toContain("applyRemoteChanges");
     expect(source).not.toContain("pullMarketRates(");

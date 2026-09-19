@@ -84,6 +84,7 @@ export interface MarketRateSnapshotPullResult {
     readonly market_rates: SyncTableChangeSet;
     readonly market_rate_observations: SyncTableChangeSet;
   };
+  readonly checkpoint: MarketRateSnapshotCursor | null;
   readonly upperWatermark: string;
 }
 
@@ -165,6 +166,7 @@ export async function pullMarketRateSnapshotsWithClient(
   const seenSnapshotIds = new Set<string>();
   const seenCursorKeys = new Set<string>();
   let cursor = start;
+  let checkpoint = start;
   let upperWatermark: string | null = null;
 
   if (cursor !== null) {
@@ -199,6 +201,10 @@ export async function pullMarketRateSnapshotsWithClient(
       seenSnapshotIds.add(envelope.snapshotId);
       roots.push(toLocalRoot(envelope));
       observations.push(...envelope.observations.map(toLocalObservation));
+      checkpoint = {
+        createdAt: envelope.publishedAt,
+        id: envelope.snapshotId,
+      };
     }
 
     if (page.nextCursor === null) {
@@ -239,6 +245,7 @@ export async function pullMarketRateSnapshotsWithClient(
         deleted: [],
       },
     },
+    checkpoint,
     upperWatermark,
   };
 }

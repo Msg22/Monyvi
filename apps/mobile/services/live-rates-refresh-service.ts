@@ -2,7 +2,10 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { Database } from "@nozbe/watermelondb";
 import { applyRemoteChanges } from "@nozbe/watermelondb/sync/impl";
 
-import { readSelectedMarketRateSnapshot } from "./market-rate-snapshot-read-model-service";
+import {
+  readMarketRatePublicationCheckpoint,
+  saveMarketRatePublicationCheckpoint,
+} from "./market-rate-publication-checkpoint-service";
 import {
   pullMarketRateSnapshots,
   type MarketRateSnapshotCursor,
@@ -19,7 +22,10 @@ let fixtureMarkerQueue: Promise<void> = Promise.resolve();
 
 export interface LiveMarketRateRefreshDependencies {
   readonly consumeArmedFixtureMarker: () => Promise<boolean>;
-  readonly readLatestSnapshotCursor: () => Promise<MarketRateSnapshotCursor | null>;
+  readonly readPublicationCheckpoint: () => Promise<MarketRateSnapshotCursor | null>;
+  readonly savePublicationCheckpoint: (
+    checkpoint: MarketRateSnapshotCursor
+  ) => Promise<void>;
   readonly pullSnapshots: (
     cursor: MarketRateSnapshotCursor | null
   ) => Promise<MarketRateSnapshotPullResult>;
@@ -59,9 +65,12 @@ export async function refreshLiveMarketRatesWithDependencies(
     throw new Error(E2E_REFRESH_FAILURE_ERROR);
   }
 
-  const cursor = await dependencies.readLatestSnapshotCursor();
+  const cursor = await dependencies.readPublicationCheckpoint();
   const result = await dependencies.pullSnapshots(cursor);
   await dependencies.applyChanges(result.changes);
+  if (result.checkpoint !== null) {
+    await dependencies.savePublicationCheckpoint(result.checkpoint);
+  }
 }
 
 /**
@@ -74,15 +83,8 @@ export async function refreshLiveMarketRates(
 ): Promise<void> {
   return refreshLiveMarketRatesWithDependencies({
     consumeArmedFixtureMarker,
-    async readLatestSnapshotCursor(): Promise<MarketRateSnapshotCursor | null> {
-      const selected = await readSelectedMarketRateSnapshot(database);
-      return selected === null
-        ? null
-        : {
-            createdAt: selected.capturedAt.toISOString(),
-            id: selected.snapshotId,
-          };
-    },
+    readPublicationCheckpoint: readMarketRatePublicationCheckpoint,
+    savePublicationCheckpoint: saveMarketRatePublicationCheckpoint,
     pullSnapshots: pullMarketRateSnapshots,
     async applyChanges(
       changes: MarketRateSnapshotPullResult["changes"]
