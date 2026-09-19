@@ -6,11 +6,11 @@ const {
     userId: string,
     seedScope?: string,
     currentTimestamp?: string
-  ) => readonly Record<string, any>[];
+  ) => readonly Record<string, unknown>[];
   readonly buildMetalRateReferenceRowsFromEvidence: (
-    evidenceRows: readonly Record<string, any>[],
+    evidenceRows: readonly Record<string, unknown>[],
     currentTimestamp?: string
-  ) => readonly Record<string, any>[];
+  ) => readonly Record<string, unknown>[];
 }>("../../scripts/seed-fixtures/manual-qa-metal-rate-reference-seed");
 
 const USER_ID = "11111111-1111-4111-8111-111111111111";
