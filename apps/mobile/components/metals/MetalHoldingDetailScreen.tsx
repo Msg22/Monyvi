@@ -19,6 +19,7 @@ import {
   type PhysicalFactIcon,
 } from "@/components/metals/holding-detail-presentation";
 import { MetalHoldingRender } from "@/components/metals/MetalHoldingRender";
+import { MetalTerminalDetail } from "@/components/metals/MetalTerminalDetail";
 import {
   getCurrencyDisplaySign,
   resolveCurrencyDisplayDecimalPlaces,
@@ -168,7 +169,11 @@ function DetailHeader({
         </Text>
       ) : null}
       <ReconciliationStatus model={model} onRetry={onRetry} />
-      {model.isActiveOwnership ? <ValueSummary model={model} /> : null}
+      {model.isActiveOwnership ? (
+        <ValueSummary model={model} />
+      ) : (
+        <MetalTerminalDetail model={model} />
+      )}
       {isOffline ? (
         <Text className="mt-3 text-sm text-text-muted dark:text-text-muted-dark">
           {t("detail.offline")}
@@ -185,7 +190,7 @@ function DetailHeader({
           {showCalculation ? <CalculationBreakdown model={model} /> : null}
         </>
       ) : null}
-      <PhysicalFacts model={model} />
+      {model.isActiveOwnership ? <PhysicalFacts model={model} /> : null}
       <View className="mt-6 h-px bg-slate-200 dark:bg-slate-800" />
       <View className="mt-4 flex-row items-center justify-between">
         <Text
@@ -274,6 +279,10 @@ function IdentityHero({
     model.metalType === "GOLD"
       ? "text-gold-600 dark:text-gold-400"
       : "text-silver-500 dark:text-slate-200";
+  const statusClassName =
+    model.status === "disposed"
+      ? "border-slate-300 bg-slate-50 text-text-primary dark:border-slate-700 dark:bg-slate-800 dark:text-text-primary-dark"
+      : "border-nileGreen-700/25 bg-nileGreen-50 text-nileGreen-800 dark:border-nileGreen-400 dark:bg-nileGreen-900 dark:text-nileGreen-400";
 
   return (
     <View
@@ -289,7 +298,7 @@ function IdentityHero({
         className={`min-w-0 flex-1 gap-2 ${isCompact ? "items-center" : "items-start"}`}
       >
         <Text
-          numberOfLines={2}
+          testID="metal-holding-detail-name"
           className={`text-[28px] font-semibold leading-[36px] text-text-primary dark:text-text-primary-dark ${
             isCompact ? "text-center" : ""
           }`}
@@ -300,9 +309,16 @@ function IdentityHero({
           <Text className={materialClassName}>{metalLabel}</Text>
           {` · ${purity} · ${formLabel}`}
         </Text>
-        <Text className="self-start rounded-full border border-nileGreen-700/25 bg-nileGreen-50 px-3 py-1.5 text-sm font-medium text-nileGreen-800 dark:border-nileGreen-400 dark:bg-nileGreen-900 dark:text-nileGreen-400">
+        <Text
+          className={`self-start rounded-full border px-3 py-1.5 text-sm font-medium ${statusClassName}`}
+        >
           {t(`status.${model.status}`)}
         </Text>
+        {model.status === "disposed" ? (
+          <Text className="text-sm leading-5 text-text-secondary dark:text-text-secondary-dark">
+            {t("detail.no_longer_active")}
+          </Text>
+        ) : null}
       </View>
     </View>
   );
