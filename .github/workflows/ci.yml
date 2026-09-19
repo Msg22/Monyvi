@@ -142,7 +142,9 @@ jobs:
           supabase/tests/metals_issue285_reconciliation_test.sql
           supabase/tests/atomic_market_rate_snapshots_test.sql
           supabase/tests/market_snapshot_publication_test.sql
-          supabase/tests/market_snapshot_publication_concurrency_test.sql
+
+      - name: Run snapshot publication concurrency pgTAP
+        run: node scripts/test-market-snapshot-concurrency.js
   android-build:
     name: Android Build Verification
     runs-on: ubuntu-latest
