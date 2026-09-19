@@ -142,55 +142,56 @@ export async function readMetalHistoryReadModel(
     return emptyHistory(options.filter);
   }
 
-  const counts = countTerminalStates(lifecycleValidatedStates);
-  const candidateStates = lifecycleValidatedStates.filter(
-    (state) => options.filter === "all" || state.status === options.filter
-  );
-  // One extra renderable item is collected to answer hasMore without
-  // exposing it, so lifecycle rows that cannot be rendered (missing owned
-  // asset, metal, or invalid detail model) never consume a visible slot.
-  const collected = await readRenderableHistoryItems(
+  const validatedHistory = await readValidatedHistoryPage(
     scope,
-    candidateStates,
+    lifecycleValidatedStates,
     options.filter,
-    pageSize,
     pageSize + 1
   );
   return Object.freeze({
-    counts: Object.freeze({ ...counts }),
+    counts: Object.freeze({ ...validatedHistory.counts }),
     filter: options.filter,
-    hasMore: collected.length > pageSize,
-    items: Object.freeze(collected.slice(0, pageSize)),
+    hasMore: validatedHistory.items.length > pageSize,
+    items: Object.freeze(validatedHistory.items.slice(0, pageSize)),
   });
 }
 
-async function readRenderableHistoryItems(
+interface ValidatedHistoryPage {
+  readonly counts: MetalHistoryCounts;
+  readonly items: readonly MetalHistoryItem[];
+}
+
+async function readValidatedHistoryPage(
   scope: CurrentUserDataScope,
   candidates: readonly MetalHoldingState[],
   filter: MetalHistoryFilter,
-  batchSize: number,
   limit: number
-): Promise<readonly MetalHistoryItem[]> {
+): Promise<ValidatedHistoryPage> {
+  let counts: MetalHistoryCounts = { all: 0, disposed: 0, sold: 0 };
   const collected: MetalHistoryItem[] = [];
-  for (
-    let offset = 0;
-    offset < candidates.length && collected.length < limit;
-    offset += batchSize
-  ) {
-    const batch = candidates.slice(offset, offset + batchSize);
+  for (let offset = 0; offset < candidates.length; offset += METAL_HISTORY_PAGE_SIZE) {
+    const batch = candidates.slice(offset, offset + METAL_HISTORY_PAGE_SIZE);
     const assets = await readHistoryAssets(scope, batch);
     if (assets.length === 0) {
       continue;
     }
     const dependencies = await readHistoryDependencies(scope, assets, batch);
     const page = buildMetalHistoryReadModel({
-      filter,
+      filter: "all",
       holdings: shapeReadHistoryHoldings(assets, batch, dependencies),
       userId: scope.userId,
     });
-    collected.push(...page.items);
+    counts = addHistoryCounts(counts, page.counts);
+    for (const item of page.items) {
+      if (
+        collected.length < limit &&
+        (filter === "all" || item.status === filter)
+      ) {
+        collected.push(item);
+      }
+    }
   }
-  return collected;
+  return { counts, items: collected };
 }
 
 async function readReportableTerminalStates(
@@ -540,18 +541,21 @@ function isReportableReconciliationState(value: string): boolean {
   );
 }
 
-function countTerminalStates(
-  states: readonly MetalHoldingState[]
-): MetalHistoryCounts {
-  const sold = states.filter((state) => state.status === "sold").length;
-  const disposed = states.filter((state) => state.status === "disposed").length;
-  return { all: sold + disposed, disposed, sold };
-}
-
 function countItems(items: readonly MetalHistoryItem[]): MetalHistoryCounts {
   const sold = items.filter((item) => item.status === "sold").length;
   const disposed = items.filter((item) => item.status === "disposed").length;
   return { all: sold + disposed, disposed, sold };
+}
+
+function addHistoryCounts(
+  left: MetalHistoryCounts,
+  right: MetalHistoryCounts
+): MetalHistoryCounts {
+  return {
+    all: left.all + right.all,
+    disposed: left.disposed + right.disposed,
+    sold: left.sold + right.sold,
+  };
 }
 
 function copyValidDate(value: Date | null): Date | null {

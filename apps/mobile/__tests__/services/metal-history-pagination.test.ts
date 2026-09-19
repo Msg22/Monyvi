@@ -204,7 +204,7 @@ describe("metal History pagination", () => {
     });
   });
 
-  it("keeps global counts and requests dependencies only for the filtered page", async () => {
+  it("keeps global counts from all validated renderable history items", async () => {
     const model = await readMetalHistoryReadModel({
       filter: "sold",
       pageSize: 1,
@@ -219,7 +219,13 @@ describe("metal History pagination", () => {
     expect(model.items.map((item) => item.holdingId)).toEqual(["sold-latest"]);
     expect(mockScopeQueryOwned).toHaveBeenCalledWith(
       mockAssetsCollection,
-      { column: "id", kind: "where", value: { oneOf: ["sold-latest"] } },
+      {
+        column: "id",
+        kind: "where",
+        value: {
+          oneOf: ["sold-latest", "disposed-middle", "sold-older"],
+        },
+      },
       { column: "type", kind: "where", value: "METAL" },
       { column: "deleted", kind: "where", value: false }
     );
@@ -228,7 +234,9 @@ describe("metal History pagination", () => {
       {
         column: "holding_id",
         kind: "where",
-        value: { oneOf: ["sold-latest"] },
+        value: {
+          oneOf: ["sold-latest", "disposed-middle", "sold-older"],
+        },
       },
       { column: "deleted", kind: "where", value: false },
       { column: "is_history_visible", kind: "where", value: true },
@@ -239,13 +247,15 @@ describe("metal History pagination", () => {
       {
         column: "holding_id",
         kind: "where",
-        value: { oneOf: ["sold-latest"] },
+        value: {
+          oneOf: ["sold-latest", "disposed-middle", "sold-older"],
+        },
       },
       { column: "deleted", kind: "where", value: false }
     );
   });
 
-  it("keeps global counts when the selected page asset is unavailable", async () => {
+  it("does not count terminal states whose owned assets are unavailable", async () => {
     mockRowsByTable = { ...mockRowsByTable, assets: [] };
 
     await expect(
@@ -255,7 +265,7 @@ describe("metal History pagination", () => {
         userId: "user-1",
       })
     ).resolves.toEqual({
-      counts: { all: 3, disposed: 1, sold: 2 },
+      counts: { all: 0, disposed: 0, sold: 0 },
       filter: "sold",
       hasMore: false,
       items: [],
@@ -277,7 +287,7 @@ describe("metal History pagination", () => {
     });
 
     expect(model).toMatchObject({
-      counts: { all: 3, disposed: 1, sold: 2 },
+      counts: { all: 2, disposed: 1, sold: 1 },
       filter: "sold",
       hasMore: false,
     });
