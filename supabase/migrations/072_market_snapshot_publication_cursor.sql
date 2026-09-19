@@ -4,6 +4,8 @@
 -- Consequently every publication <= that watermark is already committed, while
 -- every later publisher receives a strictly greater time. No overlap cutoff or
 -- historical evidence rewrite is needed.
+begin;
+
 lock table public.market_rates, public.market_rate_observations in share row exclusive mode;
 
 create table private.market_rate_publication_barrier (
@@ -156,3 +158,5 @@ grant execute on function public.pull_market_rate_snapshots_page_v2(timestamptz,
   to authenticated, service_role;
 comment on function public.pull_market_rate_snapshots_page_v2(timestamptz,timestamptz,uuid,integer)
   is 'Commit-visible publication paging; cursor createdAt is publication time, never rate capture/freshness.';
+
+commit;

@@ -1,5 +1,7 @@
 -- Keep exact numeric evidence while rejecting values that cannot populate the
 -- mobile compatibility columns. Do not clamp, round, delete, or skip evidence.
+begin;
+
 create or replace function private.market_rate_snapshot_decimal_v1(p_value text)
 returns numeric
 language plpgsql
@@ -67,3 +69,5 @@ begin
   end loop;
 end;
 $$;
+
+commit;
