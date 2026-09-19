@@ -1,12 +1,24 @@
 import { Ionicons } from "@expo/vector-icons";
-import { FlatList, I18nManager, Pressable, Text, View } from "react-native";
+import {
+  FlatList,
+  I18nManager,
+  Pressable,
+  Text,
+  useWindowDimensions,
+  View,
+} from "react-native";
 import { useTranslation } from "react-i18next";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { resolvePuritySelection } from "@monyvi/logic";
+import {
+  formatCanonicalDecimalForDisplay,
+  resolvePuritySelection,
+} from "@monyvi/logic";
 
 import { MetalHoldingRender } from "@/components/metals/MetalHoldingRender";
+import { resolveCurrencyDisplayDecimalPlaces } from "@/components/metals/portfolio-presentation";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { palette } from "@/constants/colors";
+import { shouldUseCompactLayout } from "@/constants/ui";
 import { useTheme } from "@/context/ThemeContext";
 import type {
   MetalHistoryCounts,
@@ -124,6 +136,8 @@ function HistoryRow({
 }): React.JSX.Element {
   const { t } = useTranslation("metals");
   const { isDark } = useTheme();
+  const { width, fontScale } = useWindowDimensions();
+  const isCompact = shouldUseCompactLayout(width, fontScale);
   const metalLabel = t(
     item.metalType === "GOLD" ? "metal.gold" : "metal.silver"
   );
@@ -134,30 +148,75 @@ function HistoryRow({
   const metadata = [metalLabel, purityLabel, formLabel].join(" · ");
   const dateLabel = formatHistoryDate(item.occurredAt, locale);
   const statusLabel = t(`status.${item.status}`);
+  const terminalSummary = getTerminalSummary(item, locale, t);
+  const accessibilityLabel = [
+    statusLabel,
+    item.name,
+    metadata,
+    dateLabel,
+    terminalSummary.label,
+    terminalSummary.value,
+  ].join(". ");
 
   return (
     <Pressable
       testID={`metal-history-item-${item.status}`}
       accessible
-      accessibilityLabel={`${statusLabel}. ${item.name}. ${metadata}. ${dateLabel}`}
+      accessibilityLabel={accessibilityLabel}
       accessibilityRole="button"
       className="mb-3 flex-row items-center gap-3 rounded-2xl border border-slate-200 bg-surface p-4 dark:border-slate-700 dark:bg-slate-900"
       onPress={onPress}
     >
       <MetalHoldingRender itemForm={item.itemForm} metalType={item.metalType} />
-      <View className="min-w-0 flex-1">
-        <Text className="text-sm text-text-secondary dark:text-text-secondary-dark">
-          {statusLabel}
-        </Text>
-        <Text className="mt-0.5 text-lg font-semibold text-text-primary dark:text-text-primary-dark">
-          {item.name}
-        </Text>
-        <Text className="mt-0.5 text-sm text-text-secondary dark:text-text-secondary-dark">
-          {metadata}
-        </Text>
-        <Text className="mt-1 text-sm text-text-muted dark:text-text-muted-dark">
-          {dateLabel}
-        </Text>
+      <View
+        testID={`metal-history-item-content-${item.status}`}
+        className={`min-w-0 flex-1 gap-3 ${isCompact ? "flex-col" : "flex-row items-center justify-between"}`}
+      >
+        <View className="min-w-0 flex-1">
+          <Text
+            testID={`metal-history-status-${item.status}`}
+            className={`text-sm ${item.status === "sold" ? "text-nileGreen-700 dark:text-nileGreen-400" : "text-text-secondary dark:text-text-secondary-dark"}`}
+          >
+            {statusLabel}
+          </Text>
+          <Text className="mt-0.5 text-lg font-semibold text-text-primary dark:text-text-primary-dark">
+            {item.name}
+          </Text>
+          <Text className="mt-0.5 text-sm text-text-secondary dark:text-text-secondary-dark">
+            {metadata}
+          </Text>
+          <View className="mt-1 flex-row items-center gap-1">
+            <Ionicons
+              testID={`metal-history-calendar-${item.status}`}
+              accessibilityElementsHidden
+              importantForAccessibility="no"
+              color={palette.nileGreen[600]}
+              name="calendar-clear-outline"
+              size={16}
+            />
+            <Text className="text-sm text-text-muted dark:text-text-muted-dark">
+              {dateLabel}
+            </Text>
+          </View>
+        </View>
+        <View
+          testID={`metal-history-terminal-summary-${item.status}`}
+          className={isCompact ? "items-start" : "max-w-[40%] items-end"}
+        >
+          <Text
+            className={`text-sm ${item.status === "sold" ? "text-nileGreen-700 dark:text-nileGreen-400" : "text-text-primary dark:text-text-primary-dark"}`}
+          >
+            {terminalSummary.label}
+          </Text>
+          <Text
+            className={`mt-0.5 text-sm ${item.status === "sold" ? "font-medium text-nileGreen-700 dark:text-nileGreen-400" : "text-text-secondary dark:text-text-secondary-dark"}`}
+            style={
+              item.status === "sold" ? { writingDirection: "ltr" } : undefined
+            }
+          >
+            {terminalSummary.value}
+          </Text>
+        </View>
       </View>
       <Ionicons
         accessibilityElementsHidden
@@ -168,6 +227,69 @@ function HistoryRow({
       />
     </Pressable>
   );
+}
+
+function getTerminalSummary(
+  item: MetalHistoryItem,
+  locale: string,
+  t: (key: string) => string
+): { readonly label: string; readonly value: string } {
+  const facts = item.terminalFacts;
+  if (facts === null || facts.kind !== item.status) {
+    return {
+      label: t("history.terminal_facts_unavailable"),
+      value: "",
+    };
+  }
+  if (facts.kind === "sold") {
+    return {
+      label: t("history.net_proceeds"),
+      value: displayTerminalAmount(
+        facts.netProceedsDecimal,
+        facts.proceedsCurrency,
+        locale,
+        t("history.terminal_facts_unavailable")
+      ),
+    };
+  }
+  return {
+    label: disposalReasonLabel(facts.reason, facts.treatment, t),
+    value: t("history.no_sale_proceeds"),
+  };
+}
+
+function displayTerminalAmount(
+  value: string,
+  currency: string,
+  locale: string,
+  unavailableCopy: string
+): string {
+  try {
+    const decimalPlaces = resolveCurrencyDisplayDecimalPlaces(currency);
+    return `${currency} ${formatCanonicalDecimalForDisplay(value, {
+      locale,
+      maximumFractionDigits: decimalPlaces,
+      minimumFractionDigits: decimalPlaces,
+    })}`;
+  } catch {
+    return unavailableCopy;
+  }
+}
+
+function disposalReasonLabel(
+  reason:
+    | "lost_or_stolen"
+    | "destroyed_or_damaged"
+    | "given_away"
+    | "donated"
+    | "other",
+  treatment: "write_off" | "external_transfer",
+  t: (key: string) => string
+): string {
+  if (reason !== "other") return t(`disposal.reason_${reason}`);
+  return `${t("disposal.reason_other")} · ${t(
+    `disposal.treatment_${treatment}`
+  )}`;
 }
 
 function FilterBar({

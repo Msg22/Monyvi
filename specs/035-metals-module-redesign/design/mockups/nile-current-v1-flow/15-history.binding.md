@@ -2,12 +2,12 @@
 
 - Approved reference image: 15-history.png
 - Approved reference image revision: sha256:664d7a873a88712901aa094853a81756db3e027d847a9452af0143d10496927e
-- Binding metadata approval: PENDING
+- Binding metadata approval: APPROVED
 - Binding metadata revision: sha256:6789783fa7e229949b4fcba5d168bf120beb27f6a9973dea60ce04b609b5f4d6
-- Approved binding metadata revision: PENDING
+- Approved binding metadata revision: sha256:6789783fa7e229949b4fcba5d168bf120beb27f6a9973dea60ce04b609b5f4d6
 - Binding approval revision: sha256:0b90c35aef918a33db2ff1dbc1a0c2f07f667837d2e3d800fe40ee068b3b2a5f
-- Approved binding approval revision: PENDING
-- Binding metadata approval evidence/reference: PENDING
+- Approved binding approval revision: sha256:0b90c35aef918a33db2ff1dbc1a0c2f07f667837d2e3d800fe40ee068b3b2a5f
+- Binding metadata approval evidence/reference: Issue #283 approved-source declaration; `spec.md` normal-flow visual approval; this directory's README approved visual coverage; and Mohamed's 2026-09-19 legacy-binding reaffirmation for approved combined revision sha256:0b90c35aef918a33db2ff1dbc1a0c2f07f667837d2e3d800fe40ee068b3b2a5f.
 - Legacy metadata migration: yes
 
 ## Binding Facts
@@ -32,4 +32,4 @@
 
 - Legacy image approval evidence: `spec.md` clarification sessions dated 2026-08-29 and 2026-08-30; `design/visual-directions.md` approved canonical visual handoff; `design/content-contract.md` approved late-flow proof status; and this directory's README approval registry and SHA-256 integrity table.
 - Exact image bytes independently re-hashed during migration and match the recorded canonical SHA-256 above.
-- Approval must identify the final `Approved binding approval revision` after all fidelity-affecting unknowns are resolved.
+- The approval evidence above identifies the final `Approved binding approval revision`; adaptive states remain required verification targets, not a new design gate.
