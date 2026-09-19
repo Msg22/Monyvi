@@ -3,7 +3,6 @@ import Decimal from "decimal.js";
 import {
   convertCurrentAmountExact,
   getMetalUsdPerPureGramDecimal,
-  isSupportedMetalsIsoCurrencyCode,
   parseCanonicalDecimal,
   serializeDecimal,
   type AssetBreakdown,
@@ -71,11 +70,7 @@ export function convertSelectedCurrentAmountDecimal(
       return null;
     }
   }
-  if (
-    currentSnapshot === null ||
-    !isSupportedMetalsIsoCurrencyCode(input.fromCurrency) ||
-    !isSupportedMetalsIsoCurrencyCode(input.toCurrency)
-  ) {
+  if (currentSnapshot === null) {
     return null;
   }
 

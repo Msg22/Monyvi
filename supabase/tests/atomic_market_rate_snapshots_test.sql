@@ -1,6 +1,6 @@
 begin;
 
-select plan(48);
+select plan(49);
 
 create or replace function pg_temp.atomic_snapshot_root(
   p_gold text default '3738.7400000000000001',
@@ -33,7 +33,7 @@ as $$
       'NOK', '0.0980392157', 'DKK', '0.1572327044',
       'ISK', '0.0078125000', 'TRY', '0.0303030303',
       'RUB', '0.0111111111', 'ZAR', '0.0555555556',
-      'BTC', '0.0000086956521739'
+      'BTC', '95000.5000000000'
     ),
     'providerMetalObservedAt', p_metal_time,
     'providerCurrencyObservedAt', p_currency_time
@@ -85,7 +85,8 @@ as $$
       ('currency:ISK', p_root #>> '{fiatUsdPerUnit,ISK}', 'usd_per_currency_unit', p_root ->> 'providerCurrencyObservedAt'),
       ('currency:TRY', p_root #>> '{fiatUsdPerUnit,TRY}', 'usd_per_currency_unit', p_root ->> 'providerCurrencyObservedAt'),
       ('currency:RUB', p_root #>> '{fiatUsdPerUnit,RUB}', 'usd_per_currency_unit', p_root ->> 'providerCurrencyObservedAt'),
-      ('currency:ZAR', p_root #>> '{fiatUsdPerUnit,ZAR}', 'usd_per_currency_unit', p_root ->> 'providerCurrencyObservedAt')
+      ('currency:ZAR', p_root #>> '{fiatUsdPerUnit,ZAR}', 'usd_per_currency_unit', p_root ->> 'providerCurrencyObservedAt'),
+      ('currency:BTC', p_root #>> '{fiatUsdPerUnit,BTC}', 'usd_per_currency_unit', p_root ->> 'providerCurrencyObservedAt')
   )
   select jsonb_agg(
     jsonb_build_object(
@@ -176,11 +177,16 @@ select public.persist_market_rate_snapshot_v1(
 
 select is((select payload ->> 'status' from pg_temp.atomic_created), 'created', 'valid exact snapshot is created');
 select is((select count(*) from public.market_rates where id = '11111111-1111-4111-8111-111111111111'), 1::bigint, 'one root is persisted');
-select is((select count(*) from public.market_rate_observations where batch_id = '11111111-1111-4111-8111-111111111111'), 37::bigint, 'exactly 37 observations are persisted');
+select is((select count(*) from public.market_rate_observations where batch_id = '11111111-1111-4111-8111-111111111111'), 38::bigint, 'exactly 38 observations are persisted');
 select is(
   (select value_decimal::text from public.market_rate_observations where batch_id = '11111111-1111-4111-8111-111111111111' and instrument_code = 'metal:GOLD'),
   '3738.7400000000000001',
   'high-precision observation text is preserved exactly'
+);
+select is(
+  (select value_decimal::text from public.market_rate_observations where batch_id = '11111111-1111-4111-8111-111111111111' and instrument_code = 'currency:BTC'),
+  '95000.5000000000',
+  'exact BTC observation is persisted for net-worth conversion'
 );
 select is(
   (select provider_observed_at from public.market_rate_observations where batch_id = '11111111-1111-4111-8111-111111111111' and instrument_code = 'metal:GOLD'),
@@ -197,7 +203,7 @@ select is(
   'replayed',
   'identical same-ID replay is idempotent'
 );
-select is((select count(*) from public.market_rate_observations where batch_id = '11111111-1111-4111-8111-111111111111'), 37::bigint, 'replay creates no duplicate evidence');
+select is((select count(*) from public.market_rate_observations where batch_id = '11111111-1111-4111-8111-111111111111'), 38::bigint, 'replay creates no duplicate evidence');
 
 select throws_ok(
   $$select public.persist_market_rate_snapshot_v1('20000000-0000-4000-8000-000000000001','2026-09-09T10:03:00Z',pg_temp.atomic_snapshot_root(),(select jsonb_agg(value) from jsonb_array_elements(pg_temp.atomic_snapshot_observations(pg_temp.atomic_snapshot_root())) where value ->> 'instrumentCode' <> 'currency:ZAR'))$$,
@@ -208,7 +214,7 @@ select throws_ok(
   '22023', 'snapshot_incomplete', 'duplicate observation is rejected'
 );
 select throws_ok(
-  $$select public.persist_market_rate_snapshot_v1('20000000-0000-4000-8000-000000000003','2026-09-09T10:03:00Z',pg_temp.atomic_snapshot_root(),jsonb_set(pg_temp.atomic_snapshot_observations(pg_temp.atomic_snapshot_root()),'{0,instrumentCode}','"currency:BTC"'))$$,
+  $$select public.persist_market_rate_snapshot_v1('20000000-0000-4000-8000-000000000003','2026-09-09T10:03:00Z',pg_temp.atomic_snapshot_root(),jsonb_set(pg_temp.atomic_snapshot_observations(pg_temp.atomic_snapshot_root()),'{0,instrumentCode}','"currency:CNH"'))$$,
   '22023', 'snapshot_incomplete', 'unexpected observation is rejected'
 );
 select throws_ok(

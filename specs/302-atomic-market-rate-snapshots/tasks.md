@@ -22,7 +22,7 @@ establish shared deterministic exact fixtures.
 
 - [x] **T001** Update and commit `docs/business/business-decisions.md` **before
       any other code/test task** with finalized issue #302 rules:
-      `market_rates.id` snapshot identity; `batch_id` binding; exactly 37
+      `market_rates.id` snapshot identity; `batch_id` binding; exactly 38
       required observations; exact observation decimals as authoritative current
       financial truth; wide Watermelon root numbers as identity/order/history
       compatibility only; lossless ordinary/scientific provider decimal
@@ -73,16 +73,17 @@ before current selectors/producers are implemented.
 
 - [x] **T005** Add failing pure-logic tests in
       `packages/logic/src/metals/__tests__/current-market-snapshot.test.ts` for
-      exact 37 membership, USD identity, BTC exclusion, positive canonical plain
-      decimals, accepted units/orientations, null/blank/whitespace source
-      rejection for trusted current snapshots, duplicate/missing/unexpected
-      instruments, and exact current conversion/lookup using Decimal strings.
+      exact 38 membership, USD identity, exact BTC trust evidence for
+      account/net-worth conversion, positive canonical plain decimals, accepted
+      units/orientations, null/blank/whitespace source rejection for trusted
+      current snapshots, duplicate/missing/unexpected instruments, and exact
+      current conversion/lookup using Decimal strings.
 - [x] **T006** [P] Extend red tests in
       `supabase/functions/_shared/market-rate-snapshot-contract.test.ts` to
       prove: raw provider JSON is parsed losslessly; ordinary precision canaries
       are unchanged; `3.73874e-10` becomes exact plain `0.000000000373874`;
       `1.2300e+2` becomes `123.00`; normalization uses no authoritative
-      `Number`/`parseFloat`; exactly 37 observations are emitted;
+      `Number`/`parseFloat`; exactly 38 observations are emitted;
       source/quality/unit/orientation are correct; USD is exact `1`; BTC
       excluded; valid non-future timestamps preserved; missing/malformed/future
       timestamps normalize to `null`; capture/order time is never substituted;
@@ -118,7 +119,7 @@ before current selectors/producers are implemented.
       intermediate; Zod-validate through bare `zod`; normalize
       missing/malformed/future provider timestamps to `null` using the single
       capture instant only as a future-time comparison ceiling; build one exact
-      logical root + 37 observations under supplied snapshot/capture identity.
+      logical root + 38 observations under supplied snapshot/capture identity.
       Do not introduce a second version range, URL import, or runtime-specific
       source import.
 - [x] **T010** Re-run T005–T007 after T008/T009 and keep the architecture/source
@@ -177,7 +178,7 @@ unchanged; current financial outputs remain driven by exact observations.
 - [x] **T016** [US1] Implement `SelectedMarketRateSnapshot` selection in
       `apps/mobile/services/market-rate-snapshot-read-model-service.ts` to
       satisfy T011: root identity/order + same-batch exact observations, exact
-      37 validation, source/quality/unit/value/provider-time validation,
+      38 validation, source/quality/unit/value/provider-time validation,
       previous-valid fallback, removed-evidence invalidation, no cross-batch
       repair, and exported exact rate map/trust without authoritative wide-root
       numeric values.
@@ -237,7 +238,7 @@ evidence.
 
 - [x] **T025** [US2] Create failing SQL coverage in
       `supabase/tests/atomic_market_rate_snapshots_test.sql` for valid
-      37-observation persistence; missing/duplicate/unexpected instruments;
+      38-observation persistence; missing/duplicate/unexpected instruments;
       invalid quality/unit/orientation/non-positive decimal;
       null/empty/whitespace-only source rejection; exact root/value mismatch;
       null provider time; identical replay; conflicting replay rollback;
@@ -263,7 +264,7 @@ evidence.
       behavior, and no cursor advancement on page failure.
 - [x] **T028** [P] [US2] Add failing refresh/local-apply tests in
       `apps/mobile/__tests__/services/live-rates-refresh-service.test.ts`
-      proving root+37 observations are applied in one Watermelon writer/page
+      proving root+38 observations are applied in one Watermelon writer/page
       unit, exact observation strings remain exact, compatibility root numbers
       are non-authoritative, and failure leaves cached A unchanged.
 - [x] **T029** [P] [US2] Add failing realtime tests in
@@ -283,7 +284,7 @@ evidence.
       would round exact provider values; add a `NOT VALID` FK with
       `ON DELETE CASCADE`, safe lookup index, service-role-only
       `persist_market_rate_snapshot_v1`, exact-string input casting to
-      PostgreSQL numeric, exact 37/root-equivalence/source validation,
+      PostgreSQL numeric, exact 38/root-equivalence/source validation,
       idempotent replay, conflict rejection, explicit grants/revokes. Do not
       infer legacy bindings.
 - [x] **T032** [US2] Extend the same migration with

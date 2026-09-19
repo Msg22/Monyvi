@@ -40,10 +40,10 @@ function expectValid(
 }
 
 describe("validateCurrentMarketSnapshot", () => {
-  it("accepts the complete 37-instrument snapshot", () => {
+  it("accepts the complete 38-instrument snapshot", () => {
     const rates = expectValid(toInputs(completeSnapshotA().observations));
 
-    expect(rates.size).toBe(37);
+    expect(rates.size).toBe(38);
     expect(rates.get("metal:GOLD")?.valueDecimal).toBe("3738.74000000");
     expect(rates.get("currency:USD")?.valueDecimal).toBe("1");
     expect(rates.get("currency:OMR")?.valueDecimal).toBe("0.10000000000000001");
@@ -81,17 +81,10 @@ describe("validateCurrentMarketSnapshot", () => {
     }
   });
 
-  it("rejects unexpected instruments including currency:BTC", () => {
-    const observations = toInputs(completeSnapshotA().observations);
-    const result = validateCurrentMarketSnapshot([
-      ...observations,
-      { ...observations[0], instrumentCode: "currency:BTC" },
-    ]);
+  it("accepts exact BTC as a required current observation", () => {
+    const rates = expectValid(toInputs(completeSnapshotA().observations));
 
-    expect(result.available).toBe(false);
-    if (!result.available) {
-      expect(result.reasons).toContain("unexpected_instrument:currency:BTC");
-    }
+    expect(rates.get("currency:BTC")?.valueDecimal).toBe("95000.5000000000");
   });
 
   it("rejects non-positive and non-canonical decimals", () => {
@@ -200,7 +193,7 @@ describe("validateCurrentMarketSnapshot", () => {
 
   it("preserves the accepted instrument set", () => {
     const codes = REQUIRED_INSTRUMENT_CODES;
-    expect(codes.length).toBe(37);
+    expect(codes.length).toBe(38);
     expect(codes.filter((code) => code.startsWith("currency:USD"))).toEqual([
       "currency:USD",
     ]);
@@ -220,6 +213,7 @@ describe("current exact lookups and conversion", () => {
 
     expect(getCurrencyUsdPerUnitDecimal(rates, "EGP")).toBe("0.0210523309");
     expect(getCurrencyUsdPerUnitDecimal(rates, "USD")).toBe("1");
+    expect(getCurrencyUsdPerUnitDecimal(rates, "BTC")).toBe("95000.5000000000");
   });
 
   it("returns null for instruments outside the selected snapshot", () => {

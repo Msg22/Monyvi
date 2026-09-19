@@ -167,15 +167,22 @@ describe("net-worth current rates consume the exact selected snapshot", () => {
     ).toBeNull();
   });
 
-  it("fails closed for currencies outside the trusted snapshot set", () => {
-    expect(
-      buildNetWorthReadModel({
-        accounts: [account(1, "BTC")],
-        assetMetals: [],
-        currentSnapshot: snapshotFor(completeFixtureA()),
-        preferredCurrency: "USD",
-      })
-    ).toBeNull();
+  it("includes BTC accounts from the exact trusted observation", () => {
+    const result = buildNetWorthReadModel({
+      accounts: [account(0.03, "BTC"), account(1000, "EGP")],
+      assetMetals: [],
+      currentSnapshot: snapshotFor(completeFixtureA()),
+      preferredCurrency: "EGP",
+    });
+
+    const expectedUsd = new Decimal("0.03")
+      .times("95000.5000000000")
+      .plus(new Decimal("1000").times("0.0210523309"));
+    expect(result?.totalNetWorthUsd).toBeCloseTo(Number(expectedUsd), 8);
+    expect(result?.totalAccounts).toBeCloseTo(
+      expectedUsd.div("0.0210523309").toNumber(),
+      6
+    );
   });
 
   it("does not recover missing exact holding facts from legacy number fields", () => {

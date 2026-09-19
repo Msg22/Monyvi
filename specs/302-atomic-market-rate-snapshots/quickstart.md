@@ -20,7 +20,7 @@ Record the finalized issue #302 rules:
 
 - top-level/persisted snapshot identity is `market_rates.id`;
 - observations bind through `batch_id = market_rates.id`;
-- a complete current snapshot has exactly 37 observations;
+- a complete current snapshot has exactly 38 observations;
 - current authoritative financial values are exact bound observation decimals,
   not Watermelon `MarketRate` numbers;
 - provider JSON decimal/scientific notation is normalized losslessly before
@@ -129,8 +129,9 @@ Required red cases:
   `123.00`;
 - no authoritative rounding or `Number(...)` / `parseFloat(...)` conversion;
 - malformed/non-positive required rate rejected;
-- exactly 37 observations;
-- USD exact `1`, BTC excluded;
+- exactly 38 observations;
+- USD exact `1`, and exact BTC evidence included for account/net-worth
+  conversion;
 - Gold/Silver use provider metal time;
 - fiat uses provider currency time;
 - valid non-future provider time is preserved;
@@ -213,7 +214,7 @@ Migration responsibilities:
 
 SQL red-test matrix:
 
-- valid exact 37-observation insert;
+- valid exact 38-observation insert;
 - missing/duplicate/unexpected observation rejection;
 - invalid quality/unit/orientation/value rejection;
 - null, empty, and whitespace-only source rejection;
@@ -279,7 +280,7 @@ adapter must:
 
 1. validate one top-level `snapshotId`;
 2. require all observation `batchId`s to match it;
-3. validate exact 37 membership/source/quality/unit/orientation/value semantics;
+3. validate exact 38 membership/source/quality/unit/orientation/value semantics;
 4. compare exact root text to exact observation text before local conversion;
 5. only then convert wide root fields for Watermelon compatibility storage;
 6. preserve observation `value_decimal` exact text;

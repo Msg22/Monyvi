@@ -35,6 +35,7 @@ export const REQUIRED_INSTRUMENT_CODES: readonly string[] = [
   "metal:GOLD",
   "metal:SILVER",
   ...SUPPORTED_CURRENCIES.map(({ code }) => `currency:${code}`),
+  "currency:BTC",
 ];
 
 const FIAT_USD_PER_UNIT_A: Readonly<Record<string, string>> = {
@@ -73,6 +74,7 @@ const FIAT_USD_PER_UNIT_A: Readonly<Record<string, string>> = {
   TRY: "0.0258900000",
   RUB: "0.0110600000",
   ZAR: "0.0551800000",
+  BTC: "95000.5000000000",
 };
 
 const FIAT_USD_PER_UNIT_B: Readonly<Record<string, string>> = {

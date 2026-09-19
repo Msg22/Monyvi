@@ -59,7 +59,7 @@ describe("issue #302 snapshot identity contract", () => {
       capturedAt: "2026-09-08T10:00:00.000Z",
     });
     expect(envelope.snapshotId).toBe(SNAPSHOT_ID);
-    expect(envelope.observations).toHaveLength(37);
+    expect(envelope.observations).toHaveLength(38);
     for (const observation of envelope.observations) {
       expect(observation.batchId).toBe(SNAPSHOT_ID);
     }

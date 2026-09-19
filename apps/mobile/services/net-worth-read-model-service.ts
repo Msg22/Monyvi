@@ -12,11 +12,9 @@ import {
   convertCurrentAmountExact,
   getMetalUsdPerPureGramDecimal,
   getSameDayLastMonth,
-  isSupportedMetalsIsoCurrencyCode,
   parseCanonicalDecimal,
   roundDecimal,
   serializeDecimal,
-  type MetalsIsoCurrencyCode,
   type SupportedMetal,
 } from "@monyvi/logic";
 
@@ -78,7 +76,7 @@ export interface WealthBreakdownHolding {
 }
 
 export interface BuildWealthBreakdownReadModelInput {
-  readonly accountsValueDecimal: string;
+  readonly accountsValueDecimal: string | null;
   readonly currency: CurrencyType;
   readonly holdings: readonly WealthBreakdownHolding[];
   readonly preferredCurrencyUsdPerUnitDecimal?: string | null;
@@ -154,17 +152,11 @@ export function buildNetWorthReadModel(
   if (!currentSnapshot) {
     return null;
   }
-  if (!isSupportedMetalsIsoCurrencyCode(input.preferredCurrency)) {
-    return null;
-  }
-  const preferredCurrency: MetalsIsoCurrencyCode = input.preferredCurrency;
+  const preferredCurrency: CurrencyType = input.preferredCurrency;
 
   const rates = currentSnapshot.ratesByInstrument;
   let totalAccountsUsd = parseCanonicalDecimal("0");
   for (const account of input.accounts) {
-    if (!isSupportedMetalsIsoCurrencyCode(account.currency)) {
-      return null;
-    }
     const inUsd = convertCurrentAmountExact({
       amountDecimal: new Decimal(account.balance).toFixed(),
       fromCurrency: account.currency,
@@ -264,7 +256,10 @@ export function buildWealthBreakdownReadModel(
   const silverHoldings = activeHoldings.filter(
     (holding) => holding.metalType === "SILVER"
   );
-  const accountsValue = parseAvailableDecimal(input.accountsValueDecimal);
+  const accountsValue =
+    input.accountsValueDecimal === null
+      ? null
+      : parseAvailableDecimal(input.accountsValueDecimal);
   const goldValue = sumAvailableDecimals(goldHoldings);
   const silverValue = sumAvailableDecimals(silverHoldings);
   const metalsValue = sumAvailableDecimalStrings([goldValue, silverValue]);

@@ -1,9 +1,8 @@
 import { SUPPORTED_CURRENCIES } from "../utils/currency-data";
+import type { CurrencyType } from "@monyvi/db";
 import {
   isSupportedMetalsIsoCurrencyCode,
-  type CurrencyInstrumentCode,
   type MetalInstrumentCode,
-  type MetalsIsoCurrencyCode,
 } from "./rate-reference";
 import {
   parseCanonicalDecimal,
@@ -12,9 +11,10 @@ import {
 } from "./decimal";
 import type { Availability } from "./valuation";
 
+export type CurrentCurrencyInstrumentCode = `currency:${CurrencyType}`;
 export type CurrentMarketInstrument =
   | MetalInstrumentCode
-  | CurrencyInstrumentCode;
+  | CurrentCurrencyInstrumentCode;
 
 export interface CurrentMarketSnapshotObservationInput {
   readonly instrumentCode: string;
@@ -51,18 +51,22 @@ export interface CurrentRateValueView {
 
 export interface ConvertCurrentAmountInput {
   readonly amountDecimal: string;
-  readonly fromCurrency: MetalsIsoCurrencyCode;
-  readonly toCurrency: MetalsIsoCurrencyCode;
+  readonly fromCurrency: CurrencyType;
+  readonly toCurrency: CurrencyType;
   readonly rates: ReadonlyMap<string, CurrentRateValueView>;
 }
 
 const POSITIVE_PLAIN_DECIMAL = /^(?=.*[1-9])(?:0|[1-9]\d*)(?:\.\d+)?$/;
 const CANONICAL_SIGNED_DECIMAL = /^-?(?:0|[1-9]\d*)(?:\.\d+)?$/;
 
-const REQUIRED_CURRENCY_INSTRUMENT_CODES: readonly CurrencyInstrumentCode[] =
-  SUPPORTED_CURRENCIES.flatMap(({ code }): CurrencyInstrumentCode[] =>
-    isSupportedMetalsIsoCurrencyCode(code) ? [`currency:${code}`] : []
-  );
+const REQUIRED_CURRENCY_INSTRUMENT_CODES: readonly CurrentCurrencyInstrumentCode[] =
+  [
+    ...SUPPORTED_CURRENCIES.flatMap(
+      ({ code }): CurrentCurrencyInstrumentCode[] =>
+        isSupportedMetalsIsoCurrencyCode(code) ? [`currency:${code}`] : []
+    ),
+    "currency:BTC",
+  ];
 
 const REQUIRED_INSTRUMENT_CODES: readonly CurrentMarketInstrument[] = [
   "metal:GOLD",
@@ -133,12 +137,12 @@ export function getMetalUsdPerPureGramDecimal(
 
 export function getCurrencyUsdPerUnitDecimal(
   rates: ReadonlyMap<string, CurrentRateValueView>,
-  currency: MetalsIsoCurrencyCode
+  currency: CurrencyType
 ): string | null {
   if (currency === "USD") {
     return "1";
   }
-  const instrument: CurrencyInstrumentCode = `currency:${currency}`;
+  const instrument: CurrentCurrencyInstrumentCode = `currency:${currency}`;
   return rates.get(instrument)?.valueDecimal ?? null;
 }
 
@@ -282,10 +286,10 @@ export function isCurrentMarketInstrumentCode(
 
 export function isSupportedCurrentCurrencyInstrumentCode(
   code: unknown
-): code is CurrencyInstrumentCode {
-  return (
-    typeof code === "string" &&
-    code.startsWith("currency:") &&
-    isSupportedMetalsIsoCurrencyCode(code.slice("currency:".length))
-  );
+): code is CurrentCurrencyInstrumentCode {
+  if (typeof code !== "string" || !code.startsWith("currency:")) {
+    return false;
+  }
+  const currency = code.slice("currency:".length);
+  return currency === "BTC" || isSupportedMetalsIsoCurrencyCode(currency);
 }

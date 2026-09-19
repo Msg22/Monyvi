@@ -43,7 +43,7 @@ paths:
       summary: Service-role-only transactional persistence boundary
       description: >-
         p_snapshot_id is the sole incoming snapshot identity. The function
-        writes it as market_rates.id and requires exactly 37 observations under
+        writes it as market_rates.id and requires exactly 38 observations under
         the same batch identity. Root and observation rate values are exact
         plain decimal text; the function casts root values to PostgreSQL numeric
         only inside the transaction. Same-ID identical replay is idempotent;
@@ -80,7 +80,7 @@ paths:
       description: >-
         Pages by commit-visible publication time and snapshot identity,
         independently of immutable capture/provider evidence, and returns only
-        roots with an exact, valid, bound 37-observation set. Logical root rate
+        roots with an exact, valid, bound 38-observation set. Logical root rate
         fields are returned as plain decimal strings so mobile can verify exact
         root/observation equivalence before converting the wide root to
         compatibility numeric storage.
@@ -191,8 +191,8 @@ components:
           $ref: "#/components/schemas/MarketRateRootExact"
         p_observations:
           type: array
-          minItems: 37
-          maxItems: 37
+          minItems: 38
+          maxItems: 38
           items:
             $ref: "#/components/schemas/RateObservationInput"
     PersistSnapshotResult:
@@ -231,10 +231,10 @@ components:
         fiatUsdPerUnit:
           type: object
           description: >-
-            Existing stored non-USD currency/BTC values as exact plain decimal
-            text. BTC may remain present for wide-row compatibility but is not a
-            required V1 trust observation. USD is implicit exact identity 1 and
-            may be absent.
+            Existing stored non-USD currency and BTC values as exact plain
+            decimal text. BTC is a required trusted observation for account and
+            net-worth conversion. USD is implicit exact identity 1 and may be
+            absent.
           additionalProperties:
             $ref: "#/components/schemas/PositiveDecimalString"
         providerMetalObservedAt:
@@ -258,8 +258,9 @@ components:
       pattern: "^(metal:(GOLD|SILVER)|currency:[A-Z]{3})$"
       description: >-
         Runtime validation further restricts this to the exact V1 set: Gold,
-        Silver, and all 35 SUPPORTED_CURRENCIES codes. currency:BTC is
-        forbidden.
+        Silver, all 35 SUPPORTED_CURRENCIES codes, and currency:BTC. BTC is
+        trusted for account and net-worth conversion but is not exposed as a
+        Metals lifecycle currency or Live Rates fiat row.
     RateObservationInput:
       type: object
       additionalProperties: false
@@ -358,8 +359,8 @@ components:
           $ref: "#/components/schemas/MarketRateRootExact"
         observations:
           type: array
-          minItems: 37
-          maxItems: 37
+          minItems: 38
+          maxItems: 38
           items:
             $ref: "#/components/schemas/PersistedObservation"
     SnapshotCursor:

@@ -1,6 +1,6 @@
 import type { SyncTableChangeSet } from "@nozbe/watermelondb/sync";
 import {
-  isSupportedCurrentCurrencyInstrumentCode,
+  CURRENT_MARKET_INSTRUMENT_CODES,
   SUPPORTED_CURRENCIES,
 } from "@monyvi/logic";
 
@@ -124,10 +124,7 @@ function createObservations(input: {
   readonly goldObservationValue: string;
 }): ReadonlyArray<Record<string, unknown>> {
   const root = createRoot();
-  const currencyInstruments = SUPPORTED_CURRENCIES.map(
-    ({ code }) => `currency:${code}`
-  ).filter(isSupportedCurrentCurrencyInstrumentCode);
-  const instruments = ["metal:GOLD", "metal:SILVER", ...currencyInstruments];
+  const instruments = CURRENT_MARKET_INSTRUMENT_CODES;
 
   return instruments.map((instrumentCode, index) => {
     const isMetal = instrumentCode.startsWith("metal:");
@@ -245,7 +242,7 @@ describe("pullMarketRateSnapshotsWithClient", () => {
       result.changes.market_rate_observations
     );
     expect(roots).toHaveLength(1);
-    expect(observations).toHaveLength(37);
+    expect(observations).toHaveLength(38);
     expect(roots[0]).toMatchObject({
       id: SNAPSHOT_A,
       created_at: Date.parse(CAPTURED_A),
@@ -276,7 +273,7 @@ describe("pullMarketRateSnapshotsWithClient", () => {
     expect(requireUpdatedRows(result.changes.market_rates)).toHaveLength(2);
     expect(
       requireUpdatedRows(result.changes.market_rate_observations)
-    ).toHaveLength(74);
+    ).toHaveLength(76);
     expect(result.checkpoint).toEqual({
       createdAt: CAPTURED_B,
       id: SNAPSHOT_B,

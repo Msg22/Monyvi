@@ -107,7 +107,7 @@ export const SUPPORTED_FIAT_CURRENCY_CODES: readonly string[] = [
 ];
 
 export const REQUIRED_INSTRUMENT_COUNT =
-  2 + SUPPORTED_FIAT_CURRENCY_CODES.length;
+  3 + SUPPORTED_FIAT_CURRENCY_CODES.length;
 
 const POSITIVE_PLAIN_DECIMAL = /^(?=.*[1-9])(?:0|[1-9]\d*)(?:\.\d+)?$/;
 const EXPONENT_TOKEN = /^([+-]?)(\d+)(?:\.(\d+))?[eE]([+-]?\d+)$/;
@@ -390,6 +390,20 @@ function buildObservations(
       })
     );
   }
+
+  observations.push(
+    Object.freeze({
+      batchId: input.snapshotId,
+      capturedAt: input.capturedAt,
+      instrumentCode: "currency:BTC",
+      valueDecimal: root.fiatUsdPerUnit["BTC"],
+      unit: "usd_per_currency_unit",
+      orientation: "quote_per_base",
+      providerObservedAt: currencyTime,
+      source: TRUSTED_PRODUCER_SOURCE,
+      quality: "valid",
+    })
+  );
 
   return observations;
 }

@@ -31,16 +31,17 @@ detection, and the multi-table transaction.
 the wide root and its evidence set. Sequential Edge client inserts can expose
 partial state.
 
-## Decision 3: A complete V1 snapshot contains exactly 37 trust observations
+## Decision 3: A complete V1 snapshot contains exactly 38 trust observations
 
-**Decision**: Require exactly one observation for Gold, Silver, and all 35
-currencies exported by `SUPPORTED_CURRENCIES`, including `currency:USD` and
-excluding BTC.
+**Decision**: Require exactly one observation for Gold, Silver, all 35
+currencies exported by `SUPPORTED_CURRENCIES`, and `currency:BTC`.
+`currency:USD` remains exact identity `1`.
 
 The root mapping is Gold/Silver to USD-per-gram numeric columns, every supported
-non-USD fiat to its `<code>_usd` numeric column, and USD to implicit exact
-identity `1`. Platinum, palladium, BTC, and CNH remain compatibility/provider
-fields only.
+non-USD currency plus BTC to its `<code>_usd` numeric column, and USD to
+implicit exact identity `1`. BTC is trusted for account and net-worth conversion
+but stays outside Metals lifecycle reference roles and the Live Rates fiat list.
+Platinum, palladium, and CNH remain compatibility/provider fields only.
 
 ## Decision 4: Current financial truth comes from exact observation decimals
 
@@ -159,7 +160,7 @@ derives selection from persisted root identity/order plus exact bound
 observations and exports current-rate values from observation `value_decimal`
 strings.
 
-The service requires exactly 37 rows, rejects invalid
+The service requires exactly 38 rows, rejects invalid
 binding/value/quality/unit/orientation/source, validates freshness from provider
 time only, never borrows another batch's rows, and reconstructs after restart
 without a persisted selected pointer.
@@ -224,13 +225,15 @@ would create intentionally untrusted root-only data.
 
 ## Decision 20: Schema generation impact
 
-Use migrations 071–073. Migration 071 adds atomic persistence and compatibility
+Use migrations 071–074. Migration 071 adds atomic persistence and compatibility
 pull functions, a future-write FK, and indexes. Migration 072 adds the private
 publication ledger/barrier and V2 pull; 073 enforces finite client-compatible
-positive rates without changing exact decimal evidence. No Watermelon table
-columns change. Expected generated changes include server tables and RPC
-signatures in `packages/db/src/supabase-types.ts`; generated output must still
-be produced through repository scripts.
+positive rates without changing exact decimal evidence. Migration 074 promotes
+the existing exact BTC root value into the required observation set for complete
+net-worth conversion. No Watermelon table columns change. Expected generated
+changes include server tables and RPC signatures in
+`packages/db/src/supabase-types.ts`; generated output must still be produced
+through repository scripts.
 
 ## Decision 21: Business documentation is a hard gate before code implementation
 

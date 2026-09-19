@@ -76,7 +76,7 @@ refresh leaves cached values and honest freshness visible after offline restart.
 These are automated database/sync checks, not actions requiring a device form:
 
 - Finish a rate write captured before the previous successful sync. The next
-  sync still receives its complete root and all 37 observations.
+  sync still receives its complete root and all 38 observations.
 - Pause a complete publisher before commit. First-page pull waits, then includes
   the committed snapshot; no shared sync watermark skips it.
 - Attach required observations in two concurrent partial transactions. Once both

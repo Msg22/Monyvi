@@ -738,10 +738,11 @@ from producer ingestion through offline display:
   wire contract carries this identity once as top-level `snapshotId`, and every
   trust observation binds through `market_rate_observations.batch_id` equal to
   that same identity.
-- A complete current snapshot contains exactly 37 trusted observations:
-  `metal:GOLD`, `metal:SILVER`, and `currency:<CODE>` for every one of the 35
-  supported fiat currencies. `currency:USD` is the exact identity `1`, and BTC
-  is not a trusted current observation.
+- A complete current snapshot contains exactly 38 trusted observations:
+  `metal:GOLD`, `metal:SILVER`, `currency:<CODE>` for every one of the 35
+  supported fiat currencies, and `currency:BTC`. `currency:USD` is the exact
+  identity `1`. BTC is trusted for account and net-worth conversion only; it
+  remains outside Metals lifecycle roles and Live Rates fiat rows.
 - Exact bound observation decimals (`market_rate_observations.value_decimal`)
   are the authoritative current financial truth. The wide `market_rates` numeric
   fields are identity/order/history compatibility records only and MUST NOT be

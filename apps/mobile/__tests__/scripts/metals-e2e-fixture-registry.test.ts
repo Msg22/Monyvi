@@ -325,7 +325,7 @@ describe("Metals deterministic E2E fixture registry", () => {
     const inspection = await inspectFixtureData(client, config, fixture);
     expect(inspection.tables.market_rates.expected).toBe(1);
     expect(inspection.tables.metal_holding_states.expected).toBe(1);
-    expect(inspection.tables.market_rate_observations.expected).toBe(37);
+    expect(inspection.tables.market_rate_observations.expected).toBe(38);
     expect(records).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -498,7 +498,7 @@ describe("Metals deterministic E2E fixture registry", () => {
         record.operation === "delete"
     );
     expect(observationDelete).toMatchObject({ column: "id" });
-    expect(observationDelete?.value).toHaveLength(296);
+    expect(observationDelete?.value).toHaveLength(304);
   });
 
   it("exposes materialized cached/offline and one-shot refresh controls", () => {

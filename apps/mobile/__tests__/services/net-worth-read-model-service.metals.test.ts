@@ -145,6 +145,32 @@ describe("net-worth metals contribution read model", () => {
     });
   });
 
+  it("keeps owned holding counts when account and metal values are unavailable", () => {
+    expect(
+      buildWealthBreakdownReadModel({
+        currency: "EGP" as CurrencyType,
+        accountsValueDecimal: null,
+        holdings: [
+          buildHolding({ currentValueDecimal: null }),
+          buildHolding({
+            id: "holding-silver",
+            metalType: "SILVER",
+            currentValueDecimal: null,
+          }),
+        ],
+      })
+    ).toEqual({
+      accounts: { amountDecimal: null, shareOfNetWorth: null },
+      metals: {
+        amountDecimal: null,
+        shareOfNetWorth: null,
+        gold: { amountDecimal: null, shareOfMetals: null, holdingCount: 1 },
+        silver: { amountDecimal: null, shareOfMetals: null, holdingCount: 1 },
+      },
+      totalNetWorthDecimal: null,
+    });
+  });
+
   it("uses exact decimal arithmetic without retaining input references", () => {
     const holdings = [buildHolding({ currentValueDecimal: "0.2" })];
     const model = buildWealthBreakdownReadModel({

@@ -78,7 +78,7 @@ inside a snapshot.
 ### New relationship for future writes
 
 ```text
-market_rates.id 1 ─────── 37 market_rate_observations.batch_id
+market_rates.id 1 ─────── 38 market_rate_observations.batch_id
 ```
 
 Migration relationship:
@@ -95,8 +95,8 @@ evidence is already correctly bound.
 
 ### V1 trusted child-set invariant
 
-A complete trusted current snapshot has exactly 37 observations: exactly one
-each for Gold, Silver, and all 35 product-supported fiat currencies.
+A complete trusted current snapshot has exactly 38 observations: exactly one
+each for Gold, Silver, all 35 product-supported fiat currencies, and BTC.
 
 #### Metals
 
@@ -107,7 +107,7 @@ each for Gold, Silver, and all 35 product-supported fiat currencies.
 
 #### Currencies
 
-For every code in `SUPPORTED_CURRENCIES`:
+For every code in `SUPPORTED_CURRENCIES`, plus `BTC`:
 
 ```text
 currency:<CODE>
@@ -120,10 +120,11 @@ Producer form:
 - quality: `valid`
 - source: non-empty trimmed `metals.dev`
 
-For non-USD currencies, the exact canonical value corresponds to the existing
-`<code>_usd` root numeric. `currency:USD` is exact decimal `1` because the wide
-root has no `usd_usd` column. BTC is not in the 37-observation Metals current
-contract.
+For non-USD currencies and BTC, the exact canonical value corresponds to the
+existing `<code>_usd` root numeric. `currency:USD` is exact decimal `1` because
+the wide root has no `usd_usd` column. BTC is trusted only for account and net-
+worth conversion; it remains outside Metals lifecycle roles and Live Rates fiat
+rows.
 
 ### Source rule
 
@@ -262,7 +263,7 @@ Before local persistence:
 
 - `snapshotId` is a UUID;
 - every observation has `batchId === snapshotId`;
-- exactly 37 required observations exist;
+- exactly 38 required observations exist;
 - no duplicate/unexpected required instruments exist;
 - exact values are positive plain decimals;
 - quality/unit/orientation/source satisfy current snapshot rules;
@@ -320,7 +321,7 @@ authoritative exported current-rate interface.
 
 1. Observe/cache root candidates ordered by `(created_at DESC, id DESC)`.
 2. For each root, load only observations with `batch_id = root.id`.
-3. Validate the exact 37-observation local contract, including source,
+3. Validate the exact 38-observation local contract, including source,
    units/orientations, value validity, and provider-time trust semantics.
 4. Select the newest complete valid candidate.
 5. If newer evidence is incomplete/invalid/duplicated/cross-batch, ignore it and
@@ -395,7 +396,7 @@ Provider timestamp normalization to valid/null
 Zod exact-string validation
        │
        ▼
-EnvelopeBuilt(snapshotId, capturedAt, exact root, 37 observations)
+EnvelopeBuilt(snapshotId, capturedAt, exact root, 38 observations)
        │
        ▼
 RPC validation / transaction

@@ -141,21 +141,21 @@ test("normalizeProviderObservedAt maps missing/malformed/future times to null", 
   );
 });
 
-test("buildMarketRateSnapshotEnvelope emits exactly 37 trusted observations", () => {
+test("buildMarketRateSnapshotEnvelope emits exactly 38 trusted observations", () => {
   const envelope = buildEnvelope();
 
   assert.equal(envelope.snapshotId, SNAPSHOT_ID);
   assert.equal(envelope.capturedAt, CAPTURED_AT);
-  assert.equal(envelope.observations.length, 37);
+  assert.equal(envelope.observations.length, 38);
 
   const instruments = envelope.observations.map(
     ({ instrumentCode }) => instrumentCode
   );
   assert.ok(instruments.includes("metal:GOLD"));
   assert.ok(instruments.includes("metal:SILVER"));
-  assert.ok(!instruments.includes("currency:BTC"));
+  assert.ok(instruments.includes("currency:BTC"));
   assert.ok(!instruments.includes("currency:CNH"));
-  assert.equal(new Set(instruments).size, 37);
+  assert.equal(new Set(instruments).size, 38);
 });
 
 test("envelope preserves exact precision canaries as plain decimals", () => {
@@ -179,6 +179,7 @@ test("envelope preserves exact precision canaries as plain decimals", () => {
   assert.equal(envelope.root.palladiumUsdPerGram, "1020.50000000000000001");
   assert.equal(envelope.root.fiatUsdPerUnit["KPW"], "0.000000000373874");
   assert.equal(envelope.root.fiatUsdPerUnit["BTC"], "95000.5");
+  assert.equal(byInstrument.get("currency:BTC")?.valueDecimal, "95000.5");
   assert.equal(byInstrument.get("currency:DZD")?.valueDecimal, "0.0073624976");
 });
 
@@ -281,7 +282,7 @@ test("persist RPC payload carries exact strings, one identity, and no nesting ID
   assert.equal(payload.p_captured_at, CAPTURED_AT);
   assert.equal(payload.p_root.goldUsdPerGram, "3738.74");
   assert.equal(payload.p_root.fiatUsdPerUnit["OMR"], "0.10000000000000001");
-  assert.equal(payload.p_observations.length, 37);
+  assert.equal(payload.p_observations.length, 38);
   for (const observation of payload.p_observations) {
     assert.ok(!("id" in observation));
     assert.ok(!("batchId" in observation));

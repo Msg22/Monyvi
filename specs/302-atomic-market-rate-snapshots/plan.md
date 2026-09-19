@@ -14,7 +14,7 @@ cache, deterministic selection, and every current-rate consumer.
 The persisted snapshot identity remains the existing `market_rates.id` UUID. The
 wire/service identity is carried once as top-level `snapshotId`;
 `persist_market_rate_snapshot_v1` materializes it as `market_rates.id`, and all
-37 required `market_rate_observations` use `batch_id = snapshotId`.
+38 required `market_rate_observations` use `batch_id = snapshotId`.
 
 The exact-value authority is explicit: **current financial rates come from bound
 `market_rate_observations.value_decimal` exact decimals, not from the wide
@@ -68,9 +68,10 @@ normal sync; selection scans bounded recent cached roots/children.
 **Constraints**: offline-first; exact decimal financial truth;
 provider-time-only freshness; one snapshot identity; no cross-batch repair; no
 inferred legacy binding; holdings survive missing rates; all DDL through
-numbered local migrations; no direct remote DDL. **Scale/Scope**: exactly 37
-current trust observations: Gold, Silver, 35 supported fiat currencies. BTC is
-excluded from the trusted Metals current set; USD is exact identity `1`.
+numbered local migrations; no direct remote DDL. **Scale/Scope**: exactly 38
+current trust observations: Gold, Silver, 35 supported fiat currencies, and BTC.
+BTC is trusted for account/net-worth conversion but remains outside Metals
+lifecycle references and the Live Rates fiat list; USD is exact identity `1`.
 
 ## Constitution Check
 
@@ -84,7 +85,7 @@ excluded from the trusted Metals current set; USD is exact identity `1`.
 | IV. Service Layer Architecture     | PASS      | Pure exact rate logic in `packages/logic`; DB joins/selectors in mobile services; hooks own lifecycle only.                                        |
 | V. Accessibility / UI              | PASS      | No UI redesign. Existing presentation/accessibility remains regression scope.                                                                      |
 | VI. Package Dependency Direction   | PASS      | App consumes logic/db; no reverse import added.                                                                                                    |
-| VII. Local-First Schema Migrations | PASS      | Numbered SQL migrations 071–073; generated contracts refreshed through repo scripts; no MCP/dashboard DDL.                                         |
+| VII. Local-First Schema Migrations | PASS      | Numbered SQL migrations 071–074; generated contracts refreshed through repo scripts; no MCP/dashboard DDL.                                         |
 | VIII. Sync Correctness             | PASS      | Shared market data remains pull-only; complete envelope validated before local apply; cursor advances only after full successful page application. |
 
 The Constitution II gate is intentional. Planning may finish with the gate
@@ -119,15 +120,17 @@ Exactly one observation for:
 - `metal:GOLD`
 - `metal:SILVER`
 - `currency:<CODE>` for all 35 `SUPPORTED_CURRENCIES` entries
+- `currency:BTC` for account and net-worth conversion
 
 Producer form:
 
 - Metals: `usd_per_pure_gram / quote_per_base`.
-- Fiat: `usd_per_currency_unit / quote_per_base`.
+- Currencies: `usd_per_currency_unit / quote_per_base`.
 - `quality = valid`.
 - `source` must be non-empty after trim (`metals.dev` for this producer).
 - USD is exact `1`.
-- BTC is not a trusted current observation.
+- BTC is trusted current evidence but is not exposed as a Metals lifecycle
+  currency or Live Rates fiat row.
 
 Provider metal/currency timestamps may differ. Missing, malformed, or future
 provider timestamps are normalized to `null` and therefore Unknown freshness; no
@@ -169,7 +172,7 @@ Implementation boundary:
 9. normalize provider timestamps: missing/malformed/future relative to the
    capture instant -> `null`; valid non-future provider timestamps preserved
    exactly/semantically;
-10. build exact root payload + exactly 37 exact observations;
+10. build exact root payload + exactly 38 exact observations;
 11. call only `persist_market_rate_snapshot_v1` for authoritative persistence.
 
 Tests must include `0.10000000000000001`, another long-precision decimal, and
@@ -191,7 +194,7 @@ The RPC receives:
 - top-level snapshot UUID;
 - capture/order timestamp;
 - logical wide root payload where all rate fields are plain decimal strings;
-- exactly 37 observation objects with exact plain decimal strings.
+- exactly 38 observation objects with exact plain decimal strings.
 
 It validates transactionally:
 
@@ -246,7 +249,7 @@ Private metadata has RLS and no direct client grants. Each envelope contains:
 - `publishedAt`, delivery-only timestamp; cursor `createdAt` now means this
   field;
 - logical root rate values cast to exact plain text;
-- all 37 bound observations with exact `value_decimal` text and provenance.
+- all 38 bound observations with exact `value_decimal` text and provenance.
 
 Legacy/unbound/partial/duplicate/source-invalid candidates are omitted. The
 mobile adapter validates the exact envelope before writing anything locally.
@@ -568,13 +571,13 @@ changes.
 - valid provider timestamps preserved;
 - missing/malformed/future provider timestamps normalize to `null` and Unknown
   with no capture-time substitution;
-- 37 observations, USD=1, BTC excluded, non-empty source.
+- 38 observations, USD=1, BTC included for net worth, non-empty source.
 
 ### Database boundary
 
 SQL tests cover:
 
-- complete 37-row creation;
+- complete 38-row creation;
 - missing/duplicate/unexpected instruments;
 - invalid quality/unit/orientation/non-positive values;
 - null/empty/whitespace-only source rejection;

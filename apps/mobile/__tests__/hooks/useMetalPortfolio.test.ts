@@ -221,6 +221,24 @@ describe("useMetalPortfolio summary loading signal", () => {
     expect(result.current.wealthBreakdown).toBe(mockWealthBreakdown);
   });
 
+  it("keeps the dashboard breakdown visible when account conversion is unavailable", async () => {
+    const { result } = renderHook(() =>
+      useMetalPortfolio({ accountsValueDecimal: null })
+    );
+    await waitFor(() => expect(result.current.readiness.holdings).toBe(true));
+
+    act(() => {
+      emitMarketRates({
+        currentError: null,
+        isCurrentLoading: false,
+        selectedSnapshot: selectedSnapshot(mockEmptyTrustReadModel),
+      });
+    });
+
+    await waitFor(() => expect(result.current.isSummaryLoading).toBe(false));
+    expect(result.current.wealthBreakdown).toBe(mockWealthBreakdown);
+  });
+
   it("settles readiness after an initial rate error so the screen shows unavailable values instead of an endless skeleton", async () => {
     const { result } = renderHook(() =>
       useMetalPortfolio({ accountsValueDecimal: "1000" })

@@ -720,8 +720,7 @@ export function useMetalPortfolio(
     if (
       !readiness.summary ||
       portfolio === null ||
-      input.accountsValueDecimal === undefined ||
-      input.accountsValueDecimal === null
+      input.accountsValueDecimal === undefined
     ) {
       return null;
     }

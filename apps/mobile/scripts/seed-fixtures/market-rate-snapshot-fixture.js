@@ -48,6 +48,7 @@ const MARKET_RATE_OBSERVATION_DEFINITIONS = Object.freeze([
     "TRY",
     "RUB",
     "ZAR",
+    "BTC",
   ].map((currencyCode) =>
     Object.freeze({
       field:

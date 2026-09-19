@@ -114,7 +114,7 @@ test("validateSnapshotPage accepts one complete bound root-plus-observation unit
   assert.equal(page.upperWatermark, WATERMARK);
   assert.equal(page.units.length, 1);
   assert.equal(page.units[0].root.id, SNAPSHOT_A);
-  assert.equal(page.units[0].observations.length, 37);
+  assert.equal(page.units[0].observations.length, 38);
   assert.equal(page.units[0].root.omr_usd, "0.10000000000000001");
   assert.equal(
     page.units[0].observations.find(
@@ -249,8 +249,8 @@ test("buildImportSql replaces local shared rate tables in dependency-safe atomic
   );
   const sql = buildImportSql(units);
 
-  assert.ok(sql.startsWith("begin;"));
-  assert.ok(sql.endsWith("commit;\n"));
+  assert.ok(sql.startsWith("do $market_import$\nbegin"));
+  assert.ok(sql.endsWith("end\n$market_import$;\n"));
   assert.ok(
     sql.indexOf("delete from public.market_rate_observations") <
       sql.indexOf("delete from public.market_rates")

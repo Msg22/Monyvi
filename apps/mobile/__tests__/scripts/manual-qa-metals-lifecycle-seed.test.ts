@@ -480,7 +480,7 @@ describe("manual QA Metals lifecycle fixture", () => {
     expect(rowsFor(client, "metal_lifecycle_events")).toHaveLength(7);
     expect(rowsFor(client, "metal_holding_states")).toHaveLength(5);
     expect(rowsFor(client, "market_rates")).toHaveLength(1);
-    expect(rowsFor(client, "market_rate_observations")).toHaveLength(37);
+    expect(rowsFor(client, "market_rate_observations")).toHaveLength(38);
     const [marketRate] = rowsFor(client, "market_rates");
     expect(
       rowsFor(client, "market_rate_observations").every(

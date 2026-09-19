@@ -244,7 +244,7 @@ test("POST persists one exact atomic snapshot from response text", async () => {
   const payload = harness.persistenceCalls[0];
   assert.equal(payload.p_snapshot_id, SNAPSHOT_ID);
   assert.equal(payload.p_captured_at, CAPTURED_AT);
-  assert.equal(payload.p_observations.length, 37);
+  assert.equal(payload.p_observations.length, 38);
   assert.equal(payload.p_root.platinumUsdPerGram, "123.00");
   assert.equal(payload.p_root.palladiumUsdPerGram, "1020.50000000000000001");
   assert.equal(payload.p_root.fiatUsdPerUnit.OMR, "0.10000000000000001");
@@ -256,10 +256,10 @@ test("POST persists one exact atomic snapshot from response text", async () => {
     "1"
   );
   assert.equal(
-    payload.p_observations.some(
+    payload.p_observations.find(
       ({ instrumentCode }) => instrumentCode === "currency:BTC"
-    ),
-    false
+    )?.valueDecimal,
+    "95000.5"
   );
 
   assert.equal(body["success"], true);

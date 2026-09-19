@@ -2,12 +2,13 @@
  * Copies complete production-like market-rate snapshot units from the linked
  * Supabase project into the local Supabase database.
  *
- * A root row is never imported without all 37 bound exact observations. The
+ * A root row is never imported without all 38 bound exact observations. The
  * linked complete-envelope RPC is paged under one fixed watermark, every page
  * is revalidated locally, and local root plus observation tables are replaced
  * together inside one SQL transaction. User-owned data is never touched.
  */
 const { spawnSync } = require("node:child_process");
+const { createHash } = require("node:crypto");
 const { unlinkSync, writeFileSync } = require("node:fs");
 const { join, resolve } = require("node:path");
 
@@ -63,6 +64,7 @@ const REQUIRED_INSTRUMENT_CODES = Object.freeze([
   "metal:GOLD",
   "metal:SILVER",
   ...REQUIRED_FIAT_CODES.map((code) => `currency:${code}`),
+  "currency:BTC",
 ]);
 const REQUIRED_INSTRUMENT_SET = new Set(REQUIRED_INSTRUMENT_CODES);
 
@@ -181,6 +183,21 @@ function getLinkedMarketRateSnapshotsQueryArgs(request) {
   ];
 }
 
+function getLinkedLegacyMarketRateQueryArgs() {
+  return [
+    "db",
+    "query",
+    "--agent=no",
+    "--linked",
+    "-o",
+    "json",
+    `select *
+from public.market_rates
+order by created_at desc, id desc
+limit 1;`,
+  ];
+}
+
 function queryLinkedMarketRateSnapshotPage(request) {
   const output = runSupabase(getLinkedMarketRateSnapshotsQueryArgs(request));
   const rows = parseSupabaseQueryRows(output);
@@ -250,7 +267,125 @@ async function collectCompleteSnapshotUnits(fetchPage) {
 }
 
 async function queryLinkedMarketRateSnapshots() {
-  return collectCompleteSnapshotUnits(queryLinkedMarketRateSnapshotPage);
+  try {
+    return await collectCompleteSnapshotUnits(
+      queryLinkedMarketRateSnapshotPage
+    );
+  } catch (error) {
+    if (!isMissingSnapshotRpcError(error)) {
+      throw error;
+    }
+    return queryLinkedLegacyMarketRateSnapshots();
+  }
+}
+
+function queryLinkedLegacyMarketRateSnapshots() {
+  const output = runSupabase(getLinkedLegacyMarketRateQueryArgs());
+  const rows = parseSupabaseQueryRows(output);
+  if (rows.length !== 1) {
+    invalidSnapshot("linked legacy query did not return exactly one root row");
+  }
+  return [buildLegacySnapshotUnit(rows[0])];
+}
+
+function buildLegacySnapshotUnit(value) {
+  const row = requireRecord(value, "legacy market-rate root");
+  const snapshotId = requireUuid(row.id, "legacy snapshot identity");
+  const capturedAt = requireTimestamp(row.created_at, "legacy capture time");
+  const publishedAt = requireTimestamp(
+    row.updated_at,
+    "legacy publication time"
+  );
+  if (Date.parse(publishedAt) < Date.parse(capturedAt)) {
+    invalidSnapshot("legacy publication time preceded capture time");
+  }
+
+  const fiatUsdPerUnit = {};
+  for (const code of ROOT_FIAT_CODES) {
+    fiatUsdPerUnit[code] = requirePositiveDecimal(
+      row[`${code.toLowerCase()}_usd`],
+      `legacy ${code} rate`
+    );
+  }
+  const root = {
+    goldUsdPerGram: requirePositiveDecimal(
+      row.gold_usd_per_gram,
+      "legacy Gold rate"
+    ),
+    silverUsdPerGram: requirePositiveDecimal(
+      row.silver_usd_per_gram,
+      "legacy Silver rate"
+    ),
+    platinumUsdPerGram: requirePositiveDecimal(
+      row.platinum_usd_per_gram,
+      "legacy Platinum rate"
+    ),
+    palladiumUsdPerGram: requirePositiveDecimal(
+      row.palladium_usd_per_gram,
+      "legacy Palladium rate"
+    ),
+    fiatUsdPerUnit,
+    providerMetalObservedAt: requireProviderTimestamp(
+      row.timestamp_metal,
+      capturedAt,
+      "legacy metal provider time"
+    ),
+    providerCurrencyObservedAt: requireProviderTimestamp(
+      row.timestamp_currency,
+      capturedAt,
+      "legacy currency provider time"
+    ),
+  };
+  const rootRow = {
+    ...toRootRow(snapshotId, capturedAt, root),
+    updated_at: publishedAt,
+  };
+  const observations = REQUIRED_INSTRUMENT_CODES.map((instrumentCode) => {
+    const isMetal = instrumentCode.startsWith("metal:");
+    return {
+      id: deterministicObservationUuid(snapshotId, instrumentCode),
+      batch_id: snapshotId,
+      instrument_code: instrumentCode,
+      value_decimal: expectedObservationValue(root, instrumentCode),
+      unit: isMetal ? "usd_per_pure_gram" : "usd_per_currency_unit",
+      orientation: "quote_per_base",
+      provider_observed_at: isMetal
+        ? root.providerMetalObservedAt
+        : root.providerCurrencyObservedAt,
+      source: "legacy:market_rates",
+      quality: "valid",
+      created_at: capturedAt,
+    };
+  });
+
+  return { root: rootRow, publishedAt, observations };
+}
+
+function deterministicObservationUuid(snapshotId, instrumentCode) {
+  const chars = createHash("sha256")
+    .update(`monyvi:legacy-market-rate:${snapshotId}:${instrumentCode}`)
+    .digest("hex")
+    .slice(0, 32)
+    .split("");
+  chars[12] = "5";
+  chars[16] = ((Number.parseInt(chars[16], 16) & 0x3) | 0x8).toString(16);
+  const hex = chars.join("");
+  return [
+    hex.slice(0, 8),
+    hex.slice(8, 12),
+    hex.slice(12, 16),
+    hex.slice(16, 20),
+    hex.slice(20, 32),
+  ].join("-");
+}
+
+function isMissingSnapshotRpcError(error) {
+  const message = error instanceof Error ? error.message : String(error);
+  return (
+    message.includes("42883") &&
+    message.includes("pull_market_rate_snapshots_page_v2") &&
+    message.includes("does not exist")
+  );
 }
 
 function validateSnapshotPage(value, expectedUpperWatermark) {
@@ -316,7 +451,7 @@ function validateSnapshotEnvelope(value, upperWatermark) {
     invalidSnapshot("observations must be an array");
   }
   if (envelope.observations.length !== REQUIRED_INSTRUMENT_CODES.length) {
-    invalidSnapshot("snapshot did not contain exactly 37 observations");
+    invalidSnapshot("snapshot did not contain exactly 38 observations");
   }
 
   const observedInstruments = new Set();
@@ -513,7 +648,8 @@ function buildImportSql(units) {
     "$market_observations$"
   );
 
-  return `begin;
+  return `do $market_import$
+begin
 
 delete from public.market_rate_observations;
 delete from public.market_rates;
@@ -540,7 +676,8 @@ insert into public.market_rate_observations
 select source_observations.*
 from source_observations;
 
-commit;
+end
+$market_import$;
 `;
 }
 
@@ -730,11 +867,14 @@ module.exports = {
   REQUIRED_FIAT_CODES,
   REQUIRED_INSTRUMENT_CODES,
   buildImportSql,
+  buildLegacySnapshotUnit,
   buildLinkedSnapshotPageQuery,
   collectCompleteSnapshotUnits,
   getLinkedMarketRateSnapshotsQueryArgs,
+  getLinkedLegacyMarketRateQueryArgs,
   getSupabaseSpawnArgs,
   importLocalMarketRateSnapshots,
+  isMissingSnapshotRpcError,
   parseImportMarketRatesArgs,
   parseSupabaseQueryRows,
   queryLinkedMarketRateSnapshots,
