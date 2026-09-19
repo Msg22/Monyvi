@@ -64,9 +64,13 @@ describe("PR #271 validated Metals review regressions", () => {
   });
 
   it("preserves an unavailable Accounts total instead of inventing zero", () => {
-    const value = source("hooks/useMetalPortfolio.ts");
-    expect(value).not.toContain('accountsValueDecimal ?? "0"');
-    expect(value).toContain("accountsValueDecimal === null");
+    const hook = source("hooks/useMetalPortfolio.ts");
+    const service = source("services/net-worth-read-model-service.ts");
+    expect(hook).not.toContain('accountsValueDecimal ?? "0"');
+    expect(hook).toContain(
+      "accountsValueDecimal: input.accountsValueDecimal"
+    );
+    expect(service).toContain("input.accountsValueDecimal === null");
   });
 
   it("does not publish inert detail action descriptors before action routes are integrated", () => {
