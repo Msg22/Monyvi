@@ -121,6 +121,7 @@ describe("period filter localization", () => {
     expect(screen.getAllByText(/—/)).toHaveLength(4);
     expect(screen.queryByText("0%")).toBeNull();
     expect(screen.queryByText(/NaN/)).toBeNull();
+    expect(screen.queryByText(/—\s*[↑↓]/)).toBeNull();
     expect(screen.getByText(enCommon.details)).toBeTruthy();
   });
   it("ships a one-year translation in both common locales", () => {

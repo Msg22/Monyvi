@@ -30,12 +30,19 @@ class FakeSnapshotDataSource implements MarketRateSnapshotDataSource {
   observeObservationsCalls = 0;
   rootsUnsubscribeCalls = 0;
   observationsUnsubscribeCalls = 0;
+  failRootsSynchronously = false;
+  readonly rootObservers: Array<
+    MarketRateSnapshotRowsObserver<readonly MarketRateRootCandidate[]>
+  > = [];
 
   observeRoots(
     observer: MarketRateSnapshotRowsObserver<readonly MarketRateRootCandidate[]>
   ): MarketRateSnapshotSubscription {
     this.observeRootsCalls += 1;
     this.rootsObserver = observer;
+    this.rootObservers.push(observer);
+    if (this.failRootsSynchronously)
+      observer.error?.(new Error("synchronous failure"));
     return {
       unsubscribe: (): void => {
         this.rootsUnsubscribeCalls += 1;
@@ -88,9 +95,76 @@ class FakeSnapshotDataSource implements MarketRateSnapshotDataSource {
   failObservations(error: unknown): void {
     this.observationsObserver?.error?.(error);
   }
+
+  failRoots(error: unknown): void {
+    this.rootsObserver?.error?.(error);
+  }
 }
 
 describe("atomic market-rate snapshot stream", () => {
+  it("cleans up a synchronous subscription failure and ignores obsolete callbacks after retry", () => {
+    const source = new FakeSnapshotDataSource();
+    source.failRootsSynchronously = true;
+    const stream = createMarketRateSnapshotStream(source, () => NOW_MS);
+    const next = jest.fn<void, [unknown]>();
+    const error = jest.fn<void, [unknown]>();
+    const subscription = stream.subscribe({ next, error });
+    expect(source.rootsUnsubscribeCalls).toBe(1);
+    source.failRootsSynchronously = false;
+    stream.refresh();
+    source.emitRoots([createRootB()]);
+    source.emitObservations(createObservationsB());
+    next.mockClear();
+    error.mockClear();
+    source.rootObservers[0]?.next([createRootA()]);
+    source.rootObservers[0]?.error?.(new Error("late old failure"));
+    expect(next).not.toHaveBeenCalled();
+    expect(error).not.toHaveBeenCalled();
+    subscription.unsubscribe();
+    expect(source.rootsUnsubscribeCalls).toBe(2);
+  });
+  it.each(["roots", "observations"] as const)(
+    "restarts %s observation on retry while keeping the last snapshot",
+    (kind) => {
+      const source = new FakeSnapshotDataSource();
+      const stream = createMarketRateSnapshotStream(source, () => NOW_MS);
+      const next = jest.fn<void, [unknown]>();
+      const subscription = stream.subscribe({ next, error: jest.fn() });
+      source.emitRoots([createRootA()]);
+      source.emitObservations(createObservationsA());
+      if (kind === "roots") source.failRoots(new Error("read failed"));
+      else source.failObservations(new Error("read failed"));
+      next.mockClear();
+      stream.refresh();
+      expect(source.observeRootsCalls).toBe(2);
+      expect(next).toHaveBeenLastCalledWith(
+        expect.objectContaining({ snapshotId: SNAPSHOT_A_ID })
+      );
+      source.emitRoots([createRootB()]);
+      source.emitObservations(createObservationsB());
+      expect(next).toHaveBeenLastCalledWith(
+        expect.objectContaining({ snapshotId: SNAPSHOT_B_ID })
+      );
+      subscription.unsubscribe();
+    }
+  );
+
+  it("a later subscriber restarts a failed root subscription before any snapshot existed", () => {
+    const source = new FakeSnapshotDataSource();
+    const stream = createMarketRateSnapshotStream(source, () => NOW_MS);
+    const first = stream.subscribe({ next: jest.fn(), error: jest.fn() });
+    source.failRoots(new Error("initial read failed"));
+    const next = jest.fn<void, [unknown]>();
+    const second = stream.subscribe({ next });
+    expect(source.observeRootsCalls).toBe(2);
+    source.emitRoots([createRootB()]);
+    source.emitObservations(createObservationsB());
+    expect(next).toHaveBeenLastCalledWith(
+      expect.objectContaining({ snapshotId: SNAPSHOT_B_ID })
+    );
+    first.unsubscribe();
+    second.unsubscribe();
+  });
   it("does not emit an incomplete zero/null result between root and children", () => {
     const source = new FakeSnapshotDataSource();
     const stream = createMarketRateSnapshotStream(source, () => NOW_MS);
@@ -224,6 +298,7 @@ describe("atomic market-rate snapshot stream", () => {
       expect.objectContaining({ snapshotId: SNAPSHOT_A_ID })
     );
 
+    next.mockClear();
     stream.refresh();
     expect(next).toHaveBeenLastCalledWith(
       expect.objectContaining({ snapshotId: SNAPSHOT_A_ID })

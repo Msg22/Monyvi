@@ -370,7 +370,6 @@ export function delayedOlderCompleteZ(): {
     Object.freeze({
       ...observation,
       id: rowId("z0z0z0z0", index),
-      createdAt: new Date("2026-09-09T13:00:00.000Z"),
     })
   );
 

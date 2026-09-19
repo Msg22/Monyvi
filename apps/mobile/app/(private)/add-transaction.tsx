@@ -340,17 +340,19 @@ export default function AddTransaction(): React.ReactNode {
     }
   };
 
-  const validateAndCreateTransfer = async (amount: number): Promise<void> => {
+  const validateAndCreateTransfer = async (
+    amount: number
+  ): Promise<boolean> => {
     if (!toAccountId) {
       setFormErrors({ toAccountId: t("please_select_destination_account") });
       setIsSubmitting(false);
-      return;
+      return false;
     }
 
     if (!selectedAccountId || !selectedAccount) {
       setFormErrors({ fromAccountId: t("please_select_source_account") });
       setIsSubmitting(false);
-      return;
+      return false;
     }
 
     const isCrossCurrency = selectedAccount.currency !== toAccount?.currency;
@@ -358,9 +360,10 @@ export default function AddTransaction(): React.ReactNode {
       isCrossCurrency && targetAmount
         ? parsePositiveFiniteAmountInput(targetAmount)
         : null;
-    if (isCrossCurrency && targetAmount && parsedTargetAmount === null) {
+    if (isCrossCurrency && parsedTargetAmount === null) {
       setFormErrors({ amount: t("invalid_amount") });
-      return;
+      setIsSubmitting(false);
+      return false;
     }
 
     const exchangeRate =
@@ -384,6 +387,7 @@ export default function AddTransaction(): React.ReactNode {
         title: t("transfer_created"),
         message: t("transfer_created_message"),
       });
+      return true;
     } catch (error: unknown) {
       showToast({
         type: "error",
@@ -487,7 +491,7 @@ export default function AddTransaction(): React.ReactNode {
       let alertTriggered = false;
 
       if (type === "TRANSFER") {
-        await validateAndCreateTransfer(finalAmount);
+        if (!(await validateAndCreateTransfer(finalAmount))) return;
       } else {
         let createdRecurringPaymentId: string | undefined;
         let linkedRecurringId: string | undefined;

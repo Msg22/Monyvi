@@ -395,6 +395,13 @@ describe("AddTransaction account selection", () => {
     await waitFor(() =>
       expect(screen.getByTestId("transfer-target")).toHaveTextContent(/^$/)
     );
+    const { createTransfer } = jest.requireMock<{
+      readonly createTransfer: jest.Mock;
+    }>("@/services/transfer-service");
+    createTransfer.mockClear();
+    fireEvent.press(screen.getByTestId("key-done"));
+    await waitFor(() => expect(createTransfer).not.toHaveBeenCalled());
+    expect(mockBack).not.toHaveBeenCalled();
   });
 
   it("does not submit a stale foreign-currency quote after selecting a same-currency destination", async () => {

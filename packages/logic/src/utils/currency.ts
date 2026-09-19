@@ -223,12 +223,13 @@ export const formatCurrency = ({
   const minDigits =
     minimumFractionDigits ?? Math.min(inferredMinDigits, maxDigits);
 
-  const formattedNumber = new Intl.NumberFormat(locale, {
+  const numberFormatter = new Intl.NumberFormat(locale, {
     style: "decimal",
     minimumFractionDigits: minDigits,
     maximumFractionDigits: maxDigits,
     signDisplay,
-  }).format(normalizedAmount);
+  });
+  const formattedNumber = numberFormatter.format(normalizedAmount);
 
   const symbol = CURRENCY_SYMBOLS[currency] || currency;
 
@@ -252,9 +253,14 @@ export const formatCurrency = ({
   ];
 
   if (prefixCurrencies.includes(currency)) {
-    if (amount < 0) {
-      // Strip the leading minus sign from the formatted number and prepend -symbol
-      return `-${symbol}${formattedNumber.replace(/^-/, "")}`;
+    const parts = numberFormatter.formatToParts(normalizedAmount);
+    const minus = parts.find((part) => part.type === "minusSign");
+    if (minus) {
+      const unsignedNumber = parts
+        .filter((part) => part.type !== "minusSign")
+        .map((part) => part.value)
+        .join("");
+      return `${minus.value}${symbol}${unsignedNumber}`;
     }
     return `${symbol}${formattedNumber}`;
   }

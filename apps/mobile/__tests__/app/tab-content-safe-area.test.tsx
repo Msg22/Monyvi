@@ -36,16 +36,14 @@ jest.mock("@/components/metals/MetalPortfolioScreen", () => ({
   }: {
     readonly bottomInset: number;
   }): React.JSX.Element => {
-    const { ScrollView, View } =
+    const { View } =
       jest.requireActual<typeof import("react-native")>("react-native");
 
     return (
-      <ScrollView
-        testID="metals-list"
-        contentContainerStyle={{ paddingBottom: bottomInset + 80 }}
-      >
-        <View testID="metals-live-rates" style={{ bottom: bottomInset }} />
-      </ScrollView>
+      <View
+        testID="metals-inset-contract"
+        accessibilityValue={{ now: bottomInset }}
+      />
     );
   },
 }));
@@ -59,7 +57,15 @@ jest.mock("@/components/stats/QuickStats", () => ({
   QuickStats: (): null => null,
 }));
 jest.mock("@/hooks/useMetalPortfolio", () => ({
-  useMetalPortfolio: () => ({
+  useMetalPortfolio: (): {
+    readonly error: null;
+    readonly isLoading: false;
+    readonly isOffline: false;
+    readonly onFilterChange: jest.Mock;
+    readonly portfolio: null;
+    readonly refresh: jest.Mock;
+    readonly selectedFilter: string;
+  } => ({
     error: null,
     isLoading: false,
     isOffline: false,
@@ -91,13 +97,10 @@ describe("absolute tab bar content clearance", () => {
   it("uses the measured tab bar height for Metals list content", () => {
     render(<MetalsScreen />);
 
-    expect(screen.getByTestId("metals-list")).toHaveProp(
-      "contentContainerStyle",
-      expect.objectContaining({ paddingBottom: 194 })
+    expect(screen.getByTestId("metals-inset-contract")).toHaveProp(
+      "accessibilityValue",
+      { now: 114 }
     );
-    expect(screen.getByTestId("metals-live-rates")).toHaveStyle({
-      bottom: 114,
-    });
   });
 
   it("uses the measured tab bar height for Stats scroll content", () => {

@@ -36,6 +36,10 @@ const HISTORY_STATE_OBSERVED_COLUMNS = [
   "effective_event_id",
   "is_visible",
   "reconciliation_state",
+  "name_written_at",
+  "name_writer_id",
+  "notes_written_at",
+  "notes_writer_id",
 ] as const;
 
 const EMPTY_COUNTS = Object.freeze({ all: 0, sold: 0, disposed: 0 });
@@ -138,10 +142,12 @@ export function useMetalHistory(): UseMetalHistoryResult {
         reason instanceof Error ? reason : new Error("History unavailable")
       );
     };
-    const eventsSubscription = eventsQuery?.observe().subscribe({
-      next: (): void => setLocalRevision((value) => value + 1),
-      error: onObserverError,
-    });
+    const eventsSubscription = eventsQuery
+      ?.observeWithColumns(["is_effective"])
+      .subscribe({
+        next: (): void => setLocalRevision((value) => value + 1),
+        error: onObserverError,
+      });
     const evidenceSubscription = evidenceQuery?.observe().subscribe({
       next: (): void => setLocalRevision((value) => value + 1),
       error: onObserverError,
@@ -230,7 +236,10 @@ export function useMetalHistory(): UseMetalHistoryResult {
   ]);
 
   const hasCurrentUserHistory =
-    !isResolvingUser && userId !== null && historyState.userId === userId;
+    !isResolvingUser &&
+    userId !== null &&
+    historyState.userId === userId &&
+    historyState.history.filter === filter;
   const isAwaitingCurrentUserHistory =
     isFocused &&
     (isResolvingUser || (userId !== null && !hasCurrentUserHistory));

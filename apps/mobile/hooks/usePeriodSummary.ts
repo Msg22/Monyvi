@@ -168,7 +168,7 @@ export function usePeriodSummary(
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
-  const { selectedSnapshot } = useMarketRates();
+  const { selectedSnapshot, isCurrentLoading } = useMarketRates();
   const { preferredCurrency } = usePreferredCurrency();
   const { userId, isResolvingUser } = useCurrentUser();
 
@@ -282,5 +282,13 @@ export function usePeriodSummary(
     };
   }, [transactions, selectedSnapshot, preferredCurrency]);
 
-  return { data, isLoading, error, refetch };
+  return {
+    data,
+    isLoading:
+      isLoading ||
+      (isCurrentLoading &&
+        (data.totalIncome === null || data.totalExpenses === null)),
+    error,
+    refetch,
+  };
 }

@@ -29,7 +29,7 @@ jest.mock("react-i18next", () => ({
     readonly i18n: { readonly resolvedLanguage: string };
     readonly t: (key: string, values?: Record<string, string>) => string;
   } => ({
-    i18n: { resolvedLanguage: "en" },
+    i18n: { resolvedLanguage: mockLanguage },
     t: (key: string, values?: Record<string, string>): string => {
       const template = mockWealthTranslations[key] ?? key;
       return Object.entries(values ?? {}).reduce(
@@ -56,6 +56,7 @@ jest.mock("@/context/ThemeContext", () => ({
 }));
 
 const currency: CurrencyType = "EGP";
+let mockLanguage = "en";
 
 const breakdown: WealthBreakdownReadModel = {
   accounts: { amountDecimal: "1062237.75", shareOfNetWorth: "85.4" },
@@ -77,6 +78,27 @@ const breakdown: WealthBreakdownReadModel = {
 };
 
 describe("WealthBreakdownSection", () => {
+  afterEach(() => {
+    mockLanguage = "en";
+  });
+  it("localizes canonical shares for Arabic", () => {
+    mockLanguage = "ar";
+    render(
+      <WealthBreakdownSection
+        currency={currency}
+        isLoading={false}
+        breakdown={{
+          ...breakdown,
+          accounts: { ...breakdown.accounts, shareOfNetWorth: "85.40" },
+        }}
+        onAccountsPress={jest.fn()}
+        onMetalsPress={jest.fn()}
+      />
+    );
+    // Preserve the shared Metals Arabic/Latin-numeral locale policy.
+    expect(screen.getByLabelText(/Accounts.*85\.4% of net worth/)).toBeTruthy();
+    expect(screen.queryByText(/85\.40%/)).toBeNull();
+  });
   it("renders approved additive Concept C below the net-worth hero contract", () => {
     const onAccountsPress = jest.fn();
     const onMetalsPress = jest.fn();

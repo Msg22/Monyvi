@@ -189,7 +189,11 @@ Create:
 
 ```text
 supabase/migrations/071_atomic_market_rate_snapshots.sql
+supabase/migrations/072_market_snapshot_publication_cursor.sql
+supabase/migrations/073_market_rate_compatibility_range.sql
 supabase/tests/atomic_market_rate_snapshots_test.sql
+supabase/tests/market_snapshot_publication_test.sql
+supabase/tests/market_snapshot_publication_concurrency_test.sql
 ```
 
 Migration responsibilities:
@@ -198,7 +202,12 @@ Migration responsibilities:
   `market_rate_observations.batch_id -> market_rates.id ON DELETE CASCADE`;
 - `(batch_id, instrument_code)` lookup index;
 - service-role-only `persist_market_rate_snapshot_v1`;
-- read-only `pull_market_rate_snapshots_page_v1`;
+- active `pull_market_rate_snapshots_page_v2`, using commit-visible publication
+  ordering and pinned watermarks; V1 remains compatibility-only;
+- private publication ledger/barrier without rewriting capture/provider
+  evidence;
+- finite-positive mobile compatibility range validation with fail-closed
+  preflight;
 - exact plain-decimal-string request boundary;
 - explicit grants/revokes.
 

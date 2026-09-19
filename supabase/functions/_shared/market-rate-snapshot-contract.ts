@@ -219,6 +219,9 @@ export function normalizeProviderObservedAt(
   if (typeof rawValue !== "string" || rawValue.trim().length === 0) {
     return null;
   }
+  if (!decimalTimestampSchema.safeParse(rawValue).success) {
+    return null;
+  }
 
   const observedMs = Date.parse(rawValue);
   if (!Number.isFinite(observedMs) || observedMs > capturedAt.getTime()) {

@@ -310,7 +310,7 @@ variants.
 
 ## Known limitations after normal-flow approval
 
-- Image-generated proofs vary from 824-864 px wide because each includes a fresh
+- Image-generated proofs vary from 853-864 px wide because each includes a fresh
   device frame; the frame and outer canvas are not binding. Exported full-image
   dimensions are not production viewport dimensions; the app UI inside the
   mockup remains a binding pixel-perfect reference at its ordinary-phone

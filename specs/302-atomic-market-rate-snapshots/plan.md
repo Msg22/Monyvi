@@ -84,7 +84,7 @@ excluded from the trusted Metals current set; USD is exact identity `1`.
 | IV. Service Layer Architecture     | PASS      | Pure exact rate logic in `packages/logic`; DB joins/selectors in mobile services; hooks own lifecycle only.                                        |
 | V. Accessibility / UI              | PASS      | No UI redesign. Existing presentation/accessibility remains regression scope.                                                                      |
 | VI. Package Dependency Direction   | PASS      | App consumes logic/db; no reverse import added.                                                                                                    |
-| VII. Local-First Schema Migrations | PASS      | One numbered SQL migration; generated contracts refreshed through repo scripts; no MCP/dashboard DDL.                                              |
+| VII. Local-First Schema Migrations | PASS      | Numbered SQL migrations 071–073; generated contracts refreshed through repo scripts; no MCP/dashboard DDL.                                         |
 | VIII. Sync Correctness             | PASS      | Shared market data remains pull-only; complete envelope validated before local apply; cursor advances only after full successful page application. |
 
 The Constitution II gate is intentional. Planning may finish with the gate

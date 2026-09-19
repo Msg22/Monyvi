@@ -31,6 +31,7 @@ jest.mock("@/hooks/useMarketRates", () => ({
   useMarketRates: () => ({
     selectedSnapshot: mockSnapshot,
     isLoading: mockRatesLoading,
+    isCurrentLoading: mockRatesLoading,
   }),
 }));
 jest.mock("@/hooks/usePreferredCurrency", () => ({
@@ -47,6 +48,16 @@ import { sortPayments } from "@/services/recurring-payments-dashboard-read-model
 import type { RecurringPayment } from "@monyvi/db";
 
 describe("recorded facts without current exchange rates", () => {
+  it("waits for initial snapshot selection when period conversion needs rates", () => {
+    mockRows.transactions = [{ type: "EXPENSE", amount: 10, currency: "USD" }];
+    mockRatesLoading = true;
+    const { result, rerender } = renderHook(() => usePeriodSummary());
+    expect(result.current.isLoading).toBe(true);
+    mockRatesLoading = false;
+    rerender({});
+    expect(result.current.isLoading).toBe(false);
+    expect(result.current.data.totalExpenses).toBeNull();
+  });
   beforeEach(() => {
     Object.keys(mockRows).forEach((key) => delete mockRows[key]);
     mockSnapshot = null;
@@ -129,7 +140,7 @@ describe("recorded facts without current exchange rates", () => {
   });
   it("distinguishes an unavailable breakdown from an empty account set", () => {
     mockRows.accounts = [
-      { id: "usd", balance: 20, currency: "USD", type: "CASH" },
+      { id: "egp", balance: 20, currency: "EGP", type: "CASH" },
     ];
     const { result } = renderHook(() => useAssetBreakdown());
     expect(result.current.breakdown).toBeNull();

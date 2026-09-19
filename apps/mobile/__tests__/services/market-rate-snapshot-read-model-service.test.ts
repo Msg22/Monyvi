@@ -139,6 +139,13 @@ describe("selectMarketRateSnapshot", () => {
 
   it("does not regress to a delayed older complete Z", () => {
     const fixture = delayedOlderCompleteZ();
+    const olderRoots = fixture.roots.filter(
+      (root) => root.id !== SNAPSHOT_B_ID
+    );
+    expect(
+      selectMarketRateSnapshot(olderRoots, fixture.observations, NOW_MS)
+        ?.snapshotId
+    ).toBe(olderRoots[0]?.id);
     const selected = selectMarketRateSnapshot(
       fixture.roots,
       fixture.observations,
@@ -197,8 +204,7 @@ describe("selectMarketRateSnapshot", () => {
     const strippedB = full.observations.filter(
       (row) =>
         !(
-          row.batchId === SNAPSHOT_B_ID &&
-          row.instrumentCode === "currency:EGP"
+          row.batchId === SNAPSHOT_B_ID && row.instrumentCode === "currency:EGP"
         )
     );
     const afterRemoval = selectMarketRateSnapshot(

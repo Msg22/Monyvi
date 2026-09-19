@@ -4,6 +4,9 @@ import {
   MarketRateSnapshotContractError,
   type PersistRpcPayload,
 } from "../_shared/market-rate-snapshot-contract.ts";
+import { withTimeout } from "../_shared/promise-timeout.ts";
+
+const PROVIDER_TIMEOUT_MS = 10_000;
 
 const CORS_HEADERS: Readonly<Record<string, string>> = {
   "Access-Control-Allow-Origin": "*",
@@ -19,7 +22,7 @@ export interface PersistSnapshotResult {
 
 export interface FetchMetalRatesHandlerDependencies {
   readonly getEnv: (name: string) => string | undefined;
-  readonly fetch: (url: string) => Promise<Response>;
+  readonly fetch: (url: string, signal: AbortSignal) => Promise<Response>;
   readonly now: () => Date;
   readonly createSnapshotId: () => string;
   readonly persistSnapshot: (
@@ -71,12 +74,19 @@ export function createFetchMetalRatesHandler(
       providerUrl.searchParams.set("currency", "USD");
       providerUrl.searchParams.set("unit", "g");
 
-      const providerResponse = await dependencies.fetch(providerUrl.toString());
-      if (!providerResponse.ok) {
-        throw new FetchMetalRatesHandlerError("provider_error", 502);
-      }
-
-      const rawResponseText = await providerResponse.text();
+      const rawResponseText = await withTimeout(
+        async (signal): Promise<string> => {
+          const providerResponse = await dependencies.fetch(
+            providerUrl.toString(),
+            signal
+          );
+          if (!providerResponse.ok) {
+            throw new FetchMetalRatesHandlerError("provider_error", 502);
+          }
+          return providerResponse.text();
+        },
+        PROVIDER_TIMEOUT_MS
+      );
       const capturedAtDate = dependencies.now();
       if (!Number.isFinite(capturedAtDate.getTime())) {
         throw new FetchMetalRatesHandlerError("internal_error", 500);
@@ -109,6 +119,9 @@ export function createFetchMetalRatesHandler(
         200
       );
     } catch (error: unknown) {
+      if (error instanceof Error && error.name === "TimeoutError") {
+        return jsonResponse({ success: false, code: "provider_error" }, 504);
+      }
       if (error instanceof FetchMetalRatesHandlerError) {
         return jsonResponse({ success: false, code: error.code }, error.status);
       }

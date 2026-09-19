@@ -21,6 +21,26 @@ import {
 } from "../currency";
 import type { MarketRate } from "@monyvi/db";
 
+it.each(["ar-EG", "en-US"])(
+  "formats one negative sign for prefix currencies in %s",
+  (locale) => {
+    expect(
+      formatCurrency({ amount: -1234.5, currency: "USD", locale }).match(/-/g)
+    ).toHaveLength(1);
+    expect(
+      formatCurrency({
+        amount: -1234.5,
+        currency: "USD",
+        locale,
+        signDisplay: "never",
+      })
+    ).not.toContain("-");
+    expect(
+      formatCurrency({ amount: -0, currency: "USD", locale })
+    ).not.toContain("-");
+  }
+);
+
 it("formats currency numbers in an explicitly supplied Arabic locale", () => {
   const input = {
     amount: 1234.5,

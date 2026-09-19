@@ -10,8 +10,8 @@ const handler = createFetchMetalRatesHandler({
   getEnv(name): string | undefined {
     return Deno.env.get(name);
   },
-  fetch(url): Promise<Response> {
-    return fetch(url);
+  fetch(url, signal): Promise<Response> {
+    return fetch(url, { signal });
   },
   now(): Date {
     return new Date();

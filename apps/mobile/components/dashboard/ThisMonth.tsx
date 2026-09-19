@@ -213,7 +213,7 @@ function ThisMonthComponent(): React.JSX.Element {
                     amount: data.totalIncome,
                     currency: preferredCurrency,
                   })}{" "}
-              ↑
+              {data.totalIncome === null ? null : "↑"}
             </Text>
           </View>
 
@@ -227,7 +227,7 @@ function ThisMonthComponent(): React.JSX.Element {
                     amount: data.totalExpenses,
                     currency: preferredCurrency,
                   })}{" "}
-              ↓
+              {data.totalExpenses === null ? null : "↓"}
             </Text>
           </View>
 

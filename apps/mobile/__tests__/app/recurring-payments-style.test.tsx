@@ -222,7 +222,14 @@ jest.mock("@/hooks/usePreferredCurrency", () => ({
 }));
 
 jest.mock("@/hooks/useMarketRates", () => ({
-  useMarketRates: () => ({
+  useMarketRates: (): {
+    readonly selectedSnapshot: {
+      readonly ratesByInstrument: ReadonlyMap<
+        string,
+        { readonly valueDecimal: string }
+      >;
+    };
+  } => ({
     selectedSnapshot: {
       ratesByInstrument: new Map([["currency:EGP", { valueDecimal: "0.02" }]]),
     },

@@ -127,8 +127,12 @@ financial freshness.
 
 ## Decision 9: Pull complete envelopes through one RPC
 
-Add `pull_market_rate_snapshots_page_v1`, paging by root ordering under a fixed
-upper watermark and returning only provably complete, valid, bound envelopes.
+The active `pull_market_rate_snapshots_page_v2` pages by commit-visible
+publication ordering under a pinned upper watermark and returns only provably
+complete, valid, bound envelopes. V1 is compatibility-only. Migration 072 adds
+the private publication ledger and barrier; 073 rejects incompatible numeric
+ranges without rewriting historical evidence. Capture time still selects current
+financial truth and provider time alone determines freshness.
 
 The response returns top-level `snapshotId`, exact plain-decimal root values,
 and all bound observations. The mobile adapter validates root/observation
@@ -212,18 +216,21 @@ would create intentionally untrusted root-only data.
 
 - `persist_market_rate_snapshot_v1`: revoke PUBLIC/anon/authenticated; grant
   trusted producer/service role only.
-- `pull_market_rate_snapshots_page_v1`: read-only shared-market contract under
-  existing app access conventions.
+- `pull_market_rate_snapshots_page_v2`: active authenticated shared-market read
+  contract; V1 remains compatibility-only. The publication ledger and barrier
+  are private, not directly readable by app roles.
 - Logs may contain snapshot IDs/reason codes, never provider API keys or
   unrelated user financial data.
 
 ## Decision 20: Schema generation impact
 
-Use `071_atomic_market_rate_snapshots.sql`. The migration adds functions, a
-future-write FK, and an index but no Watermelon table columns. Expected
-generated change is primarily RPC signatures in
-`packages/db/src/supabase-types.ts`; generated output must still be produced
-through repository scripts.
+Use migrations 071–073. Migration 071 adds atomic persistence and compatibility
+pull functions, a future-write FK, and indexes. Migration 072 adds the private
+publication ledger/barrier and V2 pull; 073 enforces finite client-compatible
+positive rates without changing exact decimal evidence. No Watermelon table
+columns change. Expected generated changes include server tables and RPC
+signatures in `packages/db/src/supabase-types.ts`; generated output must still
+be produced through repository scripts.
 
 ## Decision 21: Business documentation is a hard gate before code implementation
 

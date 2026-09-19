@@ -235,8 +235,21 @@ export function createMarketRateSnapshotStream(
   let hasPublished = false;
   let started = false;
   let observationGeneration = 0;
+  let rootGeneration = 0;
+
+  const disconnect = (): void => {
+    started = false;
+    rootGeneration += 1;
+    observationGeneration += 1;
+    rootSubscription?.unsubscribe();
+    rootSubscription = null;
+    observationsSubscription?.unsubscribe();
+    observationsSubscription = null;
+  };
 
   const reportError = (error: unknown): void => {
+    // Rx subscriptions terminate on error. Keep cached truth, not dead readers.
+    disconnect();
     for (const observer of [...observers]) {
       observer.error?.(error);
     }
@@ -269,7 +282,7 @@ export function createMarketRateSnapshotStream(
       return;
     }
 
-    observationsSubscription = source.observeObservations(batchIds, {
+    const subscription = source.observeObservations(batchIds, {
       next: (observations): void => {
         if (generation !== observationGeneration) {
           return;
@@ -283,6 +296,11 @@ export function createMarketRateSnapshotStream(
         }
       },
     });
+    if (generation === observationGeneration && started) {
+      observationsSubscription = subscription;
+    } else {
+      subscription.unsubscribe();
+    }
   };
 
   const start = (): void => {
@@ -290,25 +308,26 @@ export function createMarketRateSnapshotStream(
       return;
     }
     started = true;
-    rootSubscription = source.observeRoots({
+    const generation = ++rootGeneration;
+    const subscription = source.observeRoots({
       next: (roots): void => {
+        if (generation !== rootGeneration || !started) return;
         latestRoots = roots;
         replaceObservationSubscription(roots);
       },
-      error: reportError,
+      error: (error: unknown): void => {
+        if (generation === rootGeneration) reportError(error);
+      },
     });
+    if (generation === rootGeneration && started) {
+      rootSubscription = subscription;
+    } else {
+      subscription.unsubscribe();
+    }
   };
 
   const stop = (): void => {
-    if (!started) {
-      return;
-    }
-    started = false;
-    observationGeneration += 1;
-    observationsSubscription?.unsubscribe();
-    observationsSubscription = null;
-    rootSubscription?.unsubscribe();
-    rootSubscription = null;
+    disconnect();
     latestRoots = [];
     latestObservations = [];
     currentSnapshot = null;
@@ -320,6 +339,7 @@ export function createMarketRateSnapshotStream(
       if (hasPublished) {
         publish();
       }
+      if (observers.size > 0) start();
     },
     subscribe(
       observer: MarketRateSnapshotObserver

@@ -96,3 +96,33 @@ values.
 
 Initial-sync size/performance remains unverified and deferred to #316. Passing
 these correctness checks does not establish a bounded memory footprint.
+
+## Follow-up review wave: current-rate consumers and recovery
+
+Device QA remains pending. Use seeded terminal holdings; this wave does not add
+Sell, Dispose, or Undo actions.
+
+| Manual scenario                                                          | Expected result                                                                                                       | Automated coverage                                                                            | Manual-only boundary                                         |
+| ------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| Clear the destination amount on a cross-currency transfer and press Done | Validation remains visible; no transfer is saved and the form stays open                                              | `add-transaction-account-selection.test.tsx`                                                  | Keyboard and picker journey                                  |
+| Switch History filters while a read is pending                           | Previous-filter rows never appear under the new filter                                                                | `useMetalHistory.test.ts`                                                                     | Device loading presentation                                  |
+| Receive a holding metadata edit or event-effectiveness reconciliation    | History rereads and reflects the effective local state                                                                | `useMetalHistory.test.ts`                                                                     | Controlled reconciliation needs a fixture, not a form action |
+| Retry after a rate subscription fails                                    | Cached complete values remain available and a replacement subscription can receive new complete values                | `market-rate-snapshot-stream.test.ts`                                                         | Offline recovery and device lifecycle                        |
+| Open a USD-only or empty breakdown before rates arrive                   | Known USD amounts and empty totals remain available; FX- or metal-dependent amounts remain unavailable                | `current-market-snapshot-calculations.test.ts`, `missing-current-rates-availability.test.tsx` | Cold start and offline presentation                          |
+| Open This Month while conversion rates are pending or unavailable        | Dependent values load while pending, then show unavailable without a direction arrow; independent values stay visible | `missing-current-rates-availability.test.tsx`, `period-filter-localization.test.tsx`          | Screen reader and layout                                     |
+| Inspect negative prefixed amounts and wealth percentages in Arabic       | One minus sign only; grouping, precision and digits follow the shared locale policy                                   | logic `currency.test.ts`, `WealthBreakdownSection.test.tsx`                                   | RTL and enlarged text                                        |
+| Inspect Transactions net worth with seeded sold/disposed holdings        | Effective ownership matches the portfolio projection; terminal asset rows are not valued again                        | `useNetWorth-lifecycle.test.ts`, `useNetWorth.test.ts`, portfolio read-model suites           | Seeded device comparison                                     |
+
+Automated-only producer checks cover stalled response headers/body (bounded
+timeout, aborted request, no persistence) and non-contract provider timestamps
+(Unknown observation time without discarding an otherwise valid snapshot).
+Coverage: `handler.test.ts` and `market-rate-snapshot-contract.test.ts`.
+
+Test corrections separately verify real safe-area prop forwarding, stream retry
+emissions, delayed historical fixture validity, and explicit mock/callback
+types. The active protocol documentation now distinguishes V2 publication paging
+from compatibility V1 and records migrations 071–073.
+
+Terminal-detail rendering remains owned by issue #283 / PR #315. Publication
+checkpoint thread `6kAdZI` remains open for a product/sync-contract decision;
+this wave does not claim to fix the refresh cursor boundary.

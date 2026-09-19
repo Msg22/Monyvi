@@ -164,10 +164,6 @@ export function getSelectedCurrentMetalPrice(
 export function calculateSelectedCurrentAssetBreakdown(
   input: CurrentAssetBreakdownInput
 ): AssetBreakdown | null {
-  if (input.currentSnapshot === null) {
-    return null;
-  }
-
   let bank = parseCanonicalDecimal("0");
   let cash = parseCanonicalDecimal("0");
   let wallet = parseCanonicalDecimal("0");
@@ -194,6 +190,7 @@ export function calculateSelectedCurrentAssetBreakdown(
 
   for (const metal of input.metals) {
     if (
+      input.currentSnapshot === null ||
       (metal.metalType !== "GOLD" && metal.metalType !== "SILVER") ||
       metal.weightGramsDecimal === null ||
       metal.purityFactorDecimal === null

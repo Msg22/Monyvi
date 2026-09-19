@@ -121,7 +121,7 @@ export function WealthBreakdownSection({
             amount: amount(breakdown.accounts.amountDecimal),
             label: t("wealth_breakdown.accounts"),
             share: t("wealth_breakdown.of_net_worth", {
-              share: formatShare(breakdown.accounts.shareOfNetWorth),
+              share: formatShare(breakdown.accounts.shareOfNetWorth, locale),
             }),
           })}
           currency={currency}
@@ -129,7 +129,7 @@ export function WealthBreakdownSection({
           locale={locale}
           onPress={onAccountsPress}
           shareLabel={t("wealth_breakdown.of_net_worth", {
-            share: formatShare(breakdown.accounts.shareOfNetWorth),
+            share: formatShare(breakdown.accounts.shareOfNetWorth, locale),
           })}
           lightGradientColors={ACCOUNT_LIGHT_GRADIENT}
           darkGradientColors={ACCOUNT_DARK_GRADIENT}
@@ -142,7 +142,7 @@ export function WealthBreakdownSection({
             amount: amount(breakdown.metals.amountDecimal),
             label: metalsLabel,
             share: t("wealth_breakdown.of_net_worth", {
-              share: formatShare(breakdown.metals.shareOfNetWorth),
+              share: formatShare(breakdown.metals.shareOfNetWorth, locale),
             }),
           })}
           currency={currency}
@@ -150,7 +150,7 @@ export function WealthBreakdownSection({
           locale={locale}
           onPress={onMetalsPress}
           shareLabel={t("wealth_breakdown.of_net_worth", {
-            share: formatShare(breakdown.metals.shareOfNetWorth),
+            share: formatShare(breakdown.metals.shareOfNetWorth, locale),
           })}
           lightGradientColors={METALS_LIGHT_GRADIENT}
           darkGradientColors={METALS_DARK_GRADIENT}
@@ -182,7 +182,7 @@ export function WealthBreakdownSection({
               hasDivider
               label={t("wealth_breakdown.gold")}
               share={t("wealth_breakdown.of_metals", {
-                share: formatShare(breakdown.metals.gold.shareOfMetals),
+                share: formatShare(breakdown.metals.gold.shareOfMetals, locale),
               })}
             />
             <MetalAmount
@@ -193,7 +193,10 @@ export function WealthBreakdownSection({
               dotClassName="bg-silver-500"
               label={t("wealth_breakdown.silver")}
               share={t("wealth_breakdown.of_metals", {
-                share: formatShare(breakdown.metals.silver.shareOfMetals),
+                share: formatShare(
+                  breakdown.metals.silver.shareOfMetals,
+                  locale
+                ),
               })}
             />
           </View>
@@ -350,8 +353,17 @@ function formatDecimalCurrency(
   }
 }
 
-function formatShare(value: string | null): string {
-  return value === null ? "—" : `${value}%`;
+function formatShare(value: string | null, locale: string): string {
+  if (value === null) return "—";
+  const amount = formatCanonicalDecimalForDisplay(value, {
+    locale,
+    maximumFractionDigits: 1,
+  });
+  const percent =
+    new Intl.NumberFormat(locale, { style: "percent" })
+      .formatToParts(0)
+      .find((part) => part.type === "percentSign")?.value ?? "%";
+  return `${amount}${percent}`;
 }
 
 export function getWealthTilesLayoutClass(

@@ -215,6 +215,25 @@ test("root and bound observations agree exactly", () => {
   assert.equal(gold.batchId, envelope.snapshotId);
 });
 
+test("parseable non-ISO provider timestamps remain Unknown without rejecting the snapshot", () => {
+  for (const value of [
+    "2026-09-08T09:55:00",
+    "2026-09-08 09:55:00Z",
+    "September 8, 2026 09:55:00 GMT",
+  ]) {
+    const envelope = buildEnvelope(
+      withRawReplacements({ "2026-09-08T09:55:00Z": value })
+    );
+    assert.equal(envelope.root.providerMetalObservedAt, null);
+    assert.equal(
+      envelope.observations.find(
+        ({ instrumentCode }) => instrumentCode === "metal:GOLD"
+      )?.providerObservedAt,
+      null
+    );
+  }
+});
+
 test("USD accepts exact numeric identity regardless of decimal or exponent spelling", () => {
   for (const token of [
     "1",

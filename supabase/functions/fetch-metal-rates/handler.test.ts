@@ -8,6 +8,34 @@ import {
 } from "./handler.ts";
 
 const SNAPSHOT_ID = "11111111-1111-4111-8111-111111111111";
+test("provider deadline covers stalled headers and body without persisting", async (context) => {
+  context.mock.timers.enable({ apis: ["setTimeout"] });
+  for (const stalledPart of ["headers", "body"]) {
+    const harness = createHarness();
+    const signals: AbortSignal[] = [];
+    const handler = createFetchMetalRatesHandler({
+      ...harness.dependencies,
+      fetch: async (_url: string, signal: AbortSignal): Promise<Response> => {
+        signals.push(signal);
+        if (stalledPart === "headers") return new Promise(() => {});
+        const response = new Response("unused");
+        response.text = (): Promise<string> => new Promise(() => {});
+        return response;
+      },
+    });
+    const pending = handler(
+      new Request("http://localhost", { method: "POST" })
+    );
+    await Promise.resolve();
+    context.mock.timers.tick(10_001);
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    const result = await Promise.race([pending, Promise.resolve(null)]);
+    assert.notEqual(result, null, "provider timeout must settle the request");
+    assert.equal(result?.status, 504);
+    assert.equal(signals[0]?.aborted, true);
+    assert.equal(harness.persistenceCalls.length, 0);
+  }
+});
 const CAPTURED_AT = "2026-09-08T10:00:00.000Z";
 const RAW_PROVIDER_SUCCESS = `{"status":"success","currency":"USD","unit":"g",
 "metals":{"gold":3738.74,"silver":43.73874,"platinum":1.2300e+2,"palladium":1020.50000000000000001},

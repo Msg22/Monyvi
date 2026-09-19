@@ -6,11 +6,17 @@ import MetalHoldingDetailRoute from "../../app/(private)/metals/[id]";
 let mockStatus: "active" | "sold" | "disposed" = "active";
 
 jest.mock("expo-router", () => ({
-  useLocalSearchParams: () => ({ id: "holding-1" }),
+  useLocalSearchParams: (): { readonly id: string } => ({ id: "holding-1" }),
 }));
 
 jest.mock("@/hooks/useMetalHoldingDetail", () => ({
-  useMetalHoldingDetail: () => ({
+  useMetalHoldingDetail: (): {
+    readonly error: null;
+    readonly isLoading: false;
+    readonly isOffline: false;
+    readonly model: { readonly status: typeof mockStatus };
+    readonly retry: jest.Mock;
+  } => ({
     error: null,
     isLoading: false,
     isOffline: false,
@@ -24,7 +30,7 @@ jest.mock("@/components/navigation/PageHeader", () => {
   const { Text } =
     jest.requireActual<typeof import("react-native")>("react-native");
   return {
-    PageHeader: ({ title }: { readonly title: string }) =>
+    PageHeader: ({ title }: { readonly title: string }): React.JSX.Element =>
       React.createElement(Text, { testID: "detail-route-title" }, title),
   };
 });
@@ -34,13 +40,13 @@ jest.mock("@/components/metals/MetalHoldingDetailScreen", () => {
   const { View } =
     jest.requireActual<typeof import("react-native")>("react-native");
   return {
-    MetalHoldingDetailScreen: () =>
+    MetalHoldingDetailScreen: (): React.JSX.Element =>
       React.createElement(View, { testID: "detail-screen" }),
   };
 });
 
 jest.mock("react-i18next", () => ({
-  useTranslation: () => ({
+  useTranslation: (): { readonly t: (key: string) => string } => ({
     t: (key: string): string =>
       ({
         "detail.title": "Holding details",

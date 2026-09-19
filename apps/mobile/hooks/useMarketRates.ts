@@ -86,7 +86,7 @@ export function useMarketRates(): UseMarketRatesResult {
   const [isWideHistoryLoading, setIsWideHistoryLoading] = useState(true);
   const [isPreviousDayLoading, setIsPreviousDayLoading] = useState(true);
 
-  useEffect(() => {
+  useEffect((): (() => void) => {
     const stream = observeSelectedMarketRateSnapshot(database);
     streamRef.current = stream;
     const subscription = stream.subscribe({
@@ -108,7 +108,7 @@ export function useMarketRates(): UseMarketRatesResult {
       },
     });
 
-    return () => {
+    return (): void => {
       if (streamRef.current === stream) {
         streamRef.current = null;
       }
@@ -116,7 +116,7 @@ export function useMarketRates(): UseMarketRatesResult {
     };
   }, [database]);
 
-  useEffect(() => {
+  useEffect((): (() => void) => {
     const subscription = database
       .get<MarketRate>("market_rates")
       .query(Q.sortBy("created_at", Q.desc), Q.take(1))
@@ -132,10 +132,10 @@ export function useMarketRates(): UseMarketRatesResult {
         },
       });
 
-    return () => subscription.unsubscribe();
+    return (): void => subscription.unsubscribe();
   }, [database]);
 
-  useEffect(() => {
+  useEffect((): (() => void) => {
     let active = true;
 
     const fetchPreviousDay = async (): Promise<void> => {
@@ -169,7 +169,7 @@ export function useMarketRates(): UseMarketRatesResult {
     };
 
     void fetchPreviousDay();
-    return () => {
+    return (): void => {
       active = false;
     };
   }, [database, observedLatestRates]);

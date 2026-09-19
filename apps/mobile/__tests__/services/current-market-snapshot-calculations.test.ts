@@ -67,6 +67,42 @@ const currentSnapshot = snapshot([
 ]);
 
 describe("selected current market snapshot calculations", () => {
+  it("keeps USD-only breakdown available without rates", () => {
+    expect(
+      calculateSelectedCurrentAssetBreakdown({
+        accounts: [{ balance: 125, currency: "USD", type: "BANK" }],
+        metals: [],
+        currentSnapshot: null,
+      })
+    ).toEqual({ bank: 125, cash: 0, wallet: 0, metals: 0, total: 125 });
+    expect(
+      calculateSelectedCurrentAssetBreakdown({
+        accounts: [],
+        metals: [],
+        currentSnapshot: null,
+      })
+    ).toEqual({ bank: 0, cash: 0, wallet: 0, metals: 0, total: 0 });
+    expect(
+      calculateSelectedCurrentAssetBreakdown({
+        accounts: [{ balance: 125, currency: "EGP", type: "BANK" }],
+        metals: [],
+        currentSnapshot: null,
+      })
+    ).toBeNull();
+    expect(
+      calculateSelectedCurrentAssetBreakdown({
+        accounts: [],
+        metals: [
+          {
+            metalType: "GOLD",
+            weightGramsDecimal: "1",
+            purityFactorDecimal: "1",
+          },
+        ],
+        currentSnapshot: null,
+      })
+    ).toBeNull();
+  });
   it("keeps same-currency recorded amounts available without market data", () => {
     expect(
       convertSelectedCurrentAmount({

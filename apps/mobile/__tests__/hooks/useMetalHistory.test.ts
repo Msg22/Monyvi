@@ -25,6 +25,7 @@ interface MockQuery<T = unknown> {
 }
 
 const mockUnsubscribe = jest.fn<void, []>();
+const mockObservedColumns = jest.fn<void, [readonly string[]]>();
 let mockStateObserver: MockObserver<readonly unknown[]> | null = null;
 let mockEventObserver: MockObserver | null = null;
 let mockEvidenceObserver: MockObserver | null = null;
@@ -40,7 +41,10 @@ function queryWithObserver<T>(
   };
   return {
     observe: () => source,
-    observeWithColumns: () => source,
+    observeWithColumns: (columns) => {
+      mockObservedColumns(columns);
+      return source;
+    },
   };
 }
 
@@ -118,6 +122,54 @@ describe("useMetalHistory", () => {
     mockEventObserver = null;
     mockEvidenceObserver = null;
     mockCurrentUser = { isResolvingUser: false, userId: "user-1" };
+  });
+
+  it("invalidates History for terminal metadata and event-effectiveness changes", async () => {
+    renderHook(() => useMetalHistory());
+    expect(mockObservedColumns).toHaveBeenCalledWith(
+      expect.arrayContaining(["name_written_at", "name_writer_id"])
+    );
+    act(() => mockStateObserver?.next([{ holdingId: "h1", userId: "user-1" }]));
+    await waitFor(() => expect(mockEventObserver).not.toBeNull());
+    expect(mockObservedColumns).toHaveBeenCalledWith(
+      expect.arrayContaining(["is_effective"])
+    );
+    const before = mockReadMetalHistoryReadModel.mock.calls.length;
+    act(() => mockEventObserver?.next([]));
+    await waitFor(() =>
+      expect(mockReadMetalHistoryReadModel.mock.calls.length).toBeGreaterThan(
+        before
+      )
+    );
+  });
+
+  it("never exposes previous-filter rows while the replacement filter is loading", async () => {
+    mockReadMetalHistoryReadModel.mockResolvedValueOnce({
+      counts: { all: 1, sold: 1, disposed: 0 },
+      filter: "all",
+      hasMore: false,
+      items: [{ holdingId: "sold-holding" }],
+    });
+    const renders: Array<ReturnType<typeof useMetalHistory>> = [];
+    const { result } = renderHook(() => {
+      const value = useMetalHistory();
+      renders.push(value);
+      return value;
+    });
+    await waitFor(() => expect(result.current.history.items).toHaveLength(1));
+    mockReadMetalHistoryReadModel.mockReturnValueOnce(new Promise(() => {}));
+    const firstNewRender = renders.length;
+    act(() => result.current.setFilter("disposed"));
+    expect(
+      renders
+        .slice(firstNewRender)
+        .every(
+          (value) =>
+            value.history.filter === "disposed" &&
+            value.history.items.length === 0 &&
+            value.isLoading
+        )
+    ).toBe(true);
   });
 
   it("re-reads History when action evidence arrives after lifecycle rows", async () => {

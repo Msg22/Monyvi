@@ -74,14 +74,14 @@ export default function RecurringPaymentsScreen(): React.JSX.Element {
     setTodayRevision((revision) => revision + 1);
   }, []);
 
-  useEffect(() => {
+  useEffect((): (() => void) => {
     let timer: ReturnType<typeof setTimeout> | undefined;
     const scheduleNextDayRefresh = (): void => {
       const now = new Date();
       const nextDay = new Date(now);
       nextDay.setHours(24, 0, 0, 0);
       timer = setTimeout(
-        () => {
+        (): void => {
           refreshToday();
           scheduleNextDayRefresh();
         },
@@ -90,20 +90,21 @@ export default function RecurringPaymentsScreen(): React.JSX.Element {
     };
     const appStateSubscription = AppState.addEventListener(
       "change",
-      (nextState) => {
+      (nextState): void => {
         if (nextState === "active") refreshToday();
       }
     );
 
     scheduleNextDayRefresh();
-    return () => {
+    return (): void => {
       if (timer) clearTimeout(timer);
       appStateSubscription.remove();
     };
   }, [refreshToday]);
 
   const sortOptions = useMemo(
-    () => (selectedSnapshot ? { preferredCurrency, selectedSnapshot } : {}),
+    (): Parameters<typeof sortPayments>[2] =>
+      selectedSnapshot ? { preferredCurrency, selectedSnapshot } : {},
     [selectedSnapshot, preferredCurrency]
   );
 
