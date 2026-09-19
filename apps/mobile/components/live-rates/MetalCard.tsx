@@ -1,7 +1,7 @@
 /**
  * Metal Card
  *
- * Reusable half-width card for Silver, Platinum (and future Palladium).
+ * Reusable metal-rate card whose parent controls its responsive footprint.
  * Intentionally uses a dark surface (slate-800) in both themes for visual emphasis,
  * per the approved mockup.
  *
@@ -81,7 +81,7 @@ export function MetalCard({
 }: MetalCardProps): React.JSX.Element {
   return (
     <View
-      className="flex-1 bg-slate-800 rounded-xl p-3 overflow-hidden"
+      className="w-full bg-slate-800 rounded-xl p-3 overflow-hidden"
       style={{
         borderLeftWidth: 3,
         borderLeftColor: borderColor,

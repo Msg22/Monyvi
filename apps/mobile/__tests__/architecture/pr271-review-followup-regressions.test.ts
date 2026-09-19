@@ -125,12 +125,13 @@ describe("PR #271 review follow-up regressions", () => {
     expect(value).toMatch(/isCompact[\s\S]*flex-col/);
   });
 
-  it("preserves Silver's established half-row Live Rates footprint", () => {
+  it("renders Silver at the full Live Rates content width", () => {
     const value = source(
       "apps/mobile/components/live-rates/LiveRatesScreen.tsx"
     );
-    expect(value).toContain("live-rates-silver-layout-spacer");
-    expect(value).toMatch(/flex-row mt-3[\s\S]*gap:\s*12/);
+    expect(value).toContain('testID="live-rates-silver-card"');
+    expect(value).toContain('className="mt-3 w-full"');
+    expect(value).not.toContain("live-rates-silver-layout-spacer");
   });
 
   it("identity-tags History observer state and watches mutable projection columns", () => {

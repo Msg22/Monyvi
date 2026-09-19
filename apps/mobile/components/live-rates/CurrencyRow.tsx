@@ -16,7 +16,6 @@ import { palette } from "@/constants/colors";
 import { MaterialIcons } from "@expo/vector-icons";
 import React from "react";
 import { Text, View } from "react-native";
-import { useTranslation } from "react-i18next";
 
 const ROW_HEIGHT = 48;
 
@@ -26,11 +25,6 @@ interface CurrencyRowProps {
   readonly name: string;
   readonly rate: string;
   readonly changePercent: number | null;
-  readonly trust?: {
-    readonly quality: string | null;
-    readonly source: string | null;
-    readonly state: "fresh" | "stale" | "unknown" | "missing" | "invalid";
-  };
 }
 
 function CurrencyTrend({
@@ -55,9 +49,7 @@ function CurrencyTrend({
   const isUp = roundedChange > 0;
   const changeColor = isUp ? "text-nileGreen-500" : "text-red-500";
   const trendIcon = isUp ? "arrow-drop-up" : "arrow-drop-down";
-  const trendIconColor = isUp
-    ? palette.nileGreen[500]
-    : palette.red[500];
+  const trendIconColor = isUp ? palette.nileGreen[500] : palette.red[500];
 
   return (
     <View className="flex-row items-center">
@@ -80,24 +72,7 @@ export function CurrencyRow({
   name,
   rate,
   changePercent,
-  trust,
 }: CurrencyRowProps): React.JSX.Element {
-  const { t } = useTranslation("metals");
-  const trustLabel =
-    trust === undefined
-      ? null
-      : [
-          t(`rate.short_${trust.state}`),
-          trust.source === null
-            ? null
-            : t("rate.source", { source: trust.source }),
-          trust.quality === null
-            ? null
-            : t("rate.quality", { quality: trust.quality }),
-        ]
-          .filter((value): value is string => value !== null)
-          .join(" · ");
-
   return (
     <View
       className="flex-row items-center px-2 border-b border-slate-100 dark:border-slate-800"
@@ -113,7 +88,7 @@ export function CurrencyRow({
           className="text-[11px] text-slate-500 dark:text-slate-400"
           numberOfLines={1}
         >
-          {trustLabel === null ? name : `${name} · ${trustLabel}`}
+          {name}
         </Text>
       </View>
 

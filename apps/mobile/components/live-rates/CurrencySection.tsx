@@ -113,7 +113,6 @@ export function CurrencySection({
         name={item.name}
         rate={item.rate}
         changePercent={item.changePercent}
-        trust={item.trust}
       />
     ),
     []
@@ -122,7 +121,7 @@ export function CurrencySection({
   const isEmpty = currencies.length === 0 && searchQuery.trim().length > 0;
 
   return (
-    <View className="mt-5 px-5">
+    <View testID="live-rates-currency-section" className="mt-5 px-5">
       <View className="flex-row items-center justify-between mb-2">
         <Text className="text-lg font-bold text-slate-800 dark:text-white">
           {t("currencies")}

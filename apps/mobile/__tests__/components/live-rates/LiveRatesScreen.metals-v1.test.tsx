@@ -145,35 +145,30 @@ function screenState(
   };
 }
 
-describe("LiveRatesScreen Metals V1 trust presentation", () => {
+describe("LiveRatesScreen Metals V1 production presentation", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockUseLiveRatesScreen.mockReturnValue(screenState());
     mockLocale = "en";
   });
 
-  it("keeps Live Rates composition while limiting metal cards to Gold and Silver and announcing independent trust", () => {
+  it("keeps the production composition without exposing internal trust metadata", () => {
     render(<LiveRatesScreen />);
 
     expect(screen.getByText("gold_label")).toBeOnTheScreen();
     expect(screen.getByText("silver")).toBeOnTheScreen();
     expect(screen.queryByText("platinum")).toBeNull();
-    expect(
-      screen.getByText(
-        "gold · Live Rates: current rate. Rates updated 1 Sep 2026, 12:00"
-      )
-    ).toBeOnTheScreen();
-    expect(
-      screen.getByText("silver · Rates: rate is older than 24 hours")
-    ).toBeOnTheScreen();
-    expect(
-      screen.getByText("currencies · Rates: rate age is unknown")
-    ).toBeOnTheScreen();
-    expect(
-      screen.getByText(
-        "US Dollar · Older than 24h · Source: provider-cache · Quality: valid"
-      )
-    ).toBeOnTheScreen();
+    expect(screen.getByTestId("live-rates-gold-card")).toBeOnTheScreen();
+    expect(screen.getByTestId("live-rates-silver-card")).toBeOnTheScreen();
+    expect(screen.getByTestId("live-rates-currency-section")).toBeOnTheScreen();
+    expect(screen.queryByTestId("live-rates-silver-layout-spacer")).toBeNull();
+    expect(screen.queryByTestId("live-rates-trust-gold")).toBeNull();
+    expect(screen.queryByTestId("live-rates-trust-silver")).toBeNull();
+    expect(screen.queryByTestId("live-rates-trust-currencies")).toBeNull();
+    expect(screen.getByText("US Dollar")).toBeOnTheScreen();
+    expect(screen.queryByText(/Source:/)).toBeNull();
+    expect(screen.queryByText(/Quality:/)).toBeNull();
+    expect(screen.queryByText(/Older than 24h/)).toBeNull();
   });
 
   it("retains cached values while honestly showing offline mode and keeps currency search focus reachable", () => {
@@ -208,7 +203,7 @@ describe("LiveRatesScreen Metals V1 trust presentation", () => {
     expect(screen.queryByText("rates_unavailable")).toBeNull();
   });
 
-  it("renders missing and invalid rate copy without collapsing either into stale", () => {
+  it("keeps internal missing and invalid states out of the customer-facing page", () => {
     mockUseLiveRatesScreen.mockReturnValue(
       screenState({
         rateTrust: {
@@ -221,15 +216,9 @@ describe("LiveRatesScreen Metals V1 trust presentation", () => {
 
     render(<LiveRatesScreen />);
 
-    expect(
-      screen.getByText("gold · Rates: current rate unavailable")
-    ).toBeOnTheScreen();
-    expect(
-      screen.getByText("silver · Rates: this rate can’t be used")
-    ).toBeOnTheScreen();
-    expect(
-      screen.getByLabelText("silver: Rates: this rate can’t be used")
-    ).toBeOnTheScreen();
+    expect(screen.getByText("Rates")).toBeOnTheScreen();
+    expect(screen.queryByText(/current rate unavailable/)).toBeNull();
+    expect(screen.queryByText(/this rate can’t be used/)).toBeNull();
   });
 
   it("keeps cached rates visible after a refresh failure and exposes an accessible retry", () => {
@@ -249,16 +238,15 @@ describe("LiveRatesScreen Metals V1 trust presentation", () => {
     expect(mockOnRefresh).toHaveBeenCalledTimes(1);
   });
 
-  it("renders approved Arabic freshness copy visibly and in the accessible name", () => {
+  it("does not expose diagnostic freshness copy in Arabic", () => {
     mockLocale = "ar";
     mockUseLiveRatesScreen.mockReturnValue(screenState());
 
     render(<LiveRatesScreen />);
 
-    const freshCopy =
-      "الأسعار المباشرة: سعر حديث. تم تحديث الأسعار في 1 Sep 2026, 12:00";
-    expect(screen.getByText("gold · " + freshCopy)).toBeOnTheScreen();
-    expect(screen.getByLabelText("gold: " + freshCopy)).toBeOnTheScreen();
+    expect(screen.queryByText(/تم تحديث الأسعار/)).toBeNull();
+    expect(screen.queryByText(/المصدر:/)).toBeNull();
+    expect(screen.queryByText(/الجودة:/)).toBeNull();
   });
 
   it("reserves the Live Rates title and Live badge for confirmed-fresh rates", () => {

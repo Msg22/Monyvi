@@ -132,7 +132,10 @@ export function GoldHeroCard({
 }: GoldHeroCardProps): React.JSX.Element {
   const { t } = useTranslation("metals");
   return (
-    <View className="bg-slate-800 rounded-2xl p-4 overflow-hidden border-l-[3px] border-l-gold-600">
+    <View
+      testID="live-rates-gold-card"
+      className="bg-slate-800 rounded-2xl p-4 overflow-hidden border-l-[3px] border-l-gold-600"
+    >
       {/* Gold label */}
       <View className="flex-row items-center mb-1">
         <FontAwesome5 name="coins" size={14} color={palette.gold[400]} />

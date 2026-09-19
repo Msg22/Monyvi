@@ -19,6 +19,6 @@ appId: com.monyvi.app
     id: metal-portfolio-filter-GOLD
 - openLink: monyvi://live-rates
 - assertVisible:
-    id: live-rates-trust-gold
+    id: live-rates-gold-card
 - assertVisible:
-    id: live-rates-trust-silver
+    id: live-rates-silver-card
