@@ -1,13 +1,13 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Q, type Database } from "@nozbe/watermelondb";
+import type { Database } from "@nozbe/watermelondb";
 import { applyRemoteChanges } from "@nozbe/watermelondb/sync/impl";
-import type { MarketRateObservation } from "@monyvi/db";
 
+import { readSelectedMarketRateSnapshot } from "./market-rate-snapshot-read-model-service";
 import {
-  pullMarketRateObservations,
-  pullMarketRates,
-  type MetalObservationCursor,
-} from "./sync/pull-strategies";
+  pullMarketRateSnapshots,
+  type MarketRateSnapshotCursor,
+  type MarketRateSnapshotPullResult,
+} from "./sync/market-rate-snapshot-pull";
 
 const E2E_REFRESH_FAILURE_MARKER_PREFIX =
   "@monyvi/e2e/live-rates-refresh-failure/";
@@ -17,17 +17,15 @@ const E2E_REFRESH_FAILURE_ERROR = "e2e_live_rates_refresh_failure_once";
 
 let fixtureMarkerQueue: Promise<void> = Promise.resolve();
 
-async function getLatestObservationCursor(
-  database: Database
-): Promise<MetalObservationCursor | null> {
-  const observations = await database
-    .get<MarketRateObservation>("market_rate_observations")
-    .query(Q.sortBy("created_at", Q.desc), Q.sortBy("id", Q.desc), Q.take(1))
-    .fetch();
-  const latest = observations[0];
-  return latest
-    ? { createdAt: latest.createdAt.toISOString(), id: latest.id }
-    : null;
+export interface LiveMarketRateRefreshDependencies {
+  readonly consumeArmedFixtureMarker: () => Promise<boolean>;
+  readonly readLatestSnapshotCursor: () => Promise<MarketRateSnapshotCursor | null>;
+  readonly pullSnapshots: (
+    cursor: MarketRateSnapshotCursor | null
+  ) => Promise<MarketRateSnapshotPullResult>;
+  readonly applyChanges: (
+    changes: MarketRateSnapshotPullResult["changes"]
+  ) => Promise<void>;
 }
 
 async function consumeArmedFixtureMarker(): Promise<boolean> {
@@ -54,30 +52,47 @@ async function consumeArmedFixtureMarker(): Promise<boolean> {
   return didConsume;
 }
 
+export async function refreshLiveMarketRatesWithDependencies(
+  dependencies: LiveMarketRateRefreshDependencies
+): Promise<void> {
+  if (await dependencies.consumeArmedFixtureMarker()) {
+    throw new Error(E2E_REFRESH_FAILURE_ERROR);
+  }
+
+  const cursor = await dependencies.readLatestSnapshotCursor();
+  const result = await dependencies.pullSnapshots(cursor);
+  await dependencies.applyChanges(result.changes);
+}
+
 /**
- * Refreshes shared live-rate snapshots and exact observations without invoking
- * generic synchronization or changing its cursor metadata.
+ * Pulls only complete validated market-rate envelopes and applies each returned
+ * root-plus-observation set inside one Watermelon writer. Failed pulls or local
+ * writes leave the last complete cached snapshot untouched.
  */
 export async function refreshLiveMarketRates(
   database: Database
 ): Promise<void> {
-  if (await consumeArmedFixtureMarker()) {
-    throw new Error(E2E_REFRESH_FAILURE_ERROR);
-  }
-
-  const observationCursor = await getLatestObservationCursor(database);
-  const [marketRates, observations] = await Promise.all([
-    pullMarketRates(),
-    pullMarketRateObservations(observationCursor),
-  ]);
-
-  await database.write(async (): Promise<void> => {
-    await applyRemoteChanges(
-      {
-        market_rates: marketRates,
-        market_rate_observations: observations.changes,
-      },
-      { db: database, sendCreatedAsUpdated: true }
-    );
+  return refreshLiveMarketRatesWithDependencies({
+    consumeArmedFixtureMarker,
+    async readLatestSnapshotCursor(): Promise<MarketRateSnapshotCursor | null> {
+      const selected = await readSelectedMarketRateSnapshot(database);
+      return selected === null
+        ? null
+        : {
+            createdAt: selected.capturedAt.toISOString(),
+            id: selected.snapshotId,
+          };
+    },
+    pullSnapshots: pullMarketRateSnapshots,
+    async applyChanges(
+      changes: MarketRateSnapshotPullResult["changes"]
+    ): Promise<void> {
+      await database.write(async (): Promise<void> => {
+        await applyRemoteChanges(changes, {
+          db: database,
+          sendCreatedAsUpdated: true,
+        });
+      });
+    },
   });
 }

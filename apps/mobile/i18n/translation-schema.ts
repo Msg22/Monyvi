@@ -68,6 +68,7 @@ interface CommonTranslations {
   // Errors
   readonly error_generic: string;
   readonly error_network: string;
+  readonly money_summary_error: string;
 
   // Currency
   readonly currency: string;
@@ -127,6 +128,8 @@ interface CommonTranslations {
 
 /** Transactions namespace */
 interface TransactionsTranslations {
+  readonly conversion_unavailable: string;
+  readonly conversion_preview: string;
   readonly partial_sms_title: string;
   readonly partial_sms_description: string;
   readonly partial_sms_try_later_at: string;
@@ -776,6 +779,7 @@ interface AuthTranslations {
 /** Metals namespace */
 interface MetalsTranslations {
   readonly live_rates: string;
+  readonly rates: string;
   readonly gold: string;
   readonly silver: string;
   readonly platinum: string;
@@ -810,6 +814,15 @@ interface MetalsTranslations {
   readonly error_save_failed: string;
   readonly add_to_savings: string;
   readonly holding: PluralKeys;
+  readonly rate: {
+    readonly fresh: string;
+    readonly stale: string;
+    readonly unknown: string;
+    readonly missing: string;
+    readonly invalid: string;
+    readonly refresh_failed_with_cache: string;
+    readonly retry_refresh: string;
+  };
 }
 
 /** Root translation resources type */

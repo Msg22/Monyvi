@@ -74,9 +74,8 @@ describe("sync auth scope lifecycle", () => {
     mockGetCurrentUserId.mockReset();
     mockRpc.mockResolvedValue({
       data: {
-        hasMore: false,
         nextCursor: null,
-        rows: [],
+        snapshots: [],
         upperWatermark: "2026-05-18T08:05:00.000Z",
       },
       error: null,

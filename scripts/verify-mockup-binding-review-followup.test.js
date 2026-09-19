@@ -92,7 +92,10 @@ test("rejects a duplicate setext Binding Facts heading outside the approved fing
   const result = verifyMockupBinding(sidecarPath);
 
   assert.equal(result.isAuthoritative, false);
-  assert.match(result.errors.join("\n"), /exactly one .*Binding Facts heading/i);
+  assert.match(
+    result.errors.join("\n"),
+    /exactly one .*Binding Facts heading/i
+  );
 });
 
 test("does not count a canonical fact hidden inside an HTML comment", () => {
@@ -106,7 +109,10 @@ test("does not count a canonical fact hidden inside an HTML comment", () => {
   const result = verifyMockupBinding(sidecarPath);
 
   assert.equal(result.isAuthoritative, false);
-  assert.match(result.errors.join("\n"), /required Binding Facts key.*State facts/i);
+  assert.match(
+    result.errors.join("\n"),
+    /required Binding Facts key.*State facts/i
+  );
 });
 
 test("does not treat setext-looking text inside a fenced code block as the next Binding Facts boundary", () => {
@@ -134,7 +140,9 @@ test("counts Markdown-equivalent unordered list bullets as duplicate canonical f
     "+ State facts: conflicting",
     "  * State facts: conflicting",
   ]) {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), "monyvi-mockup-binding-"));
+    const root = fs.mkdtempSync(
+      path.join(os.tmpdir(), "monyvi-mockup-binding-")
+    );
     const bindingFacts = `${completeBindingFacts()}${duplicate}\n`;
     const sidecarPath = writeApprovedFixture(
       root,
@@ -162,7 +170,10 @@ test("Claude task generation blocks fidelity-affecting UNKNOWN values", () => {
     "utf8"
   );
 
-  assert.match(workflow, /fidelity-affecting `UNKNOWN`[\s\S]{0,120}pre-implementation blocker/i);
+  assert.match(
+    workflow,
+    /fidelity-affecting `UNKNOWN`[\s\S]{0,120}pre-implementation blocker/i
+  );
 });
 
 test("Claude task generation emits mandatory mockup visual and accessibility evidence tasks", () => {
@@ -174,16 +185,26 @@ test("Claude task generation emits mandatory mockup visual and accessibility evi
   assert.match(workflow, /required rendered visual-evidence tasks/i);
   assert.match(workflow, /separate accessibility-evidence tasks/i);
   assert.match(workflow, /baseline side-by-side or overlay comparison/i);
-  assert.match(workflow, /responsive, theme, RTL\/Arabic, and\s+enlarged-text variant/i);
+  assert.match(
+    workflow,
+    /responsive, theme, RTL\/Arabic, and\s+enlarged-text variant/i
+  );
 });
 
 test("source-command review uses an independent trust path when the verifier is in the diff", () => {
   const skill = fs.readFileSync(
-    path.resolve(__dirname, "..", ".agents/skills/source-command-code-review/SKILL.md"),
+    path.resolve(
+      __dirname,
+      "..",
+      ".agents/skills/source-command-code-review/SKILL.md"
+    ),
     "utf8"
   );
 
-  assert.match(skill, /If `scripts\/verify-mockup-binding\.js` is in the target diff/i);
+  assert.match(
+    skill,
+    /If `scripts\/verify-mockup-binding\.js` is in the target diff/i
+  );
   assert.match(skill, /trusted\s+base revision/i);
   assert.match(
     skill,
@@ -193,18 +214,30 @@ test("source-command review uses an independent trust path when the verifier is 
 
 test("source-command independent fallback validates the complete sidecar authority contract", () => {
   const skill = fs.readFileSync(
-    path.resolve(__dirname, "..", ".agents/skills/source-command-code-review/SKILL.md"),
+    path.resolve(
+      __dirname,
+      "..",
+      ".agents/skills/source-command-code-review/SKILL.md"
+    ),
     "utf8"
   );
-  const start = skill.indexOf("If `scripts/verify-mockup-binding.js` is in the target diff");
+  const start = skill.indexOf(
+    "If `scripts/verify-mockup-binding.js` is in the target diff"
+  );
   const end = skill.indexOf("\n\nIf an approved reference predates", start);
 
-  assert.ok(start >= 0 && end > start, "expected independent-verifier fallback section");
+  assert.ok(
+    start >= 0 && end > start,
+    "expected independent-verifier fallback section"
+  );
   const fallback = skill.slice(start, end);
 
   assert.match(fallback, /complete\s+sidecar authority contract/i);
   assert.match(fallback, /valid UTF-8\/LF/i);
-  assert.match(fallback, /exactly one[^\n]*Binding Facts[^\n]*heading/i);
+  assert.match(
+    fallback,
+    /exactly one\s+real\s+level-two\s+`Binding Facts`\s+heading/i
+  );
   assert.match(
     fallback,
     /required Binding Facts keys?[\s\S]*exactly once[\s\S]*non-empty/i

@@ -71,18 +71,24 @@ function HoldingCardInner({
     assetMetal.purityFraction
   );
 
-  const formattedValue = formatCurrency({
-    amount: currentValue,
-    currency,
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  });
+  const formattedValue =
+    currentValue === null
+      ? "—"
+      : formatCurrency({
+          amount: currentValue,
+          currency,
+          minimumFractionDigits: 0,
+          maximumFractionDigits: 0,
+        });
 
   const weight = `${assetMetal.weightGrams.toFixed(1)}${WEIGHT_UNIT}`;
-  const sign = profitLossAmount >= 0 ? "+" : "-";
-  const percentText = `${sign}${Math.abs(profitLossPercent).toFixed(1)}%`;
-  const plColor = getProfitLossColor(profitLossAmount, isDark);
-  const plIcon = getProfitLossIcon(profitLossAmount);
+  const sign = profitLossAmount !== null && profitLossAmount >= 0 ? "+" : "-";
+  const percentText =
+    profitLossPercent === null
+      ? "—"
+      : `${sign}${Math.abs(profitLossPercent).toFixed(1)}%`;
+  const plColor = getProfitLossColor(profitLossAmount ?? 0, isDark);
+  const plIcon = getProfitLossIcon(profitLossAmount ?? 0);
 
   return (
     <View className="mb-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-4">
@@ -128,7 +134,9 @@ function HoldingCardInner({
             {formattedValue}
           </Text>
           <View className="flex-row items-center mt-0.5">
-            <Ionicons name={plIcon} size={10} color={plColor} />
+            {profitLossAmount !== null && (
+              <Ionicons name={plIcon} size={10} color={plColor} />
+            )}
             <Text
               className="ms-0.5 text-xs font-medium"
               style={{ color: plColor }}

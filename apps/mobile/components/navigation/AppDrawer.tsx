@@ -26,7 +26,7 @@ import {
 } from "@/utils/profile-helpers";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { router } from "expo-router";
+import { router, type Href } from "expo-router";
 import React, {
   useCallback,
   useEffect,
@@ -189,10 +189,10 @@ export function AppDrawer({
   }, [hiddenTranslateX, slideAnim, visible]);
 
   const handleNavigation = useCallback(
-    (route: string): void => {
+    (route: Href): void => {
       onClose();
       setTimeout(() => {
-        router.push(route as never);
+        router.push(route);
       }, 100);
     },
     [onClose]

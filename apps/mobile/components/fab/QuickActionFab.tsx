@@ -21,9 +21,8 @@ import Animated, {
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { palette } from "@/constants/colors";
-import { TAB_BAR_HEIGHT } from "@/constants/ui";
+import { QUICK_ACTION_FAB_SIZE, TAB_BAR_HEIGHT } from "@/constants/ui";
 
-const FAB_SIZE = 56;
 const ACTION_SIZE = 44;
 const FAB_RIGHT_MARGIN = 10;
 const FAB_BOTTOM_OFFSET = 0;
@@ -161,7 +160,11 @@ export function QuickActionFab({
                     backgroundColor: action.color,
                   }}
                 >
-                  <Ionicons name={action.iconName} size={22} color="white" />
+                  <Ionicons
+                    name={action.iconName}
+                    size={22}
+                    color={palette.slate[50]}
+                  />
                 </View>
               </Pressable>
             ))}
@@ -173,11 +176,11 @@ export function QuickActionFab({
         <Pressable
           testID="fab-button"
           onPress={toggleExpanded}
-          className="shadow-lg shadow-nileGreen-700/30 elevation-8"
+          className="elevation-8"
           style={({ pressed }) => ({
-            width: FAB_SIZE,
-            height: FAB_SIZE,
-            borderRadius: FAB_SIZE / 2,
+            width: QUICK_ACTION_FAB_SIZE,
+            height: QUICK_ACTION_FAB_SIZE,
+            borderRadius: QUICK_ACTION_FAB_SIZE / 2,
             opacity: pressed ? 0.9 : 1,
             shadowColor: palette.nileGreen[700],
             shadowOffset: { width: 0, height: 4 },
@@ -191,14 +194,14 @@ export function QuickActionFab({
             colors={[palette.nileGreen[500], palette.nileGreen[600]]}
             className="items-center justify-center"
             style={{
-              width: FAB_SIZE,
-              height: FAB_SIZE,
-              borderRadius: FAB_SIZE / 2,
+              width: QUICK_ACTION_FAB_SIZE,
+              height: QUICK_ACTION_FAB_SIZE,
+              borderRadius: QUICK_ACTION_FAB_SIZE / 2,
             }}
           >
             <Animated.View style={fabIconStyle}>
               {/* eslint-disable-next-line no-restricted-syntax */}
-              <Ionicons name="add" size={30} color="#fff" />
+              <Ionicons name="add" size={30} color={palette.slate[50]} />
             </Animated.View>
           </LinearGradient>
         </Pressable>

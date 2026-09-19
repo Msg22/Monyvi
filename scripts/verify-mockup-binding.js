@@ -41,12 +41,17 @@ function buildBindingApprovalRevision(imageRevision, bindingRevision) {
 
 function readField(markdown, label) {
   const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const match = markdown.match(new RegExp(`^- ${escaped}:[ \\t]*(.+?)[ \\t]*$`, "m"));
+  const match = markdown.match(
+    new RegExp(`^- ${escaped}:[ \\t]*(.+?)[ \\t]*$`, "m")
+  );
   return match ? match[1] : null;
 }
 
 function atxLevelTwoHeadingText(line) {
-  return line.replace(/^ {0,3}##[ \t]*/, "").replace(/[ \t]+#+[ \t]*$/, "").trim();
+  return line
+    .replace(/^ {0,3}##[ \t]*/, "")
+    .replace(/[ \t]+#+[ \t]*$/, "")
+    .trim();
 }
 
 function fencedCodeOpening(line) {
@@ -69,9 +74,7 @@ function fencedCodeOpening(line) {
 function isFencedCodeClosing(line, fence) {
   const match = line.match(/^ {0,3}(`+|~+)[ \t]*$/);
   return Boolean(
-    match &&
-      match[1][0] === fence.character &&
-      match[1].length >= fence.length
+    match && match[1][0] === fence.character && match[1].length >= fence.length
   );
 }
 
@@ -142,7 +145,9 @@ function extractBindingFactsBytes(sidecarBytes) {
     (heading) => heading.text === BINDING_FACTS_HEADING_TEXT
   );
   if (factsHeadings.length !== 1) {
-    throw new Error("binding sidecar must contain exactly one ## Binding Facts heading");
+    throw new Error(
+      "binding sidecar must contain exactly one ## Binding Facts heading"
+    );
   }
 
   const factsHeading = factsHeadings[0];
@@ -150,8 +155,13 @@ function extractBindingFactsBytes(sidecarBytes) {
     offsets[factsHeading.endIndex] +
     Buffer.byteLength(lines[factsHeading.endIndex], "utf8") +
     1;
-  const nextHeading = headings.find((heading) => heading.startIndex > factsHeading.endIndex);
-  const factsEnd = nextHeading === undefined ? sidecarBytes.length : offsets[nextHeading.startIndex];
+  const nextHeading = headings.find(
+    (heading) => heading.startIndex > factsHeading.endIndex
+  );
+  const factsEnd =
+    nextHeading === undefined
+      ? sidecarBytes.length
+      : offsets[nextHeading.startIndex];
   return sidecarBytes.subarray(factsStart, factsEnd);
 }
 
@@ -199,12 +209,16 @@ function validateBindingFacts(bindingFactsMarkdown) {
     ];
 
     if (matches.length !== 1) {
-      errors.push(`required Binding Facts key must occur exactly once: ${label}`);
+      errors.push(
+        `required Binding Facts key must occur exactly once: ${label}`
+      );
       continue;
     }
 
     if (!matches[0][1].trim()) {
-      errors.push(`required Binding Facts key must have a non-empty value: ${label}`);
+      errors.push(
+        `required Binding Facts key must have a non-empty value: ${label}`
+      );
     }
   }
   return errors;
@@ -240,22 +254,43 @@ function verifyMockupBinding(sidecarPath) {
   }
 
   const imageName = readField(markdown, "Approved reference image");
-  const approvedImageRevision = readField(markdown, "Approved reference image revision");
+  const approvedImageRevision = readField(
+    markdown,
+    "Approved reference image revision"
+  );
   const approvalStatus = readField(markdown, "Binding metadata approval");
-  const declaredBindingRevision = readField(markdown, "Binding metadata revision");
-  const approvedBindingRevision = readField(markdown, "Approved binding metadata revision");
-  const declaredBindingApprovalRevision = readField(markdown, "Binding approval revision");
-  const approvedBindingApprovalRevision = readField(markdown, "Approved binding approval revision");
-  const approvalEvidence = readField(markdown, "Binding metadata approval evidence/reference");
+  const declaredBindingRevision = readField(
+    markdown,
+    "Binding metadata revision"
+  );
+  const approvedBindingRevision = readField(
+    markdown,
+    "Approved binding metadata revision"
+  );
+  const declaredBindingApprovalRevision = readField(
+    markdown,
+    "Binding approval revision"
+  );
+  const approvedBindingApprovalRevision = readField(
+    markdown,
+    "Approved binding approval revision"
+  );
+  const approvalEvidence = readField(
+    markdown,
+    "Binding metadata approval evidence/reference"
+  );
 
   if (!imageName) {
     errors.push("approved reference image is required");
   }
 
   const hasValidImageRevision =
-    approvedImageRevision !== null && SHA256_PATTERN.test(approvedImageRevision);
+    approvedImageRevision !== null &&
+    SHA256_PATTERN.test(approvedImageRevision);
   if (!hasValidImageRevision) {
-    errors.push("approved reference image revision is required as sha256:<64 lowercase hex>");
+    errors.push(
+      "approved reference image revision is required as sha256:<64 lowercase hex>"
+    );
   }
 
   let currentImageRevision = null;
@@ -263,8 +298,13 @@ function verifyMockupBinding(sidecarPath) {
     const imagePath = path.resolve(path.dirname(sidecarPath), imageName);
     try {
       currentImageRevision = sha256(fs.readFileSync(imagePath));
-      if (hasValidImageRevision && currentImageRevision !== approvedImageRevision) {
-        errors.push("approved reference image revision does not match current image content");
+      if (
+        hasValidImageRevision &&
+        currentImageRevision !== approvedImageRevision
+      ) {
+        errors.push(
+          "approved reference image revision does not match current image content"
+        );
       }
     } catch (error) {
       errors.push(`unable to read approved reference image: ${error.message}`);
@@ -273,16 +313,23 @@ function verifyMockupBinding(sidecarPath) {
 
   let currentBindingMetadataRevision = null;
   const hasValidDeclaredBindingRevision =
-    declaredBindingRevision !== null && SHA256_PATTERN.test(declaredBindingRevision);
+    declaredBindingRevision !== null &&
+    SHA256_PATTERN.test(declaredBindingRevision);
   try {
     const bindingFactsBytes = extractBindingFactsBytes(sidecarBytes);
-    const bindingFactsMarkdown = new TextDecoder("utf-8", { fatal: true }).decode(bindingFactsBytes);
+    const bindingFactsMarkdown = new TextDecoder("utf-8", {
+      fatal: true,
+    }).decode(bindingFactsBytes);
     errors.push(...validateBindingFacts(bindingFactsMarkdown));
     currentBindingMetadataRevision = sha256(bindingFactsBytes);
     if (!hasValidDeclaredBindingRevision) {
-      errors.push("binding metadata revision is required as sha256:<64 lowercase hex>");
+      errors.push(
+        "binding metadata revision is required as sha256:<64 lowercase hex>"
+      );
     } else if (declaredBindingRevision !== currentBindingMetadataRevision) {
-      errors.push("binding metadata revision does not match current binding facts");
+      errors.push(
+        "binding metadata revision does not match current binding facts"
+      );
     }
   } catch (error) {
     errors.push(error.message);
@@ -296,13 +343,20 @@ function verifyMockupBinding(sidecarPath) {
     );
   }
 
-  if (!declaredBindingApprovalRevision || !SHA256_PATTERN.test(declaredBindingApprovalRevision)) {
-    errors.push("binding approval revision is required as sha256:<64 lowercase hex>");
+  if (
+    !declaredBindingApprovalRevision ||
+    !SHA256_PATTERN.test(declaredBindingApprovalRevision)
+  ) {
+    errors.push(
+      "binding approval revision is required as sha256:<64 lowercase hex>"
+    );
   } else if (
     currentBindingApprovalRevision !== null &&
     declaredBindingApprovalRevision !== currentBindingApprovalRevision
   ) {
-    errors.push("binding approval revision does not match the current image and binding metadata");
+    errors.push(
+      "binding approval revision does not match the current image and binding metadata"
+    );
   }
 
   if (approvalStatus !== "APPROVED") {
@@ -314,7 +368,9 @@ function verifyMockupBinding(sidecarPath) {
     approvedBindingRevision === PENDING ||
     approvedBindingRevision !== declaredBindingRevision
   ) {
-    errors.push("approved binding metadata revision must equal binding metadata revision");
+    errors.push(
+      "approved binding metadata revision must equal binding metadata revision"
+    );
   }
 
   if (
@@ -322,7 +378,9 @@ function verifyMockupBinding(sidecarPath) {
     approvedBindingApprovalRevision === PENDING ||
     approvedBindingApprovalRevision !== declaredBindingApprovalRevision
   ) {
-    errors.push("approved binding approval revision must equal binding approval revision");
+    errors.push(
+      "approved binding approval revision must equal binding approval revision"
+    );
   }
 
   if (!approvalEvidence || approvalEvidence === PENDING) {
@@ -332,7 +390,9 @@ function verifyMockupBinding(sidecarPath) {
     approvedBindingApprovalRevision !== PENDING &&
     !approvalEvidence.includes(approvedBindingApprovalRevision)
   ) {
-    errors.push("approval evidence/reference must identify the approved binding approval revision");
+    errors.push(
+      "approval evidence/reference must identify the approved binding approval revision"
+    );
   }
 
   return {
@@ -346,7 +406,9 @@ function verifyMockupBinding(sidecarPath) {
 
 function runCli(sidecarPaths) {
   if (sidecarPaths.length === 0) {
-    console.error("Usage: node scripts/verify-mockup-binding.js <sidecar.binding.md> [...]");
+    console.error(
+      "Usage: node scripts/verify-mockup-binding.js <sidecar.binding.md> [...]"
+    );
     return 2;
   }
 
