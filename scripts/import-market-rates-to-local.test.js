@@ -77,6 +77,7 @@ function buildObservations({
 function buildEnvelope({
   snapshotId = SNAPSHOT_A,
   capturedAt = CAPTURED_A,
+  publishedAt = capturedAt,
   source,
   batchId,
   omitInstrument,
@@ -84,6 +85,7 @@ function buildEnvelope({
   return {
     snapshotId,
     capturedAt,
+    publishedAt,
     root: buildRoot(),
     observations: buildObservations({
       snapshotId,
@@ -119,6 +121,33 @@ test("validateSnapshotPage accepts one complete bound root-plus-observation unit
       (row) => row.instrument_code === "currency:OMR"
     ).value_decimal,
     "0.10000000000000001"
+  );
+});
+
+test("import pages use publication order without rewriting older capture evidence", async () => {
+  const publicationA = "2026-09-09T11:30:00.000Z";
+  const publicationB = "2026-09-09T11:45:00.000Z";
+  const pages = [
+    buildPage({
+      snapshots: [
+        buildEnvelope({ capturedAt: CAPTURED_B, publishedAt: publicationA }),
+      ],
+      nextCursor: { createdAt: publicationA, id: SNAPSHOT_A },
+    }),
+    buildPage({
+      snapshots: [
+        buildEnvelope({
+          snapshotId: SNAPSHOT_B,
+          capturedAt: CAPTURED_A,
+          publishedAt: publicationB,
+        }),
+      ],
+    }),
+  ];
+  const units = await collectCompleteSnapshotUnits(async () => pages.shift());
+  assert.deepEqual(
+    units.map((unit) => unit.root.created_at),
+    [CAPTURED_B, CAPTURED_A]
   );
 });
 
@@ -239,7 +268,7 @@ test("buildLinkedSnapshotPageQuery emits only validated pagination literals", ()
     upperWatermark: WATERMARK,
   });
 
-  assert.match(query, /pull_market_rate_snapshots_page_v1/);
+  assert.match(query, /pull_market_rate_snapshots_page_v2/);
   assert.match(query, new RegExp(SNAPSHOT_A));
   assert.match(query, /2026-09-09T12:00:00\.000Z/);
   assert.match(query, /100/);

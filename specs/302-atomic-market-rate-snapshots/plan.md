@@ -197,7 +197,8 @@ It validates transactionally:
 
 - exact required membership and count;
 - no duplicate/unexpected instruments;
-- positive canonical decimals;
+- positive canonical decimals whose mobile compatibility conversion remains
+  finite and positive (PR #271 release-safety approval, 19 September 2026);
 - exact USD identity;
 - allowed unit/orientation;
 - `quality = valid`;
@@ -213,15 +214,37 @@ semantic mutation; conflict raises a deterministic error and commits nothing.
 Execution is revoked from PUBLIC/anon/authenticated and granted only to the
 trusted producer role.
 
+Migration 073 also checks existing complete snapshots and stops cutover with the
+offending identity if a compatibility-invalid rate exists. It does not rewrite,
+delete, clamp, or silently skip immutable evidence. Such a deployment requires
+an explicit recovery decision before retrying. Producer exponent validation runs
+before expansion so an out-of-range exponent cannot allocate a huge string.
+
 ### 5. Complete-snapshot pull RPC
 
-Add `public.pull_market_rate_snapshots_page_v1(...)`.
+Use `public.pull_market_rate_snapshots_page_v2(...)` (migration 072). V1 remains
+available only for compatibility; updated mobile and importer use V2.
 
-It pages by `(market_rates.created_at, market_rates.id)` under a fixed upper
-watermark and returns only complete eligible envelopes. Each envelope contains:
+It pages by `(private.market_rate_publications.published_at, snapshot_id)` under
+a fixed millisecond upper watermark and returns only complete eligible
+envelopes. A private singleton barrier row serializes publication transactions
+and first-page reads through commit. Immediate root/observation triggers acquire
+its lock before checking completeness, including concurrent partial imports.
+Publishers use real server clock time strictly beyond the barrier (wait one
+millisecond at equality; fail on clock regression); readers never synthesize a
+future global watermark. The reader is VOLATILE with a fresh query after lock
+acquisition. Thus earlier publications are committed before the first-page
+window is fixed; later ones must fall in a later window, even when capture
+predates the last sync.
+
+Migration 072 initializes delivery metadata for existing complete roots without
+rewriting their values, capture/provider times, or observation identities.
+Private metadata has RLS and no direct client grants. Each envelope contains:
 
 - `snapshotId`;
 - capture/order timestamp;
+- `publishedAt`, delivery-only timestamp; cursor `createdAt` now means this
+  field;
 - logical root rate values cast to exact plain text;
 - all 37 bound observations with exact `value_decimal` text and provenance.
 
@@ -244,8 +267,11 @@ still exact strings. Only then does it transform:
   fields;
 - observation exact values -> existing local exact `value_decimal` text.
 
-Root + observations are applied inside one Watermelon writer/page unit. The
-market snapshot cursor/watermark advances only after the complete page succeeds.
+Root + observations are validated across every page before returning the
+complete pull result. The shared Watermelon watermark advances only after the
+full sync pull/local application succeeds, never after an individual market
+page. Whole-history buffering is separately tracked by #316; no retention cutoff
+is introduced here.
 
 Because the wide local root is a JS/SQLite compatibility representation, its
 numeric rate fields are never authoritative current inputs after this point.

@@ -13,8 +13,9 @@ import { transformFromSupabase } from "./transforms";
 export const MARKET_RATE_SNAPSHOT_PULL_ERROR_CODE =
   "sync_invalid_market_rate_snapshot_page";
 
-const MARKET_RATE_SNAPSHOT_RPC = "pull_market_rate_snapshots_page_v1";
+const MARKET_RATE_SNAPSHOT_RPC = "pull_market_rate_snapshots_page_v2";
 const MARKET_RATE_SNAPSHOT_PAGE_SIZE = 50;
+const INCREMENTAL_WATERMARK_UUID_MAX = "ffffffff-ffff-ffff-ffff-ffffffffffff";
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const POSITIVE_PLAIN_DECIMAL = /^(?=.*[1-9])(?:0|[1-9]\d*)(?:\.\d+)?$/;
@@ -30,6 +31,7 @@ const ROOT_KEYS = [
 ] as const;
 const ENVELOPE_KEYS = [
   "capturedAt",
+  "publishedAt",
   "observations",
   "root",
   "snapshotId",
@@ -110,6 +112,7 @@ interface ParsedMarketRateObservation {
 
 interface ParsedMarketRateEnvelope {
   readonly capturedAt: string;
+  readonly publishedAt: string;
   readonly observations: readonly ParsedMarketRateObservation[];
   readonly root: ParsedMarketRateRoot;
   readonly snapshotId: string;
@@ -155,6 +158,8 @@ export async function pullMarketRateSnapshotsWithClient(
   client: MarketRateSnapshotRpcClient,
   start: MarketRateSnapshotCursor | null
 ): Promise<MarketRateSnapshotPullResult> {
+  // TODO: #316 bounds whole-history memory with restart-safe staging; never
+  // advance the shared sync watermark for a partial market page.
   const roots: Array<Record<string, unknown>> = [];
   const observations: Array<Record<string, unknown>> = [];
   const seenSnapshotIds = new Set<string>();
@@ -204,7 +209,7 @@ export async function pullMarketRateSnapshotsWithClient(
     if (
       !lastSnapshot ||
       page.nextCursor.id !== lastSnapshot.snapshotId ||
-      !timestampsEqual(page.nextCursor.createdAt, lastSnapshot.capturedAt)
+      !timestampsEqual(page.nextCursor.createdAt, lastSnapshot.publishedAt)
     ) {
       failInvalidPage();
     }
@@ -265,7 +270,11 @@ function parseEnvelope(
   const record = requireExactRecord(value, ENVELOPE_KEYS);
   const snapshotId = requireUuid(record.snapshotId);
   const capturedAt = requireTimestamp(record.capturedAt);
-  if (Date.parse(capturedAt) > Date.parse(upperWatermark)) {
+  const publishedAt = requireTimestamp(record.publishedAt);
+  if (
+    Date.parse(publishedAt) > Date.parse(upperWatermark) ||
+    Date.parse(capturedAt) > Date.parse(upperWatermark)
+  ) {
     failInvalidPage();
   }
   const root = parseRoot(record.root, capturedAt);
@@ -322,6 +331,7 @@ function parseEnvelope(
 
   return {
     capturedAt,
+    publishedAt,
     observations,
     root,
     snapshotId,
@@ -469,7 +479,9 @@ function parseCursor(value: unknown): MarketRateSnapshotCursor {
 
 function validateCursor(cursor: MarketRateSnapshotCursor): void {
   requireTimestamp(cursor.createdAt);
-  requireUuid(cursor.id);
+  if (cursor.id !== INCREMENTAL_WATERMARK_UUID_MAX) {
+    requireUuid(cursor.id);
+  }
 }
 
 function requireExactRecord(

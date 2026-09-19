@@ -1,6 +1,6 @@
 begin;
 
-select plan(42);
+select plan(48);
 
 create or replace function pg_temp.atomic_snapshot_root(
   p_gold text default '3738.7400000000000001',
@@ -349,6 +349,35 @@ select throws_ok(
 select throws_ok(
   $$select public.pull_market_rate_snapshots_page_v1('2099-01-01T00:00:00Z',null,null,1)$$,
   '22023', 'market_rate_snapshot_invalid_upper_watermark', 'future upper watermark is rejected'
+);
+
+select throws_ok(
+  $$select private.market_rate_snapshot_decimal_v1('1' || repeat('0', 400))$$,
+  '22023', 'snapshot_invalid_decimal', 'overflow is rejected before persistence'
+);
+select throws_ok(
+  $$select private.market_rate_snapshot_decimal_v1('0.' || repeat('0', 399) || '1')$$,
+  '22023', 'snapshot_invalid_decimal', 'underflow is rejected before persistence'
+);
+select is(
+  private.market_rate_snapshot_decimal_v1('0.' || repeat('0', 323) || '5'),
+  '5e-324'::numeric, 'representable subnormal remains exact'
+);
+select is(
+  private.market_rate_snapshot_decimal_v1('0.10000000000000001')::text,
+  '0.10000000000000001', 'compatibility check never rounds financial evidence'
+);
+select throws_ok(
+  $$select public.persist_market_rate_snapshot_v1(
+    '01234567-1111-4111-8111-111111111111', '2026-09-09T12:00:00Z',
+    pg_temp.atomic_snapshot_root('1' || repeat('0', 400)),
+    pg_temp.atomic_snapshot_observations(pg_temp.atomic_snapshot_root('1' || repeat('0', 400)))
+  )$$,
+  '22023', 'snapshot_invalid_decimal', 'direct RPC cannot bypass producer range validation'
+);
+select is(
+  (select count(*) from public.market_rates where id = '01234567-1111-4111-8111-111111111111'),
+  0::bigint, 'rejected incompatible snapshot leaves no persisted root'
 );
 
 select * from finish();

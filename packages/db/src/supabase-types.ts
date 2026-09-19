@@ -1676,6 +1676,15 @@ export type Database = {
         };
         Returns: Json;
       };
+      pull_market_rate_snapshots_page_v2: {
+        Args: {
+          p_cursor_created_at?: string;
+          p_cursor_id?: string;
+          p_limit?: number;
+          p_upper_watermark?: string;
+        };
+        Returns: Json;
+      };
       pull_metal_observations_page_v1: {
         Args: {
           p_after_created_at?: string | null;

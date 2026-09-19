@@ -278,7 +278,7 @@ evidence.
 ### Database / generated contracts
 
 - [x] **T031** [US2] Add
-`supabase/migrations/071_atomic_market_rate_snapshots.sql` persistence
+      `supabase/migrations/071_atomic_market_rate_snapshots.sql` persistence
       half to satisfy T025: remove legacy four-decimal numeric scale caps that
       would round exact provider values; add a `NOT VALID` FK with
       `ON DELETE CASCADE`, safe lookup index, service-role-only
@@ -335,8 +335,8 @@ evidence.
       explicit `--best-effort` behavior.
 
 **Checkpoint**: US1 + US2 are the minimum releasable trust guarantee.
-Producer-only or consumer-only completion must not be deployed/merged as
-issue #302 completion.
+Producer-only or consumer-only completion must not be deployed/merged as issue
+#302 completion.
 
 ---
 
@@ -593,3 +593,19 @@ Prefer coherent TDD commits/batches:
 
 Do not deploy/merge a producer-only or consumer-only intermediate state as
 completed issue #302.
+
+## Approved PR 271 publication-cursor follow-up
+
+- [x] Add migration 072 with private publication ledger/barrier, preserving
+      captured/provider evidence and all historical root/observation data.
+- [x] Replace mobile/importer delivery paging with V2 publication ordering;
+      retain exact snapshot validation, fixed windows and full-sync failure
+      semantics.
+- [x] Prove late capture, millisecond barrier, pinned window, role permissions,
+      delayed commit visibility and concurrent partial observation completion in
+      executable PostgreSQL tests; include both suites in CI.
+- [x] Verify V2 generated RPC signature against isolated database generation;
+      private delivery metadata introduces no WatermelonDB table/migration.
+- [x] Track bounded initial-sync memory separately in issue #316; no history
+      deletion, partial shared-watermark advance, or unapproved retention
+      policy.

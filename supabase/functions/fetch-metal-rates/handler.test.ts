@@ -129,6 +129,20 @@ test("OPTIONS returns CORS success without fetching or persisting", async () => 
   assert.equal(harness.persistenceCalls.length, 0);
 });
 
+test("incompatible provider rates fail before any persistence call", async (): Promise<void> => {
+  for (const token of ["1e400", "1e-400"]) {
+    const harness = createHarness({
+      providerResponse: new Response(
+        RAW_PROVIDER_SUCCESS.replace('"gold":3738.74', `"gold":${token}`),
+        { status: 200 }
+      ),
+    });
+    const { response } = await invoke("POST", harness);
+    assert.ok(response.status >= 400);
+    assert.equal(harness.persistenceCalls.length, 0);
+  }
+});
+
 test("scheduled POST persists one exact atomic snapshot", async () => {
   const harness = createHarness();
   const { response, body } = await invoke("POST", harness);

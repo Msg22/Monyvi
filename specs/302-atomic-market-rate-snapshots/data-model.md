@@ -40,6 +40,13 @@ the nested logical root payload does not carry a second independent ID.
    columns so PostgreSQL can retain the RPC's exact plain-decimal values;
    insert/replay acceptance validates those values exactly.
 2. `created_at` is immutable ordering metadata only, never freshness evidence.
+   Delivery paging instead uses server-private publication metadata introduced
+   by migration 072. `private.market_rate_publications` binds each complete root
+   to a `published_at` cursor; `private.market_rate_publication_barrier`
+   serializes publishers and first-page reads through transaction commit.
+   Neither private table is user-owned or synchronized to WatermelonDB. Wire
+   `publishedAt` is transport-only and never replaces capture or provider
+   timestamps.
 3. Same-ID semantically conflicting root/observation content is rejected.
 4. The wide root remains useful for historical/trend compatibility.
 5. After synchronization to WatermelonDB, wide numeric root fields are not
