@@ -11,6 +11,7 @@ interface ManualQaExtraRows {
   readonly metalHoldingStates: readonly SeedRow[];
   readonly metalLifecycleEvents: readonly SeedRow[];
   readonly marketRateObservations: readonly SeedRow[];
+  readonly marketRates: readonly SeedRow[];
 }
 
 interface ManualQaSeedContext {
@@ -315,7 +316,14 @@ describe("manual QA Metals lifecycle fixture", () => {
   });
 
   it("supplies deterministic observation-backed rates for every seeded Metals currency", () => {
-    const observations = buildRows().marketRateObservations;
+    const rows = buildRows();
+    const observations = rows.marketRateObservations;
+    const [marketRate] = rows.marketRates;
+
+    expect(marketRate).toBeDefined();
+    expect(
+      observations.every((row) => row["batch_id"] === marketRate?.["id"])
+    ).toBe(true);
 
     expect(
       observations.map((row) => row["instrument_code"] as string).sort()
@@ -471,7 +479,14 @@ describe("manual QA Metals lifecycle fixture", () => {
     expect(rowsFor(client, "metal_action_evidence")).toHaveLength(7);
     expect(rowsFor(client, "metal_lifecycle_events")).toHaveLength(7);
     expect(rowsFor(client, "metal_holding_states")).toHaveLength(5);
-    expect(rowsFor(client, "market_rate_observations")).toHaveLength(4);
+    expect(rowsFor(client, "market_rates")).toHaveLength(1);
+    expect(rowsFor(client, "market_rate_observations")).toHaveLength(37);
+    const [marketRate] = rowsFor(client, "market_rates");
+    expect(
+      rowsFor(client, "market_rate_observations").every(
+        (row) => row["batch_id"] === marketRate?.["id"]
+      )
+    ).toBe(true);
     const metalAssets = rowsFor(client, "assets").filter(
       (row) => row["type"] === "METAL"
     );

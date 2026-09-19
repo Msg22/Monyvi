@@ -718,7 +718,15 @@ describe("manual-qa-seed script helpers", () => {
           getStringField(row, "notes") !== "Manual QA seeded ATM withdrawal"
       )
     );
-    expect(marketRateRows).toHaveLength(0);
+    expect(marketRateRows).toEqual([
+      [
+        expect.objectContaining({
+          egp_usd: 0.02,
+          gold_usd_per_gram: 75,
+          silver_usd_per_gram: 0.95,
+        }),
+      ],
+    ]);
   });
 
   it("seeds a persistent secondary user only for account-switch device QA", async () => {

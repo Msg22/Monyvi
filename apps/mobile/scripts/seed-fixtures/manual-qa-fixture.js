@@ -1,4 +1,7 @@
 const { createHash } = require("node:crypto");
+const {
+  buildMarketRateObservations,
+} = require("./market-rate-snapshot-fixture");
 
 const MANUAL_QA_SEED_FIXTURE = {
   seedScope: "manual-qa",
@@ -53,6 +56,7 @@ function buildManualQaExtraRows({
   dateFromToday,
   deterministicUuid,
   fixedNow,
+  marketRateTemplate,
   seedIds,
   seedScope,
   userId,
@@ -312,6 +316,13 @@ function buildManualQaExtraRows({
     occurredAt: disposedOccurredAt,
     payload: disposedPayload,
     payloadVersion: "metals.dispose/v1",
+    userId,
+  });
+  const marketRateSnapshot = createManualQaMarketRateSnapshot({
+    currentTimestamp,
+    deterministicUuid,
+    marketRateTemplate,
+    seedScope,
     userId,
   });
 
@@ -870,12 +881,8 @@ function buildManualQaExtraRows({
         userId,
       }),
     ],
-    marketRateObservations: createManualQaMarketRateObservations({
-      currentTimestamp,
-      deterministicUuid,
-      seedScope,
-      userId,
-    }),
+    marketRateObservations: marketRateSnapshot.marketRateObservations,
+    marketRates: marketRateSnapshot.marketRates,
     debts: [
       {
         id: seedIds.debts.activeLent,
@@ -1770,38 +1777,44 @@ function createAcquisitionRateSnapshots({
   ];
 }
 
-function createManualQaMarketRateObservations({
+function createManualQaMarketRateSnapshot({
   currentTimestamp,
   deterministicUuid,
+  marketRateTemplate,
   seedScope,
   userId,
 }) {
-  const batchId = deterministicUuid(
+  const snapshotId = deterministicUuid(
     seedScope,
     userId,
     "market-rate-observation-batch"
   );
-  return [
-    ["metal:GOLD", "75", "usd_per_pure_gram"],
-    ["metal:SILVER", "0.95", "usd_per_pure_gram"],
-    ["currency:EGP", "0.02", "usd_per_currency_unit"],
-    ["currency:USD", "1", "usd_per_currency_unit"],
-  ].map(([instrumentCode, valueDecimal, unit]) => ({
-    id: deterministicUuid(
-      seedScope,
-      userId,
-      `market-rate-observation:${instrumentCode}`
-    ),
-    batch_id: batchId,
-    instrument_code: instrumentCode,
-    value_decimal: valueDecimal,
-    unit,
-    orientation: "quote_per_base",
-    provider_observed_at: currentTimestamp,
-    source: `manual_qa_fixture:${seedScope}`,
-    quality: "valid",
+  const marketRate = {
+    ...(marketRateTemplate ?? {
+      egp_usd: 0.02,
+      gold_usd_per_gram: 75,
+      silver_usd_per_gram: 0.95,
+    }),
+    id: snapshotId,
+    timestamp_currency: currentTimestamp,
+    timestamp_metal: currentTimestamp,
+    updated_at: currentTimestamp,
     created_at: currentTimestamp,
-  }));
+  };
+  return {
+    marketRates: [marketRate],
+    marketRateObservations: buildMarketRateObservations({
+      createdAt: currentTimestamp,
+      deterministicUuid,
+      marketRate,
+      observationIdKey: ({ instrumentCode }) =>
+        `market-rate-observation:${instrumentCode}`,
+      providerObservedAt: currentTimestamp,
+      seedScope,
+      source: `manual_qa_fixture:${seedScope}`,
+      userId,
+    }),
+  };
 }
 
 function canonicalizeJsonKeys(value) {
