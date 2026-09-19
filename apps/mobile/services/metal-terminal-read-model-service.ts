@@ -2,6 +2,8 @@ import {
   isSupportedMetalsIsoCurrencyCode,
   type MetalsIsoCurrencyCode,
   type SupportedMetal,
+  type RealizedAttribution,
+  type RoundedAttribution,
 } from "@monyvi/logic";
 
 import {
@@ -22,6 +24,8 @@ import {
 import { toPortfolioSaleHolding } from "@/services/metal-portfolio-sale-result-service";
 
 export interface MetalSoldTerminalFacts {
+  readonly canonicalAttribution?: RealizedAttribution;
+  readonly displayAttribution?: RoundedAttribution | null;
   readonly actionId: string;
   readonly feeDecimal: string;
   readonly grossProceedsDecimal: string;
@@ -139,6 +143,7 @@ function toSoldTerminalFacts(
   if (outcome.available) {
     return Object.freeze({
       actionId: outcome.value.actionId,
+      canonicalAttribution: outcome.value.attribution,
       feeDecimal: outcome.value.feeDecimal,
       grossProceedsDecimal: outcome.value.grossProceedsDecimal,
       kind: "sold",

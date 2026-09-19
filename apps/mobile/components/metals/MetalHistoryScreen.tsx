@@ -146,7 +146,13 @@ function HistoryRow({
   );
   const purityLabel = resolvePurityLabel(item, t);
   const metadata = [metalLabel, purityLabel, formLabel].join(" · ");
-  const dateLabel = formatHistoryDate(item.occurredAt, locale);
+  const terminalDate = item.terminalFacts?.terminalDate;
+  const dateLabel = formatHistoryDate(
+    terminalDate === undefined
+      ? item.occurredAt
+      : new Date(`${terminalDate}T12:00:00`),
+    locale
+  );
   const statusLabel = t(`status.${item.status}`);
   const terminalSummary = getTerminalSummary(item, locale, t);
   const accessibilityLabel = [

@@ -1,3 +1,5 @@
+import { terminalFactsFixture } from "./terminal-facts-fixture";
+
 jest.mock("@monyvi/db", () => ({ database: { get: jest.fn() } }));
 jest.mock("@/services/user-data-access", () => ({
   getCurrentUserDataScope: jest.fn(),
@@ -14,6 +16,7 @@ function soldHolding(index: number): MetalHistoryHoldingInput {
   const id = `holding-${index.toString().padStart(3, "0")}`;
   const createdEventId = `created-${index}`;
   return {
+    terminalFacts: terminalFactsFixture(),
     asset: {
       acquisitionActionId: null,
       id,

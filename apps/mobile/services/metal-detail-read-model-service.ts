@@ -29,6 +29,7 @@ import {
   type SupportedMetal,
 } from "@monyvi/logic";
 import { Q, type Query } from "@nozbe/watermelondb";
+import { buildMetalDetailTerminalFacts } from "@/services/metal-terminal-display-service";
 import {
   getCurrentUserDataScope,
   queryChildrenOfOwnedParents,
@@ -478,8 +479,7 @@ export function buildMetalDetailReadModel(
     requiresCompleteMaterialCorrection: unavailableExactFacts.length > 0,
     renderKey: toRenderKey(input.metal.metalType, itemForm),
     status,
-    terminalFacts:
-      input.terminalFacts?.kind === status ? input.terminalFacts : null,
+    terminalFacts: buildMetalDetailTerminalFacts(input, status),
     timeline:
       projection === null
         ? []

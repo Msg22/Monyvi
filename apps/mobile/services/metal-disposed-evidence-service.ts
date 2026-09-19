@@ -1,6 +1,7 @@
 import {
   assertFinancialActionStateEvidence,
   parseFinancialActionEnvelopeJson,
+  parseFinancialActionEvidenceJson,
   type CanonicalJsonValue,
   type FinancialActionServerOutcome,
   type FinancialActionState,
@@ -11,6 +12,11 @@ const REPORTABLE_RECONCILIATION_STATES: readonly string[] = Object.freeze([
   "sync_pending",
   "sync_failed",
   "accepted",
+]);
+
+const REPORTABLE_HOLDING_STATES: readonly string[] = Object.freeze([
+  ...REPORTABLE_RECONCILIATION_STATES,
+  "reconciled",
 ]);
 
 export type MetalDisposalReason =
@@ -174,7 +180,7 @@ function classifyDisposalExclusion(
   if (
     holding.status !== "disposed" ||
     !holding.isVisible ||
-    !REPORTABLE_RECONCILIATION_STATES.includes(holding.reconciliationState) ||
+    !REPORTABLE_HOLDING_STATES.includes(holding.reconciliationState) ||
     event === null ||
     group === null ||
     event.deleted ||
@@ -257,7 +263,7 @@ function shapeReason(value: CanonicalJsonValue): ShapedDisposalReason | null {
 
 function parseJsonValue(value: string): CanonicalJsonValue | null {
   try {
-    const parsed = JSON.parse(value) as unknown;
+    const parsed = parseFinancialActionEvidenceJson(value);
     return isCanonicalJsonValue(parsed) ? parsed : null;
   } catch {
     return null;

@@ -463,7 +463,12 @@ function toHistoryItem(
     terminalFacts: holding.terminalFacts,
     userId,
   });
-  if (model === null || model.status === "active") return null;
+  if (
+    model === null ||
+    model.status === "active" ||
+    model.terminalFacts === null
+  )
+    return null;
   const terminal = model.timeline[0];
   if (terminal === undefined) return null;
   return Object.freeze({

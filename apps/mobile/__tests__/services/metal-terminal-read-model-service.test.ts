@@ -126,8 +126,12 @@ describe("metal terminal read-model evidence", () => {
       baseInput("sell", salePayload(), "metals.sell/v2")
     );
 
-    expect(facts).toEqual({
+    expect(facts).toMatchObject({
       actionId: TERMINAL_ACTION_ID,
+      canonicalAttribution: {
+        combinedDecimal: "5500",
+        breakdown: { available: false },
+      },
       feeDecimal: "500",
       grossProceedsDecimal: "36000",
       kind: "sold",

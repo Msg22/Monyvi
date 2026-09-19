@@ -282,7 +282,7 @@ describe("MetalHistoryScreen", () => {
                 realizedResultCurrency: null,
                 realizedResultDecimal: null,
                 realizedResultUnavailableReason: "invalid_sale_evidence",
-                terminalDate: "2026-09-01",
+                terminalDate: "2026-08-22",
               },
             },
           ],
@@ -297,7 +297,11 @@ describe("MetalHistoryScreen", () => {
       />
     );
 
-    expect(screen.getByText(/سبتمبر/)).toBeTruthy();
+    expect(screen.getByText(/أغسطس/)).toBeTruthy();
+    expect(screen.getByTestId("metal-history-item-sold")).toHaveProp(
+      "accessibilityLabel",
+      expect.stringContaining("أغسطس")
+    );
     expect(screen.getByText("EGP 10,450.00")).toBeTruthy();
   });
 

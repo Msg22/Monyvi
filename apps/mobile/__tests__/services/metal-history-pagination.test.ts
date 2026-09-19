@@ -1,3 +1,14 @@
+jest.mock("@/services/metal-terminal-read-model-service", () => ({
+  shapeMetalTerminalFacts: (input: {
+    readonly holdingState: { readonly status: "sold" | "disposed" };
+  }): unknown =>
+    jest
+      .requireActual<
+        typeof import("./terminal-facts-fixture")
+      >("./terminal-facts-fixture")
+      .terminalFactsFixture(input.holdingState.status),
+}));
+
 interface QueryCondition {
   readonly column?: string;
   readonly kind: "sortBy" | "where";
