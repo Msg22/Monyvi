@@ -88,6 +88,9 @@ const translations: Readonly<Record<string, string>> = {
   "metal.gold": "Gold",
   "metal.silver": "Silver",
   "rate.missing": "Rates: current rate unavailable",
+  "rate.short_stale": "Last available",
+  "rate.short_unknown": "Age unknown",
+  "rate.short_fresh": "Current",
   purity_gold_999: "24K · 999",
   "render.objectAccessibility": "{{metal}} {{form}} illustration",
   "status.active": "Active",
@@ -642,6 +645,13 @@ describe("approved active holding-detail fidelity", () => {
             proceedsCurrency: "EGP",
             realizedResultCurrency: "EGP",
             realizedResultDecimal: "1550",
+            displayRateTrust: [
+              {
+                currency: "USD",
+                state: "stale",
+                providerObservedAt: new Date("2026-08-01T12:00:00Z"),
+              },
+            ],
             displayAttribution: {
               combinedDecimal: "1550.00",
               displayedComponentSumDecimal: "1550.00",
@@ -667,6 +677,8 @@ describe("approved active holding-detail fidelity", () => {
     expect(screen.getAllByText("Net proceeds")).toHaveLength(2);
     expect(screen.getAllByText("EGP 10,450.00")).toHaveLength(2);
     expect(screen.getByText("EGP 1,550.00 profit from this sale")).toBeTruthy();
+    expect(screen.getByText("USD · Last available")).toBeTruthy();
+    expect(screen.getByText(/Prices last updated 01 Aug 2026/)).toBeTruthy();
     expect(screen.getByText("Holding story")).toBeTruthy();
     expect(screen.getAllByText("Sold").length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText("22 Aug 2026")).toBeTruthy();

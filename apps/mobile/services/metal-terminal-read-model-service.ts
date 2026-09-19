@@ -22,10 +22,18 @@ import {
   type MetalSellRateReferenceSnapshot,
 } from "@/services/metal-realized-sale-read-model-service";
 import { toPortfolioSaleHolding } from "@/services/metal-portfolio-sale-result-service";
+import type { LiveRatesTrustValue } from "./live-rates-trust-read-model-service";
+
+export interface MetalDisplayRateTrust {
+  readonly currency: MetalsIsoCurrencyCode;
+  readonly state: LiveRatesTrustValue["state"];
+  readonly providerObservedAt: Date | null;
+}
 
 export interface MetalSoldTerminalFacts {
   readonly canonicalAttribution?: RealizedAttribution;
   readonly displayAttribution?: RoundedAttribution | null;
+  readonly displayRateTrust?: readonly MetalDisplayRateTrust[];
   readonly actionId: string;
   readonly feeDecimal: string;
   readonly grossProceedsDecimal: string;

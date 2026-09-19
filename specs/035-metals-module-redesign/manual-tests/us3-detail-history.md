@@ -33,6 +33,25 @@ physical form must retain the holding and select the neutral render identity.
 
 ## Device matrix and evidence
 
+### Review follow-up: consumed display FX trust
+
+- With a Sold holding whose purchase currency differs from preferred currency,
+  inspect the result while its calculation disclosure is collapsed. Each
+  actually consumed non-USD display currency must show its current trust status
+  and provider update date/time when known. Stale/unknown valid FX remains
+  calculable; do not confuse this display conversion with historical sale rates.
+- Expand/collapse the calculation disclosure: result and FX trust stay visible.
+  Same-currency display must not show unrelated metal/FX warnings.
+  Missing/invalid required FX keeps proceeds visible and marks only converted
+  result unavailable.
+- Use existing deterministic manual-QA Sold fixture in English with EGP
+  preferred: confirm `EGP 5,500.00 profit from this sale`; expand and confirm
+  the breakdown-unavailable explanation. Empty terminal snapshots do not erase
+  this exact same-currency combined result.
+- Automated: sold evidence duplicate-key regression; terminal display trust
+  scenarios; holding-detail fidelity; timezone boundary under UTC/Cairo/UTC+14.
+  Maestro assertions updated; device execution remains outstanding.
+
 ### PR #315 review regression checks
 
 Use existing seeded Sold/Disposed holdings; do not execute Sell, Dispose, or

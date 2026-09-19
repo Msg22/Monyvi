@@ -18,6 +18,7 @@ import {
   calculatePureGrams,
   calculateRealizedAttribution,
   parseFinancialActionEnvelopeJson,
+  parseFinancialActionEvidenceJson,
   assertFinancialActionStateEvidence,
   fromMinorUnits,
   isSupportedMetalsIsoCurrencyCode,
@@ -527,7 +528,7 @@ function currentCalendarDate(): string {
 
 function parseRecord(value: string): ParsedRecord | null {
   try {
-    return asRecord(JSON.parse(value));
+    return asRecord(parseFinancialActionEvidenceJson(value));
   } catch {
     return null;
   }
