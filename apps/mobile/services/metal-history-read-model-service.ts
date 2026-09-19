@@ -2,6 +2,7 @@ import {
   database,
   type Asset,
   type AssetMetal,
+  type FinancialActionGroup,
   type MetalActionEvidence,
   type MetalHoldingState,
   type MetalLifecycleEvent,
@@ -25,6 +26,10 @@ import {
   type MetalDetailRenderKey,
 } from "@/services/metal-detail-read-model-service";
 import { hasBoundEffectiveActionEvidence } from "@/services/metal-portfolio-read-model-service";
+import {
+  shapeMetalTerminalFacts,
+  type MetalTerminalFacts,
+} from "@/services/metal-terminal-read-model-service";
 
 export const METAL_HISTORY_PAGE_SIZE = 50;
 
@@ -41,6 +46,7 @@ export interface MetalHistoryHoldingInput {
   readonly holdingState: MetalDetailHoldingStateInput;
   readonly lifecycleEvents: readonly MetalDetailLifecycleEventInput[];
   readonly metal: MetalDetailMetalInput;
+  readonly terminalFacts?: MetalTerminalFacts | null;
 }
 
 export interface BuildMetalHistoryReadModelInput {
@@ -61,6 +67,7 @@ export interface MetalHistoryItem {
   readonly purityFactorDecimal: string | null;
   readonly renderKey: MetalDetailRenderKey | null;
   readonly status: Exclude<MetalHistoryFilter, "all">;
+  readonly terminalFacts: MetalTerminalFacts | null;
 }
 
 export interface MetalHistoryReadModel {
@@ -283,6 +290,7 @@ async function readHistoryAssets(
 interface HistoryDependencies {
   readonly evidence: readonly MetalActionEvidence[];
   readonly events: readonly MetalLifecycleEvent[];
+  readonly groups: readonly FinancialActionGroup[];
   readonly metals: readonly AssetMetal[];
 }
 
@@ -292,7 +300,7 @@ async function readHistoryDependencies(
   terminalStates: readonly MetalHoldingState[]
 ): Promise<HistoryDependencies> {
   const holdingIds = terminalStates.map((state) => state.holdingId);
-  const [metals, events, evidence] = await Promise.all([
+  const [metals, events, evidence, groups] = await Promise.all([
     scope
       .queryChildrenOfOwnedParents(
         database.get<AssetMetal>("asset_metals"),
@@ -317,8 +325,16 @@ async function readHistoryDependencies(
         Q.where("deleted", false)
       )
       .fetch(),
+    scope
+      .queryOwned(
+        database.get<FinancialActionGroup>("financial_action_groups"),
+        Q.where("domain", "metals"),
+        Q.where("domain_reference_id", Q.oneOf(holdingIds)),
+        Q.where("deleted", false)
+      )
+      .fetch(),
   ]);
-  return { evidence, events, metals };
+  return { evidence, events, groups, metals };
 }
 
 function shapeReadHistoryHoldings(
@@ -346,6 +362,14 @@ function shapeReadHistoryHoldings(
     const holdingEvidence = dependencies.evidence.filter(
       (candidate) => candidate.holdingId === state.holdingId
     );
+    const terminalFacts = shapeHistoryTerminalFacts(
+      asset,
+      metal,
+      metal.metalType,
+      state,
+      holdingEvents,
+      dependencies.groups
+    );
     return [
       {
         asset: toDetailAssetInput(asset),
@@ -355,8 +379,30 @@ function shapeReadHistoryHoldings(
           holdingEvidence
         ),
         metal: toDetailMetalInput(metal, metal.metalType),
+        terminalFacts,
       },
     ];
+  });
+}
+
+function shapeHistoryTerminalFacts(
+  asset: Asset,
+  metal: AssetMetal,
+  metalType: SupportedMetal,
+  state: MetalHoldingState,
+  events: readonly MetalLifecycleEvent[],
+  groups: readonly FinancialActionGroup[]
+): MetalTerminalFacts | null {
+  return shapeMetalTerminalFacts({
+    asset,
+    event: events.find((event) => event.id === state.effectiveEventId) ?? null,
+    group:
+      groups.find((group) => group.actionId === state.effectiveActionId) ??
+      null,
+    holdingState: state,
+    metal: { ...metal, metalType },
+    rateReferences: [],
+    userId: state.userId,
   });
 }
 
@@ -414,9 +460,15 @@ function toHistoryItem(
     lifecycleEvents: holding.lifecycleEvents,
     metal: holding.metal,
     rateReferences: [],
+    terminalFacts: holding.terminalFacts,
     userId,
   });
-  if (model === null || model.status === "active") return null;
+  if (
+    model === null ||
+    model.status === "active" ||
+    model.terminalFacts === null
+  )
+    return null;
   const terminal = model.timeline[0];
   if (terminal === undefined) return null;
   return Object.freeze({
@@ -430,6 +482,7 @@ function toHistoryItem(
     purityFactorDecimal: model.purityFactorDecimal,
     renderKey: model.renderKey,
     status: model.status,
+    terminalFacts: model.terminalFacts,
   });
 }
 

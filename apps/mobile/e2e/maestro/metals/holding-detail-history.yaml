@@ -1,12 +1,17 @@
 appId: com.monyvi.app
 ---
-# Requires the deterministic Slice 6 holding fixture and a Metro-backed dev client.
+# Requires the deterministic manual-QA terminal holdings and a Metro-backed dev client.
 - runFlow: ../helpers/setup.yaml
 - openLink: monyvi://metals/history
 - extendedWaitUntil:
     visible:
       id: metal-history-root
     timeout: 30000
+- assertVisible:
+    id: metal-history-terminal-summary-sold
+- assertVisible:
+    id: metal-history-terminal-summary-disposed
+- takeScreenshot: metals-15-history-terminal-evidence
 - tapOn:
     id: metal-history-filter-sold
 - assertVisible:
@@ -15,5 +20,52 @@ appId: com.monyvi.app
     id: metal-history-item-sold
 - assertVisible:
     id: metal-holding-detail-root
+- scrollUntilVisible:
+    element:
+      id: metal-sold-net-proceeds
+    direction: DOWN
+- assertVisible:
+    id: metal-sold-net-proceeds
+- assertVisible:
+    text: "EGP 5,500.00 profit from this sale"
+- takeScreenshot: metals-16-sold-holding-detail
+- scrollUntilVisible:
+    element:
+      id: metal-detail-calculation-disclosure
+    direction: DOWN
+- assertNotVisible:
+    id: metal-sold-calculation-breakdown
+- tapOn:
+    id: metal-detail-calculation-disclosure
+- assertVisible:
+    id: metal-sold-calculation-breakdown
+- assertVisible:
+    text: "Breakdown unavailable. The total is based on your recorded details."
+- tapOn:
+    id: metal-detail-calculation-disclosure
+- assertNotVisible:
+    id: metal-sold-calculation-breakdown
 - assertVisible:
     id: metal-holding-action-undo
+- openLink: monyvi://metals/history
+- extendedWaitUntil:
+    visible:
+      id: metal-history-root
+    timeout: 30000
+- tapOn:
+    id: metal-history-filter-disposed
+- tapOn:
+    id: metal-history-item-disposed
+- extendedWaitUntil:
+    visible:
+      id: metal-disposed-terminal-details
+    timeout: 30000
+- scrollUntilVisible:
+    element:
+      id: metal-disposal-reason
+    direction: DOWN
+- assertVisible:
+    id: metal-disposal-reason
+- assertNotVisible:
+    id: metal-sold-net-proceeds
+- takeScreenshot: metals-17-disposed-holding-detail
