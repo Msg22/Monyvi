@@ -61,6 +61,9 @@ jest.mock("@/utils/logger", () => ({
 }));
 
 jest.mock("@monyvi/logic", () => ({
+  formatRateAge:
+    jest.requireActual<typeof import("@monyvi/logic")>("@monyvi/logic")
+      .formatRateAge,
   CURRENCY_INFO_MAP: { EGP: { code: "EGP", symbol: "EGP" } },
   SUPPORTED_CURRENCIES: [],
   calculateTrendPercent: (): number => 0,

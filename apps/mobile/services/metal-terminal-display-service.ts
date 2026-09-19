@@ -95,6 +95,7 @@ export function buildMetalTerminalDisplayFacts(
                       currency: consumedCurrency,
                       state: rate.state,
                       providerObservedAt: rate.providerObservedAt,
+                      ageMs: rate.ageMs,
                     },
                   ];
             }

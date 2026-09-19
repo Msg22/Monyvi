@@ -38,8 +38,11 @@ physical form must retain the holding and select the neutral render identity.
 - With a Sold holding whose purchase currency differs from preferred currency,
   inspect the result while its calculation disclosure is collapsed. Each
   actually consumed non-USD display currency must show its current trust status
-  and provider update date/time when known. Stale/unknown valid FX remains
-  calculable; do not confuse this display conversion with historical sale rates.
+  and provider update date/time when known. Stale rates also show their
+  localized age (for example, `2 days ago`) beside the status, outside the
+  disclosure. Fresh/unknown states must not display an invented stale age.
+  Stale/unknown valid FX remains calculable; do not confuse this display
+  conversion with historical sale rates.
 - Expand/collapse the calculation disclosure: result and FX trust stay visible.
   Same-currency display must not show unrelated metal/FX warnings.
   Missing/invalid required FX keeps proceeds visible and marks only converted

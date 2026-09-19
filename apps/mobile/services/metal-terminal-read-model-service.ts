@@ -25,6 +25,7 @@ import { toPortfolioSaleHolding } from "@/services/metal-portfolio-sale-result-s
 import type { LiveRatesTrustValue } from "./live-rates-trust-read-model-service";
 
 export interface MetalDisplayRateTrust {
+  readonly ageMs: number | null;
   readonly currency: MetalsIsoCurrencyCode;
   readonly state: LiveRatesTrustValue["state"];
   readonly providerObservedAt: Date | null;
