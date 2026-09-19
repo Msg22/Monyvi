@@ -60,6 +60,10 @@ export interface LiveRatesScreenReadModelInput {
   readonly previousDayRate: Parameters<typeof getCurrencyUsdValue>[0] | null;
   readonly preferredCurrency: CurrencyType;
   readonly locale: string;
+  readonly translateRelativeTime: (
+    key: "just_now" | "minutes_ago" | "hours_ago" | "days_ago",
+    count: number
+  ) => string;
 }
 export interface LiveRatesScreenReadModel {
   readonly metals: MetalDisplayData;
@@ -153,6 +157,7 @@ function buildCurrencies(
     previousDayRate,
     preferredCurrency,
     locale,
+    translateRelativeTime,
   }: LiveRatesScreenReadModelInput,
   currencySymbol: string
 ): readonly CurrencyDisplayItem[] {
@@ -196,7 +201,8 @@ function buildCurrencies(
           selectedSnapshot.trust.currencies.get(preferredCurrency) ??
             missingTrustValue(),
         ],
-        locale
+        locale,
+        translateRelativeTime
       ),
     };
   });
@@ -205,6 +211,7 @@ function buildTrust({
   selectedSnapshot,
   preferredCurrency,
   locale,
+  translateRelativeTime,
 }: LiveRatesScreenReadModelInput): LiveRatesTrustDisplay {
   const trust = selectedSnapshot
     ? selectedSnapshot.trust
@@ -216,20 +223,23 @@ function buildTrust({
         trust.gold,
         trust.currencies.get(preferredCurrency) ?? missingTrustValue(),
       ],
-      locale
+      locale,
+      translateRelativeTime
     ),
     silver: toCombinedTrustDisplay(
       [
         trust.silver,
         trust.currencies.get(preferredCurrency) ?? missingTrustValue(),
       ],
-      locale
+      locale,
+      translateRelativeTime
     ),
     currencies: toTrustDisplayValue(
       summarizeLiveRatesTrust(currencyTrustValues),
       getConservativeObservedAt(currencyTrustValues),
       getConservativeAgeMs(currencyTrustValues),
-      locale
+      locale,
+      translateRelativeTime
     ),
   };
 }
@@ -294,7 +304,8 @@ function toTrustDisplayValue(
     | LiveRatesTrustState,
   providerObservedAt: Date | null | undefined,
   ageMs: number | null | undefined,
-  locale: string
+  locale: string,
+  translateRelativeTime: LiveRatesScreenReadModelInput["translateRelativeTime"]
 ): LiveRatesTrustDisplayValue {
   const state = typeof value === "string" ? value : value.state;
   const date =
@@ -306,7 +317,7 @@ function toTrustDisplayValue(
   return {
     state,
     dateTime: date?.toLocaleString(locale) ?? null,
-    ageText: formatRateAge(resolvedAgeMs, locale),
+    ageText: formatRateAge(resolvedAgeMs, translateRelativeTime),
     quality: typeof value === "string" ? null : (value.quality ?? null),
     source: typeof value === "string" ? null : (value.source ?? null),
   };
@@ -314,7 +325,8 @@ function toTrustDisplayValue(
 
 function toCombinedTrustDisplay(
   values: readonly LiveRatesTrustValue[],
-  locale: string
+  locale: string,
+  translateRelativeTime: LiveRatesScreenReadModelInput["translateRelativeTime"]
 ): LiveRatesTrustDisplayValue {
   const sources = uniquePresentValues(
     values.map((value): string | null | undefined => value.source)
@@ -327,7 +339,8 @@ function toCombinedTrustDisplay(
       summarizeLiveRatesTrust(values),
       getConservativeObservedAt(values),
       getConservativeAgeMs(values),
-      locale
+      locale,
+      translateRelativeTime
     ),
     quality: qualities.length === 1 ? qualities[0] : null,
     source: sources.length === 1 ? sources[0] : null,
@@ -348,27 +361,24 @@ function missingTrustValue(): LiveRatesTrustValue {
   return { ageMs: null, providerObservedAt: null, state: "missing" };
 }
 
-function formatRateAge(ageMs: number | null, locale: string): string | null {
+function formatRateAge(
+  ageMs: number | null,
+  translateRelativeTime: LiveRatesScreenReadModelInput["translateRelativeTime"]
+): string | null {
   if (ageMs === null || !Number.isFinite(ageMs) || ageMs < 0) return null;
   const minutes = Math.floor(ageMs / 60_000);
   if (minutes < 60) {
-    return new Intl.RelativeTimeFormat(locale, { numeric: "auto" }).format(
-      -minutes,
-      "minute"
+    return translateRelativeTime(
+      minutes === 0 ? "just_now" : "minutes_ago",
+      minutes
     );
   }
   const hours = Math.floor(ageMs / 3_600_000);
   if (hours < 24) {
-    return new Intl.RelativeTimeFormat(locale, { numeric: "always" }).format(
-      -hours,
-      "hour"
-    );
+    return translateRelativeTime("hours_ago", hours);
   }
   const days = Math.floor(hours / 24);
-  return new Intl.RelativeTimeFormat(locale, { numeric: "always" }).format(
-    -Math.max(1, days),
-    "day"
-  );
+  return translateRelativeTime("days_ago", Math.max(1, days));
 }
 
 function currentRateDecimal(

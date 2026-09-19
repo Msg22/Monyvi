@@ -74,8 +74,21 @@ jest.mock("@monyvi/logic", () => ({
 jest.mock("react-i18next", () => ({
   useTranslation: (): {
     readonly i18n: { readonly resolvedLanguage: "en" };
+    readonly t: (key: string, options?: { readonly count?: number }) => string;
   } => ({
     i18n: { resolvedLanguage: "en" },
+    t: (key, options): string => {
+      if (key === "minutes_ago") {
+        return `${options?.count ?? 0} minutes ago`;
+      }
+      if (key === "hours_ago") {
+        return `${options?.count ?? 0} hours ago`;
+      }
+      if (key === "days_ago") {
+        return `${options?.count ?? 0} days ago`;
+      }
+      return "Just now";
+    },
   }),
 }));
 

@@ -57,7 +57,7 @@ interface UseLiveRatesScreenResult {
 
 export function useLiveRatesScreen(): UseLiveRatesScreenResult {
   const database = useDatabase();
-  const { i18n } = useTranslation();
+  const { i18n, t } = useTranslation("common");
   const locale = resolveLiveRatesLocale(i18n.resolvedLanguage);
   const {
     selectedSnapshot,
@@ -119,8 +119,9 @@ export function useLiveRatesScreen(): UseLiveRatesScreenResult {
         previousDayRate,
         preferredCurrency,
         locale,
+        translateRelativeTime: (key, count): string => t(key, { count }),
       }),
-    [selectedSnapshot, previousDayRate, preferredCurrency, locale]
+    [selectedSnapshot, previousDayRate, preferredCurrency, locale, t]
   );
 
   const sortedCurrencies = useMemo((): readonly CurrencyDisplayItem[] => {
