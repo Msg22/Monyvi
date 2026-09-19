@@ -102,7 +102,21 @@ jest.mock("@/utils/logger", () => ({
 }));
 
 jest.mock("react-i18next", () => ({
-  useTranslation: () => ({ i18n: { resolvedLanguage: "en" } }),
+  useTranslation: () => ({
+    i18n: { resolvedLanguage: "en" },
+    t: (key: string, options?: { readonly count?: number }): string => {
+      if (key === "minutes_ago") {
+        return `${options?.count ?? 0} minutes ago`;
+      }
+      if (key === "hours_ago") {
+        return `${options?.count ?? 0} hours ago`;
+      }
+      if (key === "days_ago") {
+        return `${options?.count ?? 0} days ago`;
+      }
+      return "Just now";
+    },
+  }),
 }));
 
 const netWorthInputs: Array<Record<string, unknown>> = [];
