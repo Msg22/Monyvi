@@ -20,6 +20,11 @@ interface MetalHistoryScreenProps {
   readonly history: MetalHistoryReadModel;
   readonly isLoading: boolean;
   readonly isOffline: boolean;
+  /**
+   * True while rows for a newly selected filter are loading. The shell stays
+   * mounted and only the list body shows a skeleton.
+   */
+  readonly isReplacingRows: boolean;
   readonly loadMore: () => void;
   readonly onFilterChange: (filter: MetalHistoryFilter) => void;
   readonly onOpenHolding: (holdingId: string) => void;
@@ -83,12 +88,28 @@ export function MetalHistoryScreen(
         />
       )}
       ListEmptyComponent={
-        <Text className="py-12 text-center text-base text-text-secondary dark:text-text-secondary-dark">
-          {props.error !== null ? t("history.load_error") : t("history.empty")}
-        </Text>
+        props.isReplacingRows ? (
+          <HistoryListSkeleton />
+        ) : (
+          <Text className="py-12 text-center text-base text-text-secondary dark:text-text-secondary-dark">
+            {props.error !== null
+              ? t("history.load_error")
+              : t("history.empty")}
+          </Text>
+        )
       }
       showsVerticalScrollIndicator={false}
     />
+  );
+}
+
+function HistoryListSkeleton(): React.JSX.Element {
+  return (
+    <View testID="metal-history-list-skeleton" className="gap-3 pt-2">
+      <Skeleton width="100%" height={84} borderRadius={16} />
+      <Skeleton width="100%" height={84} borderRadius={16} />
+      <Skeleton width="100%" height={84} borderRadius={16} />
+    </View>
   );
 }
 

@@ -25,7 +25,7 @@ import type {
 import { HoldingSeparator, MetalHoldingRow } from "./MetalPortfolioHoldingRow";
 import {
   getPortfolioRateAccessibilityCopy,
-  type PortfolioRateTrustState,
+  resolvePortfolioRateCopy,
 } from "./portfolio-rate-presentation";
 import {
   formatCodeAmount,
@@ -308,7 +308,12 @@ function PortfolioSummary({
   const rateAccessibilityCopy = getPortfolioRateAccessibilityCopy(
     portfolio.rateStatus.state,
     rateProviderObservedAt,
-    i18n?.resolvedLanguage
+    i18n?.resolvedLanguage,
+    new Date()
+  );
+  const rateAccessibilityLabel = resolvePortfolioRateCopy(
+    rateAccessibilityCopy,
+    t
   );
 
   return (
@@ -330,7 +335,7 @@ function PortfolioSummary({
               currency,
               locale
             ),
-            status: t(rateAccessibilityCopy.key, rateAccessibilityCopy.values),
+            status: rateAccessibilityLabel,
           })}
           className="min-w-0 flex-1"
         >
@@ -391,10 +396,7 @@ function PortfolioSummary({
       <View className="mt-6 h-px bg-slate-200 dark:bg-slate-800" />
       <AllocationBar allocation={portfolio.allocation} />
       {holdingCount === 0 ? null : (
-        <RateStatus
-          providerObservedAt={rateProviderObservedAt}
-          state={portfolio.rateStatus.state}
-        />
+        <RateStatus label={rateAccessibilityLabel} />
       )}
     </View>
   );
@@ -512,20 +514,7 @@ function AllocationLegend({
   );
 }
 
-function RateStatus({
-  providerObservedAt,
-  state,
-}: {
-  readonly providerObservedAt: Date | null;
-  readonly state: PortfolioRateTrustState;
-}): React.JSX.Element {
-  const { t, i18n } = useTranslation("metals");
-  const copy = getPortfolioRateAccessibilityCopy(
-    state,
-    providerObservedAt,
-    i18n?.resolvedLanguage
-  );
-  const label = t(copy.key, copy.values);
+function RateStatus({ label }: { readonly label: string }): React.JSX.Element {
   return (
     <View className="mt-7 flex-row items-start gap-2">
       <Ionicons name="time-outline" size={20} color={palette.nileGreen[600]} />
@@ -551,6 +540,7 @@ function FilterBar({
   const { t } = useTranslation("metals");
   return (
     <View
+      testID="metal-portfolio-filter-bar"
       accessibilityRole="tablist"
       className="mt-8 flex-row overflow-hidden rounded-xl border border-slate-300 bg-surface dark:border-slate-700 dark:bg-slate-900"
     >
@@ -561,12 +551,6 @@ function FilterBar({
         ).length;
         const label = t(`portfolio.filter.${filter.toLowerCase()}`);
         const hasDivider = index < FILTERS.length - 1;
-        const selectedBorderRadius =
-          index === 0
-            ? "rounded-s-[11px]"
-            : index === FILTERS.length - 1
-              ? "rounded-e-[11px]"
-              : "";
         return (
           <Pressable
             key={filter}
@@ -580,23 +564,14 @@ function FilterBar({
                 : t("portfolio.not_selected"),
               count,
             })}
-            className={`relative min-h-11 flex-1 items-center justify-center ${
-              isSelected ? "z-10" : "z-0"
-            } ${
+            className={`min-h-11 flex-1 items-center justify-center ${
               hasDivider
                 ? "border-e border-slate-300 dark:border-slate-700"
                 : ""
-            }`}
+            } ${isSelected ? "bg-nileGreen-50 dark:bg-slate-800" : ""}`}
             onPress={(): void => onFilterChange(filter)}
             testID={`metal-portfolio-filter-${filter}`}
           >
-            {isSelected ? (
-              <View
-                pointerEvents="none"
-                testID={`metal-portfolio-filter-border-${filter}`}
-                className={`absolute inset-0 border border-nileGreen-600 dark:border-nileGreen-500 ${selectedBorderRadius}`}
-              />
-            ) : null}
             <Text
               className={`text-sm font-medium ${
                 isSelected

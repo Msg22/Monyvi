@@ -163,14 +163,54 @@ describe("useMetalHistory", () => {
 
     const replacementRenders = renders.slice(firstNewRender);
     expect(replacementRenders).not.toHaveLength(0);
+    // The shell stays mounted (no full-screen isLoading) while only the list
+    // body transitions, and no previous-filter row leaks under the new filter.
     expect(
       replacementRenders.every(
         (value) =>
           value.history.filter === "disposed" &&
           value.history.items.length === 0 &&
-          value.isLoading
+          value.isReplacingRows &&
+          value.isLoading === false
       )
     ).toBe(true);
+    // Per-filter counts are totals for the whole History, not the selection, so
+    // they stay truthful while the replacement rows load.
+    expect(
+      replacementRenders.every(
+        (value) =>
+          value.history.counts.all === 1 &&
+          value.history.counts.sold === 1 &&
+          value.history.counts.disposed === 0
+      )
+    ).toBe(true);
+  });
+
+  it("stops replacing rows once the replacement filter read settles", async () => {
+    mockReadMetalHistoryReadModel.mockResolvedValueOnce({
+      counts: { all: 1, sold: 1, disposed: 0 },
+      filter: "all",
+      hasMore: false,
+      items: [{ holdingId: "sold-holding" }],
+    });
+    const { result } = renderHook(() => useMetalHistory());
+    await waitFor(() => expect(result.current.history.items).toHaveLength(1));
+
+    mockReadMetalHistoryReadModel.mockResolvedValueOnce({
+      counts: { all: 1, sold: 1, disposed: 1 },
+      filter: "disposed",
+      hasMore: false,
+      items: [{ holdingId: "disposed-holding" }],
+    });
+    act(() => result.current.setFilter("disposed"));
+
+    await waitFor(() =>
+      expect(result.current.history.items).toEqual([
+        { holdingId: "disposed-holding" },
+      ])
+    );
+    expect(result.current.isReplacingRows).toBe(false);
+    expect(result.current.isLoading).toBe(false);
   });
 
   it("re-reads History when action evidence arrives after lifecycle rows", async () => {

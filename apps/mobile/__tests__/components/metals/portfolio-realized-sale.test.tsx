@@ -22,6 +22,7 @@ const mockTranslations: Record<string, string> = {
   "portfolio.today": "today",
   "portfolio.rates_updated":
     "Prices last updated {{date}} at {{time}}. They may have changed since then.",
+  "portfolio.rates_updated_fresh": "Rates updated {{date}} at {{time}}",
   "portfolio.profit_from_sold_metals": "profit from sold metals",
   "portfolio.loss_from_sold_metals": "loss from sold metals",
   "portfolio.no_loss_from_sold_metals": "no profit or loss from sold metals",

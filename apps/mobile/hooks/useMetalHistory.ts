@@ -20,6 +20,12 @@ interface UseMetalHistoryResult {
   readonly history: MetalHistoryReadModel;
   readonly isLoading: boolean;
   readonly isOffline: boolean;
+  /**
+   * True while rows for a newly selected filter are loading. The screen keeps
+   * its shell (subtitle, filter bar, layout) mounted and only shows a skeleton
+   * for the list body. `isLoading` is reserved for the initial full-screen load.
+   */
+  readonly isReplacingRows: boolean;
   readonly loadMore: () => void;
   readonly retry: () => void;
   readonly setFilter: (filter: MetalHistoryFilter) => void;
@@ -52,6 +58,28 @@ const EMPTY_HISTORY: MetalHistoryReadModel = Object.freeze({
 
 function emptyHistory(filter: MetalHistoryFilter): MetalHistoryReadModel {
   return { counts: EMPTY_COUNTS, filter, hasMore: false, items: [] };
+}
+
+/**
+ * Clears rows for a newly selected filter while preserving the last settled
+ * per-filter counts for the same user, so the filter bar stays truthful and no
+ * previous-filter row leaks under the new selection.
+ */
+function replacementHistory(
+  previous: HistoryModelState,
+  filter: MetalHistoryFilter,
+  userId: string
+): HistoryModelState {
+  return {
+    history: {
+      counts:
+        previous.userId === userId ? previous.history.counts : EMPTY_COUNTS,
+      filter,
+      hasMore: false,
+      items: [],
+    },
+    userId,
+  };
 }
 
 export function useMetalHistory(): UseMetalHistoryResult {
@@ -194,7 +222,15 @@ export function useMetalHistory(): UseMetalHistoryResult {
       lastLoadedRef.current.userId === userId &&
       lastLoadedRef.current.filter === filter &&
       lastLoadedRef.current.hasLoaded;
-    if (!isSameVisitWithData) {
+    const isFilterReplacement =
+      !isSameVisitWithData &&
+      lastLoadedRef.current.userId === userId &&
+      lastLoadedRef.current.hasLoaded;
+    if (isFilterReplacement) {
+      setHistoryState((previous) =>
+        replacementHistory(previous, filter, userId)
+      );
+    } else if (!isSameVisitWithData) {
       setHistoryState({ history: emptyHistory(filter), userId });
       setIsLoading(true);
     }
@@ -212,7 +248,11 @@ export function useMetalHistory(): UseMetalHistoryResult {
       })
       .catch((cause: unknown) => {
         if (isCurrent) {
-          setHistoryState({ history: emptyHistory(filter), userId });
+          setHistoryState((previous) =>
+            isFilterReplacement
+              ? replacementHistory(previous, filter, userId)
+              : { history: emptyHistory(filter), userId }
+          );
           lastLoadedRef.current = { filter, hasLoaded: false, userId };
           setError(
             cause instanceof Error ? cause : new Error("History unavailable")
@@ -235,6 +275,8 @@ export function useMetalHistory(): UseMetalHistoryResult {
     userId,
   ]);
 
+  const settledHistory =
+    historyState.userId === userId ? historyState.history : null;
   const hasCurrentUserHistory =
     !isResolvingUser &&
     userId !== null &&
@@ -242,15 +284,28 @@ export function useMetalHistory(): UseMetalHistoryResult {
     historyState.history.filter === filter;
   const isAwaitingCurrentUserHistory =
     isFocused &&
-    (isResolvingUser || (userId !== null && !hasCurrentUserHistory));
+    (isResolvingUser || (userId !== null && historyState.userId !== userId));
+  // Derived from the last settled read so the shell can react on the same
+  // render that the filter changes, before the read effect runs.
+  const isFilterReplacement =
+    userId !== null &&
+    lastLoadedRef.current.userId === userId &&
+    lastLoadedRef.current.hasLoaded &&
+    lastLoadedRef.current.filter !== filter;
 
   return {
     error: hasCurrentUserHistory ? error : null,
     filter,
     history: hasCurrentUserHistory
       ? historyState.history
-      : emptyHistory(filter),
+      : {
+          counts: settledHistory?.counts ?? EMPTY_COUNTS,
+          filter,
+          hasMore: false,
+          items: [],
+        },
     isLoading: isLoading || isAwaitingCurrentUserHistory,
+    isReplacingRows: isFilterReplacement,
     isOffline: !isConnected,
     loadMore,
     retry,

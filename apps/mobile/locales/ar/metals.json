@@ -33,15 +33,15 @@
   "purity_silver_800": "نقاوة 800",
   "purity_silver_600": "نقاوة 600",
   "wealth_breakdown": {
-    "title": "أين أموالك",
-    "accounts": "الحسابات",
-    "metals": "المعادن",
+    "title": "فلوسك موزّعة فين",
+    "accounts": "الفلوس في الحسابات",
+    "metals": "الذهب والفضة",
     "gold": "ذهب",
     "silver": "فضة",
     "of_net_worth": "{{share}} من صافي الثروة",
-    "of_metals": "{{share}} من المعادن",
+    "of_metals": "{{share}} من الذهب والفضة",
     "net_worth": "صافي الثروة",
-    "inside_metals": "داخل المعادن",
+    "inside_metals": "تفاصيل الذهب والفضة",
     "metals_summary": "المبالغ بـ {{currency}} · النسبة من {{metals}}",
     "tile_accessibility": "{{label}}. المبلغ {{amount}}. {{share}}"
   },
@@ -88,7 +88,8 @@
     "view_all": "عرض الكل",
     "bought_on": "تم الشراء {{date}}",
     "today": "اليوم",
-    "rates_updated": "آخر تحديث للأسعار: {{date}}، {{time}}. قد تكون تغيّرت بعد ذلك."
+    "rates_updated": "آخر تحديث للأسعار: {{date}}، {{time}}. قد تكون تغيّرت بعد ذلك.",
+    "rates_updated_fresh": "تم تحديث الأسعار {{date}} في {{time}}"
   },
   "add_holding": "إضافة مقتنى",
   "add_gold": "إضافة ذهب",

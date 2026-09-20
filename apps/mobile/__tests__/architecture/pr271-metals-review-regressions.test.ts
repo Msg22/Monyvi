@@ -67,9 +67,7 @@ describe("PR #271 validated Metals review regressions", () => {
     const hook = source("hooks/useMetalPortfolio.ts");
     const service = source("services/net-worth-read-model-service.ts");
     expect(hook).not.toContain('accountsValueDecimal ?? "0"');
-    expect(hook).toContain(
-      "accountsValueDecimal: input.accountsValueDecimal"
-    );
+    expect(hook).toContain("accountsValueDecimal: input.accountsValueDecimal");
     expect(service).toContain("input.accountsValueDecimal === null");
   });
 
@@ -160,9 +158,19 @@ describe("PR #271 validated Metals review regressions", () => {
     expect(history).toMatch(
       /setHistoryState\(\{ history: emptyHistory\(filter\), userId \}\);[\s\S]*readMetalHistoryReadModel/
     );
-    expect(history).toMatch(
-      /catch[\s\S]*setHistoryState\(\{ history: emptyHistory\(filter\), userId \}\)/
+    // A failed read still resets to an empty, filter- and user-scoped History
+    // (either a first-load empty model or a filter replacement that keeps only
+    // settled counts) so no stale identity survives.
+    const historyCatch = sliceBetween(
+      history,
+      ".catch((cause: unknown)",
+      ".finally("
     );
+    expect(historyCatch).toContain("emptyHistory(filter)");
+    expect(historyCatch).toContain(
+      "replacementHistory(previous, filter, userId)"
+    );
+    expect(historyCatch).toContain("userId");
   });
 
   it("derives portfolio trust from the currency and only active metals owned", () => {

@@ -16,13 +16,13 @@ import { MetalPortfolioScreen } from "@/components/metals/MetalPortfolioScreen";
 const mockTranslations: Record<string, string> = {
   "wealth_breakdown.title": "Where your money is",
   "wealth_breakdown.accounts": "Accounts",
-  "wealth_breakdown.metals": "Metals",
+  "wealth_breakdown.metals": "Gold & silver",
   "wealth_breakdown.gold": "Gold",
   "wealth_breakdown.silver": "Silver",
   "wealth_breakdown.of_net_worth": "{{share}} of net worth",
-  "wealth_breakdown.of_metals": "{{share}} of Metals",
+  "wealth_breakdown.of_metals": "{{share}} of gold & silver",
   "wealth_breakdown.net_worth": "Net worth",
-  "wealth_breakdown.inside_metals": "Inside metals",
+  "wealth_breakdown.inside_metals": "Inside gold & silver",
   "wealth_breakdown.metals_summary":
     "Amounts in {{currency}} · share of {{metals}}",
   "wealth_breakdown.tile_accessibility": "{{label}}. {{amount}}. {{share}}",
@@ -75,6 +75,7 @@ const mockTranslations: Record<string, string> = {
   "portfolio.total_accessibility":
     "Metals portfolio value {{amount}}. {{status}}.",
   "portfolio.current_rate": "Current rate",
+  "portfolio.rates_updated_fresh": "Rates updated {{date}} at {{time}}",
   "portfolio.since_purchase": "{{signedAmount}} since purchase",
   "portfolio.filter_accessibility":
     "{{filterName}} filter, {{selectedState}}, {{count}} holdings.",
@@ -97,13 +98,14 @@ const mockTranslations: Record<string, string> = {
 };
 
 const arabicTranslations: Record<string, string> = {
-  "wealth_breakdown.title": "أين أموالك",
-  "wealth_breakdown.accounts": "الحسابات",
-  "wealth_breakdown.metals": "المعادن",
+  "wealth_breakdown.title": "فلوسك موزّعة فين",
+  "wealth_breakdown.accounts": "الفلوس في الحسابات",
+  "wealth_breakdown.metals": "الذهب والفضة",
   "wealth_breakdown.gold": "ذهب",
   "wealth_breakdown.silver": "فضة",
   "wealth_breakdown.of_net_worth": "{{amount}} · {{share}} من صافي الثروة",
-  "wealth_breakdown.of_metals": "{{amount}} · {{share}} من المعادن",
+  "wealth_breakdown.of_metals": "{{amount}} · {{share}} من الذهب والفضة",
+  "wealth_breakdown.inside_metals": "تفاصيل الذهب والفضة",
   "portfolio.filter.all": "الكل",
   "portfolio.filter.gold": "ذهب",
   "portfolio.filter.silver": "فضة",
@@ -114,6 +116,7 @@ const arabicTranslations: Record<string, string> = {
   "portfolio.total_accessibility":
     "قيمة محفظة المعادن {{amount}}. الحالة: {{status}}.",
   "portfolio.current_rate": "سعر حديث",
+  "portfolio.rates_updated_fresh": "تم تحديث الأسعار {{date}} في {{time}}",
   "portfolio.active_portfolio": "تابع قيمة ذهبك وفضتك",
   "portfolio.active_portfolio_value": "قيمة ذهبك وفضتك",
   "portfolio.active_holdings": "مقتنيات نشطة",
@@ -274,9 +277,16 @@ describe("US1 portfolio surfaces", () => {
 
   it("keeps approved English and Arabic portfolio copy in both locale resources", () => {
     expect(enMetals.wealth_breakdown.title).toBe("Where your money is");
+    expect(enMetals.wealth_breakdown.inside_metals).toBe(
+      "Inside gold & silver"
+    );
+    expect(enMetals.wealth_breakdown.metals).toBe("Gold & silver");
     expect(enMetals.portfolio.bought).toBe("{{weight}} · Bought {{date}}");
     expect(enMetals.portfolio.active_portfolio).toBe("Your gold and silver");
-    expect(arMetals.wealth_breakdown.title).toBe("أين أموالك");
+    expect(arMetals.wealth_breakdown.title).toBe("فلوسك موزّعة فين");
+    expect(arMetals.wealth_breakdown.inside_metals).toBe("تفاصيل الذهب والفضة");
+    expect(arMetals.wealth_breakdown.metals).toBe("الذهب والفضة");
+    expect(arMetals.wealth_breakdown.accounts).toBe("الفلوس في الحسابات");
     expect(arMetals.portfolio.bought).toBe("{{weight}} · تم الشراء {{date}}");
     expect(arMetals.portfolio.active_portfolio).toBe("تابع قيمة ذهبك وفضتك");
   });
@@ -666,12 +676,22 @@ describe("US1 portfolio surfaces", () => {
 
       expect(screen.getAllByTestId("icon-chevron-back")).toHaveLength(2);
       expect(screen.queryByTestId("icon-chevron-forward")).toBeNull();
+      // RTL keeps the same logical structure: the outer control owns the only
+      // rounded border, and the first/last dividers stay logical.
       expect(
-        screen.getByTestId("metal-portfolio-filter-border-ALL")
-      ).toHaveProp("className", expect.stringContaining("rounded-s-[11px]"));
+        screen.queryByTestId("metal-portfolio-filter-border-ALL")
+      ).toBeNull();
+      expect(screen.getByTestId("metal-portfolio-filter-bar")).toHaveProp(
+        "className",
+        expect.stringContaining("overflow-hidden")
+      );
       expect(screen.getByTestId("metal-portfolio-filter-ALL")).toHaveProp(
         "className",
         expect.stringContaining("border-e")
+      );
+      expect(screen.getByTestId("metal-portfolio-filter-SILVER")).toHaveProp(
+        "className",
+        expect.not.stringContaining("border-e")
       );
     } finally {
       Object.defineProperty(I18nManager, "isRTL", {
@@ -737,7 +757,7 @@ describe("US1 portfolio surfaces", () => {
     expect(screen.getByTestId("wealth-breakdown-root")).toBeTruthy();
   });
 
-  it("speaks the total as a current rate only when the trusted rate is fresh", () => {
+  it("shows the provider observation timestamp for a fresh rate instead of one unlabeled current rate", () => {
     renderPortfolio({
       portfolio: {
         ...portfolio,
@@ -747,11 +767,29 @@ describe("US1 portfolio surfaces", () => {
       rateProviderObservedAt: new Date("2026-08-25T10:30:00.000Z"),
     });
 
+    // Visible and spoken copy agree and both carry the provider timestamp.
     expect(
-      screen.getByLabelText(
-        "Metals portfolio value EGP 162,317.87. Current rate."
-      )
+      screen.getByTestId("metal-portfolio-rate-updated")
+    ).toHaveTextContent(/Rates updated .* at /);
+    expect(
+      screen.getByLabelText(/Metals portfolio value .*Rates updated .* at /)
     ).toBeTruthy();
+    expect(screen.queryByText("Current rate")).toBeNull();
+  });
+
+  it("uses the localized today label for a same-day fresh rate", () => {
+    renderPortfolio({
+      portfolio: {
+        ...portfolio,
+        holdings: portfolio.activeHoldings,
+        rateStatus: { state: "fresh", ageMs: 1_000 },
+      },
+      rateProviderObservedAt: new Date(),
+    });
+
+    expect(
+      screen.getByTestId("metal-portfolio-rate-updated")
+    ).toHaveTextContent(/Rates updated today at /);
   });
 
   it("speaks last-updated info instead of a current rate for a stale trusted rate", () => {

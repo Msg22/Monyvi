@@ -95,6 +95,7 @@ describe("MetalHistoryScreen", () => {
         history={history}
         isLoading={false}
         isOffline={false}
+        isReplacingRows={false}
         loadMore={jest.fn()}
         onFilterChange={jest.fn()}
         onOpenHolding={jest.fn()}
@@ -106,5 +107,47 @@ describe("MetalHistoryScreen", () => {
       screen.getByLabelText(/Sold\. Sold gold coin\. Gold · — · Coin/)
     ).toBeTruthy();
     expect(screen.queryByLabelText(/24K · 999/)).toBeNull();
+  });
+
+  it("keeps the shell and filter bar mounted and skeletons only the list body during a filter replacement", () => {
+    render(
+      <MetalHistoryScreen
+        error={null}
+        history={{
+          counts: { all: 3, disposed: 1, sold: 2 },
+          filter: "disposed",
+          hasMore: false,
+          items: [],
+        }}
+        isLoading={false}
+        isOffline={false}
+        isReplacingRows
+        loadMore={jest.fn()}
+        onFilterChange={jest.fn()}
+        onOpenHolding={jest.fn()}
+        onRetry={jest.fn()}
+      />
+    );
+
+    // The shell and its controls never unmount for a filter change.
+    expect(screen.queryByTestId("metal-history-loading")).toBeNull();
+    expect(screen.getByTestId("metal-history-root")).toBeTruthy();
+    expect(
+      screen.getByText("Sales and holdings no longer in your possession.")
+    ).toBeTruthy();
+    expect(screen.getByTestId("metal-history-filter-all")).toBeTruthy();
+    expect(screen.getByTestId("metal-history-filter-disposed")).toBeTruthy();
+    // Only the list body transitions to a skeleton.
+    expect(screen.getByTestId("metal-history-list-skeleton")).toBeTruthy();
+    // No previous-filter row and no empty-state copy leaks through.
+    expect(screen.queryByTestId("metal-history-item-sold")).toBeNull();
+    expect(screen.queryByText("No holdings here yet.")).toBeNull();
+    // The newly selected filter is reflected immediately and counts stay shown.
+    expect(screen.getByTestId("metal-history-filter-disposed")).toHaveProp(
+      "accessibilityState",
+      { selected: true }
+    );
+    expect(screen.getByLabelText("Disposed 1")).toBeTruthy();
+    expect(screen.getByLabelText("Sold 2")).toBeTruthy();
   });
 });

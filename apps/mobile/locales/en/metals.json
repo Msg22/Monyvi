@@ -35,13 +35,13 @@
   "wealth_breakdown": {
     "title": "Where your money is",
     "accounts": "Accounts",
-    "metals": "Metals",
+    "metals": "Gold & silver",
     "gold": "Gold",
     "silver": "Silver",
     "of_net_worth": "{{share}} of net worth",
-    "of_metals": "{{share}} of Metals",
+    "of_metals": "{{share}} of gold & silver",
     "net_worth": "Net worth",
-    "inside_metals": "Inside metals",
+    "inside_metals": "Inside gold & silver",
     "metals_summary": "Amounts in {{currency}} · share of {{metals}}",
     "tile_accessibility": "{{label}}. {{amount}}. {{share}}"
   },
@@ -84,7 +84,8 @@
     "view_all": "View all",
     "bought_on": "Bought {{date}}",
     "today": "today",
-    "rates_updated": "Prices last updated {{date}} at {{time}}. They may have changed since then."
+    "rates_updated": "Prices last updated {{date}} at {{time}}. They may have changed since then.",
+    "rates_updated_fresh": "Rates updated {{date}} at {{time}}"
   },
   "add_holding": "Add holding",
   "add_gold": "Add Gold",
