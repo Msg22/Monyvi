@@ -9,6 +9,8 @@
  * conform to these interfaces.
  */
 
+import type { CurrencyType } from "@monyvi/db";
+
 /** Supported languages */
 type SupportedLanguage = "en" | "ar";
 
@@ -73,6 +75,7 @@ interface CommonTranslations {
   readonly currency: string;
   readonly change_currency: string;
   readonly transaction_currency: string;
+  readonly currency_names: Readonly<Record<CurrencyType, string>>;
 
   // Dates (relative)
   readonly just_now: string;

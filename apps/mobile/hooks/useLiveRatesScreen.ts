@@ -15,6 +15,10 @@
  * @module useLiveRatesScreen
  */
 
+import {
+  currencyMatchesQuery,
+  getCurrencyName,
+} from "@/utils/currency-localization";
 import { formatTimeAgo } from "@/utils/dateHelpers";
 import type { CurrencyType } from "@monyvi/db";
 import {
@@ -28,6 +32,7 @@ import {
   getMetalPrice,
 } from "@monyvi/logic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useMarketRates } from "./useMarketRates";
 import { usePreferredCurrency } from "./usePreferredCurrency";
 
@@ -120,6 +125,7 @@ export function useLiveRatesScreen(): UseLiveRatesScreenResult {
     isStale,
   } = useMarketRates();
   const { preferredCurrency } = usePreferredCurrency();
+  const { i18n } = useTranslation("common");
 
   // UI state
   const [isExpanded, setIsExpanded] = useState(false);
@@ -243,13 +249,19 @@ export function useLiveRatesScreen(): UseLiveRatesScreenResult {
 
       return {
         code: info.code,
-        name: info.name,
+        name: getCurrencyName(info.code),
         flag: info.flag,
         rate: `${formatRate(rate)} ${currencySymbol}`,
         changePercent: calculateTrendPercent(rate, prevRate),
       };
     });
-  }, [latestRates, previousDayRate, preferredCurrency, currencySymbol]);
+  }, [
+    latestRates,
+    previousDayRate,
+    preferredCurrency,
+    currencySymbol,
+    i18n.language,
+  ]);
 
   // Sort: show DEFAULT_CURRENCIES first, then rest alphabetically
   const sortedCurrencies = useMemo((): readonly CurrencyDisplayItem[] => {
@@ -272,13 +284,10 @@ export function useLiveRatesScreen(): UseLiveRatesScreenResult {
   const filteredCurrencies = useMemo((): readonly CurrencyDisplayItem[] => {
     if (!searchQuery.trim()) return sortedCurrencies;
 
-    const query = searchQuery.trim().toLowerCase();
-    return sortedCurrencies.filter(
-      (c) =>
-        c.code.toLowerCase().includes(query) ||
-        c.name.toLowerCase().includes(query)
+    return sortedCurrencies.filter((c) =>
+      currencyMatchesQuery(c.code, searchQuery)
     );
-  }, [sortedCurrencies, searchQuery]);
+  }, [sortedCurrencies, searchQuery, i18n.language]);
 
   // Apply expansion limit
   const visibleCurrencies = useMemo((): readonly CurrencyDisplayItem[] => {

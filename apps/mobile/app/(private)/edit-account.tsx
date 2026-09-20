@@ -23,7 +23,7 @@ import { ReadOnlyDropdown } from "@/components/edit-account/ReadOnlyDropdown";
 import { PageHeader } from "@/components/navigation/PageHeader";
 import { TextField } from "@/components/ui/TextField";
 import { useToast } from "@/components/ui/Toast";
-import { CURRENCIES } from "@/constants/accounts";
+import { getCurrencyOptions } from "@/constants/accounts";
 import { palette } from "@/constants/colors";
 import { useTheme } from "@/context/ThemeContext";
 import { useEgyptianInstitutionEligibility } from "@/hooks/useEgyptianInstitutionEligibility";
@@ -260,15 +260,13 @@ function EditAccountForm({
     return emojiMap[accountType] ?? "💰";
   }, [accountType]);
 
-  const currencyLabel = useMemo(() => {
-    const found = CURRENCIES.find((c) => c.value === currency);
-    return found?.label ?? currency;
-  }, [currency]);
+  const currencyOptions = getCurrencyOptions();
 
-  const currencyIcon = useMemo(() => {
-    const found = CURRENCIES.find((c) => c.value === currency);
-    return found?.icon ?? "💵";
-  }, [currency]);
+  const currencyLabel =
+    currencyOptions.find((c) => c.value === currency)?.label ?? currency;
+
+  const currencyIcon =
+    currencyOptions.find((c) => c.value === currency)?.icon ?? "💵";
 
   /** Build the update data payload. */
   const buildUpdateData = useCallback((): UpdateAccountData | null => {
