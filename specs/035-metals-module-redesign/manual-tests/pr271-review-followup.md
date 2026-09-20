@@ -126,3 +126,18 @@ from compatibility V1 and records migrations 071–073.
 Terminal-detail rendering remains owned by issue #283 / PR #315. Publication
 checkpoint thread `6kAdZI` remains open for a product/sync-contract decision;
 this wave does not claim to fix the refresh cursor boundary.
+
+## Correction wave: Home copy, History filter shell, rate time, and filter borders
+
+Device QA remains pending. These corrections do not add the collapsible Home
+breakdown or the illustrated My Metals empty state; those are separate design
+work.
+
+| Manual scenario                                                        | Expected result                                                                                                                                                                                                          | Automated coverage                                              | Manual-only boundary                                       |
+| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------- | ---------------------------------------------------------- |
+| Open Home in Arabic with seeded accounts and metals                    | The wealth breakdown reads `فلوسك موزّعة فين`, `الفلوس في الحسابات`, `الذهب والفضة`, and `تفاصيل الذهب والفضة`; no generic `المعادن`; shares use readable Latin digits                                                     | `wealth-breakdown-i18n.test.tsx`, `WealthBreakdownSection.test.tsx` | RTL layout, font scale, TalkBack                           |
+| Open Home with held Gold/Silver but unavailable valuation              | `تفاصيل الذهب والفضة` stays visible with holding counts; it hides only when both Gold and Silver holding counts are zero                                                                                                  | `WealthBreakdownSection.test.tsx`                              | Seeded zero-holdings vs unavailable-rate comparison        |
+| Change the History filter while rows are loading                       | Filter bar, subtitle, and shell stay mounted; only the list body shows a skeleton; the new filter is selected immediately and no previous-filter row appears; counts stay shown                                            | `useMetalHistory.test.ts`, `MetalHistoryScreen.test.tsx`       | Slow/offline transition on device                          |
+| Inspect My Metals segmented filters in LTR and RTL                     | One outer rounded border owns the corners; the selected All/Gold/Silver segment shows a background fill without a redrawn inner border; every segment keeps a 44 px target                                                 | `metal-portfolio-filter-bar.test.tsx`, `portfolio-surfaces.test.tsx` | RTL first/last corner inspection on device                 |
+| Inspect the My Metals summary with a fresh rate                        | The rate line shows the localized provider observation time (`Rates updated today at 10:30 PM`; Arabic uses localized date/time with `ص`/`م`); visible and spoken copy agree; stale/unavailable semantics unchanged      | `portfolio-rate-presentation.test.ts`, `portfolio-surfaces.test.tsx` | Two-line wrap on compact screens; Arabic date/time and TalkBack |
+
