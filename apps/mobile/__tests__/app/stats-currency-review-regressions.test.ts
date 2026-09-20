@@ -62,7 +62,8 @@ describe("Stats currency review regressions", () => {
     expect(source).toContain('accessibilityRole="radio"');
     expect(source).toContain("selected: isSelected");
     expect(source).toContain("useLocale");
-    expect(source).toContain("currencyDisplay: \"name\"");
+    expect(source).toContain("getCurrencyName");
+    expect(source).not.toContain("currencyDisplay");
   });
 
   it("clamps the currency menu to the remaining viewport height", () => {
