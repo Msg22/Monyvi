@@ -5,6 +5,7 @@
 
 import { Account, BankDetails, database } from "@monyvi/db";
 import { sumSelectedCurrentAmounts } from "@/services/current-market-snapshot-calculations";
+import { buildAccountConvertedSubtitles } from "@/services/account-list-read-model-service";
 import { Q } from "@nozbe/watermelondb";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -22,6 +23,7 @@ interface UseAccountsResult {
   readonly isLoading: boolean;
   readonly error: Error | null;
   readonly totalAccountsBalance: number | null;
+  readonly convertedSubtitlesByAccountId: ReadonlyMap<string, string>;
   readonly refetch: () => void;
 }
 
@@ -137,11 +139,21 @@ export function useAccounts(): UseAccountsResult {
     return total;
   }, [accounts, selectedSnapshot, preferredCurrency]);
 
+  const convertedSubtitlesByAccountId = useMemo(
+    () =>
+      buildAccountConvertedSubtitles({
+        accounts,
+        currentSnapshot: selectedSnapshot,
+      }),
+    [accounts, selectedSnapshot]
+  );
+
   return {
     accounts,
     isLoading,
     error,
     totalAccountsBalance,
+    convertedSubtitlesByAccountId,
     refetch,
   };
 }

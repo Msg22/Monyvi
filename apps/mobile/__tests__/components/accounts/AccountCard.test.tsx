@@ -68,7 +68,6 @@ describe("AccountCard", () => {
     render(
       <AccountCard
         account={account({ providerDisplayName: "My Bank" })}
-        selectedSnapshot={null}
         providerLabel="My Bank"
       />
     );
@@ -84,7 +83,6 @@ describe("AccountCard", () => {
           type: "DIGITAL_WALLET",
           providerDisplayName: "Family Wallet",
         })}
-        selectedSnapshot={null}
         providerLabel="Family Wallet"
       />
     );
@@ -101,7 +99,6 @@ describe("AccountCard", () => {
           providerDisplayName: "e& Cash",
           type: "DIGITAL_WALLET",
         })}
-        selectedSnapshot={null}
         providerLabel="e& money (e& money)"
       />
     );
@@ -117,7 +114,6 @@ describe("AccountCard", () => {
           institutionId: "qnb-egypt",
           providerDisplayName: "QNB",
         })}
-        selectedSnapshot={null}
         providerLabel="QNB"
         institutionLogo={getEgyptianInstitutionAsset("qnb-egypt", "bank").logo}
       />
@@ -140,7 +136,6 @@ describe("AccountCard", () => {
           institutionId: "nbe",
           providerDisplayName: "NBE",
         })}
-        selectedSnapshot={null}
         providerLabel="NBE"
         institutionLogo={getEgyptianInstitutionAsset("nbe", "bank").logo}
       />
@@ -164,7 +159,6 @@ describe("AccountCard", () => {
           institutionId: "vodafone-cash",
           providerDisplayName: "Vodafone Cash",
         })}
-        selectedSnapshot={null}
         providerLabel="Vodafone Cash"
         institutionLogo={
           getEgyptianInstitutionAsset("vodafone-cash", "wallet").logo
@@ -183,15 +177,33 @@ describe("AccountCard", () => {
   it("refreshes the default badge when the default flag changes on the same account instance", () => {
     const updatedAccount = account({ isDefault: false });
     const { rerender } = render(
-      <AccountCard account={updatedAccount} selectedSnapshot={null} />
+      <AccountCard account={updatedAccount} />
     );
 
     expect(screen.queryByLabelText("Default account")).toBeNull();
 
     (updatedAccount as { isDefault: boolean }).isDefault = true;
 
-    rerender(<AccountCard account={updatedAccount} selectedSnapshot={null} />);
+    rerender(<AccountCard account={updatedAccount} />);
 
     expect(screen.getByLabelText("Default account")).toBeTruthy();
+  });
+
+  it("renders the parent-shaped converted subtitle when provided", () => {
+    render(
+      <AccountCard
+        account={account({ currency: "EGP" })}
+        convertedSubtitle="≈ $2.10"
+      />
+    );
+
+    expect(screen.getByText("≈ $2.10")).toBeTruthy();
+    expect(screen.queryByText("Bank Account")).toBeNull();
+  });
+
+  it("falls back to the account-type label when no converted subtitle is provided", () => {
+    render(<AccountCard account={account({ currency: "EGP" })} />);
+
+    expect(screen.getByText("Bank Account")).toBeTruthy();
   });
 });

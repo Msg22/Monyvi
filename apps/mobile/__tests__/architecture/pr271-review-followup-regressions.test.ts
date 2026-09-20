@@ -214,4 +214,44 @@ describe("PR #271 review follow-up regressions", () => {
       expect(arPortfolio[key]).not.toMatch(/محقق/);
     }
   });
+
+  it("shapes account converted subtitles upstream instead of inside the card", () => {
+    const card = source("apps/mobile/components/accounts/AccountCard.tsx");
+    expect(card).not.toContain("convertSelectedCurrentAmount");
+    expect(card).not.toContain('from "@/services/');
+    expect(card).toContain("convertedSubtitle");
+
+    const route = source("apps/mobile/app/(private)/(tabs)/accounts.tsx");
+    expect(route).toContain("convertedSubtitlesByAccountId");
+    expect(route).toContain("convertedSubtitle={");
+
+    const hook = source("apps/mobile/hooks/useAccounts.ts");
+    expect(hook).toContain("convertedSubtitlesByAccountId");
+
+    const service = source(
+      "apps/mobile/services/account-list-read-model-service.ts"
+    );
+    expect(service).toContain("convertSelectedCurrentAmount");
+    expect(service).toContain("formatCurrency");
+  });
+
+  it("observes snapshot evidence columns that can change in place", () => {
+    const value = source(
+      "apps/mobile/services/market-rate-snapshot-read-model-service.ts"
+    );
+    expect(value).toContain("observeWithColumns");
+    for (const column of [
+      "batch_id",
+      "created_at",
+      "instrument_code",
+      "orientation",
+      "provider_observed_at",
+      "quality",
+      "source",
+      "unit",
+      "value_decimal",
+    ]) {
+      expect(value).toContain(`"${column}"`);
+    }
+  });
 });

@@ -92,6 +92,18 @@ export interface MarketRateSnapshotStream {
 
 export const MAX_SNAPSHOT_CANDIDATES = 30;
 
+const OBSERVATION_OBSERVED_COLUMNS = [
+  "batch_id",
+  "created_at",
+  "instrument_code",
+  "orientation",
+  "provider_observed_at",
+  "quality",
+  "source",
+  "unit",
+  "value_decimal",
+] as const;
+
 const sharedStreams = new WeakMap<Database, MarketRateSnapshotStream>();
 
 export function selectMarketRateSnapshot(
@@ -429,7 +441,7 @@ export function createWatermelonMarketRateSnapshotDataSource(
       }
       return observations
         .query(Q.where("batch_id", Q.oneOf([...batchIds])))
-        .observe()
+        .observeWithColumns([...OBSERVATION_OBSERVED_COLUMNS])
         .subscribe(observer);
     },
     async fetchRoots(): Promise<readonly MarketRateRootCandidate[]> {
