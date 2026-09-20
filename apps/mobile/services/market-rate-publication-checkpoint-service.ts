@@ -5,7 +5,7 @@ import { MARKET_RATE_PUBLICATION_CHECKPOINT_KEY } from "@/constants/storage-keys
 import type { MarketRateSnapshotCursor } from "./sync/market-rate-snapshot-pull";
 
 const publicationCheckpointSchema = z.object({
-  createdAt: z.string().datetime(),
+  createdAt: z.string().datetime({ offset: true }),
   id: z.string().uuid(),
 });
 

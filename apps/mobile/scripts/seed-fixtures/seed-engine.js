@@ -1344,6 +1344,7 @@ module.exports = {
   RESET_TABLE_DELETE_ORDER,
   SEED_TABLE_DELETE_ORDER,
   E2E_MARKET_RATE_ID,
+  buildMarketRateRow,
   buildSeedIds,
   createLocalSupabaseJwt,
   getSeedConfig,

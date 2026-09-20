@@ -160,15 +160,16 @@ describe("useMetalHistory", () => {
     mockReadMetalHistoryReadModel.mockReturnValueOnce(new Promise(() => {}));
     const firstNewRender = renders.length;
     act(() => result.current.setFilter("disposed"));
+
+    const replacementRenders = renders.slice(firstNewRender);
+    expect(replacementRenders).not.toHaveLength(0);
     expect(
-      renders
-        .slice(firstNewRender)
-        .every(
-          (value) =>
-            value.history.filter === "disposed" &&
-            value.history.items.length === 0 &&
-            value.isLoading
-        )
+      replacementRenders.every(
+        (value) =>
+          value.history.filter === "disposed" &&
+          value.history.items.length === 0 &&
+          value.isLoading
+      )
     ).toBe(true);
   });
 

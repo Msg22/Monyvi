@@ -39,7 +39,22 @@ describe("market-rate-publication-checkpoint-service", () => {
   it("persists the publication timestamp and tie-break identity across reads", async () => {
     await saveMarketRatePublicationCheckpoint(EARLIER);
 
-    await expect(readMarketRatePublicationCheckpoint()).resolves.toEqual(EARLIER);
+    await expect(readMarketRatePublicationCheckpoint()).resolves.toEqual(
+      EARLIER
+    );
+  });
+
+  it("accepts publication timestamps with an explicit UTC offset", async () => {
+    const checkpoint = {
+      ...EARLIER,
+      createdAt: "2030-01-02T05:04:05.000+02:00",
+    };
+
+    await saveMarketRatePublicationCheckpoint(checkpoint);
+
+    await expect(readMarketRatePublicationCheckpoint()).resolves.toEqual(
+      checkpoint
+    );
   });
 
   it("does not let a slower concurrent refresh regress the durable checkpoint", async () => {

@@ -222,7 +222,7 @@ describe("manual QA Metals lifecycle fixture", () => {
     expect(first.metalLifecycleEvents).toHaveLength(7);
     expect(first.financialActionGroups).toHaveLength(7);
     expect(first.metalActionEvidence).toHaveLength(7);
-    expect(first.marketRateObservations).toHaveLength(4);
+    expect(first.marketRateObservations).toHaveLength(38);
     expect(first.metalLifecycleEvents.map((row) => row["id"])).toEqual(
       second.metalLifecycleEvents.map((row) => row["id"])
     );
@@ -326,10 +326,17 @@ describe("manual QA Metals lifecycle fixture", () => {
     ).toBe(true);
 
     expect(
-      observations.map((row) => row["instrument_code"] as string).sort()
-    ).toEqual(["currency:EGP", "currency:USD", "metal:GOLD", "metal:SILVER"]);
+      new Set(observations.map((row) => row["instrument_code"]))
+    ).toHaveProperty("size", 38);
     expect(observations).toEqual(
       expect.arrayContaining([
+        expect.objectContaining({
+          instrument_code: "currency:BTC",
+          orientation: "quote_per_base",
+          quality: "valid",
+          unit: "usd_per_currency_unit",
+          value_decimal: "65000",
+        }),
         expect.objectContaining({
           instrument_code: "currency:EGP",
           orientation: "quote_per_base",

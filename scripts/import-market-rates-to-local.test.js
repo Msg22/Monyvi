@@ -9,6 +9,7 @@ const {
   collectCompleteSnapshotUnits,
   parseImportMarketRatesArgs,
   parseSupabaseQueryRows,
+  queryLinkedMarketRateSnapshots,
   validateSnapshotPage,
 } = require("./import-market-rates-to-local");
 
@@ -239,6 +240,19 @@ test("collectCompleteSnapshotUnits refuses watermark drift and repeating cursors
   await assert.rejects(
     collectCompleteSnapshotUnits(async () => repeatingPages.shift()),
     /invalid complete market-rate snapshot/i
+  );
+});
+
+test("queryLinkedMarketRateSnapshots propagates an unavailable V2 RPC", async () => {
+  const unavailable = new Error(
+    "function public.pull_market_rate_snapshots_page_v2 does not exist"
+  );
+
+  await assert.rejects(
+    queryLinkedMarketRateSnapshots(async () => {
+      throw unavailable;
+    }),
+    unavailable
   );
 });
 

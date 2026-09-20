@@ -84,8 +84,8 @@ before current selectors/producers are implemented.
       are unchanged; `3.73874e-10` becomes exact plain `0.000000000373874`;
       `1.2300e+2` becomes `123.00`; normalization uses no authoritative
       `Number`/`parseFloat`; exactly 38 observations are emitted;
-      source/quality/unit/orientation are correct; USD is exact `1`; BTC
-      excluded; valid non-future timestamps preserved; missing/malformed/future
+      source/quality/unit/orientation are correct; USD is exact `1`; BTC is
+      included; valid non-future timestamps preserved; missing/malformed/future
       timestamps normalize to `null`; capture/order time is never substituted;
       authoritative payload construction does not require `response.json()`. The
       test imports shared dependencies through the same bare `lossless-json` /

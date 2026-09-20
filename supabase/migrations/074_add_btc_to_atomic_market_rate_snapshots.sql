@@ -32,7 +32,10 @@ alter table public.market_rate_observations
         (unit = 'currency_units_per_usd' and orientation = 'base_per_quote')
       )
     )
-  );
+  ) not valid;
+
+alter table public.market_rate_observations
+  validate constraint market_rate_observations_instrument_contract_check;
 
 create or replace function private.market_rate_snapshot_required_instruments_v1()
  returns text[]

@@ -2,6 +2,7 @@ const { createHash } = require("node:crypto");
 const {
   buildMarketRateObservations,
 } = require("./market-rate-snapshot-fixture");
+const { buildMarketRateRow } = require("./seed-engine");
 
 const MANUAL_QA_SEED_FIXTURE = {
   seedScope: "manual-qa",
@@ -1790,11 +1791,7 @@ function createManualQaMarketRateSnapshot({
     "market-rate-observation-batch"
   );
   const marketRate = {
-    ...(marketRateTemplate ?? {
-      egp_usd: 0.02,
-      gold_usd_per_gram: 75,
-      silver_usd_per_gram: 0.95,
-    }),
+    ...(marketRateTemplate ?? buildMarketRateRow(currentTimestamp)),
     id: snapshotId,
     timestamp_currency: currentTimestamp,
     timestamp_metal: currentTimestamp,

@@ -2,13 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 interface ImportMarketRatesModule {
-  readonly REQUIRED_FIAT_CODES: readonly string[];
   buildImportSql(units: readonly unknown[]): string;
-  buildLegacySnapshotUnit(row: Record<string, unknown>): {
-    readonly observations: readonly Record<string, unknown>[];
-    readonly root: Record<string, unknown>;
-  };
-  getLinkedLegacyMarketRateQueryArgs(): readonly string[];
   getLinkedMarketRateSnapshotsQueryArgs(request: {
     readonly cursor: null;
     readonly limit: number;
@@ -19,7 +13,6 @@ interface ImportMarketRatesModule {
     readonly bestEffort: boolean;
   };
   parseSupabaseQueryRows(output: string): readonly unknown[];
-  isMissingSnapshotRpcError(error: unknown): boolean;
 }
 
 const marketRatesImporter = jest.requireActual(
@@ -54,77 +47,17 @@ describe("import-market-rates-to-local helpers", () => {
     ]);
   });
 
-  it("queries the newest legacy row when the atomic snapshot RPC is not deployed", () => {
-    expect(marketRatesImporter.getLinkedLegacyMarketRateQueryArgs()).toEqual([
-      "db",
-      "query",
-      "--agent=no",
-      "--linked",
-      "-o",
-      "json",
-      expect.stringMatching(
-        /from public\.market_rates[\s\S]*order by created_at desc, id desc[\s\S]*limit 1/i
-      ),
-    ]);
-  });
-
-  it("adapts one legacy root into an honest complete local snapshot", () => {
-    const fiatColumns = Object.fromEntries(
-      marketRatesImporter.REQUIRED_FIAT_CODES.filter(
-        (code) => code !== "USD"
-      ).map((code) => [`${code.toLowerCase()}_usd`, "0.5"])
+  it("never fabricates observations from a legacy wide market-rate row", () => {
+    const importerSource = readFileSync(
+      resolve(__dirname, "../../../../scripts/import-market-rates-to-local.js"),
+      "utf8"
     );
-    const unit = marketRatesImporter.buildLegacySnapshotUnit({
-      id: "19f3212b-9d32-4a4c-9bf9-968e9cea5d64",
-      created_at: "2026-09-19T12:00:02.292Z",
-      updated_at: "2026-09-19T12:00:02.965967Z",
-      gold_usd_per_gram: "140.7815",
-      silver_usd_per_gram: "2.1302",
-      platinum_usd_per_gram: "57.8842",
-      palladium_usd_per_gram: "41.7145",
-      timestamp_metal: "2026-09-19T11:59:07.631Z",
-      timestamp_currency: "2026-09-19T11:58:07.953Z",
-      ...fiatColumns,
-      egp_usd: "0.0191",
-      btc_usd: "81276.3640",
-    });
 
-    expect(unit.root).toMatchObject({
-      id: "19f3212b-9d32-4a4c-9bf9-968e9cea5d64",
-      egp_usd: "0.0191",
-      gold_usd_per_gram: "140.7815",
-      silver_usd_per_gram: "2.1302",
-    });
-    expect(unit.observations).toHaveLength(38);
-    expect(unit.observations).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          instrument_code: "currency:EGP",
-          source: "legacy:market_rates",
-          value_decimal: "0.0191",
-        }),
-        expect.objectContaining({
-          instrument_code: "currency:USD",
-          source: "legacy:market_rates",
-          value_decimal: "1",
-        }),
-      ])
+    expect(importerSource).not.toContain("buildLegacySnapshotUnit");
+    expect(importerSource).not.toContain(
+      "queryLinkedLegacyMarketRateSnapshots"
     );
-  });
-
-  it("falls back only when the linked atomic snapshot RPC is absent", () => {
-    expect(
-      marketRatesImporter.isMissingSnapshotRpcError(
-        new Error(
-          "ERROR: 42883: function public.pull_market_rate_snapshots_page_v2 does not exist"
-        )
-      )
-    ).toBe(true);
-    expect(
-      marketRatesImporter.isMissingSnapshotRpcError(
-        new Error("network connection failed")
-      )
-    ).toBe(false);
+    expect(importerSource).not.toContain('source: "legacy:market_rates"');
   });
 
   it("imports the replacement atomically as one CLI-compatible statement", () => {
