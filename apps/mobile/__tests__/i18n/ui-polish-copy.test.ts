@@ -46,13 +46,17 @@ describe("approved UI-polish localization", () => {
     expect(arUiPolish.metals_empty.cta).toBe("ضيف أول قطعة");
   });
 
-  it("loads UI-polish copy through the registered i18next namespace", () => {
+  it("loads UI-polish copy through the registered typed i18next namespace", () => {
     const hookSource = fs.readFileSync(
       path.resolve(__dirname, "../../hooks/useUiPolishCopy.ts"),
       "utf8"
     );
     const i18nSource = fs.readFileSync(
       path.resolve(__dirname, "../../i18n/index.ts"),
+      "utf8"
+    );
+    const typeSource = fs.readFileSync(
+      path.resolve(__dirname, "../../i18n/types.ts"),
       "utf8"
     );
 
@@ -66,5 +70,8 @@ describe("approved UI-polish localization", () => {
     );
     expect(i18nSource).toContain('"ui-polish": enUiPolish');
     expect(i18nSource).toContain('"ui-polish": arUiPolish');
+    expect(typeSource).toContain(
+      'readonly "ui-polish": UiPolishTranslations;'
+    );
   });
 });
