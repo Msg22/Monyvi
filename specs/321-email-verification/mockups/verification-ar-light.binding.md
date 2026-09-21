@@ -3,9 +3,9 @@
 - Approved reference image: verification-ar-light.png
 - Approved reference image revision: sha256:ae45a2ea9155140fb0b1b453f83960feaf9e6053d96ef15d880e49d1066227a0
 - Binding metadata approval: PENDING
-- Binding metadata revision: sha256:e98c1eaa617a03baf488333284d1204b3eb5c80a2ce9aba33b5c572bbdc3d10d
+- Binding metadata revision: sha256:bffef69a6ea3b572ab4d67bad1b8b2e481992df1277188f5c48e8729e01e8f15
 - Approved binding metadata revision: PENDING
-- Binding approval revision: sha256:96db92c35236cc6e17ae2ac4ba4bedb6520239ce916029bf27be67f101b05046
+- Binding approval revision: sha256:2c1eacce758c58ab5680ceb6cc56e8217f38e67f4943aabab2596356a548400a
 - Approved binding approval revision: PENDING
 - Binding metadata approval evidence/reference: PENDING
 - Legacy metadata migration: no
