@@ -43,6 +43,23 @@ WebBrowser.maybeCompleteAuthSession();
 /** Error codes returned by the OAuth flow. */
 type OAuthErrorCode = "cancelled" | "network" | "timeout" | "unknown";
 
+/** Stable error codes returned when completing a native auth callback. */
+type AuthCallbackErrorCode =
+  | "invalid_callback"
+  | "provider_error"
+  | "network"
+  | "timeout"
+  | "unknown";
+
+/** Result of completing a native Supabase auth callback. */
+type AuthCallbackResult =
+  | { success: true }
+  | {
+      success: false;
+      error: string;
+      errorCode: AuthCallbackErrorCode;
+    };
+
 /** Result of an OAuth sign-in attempt. */
 type OAuthResult =
   | { success: true }
@@ -134,12 +151,12 @@ export async function signInWithOAuth(
     const redirectUrl =
       browserResult.type === "success" ? browserResult.url : undefined;
 
-    const sessionResult = await extractSessionFromRedirectUrl(redirectUrl);
+    const sessionResult = await completeAuthSessionFromUrl(redirectUrl);
     if (!sessionResult.success) {
       return {
         success: false,
         error: sessionResult.error,
-        errorCode: sessionResult.errorCode ?? "unknown",
+        errorCode: toOAuthErrorCode(sessionResult.errorCode),
       };
     }
 
@@ -243,89 +260,140 @@ function isTimeoutSentinel(
 }
 
 /**
- * Extract session tokens from the OAuth redirect URL and establish
- * the new session in the Supabase client.
+ * Complete a native Supabase auth callback by establishing the returned session.
  *
- * The redirect URL can contain tokens in two forms:
- * - Fragment (implicit flow): `#access_token=...&refresh_token=...`
- * - Query param (PKCE flow): `?code=...`
+ * Supported callback shapes:
+ * - Fragment tokens (implicit flow):
+ *   `#access_token=...&refresh_token=...`
+ * - Query authorization code (PKCE flow): `?code=...`
  *
- * Architecture & Design Rationale:
- * - Pattern: Strategy—delegates to the appropriate Supabase method
- *   based on URL shape.
- * - Why: signInWithOAuth creates a completely new server-side session.
- *   The auth code/tokens are ONLY available in the redirect URL.
- *   `detectSessionInUrl: false` in our client means they're never
- *   auto-extracted.
+ * Provider-declared callback failures are detected before any session mutation.
+ * Raw callback URLs and auth material are never returned in errors.
  */
-async function extractSessionFromRedirectUrl(
+export async function completeAuthSessionFromUrl(
   url: string | undefined
-): Promise<
-  | { success: true }
-  | { success: false; error: string; errorCode?: OAuthErrorCode }
-> {
+): Promise<AuthCallbackResult> {
   if (!url) {
     return {
       success: false,
       error: "No redirect URL received from the browser.",
+      errorCode: "invalid_callback",
     };
   }
 
-  // Try fragment-based tokens first (implicit flow)
-  // URL format: monyvi://auth-callback#access_token=...&refresh_token=...
-  const hashIndex = url.indexOf("#");
-  if (hashIndex !== -1) {
-    const fragment = url.substring(hashIndex + 1);
-    const params = new URLSearchParams(fragment);
-    const accessToken = params.get("access_token");
-    const refreshToken = params.get("refresh_token");
+  const fragmentParams = getCallbackParams(url, "#");
+  const queryParams = getCallbackParams(url, "?");
 
-    if (accessToken && refreshToken) {
-      const { error } = await supabase.auth.setSession({
-        access_token: accessToken,
-        refresh_token: refreshToken,
-      });
+  const providerError =
+    fragmentParams?.get("error") ??
+    fragmentParams?.get("error_code") ??
+    queryParams?.get("error") ??
+    queryParams?.get("error_code");
 
-      if (error) {
-        return {
-          success: false,
-          error: getHumanReadableError(error),
-          errorCode: getErrorCode(error),
-        };
-      }
-
-      return { success: true };
-    }
+  if (providerError) {
+    return {
+      success: false,
+      error: "Authentication could not be completed. Please try again.",
+      errorCode: "provider_error",
+    };
   }
 
-  // Try query-based code (PKCE flow)
-  // URL format: monyvi://auth-callback?code=...
-  const queryIndex = url.indexOf("?");
-  if (queryIndex !== -1) {
-    const queryString = url.substring(queryIndex + 1);
-    const params = new URLSearchParams(queryString);
-    const code = params.get("code");
+  const accessToken = fragmentParams?.get("access_token");
+  const refreshToken = fragmentParams?.get("refresh_token");
 
-    if (code) {
-      const { error } = await supabase.auth.exchangeCodeForSession(code);
-
-      if (error) {
-        return {
-          success: false,
-          error: getHumanReadableError(error),
-          errorCode: getErrorCode(error),
-        };
-      }
-
-      return { success: true };
+  if (accessToken || refreshToken) {
+    if (!accessToken || !refreshToken) {
+      return {
+        success: false,
+        error: "Could not extract session from the sign-in response.",
+        errorCode: "invalid_callback",
+      };
     }
+
+    const { error } = await supabase.auth.setSession({
+      access_token: accessToken,
+      refresh_token: refreshToken,
+    });
+
+    if (error) {
+      const errorCode = getErrorCode(error);
+      return {
+        success: false,
+        error: getHumanReadableError(error),
+        errorCode: toAuthCallbackErrorCode(errorCode),
+      };
+    }
+
+    return { success: true };
   }
 
-  // Neither tokens nor code found — the URL might be malformed
+  const code = queryParams?.get("code");
+  if (code) {
+    const { error } = await supabase.auth.exchangeCodeForSession(code);
+
+    if (error) {
+      const errorCode = getErrorCode(error);
+      return {
+        success: false,
+        error: getHumanReadableError(error),
+        errorCode: toAuthCallbackErrorCode(errorCode),
+      };
+    }
+
+    return { success: true };
+  }
+
   return {
     success: false,
     error: "Could not extract session from the sign-in response.",
+    errorCode: "invalid_callback",
   };
+}
+
+/**
+ * Read one delimited callback parameter section without including a later
+ * fragment marker in the query string.
+ */
+function getCallbackParams(
+  url: string,
+  marker: "#" | "?"
+): URLSearchParams | null {
+  const markerIndex = url.indexOf(marker);
+  if (markerIndex === -1) {
+    return null;
+  }
+
+  const startIndex = markerIndex + 1;
+  const endIndex =
+    marker === "?"
+      ? (() => {
+          const hashIndex = url.indexOf("#", startIndex);
+          return hashIndex === -1 ? url.length : hashIndex;
+        })()
+      : url.length;
+  const encodedParams = url.slice(startIndex, endIndex);
+
+  return encodedParams ? new URLSearchParams(encodedParams) : null;
+}
+
+function toAuthCallbackErrorCode(
+  errorCode: OAuthErrorCode
+): AuthCallbackErrorCode {
+  if (errorCode === "network" || errorCode === "timeout") {
+    return errorCode;
+  }
+
+  return "unknown";
+}
+
+function toOAuthErrorCode(
+  errorCode: AuthCallbackErrorCode
+): OAuthErrorCode {
+  if (errorCode === "network" || errorCode === "timeout") {
+    return errorCode;
+  }
+
+  return "unknown";
 }
 
 /**
@@ -385,4 +453,10 @@ function getErrorCode(error: unknown): OAuthErrorCode {
   return "unknown";
 }
 
-export type { OAuthErrorCode, OAuthProvider, OAuthResult };
+export type {
+  AuthCallbackErrorCode,
+  AuthCallbackResult,
+  OAuthErrorCode,
+  OAuthProvider,
+  OAuthResult,
+};
