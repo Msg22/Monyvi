@@ -123,6 +123,8 @@ export default function AuthScreen(): React.JSX.Element {
                 isResending={controller.pendingAction === "verificationResend"}
                 onResend={controller.handleResendVerification}
                 onBack={controller.handleBackToForm}
+                onPrivacyPress={() => router.push("/privacy-policy")}
+                onTermsPress={() => router.push("/terms")}
               />
             ) : (
               <ResetSentView
