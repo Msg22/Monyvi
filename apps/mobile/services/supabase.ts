@@ -342,7 +342,11 @@ export async function signInWithEmail(
   });
 
   if (error) {
-    return { success: false, error };
+    return {
+      success: false,
+      error,
+      needsVerification: error.code === "email_not_confirmed",
+    };
   }
 
   return { success: true };
