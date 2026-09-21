@@ -6,10 +6,13 @@ import { VerificationPendingView } from "@/components/auth/VerificationPendingVi
 
 const COPY: Readonly<Record<string, string>> = {
   check_your_inbox: "Check your inbox",
-  verification_sent_message: "We sent a verification link to {{email}}.",
+  verification_sent_message: "We sent a verification link to",
   resend_email: "Resend email",
   resending_email: "Resending email…",
   back_to_sign_in: "Back to sign in",
+  private_by_design: "Private by design.",
+  privacy: "Privacy",
+  terms: "Terms",
   reset_link_sent: "Reset link sent",
   reset_link_message: "We sent a password reset link to {{email}}.",
 };
@@ -46,6 +49,33 @@ jest.mock("@/context/ThemeContext", () => ({
 }));
 
 describe("auth status views", () => {
+
+  it("renders the approved full-page verification composition without a card", () => {
+    const onResend = jest.fn<Promise<void>, []>().mockResolvedValue(undefined);
+    const onBack = jest.fn();
+
+    render(
+      <VerificationPendingView
+        email="user@example.com"
+        isResending={false}
+        onResend={onResend}
+        onBack={onBack}
+      />
+    );
+
+    expect(screen.getByTestId("verification-pending-view")).toBeOnTheScreen();
+    expect(screen.getByTestId("verification-state-content")).toBeOnTheScreen();
+    expect(screen.getByTestId("verification-email-chip")).toHaveTextContent(
+      "user@example.com"
+    );
+    expect(screen.getByTestId("auth-privacy-footer")).toBeOnTheScreen();
+    expect(
+      screen.getByRole("link", { name: "Privacy" })
+    ).toBeOnTheScreen();
+    expect(screen.getByRole("link", { name: "Terms" })).toBeOnTheScreen();
+    expect(screen.queryByTestId("verification-card")).not.toBeOnTheScreen();
+  });
+
   it("announces the verification resend state and blocks conflicting actions", () => {
     const onResend = jest.fn<Promise<void>, []>().mockResolvedValue(undefined);
     const onBack = jest.fn();
