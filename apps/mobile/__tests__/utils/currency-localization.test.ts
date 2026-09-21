@@ -50,6 +50,10 @@ describe("currency localization catalogue", () => {
     }
   });
 
+  it("excludes non-catalogue codes such as BTC from the supported set", () => {
+    expect(SUPPORTED_CODES).not.toContain("BTC");
+  });
+
   it("leaves ISO codes, symbols, and flags for supported currencies unchanged", () => {
     for (const currency of SUPPORTED_CURRENCIES) {
       expect(CURRENCY_INFO_MAP[currency.code]?.code).toBe(currency.code);

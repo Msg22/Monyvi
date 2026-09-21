@@ -39,9 +39,15 @@ export function getCurrencyName(
   language?: string
 ): string {
   const key = `${CURRENCY_NAMES_KEY_PREFIX}.${currencyCode}`;
+  // Fallback languages are disabled on purpose: a missing Arabic entry must
+  // resolve to the ISO code, never to the English name.
   const translated = language
-    ? t(key, { ns: CURRENCY_NAMES_NAMESPACE, lng: language })
-    : t(key, { ns: CURRENCY_NAMES_NAMESPACE });
+    ? t(key, {
+        ns: CURRENCY_NAMES_NAMESPACE,
+        lng: language,
+        fallbackLng: false,
+      })
+    : t(key, { ns: CURRENCY_NAMES_NAMESPACE, fallbackLng: false });
 
   return translated === key ? currencyCode : translated;
 }
