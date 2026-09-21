@@ -118,14 +118,14 @@ export function useAuthScreenController(): AuthScreenController {
             ? await signUpWithEmail(normalizedEmail, password)
             : await signInWithEmail(normalizedEmail, password);
 
-        if (result.error) {
-          setEmailError(result.error.message);
+        if (result.needsVerification) {
+          setPendingEmail(normalizedEmail);
+          setScreenState("verificationPending");
           return;
         }
 
-        if (mode === "signUp" && result.needsVerification) {
-          setPendingEmail(normalizedEmail);
-          setScreenState("verificationPending");
+        if (result.error) {
+          setEmailError(result.error.message);
           return;
         }
 
