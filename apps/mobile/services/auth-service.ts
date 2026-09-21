@@ -281,6 +281,15 @@ export async function completeAuthSessionFromUrl(
     };
   }
 
+  const callbackBase = url.split(/[?#]/, 1)[0];
+  if (callbackBase !== AUTH_REDIRECT_URL) {
+    return {
+      success: false,
+      error: "Could not validate the authentication callback.",
+      errorCode: "invalid_callback",
+    };
+  }
+
   const fragmentParams = getCallbackParams(url, "#");
   const queryParams = getCallbackParams(url, "?");
 
