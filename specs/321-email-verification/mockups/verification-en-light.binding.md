@@ -3,9 +3,9 @@
 - Approved reference image: verification-en-light.png
 - Approved reference image revision: sha256:f4efe599e755ec55041f663d2049ec01c2f9146633d1d769750879d40f8e3c74
 - Binding metadata approval: PENDING
-- Binding metadata revision: sha256:e98c1eaa617a03baf488333284d1204b3eb5c80a2ce9aba33b5c572bbdc3d10d
+- Binding metadata revision: sha256:bffef69a6ea3b572ab4d67bad1b8b2e481992df1277188f5c48e8729e01e8f15
 - Approved binding metadata revision: PENDING
-- Binding approval revision: sha256:d6fed6027a98e5fdb761b7c58df5fb5075e14f79c8b3ac504c931ac09a5b95e8
+- Binding approval revision: sha256:a68a6f1a4540f3b6b0648daf98ff24b820d23a2a348e7b33a6924731607cd884
 - Approved binding approval revision: PENDING
 - Binding metadata approval evidence/reference: PENDING
 - Legacy metadata migration: no
