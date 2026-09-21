@@ -257,3 +257,41 @@ describe("AuthCallbackScreen verification lifecycle", () => {
     expect(mockReplace).toHaveBeenCalledWith("/");
   });
 });
+
+
+describe("AuthCallbackScreen failed verification recovery", () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+    mockReplace.mockClear();
+    mockCompleteAuthSessionFromUrl.mockReset();
+    mockCallbackUrl = "monyvi://auth-callback?error=access_denied";
+    mockIsNavigationReady = true;
+    mockAuthState = {
+      isAuthenticated: true,
+      isLoading: false,
+    };
+    mockCompleteAuthSessionFromUrl.mockResolvedValue({
+      success: false,
+      error: "Authentication could not be completed. Please try again.",
+      errorCode: "provider_error",
+    });
+  });
+
+  afterEach(() => {
+    jest.clearAllTimers();
+    jest.useRealTimers();
+  });
+
+  it("routes a failed callback to auth recovery even when a previous auth state exists", async () => {
+    render(<AuthCallbackScreen />);
+
+    await act(async () => {
+      await Promise.resolve();
+      jest.advanceTimersByTime(60);
+    });
+
+    expect(mockCompleteAuthSessionFromUrl).toHaveBeenCalledWith(mockCallbackUrl);
+    expect(mockReplace).toHaveBeenCalledWith("/auth");
+    expect(mockReplace).not.toHaveBeenCalledWith("/");
+  });
+});
