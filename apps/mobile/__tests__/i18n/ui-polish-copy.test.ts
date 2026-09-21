@@ -1,3 +1,6 @@
+import fs from "node:fs";
+import path from "node:path";
+
 import arUiPolish from "@/locales/ar/ui-polish.json";
 import enUiPolish from "@/locales/en/ui-polish.json";
 
@@ -6,10 +9,10 @@ function flattenKeys(
   prefix = ""
 ): readonly string[] {
   return Object.entries(value).flatMap(([key, child]) => {
-    const path = prefix ? `${prefix}.${key}` : key;
+    const resourcePath = prefix ? `${prefix}.${key}` : key;
     return child !== null && typeof child === "object" && !Array.isArray(child)
-      ? flattenKeys(child as Record<string, unknown>, path)
-      : [path];
+      ? flattenKeys(child as Record<string, unknown>, resourcePath)
+      : [resourcePath];
   });
 }
 
@@ -41,5 +44,27 @@ describe("approved UI-polish localization", () => {
       "ضيف أول قطعة علشان تتابع قيمتها مع الوقت."
     );
     expect(arUiPolish.metals_empty.cta).toBe("ضيف أول قطعة");
+  });
+
+  it("loads UI-polish copy through the registered i18next namespace", () => {
+    const hookSource = fs.readFileSync(
+      path.resolve(__dirname, "../../hooks/useUiPolishCopy.ts"),
+      "utf8"
+    );
+    const i18nSource = fs.readFileSync(
+      path.resolve(__dirname, "../../i18n/index.ts"),
+      "utf8"
+    );
+
+    expect(hookSource).toContain('useTranslation("ui-polish")');
+    expect(hookSource).not.toContain("@/locales/");
+    expect(i18nSource).toContain(
+      'import enUiPolish from "../locales/en/ui-polish.json";'
+    );
+    expect(i18nSource).toContain(
+      'import arUiPolish from "../locales/ar/ui-polish.json";'
+    );
+    expect(i18nSource).toContain('"ui-polish": enUiPolish');
+    expect(i18nSource).toContain('"ui-polish": arUiPolish');
   });
 });
