@@ -6,8 +6,8 @@
 - Branch: `codex/issue321-email-verification`
 - Product authority: `docs/business/business-decisions.md` §3
 - Prior approved behavior: `specs/016-remove-anonymous-auth`
-- Visual authority: approved #321 verification images + approved binding
-  sidecars once verifier passes
+- Visual authority: approved #321 verification images + their approved,
+  fingerprinted binding sidecars
 
 ## Implementation order
 
