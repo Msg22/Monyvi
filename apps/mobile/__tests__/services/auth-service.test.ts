@@ -72,6 +72,7 @@ jest.mock("expo-web-browser", () => ({
 
 // Import after mocks
 import {
+  completeAuthSessionFromUrl,
   signInWithOAuth,
   signUpWithEmail,
   signInWithEmail,
@@ -98,6 +99,52 @@ function createRetryableFetchError(
   error.status = 0;
   return error;
 }
+
+
+// ---------------------------------------------------------------------------
+// Test Suite: completeAuthSessionFromUrl
+// ---------------------------------------------------------------------------
+
+describe("auth-service - completeAuthSessionFromUrl", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("establishes a session from implicit-flow access and refresh tokens", async () => {
+    mockSetSession.mockResolvedValue({
+      data: { session: {} },
+      error: null,
+    });
+
+    const result = await completeAuthSessionFromUrl(
+      "monyvi://auth-callback#access_token=verification-access&refresh_token=verification-refresh&token_type=bearer"
+    );
+
+    expect(mockSetSession).toHaveBeenCalledWith({
+      access_token: "verification-access",
+      refresh_token: "verification-refresh",
+    });
+    expect(mockExchangeCodeForSession).not.toHaveBeenCalled();
+    expect(result).toEqual({ success: true });
+  });
+
+  it("establishes a session from a PKCE authorization code", async () => {
+    mockExchangeCodeForSession.mockResolvedValue({
+      data: { session: {} },
+      error: null,
+    });
+
+    const result = await completeAuthSessionFromUrl(
+      "monyvi://auth-callback?code=verification-pkce-code"
+    );
+
+    expect(mockExchangeCodeForSession).toHaveBeenCalledWith(
+      "verification-pkce-code"
+    );
+    expect(mockSetSession).not.toHaveBeenCalled();
+    expect(result).toEqual({ success: true });
+  });
+});
 
 // ---------------------------------------------------------------------------
 // Test Suite: signInWithOAuth
