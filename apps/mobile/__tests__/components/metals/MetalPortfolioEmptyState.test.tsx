@@ -113,18 +113,32 @@ describe("MetalPortfolioEmptyState", () => {
     expect(
       screen.getByText("Add your first holding to follow its value over time.")
     ).toBeTruthy();
-    expect(screen.getByTestId("metal-empty-silver-bar-back")).toBeTruthy();
-    expect(screen.getByTestId("metal-empty-silver-bar-front")).toBeTruthy();
-    expect(screen.getByTestId("metal-empty-gold-coin")).toBeTruthy();
+    expect(
+      screen.getByTestId("metal-empty-silver-bar-back", {
+        includeHiddenElements: true,
+      })
+    ).toBeTruthy();
+    expect(
+      screen.getByTestId("metal-empty-silver-bar-front", {
+        includeHiddenElements: true,
+      })
+    ).toBeTruthy();
+    expect(
+      screen.getByTestId("metal-empty-gold-coin", {
+        includeHiddenElements: true,
+      })
+    ).toBeTruthy();
 
-    expect(screen.getByTestId("metal-empty-illustration")).toHaveProp(
-      "accessible",
-      false
-    );
-    expect(screen.getByTestId("metal-empty-illustration")).toHaveProp(
-      "importantForAccessibility",
-      "no-hide-descendants"
-    );
+    expect(
+      screen.getByTestId("metal-empty-illustration", {
+        includeHiddenElements: true,
+      })
+    ).toHaveProp("accessible", false);
+    expect(
+      screen.getByTestId("metal-empty-illustration", {
+        includeHiddenElements: true,
+      })
+    ).toHaveProp("importantForAccessibility", "no-hide-descendants");
 
     expect(screen.getByLabelText("Add your first holding")).toHaveProp(
       "accessibilityRole",
