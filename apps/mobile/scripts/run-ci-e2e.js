@@ -23,6 +23,7 @@ const defaultDeviceOfflineRetryCount = 5;
 
 const shouldBootstrapAuth = process.env.E2E_SKIP_AUTH_BOOTSTRAP !== "1";
 const allCiSuites = [
+  "auth",
   "accounts",
   "transactions",
   "recurring-payments",
@@ -485,6 +486,12 @@ function shouldRestoreDefaultFixtureAfterBudgets(selectedSuites) {
   );
 }
 
+async function runEmailVerificationSuite() {
+  await runNodeScript("scripts/run-email-verification-e2e.js", [], {
+    retryOnDeviceFailure: true,
+  });
+}
+
 async function maybeRunAuthBootstrap() {
   if (shouldBootstrapAuth && !hasRunAuthBootstrap) {
     await runAuthBootstrap(getInitialAuthBootstrapOptions());
@@ -566,6 +573,10 @@ async function main() {
   applyLocalE2eDefaults();
   assertRequiredEnv();
   await maybeSeedE2eData();
+
+  if (selectedSuites.has("auth")) {
+    await runEmailVerificationSuite();
+  }
 
   if (selectedSuites.has("accounts")) {
     await runMaestroFlows(accountMaestroFlows);
