@@ -37,6 +37,7 @@ jest.mock("expo-router", () => ({
   useNavigationContainerRef: (): MockNavigationContainerRef => ({
     isReady: (): boolean => mockIsNavigationReady,
   }),
+  useLocalSearchParams: (): Record<string, string | string[]> => ({}),
 }));
 
 jest.mock("@/context/AuthContext", () => ({
