@@ -117,21 +117,21 @@ describe("MetalPortfolioEmptyState", () => {
     expect(screen.getByTestId("metal-empty-silver-bar-front")).toBeTruthy();
     expect(screen.getByTestId("metal-empty-gold-coin")).toBeTruthy();
 
-    const illustration = screen.getByTestId("metal-empty-illustration");
-    expect(illustration).toHaveProp("accessible", false);
-    expect(illustration).toHaveProp(
+    expect(screen.getByTestId("metal-empty-illustration")).toHaveProp(
+      "accessible",
+      false
+    );
+    expect(screen.getByTestId("metal-empty-illustration")).toHaveProp(
       "importantForAccessibility",
       "no-hide-descendants"
     );
 
-    const cta = screen.getByRole("button", {
-      name: "Add your first holding",
-    });
-    expect(cta).toHaveProp(
-      "className",
-      expect.stringContaining("min-h-14")
+    expect(
+      screen.getByRole("button", { name: "Add your first holding" })
+    ).toHaveProp("className", expect.stringContaining("min-h-14"));
+    fireEvent.press(
+      screen.getByRole("button", { name: "Add your first holding" })
     );
-    fireEvent.press(cta);
     expect(onAddPress).toHaveBeenCalledTimes(1);
   });
 

@@ -24,18 +24,21 @@ describe("WealthDisclosure", () => {
       />
     );
 
-    const disclosure = screen.getByRole("button", {
-      name: "See where your money is",
-      expanded: false,
-    });
+    expect(
+      screen.getByRole("button", {
+        name: "See where your money is",
+        expanded: false,
+      })
+    ).toHaveProp("className", expect.stringContaining("min-h-11"));
     expect(screen.getByText("See where your money is")).toBeTruthy();
-    expect(disclosure).toHaveProp(
-      "className",
-      expect.stringContaining("min-h-11")
-    );
     expect(screen.getByTestId("icon-chevron-down")).toBeTruthy();
 
-    fireEvent.press(disclosure);
+    fireEvent.press(
+      screen.getByRole("button", {
+        name: "See where your money is",
+        expanded: false,
+      })
+    );
     expect(onPress).toHaveBeenCalledTimes(1);
   });
 

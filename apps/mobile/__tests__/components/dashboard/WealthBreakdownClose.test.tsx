@@ -69,23 +69,20 @@ describe("WealthBreakdownSection close control", () => {
       />
     );
 
-    const close = screen.getByRole("button", {
-      name: "Close wealth breakdown",
-    });
-    expect(close).toHaveProp(
-      "className",
-      expect.stringContaining("min-h-11")
-    );
+    expect(
+      screen.getByRole("button", { name: "Close wealth breakdown" })
+    ).toHaveProp("className", expect.stringContaining("min-h-11"));
     expect(screen.getByTestId("icon-close")).toBeTruthy();
-    fireEvent.press(close);
+    fireEvent.press(
+      screen.getByRole("button", { name: "Close wealth breakdown" })
+    );
     expect(onClose).toHaveBeenCalledTimes(1);
 
-    const panel = screen.getByTestId("wealth-breakdown-root");
-    expect(panel).toHaveProp(
+    expect(screen.getByTestId("wealth-breakdown-root")).toHaveProp(
       "className",
       expect.stringContaining("border-slate-200")
     );
-    expect(panel).not.toHaveProp(
+    expect(screen.getByTestId("wealth-breakdown-root")).not.toHaveProp(
       "className",
       expect.stringMatching(/glow|shadow|drop-shadow/)
     );

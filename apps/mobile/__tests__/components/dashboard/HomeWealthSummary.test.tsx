@@ -158,13 +158,20 @@ describe("HomeWealthSummary", () => {
   it("starts collapsed, then expands and collapses through both controls", () => {
     renderSummary();
 
-    const disclosure = screen.getByRole("button", {
-      name: "See where your money is",
-      expanded: false,
-    });
+    expect(
+      screen.getByRole("button", {
+        name: "See where your money is",
+        expanded: false,
+      })
+    ).toBeTruthy();
     expect(screen.queryByTestId("mock-wealth-breakdown")).toBeNull();
 
-    fireEvent.press(disclosure);
+    fireEvent.press(
+      screen.getByRole("button", {
+        name: "See where your money is",
+        expanded: false,
+      })
+    );
     expect(screen.getByTestId("mock-wealth-breakdown")).toBeTruthy();
     expect(screen.getByTestId("home-wealth-breakdown-reveal")).toBeTruthy();
     expect(
