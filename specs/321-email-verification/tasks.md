@@ -118,17 +118,17 @@ runtime mounts, no token appears in UI/log output, and recovery remains possible
 
 ### Tests first
 
-- [ ] T027 [P] [US3] Add Red callback-service cases for provider-declared error parameters, malformed URLs, missing auth material, failed token session establishment, and failed PKCE exchange in `apps/mobile/__tests__/services/auth-service.test.ts`
-- [ ] T028 [P] [US3] Add Red route tests proving failed callbacks never navigate into private/authenticated routing and provide a safe recovery path in `apps/mobile/__tests__/app/auth-redirect.test.tsx`
-- [ ] T029 [P] [US3] Add a regression assertion that surfaced callback failures/logging never contain raw access token, refresh token, verification token, or complete credential-bearing callback URL in `apps/mobile/__tests__/services/auth-service.test.ts`
+- [x] T027 [P] [US3] Add Red callback-service cases for provider-declared error parameters, malformed URLs, missing auth material, failed token session establishment, and failed PKCE exchange in `apps/mobile/__tests__/services/auth-service.test.ts`
+- [x] T028 [P] [US3] Add Red route tests proving failed callbacks never navigate into private/authenticated routing and provide a safe recovery path in `apps/mobile/__tests__/app/auth-redirect.test.tsx`
+- [x] T029 [P] [US3] Add a regression assertion that surfaced callback failures/logging never contain raw access token, refresh token, verification token, or complete credential-bearing callback URL in `apps/mobile/__tests__/services/auth-service.test.ts`
 
 ### Implementation
 
-- [ ] T030 [US3] Complete fail-closed callback error classification/sanitization in `apps/mobile/services/auth-service.ts` while preserving only stable user-safe error information
-- [ ] T031 [US3] Implement safe invalid/expired callback recovery behavior in `apps/mobile/app/auth-callback.tsx` without introducing a second auth-state or onboarding-routing authority
+- [x] T030 [US3] Complete fail-closed callback error classification/sanitization in `apps/mobile/services/auth-service.ts` while preserving only stable user-safe error information
+- [x] T031 [US3] Implement safe invalid/expired callback recovery behavior in `apps/mobile/app/auth-callback.tsx` without introducing a second auth-state or onboarding-routing authority
 - [ ] T032 [US3] Add deterministic local/manual invalid-link coverage for malformed, expired, and reused confirmation links to `apps/mobile/e2e/maestro/auth/email-verification.yaml` where automation is reliable, and record manual-only cases in `specs/321-email-verification/quickstart.md`
 
-**Checkpoint**: US3 fails closed across the required invalid-link matrix.
+**Checkpoint**: Functional US3 T027-T031 PASS at exact head `6e828813a64825bbfbed29f11e14b92c2f679d1d` — non-canonical token callbacks are rejected before session mutation; provider-declared failures recover to auth; callback secrets are not surfaced; full mobile Jest, typecheck/lint, Android build, and pgTAP are Green. T032 E2E/manual invalid-link evidence remains pending.
 
 ---
 
