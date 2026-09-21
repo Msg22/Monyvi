@@ -20,22 +20,24 @@ import Animated, {
   withSpring,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+
 import { palette } from "@/constants/colors";
 import { QUICK_ACTION_FAB_SIZE, TAB_BAR_HEIGHT } from "@/constants/ui";
+import { useIsQuickActionFabSuppressed } from "@/hooks/useQuickActionFabVisibility";
 
 const ACTION_SIZE = 44;
 const FAB_RIGHT_MARGIN = 10;
 const FAB_BOTTOM_OFFSET = 0;
 
 interface QuickAction {
-  id: string;
-  iconName: keyof typeof Ionicons.glyphMap;
-  label: string;
-  route: string;
-  color: string;
+  readonly id: string;
+  readonly iconName: keyof typeof Ionicons.glyphMap;
+  readonly label: string;
+  readonly route: string;
+  readonly color: string;
 }
 
-const QUICK_ACTIONS: QuickAction[] = [
+const QUICK_ACTIONS: readonly QuickAction[] = [
   {
     id: "transfer",
     iconName: "swap-horizontal",
@@ -75,6 +77,7 @@ export function QuickActionFab({
   isRecordingActive = false,
 }: QuickActionFabProps): React.JSX.Element | null {
   const insets = useSafeAreaInsets();
+  const isSuppressed = useIsQuickActionFabSuppressed();
   const [isExpanded, setIsExpanded] = useState(false);
 
   const fabRotation = useSharedValue(0);
@@ -102,29 +105,25 @@ export function QuickActionFab({
     transform: [{ rotate: `${fabRotation.value}deg` }],
   }));
 
-  // Hide FAB during voice recording (US6) — placed AFTER all hooks
-  if (isRecordingActive) return null;
+  if (shouldHideQuickActionFab(isRecordingActive, isSuppressed)) return null;
 
   return (
     <>
-      {/* Overlay */}
-      {isExpanded && (
+      {isExpanded ? (
         <Animated.View
           entering={FadeIn.duration(200)}
           exiting={FadeOut.duration(150)}
-          className="absolute inset-0 bg-black/50 z-[99]"
+          className="absolute inset-0 z-[99] bg-black/50"
         >
           <Pressable className="absolute inset-0" onPress={toggleExpanded} />
         </Animated.View>
-      )}
+      ) : null}
 
-      {/* Actions Container */}
       <View
         className="absolute z-[100] items-end"
         style={{ bottom: fabBottom, right: FAB_RIGHT_MARGIN }}
       >
-        {/* Action Buttons - Stacked vertically above FAB */}
-        {isExpanded && (
+        {isExpanded ? (
           <Animated.View
             entering={SlideInDown.duration(250)}
             exiting={SlideOutDown.duration(150)}
@@ -135,7 +134,7 @@ export function QuickActionFab({
                 key={action.id}
                 testID={`fab-${action.id}`}
                 onPress={() => closeAndNavigate(action.route)}
-                className="flex-row items-center justify-end mb-3"
+                className="mb-3 flex-row items-center justify-end"
                 style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
                 accessibilityLabel={action.label}
                 accessibilityRole="button"
@@ -152,7 +151,7 @@ export function QuickActionFab({
                   {action.label}
                 </Text>
                 <View
-                  className="items-center justify-center shadow-sm shadow-black/20 elevation-5"
+                  className="elevation-5 items-center justify-center shadow-sm shadow-black/20"
                   style={{
                     width: ACTION_SIZE,
                     height: ACTION_SIZE,
@@ -169,10 +168,8 @@ export function QuickActionFab({
               </Pressable>
             ))}
           </Animated.View>
-        )}
+        ) : null}
 
-        {/* Main FAB */}
-        {/* Main FAB */}
         <Pressable
           testID="fab-button"
           onPress={toggleExpanded}
@@ -208,4 +205,11 @@ export function QuickActionFab({
       </View>
     </>
   );
+}
+
+export function shouldHideQuickActionFab(
+  isRecordingActive: boolean,
+  isSuppressed: boolean
+): boolean {
+  return isRecordingActive || isSuppressed;
 }

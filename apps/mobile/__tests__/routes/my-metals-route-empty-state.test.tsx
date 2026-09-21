@@ -5,9 +5,12 @@ import type { MetalPortfolioSectionReadiness } from "@/hooks/metal-portfolio-rea
 import type { MetalPortfolioReadModel } from "@/services/metal-portfolio-read-model-service";
 import MyMetalsRoute from "@/app/(private)/(tabs)/metals";
 
-let mockLanguage = "en";
+let mockLanguage: "en" | "ar" = "en";
 let mockPortfolioState: MetalPortfolioReadModel | null;
 let mockReadinessState: MetalPortfolioSectionReadiness;
+let mockErrorState: Error | null = null;
+let mockFabSuppression = false;
+let mockEmptyHasHistory = false;
 
 const ready: MetalPortfolioSectionReadiness = {
   holdings: true,
@@ -29,14 +32,33 @@ const populatedPortfolio = {
 } as unknown as MetalPortfolioReadModel;
 
 jest.mock("react-i18next", () => ({
-  useTranslation: (): { readonly t: (key: string) => string } => ({
+  useTranslation: () => ({
     t: (key: string): string => {
-      const copy: Readonly<Record<string, Readonly<Record<string, string>>>> = {
-        en: { my_metals: "My Metals", add_holding: "Add holding" },
-        ar: { my_metals: "ذهبك وفضتك", add_holding: "إضافة مقتنى" },
-      };
-      return copy[mockLanguage]?.[key] ?? key;
+      if (key === "my_metals") return mockLanguage === "ar" ? "معادني" : "My Metals";
+      if (key === "add_holding")
+        return mockLanguage === "ar" ? "إضافة مقتنى" : "Add holding";
+      return key;
     },
+  }),
+}));
+
+jest.mock("@/hooks/useUiPolishCopy", () => ({
+  useUiPolishCopy: () => ({
+    wealth_breakdown: {},
+    metals_empty:
+      mockLanguage === "ar"
+        ? {
+            header: "ذهبك وفضتك",
+            title: "ابدأ تتابع ذهبك وفضتك",
+            body: "ضيف أول قطعة علشان تتابع قيمتها مع الوقت.",
+            cta: "ضيف أول قطعة",
+          }
+        : {
+            header: "My Metals",
+            title: "Start tracking your gold and silver",
+            body: "Add your first holding to follow its value over time.",
+            cta: "Add your first holding",
+          },
   }),
 }));
 
@@ -54,7 +76,7 @@ jest.mock("@/hooks/usePreferredCurrency", () => ({
 
 jest.mock("@/hooks/useMetalPortfolio", () => ({
   useMetalPortfolio: () => ({
-    error: null,
+    error: mockErrorState,
     isLoading: false,
     isOffline: false,
     onFilterChange: jest.fn(),
@@ -65,6 +87,12 @@ jest.mock("@/hooks/useMetalPortfolio", () => ({
     refresh: jest.fn(),
     selectedFilter: "ALL",
   }),
+}));
+
+jest.mock("@/hooks/useQuickActionFabVisibility", () => ({
+  useSuppressQuickActionFabWhenFocused: (isSuppressed: boolean): void => {
+    mockFabSuppression = isSuppressed;
+  },
 }));
 
 jest.mock("@/components/navigation/PageHeader", () => {
@@ -93,20 +121,52 @@ jest.mock("@/components/navigation/PageHeader", () => {
   };
 });
 
-jest.mock("@/components/metals/MetalPortfolioScreen", () => {
+jest.mock("@/components/metals/MetalPortfolioEmptyState", () => {
   const ReactActual = jest.requireActual<typeof import("react")>("react");
-  const { Pressable } =
+  const { Pressable, View } =
     jest.requireActual<typeof import("react-native")>("react-native");
+  const actual = jest.requireActual(
+    "@/components/metals/MetalPortfolioEmptyState"
+  ) as typeof import("@/components/metals/MetalPortfolioEmptyState");
   return {
-    MetalPortfolioScreen: ({
+    ...actual,
+    MetalPortfolioEmptyState: ({
+      hasHistory,
       onAddPress,
     }: {
-      readonly onAddPress?: () => void;
-    }): React.JSX.Element =>
-      ReactActual.createElement(Pressable, {
-        onPress: onAddPress,
-        testID: "mock-empty-cta",
-      }),
+      readonly hasHistory?: boolean;
+      readonly onAddPress: () => void;
+    }): React.JSX.Element => {
+      mockEmptyHasHistory = Boolean(hasHistory);
+      return ReactActual.createElement(
+        View,
+        { testID: "mock-premium-empty-state" },
+        ReactActual.createElement(Pressable, {
+          onPress: onAddPress,
+          testID: "mock-empty-cta",
+        })
+      );
+    },
+  };
+});
+
+jest.mock("@/components/metals/MetalPortfolioScreen", () => {
+  const ReactActual = jest.requireActual<typeof import("react")>("react");
+  const { Text, View } =
+    jest.requireActual<typeof import("react-native")>("react-native");
+  return {
+    MetalPortfolioScreen: (): React.JSX.Element =>
+      ReactActual.createElement(
+        View,
+        { testID: "mock-populated-portfolio" },
+        ReactActual.createElement(View, {
+          testID: "metal-portfolio-summary-layout",
+        }),
+        ReactActual.createElement(View, {
+          testID: "metal-portfolio-filter-bar",
+        }),
+        ReactActual.createElement(Text, null, "Holdings")
+      ),
   };
 });
 
@@ -123,18 +183,26 @@ jest.mock("@/components/metals/AddHoldingModal", () => {
   };
 });
 
-describe("MyMetalsRoute empty-state chrome", () => {
+describe("MyMetalsRoute premium empty-state chrome", () => {
   beforeEach(() => {
     mockLanguage = "en";
     mockPortfolioState = emptyPortfolio;
     mockReadinessState = ready;
+    mockErrorState = null;
+    mockFabSuppression = false;
+    mockEmptyHasHistory = false;
   });
 
-  it("uses the empty CTA as the only Add action and opens the existing journey", () => {
+  it("uses the empty CTA as the only Add action and hides zero portfolio chrome", () => {
     render(<MyMetalsRoute />);
 
     expect(screen.getByText("My Metals")).toBeTruthy();
     expect(screen.queryByTestId("mock-header-add")).toBeNull();
+    expect(screen.getByTestId("mock-premium-empty-state")).toBeTruthy();
+    expect(screen.queryByTestId("metal-portfolio-summary-layout")).toBeNull();
+    expect(screen.queryByTestId("metal-portfolio-filter-bar")).toBeNull();
+    expect(screen.queryByText("Holdings")).toBeNull();
+    expect(mockFabSuppression).toBe(true);
 
     fireEvent.press(screen.getByTestId("mock-empty-cta"));
     expect(
@@ -142,18 +210,45 @@ describe("MyMetalsRoute empty-state chrome", () => {
     ).toEqual({ expanded: true });
   });
 
-  it("keeps the header Add action for a populated portfolio", () => {
+  it("retains populated controls and both existing Add entry points", () => {
     mockPortfolioState = populatedPortfolio;
     render(<MyMetalsRoute />);
 
     expect(screen.getByTestId("mock-header-add")).toBeTruthy();
+    expect(screen.getByTestId("mock-populated-portfolio")).toBeTruthy();
+    expect(screen.getByTestId("metal-portfolio-summary-layout")).toBeTruthy();
+    expect(screen.getByTestId("metal-portfolio-filter-bar")).toBeTruthy();
+    expect(screen.getByText("Holdings")).toBeTruthy();
+    expect(mockFabSuppression).toBe(false);
   });
 
-  it("uses the approved Arabic header while empty", () => {
+  it("preserves the existing error surface instead of claiming the portfolio is empty", () => {
+    mockErrorState = new Error("read failed");
+    render(<MyMetalsRoute />);
+
+    expect(screen.queryByTestId("mock-premium-empty-state")).toBeNull();
+    expect(screen.getByTestId("mock-populated-portfolio")).toBeTruthy();
+    expect(mockFabSuppression).toBe(false);
+  });
+
+  it("keeps terminal History available when there are no active holdings", () => {
+    mockPortfolioState = {
+      ...emptyPortfolio,
+      hasTerminalHistory: true,
+    } as unknown as MetalPortfolioReadModel;
+
+    render(<MyMetalsRoute />);
+
+    expect(screen.getByTestId("mock-premium-empty-state")).toBeTruthy();
+    expect(mockEmptyHasHistory).toBe(true);
+  });
+
+  it("uses the approved Arabic empty-state header", () => {
     mockLanguage = "ar";
     render(<MyMetalsRoute />);
 
     expect(screen.getByText("ذهبك وفضتك")).toBeTruthy();
+    expect(screen.queryByText("My Metals")).toBeNull();
     expect(screen.queryByTestId("mock-header-add")).toBeNull();
   });
 });

@@ -1,7 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react-native";
 import React from "react";
 
-import type { CurrencyType } from "@monyvi/db";
 import type { MetalPortfolioSectionReadiness } from "@/hooks/metal-portfolio-readiness";
 import type { MetalPortfolioReadModel } from "@/services/metal-portfolio-read-model-service";
 import {
@@ -9,35 +8,42 @@ import {
   isTrueMetalPortfolioEmpty,
   MetalPortfolioEmptyState,
 } from "@/components/metals/MetalPortfolioEmptyState";
-import { MetalPortfolioScreen } from "@/components/metals/MetalPortfolioScreen";
 
-let mockLanguage = "en";
-
-const translations: Readonly<Record<string, Readonly<Record<string, string>>>> = {
-  en: {
-    start_tracking_metals: "Start tracking your gold and silver",
-    empty_metals_description:
-      "Add your first holding to follow its value over time.",
-    add_first_holding: "Add your first holding",
-    add_first_holding_accessibility: "Add your first gold or silver holding",
-    "portfolio.holdings": "Holdings",
-  },
-  ar: {
-    start_tracking_metals: "ابدأ تتابع ذهبك وفضتك",
-    empty_metals_description: "ضيف أول قطعة علشان تتابع قيمتها مع الوقت.",
-    add_first_holding: "ضيف أول قطعة",
-    add_first_holding_accessibility: "ضيف أول قطعة ذهب أو فضة",
-    "portfolio.holdings": "المقتنيات",
-  },
-};
+let mockLanguage: "en" | "ar" = "en";
 
 jest.mock("react-i18next", () => ({
-  useTranslation: (): {
-    readonly i18n: { readonly resolvedLanguage: string };
-    readonly t: (key: string, values?: Record<string, unknown>) => string;
-  } => ({
-    i18n: { resolvedLanguage: mockLanguage },
-    t: (key: string): string => translations[mockLanguage]?.[key] ?? key,
+  useTranslation: () => ({
+    i18n: { language: mockLanguage, resolvedLanguage: mockLanguage },
+    t: (key: string): string =>
+      key === "portfolio.recent_history"
+        ? mockLanguage === "ar"
+          ? "السجل"
+          : "History"
+        : key === "portfolio.view_all"
+          ? mockLanguage === "ar"
+            ? "عرض الكل"
+            : "View all"
+          : key,
+  }),
+}));
+
+jest.mock("@/hooks/useUiPolishCopy", () => ({
+  useUiPolishCopy: () => ({
+    wealth_breakdown: {},
+    metals_empty:
+      mockLanguage === "ar"
+        ? {
+            header: "ذهبك وفضتك",
+            title: "ابدأ تتابع ذهبك وفضتك",
+            body: "ضيف أول قطعة علشان تتابع قيمتها مع الوقت.",
+            cta: "ضيف أول قطعة",
+          }
+        : {
+            header: "My Metals",
+            title: "Start tracking your gold and silver",
+            body: "Add your first holding to follow its value over time.",
+            cta: "Add your first holding",
+          },
   }),
 }));
 
@@ -58,7 +64,6 @@ jest.mock("@expo/vector-icons", () => {
   };
 });
 
-const currency: CurrencyType = "EGP";
 const ready: MetalPortfolioSectionReadiness = {
   holdings: true,
   rateCurrency: true,
@@ -68,59 +73,39 @@ const ready: MetalPortfolioSectionReadiness = {
 };
 const notReady: MetalPortfolioSectionReadiness = {
   ...ready,
-  holdings: false,
+  summary: false,
 };
 const emptyPortfolio = {
   activeHoldings: [],
-  activeTotalDecimal: "0",
-  allocation: { gold: null, silver: null },
-  currentPerformanceDecimal: null,
-  currentPerformanceUnavailableReason: null,
   holdings: [],
   listState: "PORTFOLIO_EMPTY",
-  rateStatus: { state: "missing" },
   recentHistory: [],
-  soldResultDecimal: null,
-  soldResultUnavailable: false,
 } as unknown as MetalPortfolioReadModel;
 const populatedPortfolio = {
   ...emptyPortfolio,
   activeHoldings: [{ id: "gold-1", metalType: "GOLD" }],
-  activeTotalDecimal: "1000",
-  currentPerformanceDecimal: "20",
   listState: "POPULATED",
-  rateStatus: { state: "fresh" },
 } as unknown as MetalPortfolioReadModel;
 
-const baseScreenProps = {
-  bottomInset: 0,
-  currency,
-  error: null,
-  isLoading: false,
-  isOffline: false,
-  onAddPress: jest.fn(),
-  onFilterChange: jest.fn(),
-  onHistoryPress: jest.fn(),
-  onHoldingPress: jest.fn(),
-  onRetry: jest.fn(),
-  rateProviderObservedAt: null,
-  recentHistory: [],
-  selectedFilter: "ALL" as const,
-};
-
 describe("MetalPortfolioEmptyState", () => {
-  afterEach(() => {
+  beforeEach(() => {
     mockLanguage = "en";
   });
 
   it("recognizes only a ready, truly empty active portfolio", () => {
     expect(isTrueMetalPortfolioEmpty(emptyPortfolio, ready)).toBe(true);
     expect(isTrueMetalPortfolioEmpty(populatedPortfolio, ready)).toBe(false);
+    expect(
+      isTrueMetalPortfolioEmpty(
+        { ...emptyPortfolio, listState: "FILTER_EMPTY" },
+        ready
+      )
+    ).toBe(false);
     expect(isTrueMetalPortfolioEmpty(emptyPortfolio, notReady)).toBe(false);
     expect(isTrueMetalPortfolioEmpty(null, ready)).toBe(false);
   });
 
-  it("renders the approved illustrated English composition and opens Add Holding", () => {
+  it("renders the approved English composition and opens Add Holding", () => {
     const onAddPress = jest.fn();
     render(<MetalPortfolioEmptyState onAddPress={onAddPress} />);
 
@@ -140,14 +125,13 @@ describe("MetalPortfolioEmptyState", () => {
 
     const cta = screen.getByTestId("metal-empty-add");
     expect(cta.props.accessibilityRole).toBe("button");
-    expect(cta.props.accessibilityLabel).toBe(
-      "Add your first gold or silver holding"
-    );
+    expect(cta.props.accessibilityLabel).toBe("Add your first holding");
+    expect(cta.props.className).toContain("min-h-14");
     fireEvent.press(cta);
     expect(onAddPress).toHaveBeenCalledTimes(1);
   });
 
-  it("uses the approved Arabic copy", () => {
+  it("uses the approved Arabic copy without English UI", () => {
     mockLanguage = "ar";
     render(<MetalPortfolioEmptyState onAddPress={jest.fn()} />);
 
@@ -156,9 +140,10 @@ describe("MetalPortfolioEmptyState", () => {
       screen.getByText("ضيف أول قطعة علشان تتابع قيمتها مع الوقت.")
     ).toBeTruthy();
     expect(screen.getByText("ضيف أول قطعة")).toBeTruthy();
+    expect(screen.queryByText("Start tracking your gold and silver")).toBeNull();
   });
 
-  it("reduces illustration size and vertical spacing for compact or enlarged text", () => {
+  it("reduces illustration size and gaps for compact or enlarged text", () => {
     const ordinary = getMetalEmptyStateLayout(390, 1);
     const compact = getMetalEmptyStateLayout(320, 1);
     const enlarged = getMetalEmptyStateLayout(390, 2);
@@ -170,34 +155,17 @@ describe("MetalPortfolioEmptyState", () => {
     expect(enlarged.verticalGap).toBeLessThan(ordinary.verticalGap);
   });
 
-  it("replaces zero portfolio chrome only for the true-empty state", () => {
+  it("keeps terminal History reachable as a secondary action", () => {
+    const onHistoryPress = jest.fn();
     render(
-      <MetalPortfolioScreen
-        {...baseScreenProps}
-        portfolio={emptyPortfolio}
-        readiness={ready}
+      <MetalPortfolioEmptyState
+        hasHistory
+        onAddPress={jest.fn()}
+        onHistoryPress={onHistoryPress}
       />
     );
 
-    expect(screen.getByTestId("metal-portfolio-empty-state")).toBeTruthy();
-    expect(screen.queryByTestId("metal-portfolio-summary-layout")).toBeNull();
-    expect(screen.queryByTestId("metal-portfolio-filter-bar")).toBeNull();
-    expect(screen.queryByTestId("metal-portfolio-rate-updated")).toBeNull();
-    expect(screen.queryByText("Holdings")).toBeNull();
-  });
-
-  it("retains populated portfolio summary, filters, and holdings heading", () => {
-    render(
-      <MetalPortfolioScreen
-        {...baseScreenProps}
-        portfolio={populatedPortfolio}
-        readiness={ready}
-      />
-    );
-
-    expect(screen.queryByTestId("metal-portfolio-empty-state")).toBeNull();
-    expect(screen.getByTestId("metal-portfolio-summary-layout")).toBeTruthy();
-    expect(screen.getByTestId("metal-portfolio-filter-bar")).toBeTruthy();
-    expect(screen.getByText("Holdings")).toBeTruthy();
+    fireEvent.press(screen.getByTestId("metal-empty-history"));
+    expect(onHistoryPress).toHaveBeenCalledTimes(1);
   });
 });

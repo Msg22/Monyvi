@@ -6,6 +6,7 @@ import {
   formatCanonicalDecimalForDisplay,
   resolveCurrencyDisplayMinorUnits,
 } from "@monyvi/logic";
+import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import React, { useMemo } from "react";
 import { Pressable, Text, useWindowDimensions, View } from "react-native";
@@ -16,9 +17,11 @@ import type { WealthBreakdownReadModel } from "@/services/net-worth-read-model-s
 
 interface WealthBreakdownSectionProps {
   readonly breakdown: WealthBreakdownReadModel | null;
+  readonly closeAccessibilityLabel?: string;
   readonly currency: CurrencyType;
   readonly isLoading: boolean;
   readonly onAccountsPress: () => void;
+  readonly onClose?: () => void;
   readonly onMetalsPress: () => void;
 }
 
@@ -39,22 +42,25 @@ interface WealthTileProps {
 interface MetalAmountProps {
   readonly amount: string;
   readonly countLabel: string;
+  readonly dividerClassName?: string;
   readonly dotClassName: string;
-  readonly hasDivider?: boolean;
   readonly label: string;
   readonly share: string;
 }
 
 export function WealthBreakdownSection({
   breakdown,
+  closeAccessibilityLabel,
   currency,
   isLoading,
   onAccountsPress,
+  onClose,
   onMetalsPress,
 }: WealthBreakdownSectionProps): React.JSX.Element {
   const { t, i18n } = useTranslation("metals");
   const { fontScale, width } = useWindowDimensions();
   const primaryTilesClass = getWealthTilesLayoutClass(width, fontScale);
+  const isStacked = primaryTilesClass === "flex-col";
   const locale = resolveLocale(i18n?.resolvedLanguage);
   const amount = useMemo(
     (): ((value: string | null) => string) => (value) =>
@@ -64,7 +70,7 @@ export function WealthBreakdownSection({
 
   if (isLoading) {
     return (
-      <View testID="wealth-breakdown-skeleton" className="my-4 gap-3">
+      <View testID="wealth-breakdown-skeleton" className="mb-4 mt-2 gap-3">
         <Skeleton width="100%" height={260} borderRadius={24} />
       </View>
     );
@@ -88,26 +94,42 @@ export function WealthBreakdownSection({
   return (
     <View
       testID="wealth-breakdown-root"
-      className="my-4 overflow-hidden rounded-3xl border border-slate-200 bg-surface px-4 pb-4 pt-4 dark:border-slate-700 dark:bg-slate-900"
+      className="mb-4 mt-2 overflow-hidden rounded-3xl border border-slate-200 bg-surface px-4 pb-4 pt-4 dark:border-slate-700 dark:bg-slate-900"
     >
       <View className="flex-row items-start justify-between gap-3">
         <Text
-          numberOfLines={2}
           className="min-w-0 flex-1 text-lg font-bold text-text-primary dark:text-text-primary-dark"
+          accessibilityRole="header"
         >
           {t("wealth_breakdown.title")}
         </Text>
-        <View className="shrink-0 items-end pl-2">
-          <Text className="text-[11px] text-text-secondary dark:text-text-secondary-dark">
-            {netWorthLabel}
-          </Text>
-          <Text
-            numberOfLines={1}
-            className="mt-0.5 text-[15px] font-bold text-text-primary dark:text-text-primary-dark"
+        {onClose ? (
+          <Pressable
+            accessibilityLabel={
+              closeAccessibilityLabel ?? t("wealth_breakdown.title")
+            }
+            accessibilityRole="button"
+            className="min-h-11 min-w-11 items-center justify-center rounded-full border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800"
+            onPress={onClose}
+            style={({ pressed }) => ({ opacity: pressed ? 0.72 : 1 })}
+            testID="wealth-breakdown-close"
           >
-            {amount(breakdown.totalNetWorthDecimal)}
-          </Text>
-        </View>
+            <Ionicons
+              color={palette.slate[500]}
+              name="close"
+              size={24}
+            />
+          </Pressable>
+        ) : null}
+      </View>
+
+      <View className="mt-1 items-end">
+        <Text className="text-[11px] text-text-secondary dark:text-text-secondary-dark">
+          {netWorthLabel}
+        </Text>
+        <Text className="mt-0.5 text-[15px] font-bold text-text-primary dark:text-text-primary-dark">
+          {amount(breakdown.totalNetWorthDecimal)}
+        </Text>
       </View>
 
       <View
@@ -158,28 +180,32 @@ export function WealthBreakdownSection({
         />
       </View>
 
-      {hasOwnedMetals && (
+      {hasOwnedMetals ? (
         <View className="mt-4">
-          <View className="flex-row items-end justify-between gap-3">
+          <View className="flex-row flex-wrap items-end justify-between gap-3">
             <Text className="text-[13px] font-bold text-text-primary dark:text-text-primary-dark">
               {insideMetalsLabel}
             </Text>
-            <Text
-              numberOfLines={1}
-              className="min-w-0 flex-1 text-right text-[9px] text-text-secondary dark:text-text-secondary-dark"
-            >
+            <Text className="min-w-0 flex-1 text-end text-[9px] text-text-secondary dark:text-text-secondary-dark">
               {metalsSummaryLabel}
             </Text>
           </View>
 
-          <View className="mt-1.5 min-h-14 flex-row overflow-hidden rounded-2xl bg-slate-100 dark:bg-slate-800/50">
+          <View
+            testID="wealth-breakdown-metal-details"
+            className={`mt-1.5 min-h-14 overflow-hidden rounded-2xl bg-slate-100 dark:bg-slate-800/50 ${primaryTilesClass}`}
+          >
             <MetalAmount
               amount={amount(breakdown.metals.gold.amountDecimal)}
               countLabel={t("holding", {
                 count: breakdown.metals.gold.holdingCount,
               })}
+              dividerClassName={
+                isStacked
+                  ? "border-b border-slate-200 dark:border-slate-700/60"
+                  : "border-e border-slate-200 dark:border-slate-700/60"
+              }
               dotClassName="bg-gold-400"
-              hasDivider
               label={t("wealth_breakdown.gold")}
               share={t("wealth_breakdown.of_metals", {
                 share: formatShare(breakdown.metals.gold.shareOfMetals, locale),
@@ -201,7 +227,7 @@ export function WealthBreakdownSection({
             />
           </View>
         </View>
-      )}
+      ) : null}
     </View>
   );
 }
@@ -227,6 +253,7 @@ function WealthTile({
       onPress={onPress}
       testID={testID}
       className="relative min-h-24 flex-1 overflow-hidden rounded-2xl bg-slate-25 dark:bg-slate-900"
+      style={({ pressed }) => ({ opacity: pressed ? 0.78 : 1 })}
     >
       <View pointerEvents="none" className="absolute inset-0 dark:hidden">
         <LinearGradient
@@ -248,22 +275,16 @@ function WealthTile({
       </View>
       <View
         pointerEvents="none"
-        className={`absolute bottom-0 left-0 top-0 w-1 ${accentClassName}`}
+        className={`absolute bottom-0 start-0 top-0 w-1 ${accentClassName}`}
       />
       <View className="px-4 py-3.5">
         <Text className="text-[11px] font-semibold text-text-primary dark:text-text-primary-dark">
           {label}
         </Text>
-        <Text
-          numberOfLines={1}
-          className="mt-2 text-[15px] font-bold text-text-primary dark:text-text-primary-dark"
-        >
+        <Text className="mt-2 text-[15px] font-bold text-text-primary dark:text-text-primary-dark">
           {formatDecimalCurrency(amountDecimal, currency, locale)}
         </Text>
-        <Text
-          numberOfLines={1}
-          className="mt-1 text-[10px] text-text-secondary dark:text-text-secondary-dark"
-        >
+        <Text className="mt-1 text-[10px] text-text-secondary dark:text-text-secondary-dark">
           {shareLabel}
         </Text>
       </View>
@@ -274,36 +295,23 @@ function WealthTile({
 function MetalAmount({
   amount,
   countLabel,
+  dividerClassName = "",
   dotClassName,
-  hasDivider = false,
   label,
   share,
 }: MetalAmountProps): React.JSX.Element {
   return (
-    <View
-      className={`min-w-0 flex-1 px-3 py-1.5 ${
-        hasDivider ? "border-r border-slate-200 dark:border-slate-700/60" : ""
-      }`}
-    >
+    <View className={`min-w-0 flex-1 px-3 py-2 ${dividerClassName}`}>
       <View className="flex-row items-center gap-2">
         <View className={`h-2 w-2 rounded-full ${dotClassName}`} />
-        <Text
-          numberOfLines={1}
-          className="min-w-0 flex-1 text-[11px] font-bold text-text-primary dark:text-text-primary-dark"
-        >
+        <Text className="min-w-0 flex-1 text-[11px] font-bold text-text-primary dark:text-text-primary-dark">
           {label}
         </Text>
       </View>
-      <Text
-        numberOfLines={1}
-        className="mt-0.5 text-xs font-bold text-text-primary dark:text-text-primary-dark"
-      >
+      <Text className="mt-0.5 text-xs font-bold text-text-primary dark:text-text-primary-dark">
         {amount}
       </Text>
-      <Text
-        numberOfLines={1}
-        className="text-[9px] text-text-secondary dark:text-text-secondary-dark"
-      >
+      <Text className="text-[9px] text-text-secondary dark:text-text-secondary-dark">
         {share} · {countLabel}
       </Text>
     </View>
@@ -355,15 +363,19 @@ function formatDecimalCurrency(
 
 function formatShare(value: string | null, locale: string): string {
   if (value === null) return "—";
-  const amount = formatCanonicalDecimalForDisplay(value, {
-    locale,
-    maximumFractionDigits: 1,
-  });
-  const percent =
-    new Intl.NumberFormat(locale, { style: "percent" })
-      .formatToParts(0)
-      .find((part) => part.type === "percentSign")?.value ?? "%";
-  return `${amount}${percent}`;
+  try {
+    const amount = formatCanonicalDecimalForDisplay(value, {
+      locale,
+      maximumFractionDigits: 1,
+    });
+    const percent =
+      new Intl.NumberFormat(locale, { style: "percent" })
+        .formatToParts(0)
+        .find((part) => part.type === "percentSign")?.value ?? "%";
+    return `${amount}${percent}`;
+  } catch {
+    return "—";
+  }
 }
 
 export function getWealthTilesLayoutClass(

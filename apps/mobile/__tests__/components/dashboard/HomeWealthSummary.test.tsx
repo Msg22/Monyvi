@@ -5,41 +5,71 @@ import type { CurrencyType } from "@monyvi/db";
 import type { WealthBreakdownReadModel } from "@/services/net-worth-read-model-service";
 import {
   getWealthRevealDuration,
+  hasNonZeroCanonicalNetWorth,
   HomeWealthSummary,
 } from "@/components/dashboard/HomeWealthSummary";
 
 let mockFocusCallback: (() => void | (() => void)) | null = null;
+let mockLanguage: "en" | "ar" = "en";
 
-jest.mock("@react-navigation/native", () => ({
+jest.mock("expo-router", () => ({
   useFocusEffect: (callback: () => void | (() => void)): void => {
     mockFocusCallback = callback;
   },
 }));
 
+jest.mock("@/hooks/useUiPolishCopy", () => ({
+  useUiPolishCopy: () =>
+    mockLanguage === "ar"
+      ? {
+          wealth_breakdown: {
+            show: "شوف فلوسك موزّعة فين",
+            hide: "إخفاء التفاصيل",
+            close: "إغلاق تفاصيل توزيع الفلوس",
+          },
+          metals_empty: {},
+        }
+      : {
+          wealth_breakdown: {
+            show: "See where your money is",
+            hide: "Hide breakdown",
+            close: "Close wealth breakdown",
+          },
+          metals_empty: {},
+        },
+}));
+
 jest.mock("@/components/dashboard/TotalNetWorthCard", () => {
   const ReactActual = jest.requireActual<typeof import("react")>("react");
-  const { Pressable, View } =
+  const { Pressable, Text, View } =
     jest.requireActual<typeof import("react-native")>("react-native");
   return {
     TotalNetWorthCard: ({
-      isBreakdownExpanded,
-      onBreakdownDisclosurePress,
-      showBreakdownDisclosure,
+      breakdownDisclosure,
     }: {
-      readonly isBreakdownExpanded: boolean;
-      readonly onBreakdownDisclosurePress: () => void;
-      readonly showBreakdownDisclosure: boolean;
+      readonly breakdownDisclosure?: {
+        readonly isExpanded: boolean;
+        readonly label: string;
+        readonly onPress: () => void;
+      };
     }): React.JSX.Element =>
       ReactActual.createElement(
         View,
         { testID: "mock-net-worth-card" },
-        showBreakdownDisclosure
-          ? ReactActual.createElement(Pressable, {
-              accessibilityRole: "button",
-              accessibilityState: { expanded: isBreakdownExpanded },
-              onPress: onBreakdownDisclosurePress,
-              testID: "mock-wealth-disclosure",
-            })
+        breakdownDisclosure
+          ? ReactActual.createElement(
+              Pressable,
+              {
+                accessibilityLabel: breakdownDisclosure.label,
+                accessibilityRole: "button",
+                accessibilityState: {
+                  expanded: breakdownDisclosure.isExpanded,
+                },
+                onPress: breakdownDisclosure.onPress,
+                testID: "mock-wealth-disclosure",
+              },
+              ReactActual.createElement(Text, null, breakdownDisclosure.label)
+            )
           : null
       ),
   };
@@ -51,14 +81,17 @@ jest.mock("@/components/dashboard/WealthBreakdownSection", () => {
     jest.requireActual<typeof import("react-native")>("react-native");
   return {
     WealthBreakdownSection: ({
+      closeAccessibilityLabel,
       onClose,
     }: {
-      readonly onClose: () => void;
+      readonly closeAccessibilityLabel?: string;
+      readonly onClose?: () => void;
     }): React.JSX.Element =>
       ReactActual.createElement(
         View,
         { testID: "mock-wealth-breakdown" },
         ReactActual.createElement(Pressable, {
+          accessibilityLabel: closeAccessibilityLabel,
           onPress: onClose,
           testID: "mock-wealth-breakdown-close",
         })
@@ -71,13 +104,19 @@ const breakdown = {
   totalNetWorthDecimal: "1243663.92",
 } as unknown as WealthBreakdownReadModel;
 
-function renderSummary(totalNetWorth: string | null = "1243663.92") {
+function renderSummary({
+  isLoading = false,
+  totalNetWorth = "1243663.92",
+}: {
+  readonly isLoading?: boolean;
+  readonly totalNetWorth?: number | string | null;
+} = {}): ReturnType<typeof render> {
   return render(
     <HomeWealthSummary
       breakdown={breakdown}
       currency={currency}
       isBreakdownLoading={false}
-      isLoading={false}
+      isLoading={isLoading}
       monthlyPercentageChange={2.4}
       onAccountsPress={jest.fn()}
       onMetalsPress={jest.fn()}
@@ -87,18 +126,49 @@ function renderSummary(totalNetWorth: string | null = "1243663.92") {
   );
 }
 
+describe("hasNonZeroCanonicalNetWorth", () => {
+  it.each([
+    ["1", true],
+    ["-1", true],
+    ["9007199254740993.245", true],
+    ["-9007199254740993.245", true],
+    [1, true],
+    [-1, true],
+    ["0", false],
+    ["0.00", false],
+    ["-0", false],
+    [0, false],
+    [null, false],
+    [undefined, false],
+    ["", false],
+    ["1e3", false],
+    ["1,000", false],
+    [Number.POSITIVE_INFINITY, false],
+  ])("classifies %p without coercing canonical strings", (value, expected) => {
+    expect(hasNonZeroCanonicalNetWorth(value)).toBe(expected);
+  });
+});
+
 describe("HomeWealthSummary", () => {
   beforeEach(() => {
     mockFocusCallback = null;
+    mockLanguage = "en";
   });
 
-  it("starts collapsed and expands or closes through either control", () => {
+  it("starts collapsed, then expands and collapses through both controls", () => {
     renderSummary();
 
+    const disclosure = screen.getByTestId("mock-wealth-disclosure");
+    expect(disclosure.props.accessibilityState).toEqual({ expanded: false });
     expect(screen.queryByTestId("mock-wealth-breakdown")).toBeNull();
-    fireEvent.press(screen.getByTestId("mock-wealth-disclosure"));
+
+    fireEvent.press(disclosure);
     expect(screen.getByTestId("mock-wealth-breakdown")).toBeTruthy();
     expect(screen.getByTestId("home-wealth-breakdown-reveal")).toBeTruthy();
+    expect(
+      screen.getByTestId("mock-wealth-disclosure").props.accessibilityState
+    ).toEqual({ expanded: true });
+    expect(screen.getByText("Hide breakdown")).toBeTruthy();
 
     fireEvent.press(screen.getByTestId("mock-wealth-breakdown-close"));
     expect(screen.queryByTestId("mock-wealth-breakdown")).toBeNull();
@@ -119,57 +189,41 @@ describe("HomeWealthSummary", () => {
     ).toEqual({ expanded: false });
   });
 
-  it("shows the disclosure for positive and negative nonzero canonical values", () => {
-    const { rerender } = renderSummary("0.01");
-    expect(screen.getByTestId("mock-wealth-disclosure")).toBeTruthy();
-
-    rerender(
-      <HomeWealthSummary
-        breakdown={breakdown}
-        currency={currency}
-        isBreakdownLoading={false}
-        isLoading={false}
-        monthlyPercentageChange={null}
-        onAccountsPress={jest.fn()}
-        onMetalsPress={jest.fn()}
-        totalNetWorth="-0.01"
-        totalNetWorthUsd={null}
-      />
-    );
-    expect(screen.getByTestId("mock-wealth-disclosure")).toBeTruthy();
-  });
+  it.each(["0.01", "-0.01"])(
+    "shows the disclosure for nonzero value %s",
+    (totalNetWorth) => {
+      renderSummary({ totalNetWorth });
+      expect(screen.getByTestId("mock-wealth-disclosure")).toBeTruthy();
+    }
+  );
 
   it.each(["0", "0.00", "1e3", null])(
     "hides the disclosure when net worth is %p",
     (totalNetWorth) => {
-      renderSummary(totalNetWorth);
+      renderSummary({ totalNetWorth });
       expect(screen.queryByTestId("mock-wealth-disclosure")).toBeNull();
     }
   );
 
-  it("hides and collapses the disclosure while net worth is loading", () => {
-    const { rerender } = renderSummary();
-    fireEvent.press(screen.getByTestId("mock-wealth-disclosure"));
-
-    rerender(
-      <HomeWealthSummary
-        breakdown={breakdown}
-        currency={currency}
-        isBreakdownLoading
-        isLoading
-        monthlyPercentageChange={null}
-        onAccountsPress={jest.fn()}
-        onMetalsPress={jest.fn()}
-        totalNetWorth="1243663.92"
-        totalNetWorthUsd={null}
-      />
-    );
-
+  it("hides the disclosure while the net-worth card is loading", () => {
+    renderSummary({ isLoading: true });
     expect(screen.queryByTestId("mock-wealth-disclosure")).toBeNull();
-    expect(screen.queryByTestId("mock-wealth-breakdown")).toBeNull();
   });
 
-  it("uses no reveal duration when Reduce Motion is enabled", () => {
+  it("uses the approved Arabic disclosure and close labels", () => {
+    mockLanguage = "ar";
+    renderSummary();
+
+    expect(screen.getByText("شوف فلوسك موزّعة فين")).toBeTruthy();
+    fireEvent.press(screen.getByTestId("mock-wealth-disclosure"));
+    expect(screen.getByText("إخفاء التفاصيل")).toBeTruthy();
+    expect(
+      screen.getByTestId("mock-wealth-breakdown-close").props
+        .accessibilityLabel
+    ).toBe("إغلاق تفاصيل توزيع الفلوس");
+  });
+
+  it("uses no animation duration under Reduce Motion", () => {
     expect(getWealthRevealDuration(false)).toBe(180);
     expect(getWealthRevealDuration(true)).toBe(0);
   });

@@ -7,13 +7,13 @@ import { WealthBreakdownSection } from "@/components/dashboard/WealthBreakdownSe
 
 const translations: Readonly<Record<string, string>> = {
   "wealth_breakdown.title": "Where your money is",
-  "wealth_breakdown.close": "Close wealth breakdown",
   "wealth_breakdown.accounts": "Accounts",
   "wealth_breakdown.metals": "Gold & silver",
   "wealth_breakdown.gold": "Gold",
   "wealth_breakdown.silver": "Silver",
   "wealth_breakdown.of_net_worth": "{{share}} of net worth",
   "wealth_breakdown.of_metals": "{{share}} of gold & silver",
+  "wealth_breakdown.net_worth": "Net worth",
   "wealth_breakdown.inside_metals": "Inside gold & silver",
   "wealth_breakdown.metals_summary": "Amounts in {{currency}} · share of {{metals}}",
   "wealth_breakdown.tile_accessibility": "{{label}}. {{amount}}. {{share}}",
@@ -55,11 +55,12 @@ const breakdown: WealthBreakdownReadModel = {
 };
 
 describe("WealthBreakdownSection close control", () => {
-  it("uses a labeled 44dp close control and an ordinary non-glowing panel", () => {
+  it("uses a labeled 44dp close control and a non-glowing slate panel", () => {
     const onClose = jest.fn();
     render(
       <WealthBreakdownSection
         breakdown={breakdown}
+        closeAccessibilityLabel="Close wealth breakdown"
         currency={currency}
         isLoading={false}
         onAccountsPress={jest.fn()}
@@ -72,6 +73,7 @@ describe("WealthBreakdownSection close control", () => {
     expect(close.props.accessibilityRole).toBe("button");
     expect(close.props.accessibilityLabel).toBe("Close wealth breakdown");
     expect(close.props.className).toContain("min-h-11");
+    expect(screen.getByTestId("icon-close")).toBeTruthy();
     fireEvent.press(close);
     expect(onClose).toHaveBeenCalledTimes(1);
 
