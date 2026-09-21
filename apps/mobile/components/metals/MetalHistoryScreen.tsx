@@ -18,7 +18,7 @@ import { MetalHoldingRender } from "@/components/metals/MetalHoldingRender";
 import { resolveCurrencyDisplayDecimalPlaces } from "@/components/metals/portfolio-presentation";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { palette } from "@/constants/colors";
-import { shouldUseCompactLayout } from "@/constants/ui";
+import { shouldUseDenseRowCompactLayout } from "@/constants/ui";
 import { useTheme } from "@/context/ThemeContext";
 import type {
   MetalHistoryCounts,
@@ -137,7 +137,7 @@ function HistoryRow({
   const { t } = useTranslation("metals");
   const { isDark } = useTheme();
   const { width, fontScale } = useWindowDimensions();
-  const isCompact = shouldUseCompactLayout(width, fontScale);
+  const isCompact = shouldUseDenseRowCompactLayout(width, fontScale);
   const metalLabel = t(
     item.metalType === "GOLD" ? "metal.gold" : "metal.silver"
   );
@@ -163,6 +163,13 @@ function HistoryRow({
     terminalSummary.label,
     terminalSummary.value,
   ].join(". ");
+  const summaryTextAlign = isCompact
+    ? I18nManager.isRTL
+      ? "text-right"
+      : "text-left"
+    : I18nManager.isRTL
+      ? "text-left"
+      : "text-right";
 
   return (
     <Pressable
@@ -207,15 +214,25 @@ function HistoryRow({
         </View>
         <View
           testID={`metal-history-terminal-summary-${item.status}`}
-          className={isCompact ? "items-start" : "max-w-[40%] items-end"}
+          className={isCompact ? "items-start" : "shrink-0 items-end"}
         >
           <Text
-            className={`text-sm ${item.status === "sold" ? "text-nileGreen-700 dark:text-nileGreen-400" : "text-text-primary dark:text-text-primary-dark"}`}
+            testID={`metal-history-terminal-label-${item.status}`}
+            className={`text-sm ${
+              item.status === "sold"
+                ? "text-nileGreen-700 dark:text-nileGreen-400"
+                : "text-text-primary dark:text-text-primary-dark"
+            } ${summaryTextAlign}`}
           >
             {terminalSummary.label}
           </Text>
           <Text
-            className={`mt-0.5 text-sm ${item.status === "sold" ? "font-medium text-nileGreen-700 dark:text-nileGreen-400" : "text-text-secondary dark:text-text-secondary-dark"}`}
+            testID={`metal-history-terminal-value-${item.status}`}
+            className={`mt-0.5 text-sm ${
+              item.status === "sold"
+                ? "font-medium text-nileGreen-700 dark:text-nileGreen-400"
+                : "text-text-secondary dark:text-text-secondary-dark"
+            } ${summaryTextAlign}`}
             style={
               item.status === "sold" ? { writingDirection: "ltr" } : undefined
             }
@@ -225,6 +242,7 @@ function HistoryRow({
         </View>
       </View>
       <Ionicons
+        testID={`metal-history-chevron-${item.status}`}
         accessibilityElementsHidden
         importantForAccessibility="no"
         color={isDark ? palette.slate[300] : palette.slate[500]}

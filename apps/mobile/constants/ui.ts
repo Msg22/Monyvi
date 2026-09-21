@@ -5,6 +5,7 @@
 /** Shared viewport breakpoints for approved responsive compositions. */
 export const RESPONSIVE_BREAKPOINTS = {
   compactPhone: 340,
+  denseRowPhone: 390,
   tablet: 600,
 } as const;
 
@@ -19,6 +20,22 @@ export function shouldUseCompactLayout(
 ): boolean {
   return (
     width < RESPONSIVE_BREAKPOINTS.compactPhone ||
+    fontScale > RESPONSIVE_FONT_SCALE.denseLayout
+  );
+}
+
+/**
+ * For dense multi-part rows that include media, primary identity, and a terminal
+ * summary column (such as metals history cards), reflow into a stacked layout
+ * when the viewport cannot support all columns side-by-side without squeezing
+ * values or splitting currency codes.
+ */
+export function shouldUseDenseRowCompactLayout(
+  width: number,
+  fontScale: number
+): boolean {
+  return (
+    width < RESPONSIVE_BREAKPOINTS.denseRowPhone ||
     fontScale > RESPONSIVE_FONT_SCALE.denseLayout
   );
 }
