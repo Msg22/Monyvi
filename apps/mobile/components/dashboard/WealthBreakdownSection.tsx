@@ -42,10 +42,10 @@ interface WealthTileProps {
 interface MetalAmountProps {
   readonly amount: string;
   readonly countLabel: string;
-  readonly dividerClassName?: string;
   readonly dotClassName: string;
   readonly label: string;
   readonly share: string;
+  readonly testID: string;
 }
 
 export function WealthBreakdownSection({
@@ -60,7 +60,6 @@ export function WealthBreakdownSection({
   const { t, i18n } = useTranslation("metals");
   const { fontScale, width } = useWindowDimensions();
   const primaryTilesClass = getWealthTilesLayoutClass(width, fontScale);
-  const isStacked = primaryTilesClass === "flex-col";
   const locale = resolveLocale(i18n?.resolvedLanguage);
   const amount = useMemo(
     (): ((value: string | null) => string) => (value) =>
@@ -81,7 +80,6 @@ export function WealthBreakdownSection({
   }
 
   const metalsLabel = t("wealth_breakdown.metals");
-  const netWorthLabel = t("wealth_breakdown.net_worth");
   const insideMetalsLabel = t("wealth_breakdown.inside_metals");
   const metalsSummaryLabel = t("wealth_breakdown.metals_summary", {
     currency,
@@ -121,15 +119,6 @@ export function WealthBreakdownSection({
             />
           </Pressable>
         ) : null}
-      </View>
-
-      <View className="mt-1 items-end">
-        <Text className="text-[11px] text-text-secondary dark:text-text-secondary-dark">
-          {netWorthLabel}
-        </Text>
-        <Text className="mt-0.5 text-[15px] font-bold text-text-primary dark:text-text-primary-dark">
-          {amount(breakdown.totalNetWorthDecimal)}
-        </Text>
       </View>
 
       <View
@@ -193,23 +182,19 @@ export function WealthBreakdownSection({
 
           <View
             testID="wealth-breakdown-metal-details"
-            className={`mt-1.5 min-h-14 overflow-hidden rounded-2xl bg-slate-100 dark:bg-slate-800/50 ${primaryTilesClass}`}
+            className={`mt-1.5 gap-2.5 ${primaryTilesClass}`}
           >
             <MetalAmount
               amount={amount(breakdown.metals.gold.amountDecimal)}
               countLabel={t("holding", {
                 count: breakdown.metals.gold.holdingCount,
               })}
-              dividerClassName={
-                isStacked
-                  ? "border-b border-slate-200 dark:border-slate-700/60"
-                  : "border-e border-slate-200 dark:border-slate-700/60"
-              }
               dotClassName="bg-gold-400"
               label={t("wealth_breakdown.gold")}
               share={t("wealth_breakdown.of_metals", {
                 share: formatShare(breakdown.metals.gold.shareOfMetals, locale),
               })}
+              testID="wealth-breakdown-gold-detail"
             />
             <MetalAmount
               amount={amount(breakdown.metals.silver.amountDecimal)}
@@ -224,6 +209,7 @@ export function WealthBreakdownSection({
                   locale
                 ),
               })}
+              testID="wealth-breakdown-silver-detail"
             />
           </View>
         </View>
@@ -295,13 +281,16 @@ function WealthTile({
 function MetalAmount({
   amount,
   countLabel,
-  dividerClassName = "",
   dotClassName,
   label,
   share,
+  testID,
 }: MetalAmountProps): React.JSX.Element {
   return (
-    <View className={`min-w-0 flex-1 px-3 py-2 ${dividerClassName}`}>
+    <View
+      className="min-w-0 flex-1 rounded-2xl border border-slate-200 bg-slate-100 px-3 py-2 dark:border-slate-700/60 dark:bg-slate-800/50"
+      testID={testID}
+    >
       <View className="flex-row items-center gap-2">
         <View className={`h-2 w-2 rounded-full ${dotClassName}`} />
         <Text className="min-w-0 flex-1 text-[11px] font-bold text-text-primary dark:text-text-primary-dark">

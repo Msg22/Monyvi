@@ -148,6 +148,10 @@ describe("MetalPortfolioEmptyState", () => {
       "className",
       expect.stringContaining("min-h-14")
     );
+    expect(screen.getByTestId("metal-empty-add-gradient")).toHaveProp(
+      "className",
+      expect.stringContaining("rounded-full")
+    );
     fireEvent.press(screen.getByLabelText("Add your first holding"));
     expect(onAddPress).toHaveBeenCalledTimes(1);
   });
@@ -170,6 +174,7 @@ describe("MetalPortfolioEmptyState", () => {
     const enlarged = getMetalEmptyStateLayout(390, 2);
 
     expect(ordinary.isCompact).toBe(false);
+    expect(ordinary.illustrationSize).toBe(316);
     expect(compact.isCompact).toBe(true);
     expect(enlarged.isCompact).toBe(true);
     expect(compact.illustrationSize).toBeLessThan(ordinary.illustrationSize);
@@ -186,6 +191,7 @@ describe("MetalPortfolioEmptyState", () => {
       />
     );
 
+    expect(screen.getByLabelText("History")).toHaveTextContent("History");
     fireEvent.press(screen.getByTestId("metal-empty-history"));
     expect(onHistoryPress).toHaveBeenCalledTimes(1);
   });

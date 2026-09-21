@@ -8,6 +8,7 @@ import type { MetalPortfolioSectionReadiness } from "@/hooks/metal-portfolio-rea
 import { useUiPolishCopy } from "@/hooks/useUiPolishCopy";
 import type { MetalPortfolioReadModel } from "@/services/metal-portfolio-read-model-service";
 import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import React from "react";
 import {
   I18nManager,
@@ -76,22 +77,30 @@ export function MetalPortfolioEmptyState({
           accessible
           accessibilityLabel={copy.metals_empty.cta}
           accessibilityRole="button"
-          className="mt-7 min-h-14 w-full flex-row items-center rounded-full bg-nileGreen-400 p-1.5"
+          className="mt-7 min-h-14 w-full rounded-full"
           onPress={onAddPress}
           style={({ pressed }) => ({ opacity: pressed ? 0.78 : 1 })}
           testID="metal-empty-add"
         >
-          <View className="h-11 w-11 items-center justify-center rounded-full bg-nileGreen-900">
-            <Ionicons name="add" size={30} color={palette.slate[25]} />
-          </View>
-          <Text className="min-w-0 flex-1 px-3 text-center text-lg font-bold text-slate-900">
-            {copy.metals_empty.cta}
-          </Text>
+          <LinearGradient
+            className="min-h-14 w-full flex-row items-center justify-center gap-4 rounded-full px-5 py-1.5"
+            colors={[palette.nileGreen[400], palette.nileGreen[500]]}
+            end={{ x: 1, y: 0 }}
+            start={{ x: 0, y: 0 }}
+            testID="metal-empty-add-gradient"
+          >
+            <View className="h-11 w-11 items-center justify-center rounded-full bg-nileGreen-900">
+              <Ionicons name="add" size={30} color={palette.slate[25]} />
+            </View>
+            <Text className="min-w-0 shrink text-center text-lg font-bold text-slate-900">
+              {copy.metals_empty.cta}
+            </Text>
+          </LinearGradient>
         </Pressable>
 
         {hasHistory && onHistoryPress ? (
           <Pressable
-            accessibilityLabel={t("portfolio.view_all")}
+            accessibilityLabel={t("portfolio.recent_history")}
             accessibilityRole="button"
             className="mt-3 min-h-11 flex-row items-center justify-center gap-1"
             onPress={onHistoryPress}
@@ -241,7 +250,7 @@ export function getMetalEmptyStateLayout(
   const isCompact = shouldUseCompactLayout(width, fontScale);
   return {
     isCompact,
-    illustrationSize: isCompact ? 220 : 284,
+    illustrationSize: isCompact ? 244 : 316,
     verticalGap: isCompact ? 12 : 24,
   };
 }
