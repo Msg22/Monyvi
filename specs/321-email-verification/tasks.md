@@ -94,18 +94,17 @@ the submitted email → resend → new captured verification email.
 
 ### Tests first
 
-- [ ] T021 [P] [US2] Add Red service/controller coverage that stable Supabase `email_not_confirmed` is preserved/classified without relying on provider message text in `apps/mobile/__tests__/services/supabase.test.ts` and `apps/mobile/__tests__/hooks/useAuthScreenController.test.ts`
-- [ ] T022 [P] [US2] Add Red coverage for resend success, resend failure, duplicate in-flight protection, pending-email retention, and back-to-sign-in recovery in `apps/mobile/__tests__/hooks/useAuthScreenController.test.ts`
-- [ ] T023 [P] [US2] Extend component tests for the resending label plus disabled/busy accessibility state without changing the approved resting composition in `apps/mobile/__tests__/components/auth/AuthStatusViews.test.tsx`
+- [x] T021 [P] [US2] Add Red service/controller coverage that stable Supabase `email_not_confirmed` is preserved/classified without relying on provider message text in `apps/mobile/__tests__/services/supabase.test.ts` and `apps/mobile/__tests__/hooks/useAuthScreenController.test.ts`
+- [x] T022 [P] [US2] Add Red coverage for resend success, resend failure, duplicate in-flight protection, pending-email retention, and back-to-sign-in recovery in `apps/mobile/__tests__/hooks/useAuthScreenController.test.ts`
+- [x] T023 [P] [US2] Extend component tests for the resending label plus disabled/busy accessibility state without changing the approved resting composition in `apps/mobile/__tests__/components/auth/AuthStatusViews.test.tsx`
 
 ### Implementation
 
-- [ ] T024 [US2] Expose the stable unverified-email auth classification needed by the controller without leaking raw provider copy in `apps/mobile/services/supabase.ts`
-- [ ] T025 [US2] Route `email_not_confirmed` sign-in into `verificationPending`, retain the submitted normalized email, preserve resend/back behavior, and keep ordinary invalid credentials inline in `apps/mobile/hooks/useAuthScreenController.ts`
+- [x] T024 [US2] Expose the stable unverified-email auth classification needed by the controller without leaking raw provider copy in `apps/mobile/services/supabase.ts`
+- [x] T025 [US2] Route `email_not_confirmed` sign-in into `verificationPending`, retain the submitted normalized email, preserve resend/back behavior, and keep ordinary invalid credentials inline in `apps/mobile/hooks/useAuthScreenController.ts`
 - [ ] T026 [US2] Add/extend the local E2E recovery path for returning unverified sign-in and resend in `apps/mobile/e2e/maestro/auth/email-verification.yaml`
 
-**Checkpoint**: US2 works independently without changing normal invalid-credential
-behavior.
+**Checkpoint**: Functional US2 T021-T025 PASS at exact head `f711d0e27e748f2bc15fcef196fdd62e7766b940` — typecheck, lint, repository checks, full mobile Jest, pgTAP, and Android build are Green; T026 local E2E remains pending.
 
 ---
 
