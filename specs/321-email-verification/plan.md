@@ -46,9 +46,9 @@ Edge Function is required.
   SMTP secret in mobile code, no raw callback/token logging.
 - **Schema/sync**: PASS — no migration, data backfill, WatermelonDB, RLS, or
   sync-contract change.
-- **Premium UI / approved mockup**: PENDING FINAL BINDING APPROVAL — image
-  direction is approved; binding sidecars must receive explicit metadata
-  approval and pass the verifier before UI implementation.
+- **Premium UI / approved mockup**: PASS — all three approved verification
+  references have approved, fingerprinted binding sidecars with matching image,
+  metadata, combined revisions, and explicit approval evidence.
 - **TDD**: PASS — production code changes are planned test-first.
 - **Localization/accessibility**: PASS — English/Arabic, RTL, themes, responsive
   variants, enlarged text, and separate accessibility evidence are in scope.
@@ -213,8 +213,8 @@ navigation orchestration in the Expo Router callback route.
 - Authenticated runtime remains fail-closed.
 - Secrets stay external.
 - TDD and E2E coverage are explicit.
-- Mockup-governed UI remains blocked until binding metadata approval/verifier
-  pass.
+- Mockup-governed UI is authorized by the approved binding sidecars; any later
+  reference-image or Binding Facts byte change requires renewed approval.
 - Required visual and accessibility evidence is included in the implementation
   completion contract.
 
