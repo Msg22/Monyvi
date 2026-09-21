@@ -154,5 +154,6 @@ English light, English dark, and Arabic light.
 - The current production `VerificationPendingView` materially drifted by
   introducing a card and moving the back action inside it.
 
-**Binding note**: Image approval is complete; binding metadata approval and
-verifier pass remain required before implementation consumes the reference.
+**Binding note**: The three reference images and their binding metadata were
+explicitly approved on 2026-09-21. Their current image, metadata, and combined
+approval revisions match and are authoritative for implementation.
