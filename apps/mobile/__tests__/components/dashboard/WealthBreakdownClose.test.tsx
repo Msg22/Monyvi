@@ -69,17 +69,25 @@ describe("WealthBreakdownSection close control", () => {
       />
     );
 
-    const close = screen.getByTestId("wealth-breakdown-close");
-    expect(close.props.accessibilityRole).toBe("button");
-    expect(close.props.accessibilityLabel).toBe("Close wealth breakdown");
-    expect(close.props.className).toContain("min-h-11");
+    const close = screen.getByRole("button", {
+      name: "Close wealth breakdown",
+    });
+    expect(close).toHaveProp(
+      "className",
+      expect.stringContaining("min-h-11")
+    );
     expect(screen.getByTestId("icon-close")).toBeTruthy();
     fireEvent.press(close);
     expect(onClose).toHaveBeenCalledTimes(1);
 
-    const panelClassName = screen.getByTestId("wealth-breakdown-root").props
-      .className as string;
-    expect(panelClassName).toContain("border-slate-200");
-    expect(panelClassName).not.toMatch(/glow|shadow|drop-shadow/);
+    const panel = screen.getByTestId("wealth-breakdown-root");
+    expect(panel).toHaveProp(
+      "className",
+      expect.stringContaining("border-slate-200")
+    );
+    expect(panel).not.toHaveProp(
+      "className",
+      expect.stringMatching(/glow|shadow|drop-shadow/)
+    );
   });
 });

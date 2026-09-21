@@ -158,17 +158,21 @@ describe("HomeWealthSummary", () => {
   it("starts collapsed, then expands and collapses through both controls", () => {
     renderSummary();
 
-    const disclosure = screen.getByTestId("mock-wealth-disclosure");
-    expect(disclosure.props.accessibilityState).toEqual({ expanded: false });
+    const disclosure = screen.getByRole("button", {
+      name: "See where your money is",
+      expanded: false,
+    });
     expect(screen.queryByTestId("mock-wealth-breakdown")).toBeNull();
 
     fireEvent.press(disclosure);
     expect(screen.getByTestId("mock-wealth-breakdown")).toBeTruthy();
     expect(screen.getByTestId("home-wealth-breakdown-reveal")).toBeTruthy();
     expect(
-      screen.getByTestId("mock-wealth-disclosure").props.accessibilityState
-    ).toEqual({ expanded: true });
-    expect(screen.getByText("Hide breakdown")).toBeTruthy();
+      screen.getByRole("button", {
+        name: "Hide breakdown",
+        expanded: true,
+      })
+    ).toBeTruthy();
 
     fireEvent.press(screen.getByTestId("mock-wealth-breakdown-close"));
     expect(screen.queryByTestId("mock-wealth-breakdown")).toBeNull();
@@ -185,8 +189,11 @@ describe("HomeWealthSummary", () => {
 
     expect(screen.queryByTestId("mock-wealth-breakdown")).toBeNull();
     expect(
-      screen.getByTestId("mock-wealth-disclosure").props.accessibilityState
-    ).toEqual({ expanded: false });
+      screen.getByRole("button", {
+        name: "See where your money is",
+        expanded: false,
+      })
+    ).toBeTruthy();
   });
 
   it.each(["0.01", "-0.01"])(
@@ -218,9 +225,8 @@ describe("HomeWealthSummary", () => {
     fireEvent.press(screen.getByTestId("mock-wealth-disclosure"));
     expect(screen.getByText("إخفاء التفاصيل")).toBeTruthy();
     expect(
-      screen.getByTestId("mock-wealth-breakdown-close").props
-        .accessibilityLabel
-    ).toBe("إغلاق تفاصيل توزيع الفلوس");
+      screen.getByLabelText("إغلاق تفاصيل توزيع الفلوس")
+    ).toBeTruthy();
   });
 
   it("uses no animation duration under Reduce Motion", () => {

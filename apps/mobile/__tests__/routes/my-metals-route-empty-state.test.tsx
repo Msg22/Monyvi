@@ -205,9 +205,10 @@ describe("MyMetalsRoute premium empty-state chrome", () => {
     expect(mockFabSuppression).toBe(true);
 
     fireEvent.press(screen.getByTestId("mock-empty-cta"));
-    expect(
-      screen.getByTestId("mock-add-holding-modal").props.accessibilityState
-    ).toEqual({ expanded: true });
+    expect(screen.getByTestId("mock-add-holding-modal")).toHaveProp(
+      "accessibilityState",
+      { expanded: true }
+    );
   });
 
   it("retains populated controls and both existing Add entry points", () => {

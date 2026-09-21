@@ -45,8 +45,10 @@ describe("TotalNetWorthCard wealth disclosure", () => {
 
     expect(screen.getByTestId("total-net-worth-card")).toBeTruthy();
     expect(screen.getByText("EGP 1,243,663.92")).toBeTruthy();
-    const disclosure = screen.getByTestId("wealth-breakdown-disclosure");
-    expect(disclosure.props.accessibilityState).toEqual({ expanded: false });
+    const disclosure = screen.getByRole("button", {
+      name: "See where your money is",
+      expanded: false,
+    });
     fireEvent.press(disclosure);
     expect(onPress).toHaveBeenCalledTimes(1);
   });

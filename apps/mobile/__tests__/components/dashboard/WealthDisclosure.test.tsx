@@ -24,11 +24,15 @@ describe("WealthDisclosure", () => {
       />
     );
 
-    const disclosure = screen.getByTestId("wealth-breakdown-disclosure");
+    const disclosure = screen.getByRole("button", {
+      name: "See where your money is",
+      expanded: false,
+    });
     expect(screen.getByText("See where your money is")).toBeTruthy();
-    expect(disclosure.props.accessibilityRole).toBe("button");
-    expect(disclosure.props.accessibilityState).toEqual({ expanded: false });
-    expect(disclosure.props.className).toContain("min-h-11");
+    expect(disclosure).toHaveProp(
+      "className",
+      expect.stringContaining("min-h-11")
+    );
     expect(screen.getByTestId("icon-chevron-down")).toBeTruthy();
 
     fireEvent.press(disclosure);
@@ -44,9 +48,13 @@ describe("WealthDisclosure", () => {
       />
     );
 
-    const disclosure = screen.getByTestId("wealth-breakdown-disclosure");
+    expect(
+      screen.getByRole("button", {
+        name: "Hide breakdown",
+        expanded: true,
+      })
+    ).toBeTruthy();
     expect(screen.getByText("Hide breakdown")).toBeTruthy();
-    expect(disclosure.props.accessibilityState).toEqual({ expanded: true });
     expect(screen.getByTestId("icon-chevron-up")).toBeTruthy();
   });
 });
