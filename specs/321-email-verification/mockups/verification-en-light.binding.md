@@ -2,12 +2,12 @@
 
 - Approved reference image: verification-en-light.png
 - Approved reference image revision: sha256:f4efe599e755ec55041f663d2049ec01c2f9146633d1d769750879d40f8e3c74
-- Binding metadata approval: PENDING
+- Binding metadata approval: APPROVED
 - Binding metadata revision: sha256:bffef69a6ea3b572ab4d67bad1b8b2e481992df1277188f5c48e8729e01e8f15
-- Approved binding metadata revision: PENDING
+- Approved binding metadata revision: sha256:bffef69a6ea3b572ab4d67bad1b8b2e481992df1277188f5c48e8729e01e8f15
 - Binding approval revision: sha256:a68a6f1a4540f3b6b0648daf98ff24b820d23a2a348e7b33a6924731607cd884
-- Approved binding approval revision: PENDING
-- Binding metadata approval evidence/reference: PENDING
+- Approved binding approval revision: sha256:a68a6f1a4540f3b6b0648daf98ff24b820d23a2a348e7b33a6924731607cd884
+- Binding metadata approval evidence/reference: Mohamed explicit approval in ChatGPT on 2026-09-21 for combined revision sha256:a68a6f1a4540f3b6b0648daf98ff24b820d23a2a348e7b33a6924731607cd884
 - Legacy metadata migration: no
 
 `Approved reference image revision` is computed from the exact approved PNG bytes currently stored on `codex/issue321-email-verification`. `Binding metadata revision` fingerprints the exact UTF-8/LF bytes under `## Binding Facts`. `Binding approval revision` combines the image and metadata revisions per the repository template.
