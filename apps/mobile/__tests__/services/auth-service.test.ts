@@ -146,6 +146,83 @@ describe("auth-service - completeAuthSessionFromUrl", () => {
   });
 });
 
+
+
+describe("auth-service - callback failure hardening", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("rejects token-bearing callbacks from any URL other than the canonical Monyvi callback", async () => {
+    mockSetSession.mockResolvedValue({
+      data: { session: {} },
+      error: null,
+    });
+
+    const result = await completeAuthSessionFromUrl(
+      "evil://auth-callback#access_token=stolen-access&refresh_token=stolen-refresh"
+    );
+
+    expect(result).toEqual({
+      success: false,
+      error: "Could not validate the authentication callback.",
+      errorCode: "invalid_callback",
+    });
+    expect(mockSetSession).not.toHaveBeenCalled();
+    expect(mockExchangeCodeForSession).not.toHaveBeenCalled();
+  });
+
+  it("fails closed on provider-declared callback errors without exposing provider details", async () => {
+    const secretDescription = "verification-secret-should-not-leak";
+    const result = await completeAuthSessionFromUrl(
+      `monyvi://auth-callback?error=access_denied&error_description=${secretDescription}`
+    );
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.errorCode).toBe("provider_error");
+      expect(result.error).not.toContain(secretDescription);
+      expect(result.error).not.toContain("monyvi://auth-callback");
+    }
+    expect(mockSetSession).not.toHaveBeenCalled();
+    expect(mockExchangeCodeForSession).not.toHaveBeenCalled();
+  });
+
+  it("sanitizes token-session failures instead of echoing callback secrets", async () => {
+    const accessToken = "access-secret-321";
+    const refreshToken = "refresh-secret-321";
+    mockSetSession.mockResolvedValue({
+      data: { session: null },
+      error: new Error(
+        `provider failed for ${accessToken} and ${refreshToken}`
+      ),
+    });
+
+    const result = await completeAuthSessionFromUrl(
+      `monyvi://auth-callback#access_token=${accessToken}&refresh_token=${refreshToken}`
+    );
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error).not.toContain(accessToken);
+      expect(result.error).not.toContain(refreshToken);
+      expect(result.error).not.toContain("monyvi://auth-callback");
+    }
+  });
+
+  it("fails closed when the canonical callback contains no usable auth material", async () => {
+    const result = await completeAuthSessionFromUrl("monyvi://auth-callback");
+
+    expect(result).toEqual({
+      success: false,
+      error: "Could not extract session from the sign-in response.",
+      errorCode: "invalid_callback",
+    });
+    expect(mockSetSession).not.toHaveBeenCalled();
+    expect(mockExchangeCodeForSession).not.toHaveBeenCalled();
+  });
+});
+
 // ---------------------------------------------------------------------------
 // Test Suite: signInWithOAuth
 // ---------------------------------------------------------------------------
