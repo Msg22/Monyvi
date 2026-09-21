@@ -213,7 +213,7 @@ describe("useAuthScreenController", () => {
     expect(result.current.emailError).toBe("Invalid credentials");
   });
 
-  it("moves successful sign-up requiring verification to pending state", async () => {
+  it("moves successful sign-up requiring verification to pending state with normalized email", async () => {
     mockSignUpWithEmail.mockResolvedValue({
       success: true,
       needsVerification: true,
@@ -222,12 +222,16 @@ describe("useAuthScreenController", () => {
 
     await act(async () => {
       await result.current.handleEmailSubmit(
-        "new@example.com",
+        "  new@example.com  ",
         "secret",
         "signUp"
       );
     });
 
+    expect(mockSignUpWithEmail).toHaveBeenCalledWith(
+      "new@example.com",
+      "secret"
+    );
     expect(result.current.pendingEmail).toBe("new@example.com");
     expect(result.current.screenState).toBe("verificationPending");
   });
