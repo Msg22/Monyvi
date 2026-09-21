@@ -53,6 +53,8 @@ describe("auth status views", () => {
   it("renders the approved full-page verification composition without a card", () => {
     const onResend = jest.fn<Promise<void>, []>().mockResolvedValue(undefined);
     const onBack = jest.fn();
+    const onPrivacyPress = jest.fn();
+    const onTermsPress = jest.fn();
 
     render(
       <VerificationPendingView
@@ -60,6 +62,8 @@ describe("auth status views", () => {
         isResending={false}
         onResend={onResend}
         onBack={onBack}
+        onPrivacyPress={onPrivacyPress}
+        onTermsPress={onTermsPress}
       />
     );
 
@@ -73,6 +77,10 @@ describe("auth status views", () => {
       screen.getByRole("link", { name: "Privacy" })
     ).toBeOnTheScreen();
     expect(screen.getByRole("link", { name: "Terms" })).toBeOnTheScreen();
+    fireEvent.press(screen.getByRole("link", { name: "Privacy" }));
+    fireEvent.press(screen.getByRole("link", { name: "Terms" }));
+    expect(onPrivacyPress).toHaveBeenCalledTimes(1);
+    expect(onTermsPress).toHaveBeenCalledTimes(1);
     expect(screen.queryByTestId("verification-card")).not.toBeOnTheScreen();
   });
 
@@ -86,6 +94,8 @@ describe("auth status views", () => {
         isResending
         onResend={onResend}
         onBack={onBack}
+        onPrivacyPress={jest.fn()}
+        onTermsPress={jest.fn()}
       />
     );
 
