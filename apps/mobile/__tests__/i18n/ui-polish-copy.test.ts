@@ -15,8 +15,8 @@ function flattenKeys(
 
 describe("approved UI-polish localization", () => {
   it("keeps English and Arabic key parity", () => {
-    expect(flattenKeys(arUiPolish).sort()).toEqual(
-      flattenKeys(enUiPolish).sort()
+    expect([...flattenKeys(arUiPolish)].sort()).toEqual(
+      [...flattenKeys(enUiPolish)].sort()
     );
   });
 
