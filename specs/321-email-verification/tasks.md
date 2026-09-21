@@ -36,19 +36,18 @@ verification redirect used by signup/resend.
 
 ### Tests first
 
-- [ ] T003 [P] Add Red coverage for callback completion from valid access/refresh-token fragments and PKCE authorization codes in `apps/mobile/__tests__/services/auth-service.test.ts`
-- [ ] T004 [P] Add Red coverage that email signup and signup-verification resend both pass `AUTH_REDIRECT_URL` through `emailRedirectTo` in `apps/mobile/__tests__/services/supabase.test.ts`
-- [ ] T005 [P] Add Red regression coverage that the existing Google OAuth callback path still supports the same token/code session-establishment shapes in `apps/mobile/__tests__/services/auth-service.test.ts`
+- [x] T003 [P] Add Red coverage for callback completion from valid access/refresh-token fragments and PKCE authorization codes in `apps/mobile/__tests__/services/auth-service.test.ts`
+- [x] T004 [P] Add Red coverage that email signup and signup-verification resend both pass `AUTH_REDIRECT_URL` through `emailRedirectTo` in `apps/mobile/__tests__/services/supabase.test.ts`
+- [x] T005 [P] Add Red regression coverage that the existing Google OAuth callback path still supports the same token/code session-establishment shapes in `apps/mobile/__tests__/services/auth-service.test.ts`
 
 ### Implementation
 
-- [ ] T006 Implement a single reusable callback/session-completion primitive, including stable typed result classification and secret-safe failures, in `apps/mobile/services/auth-service.ts`
-- [ ] T007 Refactor the existing Google OAuth completion path to delegate to the shared callback/session primitive without duplicating token parsing in `apps/mobile/services/auth-service.ts`
-- [ ] T008 Add `options.emailRedirectTo = AUTH_REDIRECT_URL` to email signup and verification resend without overwriting any future signup metadata options in `apps/mobile/services/supabase.ts`
-- [ ] T009 Enable local email confirmation parity by setting `[auth.email].enable_confirmations = true` and preserving local email capture in `supabase/config.toml`
+- [x] T006 Implement a single reusable callback/session-completion primitive, including stable typed result classification and secret-safe failures, in `apps/mobile/services/auth-service.ts`
+- [x] T007 Refactor the existing Google OAuth completion path to delegate to the shared callback/session primitive without duplicating token parsing in `apps/mobile/services/auth-service.ts`
+- [x] T008 Add `options.emailRedirectTo = AUTH_REDIRECT_URL` to email signup and verification resend without overwriting any future signup metadata options in `apps/mobile/services/supabase.ts`
+- [x] T009 Enable local email confirmation parity by setting `[auth.email].enable_confirmations = true` and preserving local email capture in `supabase/config.toml`
 
-**Checkpoint**: Shared callback tests, signup/resend redirect tests, and existing
-OAuth tests are Green before user-story work continues.
+**Checkpoint**: PASS at exact head `83bdea3941b50a5ee5a0ece9dea01bb57e971d49` — shared callback tests, signup/resend redirect tests, OAuth regression coverage, typecheck, lint, i18n, mobile tests, repository checks, and Android build are Green.
 
 ---
 
