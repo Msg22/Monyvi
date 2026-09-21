@@ -85,6 +85,9 @@ jest.mock("@/hooks/useMetalPortfolio", () => ({
 jest.mock("@/hooks/usePreferredCurrency", () => ({
   usePreferredCurrency: () => ({ preferredCurrency: "EGP" }),
 }));
+jest.mock("@/hooks/useQuickActionFabVisibility", () => ({
+  useSuppressQuickActionFabWhenFocused: (): void => undefined,
+}));
 jest.mock("@/hooks/useStatsCurrencyFilter", () => ({
   useStatsCurrencyFilter: () => ({
     availableCurrencies: ["EGP"],
