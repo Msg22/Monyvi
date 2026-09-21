@@ -14,6 +14,7 @@ interface RunCiE2eModule {
   getRequestedCiSuites(
     env?: Readonly<Record<string, string | undefined>>
   ): ReadonlySet<
+    | "auth"
     | "accounts"
     | "transactions"
     | "recurring-payments"
@@ -89,6 +90,7 @@ const runCiE2e = jest.requireActual(
 describe("run-ci-e2e helpers", () => {
   it("defaults to all E2E suites when no selective suite is requested", () => {
     expect([...runCiE2e.getRequestedCiSuites({})]).toEqual([
+      "auth",
       "accounts",
       "transactions",
       "recurring-payments",
@@ -149,9 +151,15 @@ describe("run-ci-e2e helpers", () => {
   it("parses selected E2E suites and treats skip as no-op", () => {
     expect([
       ...runCiE2e.getRequestedCiSuites({
-        E2E_CI_SUITES: "accounts,recurring-payments,sms-sync,live-sms",
+        E2E_CI_SUITES: "auth,accounts,recurring-payments,sms-sync,live-sms",
       }),
-    ]).toEqual(["accounts", "recurring-payments", "sms-sync", "live-sms"]);
+    ]).toEqual([
+      "auth",
+      "accounts",
+      "recurring-payments",
+      "sms-sync",
+      "live-sms",
+    ]);
 
     expect(runCiE2e.getRequestedCiSuites({ E2E_CI_SUITES: "skip" }).size).toBe(
       0
