@@ -23,6 +23,7 @@ import { useTranslation } from "react-i18next";
 import { palette } from "@/constants/colors";
 import { shouldUseCompactLayout } from "@/constants/ui";
 import { useLocale } from "@/context/LocaleContext";
+import { getCurrencyName } from "@/utils/currency-localization";
 
 const MAX_MENU_HEIGHT = 288;
 
@@ -179,7 +180,7 @@ function StatsCurrencyOption({
   language,
   onSelect,
 }: StatsCurrencyOptionProps): React.JSX.Element {
-  const localizedName = getLocalizedCurrencyName(item, language);
+  const localizedName = getCurrencyName(item.code, language);
 
   return (
     <TouchableOpacity
@@ -246,29 +247,4 @@ function getCurrencyItems(
       flag: code === "BTC" ? "₿" : "💱",
     };
   });
-}
-
-function getLocalizedCurrencyName(
-  item: CurrencyInfo,
-  language: string
-): string {
-  try {
-    const currencyPart = new Intl.NumberFormat(language, {
-      style: "currency",
-      currency: item.code,
-      currencyDisplay: "name",
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    })
-      .formatToParts(0)
-      .find((part) => part.type === "currency")?.value;
-
-    if (currencyPart && currencyPart !== item.code) {
-      return currencyPart;
-    }
-  } catch {
-    // Fall through to a language-neutral code when Intl lacks metadata.
-  }
-
-  return language.startsWith("en") ? item.name : item.code;
 }
