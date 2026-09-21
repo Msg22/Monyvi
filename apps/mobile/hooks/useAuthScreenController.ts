@@ -111,11 +111,12 @@ export function useAuthScreenController(): AuthScreenController {
       }
 
       clearTransientErrors();
+      const normalizedEmail = email.trim();
       try {
         const result =
           mode === "signUp"
-            ? await signUpWithEmail(email, password)
-            : await signInWithEmail(email, password);
+            ? await signUpWithEmail(normalizedEmail, password)
+            : await signInWithEmail(normalizedEmail, password);
 
         if (result.error) {
           setEmailError(result.error.message);
@@ -123,7 +124,7 @@ export function useAuthScreenController(): AuthScreenController {
         }
 
         if (mode === "signUp" && result.needsVerification) {
-          setPendingEmail(email);
+          setPendingEmail(normalizedEmail);
           setScreenState("verificationPending");
           return;
         }
