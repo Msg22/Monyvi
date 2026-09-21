@@ -2,6 +2,7 @@ const { appendFileSync } = require("node:fs");
 const { spawnSync } = require("node:child_process");
 
 const orderedSuites = [
+  "auth",
   "accounts",
   "transactions",
   "recurring-payments",
@@ -124,6 +125,19 @@ function getSuitesForFile(filePath) {
   const maestroSuite = getSuiteForMaestroFlow(normalized);
   if (maestroSuite) {
     suites.push(maestroSuite);
+  }
+
+  const isAuthRuntimePath =
+    normalized === "apps/mobile/app/auth.tsx" ||
+    normalized === "apps/mobile/app/auth-callback.tsx" ||
+    normalized === "apps/mobile/constants/auth-constants.ts" ||
+    normalized === "apps/mobile/hooks/useAuthScreenController.ts" ||
+    normalized === "apps/mobile/services/auth-service.ts" ||
+    normalized === "apps/mobile/scripts/run-email-verification-e2e.js" ||
+    normalized.startsWith("apps/mobile/components/auth/");
+
+  if (isAuthRuntimePath) {
+    suites.push("auth");
   }
 
   if (
