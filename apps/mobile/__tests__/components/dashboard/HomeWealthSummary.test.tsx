@@ -158,28 +158,23 @@ describe("HomeWealthSummary", () => {
   it("starts collapsed, then expands and collapses through both controls", () => {
     renderSummary();
 
-    expect(
-      screen.getByRole("button", {
-        name: "See where your money is",
-        expanded: false,
-      })
-    ).toBeTruthy();
+    expect(screen.getByLabelText("See where your money is")).toHaveProp(
+      "accessibilityRole",
+      "button"
+    );
+    expect(screen.getByLabelText("See where your money is")).toHaveProp(
+      "accessibilityState",
+      { expanded: false }
+    );
     expect(screen.queryByTestId("mock-wealth-breakdown")).toBeNull();
 
-    fireEvent.press(
-      screen.getByRole("button", {
-        name: "See where your money is",
-        expanded: false,
-      })
-    );
+    fireEvent.press(screen.getByLabelText("See where your money is"));
     expect(screen.getByTestId("mock-wealth-breakdown")).toBeTruthy();
     expect(screen.getByTestId("home-wealth-breakdown-reveal")).toBeTruthy();
-    expect(
-      screen.getByRole("button", {
-        name: "Hide breakdown",
-        expanded: true,
-      })
-    ).toBeTruthy();
+    expect(screen.getByLabelText("Hide breakdown")).toHaveProp(
+      "accessibilityState",
+      { expanded: true }
+    );
 
     fireEvent.press(screen.getByTestId("mock-wealth-breakdown-close"));
     expect(screen.queryByTestId("mock-wealth-breakdown")).toBeNull();
@@ -195,12 +190,10 @@ describe("HomeWealthSummary", () => {
     });
 
     expect(screen.queryByTestId("mock-wealth-breakdown")).toBeNull();
-    expect(
-      screen.getByRole("button", {
-        name: "See where your money is",
-        expanded: false,
-      })
-    ).toBeTruthy();
+    expect(screen.getByLabelText("See where your money is")).toHaveProp(
+      "accessibilityState",
+      { expanded: false }
+    );
   });
 
   it.each(["0.01", "-0.01"])(

@@ -69,22 +69,25 @@ describe("WealthBreakdownSection close control", () => {
       />
     );
 
-    expect(
-      screen.getByRole("button", { name: "Close wealth breakdown" })
-    ).toHaveProp("className", expect.stringContaining("min-h-11"));
-    expect(screen.getByTestId("icon-close")).toBeTruthy();
-    fireEvent.press(
-      screen.getByRole("button", { name: "Close wealth breakdown" })
+    expect(screen.getByLabelText("Close wealth breakdown")).toHaveProp(
+      "accessibilityRole",
+      "button"
     );
+    expect(screen.getByLabelText("Close wealth breakdown")).toHaveProp(
+      "className",
+      expect.stringContaining("min-h-11")
+    );
+    expect(screen.getByTestId("icon-close")).toBeTruthy();
+    fireEvent.press(screen.getByLabelText("Close wealth breakdown"));
     expect(onClose).toHaveBeenCalledTimes(1);
 
     expect(screen.getByTestId("wealth-breakdown-root")).toHaveProp(
       "className",
       expect.stringContaining("border-slate-200")
     );
-    expect(screen.getByTestId("wealth-breakdown-root")).not.toHaveProp(
+    expect(screen.getByTestId("wealth-breakdown-root")).toHaveProp(
       "className",
-      expect.stringMatching(/glow|shadow|drop-shadow/)
+      expect.not.stringMatching(/glow|shadow|drop-shadow/)
     );
   });
 });

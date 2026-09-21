@@ -24,21 +24,22 @@ describe("WealthDisclosure", () => {
       />
     );
 
-    expect(
-      screen.getByRole("button", {
-        name: "See where your money is",
-        expanded: false,
-      })
-    ).toHaveProp("className", expect.stringContaining("min-h-11"));
+    expect(screen.getByLabelText("See where your money is")).toHaveProp(
+      "accessibilityRole",
+      "button"
+    );
+    expect(screen.getByLabelText("See where your money is")).toHaveProp(
+      "accessibilityState",
+      { expanded: false }
+    );
+    expect(screen.getByLabelText("See where your money is")).toHaveProp(
+      "className",
+      expect.stringContaining("min-h-11")
+    );
     expect(screen.getByText("See where your money is")).toBeTruthy();
     expect(screen.getByTestId("icon-chevron-down")).toBeTruthy();
 
-    fireEvent.press(
-      screen.getByRole("button", {
-        name: "See where your money is",
-        expanded: false,
-      })
-    );
+    fireEvent.press(screen.getByLabelText("See where your money is"));
     expect(onPress).toHaveBeenCalledTimes(1);
   });
 
@@ -51,12 +52,10 @@ describe("WealthDisclosure", () => {
       />
     );
 
-    expect(
-      screen.getByRole("button", {
-        name: "Hide breakdown",
-        expanded: true,
-      })
-    ).toBeTruthy();
+    expect(screen.getByLabelText("Hide breakdown")).toHaveProp(
+      "accessibilityState",
+      { expanded: true }
+    );
     expect(screen.getByText("Hide breakdown")).toBeTruthy();
     expect(screen.getByTestId("icon-chevron-up")).toBeTruthy();
   });

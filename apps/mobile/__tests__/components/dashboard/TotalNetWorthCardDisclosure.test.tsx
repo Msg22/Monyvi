@@ -25,6 +25,18 @@ jest.mock("@expo/vector-icons", () => {
   };
 });
 
+jest.mock("react-native-svg", () => {
+  const NullSvg = (): null => null;
+  return {
+    __esModule: true,
+    default: NullSvg,
+    Defs: NullSvg,
+    RadialGradient: NullSvg,
+    Rect: NullSvg,
+    Stop: NullSvg,
+  };
+});
+
 describe("TotalNetWorthCard wealth disclosure", () => {
   it("renders the disclosure inside the card and forwards its interaction", () => {
     const onPress = jest.fn();
@@ -45,18 +57,15 @@ describe("TotalNetWorthCard wealth disclosure", () => {
 
     expect(screen.getByTestId("total-net-worth-card")).toBeTruthy();
     expect(screen.getByText("EGP 1,243,663.92")).toBeTruthy();
-    expect(
-      screen.getByRole("button", {
-        name: "See where your money is",
-        expanded: false,
-      })
-    ).toBeTruthy();
-    fireEvent.press(
-      screen.getByRole("button", {
-        name: "See where your money is",
-        expanded: false,
-      })
+    expect(screen.getByLabelText("See where your money is")).toHaveProp(
+      "accessibilityRole",
+      "button"
     );
+    expect(screen.getByLabelText("See where your money is")).toHaveProp(
+      "accessibilityState",
+      { expanded: false }
+    );
+    fireEvent.press(screen.getByLabelText("See where your money is"));
     expect(onPress).toHaveBeenCalledTimes(1);
   });
 

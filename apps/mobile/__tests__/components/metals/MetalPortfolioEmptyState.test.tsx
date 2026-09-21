@@ -126,12 +126,15 @@ describe("MetalPortfolioEmptyState", () => {
       "no-hide-descendants"
     );
 
-    expect(
-      screen.getByRole("button", { name: "Add your first holding" })
-    ).toHaveProp("className", expect.stringContaining("min-h-14"));
-    fireEvent.press(
-      screen.getByRole("button", { name: "Add your first holding" })
+    expect(screen.getByLabelText("Add your first holding")).toHaveProp(
+      "accessibilityRole",
+      "button"
     );
+    expect(screen.getByLabelText("Add your first holding")).toHaveProp(
+      "className",
+      expect.stringContaining("min-h-14")
+    );
+    fireEvent.press(screen.getByLabelText("Add your first holding"));
     expect(onAddPress).toHaveBeenCalledTimes(1);
   });
 
