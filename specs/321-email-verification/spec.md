@@ -2,7 +2,7 @@
 
 **Feature Branch**: `codex/issue321-email-verification`  
 **Created**: 2026-09-21  
-**Status**: Planning  
+**Status**: Ready for implementation  
 **Issue**: #321 — Complete production email verification for email/password sign-up  
 **Input**: Complete the already-approved email-verification requirement from feature 016 and make email/password registration release-ready.
 
@@ -185,8 +185,8 @@ user can return to the auth flow.
 - The behavior is already approved by `specs/016-remove-anonymous-auth` and
   `docs/business/business-decisions.md`; this feature completes that existing
   requirement rather than introducing a new authentication method.
-- The approved verification-state renders from 2026-09-21 govern the visual
-  direction once their binding metadata is explicitly approved.
+- The verification-state renders approved on 2026-09-21 and their approved,
+  fingerprinted binding sidecars govern the visual implementation.
 - A Monyvi-controlled sending domain/subdomain will be available before hosted
   SMTP configuration is finalized.
 - Verification inherently requires network access; Monyvi's offline-first
