@@ -14,6 +14,8 @@ interface MockNavigationContainerRef {
 
 const mockReplace = jest.fn();
 const mockPush = jest.fn();
+const mockCompleteAuthSessionFromUrl = jest.fn();
+let mockCallbackUrl: string | null;
 let mockIsNavigationReady: boolean;
 let mockAuthState: MockAuthState;
 let mockSafeAreaInsets: {
@@ -22,6 +24,10 @@ let mockSafeAreaInsets: {
   bottom: number;
   left: number;
 };
+
+jest.mock("expo-linking", () => ({
+  useURL: (): string | null => mockCallbackUrl,
+}));
 
 jest.mock("expo-router", () => ({
   useRouter: (): { replace: typeof mockReplace; push: typeof mockPush } => ({
@@ -95,6 +101,8 @@ jest.mock("@/components/auth/ResetSentView", () => ({
 }));
 
 jest.mock("@/services/auth-service", () => ({
+  completeAuthSessionFromUrl: (...args: unknown[]): Promise<unknown> =>
+    mockCompleteAuthSessionFromUrl(...args) as Promise<unknown>,
   signInWithOAuth: jest.fn(),
   signUpWithEmail: jest.fn(),
   signInWithEmail: jest.fn(),
@@ -114,11 +122,18 @@ const AuthModule = require("../../app/auth") as {
 };
 const AuthScreen = AuthModule.default;
 const { getAuthBottomPadding } = AuthModule;
+const AuthCallbackScreen = (
+  require("../../app/auth-callback") as {
+    default: () => React.JSX.Element;
+  }
+).default;
 
 describe("AuthScreen redirect", () => {
   beforeEach(() => {
     jest.useFakeTimers();
     mockReplace.mockClear();
+    mockCompleteAuthSessionFromUrl.mockReset();
+    mockCallbackUrl = null;
     mockIsNavigationReady = false;
     mockAuthState = {
       isAuthenticated: true,
@@ -187,5 +202,69 @@ describe("AuthScreen redirect", () => {
       "overScrollMode",
       "never"
     );
+  });
+});
+
+
+describe("AuthCallbackScreen verification lifecycle", () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+    mockReplace.mockClear();
+    mockCompleteAuthSessionFromUrl.mockReset();
+    mockCallbackUrl =
+      "monyvi://auth-callback#access_token=verification-access&refresh_token=verification-refresh&type=signup";
+    mockIsNavigationReady = true;
+    mockAuthState = {
+      isAuthenticated: false,
+      isLoading: false,
+    };
+    mockCompleteAuthSessionFromUrl.mockResolvedValue({ success: true });
+  });
+
+  afterEach(() => {
+    jest.clearAllTimers();
+    jest.useRealTimers();
+  });
+
+  it("completes a cold-start verification callback before authenticated routing", async () => {
+    const { rerender } = render(<AuthCallbackScreen />);
+
+    await act(async () => {
+      await Promise.resolve();
+      jest.advanceTimersByTime(60);
+    });
+
+    expect(mockCompleteAuthSessionFromUrl).toHaveBeenCalledWith(mockCallbackUrl);
+    expect(mockReplace).not.toHaveBeenCalledWith("/auth");
+    expect(mockReplace).not.toHaveBeenCalledWith("/");
+
+    mockAuthState = {
+      isAuthenticated: true,
+      isLoading: false,
+    };
+    rerender(<AuthCallbackScreen />);
+
+    act(() => {
+      jest.advanceTimersByTime(60);
+    });
+
+    expect(mockReplace).toHaveBeenCalledWith("/");
+  });
+
+  it("still processes the callback when the app is already authenticated on warm start", async () => {
+    mockAuthState = {
+      isAuthenticated: true,
+      isLoading: false,
+    };
+
+    render(<AuthCallbackScreen />);
+
+    await act(async () => {
+      await Promise.resolve();
+      jest.advanceTimersByTime(60);
+    });
+
+    expect(mockCompleteAuthSessionFromUrl).toHaveBeenCalledWith(mockCallbackUrl);
+    expect(mockReplace).toHaveBeenCalledWith("/");
   });
 });
