@@ -98,7 +98,8 @@
     "e2e:studio": "npm run e2e:studio -w @monyvi/mobile",
     "test": "npm test -w @monyvi/mobile",
     "prepare": "node -e \"if (process.env.CI !== 'true') { process.exit(1) }\" || husky",
-    "postinstall": "node scripts/postinstall.js"
+    "postinstall": "node scripts/postinstall.js",
+    "e2e:email-verification:local": "npm run e2e:email-verification:local -w @monyvi/mobile"
   },
   "dependencies": {
     "@nozbe/watermelondb": "^0.28.0"
