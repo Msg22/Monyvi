@@ -143,11 +143,6 @@ describe("AuthScreen redirect", () => {
     mockSafeAreaInsets = { top: 24, right: 0, bottom: 34, left: 0 };
   });
 
-  afterEach(() => {
-    jest.clearAllTimers();
-    jest.useRealTimers();
-  });
-
   it("waits for the navigation container ref before redirecting authenticated users", () => {
     render(<AuthScreen />);
     expect(mockReplace).not.toHaveBeenCalled();
@@ -209,7 +204,6 @@ describe("AuthScreen redirect", () => {
 
 describe("AuthCallbackScreen verification lifecycle", () => {
   beforeEach(() => {
-    jest.useFakeTimers();
     mockReplace.mockClear();
     mockCompleteAuthSessionFromUrl.mockReset();
     mockCallbackUrl =
@@ -232,7 +226,6 @@ describe("AuthCallbackScreen verification lifecycle", () => {
 
     await act(async () => {
       await Promise.resolve();
-      jest.advanceTimersByTime(60);
     });
 
     expect(mockCompleteAuthSessionFromUrl).toHaveBeenCalledWith(mockCallbackUrl);
@@ -244,10 +237,6 @@ describe("AuthCallbackScreen verification lifecycle", () => {
       isLoading: false,
     };
     rerender(<AuthCallbackScreen />);
-
-    act(() => {
-      jest.advanceTimersByTime(60);
-    });
 
     expect(mockReplace).toHaveBeenCalledWith("/");
   });
@@ -262,7 +251,6 @@ describe("AuthCallbackScreen verification lifecycle", () => {
 
     await act(async () => {
       await Promise.resolve();
-      jest.advanceTimersByTime(60);
     });
 
     expect(mockCompleteAuthSessionFromUrl).toHaveBeenCalledWith(mockCallbackUrl);
