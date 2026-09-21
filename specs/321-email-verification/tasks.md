@@ -62,16 +62,16 @@ remains unavailable until that succeeds.
 
 ### Tests first
 
-- [ ] T010 [P] [US1] Add Red route tests proving a valid verification callback must complete the auth session before authenticated routing for cold-start and warm-start semantics in `apps/mobile/__tests__/app/auth-redirect.test.tsx`
-- [ ] T011 [P] [US1] Add Red component tests for the approved full-page/no-card verification hierarchy, separate LTR email chip, resend/back actions, and privacy/legal content in `apps/mobile/__tests__/components/auth/AuthStatusViews.test.tsx`
-- [ ] T012 [P] [US1] Add Red controller coverage that successful signup requiring verification retains the normalized pending email and exposes the verification-pending screen without granting authenticated state in `apps/mobile/__tests__/hooks/useAuthScreenController.test.ts`
+- [x] T010 [P] [US1] Add Red route tests proving a valid verification callback must complete the auth session before authenticated routing for cold-start and warm-start semantics in `apps/mobile/__tests__/app/auth-redirect.test.tsx`
+- [x] T011 [P] [US1] Add Red component tests for the approved full-page/no-card verification hierarchy, separate LTR email chip, resend/back actions, and privacy/legal content in `apps/mobile/__tests__/components/auth/AuthStatusViews.test.tsx`
+- [x] T012 [P] [US1] Add Red controller coverage that successful signup requiring verification retains the normalized pending email and exposes the verification-pending screen without granting authenticated state in `apps/mobile/__tests__/hooks/useAuthScreenController.test.ts`
 
 ### Implementation
 
-- [ ] T013 [US1] Update `apps/mobile/app/auth-callback.tsx` to consume the incoming native auth URL, invoke shared session completion, wait for resolved auth state, and hand off to existing root/startup routing only after success
-- [ ] T014 [US1] Update `apps/mobile/components/auth/VerificationPendingView.tsx` to match the approved binding: full-page/no-card content, 92px mail treatment, centered copy, separate LTR email chip, outlined resend action, separate bottom back action, and footer-compatible structure
-- [ ] T015 [US1] Wire verification-state Privacy/Terms navigation and any layout ownership needed for the approved footer through `apps/mobile/app/auth.tsx` without duplicating auth/business logic
-- [ ] T016 [US1] Preserve/adjust localized verification copy only as required for the approved structure in `apps/mobile/locales/en/auth.json` and `apps/mobile/locales/ar/auth.json`
+- [x] T013 [US1] Update `apps/mobile/app/auth-callback.tsx` to consume the incoming native auth URL, invoke shared session completion, wait for resolved auth state, and hand off to existing root/startup routing only after success
+- [x] T014 [US1] Update `apps/mobile/components/auth/VerificationPendingView.tsx` to match the approved binding: full-page/no-card content, 92px mail treatment, centered copy, separate LTR email chip, outlined resend action, separate bottom back action, and footer-compatible structure
+- [x] T015 [US1] Wire verification-state Privacy/Terms navigation and any layout ownership needed for the approved footer through `apps/mobile/app/auth.tsx` without duplicating auth/business logic
+- [x] T016 [US1] Preserve/adjust localized verification copy only as required for the approved structure in `apps/mobile/locales/en/auth.json` and `apps/mobile/locales/ar/auth.json`
 
 ### End-to-end and evidence
 
@@ -80,8 +80,7 @@ remains unavailable until that succeeds.
 - [ ] T019 [US1] Capture rendered scoped-variant evidence for English dark, Arabic RTL light/dark, compact phone, tablet/landscape where supported, and enlarged text; compare against approved bindings and record evidence/status in `specs/321-email-verification/tasks.md`
 - [ ] T020 [US1] Verify accessibility tree/screen-reader or appropriate automated evidence for verification heading, email presentation, resend button disabled/busy state, back action, language control, Privacy, and Terms; record separate accessibility status/reference in `specs/321-email-verification/tasks.md`
 
-**Checkpoint**: US1 is independently functional and visually governed before
-continuing.
+**Checkpoint**: Functional implementation/tests T010-T016 PASS at exact head `3c310feae93c1f0e75b578f722e61891337afd6d`; T017-T020 remain required before US1 visual/E2E completion.
 
 ---
 
