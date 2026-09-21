@@ -8,10 +8,19 @@ interface SupabaseServiceModule {
     email: string,
     password: string
   ) => Promise<unknown>;
+  readonly signInWithEmail: (
+    email: string,
+    password: string
+  ) => Promise<{
+    readonly success: boolean;
+    readonly needsVerification?: boolean;
+    readonly error?: { readonly code?: string };
+  }>;
   readonly resendVerificationEmail: (email: string) => Promise<unknown>;
   readonly supabase: {
     readonly auth: {
       signUp: (...args: unknown[]) => Promise<unknown>;
+      signInWithPassword: (...args: unknown[]) => Promise<unknown>;
       resend: (...args: unknown[]) => Promise<unknown>;
     };
   };
@@ -24,6 +33,7 @@ const {
   getSupabaseStorageKey,
   resolveSupabaseStorageKey,
   signUpWithEmail,
+  signInWithEmail,
   resendVerificationEmail,
   supabase,
 } = jest.requireActual<SupabaseServiceModule>("@/services/supabase");
@@ -74,6 +84,33 @@ describe("supabase email verification redirect contract", () => {
         emailRedirectTo: "monyvi://auth-callback",
       },
     });
+  });
+
+
+  it("classifies email_not_confirmed sign-in as verification required", async () => {
+    const emailNotConfirmedError = Object.assign(
+      new Error("Email not confirmed"),
+      { code: "email_not_confirmed" }
+    );
+    const signInSpy = jest
+      .spyOn(supabase.auth, "signInWithPassword")
+      .mockResolvedValue({
+        data: { user: null, session: null },
+        error: emailNotConfirmedError,
+      });
+
+    const result = await signInWithEmail(
+      "unverified@example.com",
+      "password123"
+    );
+
+    expect(signInSpy).toHaveBeenCalledWith({
+      email: "unverified@example.com",
+      password: "password123",
+    });
+    expect(result.success).toBe(false);
+    expect(result.needsVerification).toBe(true);
+    expect(result.error?.code).toBe("email_not_confirmed");
   });
 
   it("passes the canonical app callback when resending signup verification", async () => {
