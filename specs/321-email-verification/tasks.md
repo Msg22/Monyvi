@@ -22,8 +22,8 @@ configuration work that blocks more than one story is foundational.
 
 **Purpose**: Reconfirm immutable planning authority immediately before coding.
 
-- [ ] T001 Re-fetch issue #321, current branch head, issue #20/active auth PR overlap, and approved mockup-binding state before the first production mutation; record any conflict/blocker in `specs/321-email-verification/tasks.md`
-- [ ] T002 Verify `specs/321-email-verification/mockups/verification-en-light.binding.md`, `verification-en-dark.binding.md`, and `verification-ar-light.binding.md` with `scripts/verify-mockup-binding.js` and record the exact verifier result/head in `specs/321-email-verification/tasks.md`
+- [x] T001 Re-fetch issue #321, current branch head, issue #20/active auth PR overlap, and approved mockup-binding state before the first production mutation; record any conflict/blocker in `specs/321-email-verification/tasks.md` — PASS at `77e2982f936f85d5bdb5cda14e3f7753a309442f`: main unchanged at `aa32edf748da89e8b16d584e3e78f61c5313d191`, issue #20 open with no active implementation PR, no overlapping open auth/signup PR, approved bindings unchanged
+- [x] T002 Verify `specs/321-email-verification/mockups/verification-en-light.binding.md`, `verification-en-dark.binding.md`, and `verification-ar-light.binding.md` with `scripts/verify-mockup-binding.js` and record the exact verifier result/head in `specs/321-email-verification/tasks.md` — PASS at `77e2982f936f85d5bdb5cda14e3f7753a309442f`: exact branch image/metadata/combined SHA-256 values and approval fields satisfy the canonical verifier logic for all three sidecars; the GitHub-only execution environment has no repository command runner, so the Node CLI is re-required by T041 in the implementation runner before completion
 
 **Checkpoint**: Implementation may start only when T001-T002 remain Green.
 
