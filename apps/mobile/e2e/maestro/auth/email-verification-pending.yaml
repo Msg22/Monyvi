@@ -1,0 +1,87 @@
+appId: com.monyvi.app
+---
+# #321 local email verification: fresh signup, returning unverified sign-in,
+# and resend recovery. The orchestrator uses a unique Mailpit recipient.
+
+- waitForAnimationToEnd
+
+- runFlow:
+    when:
+      visible: "This is the developer menu"
+    commands:
+      - tapOn: "Continue"
+      - waitForAnimationToEnd
+
+- runFlow:
+    when:
+      visible: "Connected to:"
+    commands:
+      - pressKey: Back
+      - waitForAnimationToEnd
+
+- extendedWaitUntil:
+    visible: "Skip|Your money, understood."
+    timeout: 120000
+
+- runFlow:
+    when:
+      visible: "Skip"
+    commands:
+      - tapOn: "Skip"
+
+- extendedWaitUntil:
+    visible:
+      id: "auth-email-input"
+    timeout: 120000
+
+- tapOn:
+    id: "auth-mode-sign-up"
+- tapOn:
+    id: "auth-email-input"
+- inputText: ${MAESTRO_E2E_VERIFICATION_EMAIL}
+- hideKeyboard
+- tapOn:
+    id: "auth-password-input"
+- inputText: ${MAESTRO_E2E_VERIFICATION_PASSWORD}
+- hideKeyboard
+- tapOn:
+    id: "auth-submit-button"
+
+- extendedWaitUntil:
+    visible: "Check your inbox"
+    timeout: 30000
+- assertVisible:
+    id: "verification-email-chip"
+- assertVisible: "Resend email"
+- assertVisible: "Back to sign in"
+
+# Returning unverified users must land on the same pending/resend state.
+- tapOn: "Back to sign in"
+- extendedWaitUntil:
+    visible:
+      id: "auth-email-input"
+    timeout: 30000
+- tapOn:
+    id: "auth-mode-sign-in"
+- tapOn:
+    id: "auth-email-input"
+- eraseText
+- inputText: ${MAESTRO_E2E_VERIFICATION_EMAIL}
+- hideKeyboard
+- tapOn:
+    id: "auth-password-input"
+- eraseText
+- inputText: ${MAESTRO_E2E_VERIFICATION_PASSWORD}
+- hideKeyboard
+- tapOn:
+    id: "auth-submit-button"
+
+- extendedWaitUntil:
+    visible: "Check your inbox"
+    timeout: 30000
+- tapOn: "Resend email"
+- extendedWaitUntil:
+    visible: "Verification email sent. Please check your inbox."
+    timeout: 15000
+- assertVisible:
+    id: "verification-email-chip"
