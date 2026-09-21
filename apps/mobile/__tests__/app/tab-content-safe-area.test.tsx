@@ -15,7 +15,14 @@ jest.mock("@react-navigation/bottom-tabs", () => {
 });
 
 jest.mock("react-i18next", () => ({
-  useTranslation: (): { readonly t: (key: string) => string } => ({
+  useTranslation: (): {
+    readonly i18n: {
+      readonly language: string;
+      readonly resolvedLanguage: string;
+    };
+    readonly t: (key: string) => string;
+  } => ({
+    i18n: { language: "en", resolvedLanguage: "en" },
     t: (key: string): string => key,
   }),
 }));
