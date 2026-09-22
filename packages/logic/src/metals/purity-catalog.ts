@@ -19,9 +19,7 @@ export type PurityResolution =
   | { readonly available: true; readonly entry: PurityCatalogEntry }
   | {
       readonly available: false;
-      readonly reason:
-        | "unsupported_metal"
-        | "unknown_purity";
+      readonly reason: "unsupported_metal" | "unknown_purity";
     };
 
 export const PURITY_CATALOG_VERSION = "1" as const;
@@ -106,6 +104,6 @@ function entry(
   });
 }
 
-function isSupportedMetal(metal: string): metal is SupportedMetal {
+export function isSupportedMetal(metal: string): metal is SupportedMetal {
   return metal === "GOLD" || metal === "SILVER";
 }

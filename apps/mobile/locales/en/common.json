@@ -31,6 +31,7 @@
   "amount_decimal_separator_error": "Use a dot (.) for decimals. Commas can only separate groups of three digits.",
   "recurring_name_required": "Enter a name for this recurring payment.",
   "error_network": "Network error. Please check your connection.",
+  "money_summary_error": "We couldn't load your money summary. Try again.",
   "currency": "Currency",
   "transaction_currency": "Transaction currency",
   "just_now": "Just now",

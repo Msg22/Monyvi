@@ -45,7 +45,7 @@
   "pitch_get_started": "Get Started",
   "pitch_back": "Previous slide",
   "currency_step_title": "Choose your primary currency",
-  "currency_step_subtitle": "This is the currency of your first account. You can change it later from Settings.",
+  "currency_step_subtitle": "This is the currency of your first cash account. You can change it later from Settings.",
   "currency_step_confirm": "Confirm",
   "currency_step_signout": "Sign out",
   "currency_step_error_generic": "Something went wrong. Please try again.",

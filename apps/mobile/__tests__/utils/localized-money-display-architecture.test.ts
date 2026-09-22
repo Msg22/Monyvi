@@ -42,6 +42,9 @@ describe("localized money display architecture", () => {
     const dashboardRates = readMobileSource(
       "components/dashboard/LiveRates.tsx"
     );
+    const liveRatesReadModel = readMobileSource(
+      "services/live-rates-screen-read-model-service.ts"
+    );
     const transferFields = readMobileSource(
       "components/add-transaction/TransferFields.tsx"
     );
@@ -51,8 +54,9 @@ describe("localized money display architecture", () => {
     const goldHero = readMobileSource("components/live-rates/GoldHeroCard.tsx");
     const metalCard = readMobileSource("components/live-rates/MetalCard.tsx");
 
-    expect(liveRatesHook).toContain("formatLocalizedMoneyAmount");
-    expect(liveRatesHook).not.toContain("getCurrencyAmountLabel");
+    expect(liveRatesHook).not.toContain("formatCurrency");
+    expect(liveRatesReadModel).toContain("formatLocalizedMoneyAmount");
+    expect(liveRatesReadModel).not.toContain("getCurrencyAmountLabel");
     expect(dashboardRates).toContain("formatLocalizedMoneyAmount");
     expect(dashboardRates).toContain("price_per_gram");
     expect(dashboardRates).not.toMatch(/\.toLocaleString\(|\.toFixed\(|\/g/u);

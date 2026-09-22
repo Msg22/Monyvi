@@ -20,9 +20,9 @@ import {
   Transaction,
   Transfer,
   type CurrencyType,
-  type MarketRate,
 } from "@monyvi/db";
-import { convertCurrency } from "@monyvi/logic";
+import { convertSelectedCurrentAmount } from "@/services/current-market-snapshot-calculations";
+import type { SelectedMarketRateSnapshot } from "@/services/market-rate-snapshot-read-model-service";
 import { Q, type Query } from "@nozbe/watermelondb";
 
 export type TransactionTypeFilter = "All" | "Income" | "Expense" | "Transfer";
@@ -58,7 +58,7 @@ interface TransactionDisplayItem {
   readonly categoryName: string;
   readonly categoryIconName: string;
   readonly categoryIconLibrary: string;
-  readonly displayNetWorth?: number;
+  readonly displayNetWorth?: number | null;
 }
 
 interface TransferDisplayItem {
@@ -76,21 +76,21 @@ interface TransferDisplayItem {
   readonly notes?: string;
   readonly fromAccountName: string;
   readonly toAccountName: string;
-  readonly displayNetWorth?: number;
+  readonly displayNetWorth?: number | null;
 }
 
 export type DisplayListItem = TransactionDisplayItem | TransferDisplayItem;
 
 export type DisplayTransaction =
-  | (TransactionDisplayItem & { readonly displayNetWorth: number })
-  | (TransferDisplayItem & { readonly displayNetWorth: number });
+  | (TransactionDisplayItem & { readonly displayNetWorth: number | null })
+  | (TransferDisplayItem & { readonly displayNetWorth: number | null });
 
 export interface GroupedTransaction {
   readonly title: string;
   readonly transactions: readonly DisplayTransaction[];
-  readonly groupNetWorth?: number;
-  readonly groupTotalIncome: number;
-  readonly groupTotalExpense: number;
+  readonly groupNetWorth?: number | null;
+  readonly groupTotalIncome: number | null;
+  readonly groupTotalExpense: number | null;
 }
 
 export interface TransactionListReadModel {
@@ -106,7 +106,7 @@ export interface GetTransactionListReadModelInput {
 
 export interface BuildTransactionGroupsInput extends TransactionListReadModel {
   readonly totalNetWorth: number | null;
-  readonly latestRates: MarketRate | null;
+  readonly selectedSnapshot: SelectedMarketRateSnapshot | null;
   readonly preferredCurrency: CurrencyType;
   readonly period: GroupingPeriod;
   readonly searchQuery: string;
@@ -199,19 +199,22 @@ export async function getTransactionListReadModel(
 export function buildTransactionGroups(
   input: BuildTransactionGroupsInput
 ): GroupedTransaction[] {
-  const latestRates = input.latestRates;
-  if (input.totalNetWorth === null || latestRates === null) {
-    return [];
-  }
+  const selectedSnapshot = input.selectedSnapshot;
 
-  const toPreferred = (amount: number, currency: CurrencyType): number =>
-    convertCurrency(amount, currency, input.preferredCurrency, latestRates);
-  const getSignedAmount = (item: DisplayListItem): number => {
+  const toPreferred = (amount: number, currency: CurrencyType): number | null =>
+    convertSelectedCurrentAmount({
+      amount,
+      fromCurrency: currency,
+      toCurrency: input.preferredCurrency,
+      currentSnapshot: selectedSnapshot,
+    });
+  const getSignedAmount = (item: DisplayListItem): number | null => {
     if (item._type !== "transaction") {
       return 0;
     }
 
     const preferredAmount = toPreferred(item.amount, item.currency);
+    if (preferredAmount === null) return null;
     if (item.isIncome) return preferredAmount;
     if (item.isExpense) return -preferredAmount;
     return 0;
@@ -223,6 +226,10 @@ export function buildTransactionGroups(
       transaction.amount,
       transaction.currency
     );
+    if (preferredAmount === null || anchorNetWorth === null) {
+      anchorNetWorth = null;
+      continue;
+    }
     if (transaction.isIncome) anchorNetWorth -= preferredAmount;
     if (transaction.isExpense) anchorNetWorth += preferredAmount;
   }
@@ -237,11 +244,15 @@ export function buildTransactionGroups(
       ...item,
       displayNetWorth: runningNetWorth,
     };
-    runningNetWorth -= getSignedAmount(item);
+    const signedAmount = getSignedAmount(item);
+    runningNetWorth =
+      runningNetWorth === null || signedAmount === null
+        ? null
+        : runningNetWorth - signedAmount;
     return itemWithNetWorth;
   });
 
-  return groupDisplayItems(processedItems, input, latestRates);
+  return groupDisplayItems(processedItems, input, selectedSnapshot);
 }
 
 function transactionsCollection(): ReturnType<
@@ -543,15 +554,15 @@ function createTransferDisplayItem(
 function groupDisplayItems(
   items: readonly DisplayTransaction[],
   input: BuildTransactionGroupsInput,
-  latestRates: MarketRate
+  selectedSnapshot: SelectedMarketRateSnapshot | null
 ): GroupedTransaction[] {
   const groups: GroupedTransaction[] = [];
   let currentGroup: {
     title: string;
     transactions: DisplayTransaction[];
-    groupNetWorth?: number;
-    groupTotalIncome: number;
-    groupTotalExpense: number;
+    groupNetWorth?: number | null;
+    groupTotalIncome: number | null;
+    groupTotalExpense: number | null;
   } | null = null;
 
   for (const item of items) {
@@ -570,16 +581,22 @@ function groupDisplayItems(
 
     currentGroup.transactions.push(item);
     if (item._type === "transaction") {
-      const preferredAmount = convertCurrency(
-        item.amount,
-        item.currency,
-        input.preferredCurrency,
-        latestRates
-      );
+      const preferredAmount = convertSelectedCurrentAmount({
+        amount: item.amount,
+        fromCurrency: item.currency,
+        toCurrency: input.preferredCurrency,
+        currentSnapshot: selectedSnapshot,
+      });
       if (item.isIncome) {
-        currentGroup.groupTotalIncome += preferredAmount;
+        currentGroup.groupTotalIncome =
+          currentGroup.groupTotalIncome === null || preferredAmount === null
+            ? null
+            : currentGroup.groupTotalIncome + preferredAmount;
       } else if (item.isExpense) {
-        currentGroup.groupTotalExpense += preferredAmount;
+        currentGroup.groupTotalExpense =
+          currentGroup.groupTotalExpense === null || preferredAmount === null
+            ? null
+            : currentGroup.groupTotalExpense + preferredAmount;
       }
     }
   }

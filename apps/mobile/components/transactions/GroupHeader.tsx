@@ -6,9 +6,9 @@ import { Platform, Text, useColorScheme, View } from "react-native";
 
 interface GroupHeaderProps {
   title: string;
-  netWorth: number;
-  income: number;
-  expense: number;
+  netWorth: number | null;
+  income: number | null;
+  expense: number | null;
   currencyCode: CurrencyType;
 }
 
@@ -47,24 +47,31 @@ export const GroupHeader = React.memo(function GroupHeader({
 
         <View className="flex-col items-end">
           {/* Group Totals */}
-          {(income > 0 || expense > 0) && (
+          {(income === null ||
+            expense === null ||
+            income > 0 ||
+            expense > 0) && (
             <View className="flex-row items-center gap-2 mb-0.5">
-              {income > 0 && (
+              {(income === null || income > 0) && (
                 <Text className="text-[11px] text-nileGreen-600 dark:text-nileGreen-400 font-semibold">
-                  {formatLocalizedMoneyAmount({
-                    amount: income,
-                    currency: currencyCode,
-                    signDisplay: "always",
-                  })}
+                  {income === null
+                    ? "—"
+                    : formatLocalizedMoneyAmount({
+                        amount: income,
+                        currency: currencyCode,
+                        signDisplay: "always",
+                      })}
                 </Text>
               )}
-              {expense > 0 && (
+              {(expense === null || expense > 0) && (
                 <Text className="text-[11px] text-red-500 dark:text-red-400 font-semibold">
-                  {formatLocalizedMoneyAmount({
-                    amount: -expense,
-                    currency: currencyCode,
-                    signDisplay: "always",
-                  })}
+                  {expense === null
+                    ? "—"
+                    : formatLocalizedMoneyAmount({
+                        amount: -expense,
+                        currency: currencyCode,
+                        signDisplay: "always",
+                      })}
                 </Text>
               )}
             </View>
@@ -74,10 +81,12 @@ export const GroupHeader = React.memo(function GroupHeader({
           <Text className="text-[10px] text-slate-400 dark:text-slate-500">
             Bal:{" "}
             <Text className="text-slate-600 dark:text-slate-300 font-medium">
-              {formatLocalizedMoneyAmount({
-                amount: netWorth,
-                currency: currencyCode,
-              })}
+              {netWorth === null
+                ? "—"
+                : formatLocalizedMoneyAmount({
+                    amount: netWorth,
+                    currency: currencyCode,
+                  })}
             </Text>
           </Text>
         </View>

@@ -34,7 +34,7 @@ interface BaseCardProps {
   isIncome: boolean;
   counterparty?: string;
   details?: string;
-  displayNetWorth: number;
+  displayNetWorth: number | null;
   currencyCode: CurrencyType;
   date: Date;
   index?: number;
@@ -235,10 +235,12 @@ export const BaseCard = React.memo(function BaseCard({
                   Net Worth:{" "}
                 </Text>
                 <Text className="text-[11px] text-slate-400 dark:text-slate-500 font-medium">
-                  {formatLocalizedMoneyAmount({
-                    amount: displayNetWorth,
-                    currency: currencyCode,
-                  })}
+                  {displayNetWorth === null
+                    ? "—"
+                    : formatLocalizedMoneyAmount({
+                        amount: displayNetWorth,
+                        currency: currencyCode,
+                      })}
                 </Text>
               </View>
               <Text className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">

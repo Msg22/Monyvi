@@ -89,6 +89,10 @@ export const palette = {
 } as const;
 
 // 2. The Semantic Theme
+export const textShadowColors = {
+  floatingActionLabel: "rgba(0,0,0,0.3)",
+} as const;
+
 export const colors = {
   primary: palette.nileGreen[700],
   secondary: palette.nileGreen[500],

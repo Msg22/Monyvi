@@ -38,7 +38,13 @@ import { formatLocalizedMoneyAmount } from "@/utils/localized-money-display";
 import { router } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { AppState, SectionList, Text, TouchableOpacity, View } from "react-native";
+import {
+  AppState,
+  SectionList,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function RecurringPaymentsScreen(): React.JSX.Element {
@@ -48,8 +54,9 @@ export default function RecurringPaymentsScreen(): React.JSX.Element {
   const insets = useSafeAreaInsets();
   const [selectedSort, setSelectedSort] = useState<SortOption>("next_due");
   const [isSortModalVisible, setIsSortModalVisible] = useState(false);
-  const [payNowPayment, setPayNowPayment] =
-    useState<RecurringPayment | null>(null);
+  const [payNowPayment, setPayNowPayment] = useState<RecurringPayment | null>(
+    null
+  );
   const [todayRevision, setTodayRevision] = useState(0);
   const {
     allPayments = [],
@@ -62,37 +69,44 @@ export default function RecurringPaymentsScreen(): React.JSX.Element {
     setStatusFilter,
   } = useRecurringPayments({ calendarRevision: todayRevision });
   const { preferredCurrency } = usePreferredCurrency();
-  const { latestRates } = useMarketRates();
+  const { selectedSnapshot } = useMarketRates();
 
   const refreshToday = useCallback((): void => {
     setTodayRevision((revision) => revision + 1);
   }, []);
 
-  useEffect(() => {
+  useEffect((): (() => void) => {
     let timer: ReturnType<typeof setTimeout> | undefined;
     const scheduleNextDayRefresh = (): void => {
       const now = new Date();
       const nextDay = new Date(now);
       nextDay.setHours(24, 0, 0, 0);
-      timer = setTimeout(() => {
-        refreshToday();
-        scheduleNextDayRefresh();
-      }, Math.max(1, nextDay.getTime() - now.getTime()));
+      timer = setTimeout(
+        (): void => {
+          refreshToday();
+          scheduleNextDayRefresh();
+        },
+        Math.max(1, nextDay.getTime() - now.getTime())
+      );
     };
-    const appStateSubscription = AppState.addEventListener("change", (nextState) => {
-      if (nextState === "active") refreshToday();
-    });
+    const appStateSubscription = AppState.addEventListener(
+      "change",
+      (nextState): void => {
+        if (nextState === "active") refreshToday();
+      }
+    );
 
     scheduleNextDayRefresh();
-    return () => {
+    return (): void => {
       if (timer) clearTimeout(timer);
       appStateSubscription.remove();
     };
   }, [refreshToday]);
 
   const sortOptions = useMemo(
-    () => (latestRates ? { preferredCurrency, latestRates } : {}),
-    [latestRates, preferredCurrency]
+    (): Parameters<typeof sortPayments>[2] =>
+      selectedSnapshot ? { preferredCurrency, selectedSnapshot } : {},
+    [selectedSnapshot, preferredCurrency]
   );
 
   const sortedPayments = useMemo(

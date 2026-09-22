@@ -8,7 +8,10 @@
 import i18next, { t } from "i18next";
 
 import type { CurrencyType } from "@monyvi/db";
-import { formatCurrency as formatEnglishCurrency } from "@monyvi/logic";
+import {
+  formatCurrency as formatEnglishCurrency,
+  roundDecimal,
+} from "@monyvi/logic";
 
 import type { SupportedLanguage } from "@/i18n/translation-schema";
 
@@ -143,6 +146,9 @@ export function formatLocalizedMoneyAmount({
   }
 
   if (englishPresentation === "code-prefix") {
+    if (formattedNumber.startsWith("+") || formattedNumber.startsWith("-")) {
+      return `${formattedNumber[0]} ${currency} ${formattedNumber.slice(1)}`;
+    }
     return `${currency} ${formattedNumber}`;
   }
   if (englishPresentation === "code-suffix") {
@@ -272,25 +278,9 @@ function roundCanonicalDecimal(
   amount: string,
   maximumFractionDigits: number
 ): RoundedDecimal {
-  const isNegativeInput = amount.startsWith("-");
-  const unsigned = amount.replace(/^[+-]/, "");
-  const [rawInteger = "0", rawFraction = ""] = unsigned.split(".");
-  const normalizedInteger = rawInteger.replace(/^0+(?=\d)/, "");
-  const keptFraction = rawFraction
-    .slice(0, maximumFractionDigits)
-    .padEnd(maximumFractionDigits, "0");
-  const shouldRoundUp =
-    rawFraction.length > maximumFractionDigits &&
-    Number(rawFraction[maximumFractionDigits]) >= 5;
-  const roundedDigits = incrementDecimalDigits(
-    `${normalizedInteger}${keptFraction}`,
-    shouldRoundUp
-  ).padStart(maximumFractionDigits + 1, "0");
-  const splitIndex = roundedDigits.length - maximumFractionDigits;
-  const integerDigits =
-    roundedDigits.slice(0, splitIndex).replace(/^0+(?=\d)/, "") || "0";
-  const fractionDigits =
-    maximumFractionDigits > 0 ? roundedDigits.slice(splitIndex) : "";
+  const rounded = roundDecimal(amount, maximumFractionDigits);
+  const unsigned = rounded.startsWith("-") ? rounded.slice(1) : rounded;
+  const [integerDigits = "0", fractionDigits = ""] = unsigned.split(".");
   const isZero =
     integerDigits === "0" &&
     !fractionDigits.split("").some((digit) => digit !== "0");
@@ -298,27 +288,9 @@ function roundCanonicalDecimal(
   return {
     integerDigits,
     fractionDigits,
-    isNegative: isNegativeInput && !isZero,
+    isNegative: amount.startsWith("-") && !isZero,
     isZero,
   };
-}
-
-function incrementDecimalDigits(
-  digits: string,
-  shouldIncrement: boolean
-): string {
-  if (!shouldIncrement) return digits || "0";
-
-  const result = (digits || "0").split("");
-  for (let index = result.length - 1; index >= 0; index -= 1) {
-    if (result[index] !== "9") {
-      result[index] = String(Number(result[index]) + 1);
-      return result.join("");
-    }
-    result[index] = "0";
-  }
-
-  return `1${result.join("")}`;
 }
 
 function resolveSign(

@@ -11,6 +11,7 @@ let mockUserId: string | null = "user-1";
 let mockIsResolvingUser = false;
 let mockTotalNetWorth: number | null = 1000;
 let mockIsNetWorthLoading = false;
+let mockIsRatesLoading = false;
 
 interface MockQuery {
   readonly observeWithColumns: jest.Mock<{
@@ -101,9 +102,9 @@ jest.mock("../../hooks/useCurrentUser", () => ({
 }));
 
 jest.mock("../../hooks/useMarketRates", () => ({
-  useMarketRates: (): { latestRates: null; isLoading: false } => ({
-    latestRates: null,
-    isLoading: false,
+  useMarketRates: (): { selectedSnapshot: null; isLoading: boolean } => ({
+    selectedSnapshot: null,
+    isLoading: mockIsRatesLoading,
   }),
 }));
 
@@ -129,6 +130,7 @@ describe("useTransactionsGrouping", () => {
     mockIsResolvingUser = false;
     mockTotalNetWorth = 1000;
     mockIsNetWorthLoading = false;
+    mockIsRatesLoading = false;
     mockObserveTransactionListInvalidationSources.mockReturnValue({
       transactionsQuery,
       transfersQuery,
@@ -158,7 +160,7 @@ describe("useTransactionsGrouping", () => {
     expect(mockBuildTransactionGroups).toHaveBeenCalledWith({
       ...readModel,
       totalNetWorth: 1000,
-      latestRates: null,
+      selectedSnapshot: null,
       preferredCurrency: "EGP",
       period: "this_month",
       searchQuery: "",
@@ -220,7 +222,7 @@ describe("useTransactionsGrouping", () => {
       expect(mockBuildTransactionGroups).toHaveBeenLastCalledWith({
         ...readModel,
         totalNetWorth: 1000,
-        latestRates: null,
+        selectedSnapshot: null,
         preferredCurrency: "EGP",
         period: "this_month",
         searchQuery: "rent",
@@ -245,6 +247,19 @@ describe("useTransactionsGrouping", () => {
     expect(mockLoggerError).toHaveBeenCalledWith(
       "transactionsGrouping.readModel.failed",
       error
+    );
+  });
+
+  it("shows loaded transaction facts while net worth and rates are pending", async () => {
+    mockIsNetWorthLoading = true;
+    mockIsRatesLoading = true;
+    const { result } = renderHook(() =>
+      useTransactionsGrouping("this_month", ["Expense"], "")
+    );
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(result.current.groupedData).toBe(groupedData);
+    expect(mockBuildTransactionGroups).toHaveBeenLastCalledWith(
+      expect.objectContaining({ totalNetWorth: null })
     );
   });
 });

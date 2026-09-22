@@ -1,4 +1,6 @@
 {
+  "conversion_unavailable": "سعر التحويل غير متاح",
+  "conversion_preview": "≈ {{amount}} بسعر {{one}} {{baseCurrency}} = {{rate}} {{quoteCurrency}}",
   "partial_sms_title": "تعذرت معالجة {{count}} رسائل",
   "partial_sms_title_zero": "لم تتم معالجة أي رسالة",
   "partial_sms_title_one": "تعذرت معالجة رسالة واحدة",

@@ -1,4 +1,6 @@
 {
+  "conversion_unavailable": "Exchange rate unavailable",
+  "conversion_preview": "≈ {{amount}} at rate {{one}} {{baseCurrency}} = {{rate}} {{quoteCurrency}}",
   "partial_sms_title": "{{count}} messages couldn't be processed",
   "partial_sms_title_one": "1 message couldn't be processed",
   "partial_sms_title_other": "{{count}} messages couldn't be processed",

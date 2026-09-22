@@ -134,6 +134,19 @@ describe("localized money display", () => {
     ).toBe("٩٬٠٠٧٬١٩٩٬٢٥٤٬٧٤٠٬٩٩٣٫١٠ جنيه مصري");
   });
 
+  it("uses the shared half-even policy for canonical decimal strings", () => {
+    expect(
+      formatLocalizedMoneyAmount({
+        amount: "9007199254740993.245",
+        currency: "EGP",
+        language: "en",
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+        englishPresentation: "code-suffix",
+      })
+    ).toBe("9,007,199,254,740,993.24 EGP");
+  });
+
   it("preserves existing English standard currency output", () => {
     expect(
       formatLocalizedMoneyAmount({
@@ -170,6 +183,18 @@ describe("localized money display", () => {
         englishPresentation: "code-suffix",
       })
     ).toBe("1,234.50 EGP");
+
+    expect(
+      formatLocalizedMoneyAmount({
+        amount: "0.006",
+        currency: "EGP",
+        language: "en",
+        signDisplay: "exceptZero",
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+        englishPresentation: "code-prefix",
+      })
+    ).toBe("+ EGP 0.01");
   });
 
   it("places a positive sign before standard English prefix symbols", () => {

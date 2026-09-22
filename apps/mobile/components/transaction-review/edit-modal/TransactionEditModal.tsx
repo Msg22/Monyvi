@@ -18,8 +18,7 @@ import type { PendingAccount } from "@/services/pending-account-service";
 import type { AccountWithBankDetails } from "@/services/sms-account-matcher";
 import type { TransactionEdits } from "@/services/sms-edit-modal-service";
 import { formatToLocalDateString } from "@/utils/dateHelpers";
-import { formatLocalizedConversionPreview } from "@/utils/localized-conversion-preview";
-import type { Category, MarketRate } from "@monyvi/db";
+import type { Category } from "@monyvi/db";
 import {
   formatAmountInput,
   parseAmountInput,
@@ -50,6 +49,8 @@ import {
   type UseTransactionEditStateReturn,
 } from "@/hooks/useTransactionEditState";
 import { useModalBottomInset } from "@/hooks/useModalBottomInset";
+import { formatSelectedSnapshotConversionPreview } from "@/services/transaction-conversion-preview-service";
+import type { SelectedMarketRateSnapshot } from "@/services/market-rate-snapshot-read-model-service";
 
 export interface TransactionEditModalProps {
   /** Whether the modal is visible */
@@ -66,7 +67,7 @@ export interface TransactionEditModalProps {
   /** In-memory pending accounts created this session */
   readonly pendingAccounts: readonly PendingAccount[];
   /** Market rates for currency conversion (optional, from useMarketRates) */
-  readonly latestRates: MarketRate | null;
+  readonly selectedSnapshot: SelectedMarketRateSnapshot | null;
   /** Map of category IDs to categories */
   readonly categoryMap: ReadonlyMap<string, Category>;
   /** Expense categories for the category picker */
@@ -89,7 +90,7 @@ export function TransactionEditModal(
   const {
     visible,
     onClose,
-    latestRates,
+    selectedSnapshot,
     transaction,
     sourceVariant = "default",
   } = props;
@@ -200,7 +201,7 @@ export function TransactionEditModal(
                 state={state}
                 setters={setters}
                 accountHandlers={accountHandlers}
-                latestRates={latestRates}
+                selectedSnapshot={selectedSnapshot}
               />
             ) : (
               <>
@@ -290,13 +291,14 @@ export function TransactionEditModal(
                         color={palette.blue[500]}
                       />
                       <Text className="text-xs text-blue-400 font-medium ms-2 flex-shrink">
-                        {formatLocalizedConversionPreview({
-                          amount: state.amount,
-                          fromCurrency: transaction.currency,
-                          toCurrency: state.selectedAccountCurrency,
-                          rates: latestRates,
-                          language: i18n.language === "ar" ? "ar" : "en",
-                        })}
+                        {formatSelectedSnapshotConversionPreview(
+                          state.amount,
+                          transaction.currency,
+                          state.selectedAccountCurrency,
+                          selectedSnapshot,
+                          t,
+                          i18n.resolvedLanguage ?? i18n.language
+                        )}
                       </Text>
                     </View>
                   </View>
@@ -543,7 +545,7 @@ interface SmsReviewEditFieldsProps {
   readonly state: UseTransactionEditStateReturn["state"];
   readonly setters: UseTransactionEditStateReturn["setters"];
   readonly accountHandlers: UseTransactionEditStateReturn["accountHandlers"];
-  readonly latestRates: MarketRate | null;
+  readonly selectedSnapshot: SelectedMarketRateSnapshot | null;
 }
 
 type SmsEditableField = "amount" | "merchant" | null;
@@ -552,7 +554,7 @@ function SmsReviewEditFields({
   state,
   setters,
   accountHandlers,
-  latestRates,
+  selectedSnapshot,
 }: SmsReviewEditFieldsProps): React.JSX.Element {
   const { t, i18n } = useTranslation("transactions");
   const [focusedField, setFocusedField] = useState<SmsEditableField>(null);
@@ -778,13 +780,14 @@ function SmsReviewEditFields({
             color={palette.blue[500]}
           />
           <Text className="ms-2 flex-1 text-xs font-medium text-blue-500">
-            {formatLocalizedConversionPreview({
-              amount: state.amount,
-              fromCurrency: state.editedTransactionCurrency,
-              toCurrency: state.selectedAccountCurrency,
-              rates: latestRates,
-              language: i18n.language === "ar" ? "ar" : "en",
-            })}
+            {formatSelectedSnapshotConversionPreview(
+              state.amount,
+              state.editedTransactionCurrency,
+              state.selectedAccountCurrency,
+              selectedSnapshot,
+              t,
+              i18n.resolvedLanguage ?? i18n.language
+            )}
           </Text>
         </View>
       )}

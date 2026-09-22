@@ -191,10 +191,12 @@ function UpcomingPaymentsComponent({
           <View className="flex-row items-center justify-between mt-3 pt-3 border-t border-slate-200 dark:border-slate-700">
             <Text className="stat-label">{t("total_due")}</Text>
             <Text className="text-base font-bold text-nileGreen-500">
-              {formatLocalizedMoneyAmount({
-                amount: totalDueFiltered,
-                currency: preferredCurrency,
-              })}
+              {totalDueFiltered === null
+                ? "—"
+                : formatLocalizedMoneyAmount({
+                    amount: totalDueFiltered,
+                    currency: preferredCurrency,
+                  })}
             </Text>
           </View>
         </>
