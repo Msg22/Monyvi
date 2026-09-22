@@ -92,13 +92,12 @@ export function MetalsHeroCard({
   });
 
   const formattedProfitLoss = formatLocalizedMoneyAmount({
-    amount: Math.abs(profitLossAmount),
+    amount: profitLossAmount,
     currency,
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
+    signDisplay: "always",
   });
-
-  const sign = profitLossAmount >= 0 ? "+" : "-";
   const percentText = `${Math.abs(profitLossPercent).toFixed(1)}%`;
   const plColor = getProfitLossColor(profitLossAmount, isDark);
   const plIcon = getProfitLossIcon(profitLossAmount);
@@ -133,7 +132,6 @@ export function MetalsHeroCard({
             className="ms-1 text-sm font-semibold"
             style={{ color: plColor }}
           >
-            {sign}
             {formattedProfitLoss} ({percentText})
           </Text>
 

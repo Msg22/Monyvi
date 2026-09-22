@@ -132,11 +132,11 @@ Arabic immediately. Selecting English should do the same in English.
 - What happens with mixed-direction content (e.g., English brand names or
   numbers embedded in Arabic text)? The app should handle bidirectional text
   correctly using Unicode BiDi rules.
-- What happens with numeric formatting? Numbers should remain in Western Arabic
-  numerals (1, 2, 3) as commonly used in Egyptian financial contexts, not
-  Eastern Arabic numerals (١، ٢، ٣).
-- What happens with currency formatting in Arabic mode? Currency symbols and
-  amounts should remain consistent with existing app formatting.
+- What happens with monetary numeric formatting? Arabic user-visible monetary
+  amounts use Arabic-Indic digits (٠، ١، ٢), `ar-EG` grouping (`٬`), and decimal
+  (`٫`) separators. Editable financial inputs retain their Latin-digit grammar.
+- What happens with currency formatting in Arabic mode? The localized amount is
+  followed by its fixed Arabic currency label; English formatting is unchanged.
 - What happens when the user's device language changes while the app is running?
   The app should respect the user's in-app preference over device language once
   explicitly set.
@@ -258,5 +258,5 @@ Arabic immediately. Selecting English should do the same in English.
 - Voice command recognition improvements for Arabic (handled separately).
 - Translation of user-generated content (transaction notes, account names).
 - Server-side localization or dynamic translation loading.
-- Eastern Arabic numeral support (١٢٣).
+- Localization of non-monetary numeric values such as generic counts.
 - Dialect-specific or colloquial Arabic variations.

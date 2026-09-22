@@ -10,7 +10,8 @@
   "gram": "Gram",
   "kilogram": "Kilogram",
   "ounce": "Ounce",
-  "price_per_gram": "Price per gram",
+  "price_per_gram": "{{amount}}/g",
+  "price_per_ounce": "{{amount}}/oz",
   "total_value": "Total value",
   "holdings": "Holdings",
   "my_metals": "My Metals",
@@ -66,7 +67,12 @@
   "karat_label": "{{karat}} Karat",
   "price_gram_with_symbol": "{{currencySymbol}} {{price}}/g",
   "metal": { "gold": "Gold", "silver": "Silver", "unknown": "Metal" },
-  "form": { "bar": "Bar", "coin": "Coin", "jewelry": "Jewelry", "unknown": "Other form" },
+  "form": {
+    "bar": "Bar",
+    "coin": "Coin",
+    "jewelry": "Jewelry",
+    "unknown": "Other form"
+  },
   "status": { "active": "Active", "sold": "Sold", "disposed": "Disposed" },
   "rate": {
     "fresh": "Current",

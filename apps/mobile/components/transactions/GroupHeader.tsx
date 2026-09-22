@@ -51,19 +51,19 @@ export const GroupHeader = React.memo(function GroupHeader({
             <View className="flex-row items-center gap-2 mb-0.5">
               {income > 0 && (
                 <Text className="text-[11px] text-nileGreen-600 dark:text-nileGreen-400 font-semibold">
-                  +
                   {formatLocalizedMoneyAmount({
                     amount: income,
                     currency: currencyCode,
+                    signDisplay: "always",
                   })}
                 </Text>
               )}
               {expense > 0 && (
                 <Text className="text-[11px] text-red-500 dark:text-red-400 font-semibold">
-                  -
                   {formatLocalizedMoneyAmount({
-                    amount: expense,
+                    amount: -expense,
                     currency: currencyCode,
+                    signDisplay: "always",
                   })}
                 </Text>
               )}

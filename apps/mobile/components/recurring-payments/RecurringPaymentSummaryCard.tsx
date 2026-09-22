@@ -42,11 +42,13 @@ export function RecurringPaymentSummaryCard({
     maxFractionDigits: getCurrencyPrecision(currency),
   });
   const displayAmount = parsedAmount.success ? parsedAmount.amount : 0;
+  const signedAmount =
+    displayAmount === 0 ? 0 : isIncome ? displayAmount : -displayAmount;
   const formattedAmount = formatLocalizedMoneyAmount({
-    amount: displayAmount,
+    amount: signedAmount,
     currency,
+    signDisplay: "exceptZero",
   });
-  const amountSign = displayAmount === 0 ? "" : isIncome ? "+" : "-";
   const iconConfig = category ? getCategoryIconConfig(category) : null;
   const statusClasses = getStatusPillClasses(statusKind);
 
@@ -109,7 +111,6 @@ export function RecurringPaymentSummaryCard({
               isIncome ? "text-nileGreen-500" : "text-red-500"
             }`}
           >
-            {amountSign}
             {formattedAmount}
           </Text>
         </View>

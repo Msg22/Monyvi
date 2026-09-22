@@ -1,7 +1,13 @@
 import i18next, { t } from "i18next";
 
 import type { CurrencyType, MarketRate } from "@monyvi/db";
-import { convertCurrency, getCurrencyRate } from "@monyvi/logic";
+import {
+  convertCurrency,
+  getCurrencyPrecision,
+  getCurrencyRate,
+  MAX_TRANSACTION_AMOUNT,
+  parseStrictAmountInput,
+} from "@monyvi/logic";
 
 import type { SupportedLanguage } from "@/i18n/translation-schema";
 import { formatLocalizedMoneyAmount } from "@/utils/localized-money-display";
@@ -29,8 +35,7 @@ export function formatLocalizedConversionPreview({
     return translateForLanguage("exchange_rate_unavailable", resolvedLanguage);
   }
 
-  const parsedAmount = typeof amount === "string" ? parseFloat(amount) : amount;
-  const safeAmount = Number.isFinite(parsedAmount) ? parsedAmount : 0;
+  const safeAmount = parseConversionAmount(amount, fromCurrency);
 
   if (fromCurrency === toCurrency) {
     return formatFixedAmount(safeAmount, toCurrency, resolvedLanguage);
@@ -127,14 +132,30 @@ function formatFixedAmount(
   currency: CurrencyType,
   language: SupportedLanguage
 ): string {
+  const fractionDigits = getCurrencyPrecision(currency);
   return formatLocalizedMoneyAmount({
     amount,
     currency,
     language,
     englishPresentation: "code-suffix",
-    minimumFractionDigits: PRIMARY_RATE_FRACTION_DIGITS,
-    maximumFractionDigits: PRIMARY_RATE_FRACTION_DIGITS,
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits,
   });
+}
+
+function parseConversionAmount(
+  amount: number | string,
+  currency: CurrencyType
+): number {
+  if (typeof amount === "number") {
+    return Number.isFinite(amount) ? amount : 0;
+  }
+
+  const parsed = parseStrictAmountInput(amount, {
+    maxAmount: MAX_TRANSACTION_AMOUNT,
+    maxFractionDigits: getCurrencyPrecision(currency),
+  });
+  return parsed.success ? parsed.amount : 0;
 }
 
 function translateForLanguage(

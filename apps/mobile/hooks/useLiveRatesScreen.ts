@@ -20,10 +20,7 @@ import {
   getCurrencyName,
 } from "@/utils/currency-localization";
 import { formatTimeAgo } from "@/utils/dateHelpers";
-import {
-  formatLocalizedMoneyNumber,
-  getCurrencyAmountLabel,
-} from "@/utils/localized-money-display";
+import { formatLocalizedMoneyAmount } from "@/utils/localized-money-display";
 import type { CurrencyType } from "@monyvi/db";
 import {
   type CurrencyInfo,
@@ -74,7 +71,6 @@ interface MetalDisplayData {
   readonly silverTrendPercent: number;
   readonly platinumPrice: string;
   readonly platinumTrendPercent: number;
-  readonly currencySymbol: string;
 }
 
 interface CurrencyDisplayItem {
@@ -170,13 +166,6 @@ export function useLiveRatesScreen(): UseLiveRatesScreenResult {
   // Metal data derivation
   // ---------------------------------------------------------------------------
 
-  const currencySymbol = useMemo((): string => {
-    if (language === "ar") {
-      return getCurrencyAmountLabel(preferredCurrency, language);
-    }
-    return CURRENCY_INFO_MAP[preferredCurrency]?.symbol ?? preferredCurrency;
-  }, [language, preferredCurrency]);
-
   const metals = useMemo((): MetalDisplayData => {
     if (!latestRates) {
       return {
@@ -188,7 +177,6 @@ export function useLiveRatesScreen(): UseLiveRatesScreenResult {
         silverTrendPercent: 0,
         platinumPrice: "—",
         platinumTrendPercent: 0,
-        currencySymbol,
       };
     }
 
@@ -221,21 +209,21 @@ export function useLiveRatesScreen(): UseLiveRatesScreenResult {
       : null;
 
     return {
-      price24k: formatLocalizedMoneyNumber({
+      price24k: formatLocalizedMoneyAmount({
         amount: gold24k,
         currency: preferredCurrency,
         language,
         minimumFractionDigits: 0,
         maximumFractionDigits: 2,
       }),
-      price21k: formatLocalizedMoneyNumber({
+      price21k: formatLocalizedMoneyAmount({
         amount: gold21k,
         currency: preferredCurrency,
         language,
         minimumFractionDigits: 0,
         maximumFractionDigits: 2,
       }),
-      price18k: formatLocalizedMoneyNumber({
+      price18k: formatLocalizedMoneyAmount({
         amount: gold18k,
         currency: preferredCurrency,
         language,
@@ -243,7 +231,7 @@ export function useLiveRatesScreen(): UseLiveRatesScreenResult {
         maximumFractionDigits: 2,
       }),
       goldTrendPercent: calculateTrendPercent(gold24k, prevGold24k),
-      silverPrice: formatLocalizedMoneyNumber({
+      silverPrice: formatLocalizedMoneyAmount({
         amount: silver,
         currency: preferredCurrency,
         language,
@@ -251,7 +239,7 @@ export function useLiveRatesScreen(): UseLiveRatesScreenResult {
         maximumFractionDigits: 2,
       }),
       silverTrendPercent: calculateTrendPercent(silver, prevSilver),
-      platinumPrice: formatLocalizedMoneyNumber({
+      platinumPrice: formatLocalizedMoneyAmount({
         amount: platinum,
         currency: preferredCurrency,
         language,
@@ -259,15 +247,8 @@ export function useLiveRatesScreen(): UseLiveRatesScreenResult {
         maximumFractionDigits: 2,
       }),
       platinumTrendPercent: calculateTrendPercent(platinum, prevPlatinum),
-      currencySymbol,
     };
-  }, [
-    latestRates,
-    previousDayRate,
-    preferredCurrency,
-    currencySymbol,
-    language,
-  ]);
+  }, [latestRates, previousDayRate, preferredCurrency, language]);
 
   // ---------------------------------------------------------------------------
   // Currency data derivation
@@ -294,13 +275,13 @@ export function useLiveRatesScreen(): UseLiveRatesScreenResult {
         code: info.code,
         name: getCurrencyName(info.code),
         flag: info.flag,
-        rate: `${formatLocalizedMoneyNumber({
+        rate: formatLocalizedMoneyAmount({
           amount: rate,
           currency: preferredCurrency,
           language,
           minimumFractionDigits: 0,
           maximumFractionDigits: 2,
-        })} ${currencySymbol}`,
+        }),
         changePercent: calculateTrendPercent(rate, prevRate),
       };
     });
@@ -308,7 +289,6 @@ export function useLiveRatesScreen(): UseLiveRatesScreenResult {
     latestRates,
     previousDayRate,
     preferredCurrency,
-    currencySymbol,
     i18n.language,
     language,
   ]);

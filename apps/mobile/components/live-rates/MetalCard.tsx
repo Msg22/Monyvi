@@ -17,6 +17,7 @@ import { palette } from "@/constants/colors";
 import { FontAwesome5, MaterialIcons } from "@expo/vector-icons";
 import React from "react";
 import { Text, View } from "react-native";
+import { useTranslation } from "react-i18next";
 
 // =============================================================================
 // Types
@@ -27,7 +28,6 @@ interface MetalCardProps {
   readonly price: string;
   readonly trendPercent: number;
   readonly borderColor: string;
-  readonly currencySymbol: string;
 }
 
 // =============================================================================
@@ -39,8 +39,8 @@ export function MetalCard({
   price,
   trendPercent,
   borderColor,
-  currencySymbol,
 }: MetalCardProps): React.JSX.Element {
+  const { t } = useTranslation("metals");
   const isUp = trendPercent > 0;
   const isFlat = trendPercent === 0;
   const trendColor = isFlat
@@ -70,7 +70,7 @@ export function MetalCard({
 
       {/* Price */}
       <Text className="text-base font-bold text-white">
-        {currencySymbol} {price}/g
+        {t("price_per_gram", { amount: price })}
       </Text>
 
       {/* Trend */}

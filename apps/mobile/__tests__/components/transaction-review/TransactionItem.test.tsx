@@ -41,10 +41,23 @@ jest.mock("@/context/LocaleContext", () => ({
 
 jest.mock("react-i18next", () => ({
   useTranslation: (): {
-    readonly t: (key: string, options?: { readonly name?: string }) => string;
+    readonly t: (
+      key: string,
+      options?: Readonly<Record<string, string>>
+    ) => string;
   } => ({
-    t: (key: string, options?: { readonly name?: string }): string => {
+    t: (key: string, options?: Readonly<Record<string, string>>): string => {
       if (key === "expense") return "localized-expense";
+      if (key === "transaction_review_accessibility") {
+        return [
+          options?.origin,
+          options?.type,
+          options?.amount,
+          options?.counterparty,
+          options?.category,
+          options?.account,
+        ].join(" | ");
+      }
       return options?.name ? `${key}:${options.name}` : key;
     },
   }),
@@ -243,12 +256,12 @@ describe("TransactionItem", () => {
     expect(onToggleSelect).toHaveBeenCalledWith(0);
   });
 
-  it("localizes the transaction type in the edit accessibility label", () => {
+  it("localizes the complete edit accessibility sentence with named values", () => {
     renderItem();
 
     expect(screen.getByTestId("transaction-review-edit-action")).toHaveProp(
       "accessibilityLabel",
-      expect.stringContaining("localized-expense")
+      "QNB | localized-expense | ١٢٥ جنيه مصري | Fixture Shop | Food | QNB Account"
     );
   });
 

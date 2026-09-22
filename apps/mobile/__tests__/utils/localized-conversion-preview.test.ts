@@ -8,10 +8,13 @@ import enCommon from "@/locales/en/common.json";
 import enTransactions from "@/locales/en/transactions.json";
 import { formatLocalizedConversionPreview } from "@/utils/localized-conversion-preview";
 
-function createStandardRates(): MarketRate {
+function createStandardRates(
+  overrides: Partial<Pick<MarketRate, "btcUsd">> = {}
+): MarketRate {
   return {
     egpUsd: 1 / 49.7,
     eurUsd: 1 / 0.92,
+    ...overrides,
   } as unknown as MarketRate;
 }
 
@@ -87,6 +90,34 @@ describe("localized conversion preview", () => {
         language: "ar",
       })
     ).toBe("سعر الصرف غير متاح");
+  });
+
+  it("rejects malformed and out-of-range canonical amount strings", () => {
+    for (const amount of ["100abc", "1e3", "1,00", "1000000000.01"]) {
+      expect(
+        formatLocalizedConversionPreview({
+          amount,
+          fromCurrency: "EGP",
+          toCurrency: "EGP",
+          rates: STANDARD_RATES,
+          language: "en",
+        })
+      ).toBe("0.00 EGP");
+    }
+  });
+
+  it("preserves the target currency precision for BTC previews", () => {
+    const rates = createStandardRates({ btcUsd: 1000 });
+
+    expect(
+      formatLocalizedConversionPreview({
+        amount: "1",
+        fromCurrency: "USD",
+        toCurrency: "BTC",
+        rates,
+        language: "ar",
+      })
+    ).toBe("≈ ٠٫٠٠١٠٠٠٠٠ بيتكوين بسعر ١ بيتكوين = ١٬٠٠٠٫٠٠ دولار أمريكي");
   });
 
   it("recomputes from the active runtime language", async () => {

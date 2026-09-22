@@ -21,8 +21,8 @@ import { useTranslation } from "react-i18next";
 import { formatTimeAgo } from "@/utils/dateHelpers";
 import type { SupportedLanguage } from "@/i18n/translation-schema";
 import {
+  formatLocalizedMoneyAmount,
   formatLocalizedMoneyNumber,
-  getCurrencyAmountLabel,
 } from "@/utils/localized-money-display";
 
 interface Rate {
@@ -79,21 +79,13 @@ function formatDashboardRateAmount(
   language: SupportedLanguage,
   fractionDigits: number
 ): string {
-  const formattedNumber = formatLocalizedMoneyNumber({
+  return formatLocalizedMoneyAmount({
     amount,
     currency,
     language,
     minimumFractionDigits: fractionDigits,
     maximumFractionDigits: fractionDigits,
   });
-  const currencyLabel =
-    language === "ar"
-      ? getCurrencyAmountLabel(currency, language)
-      : (CURRENCY_INFO_MAP[currency]?.symbol ?? currency);
-
-  return language === "ar"
-    ? `${formattedNumber} ${currencyLabel}`
-    : `${currencyLabel} ${formattedNumber}`;
 }
 
 /**
@@ -136,7 +128,7 @@ function buildGoldRate(
   previousDayRate: MarketRate | null,
   preferredCurrency: CurrencyType,
   language: SupportedLanguage,
-  t: (key: string) => string
+  t: (key: string, options?: { readonly amount: string }) => string
 ): Rate {
   const goldInPreferred = getMetalPrice("GOLD", latestRates, preferredCurrency);
   const prevGoldInPreferred = previousDayRate
@@ -146,12 +138,14 @@ function buildGoldRate(
   return {
     id: "2",
     label: t("gold_24k_pill"),
-    value: `${formatDashboardRateAmount(
-      Math.round(goldInPreferred),
-      preferredCurrency,
-      language,
-      0
-    )}/g`,
+    value: t("price_per_gram", {
+      amount: formatDashboardRateAmount(
+        Math.round(goldInPreferred),
+        preferredCurrency,
+        language,
+        0
+      ),
+    }),
     trend: calculateTrend(goldInPreferred, prevGoldInPreferred),
     type: "gold",
   };
@@ -165,7 +159,7 @@ function buildSilverRate(
   previousDayRate: MarketRate | null,
   preferredCurrency: CurrencyType,
   language: SupportedLanguage,
-  t: (key: string) => string
+  t: (key: string, options?: { readonly amount: string }) => string
 ): Rate {
   const silverInPreferred = getMetalPrice(
     "SILVER",
@@ -179,12 +173,14 @@ function buildSilverRate(
   return {
     id: "3",
     label: t("silver_pill"),
-    value: `${formatDashboardRateAmount(
-      silverInPreferred,
-      preferredCurrency,
-      language,
-      2
-    )}/g`,
+    value: t("price_per_gram", {
+      amount: formatDashboardRateAmount(
+        silverInPreferred,
+        preferredCurrency,
+        language,
+        2
+      ),
+    }),
     trend: calculateTrend(silverInPreferred, prevSilverInPreferred),
     type: "silver",
   };
@@ -199,7 +195,7 @@ function buildRatesDisplay(
   previousDayRate: MarketRate | null,
   preferredCurrency: CurrencyType,
   language: SupportedLanguage,
-  t: (key: string) => string
+  t: (key: string, options?: { readonly amount: string }) => string
 ): Rate[] {
   if (!latestRates) {
     return [];
@@ -212,13 +208,7 @@ function buildRatesDisplay(
       preferredCurrency,
       language
     ),
-    buildGoldRate(
-      latestRates,
-      previousDayRate,
-      preferredCurrency,
-      language,
-      t
-    ),
+    buildGoldRate(latestRates, previousDayRate, preferredCurrency, language, t),
     buildSilverRate(
       latestRates,
       previousDayRate,

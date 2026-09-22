@@ -86,6 +86,12 @@ export function LiveRatesStrip({
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
+  const goldPricePerOunce = t("price_per_ounce", {
+    amount: formattedGoldPrice,
+  });
+  const silverPricePerGram = t("price_per_gram", {
+    amount: formattedSilverPrice,
+  });
 
   const accessibilityLabel = t("live_rates_accessibility", {
     goldPrice: formattedGoldPrice,
@@ -111,7 +117,7 @@ export function LiveRatesStrip({
           {t("gold_24k_label")}
         </Text>
         <Text className="text-xs font-bold text-slate-800 dark:text-white me-1">
-          {formattedGoldPrice}/oz
+          {goldPricePerOunce}
         </Text>
         <Ionicons
           name={getChangeIcon(goldChangePercent)}
@@ -130,7 +136,7 @@ export function LiveRatesStrip({
           {t("silver_label")}
         </Text>
         <Text className="text-xs font-bold text-slate-800 dark:text-white me-1">
-          {formattedSilverPrice}/g
+          {silverPricePerGram}
         </Text>
         <Ionicons
           name={getChangeIcon(silverChangePercent)}

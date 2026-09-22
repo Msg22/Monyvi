@@ -175,6 +175,13 @@ interface TransactionsTranslations {
 
   // SMS scanning
   readonly sms_review_title: string;
+  readonly transaction_review_accessibility: string;
+  readonly notification_detected_title: string;
+  readonly notification_body: string;
+  readonly notification_body_with_counterparty: string;
+  readonly notification_transaction_created_title: string;
+  readonly notification_transaction_needs_account_title: string;
+  readonly notification_no_account_configured: string;
   readonly sms_scan_title: string;
   readonly sms_scan_instructions: string;
   readonly sms_scan_scope_last_30_days: string;
@@ -796,6 +803,7 @@ interface MetalsTranslations {
   readonly kilogram: string;
   readonly ounce: string;
   readonly price_per_gram: string;
+  readonly price_per_ounce: string;
   readonly total_value: string;
   readonly holdings: string;
   readonly my_metals: string;

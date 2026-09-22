@@ -10,7 +10,8 @@
   "gram": "غرام",
   "kilogram": "كيلوغرام",
   "ounce": "أوقية",
-  "price_per_gram": "السعر لكل غرام",
+  "price_per_gram": "{{amount}}/غرام",
+  "price_per_ounce": "{{amount}}/أوقية",
   "total_value": "إجمالي القيمة",
   "holdings": "المقتنيات",
   "my_metals": "معادني",
@@ -66,8 +67,17 @@
   "karat_label": "عيار {{karat}}",
   "price_gram_with_symbol": "{{price}} {{currencySymbol}}/غرام",
   "metal": { "gold": "ذهب", "silver": "فضة", "unknown": "معدن" },
-  "form": { "bar": "سبيكة", "coin": "عملة", "jewelry": "مجوهرات", "unknown": "شكل آخر" },
-  "status": { "active": "نشطة", "sold": "مباعة", "disposed": "تم التخلّص منها" },
+  "form": {
+    "bar": "سبيكة",
+    "coin": "عملة",
+    "jewelry": "مجوهرات",
+    "unknown": "شكل آخر"
+  },
+  "status": {
+    "active": "نشطة",
+    "sold": "مباعة",
+    "disposed": "تم التخلّص منها"
+  },
   "rate": {
     "fresh": "حديث",
     "stale": "قديم",

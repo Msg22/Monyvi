@@ -11,6 +11,8 @@ const mockHandleDetectedSms = jest.fn<
   Promise<void>,
   [ParsedSmsTransaction, string]
 >();
+const mockInitI18n = jest.fn<Promise<void>, []>(() => Promise.resolve());
+const mockI18n = { isInitialized: true };
 
 jest.mock("react-native", () => ({
   AppRegistry: {
@@ -19,6 +21,12 @@ jest.mock("react-native", () => ({
       taskProvider: () => () => Promise<void>
     ): void => mockRegisterHeadlessTask(taskName, taskProvider),
   },
+}));
+
+jest.mock("@/i18n", () => ({
+  __esModule: true,
+  initI18n: (): Promise<void> => mockInitI18n(),
+  isI18nInitialized: (): boolean => mockI18n.isInitialized,
 }));
 
 jest.mock("@/services/sms-live-processor", () => ({
@@ -66,6 +74,7 @@ function getRegisteredTask(): (taskData: {
 describe("sms-headless-task", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockI18n.isInitialized = true;
   });
 
   it("delegates killed-app SMS processing to the shared AI live processor", async () => {
@@ -91,6 +100,33 @@ describe("sms-headless-task", () => {
       deliveryMode: "headless",
     });
     expect(mockHandleDetectedSms).toHaveBeenCalledWith(parsed, "user-1");
+  });
+
+  it("initializes the persisted app locale before killed-app SMS handling", async () => {
+    mockI18n.isInitialized = false;
+    mockInitI18n.mockImplementationOnce(() => {
+      mockI18n.isInitialized = true;
+      return Promise.resolve();
+    });
+    const parsed = createParsedTransaction();
+    mockProcessLiveSmsEvent.mockResolvedValue({
+      status: "parsed",
+      smsFingerprint: "hash-headless",
+      userId: "user-1",
+      transactions: [parsed],
+    });
+    const task = getRegisteredTask();
+
+    await task({
+      sender: "NBE",
+      body: "Purchase EGP 7.25 at DOUBLE CONFIRM TEST using card ending 1234",
+      timestamp: 1778414400000,
+    });
+
+    expect(mockInitI18n).toHaveBeenCalledTimes(1);
+    expect(mockInitI18n.mock.invocationCallOrder[0]).toBeLessThan(
+      mockProcessLiveSmsEvent.mock.invocationCallOrder[0]
+    );
   });
 
   it("throws a HeadlessJsTaskError when AI parsing should be retried", async () => {

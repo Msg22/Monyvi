@@ -100,6 +100,18 @@ describe("useLiveRatesScreen localization", () => {
     });
   });
 
+  it("returns complete Arabic monetary strings for metal prices", async () => {
+    await prepareI18n("ar");
+    const { result } = renderHook(() => useLiveRatesScreen());
+
+    await waitFor(() => {
+      expect(result.current.metals.price24k).toBe("٠ جنيه مصري");
+      expect(result.current.metals.silverPrice).toBe("٠ جنيه مصري");
+      expect(result.current.metals.platinumPrice).toBe("٠ جنيه مصري");
+      expect(result.current.metals).not.toHaveProperty("currencySymbol");
+    });
+  });
+
   it("finds a currency by localized name, English name, and ISO code", async () => {
     await prepareI18n("ar");
     const { result } = renderHook(() => useLiveRatesScreen());

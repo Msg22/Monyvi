@@ -9,6 +9,7 @@
  */
 
 import { AppRegistry } from "react-native";
+import { initI18n, isI18nInitialized } from "@/i18n";
 import { handleDetectedSms } from "./sms-live-detection-handler";
 import { processLiveSmsEvent } from "./sms-live-processor";
 
@@ -39,6 +40,9 @@ function createHeadlessJsRetryError(): Error {
  * Runs without UI when the native BroadcastReceiver starts the service.
  */
 async function smsDetectionTask(taskData: SmsTaskData): Promise<void> {
+  if (!isI18nInitialized()) {
+    await initI18n();
+  }
   const result = await processLiveSmsEvent({
     sender: taskData.sender,
     body: taskData.body,

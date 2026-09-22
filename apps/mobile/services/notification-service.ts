@@ -17,10 +17,12 @@
  */
 
 import type * as ExpoNotifications from "expo-notifications";
+import { t } from "i18next";
 import { Linking, Platform } from "react-native";
 import type { CurrencyType } from "@monyvi/db";
 import type { ParsedSmsTransaction } from "@monyvi/logic";
 import { getCurrentLanguage } from "@/i18n/changeLanguage";
+import type { SupportedLanguage } from "@/i18n/translation-schema";
 import { formatLocalizedMoneyAmount } from "@/utils/localized-money-display";
 import { getRequiredCurrentUserId } from "@/services/user-data-access";
 import { logger } from "@/utils/logger";
@@ -404,15 +406,63 @@ async function dismissDeliveredNotification(
 /**
  * Format a currency amount for display in notification.
  */
-function formatAmount(amount: number, currency: CurrencyType): string {
+function formatAmount(
+  amount: number,
+  currency: CurrencyType,
+  language: SupportedLanguage
+): string {
   return formatLocalizedMoneyAmount({
     amount,
     currency,
-    language: getCurrentLanguage(),
+    language,
     englishPresentation: "code-prefix",
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
+}
+
+type NotificationTranslationKey =
+  | "expense"
+  | "income"
+  | "notification_detected_title"
+  | "notification_body"
+  | "notification_body_with_counterparty"
+  | "notification_transaction_created_title"
+  | "notification_transaction_needs_account_title"
+  | "notification_no_account_configured";
+
+function translateNotification(
+  key: NotificationTranslationKey,
+  language: SupportedLanguage,
+  values?: Readonly<Record<string, string>>
+): string {
+  return t(key, {
+    ns: "transactions",
+    lng: language,
+    fallbackLng: false,
+    ...values,
+  });
+}
+
+function buildNotificationBody(
+  parsed: ParsedSmsTransaction,
+  resolvedAccountName: string,
+  language: SupportedLanguage
+): string {
+  const values = {
+    amount: formatAmount(parsed.amount, parsed.currency, language),
+    sender: parsed.senderDisplayName,
+    account: resolvedAccountName,
+    counterparty: parsed.counterparty ?? "",
+  };
+
+  return translateNotification(
+    parsed.counterparty
+      ? "notification_body_with_counterparty"
+      : "notification_body",
+    language,
+    values
+  );
 }
 
 function serializeTransactionData(
@@ -451,18 +501,18 @@ export async function showTransactionNotification(
     return;
   }
 
+  const language = getCurrentLanguage();
   const isExpense = parsed.type === "EXPENSE";
   const typeEmoji = isExpense ? "💸" : "💰";
-  const typeLabel = isExpense ? "Expense" : "Income";
-
-  const title = `${typeEmoji} ${typeLabel} Detected`;
-  const body = [
-    `${formatAmount(parsed.amount, parsed.currency)} from ${parsed.senderDisplayName}`,
-    parsed.counterparty ? `To: ${parsed.counterparty}` : undefined,
-    `Account: ${resolvedAccountName}`,
-  ]
-    .filter(Boolean)
-    .join("\n");
+  const typeLabel = translateNotification(
+    isExpense ? "expense" : "income",
+    language
+  );
+  const title = translateNotification("notification_detected_title", language, {
+    emoji: typeEmoji,
+    type: typeLabel,
+  });
+  const body = buildNotificationBody(parsed, resolvedAccountName, language);
 
   const payload: TransactionNotificationPayload = {
     type: "sms_transaction",
@@ -504,7 +554,7 @@ export async function showTransactionCreatedNotification(
     resolvedAccountName,
     initiatingUserId,
     identifierPrefix: "sms-transaction-created",
-    title: "Transaction created",
+    titleKey: "notification_transaction_created_title",
     type: "sms_transaction_created",
   });
 }
@@ -519,10 +569,10 @@ export async function showTransactionNeedsAccountNotification(
 ): Promise<void> {
   await showInfoOnlySmsTransactionNotification({
     parsed,
-    resolvedAccountName: "No Account Configured",
+    resolvedAccountName: null,
     initiatingUserId,
     identifierPrefix: "sms-transaction-info",
-    title: "Transaction needs an account",
+    titleKey: "notification_transaction_needs_account_title",
     type: "sms_transaction_info",
   });
 }
@@ -532,14 +582,16 @@ async function showInfoOnlySmsTransactionNotification({
   resolvedAccountName,
   initiatingUserId,
   identifierPrefix,
-  title,
+  titleKey,
   type,
 }: {
   readonly parsed: ParsedSmsTransaction;
-  readonly resolvedAccountName: string;
+  readonly resolvedAccountName: string | null;
   readonly initiatingUserId: string;
   readonly identifierPrefix: string;
-  readonly title: string;
+  readonly titleKey:
+    | "notification_transaction_created_title"
+    | "notification_transaction_needs_account_title";
   readonly type: TransactionInfoNotificationPayload["type"];
 }): Promise<void> {
   await initializeNotifications();
@@ -552,17 +604,16 @@ async function showInfoOnlySmsTransactionNotification({
     return;
   }
 
-  const body = [
-    `${formatAmount(parsed.amount, parsed.currency)} from ${parsed.senderDisplayName}`,
-    parsed.counterparty ? `To: ${parsed.counterparty}` : undefined,
-    `Account: ${resolvedAccountName}`,
-  ]
-    .filter(Boolean)
-    .join("\n");
+  const language = getCurrentLanguage();
+  const displayAccountName =
+    resolvedAccountName ??
+    translateNotification("notification_no_account_configured", language);
+  const title = translateNotification(titleKey, language);
+  const body = buildNotificationBody(parsed, displayAccountName, language);
   const payload: TransactionInfoNotificationPayload = {
     type,
     transactionData: serializeTransactionData(parsed),
-    resolvedAccountName,
+    resolvedAccountName: displayAccountName,
   };
 
   try {

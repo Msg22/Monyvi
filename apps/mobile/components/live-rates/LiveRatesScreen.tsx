@@ -100,7 +100,6 @@ export function LiveRatesScreen(): React.JSX.Element {
               price21k={metals.price21k}
               price18k={metals.price18k}
               trendPercent={metals.goldTrendPercent}
-              currencySymbol={metals.currencySymbol}
             />
 
             {/* Silver + Platinum side-by-side */}
@@ -110,14 +109,12 @@ export function LiveRatesScreen(): React.JSX.Element {
                 price={metals.silverPrice}
                 trendPercent={metals.silverTrendPercent}
                 borderColor={palette.silver[500]}
-                currencySymbol={metals.currencySymbol}
               />
               <MetalCard
                 metalName={t("platinum")}
                 price={metals.platinumPrice}
                 trendPercent={metals.platinumTrendPercent}
                 borderColor={palette.slate[400]}
-                currencySymbol={metals.currencySymbol}
               />
             </View>
           </View>

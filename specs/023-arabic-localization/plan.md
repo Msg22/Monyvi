@@ -229,7 +229,8 @@ continues using Inter. No system font fallback visible.
    visual layout (FR-016)
 2. Add `accessibilityLanguage="ar"` hints where needed
 3. Test bidirectional text (Arabic with embedded English brand names, numbers)
-4. Verify Western Arabic numerals (0-9) in financial displays (FR-009)
+4. Verify Arabic-Indic digits and `ar-EG` separators in Arabic financial
+   displays (FR-009)
 5. Test missing translation key fallback → English (FR-006)
 6. Test device language change while app is running → in-app preference wins
 7. Verify date formatting shows Arabic month names in Arabic mode

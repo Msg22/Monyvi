@@ -48,16 +48,40 @@ describe("localized money display architecture", () => {
     const metalsRates = readMobileSource(
       "components/metals/LiveRatesStrip.tsx"
     );
+    const goldHero = readMobileSource("components/live-rates/GoldHeroCard.tsx");
+    const metalCard = readMobileSource("components/live-rates/MetalCard.tsx");
 
-    expect(liveRatesHook).toContain("formatLocalizedMoneyNumber");
-    expect(liveRatesHook).toContain("getCurrencyAmountLabel");
-    expect(dashboardRates).toContain("formatLocalizedMoneyNumber");
-    expect(dashboardRates).not.toMatch(/\.toLocaleString\(|\.toFixed\(/u);
+    expect(liveRatesHook).toContain("formatLocalizedMoneyAmount");
+    expect(liveRatesHook).not.toContain("getCurrencyAmountLabel");
+    expect(dashboardRates).toContain("formatLocalizedMoneyAmount");
+    expect(dashboardRates).toContain("price_per_gram");
+    expect(dashboardRates).not.toMatch(/\.toLocaleString\(|\.toFixed\(|\/g/u);
     expect(transferFields).toContain("formatLocalizedMoneyAmount");
     expect(transferFields).not.toContain("exchangeRate.toFixed");
     expect(metalsRates).toContain("formatLocalizedMoneyAmount");
-    expect(metalsRates).not.toContain("goldPerOz.toFixed");
-    expect(metalsRates).not.toContain("silverPricePerGramUsd.toFixed");
+    expect(metalsRates).toContain("price_per_ounce");
+    expect(metalsRates).toContain("price_per_gram");
+    expect(metalsRates).not.toMatch(
+      /goldPerOz\.toFixed|silverPricePerGramUsd\.toFixed|\/oz|\/g/u
+    );
+    expect(goldHero).toContain("price_per_gram");
+    expect(metalCard).toContain("price_per_gram");
+    expect([goldHero, metalCard].join("\n")).not.toMatch(
+      /\{currencySymbol\}|\/g/u
+    );
+  });
+
+  it("keeps monetary signs inside the localized amount adapter", () => {
+    const sources = [
+      "components/recurring-payments/RecurringPaymentSummaryCard.tsx",
+      "components/metals/MetalsHeroCard.tsx",
+      "components/transactions/GroupHeader.tsx",
+    ].map(readMobileSource);
+
+    for (const source of sources) {
+      expect(source).toContain("signDisplay");
+      expect(source).not.toMatch(/(?:const\s+sign\s*=|\{sign\}|\$\{sign\})/u);
+    }
   });
 
   it("prevents manual currency and amount interpolation in production components", () => {

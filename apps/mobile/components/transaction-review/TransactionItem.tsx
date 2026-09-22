@@ -314,9 +314,14 @@ function TransactionItemInner({
           activeOpacity={0.7}
           accessibilityRole="button"
           accessibilityLanguage={language}
-          accessibilityLabel={`${transaction.originLabel}, ${t(
-            isExpense ? "expense" : "income"
-          )} ${formattedAmount}, ${counterpartyText ?? ""}, ${transaction.categoryDisplayName}${accountName ? `, ${accountName}` : ""}`}
+          accessibilityLabel={t("transaction_review_accessibility", {
+            origin: transaction.originLabel,
+            type: t(isExpense ? "expense" : "income"),
+            amount: formattedAmount,
+            counterparty: counterpartyText ?? "",
+            category: transaction.categoryDisplayName,
+            account: accountName ?? "",
+          })}
           accessibilityHint={t("tap_to_edit_transaction")}
         >
           <InstitutionLogoMark
