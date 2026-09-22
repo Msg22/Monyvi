@@ -55,6 +55,18 @@ describe("localized conversion preview", () => {
     ).toBe("≈ 4,970.00 EGP at rate 1 USD = 49.70 EGP");
   });
 
+  it("preserves standard English placement for prefix-symbol converted amounts", () => {
+    expect(
+      formatLocalizedConversionPreview({
+        amount: 1000,
+        fromCurrency: "EGP",
+        toCurrency: "USD",
+        rates: STANDARD_RATES,
+        language: "en",
+      })
+    ).toBe("≈ $20.12 at rate 1 USD = 49.70 EGP");
+  });
+
   it("localizes both converted amount and rate in Arabic", () => {
     const preview = formatLocalizedConversionPreview({
       amount: 100,

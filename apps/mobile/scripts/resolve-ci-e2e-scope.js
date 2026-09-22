@@ -117,7 +117,7 @@ function getSuitesForFile(filePath) {
   const isTransactionsLocaleFile =
     /locales\/(?:ar|en)\/transactions\.json/i.test(normalized);
   const isLocalizationPath =
-    /localized-money-display|localized-conversion-preview|currency-amount-labels|LocaleContext|locales\/(?:ar|en)\/metals\.json|components\/(?:dashboard\/LiveRates|metals\/(?:LiveRatesStrip|MetalsHeroCard)|live-rates\/|transactions\/GroupHeader|transaction-review\/TransactionItem|recurring-payments\/RecurringPaymentSummaryCard)|services\/(?:notification-service|sms-headless-task)|hooks\/useLiveRatesScreen/i.test(
+    /localized-money-display|localized-conversion-preview|currency-amount-labels|LocaleContext|locales\/(?:ar|en)\/metals\.json|components\/(?:accounts\/AccountCard|dashboard\/(?:LiveRates|TotalNetWorthCard)|metals\/(?:LiveRatesStrip|MetalsHeroCard)|live-rates\/|transactions\/(?:BaseCard|GroupHeader|TransactionCard|TransferCard)|transaction-review\/TransactionItem|recurring-payments\/RecurringPaymentSummaryCard)|services\/(?:notification-service|sms-headless-task)|hooks\/useLiveRatesScreen/i.test(
       normalized
     );
   const isBudgetPath = /budget/i.test(normalized);

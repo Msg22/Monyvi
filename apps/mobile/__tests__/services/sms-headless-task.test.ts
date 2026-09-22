@@ -9,9 +9,13 @@ const mockRegisterHeadlessTask = jest.fn<
 const mockProcessLiveSmsEvent = jest.fn<Promise<unknown>, unknown[]>();
 const mockHandleDetectedSms = jest.fn<
   Promise<void>,
-  [ParsedSmsTransaction, string]
+  [ParsedSmsTransaction, string, "en" | "ar"]
 >();
 const mockInitI18n = jest.fn<Promise<void>, []>(() => Promise.resolve());
+const mockGetPreferredLanguageForUser = jest.fn<
+  Promise<"en" | "ar" | null>,
+  [string]
+>(() => Promise.resolve("en"));
 const mockI18n = { isInitialized: true };
 
 jest.mock("react-native", () => ({
@@ -29,6 +33,13 @@ jest.mock("@/i18n", () => ({
   isI18nInitialized: (): boolean => mockI18n.isInitialized,
 }));
 
+jest.mock("@/services/profile-service", () => ({
+  getPreferredLanguageForUser: (
+    expectedUserId: string
+  ): Promise<"en" | "ar" | null> =>
+    mockGetPreferredLanguageForUser(expectedUserId),
+}));
+
 jest.mock("@/services/sms-live-processor", () => ({
   processLiveSmsEvent: (...args: unknown[]): Promise<unknown> =>
     mockProcessLiveSmsEvent(...args),
@@ -37,8 +48,9 @@ jest.mock("@/services/sms-live-processor", () => ({
 jest.mock("@/services/sms-live-detection-handler", () => ({
   handleDetectedSms: (
     parsed: ParsedSmsTransaction,
-    userId: string
-  ): Promise<void> => mockHandleDetectedSms(parsed, userId),
+    userId: string,
+    language: "en" | "ar"
+  ): Promise<void> => mockHandleDetectedSms(parsed, userId, language),
 }));
 
 import { registerSmsHeadlessTask } from "@/services/sms-headless-task";
@@ -75,6 +87,8 @@ describe("sms-headless-task", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockI18n.isInitialized = true;
+
+    mockGetPreferredLanguageForUser.mockResolvedValue("en");
   });
 
   it("delegates killed-app SMS processing to the shared AI live processor", async () => {
@@ -99,7 +113,8 @@ describe("sms-headless-task", () => {
       timestamp: 1778414400000,
       deliveryMode: "headless",
     });
-    expect(mockHandleDetectedSms).toHaveBeenCalledWith(parsed, "user-1");
+    expect(mockGetPreferredLanguageForUser).toHaveBeenCalledWith("user-1");
+    expect(mockHandleDetectedSms).toHaveBeenCalledWith(parsed, "user-1", "en");
   });
 
   it("initializes the persisted app locale before killed-app SMS handling", async () => {
@@ -127,6 +142,53 @@ describe("sms-headless-task", () => {
     expect(mockInitI18n.mock.invocationCallOrder[0]).toBeLessThan(
       mockProcessLiveSmsEvent.mock.invocationCallOrder[0]
     );
+  });
+
+  it("uses the scoped profile language for killed-app notification handling", async () => {
+    mockGetPreferredLanguageForUser.mockResolvedValueOnce("ar");
+    const parsed = createParsedTransaction();
+    mockProcessLiveSmsEvent.mockResolvedValue({
+      status: "parsed",
+      smsFingerprint: "hash-headless",
+      userId: "user-1",
+      transactions: [parsed],
+    });
+    const task = getRegisteredTask();
+
+    await task({
+      sender: "NBE",
+      body: "Purchase EGP 7.25 at DOUBLE CONFIRM TEST using card ending 1234",
+      timestamp: 1778414400000,
+    });
+
+    expect(mockGetPreferredLanguageForUser).toHaveBeenCalledWith("user-1");
+    expect(mockHandleDetectedSms).toHaveBeenCalledWith(parsed, "user-1", "ar");
+    expect(
+      mockGetPreferredLanguageForUser.mock.invocationCallOrder[0]
+    ).toBeLessThan(mockHandleDetectedSms.mock.invocationCallOrder[0]);
+  });
+
+  it("drops killed-app notification handling if the authenticated user changes", async () => {
+    mockGetPreferredLanguageForUser.mockResolvedValueOnce(null);
+    const parsed = createParsedTransaction();
+    mockProcessLiveSmsEvent.mockResolvedValue({
+      status: "parsed",
+      smsFingerprint: "hash-headless",
+      userId: "user-1",
+      transactions: [parsed],
+    });
+    const task = getRegisteredTask();
+
+    await expect(
+      task({
+        sender: "NBE",
+        body: "Purchase EGP 7.25 at DOUBLE CONFIRM TEST using card ending 1234",
+        timestamp: 1778414400000,
+      })
+    ).resolves.toBeUndefined();
+
+    expect(mockGetPreferredLanguageForUser).toHaveBeenCalledWith("user-1");
+    expect(mockHandleDetectedSms).not.toHaveBeenCalled();
   });
 
   it("throws a HeadlessJsTaskError when AI parsing should be retried", async () => {

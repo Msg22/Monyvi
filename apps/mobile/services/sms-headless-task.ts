@@ -10,6 +10,7 @@
 
 import { AppRegistry } from "react-native";
 import { initI18n, isI18nInitialized } from "@/i18n";
+import { getPreferredLanguageForUser } from "./profile-service";
 import { handleDetectedSms } from "./sms-live-detection-handler";
 import { processLiveSmsEvent } from "./sms-live-processor";
 
@@ -58,8 +59,13 @@ async function smsDetectionTask(taskData: SmsTaskData): Promise<void> {
     return;
   }
 
+  const language = await getPreferredLanguageForUser(result.userId);
+  if (language === null) {
+    return;
+  }
+
   for (const parsed of result.transactions) {
-    await handleDetectedSms(parsed, result.userId);
+    await handleDetectedSms(parsed, result.userId, language);
   }
 }
 

@@ -83,6 +83,7 @@ function formatDashboardRateAmount(
     amount,
     currency,
     language,
+    englishPresentation: "code-prefix",
     minimumFractionDigits: fractionDigits,
     maximumFractionDigits: fractionDigits,
   });

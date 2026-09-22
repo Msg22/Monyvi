@@ -89,6 +89,16 @@ describe("resolve-ci-e2e-scope", () => {
     });
   });
 
+  it.each([
+    "apps/mobile/components/dashboard/TotalNetWorthCard.tsx",
+    "apps/mobile/components/accounts/AccountCard.tsx",
+    "apps/mobile/components/transactions/BaseCard.tsx",
+  ])("selects localization E2E for asserted money surface %s", (filePath) => {
+    expect(scopeResolver.resolveCiE2eScope([filePath]).suites).toContain(
+      "localization"
+    );
+  });
+
   it("selects only recurring payment E2E for recurring dashboard code changes", () => {
     expect(
       scopeResolver.resolveCiE2eScope([

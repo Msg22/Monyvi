@@ -172,6 +172,19 @@ describe("localized money display", () => {
     ).toBe("1,234.50 EGP");
   });
 
+  it("places a positive sign before standard English prefix symbols", () => {
+    expect(
+      formatLocalizedMoneyAmount({
+        amount: 100,
+        currency: "USD",
+        language: "en",
+        signDisplay: "always",
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0,
+      })
+    ).toBe("+$100");
+  });
+
   it("localizes number-only monetary rate output without adding a label", () => {
     expect(
       formatLocalizedMoneyNumber({

@@ -149,13 +149,17 @@ export function formatLocalizedMoneyAmount({
     return `${formattedNumber} ${currency}`;
   }
   if (typeof amount === "number") {
-    return formatEnglishCurrency({
+    const formattedCurrency = formatEnglishCurrency({
       amount,
       currency,
       signDisplay,
       minimumFractionDigits,
       maximumFractionDigits,
     });
+
+    return formattedNumber.startsWith("+")
+      ? applyStandardEnglishCurrencyPlacement(formattedNumber, currency)
+      : formattedCurrency;
   }
 
   return applyStandardEnglishCurrencyPlacement(formattedNumber, currency);
@@ -351,8 +355,11 @@ function applyStandardEnglishCurrencyPlacement(
   const prefix = template.slice(0, zeroIndex);
   const suffix = template.slice(zeroIndex + 1);
 
-  if (formattedNumber.startsWith("-") && prefix.length > 0) {
-    return `-${prefix}${formattedNumber.slice(1)}${suffix}`;
+  if (
+    (formattedNumber.startsWith("-") || formattedNumber.startsWith("+")) &&
+    prefix.length > 0
+  ) {
+    return `${formattedNumber[0]}${prefix}${formattedNumber.slice(1)}${suffix}`;
   }
 
   return `${prefix}${formattedNumber}${suffix}`;

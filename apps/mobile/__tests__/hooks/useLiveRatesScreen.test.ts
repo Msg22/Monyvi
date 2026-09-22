@@ -112,6 +112,17 @@ describe("useLiveRatesScreen localization", () => {
     });
   });
 
+  it("preserves legacy English code-prefix placement for metal prices", async () => {
+    await prepareI18n("en");
+    const { result } = renderHook(() => useLiveRatesScreen());
+
+    await waitFor(() => {
+      expect(result.current.metals.price24k).toBe("EGP 0");
+      expect(result.current.metals.silverPrice).toBe("EGP 0");
+      expect(result.current.metals.platinumPrice).toBe("EGP 0");
+    });
+  });
+
   it("finds a currency by localized name, English name, and ISO code", async () => {
     await prepareI18n("ar");
     const { result } = renderHook(() => useLiveRatesScreen());

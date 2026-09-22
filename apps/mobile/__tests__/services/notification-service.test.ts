@@ -137,7 +137,9 @@ function getNotificationChannelInput(): Parameters<
   return channelCall[1];
 }
 
-function createParsedSmsTransaction(): ParsedSmsTransaction {
+function createParsedSmsTransaction(
+  overrides: Partial<ParsedSmsTransaction> = {}
+): ParsedSmsTransaction {
   return {
     amount: 413,
     currency: "EGP",
@@ -152,6 +154,7 @@ function createParsedSmsTransaction(): ParsedSmsTransaction {
     smsFingerprint: "hash-1",
     senderDisplayName: "NBE",
     rawSmsBody: "Purchase EGP 413.00 at LIVE TEST MARKET",
+    ...overrides,
   };
 }
 
@@ -414,17 +417,42 @@ describe("notification-service", () => {
       );
       expect(scheduled[0]).toMatchObject({
         title: "💸 تم اكتشاف مصروف",
-        body: "٤١٣٫٠٠ جنيه مصري من NBE\nإلى: LIVE TEST MARKET\nالحساب: MainCIBAccount",
+        body: "٤١٣ جنيه مصري من NBE\nإلى: LIVE TEST MARKET\nالحساب: MainCIBAccount",
       });
       expect(scheduled[1]).toMatchObject({
         title: "تم إنشاء المعاملة",
-        body: "٤١٣٫٠٠ جنيه مصري من NBE\nإلى: LIVE TEST MARKET\nالحساب: MainCIBAccount",
+        body: "٤١٣ جنيه مصري من NBE\nإلى: LIVE TEST MARKET\nالحساب: MainCIBAccount",
       });
       expect(scheduled[2]).toMatchObject({
         title: "المعاملة تحتاج إلى حساب",
-        body: "٤١٣٫٠٠ جنيه مصري من NBE\nإلى: LIVE TEST MARKET\nالحساب: لا يوجد حساب مُعدّ",
+        body: "٤١٣ جنيه مصري من NBE\nإلى: LIVE TEST MARKET\nالحساب: لا يوجد حساب مُعدّ",
       });
     });
+
+    it.each([
+      ["KWD", 1.234, "١٫٢٣٤ دينار كويتي"],
+      ["BTC", 0.001, "٠٫٠٠١٠٠٠٠٠ بيتكوين"],
+    ] as const)(
+      "preserves Arabic %s precision in notification bodies",
+      async (currency, amount, expectedAmount) => {
+        mockScheduleNotificationAsync.mockClear();
+        await i18next.changeLanguage("ar");
+        mockGetPermissionsAsync.mockResolvedValue(
+          createPermissionStatus({ granted: true })
+        );
+
+        await showTransactionNotification(
+          createParsedSmsTransaction({ amount, currency }),
+          "account-1",
+          "MainCIBAccount",
+          "user-1"
+        );
+
+        expect(getScheduledNotificationInput().content.body).toContain(
+          expectedAmount
+        );
+      }
+    );
 
     it("lets Android use the default channel sound without a custom sound resource", async () => {
       mockGetPermissionsAsync.mockResolvedValueOnce(

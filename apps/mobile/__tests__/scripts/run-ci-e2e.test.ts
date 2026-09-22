@@ -78,6 +78,10 @@ interface RunCiE2eModule {
   shouldRestoreDefaultFixtureAfterBudgets(
     selectedSuites: ReadonlySet<string>
   ): boolean;
+
+  shouldRestoreDefaultFixtureBeforeLocalization(
+    selectedSuites: ReadonlySet<string>
+  ): boolean;
   assertBudgetSuiteIsolation(
     selectedSuites: ReadonlySet<string>,
     env?: Readonly<Record<string, string | undefined>>
@@ -152,6 +156,27 @@ describe("run-ci-e2e helpers", () => {
     ).toBe(false);
     expect(
       runCiE2e.shouldRestoreDefaultFixtureAfterBudgets(new Set(["sms-sync"]))
+    ).toBe(false);
+  });
+
+  it("restores the default fixture before localization after mutating suites", () => {
+    for (const suite of [
+      "accounts",
+      "transactions",
+      "recurring-payments",
+      "budgets",
+    ]) {
+      expect(
+        runCiE2e.shouldRestoreDefaultFixtureBeforeLocalization(
+          new Set([suite, "localization"])
+        )
+      ).toBe(true);
+    }
+
+    expect(
+      runCiE2e.shouldRestoreDefaultFixtureBeforeLocalization(
+        new Set(["localization"])
+      )
     ).toBe(false);
   });
 

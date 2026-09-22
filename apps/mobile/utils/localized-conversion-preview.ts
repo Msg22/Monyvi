@@ -137,7 +137,6 @@ function formatFixedAmount(
     amount,
     currency,
     language,
-    englishPresentation: "code-suffix",
     minimumFractionDigits: fractionDigits,
     maximumFractionDigits: fractionDigits,
   });

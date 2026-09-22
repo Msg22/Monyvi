@@ -488,9 +488,16 @@ function shouldBootstrapBeforeLiveSms(selectedSuites, supabaseMode) {
 function shouldRestoreDefaultFixtureAfterBudgets(selectedSuites) {
   return (
     selectedSuites.has("budgets") &&
-    (selectedSuites.has("sms-sync") ||
-      selectedSuites.has("live-sms") ||
-      selectedSuites.has("localization"))
+    !selectedSuites.has("localization") &&
+    (selectedSuites.has("sms-sync") || selectedSuites.has("live-sms"))
+  );
+}
+
+function shouldRestoreDefaultFixtureBeforeLocalization(selectedSuites) {
+  if (!selectedSuites.has("localization")) return false;
+
+  return ["accounts", "transactions", "recurring-payments", "budgets"].some(
+    (suite) => selectedSuites.has(suite)
   );
 }
 
@@ -596,6 +603,9 @@ async function main() {
   }
 
   if (selectedSuites.has("localization")) {
+    if (shouldRestoreDefaultFixtureBeforeLocalization(selectedSuites)) {
+      await restoreDefaultE2eData();
+    }
     await runMaestroFlows(getLocalizationMaestroFlows());
   }
 
@@ -645,4 +655,5 @@ module.exports = {
   shouldRetryStabilizationFailure,
   shouldBootstrapBeforeLiveSms,
   shouldRestoreDefaultFixtureAfterBudgets,
+  shouldRestoreDefaultFixtureBeforeLocalization,
 };

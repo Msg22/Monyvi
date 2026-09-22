@@ -411,13 +411,21 @@ function formatAmount(
   currency: CurrencyType,
   language: SupportedLanguage
 ): string {
+  if (language === "en") {
+    return formatLocalizedMoneyAmount({
+      amount,
+      currency,
+      language,
+      englishPresentation: "code-prefix",
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+  }
+
   return formatLocalizedMoneyAmount({
     amount,
     currency,
     language,
-    englishPresentation: "code-prefix",
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
   });
 }
 
@@ -489,7 +497,8 @@ export async function showTransactionNotification(
   parsed: ParsedSmsTransaction,
   resolvedAccountId: string,
   resolvedAccountName: string,
-  initiatingUserId: string
+  initiatingUserId: string,
+  language: SupportedLanguage = getCurrentLanguage()
 ): Promise<void> {
   await initializeNotifications();
 
@@ -501,7 +510,6 @@ export async function showTransactionNotification(
     return;
   }
 
-  const language = getCurrentLanguage();
   const isExpense = parsed.type === "EXPENSE";
   const typeEmoji = isExpense ? "💸" : "💰";
   const typeLabel = translateNotification(
@@ -547,12 +555,14 @@ export async function showTransactionNotification(
 export async function showTransactionCreatedNotification(
   parsed: ParsedSmsTransaction,
   resolvedAccountName: string,
-  initiatingUserId: string
+  initiatingUserId: string,
+  language: SupportedLanguage = getCurrentLanguage()
 ): Promise<void> {
   await showInfoOnlySmsTransactionNotification({
     parsed,
     resolvedAccountName,
     initiatingUserId,
+    language,
     identifierPrefix: "sms-transaction-created",
     titleKey: "notification_transaction_created_title",
     type: "sms_transaction_created",
@@ -565,12 +575,14 @@ export async function showTransactionCreatedNotification(
  */
 export async function showTransactionNeedsAccountNotification(
   parsed: ParsedSmsTransaction,
-  initiatingUserId: string
+  initiatingUserId: string,
+  language: SupportedLanguage = getCurrentLanguage()
 ): Promise<void> {
   await showInfoOnlySmsTransactionNotification({
     parsed,
     resolvedAccountName: null,
     initiatingUserId,
+    language,
     identifierPrefix: "sms-transaction-info",
     titleKey: "notification_transaction_needs_account_title",
     type: "sms_transaction_info",
@@ -581,6 +593,7 @@ async function showInfoOnlySmsTransactionNotification({
   parsed,
   resolvedAccountName,
   initiatingUserId,
+  language,
   identifierPrefix,
   titleKey,
   type,
@@ -588,6 +601,7 @@ async function showInfoOnlySmsTransactionNotification({
   readonly parsed: ParsedSmsTransaction;
   readonly resolvedAccountName: string | null;
   readonly initiatingUserId: string;
+  readonly language: SupportedLanguage;
   readonly identifierPrefix: string;
   readonly titleKey:
     | "notification_transaction_created_title"
@@ -604,7 +618,6 @@ async function showInfoOnlySmsTransactionNotification({
     return;
   }
 
-  const language = getCurrentLanguage();
   const displayAccountName =
     resolvedAccountName ??
     translateNotification("notification_no_account_configured", language);
