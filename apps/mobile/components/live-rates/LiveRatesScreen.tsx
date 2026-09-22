@@ -1,29 +1,13 @@
-/**
- * Live Rates Screen
- *
- * Main orchestrator component for the Live Rates feature.
- * Composes all presentational sub-components and wires them to
- * the `useLiveRatesScreen` hook for data.
- *
- * Layout (per approved mockup):
- * 1. LiveRatesHeader — back arrow + title + connection indicator
- * 2. GoldHeroCard — 24K price + 21K/18K chips + trend
- * 3. MetalCard × 2 — Silver + Platinum side-by-side
- * 4. CurrencySection — section header + search + list
- * 5. LiveRatesFooter — "Updated X min ago"
- *
- * Architecture & Design Rationale:
- * - Pattern: Container/Presenter (screen orchestrator)
- * - Why: Clean separation — hook handles data, screen handles layout.
- * - SOLID: SRP — only composes layout. OCP — new sections added without modifying existing ones.
- *
- * @module LiveRatesScreen
- */
-
 import { palette } from "@/constants/colors";
 import { useLiveRatesScreen } from "@/hooks/useLiveRatesScreen";
 import React from "react";
-import { RefreshControl, ScrollView, View } from "react-native";
+import {
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  Text,
+  View,
+} from "react-native";
 import { useTranslation } from "react-i18next";
 
 import { CurrencySection } from "./CurrencySection";
@@ -34,32 +18,72 @@ import { LiveRatesHeader } from "./LiveRatesHeader";
 import { LiveRatesScreenSkeleton } from "./LiveRatesScreenSkeleton";
 import { MetalCard } from "./MetalCard";
 
-// =============================================================================
-// Component
-// =============================================================================
+interface LiveRatesStatusProps {
+  readonly isConnected: boolean;
+  readonly refreshError:
+    | "cached_refresh_failed"
+    | "initial_refresh_failed"
+    | null;
+  readonly onRetryRefresh: () => void;
+}
+
+function LiveRatesStatus({
+  isConnected,
+  refreshError,
+  onRetryRefresh,
+}: LiveRatesStatusProps): React.JSX.Element | null {
+  const { t } = useTranslation("metals");
+
+  if (isConnected && refreshError !== "cached_refresh_failed") {
+    return null;
+  }
+
+  return (
+    <View className="mt-3" accessibilityLiveRegion="polite">
+      {!isConnected && (
+        <Text className="mb-2 text-xs font-medium text-text-secondary dark:text-text-secondary-dark">
+          {t("offline_mode")}
+        </Text>
+      )}
+      {refreshError === "cached_refresh_failed" && (
+        <View className="mb-2">
+          <Text className="text-xs font-medium text-text-secondary dark:text-text-secondary-dark">
+            {t("rate.refresh_failed_with_cache")}
+          </Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t("rate.retry_refresh")}
+            className="mt-1 min-h-11 justify-center"
+            onPress={onRetryRefresh}
+          >
+            <Text className="text-sm font-semibold text-nileGreen-600 dark:text-nileGreen-400">
+              {t("rate.retry_refresh")}
+            </Text>
+          </Pressable>
+        </View>
+      )}
+    </View>
+  );
+}
 
 export function LiveRatesScreen(): React.JSX.Element {
   const { t } = useTranslation("metals");
   const {
     isLoading,
     isConnected,
-    isStale,
+    isLive,
     hasData,
-
     metals,
-
     currencies,
     isExpanded,
     onToggleExpand,
     showSeeAll,
     preferredCurrencyLabel,
-
     searchQuery,
     onSearchChange,
-
     lastUpdatedText,
-
     isRefreshing,
+    refreshError,
     onRefresh,
   } = useLiveRatesScreen();
 
@@ -74,7 +98,7 @@ export function LiveRatesScreen(): React.JSX.Element {
 
   return (
     <View className="flex-1 bg-slate-50 dark:bg-slate-900">
-      <LiveRatesHeader isConnected={isConnected} isStale={isStale} />
+      <LiveRatesHeader isLive={isLive} />
 
       {isLoading && !hasData ? (
         <LiveRatesScreenSkeleton />
@@ -84,6 +108,26 @@ export function LiveRatesScreen(): React.JSX.Element {
           contentContainerStyle={{ flexGrow: 1 }}
           refreshControl={refreshControl}
         >
+          {refreshError === "initial_refresh_failed" ? (
+            <View
+              accessibilityLiveRegion="polite"
+              className="mx-5 mt-4 rounded-xl border border-red-200 bg-red-50 p-4 dark:border-red-900 dark:bg-red-950/30"
+            >
+              <Text className="text-sm text-red-700 dark:text-red-400">
+                {t("rate.initial_refresh_failed")}
+              </Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t("rate.retry_refresh")}
+                className="mt-2 min-h-11 justify-center"
+                onPress={onRefresh}
+              >
+                <Text className="font-semibold text-nileGreen-700 dark:text-nileGreen-400">
+                  {t("rate.retry_refresh")}
+                </Text>
+              </Pressable>
+            </View>
+          ) : null}
           <LiveRatesEmptyState />
         </ScrollView>
       ) : (
@@ -92,37 +136,30 @@ export function LiveRatesScreen(): React.JSX.Element {
           contentContainerStyle={{ paddingBottom: 16 }}
           refreshControl={refreshControl}
         >
-          {/* Metals Section */}
           <View className="px-5 pt-2">
-            {/* Gold Hero Card */}
             <GoldHeroCard
               price24k={metals.price24k}
               price21k={metals.price21k}
               price18k={metals.price18k}
               trendPercent={metals.goldTrendPercent}
-              currencySymbol={metals.currencySymbol}
             />
 
-            {/* Silver + Platinum side-by-side */}
-            <View className="flex-row mt-3" style={{ gap: 12 }}>
+            <View testID="live-rates-silver-card" className="mt-3 w-full">
               <MetalCard
                 metalName={t("silver")}
                 price={metals.silverPrice}
                 trendPercent={metals.silverTrendPercent}
                 borderColor={palette.silver[500]}
-                currencySymbol={metals.currencySymbol}
-              />
-              <MetalCard
-                metalName={t("platinum")}
-                price={metals.platinumPrice}
-                trendPercent={metals.platinumTrendPercent}
-                borderColor={palette.slate[400]}
-                currencySymbol={metals.currencySymbol}
               />
             </View>
+
+            <LiveRatesStatus
+              isConnected={isConnected}
+              refreshError={refreshError}
+              onRetryRefresh={onRefresh}
+            />
           </View>
 
-          {/* Currency Section */}
           <CurrencySection
             currencies={currencies}
             searchQuery={searchQuery}
@@ -133,7 +170,6 @@ export function LiveRatesScreen(): React.JSX.Element {
             showSeeAll={showSeeAll}
           />
 
-          {/* Footer */}
           <LiveRatesFooter lastUpdatedText={lastUpdatedText} />
         </ScrollView>
       )}

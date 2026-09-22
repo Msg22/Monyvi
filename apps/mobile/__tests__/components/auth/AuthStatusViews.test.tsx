@@ -18,6 +18,16 @@ const COPY: Readonly<Record<string, string>> = {
   verification_link_failed_title: "Verification link didn’t work",
   verification_link_failed_message:
     "This link may have expired or already been used. Go back to sign in and request a new email.",
+  recovery_link_failed_title: "Reset link didn’t work",
+  recovery_link_failed_message:
+    "This password reset link may have expired or already been used. Go back to sign in and request a new link.",
+  callback_network_failed_title: "Couldn’t connect",
+  callback_network_failed_message:
+    "Check your internet connection and try again.",
+  auth_callback_failed_title: "Sign-in didn’t work",
+  auth_callback_failed_message:
+    "We couldn’t complete sign-in from this link. Go back to sign in and try again.",
+  retry: "Retry",
   reset_link_sent: "Reset link sent",
   reset_link_message: "We sent a password reset link to {{email}}.",
 };
@@ -139,6 +149,59 @@ describe("auth status views", () => {
     expect(screen.getByTestId("auth-callback-failure-view")).toHaveStyle({
       paddingBottom: 58,
     });
+
+    fireEvent.press(screen.getByRole("button", { name: "Back to sign in" }));
+    expect(onBack).toHaveBeenCalledTimes(1);
+  });
+
+  it("renders contextual recovery for password reset and network failure with retry", () => {
+    const onBack = jest.fn();
+    const onRetry = jest.fn();
+
+    const { rerender } = render(
+      <SafeAreaProvider
+        initialMetrics={{
+          frame: { x: 0, y: 0, width: 390, height: 844 },
+          insets: { top: 47, right: 0, bottom: 34, left: 0 },
+        }}
+      >
+        <AuthCallbackFailureView failureType="recovery" onBack={onBack} />
+      </SafeAreaProvider>
+    );
+
+    expect(
+      screen.getByRole("header", { name: "Reset link didn’t work" })
+    ).toBeOnTheScreen();
+    expect(
+      screen.getByText(
+        "This password reset link may have expired or already been used. Go back to sign in and request a new link."
+      )
+    ).toBeOnTheScreen();
+
+    rerender(
+      <SafeAreaProvider
+        initialMetrics={{
+          frame: { x: 0, y: 0, width: 390, height: 844 },
+          insets: { top: 47, right: 0, bottom: 34, left: 0 },
+        }}
+      >
+        <AuthCallbackFailureView
+          failureType="network"
+          onBack={onBack}
+          onRetry={onRetry}
+        />
+      </SafeAreaProvider>
+    );
+
+    expect(
+      screen.getByRole("header", { name: "Couldn’t connect" })
+    ).toBeOnTheScreen();
+    expect(
+      screen.getByText("Check your internet connection and try again.")
+    ).toBeOnTheScreen();
+
+    fireEvent.press(screen.getByRole("button", { name: "Retry" }));
+    expect(onRetry).toHaveBeenCalledTimes(1);
 
     fireEvent.press(screen.getByRole("button", { name: "Back to sign in" }));
     expect(onBack).toHaveBeenCalledTimes(1);

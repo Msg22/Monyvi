@@ -8,7 +8,8 @@
 import { palette } from "@/constants/colors";
 import { getDueText } from "@/utils/dateHelpers";
 import { getPaymentIcon } from "@/utils/recurring-helpers";
-import { calculateCalendarDaysUntil, formatCurrency } from "@monyvi/logic";
+import { calculateCalendarDaysUntil } from "@monyvi/logic";
+import { formatLocalizedMoneyAmount } from "@/utils/localized-money-display";
 import { Ionicons } from "@expo/vector-icons";
 import React from "react";
 import { Text, TouchableOpacity, View } from "react-native";
@@ -47,7 +48,7 @@ function FeaturedPaymentCardComponent({
 
       {/* Amount */}
       <Text className="text-xl font-bold text-nileGreen-400 mb-1">
-        {formatCurrency({
+        {formatLocalizedMoneyAmount({
           amount: payment.amount,
           currency: payment.currency,
         })}

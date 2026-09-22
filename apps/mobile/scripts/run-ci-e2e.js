@@ -30,6 +30,7 @@ const allCiSuites = [
   "budgets",
   "sms-sync",
   "live-sms",
+  "localization",
 ];
 let hasRunAuthBootstrap = false;
 
@@ -50,6 +51,7 @@ const recurringPaymentMaestroFlows = [
   "recurring-payments/recurring-payments-crud-actions.yaml",
 ];
 const smsSyncMaestroFlows = ["sms-sync/sms-sync-permission-requestable.yaml"];
+const localizationMaestroFlows = ["localization/arabic-money-displays.yaml"];
 const budgetMaestroFlows = [
   {
     flow: "budgets/dashboard-filtering.yaml",
@@ -185,7 +187,8 @@ function shouldResetMaestroFlowBeforeRetry(flow, env = process.env) {
     flow.startsWith("accounts/") ||
     flow.startsWith("transactions/") ||
     flow.startsWith("recurring-payments/") ||
-    flow.startsWith("budgets/")
+    flow.startsWith("budgets/") ||
+    flow.startsWith("localization/")
   );
 }
 
@@ -383,6 +386,10 @@ function getBudgetMaestroFlows() {
   return budgetMaestroFlows;
 }
 
+function getLocalizationMaestroFlows() {
+  return localizationMaestroFlows;
+}
+
 function getBudgetProfileForMaestroFlow(flow) {
   return budgetMaestroFlows.find((entry) => entry.flow === flow)?.profile;
 }
@@ -482,6 +489,7 @@ function shouldBootstrapBeforeLiveSms(selectedSuites, supabaseMode) {
 function shouldRestoreDefaultFixtureAfterBudgets(selectedSuites) {
   return (
     selectedSuites.has("budgets") &&
+    !selectedSuites.has("localization") &&
     (selectedSuites.has("sms-sync") || selectedSuites.has("live-sms"))
   );
 }
@@ -500,6 +508,20 @@ function getEmailVerificationSuiteOptions() {
   };
 }
 
+function shouldRunEmailVerificationSuite(
+  selectedSuites,
+  supabaseMode = getSupabaseMode()
+) {
+  return selectedSuites.has("auth") && supabaseMode === "local";
+}
+
+function shouldRestoreDefaultFixtureBeforeLocalization(selectedSuites) {
+  if (!selectedSuites.has("localization")) return false;
+
+  return ["accounts", "transactions", "recurring-payments", "budgets"].some(
+    (suite) => selectedSuites.has(suite)
+  );
+}
 async function maybeRunAuthBootstrap() {
   if (shouldBootstrapAuth && !hasRunAuthBootstrap) {
     await runAuthBootstrap(getInitialAuthBootstrapOptions());
@@ -582,8 +604,12 @@ async function main() {
   assertRequiredEnv();
   await maybeSeedE2eData();
 
-  if (selectedSuites.has("auth")) {
+  if (shouldRunEmailVerificationSuite(selectedSuites, getSupabaseMode())) {
     await runEmailVerificationSuite();
+  } else if (selectedSuites.has("auth")) {
+    console.log(
+      "Skipping local email verification suite because E2E_SUPABASE_MODE is not local."
+    );
   }
 
   if (selectedSuites.has("accounts")) {
@@ -603,6 +629,13 @@ async function main() {
     if (shouldRestoreDefaultFixtureAfterBudgets(selectedSuites)) {
       await restoreDefaultE2eData();
     }
+  }
+
+  if (selectedSuites.has("localization")) {
+    if (shouldRestoreDefaultFixtureBeforeLocalization(selectedSuites)) {
+      await restoreDefaultE2eData();
+    }
+    await runMaestroFlows(getLocalizationMaestroFlows());
   }
 
   if (selectedSuites.has("sms-sync")) {
@@ -637,6 +670,7 @@ module.exports = {
   getDeviceOfflineRetryCount,
   getLiveSmsTimeoutMs,
   getBudgetMaestroFlows,
+  getLocalizationMaestroFlows,
   getRequestedCiSuites,
   getAuthBootstrapFlow,
   getInitialAuthBootstrapOptions,
@@ -651,4 +685,6 @@ module.exports = {
   shouldRetryStabilizationFailure,
   shouldBootstrapBeforeLiveSms,
   shouldRestoreDefaultFixtureAfterBudgets,
+  shouldRestoreDefaultFixtureBeforeLocalization,
+  shouldRunEmailVerificationSuite,
 };

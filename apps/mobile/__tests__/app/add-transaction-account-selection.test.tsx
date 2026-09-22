@@ -5,6 +5,11 @@ import {
   waitFor,
 } from "@testing-library/react-native";
 import React from "react";
+import { completeFixtureA } from "../fixtures/market-rate-snapshot";
+import {
+  selectMarketRateSnapshot,
+  type SelectedMarketRateSnapshot,
+} from "@/services/market-rate-snapshot-read-model-service";
 
 interface MockAccount {
   readonly id: string;
@@ -16,6 +21,7 @@ interface MockAccount {
 }
 
 let mockAccounts: readonly MockAccount[] = [];
+let mockSelectedSnapshot: SelectedMarketRateSnapshot | null = null;
 
 const mockBack = jest.fn();
 const mockPush = jest.fn();
@@ -77,7 +83,9 @@ jest.mock("@/hooks/useCategoryChildren", () => ({
 }));
 
 jest.mock("@/hooks/useMarketRates", () => ({
-  useMarketRates: (): { readonly latestRates: null } => ({ latestRates: null }),
+  useMarketRates: (): {
+    readonly selectedSnapshot: SelectedMarketRateSnapshot | null;
+  } => ({ selectedSnapshot: mockSelectedSnapshot }),
 }));
 
 jest.mock("@/hooks/usePreferredCurrency", () => ({
@@ -181,7 +189,43 @@ jest.mock("@/components/add-transaction/CalculatorKeypad", () => ({
 }));
 
 jest.mock("@/components/add-transaction/TypeTabs", () => ({
-  TypeTabs: (): React.JSX.Element => mockView("type-tabs"),
+  TypeTabs: ({
+    onSelect,
+  }: {
+    readonly onSelect: (type: "TRANSFER") => void;
+  }): React.JSX.Element => {
+    const { Pressable, Text } =
+      jest.requireActual<typeof import("react-native")>("react-native");
+    return (
+      <Pressable testID="choose-transfer" onPress={() => onSelect("TRANSFER")}>
+        <Text>Transfer</Text>
+      </Pressable>
+    );
+  },
+}));
+
+jest.mock("@/components/add-transaction/TransferFields", () => ({
+  TransferFields: ({
+    targetAmount,
+    onSelectTo,
+  }: {
+    readonly targetAmount: string;
+    readonly onSelectTo: (id: string) => void;
+  }): React.JSX.Element => {
+    const { View, Pressable, Text } =
+      jest.requireActual<typeof import("react-native")>("react-native");
+    return (
+      <View>
+        <Text testID="transfer-target">{targetAmount}</Text>
+        <Pressable testID="to-usd" onPress={() => onSelectTo("usd")}>
+          <Text>USD account</Text>
+        </Pressable>
+        <Pressable testID="to-egp" onPress={() => onSelectTo("egp")}>
+          <Text>EGP account</Text>
+        </Pressable>
+      </View>
+    );
+  },
 }));
 
 jest.mock("@/components/add-transaction/CategoryPicker", () => ({
@@ -314,7 +358,23 @@ function account(id: string, name: string, isDefault: boolean): MockAccount {
 }
 
 describe("AddTransaction account selection", () => {
+  it("shows the expense balance warning only for a parsed amount above the balance", () => {
+    mockAccounts = [account("cash-1", "Cash", true)];
+    render(<AddTransaction />);
+    fireEvent.press(screen.getByTestId("key-2"));
+    expect(screen.queryByText(/warning_negative_balance/)).toBeNull();
+    fireEvent.press(screen.getByTestId("key-2"));
+    fireEvent.press(screen.getByTestId("key-2"));
+    fireEvent.press(screen.getByTestId("key-2"));
+    expect(screen.getByText(/warning_negative_balance/)).toHaveTextContent(
+      /- 1,222\.00 EGP/
+    );
+    fireEvent.press(screen.getByTestId("key-plus"));
+    expect(screen.queryByText(/warning_negative_balance/)).toBeNull();
+  });
+
   beforeEach(() => {
+    mockSelectedSnapshot = null;
     mockAccounts = [
       account("cash-1", "Cash", false),
       account("bank-1", "Bank", false),
@@ -325,6 +385,75 @@ describe("AddTransaction account selection", () => {
     recurringPaymentServiceMocks().createRecurringPayment.mockReset();
     recurringPaymentServiceMocks().deleteRecurringPayment.mockReset();
     transactionServiceMocks().createTransaction.mockReset();
+  });
+
+  it("clears an automatic transfer quote when its snapshot becomes unavailable", async () => {
+    const fixture = completeFixtureA();
+    mockSelectedSnapshot = selectMarketRateSnapshot(
+      fixture.roots,
+      fixture.observations,
+      Date.parse("2026-09-09T11:00:00Z")
+    );
+    mockAccounts = [
+      account("cash-1", "Cash", true),
+      { ...account("usd", "USD", false), currency: "USD" },
+    ];
+    const view = render(<AddTransaction />);
+    fireEvent.press(screen.getByTestId("choose-transfer"));
+    fireEvent.press(screen.getByTestId("to-usd"));
+    fireEvent.press(screen.getByTestId("key-2"));
+    await waitFor(() =>
+      expect(screen.getByTestId("transfer-target")).not.toHaveTextContent(/^$/)
+    );
+    mockSelectedSnapshot = null;
+    view.rerender(<AddTransaction />);
+    await waitFor(() =>
+      expect(screen.getByTestId("transfer-target")).toHaveTextContent(/^$/)
+    );
+    const { createTransfer } = jest.requireMock<{
+      readonly createTransfer: jest.Mock;
+    }>("@/services/transfer-service");
+    createTransfer.mockClear();
+    fireEvent.press(screen.getByTestId("key-done"));
+    await waitFor(() => expect(createTransfer).not.toHaveBeenCalled());
+    expect(mockBack).not.toHaveBeenCalled();
+  });
+
+  it("does not submit a stale foreign-currency quote after selecting a same-currency destination", async () => {
+    const fixture = completeFixtureA();
+    mockSelectedSnapshot = selectMarketRateSnapshot(
+      fixture.roots,
+      fixture.observations,
+      Date.parse("2026-09-09T11:00:00Z")
+    );
+    mockAccounts = [
+      account("cash-1", "Cash", true),
+      { ...account("usd", "USD", false), currency: "USD" },
+      account("egp", "Other EGP", false),
+    ];
+    const { createTransfer } = jest.requireMock<{
+      readonly createTransfer: jest.Mock;
+    }>("@/services/transfer-service");
+    createTransfer.mockReset();
+    createTransfer.mockResolvedValue(undefined);
+    render(<AddTransaction />);
+    fireEvent.press(screen.getByTestId("choose-transfer"));
+    fireEvent.press(screen.getByTestId("to-usd"));
+    fireEvent.press(screen.getByTestId("key-2"));
+    await waitFor(() =>
+      expect(screen.getByTestId("transfer-target")).not.toHaveTextContent(/^$/)
+    );
+    fireEvent.press(screen.getByTestId("to-egp"));
+    fireEvent.press(screen.getByTestId("key-done"));
+    await waitFor(() =>
+      expect(createTransfer).toHaveBeenCalledWith(
+        expect.objectContaining({
+          amount: 2,
+          convertedAmount: undefined,
+          exchangeRate: undefined,
+        })
+      )
+    );
   });
 
   it("selects a default account that appears after an initial no-default emission", async () => {
@@ -408,9 +537,11 @@ describe("AddTransaction account selection", () => {
 
   it("removes a created recurring payment when its first transaction fails", async () => {
     mockAccounts = [account("cash-1", "Cash", true)];
-    recurringPaymentServiceMocks().createRecurringPayment.mockResolvedValueOnce({
-      id: "recurring-1",
-    });
+    recurringPaymentServiceMocks().createRecurringPayment.mockResolvedValueOnce(
+      {
+        id: "recurring-1",
+      }
+    );
     transactionServiceMocks().createTransaction.mockRejectedValueOnce(
       new Error("transaction write failed")
     );

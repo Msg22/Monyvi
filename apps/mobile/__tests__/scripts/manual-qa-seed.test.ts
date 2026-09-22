@@ -396,7 +396,7 @@ describe("manual-qa-seed script helpers", () => {
       expect.arrayContaining([
         expect.objectContaining({
           metal_type: "GOLD",
-          item_form: "Jewelry",
+          item_form: "jewelry",
           weight_grams_decimal: "24.5",
           purity_code: "gold-875",
           purity_factor_decimal: "0.875",
@@ -404,7 +404,7 @@ describe("manual-qa-seed script helpers", () => {
         }),
         expect.objectContaining({
           metal_type: "SILVER",
-          item_form: "Coins",
+          item_form: "coin",
           weight_grams_decimal: "250",
           purity_code: "silver-999",
           purity_factor_decimal: "0.999",
@@ -412,7 +412,7 @@ describe("manual-qa-seed script helpers", () => {
         }),
         expect.objectContaining({
           metal_type: "GOLD",
-          item_form: "Bar",
+          item_form: "bar",
           weight_grams_decimal: "10",
           purity_code: "gold-999",
           purity_factor_decimal: "0.999",
@@ -431,17 +431,17 @@ describe("manual-qa-seed script helpers", () => {
       expect.arrayContaining([
         expect.objectContaining({
           status: "active",
-          financial_revision: "0",
+          financial_revision: "1",
           reconciliation_state: "accepted",
         }),
         expect.objectContaining({
           status: "sold",
-          financial_revision: "1",
+          financial_revision: "2",
           reconciliation_state: "accepted",
         }),
         expect.objectContaining({
           status: "disposed",
-          financial_revision: "1",
+          financial_revision: "2",
           reconciliation_state: "accepted",
         }),
       ])
@@ -718,7 +718,15 @@ describe("manual-qa-seed script helpers", () => {
           getStringField(row, "notes") !== "Manual QA seeded ATM withdrawal"
       )
     );
-    expect(marketRateRows).toHaveLength(0);
+    expect(marketRateRows).toEqual([
+      [
+        expect.objectContaining({
+          egp_usd: 0.02,
+          gold_usd_per_gram: 75,
+          silver_usd_per_gram: 0.95,
+        }),
+      ],
+    ]);
   });
 
   it("seeds a persistent secondary user only for account-switch device QA", async () => {
@@ -741,6 +749,9 @@ describe("manual-qa-seed script helpers", () => {
     expect(ACCOUNT_SWITCH_QA_EMAIL).toBe("manual-qa-secondary@monyvi.test");
     expect(ACCOUNT_SWITCH_QA_PASSWORD).toBe("123456");
     expect(createdAuthUsers).toContainEqual({
+      id: expect.stringMatching(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
+      ),
       email: ACCOUNT_SWITCH_QA_EMAIL,
       password: ACCOUNT_SWITCH_QA_PASSWORD,
       email_confirm: true,
@@ -756,6 +767,7 @@ describe("manual-qa-seed script helpers", () => {
 });
 
 interface AuthUserSeedInput {
+  readonly id?: string;
   readonly email: string;
   readonly password: string;
   readonly email_confirm: boolean;

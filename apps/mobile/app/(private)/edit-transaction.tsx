@@ -36,12 +36,12 @@ import {
   validateTransactionForm,
   type TransactionValidationErrors,
 } from "@/validation/transaction-validation";
+import { formatLocalizedMoneyAmount } from "@/utils/localized-money-display";
 import { Ionicons } from "@expo/vector-icons";
 import type { TransactionType } from "@monyvi/db";
 import {
   calculateEditedTransactionBalanceProjection,
   evaluateAmountExpression,
-  formatAmountInput,
   formatStoredAmountInput,
 } from "@monyvi/logic";
 import * as Haptics from "expo-haptics";
@@ -582,11 +582,13 @@ export default function EditTransaction(): React.ReactNode {
           {balanceWarning && balanceWarningAccount && (
             <Text className="text-amber-500 text-xs font-medium text-center mb-1">
               {t("warning_negative_balance")}{" "}
-              {formatAmountInput(
-                balanceWarning.projectedBalance.toFixed(2),
-                "0"
-              )}{" "}
-              {balanceWarningAccount.currency}
+              {formatLocalizedMoneyAmount({
+                amount: balanceWarning.projectedBalance,
+                currency: balanceWarningAccount.currency,
+                englishPresentation: "code-suffix",
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}
             </Text>
           )}
           <AmountDisplay

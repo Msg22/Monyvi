@@ -11,6 +11,7 @@ interface RunCiE2eModule {
       | "dashboard-filter-empty"
       | "budget-detail-delete";
   }[];
+  getLocalizationMaestroFlows(): readonly string[];
   getRequestedCiSuites(
     env?: Readonly<Record<string, string | undefined>>
   ): ReadonlySet<
@@ -21,6 +22,7 @@ interface RunCiE2eModule {
     | "budgets"
     | "sms-sync"
     | "live-sms"
+    | "localization"
   >;
   getChildTimeoutMs(env?: Readonly<Record<string, string | undefined>>): number;
   getLiveSmsTimeoutMs(
@@ -80,6 +82,14 @@ interface RunCiE2eModule {
   shouldRestoreDefaultFixtureAfterBudgets(
     selectedSuites: ReadonlySet<string>
   ): boolean;
+
+  shouldRestoreDefaultFixtureBeforeLocalization(
+    selectedSuites: ReadonlySet<string>
+  ): boolean;
+  shouldRunEmailVerificationSuite(
+    selectedSuites: ReadonlySet<string>,
+    supabaseMode?: "local" | "remote"
+  ): boolean;
   assertBudgetSuiteIsolation(
     selectedSuites: ReadonlySet<string>,
     env?: Readonly<Record<string, string | undefined>>
@@ -100,6 +110,7 @@ describe("run-ci-e2e helpers", () => {
       "budgets",
       "sms-sync",
       "live-sms",
+      "localization",
     ]);
   });
 
@@ -132,6 +143,12 @@ describe("run-ci-e2e helpers", () => {
     ]);
   });
 
+  it("registers the Arabic monetary localization journey", () => {
+    expect(runCiE2e.getLocalizationMaestroFlows()).toEqual([
+      "localization/arabic-money-displays.yaml",
+    ]);
+  });
+
   it("restores the default fixture when a downstream suite follows budgets", () => {
     expect(
       runCiE2e.shouldRestoreDefaultFixtureAfterBudgets(
@@ -151,10 +168,32 @@ describe("run-ci-e2e helpers", () => {
     ).toBe(false);
   });
 
+  it("restores the default fixture before localization after mutating suites", () => {
+    for (const suite of [
+      "accounts",
+      "transactions",
+      "recurring-payments",
+      "budgets",
+    ]) {
+      expect(
+        runCiE2e.shouldRestoreDefaultFixtureBeforeLocalization(
+          new Set([suite, "localization"])
+        )
+      ).toBe(true);
+    }
+
+    expect(
+      runCiE2e.shouldRestoreDefaultFixtureBeforeLocalization(
+        new Set(["localization"])
+      )
+    ).toBe(false);
+  });
+
   it("parses selected E2E suites and treats skip as no-op", () => {
     expect([
       ...runCiE2e.getRequestedCiSuites({
-        E2E_CI_SUITES: "auth,accounts,recurring-payments,sms-sync,live-sms",
+        E2E_CI_SUITES:
+          "auth,accounts,recurring-payments,sms-sync,live-sms,localization",
       }),
     ]).toEqual([
       "auth",
@@ -162,11 +201,24 @@ describe("run-ci-e2e helpers", () => {
       "recurring-payments",
       "sms-sync",
       "live-sms",
+      "localization",
     ]);
 
     expect(runCiE2e.getRequestedCiSuites({ E2E_CI_SUITES: "skip" }).size).toBe(
       0
     );
+  });
+
+  it("gates email verification E2E on local Supabase mode", () => {
+    expect(
+      runCiE2e.shouldRunEmailVerificationSuite(new Set(["auth"]), "local")
+    ).toBe(true);
+    expect(
+      runCiE2e.shouldRunEmailVerificationSuite(new Set(["auth"]), "remote")
+    ).toBe(false);
+    expect(
+      runCiE2e.shouldRunEmailVerificationSuite(new Set(["accounts"]), "local")
+    ).toBe(false);
   });
 
   it("keeps only a bounded output tail for retry detection", () => {

@@ -36,8 +36,7 @@ interface GoldHeroCardProps {
   readonly price24k: string;
   readonly price21k: string;
   readonly price18k: string;
-  readonly trendPercent: number;
-  readonly currencySymbol: string;
+  readonly trendPercent: number | null;
 }
 
 // =============================================================================
@@ -47,11 +46,29 @@ interface GoldHeroCardProps {
 function TrendBadge({
   trendPercent,
 }: {
-  readonly trendPercent: number;
+  readonly trendPercent: number | null;
 }): React.JSX.Element | null {
   const { t } = useTranslation("metals");
+  if (trendPercent === null || !Number.isFinite(trendPercent)) {
+    return null;
+  }
+
   const roundedTrend = Number(trendPercent.toFixed(1));
-  if (roundedTrend === 0) return null;
+  if (roundedTrend === 0) {
+    return (
+      <View className="flex-row items-center mt-0.5 ms-1">
+        <Text
+          style={{
+            color: palette.slate[400],
+            fontSize: 12,
+            fontWeight: "500",
+          }}
+        >
+          0.0%
+        </Text>
+      </View>
+    );
+  }
 
   const isUp = roundedTrend > 0;
   const color = isUp ? palette.nileGreen[400] : palette.red[400];
@@ -77,14 +94,9 @@ function TrendBadge({
 interface PurityChipProps {
   readonly karat: number;
   readonly price: string;
-  readonly currencySymbol: string;
 }
 
-function PurityChip({
-  karat,
-  price,
-  currencySymbol,
-}: PurityChipProps): React.JSX.Element {
+function PurityChip({ karat, price }: PurityChipProps): React.JSX.Element {
   const { t } = useTranslation("metals");
   return (
     <View
@@ -95,7 +107,7 @@ function PurityChip({
         {t("karat_label", { karat })}
       </Text>
       <Text className="text-sm font-semibold text-white">
-        {t("price_gram_with_symbol", { currencySymbol, price })}
+        {t("price_per_gram", { amount: price })}
       </Text>
     </View>
   );
@@ -110,11 +122,13 @@ export function GoldHeroCard({
   price21k,
   price18k,
   trendPercent,
-  currencySymbol,
 }: GoldHeroCardProps): React.JSX.Element {
   const { t } = useTranslation("metals");
   return (
-    <View className="bg-slate-800 rounded-2xl p-4 overflow-hidden border-l-[3px] border-l-gold-600">
+    <View
+      testID="live-rates-gold-card"
+      className="bg-slate-800 rounded-2xl p-4 overflow-hidden border-l-[3px] border-l-gold-600"
+    >
       {/* Gold label */}
       <View className="flex-row items-center mb-1">
         <FontAwesome5 name="coins" size={14} color={palette.gold[400]} />
@@ -128,7 +142,7 @@ export function GoldHeroCard({
 
       {/* 24K Price — large display */}
       <Text className="text-[28px] font-bold text-white tracking-tight">
-        {t("price_gram_with_symbol", { currencySymbol, price: price24k })}
+        {t("price_per_gram", { amount: price24k })}
       </Text>
 
       {/* Subtitle + trend */}
@@ -139,16 +153,8 @@ export function GoldHeroCard({
 
       {/* 21K and 18K chips */}
       <View className="flex-row mt-3">
-        <PurityChip
-          karat={KARAT_21}
-          price={price21k}
-          currencySymbol={currencySymbol}
-        />
-        <PurityChip
-          karat={KARAT_18}
-          price={price18k}
-          currencySymbol={currencySymbol}
-        />
+        <PurityChip karat={KARAT_21} price={price21k} />
+        <PurityChip karat={KARAT_18} price={price18k} />
       </View>
     </View>
   );

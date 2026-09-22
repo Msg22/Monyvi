@@ -199,11 +199,11 @@ Business rules:
   and recurring payments share the inclusive `MAX_TRANSACTION_AMOUNT` limit of
   `1,000,000,000` in the selected account currency, without FX conversion.
 - Currency precision follows the centralized contract: two fractional digits by
-  default, three for KWD/BHD/OMR, and eight for BTC. Excess precision is rejected
-  rather than rounded.
+  default, three for KWD/BHD/OMR, and eight for BTC. Excess precision is
+  rejected rather than rounded.
 - The recurring-payment and transaction paths are the first consumers of this
-  contract. Existing amount-entry surfaces migrate through focused follow-up work
-  rather than duplicating or weakening the grammar.
+  contract. Existing amount-entry surfaces migrate through focused follow-up
+  work rather than duplicating or weakening the grammar.
 
 ### Accounts
 
@@ -337,8 +337,8 @@ Business rules:
 - Every new budget stores one supported currency. Creation defaults to the
   user's preferred currency, but may select another supported currency before
   saving; the saved currency is immutable.
-- Budget spending includes only transactions with the exact same currency as
-  the budget. Monyvi does not convert transaction currencies for budgets.
+- Budget spending includes only transactions with the exact same currency as the
+  budget. Monyvi does not convert transaction currencies for budgets.
 - Budget limits accept localized positive decimals with at most two fractional
   digits and a maximum of `999,999,999.99`.
 - Custom-period budgets require both start and end dates.
@@ -408,30 +408,32 @@ Business rules:
 - When a recurring payment creates a transaction, the created transaction should
   link back through `linked_recurring_id`.
 - Any future scheduler must preserve local-first writes and idempotency.
-- End date is optional and inclusive: an occurrence due exactly on it is eligible.
-- An unpaid final occurrence remains active and overdue after End date. Passing the
-  boundary never proves that it was paid.
-- Pay Now may record an overdue final occurrence. Its successful local batch must
-  create the transaction, apply the balance effect, advance the schedule, and set
-  the recurring payment to `COMPLETED` together.
-- Editing a completed recurring payment, including extending or clearing End date,
-  never changes its status. Reactivation is always an explicit user decision.
-- Users reactivate a completed series only by selecting "Reactivate after saving"
-  while editing it. The completed My Bills card has no Reactivate action because
-  an ineligible schedule needs its End date changed in the edit form. Reactivation
-  is allowed only when the calculated next due payment is eligible under the
-  selected End date.
-- A Due payment after End date is invalid. A schedule with one eligible Due payment
-  and no later eligible recurrence is valid and explains that no further payments
-  will be due.
-- A newly created recurring payment accepts a Due payment from today through
-  the same local-calendar date one year ahead, inclusive. Calendar-day comparison
-  is authoritative; elapsed milliseconds, time of day, DST, and leap-year
+- End date is optional and inclusive: an occurrence due exactly on it is
+  eligible.
+- An unpaid final occurrence remains active and overdue after End date. Passing
+  the boundary never proves that it was paid.
+- Pay Now may record an overdue final occurrence. Its successful local batch
+  must create the transaction, apply the balance effect, advance the schedule,
+  and set the recurring payment to `COMPLETED` together.
+- Editing a completed recurring payment, including extending or clearing End
+  date, never changes its status. Reactivation is always an explicit user
+  decision.
+- Users reactivate a completed series only by selecting "Reactivate after
+  saving" while editing it. The completed My Bills card has no Reactivate action
+  because an ineligible schedule needs its End date changed in the edit form.
+  Reactivation is allowed only when the calculated next due payment is eligible
+  under the selected End date.
+- A Due payment after End date is invalid. A schedule with one eligible Due
+  payment and no later eligible recurrence is valid and explains that no further
+  payments will be due.
+- A newly created recurring payment accepts a Due payment from today through the
+  same local-calendar date one year ahead, inclusive. Calendar-day comparison is
+  authoritative; elapsed milliseconds, time of day, DST, and leap-year
   boundaries must not change eligibility.
 - Editing may preserve an existing past Due payment or a legacy Due payment more
   than one year ahead only while that local-calendar date remains unchanged. A
-  newly selected edit date must satisfy the current create range, and one invalid
-  historical date cannot be changed to another invalid historical date.
+  newly selected edit date must satisfy the current create range, and one
+  invalid historical date cannot be changed to another invalid historical date.
 - Recurring create and update services independently reject invalid amounts,
   excess currency precision, non-finite values, invalid dates, and out-of-range
   newly selected dates before any database write. Persistence never repairs an
@@ -440,8 +442,8 @@ Business rules:
   keeps its historical date. The recurring template starts at the first
   frequency-aligned occurrence after the recorded occurrence and on or after
   today. A transaction recorded today therefore starts at the next aligned
-  occurrence, while an earlier transaction may start today when today is aligned,
-  so no historical template Due payment is created.
+  occurrence, while an earlier transaction may start today when today is
+  aligned, so no historical template Due payment is created.
 - Unexpected recurring-payment failures are logged with the original error and
   shown to the user through generic localized copy; internal error messages are
   never placed directly in a toast.
@@ -477,9 +479,9 @@ Business rules:
   `terminal_proceeds_currency`, `display_purchase_currency`, and
   `display_preferred_currency` for currencies. A metal reference is only
   `usd_per_pure_gram` with `quote_per_base`; a currency reference is either
-  `usd_per_currency_unit` with `quote_per_base` or `currency_units_per_usd`
-  with `base_per_quote`. USD is the exact identity rate `1`; inverse metal
-  references are rejected.
+  `usd_per_currency_unit` with `quote_per_base` or `currency_units_per_usd` with
+  `base_per_quote`. USD is the exact identity rate `1`; inverse metal references
+  are rejected.
 - Every action preserves the raw observed reference and provenance. Adapter/pure
   logic normalizes valid inputs once to canonical USD-per-base; no persistence
   column stores an unavailable reason. Missing or unparseable observation time
@@ -489,9 +491,9 @@ Business rules:
   rejected event records with stable internal reasons. Input evidence is
   `effective`, `ineffective`, or `incomplete`; structural validation always
   runs, so `is_effective` alone never establishes ownership. Invalid events and
-  descendants never affect ownership, net worth, reporting, analytics, or
-  normal History; retained malformed/rejected/incomplete evidence remains
-  available for audit, sync, and recovery.
+  descendants never affect ownership, net worth, reporting, analytics, or normal
+  History; retained malformed/rejected/incomplete evidence remains available for
+  audit, sync, and recovery.
 - A reversal is valid only when both references identify the current Sold or
   Disposed head. Equal-time causality wins; event IDs stabilize only unrelated
   display/diagnostic order and never select a CAS winner. Per-event persisted
@@ -499,8 +501,8 @@ Business rules:
   action-root rejection are sufficient for Slice 2. User-facing recovery maps
   internal reason codes to the approved reconciliation-recovery state.
 - Parent `assets` rows own the user, name, purchase facts, notes, and root sync
-  columns. `asset_metals` is a strict parent-owned child through `asset_id`;
-  it stores metal-specific facts and does not duplicate `user_id`.
+  columns. `asset_metals` is a strict parent-owned child through `asset_id`; it
+  stores metal-specific facts and does not duplicate `user_id`.
 - `purity_factor_decimal` is the canonical exact purity factor snapshot for new
   financial logic. Numeric `purity_fraction` is migration/compatibility-only and
   MUST NOT drive authoritative calculations. New flows MUST NOT use the retired
@@ -519,22 +521,22 @@ Business rules:
   form with no intermediate step or route.
 - Every other Active holding field is correctable. Name and notes are ordinary
   metadata edits. Weight, purity, physical form, total purchase price, purchase
-  currency, and purchase date are material corrections that require a reason
-  and preserve immutable before/after evidence in History.
+  currency, and purchase date are material corrections that require a reason and
+  preserve immutable before/after evidence in History.
 - Edit holding is one form with one direct `Save changes` action. Material
   differences reveal previous/current facts, required reason, and a live
   consequence summary; there is no separate correction-review route.
 - Preserved legacy holdings with unavailable exact weight, purity tuple, or
-  total purchase price remain visible and show those saved facts as not recorded.
-  Calculations that require a missing fact are unavailable and must never fall
-  back to compatibility numbers. A material correction of such a holding must
-  supply the complete valid exact fact set atomically; metadata-only edits do not
-  invent facts.
+  total purchase price remain visible and show those saved facts as not
+  recorded. Calculations that require a missing fact are unavailable and must
+  never fall back to compatibility numbers. A material correction of such a
+  holding must supply the complete valid exact fact set atomically;
+  metadata-only edits do not invent facts.
 - Purchase price means the total amount paid, including workmanship, premium,
   and other acquisition costs.
 - Effective holding state is Active, Sold, or Disposed. Creation, material
-  correction, Sale, No Longer, and Undo are immutable lifecycle events.
-  Terminal event facts are never edited in place.
+  correction, Sale, No Longer, and Undo are immutable lifecycle events. Terminal
+  event facts are never edited in place.
 - Sell applies to the whole holding only. It records positive gross proceeds,
   same-currency optional fees, net proceeds, sale date, optional notes, and
   realized profit or loss. Partial sales are backlog.
@@ -545,9 +547,9 @@ Business rules:
   or disable it. Cross-currency automatic credit is not allowed.
 - Issue #242 is a separate immediate implementation prerequisite only for sale
   account credit, Undo of an actually credited sale, and account compensation or
-  replacement credit. Those effects remain disabled until #242 passes its account
-  revision, writer-guard, CAS, sync, cutover, and regression contract. Sale without
-  credit, uncredited Undo, and unrelated Metals work continue.
+  replacement credit. Those effects remain disabled until #242 passes its
+  account revision, writer-guard, CAS, sync, cutover, and regression contract.
+  Sale without credit, uncredited Undo, and unrelated Metals work continue.
 - Sale credit equals exact net proceeds. It is a narrow linked Metals account
   effect, increases the account balance, and is excluded from ordinary income,
   budget-income, and earned-cashflow analytics.
@@ -604,8 +606,7 @@ metal/FX references.
 ### Financial Arithmetic
 
 New authoritative financial calculations use one shared `@monyvi/logic`
-Decimal.js primitive configured for 50 significant digits and
-`ROUND_HALF_EVEN`.
+Decimal.js primitive configured for 50 significant digits and `ROUND_HALF_EVEN`.
 
 - Financial calculation inputs and non-posted outputs cross boundaries as
   canonical base-10 decimal strings, never binary floating-point numbers.
@@ -634,9 +635,8 @@ introduce a new calculation or product decision.
   inputs are unavailable, never zero.
 - Purchase currency `P` is the canonical calculation and reporting basis. With
   acquisition time `a`, current or terminal valuation time `v`, and positive
-  known all-in purchase cost `K`: acquisition reference
-  `A = q × m_a ÷ x_{P,a}`; valuation reference
-  `V = q × m_v ÷ x_{P,v}`; metal movement
+  known all-in purchase cost `K`: acquisition reference `A = q × m_a ÷ x_{P,a}`;
+  valuation reference `V = q × m_v ÷ x_{P,v}`; metal movement
   `= q × (m_v - m_a) ÷ x_{P,a}`; currency movement
   `= q × m_v × (1 ÷ x_{P,v} - 1 ÷ x_{P,a})`; and purchase-cost component
   `= A - K`.
@@ -644,12 +644,11 @@ introduce a new calculation or product decision.
   purchase-cost component, therefore `V - K`. Only Active holdings contribute
   current value and unrealized P/L; Sold and Disposed holdings do not.
 - For a sale at time `s`, `v = s`. With gross proceeds `G`, fees `F`, and
-  proceeds currency `S`: canonical gross proceeds
-  `G_P = G × x_{S,s} ÷ x_{P,s}`; canonical fees
-  `F_P = F × x_{S,s} ÷ x_{P,s}`; sale-difference component `= G_P - V`; and
-  fee component `= -F_P`. Trustworthy realized P/L equals metal movement plus
-  currency movement plus purchase-cost component plus sale-difference component
-  plus fee component, therefore `G_P - F_P - K`.
+  proceeds currency `S`: canonical gross proceeds `G_P = G × x_{S,s} ÷ x_{P,s}`;
+  canonical fees `F_P = F × x_{S,s} ÷ x_{P,s}`; sale-difference component
+  `= G_P - V`; and fee component `= -F_P`. Trustworthy realized P/L equals metal
+  movement plus currency movement plus purchase-cost component plus
+  sale-difference component plus fee component, therefore `G_P - F_P - K`.
 - Fees use the sale-proceeds currency only, are non-negative, cannot exceed
   gross proceeds, and are deducted from gross proceeds to produce net proceeds.
   A sale without account credit remains valid. Optional account credit equals
@@ -662,13 +661,13 @@ introduce a new calculation or product decision.
   `Y_P × x_{P,d} ÷ x_{D,d}`. Use the same current observed FX basis for the
   combined value and every component; never rewrite canonical historical facts.
 - Combined P/L is available only with exact positive weight, a complete valid
-  purity tuple, a positive known all-in purchase cost, and every required current
-  or terminal conversion fact. Missing, invalid, zero, ambiguous, or legacy-null
-  required exact facts make only dependent value, P/L, or attribution unavailable,
-  never a free acquisition or hidden holding. Detailed attribution is unavailable
-  without required historical references. A combined result may still be shown
-  only when recorded facts derive it without assumptions, with an explanation
-  that its breakdown is unavailable.
+  purity tuple, a positive known all-in purchase cost, and every required
+  current or terminal conversion fact. Missing, invalid, zero, ambiguous, or
+  legacy-null required exact facts make only dependent value, P/L, or
+  attribution unavailable, never a free acquisition or hidden holding. Detailed
+  attribution is unavailable without required historical references. A combined
+  result may still be shown only when recorded facts derive it without
+  assumptions, with an explanation that its breakdown is unavailable.
 - Every acquired, corrected, sold, or attributed calculation preserves each
   consumed metal/FX reference's numeric value, unit, orientation, provider
   observation time, source, source-reported quality, and captured freshness.
@@ -710,11 +709,11 @@ Market rates are stored in `market_rates` as append-only USD-based references:
 
 - Currency columns store the USD value of one unit of that currency, for example
   `egp_usd`.
-- Metal columns store USD per pure gram, for example
-  `gold_usd_per_gram`.
-- The mobile app synchronizes recent rows into WatermelonDB. Authenticated startup
-  never blocks on market-rate presence; missing or invalid rates are handled by
-  affected screens as unavailable-value states while routing remains safe.
+- Metal columns store USD per pure gram, for example `gold_usd_per_gram`.
+- The mobile app synchronizes recent rows into WatermelonDB. Authenticated
+  startup never blocks on market-rate presence; missing or invalid rates are
+  handled by affected screens as unavailable-value states while routing remains
+  safe.
 - Freshness uses provider observation time, never fetch, storage, refresh, or
   synchronization time. An input older than 24 hours is stale; missing or
   unparseable observation time means freshness is Unknown.
@@ -722,13 +721,73 @@ Market rates are stored in `market_rates` as append-only USD-based references:
   orientation, provider observation time, source identity, source-reported
   quality or validity, and derived freshness. Unavailable provenance remains
   explicitly Unknown.
-- A failed refresh retains valid cached data and offers retry. Missing or invalid
-  rates preserve holdings and recorded facts while affected values remain
-  unavailable, never zero or an empty portfolio.
+- A failed refresh retains valid cached data and offers retry. Missing or
+  invalid rates preserve holdings and recorded facts while affected values
+  remain unavailable, never zero or an empty portfolio.
 - Current and historical references are distinct. Current rates MUST NOT
   fabricate acquisition or terminal snapshots.
-- `market_rates_history` is not part of the current WatermelonDB schema and
-  MUST NOT be referenced as the active app data source.
+- `market_rates_history` is not part of the current WatermelonDB schema and MUST
+  NOT be referenced as the active app data source.
+
+#### Atomic Market-Rate Snapshots (Issue #302)
+
+Issue #302 makes one complete market-rate snapshot the indivisible trust unit
+from producer ingestion through offline display:
+
+- The persisted snapshot identity is the `market_rates.id` UUID. The service
+  wire contract carries this identity once as top-level `snapshotId`, and every
+  trust observation binds through `market_rate_observations.batch_id` equal to
+  that same identity.
+- A complete current snapshot contains exactly 38 trusted observations:
+  `metal:GOLD`, `metal:SILVER`, `currency:<CODE>` for every one of the 35
+  supported fiat currencies, and `currency:BTC`. `currency:USD` is the exact
+  identity `1`. BTC is trusted for account and net-worth conversion only; it
+  remains outside Metals lifecycle roles and Live Rates fiat rows.
+- Exact bound observation decimals (`market_rate_observations.value_decimal`)
+  are the authoritative current financial truth. The wide `market_rates` numeric
+  fields are identity/order/history compatibility records only and MUST NOT be
+  used as authoritative current valuation or conversion inputs.
+- Provider JSON rate tokens in ordinary or scientific notation are normalized
+  losslessly to plain exact decimal text before validation and persistence. No
+  binary floating-point conversion is authoritative on that path.
+- Release safety approval (19 September 2026, PR #271): producer and persistence
+  reject rates whose mobile compatibility conversion is non-finite or zero. This
+  is a representability check only; accepted authoritative decimal strings
+  retain their precision. No clamping or rounding repairs an invalid candidate.
+  Cutover stops and identifies any existing incompatible complete snapshot for
+  an explicit recovery decision rather than deleting or rewriting its evidence.
+- Missing, malformed, or future provider observation timestamps normalize to
+  `null`, which means Unknown freshness. Capture, fetch, storage,
+  synchronization, receipt, restart, and local clock time are never substituted
+  as provider observation time, and root `created_at` is ordering metadata only.
+- Producer persistence, complete-envelope pull, and local application are atomic
+  and fail closed. Only a complete, valid, exactly bound snapshot can persist,
+  sync, or become current. Replaying an identical snapshot is idempotent;
+  replaying the same identity with conflicting content is rejected without
+  mutation; delayed older deliveries never regress the selected snapshot.
+- Delivery ordering is independent from immutable capture/provider evidence. The
+  V2 pull uses private commit-visible publication metadata and a serialized
+  millisecond barrier so late commits cannot fall behind the last successful
+  global sync watermark. Publication time never makes a rate fresher or changes
+  current-snapshot selection. Initial whole-history memory work is deferred to
+  #316; there is no new history cutoff or deletion policy.
+- Every displayed current rate and every trust fact describing it (source,
+  provider time, quality, freshness) come from one shared selected complete
+  snapshot across Home, Live Rates, My Metals, holding detail/valuation, and net
+  worth. A displayed value is never paired with evidence from another snapshot,
+  and current snapshot selection never rewrites immutable acquisition or
+  terminal rate references.
+- A trusted producer snapshot requires a non-empty trimmed source identity for
+  every required observation; null, empty, or whitespace-only source rejects the
+  candidate.
+- Legacy cached rate data without a provable matching immutable binding is never
+  newly certified by inference. When no complete valid snapshot exists,
+  dependent current values are unavailable rather than zero, while recorded
+  holdings and unrelated facts remain visible.
+- Retention and corruption integrity: removing any required evidence from a
+  snapshot makes it immediately ineligible, and it is never repaired with rows
+  from another batch. Deleting a root cascades its bound observations; any
+  future cleanup path treats root plus observations as one unit.
 
 ### Net Worth
 
@@ -1285,6 +1344,16 @@ Business rules:
 - Settings can change language after sign-in.
 - Theme preference is `LIGHT`, `DARK`, or `SYSTEM`.
 - Preferred currency affects display conversion and defaults.
+- User-visible monetary output follows the active language without changing stored
+  values or calculations. Arabic uses `ar-EG` Arabic-Indic digits, Arabic
+  grouping and decimal separators, then a fixed Arabic currency unit label
+  (for example `٤٤٤٬٩٥٦ جنيه مصري` and `٠٫٠٠١٠٠٠٠٠ بيتكوين`).
+- English monetary presentation keeps its existing symbol/code placement.
+  Editable financial inputs keep the Latin-digit, `.` decimal grammar defined
+  under Financial Amount Entry; display localization never changes input parsing.
+- Monetary amount labels cover every generated `CurrencyType` through an
+  exhaustive catalogue. Standalone currency names, stored ISO codes, parser
+  identifiers, rate instruments, and sync payloads remain code based.
 
 ## 10. Data Safety And Sync
 
@@ -1310,18 +1379,19 @@ Business rules:
   instead of overflowing. Account guard/result/evidence arrays contain each
   affected account exactly once and use deterministic ascending account-ID order
   for payload hashing, row locks, RPC outcomes, and reconciliation. Transfers
-  guard both source and destination accounts.
-  Transactions, transfers, recurring payments, SMS, and Metals reuse this protocol;
-  a domain may link its own evidence but must not create a competing account outbox.
-  The complete group synchronizes through dedicated action sync and one atomic server
+  guard both source and destination accounts. Transactions, transfers, recurring
+  payments, SMS, and Metals reuse this protocol; a domain may link its own
+  evidence but must not create a competing account outbox. The complete group
+  synchronizes through dedicated action sync and one atomic server
   compare-and-swap RPC.
-- Account `balance` and `financial_revision` are protected from direct authenticated
-  writes and generic full-row sync. Existing accounts backfill revision `0` without
-  fabricated historical actions. Before fail-closed enforcement, legacy unsynced
-  financial rows are drained, migrated, or explicitly quarantined; clients without
-  action ID, payload hash, and expected revision cannot overwrite protected fields.
-  The app is not in production, so cutover claims are proven with safe test/developer
-  fixtures rather than invented production-user assumptions.
+- Account `balance` and `financial_revision` are protected from direct
+  authenticated writes and generic full-row sync. Existing accounts backfill
+  revision `0` without fabricated historical actions. Before fail-closed
+  enforcement, legacy unsynced financial rows are drained, migrated, or
+  explicitly quarantined; clients without action ID, payload hash, and expected
+  revision cannot overwrite protected fields. The app is not in production, so
+  cutover claims are proven with safe test/developer fixtures rather than
+  invented production-user assumptions.
 - The first complete valid action accepted for the expected revision becomes
   canonical. Client time and Last Write Wins never choose competing grouped
   financial actions. Repeat delivery is idempotent.

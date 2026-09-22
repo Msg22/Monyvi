@@ -2,8 +2,29 @@ import {
   formatAccountBalance,
   formatSignedTransactionAmount,
 } from "@/utils/financial-display";
+import i18next from "i18next";
+
+import arCommon from "@/locales/ar/common.json";
+import enCommon from "@/locales/en/common.json";
 
 describe("financial display helpers", () => {
+  beforeAll(async () => {
+    await i18next.init({
+      resources: {
+        en: { common: enCommon },
+        ar: { common: arCommon },
+      },
+      lng: "en",
+      fallbackLng: "en",
+      ns: "common",
+      defaultNS: "common",
+      interpolation: { escapeValue: false },
+    });
+  });
+
+  afterEach(async () => {
+    await i18next.changeLanguage("en");
+  });
   it("formats an account balance without depending on DB model getters", () => {
     expect(
       formatAccountBalance({
@@ -41,5 +62,25 @@ describe("financial display helpers", () => {
         type: "INCOME",
       })
     ).toBe("+$250");
+  });
+
+  it("keeps signed Arabic amounts bidi-safe", async () => {
+    await i18next.changeLanguage("ar");
+
+    expect(
+      formatSignedTransactionAmount({
+        amount: 250,
+        currency: "EGP",
+        type: "EXPENSE",
+      })
+    ).toBe("\u061c-٢٥٠ جنيه مصري");
+
+    expect(
+      formatSignedTransactionAmount({
+        amount: 250,
+        currency: "EGP",
+        type: "INCOME",
+      })
+    ).toBe("\u061c+٢٥٠ جنيه مصري");
   });
 });

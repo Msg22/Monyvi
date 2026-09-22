@@ -2,8 +2,10 @@ import Decimal from "decimal.js";
 
 const CANONICAL_DECIMAL_PATTERN = /^-?(?:0|[1-9]\d*)(?:\.\d+)?$/;
 const INTEGER_PATTERN = /^-?(?:0|[1-9]\d*)$/;
-const ENGLISH_GROUPED_DECIMAL_PATTERN = /^-?(?:0|[1-9]\d{0,2})(?:,\d{3})+(?:\.\d+)?$/;
-const ARABIC_GROUPED_DECIMAL_PATTERN = /^-?(?:0|[1-9]\d{0,2})(?:٬\d{3})+(?:٫\d+)?$/;
+const ENGLISH_GROUPED_DECIMAL_PATTERN =
+  /^-?(?:0|[1-9]\d{0,2})(?:,\d{3})+(?:\.\d+)?$/;
+const ARABIC_GROUPED_DECIMAL_PATTERN =
+  /^-?(?:0|[1-9]\d{0,2})(?:٬\d{3})+(?:٫\d+)?$/;
 const AMBIGUOUS_SINGLE_COMMA_PATTERN = /^-?\d+,\d{3}$/;
 const ARABIC_INDIC_ZERO = "٠".charCodeAt(0);
 const InternalDecimal = Decimal.clone({
@@ -21,6 +23,12 @@ export type ExactDecimalInput = string | ExactDecimalValue;
 
 export interface LocalizedDecimalContext {
   readonly decimalSeparator?: "." | ",";
+}
+
+export interface CanonicalDecimalDisplayOptions {
+  readonly locale: string;
+  readonly maximumFractionDigits: number;
+  readonly minimumFractionDigits?: number;
 }
 
 export interface ExactDecimalValue {
@@ -117,7 +125,9 @@ export function parseLocalizedDecimal(
     throw new Error("Expected a localized decimal string");
   }
 
-  const normalizedDigits = Array.from(value, normalizeLocalizedCharacter).join("");
+  const normalizedDigits = Array.from(value, normalizeLocalizedCharacter).join(
+    ""
+  );
   const withoutArabicGrouping = normalizeArabicGrouping(normalizedDigits);
   const withStandardDecimal = withoutArabicGrouping.replace("٫", ".");
   return parseCanonicalDecimal(
@@ -150,6 +160,41 @@ export function roundDecimal(
   return readInput(value)
     .toDecimalPlaces(decimalPlaces, Decimal.ROUND_HALF_EVEN)
     .toFixed(decimalPlaces);
+}
+
+export function formatCanonicalDecimalForDisplay(
+  value: string,
+  options: CanonicalDecimalDisplayOptions
+): string {
+  const minimumFractionDigits = options.minimumFractionDigits ?? 0;
+  assertDisplayFractionDigits(
+    minimumFractionDigits,
+    options.maximumFractionDigits
+  );
+  const rounded = roundDecimal(value, options.maximumFractionDigits);
+  const isNegative = rounded.startsWith("-");
+  const unsigned = isNegative ? rounded.slice(1) : rounded;
+  const [integerDigits, fixedFraction = ""] = unsigned.split(".");
+  const fractionDigits = trimOptionalFractionZeroes(
+    fixedFraction,
+    minimumFractionDigits
+  );
+  const localeParts = getLocaleNumberParts(options.locale);
+  const groupedInteger = groupIntegerDigits(
+    integerDigits,
+    localeParts.groupSeparator,
+    localeParts.primaryGroupSize,
+    localeParts.secondaryGroupSize
+  );
+  const localizedInteger = localizeDigits(groupedInteger, localeParts.digits);
+  const localizedFraction = localizeDigits(fractionDigits, localeParts.digits);
+  const unsignedResult =
+    localizedFraction.length === 0
+      ? localizedInteger
+      : `${localizedInteger}${localeParts.decimalSeparator}${localizedFraction}`;
+  return isNegative
+    ? `${localeParts.negativePrefix}${unsignedResult}${localeParts.negativeSuffix}`
+    : unsignedResult;
 }
 
 export function toMinorUnits(
@@ -189,7 +234,9 @@ function readInput(value: ExactDecimalInput): Decimal {
 
   const decimal = decimalValues.get(value);
   if (decimal === undefined) {
-    throw new Error("Expected a canonical decimal string or exact decimal value");
+    throw new Error(
+      "Expected a canonical decimal string or exact decimal value"
+    );
   }
 
   return decimal;
@@ -274,5 +321,113 @@ function normalizeEnglishSeparators(
 function assertDecimalPlaces(decimalPlaces: number): void {
   if (!Number.isInteger(decimalPlaces) || decimalPlaces < 0) {
     throw new Error("Decimal places must be a non-negative integer");
+  }
+}
+
+interface LocaleNumberParts {
+  readonly decimalSeparator: string;
+  readonly digits: readonly string[];
+  readonly groupSeparator: string;
+  readonly negativePrefix: string;
+  readonly negativeSuffix: string;
+  readonly primaryGroupSize: number;
+  readonly secondaryGroupSize: number;
+}
+
+function getLocaleNumberParts(locale: string): LocaleNumberParts {
+  const formatter = new Intl.NumberFormat(locale, {
+    maximumFractionDigits: 1,
+    minimumFractionDigits: 1,
+    useGrouping: true,
+  });
+  const sampleParts = formatter.formatToParts(123_456_789.1);
+  const integerParts = sampleParts.filter(({ type }) => type === "integer");
+  const groupSeparator =
+    sampleParts.find(({ type }) => type === "group")?.value ?? "";
+  const decimalSeparator =
+    sampleParts.find(({ type }) => type === "decimal")?.value ?? ".";
+  const primaryGroupSize =
+    integerParts.at(-1)?.value.length ?? EXACT_DECIMAL_CONFIG.precision;
+  const secondaryGroupSize =
+    integerParts.at(-2)?.value.length ?? primaryGroupSize;
+  const negativeParts = new Intl.NumberFormat(locale, {
+    maximumFractionDigits: 0,
+    useGrouping: false,
+  }).formatToParts(-1);
+  const numericIndex = negativeParts.findIndex(
+    ({ type }) => type === "integer"
+  );
+  const negativePrefix = negativeParts
+    .slice(0, numericIndex)
+    .map(({ value: part }) => part)
+    .join("");
+  const negativeSuffix = negativeParts
+    .slice(numericIndex + 1)
+    .map(({ value: part }) => part)
+    .join("");
+  const digitFormatter = new Intl.NumberFormat(locale, {
+    maximumFractionDigits: 0,
+    useGrouping: false,
+  });
+  const digits = Array.from({ length: 10 }, (_, digit) =>
+    digitFormatter.format(digit)
+  );
+  return {
+    decimalSeparator,
+    digits,
+    groupSeparator,
+    negativePrefix,
+    negativeSuffix,
+    primaryGroupSize,
+    secondaryGroupSize,
+  };
+}
+
+function groupIntegerDigits(
+  value: string,
+  separator: string,
+  primaryGroupSize: number,
+  secondaryGroupSize: number
+): string {
+  if (separator.length === 0 || value.length <= primaryGroupSize) return value;
+  const groups: string[] = [];
+  let end = value.length;
+  let groupSize = primaryGroupSize;
+  while (end > 0) {
+    const start = Math.max(0, end - groupSize);
+    groups.unshift(value.slice(start, end));
+    end = start;
+    groupSize = secondaryGroupSize;
+  }
+  return groups.join(separator);
+}
+
+function localizeDigits(value: string, digits: readonly string[]): string {
+  return Array.from(value, (character) => {
+    const digit = character.charCodeAt(0) - "0".charCodeAt(0);
+    return digit >= 0 && digit <= 9 ? (digits[digit] ?? character) : character;
+  }).join("");
+}
+
+function trimOptionalFractionZeroes(
+  value: string,
+  minimumFractionDigits: number
+): string {
+  let end = value.length;
+  while (end > minimumFractionDigits && value[end - 1] === "0") end -= 1;
+  return value.slice(0, end);
+}
+
+function assertDisplayFractionDigits(
+  minimumFractionDigits: number,
+  maximumFractionDigits: number
+): void {
+  assertDecimalPlaces(minimumFractionDigits);
+  assertDecimalPlaces(maximumFractionDigits);
+  if (
+    minimumFractionDigits > maximumFractionDigits ||
+    maximumFractionDigits > EXACT_DECIMAL_CONFIG.precision
+  ) {
+    throw new Error("Expected a valid display fraction range");
   }
 }

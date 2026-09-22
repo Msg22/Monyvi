@@ -1,4 +1,6 @@
 {
+  "conversion_unavailable": "Exchange rate unavailable",
+  "conversion_preview": "≈ {{amount}} at rate {{one}} {{baseCurrency}} = {{rate}} {{quoteCurrency}}",
   "partial_sms_title": "{{count}} messages couldn't be processed",
   "partial_sms_title_one": "1 message couldn't be processed",
   "partial_sms_title_other": "{{count}} messages couldn't be processed",
@@ -465,6 +467,13 @@
   "sms_review_deselect_accessibility": "Deselect {{name}} suggestion",
   "sms_review_expand_accessibility": "Show original message for {{name}}",
   "sms_review_collapse_accessibility": "Hide original message for {{name}}",
+  "transaction_review_accessibility": "{{origin}}, {{type}} {{amount}}, {{counterparty}}, {{category}}, {{account}}",
+  "notification_detected_title": "{{emoji}} {{type}} Detected",
+  "notification_body": "{{amount}} from {{sender}}\nAccount: {{account}}",
+  "notification_body_with_counterparty": "{{amount}} from {{sender}}\nTo: {{counterparty}}\nAccount: {{account}}",
+  "notification_transaction_created_title": "Transaction created",
+  "notification_transaction_needs_account_title": "Transaction needs an account",
+  "notification_no_account_configured": "No Account Configured",
 
   "voice_resume": "Resume",
   "voice_pause": "Pause",
@@ -549,5 +558,8 @@
   "review_badge_auto_selected": "Auto-selected",
   "review_badge_missing_info": "Review details",
   "save_error_title": "Save Error",
-  "account_currency_mismatch": "Select an account with the same currency."
+  "account_currency_mismatch": "Select an account with the same currency.",
+  "exchange_rate_unavailable": "Exchange rate unavailable",
+  "conversion_unavailable": "Conversion unavailable",
+  "conversion_preview_at_rate": "≈ {{amount}} at rate {{rate}}"
 }

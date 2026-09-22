@@ -9,6 +9,7 @@
  * conform to these interfaces.
  */
 
+import type { CurrencyType } from "@monyvi/db";
 import type { SupportedCurrencyCode } from "@monyvi/logic";
 
 /** Supported languages */
@@ -70,12 +71,14 @@ interface CommonTranslations {
   // Errors
   readonly error_generic: string;
   readonly error_network: string;
+  readonly money_summary_error: string;
 
   // Currency
   readonly currency: string;
   readonly change_currency: string;
   readonly transaction_currency: string;
   readonly currency_names: Readonly<Record<SupportedCurrencyCode, string>>;
+  readonly currency_amount_labels: Readonly<Record<CurrencyType, string>>;
 
   // Dates (relative)
   readonly just_now: string;
@@ -130,6 +133,7 @@ interface CommonTranslations {
 
 /** Transactions namespace */
 interface TransactionsTranslations {
+  readonly conversion_preview: string;
   readonly partial_sms_title: string;
   readonly partial_sms_description: string;
   readonly partial_sms_try_later_at: string;
@@ -159,6 +163,9 @@ interface TransactionsTranslations {
   readonly start_tracking_spending: string;
   readonly confirm_delete: string;
 
+  readonly exchange_rate_unavailable: string;
+  readonly conversion_unavailable: string;
+  readonly conversion_preview_at_rate: string;
   // Voice input
   readonly voice_prompt: string;
   readonly voice_listening: string;
@@ -170,6 +177,13 @@ interface TransactionsTranslations {
 
   // SMS scanning
   readonly sms_review_title: string;
+  readonly transaction_review_accessibility: string;
+  readonly notification_detected_title: string;
+  readonly notification_body: string;
+  readonly notification_body_with_counterparty: string;
+  readonly notification_transaction_created_title: string;
+  readonly notification_transaction_needs_account_title: string;
+  readonly notification_no_account_configured: string;
   readonly sms_scan_title: string;
   readonly sms_scan_instructions: string;
   readonly sms_scan_scope_last_30_days: string;
@@ -775,12 +789,19 @@ interface AuthTranslations {
   readonly terms: string;
   readonly verification_link_failed_title: string;
   readonly verification_link_failed_message: string;
+  readonly recovery_link_failed_title: string;
+  readonly recovery_link_failed_message: string;
+  readonly callback_network_failed_title: string;
+  readonly callback_network_failed_message: string;
+  readonly auth_callback_failed_title: string;
+  readonly auth_callback_failed_message: string;
   readonly dismiss: string;
 }
 
 /** Metals namespace */
 interface MetalsTranslations {
   readonly live_rates: string;
+  readonly rates: string;
   readonly gold: string;
   readonly silver: string;
   readonly platinum: string;
@@ -793,6 +814,7 @@ interface MetalsTranslations {
   readonly kilogram: string;
   readonly ounce: string;
   readonly price_per_gram: string;
+  readonly price_per_ounce: string;
   readonly total_value: string;
   readonly holdings: string;
   readonly my_metals: string;
@@ -815,6 +837,15 @@ interface MetalsTranslations {
   readonly error_save_failed: string;
   readonly add_to_savings: string;
   readonly holding: PluralKeys;
+  readonly rate: {
+    readonly fresh: string;
+    readonly stale: string;
+    readonly unknown: string;
+    readonly missing: string;
+    readonly invalid: string;
+    readonly refresh_failed_with_cache: string;
+    readonly retry_refresh: string;
+  };
 }
 
 /** Root translation resources type */

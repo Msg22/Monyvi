@@ -4,10 +4,30 @@ import { useTranslation } from "react-i18next";
 import { FontAwesome5, Ionicons } from "@expo/vector-icons";
 
 import { palette } from "@/constants/colors";
+import { formatLocalizedMoneyAmount } from "@/utils/localized-money-display";
 
 import { PitchMockCard } from "./PitchMockCard";
 
 const COMPACT_HEIGHT_BREAKPOINT = 700;
+
+function formatVoiceResultAmount(
+  amount: number,
+  language: "en" | "ar"
+): string {
+  const formatted = formatLocalizedMoneyAmount({
+    amount,
+    currency: "EGP",
+    language,
+    englishPresentation: "code-suffix",
+    signDisplay: "always",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  });
+
+  return language === "en" && amount < 0
+    ? formatted.replace("-", "−")
+    : formatted;
+}
 
 interface VoiceResult {
   readonly id: "coffee" | "clothes" | "borrowed";
@@ -88,14 +108,20 @@ export function Slide1Voice(): React.ReactElement {
   const { height } = useWindowDimensions();
   const isCompact = height < COMPACT_HEIGHT_BREAKPOINT;
   const isRtl = i18n.dir() === "rtl";
+  const language = isRtl ? "ar" : "en";
+  const coffeeAmount = formatVoiceResultAmount(-40, language);
+  const clothesAmount = formatVoiceResultAmount(-2000, language);
+  const borrowedAmount = formatVoiceResultAmount(500, language);
 
   const results: readonly VoiceResult[] = [
     {
       id: "coffee",
       title: t("pitch_slide_voice_result_coffee_title"),
       category: t("pitch_slide_voice_result_coffee_category"),
-      amount: "−40 EGP",
-      accessibilityLabel: t("pitch_slide_voice_result_coffee_accessibility"),
+      amount: coffeeAmount,
+      accessibilityLabel: t("pitch_slide_voice_result_coffee_accessibility", {
+        amount: coffeeAmount,
+      }),
       iconName: "cafe-outline",
       iconColor: palette.orange[500],
       iconBackgroundClassName: "bg-orange-500/15",
@@ -105,8 +131,10 @@ export function Slide1Voice(): React.ReactElement {
       id: "clothes",
       title: t("pitch_slide_voice_result_clothes_title"),
       category: t("pitch_slide_voice_result_clothes_category"),
-      amount: "−2,000 EGP",
-      accessibilityLabel: t("pitch_slide_voice_result_clothes_accessibility"),
+      amount: clothesAmount,
+      accessibilityLabel: t("pitch_slide_voice_result_clothes_accessibility", {
+        amount: clothesAmount,
+      }),
       iconName: "shirt-outline",
       iconColor: palette.violet[500],
       iconBackgroundClassName: "bg-violet-500/15",
@@ -116,8 +144,10 @@ export function Slide1Voice(): React.ReactElement {
       id: "borrowed",
       title: t("pitch_slide_voice_result_borrowed_title"),
       category: t("pitch_slide_voice_result_borrowed_category"),
-      amount: "+500 EGP",
-      accessibilityLabel: t("pitch_slide_voice_result_borrowed_accessibility"),
+      amount: borrowedAmount,
+      accessibilityLabel: t("pitch_slide_voice_result_borrowed_accessibility", {
+        amount: borrowedAmount,
+      }),
       iconName: "wallet-outline",
       iconColor: palette.nileGreen[500],
       iconBackgroundClassName: "bg-nileGreen-500/15",

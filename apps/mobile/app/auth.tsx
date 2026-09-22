@@ -28,8 +28,21 @@ export function getAuthBottomPadding(
   return bottomInset + (isCompactViewport ? 8 : 22);
 }
 
-export function shouldEnableAuthScroll(fontScale: number): boolean {
-  return fontScale >= RESPONSIVE_FONT_SCALE.denseLayout;
+export function shouldEnableAuthScroll(
+  fontScale: number,
+  viewportHeight: number = 900,
+  viewportWidth?: number
+): boolean {
+  if (fontScale >= RESPONSIVE_FONT_SCALE.denseLayout) {
+    return true;
+  }
+  if (viewportHeight <= 850) {
+    return true;
+  }
+  if (viewportWidth !== undefined && viewportWidth > viewportHeight) {
+    return true;
+  }
+  return false;
 }
 
 export default function AuthScreen(): React.JSX.Element {
@@ -67,7 +80,11 @@ export default function AuthScreen(): React.JSX.Element {
           ref={scrollViewRef}
           onScroll={onScroll}
           scrollEventThrottle={16}
-          scrollEnabled={shouldEnableAuthScroll(fontScale)}
+          scrollEnabled={shouldEnableAuthScroll(
+            fontScale,
+            viewportHeight,
+            viewportWidth
+          )}
           bounces={false}
           overScrollMode="never"
           contentContainerStyle={{

@@ -7,7 +7,7 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { palette } from "@/constants/colors";
 import { useMonthlySummaries } from "@/hooks/useAnalytics";
 import type { CurrencyType } from "@monyvi/db";
-import { formatCurrency } from "@monyvi/logic";
+import { formatLocalizedMoneyAmount } from "@/utils/localized-money-display";
 import { Ionicons } from "@expo/vector-icons";
 import React from "react";
 import { Text, View } from "react-native";
@@ -68,7 +68,7 @@ export function QuickStats({ currency }: QuickStatsProps): React.JSX.Element {
               {t("avg_monthly_spend")}
             </Text>
             <Text className="text-base font-bold mt-1 text-slate-800 dark:text-white">
-              {formatCurrency({
+              {formatLocalizedMoneyAmount({
                 amount: avgExpense,
                 currency,
               })}

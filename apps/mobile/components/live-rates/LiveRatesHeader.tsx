@@ -27,8 +27,7 @@ import { useTranslation } from "react-i18next";
 // =============================================================================
 
 interface LiveRatesHeaderProps {
-  readonly isConnected: boolean;
-  readonly isStale?: boolean;
+  readonly isLive: boolean;
 }
 
 // =============================================================================
@@ -40,28 +39,20 @@ interface LiveRatesHeaderProps {
  * connection indicator in the right slot. Built custom rather than using
  * PageHeader children because the indicator needs to sit in the nav row,
  * not below it.
+ *
+ * The approved content contract reserves "Live Rates"/الأسعار المباشرة and
+ * the Live badge for confirmed-fresh, online rates; every other trust state
+ * shows the neutral "Rates"/أسعار السوق title while the per-section trust
+ * chips below keep the precise status.
  */
 export function LiveRatesHeader({
-  isConnected,
-  isStale = false,
+  isLive,
 }: LiveRatesHeaderProps): React.JSX.Element {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { isDark } = useTheme();
   const { t } = useTranslation("common");
   const { t: tMetals } = useTranslation("metals");
-
-  const dotColor = isStale
-    ? palette.gold[500]
-    : isConnected
-      ? palette.nileGreen[500]
-      : palette.slate[400];
-
-  const labelColor = isStale
-    ? palette.gold[500]
-    : isConnected
-      ? palette.nileGreen[500]
-      : palette.slate[400];
 
   return (
     <View
@@ -78,7 +69,7 @@ export function LiveRatesHeader({
             className="text-2xl font-bold text-slate-800 dark:text-white px-12"
             numberOfLines={1}
           >
-            {tMetals("live_rates")}
+            {tMetals(isLive ? "live_rates" : "rates")}
           </Text>
         </View>
 
@@ -97,16 +88,17 @@ export function LiveRatesHeader({
           />
         </TouchableOpacity>
 
-        {/* Connection indicator */}
-        <View className="flex-row items-center">
-          <View
-            className="w-2 h-2 rounded-full me-1.5"
-            style={{ backgroundColor: dotColor }}
-          />
-          <Text className="text-sm font-medium" style={{ color: labelColor }}>
-            {tMetals("live_badge")}
-          </Text>
-        </View>
+        {/* Live indicator (confirmed-fresh rates only) */}
+        {isLive ? (
+          <View className="flex-row items-center">
+            <View className="w-2 h-2 rounded-full me-1.5 bg-nileGreen-500" />
+            <Text className="text-sm font-medium text-nileGreen-500">
+              {tMetals("live_badge")}
+            </Text>
+          </View>
+        ) : (
+          <View className="w-2" />
+        )}
       </View>
     </View>
   );

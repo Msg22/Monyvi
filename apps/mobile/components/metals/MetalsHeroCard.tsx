@@ -20,7 +20,7 @@ import { Pressable, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 
 import type { CurrencyType } from "@monyvi/db";
-import { formatCurrency } from "@monyvi/logic";
+import { formatLocalizedMoneyAmount } from "@/utils/localized-money-display";
 
 import { palette } from "@/constants/colors";
 import { useTheme } from "@/context/ThemeContext";
@@ -84,21 +84,20 @@ export function MetalsHeroCard({
     setShowTooltip(false);
   }, []);
 
-  const formattedTotal = formatCurrency({
+  const formattedTotal = formatLocalizedMoneyAmount({
     amount: totalValue,
     currency,
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   });
 
-  const formattedProfitLoss = formatCurrency({
-    amount: Math.abs(profitLossAmount),
+  const formattedProfitLoss = formatLocalizedMoneyAmount({
+    amount: profitLossAmount,
     currency,
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
+    signDisplay: "always",
   });
-
-  const sign = profitLossAmount >= 0 ? "+" : "-";
   const percentText = `${Math.abs(profitLossPercent).toFixed(1)}%`;
   const plColor = getProfitLossColor(profitLossAmount, isDark);
   const plIcon = getProfitLossIcon(profitLossAmount);
@@ -133,7 +132,6 @@ export function MetalsHeroCard({
             className="ms-1 text-sm font-semibold"
             style={{ color: plColor }}
           >
-            {sign}
             {formattedProfitLoss} ({percentText})
           </Text>
 

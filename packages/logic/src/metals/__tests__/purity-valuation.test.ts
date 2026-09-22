@@ -2,13 +2,11 @@ import {
   createPuritySnapshot,
   getPurityCatalog,
   getPurityEntry,
+  isSupportedMetal,
   PURITY_CATALOG_VERSION,
   resolvePuritySelection,
 } from "../purity-catalog";
-import {
-  calculateMetalReferenceValue,
-  calculatePureGrams,
-} from "../valuation";
+import { calculateMetalReferenceValue, calculatePureGrams } from "../valuation";
 
 function loadPurityCatalogApi(): {
   readonly createPuritySnapshot: typeof createPuritySnapshot;
@@ -34,41 +32,148 @@ function loadValuationApi(): {
 }
 
 const EXPECTED_CATALOG_V1 = [
-  { code: "gold-9999", metal: "GOLD", labelKey: "purity_gold_9999", factorDecimal: "0.9999", catalogVersion: "1" },
-  { code: "gold-999", metal: "GOLD", labelKey: "purity_gold_999", factorDecimal: "0.999", catalogVersion: "1" },
-  { code: "gold-995", metal: "GOLD", labelKey: "purity_gold_995", factorDecimal: "0.995", catalogVersion: "1" },
-  { code: "gold-97916", metal: "GOLD", labelKey: "purity_gold_97916", factorDecimal: "0.97916", catalogVersion: "1" },
-  { code: "gold-9167", metal: "GOLD", labelKey: "purity_gold_9167", factorDecimal: "0.9167", catalogVersion: "1" },
-  { code: "gold-875", metal: "GOLD", labelKey: "purity_gold_875", factorDecimal: "0.875", catalogVersion: "1" },
-  { code: "gold-750", metal: "GOLD", labelKey: "purity_gold_750", factorDecimal: "0.75", catalogVersion: "1" },
-  { code: "gold-58333", metal: "GOLD", labelKey: "purity_gold_58333", factorDecimal: "0.58333", catalogVersion: "1" },
-  { code: "gold-500", metal: "GOLD", labelKey: "purity_gold_500", factorDecimal: "0.5", catalogVersion: "1" },
-  { code: "gold-375", metal: "GOLD", labelKey: "purity_gold_375", factorDecimal: "0.375", catalogVersion: "1" },
-  { code: "silver-9999", metal: "SILVER", labelKey: "purity_silver_9999", factorDecimal: "0.9999", catalogVersion: "1" },
-  { code: "silver-999", metal: "SILVER", labelKey: "purity_silver_999", factorDecimal: "0.999", catalogVersion: "1" },
-  { code: "silver-925", metal: "SILVER", labelKey: "purity_silver_925", factorDecimal: "0.925", catalogVersion: "1" },
-  { code: "silver-900", metal: "SILVER", labelKey: "purity_silver_900", factorDecimal: "0.9", catalogVersion: "1" },
-  { code: "silver-800", metal: "SILVER", labelKey: "purity_silver_800", factorDecimal: "0.8", catalogVersion: "1" },
-  { code: "silver-600", metal: "SILVER", labelKey: "purity_silver_600", factorDecimal: "0.6", catalogVersion: "1" },
+  {
+    code: "gold-9999",
+    metal: "GOLD",
+    labelKey: "purity_gold_9999",
+    factorDecimal: "0.9999",
+    catalogVersion: "1",
+  },
+  {
+    code: "gold-999",
+    metal: "GOLD",
+    labelKey: "purity_gold_999",
+    factorDecimal: "0.999",
+    catalogVersion: "1",
+  },
+  {
+    code: "gold-995",
+    metal: "GOLD",
+    labelKey: "purity_gold_995",
+    factorDecimal: "0.995",
+    catalogVersion: "1",
+  },
+  {
+    code: "gold-97916",
+    metal: "GOLD",
+    labelKey: "purity_gold_97916",
+    factorDecimal: "0.97916",
+    catalogVersion: "1",
+  },
+  {
+    code: "gold-9167",
+    metal: "GOLD",
+    labelKey: "purity_gold_9167",
+    factorDecimal: "0.9167",
+    catalogVersion: "1",
+  },
+  {
+    code: "gold-875",
+    metal: "GOLD",
+    labelKey: "purity_gold_875",
+    factorDecimal: "0.875",
+    catalogVersion: "1",
+  },
+  {
+    code: "gold-750",
+    metal: "GOLD",
+    labelKey: "purity_gold_750",
+    factorDecimal: "0.75",
+    catalogVersion: "1",
+  },
+  {
+    code: "gold-58333",
+    metal: "GOLD",
+    labelKey: "purity_gold_58333",
+    factorDecimal: "0.58333",
+    catalogVersion: "1",
+  },
+  {
+    code: "gold-500",
+    metal: "GOLD",
+    labelKey: "purity_gold_500",
+    factorDecimal: "0.5",
+    catalogVersion: "1",
+  },
+  {
+    code: "gold-375",
+    metal: "GOLD",
+    labelKey: "purity_gold_375",
+    factorDecimal: "0.375",
+    catalogVersion: "1",
+  },
+  {
+    code: "silver-9999",
+    metal: "SILVER",
+    labelKey: "purity_silver_9999",
+    factorDecimal: "0.9999",
+    catalogVersion: "1",
+  },
+  {
+    code: "silver-999",
+    metal: "SILVER",
+    labelKey: "purity_silver_999",
+    factorDecimal: "0.999",
+    catalogVersion: "1",
+  },
+  {
+    code: "silver-925",
+    metal: "SILVER",
+    labelKey: "purity_silver_925",
+    factorDecimal: "0.925",
+    catalogVersion: "1",
+  },
+  {
+    code: "silver-900",
+    metal: "SILVER",
+    labelKey: "purity_silver_900",
+    factorDecimal: "0.9",
+    catalogVersion: "1",
+  },
+  {
+    code: "silver-800",
+    metal: "SILVER",
+    labelKey: "purity_silver_800",
+    factorDecimal: "0.8",
+    catalogVersion: "1",
+  },
+  {
+    code: "silver-600",
+    metal: "SILVER",
+    labelKey: "purity_silver_600",
+    factorDecimal: "0.6",
+    catalogVersion: "1",
+  },
 ];
 
 describe("Metals purity catalog v1", () => {
+  it("owns the single supported-metal runtime guard", () => {
+    expect(isSupportedMetal("GOLD")).toBe(true);
+    expect(isSupportedMetal("SILVER")).toBe(true);
+    expect(isSupportedMetal("PLATINUM")).toBe(false);
+    expect(isSupportedMetal("BTC")).toBe(false);
+  });
+
   it("publishes exactly the approved Gold and Silver catalog with stable literal codes", () => {
     const { PURITY_CATALOG_VERSION, getPurityCatalog } = loadPurityCatalogApi();
 
     expect(PURITY_CATALOG_VERSION).toBe("1");
     expect(
-      getPurityCatalog().map(({ code, metal, labelKey, factorDecimal, catalogVersion }) => ({
-        code,
-        metal,
-        labelKey,
-        factorDecimal,
-        catalogVersion,
-      }))
+      getPurityCatalog().map(
+        ({ code, metal, labelKey, factorDecimal, catalogVersion }) => ({
+          code,
+          metal,
+          labelKey,
+          factorDecimal,
+          catalogVersion,
+        })
+      )
     ).toEqual(EXPECTED_CATALOG_V1);
     expect(new Set(getPurityCatalog().map(({ code }) => code)).size).toBe(16);
     expect(getPurityCatalog().map(({ code }) => code)).toEqual(
-      loadPurityCatalogApi().getPurityCatalog().map(({ code }) => code)
+      loadPurityCatalogApi()
+        .getPurityCatalog()
+        .map(({ code }) => code)
     );
   });
 
@@ -177,13 +282,24 @@ describe("exact purity and valuation", () => {
   });
 
   it.each([
-    ["weight", { weightGramsDecimal: "1.2345", purityFactorDecimal: "0.999999" }, "invalid_weight"],
-    ["purity", { weightGramsDecimal: "1.234", purityFactorDecimal: "0.9999999" }, "invalid_purity"],
-  ] as const)("rejects %s precision beyond the FR-083 boundary", (_case, input, reason) => {
-    const { calculatePureGrams } = loadValuationApi();
+    [
+      "weight",
+      { weightGramsDecimal: "1.2345", purityFactorDecimal: "0.999999" },
+      "invalid_weight",
+    ],
+    [
+      "purity",
+      { weightGramsDecimal: "1.234", purityFactorDecimal: "0.9999999" },
+      "invalid_purity",
+    ],
+  ] as const)(
+    "rejects %s precision beyond the FR-083 boundary",
+    (_case, input, reason) => {
+      const { calculatePureGrams } = loadValuationApi();
 
-    expect(calculatePureGrams(input)).toEqual({ available: false, reason });
-  });
+      expect(calculatePureGrams(input)).toEqual({ available: false, reason });
+    }
+  );
 
   it.each([
     [
@@ -204,12 +320,15 @@ describe("exact purity and valuation", () => {
           currencyUsdPerUnitDecimal: "1",
         }),
     ],
-  ] as const)("rejects a 51-significant-digit weight before %s arithmetic", (_case, calculate) => {
-    expect(calculate()).toEqual({
-      available: false,
-      reason: "invalid_weight",
-    });
-  });
+  ] as const)(
+    "rejects a 51-significant-digit weight before %s arithmetic",
+    (_case, calculate) => {
+      expect(calculate()).toEqual({
+        available: false,
+        reason: "invalid_weight",
+      });
+    }
+  );
 
   it("preserves an exact 50-significant-digit weight without rounding", () => {
     const weightGramsDecimal = "9".repeat(50);
@@ -226,14 +345,22 @@ describe("exact purity and valuation", () => {
     ["10", "0.999", "9.99"],
     ["0.001", "0.999999", "0.000999999"],
     ["999999999999999999.999", "0.999999", "999998999999999999.999000001"],
-  ])("calculates %s g at factor %s as exact pure grams %s", (weight, factor, expected) => {
-    const { calculatePureGrams } = loadValuationApi();
+  ])(
+    "calculates %s g at factor %s as exact pure grams %s",
+    (weight, factor, expected) => {
+      const { calculatePureGrams } = loadValuationApi();
 
-    expect(calculatePureGrams({ weightGramsDecimal: weight, purityFactorDecimal: factor })).toEqual({
-      available: true,
-      valueDecimal: expected,
-    });
-  });
+      expect(
+        calculatePureGrams({
+          weightGramsDecimal: weight,
+          purityFactorDecimal: factor,
+        })
+      ).toEqual({
+        available: true,
+        valueDecimal: expected,
+      });
+    }
+  );
 
   it("values exact 24K · 999 Gold from USD per pure gram and USD per currency unit", () => {
     const { calculateMetalReferenceValue } = loadValuationApi();
@@ -262,13 +389,51 @@ describe("exact purity and valuation", () => {
   });
 
   it.each([
-    [{ weightGramsDecimal: "0", purityFactorDecimal: "0.999", metalUsdPerPureGramDecimal: "100", currencyUsdPerUnitDecimal: "0.02" }, "invalid_weight"],
-    [{ weightGramsDecimal: "10", purityFactorDecimal: "1.000001", metalUsdPerPureGramDecimal: "100", currencyUsdPerUnitDecimal: "0.02" }, "invalid_purity"],
-    [{ weightGramsDecimal: "10", purityFactorDecimal: "0.999", metalUsdPerPureGramDecimal: "0", currencyUsdPerUnitDecimal: "0.02" }, "invalid_metal_rate"],
-    [{ weightGramsDecimal: "10", purityFactorDecimal: "0.999", metalUsdPerPureGramDecimal: "100", currencyUsdPerUnitDecimal: "0" }, "invalid_currency_rate"],
-  ])("marks unavailable input as %s instead of zero valuation", (input, reason) => {
-    const { calculateMetalReferenceValue } = loadValuationApi();
+    [
+      {
+        weightGramsDecimal: "0",
+        purityFactorDecimal: "0.999",
+        metalUsdPerPureGramDecimal: "100",
+        currencyUsdPerUnitDecimal: "0.02",
+      },
+      "invalid_weight",
+    ],
+    [
+      {
+        weightGramsDecimal: "10",
+        purityFactorDecimal: "1.000001",
+        metalUsdPerPureGramDecimal: "100",
+        currencyUsdPerUnitDecimal: "0.02",
+      },
+      "invalid_purity",
+    ],
+    [
+      {
+        weightGramsDecimal: "10",
+        purityFactorDecimal: "0.999",
+        metalUsdPerPureGramDecimal: "0",
+        currencyUsdPerUnitDecimal: "0.02",
+      },
+      "invalid_metal_rate",
+    ],
+    [
+      {
+        weightGramsDecimal: "10",
+        purityFactorDecimal: "0.999",
+        metalUsdPerPureGramDecimal: "100",
+        currencyUsdPerUnitDecimal: "0",
+      },
+      "invalid_currency_rate",
+    ],
+  ])(
+    "marks unavailable input as %s instead of zero valuation",
+    (input, reason) => {
+      const { calculateMetalReferenceValue } = loadValuationApi();
 
-    expect(calculateMetalReferenceValue(input)).toEqual({ available: false, reason });
-  });
+      expect(calculateMetalReferenceValue(input)).toEqual({
+        available: false,
+        reason,
+      });
+    }
+  );
 });

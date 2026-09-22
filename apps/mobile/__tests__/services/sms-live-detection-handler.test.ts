@@ -313,7 +313,8 @@ describe("sms-live-detection-handler notification actions", () => {
     expect(mockShowTransactionCreatedNotification).toHaveBeenCalledWith(
       parsed,
       "MainCIBAccount",
-      "user-1"
+      "user-1",
+      "en"
     );
     expect(mockShowTransactionNotification).not.toHaveBeenCalled();
   });
@@ -326,7 +327,8 @@ describe("sms-live-detection-handler notification actions", () => {
 
     expect(mockShowTransactionNeedsAccountNotification).toHaveBeenCalledWith(
       parsed,
-      "user-1"
+      "user-1",
+      "en"
     );
     expect(mockCreateTransaction).not.toHaveBeenCalled();
     expect(mockShowTransactionNotification).not.toHaveBeenCalled();
@@ -409,7 +411,8 @@ describe("sms-live-detection-handler notification actions", () => {
       parsed,
       "account-1",
       "MainCIBAccount",
-      "user-1"
+      "user-1",
+      "en"
     );
   });
 
@@ -434,7 +437,8 @@ describe("sms-live-detection-handler notification actions", () => {
       parsed,
       "account-1",
       "MainCIBAccount",
-      "user-1"
+      "user-1",
+      "en"
     );
   });
 
@@ -455,7 +459,8 @@ describe("sms-live-detection-handler notification actions", () => {
       parsed,
       "account-1",
       "MainCIBAccount",
-      "user-1"
+      "user-1",
+      "en"
     );
   });
 

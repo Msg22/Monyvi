@@ -38,11 +38,12 @@ describe("resolve-ci-e2e-scope", () => {
   });
 
 
-  it("selects auth E2E for verification Maestro and auth-service changes", () => {
+  it("selects auth E2E for verification Maestro, auth-service, and supabase-service changes", () => {
     expect(
       scopeResolver.resolveCiE2eScope([
         "apps/mobile/e2e/maestro/auth/email-verification-pending.yaml",
         "apps/mobile/services/auth-service.ts",
+        "apps/mobile/services/supabase.ts",
       ])
     ).toEqual({
       shouldRun: true,
@@ -89,6 +90,27 @@ describe("resolve-ci-e2e-scope", () => {
       shouldRun: true,
       suites: ["recurring-payments"],
     });
+  });
+
+  it("selects localization E2E for the Arabic monetary flow", () => {
+    expect(
+      scopeResolver.resolveCiE2eScope([
+        "apps/mobile/e2e/maestro/localization/arabic-money-displays.yaml",
+      ])
+    ).toEqual({
+      shouldRun: true,
+      suites: ["localization"],
+    });
+  });
+
+  it.each([
+    "apps/mobile/components/dashboard/TotalNetWorthCard.tsx",
+    "apps/mobile/components/accounts/AccountCard.tsx",
+    "apps/mobile/components/transactions/BaseCard.tsx",
+  ])("selects localization E2E for asserted money surface %s", (filePath) => {
+    expect(scopeResolver.resolveCiE2eScope([filePath]).suites).toContain(
+      "localization"
+    );
   });
 
   it("selects only recurring payment E2E for recurring dashboard code changes", () => {
@@ -205,6 +227,7 @@ describe("resolve-ci-e2e-scope", () => {
         "budgets",
         "sms-sync",
         "live-sms",
+        "localization",
       ],
     });
   });
@@ -275,7 +298,12 @@ describe("resolve-ci-e2e-scope", () => {
       ])
     ).toEqual({
       shouldRun: true,
-      suites: ["transactions", "recurring-payments", "sms-sync"],
+      suites: [
+        "transactions",
+        "recurring-payments",
+        "sms-sync",
+        "localization",
+      ],
     });
   });
 
@@ -294,6 +322,7 @@ describe("resolve-ci-e2e-scope", () => {
         "budgets",
         "sms-sync",
         "live-sms",
+        "localization",
       ],
     });
   });
@@ -311,6 +340,7 @@ describe("resolve-ci-e2e-scope", () => {
         "budgets",
         "sms-sync",
         "live-sms",
+        "localization",
       ],
     });
   });
@@ -328,6 +358,7 @@ describe("resolve-ci-e2e-scope", () => {
         "budgets",
         "sms-sync",
         "live-sms",
+        "localization",
       ],
     });
   });
@@ -383,6 +414,7 @@ describe("resolve-ci-e2e-scope", () => {
         "budgets",
         "sms-sync",
         "live-sms",
+        "localization",
       ],
     });
   });
@@ -409,6 +441,7 @@ describe("resolve-ci-e2e-scope", () => {
         "budgets",
         "sms-sync",
         "live-sms",
+        "localization",
       ],
     });
   });
@@ -429,6 +462,7 @@ describe("resolve-ci-e2e-scope", () => {
         "budgets",
         "sms-sync",
         "live-sms",
+        "localization",
       ],
     });
   });

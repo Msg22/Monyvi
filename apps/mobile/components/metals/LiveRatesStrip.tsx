@@ -19,6 +19,7 @@ import { Text, View, type ViewStyle } from "react-native";
 import { useTranslation } from "react-i18next";
 
 import { getChangeColor, getChangeIcon } from "@/utils/profit-loss-helpers";
+import { formatLocalizedMoneyAmount } from "@/utils/localized-money-display";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -66,17 +67,38 @@ export function LiveRatesStrip({
   silverChangePercent,
   bottomOffset = 0,
 }: LiveRatesStripProps): React.JSX.Element {
-  const { t } = useTranslation("metals");
+  const { t, i18n } = useTranslation("metals");
+  const language = i18n.language === "ar" ? "ar" : "en";
   const goldPerOz = goldPricePerGramUsd * TROY_OUNCE_GRAMS;
   const goldColor = getChangeColor(goldChangePercent);
   const silverColor = getChangeColor(silverChangePercent);
+  const formattedGoldPrice = formatLocalizedMoneyAmount({
+    amount: goldPerOz,
+    currency: "USD",
+    language,
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  });
+  const formattedSilverPrice = formatLocalizedMoneyAmount({
+    amount: silverPricePerGramUsd,
+    currency: "USD",
+    language,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+  const goldPricePerOunce = t("price_per_ounce", {
+    amount: formattedGoldPrice,
+  });
+  const silverPricePerGram = t("price_per_gram", {
+    amount: formattedSilverPrice,
+  });
 
   const accessibilityLabel = t("live_rates_accessibility", {
-    goldPrice: goldPerOz.toFixed(0),
+    goldPrice: formattedGoldPrice,
     goldDirection:
       goldChangePercent >= 0 ? t("direction_up") : t("direction_down"),
     goldChange: Math.abs(goldChangePercent).toFixed(1),
-    silverPrice: silverPricePerGramUsd.toFixed(2),
+    silverPrice: formattedSilverPrice,
     silverDirection:
       silverChangePercent >= 0 ? t("direction_up") : t("direction_down"),
     silverChange: Math.abs(silverChangePercent).toFixed(1),
@@ -95,7 +117,7 @@ export function LiveRatesStrip({
           {t("gold_24k_label")}
         </Text>
         <Text className="text-xs font-bold text-slate-800 dark:text-white me-1">
-          ${goldPerOz.toFixed(0)}/oz
+          {goldPricePerOunce}
         </Text>
         <Ionicons
           name={getChangeIcon(goldChangePercent)}
@@ -114,7 +136,7 @@ export function LiveRatesStrip({
           {t("silver_label")}
         </Text>
         <Text className="text-xs font-bold text-slate-800 dark:text-white me-1">
-          ${silverPricePerGramUsd.toFixed(2)}/g
+          {silverPricePerGram}
         </Text>
         <Ionicons
           name={getChangeIcon(silverChangePercent)}

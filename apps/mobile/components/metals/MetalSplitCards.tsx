@@ -17,7 +17,7 @@ import { Text, View, type ViewStyle } from "react-native";
 import { useTranslation } from "react-i18next";
 
 import type { CurrencyType } from "@monyvi/db";
-import { formatCurrency } from "@monyvi/logic";
+import { formatLocalizedMoneyAmount } from "@/utils/localized-money-display";
 
 import { palette } from "@/constants/colors";
 import type { PortfolioSplit } from "@/hooks/useMetalHoldings";
@@ -37,8 +37,8 @@ const MIN_BAR_WIDTH_PERCENT = 5;
 
 interface SplitCardProps {
   readonly label: string;
-  readonly percentage: number;
-  readonly totalValue: number;
+  readonly percentage: number | null;
+  readonly totalValue: number | null;
   readonly itemCount: number;
   readonly currency: CurrencyType;
   readonly barStyle: ViewStyle;
@@ -55,14 +55,18 @@ function SplitCardInner({
   isGold,
 }: SplitCardProps): React.JSX.Element {
   const { t } = useTranslation("metals");
-  const formattedValue = formatCurrency({
-    amount: totalValue,
-    currency,
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  });
+  const formattedValue =
+    totalValue === null
+      ? "—"
+      : formatLocalizedMoneyAmount({
+          amount: totalValue,
+          currency,
+          minimumFractionDigits: 0,
+          maximumFractionDigits: 0,
+        });
 
-  const displayPercent = Math.max(percentage, MIN_BAR_WIDTH_PERCENT);
+  const displayPercent =
+    percentage === null ? 0 : Math.max(percentage, MIN_BAR_WIDTH_PERCENT);
 
   return (
     <View
@@ -90,7 +94,7 @@ function SplitCardInner({
               : "text-slate-500 dark:text-slate-400"
           }`}
         >
-          {percentage.toFixed(0)}%
+          {percentage === null ? "—" : `${percentage.toFixed(0)}%`}
         </Text>
       </View>
 

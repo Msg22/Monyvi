@@ -340,9 +340,9 @@ adapts to selected language → preference persists.
       and `accessible` props on interactive elements in each screen; add
       `accessibilityLanguage="ar"` on Arabic text containers where needed
       (FR-016)
-- [ ] T075 Verify Western Arabic numerals (0-9) in all financial amount displays
-      in Arabic mode — grep for `toLocaleString` calls and ensure no `ar-EG`
-      locale causes eastern numeral substitution (FR-009)
+- [ ] T075 Verify Arabic-Indic digits and `ar-EG` grouping/decimal separators in
+      all user-visible monetary displays in Arabic mode while editable financial
+      inputs retain their Latin-digit grammar (FR-009)
 - [ ] T076 Verify bidirectional text: test Arabic text with embedded English
       brand names and numbers across transaction, account, and budget screens —
       confirm no layout breaking (FR-008)

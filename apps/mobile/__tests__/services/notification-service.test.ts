@@ -1,6 +1,12 @@
 import type { ParsedSmsTransaction } from "@monyvi/logic";
 import { Linking, Platform } from "react-native";
 import * as Notifications from "expo-notifications";
+import i18next from "i18next";
+
+import arCommon from "@/locales/ar/common.json";
+import arTransactions from "@/locales/ar/transactions.json";
+import enCommon from "@/locales/en/common.json";
+import enTransactions from "@/locales/en/transactions.json";
 import {
   ACTION_CONFIRM,
   ACTION_DISCARD,
@@ -131,7 +137,9 @@ function getNotificationChannelInput(): Parameters<
   return channelCall[1];
 }
 
-function createParsedSmsTransaction(): ParsedSmsTransaction {
+function createParsedSmsTransaction(
+  overrides: Partial<ParsedSmsTransaction> = {}
+): ParsedSmsTransaction {
   return {
     amount: 413,
     currency: "EGP",
@@ -146,6 +154,7 @@ function createParsedSmsTransaction(): ParsedSmsTransaction {
     smsFingerprint: "hash-1",
     senderDisplayName: "NBE",
     rawSmsBody: "Purchase EGP 413.00 at LIVE TEST MARKET",
+    ...overrides,
   };
 }
 
@@ -203,9 +212,23 @@ function createPermissionStatus({
 }
 
 describe("notification-service", () => {
-  beforeEach(() => {
+  beforeAll(async () => {
+    await i18next.init({
+      resources: {
+        en: { common: enCommon, transactions: enTransactions },
+        ar: { common: arCommon, transactions: arTransactions },
+      },
+      lng: "en",
+      fallbackLng: "en",
+      ns: ["common", "transactions"],
+      defaultNS: "transactions",
+      interpolation: { escapeValue: false },
+    });
+  });
+  beforeEach(async () => {
     resetNotificationServiceForTests();
     jest.clearAllMocks();
+    await i18next.changeLanguage("en");
     mockGetLastNotificationResponseAsync.mockResolvedValue(null);
     mockGetRequiredCurrentUserId.mockResolvedValue("user-1");
     Object.defineProperty(Platform, "OS", {
@@ -348,6 +371,88 @@ describe("notification-service", () => {
         })
       );
     });
+
+    it("preserves the existing English notification copy", async () => {
+      mockGetPermissionsAsync.mockResolvedValue(
+        createPermissionStatus({ granted: true })
+      );
+
+      await showTransactionNotification(
+        createParsedSmsTransaction(),
+        "account-1",
+        "MainCIBAccount",
+        "user-1"
+      );
+
+      expect(getScheduledNotificationInput().content).toMatchObject({
+        title: "💸 Expense Detected",
+        body: "EGP 413.00 from NBE\nTo: LIVE TEST MARKET\nAccount: MainCIBAccount",
+      });
+    });
+
+    it("localizes complete actionable and info-only notification messages", async () => {
+      await i18next.changeLanguage("ar");
+      mockGetPermissionsAsync.mockResolvedValue(
+        createPermissionStatus({ granted: true })
+      );
+
+      await showTransactionNotification(
+        createParsedSmsTransaction(),
+        "account-1",
+        "MainCIBAccount",
+        "user-1"
+      );
+      await showTransactionCreatedNotification(
+        createParsedSmsTransaction(),
+        "MainCIBAccount",
+        "user-1"
+      );
+      await showTransactionNeedsAccountNotification(
+        createParsedSmsTransaction(),
+        "user-1"
+      );
+
+      const scheduled = mockScheduleNotificationAsync.mock.calls.map(
+        ([notification]) => notification.content
+      );
+      expect(scheduled[0]).toMatchObject({
+        title: "💸 تم اكتشاف مصروف",
+        body: "٤١٣ جنيه مصري من NBE\nإلى: LIVE TEST MARKET\nالحساب: MainCIBAccount",
+      });
+      expect(scheduled[1]).toMatchObject({
+        title: "تم إنشاء المعاملة",
+        body: "٤١٣ جنيه مصري من NBE\nإلى: LIVE TEST MARKET\nالحساب: MainCIBAccount",
+      });
+      expect(scheduled[2]).toMatchObject({
+        title: "المعاملة تحتاج إلى حساب",
+        body: "٤١٣ جنيه مصري من NBE\nإلى: LIVE TEST MARKET\nالحساب: لا يوجد حساب مُعدّ",
+      });
+    });
+
+    it.each([
+      ["KWD", 1.234, "١٫٢٣٤ دينار كويتي"],
+      ["BTC", 0.001, "٠٫٠٠١٠٠٠٠٠ بيتكوين"],
+    ] as const)(
+      "preserves Arabic %s precision in notification bodies",
+      async (currency, amount, expectedAmount) => {
+        mockScheduleNotificationAsync.mockClear();
+        await i18next.changeLanguage("ar");
+        mockGetPermissionsAsync.mockResolvedValue(
+          createPermissionStatus({ granted: true })
+        );
+
+        await showTransactionNotification(
+          createParsedSmsTransaction({ amount, currency }),
+          "account-1",
+          "MainCIBAccount",
+          "user-1"
+        );
+
+        expect(getScheduledNotificationInput().content.body).toContain(
+          expectedAmount
+        );
+      }
+    );
 
     it("lets Android use the default channel sound without a custom sound resource", async () => {
       mockGetPermissionsAsync.mockResolvedValueOnce(

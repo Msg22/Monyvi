@@ -23,7 +23,7 @@ const IDS = {
   terminalProceedsCurrency: "018f0c7a-1234-7abc-8def-000000000010",
 } as const;
 
-const VALIDATION_INPUT = { cairoTodayDate: "2026-09-01" } as const;
+const VALIDATION_INPUT = { latestAllowedCalendarDate: "2026-09-01" } as const;
 
 function acquisitionSnapshots(): ReadonlyArray<Record<string, string | null>> {
   return [
@@ -289,7 +289,7 @@ describe("approved Metals financial action payload registry", () => {
     ).toThrow("financial_action_invalid_payload");
   });
 
-  it("enforces canonical facts, required revision semantics, and deterministic Cairo dates", () => {
+  it("enforces canonical facts, required revision semantics, and the trusted calendar-date boundary", () => {
     const add = payloadFor("add", "metals.add/v1");
     const sell = payloadFor("sell", "metals.sell/v2");
 
@@ -361,6 +361,22 @@ describe("approved Metals financial action payload registry", () => {
         VALIDATION_INPUT
       )
     ).not.toThrow();
+  });
+
+  it("rejects a sell sale date later than the trusted calendar boundary while accepting past and current-day dates", () => {
+    const sell = payloadFor("sell", "metals.sell/v2");
+    const validate = (saleDate: string): void => {
+      definition("sell", "metals.sell/v2").validatePayload(
+        { ...sell, saleDate },
+        VALIDATION_INPUT
+      );
+    };
+
+    expect(() => validate("2026-08-15")).not.toThrow();
+    expect(() => validate("2026-09-01")).not.toThrow();
+    expect(() => validate("2026-09-02")).toThrow(
+      FINANCIAL_ACTION_ERROR_CODES.INVALID_PAYLOAD
+    );
   });
 
   it("validates terminal purchase and proceeds currencies independently", () => {

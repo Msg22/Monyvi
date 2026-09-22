@@ -25,6 +25,7 @@ let mockSafeAreaInsets: {
   left: number;
 };
 let mockFontScale: number;
+let mockLocalSearchParams: Record<string, string | string[]> = {};
 
 jest.mock("react-native/Libraries/Utilities/useWindowDimensions", () => ({
   __esModule: true,
@@ -48,7 +49,8 @@ jest.mock("expo-router", () => ({
   useNavigationContainerRef: (): MockNavigationContainerRef => ({
     isReady: (): boolean => mockIsNavigationReady,
   }),
-  useLocalSearchParams: (): Record<string, string | string[]> => ({}),
+  useLocalSearchParams: (): Record<string, string | string[]> =>
+    mockLocalSearchParams,
 }));
 
 jest.mock("@/context/AuthContext", () => ({
@@ -143,13 +145,28 @@ jest.mock("@/services/supabase", () => ({
   resendVerificationEmail: jest.fn(),
 }));
 
+jest.mock("@/components/ui/Skeleton", () => ({
+  Skeleton: (props: unknown): React.ReactElement => {
+    const ReactMod = require("react") as typeof React;
+    const RN = require("react-native") as typeof import("react-native");
+    return ReactMod.createElement(RN.View, {
+      testID: "skeleton",
+      ...(props as object),
+    });
+  },
+}));
+
 const AuthModule = require("../../app/auth") as {
   default: () => React.JSX.Element;
   getAuthBottomPadding: (
     bottomInset: number,
     isCompactViewport: boolean
   ) => number;
-  shouldEnableAuthScroll: (fontScale: number) => boolean;
+  shouldEnableAuthScroll: (
+    fontScale: number,
+    viewportHeight?: number,
+    viewportWidth?: number
+  ) => boolean;
 };
 const AuthScreen = AuthModule.default;
 const { getAuthBottomPadding } = AuthModule;
@@ -232,10 +249,14 @@ describe("AuthScreen redirect", () => {
     );
   });
 
-  it("enables recovery scrolling only at the shared enlarged-text threshold", () => {
+  it("enables recovery scrolling for enlarged text scales, short viewports, and landscape", () => {
     expect(shouldEnableAuthScroll(1)).toBe(false);
     expect(shouldEnableAuthScroll(1.34)).toBe(false);
     expect(shouldEnableAuthScroll(1.35)).toBe(true);
+    expect(shouldEnableAuthScroll(1, 800)).toBe(true);
+    expect(shouldEnableAuthScroll(1, 850)).toBe(true);
+    expect(shouldEnableAuthScroll(1, 900, 1000)).toBe(true);
+    expect(shouldEnableAuthScroll(1, 900, 400)).toBe(false);
 
     mockFontScale = 1.35;
     render(<AuthScreen />);
@@ -247,6 +268,7 @@ describe("AuthCallbackScreen verification lifecycle", () => {
   beforeEach(() => {
     mockReplace.mockClear();
     mockCompleteAuthSessionFromUrl.mockReset();
+    mockLocalSearchParams = {};
     mockCallbackUrl =
       "monyvi://auth-callback#access_token=verification-access&refresh_token=verification-refresh&type=signup";
     mockIsNavigationReady = true;
@@ -260,6 +282,27 @@ describe("AuthCallbackScreen verification lifecycle", () => {
   afterEach(() => {
     jest.clearAllTimers();
     jest.useRealTimers();
+  });
+
+  it("renders a skeleton placeholder while processing callback completion", async () => {
+    let resolveSession: ((value: { success: boolean }) => void) | undefined;
+    mockCompleteAuthSessionFromUrl.mockImplementation(
+      () =>
+        new Promise<{ success: boolean }>((resolve) => {
+          resolveSession = resolve;
+        })
+    );
+
+    render(<AuthCallbackScreen />);
+
+    expect(
+      screen.getByTestId("auth-callback-loading-skeleton")
+    ).toBeOnTheScreen();
+
+    await act(async () => {
+      resolveSession?.({ success: true });
+      await Promise.resolve();
+    });
   });
 
   it("completes a cold-start verification callback before authenticated routing", async () => {
@@ -308,6 +351,7 @@ describe("AuthCallbackScreen failed verification recovery", () => {
     jest.useFakeTimers();
     mockReplace.mockClear();
     mockCompleteAuthSessionFromUrl.mockReset();
+    mockLocalSearchParams = {};
     mockCallbackUrl = "monyvi://auth-callback?error=access_denied";
     mockIsNavigationReady = true;
     mockAuthState = {
@@ -344,6 +388,52 @@ describe("AuthCallbackScreen failed verification recovery", () => {
 
     fireEvent.press(screen.getByRole("button", { name: "back_to_sign_in" }));
     expect(mockReplace).toHaveBeenCalledWith("/auth");
+  });
+
+  it("shows password recovery failure copy when the callback is for password reset", async () => {
+    mockLocalSearchParams = { type: "recovery" };
+
+    render(<AuthCallbackScreen />);
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(
+      screen.getByRole("header", { name: "recovery_link_failed_title" })
+    ).toBeOnTheScreen();
+    expect(
+      screen.getByText("recovery_link_failed_message")
+    ).toBeOnTheScreen();
+  });
+
+  it("shows connection error copy with a retry action for network failure", async () => {
+    mockCompleteAuthSessionFromUrl.mockResolvedValue({
+      success: false,
+      error: "No internet connection.",
+      errorCode: "network",
+    });
+
+    render(<AuthCallbackScreen />);
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(
+      screen.getByRole("header", { name: "callback_network_failed_title" })
+    ).toBeOnTheScreen();
+    expect(
+      screen.getByRole("button", { name: "retry" })
+    ).toBeOnTheScreen();
+
+    fireEvent.press(screen.getByRole("button", { name: "retry" }));
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(mockCompleteAuthSessionFromUrl).toHaveBeenCalledTimes(2);
   });
 
   it("shows the same safe recovery for an unexpected callback rejection", async () => {

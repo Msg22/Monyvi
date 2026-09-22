@@ -28,8 +28,10 @@ import {
 } from "@/services/recurring-payment-service";
 import { createTransaction } from "@/services/transaction-service";
 import { createTransfer } from "@/services/transfer-service";
+import { getSelectedCurrentCurrencyRate } from "@/services/current-market-snapshot-calculations";
 import { resolveInitialTransactionAccountSelection } from "@/utils/account-selection";
 import { logger } from "@/utils/logger";
+import { formatLocalizedMoneyAmount } from "@/utils/localized-money-display";
 import { useBudgetAlert } from "@/hooks/useBudgetAlert";
 import { BudgetAlertModal } from "@/components/budget/BudgetAlertModal";
 import {
@@ -44,8 +46,6 @@ import type {
 } from "@monyvi/db";
 import {
   evaluateAmountExpression,
-  formatAmountInput,
-  getCurrencyRate,
   parsePositiveFiniteAmountInput,
 } from "@monyvi/logic";
 import { Ionicons } from "@expo/vector-icons";
@@ -56,14 +56,15 @@ import { ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { usePreferredCurrency } from "@/hooks/usePreferredCurrency";
 
-const TRANSACTION_FIELD_ORDER: readonly (keyof TransactionValidationErrors)[] = [
-  "amount",
-  "accountId",
-  "categoryId",
-  "fromAccountId",
-  "toAccountId",
-  "recurringName",
-];
+const TRANSACTION_FIELD_ORDER: readonly (keyof TransactionValidationErrors)[] =
+  [
+    "amount",
+    "accountId",
+    "categoryId",
+    "fromAccountId",
+    "toAccountId",
+    "recurringName",
+  ];
 
 export default function AddTransaction(): React.ReactNode {
   const router = useRouter();
@@ -116,7 +117,7 @@ export default function AddTransaction(): React.ReactNode {
     incomeCategories,
     isLoading: _categoriesLoading,
   } = useCategories();
-  const { latestRates } = useMarketRates();
+  const { selectedSnapshot } = useMarketRates();
   const { showToast } = useToast();
   const { preferredCurrency } = usePreferredCurrency();
   const { scrollViewRef, getFieldRef, onScroll, scrollToFirstError } =
@@ -137,6 +138,7 @@ export default function AddTransaction(): React.ReactNode {
 
   // Derived Values
   const selectedAccount = accounts.find((a) => a.id === selectedAccountId);
+  const parsedAmount = parsePositiveFiniteAmountInput(amount);
   const toAccount = accounts.find((a) => a.id === toAccountId);
 
   const relevantCategories =
@@ -281,6 +283,7 @@ export default function AddTransaction(): React.ReactNode {
 
   // Auto-calculate target amount for transfers
   useEffect(() => {
+    setTargetAmount("");
     if (
       type === "TRANSFER" &&
       selectedAccount &&
@@ -290,17 +293,19 @@ export default function AddTransaction(): React.ReactNode {
     ) {
       const numAmount = calculateResult(amount);
       if (numAmount !== null && numAmount > 0) {
-        if (latestRates) {
-          const rate = getCurrencyRate(
-            latestRates,
-            selectedAccount.currency,
-            toAccount.currency
-          );
-          setTargetAmount((numAmount * rate).toFixed(2));
+        if (selectedSnapshot) {
+          const rate = getSelectedCurrentCurrencyRate({
+            fromCurrency: selectedAccount.currency,
+            toCurrency: toAccount.currency,
+            currentSnapshot: selectedSnapshot,
+          });
+          if (rate !== null) {
+            setTargetAmount((numAmount * rate).toFixed(2));
+          }
         }
       }
     }
-  }, [type, selectedAccount, toAccount, amount, latestRates]);
+  }, [type, selectedAccount, toAccount, amount, selectedSnapshot]);
 
   const createRecurring = async (
     amount: number,
@@ -336,25 +341,30 @@ export default function AddTransaction(): React.ReactNode {
     }
   };
 
-  const validateAndCreateTransfer = async (amount: number): Promise<void> => {
+  const validateAndCreateTransfer = async (
+    amount: number
+  ): Promise<boolean> => {
     if (!toAccountId) {
       setFormErrors({ toAccountId: t("please_select_destination_account") });
       setIsSubmitting(false);
-      return;
+      return false;
     }
 
     if (!selectedAccountId || !selectedAccount) {
       setFormErrors({ fromAccountId: t("please_select_source_account") });
       setIsSubmitting(false);
-      return;
+      return false;
     }
 
-    const parsedTargetAmount = targetAmount
-      ? parsePositiveFiniteAmountInput(targetAmount)
-      : null;
-    if (targetAmount && parsedTargetAmount === null) {
+    const isCrossCurrency = selectedAccount.currency !== toAccount?.currency;
+    const parsedTargetAmount =
+      isCrossCurrency && targetAmount
+        ? parsePositiveFiniteAmountInput(targetAmount)
+        : null;
+    if (isCrossCurrency && parsedTargetAmount === null) {
       setFormErrors({ amount: t("invalid_amount") });
-      return;
+      setIsSubmitting(false);
+      return false;
     }
 
     const exchangeRate =
@@ -378,6 +388,7 @@ export default function AddTransaction(): React.ReactNode {
         title: t("transfer_created"),
         message: t("transfer_created_message"),
       });
+      return true;
     } catch (error: unknown) {
       showToast({
         type: "error",
@@ -481,7 +492,7 @@ export default function AddTransaction(): React.ReactNode {
       let alertTriggered = false;
 
       if (type === "TRANSFER") {
-        await validateAndCreateTransfer(finalAmount);
+        if (!(await validateAndCreateTransfer(finalAmount))) return;
       } else {
         let createdRecurringPaymentId: string | undefined;
         let linkedRecurringId: string | undefined;
@@ -592,19 +603,17 @@ export default function AddTransaction(): React.ReactNode {
             {/* Insufficient balance warning */}
             {type === "EXPENSE" &&
               selectedAccount &&
-              amount &&
-              parsePositiveFiniteAmountInput(amount) !== null &&
-              parsePositiveFiniteAmountInput(amount)! >
-                selectedAccount.balance && (
+              parsedAmount !== null &&
+              parsedAmount > selectedAccount.balance && (
                 <Text className="text-amber-500 text-xs font-medium text-center mb-1">
-                  ⚠️ {t("warning_negative_balance")} -
-                  {formatAmountInput(
-                    (
-                      parsePositiveFiniteAmountInput(amount)! -
-                      selectedAccount.balance
-                    ).toFixed(2)
-                  )}{" "}
-                  {selectedAccount.currency}
+                  ⚠️ {t("warning_negative_balance")} -{" "}
+                  {formatLocalizedMoneyAmount({
+                    amount: parsedAmount - selectedAccount.balance,
+                    currency: selectedAccount.currency,
+                    englishPresentation: "code-suffix",
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })}
                 </Text>
               )}
             <AmountDisplay
@@ -661,13 +670,11 @@ export default function AddTransaction(): React.ReactNode {
                 toAccountRef={getFieldRef("toAccountId")}
                 exchangeRate={
                   selectedAccount && toAccount
-                    ? latestRates
-                      ? getCurrencyRate(
-                          latestRates,
-                          selectedAccount.currency,
-                          toAccount.currency
-                        )
-                      : undefined
+                    ? (getSelectedCurrentCurrencyRate({
+                        fromCurrency: selectedAccount.currency,
+                        toCurrency: toAccount.currency,
+                        currentSnapshot: selectedSnapshot,
+                      }) ?? undefined)
                     : undefined
                 }
                 isTargetAmountActive={activeAmountField === "targetAmount"}

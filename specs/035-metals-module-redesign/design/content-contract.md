@@ -92,10 +92,10 @@ Do not shorten **Dispose** to “Remove,” “Delete,” or `حذف`. Do not us
 
 ## 3a. Home net-worth breakdown and holding imagery
 
-- **Approved title:** Where your money is / أين أموالك.
-- **Composition constraint — Concept C:** This is an additive compact section directly below the existing Net worth total, not a Home redesign. Use an isolated pair of equal-width Accounts and Metals summary tiles. Preserve the existing header, greeting, net-worth hero, sections/cards, bottom navigation, theme behavior, tokens, and spacing language. Do not repeat full Accounts or Metals module content.
-- **Source tiles:** Accounts / الحسابات; Metals / المعادن. Show each source as `{{amount}} · {{share}} of net worth` / `{{amount}} · {{share}} من صافي الثروة`. Do not add performance, sale proceeds, budgets, transactions, or snapshots as extra wealth sources.
-- **Metals footer:** Gold / ذهب; Silver / فضة. These compact items are clearly nested inside Metals and use `{{amount}} · {{share}} of Metals` / `{{amount}} · {{share}} من المعادن`; they are not separate net-worth sources.
+- **Approved title:** Where your money is / فلوسك موزّعة فين.
+- **Composition constraint — Concept C:** This is an additive compact section directly below the existing Net worth total, not a Home redesign. Use an isolated pair of equal-width Accounts and gold-and-silver summary tiles. Preserve the existing header, greeting, net-worth hero, sections/cards, bottom navigation, theme behavior, tokens, and spacing language. Do not repeat full Accounts or Metals module content.
+- **Source tiles:** Accounts / الفلوس في الحسابات; Gold & silver / الذهب والفضة. Describe the metals source as gold and silver, never generic `المعادن`. Show each source as `{{amount}} · {{share}} of net worth` / `{{amount}} · {{share}} من صافي الثروة`. Do not add performance, sale proceeds, budgets, transactions, or snapshots as extra wealth sources.
+- **Metals footer:** Nested label `Inside gold & silver` / `تفاصيل الذهب والفضة`; Gold / ذهب; Silver / فضة. These compact items are clearly nested inside the gold-and-silver source and use `{{amount}} · {{share}} of gold & silver` / `{{amount}} · {{share}} من الذهب والفضة`; they are not separate net-worth sources. Hide the footer only when both active Gold and Silver holding counts are zero, never because a valuation is `0`, `null`, or unavailable.
 - **Destinations:** Accounts and Metals rows may open Accounts and My metals. **See all rates** / عرض كل الأسعار opens Live Rates. Rates content sits below the net-worth breakdown and never appears as a wealth source.
 - **Themes:** Use one equivalent compact composition in light and dark themes; theme changes must not change source order, nesting, amounts, shares, or destinations.
 - **Canonical illustration:** Accounts EGP 1,062,237.75 · 85.4% of net worth; Metals EGP 181,426.17 · 14.6% of net worth. Within Metals: Gold EGP 162,317.87 · 89.5% of Metals; Silver EGP 19,108.30 · 10.5% of Metals. Net worth: EGP 1,243,663.92.
@@ -208,6 +208,7 @@ Do not shorten **Dispose** to “Remove,” “Delete,” or `حذف`. Do not us
 - Financial-review acknowledgment for unknown freshness: “I understand that the age of {{rateName}} is unknown.” / «أفهم أن عمر {{rateName}} غير معروف.»
 - Name every affected metal or currency input; never use an unexplained generic “rates may be stale.”
 - Provenance display sequence: **source, provider update time, quality/freshness**. Do not substitute local fetch, storage, sync, or action time for provider observation time.
+- **My Metals fresh-rate line:** `Rates updated {{date}} at {{time}}` / `تم تحديث الأسعار {{date}} في {{time}}`, always from provider observation time. Use `today` / `اليوم` only when the observation falls on the same local day; otherwise show the calendar date. The visible line and its accessibility copy must match, and long copy may wrap to two lines on compact screens.
 - Unit label: **USD per pure gram** / **دولار أمريكي لكل غرام نقي**. Currency factors: **USD value of one {{currency}}** / **القيمة بالدولار الأمريكي لوحدة واحدة من {{currency}}**.
 
 ## 6. Local-first, sync, recovery, and conflict

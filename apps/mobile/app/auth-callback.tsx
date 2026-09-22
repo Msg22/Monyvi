@@ -9,7 +9,11 @@
  * @module AuthCallbackRoute
  */
 
-import { AuthCallbackFailureView } from "@/components/auth/AuthCallbackFailureView";
+import {
+  AuthCallbackFailureView,
+  type AuthCallbackFailureType,
+} from "@/components/auth/AuthCallbackFailureView";
+import { Skeleton } from "@/components/ui/Skeleton";
 import { useAuth } from "@/context/AuthContext";
 import { useDeferredRouterReplace } from "@/hooks/useDeferredRouterReplace";
 import { completeAuthSessionFromUrl } from "@/services/auth-service";
@@ -17,6 +21,7 @@ import { useURL } from "expo-linking";
 import { type Href, useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 type CallbackState = "waiting" | "processing" | "completed" | "failed";
 
@@ -61,6 +66,35 @@ function isPasswordRecoveryLink(
   return false;
 }
 
+function AuthCallbackSkeleton(): React.JSX.Element {
+  const insets = useSafeAreaInsets();
+
+  return (
+    <View
+      testID="auth-callback-loading-skeleton"
+      className="flex-1 items-center justify-between bg-background px-6 dark:bg-background-dark"
+      style={{
+        paddingTop: insets.top + 24,
+        paddingBottom: insets.bottom + 24,
+      }}
+    >
+      <View className="flex-1 items-center justify-center">
+        <Skeleton width={92} height={92} borderRadius={46} />
+        <View className="mt-6">
+          <Skeleton width={220} height={32} borderRadius={8} />
+        </View>
+        <View className="mt-3 items-center">
+          <Skeleton width={260} height={16} borderRadius={6} />
+          <View className="mt-2">
+            <Skeleton width={180} height={16} borderRadius={6} />
+          </View>
+        </View>
+      </View>
+      <Skeleton width="100%" height={48} borderRadius={13} />
+    </View>
+  );
+}
+
 export default function AuthCallbackScreen(): React.JSX.Element {
   const { isAuthenticated, isLoading } = useAuth();
   const router = useRouter();
@@ -68,6 +102,9 @@ export default function AuthCallbackScreen(): React.JSX.Element {
   const callbackUrl = useURL();
   const processedUrlRef = useRef<string | null>(null);
   const [callbackState, setCallbackState] = useState<CallbackState>("waiting");
+  const [failureType, setFailureType] =
+    useState<AuthCallbackFailureType>("verification");
+  const [retryNonce, setRetryNonce] = useState(0);
 
   useEffect(() => {
     if (!callbackUrl || processedUrlRef.current === callbackUrl) {
@@ -85,10 +122,34 @@ export default function AuthCallbackScreen(): React.JSX.Element {
           return;
         }
 
-        setCallbackState(result.success ? "completed" : "failed");
+        if (result.success) {
+          setCallbackState("completed");
+        } else {
+          setCallbackState("failed");
+          if (
+            result.errorCode === "network" ||
+            result.errorCode === "timeout"
+          ) {
+            setFailureType("network");
+          } else if (isPasswordRecoveryLink(params, callbackUrl)) {
+            setFailureType("recovery");
+          } else if (
+            params.provider ||
+            (callbackUrl && callbackUrl.includes("provider="))
+          ) {
+            setFailureType("oauth");
+          } else {
+            setFailureType("verification");
+          }
+        }
       } catch {
         if (isMounted) {
           setCallbackState("failed");
+          if (isPasswordRecoveryLink(params, callbackUrl)) {
+            setFailureType("recovery");
+          } else {
+            setFailureType("verification");
+          }
         }
       }
     };
@@ -98,7 +159,7 @@ export default function AuthCallbackScreen(): React.JSX.Element {
     return () => {
       isMounted = false;
     };
-  }, [callbackUrl]);
+  }, [callbackUrl, retryNonce, params]);
 
   let redirectHref: Href | null = null;
   if (callbackState === "completed" && !isLoading && isAuthenticated) {
@@ -112,15 +173,22 @@ export default function AuthCallbackScreen(): React.JSX.Element {
     href: redirectHref ?? "/",
   });
 
+  const handleRetry = (): void => {
+    processedUrlRef.current = null;
+    setRetryNonce((prev) => prev + 1);
+  };
+
   if (callbackState === "failed") {
     return (
       <AuthCallbackFailureView
+        failureType={failureType}
         onBack={() => {
           router.replace("/auth");
         }}
+        onRetry={failureType === "network" ? handleRetry : undefined}
       />
     );
   }
 
-  return <View />;
+  return <AuthCallbackSkeleton />;
 }

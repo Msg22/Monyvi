@@ -1,0 +1,21 @@
+appId: com.monyvi.app
+---
+# The production page keeps trust decisions behind its customer-facing status,
+# while the visible composition remains Gold, Silver, and currencies.
+- runFlow: ../helpers/setup.yaml
+- openLink: monyvi://live-rates
+- extendedWaitUntil:
+    visible:
+      id: "live-rates-gold-card"
+    timeout: 30000
+- assertVisible:
+    id: "live-rates-gold-card"
+- assertVisible:
+    id: "live-rates-silver-card"
+- assertVisible:
+    id: "live-rates-currency-section"
+- assertNotVisible: "Platinum"
+- swipe:
+    direction: DOWN
+- assertVisible:
+    id: "live-rates-gold-card"

@@ -305,17 +305,16 @@ describe("(private)/startup.tsx routing gate", () => {
     expect(mockRouterReplace).toHaveBeenCalledWith("/(private)/(tabs)");
   });
 
-  it("keeps the recovery screen visible for an onboarded user when required market rates are unavailable", () => {
+  it("keeps an onboarded user's recorded data available when market rates are unavailable", () => {
     setState({
       syncState: "failed",
       onboardingCompleted: true,
       initialSyncFailureReason: "market-rates-unavailable",
     });
 
-    const renderer = renderGate();
+    renderGateWithEffects();
 
-    expect(findRetryReason(renderer)).toBe("market-rates-unavailable");
-    expect(mockRouterReplace).not.toHaveBeenCalledWith("/(private)/(tabs)");
+    expect(mockRouterReplace).toHaveBeenCalledWith("/(private)/(tabs)");
   });
 
   // Race-condition guards — `useProfile.isLoading` flips false on the FIRST

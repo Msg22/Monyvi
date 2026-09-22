@@ -4,6 +4,10 @@ import { useTranslation } from "react-i18next";
 import { Ionicons } from "@expo/vector-icons";
 import Svg, { Path } from "react-native-svg";
 import { palette } from "@/constants/colors";
+import {
+  formatLocalizedMoneyAmount,
+  formatLocalizedMoneyNumber,
+} from "@/utils/localized-money-display";
 import { PitchMockCard } from "./PitchMockCard";
 
 /**
@@ -11,25 +15,14 @@ import { PitchMockCard } from "./PitchMockCard";
  *
  * Mirrors `specs/026-onboarding-restructure/mockups/03-slide-live-market.png`
  * after the 2026-04-26 user-feedback round:
- *  - "NET WORTH" eyebrow.
- *  - Big "EGP 342,180" amount + green "+2.1% ↑" pill on the right.
+ *  - Localized mock net-worth amount + green "+2.1% ↑" pill on the right.
  *  - Smooth line-chart silhouette (replaces the previous bar-chart
  *    approximation, which the user flagged as not matching the mockup).
  *  - 3 asset rows: bullet + label + value with directional arrow.
  *  - Footer caption: pulsing-green "live" dot + "updated 2 min ago".
  *
- * ## i18n
- *
- * The numeric / currency / change values in this slide are
- * mock-illustration content baked into the design (mockup
- * `03-slide-live-market.png`). They are intentionally NOT translated —
- * the goal is to convey the SHAPE of the live-market card, not real
- * data. The hard-coded values (currency code "EGP", amounts like
- * "4,218 EGP/g", percentages like "+2.1%", and the "2 min ago" caption
- * value) live in this file directly rather than the locale files.
- *
- * Each occurrence has an inline `// i18n-ignore` marker so an
- * automated audit can tell illustration-mock from real strings.
+ * Monetary values are fixed illustration data, but their digits, separators,
+ * currency labels, and per-gram unit follow the active app locale.
  */
 /**
  * Minutes-ago value baked into the "live · updated N min ago" footer.
@@ -42,7 +35,10 @@ interface MarketRow {
   readonly key: string;
   readonly bulletColor: string;
   readonly labelKey: string;
-  readonly value: string;
+  readonly amount: number;
+  readonly currency?: "EGP";
+  readonly minimumFractionDigits: number;
+  readonly maximumFractionDigits: number;
   readonly change: "up" | "down" | "flat";
   readonly tone: "amber" | "slate" | "green" | "red";
 }
@@ -52,7 +48,10 @@ const MARKET_ROWS: readonly MarketRow[] = [
     key: "gold",
     bulletColor: "#F59E0B",
     labelKey: "pitch_slide_live_market_gold_label",
-    value: "4,218 EGP/g",
+    amount: 4218,
+    currency: "EGP",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
     change: "up",
     tone: "amber",
   },
@@ -60,7 +59,10 @@ const MARKET_ROWS: readonly MarketRow[] = [
     key: "silver",
     bulletColor: "#94A3B8",
     labelKey: "pitch_slide_live_market_silver_label",
-    value: "54.20 EGP/g",
+    amount: 54.2,
+    currency: "EGP",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
     change: "down",
     tone: "red",
   },
@@ -68,7 +70,9 @@ const MARKET_ROWS: readonly MarketRow[] = [
     key: "usd",
     bulletColor: "#3B82F6",
     labelKey: "pitch_slide_live_market_usd_label",
-    value: "49.82",
+    amount: 49.82,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
     change: "flat",
     tone: "slate",
   },
@@ -133,7 +137,38 @@ function LiveDot(): React.ReactElement {
 }
 
 export function Slide3LiveMarket(): React.ReactElement {
-  const { t } = useTranslation("onboarding");
+  const { t, i18n } = useTranslation("onboarding");
+  const language = i18n.dir() === "rtl" ? "ar" : "en";
+  const netWorth = formatLocalizedMoneyAmount({
+    amount: 342180,
+    currency: "EGP",
+    language,
+    englishPresentation: "code-prefix",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  });
+  const formatMarketValue = (row: MarketRow): string => {
+    const amount = row.currency
+      ? formatLocalizedMoneyAmount({
+          amount: row.amount,
+          currency: row.currency,
+          language,
+          englishPresentation: "code-suffix",
+          minimumFractionDigits: row.minimumFractionDigits,
+          maximumFractionDigits: row.maximumFractionDigits,
+        })
+      : formatLocalizedMoneyNumber({
+          amount: row.amount,
+          currency: "EGP",
+          language,
+          minimumFractionDigits: row.minimumFractionDigits,
+          maximumFractionDigits: row.maximumFractionDigits,
+        });
+
+    return row.currency
+      ? t("pitch_slide_live_market_per_gram", { amount })
+      : amount;
+  };
 
   return (
     <PitchMockCard>
@@ -144,8 +179,7 @@ export function Slide3LiveMarket(): React.ReactElement {
 
       <View className="mt-1 flex-row items-end justify-between">
         <Text className="text-2xl font-bold text-slate-900 dark:text-white">
-          {/* i18n-ignore: ISO currency code + numeric mock value. */}
-          EGP 342,180
+          {netWorth}
         </Text>
         <View
           className="flex-row items-center rounded-full bg-nileGreen-500/15 px-2 py-0.5"
@@ -177,8 +211,7 @@ export function Slide3LiveMarket(): React.ReactElement {
             </Text>
             <View className="flex-row items-center" style={{ columnGap: 4 }}>
               <Text className={`text-sm font-semibold ${TONE_CLASS[row.tone]}`}>
-                {/* i18n-ignore: numeric mock value with currency-per-unit suffix. */}
-                {row.value}
+                {formatMarketValue(row)}
               </Text>
               <Ionicons
                 name={CHANGE_ICON[row.change]}
