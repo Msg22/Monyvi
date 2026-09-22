@@ -49,6 +49,6 @@ test("issue 321 approved verification mockup bindings remain authoritative", () 
   );
 
   for (const sidecar of sidecars) {
-    assert.match(result.stdout, new RegExp(`PASS .*\${sidecar.split(/[\\/]/).pop()}`));
+    assert.match(result.stdout, new RegExp(`PASS .*${sidecar.split(/[\\/]/).pop()}`));
   }
 });
