@@ -232,7 +232,7 @@ export function CurrencyStep(): React.ReactElement {
 
       {/* Search bar */}
       <View className="mx-6 mb-4">
-        <View className="flex-row items-center px-4 py-3 rounded-xl bg-black/5 dark:bg-white/[0.08]">
+        <View className="flex-row items-center px-4 py-1 rounded-xl bg-black/5 dark:bg-white/[0.08]">
           <Ionicons
             name="search"
             size={18}
