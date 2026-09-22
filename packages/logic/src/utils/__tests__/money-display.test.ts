@@ -155,3 +155,87 @@ describe("retained fixed-precision exceptions", () => {
     ).toBe("1,235");
   });
 });
+
+describe("float-boundary fraction detection (numeric path)", () => {
+  it("hides the fraction when the rounded display value is whole despite binary drift", () => {
+    // 8.995 * 100 === 899.4999999999999, so naive minor-unit math reports a
+    // non-zero fraction, while Intl formats 8.995 as 9.00. The contract says a
+    // rounded zero-only fraction must be hidden.
+    expect(formatMoneyAmount(8.995, { currency: "EGP" })).toBe("9");
+    expect(formatMoneyAmount(1999.995, { currency: "EGP" })).toBe("2,000");
+  });
+
+  it("keeps meaningful fractions next to binary rounding boundaries", () => {
+    expect(formatMoneyAmount(8.994, { currency: "EGP" })).toBe("8.99");
+    expect(formatMoneyAmount(8.989, { currency: "EGP" })).toBe("8.99");
+  });
+});
+
+describe("locale-aware sign affixes (canonical path)", () => {
+  it("matches Intl sign placement exactly for the Arabic locale", () => {
+    expect(
+      formatMoneyAmount("-1234.00", { currency: "EGP", locale: "ar-EG" })
+    ).toBe(new Intl.NumberFormat("ar-EG").format(-1234));
+    expect(
+      formatMoneyAmount("-1234.00", { currency: "EGP", locale: "ar-EG" })
+    ).toContain("\u061C-");
+  });
+
+  it("matches Intl sign placement exactly for a Latin negative-prefix locale", () => {
+    expect(
+      formatMoneyAmount("-1234.00", {
+        currency: "EGP",
+        locale: "ar-EG-u-nu-latn",
+      })
+    ).toBe(new Intl.NumberFormat("ar-EG-u-nu-latn").format(-1234));
+  });
+
+  it("keeps the ASCII leading minus for the default locale", () => {
+    expect(formatMoneyAmount("-35500.00", { currency: "EGP" })).toBe(
+      "-35,500"
+    );
+  });
+
+  it("applies locale affixes with an explicit positive sign", () => {
+    expect(
+      formatMoneyAmount("1234.00", {
+        currency: "EGP",
+        locale: "ar-EG",
+        signDisplay: "always",
+      })
+    ).toBe(
+      new Intl.NumberFormat("ar-EG", { signDisplay: "always" }).format(1234)
+    );
+  });
+});
+
+describe("minimum-only overrides", () => {
+  it("raises the default maximum so both input types render consistently", () => {
+    expect(
+      formatMoneyAmount(1.2346, { currency: "EGP", minimumFractionDigits: 3 })
+    ).toBe("1.235");
+    expect(
+      formatMoneyAmount("1.2346", {
+        currency: "EGP",
+        minimumFractionDigits: 3,
+      })
+    ).toBe("1.235");
+  });
+
+  it("rejects an inverted explicit range consistently on both paths", () => {
+    expect(() =>
+      formatMoneyAmount(1.2346, {
+        currency: "EGP",
+        minimumFractionDigits: 3,
+        maximumFractionDigits: 2,
+      })
+    ).toThrow(RangeError);
+    expect(() =>
+      formatMoneyAmount("1.2346", {
+        currency: "EGP",
+        minimumFractionDigits: 3,
+        maximumFractionDigits: 2,
+      })
+    ).toThrow(RangeError);
+  });
+});

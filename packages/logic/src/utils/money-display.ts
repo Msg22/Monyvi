@@ -80,7 +80,12 @@ export interface FormatMoneyAmountOptions {
 interface LocaleNumberParts {
   readonly groupSeparator: string;
   readonly decimalSeparator: string;
+  readonly negativePrefix: string;
+  readonly negativeSuffix: string;
   readonly minusSign: string;
+  readonly positivePrefix: string;
+  readonly positiveSuffix: string;
+  readonly plusSign: string;
   readonly digits: readonly string[];
   readonly primaryGroupSize: number;
   readonly secondaryGroupSize: number;
@@ -169,14 +174,44 @@ function formatCanonicalAmount(
   const groupedInteger = groupIntegerDigits(integerDigits, parts);
   const localizedInteger = localizeDigits(groupedInteger, parts.digits);
   const localizedFraction = localizeDigits(fractionDigits, parts.digits);
-
-  const sign = resolveSign(isNegative, fixed.isZero(), options.signDisplay);
   const fractionSuffix =
     localizedFraction.length === 0
       ? ""
       : `${parts.decimalSeparator}${localizedFraction}`;
 
-  return `${sign}${localizedInteger}${fractionSuffix}`;
+  const affix = resolveSignAffix(isNegative, fixed.isZero(), options.signDisplay, parts);
+  return `${affix.prefix}${affix.sign}${localizedInteger}${fractionSuffix}${affix.suffix}`;
+}
+
+function resolveSignAffix(
+  isNegative: boolean,
+  isZero: boolean,
+  signDisplay: MoneyDisplaySignDisplay | undefined,
+  parts: LocaleNumberParts
+): {
+  readonly prefix: string;
+  readonly sign: string;
+  readonly suffix: string;
+} {
+  const display = signDisplay ?? "auto";
+  if (isNegative) {
+    if (display === "never") {
+      return { prefix: "", sign: "", suffix: "" };
+    }
+    return {
+      prefix: parts.negativePrefix,
+      sign: parts.minusSign,
+      suffix: parts.negativeSuffix,
+    };
+  }
+  if (display === "always" || (display === "exceptZero" && !isZero)) {
+    return {
+      prefix: parts.positivePrefix,
+      sign: parts.plusSign,
+      suffix: parts.positiveSuffix,
+    };
+  }
+  return { prefix: "", sign: "", suffix: "" };
 }
 
 function resolveFractionDigits(
@@ -184,38 +219,37 @@ function resolveFractionDigits(
   precision: number,
   options: FormatMoneyAmountOptions
 ): { readonly minimum: number; readonly maximum: number } {
-  const maximum = options.maximumFractionDigits ?? precision;
+  const requestedMinimum = options.minimumFractionDigits;
+  const maximum =
+    options.maximumFractionDigits ??
+    Math.max(precision, requestedMinimum ?? 0);
+  if (requestedMinimum !== undefined && requestedMinimum > maximum) {
+    throw new RangeError(
+      "minimumFractionDigits cannot exceed maximumFractionDigits"
+    );
+  }
   const inferredMinimum = hasNonZeroFraction ? precision : 0;
-  const minimum =
-    options.minimumFractionDigits ?? Math.min(inferredMinimum, maximum);
+  const minimum = requestedMinimum ?? Math.min(inferredMinimum, maximum);
   return { minimum, maximum };
-}
-
-function resolveSign(
-  isNegative: boolean,
-  isZero: boolean,
-  signDisplay: MoneyDisplaySignDisplay | undefined
-): string {
-  const display = signDisplay ?? "auto";
-  if (isNegative) {
-    return display === "never" ? "" : "-";
-  }
-  if (display === "always") {
-    return "+";
-  }
-  if (display === "exceptZero" && !isZero) {
-    return "+";
-  }
-  return "";
 }
 
 function hasNonZeroFractionAtPrecision(
   amount: number,
   precision: number
 ): boolean {
-  const factor = 10 ** precision;
-  const roundedMinorUnits = Math.round(Math.abs(amount) * factor);
-  return roundedMinorUnits % factor !== 0;
+  if (!Number.isFinite(amount)) {
+    return true;
+  }
+
+  // Round the shortest decimal string of the double exactly the way
+  // Intl.NumberFormat does (half-even). Binary minor-unit math can disagree
+  // with Intl at rounding boundaries (for example 8.995 * 100 is 899.499…),
+  // which would re-expose a zero-only fraction such as 8.995 -> "9.00".
+  const rounded = new DisplayDecimal(amount).toDecimalPlaces(
+    precision,
+    Decimal.ROUND_HALF_EVEN
+  );
+  return !rounded.modulo(1).isZero();
 }
 
 function hasNonZeroDecimalFractionAtPrecision(
@@ -276,21 +310,61 @@ function resolveLocaleNumberParts(locale: string): LocaleNumberParts {
     new Intl.NumberFormat(locale).formatToParts(1.1).find(
       (part) => part.type === "decimal"
     )?.value ?? ".";
+
+  const negativeParts = new Intl.NumberFormat(locale).formatToParts(-1);
   const minusSign =
-    new Intl.NumberFormat(locale).formatToParts(-1).find(
-      (part) => part.type === "minusSign"
-    )?.value ?? "-";
+    negativeParts.find((part) => part.type === "minusSign")?.value ?? "-";
+  const negativePrefix = collectAffix(negativeParts, minusSign, "prefix");
+  const negativeSuffix = collectAffix(negativeParts, minusSign, "suffix");
+
+  const positiveParts = new Intl.NumberFormat(locale, {
+    signDisplay: "always",
+  }).formatToParts(1);
+  const plusSign =
+    positiveParts.find((part) => part.type === "plusSign")?.value ?? "+";
+  const positivePrefix = collectAffix(positiveParts, plusSign, "prefix");
+  const positiveSuffix = collectAffix(positiveParts, plusSign, "suffix");
 
   const resolved: LocaleNumberParts = {
     groupSeparator,
     decimalSeparator,
+    negativePrefix,
+    negativeSuffix,
     minusSign,
+    positivePrefix,
+    positiveSuffix,
+    plusSign,
     digits,
     primaryGroupSize,
     secondaryGroupSize,
   };
   localeNumberPartsCache.set(locale, resolved);
   return resolved;
+}
+
+/**
+ * Collects the locale's directional/bidi literals that surround the sign part
+ * so a manually assembled number matches `Intl.NumberFormat` sign placement.
+ */
+function collectAffix(
+  parts: Intl.NumberFormatPart[],
+  signValue: string,
+  side: "prefix" | "suffix"
+): string {
+  const signIndex = parts.findIndex(
+    (part) =>
+      part.value === signValue &&
+      (part.type === "minusSign" || part.type === "plusSign")
+  );
+  if (signIndex === -1) {
+    return "";
+  }
+  const affixParts =
+    side === "prefix" ? parts.slice(0, signIndex) : parts.slice(signIndex + 1);
+  return affixParts
+    .filter((part) => part.type !== "integer" && part.type !== "group")
+    .map((part) => part.value)
+    .join("");
 }
 
 function groupIntegerDigits(
