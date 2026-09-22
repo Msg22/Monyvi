@@ -1,4 +1,4 @@
-import { act, render, screen } from "@testing-library/react-native";
+import { act, fireEvent, render, screen } from "@testing-library/react-native";
 import React, { Children } from "react";
 
 /* eslint-disable @typescript-eslint/no-require-imports */
@@ -57,6 +57,24 @@ jest.mock("@/context/AuthContext", () => ({
 
 jest.mock("@/context/ThemeContext", () => ({
   useTheme: (): { isDark: boolean } => ({ isDark: false }),
+}));
+
+jest.mock("@/context/LocaleContext", () => ({
+  useLocale: (): {
+    isRTL: boolean;
+    fontFamily: {
+      regular: string;
+      semiBold: string;
+      bold: string;
+    };
+  } => ({
+    isRTL: false,
+    fontFamily: {
+      regular: "Inter_400Regular",
+      semiBold: "Inter_600SemiBold",
+      bold: "Inter_700Bold",
+    },
+  }),
 }));
 
 jest.mock("react-i18next", () => ({
@@ -308,7 +326,7 @@ describe("AuthCallbackScreen failed verification recovery", () => {
     jest.useRealTimers();
   });
 
-  it("routes a failed callback to auth recovery even when a previous auth state exists", async () => {
+  it("shows public recovery before leaving a failed warm callback", async () => {
     render(<AuthCallbackScreen />);
 
     await act(async () => {
@@ -318,11 +336,17 @@ describe("AuthCallbackScreen failed verification recovery", () => {
     expect(mockCompleteAuthSessionFromUrl).toHaveBeenCalledWith(
       mockCallbackUrl
     );
-    expect(mockReplace).toHaveBeenCalledWith("/auth");
+    expect(
+      screen.getByRole("header", { name: "verification_link_failed_title" })
+    ).toBeOnTheScreen();
+    expect(mockReplace).not.toHaveBeenCalled();
     expect(mockReplace).not.toHaveBeenCalledWith("/");
+
+    fireEvent.press(screen.getByRole("button", { name: "back_to_sign_in" }));
+    expect(mockReplace).toHaveBeenCalledWith("/auth");
   });
 
-  it("routes an unexpected callback rejection to auth recovery", async () => {
+  it("shows the same safe recovery for an unexpected callback rejection", async () => {
     mockCompleteAuthSessionFromUrl.mockRejectedValue(
       new Error("unexpected callback failure")
     );
@@ -333,7 +357,10 @@ describe("AuthCallbackScreen failed verification recovery", () => {
       await Promise.resolve();
     });
 
-    expect(mockReplace).toHaveBeenCalledWith("/auth");
+    expect(
+      screen.getByText("verification_link_failed_message")
+    ).toBeOnTheScreen();
+    expect(mockReplace).not.toHaveBeenCalled();
     expect(mockReplace).not.toHaveBeenCalledWith("/");
   });
 });

@@ -9,11 +9,12 @@
  * @module AuthCallbackRoute
  */
 
+import { AuthCallbackFailureView } from "@/components/auth/AuthCallbackFailureView";
 import { useAuth } from "@/context/AuthContext";
 import { useDeferredRouterReplace } from "@/hooks/useDeferredRouterReplace";
 import { completeAuthSessionFromUrl } from "@/services/auth-service";
 import { useURL } from "expo-linking";
-import { type Href, useLocalSearchParams } from "expo-router";
+import { type Href, useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { View } from "react-native";
 
@@ -62,6 +63,7 @@ function isPasswordRecoveryLink(
 
 export default function AuthCallbackScreen(): React.JSX.Element {
   const { isAuthenticated, isLoading } = useAuth();
+  const router = useRouter();
   const params = useLocalSearchParams<Record<string, string | string[]>>();
   const callbackUrl = useURL();
   const processedUrlRef = useRef<string | null>(null);
@@ -99,9 +101,7 @@ export default function AuthCallbackScreen(): React.JSX.Element {
   }, [callbackUrl]);
 
   let redirectHref: Href | null = null;
-  if (callbackState === "failed") {
-    redirectHref = "/auth";
-  } else if (callbackState === "completed" && !isLoading && isAuthenticated) {
+  if (callbackState === "completed" && !isLoading && isAuthenticated) {
     redirectHref = isPasswordRecoveryLink(params, callbackUrl)
       ? "/settings"
       : "/";
@@ -111,6 +111,16 @@ export default function AuthCallbackScreen(): React.JSX.Element {
     enabled: redirectHref !== null,
     href: redirectHref ?? "/",
   });
+
+  if (callbackState === "failed") {
+    return (
+      <AuthCallbackFailureView
+        onBack={() => {
+          router.replace("/auth");
+        }}
+      />
+    );
+  }
 
   return <View />;
 }

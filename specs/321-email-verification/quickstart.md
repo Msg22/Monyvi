@@ -106,6 +106,33 @@ Manual release configuration:
 
 No SMTP credential is committed to the repository or bundled in Expo.
 
+### Resend configuration skeleton
+
+When a Monyvi-controlled sending domain is ready, verify it in Resend and set
+these values only in the release operator's shell or secret manager:
+
+```text
+SUPABASE_ACCESS_TOKEN=<Supabase management token with Auth config write access>
+SUPABASE_PROJECT_REF=<hosted project reference>
+MONYVI_AUTH_SMTP_FROM=verify@<verified Monyvi domain>
+MONYVI_AUTH_SMTP_PASSWORD=<scoped Resend SMTP credential>
+```
+
+Optional overrides are `MONYVI_AUTH_SMTP_HOST` (default `smtp.resend.com`),
+`MONYVI_AUTH_SMTP_PORT` (default `465`), `MONYVI_AUTH_SMTP_USER` (default
+`resend`), and `MONYVI_AUTH_SMTP_SENDER_NAME` (default `Monyvi`). Then run:
+
+```bash
+npm run auth:smtp:check
+npm run auth:smtp:configure
+```
+
+The first command validates and prints a redacted preview. The second performs
+the explicit Supabase Management API update. The script rejects example sender
+domains, never prints the SMTP credential, enables external email, and keeps
+email confirmation required. Re-run the hosted checks and real-provider delivery
+matrix after applying it.
+
 ### Hosted configuration status (verified 2026-09-22)
 
 - **Confirm email:** enabled in the hosted Monyvi Supabase project.

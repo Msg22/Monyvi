@@ -7,14 +7,26 @@ appId: com.monyvi.app
 
 - extendedWaitUntil:
     visible:
-      id: "auth-email-input"
+      id: "auth-callback-failure-view"
     timeout: 120000
+- tapOn:
+    id: "auth-callback-back"
+- extendedWaitUntil:
+    visible:
+      id: "auth-email-input"
+    timeout: 30000
 - assertVisible:
     id: "auth-mode-sign-in"
 
-# Missing auth material is also rejected and returns to auth recovery.
+# Missing auth material is also rejected behind the same recovery boundary.
 - openLink: "monyvi://auth-callback"
 
+- extendedWaitUntil:
+    visible:
+      id: "auth-callback-failure-view"
+    timeout: 30000
+- tapOn:
+    id: "auth-callback-back"
 - extendedWaitUntil:
     visible:
       id: "auth-email-input"

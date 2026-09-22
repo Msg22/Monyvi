@@ -257,6 +257,8 @@ const REQUIRED_SCALAR_KEYS: Record<string, readonly string[]> = {
     "private_by_design",
     "privacy",
     "terms",
+    "verification_link_failed_title",
+    "verification_link_failed_message",
     "dismiss",
     "welcome_tagline",
     "pill_voice",

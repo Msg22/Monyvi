@@ -1,5 +1,4 @@
 import { LinearGradient } from "expo-linear-gradient";
-import { useRouter } from "expo-router";
 import {
   KeyboardAvoidingView,
   Platform,
@@ -35,7 +34,6 @@ export function shouldEnableAuthScroll(fontScale: number): boolean {
 
 export default function AuthScreen(): React.JSX.Element {
   const insets = useSafeAreaInsets();
-  const router = useRouter();
   const { isDark } = useTheme();
   const isKeyboardVisible = useKeyboardVisibility();
   const {
@@ -120,8 +118,6 @@ export default function AuthScreen(): React.JSX.Element {
                 onForgotPassword={controller.handleForgotPassword}
                 onClearError={controller.clearEmailError}
                 onClearNetworkError={controller.clearNetworkError}
-                onPrivacyPress={() => router.push("/privacy-policy")}
-                onTermsPress={() => router.push("/terms")}
                 onEmailFocus={() => scrollToField("email")}
                 onPasswordFocus={() => scrollToField("password")}
               />
@@ -131,8 +127,6 @@ export default function AuthScreen(): React.JSX.Element {
                 isResending={controller.pendingAction === "verificationResend"}
                 onResend={controller.handleResendVerification}
                 onBack={controller.handleBackToForm}
-                onPrivacyPress={() => router.push("/privacy-policy")}
-                onTermsPress={() => router.push("/terms")}
               />
             ) : (
               <ResetSentView

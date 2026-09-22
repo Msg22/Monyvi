@@ -11,8 +11,6 @@ export interface VerificationPendingViewProps {
   readonly isResending: boolean;
   readonly onResend: () => Promise<void>;
   readonly onBack: () => void;
-  readonly onPrivacyPress: () => void;
-  readonly onTermsPress: () => void;
 }
 
 export function VerificationPendingView({
@@ -20,8 +18,6 @@ export function VerificationPendingView({
   isResending,
   onResend,
   onBack,
-  onPrivacyPress,
-  onTermsPress,
 }: VerificationPendingViewProps): React.JSX.Element {
   const { t } = useTranslation("auth");
   const { fontFamily, isRTL } = useLocale();
@@ -140,33 +136,19 @@ export function VerificationPendingView({
         </View>
 
         <View testID="auth-legal-row" className="flex-row items-center gap-3.5">
-          <Pressable
-            accessibilityRole="link"
-            accessibilityLabel={t("privacy")}
-            hitSlop={8}
-            onPress={onPrivacyPress}
+          <Text
+            className="text-[11.5px] text-nileGreen-700 dark:text-nileGreen-300"
+            style={{ fontFamily: fontFamily.semiBold }}
           >
-            <Text
-              className="text-[11.5px] text-nileGreen-700 dark:text-nileGreen-300"
-              style={{ fontFamily: fontFamily.semiBold }}
-            >
-              {t("privacy")}
-            </Text>
-          </Pressable>
+            {t("privacy")}
+          </Text>
           <View className="h-3 w-px bg-slate-200 dark:bg-slate-700" />
-          <Pressable
-            accessibilityRole="link"
-            accessibilityLabel={t("terms")}
-            hitSlop={8}
-            onPress={onTermsPress}
+          <Text
+            className="text-[11.5px] text-nileGreen-700 dark:text-nileGreen-300"
+            style={{ fontFamily: fontFamily.semiBold }}
           >
-            <Text
-              className="text-[11.5px] text-nileGreen-700 dark:text-nileGreen-300"
-              style={{ fontFamily: fontFamily.semiBold }}
-            >
-              {t("terms")}
-            </Text>
-          </Pressable>
+            {t("terms")}
+          </Text>
         </View>
       </View>
     </View>
