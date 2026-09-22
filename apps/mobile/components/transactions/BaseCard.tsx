@@ -2,7 +2,7 @@ import { palette } from "@/constants/colors";
 import { useTheme } from "@/context/ThemeContext";
 import { formatDate } from "@/utils/dateHelpers";
 import type { CurrencyType } from "@monyvi/db";
-import { formatCurrency } from "@monyvi/logic";
+import { formatLocalizedMoneyAmount } from "@/utils/localized-money-display";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import React from "react";
@@ -235,7 +235,7 @@ export const BaseCard = React.memo(function BaseCard({
                   Net Worth:{" "}
                 </Text>
                 <Text className="text-[11px] text-slate-400 dark:text-slate-500 font-medium">
-                  {formatCurrency({
+                  {formatLocalizedMoneyAmount({
                     amount: displayNetWorth,
                     currency: currencyCode,
                   })}

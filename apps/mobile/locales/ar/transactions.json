@@ -563,5 +563,8 @@
   "ai_privacy_no_raw_sms_saved": "لا نحفظ نص الرسالة الخام في سجلات المعاملات أو التحويلات بعد المراجعة.",
   "ai_privacy_provider_title": "المزود",
   "ai_privacy_provider_body": "الشاشات المختصرة تقول مزود الذكاء الاصطناعي. هذه الصفحة توضّح اسم المزود: Google Gemini.",
-  "ai_privacy_footer": "يمكنك إيقاف ميزات الذكاء الاصطناعي لاحقاً من الإعدادات."
+  "ai_privacy_footer": "يمكنك إيقاف ميزات الذكاء الاصطناعي لاحقاً من الإعدادات.",
+  "exchange_rate_unavailable": "سعر الصرف غير متاح",
+  "conversion_unavailable": "التحويل غير متاح",
+  "conversion_preview_at_rate": "≈ {{amount}} بسعر {{rate}}"
 }

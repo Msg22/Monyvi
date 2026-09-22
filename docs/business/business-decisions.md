@@ -1285,6 +1285,16 @@ Business rules:
 - Settings can change language after sign-in.
 - Theme preference is `LIGHT`, `DARK`, or `SYSTEM`.
 - Preferred currency affects display conversion and defaults.
+- User-visible monetary output follows the active language without changing stored
+  values or calculations. Arabic uses `ar-EG` Arabic-Indic digits, Arabic
+  grouping and decimal separators, then a fixed Arabic currency unit label
+  (for example `٤٤٤٬٩٥٦ جنيه مصري` and `٠٫٠٠١٠٠٠٠٠ بيتكوين`).
+- English monetary presentation keeps its existing symbol/code placement.
+  Editable financial inputs keep the Latin-digit, `.` decimal grammar defined
+  under Financial Amount Entry; display localization never changes input parsing.
+- Monetary amount labels cover every generated `CurrencyType` through an
+  exhaustive catalogue. Standalone currency names, stored ISO codes, parser
+  identifiers, rate instruments, and sync payloads remain code based.
 
 ## 10. Data Safety And Sync
 

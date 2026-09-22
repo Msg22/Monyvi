@@ -20,7 +20,7 @@ import { Pressable, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 
 import type { CurrencyType } from "@monyvi/db";
-import { formatCurrency } from "@monyvi/logic";
+import { formatLocalizedMoneyAmount } from "@/utils/localized-money-display";
 
 import { palette } from "@/constants/colors";
 import { useTheme } from "@/context/ThemeContext";
@@ -84,14 +84,14 @@ export function MetalsHeroCard({
     setShowTooltip(false);
   }, []);
 
-  const formattedTotal = formatCurrency({
+  const formattedTotal = formatLocalizedMoneyAmount({
     amount: totalValue,
     currency,
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   });
 
-  const formattedProfitLoss = formatCurrency({
+  const formattedProfitLoss = formatLocalizedMoneyAmount({
     amount: Math.abs(profitLossAmount),
     currency,
     minimumFractionDigits: 0,

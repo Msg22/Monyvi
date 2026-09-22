@@ -13,7 +13,7 @@ import { Modal, Pressable, Text, TouchableOpacity, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { palette } from "@/constants/colors";
 import type { BudgetAlert } from "@/services/budget-alert-service";
-import { formatCurrency } from "@monyvi/logic";
+import { formatLocalizedMoneyAmount } from "@/utils/localized-money-display";
 import { useTranslation } from "react-i18next";
 import { useModalBottomInset } from "@/hooks/useModalBottomInset";
 
@@ -79,7 +79,7 @@ export function BudgetAlertModal({
     alert.level === "WARNING"
       ? t("alert_warning_subtitle", { percentage })
       : t("alert_over_budget_subtitle", {
-          overage: formatCurrency({
+          overage: formatLocalizedMoneyAmount({
             amount: overage,
             currency: alert.currency,
             maximumFractionDigits: 0,
@@ -140,13 +140,13 @@ export function BudgetAlertModal({
                 className="text-sm font-bold"
                 style={{ color: config.headerBg }}
               >
-                {formatCurrency({
+                {formatLocalizedMoneyAmount({
                   amount: alert.spent,
                   currency: alert.currency,
                 })}
               </Text>
               <Text className="text-sm font-semibold text-slate-800 dark:text-white">
-                {formatCurrency({
+                {formatLocalizedMoneyAmount({
                   amount: alert.limit,
                   currency: alert.currency,
                 })}

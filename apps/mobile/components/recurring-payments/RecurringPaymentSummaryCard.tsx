@@ -3,11 +3,11 @@ import { palette } from "@/constants/colors";
 import { getCategoryIconConfig } from "@/utils/category-icon-config";
 import type { Category, CurrencyType, RecurringStatus } from "@monyvi/db";
 import {
-  formatCurrency,
   getCurrencyPrecision,
   MAX_TRANSACTION_AMOUNT,
   parseStrictAmountInput,
 } from "@monyvi/logic";
+import { formatLocalizedMoneyAmount } from "@/utils/localized-money-display";
 import { Ionicons } from "@expo/vector-icons";
 import React from "react";
 import { useTranslation } from "react-i18next";
@@ -42,7 +42,7 @@ export function RecurringPaymentSummaryCard({
     maxFractionDigits: getCurrencyPrecision(currency),
   });
   const displayAmount = parsedAmount.success ? parsedAmount.amount : 0;
-  const formattedAmount = formatCurrency({
+  const formattedAmount = formatLocalizedMoneyAmount({
     amount: displayAmount,
     currency,
   });

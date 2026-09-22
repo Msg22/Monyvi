@@ -18,9 +18,9 @@ import type { PendingAccount } from "@/services/pending-account-service";
 import type { AccountWithBankDetails } from "@/services/sms-account-matcher";
 import type { TransactionEdits } from "@/services/sms-edit-modal-service";
 import { formatToLocalDateString } from "@/utils/dateHelpers";
+import { formatLocalizedConversionPreview } from "@/utils/localized-conversion-preview";
 import type { Category, MarketRate } from "@monyvi/db";
 import {
-  formatConversionPreview,
   formatAmountInput,
   parseAmountInput,
   CURRENCY_INFO_MAP,
@@ -94,7 +94,7 @@ export function TransactionEditModal(
     sourceVariant = "default",
   } = props;
   const isSmsWorkspace = sourceVariant === "sms";
-  const { t } = useTranslation("transactions");
+  const { t, i18n } = useTranslation("transactions");
   const bottomInset = useModalBottomInset();
 
   const { state, setters, accountHandlers } = useTransactionEditState({
@@ -290,12 +290,13 @@ export function TransactionEditModal(
                         color={palette.blue[500]}
                       />
                       <Text className="text-xs text-blue-400 font-medium ms-2 flex-shrink">
-                        {formatConversionPreview(
-                          state.amount,
-                          transaction.currency,
-                          state.selectedAccountCurrency,
-                          latestRates
-                        )}
+                        {formatLocalizedConversionPreview({
+                          amount: state.amount,
+                          fromCurrency: transaction.currency,
+                          toCurrency: state.selectedAccountCurrency,
+                          rates: latestRates,
+                          language: i18n.language === "ar" ? "ar" : "en",
+                        })}
                       </Text>
                     </View>
                   </View>
@@ -553,7 +554,7 @@ function SmsReviewEditFields({
   accountHandlers,
   latestRates,
 }: SmsReviewEditFieldsProps): React.JSX.Element {
-  const { t } = useTranslation("transactions");
+  const { t, i18n } = useTranslation("transactions");
   const [focusedField, setFocusedField] = useState<SmsEditableField>(null);
 
   const openCategory = (): void => {
@@ -777,12 +778,13 @@ function SmsReviewEditFields({
             color={palette.blue[500]}
           />
           <Text className="ms-2 flex-1 text-xs font-medium text-blue-500">
-            {formatConversionPreview(
-              state.amount,
-              state.editedTransactionCurrency,
-              state.selectedAccountCurrency,
-              latestRates
-            )}
+            {formatLocalizedConversionPreview({
+              amount: state.amount,
+              fromCurrency: state.editedTransactionCurrency,
+              toCurrency: state.selectedAccountCurrency,
+              rates: latestRates,
+              language: i18n.language === "ar" ? "ar" : "en",
+            })}
           </Text>
         </View>
       )}

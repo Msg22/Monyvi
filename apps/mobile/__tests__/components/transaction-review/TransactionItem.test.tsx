@@ -1,6 +1,10 @@
 import { fireEvent, render, screen } from "@testing-library/react-native";
 import type { ReviewableTransaction } from "@monyvi/logic";
 import React from "react";
+import i18next from "i18next";
+
+import arCommon from "@/locales/ar/common.json";
+import enCommon from "@/locales/en/common.json";
 import {
   ReviewTransactionItemSkeleton,
   TransactionItem,
@@ -79,6 +83,19 @@ function renderItem(isSmsWorkspace = false): void {
 }
 
 describe("TransactionItem", () => {
+  beforeAll(async () => {
+    await i18next.init({
+      resources: {
+        en: { common: enCommon },
+        ar: { common: arCommon },
+      },
+      lng: "ar",
+      fallbackLng: "en",
+      ns: "common",
+      defaultNS: "common",
+      interpolation: { escapeValue: false },
+    });
+  });
   beforeEach(() => {
     mockInstitutionLogoMark.mockClear();
   });
@@ -140,6 +157,14 @@ describe("TransactionItem", () => {
     expect(screen.getByTestId("transaction-review-amount")).toHaveProp(
       "className",
       expect.stringContaining("text-red-400")
+    );
+  });
+
+  it("localizes the signed amount using the active Arabic locale", () => {
+    renderItem();
+
+    expect(screen.getByTestId("transaction-review-amount")).toHaveTextContent(
+      "\u061c-١٢٥ جنيه مصري"
     );
   });
 

@@ -2,7 +2,7 @@ import { palette } from "@/constants/colors";
 import type { BudgetDetailTransactionItem } from "@/contracts/budget-detail-presentation";
 import { useLocale } from "@/context/LocaleContext";
 import { Ionicons } from "@expo/vector-icons";
-import { formatCurrency } from "@monyvi/logic";
+import { formatLocalizedMoneyAmount } from "@/utils/localized-money-display";
 import React from "react";
 import { I18nManager, Text, TouchableOpacity, View } from "react-native";
 import { useTranslation } from "react-i18next";
@@ -40,7 +40,7 @@ export function BudgetRecentTransactions({
         </Text>
       ) : (
         transactions.map((transaction) => {
-          const amount = formatCurrency({
+          const amount = formatLocalizedMoneyAmount({
             amount: transaction.amount,
             currency: transaction.currency,
           });

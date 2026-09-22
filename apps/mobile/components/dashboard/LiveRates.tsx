@@ -19,6 +19,11 @@ import { LiveRatesSkeleton } from "@/components/dashboard/skeletons/LiveRatesSke
 import { useTheme } from "@/context/ThemeContext";
 import { useTranslation } from "react-i18next";
 import { formatTimeAgo } from "@/utils/dateHelpers";
+import type { SupportedLanguage } from "@/i18n/translation-schema";
+import {
+  formatLocalizedMoneyNumber,
+  getCurrencyAmountLabel,
+} from "@/utils/localized-money-display";
 
 interface Rate {
   id: string;
@@ -68,6 +73,29 @@ function calculateTrend(
   return "flat";
 }
 
+function formatDashboardRateAmount(
+  amount: number,
+  currency: CurrencyType,
+  language: SupportedLanguage,
+  fractionDigits: number
+): string {
+  const formattedNumber = formatLocalizedMoneyNumber({
+    amount,
+    currency,
+    language,
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits,
+  });
+  const currencyLabel =
+    language === "ar"
+      ? getCurrencyAmountLabel(currency, language)
+      : (CURRENCY_INFO_MAP[currency]?.symbol ?? currency);
+
+  return language === "ar"
+    ? `${formattedNumber} ${currencyLabel}`
+    : `${currencyLabel} ${formattedNumber}`;
+}
+
 /**
  * Build the currency pair rate entry (e.g. USD/EGP).
  * When the preferred currency IS USD, uses EUR as a reference instead.
@@ -75,7 +103,8 @@ function calculateTrend(
 function buildCurrencyRate(
   latestRates: MarketRate,
   previousDayRate: MarketRate | null,
-  preferredCurrency: CurrencyType
+  preferredCurrency: CurrencyType,
+  language: SupportedLanguage
 ): Rate {
   const displayCurrency: CurrencyType =
     preferredCurrency === "USD" ? "EUR" : preferredCurrency;
@@ -87,7 +116,13 @@ function buildCurrencyRate(
   return {
     id: "1",
     label: `USD/${displayCurrency}`,
-    value: currencyRate.toFixed(2),
+    value: formatLocalizedMoneyNumber({
+      amount: currencyRate,
+      currency: displayCurrency,
+      language,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }),
     trend: calculateTrend(currencyRate, previousRate),
     type: "currency",
   };
@@ -100,10 +135,9 @@ function buildGoldRate(
   latestRates: MarketRate,
   previousDayRate: MarketRate | null,
   preferredCurrency: CurrencyType,
+  language: SupportedLanguage,
   t: (key: string) => string
 ): Rate {
-  const symbol =
-    CURRENCY_INFO_MAP[preferredCurrency]?.symbol ?? preferredCurrency;
   const goldInPreferred = getMetalPrice("GOLD", latestRates, preferredCurrency);
   const prevGoldInPreferred = previousDayRate
     ? getMetalPrice("GOLD", previousDayRate, preferredCurrency)
@@ -112,7 +146,12 @@ function buildGoldRate(
   return {
     id: "2",
     label: t("gold_24k_pill"),
-    value: `${symbol} ${Math.round(goldInPreferred).toLocaleString()}/g`,
+    value: `${formatDashboardRateAmount(
+      Math.round(goldInPreferred),
+      preferredCurrency,
+      language,
+      0
+    )}/g`,
     trend: calculateTrend(goldInPreferred, prevGoldInPreferred),
     type: "gold",
   };
@@ -125,10 +164,9 @@ function buildSilverRate(
   latestRates: MarketRate,
   previousDayRate: MarketRate | null,
   preferredCurrency: CurrencyType,
+  language: SupportedLanguage,
   t: (key: string) => string
 ): Rate {
-  const symbol =
-    CURRENCY_INFO_MAP[preferredCurrency]?.symbol ?? preferredCurrency;
   const silverInPreferred = getMetalPrice(
     "SILVER",
     latestRates,
@@ -141,7 +179,12 @@ function buildSilverRate(
   return {
     id: "3",
     label: t("silver_pill"),
-    value: `${symbol} ${silverInPreferred.toFixed(2)}/g`,
+    value: `${formatDashboardRateAmount(
+      silverInPreferred,
+      preferredCurrency,
+      language,
+      2
+    )}/g`,
     trend: calculateTrend(silverInPreferred, prevSilverInPreferred),
     type: "silver",
   };
@@ -155,6 +198,7 @@ function buildRatesDisplay(
   latestRates: MarketRate | null,
   previousDayRate: MarketRate | null,
   preferredCurrency: CurrencyType,
+  language: SupportedLanguage,
   t: (key: string) => string
 ): Rate[] {
   if (!latestRates) {
@@ -162,9 +206,26 @@ function buildRatesDisplay(
   }
 
   return [
-    buildCurrencyRate(latestRates, previousDayRate, preferredCurrency),
-    buildGoldRate(latestRates, previousDayRate, preferredCurrency, t),
-    buildSilverRate(latestRates, previousDayRate, preferredCurrency, t),
+    buildCurrencyRate(
+      latestRates,
+      previousDayRate,
+      preferredCurrency,
+      language
+    ),
+    buildGoldRate(
+      latestRates,
+      previousDayRate,
+      preferredCurrency,
+      language,
+      t
+    ),
+    buildSilverRate(
+      latestRates,
+      previousDayRate,
+      preferredCurrency,
+      language,
+      t
+    ),
   ];
 }
 
@@ -216,7 +277,8 @@ function LiveRatesComponent({
   preferredCurrency,
 }: LiveRatesProps): React.ReactElement {
   const { isDark } = useTheme();
-  const { t } = useTranslation("common");
+  const { t, i18n } = useTranslation("common");
+  const language: SupportedLanguage = i18n.language === "ar" ? "ar" : "en";
   const { t: tMetals } = useTranslation("metals");
   const ratesDisplay = useMemo(
     () =>
@@ -224,9 +286,10 @@ function LiveRatesComponent({
         latestRates,
         previousDayRate,
         preferredCurrency,
+        language,
         tMetals
       ),
-    [latestRates, previousDayRate, preferredCurrency, tMetals]
+    [latestRates, previousDayRate, preferredCurrency, language, tMetals]
   );
 
   const handlePress = useCallback((): void => {

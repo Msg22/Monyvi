@@ -18,7 +18,10 @@
 
 import type * as ExpoNotifications from "expo-notifications";
 import { Linking, Platform } from "react-native";
+import type { CurrencyType } from "@monyvi/db";
 import type { ParsedSmsTransaction } from "@monyvi/logic";
+import { getCurrentLanguage } from "@/i18n/changeLanguage";
+import { formatLocalizedMoneyAmount } from "@/utils/localized-money-display";
 import { getRequiredCurrentUserId } from "@/services/user-data-access";
 import { logger } from "@/utils/logger";
 import { redactIdentifierForLog } from "@/utils/logger-redaction";
@@ -401,12 +404,15 @@ async function dismissDeliveredNotification(
 /**
  * Format a currency amount for display in notification.
  */
-function formatAmount(amount: number, currency: string): string {
-  const formatted = amount.toLocaleString("en-US", {
+function formatAmount(amount: number, currency: CurrencyType): string {
+  return formatLocalizedMoneyAmount({
+    amount,
+    currency,
+    language: getCurrentLanguage(),
+    englishPresentation: "code-prefix",
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
-  return `${currency} ${formatted}`;
 }
 
 function serializeTransactionData(

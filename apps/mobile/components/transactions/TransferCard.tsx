@@ -1,5 +1,5 @@
 import { CurrencyType } from "@monyvi/db";
-import { formatCurrency } from "@monyvi/logic";
+import { formatLocalizedMoneyAmount } from "@/utils/localized-money-display";
 import React from "react";
 import { useTranslation } from "react-i18next";
 import { palette } from "@/constants/colors";
@@ -48,7 +48,7 @@ export const TransferCard = React.memo(function TransferCard({
 }): React.JSX.Element {
   const { t } = useTranslation("common");
   const mainColor = palette.blue[500];
-  const formattedAmount = formatCurrency({
+  const formattedAmount = formatLocalizedMoneyAmount({
     amount: Math.abs(amount),
     currency,
   });

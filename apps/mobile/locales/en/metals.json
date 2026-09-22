@@ -54,7 +54,7 @@
   "total_metals_value": "Total metals value",
   "gold_24k_label": "Gold 24K:",
   "gold_24k_pill": "Gold 24K",
-  "live_rates_accessibility": "Live rates: Gold {{currencySymbol}}{{goldPrice}} per ounce, {{goldDirection}} {{goldChange}} percent. Silver {{currencySymbol}}{{silverPrice}} per gram, {{silverDirection}} {{silverChange}} percent.",
+  "live_rates_accessibility": "Live rates: Gold {{goldPrice}} per ounce, {{goldDirection}} {{goldChange}} percent. Silver {{silverPrice}} per gram, {{silverDirection}} {{silverChange}} percent.",
   "direction_up": "up",
   "direction_down": "down",
   "trend_direction_up": "Up",

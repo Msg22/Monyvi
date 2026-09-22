@@ -14,7 +14,7 @@ import {
   type BillsPeriodFilter,
 } from "@/hooks/useRecurringPayments";
 import type { RecurringPayment } from "@monyvi/db";
-import { formatCurrency } from "@monyvi/logic";
+import { formatLocalizedMoneyAmount } from "@/utils/localized-money-display";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import React, { useCallback, useMemo, useState } from "react";
@@ -191,7 +191,7 @@ function UpcomingPaymentsComponent({
           <View className="flex-row items-center justify-between mt-3 pt-3 border-t border-slate-200 dark:border-slate-700">
             <Text className="stat-label">{t("total_due")}</Text>
             <Text className="text-base font-bold text-nileGreen-500">
-              {formatCurrency({
+              {formatLocalizedMoneyAmount({
                 amount: totalDueFiltered,
                 currency: preferredCurrency,
               })}

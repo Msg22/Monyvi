@@ -5,7 +5,7 @@ import type {
 import { palette } from "@/constants/colors";
 import { useLocale } from "@/context/LocaleContext";
 import type { CurrencyType } from "@monyvi/db";
-import { formatCurrency } from "@monyvi/logic";
+import { formatLocalizedMoneyAmount } from "@/utils/localized-money-display";
 import React, { useEffect } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { FlatList, I18nManager, Text, View } from "react-native";
@@ -193,7 +193,7 @@ function WeekColumn({
     ...(showsYear ? { year: "numeric" as const } : {}),
   });
   const amount = (value: number): string =>
-    formatCurrency({ amount: value, currency });
+    formatLocalizedMoneyAmount({ amount: value, currency });
   const weekLabel = t("detail.trend.week_label", {
     defaultValue: `Week ${index + 1}`,
     index: index + 1,
@@ -289,7 +289,7 @@ function AxisLabel({
 }): React.JSX.Element {
   return (
     <Text className="text-[10px] text-text-secondary dark:text-text-secondary-dark">
-      {formatCurrency({ amount, currency })}
+      {formatLocalizedMoneyAmount({ amount, currency })}
     </Text>
   );
 }

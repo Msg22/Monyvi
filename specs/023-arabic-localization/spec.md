@@ -182,8 +182,10 @@ Arabic immediately. Selecting English should do the same in English.
   and default to Arabic if the device language is Arabic, or English otherwise.
 - **FR-008**: System MUST handle bidirectional text correctly when Arabic text
   contains embedded English words, brand names, or numbers.
-- **FR-009**: System MUST use Western Arabic numerals (0-9) in financial
-  displays regardless of language setting.
+- **FR-009 (superseded by #325)**: Arabic user-visible monetary displays MUST
+  use Arabic-Indic digits and `ar-EG` grouping/decimal separators. Editable
+  financial inputs retain the shared Latin-digit grammar documented in
+  `docs/business/business-decisions.md`; English monetary output is unchanged.
 - **FR-010**: System MUST preserve user-generated content (account names,
   transaction descriptions) as entered, regardless of the current language
   setting.

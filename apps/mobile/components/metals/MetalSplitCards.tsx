@@ -17,7 +17,7 @@ import { Text, View, type ViewStyle } from "react-native";
 import { useTranslation } from "react-i18next";
 
 import type { CurrencyType } from "@monyvi/db";
-import { formatCurrency } from "@monyvi/logic";
+import { formatLocalizedMoneyAmount } from "@/utils/localized-money-display";
 
 import { palette } from "@/constants/colors";
 import type { PortfolioSplit } from "@/hooks/useMetalHoldings";
@@ -55,7 +55,7 @@ function SplitCardInner({
   isGold,
 }: SplitCardProps): React.JSX.Element {
   const { t } = useTranslation("metals");
-  const formattedValue = formatCurrency({
+  const formattedValue = formatLocalizedMoneyAmount({
     amount: totalValue,
     currency,
     minimumFractionDigits: 0,

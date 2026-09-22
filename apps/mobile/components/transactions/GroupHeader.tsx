@@ -1,5 +1,5 @@
 import type { CurrencyType } from "@monyvi/db";
-import { formatCurrency } from "@monyvi/logic";
+import { formatLocalizedMoneyAmount } from "@/utils/localized-money-display";
 import { BlurView } from "expo-blur";
 import React from "react";
 import { Platform, Text, useColorScheme, View } from "react-native";
@@ -52,7 +52,7 @@ export const GroupHeader = React.memo(function GroupHeader({
               {income > 0 && (
                 <Text className="text-[11px] text-nileGreen-600 dark:text-nileGreen-400 font-semibold">
                   +
-                  {formatCurrency({
+                  {formatLocalizedMoneyAmount({
                     amount: income,
                     currency: currencyCode,
                   })}
@@ -61,7 +61,7 @@ export const GroupHeader = React.memo(function GroupHeader({
               {expense > 0 && (
                 <Text className="text-[11px] text-red-500 dark:text-red-400 font-semibold">
                   -
-                  {formatCurrency({
+                  {formatLocalizedMoneyAmount({
                     amount: expense,
                     currency: currencyCode,
                   })}
@@ -74,7 +74,7 @@ export const GroupHeader = React.memo(function GroupHeader({
           <Text className="text-[10px] text-slate-400 dark:text-slate-500">
             Bal:{" "}
             <Text className="text-slate-600 dark:text-slate-300 font-medium">
-              {formatCurrency({
+              {formatLocalizedMoneyAmount({
                 amount: netWorth,
                 currency: currencyCode,
               })}

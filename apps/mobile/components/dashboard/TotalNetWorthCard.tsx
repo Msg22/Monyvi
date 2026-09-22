@@ -1,7 +1,7 @@
 import { palette } from "@/constants/colors";
 import { TotalNetWorthSkeleton } from "@/components/dashboard/skeletons/TotalNetWorthSkeleton";
 import { CurrencyType } from "@monyvi/db";
-import { formatCurrency } from "@monyvi/logic";
+import { formatLocalizedMoneyAmount } from "@/utils/localized-money-display";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useTranslation } from "react-i18next";
@@ -120,12 +120,13 @@ function TotalNetWorthCardComponent({
           </Text>
           {/* Main Amount */}
           <Text
+            testID="home-net-worth-amount"
             className="mt-1 text-[42px] font-extrabold tracking-tight text-white text-center"
             numberOfLines={1}
             adjustsFontSizeToFit
             minimumFontScale={0.6}
           >
-            {formatCurrency({
+            {formatLocalizedMoneyAmount({
               amount: totalNetWorth ?? 0,
               currency: preferredCurrency,
             })}
@@ -134,7 +135,7 @@ function TotalNetWorthCardComponent({
           {!isPreferredCurrencyUSD && (
             <Text className="text-base font-medium text-slate-100 opacity-80">
               ≈
-              {formatCurrency({
+              {formatLocalizedMoneyAmount({
                 amount: totalNetWorthUsd ?? 0,
                 currency: "USD",
               })}

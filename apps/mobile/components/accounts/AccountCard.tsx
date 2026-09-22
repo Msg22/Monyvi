@@ -3,7 +3,8 @@ import type { InstitutionLogo } from "@/constants/egyptian-institution-assets";
 import { InstitutionLogoMark } from "@/components/institutions/InstitutionLogoMark";
 import { formatAccountBalance } from "@/utils/financial-display";
 import { Account, MarketRate } from "@monyvi/db";
-import { convertCurrency, formatCurrency } from "@monyvi/logic";
+import { convertCurrency } from "@monyvi/logic";
+import { formatLocalizedMoneyAmount } from "@/utils/localized-money-display";
 import { Ionicons } from "@expo/vector-icons";
 import { useCallback, useMemo } from "react";
 import { Text, TouchableOpacity, View } from "react-native";
@@ -84,7 +85,7 @@ export function AccountCard({
         "USD",
         latestRates
       );
-      return `≈ ${formatCurrency({
+      return `≈ ${formatLocalizedMoneyAmount({
         amount: usdValue,
         currency: "USD",
       })}`;

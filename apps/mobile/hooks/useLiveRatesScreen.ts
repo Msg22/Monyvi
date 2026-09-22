@@ -20,6 +20,10 @@ import {
   getCurrencyName,
 } from "@/utils/currency-localization";
 import { formatTimeAgo } from "@/utils/dateHelpers";
+import {
+  formatLocalizedMoneyNumber,
+  getCurrencyAmountLabel,
+} from "@/utils/localized-money-display";
 import type { CurrencyType } from "@monyvi/db";
 import {
   type CurrencyInfo,
@@ -27,7 +31,6 @@ import {
   SUPPORTED_CURRENCIES,
   calculateTrendPercent,
   convertCurrency,
-  formatRate,
   getGoldPurityPrice,
   getMetalPrice,
 } from "@monyvi/logic";
@@ -126,6 +129,7 @@ export function useLiveRatesScreen(): UseLiveRatesScreenResult {
   } = useMarketRates();
   const { preferredCurrency } = usePreferredCurrency();
   const { i18n } = useTranslation("common");
+  const language = i18n.language === "ar" ? "ar" : "en";
 
   // UI state
   const [isExpanded, setIsExpanded] = useState(false);
@@ -167,8 +171,11 @@ export function useLiveRatesScreen(): UseLiveRatesScreenResult {
   // ---------------------------------------------------------------------------
 
   const currencySymbol = useMemo((): string => {
+    if (language === "ar") {
+      return getCurrencyAmountLabel(preferredCurrency, language);
+    }
     return CURRENCY_INFO_MAP[preferredCurrency]?.symbol ?? preferredCurrency;
-  }, [preferredCurrency]);
+  }, [language, preferredCurrency]);
 
   const metals = useMemo((): MetalDisplayData => {
     if (!latestRates) {
@@ -214,17 +221,53 @@ export function useLiveRatesScreen(): UseLiveRatesScreenResult {
       : null;
 
     return {
-      price24k: formatRate(gold24k),
-      price21k: formatRate(gold21k),
-      price18k: formatRate(gold18k),
+      price24k: formatLocalizedMoneyNumber({
+        amount: gold24k,
+        currency: preferredCurrency,
+        language,
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 2,
+      }),
+      price21k: formatLocalizedMoneyNumber({
+        amount: gold21k,
+        currency: preferredCurrency,
+        language,
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 2,
+      }),
+      price18k: formatLocalizedMoneyNumber({
+        amount: gold18k,
+        currency: preferredCurrency,
+        language,
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 2,
+      }),
       goldTrendPercent: calculateTrendPercent(gold24k, prevGold24k),
-      silverPrice: formatRate(silver),
+      silverPrice: formatLocalizedMoneyNumber({
+        amount: silver,
+        currency: preferredCurrency,
+        language,
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 2,
+      }),
       silverTrendPercent: calculateTrendPercent(silver, prevSilver),
-      platinumPrice: formatRate(platinum),
+      platinumPrice: formatLocalizedMoneyNumber({
+        amount: platinum,
+        currency: preferredCurrency,
+        language,
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 2,
+      }),
       platinumTrendPercent: calculateTrendPercent(platinum, prevPlatinum),
       currencySymbol,
     };
-  }, [latestRates, previousDayRate, preferredCurrency, currencySymbol]);
+  }, [
+    latestRates,
+    previousDayRate,
+    preferredCurrency,
+    currencySymbol,
+    language,
+  ]);
 
   // ---------------------------------------------------------------------------
   // Currency data derivation
@@ -251,7 +294,13 @@ export function useLiveRatesScreen(): UseLiveRatesScreenResult {
         code: info.code,
         name: getCurrencyName(info.code),
         flag: info.flag,
-        rate: `${formatRate(rate)} ${currencySymbol}`,
+        rate: `${formatLocalizedMoneyNumber({
+          amount: rate,
+          currency: preferredCurrency,
+          language,
+          minimumFractionDigits: 0,
+          maximumFractionDigits: 2,
+        })} ${currencySymbol}`,
         changePercent: calculateTrendPercent(rate, prevRate),
       };
     });
@@ -261,6 +310,7 @@ export function useLiveRatesScreen(): UseLiveRatesScreenResult {
     preferredCurrency,
     currencySymbol,
     i18n.language,
+    language,
   ]);
 
   // Sort: show DEFAULT_CURRENCIES first, then rest alphabetically

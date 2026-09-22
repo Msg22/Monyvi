@@ -30,6 +30,7 @@ import { createTransaction } from "@/services/transaction-service";
 import { createTransfer } from "@/services/transfer-service";
 import { resolveInitialTransactionAccountSelection } from "@/utils/account-selection";
 import { logger } from "@/utils/logger";
+import { formatLocalizedMoneyAmount } from "@/utils/localized-money-display";
 import { useBudgetAlert } from "@/hooks/useBudgetAlert";
 import { BudgetAlertModal } from "@/components/budget/BudgetAlertModal";
 import {
@@ -44,7 +45,6 @@ import type {
 } from "@monyvi/db";
 import {
   evaluateAmountExpression,
-  formatAmountInput,
   getCurrencyRate,
   parsePositiveFiniteAmountInput,
 } from "@monyvi/logic";
@@ -56,14 +56,15 @@ import { ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { usePreferredCurrency } from "@/hooks/usePreferredCurrency";
 
-const TRANSACTION_FIELD_ORDER: readonly (keyof TransactionValidationErrors)[] = [
-  "amount",
-  "accountId",
-  "categoryId",
-  "fromAccountId",
-  "toAccountId",
-  "recurringName",
-];
+const TRANSACTION_FIELD_ORDER: readonly (keyof TransactionValidationErrors)[] =
+  [
+    "amount",
+    "accountId",
+    "categoryId",
+    "fromAccountId",
+    "toAccountId",
+    "recurringName",
+  ];
 
 export default function AddTransaction(): React.ReactNode {
   const router = useRouter();
@@ -597,14 +598,16 @@ export default function AddTransaction(): React.ReactNode {
               parsePositiveFiniteAmountInput(amount)! >
                 selectedAccount.balance && (
                 <Text className="text-amber-500 text-xs font-medium text-center mb-1">
-                  ⚠️ {t("warning_negative_balance")} -
-                  {formatAmountInput(
-                    (
+                  ⚠️ {t("warning_negative_balance")} -{" "}
+                  {formatLocalizedMoneyAmount({
+                    amount:
                       parsePositiveFiniteAmountInput(amount)! -
-                      selectedAccount.balance
-                    ).toFixed(2)
-                  )}{" "}
-                  {selectedAccount.currency}
+                      selectedAccount.balance,
+                    currency: selectedAccount.currency,
+                    englishPresentation: "code-suffix",
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })}
                 </Text>
               )}
             <AmountDisplay

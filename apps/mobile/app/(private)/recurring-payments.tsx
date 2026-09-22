@@ -33,10 +33,8 @@ import type {
   RecurringPayment,
   RecurringStatus,
 } from "@monyvi/db";
-import {
-  calculateCalendarDaysUntil,
-  formatCurrency,
-} from "@monyvi/logic";
+import { calculateCalendarDaysUntil } from "@monyvi/logic";
+import { formatLocalizedMoneyAmount } from "@/utils/localized-money-display";
 import { router } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -167,7 +165,7 @@ export default function RecurringPaymentsScreen(): React.JSX.Element {
       showToast({
         type: "success",
         title: tCommon("payment_recorded"),
-        message: `${paymentName} - ${formatCurrency({
+        message: `${paymentName} - ${formatLocalizedMoneyAmount({
           amount,
           currency: paymentCurrency,
         })}`,

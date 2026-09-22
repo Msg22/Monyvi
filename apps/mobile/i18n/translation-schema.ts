@@ -9,6 +9,7 @@
  * conform to these interfaces.
  */
 
+import type { CurrencyType } from "@monyvi/db";
 import type { SupportedCurrencyCode } from "@monyvi/logic";
 
 /** Supported languages */
@@ -76,6 +77,7 @@ interface CommonTranslations {
   readonly change_currency: string;
   readonly transaction_currency: string;
   readonly currency_names: Readonly<Record<SupportedCurrencyCode, string>>;
+  readonly currency_amount_labels: Readonly<Record<CurrencyType, string>>;
 
   // Dates (relative)
   readonly just_now: string;
@@ -159,6 +161,9 @@ interface TransactionsTranslations {
   readonly start_tracking_spending: string;
   readonly confirm_delete: string;
 
+  readonly exchange_rate_unavailable: string;
+  readonly conversion_unavailable: string;
+  readonly conversion_preview_at_rate: string;
   // Voice input
   readonly voice_prompt: string;
   readonly voice_listening: string;
