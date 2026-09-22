@@ -114,6 +114,10 @@ export async function initI18n(): Promise<void> {
   await initializeI18n(language);
 }
 
+export function isI18nInitialized(): boolean {
+  return i18next.isInitialized;
+}
+
 /**
  * Initialize the bundled English resources after primary startup fails before
  * i18next is ready. This intentionally skips runtime contract validation: the

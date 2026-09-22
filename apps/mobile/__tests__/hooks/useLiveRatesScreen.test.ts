@@ -1,5 +1,11 @@
 import { act, renderHook, waitFor } from "@testing-library/react-native";
+import i18next from "i18next";
+
+import arCommon from "@/locales/ar/common.json";
+import enCommon from "@/locales/en/common.json";
 import type { LiveRatesTrustReadModel } from "@/services/live-rates-trust-read-model-service";
+import { selectMarketRateSnapshot } from "@/services/market-rate-snapshot-read-model-service";
+import { completeFixtureA } from "../fixtures/market-rate-snapshot";
 
 const mockRefreshLiveMarketRates = jest.fn<Promise<void>, [unknown]>(() =>
   Promise.resolve()
@@ -7,6 +13,7 @@ const mockRefreshLiveMarketRates = jest.fn<Promise<void>, [unknown]>(() =>
 const mockDatabase = { id: "database" };
 const mockRefreshSelectedSnapshot = jest.fn<void, []>();
 const mockMarketRatesListeners = new Set<() => void>();
+let mockResolvedLanguage: "en" | "ar" = "en";
 let mockMarketRatesState = {
   currentError: null as Error | null,
   isConnected: true,
@@ -60,26 +67,25 @@ jest.mock("@/utils/logger", () => ({
   logger: { error: jest.fn(), warn: jest.fn() },
 }));
 
-jest.mock("@monyvi/logic", () => ({
-  formatRateAge:
-    jest.requireActual<typeof import("@monyvi/logic")>("@monyvi/logic")
-      .formatRateAge,
-  CURRENCY_INFO_MAP: { EGP: { code: "EGP", symbol: "EGP" } },
-  SUPPORTED_CURRENCIES: [],
-  calculateTrendPercent: (): number => 0,
-  convertCurrency: (): number => 0,
-  formatRate: (): string => "0",
-  getGoldPurityPrice: (): number => 0,
-  getMetalPrice: (): number => 0,
-  isSupportedMetalsIsoCurrencyCode: (): boolean => true,
-}));
+jest.mock("@monyvi/logic", () => {
+  const actual =
+    jest.requireActual<typeof import("@monyvi/logic")>("@monyvi/logic");
+  return {
+    ...actual,
+    calculateTrendPercent: (): number => 0,
+    convertCurrency: (): number => 0,
+    formatRate: (): string => "0",
+    getGoldPurityPrice: (): number => 0,
+    getMetalPrice: (): number => 0,
+  };
+});
 
 jest.mock("react-i18next", () => ({
   useTranslation: (): {
-    readonly i18n: { readonly resolvedLanguage: "en" };
+    readonly i18n: { readonly resolvedLanguage: "en" | "ar" };
     readonly t: (key: string, options?: { readonly count?: number }) => string;
   } => ({
-    i18n: { resolvedLanguage: "en" },
+    i18n: { resolvedLanguage: mockResolvedLanguage },
     t: (key, options): string => {
       if (key === "minutes_ago") {
         return `${options?.count ?? 0} minutes ago`;
@@ -123,12 +129,35 @@ const trustedRates: LiveRatesTrustReadModel = {
 function selectedSnapshot(
   trust = trustedRates
 ): NonNullable<typeof mockMarketRatesState.selectedSnapshot> {
-  return {
-    capturedAt: new Date("2026-09-07T00:00:00.000Z"),
-    ratesByInstrument: new Map(),
-    snapshotId: "snapshot-1",
-    trust,
-  };
+  const fixture = completeFixtureA();
+  const snapshot = selectMarketRateSnapshot(
+    fixture.roots,
+    fixture.observations,
+    Date.parse("2026-09-09T11:00:00.000Z")
+  );
+  if (snapshot === null) {
+    throw new Error("Expected a complete market-rate fixture");
+  }
+  return { ...snapshot, trust };
+}
+
+async function prepareI18n(language: "en" | "ar"): Promise<void> {
+  mockResolvedLanguage = language;
+  if (!i18next.isInitialized) {
+    await i18next.init({
+      resources: {
+        en: { common: enCommon },
+        ar: { common: arCommon },
+      },
+      lng: language,
+      fallbackLng: "en",
+      ns: "common",
+      defaultNS: "common",
+      interpolation: { escapeValue: false },
+    });
+    return;
+  }
+  await i18next.changeLanguage(language);
 }
 
 describe("useLiveRatesScreen", () => {
@@ -172,6 +201,7 @@ describe("useLiveRatesScreen", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockResolvedLanguage = "en";
     mockMarketRatesListeners.clear();
     mockMarketRatesState = {
       currentError: null,
@@ -200,6 +230,39 @@ describe("useLiveRatesScreen", () => {
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
     expect(result.current.hasData).toBe(true);
+  });
+
+  it("returns complete Arabic monetary strings for metal prices", async () => {
+    await prepareI18n("ar");
+    mockMarketRatesState = {
+      ...mockMarketRatesState,
+      isCurrentLoading: false,
+      selectedSnapshot: selectedSnapshot(),
+    };
+    const { result } = renderHook(() => useLiveRatesScreen());
+
+    await waitFor(() => {
+      expect(result.current.metals.price24k).toMatch(/^[٠-٩٬٫]+ جنيه مصري$/u);
+      expect(result.current.metals.silverPrice).toMatch(
+        /^[٠-٩٬٫]+ جنيه مصري$/u
+      );
+      expect(result.current.metals).not.toHaveProperty("currencySymbol");
+    });
+  });
+
+  it("preserves legacy English code-prefix placement for metal prices", async () => {
+    await prepareI18n("en");
+    mockMarketRatesState = {
+      ...mockMarketRatesState,
+      isCurrentLoading: false,
+      selectedSnapshot: selectedSnapshot(),
+    };
+    const { result } = renderHook(() => useLiveRatesScreen());
+
+    await waitFor(() => {
+      expect(result.current.metals.price24k).toMatch(/^EGP [0-9,.]+$/u);
+      expect(result.current.metals.silverPrice).toMatch(/^EGP [0-9,.]+$/u);
+    });
   });
 
   it("surfaces observer failure and resubscribes on accessible refresh retry", async () => {

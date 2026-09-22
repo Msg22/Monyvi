@@ -148,8 +148,8 @@ export function useLiveRatesScreen(): UseLiveRatesScreenResult {
   const filteredCurrencies = useMemo((): readonly CurrencyDisplayItem[] => {
     if (!searchQuery.trim()) return sortedCurrencies;
 
-    return sortedCurrencies.filter(
-      (currency) => currencyMatchesQuery(currency.code, searchQuery)
+    return sortedCurrencies.filter((currency) =>
+      currencyMatchesQuery(currency.code, searchQuery)
     );
   }, [searchQuery, sortedCurrencies]);
 
@@ -238,5 +238,5 @@ export function useLiveRatesScreen(): UseLiveRatesScreenResult {
 }
 
 function resolveLiveRatesLocale(language: string | undefined): string {
-  return language?.toLowerCase().startsWith("ar") ? "ar-EG-u-nu-latn" : "en-GB";
+  return language?.toLowerCase().startsWith("ar") ? "ar-EG" : "en-GB";
 }

@@ -11,8 +11,8 @@ import {
   resolveMetalsCurrencyMinorUnits,
   resolvePuritySelection,
   roundDecimal,
-  serializeDecimal,
 } from "@monyvi/logic";
+import { formatLocalizedMoneyAmount } from "@/utils/localized-money-display";
 
 export type CurrencyDisplaySign = "negative" | "positive" | "zero";
 
@@ -97,26 +97,15 @@ export function formatCodeAmount(
   if (value === null) return "—";
   try {
     const decimalPlaces = resolveCurrencyDisplayDecimalPlaces(currency);
-    const amount = parseCanonicalDecimal(roundDecimal(value, decimalPlaces));
-    const amountSign = getExactAmountSign(amount);
-    const sign = signed
-      ? amountSign === "positive"
-        ? "+ "
-        : amountSign === "negative"
-          ? "- "
-          : ""
-      : amountSign === "negative"
-        ? "- "
-        : "";
-    const numericPart = formatCanonicalDecimalForDisplay(
-      serializeDecimal(amount.absoluteValue()),
-      {
-        locale,
-        minimumFractionDigits: decimalPlaces,
-        maximumFractionDigits: decimalPlaces,
-      }
-    );
-    return `${sign}${currency} ${numericPart}`;
+    return formatLocalizedMoneyAmount({
+      amount: value,
+      currency,
+      language: locale.toLowerCase().startsWith("ar") ? "ar" : "en",
+      signDisplay: signed ? "exceptZero" : "auto",
+      minimumFractionDigits: decimalPlaces,
+      maximumFractionDigits: decimalPlaces,
+      englishPresentation: "code-prefix",
+    });
   } catch {
     return "—";
   }

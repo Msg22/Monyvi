@@ -1,5 +1,6 @@
 import type { CurrencyType, TransactionType } from "@monyvi/db";
-import { formatCurrency } from "@monyvi/logic";
+import { getCurrentLanguage } from "@/i18n/changeLanguage";
+import { formatLocalizedMoneyAmount } from "@/utils/localized-money-display";
 
 interface AccountBalanceInput {
   readonly balance: number;
@@ -15,7 +16,7 @@ interface TransactionAmountInput {
 }
 
 export function formatAccountBalance(account: AccountBalanceInput): string {
-  return formatCurrency({
+  return formatLocalizedMoneyAmount({
     amount: account.balance,
     currency: account.currency,
     minimumFractionDigits: account.minimumFractionDigits,
@@ -26,9 +27,25 @@ export function formatAccountBalance(account: AccountBalanceInput): string {
 export function formatSignedTransactionAmount(
   transaction: TransactionAmountInput
 ): string {
+  const language = getCurrentLanguage();
   const sign = transaction.type === "EXPENSE" ? "-" : "+";
-  return `${sign}${formatCurrency({
+
+  if (language === "ar") {
+    const signedAmount =
+      transaction.type === "EXPENSE"
+        ? -Math.abs(transaction.amount)
+        : Math.abs(transaction.amount);
+    return formatLocalizedMoneyAmount({
+      amount: signedAmount,
+      currency: transaction.currency,
+      language,
+      signDisplay: "always",
+    });
+  }
+
+  return `${sign}${formatLocalizedMoneyAmount({
     amount: transaction.amount,
     currency: transaction.currency,
+    language,
   })}`;
 }

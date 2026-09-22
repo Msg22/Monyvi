@@ -31,6 +31,7 @@ import { createTransfer } from "@/services/transfer-service";
 import { getSelectedCurrentCurrencyRate } from "@/services/current-market-snapshot-calculations";
 import { resolveInitialTransactionAccountSelection } from "@/utils/account-selection";
 import { logger } from "@/utils/logger";
+import { formatLocalizedMoneyAmount } from "@/utils/localized-money-display";
 import { useBudgetAlert } from "@/hooks/useBudgetAlert";
 import { BudgetAlertModal } from "@/components/budget/BudgetAlertModal";
 import {
@@ -45,7 +46,6 @@ import type {
 } from "@monyvi/db";
 import {
   evaluateAmountExpression,
-  formatAmountInput,
   parsePositiveFiniteAmountInput,
 } from "@monyvi/logic";
 import { Ionicons } from "@expo/vector-icons";
@@ -606,11 +606,14 @@ export default function AddTransaction(): React.ReactNode {
               parsedAmount !== null &&
               parsedAmount > selectedAccount.balance && (
                 <Text className="text-amber-500 text-xs font-medium text-center mb-1">
-                  ⚠️ {t("warning_negative_balance")} -
-                  {formatAmountInput(
-                    (parsedAmount - selectedAccount.balance).toFixed(2)
-                  )}{" "}
-                  {selectedAccount.currency}
+                  ⚠️ {t("warning_negative_balance")} -{" "}
+                  {formatLocalizedMoneyAmount({
+                    amount: parsedAmount - selectedAccount.balance,
+                    currency: selectedAccount.currency,
+                    englishPresentation: "code-suffix",
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })}
                 </Text>
               )}
             <AmountDisplay

@@ -6,7 +6,8 @@
  * the `usePaymentSubmission` hook (SRP).
  */
 
-import { calculateCalendarDaysUntil, formatCurrency } from "@monyvi/logic";
+import { calculateCalendarDaysUntil } from "@monyvi/logic";
+import { formatLocalizedMoneyAmount } from "@/utils/localized-money-display";
 import { Ionicons } from "@expo/vector-icons";
 import React, { useEffect, useMemo, useState } from "react";
 import { buildAccountDisplayNames } from "@/utils/account-display";
@@ -244,7 +245,7 @@ export function PayNowModal({
               />
               <Text className="flex-1 text-xs text-orange-700 dark:text-orange-300">
                 {t("balance_warning", {
-                  balance: formatCurrency({
+                  balance: formatLocalizedMoneyAmount({
                     amount: selectedAccount.balance - parseFloat(amount),
                     currency: selectedAccount.currency,
                   }),
@@ -260,7 +261,7 @@ export function PayNowModal({
               {t("original_amount")}
             </Text>
             <Text className="text-sm text-slate-600 dark:text-slate-300">
-              {formatCurrency({
+              {formatLocalizedMoneyAmount({
                 amount: payment.amount,
                 currency: payment.currency,
               })}

@@ -17,7 +17,8 @@ import React, { memo } from "react";
 import { Text, View } from "react-native";
 
 import type { CurrencyType } from "@monyvi/db";
-import { formatCurrency, formatPurityForDisplay } from "@monyvi/logic";
+import { formatPurityForDisplay } from "@monyvi/logic";
+import { formatLocalizedMoneyAmount } from "@/utils/localized-money-display";
 
 import { useTheme } from "@/context/ThemeContext";
 import type { MetalHolding } from "@/hooks/useMetalHoldings";
@@ -74,7 +75,7 @@ function HoldingCardInner({
   const formattedValue =
     currentValue === null
       ? "—"
-      : formatCurrency({
+      : formatLocalizedMoneyAmount({
           amount: currentValue,
           currency,
           minimumFractionDigits: 0,

@@ -20,6 +20,11 @@ import type { SelectedMarketRateSnapshot } from "@/services/market-rate-snapshot
 import { useTheme } from "@/context/ThemeContext";
 import { useTranslation } from "react-i18next";
 import { formatTimeAgo } from "@/utils/dateHelpers";
+import type { SupportedLanguage } from "@/i18n/translation-schema";
+import {
+  formatLocalizedMoneyAmount,
+  formatLocalizedMoneyNumber,
+} from "@/utils/localized-money-display";
 
 interface Rate {
   id: string;
@@ -69,6 +74,22 @@ function calculateTrend(
   return "flat";
 }
 
+function formatDashboardRateAmount(
+  amount: number,
+  currency: CurrencyType,
+  language: SupportedLanguage,
+  fractionDigits: number
+): string {
+  return formatLocalizedMoneyAmount({
+    amount,
+    currency,
+    language,
+    englishPresentation: "code-prefix",
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits,
+  });
+}
+
 /**
  * Build the currency pair rate entry (e.g. USD/EGP).
  * When the preferred currency IS USD, uses EUR as a reference instead.
@@ -76,7 +97,8 @@ function calculateTrend(
 function buildCurrencyRate(
   selectedSnapshot: SelectedMarketRateSnapshot,
   previousDayRate: MarketRate | null,
-  preferredCurrency: CurrencyType
+  preferredCurrency: CurrencyType,
+  language: SupportedLanguage
 ): Rate | null {
   const displayCurrency: CurrencyType =
     preferredCurrency === "USD" ? "EUR" : preferredCurrency;
@@ -95,7 +117,13 @@ function buildCurrencyRate(
   return {
     id: "1",
     label: `USD/${displayCurrency}`,
-    value: currencyRate.toFixed(2),
+    value: formatLocalizedMoneyNumber({
+      amount: currencyRate,
+      currency: displayCurrency,
+      language,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }),
     trend: calculateTrend(currencyRate, previousRate),
     type: "currency",
   };
@@ -108,10 +136,9 @@ function buildGoldRate(
   selectedSnapshot: SelectedMarketRateSnapshot,
   previousDayRate: MarketRate | null,
   preferredCurrency: CurrencyType,
-  t: (key: string) => string
+  language: SupportedLanguage,
+  t: (key: string, options?: { readonly amount: string }) => string
 ): Rate | null {
-  const symbol =
-    CURRENCY_INFO_MAP[preferredCurrency]?.symbol ?? preferredCurrency;
   const goldInPreferred = getSelectedCurrentMetalPrice({
     metal: "GOLD",
     toCurrency: preferredCurrency,
@@ -127,7 +154,14 @@ function buildGoldRate(
   return {
     id: "2",
     label: t("gold_24k_pill"),
-    value: `${symbol} ${Math.round(goldInPreferred).toLocaleString()}/g`,
+    value: t("price_per_gram", {
+      amount: formatDashboardRateAmount(
+        Math.round(goldInPreferred),
+        preferredCurrency,
+        language,
+        0
+      ),
+    }),
     trend: calculateTrend(goldInPreferred, prevGoldInPreferred),
     type: "gold",
   };
@@ -140,10 +174,9 @@ function buildSilverRate(
   selectedSnapshot: SelectedMarketRateSnapshot,
   previousDayRate: MarketRate | null,
   preferredCurrency: CurrencyType,
-  t: (key: string) => string
+  language: SupportedLanguage,
+  t: (key: string, options?: { readonly amount: string }) => string
 ): Rate | null {
-  const symbol =
-    CURRENCY_INFO_MAP[preferredCurrency]?.symbol ?? preferredCurrency;
   const silverInPreferred = getSelectedCurrentMetalPrice({
     metal: "SILVER",
     toCurrency: preferredCurrency,
@@ -159,7 +192,14 @@ function buildSilverRate(
   return {
     id: "3",
     label: t("silver_pill"),
-    value: `${symbol} ${silverInPreferred.toFixed(2)}/g`,
+    value: t("price_per_gram", {
+      amount: formatDashboardRateAmount(
+        silverInPreferred,
+        preferredCurrency,
+        language,
+        2
+      ),
+    }),
     trend: calculateTrend(silverInPreferred, prevSilverInPreferred),
     type: "silver",
   };
@@ -173,7 +213,8 @@ function buildRatesDisplay(
   selectedSnapshot: SelectedMarketRateSnapshot | null,
   previousDayRate: MarketRate | null,
   preferredCurrency: CurrencyType,
-  t: (key: string) => string
+  language: SupportedLanguage,
+  t: (key: string, options?: { readonly amount: string }) => string
 ): Rate[] {
   if (
     !selectedSnapshot ||
@@ -183,9 +224,26 @@ function buildRatesDisplay(
   }
 
   const candidates = [
-    buildCurrencyRate(selectedSnapshot, previousDayRate, preferredCurrency),
-    buildGoldRate(selectedSnapshot, previousDayRate, preferredCurrency, t),
-    buildSilverRate(selectedSnapshot, previousDayRate, preferredCurrency, t),
+    buildCurrencyRate(
+      selectedSnapshot,
+      previousDayRate,
+      preferredCurrency,
+      language
+    ),
+    buildGoldRate(
+      selectedSnapshot,
+      previousDayRate,
+      preferredCurrency,
+      language,
+      t
+    ),
+    buildSilverRate(
+      selectedSnapshot,
+      previousDayRate,
+      preferredCurrency,
+      language,
+      t
+    ),
   ];
   return candidates.filter((rate): rate is Rate => rate !== null);
 }
@@ -238,7 +296,8 @@ function LiveRatesComponent({
   preferredCurrency,
 }: LiveRatesProps): React.ReactElement {
   const { isDark } = useTheme();
-  const { t } = useTranslation("common");
+  const { t, i18n } = useTranslation("common");
+  const language: SupportedLanguage = i18n.language === "ar" ? "ar" : "en";
   const { t: tMetals } = useTranslation("metals");
   const ratesDisplay = useMemo(
     () =>
@@ -246,9 +305,10 @@ function LiveRatesComponent({
         selectedSnapshot,
         previousDayRate,
         preferredCurrency,
+        language,
         tMetals
       ),
-    [selectedSnapshot, previousDayRate, preferredCurrency, tMetals]
+    [selectedSnapshot, previousDayRate, preferredCurrency, language, tMetals]
   );
 
   const handlePress = useCallback((): void => {

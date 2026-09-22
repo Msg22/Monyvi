@@ -17,13 +17,13 @@ import { palette } from "@/constants/colors";
 import { FontAwesome5, MaterialIcons } from "@expo/vector-icons";
 import React from "react";
 import { Text, View } from "react-native";
+import { useTranslation } from "react-i18next";
 
 interface MetalCardProps {
   readonly metalName: string;
   readonly price: string;
   readonly trendPercent: number | null;
   readonly borderColor: string;
-  readonly currencySymbol: string;
 }
 
 function MetalTrend({
@@ -77,8 +77,8 @@ export function MetalCard({
   price,
   trendPercent,
   borderColor,
-  currencySymbol,
 }: MetalCardProps): React.JSX.Element {
+  const { t } = useTranslation("metals");
   return (
     <View
       className="w-full bg-slate-800 rounded-xl p-3 overflow-hidden"
@@ -95,7 +95,7 @@ export function MetalCard({
       </View>
 
       <Text className="text-base font-bold text-white">
-        {currencySymbol} {price}/g
+        {t("price_per_gram", { amount: price })}
       </Text>
 
       <MetalTrend trendPercent={trendPercent} />

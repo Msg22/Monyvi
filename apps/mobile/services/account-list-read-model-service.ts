@@ -1,5 +1,6 @@
+import type { SupportedLanguage } from "@/i18n/translation-schema";
+import { formatLocalizedMoneyAmount } from "@/utils/localized-money-display";
 import type { Account, CurrencyType } from "@monyvi/db";
-import { formatCurrency } from "@monyvi/logic";
 
 import { convertSelectedCurrentAmount } from "./current-market-snapshot-calculations";
 import type { SelectedMarketRateSnapshot } from "./market-rate-snapshot-read-model-service";
@@ -9,6 +10,7 @@ const USD_CURRENCY: CurrencyType = "USD";
 export interface AccountListConvertedSubtitlesInput {
   readonly accounts: readonly Account[];
   readonly currentSnapshot: SelectedMarketRateSnapshot | null;
+  readonly language: SupportedLanguage;
 }
 
 /**
@@ -45,7 +47,11 @@ export function buildAccountConvertedSubtitles(
 
     subtitles.set(
       account.id,
-      `≈ ${formatCurrency({ amount: usdValue, currency: USD_CURRENCY })}`
+      `≈ ${formatLocalizedMoneyAmount({
+        amount: usdValue,
+        currency: USD_CURRENCY,
+        language: input.language,
+      })}`
     );
   }
 

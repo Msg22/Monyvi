@@ -9,7 +9,7 @@ import { palette } from "@/constants/colors";
 import { useTheme } from "@/context/ThemeContext";
 import { useLocale } from "@/context/LocaleContext";
 import type { CurrencyType } from "@monyvi/db";
-import { formatCurrency } from "@monyvi/logic";
+import { formatLocalizedMoneyAmount } from "@/utils/localized-money-display";
 import { Ionicons } from "@expo/vector-icons";
 import React from "react";
 import { Text, TouchableOpacity, View } from "react-native";
@@ -39,7 +39,7 @@ export function DrilldownCategoryItem({
       accessible
       accessibilityRole={canDrillDown ? "button" : "text"}
       accessibilityLanguage={language}
-      accessibilityLabel={`${category.displayName}, ${formatCurrency({ amount: category.amount, currency })}, ${category.percentage.toFixed(1)}%`}
+      accessibilityLabel={`${category.displayName}, ${formatLocalizedMoneyAmount({ amount: category.amount, currency })}, ${category.percentage.toFixed(1)}%`}
       accessibilityHint={canDrillDown ? "Tap to drill down" : undefined}
       accessibilityState={{ disabled: !canDrillDown }}
     >
@@ -56,7 +56,7 @@ export function DrilldownCategoryItem({
         </Text>
       </View>
       <Text className="text-sm font-semibold me-2 text-slate-600 dark:text-slate-300">
-        {formatCurrency({ amount: category.amount, currency })}
+        {formatLocalizedMoneyAmount({ amount: category.amount, currency })}
       </Text>
       <Text className="text-xs text-slate-400 dark:text-slate-500">
         {category.percentage.toFixed(1)}%

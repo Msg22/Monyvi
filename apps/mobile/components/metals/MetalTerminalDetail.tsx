@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { I18nManager, Text, useWindowDimensions, View } from "react-native";
 import { useTranslation } from "react-i18next";
-import { formatCanonicalDecimalForDisplay } from "@monyvi/logic";
+import { isSupportedMetalsIsoCurrencyCode } from "@monyvi/logic";
 
 import {
   getCurrencyDisplaySign,
@@ -12,6 +12,7 @@ import { palette } from "@/constants/colors";
 import { shouldUseCompactLayout } from "@/constants/ui";
 import { useTheme } from "@/context/ThemeContext";
 import type { MetalDetailReadModel } from "@/services/metal-detail-read-model-service";
+import { formatLocalizedMoneyAmount } from "@/utils/localized-money-display";
 import { MetalSoldRateTrust } from "./MetalSoldRateTrust";
 
 interface MetalTerminalDetailProps {
@@ -350,13 +351,17 @@ function tryDisplayAmount(
   currency: string,
   locale: string
 ): string | null {
+  if (!isSupportedMetalsIsoCurrencyCode(currency)) return null;
   try {
     const decimalPlaces = resolveCurrencyDisplayDecimalPlaces(currency);
-    return `${currency} ${formatCanonicalDecimalForDisplay(value, {
-      locale,
+    return formatLocalizedMoneyAmount({
+      amount: value,
+      currency,
+      language: locale.toLowerCase().startsWith("ar") ? "ar" : "en",
       minimumFractionDigits: decimalPlaces,
       maximumFractionDigits: decimalPlaces,
-    })}`;
+      englishPresentation: "code-prefix",
+    });
   } catch {
     return null;
   }

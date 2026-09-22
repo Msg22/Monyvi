@@ -1,5 +1,11 @@
+import type { SupportedLanguage } from "@/i18n/translation-schema";
+import { formatLocalizedMoneyAmount } from "@/utils/localized-money-display";
 import type { CurrencyType } from "@monyvi/db";
-import { formatCurrency } from "@monyvi/logic";
+import {
+  getCurrencyPrecision,
+  MAX_TRANSACTION_AMOUNT,
+  parseStrictAmountInput,
+} from "@monyvi/logic";
 import type { TFunction } from "i18next";
 import {
   convertSelectedCurrentAmount,
@@ -16,16 +22,11 @@ export function formatSelectedSnapshotConversionPreview(
   locale = "en-US"
 ): string {
   if (currentSnapshot === null) return t("conversion_unavailable");
-  const parsedAmount = typeof amount === "string" ? Number(amount) : amount;
-  const safeAmount = Number.isFinite(parsedAmount) ? parsedAmount : 0;
+
+  const language = resolveMoneyLanguage(locale);
+  const safeAmount = parseConversionAmount(amount, fromCurrency);
   if (fromCurrency === toCurrency) {
-    return formatCurrency({
-      amount: safeAmount,
-      currency: toCurrency,
-      locale,
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    });
+    return formatFixedAmount(safeAmount, toCurrency, language);
   }
 
   const converted = convertSelectedCurrentAmount({
@@ -56,22 +57,75 @@ export function formatSelectedSnapshotConversionPreview(
   if (displayRate === null) {
     return t("conversion_unavailable");
   }
-  const formattedRate = new Intl.NumberFormat(locale, {
-    maximumFractionDigits: forwardRate >= 1 ? 2 : 4,
-    minimumFractionDigits: 2,
-  }).format(displayRate);
 
-  return t("conversion_preview", {
-    amount: formatCurrency({
-      amount: converted,
-      currency: toCurrency,
-      locale,
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }),
-    one: new Intl.NumberFormat(locale).format(1),
-    baseCurrency,
-    quoteCurrency,
-    rate: formattedRate,
+  return t("conversion_preview_at_rate", {
+    amount: formatFixedAmount(converted, toCurrency, language),
+    rate: buildRateEquation(
+      baseCurrency,
+      quoteCurrency,
+      displayRate,
+      forwardRate >= 1 ? 2 : 4,
+      language
+    ),
   });
+}
+
+function buildRateEquation(
+  baseCurrency: CurrencyType,
+  quoteCurrency: CurrencyType,
+  quoteAmount: number,
+  maximumFractionDigits: number,
+  language: SupportedLanguage
+): string {
+  const base = formatLocalizedMoneyAmount({
+    amount: 1,
+    currency: baseCurrency,
+    language,
+    englishPresentation: "code-suffix",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  });
+  const quote = formatLocalizedMoneyAmount({
+    amount: quoteAmount,
+    currency: quoteCurrency,
+    language,
+    englishPresentation: "code-suffix",
+    minimumFractionDigits: 2,
+    maximumFractionDigits,
+  });
+  return `${base} = ${quote}`;
+}
+
+function formatFixedAmount(
+  amount: number,
+  currency: CurrencyType,
+  language: SupportedLanguage
+): string {
+  const fractionDigits = getCurrencyPrecision(currency);
+  return formatLocalizedMoneyAmount({
+    amount,
+    currency,
+    language,
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits,
+  });
+}
+
+function parseConversionAmount(
+  amount: number | string,
+  currency: CurrencyType
+): number {
+  if (typeof amount === "number") {
+    return Number.isFinite(amount) ? amount : 0;
+  }
+
+  const parsed = parseStrictAmountInput(amount, {
+    maxAmount: MAX_TRANSACTION_AMOUNT,
+    maxFractionDigits: getCurrencyPrecision(currency),
+  });
+  return parsed.success ? parsed.amount : 0;
+}
+
+function resolveMoneyLanguage(locale: string): SupportedLanguage {
+  return locale.toLowerCase().startsWith("ar") ? "ar" : "en";
 }

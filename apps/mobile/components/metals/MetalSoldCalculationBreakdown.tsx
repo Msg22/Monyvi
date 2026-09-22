@@ -1,6 +1,6 @@
 import { Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
-import { formatCanonicalDecimalForDisplay } from "@monyvi/logic";
+import { formatLocalizedMoneyAmount } from "@/utils/localized-money-display";
 import type { MetalSoldTerminalFacts } from "@/services/metal-terminal-read-model-service";
 import { resolveCurrencyDisplayDecimalPlaces } from "./portfolio-presentation";
 
@@ -30,9 +30,7 @@ export function MetalSoldCalculationBreakdown({
       </Text>
     );
   }
-  const locale = i18n.resolvedLanguage?.startsWith("ar")
-    ? "ar-EG-u-nu-latn"
-    : "en-GB";
+  const language = i18n.resolvedLanguage?.startsWith("ar") ? "ar" : "en";
   const decimalPlaces = resolveCurrencyDisplayDecimalPlaces(currency);
   return (
     <View
@@ -49,7 +47,14 @@ export function MetalSoldCalculationBreakdown({
               className="text-sm font-medium text-text-primary dark:text-text-primary-dark"
               style={{ writingDirection: "ltr" }}
             >
-              {`${currency} ${formatCanonicalDecimalForDisplay(breakdown.displayedComponents[key], { locale, minimumFractionDigits: decimalPlaces, maximumFractionDigits: decimalPlaces })}`}
+              {formatLocalizedMoneyAmount({
+                amount: breakdown.displayedComponents[key],
+                currency,
+                language,
+                minimumFractionDigits: decimalPlaces,
+                maximumFractionDigits: decimalPlaces,
+                englishPresentation: "code-prefix",
+              })}
             </Text>
           </View>
         )

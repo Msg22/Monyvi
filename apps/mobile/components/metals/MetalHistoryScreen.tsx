@@ -9,10 +9,8 @@ import {
 } from "react-native";
 import { useTranslation } from "react-i18next";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import {
-  formatCanonicalDecimalForDisplay,
-  resolvePuritySelection,
-} from "@monyvi/logic";
+import { resolvePuritySelection } from "@monyvi/logic";
+import type { CurrencyType } from "@monyvi/db";
 
 import { MetalHoldingRender } from "@/components/metals/MetalHoldingRender";
 import { resolveCurrencyDisplayDecimalPlaces } from "@/components/metals/portfolio-presentation";
@@ -26,6 +24,7 @@ import type {
   MetalHistoryItem,
   MetalHistoryReadModel,
 } from "@/services/metal-history-read-model-service";
+import { formatLocalizedMoneyAmount } from "@/utils/localized-money-display";
 
 interface MetalHistoryScreenProps {
   readonly error: Error | null;
@@ -284,17 +283,20 @@ function getTerminalSummary(
 
 function displayTerminalAmount(
   value: string,
-  currency: string,
+  currency: CurrencyType,
   locale: string,
   unavailableCopy: string
 ): string {
   try {
     const decimalPlaces = resolveCurrencyDisplayDecimalPlaces(currency);
-    return `${currency} ${formatCanonicalDecimalForDisplay(value, {
-      locale,
-      maximumFractionDigits: decimalPlaces,
+    return formatLocalizedMoneyAmount({
+      amount: value,
+      currency,
+      language: locale.toLowerCase().startsWith("ar") ? "ar" : "en",
       minimumFractionDigits: decimalPlaces,
-    })}`;
+      maximumFractionDigits: decimalPlaces,
+      englishPresentation: "code-prefix",
+    });
   } catch {
     return unavailableCopy;
   }

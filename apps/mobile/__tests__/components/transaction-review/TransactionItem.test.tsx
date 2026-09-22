@@ -1,6 +1,10 @@
 import { fireEvent, render, screen } from "@testing-library/react-native";
 import type { ReviewableTransaction } from "@monyvi/logic";
 import React from "react";
+import i18next from "i18next";
+
+import arCommon from "@/locales/ar/common.json";
+import enCommon from "@/locales/en/common.json";
 import {
   ReviewTransactionItemSkeleton,
   TransactionItem,
@@ -37,10 +41,23 @@ jest.mock("@/context/LocaleContext", () => ({
 
 jest.mock("react-i18next", () => ({
   useTranslation: (): {
-    readonly t: (key: string, options?: { readonly name?: string }) => string;
+    readonly t: (
+      key: string,
+      options?: Readonly<Record<string, string>>
+    ) => string;
   } => ({
-    t: (key: string, options?: { readonly name?: string }): string => {
+    t: (key: string, options?: Readonly<Record<string, string>>): string => {
       if (key === "expense") return "localized-expense";
+      if (key === "transaction_review_accessibility") {
+        return [
+          options?.origin,
+          options?.type,
+          options?.amount,
+          options?.counterparty,
+          options?.category,
+          options?.account,
+        ].join(" | ");
+      }
       return options?.name ? `${key}:${options.name}` : key;
     },
   }),
@@ -79,6 +96,19 @@ function renderItem(isSmsWorkspace = false): void {
 }
 
 describe("TransactionItem", () => {
+  beforeAll(async () => {
+    await i18next.init({
+      resources: {
+        en: { common: enCommon },
+        ar: { common: arCommon },
+      },
+      lng: "ar",
+      fallbackLng: "en",
+      ns: "common",
+      defaultNS: "common",
+      interpolation: { escapeValue: false },
+    });
+  });
   beforeEach(() => {
     mockInstitutionLogoMark.mockClear();
   });
@@ -140,6 +170,14 @@ describe("TransactionItem", () => {
     expect(screen.getByTestId("transaction-review-amount")).toHaveProp(
       "className",
       expect.stringContaining("text-red-400")
+    );
+  });
+
+  it("localizes the signed amount using the active Arabic locale", () => {
+    renderItem();
+
+    expect(screen.getByTestId("transaction-review-amount")).toHaveTextContent(
+      "\u061c-١٢٥ جنيه مصري"
     );
   });
 
@@ -218,12 +256,12 @@ describe("TransactionItem", () => {
     expect(onToggleSelect).toHaveBeenCalledWith(0);
   });
 
-  it("localizes the transaction type in the edit accessibility label", () => {
+  it("localizes the complete edit accessibility sentence with named values", () => {
     renderItem();
 
     expect(screen.getByTestId("transaction-review-edit-action")).toHaveProp(
       "accessibilityLabel",
-      expect.stringContaining("localized-expense")
+      "QNB | localized-expense | ١٢٥ جنيه مصري | Fixture Shop | Food | QNB Account"
     );
   });
 

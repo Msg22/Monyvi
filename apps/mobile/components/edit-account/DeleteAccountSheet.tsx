@@ -16,7 +16,7 @@
 import type { CurrencyType } from "@monyvi/db";
 import { Ionicons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
-import { formatCurrency } from "@monyvi/logic";
+import { formatLocalizedMoneyAmount } from "@/utils/localized-money-display";
 import React, { useEffect } from "react";
 import {
   ActivityIndicator,
@@ -213,7 +213,7 @@ export function DeleteAccountSheet({
               <Text className="text-sm text-slate-500 dark:text-slate-400">
                 {t("balance_label")}{" "}
                 <Text className="font-semibold text-slate-700 dark:text-slate-200">
-                  {formatCurrency({
+                  {formatLocalizedMoneyAmount({
                     amount: accountBalance,
                     currency: currencyCode,
                   })}

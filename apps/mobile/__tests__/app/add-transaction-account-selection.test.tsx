@@ -367,7 +367,7 @@ describe("AddTransaction account selection", () => {
     fireEvent.press(screen.getByTestId("key-2"));
     fireEvent.press(screen.getByTestId("key-2"));
     expect(screen.getByText(/warning_negative_balance/)).toHaveTextContent(
-      /-1,222\.00 EGP/
+      /- 1,222\.00 EGP/
     );
     fireEvent.press(screen.getByTestId("key-plus"));
     expect(screen.queryByText(/warning_negative_balance/)).toBeNull();

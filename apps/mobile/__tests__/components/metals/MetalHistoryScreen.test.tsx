@@ -1,7 +1,10 @@
 import { render, screen } from "@testing-library/react-native";
+import i18next from "i18next";
 import React from "react";
 import { I18nManager } from "react-native";
 
+import arCommon from "@/locales/ar/common.json";
+import enCommon from "@/locales/en/common.json";
 import { MetalHistoryScreen } from "@/components/metals/MetalHistoryScreen";
 import type {
   MetalHistoryItem,
@@ -174,6 +177,20 @@ const terminalHistoryFixture: MetalHistoryReadModel = {
     baseDisposedHistoryItem,
   ],
 };
+
+beforeAll(async () => {
+  await i18next.init({
+    resources: {
+      en: { common: enCommon },
+      ar: { common: arCommon },
+    },
+    lng: "en",
+    fallbackLng: "en",
+    ns: "common",
+    defaultNS: "common",
+    interpolation: { escapeValue: false },
+  });
+});
 
 describe("MetalHistoryScreen", () => {
   beforeEach(() => {
@@ -368,7 +385,7 @@ describe("MetalHistoryScreen", () => {
       "accessibilityLabel",
       expect.stringContaining("أغسطس")
     );
-    expect(screen.getByText("EGP 10,450.00")).toBeTruthy();
+    expect(screen.getByText("١٠٬٤٥٠٫٠٠ جنيه مصري")).toBeTruthy();
   });
 
   it("keeps History content above the bottom safe area", () => {
@@ -476,15 +493,13 @@ describe("MetalHistoryScreen", () => {
       "className",
       expect.stringContaining("flex-col")
     );
-    expect(screen.getByTestId("metal-history-item-content-disposed")).toHaveProp(
-      "className",
-      expect.stringContaining("flex-col")
-    );
+    expect(
+      screen.getByTestId("metal-history-item-content-disposed")
+    ).toHaveProp("className", expect.stringContaining("flex-col"));
     // Terminal summary container aligns to start in stacked mode
-    expect(screen.getByTestId("metal-history-terminal-summary-sold")).toHaveProp(
-      "className",
-      expect.stringContaining("items-start")
-    );
+    expect(
+      screen.getByTestId("metal-history-terminal-summary-sold")
+    ).toHaveProp("className", expect.stringContaining("items-start"));
     // In LTR stacked mode, text aligns to the left (same start edge as title/metadata)
     expect(screen.getByTestId("metal-history-terminal-label-sold")).toHaveProp(
       "className",
@@ -524,18 +539,15 @@ describe("MetalHistoryScreen", () => {
       "className",
       expect.stringContaining("flex-row")
     );
-    expect(screen.getByTestId("metal-history-terminal-summary-sold")).toHaveProp(
-      "className",
-      expect.stringContaining("items-end")
-    );
-    expect(screen.getByTestId("metal-history-terminal-summary-sold")).toHaveProp(
-      "className",
-      expect.stringContaining("shrink-0")
-    );
-    expect(screen.getByTestId("metal-history-terminal-summary-sold")).not.toHaveProp(
-      "className",
-      expect.stringContaining("max-w-[40%]")
-    );
+    expect(
+      screen.getByTestId("metal-history-terminal-summary-sold")
+    ).toHaveProp("className", expect.stringContaining("items-end"));
+    expect(
+      screen.getByTestId("metal-history-terminal-summary-sold")
+    ).toHaveProp("className", expect.stringContaining("shrink-0"));
+    expect(
+      screen.getByTestId("metal-history-terminal-summary-sold")
+    ).not.toHaveProp("className", expect.stringContaining("max-w-[40%]"));
     // In LTR horizontal mode, both label and value align to the trailing edge (text-right)
     expect(screen.getByTestId("metal-history-terminal-label-sold")).toHaveProp(
       "className",
@@ -565,10 +577,9 @@ describe("MetalHistoryScreen", () => {
       "className",
       expect.stringContaining("flex-row")
     );
-    expect(screen.getByTestId("metal-history-terminal-summary-sold")).toHaveProp(
-      "className",
-      expect.stringContaining("items-end")
-    );
+    expect(
+      screen.getByTestId("metal-history-terminal-summary-sold")
+    ).toHaveProp("className", expect.stringContaining("items-end"));
   });
 
   it("reflows rows into stacked layout when font scale is enlarged to 2.0 or higher", () => {
@@ -592,10 +603,9 @@ describe("MetalHistoryScreen", () => {
       "className",
       expect.stringContaining("flex-col")
     );
-    expect(screen.getByTestId("metal-history-terminal-summary-sold")).toHaveProp(
-      "className",
-      expect.stringContaining("items-start")
-    );
+    expect(
+      screen.getByTestId("metal-history-terminal-summary-sold")
+    ).toHaveProp("className", expect.stringContaining("items-start"));
 
     // Enlarged font scale on tablet also reflows dense rows
     mockScreenWidth = 768;
@@ -643,10 +653,9 @@ describe("MetalHistoryScreen", () => {
     );
 
     // In RTL horizontal layout: end-aligned is text-left (trailing edge)
-    expect(screen.getByTestId("metal-history-terminal-summary-sold")).toHaveProp(
-      "className",
-      expect.stringContaining("items-end")
-    );
+    expect(
+      screen.getByTestId("metal-history-terminal-summary-sold")
+    ).toHaveProp("className", expect.stringContaining("items-end"));
     expect(screen.getByTestId("metal-history-terminal-label-sold")).toHaveProp(
       "className",
       expect.stringContaining("text-left")
@@ -676,10 +685,9 @@ describe("MetalHistoryScreen", () => {
         onRetry={jest.fn()}
       />
     );
-    expect(screen.getByTestId("metal-history-terminal-summary-sold")).toHaveProp(
-      "className",
-      expect.stringContaining("items-start")
-    );
+    expect(
+      screen.getByTestId("metal-history-terminal-summary-sold")
+    ).toHaveProp("className", expect.stringContaining("items-start"));
     expect(screen.getByTestId("metal-history-terminal-label-sold")).toHaveProp(
       "className",
       expect.stringContaining("text-right")
@@ -736,10 +744,9 @@ describe("MetalHistoryScreen", () => {
       "className",
       expect.stringContaining("flex-row")
     );
-    expect(screen.getByTestId("metal-history-terminal-summary-sold")).toHaveProp(
-      "className",
-      expect.stringContaining("shrink-0")
-    );
+    expect(
+      screen.getByTestId("metal-history-terminal-summary-sold")
+    ).toHaveProp("className", expect.stringContaining("shrink-0"));
     expect(screen.getByText("EGP 10,450.00")).toBeTruthy();
   });
 

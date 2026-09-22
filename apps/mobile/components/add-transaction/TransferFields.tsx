@@ -5,6 +5,7 @@ import { Text, TouchableOpacity, View } from "react-native";
 import { useEffect, useMemo, useState, type RefObject } from "react";
 import { AccountSelectorModal } from "../modals/AccountSelectorModal";
 import { formatAmountInput } from "@monyvi/logic";
+import { formatLocalizedMoneyAmount } from "@/utils/localized-money-display";
 import { useTranslation } from "react-i18next";
 
 interface TransferFieldsProps {
@@ -47,7 +48,8 @@ export function TransferFields({
 }: TransferFieldsProps): React.JSX.Element {
   const [isFromModalOpen, setIsFromModalOpen] = useState(false);
   const [isToModalOpen, setIsToModalOpen] = useState(false);
-  const { t } = useTranslation("transactions");
+  const { t, i18n } = useTranslation("transactions");
+  const language = i18n?.language === "ar" ? "ar" : "en";
 
   const fromAccount = accounts.find((a) => a.id === fromAccountId);
   const toAccount = accounts.find((a) => a.id === toAccountId);
@@ -190,10 +192,25 @@ export function TransferFields({
             <Text className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">
               {t("target_amount", { currency: toAccount?.currency })}
             </Text>
-            {exchangeRate && (
+            {exchangeRate && fromAccount && toAccount && (
               <Text className="text-[10px] text-slate-400 font-bold dark:text-slate-500">
-                1 {fromAccount?.currency} ≈ {exchangeRate.toFixed(2)}{" "}
-                {toAccount?.currency}
+                {formatLocalizedMoneyAmount({
+                  amount: 1,
+                  currency: fromAccount.currency,
+                  language,
+                  englishPresentation: "code-suffix",
+                  minimumFractionDigits: 0,
+                  maximumFractionDigits: 0,
+                })}{" "}
+                ≈{" "}
+                {formatLocalizedMoneyAmount({
+                  amount: exchangeRate,
+                  currency: toAccount.currency,
+                  language,
+                  englishPresentation: "code-suffix",
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}
               </Text>
             )}
           </View>

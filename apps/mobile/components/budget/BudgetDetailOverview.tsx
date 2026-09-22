@@ -1,7 +1,8 @@
 import { useLocale } from "@/context/LocaleContext";
 import { shouldUseCompactLayout } from "@/constants/ui";
 import type { CurrencyType } from "@monyvi/db";
-import { formatCurrency, type SpendingMetrics } from "@monyvi/logic";
+import type { SpendingMetrics } from "@monyvi/logic";
+import { formatLocalizedMoneyAmount } from "@/utils/localized-money-display";
 import React from "react";
 import { Text, useWindowDimensions, View } from "react-native";
 import { useTranslation } from "react-i18next";
@@ -37,7 +38,7 @@ export function BudgetDetailOverview({
       ? "bg-gold-800 dark:bg-gold-400"
       : "bg-nileGreen-700 dark:bg-nileGreen-400";
   const amount = (value: number): string =>
-    formatCurrency({ amount: value, currency });
+    formatLocalizedMoneyAmount({ amount: value, currency });
 
   return (
     <View

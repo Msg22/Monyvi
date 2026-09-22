@@ -1,5 +1,5 @@
 import type { CurrencyType } from "@monyvi/db";
-import { formatCurrency } from "@monyvi/logic";
+import { formatLocalizedMoneyAmount } from "@/utils/localized-money-display";
 import { BlurView } from "expo-blur";
 import React from "react";
 import { Platform, Text, useColorScheme, View } from "react-native";
@@ -54,23 +54,23 @@ export const GroupHeader = React.memo(function GroupHeader({
             <View className="flex-row items-center gap-2 mb-0.5">
               {(income === null || income > 0) && (
                 <Text className="text-[11px] text-nileGreen-600 dark:text-nileGreen-400 font-semibold">
-                  {income === null ? "" : "+"}
                   {income === null
                     ? "—"
-                    : formatCurrency({
+                    : formatLocalizedMoneyAmount({
                         amount: income,
                         currency: currencyCode,
+                        signDisplay: "always",
                       })}
                 </Text>
               )}
               {(expense === null || expense > 0) && (
                 <Text className="text-[11px] text-red-500 dark:text-red-400 font-semibold">
-                  {expense === null ? "" : "-"}
                   {expense === null
                     ? "—"
-                    : formatCurrency({
-                        amount: expense,
+                    : formatLocalizedMoneyAmount({
+                        amount: -expense,
                         currency: currencyCode,
+                        signDisplay: "always",
                       })}
                 </Text>
               )}
@@ -83,7 +83,7 @@ export const GroupHeader = React.memo(function GroupHeader({
             <Text className="text-slate-600 dark:text-slate-300 font-medium">
               {netWorth === null
                 ? "—"
-                : formatCurrency({
+                : formatLocalizedMoneyAmount({
                     amount: netWorth,
                     currency: currencyCode,
                   })}
