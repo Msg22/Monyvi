@@ -168,6 +168,21 @@ function inputOf(
   };
 }
 
+it.each(["netProceedsMinorUnits", "netProceedsMinor\\u0055nits"])(
+  "rejects ambiguous sold event evidence with duplicate %s",
+  (key): void => {
+    const payload = salePayload();
+    const input = inputOf(payload);
+    const event = saleEvent(payload, {
+      payloadJson: `{"${key}":"1",${JSON.stringify(payload).slice(1)}`,
+    });
+    expect(shapeMetalRealizedSaleEvidence({ ...input, event })).toEqual({
+      available: false,
+      reason: "unsupported_sale_evidence",
+    });
+  }
+);
+
 describe("metal realized sale evidence shaper", () => {
   it("keeps the effective sale reportable after a rejected undo restores its holding", () => {
     expect(shapeMetalRealizedSaleEvidence(inputOf(salePayload(), {
@@ -190,8 +205,10 @@ describe("metal realized sale evidence shaper", () => {
         grossProceedsDecimal: "36000",
         feeDecimal: "500",
         netProceedsDecimal: "35500",
+        notes: "Manual QA whole-holding sale without account credit",
         purchaseCurrency: "EGP",
         proceedsCurrency: "EGP",
+        saleDate: "2026-08-22",
         breakdownAvailable: false,
       },
     });
@@ -541,6 +558,16 @@ describe("metal realized sale evidence shaper", () => {
 
     expect(outcome).toMatchObject({
       available: false,
+      facts: {
+        actionId: SELL_ACTION_ID,
+        feeDecimal: "500",
+        grossProceedsDecimal: "36000",
+        holdingId: HOLDING_ID,
+        netProceedsDecimal: "35500",
+        notes: "Manual QA whole-holding sale without account credit",
+        proceedsCurrency: "EGP",
+        saleDate: "2026-08-22",
+      },
       reason: "purchase_cost_unavailable",
     });
   });

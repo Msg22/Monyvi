@@ -1,3 +1,11 @@
+import { terminalFactsFixture } from "./terminal-facts-fixture";
+
+jest.mock("@/services/metal-terminal-read-model-service", () =>
+  jest.requireActual<typeof import("./terminal-facts-fixture")>(
+    "./terminal-facts-fixture"
+  )
+);
+
 interface QueryCondition {
   readonly column?: string;
   readonly kind: "take" | "where" | "sortBy";
@@ -7,6 +15,7 @@ interface QueryCondition {
 const mockAssetsCollection = { table: "assets" };
 const mockAssetMetalsCollection = { table: "asset_metals" };
 const mockActionEvidenceCollection = { table: "metal_action_evidence" };
+const mockFinancialActionGroupsCollection = { table: "financial_action_groups" };
 const mockHoldingStatesCollection = { table: "metal_holding_states" };
 const mockLifecycleEventsCollection = { table: "metal_lifecycle_events" };
 const mockRateReferencesCollection = { table: "metal_rate_references" };
@@ -23,6 +32,7 @@ jest.mock("@monyvi/db", () => ({
       const collections: Readonly<Record<string, unknown>> = {
         assets: mockAssetsCollection,
         asset_metals: mockAssetMetalsCollection,
+        financial_action_groups: mockFinancialActionGroupsCollection,
         metal_action_evidence: mockActionEvidenceCollection,
         metal_holding_states: mockHoldingStatesCollection,
         metal_lifecycle_events: mockLifecycleEventsCollection,
@@ -225,6 +235,7 @@ function historyHolding(
       userId,
     },
     lifecycleEvents,
+    terminalFacts: terminalFactsFixture(),
     metal: {
       itemForm: "coin",
       metalType: "GOLD",

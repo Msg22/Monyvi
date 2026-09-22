@@ -2,6 +2,7 @@ import {
   database,
   type Asset,
   type AssetMetal,
+  type FinancialActionGroup,
   type MetalActionEvidence,
   type MetalHoldingState,
   type MetalLifecycleEvent,
@@ -25,6 +26,10 @@ import {
   type MetalDetailRenderKey,
 } from "@/services/metal-detail-read-model-service";
 import { hasBoundEffectiveActionEvidence } from "@/services/metal-portfolio-read-model-service";
+import {
+  shapeMetalTerminalFacts,
+  type MetalTerminalFacts,
+} from "@/services/metal-terminal-read-model-service";
 
 export const METAL_HISTORY_PAGE_SIZE = 50;
 
@@ -41,6 +46,7 @@ export interface MetalHistoryHoldingInput {
   readonly holdingState: MetalDetailHoldingStateInput;
   readonly lifecycleEvents: readonly MetalDetailLifecycleEventInput[];
   readonly metal: MetalDetailMetalInput;
+  readonly terminalFacts?: MetalTerminalFacts | null;
 }
 
 export interface BuildMetalHistoryReadModelInput {
@@ -61,6 +67,7 @@ export interface MetalHistoryItem {
   readonly purityFactorDecimal: string | null;
   readonly renderKey: MetalDetailRenderKey | null;
   readonly status: Exclude<MetalHistoryFilter, "all">;
+  readonly terminalFacts: MetalTerminalFacts | null;
 }
 
 export interface MetalHistoryReadModel {
@@ -135,55 +142,38 @@ export async function readMetalHistoryReadModel(
     return emptyHistory(options.filter);
   }
 
-  const counts = countTerminalStates(lifecycleValidatedStates);
-  const candidateStates = lifecycleValidatedStates.filter(
-    (state) => options.filter === "all" || state.status === options.filter
-  );
-  // One extra renderable item is collected to answer hasMore without
-  // exposing it, so lifecycle rows that cannot be rendered (missing owned
-  // asset, metal, or invalid detail model) never consume a visible slot.
-  const collected = await readRenderableHistoryItems(
+  // Validate the whole archive once for truthful per-filter counts, but keep the
+  // number of query rounds constant: read assets and their dependencies for the
+  // entire ordered set in one pass, then shape counts and the bounded page in
+  // memory. Batching per page here previously issued another asset lookup plus
+  // four dependency queries for every page of candidates.
+  const assets = await readHistoryAssets(scope, lifecycleValidatedStates);
+  if (assets.length === 0) {
+    return emptyHistory(options.filter);
+  }
+  const dependencies = await readHistoryDependencies(
     scope,
-    candidateStates,
-    options.filter,
-    pageSize,
-    pageSize + 1
+    assets,
+    lifecycleValidatedStates
+  );
+  const validated = buildMetalHistoryReadModel({
+    filter: "all",
+    holdings: shapeReadHistoryHoldings(
+      assets,
+      lifecycleValidatedStates,
+      dependencies
+    ),
+    userId: scope.userId,
+  });
+  const filteredItems = validated.items.filter(
+    (item) => options.filter === "all" || item.status === options.filter
   );
   return Object.freeze({
-    counts: Object.freeze({ ...counts }),
+    counts: Object.freeze({ ...validated.counts }),
     filter: options.filter,
-    hasMore: collected.length > pageSize,
-    items: Object.freeze(collected.slice(0, pageSize)),
+    hasMore: filteredItems.length > pageSize,
+    items: Object.freeze(filteredItems.slice(0, pageSize)),
   });
-}
-
-async function readRenderableHistoryItems(
-  scope: CurrentUserDataScope,
-  candidates: readonly MetalHoldingState[],
-  filter: MetalHistoryFilter,
-  batchSize: number,
-  limit: number
-): Promise<readonly MetalHistoryItem[]> {
-  const collected: MetalHistoryItem[] = [];
-  for (
-    let offset = 0;
-    offset < candidates.length && collected.length < limit;
-    offset += batchSize
-  ) {
-    const batch = candidates.slice(offset, offset + batchSize);
-    const assets = await readHistoryAssets(scope, batch);
-    if (assets.length === 0) {
-      continue;
-    }
-    const dependencies = await readHistoryDependencies(scope, assets, batch);
-    const page = buildMetalHistoryReadModel({
-      filter,
-      holdings: shapeReadHistoryHoldings(assets, batch, dependencies),
-      userId: scope.userId,
-    });
-    collected.push(...page.items);
-  }
-  return collected;
 }
 
 async function readReportableTerminalStates(
@@ -283,6 +273,7 @@ async function readHistoryAssets(
 interface HistoryDependencies {
   readonly evidence: readonly MetalActionEvidence[];
   readonly events: readonly MetalLifecycleEvent[];
+  readonly groups: readonly FinancialActionGroup[];
   readonly metals: readonly AssetMetal[];
 }
 
@@ -292,7 +283,7 @@ async function readHistoryDependencies(
   terminalStates: readonly MetalHoldingState[]
 ): Promise<HistoryDependencies> {
   const holdingIds = terminalStates.map((state) => state.holdingId);
-  const [metals, events, evidence] = await Promise.all([
+  const [metals, events, evidence, groups] = await Promise.all([
     scope
       .queryChildrenOfOwnedParents(
         database.get<AssetMetal>("asset_metals"),
@@ -317,8 +308,16 @@ async function readHistoryDependencies(
         Q.where("deleted", false)
       )
       .fetch(),
+    scope
+      .queryOwned(
+        database.get<FinancialActionGroup>("financial_action_groups"),
+        Q.where("domain", "metals"),
+        Q.where("domain_reference_id", Q.oneOf(holdingIds)),
+        Q.where("deleted", false)
+      )
+      .fetch(),
   ]);
-  return { evidence, events, metals };
+  return { evidence, events, groups, metals };
 }
 
 function shapeReadHistoryHoldings(
@@ -346,6 +345,14 @@ function shapeReadHistoryHoldings(
     const holdingEvidence = dependencies.evidence.filter(
       (candidate) => candidate.holdingId === state.holdingId
     );
+    const terminalFacts = shapeHistoryTerminalFacts(
+      asset,
+      metal,
+      metal.metalType,
+      state,
+      holdingEvents,
+      dependencies.groups
+    );
     return [
       {
         asset: toDetailAssetInput(asset),
@@ -355,8 +362,30 @@ function shapeReadHistoryHoldings(
           holdingEvidence
         ),
         metal: toDetailMetalInput(metal, metal.metalType),
+        terminalFacts,
       },
     ];
+  });
+}
+
+function shapeHistoryTerminalFacts(
+  asset: Asset,
+  metal: AssetMetal,
+  metalType: SupportedMetal,
+  state: MetalHoldingState,
+  events: readonly MetalLifecycleEvent[],
+  groups: readonly FinancialActionGroup[]
+): MetalTerminalFacts | null {
+  return shapeMetalTerminalFacts({
+    asset,
+    event: events.find((event) => event.id === state.effectiveEventId) ?? null,
+    group:
+      groups.find((group) => group.actionId === state.effectiveActionId) ??
+      null,
+    holdingState: state,
+    metal: { ...metal, metalType },
+    rateReferences: [],
+    userId: state.userId,
   });
 }
 
@@ -414,9 +443,15 @@ function toHistoryItem(
     lifecycleEvents: holding.lifecycleEvents,
     metal: holding.metal,
     rateReferences: [],
+    terminalFacts: holding.terminalFacts,
     userId,
   });
-  if (model === null || model.status === "active") return null;
+  if (
+    model === null ||
+    model.status === "active" ||
+    model.terminalFacts === null
+  )
+    return null;
   const terminal = model.timeline[0];
   if (terminal === undefined) return null;
   return Object.freeze({
@@ -430,6 +465,7 @@ function toHistoryItem(
     purityFactorDecimal: model.purityFactorDecimal,
     renderKey: model.renderKey,
     status: model.status,
+    terminalFacts: model.terminalFacts,
   });
 }
 
@@ -485,14 +521,6 @@ function isReportableReconciliationState(value: string): boolean {
     value === "accepted" ||
     value === "reconciled"
   );
-}
-
-function countTerminalStates(
-  states: readonly MetalHoldingState[]
-): MetalHistoryCounts {
-  const sold = states.filter((state) => state.status === "sold").length;
-  const disposed = states.filter((state) => state.status === "disposed").length;
-  return { all: sold + disposed, disposed, sold };
 }
 
 function countItems(items: readonly MetalHistoryItem[]): MetalHistoryCounts {

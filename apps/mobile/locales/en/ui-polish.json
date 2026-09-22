@@ -1,0 +1,13 @@
+{
+  "wealth_breakdown": {
+    "show": "See where your money is",
+    "hide": "Hide breakdown",
+    "close": "Close wealth breakdown"
+  },
+  "metals_empty": {
+    "header": "My Metals",
+    "title": "Start tracking your gold and silver",
+    "body": "Add your first holding to follow its value over time.",
+    "cta": "Add your first holding"
+  }
+}

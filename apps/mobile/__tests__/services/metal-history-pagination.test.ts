@@ -1,3 +1,14 @@
+jest.mock("@/services/metal-terminal-read-model-service", () => ({
+  shapeMetalTerminalFacts: (input: {
+    readonly holdingState: { readonly status: "sold" | "disposed" };
+  }): unknown =>
+    jest
+      .requireActual<
+        typeof import("./terminal-facts-fixture")
+      >("./terminal-facts-fixture")
+      .terminalFactsFixture(input.holdingState.status),
+}));
+
 interface QueryCondition {
   readonly column?: string;
   readonly kind: "sortBy" | "where";
@@ -7,6 +18,9 @@ interface QueryCondition {
 const mockAssetsCollection = { table: "assets" };
 const mockAssetMetalsCollection = { table: "asset_metals" };
 const mockEvidenceCollection = { table: "metal_action_evidence" };
+const mockFinancialActionGroupsCollection = {
+  table: "financial_action_groups",
+};
 const mockStatesCollection = { table: "metal_holding_states" };
 const mockEventsCollection = { table: "metal_lifecycle_events" };
 const mockGetCurrentUserDataScope = jest.fn();
@@ -20,6 +34,7 @@ jest.mock("@monyvi/db", () => ({
       const collections: Readonly<Record<string, unknown>> = {
         assets: mockAssetsCollection,
         asset_metals: mockAssetMetalsCollection,
+        financial_action_groups: mockFinancialActionGroupsCollection,
         metal_action_evidence: mockEvidenceCollection,
         metal_holding_states: mockStatesCollection,
         metal_lifecycle_events: mockEventsCollection,
@@ -91,9 +106,7 @@ function terminalFixtures(): readonly TerminalFixture[] {
 }
 
 describe("metal History pagination", () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-    const terminals = terminalFixtures();
+  function seedArchive(terminals: readonly TerminalFixture[]): void {
     const assets = terminals.map((terminal) => ({
       deleted: false,
       id: terminal.holdingId,
@@ -152,17 +165,21 @@ describe("metal History pagination", () => {
       userId: "user-1",
     }));
 
-    mockScopeQueryOwned.mockImplementation(
-      (collection: { readonly table: string }): unknown => {
-        return fetchedRows(mockRowsByTable[collection.table] ?? []);
-      }
-    );
     mockRowsByTable = {
       assets,
+      financial_action_groups: [],
       metal_action_evidence: evidence,
       metal_holding_states: states,
       metal_lifecycle_events: events,
     };
+  }
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockScopeQueryOwned.mockImplementation(
+      (collection: { readonly table: string }): unknown =>
+        fetchedRows(mockRowsByTable[collection.table] ?? [])
+    );
     mockScopeQueryChildren.mockImplementation(
       (
         _collection: unknown,
@@ -186,9 +203,10 @@ describe("metal History pagination", () => {
       queryOwned: mockScopeQueryOwned,
       userId: "user-1",
     });
+    seedArchive(terminalFixtures());
   });
 
-  it("keeps global counts and requests dependencies only for the filtered page", async () => {
+  it("keeps global counts from all validated renderable history items", async () => {
     const model = await readMetalHistoryReadModel({
       filter: "sold",
       pageSize: 1,
@@ -203,7 +221,13 @@ describe("metal History pagination", () => {
     expect(model.items.map((item) => item.holdingId)).toEqual(["sold-latest"]);
     expect(mockScopeQueryOwned).toHaveBeenCalledWith(
       mockAssetsCollection,
-      { column: "id", kind: "where", value: { oneOf: ["sold-latest"] } },
+      {
+        column: "id",
+        kind: "where",
+        value: {
+          oneOf: ["sold-latest", "disposed-middle", "sold-older"],
+        },
+      },
       { column: "type", kind: "where", value: "METAL" },
       { column: "deleted", kind: "where", value: false }
     );
@@ -212,7 +236,9 @@ describe("metal History pagination", () => {
       {
         column: "holding_id",
         kind: "where",
-        value: { oneOf: ["sold-latest"] },
+        value: {
+          oneOf: ["sold-latest", "disposed-middle", "sold-older"],
+        },
       },
       { column: "deleted", kind: "where", value: false },
       { column: "is_history_visible", kind: "where", value: true },
@@ -223,13 +249,15 @@ describe("metal History pagination", () => {
       {
         column: "holding_id",
         kind: "where",
-        value: { oneOf: ["sold-latest"] },
+        value: {
+          oneOf: ["sold-latest", "disposed-middle", "sold-older"],
+        },
       },
       { column: "deleted", kind: "where", value: false }
     );
   });
 
-  it("keeps global counts when the selected page asset is unavailable", async () => {
+  it("does not count terminal states whose owned assets are unavailable", async () => {
     mockRowsByTable = { ...mockRowsByTable, assets: [] };
 
     await expect(
@@ -239,7 +267,7 @@ describe("metal History pagination", () => {
         userId: "user-1",
       })
     ).resolves.toEqual({
-      counts: { all: 3, disposed: 1, sold: 2 },
+      counts: { all: 0, disposed: 0, sold: 0 },
       filter: "sold",
       hasMore: false,
       items: [],
@@ -261,10 +289,43 @@ describe("metal History pagination", () => {
     });
 
     expect(model).toMatchObject({
-      counts: { all: 3, disposed: 1, sold: 2 },
+      counts: { all: 2, disposed: 1, sold: 1 },
       filter: "sold",
       hasMore: false,
     });
     expect(model.items.map((item) => item.holdingId)).toEqual(["sold-older"]);
+  });
+
+  it("keeps query rounds constant as the archive grows", async () => {
+    await readMetalHistoryReadModel({
+      filter: "all",
+      pageSize: 1,
+      userId: "user-1",
+    });
+    const smallArchiveRounds = mockScopeQueryOwned.mock.calls.length;
+
+    mockScopeQueryOwned.mockClear();
+    const largeTerminals: TerminalFixture[] = Array.from(
+      { length: 400 },
+      (_, index) => ({
+        holdingId: `holding-${index.toString().padStart(3, "0")}`,
+        occurredAt: new Date(Date.UTC(2026, 0, 1, 0, index)),
+        status: index % 2 === 0 ? "sold" : "disposed",
+      })
+    );
+    seedArchive(largeTerminals);
+
+    const model = await readMetalHistoryReadModel({
+      filter: "all",
+      pageSize: 50,
+      userId: "user-1",
+    });
+
+    expect(model.counts).toEqual({ all: 400, disposed: 200, sold: 200 });
+    expect(model.items).toHaveLength(50);
+    expect(model.hasMore).toBe(true);
+    // Whole-archive count validation must not add query rounds per page of
+    // candidates; it stays constant however large the archive is.
+    expect(mockScopeQueryOwned.mock.calls.length).toBe(smallArchiveRounds);
   });
 });
