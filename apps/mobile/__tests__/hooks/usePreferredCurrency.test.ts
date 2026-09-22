@@ -15,7 +15,11 @@ const mockSubscribe = jest.fn(
   }
 );
 const mockObserve = jest.fn(() => ({ subscribe: mockSubscribe }));
-const mockQuery = jest.fn(() => ({ observe: mockObserve }));
+const mockObserveWithColumns = jest.fn(() => ({ subscribe: mockSubscribe }));
+const mockQuery = jest.fn(() => ({
+  observe: mockObserve,
+  observeWithColumns: mockObserveWithColumns,
+}));
 const mockWrite = jest.fn<Promise<unknown>, [() => Promise<unknown>]>((fn) =>
   fn()
 );
@@ -102,6 +106,19 @@ beforeEach(() => {
 });
 
 describe("usePreferredCurrency", () => {
+  it("reacts to a preferred-currency update on the same profile model", (): void => {
+    const profile = { id: "profile-1", preferredCurrency: "EGP" };
+    const { result } = renderHook(() => usePreferredCurrency());
+
+    act(() => emitProfiles([profile]));
+    expect(result.current.preferredCurrency).toBe("EGP");
+
+    profile.preferredCurrency = "USD";
+    act(() => emitProfiles([profile]));
+
+    expect(mockObserveWithColumns).toHaveBeenCalledWith(["preferred_currency"]);
+    expect(result.current.preferredCurrency).toBe("USD");
+  });
   it("delegates preferred-currency writes to profile-service", async (): Promise<void> => {
     const { result } = renderHook(() => usePreferredCurrency());
 

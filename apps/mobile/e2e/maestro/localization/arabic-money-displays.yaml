@@ -34,6 +34,23 @@ appId: com.monyvi.app
 
 - assertVisible: "١٩٬٠٨٠٫٥٥ جنيه مصري"
 
+# Changing the preferred currency must refresh Home without reopening the picker.
+- tapOn: "تغيير العملة"
+- tapOn:
+    id: "currency-code-row-USD"
+- extendedWaitUntil:
+    visible: ".*دولار أمريكي"
+    timeout: 120000
+- assertNotVisible: "١٩٬٠٨٠٫٥٥ جنيه مصري"
+
+# Restore the fixture currency for the account and transaction checks.
+- tapOn: "تغيير العملة"
+- tapOn:
+    id: "currency-code-row-EGP"
+- extendedWaitUntil:
+    visible: "١٩٬٠٨٠٫٥٥ جنيه مصري"
+    timeout: 120000
+
 # Verify a deterministic account amount.
 - tapOn:
     id: "tab-accounts"

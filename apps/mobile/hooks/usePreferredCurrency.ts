@@ -3,7 +3,7 @@ import {
   DEFAULT_CURRENCY,
   detectCurrencyFromTimezone,
 } from "@/utils/currency-detection";
-import { database, Profile, type CurrencyType } from "@monyvi/db";
+import { database, type Profile, type CurrencyType } from "@monyvi/db";
 import { SUPPORTED_CURRENCIES } from "@monyvi/logic";
 import { Q } from "@nozbe/watermelondb";
 import { useEffect, useMemo, useState } from "react";
@@ -21,6 +21,11 @@ interface UsePreferredCurrencyResult {
   readonly isLoading: boolean;
 }
 
+interface ObservedPreference {
+  readonly userId: string;
+  readonly currency: CurrencyType | null;
+}
+
 /**
  * Exposes the user's preferred currency (from the Profile record or device locale) and a setter to persist changes.
  *
@@ -30,25 +35,25 @@ interface UsePreferredCurrencyResult {
  * - `isLoading`: `true` while the initial Profile observation is pending, `false` otherwise.
  */
 export function usePreferredCurrency(): UsePreferredCurrencyResult {
-  const [profile, setProfile] = useState<Profile | null>(null);
+  const [preference, setPreference] = useState<ObservedPreference | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const { showToast } = useToast();
   const { userId, isResolvingUser } = useCurrentUser();
 
   useEffect(() => {
     if (isResolvingUser) {
-      setProfile(null);
+      setPreference(null);
       setIsLoading(true);
       return;
     }
 
     if (!userId) {
-      setProfile(null);
+      setPreference(null);
       setIsLoading(false);
       return;
     }
 
-    setProfile(null);
+    setPreference(null);
     setIsLoading(true);
 
     const collection = database.get<Profile>("profiles");
@@ -58,10 +63,15 @@ export function usePreferredCurrency(): UsePreferredCurrencyResult {
       Q.where("deleted", false),
       Q.take(1)
     )
-      .observe()
+      .observeWithColumns(["preferred_currency"])
       .subscribe({
         next: (profiles) => {
-          setProfile(profiles[0] ?? null);
+          const profile = profiles[0];
+          setPreference(
+            profile
+              ? { userId, currency: profile.preferredCurrency ?? null }
+              : null
+          );
           setIsLoading(false);
         },
         error: (err: unknown) => {
@@ -75,24 +85,26 @@ export function usePreferredCurrency(): UsePreferredCurrencyResult {
     return () => subscription.unsubscribe();
   }, [userId, isResolvingUser]);
 
+  const currentPreference =
+    !isResolvingUser && preference?.userId === userId ? preference : null;
+
   const preferredCurrency = useMemo<CurrencyType>(() => {
-    if (profile?.preferredCurrency) {
-      const isSupported = SUPPORTED_CURRENCIES.some(
-        (c) => c.code === profile.preferredCurrency
-      );
-      if (isSupported) {
-        return profile.preferredCurrency;
-      }
+    const currency = currentPreference?.currency;
+    if (
+      currency &&
+      SUPPORTED_CURRENCIES.some((item) => item.code === currency)
+    ) {
+      return currency;
     }
     // No profile or unsupported currency — detect from device timezone.
     // Falls back to DEFAULT_CURRENCY (USD) if detection returns null.
     return detectCurrencyFromTimezone() ?? DEFAULT_CURRENCY;
-  }, [profile?.preferredCurrency]);
+  }, [currentPreference?.currency]);
 
   const setPreferredCurrency = async (
     currency: CurrencyType
   ): Promise<void> => {
-    if (!profile) return;
+    if (!currentPreference) return;
     try {
       await persistPreferredCurrency(currency);
     } catch (error) {
