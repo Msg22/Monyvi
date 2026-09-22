@@ -18,6 +18,8 @@
  */
 
 import type { ParsedSmsTransaction } from "@monyvi/logic";
+import { getCurrentLanguage } from "@/i18n/changeLanguage";
+import type { SupportedLanguage } from "@/i18n/translation-schema";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { PermissionsAndroid, Platform } from "react-native";
 import {
@@ -350,7 +352,8 @@ async function isExpectedUserCurrent(expectedUserId: string): Promise<boolean> {
  */
 export async function handleDetectedSms(
   parsed: ParsedSmsTransaction,
-  expectedUserId: string
+  expectedUserId: string,
+  language: SupportedLanguage = getCurrentLanguage()
 ): Promise<void> {
   if (!(await isExpectedUserCurrent(expectedUserId))) return;
 
@@ -383,7 +386,11 @@ export async function handleDetectedSms(
         hasSenderDisplayName: parsed.senderDisplayName.trim().length > 0,
         redactedSmsFingerprint: redactIdentifierForLog(parsed.smsFingerprint),
       });
-      await showTransactionNeedsAccountNotification(parsed, expectedUserId);
+      await showTransactionNeedsAccountNotification(
+        parsed,
+        expectedUserId,
+        language
+      );
       return;
     }
 
@@ -403,7 +410,8 @@ export async function handleDetectedSms(
         await showTransactionCreatedNotification(
           parsed,
           resolved.accountName,
-          expectedUserId
+          expectedUserId,
+          language
         );
       }
     } else {
@@ -412,7 +420,8 @@ export async function handleDetectedSms(
         parsed,
         resolved.accountId,
         resolved.accountName,
-        expectedUserId
+        expectedUserId,
+        language
       );
     }
   } catch (err) {

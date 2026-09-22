@@ -55,7 +55,7 @@ export interface RealizedAttributionInput {
   readonly metalInstrumentCode: MetalInstrumentCode;
   readonly purchaseCurrencyInstrumentCode: CurrencyInstrumentCode;
   readonly proceedsCurrencyInstrumentCode: CurrencyInstrumentCode;
-  readonly pureGramsDecimal: string;
+  readonly pureGramsDecimal: string | null;
   readonly purchaseCostDecimal: string | null;
   readonly purchaseCurrencyDecimalPlaces: number;
   readonly grossProceedsDecimal: string;
@@ -269,12 +269,13 @@ export function calculateRealizedAttribution(
     purchaseCurrencyMinorUnits === null ||
     input.purchaseCurrencyDecimalPlaces !== purchaseCurrencyMinorUnits ||
     !isMinorUnitCompatible(
-      input.purchaseCostDecimal as string,
+      serializeDecimal(purchaseCost.value),
       purchaseCurrencyMinorUnits
     )
   ) {
     return { available: false, reason: "purchase_cost_unavailable" };
   }
+
   const proceedsCurrencyMinorUnits = resolveMetalsCurrencyMinorUnits(
     input.proceedsCurrencyInstrumentCode
   );
@@ -284,24 +285,7 @@ export function calculateRealizedAttribution(
   ) {
     return { available: false, reason: "gross_proceeds_unavailable" };
   }
-  const purchaseCurrencyAtSale = readRate(
-    input.purchaseCurrencyAtSaleRate,
-    "purchase_currency_at_sale_rate_unavailable",
-    "terminal_purchase_currency",
-    input.purchaseCurrencyInstrumentCode
-  );
-  if (!purchaseCurrencyAtSale.available) {
-    return purchaseCurrencyAtSale;
-  }
-  const proceedsCurrencyAtSale = readRate(
-    input.proceedsCurrencyAtSaleRate,
-    "proceeds_currency_at_sale_rate_unavailable",
-    "terminal_proceeds_currency",
-    input.proceedsCurrencyInstrumentCode
-  );
-  if (!proceedsCurrencyAtSale.available) {
-    return proceedsCurrencyAtSale;
-  }
+
   const grossProceeds = readPositiveDecimal(
     input.grossProceedsDecimal,
     "gross_proceeds_unavailable"
@@ -324,13 +308,35 @@ export function calculateRealizedAttribution(
     return { available: false, reason: "fees_unavailable" };
   }
 
-  const saleConversion =
-    input.purchaseCurrencyInstrumentCode ===
+  const purchaseCurrencyAtSale = readRate(
+    input.purchaseCurrencyAtSaleRate,
+    "purchase_currency_at_sale_rate_unavailable",
+    "terminal_purchase_currency",
+    input.purchaseCurrencyInstrumentCode
+  );
+  const proceedsCurrencyAtSale = readRate(
+    input.proceedsCurrencyAtSaleRate,
+    "proceeds_currency_at_sale_rate_unavailable",
+    "terminal_proceeds_currency",
     input.proceedsCurrencyInstrumentCode
-      ? parseCanonicalDecimal("1")
-      : proceedsCurrencyAtSale.value.decimal.dividedBy(
-          purchaseCurrencyAtSale.value.decimal
-        );
+  );
+  const isSameCurrencySale =
+    input.purchaseCurrencyInstrumentCode ===
+    input.proceedsCurrencyInstrumentCode;
+
+  let saleConversion = parseCanonicalDecimal("1");
+  if (!isSameCurrencySale) {
+    if (!purchaseCurrencyAtSale.available) {
+      return purchaseCurrencyAtSale;
+    }
+    if (!proceedsCurrencyAtSale.available) {
+      return proceedsCurrencyAtSale;
+    }
+    saleConversion = proceedsCurrencyAtSale.value.decimal.dividedBy(
+      purchaseCurrencyAtSale.value.decimal
+    );
+  }
+
   const canonicalGrossProceeds = grossProceeds.value.times(saleConversion);
   const canonicalFees = fees.value.times(saleConversion);
   const combined = canonicalGrossProceeds
@@ -347,10 +353,6 @@ export function calculateRealizedAttribution(
     netProceedsDecimal: serializeDecimal(grossProceeds.value.minus(fees.value)),
   };
 
-  const pureGrams = readPositiveDecimal(
-    input.pureGramsDecimal,
-    "pure_grams_unavailable"
-  );
   const acquisitionMetal = readRate(
     input.acquisitionMetalRate,
     "acquisition_metal_rate_unavailable",
@@ -369,11 +371,19 @@ export function calculateRealizedAttribution(
     "terminal_metal",
     input.metalInstrumentCode
   );
+  // Pure grams are only required for the component breakdown; the combined
+  // realized result (gross - fees - purchase cost) is computed above and stays
+  // available when weight/purity evidence is absent.
+  const pureGrams = readPositiveDecimal(
+    input.pureGramsDecimal,
+    "pure_grams_unavailable"
+  );
   const breakdownReasons = unavailableReasons([
     pureGrams,
     acquisitionMetal,
     acquisitionCurrency,
     saleMetal,
+    purchaseCurrencyAtSale,
   ]);
   const consumedRateReferences = snapshotAvailableRateReferences([
     acquisitionMetal,
@@ -396,7 +406,8 @@ export function calculateRealizedAttribution(
     !pureGrams.available ||
     !acquisitionMetal.available ||
     !acquisitionCurrency.available ||
-    !saleMetal.available
+    !saleMetal.available ||
+    !purchaseCurrencyAtSale.available
   ) {
     throw new Error("Breakdown availability invariant violated");
   }
@@ -502,10 +513,12 @@ function roundReconciledAttributionForDisplay(input: {
 
 function hasExactComponentSum(input: DisplayAttributionSource): boolean {
   try {
-    return compareDecimal(
-      input.combinedDecimal,
-      sumDecimalStrings(Object.values(input.components))
-    ) === 0;
+    return (
+      compareDecimal(
+        input.combinedDecimal,
+        sumDecimalStrings(Object.values(input.components))
+      ) === 0
+    );
   } catch {
     return false;
   }
@@ -513,10 +526,7 @@ function hasExactComponentSum(input: DisplayAttributionSource): boolean {
 
 function sumDecimalStrings(values: readonly string[]): string {
   return serializeDecimal(
-    values.reduce(
-      (sum, value) => sum.plus(value),
-      parseCanonicalDecimal("0")
-    )
+    values.reduce((sum, value) => sum.plus(value), parseCanonicalDecimal("0"))
   );
 }
 
@@ -565,7 +575,9 @@ export function convertAttributionForDisplay(
   ).reduce<Readonly<Record<string, string>>>(
     (current, [key, value]) => ({
       ...current,
-      [key]: serializeDecimal(parseCanonicalDecimal(value).times(displayFactor)),
+      [key]: serializeDecimal(
+        parseCanonicalDecimal(value).times(displayFactor)
+      ),
     }),
     {}
   );
@@ -637,11 +649,15 @@ function calculateCoreComponents(input: {
     metalMovement: input.pureGrams
       .times(input.valuationMetal.minus(input.acquisitionMetal))
       .dividedBy(input.acquisitionCurrency),
-    currencyMovement: input.pureGrams.times(input.valuationMetal).times(
-      parseCanonicalDecimal("1")
-        .dividedBy(input.valuationCurrency)
-        .minus(parseCanonicalDecimal("1").dividedBy(input.acquisitionCurrency))
-    ),
+    currencyMovement: input.pureGrams
+      .times(input.valuationMetal)
+      .times(
+        parseCanonicalDecimal("1")
+          .dividedBy(input.valuationCurrency)
+          .minus(
+            parseCanonicalDecimal("1").dividedBy(input.acquisitionCurrency)
+          )
+      ),
     purchaseCost: acquisitionReference.minus(input.purchaseCost),
   };
 }
@@ -666,17 +682,13 @@ function readRate(
   if (!normalized.available) {
     return { available: false, reason: unavailableReason };
   }
-  const {
-    normalizedUsdPerBaseDecimal,
-    ...validatedReference
-  } = normalized.value;
+  const { normalizedUsdPerBaseDecimal, ...validatedReference } =
+    normalized.value;
 
   return {
     available: true,
     value: {
-      decimal: parseCanonicalDecimal(
-        normalizedUsdPerBaseDecimal
-      ),
+      decimal: parseCanonicalDecimal(normalizedUsdPerBaseDecimal),
       reference: Object.freeze(validatedReference),
     },
   };
@@ -698,9 +710,11 @@ function createRateExpectation(
 function isMetalRateRole(
   role: MetalRateRole | CurrencyRateRole
 ): role is MetalRateRole {
-  return role === "acquisition_metal" ||
+  return (
+    role === "acquisition_metal" ||
     role === "current_metal" ||
-    role === "terminal_metal";
+    role === "terminal_metal"
+  );
 }
 
 function isMetalInstrumentCode(
@@ -743,18 +757,18 @@ function readNonNegativeDecimal<Reason extends AttributionUnavailableReason>(
 function isMinorUnitCompatible(value: string, decimalPlaces: number): boolean {
   try {
     const minorUnits = toMinorUnits(value, decimalPlaces);
-    return compareDecimal(value, fromMinorUnits(minorUnits, decimalPlaces)) === 0;
+    return (
+      compareDecimal(value, fromMinorUnits(minorUnits, decimalPlaces)) === 0
+    );
   } catch {
     return false;
   }
 }
 
 function unavailableReasons(
-  values: readonly Availability<unknown, AttributionUnavailableReason>[]
+  values: ReadonlyArray<Availability<unknown, AttributionUnavailableReason>>
 ): readonly AttributionUnavailableReason[] {
-  return values.flatMap((value) =>
-    value.available ? [] : [value.reason]
-  );
+  return values.flatMap((value) => (value.available ? [] : [value.reason]));
 }
 
 function snapshotRateReferences(
@@ -771,13 +785,12 @@ function snapshotRateReferences(
 }
 
 function snapshotAvailableRateReferences(
-  rates: readonly Availability<
-    RequiredRate,
-    AttributionCalculationOutputReason
-  >[]
+  rates: ReadonlyArray<
+    Availability<RequiredRate, AttributionCalculationOutputReason>
+  >
 ): readonly ExactRateReference[] {
   return snapshotRateReferences(
-    rates.flatMap((rate) => rate.available ? [rate.value.reference] : [])
+    rates.flatMap((rate) => (rate.available ? [rate.value.reference] : []))
   );
 }
 

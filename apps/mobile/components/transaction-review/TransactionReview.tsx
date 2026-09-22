@@ -584,7 +584,7 @@ export function TransactionReview({
             accounts={state.userAccounts}
             categoryMap={state.categoryMap}
             pendingAccounts={state.pendingAccounts}
-            latestRates={state.latestRates}
+            selectedSnapshot={state.selectedSnapshot}
             expenseCategories={state.expenseCategories}
             incomeCategories={state.incomeCategories}
             onSave={state.handleEditModalSave}

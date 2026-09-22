@@ -17,7 +17,7 @@ interface TransactionCardProps {
   categoryName: string;
   categoryIconName: string;
   categoryIconLibrary: IconLibrary;
-  displayNetWorth: number;
+  displayNetWorth: number | null;
   currencyCode: CurrencyType;
   isSelectionMode: boolean;
   isSelected: boolean;

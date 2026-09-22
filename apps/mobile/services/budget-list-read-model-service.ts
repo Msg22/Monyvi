@@ -3,13 +3,13 @@ import { Q } from "@nozbe/watermelondb";
 import type Query from "@nozbe/watermelondb/Query";
 import {
   computeSpendingMetrics,
-  formatCurrency,
   getCurrentPeriodBounds,
   getDaysElapsed,
   getDaysLeft,
   isPeriodExpired,
   type SpendingMetrics,
 } from "@monyvi/logic";
+import { formatLocalizedMoneyAmount } from "@/utils/localized-money-display";
 
 import {
   type BudgetDashboardCategoryLabel,
@@ -238,8 +238,16 @@ function createDashboardPresentation(
   copy: BudgetDashboardPresentationCopy
 ): BudgetDashboardPresentation {
   const currency = getRequiredBudgetCurrency(item.budget);
-  const spent = formatCurrency({ amount: item.metrics.spent, currency });
-  const limit = formatCurrency({ amount: item.metrics.limit, currency });
+  const spent = formatLocalizedMoneyAmount({
+    amount: item.metrics.spent,
+    currency,
+    language: activeLocale,
+  });
+  const limit = formatLocalizedMoneyAmount({
+    amount: item.metrics.limit,
+    currency,
+    language: activeLocale,
+  });
   const spentOfLimitLabel = copy.formatSpentOfLimit(spent, limit);
   const roundedPercentage = Math.round(item.metrics.percentage);
   const showsProgress = ["HEALTHY", "NEAR_LIMIT", "OVER_BUDGET"].includes(

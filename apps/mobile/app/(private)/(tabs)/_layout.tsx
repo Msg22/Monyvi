@@ -28,7 +28,8 @@ import { getAiProcessingConsentStatus } from "@/services/profile-service";
 import { toCategoryTreeSources } from "@/utils/category-tree-source";
 import { logger } from "@/utils/logger";
 import type { CurrencyType } from "@monyvi/db";
-import { buildCategoryTree, formatCurrency } from "@monyvi/logic";
+import { buildCategoryTree } from "@monyvi/logic";
+import { formatLocalizedMoneyAmount } from "@/utils/localized-money-display";
 import {
   Tabs,
   useFocusEffect,
@@ -129,7 +130,7 @@ function TabLayoutInner(): React.ReactElement {
       showToast({
         type: "success",
         title: tCommon("payment_recorded"),
-        message: `${paymentName} - ${formatCurrency({
+        message: `${paymentName} - ${formatLocalizedMoneyAmount({
           amount,
           currency: paymentCurrency,
         })}`,
@@ -198,25 +199,25 @@ function TabLayoutInner(): React.ReactElement {
           <Tabs.Screen
             name="index"
             options={{
-              title: "Home",
+              title: tCommon("home"),
             }}
           />
           <Tabs.Screen
             name="accounts"
             options={{
-              title: "Accounts",
+              title: tCommon("accounts"),
             }}
           />
           <Tabs.Screen
             name="transactions"
             options={{
-              title: "Transactions",
+              title: tCommon("transactions"),
             }}
           />
           <Tabs.Screen
             name="metals"
             options={{
-              title: "Metals",
+              title: tCommon("metals"),
             }}
           />
         </Tabs>

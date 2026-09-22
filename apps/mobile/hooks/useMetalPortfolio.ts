@@ -1,0 +1,949 @@
+import { useIsFocused } from "@react-navigation/native";
+import {
+  buildWealthBreakdownReadModel,
+  type WealthBreakdownReadModel,
+} from "@/services/net-worth-read-model-service";
+import {
+  buildMetalPortfolioReadModel,
+  observePortfolioAssetMetals,
+  observePortfolioAssets,
+  observePortfolioEffectiveActionEvidence,
+  observePortfolioHoldingStates,
+  observePortfolioMetalSellGroups,
+  observePortfolioRecentHistory,
+  observePortfolioSaleRateReferences,
+  shapeMetalPortfolioHoldings,
+  type MetalPortfolioFilter,
+  type MetalPortfolioReadModel,
+  type PortfolioRateStatus,
+} from "@/services/metal-portfolio-read-model-service";
+import {
+  summarizeLiveRatesTrust,
+  type LiveRatesTrustReadModel,
+  type LiveRatesTrustState,
+  type LiveRatesTrustValue,
+} from "@/services/live-rates-trust-read-model-service";
+import { logger } from "@/utils/logger";
+import type {
+  Asset,
+  AssetMetal,
+  CurrencyType,
+  FinancialActionGroup,
+  MetalActionEvidence,
+  MetalHoldingState,
+  MetalLifecycleEvent,
+  MetalRateReference,
+} from "@monyvi/db";
+import type { MetalsIsoCurrencyCode, SupportedMetal } from "@monyvi/logic";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AppState } from "react-native";
+
+import {
+  resolveMetalPortfolioReadiness,
+  type MetalPortfolioSectionReadiness,
+} from "./metal-portfolio-readiness";
+import { useMarketRates } from "./useMarketRates";
+import { usePreferredCurrency } from "./usePreferredCurrency";
+import { runUserScopedEffect, useCurrentUser } from "./useCurrentUser";
+
+const RATE_STATUS_REFRESH_INTERVAL_MS = 60_000;
+
+// Device-local calendar date in `YYYY-MM-DD`, used as the trusted "not in the
+// future" boundary for realized-sale validation. Recomputed as the local day
+// advances so a sale dated after a midnight rollover while this hook stays
+// mounted does not go stale; the pure logic/service layers still accept an
+// explicit override for deterministic tests.
+function currentCalendarDate(): string {
+  const now = new Date();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${now.getFullYear()}-${month}-${day}`;
+}
+
+const PORTFOLIO_ASSET_OBSERVED_COLUMNS = [
+  "name",
+  "purchase_date",
+  "purchase_price_decimal",
+  "purchase_currency",
+  "acquisition_action_id",
+] as const;
+
+const PORTFOLIO_ASSET_METAL_OBSERVED_COLUMNS = [
+  "metal_type",
+  "item_form",
+  "purity_catalog_version",
+  "purity_code",
+  "purity_factor_decimal",
+  "weight_grams_decimal",
+] as const;
+
+const PORTFOLIO_HOLDING_STATE_OBSERVED_COLUMNS = [
+  "status",
+  "effective_action_id",
+  "effective_event_id",
+  "is_visible",
+  "reconciliation_state",
+] as const;
+
+const PORTFOLIO_SELL_GROUP_OBSERVED_COLUMNS = [
+  "outcome_json",
+  "payload_json",
+  "rejection_code",
+  "server_outcome",
+  "state",
+] as const;
+
+const PORTFOLIO_SALE_RATE_REFERENCE_OBSERVED_COLUMNS = [
+  "captured_at",
+  "captured_freshness",
+  "instrument_code",
+  "provider_observed_at",
+  "quality",
+  "source",
+  "value_decimal",
+] as const;
+interface UseMetalPortfolioResult {
+  readonly error: Error | null;
+  readonly isLoading: boolean;
+  readonly isOffline: boolean;
+  readonly isSummaryLoading: boolean;
+  readonly onFilterChange: (filter: MetalPortfolioFilter) => void;
+  readonly portfolio: MetalPortfolioReadModel | null;
+  readonly rateProviderObservedAt: Date | null;
+  readonly readiness: MetalPortfolioSectionReadiness;
+  readonly recentHistory: MetalPortfolioReadModel["recentHistory"] | null;
+  readonly refresh: () => void;
+  readonly selectedFilter: MetalPortfolioFilter;
+  readonly wealthBreakdown: WealthBreakdownReadModel | null;
+}
+
+function createEmptyTrustReadModel(): LiveRatesTrustReadModel {
+  return {
+    gold: missingTrustValue(),
+    silver: missingTrustValue(),
+    currencies: new Map(),
+  };
+}
+
+export function useMetalPortfolio(
+  input: {
+    readonly accountsValueDecimal?: string | null;
+  } = {}
+): UseMetalPortfolioResult {
+  const isFocused = useIsFocused();
+  const wasFocusedRef = useRef(isFocused);
+  const { userId, isResolvingUser } = useCurrentUser();
+  const { preferredCurrency, isLoading: isCurrencyLoading } =
+    usePreferredCurrency();
+  const {
+    currentError: marketRatesError,
+    isConnected,
+    isCurrentLoading,
+    refreshSelectedSnapshot,
+    selectedSnapshot,
+  } = useMarketRates();
+  const currentRates = useMemo<LiveRatesTrustReadModel>(
+    () => selectedSnapshot?.trust ?? createEmptyTrustReadModel(),
+    [selectedSnapshot]
+  );
+  const [selectedFilter, setSelectedFilter] =
+    useState<MetalPortfolioFilter>("ALL");
+  const [assets, setAssets] = useState<readonly Asset[]>([]);
+  const assetsRef = useRef<readonly Asset[]>([]);
+  const [assetsSnapshotUserId, setAssetsSnapshotUserId] = useState<
+    string | null
+  >(null);
+  const [assetMetals, setAssetMetals] = useState<readonly AssetMetal[]>([]);
+  const [assetMetalsDependencyKey, setAssetMetalsDependencyKey] = useState<
+    string | null
+  >(null);
+  const [holdingStates, setHoldingStates] = useState<
+    readonly MetalHoldingState[]
+  >([]);
+  const [holdingStatesSnapshotUserId, setHoldingStatesSnapshotUserId] =
+    useState<string | null>(null);
+  const [lifecycleEvents, setLifecycleEvents] = useState<
+    readonly MetalLifecycleEvent[]
+  >([]);
+  const [historyDependencyKey, setHistoryDependencyKey] = useState<
+    string | null
+  >(null);
+  const [metalSellGroups, setMetalSellGroups] = useState<
+    readonly FinancialActionGroup[]
+  >([]);
+  const [saleRateReferences, setSaleRateReferences] = useState<
+    readonly MetalRateReference[]
+  >([]);
+  // Trusted device-local calendar date supplied to realized-sale validation so
+  // a sale can never be validated against its own future `saleDate`. Refreshed
+  // when the device-local day rolls over (see the refresh interval/AppState
+  // effect below) so a long-lived mount does not strand a newly-allowed sale;
+  // overridable at the service layer for deterministic tests.
+  const [latestAllowedCalendarDate, setLatestAllowedCalendarDate] =
+    useState<string>(() => currentCalendarDate());
+  const [actionEvidence, setActionEvidence] = useState<
+    readonly MetalActionEvidence[]
+  >([]);
+  const [isAssetsLoading, setIsAssetsLoading] = useState(true);
+  const [isAssetMetalsLoading, setIsAssetMetalsLoading] = useState(true);
+  const [isHoldingStatesLoading, setIsHoldingStatesLoading] = useState(true);
+  const [isHistoryLoading, setIsHistoryLoading] = useState(true);
+  const [isMetalSellGroupsLoading, setIsMetalSellGroupsLoading] =
+    useState(true);
+  const [isSaleRateReferencesLoading, setIsSaleRateReferencesLoading] =
+    useState(true);
+  const [error, setError] = useState<Error | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  const onFilterChange = useCallback((filter: MetalPortfolioFilter): void => {
+    setSelectedFilter(filter);
+  }, []);
+
+  const refresh = useCallback((): void => {
+    setError(null);
+    refreshSelectedSnapshot();
+    setRefreshKey((value) => value + 1);
+  }, [refreshSelectedSnapshot]);
+
+  const previousUserIdRef = useRef(userId);
+  useEffect(() => {
+    if (previousUserIdRef.current === userId) {
+      return;
+    }
+    previousUserIdRef.current = userId;
+    setError(null);
+    setRefreshKey((value) => value + 1);
+  }, [userId]);
+
+  useEffect(() => {
+    if (isFocused && !wasFocusedRef.current) {
+      setSelectedFilter("ALL");
+    }
+    wasFocusedRef.current = isFocused;
+  }, [isFocused]);
+
+  useEffect(() => {
+    assetsRef.current = assets;
+  }, [assets]);
+
+  useEffect(() => {
+    const syncCalendarBoundary = (): void => {
+      const next = currentCalendarDate();
+      // Returning the previous value when the local day is unchanged avoids a
+      // needless re-render on every refresh tick.
+      setLatestAllowedCalendarDate((prev) => (prev === next ? prev : next));
+    };
+    syncCalendarBoundary();
+    const timer = setInterval(() => {
+      refreshSelectedSnapshot();
+      syncCalendarBoundary();
+    }, RATE_STATUS_REFRESH_INTERVAL_MS);
+    const appStateSubscription = AppState.addEventListener(
+      "change",
+      (state) => {
+        if (state === "active") {
+          refreshSelectedSnapshot();
+          syncCalendarBoundary();
+        }
+      }
+    );
+    return () => {
+      clearInterval(timer);
+      appStateSubscription.remove();
+    };
+  }, [refreshSelectedSnapshot]);
+
+  useEffect(() => {
+    return runUserScopedEffect({
+      userId,
+      isResolvingUser,
+      onResolving: () => {
+        assetsRef.current = [];
+        setAssets([]);
+        setAssetsSnapshotUserId(null);
+        setIsAssetsLoading(true);
+      },
+      onSignedOut: () => {
+        assetsRef.current = [];
+        setAssets([]);
+        setAssetsSnapshotUserId(null);
+        setIsAssetsLoading(false);
+      },
+      onAuthenticated: (currentUserId) => {
+        if (assetsSnapshotUserId !== currentUserId) {
+          assetsRef.current = [];
+          setAssets([]);
+          setAssetsSnapshotUserId(null);
+        }
+        setIsAssetsLoading(true);
+        const subscription = observePortfolioAssets(currentUserId)
+          .observeWithColumns([...PORTFOLIO_ASSET_OBSERVED_COLUMNS])
+          .subscribe({
+            next: (result): void => {
+              assetsRef.current = result;
+              setAssets(result);
+              setAssetsSnapshotUserId(currentUserId);
+              setIsAssetsLoading(false);
+            },
+            error: (reason: unknown): void => {
+              recordObserverError(
+                "metalPortfolio.assets.observe.failed",
+                reason,
+                setError
+              );
+              setIsAssetsLoading(false);
+            },
+          });
+        return () => subscription.unsubscribe();
+      },
+    });
+  }, [assetsSnapshotUserId, refreshKey, isResolvingUser, userId]);
+
+  const assetIdsKey = useMemo(
+    (): string =>
+      assets
+        .map((asset) => asset.id)
+        .sort()
+        .join(","),
+    [assets]
+  );
+
+  useEffect(() => {
+    return runUserScopedEffect({
+      userId,
+      isResolvingUser,
+      onResolving: () => {
+        setAssetMetals([]);
+        setAssetMetalsDependencyKey(null);
+        setIsAssetMetalsLoading(true);
+      },
+      onSignedOut: () => {
+        setAssetMetals([]);
+        setAssetMetalsDependencyKey(null);
+        setIsAssetMetalsLoading(false);
+      },
+      onAuthenticated: (currentUserId) => {
+        const assetIds = new Set(assetIdsKey.split(",").filter(Boolean));
+        const currentAssets = assetsRef.current.filter((asset) =>
+          assetIds.has(asset.id)
+        );
+        const query = observePortfolioAssetMetals({
+          assets: currentAssets,
+          userId: currentUserId,
+        });
+        if (query === null) {
+          setAssetMetals([]);
+          setAssetMetalsDependencyKey(assetIdsKey);
+          setIsAssetMetalsLoading(false);
+          return;
+        }
+        setIsAssetMetalsLoading(true);
+        const subscription = query
+          .observeWithColumns([...PORTFOLIO_ASSET_METAL_OBSERVED_COLUMNS])
+          .subscribe({
+            next: (result): void => {
+              setAssetMetals(result);
+              setAssetMetalsDependencyKey(assetIdsKey);
+              setIsAssetMetalsLoading(false);
+            },
+            error: (reason: unknown): void => {
+              recordObserverError(
+                "metalPortfolio.assetMetals.observe.failed",
+                reason,
+                setError
+              );
+              setIsAssetMetalsLoading(false);
+            },
+          });
+        return () => subscription.unsubscribe();
+      },
+    });
+  }, [assetIdsKey, isResolvingUser, refreshKey, userId]);
+
+  useEffect(() => {
+    return runUserScopedEffect({
+      userId,
+      isResolvingUser,
+      onResolving: () => {
+        setHoldingStates([]);
+        setHoldingStatesSnapshotUserId(null);
+        setIsHoldingStatesLoading(true);
+      },
+      onSignedOut: () => {
+        setHoldingStates([]);
+        setHoldingStatesSnapshotUserId(null);
+        setIsHoldingStatesLoading(false);
+      },
+      onAuthenticated: (currentUserId) => {
+        if (holdingStatesSnapshotUserId !== currentUserId) {
+          setHoldingStates([]);
+          setHoldingStatesSnapshotUserId(null);
+        }
+        setIsHoldingStatesLoading(true);
+        const subscription = observePortfolioHoldingStates(currentUserId)
+          .observeWithColumns([...PORTFOLIO_HOLDING_STATE_OBSERVED_COLUMNS])
+          .subscribe({
+            next: (result): void => {
+              setHoldingStates(result);
+              setHoldingStatesSnapshotUserId(currentUserId);
+              setIsHoldingStatesLoading(false);
+            },
+            error: (reason: unknown): void => {
+              recordObserverError(
+                "metalPortfolio.holdingStates.observe.failed",
+                reason,
+                setError
+              );
+              setIsHoldingStatesLoading(false);
+            },
+          });
+        return () => subscription.unsubscribe();
+      },
+    });
+  }, [holdingStatesSnapshotUserId, isResolvingUser, refreshKey, userId]);
+
+  const holdingStatesKey = useMemo(
+    () =>
+      holdingStates
+        .map(
+          (state) =>
+            `${state.holdingId}:${state.status}:${state.effectiveEventId ?? ""}:${state.effectiveActionId ?? ""}:${state.isVisible ? "1" : "0"}:${state.reconciliationState}`
+        )
+        .sort()
+        .join(","),
+    [holdingStates]
+  );
+
+  useEffect(() => {
+    return runUserScopedEffect({
+      userId,
+      isResolvingUser,
+      onResolving: () => {
+        setLifecycleEvents([]);
+        setActionEvidence([]);
+        setHistoryDependencyKey(null);
+        setIsHistoryLoading(true);
+      },
+      onSignedOut: () => {
+        setLifecycleEvents([]);
+        setActionEvidence([]);
+        setHistoryDependencyKey(null);
+        setIsHistoryLoading(false);
+      },
+      onAuthenticated: (currentUserId) => {
+        const eventsQuery = observePortfolioRecentHistory({
+          holdingStates,
+          userId: currentUserId,
+        });
+        const evidenceQuery = observePortfolioEffectiveActionEvidence({
+          holdingStates,
+          userId: currentUserId,
+        });
+        let eventsSettled = eventsQuery === null;
+        let evidenceSettled = evidenceQuery === null;
+        const settle = (): void => {
+          if (eventsSettled && evidenceSettled) {
+            setHistoryDependencyKey(holdingStatesKey);
+            setIsHistoryLoading(false);
+          }
+        };
+        if (eventsQuery === null) setLifecycleEvents([]);
+        if (evidenceQuery === null) setActionEvidence([]);
+        setHistoryDependencyKey(null);
+        setIsHistoryLoading(!(eventsSettled && evidenceSettled));
+        settle();
+        const subscriptions = [
+          eventsQuery?.observe().subscribe({
+            next: (result): void => {
+              setLifecycleEvents(result);
+              eventsSettled = true;
+              settle();
+            },
+            error: (reason: unknown): void => {
+              recordObserverError(
+                "metalPortfolio.history.observe.failed",
+                reason,
+                setError
+              );
+              setIsHistoryLoading(false);
+            },
+          }),
+          evidenceQuery?.observe().subscribe({
+            next: (result): void => {
+              setActionEvidence(result);
+              evidenceSettled = true;
+              settle();
+            },
+            error: (reason: unknown): void => {
+              recordObserverError(
+                "metalPortfolio.actionEvidence.observe.failed",
+                reason,
+                setError
+              );
+              setIsHistoryLoading(false);
+            },
+          }),
+        ];
+        return () =>
+          subscriptions.forEach((subscription) => subscription?.unsubscribe());
+      },
+    });
+  }, [holdingStates, holdingStatesKey, isResolvingUser, refreshKey, userId]);
+
+  useEffect(() => {
+    return subscribeForCurrentUser({
+      isResolvingUser,
+      onAuthenticated: (currentUserId) =>
+        observePortfolioMetalSellGroups(currentUserId).observeWithColumns([
+          ...PORTFOLIO_SELL_GROUP_OBSERVED_COLUMNS,
+        ]),
+      onError: (reason) =>
+        recordObserverError(
+          "metalPortfolio.metalSellGroups.observe.failed",
+          reason,
+          setError
+        ),
+      onNext: setMetalSellGroups,
+      onSignedOut: () => setMetalSellGroups([]),
+      onResolving: () => setMetalSellGroups([]),
+      setLoading: setIsMetalSellGroupsLoading,
+      userId,
+    });
+  }, [isResolvingUser, refreshKey, userId]);
+
+  useEffect(() => {
+    return subscribeForCurrentUser({
+      isResolvingUser,
+      onAuthenticated: (currentUserId) =>
+        observePortfolioSaleRateReferences(currentUserId).observeWithColumns([
+          ...PORTFOLIO_SALE_RATE_REFERENCE_OBSERVED_COLUMNS,
+        ]),
+      onError: (reason) =>
+        recordObserverError(
+          "metalPortfolio.saleRateReferences.observe.failed",
+          reason,
+          setError
+        ),
+      onNext: setSaleRateReferences,
+      onSignedOut: () => setSaleRateReferences([]),
+      onResolving: () => setSaleRateReferences([]),
+      setLoading: setIsSaleRateReferencesLoading,
+      userId,
+    });
+  }, [isResolvingUser, refreshKey, userId]);
+
+  const saleEvidenceReady =
+    !isMetalSellGroupsLoading && !isSaleRateReferencesLoading;
+
+  const readiness = useMemo(
+    () =>
+      resolveMetalPortfolioReadiness({
+        assetIdsKey,
+        assetMetalsDependencyKey,
+        assetsReady: userId !== null && assetsSnapshotUserId === userId,
+        currencyReady: !isCurrencyLoading,
+        historyDependencyKey,
+        holdingStatesKey,
+        holdingStatesReady:
+          userId !== null && holdingStatesSnapshotUserId === userId,
+        ratesReady: !isCurrentLoading,
+        saleEvidenceReady,
+      }),
+    [
+      assetIdsKey,
+      assetMetalsDependencyKey,
+      assetsSnapshotUserId,
+      historyDependencyKey,
+      holdingStatesKey,
+      holdingStatesSnapshotUserId,
+      isCurrencyLoading,
+      isCurrentLoading,
+      saleEvidenceReady,
+      userId,
+    ]
+  );
+
+  const portfolioShapedHoldings = useMemo(() => {
+    if (userId === null || isResolvingUser || !readiness.holdings) {
+      return null;
+    }
+    return shapeMetalPortfolioHoldings({
+      actionGroups: metalSellGroups,
+      actionEvidence,
+      assetMetals,
+      assets,
+      currentRates,
+      snapshotId: selectedSnapshot?.snapshotId ?? null,
+      holdingStates,
+      latestAllowedCalendarDate,
+      lifecycleEvents,
+      preferredCurrency,
+      rateReferences: saleRateReferences,
+      userId,
+    });
+  }, [
+    actionEvidence,
+    assetMetals,
+    assets,
+    currentRates,
+    holdingStates,
+    isResolvingUser,
+    latestAllowedCalendarDate,
+    lifecycleEvents,
+    metalSellGroups,
+    preferredCurrency,
+    readiness.holdings,
+    saleRateReferences,
+    selectedSnapshot,
+    userId,
+  ]);
+
+  const historyShapedHoldings = useMemo(() => {
+    if (userId === null || isResolvingUser || !readiness.recentHistory) {
+      return null;
+    }
+    return shapeMetalPortfolioHoldings({
+      actionGroups: metalSellGroups,
+      actionEvidence,
+      assetMetals,
+      assets,
+      currentRates,
+      holdingStates,
+      lifecycleEvents,
+      preferredCurrency,
+      rateReferences: saleRateReferences,
+      snapshotId: selectedSnapshot?.snapshotId ?? null,
+      latestAllowedCalendarDate,
+      userId,
+    });
+  }, [
+    actionEvidence,
+    assetMetals,
+    assets,
+    currentRates,
+    holdingStates,
+    isResolvingUser,
+    lifecycleEvents,
+    latestAllowedCalendarDate,
+    metalSellGroups,
+    preferredCurrency,
+    saleRateReferences,
+    readiness.recentHistory,
+    selectedSnapshot,
+    userId,
+  ]);
+
+  const recentHistory = useMemo<
+    MetalPortfolioReadModel["recentHistory"] | null
+  >(() => {
+    if (userId === null || historyShapedHoldings === null) return null;
+    return buildMetalPortfolioReadModel({
+      filter: "ALL",
+      holdings: historyShapedHoldings,
+      rateStatus: { ageMs: null, state: "missing" },
+      userId,
+    }).recentHistory;
+  }, [historyShapedHoldings, userId]);
+
+  const portfolio = useMemo((): MetalPortfolioReadModel | null => {
+    if (
+      userId === null ||
+      isResolvingUser ||
+      !readiness.holdings ||
+      portfolioShapedHoldings === null
+    ) {
+      return null;
+    }
+    const activeMetalTypes = Array.from(
+      new Set<SupportedMetal>(
+        portfolioShapedHoldings
+          .filter(
+            (holding) =>
+              holding.isEffective &&
+              holding.isVisible &&
+              holding.status === "active"
+          )
+          .map((holding) => holding.metalType)
+      )
+    );
+    const activePurchaseCurrencies = Array.from(
+      new Set<MetalsIsoCurrencyCode>(
+        portfolioShapedHoldings
+          .filter(
+            (holding) =>
+              holding.isEffective &&
+              holding.isVisible &&
+              holding.status === "active" &&
+              holding.purchasePriceDecimal !== null &&
+              holding.purchaseCurrency !== null
+          )
+          .flatMap((holding) =>
+            holding.purchaseCurrency === null ? [] : [holding.purchaseCurrency]
+          )
+      )
+    );
+
+    return buildMetalPortfolioReadModel({
+      filter: selectedFilter,
+      holdings: portfolioShapedHoldings,
+      rateStatus: getPortfolioRateStatus(
+        currentRates,
+        preferredCurrency,
+        activeMetalTypes,
+        activePurchaseCurrencies
+      ),
+      userId,
+    });
+  }, [
+    currentRates,
+    isResolvingUser,
+    portfolioShapedHoldings,
+    preferredCurrency,
+    readiness.holdings,
+    selectedFilter,
+    userId,
+  ]);
+
+  const rateProviderObservedAt = useMemo(
+    () =>
+      readiness.rateCurrency
+        ? getPortfolioProviderObservedAt(
+            currentRates,
+            portfolio?.activeHoldings ?? [],
+            preferredCurrency
+          )
+        : null,
+    [currentRates, portfolio, preferredCurrency, readiness.rateCurrency]
+  );
+
+  const wealthBreakdown = useMemo((): WealthBreakdownReadModel | null => {
+    if (
+      !readiness.summary ||
+      portfolio === null ||
+      input.accountsValueDecimal === undefined
+    ) {
+      return null;
+    }
+    return buildWealthBreakdownReadModel({
+      accountsValueDecimal: input.accountsValueDecimal,
+      currency: preferredCurrency,
+      holdings: portfolio.activeHoldings,
+      preferredCurrencyUsdPerUnitDecimal:
+        getTrustedRateDecimal(currentRates.currencies.get(preferredCurrency)) ??
+        (preferredCurrency === "USD" ? "1" : null),
+    });
+  }, [
+    currentRates,
+    input.accountsValueDecimal,
+    portfolio,
+    preferredCurrency,
+    readiness.summary,
+  ]);
+
+  const isAnySubscriptionLoading =
+    isAssetsLoading ||
+    isAssetMetalsLoading ||
+    isHoldingStatesLoading ||
+    isHistoryLoading ||
+    isCurrentLoading ||
+    isCurrencyLoading;
+  const hasAnyReadySection =
+    readiness.summary || readiness.holdings || readiness.recentHistory;
+  const isSummaryLoading =
+    isResolvingUser ||
+    (userId !== null &&
+      error === null &&
+      marketRatesError === null &&
+      !readiness.summary);
+
+  const combinedError = error ?? marketRatesError;
+
+  return {
+    error: combinedError,
+    isLoading:
+      isResolvingUser || (isAnySubscriptionLoading && !hasAnyReadySection),
+    isOffline: !isConnected,
+    isSummaryLoading,
+    onFilterChange,
+    portfolio,
+    rateProviderObservedAt,
+    readiness,
+    recentHistory,
+    refresh,
+    selectedFilter,
+    wealthBreakdown,
+  };
+}
+
+function getTrustedRateDecimal(
+  value: LiveRatesTrustReadModel["gold"] | undefined
+): string | null {
+  return value !== undefined &&
+    value.state !== "missing" &&
+    value.state !== "invalid" &&
+    typeof value.valueDecimal === "string"
+    ? value.valueDecimal
+    : null;
+}
+
+function recordObserverError(
+  event: string,
+  reason: unknown,
+  setError: (value: Error) => void
+): void {
+  logger.error(event, reason);
+  setError(reason instanceof Error ? reason : new Error(String(reason)));
+}
+
+function subscribeForCurrentUser<T>({
+  isResolvingUser,
+  onAuthenticated,
+  onError,
+  onNext,
+  onSignedOut,
+  onResolving,
+  setLoading,
+  userId,
+}: {
+  readonly isResolvingUser: boolean;
+  readonly onAuthenticated: (userId: string) => {
+    readonly subscribe: (observer: {
+      readonly error: (reason: unknown) => void;
+      readonly next: (value: readonly T[]) => void;
+    }) => { readonly unsubscribe: () => void };
+  };
+  readonly onError: (reason: unknown) => void;
+  readonly onNext: (value: readonly T[]) => void;
+  readonly onSignedOut: () => void;
+  readonly onResolving: () => void;
+  readonly setLoading: (value: boolean) => void;
+  readonly userId: string | null;
+}): void | (() => void) {
+  return runUserScopedEffect({
+    userId,
+    isResolvingUser,
+    onResolving: () => {
+      onResolving();
+      setLoading(true);
+    },
+    onSignedOut: () => {
+      onSignedOut();
+      setLoading(false);
+    },
+    onAuthenticated: (currentUserId) => {
+      onResolving();
+      setLoading(true);
+      const subscription = onAuthenticated(currentUserId).subscribe({
+        next: (result): void => {
+          onNext(result);
+          setLoading(false);
+        },
+        error: (reason: unknown): void => {
+          onError(reason);
+          setLoading(false);
+        },
+      });
+      return () => subscription.unsubscribe();
+    },
+  });
+}
+
+function getPortfolioRateValues(
+  currentRates: LiveRatesTrustReadModel,
+  preferredCurrency: CurrencyType,
+  activeMetalTypes: readonly SupportedMetal[],
+  activePurchaseCurrencies: readonly MetalsIsoCurrencyCode[]
+): readonly LiveRatesTrustValue[] {
+  const values: LiveRatesTrustValue[] = [
+    ...activeMetalTypes.map((metalType) =>
+      metalType === "GOLD" ? currentRates.gold : currentRates.silver
+    ),
+    currentRates.currencies.get(preferredCurrency) ?? missingTrustValue(),
+    ...activePurchaseCurrencies
+      .filter((currency) => currency !== preferredCurrency)
+      .map(
+        (currency) =>
+          currentRates.currencies.get(currency) ?? missingTrustValue()
+      ),
+  ];
+  return values;
+}
+
+function getPortfolioRateStatus(
+  currentRates: LiveRatesTrustReadModel,
+  preferredCurrency: CurrencyType,
+  activeMetalTypes: readonly SupportedMetal[],
+  activePurchaseCurrencies: readonly MetalsIsoCurrencyCode[]
+): PortfolioRateStatus {
+  const values = getPortfolioRateValues(
+    currentRates,
+    preferredCurrency,
+    activeMetalTypes,
+    activePurchaseCurrencies
+  );
+  const state = summarizeLiveRatesTrust(values);
+  return {
+    ageMs: maximumAge(values),
+    state: toPortfolioRateState(state),
+  };
+}
+
+function maximumAge(values: readonly LiveRatesTrustValue[]): number | null {
+  let maximum: number | null = null;
+  for (const value of values) {
+    if (value.ageMs !== null) {
+      maximum = maximum === null ? value.ageMs : Math.max(maximum, value.ageMs);
+    }
+  }
+  return maximum;
+}
+
+function missingTrustValue(): LiveRatesTrustValue {
+  return {
+    state: "missing",
+    ageMs: null,
+    providerObservedAt: null,
+  };
+}
+
+function getPortfolioProviderObservedAt(
+  currentRates: LiveRatesTrustReadModel,
+  activeHoldings: MetalPortfolioReadModel["activeHoldings"],
+  preferredCurrency: CurrencyType
+): Date | null {
+  if (activeHoldings.length === 0) return null;
+  const activeMetalTypes = Array.from(
+    new Set<SupportedMetal>(activeHoldings.map((holding) => holding.metalType))
+  );
+  const activePurchaseCurrencies = Array.from(
+    new Set<MetalsIsoCurrencyCode>(
+      activeHoldings.flatMap((holding) =>
+        holding.purchasePriceDecimal !== null &&
+        holding.purchaseCurrency !== null
+          ? [holding.purchaseCurrency]
+          : []
+      )
+    )
+  );
+  const values = getPortfolioRateValues(
+    currentRates,
+    preferredCurrency,
+    activeMetalTypes,
+    activePurchaseCurrencies
+  );
+  const timestamps = values.flatMap((value) =>
+    value.providerObservedAt === null ||
+    !Number.isFinite(value.providerObservedAt.getTime())
+      ? []
+      : [value.providerObservedAt.getTime()]
+  );
+  return timestamps.length > 0 && timestamps.length === values.length
+    ? new Date(Math.min(...timestamps))
+    : null;
+}
+
+function toPortfolioRateState(
+  state: LiveRatesTrustState
+): PortfolioRateStatus["state"] {
+  return state === "invalid" ? "missing" : state;
+}

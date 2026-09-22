@@ -21,7 +21,7 @@ import { SmsMatchingSection } from "@/components/add-account/SmsMatchingSection"
 import { CurrencyPicker } from "@/components/currency/CurrencyPicker";
 import { PageHeader } from "@/components/navigation/PageHeader";
 import { TextField } from "@/components/ui/TextField";
-import { CURRENCIES } from "@/constants/accounts";
+import { getCurrencyOptions } from "@/constants/accounts";
 import { palette } from "@/constants/colors";
 import { useTheme } from "@/context/ThemeContext";
 import {
@@ -50,7 +50,7 @@ function CurrencySelectField({
   onChange,
   label,
 }: CurrencySelectFieldProps): React.JSX.Element {
-  const selectedCurrency = CURRENCIES.find(
+  const selectedCurrency = getCurrencyOptions().find(
     (currency) => currency.value === value
   );
 

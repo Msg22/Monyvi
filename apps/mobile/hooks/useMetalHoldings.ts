@@ -28,6 +28,7 @@ import {
   groupAndSortHoldings,
   joinAssetsWithMetals,
   PERCENTAGE_MULTIPLIER,
+  sumAvailableHoldingValues,
 } from "../services/metal-holding-calculations";
 
 import { useMarketRates } from "./useMarketRates";
@@ -49,9 +50,9 @@ interface UseMetalHoldingsResult {
   /** Silver holdings sorted by purchase date descending (newest first) */
   readonly silverHoldings: readonly MetalHolding[];
   /** Total portfolio value in preferred currency */
-  readonly totalValue: number;
+  readonly totalValue: number | null;
   /** Total purchase price of all holdings in preferred currency */
-  readonly totalPurchasePrice: number;
+  readonly totalPurchasePrice: number | null;
   /** Aggregate profit/loss for the entire portfolio */
   readonly profitLoss: ProfitLoss;
   /** Portfolio split between Gold and Silver */
@@ -85,7 +86,7 @@ const ZERO_PROFIT_LOSS: ProfitLoss = { amount: 0, percent: 0 };
  * values, profit/loss, and portfolio split.
  */
 export function useMetalHoldings(): UseMetalHoldingsResult {
-  const { latestRates, isLoading: ratesLoading } = useMarketRates();
+  const { selectedSnapshot } = useMarketRates();
   const { preferredCurrency } = usePreferredCurrency();
   const { userId, isResolvingUser } = useCurrentUser();
 
@@ -175,7 +176,7 @@ export function useMetalHoldings(): UseMetalHoldingsResult {
     UseMetalHoldingsResult,
     "isLoading"
   > => {
-    if (!latestRates || assets.length === 0) {
+    if (assets.length === 0) {
       return {
         goldHoldings: EMPTY_HOLDINGS,
         silverHoldings: EMPTY_HOLDINGS,
@@ -191,24 +192,29 @@ export function useMetalHoldings(): UseMetalHoldingsResult {
 
     // 2. Enrich with computed values
     const enriched = rawHoldings.map((raw) =>
-      enrichHolding(raw, latestRates, preferredCurrency)
+      enrichHolding(raw, selectedSnapshot, preferredCurrency)
     );
 
     // 3. Group and sort (FR-024: newest first)
     const { gold, silver } = groupAndSortHoldings(enriched);
 
     // 4. Compute aggregates (using pre-computed purchasePriceInPref from enrichHolding)
-    const totalValue = enriched.reduce((sum, h) => sum + h.currentValue, 0);
-    const totalPurchasePrice = enriched.reduce(
-      (sum, h) => sum + h.purchasePriceInPref,
-      0
+    const totalValue = sumAvailableHoldingValues(enriched, "currentValue");
+    const totalPurchasePrice = sumAvailableHoldingValues(
+      enriched,
+      "purchasePriceInPref"
     );
 
-    const profitLossAmount = totalValue - totalPurchasePrice;
+    const profitLossAmount =
+      totalValue === null || totalPurchasePrice === null
+        ? null
+        : totalValue - totalPurchasePrice;
     const profitLossPercent =
-      totalPurchasePrice > 0
-        ? (profitLossAmount / totalPurchasePrice) * PERCENTAGE_MULTIPLIER
-        : 0;
+      profitLossAmount === null || totalPurchasePrice === null
+        ? null
+        : totalPurchasePrice > 0
+          ? (profitLossAmount / totalPurchasePrice) * PERCENTAGE_MULTIPLIER
+          : 0;
 
     // 5. Portfolio split
     const portfolioSplit = computePortfolioSplit(gold, silver, totalValue);
@@ -221,11 +227,11 @@ export function useMetalHoldings(): UseMetalHoldingsResult {
       profitLoss: { amount: profitLossAmount, percent: profitLossPercent },
       portfolioSplit,
     };
-  }, [assets, assetMetals, latestRates, preferredCurrency]);
+  }, [assets, assetMetals, selectedSnapshot, preferredCurrency]);
 
   return {
     ...computedData,
-    isLoading: dataLoading || ratesLoading,
+    isLoading: dataLoading,
   };
 }
 

@@ -13,11 +13,17 @@ mockup binding** principle is authoritative.
 
 The sidecar MUST record `Binding metadata approval: APPROVED` together with the
 explicit approval evidence/reference required by
-`.agent/workflows/mockup-implementation.md`. Its current fingerprint MUST be
-valid, `Approved binding metadata revision` MUST equal
-`Binding metadata revision`, and the approval evidence/reference MUST identify
-that same revision. A sidecar that fails any approval or revision check is not
-authoritative and MUST NOT drive implementation until explicitly approved.
+`.agent/workflows/mockup-implementation.md`. Its current
+`Binding metadata revision` and `Binding approval revision` MUST be valid; each
+matching approved revision field MUST equal its current revision; and approval
+evidence/reference MUST identify the approved combined
+`Binding approval revision`. Before consuming any binding fact, run:
+
+`node scripts/verify-mockup-binding.js <path/to/mockup.binding.md>`
+
+The verifier MUST exit zero. A sidecar that fails any approval, image, metadata,
+or combined-revision check is not authoritative and MUST NOT drive
+implementation until explicitly renewed and approved.
 
 If an approved reference predates the binding-sidecar rule and has no sidecar,
 first follow the **Legacy Approved Mockup Metadata Migration** procedure in

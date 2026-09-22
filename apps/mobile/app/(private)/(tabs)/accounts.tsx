@@ -12,10 +12,9 @@ import { palette } from "@/constants/colors";
 import { ANDROID_SAFE_LIST_PROPS } from "@/constants/virtualized-list-policy";
 import { TAB_BAR_HEIGHT } from "@/constants/ui";
 import { useAccounts } from "@/hooks";
-import { useMarketRates } from "@/hooks/useMarketRates";
 import { usePreferredCurrency } from "@/hooks/usePreferredCurrency";
 import type { CurrencyType } from "@monyvi/db";
-import { formatCurrency } from "@monyvi/logic";
+import { formatLocalizedMoneyAmount } from "@/utils/localized-money-display";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
@@ -109,7 +108,7 @@ function TotalBalanceCard({
   balance,
   currencyCode,
 }: {
-  balance: number;
+  balance: number | null;
   currencyCode: CurrencyType;
 }): ReactElement {
   const { t } = useTranslation("accounts");
@@ -119,7 +118,12 @@ function TotalBalanceCard({
         {t("total_balance")}
       </Text>
       <Text className="text-3xl font-black text-slate-900 dark:text-white">
-        {formatCurrency({ amount: balance, currency: currencyCode })}
+        {balance === null
+          ? "—"
+          : formatLocalizedMoneyAmount({
+              amount: balance,
+              currency: currencyCode,
+            })}
       </Text>
     </View>
   );
@@ -137,10 +141,14 @@ export default function Accounts(): ReactElement {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { t: tCommon } = useTranslation("common");
-  const { latestRates } = useMarketRates();
 
   const [selectedFilter, setSelectedFilter] = useState<FilterType>("ALL");
-  const { totalAccountsBalance, accounts, isLoading } = useAccounts();
+  const {
+    totalAccountsBalance,
+    accounts,
+    isLoading,
+    convertedSubtitlesByAccountId,
+  } = useAccounts();
   const { preferredCurrency } = usePreferredCurrency();
   const isEmpty = accounts.length === 0;
   const isHydrating = isLoading && isEmpty;
@@ -178,7 +186,9 @@ export default function Accounts(): ReactElement {
         return (
           <AccountCard
             account={item}
-            latestRates={latestRates}
+            convertedSubtitle={
+              convertedSubtitlesByAccountId.get(item.id) ?? null
+            }
             displayName={displayNames.get(item.id) ?? item.name}
             providerLabel={presentation?.providerLabel ?? null}
             institutionLogo={presentation?.asset.logo ?? null}
@@ -186,7 +196,7 @@ export default function Accounts(): ReactElement {
           />
         );
       },
-      [latestRates, displayNames, handleCardPress]
+      [convertedSubtitlesByAccountId, displayNames, handleCardPress]
     );
 
   const keyExtractor = useCallback(

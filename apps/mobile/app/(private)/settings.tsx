@@ -1,5 +1,6 @@
 import type { CurrencyType } from "@monyvi/db";
 import { CURRENCY_INFO_MAP } from "@monyvi/logic";
+import { getCurrencyName } from "@/utils/currency-localization";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useFocusEffect } from "expo-router";
 import { useTranslation } from "react-i18next";
@@ -823,7 +824,9 @@ export default function SettingsScreen(): React.JSX.Element {
           t={t}
           preferredCurrency={preferredCurrency}
           currencyFlag={currencyInfo?.flag ?? "💱"}
-          currencyName={currencyInfo?.name ?? preferredCurrency}
+          currencyName={
+            currencyInfo ? getCurrencyName(currencyInfo.code) : preferredCurrency
+          }
           chevronColor={theme.text.secondary}
           onPress={() => setIsCurrencyPickerVisible(true)}
         />

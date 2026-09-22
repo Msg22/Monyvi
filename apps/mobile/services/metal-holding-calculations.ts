@@ -16,7 +16,11 @@
  */
 
 import type { Asset, AssetMetal, CurrencyType } from "@monyvi/db";
-import { convertCurrency, getMetalPriceUsd } from "@monyvi/logic";
+import {
+  convertSelectedCurrentAmount,
+  getSelectedCurrentMetalPrice,
+} from "@/services/current-market-snapshot-calculations";
+import type { SelectedMarketRateSnapshot } from "@/services/market-rate-snapshot-read-model-service";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -42,21 +46,21 @@ interface MetalHolding {
   /** The child AssetMetal record */
   readonly assetMetal: AssetMetal;
   /** Current market value in user's preferred currency */
-  readonly currentValue: number;
+  readonly currentValue: number | null;
   /** Current market value in USD */
-  readonly currentValueUsd: number;
+  readonly currentValueUsd: number | null;
   /** Purchase price converted to preferred currency */
-  readonly purchasePriceInPref: number;
+  readonly purchasePriceInPref: number | null;
   /** Profit/loss as a percentage ((current - purchase) / purchase * 100) */
-  readonly profitLossPercent: number;
+  readonly profitLossPercent: number | null;
   /** Absolute profit/loss amount in preferred currency */
-  readonly profitLossAmount: number;
+  readonly profitLossAmount: number | null;
 }
 
 /** Summary for a single metal type */
 interface MetalTypeSummary {
-  readonly totalValue: number;
-  readonly percentage: number;
+  readonly totalValue: number | null;
+  readonly percentage: number | null;
   readonly itemCount: number;
 }
 
@@ -69,9 +73,9 @@ interface PortfolioSplit {
 /** Aggregate profit/loss for the entire portfolio */
 interface ProfitLoss {
   /** Absolute profit/loss amount in preferred currency */
-  readonly amount: number;
+  readonly amount: number | null;
   /** Profit/loss as a percentage */
-  readonly percent: number;
+  readonly percent: number | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -109,34 +113,43 @@ function joinAssetsWithMetals(
  */
 function enrichHolding(
   raw: RawHolding,
-  latestRates: NonNullable<Parameters<typeof getMetalPriceUsd>[1]>,
+  currentSnapshot: SelectedMarketRateSnapshot | null,
   preferredCurrency: CurrencyType
 ): MetalHolding {
-  const pricePerGramUsd = getMetalPriceUsd(
-    raw.assetMetal.metalType,
-    latestRates
-  );
-  const currentValueUsd = raw.assetMetal.calculateValue(pricePerGramUsd);
+  const pricePerGramUsd = getSelectedCurrentMetalPrice({
+    metal: raw.assetMetal.metalType,
+    toCurrency: "USD",
+    currentSnapshot,
+  });
+  const pricePerGramPreferred = getSelectedCurrentMetalPrice({
+    metal: raw.assetMetal.metalType,
+    toCurrency: preferredCurrency,
+    currentSnapshot,
+  });
+  const purchasePriceInPref = convertSelectedCurrentAmount({
+    amount: raw.asset.purchasePrice,
+    fromCurrency: raw.asset.currency,
+    toCurrency: preferredCurrency,
+    currentSnapshot,
+  });
+  const currentValueUsd =
+    pricePerGramUsd === null
+      ? null
+      : raw.assetMetal.calculateValue(pricePerGramUsd);
   const currentValue =
-    preferredCurrency === "USD"
-      ? currentValueUsd
-      : convertCurrency(currentValueUsd, "USD", preferredCurrency, latestRates);
-
-  const purchasePriceInPref =
-    raw.asset.currency === preferredCurrency
-      ? raw.asset.purchasePrice
-      : convertCurrency(
-          raw.asset.purchasePrice,
-          raw.asset.currency,
-          preferredCurrency,
-          latestRates
-        );
-
-  const profitLossAmount = currentValue - purchasePriceInPref;
+    pricePerGramPreferred === null
+      ? null
+      : raw.assetMetal.calculateValue(pricePerGramPreferred);
+  const profitLossAmount =
+    currentValue === null || purchasePriceInPref === null
+      ? null
+      : currentValue - purchasePriceInPref;
   const profitLossPercent =
-    purchasePriceInPref > 0
-      ? (profitLossAmount / purchasePriceInPref) * PERCENTAGE_MULTIPLIER
-      : 0;
+    profitLossAmount === null || purchasePriceInPref === null
+      ? null
+      : purchasePriceInPref > 0
+        ? (profitLossAmount / purchasePriceInPref) * PERCENTAGE_MULTIPLIER
+        : 0;
 
   return {
     asset: raw.asset,
@@ -187,28 +200,43 @@ function groupAndSortHoldings(holdings: readonly MetalHolding[]): {
 function computePortfolioSplit(
   goldHoldings: readonly MetalHolding[],
   silverHoldings: readonly MetalHolding[],
-  totalValue: number
+  totalValue: number | null
 ): PortfolioSplit {
-  const goldTotal = goldHoldings.reduce((sum, h) => sum + h.currentValue, 0);
-  const silverTotal = silverHoldings.reduce(
-    (sum, h) => sum + h.currentValue,
-    0
-  );
+  const goldTotal = sumAvailableHoldingValues(goldHoldings, "currentValue");
+  const silverTotal = sumAvailableHoldingValues(silverHoldings, "currentValue");
 
   return {
     gold: {
       totalValue: goldTotal,
       percentage:
-        totalValue > 0 ? (goldTotal / totalValue) * PERCENTAGE_MULTIPLIER : 0,
+        totalValue === null || goldTotal === null
+          ? null
+          : totalValue > 0
+            ? (goldTotal / totalValue) * PERCENTAGE_MULTIPLIER
+            : 0,
       itemCount: goldHoldings.length,
     },
     silver: {
       totalValue: silverTotal,
       percentage:
-        totalValue > 0 ? (silverTotal / totalValue) * PERCENTAGE_MULTIPLIER : 0,
+        totalValue === null || silverTotal === null
+          ? null
+          : totalValue > 0
+            ? (silverTotal / totalValue) * PERCENTAGE_MULTIPLIER
+            : 0,
       itemCount: silverHoldings.length,
     },
   };
+}
+
+export function sumAvailableHoldingValues(
+  holdings: readonly MetalHolding[],
+  field: "currentValue" | "purchasePriceInPref"
+): number | null {
+  return holdings.reduce<number | null>((sum, holding) => {
+    const value = holding[field];
+    return sum === null || value === null ? null : sum + value;
+  }, 0);
 }
 
 export {

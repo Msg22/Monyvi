@@ -65,6 +65,17 @@ export const SUPPORTED_CURRENCIES: readonly CurrencyInfo[] = [
   { code: "ZAR", name: "South African Rand", symbol: "ZAR", flag: "🇿🇦" },
 ] as const;
 
+/**
+ * Union of the ISO codes that Monyvi actually supports and that have display
+ * metadata / localized catalogue entries. `CurrencyType` (the persisted,
+ * Supabase-generated union) also carries codes such as `BTC` that are handled
+ * outside the supported fiat list, so they are excluded here.
+ *
+ * Invariant: every `SUPPORTED_CURRENCIES` code is a `SupportedCurrencyCode`.
+ * The currency catalogue completeness test guards the reverse direction.
+ */
+export type SupportedCurrencyCode = Exclude<CurrencyType, "BTC">;
+
 export const SORTED_SUPPORTED_CURRENCIES = [...SUPPORTED_CURRENCIES].sort(
   (a, b) => a.code.localeCompare(b.code)
 );

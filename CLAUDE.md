@@ -64,6 +64,10 @@ Dependency direction: `apps/ → packages/logic → packages/db`. **Never revers
 
 ## TypeScript & React Native
 
+- Read and follow **Canonical Types & End-to-End Type Safety** in `AGENTS.md`.
+  It applies project-wide, including backend code, tests, fixtures, and mocks:
+  reuse authoritative database/domain types, preserve them through every layer,
+  validate external inputs, handle unions exhaustively, and justify assertions.
 - Write concise, technical TypeScript with strict mode. Prefer interfaces over
   types. Avoid enums — use maps.
 - Use functional components with hooks. No class components.
@@ -196,6 +200,20 @@ All schema changes MUST go through local SQL migration files in
 
 Commit format: `<type>: <description>` — Types: feat, fix, refactor, docs, test,
 chore, perf, ci.
+
+## Git Worktrees & Branch Isolation
+
+- **Worktree Location Invariant (MANDATORY)**: All secondary or isolated
+  worktrees MUST be created on the exact same disk and in the exact same parent
+  folder where the original project repository exists (`E:\Work\My Projects\`).
+- **NEVER create worktrees on other disks**: Never create worktrees on `C:`
+  (such as `~/.codex/worktrees/`, `~/.claude/worktrees/`, or `AppData`),
+  temporary directories, or any other disk.
+- **Directory Naming**: Sibling worktrees following
+  `../Monyvi-<issue-or-feature-name>`.
+- **Dependency Sharing**: Secondary worktrees MUST NOT run `npm install`. Link
+  `node_modules` via
+  `powershell -ExecutionPolicy Bypass -File scripts/link-worktree-node-modules.ps1 -RootWorkspace "E:\Work\My Projects\Monyvi"`.
 
 ## Security
 

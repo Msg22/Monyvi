@@ -4,6 +4,15 @@ description: apply mockups guidelines
 
 # 🎯 Implementation Requirement — Pixel-Perfect UI
 
+## Approved Binding Gate
+
+Before consuming an approved mockup, load its matching binding sidecar and run
+`node scripts/verify-mockup-binding.js <path/to/mockup.binding.md>`. Require
+exit status zero. A filename is not authority: current image bytes, exact
+UTF-8/LF Binding Facts bytes, both approved revisions, and evidence for the
+approved combined `Binding approval revision` must all verify. Follow
+`.agent/workflows/applying-mockups.md` for the complete gate.
+
 ## Requirements
 
 - Implement the UI **exactly as defined in the approved mockups**.

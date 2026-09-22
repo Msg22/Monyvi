@@ -134,14 +134,14 @@ export default function TransactionsPlaceholder(): React.JSX.Element {
     }: {
       section: {
         title: string;
-        netWorth?: number;
-        income: number;
-        expense: number;
+        netWorth?: number | null;
+        income: number | null;
+        expense: number | null;
       };
     }) => (
       <GroupHeader
         title={title}
-        netWorth={netWorth || 0}
+        netWorth={netWorth ?? null}
         income={income}
         expense={expense}
         currencyCode={preferredCurrency}

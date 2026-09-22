@@ -29,6 +29,7 @@ const allCiSuites = [
   "budgets",
   "sms-sync",
   "live-sms",
+  "localization",
 ];
 let hasRunAuthBootstrap = false;
 
@@ -49,6 +50,7 @@ const recurringPaymentMaestroFlows = [
   "recurring-payments/recurring-payments-crud-actions.yaml",
 ];
 const smsSyncMaestroFlows = ["sms-sync/sms-sync-permission-requestable.yaml"];
+const localizationMaestroFlows = ["localization/arabic-money-displays.yaml"];
 const budgetMaestroFlows = [
   {
     flow: "budgets/dashboard-filtering.yaml",
@@ -184,7 +186,8 @@ function shouldResetMaestroFlowBeforeRetry(flow, env = process.env) {
     flow.startsWith("accounts/") ||
     flow.startsWith("transactions/") ||
     flow.startsWith("recurring-payments/") ||
-    flow.startsWith("budgets/")
+    flow.startsWith("budgets/") ||
+    flow.startsWith("localization/")
   );
 }
 
@@ -382,6 +385,10 @@ function getBudgetMaestroFlows() {
   return budgetMaestroFlows;
 }
 
+function getLocalizationMaestroFlows() {
+  return localizationMaestroFlows;
+}
+
 function getBudgetProfileForMaestroFlow(flow) {
   return budgetMaestroFlows.find((entry) => entry.flow === flow)?.profile;
 }
@@ -481,7 +488,16 @@ function shouldBootstrapBeforeLiveSms(selectedSuites, supabaseMode) {
 function shouldRestoreDefaultFixtureAfterBudgets(selectedSuites) {
   return (
     selectedSuites.has("budgets") &&
+    !selectedSuites.has("localization") &&
     (selectedSuites.has("sms-sync") || selectedSuites.has("live-sms"))
+  );
+}
+
+function shouldRestoreDefaultFixtureBeforeLocalization(selectedSuites) {
+  if (!selectedSuites.has("localization")) return false;
+
+  return ["accounts", "transactions", "recurring-payments", "budgets"].some(
+    (suite) => selectedSuites.has(suite)
   );
 }
 
@@ -586,6 +602,13 @@ async function main() {
     }
   }
 
+  if (selectedSuites.has("localization")) {
+    if (shouldRestoreDefaultFixtureBeforeLocalization(selectedSuites)) {
+      await restoreDefaultE2eData();
+    }
+    await runMaestroFlows(getLocalizationMaestroFlows());
+  }
+
   if (selectedSuites.has("sms-sync")) {
     await runMaestroFlows(smsSyncMaestroFlows);
     await maybeRunSmsSyncJourneys();
@@ -618,6 +641,7 @@ module.exports = {
   getDeviceOfflineRetryCount,
   getLiveSmsTimeoutMs,
   getBudgetMaestroFlows,
+  getLocalizationMaestroFlows,
   getRequestedCiSuites,
   getAuthBootstrapFlow,
   getInitialAuthBootstrapOptions,
@@ -631,4 +655,5 @@ module.exports = {
   shouldRetryStabilizationFailure,
   shouldBootstrapBeforeLiveSms,
   shouldRestoreDefaultFixtureAfterBudgets,
+  shouldRestoreDefaultFixtureBeforeLocalization,
 };

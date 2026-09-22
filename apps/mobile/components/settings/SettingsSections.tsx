@@ -73,6 +73,7 @@ export function LanguageSettingsSection({
           />
           <View className="flex-1">
             <Dropdown<string>
+              testID="settings-language"
               label=""
               items={
                 [

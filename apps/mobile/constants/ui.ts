@@ -5,6 +5,7 @@
 /** Shared viewport breakpoints for approved responsive compositions. */
 export const RESPONSIVE_BREAKPOINTS = {
   compactPhone: 340,
+  denseRowPhone: 390,
   tablet: 600,
 } as const;
 
@@ -22,6 +23,22 @@ export function shouldUseCompactLayout(
     fontScale > RESPONSIVE_FONT_SCALE.denseLayout
   );
 }
+
+/**
+ * For dense multi-part rows that include media, primary identity, and a terminal
+ * summary column (such as metals history cards), reflow into a stacked layout
+ * when the viewport cannot support all columns side-by-side without squeezing
+ * values or splitting currency codes.
+ */
+export function shouldUseDenseRowCompactLayout(
+  width: number,
+  fontScale: number
+): boolean {
+  return (
+    width < RESPONSIVE_BREAKPOINTS.denseRowPhone ||
+    fontScale > RESPONSIVE_FONT_SCALE.denseLayout
+  );
+}
 /** Height of the custom bottom tab bar including safe area */
 export const TAB_BAR_HEIGHT = 80;
 
@@ -30,6 +47,25 @@ export const MIC_BUTTON_SIZE = 64;
 
 /** Size of quick action buttons */
 export const QUICK_ACTION_SIZE = 48;
+
+/** Visible diameter of the floating quick-action control. */
+export const QUICK_ACTION_FAB_SIZE = 56;
+
+/** Breathing room kept between scroll content and floating tab controls. */
+export const TAB_CONTENT_BOTTOM_GUTTER = 24;
+
+/**
+ * Keeps final scroll content above both the raised microphone and quick-action
+ * controls that sit over the absolute tab bar.
+ */
+export function getTabContentBottomClearance(tabBarHeight: number): number {
+  const raisedMicClearance = MIC_BUTTON_SIZE / 2 - 8;
+  return (
+    tabBarHeight +
+    Math.max(raisedMicClearance, QUICK_ACTION_FAB_SIZE) +
+    TAB_CONTENT_BOTTOM_GUTTER
+  );
+}
 
 /** Tab bar blur intensity */
 export const TAB_BAR_BLUR_INTENSITY = 80;

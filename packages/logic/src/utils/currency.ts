@@ -181,6 +181,11 @@ export const CURRENCY_PRECISION: Partial<Record<CurrencyType, number>> = {
 /** Default precision for currencies not listed in CURRENCY_PRECISION (ISO 4217 standard) */
 export const DEFAULT_PRECISION = 2;
 
+/** Returns the authoritative fractional precision for a supported currency. */
+export function getCurrencyPrecision(currency: CurrencyType): number {
+  return CURRENCY_PRECISION[currency] ?? DEFAULT_PRECISION;
+}
+
 function hasNonZeroFractionAtPrecision(
   amount: number,
   precision: number
@@ -194,17 +199,19 @@ export const formatCurrency = ({
   amount,
   currency,
   signDisplay = "auto",
+  locale = "en-US",
   minimumFractionDigits,
   maximumFractionDigits,
 }: {
   amount: number;
   currency: CurrencyType;
+  locale?: string;
   signDisplay?: "always" | "exceptZero" | "negative" | "never" | "auto";
   minimumFractionDigits?: number;
   maximumFractionDigits?: number;
 }): string => {
   // Use currency-specific precision when caller doesn't override
-  const precision = CURRENCY_PRECISION[currency] ?? DEFAULT_PRECISION;
+  const precision = getCurrencyPrecision(currency);
   // Normalize -0 to 0 (IEEE 754 artifact from floating-point arithmetic)
   const normalizedAmount = amount || 0;
   const hasFraction = hasNonZeroFractionAtPrecision(
@@ -216,12 +223,13 @@ export const formatCurrency = ({
   const minDigits =
     minimumFractionDigits ?? Math.min(inferredMinDigits, maxDigits);
 
-  const formattedNumber = new Intl.NumberFormat("en-US", {
+  const numberFormatter = new Intl.NumberFormat(locale, {
     style: "decimal",
     minimumFractionDigits: minDigits,
     maximumFractionDigits: maxDigits,
     signDisplay,
-  }).format(normalizedAmount);
+  });
+  const formattedNumber = numberFormatter.format(normalizedAmount);
 
   const symbol = CURRENCY_SYMBOLS[currency] || currency;
 
@@ -245,9 +253,14 @@ export const formatCurrency = ({
   ];
 
   if (prefixCurrencies.includes(currency)) {
-    if (amount < 0) {
-      // Strip the leading minus sign from the formatted number and prepend -symbol
-      return `-${symbol}${formattedNumber.replace(/^-/, "")}`;
+    const parts = numberFormatter.formatToParts(normalizedAmount);
+    const minus = parts.find((part) => part.type === "minusSign");
+    if (minus) {
+      const unsignedNumber = parts
+        .filter((part) => part.type !== "minusSign")
+        .map((part) => part.value)
+        .join("");
+      return `${minus.value}${symbol}${unsignedNumber}`;
     }
     return `${symbol}${formattedNumber}`;
   }
@@ -266,6 +279,6 @@ export function roundForCurrency(
   value: number,
   currency: CurrencyType
 ): number {
-  const decimals = CURRENCY_PRECISION[currency] ?? DEFAULT_PRECISION;
+  const decimals = getCurrencyPrecision(currency);
   return roundCurrency(value, decimals);
 }

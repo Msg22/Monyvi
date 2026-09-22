@@ -2,7 +2,12 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 interface ImportMarketRatesModule {
-  getLinkedMarketRatesQueryArgs(): readonly string[];
+  buildImportSql(units: readonly unknown[]): string;
+  getLinkedMarketRateSnapshotsQueryArgs(request: {
+    readonly cursor: null;
+    readonly limit: number;
+    readonly upperWatermark: null;
+  }): readonly string[];
   getSupabaseSpawnArgs(args: readonly string[]): readonly string[];
   parseImportMarketRatesArgs(argv?: readonly string[]): {
     readonly bestEffort: boolean;
@@ -24,16 +29,51 @@ describe("import-market-rates-to-local helpers", () => {
     ]);
   });
 
-  it("passes the remote market-rate query directly to the CLI", () => {
-    expect(marketRatesImporter.getLinkedMarketRatesQueryArgs()).toEqual([
+  it("queries complete remote snapshot pages through the linked RPC", () => {
+    expect(
+      marketRatesImporter.getLinkedMarketRateSnapshotsQueryArgs({
+        cursor: null,
+        limit: 50,
+        upperWatermark: null,
+      })
+    ).toEqual([
       "db",
       "query",
       "--agent=no",
       "--linked",
       "-o",
       "json",
-      "select * from public.market_rates order by created_at asc;",
+      expect.stringContaining("pull_market_rate_snapshots_page_v2"),
     ]);
+  });
+
+  it("never fabricates observations from a legacy wide market-rate row", () => {
+    const importerSource = readFileSync(
+      resolve(__dirname, "../../../../scripts/import-market-rates-to-local.js"),
+      "utf8"
+    );
+
+    expect(importerSource).not.toContain("buildLegacySnapshotUnit");
+    expect(importerSource).not.toContain(
+      "queryLinkedLegacyMarketRateSnapshots"
+    );
+    expect(importerSource).not.toContain('source: "legacy:market_rates"');
+  });
+
+  it("imports the replacement atomically as one CLI-compatible statement", () => {
+    const sql = marketRatesImporter.buildImportSql([
+      {
+        root: {
+          id: "19f3212b-9d32-4a4c-9bf9-968e9cea5d64",
+        },
+        observations: [],
+      },
+    ]);
+
+    expect(sql).toMatch(/^do \$market_import\$/);
+    expect(sql).toContain("delete from public.market_rate_observations;");
+    expect(sql).toContain("delete from public.market_rates;");
+    expect(sql).not.toMatch(/\bbegin;|\bcommit;/);
   });
 
   it("ignores temporary SQL files created during market-rate import", () => {

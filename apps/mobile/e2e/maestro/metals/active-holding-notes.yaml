@@ -1,0 +1,40 @@
+appId: com.monyvi.app
+---
+# Prerequisite: signed in with the existing manual-QA lifecycle seed, English locale.
+# This flow reads the saved note; it does not create or alter financial records.
+- openLink: monyvi://metals
+- extendedWaitUntil:
+    visible:
+      id: metal-portfolio-root
+    timeout: 30000
+- scrollUntilVisible:
+    element:
+      text: "21k Gold Chain"
+    direction: DOWN
+- tapOn: "21k Gold Chain"
+- extendedWaitUntil:
+    visible:
+      id: metal-holding-detail-root
+    timeout: 30000
+- scrollUntilVisible:
+    element:
+      id: metal-holding-notes
+    direction: DOWN
+- assertVisible: "Notes"
+- assertVisible: "Jewelry purchase for metal asset QA"
+- takeScreenshot: metals-active-holding-notes
+- openLink: monyvi://metals
+- extendedWaitUntil:
+    visible:
+      id: metal-portfolio-root
+    timeout: 30000
+- scrollUntilVisible:
+    element:
+      text: "21k Gold Chain"
+    direction: DOWN
+- tapOn: "21k Gold Chain"
+- scrollUntilVisible:
+    element:
+      id: metal-holding-notes
+    direction: DOWN
+- assertVisible: "Jewelry purchase for metal asset QA"

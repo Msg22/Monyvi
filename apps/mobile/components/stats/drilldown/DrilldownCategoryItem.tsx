@@ -6,48 +6,42 @@
 
 import { type CategoryData } from "./types";
 import { palette } from "@/constants/colors";
-import { usePreferredCurrency } from "@/hooks/usePreferredCurrency";
 import { useTheme } from "@/context/ThemeContext";
 import { useLocale } from "@/context/LocaleContext";
-import { formatCurrency } from "@monyvi/logic";
+import type { CurrencyType } from "@monyvi/db";
+import { formatLocalizedMoneyAmount } from "@/utils/localized-money-display";
 import { Ionicons } from "@expo/vector-icons";
 import React from "react";
 import { Text, TouchableOpacity, View } from "react-native";
 
-// =============================================================================
-// Types
-// =============================================================================
-
 interface DrilldownCategoryItemProps {
   readonly category: CategoryData;
   readonly onPress: () => void;
-  readonly hasChildren: boolean;
+  readonly canDrillDown: boolean;
+  readonly currency: CurrencyType;
 }
-
-// =============================================================================
-// Component
-// =============================================================================
 
 export function DrilldownCategoryItem({
   category,
   onPress,
-  hasChildren,
+  canDrillDown,
+  currency,
 }: DrilldownCategoryItemProps): React.JSX.Element {
   const { isDark } = useTheme();
   const { language } = useLocale();
-  const { preferredCurrency } = usePreferredCurrency();
 
   return (
     <TouchableOpacity
+      testID={`drilldown-category-${category.id}`}
       onPress={onPress}
-      disabled={!hasChildren}
+      disabled={!canDrillDown}
       className="flex-row items-center py-2"
       accessible
-      accessibilityRole={hasChildren ? "button" : "text"}
+      accessibilityRole={canDrillDown ? "button" : "text"}
       accessibilityLanguage={language}
-      accessibilityLabel={`${category.displayName}, ${formatCurrency({ amount: category.amount, currency: preferredCurrency })}, ${category.percentage.toFixed(1)}%`}
-      accessibilityHint={hasChildren ? "Tap to drill down" : undefined}
-      accessibilityState={{ disabled: !hasChildren }}
+      accessibilityLabel={`${category.displayName}, ${formatLocalizedMoneyAmount({ amount: category.amount, currency })}, ${category.percentage.toFixed(1)}%`}
+      accessibilityHint={canDrillDown ? "Tap to drill down" : undefined}
+      accessibilityState={{ disabled: !canDrillDown }}
     >
       <View
         className="w-3 h-3 rounded-full me-3"
@@ -62,16 +56,14 @@ export function DrilldownCategoryItem({
         </Text>
       </View>
       <Text className="text-sm font-semibold me-2 text-slate-600 dark:text-slate-300">
-        {formatCurrency({
-          amount: category.amount,
-          currency: preferredCurrency,
-        })}
+        {formatLocalizedMoneyAmount({ amount: category.amount, currency })}
       </Text>
       <Text className="text-xs text-slate-400 dark:text-slate-500">
         {category.percentage.toFixed(1)}%
       </Text>
-      {hasChildren && (
+      {canDrillDown && (
         <Ionicons
+          testID={`drilldown-chevron-${category.id}`}
           name="chevron-forward"
           size={16}
           color={isDark ? palette.slate[500] : palette.slate[400]}
