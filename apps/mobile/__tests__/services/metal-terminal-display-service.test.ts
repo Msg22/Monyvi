@@ -82,6 +82,26 @@ describe("terminal preferred-currency display", () => {
     }
   );
 
+  it("carries each consumed rate's source and quality for provenance", () => {
+    const currentRates: LiveRatesTrustReadModel = {
+      ...rates,
+      currencies: new Map([
+        ["EGP", { ...rate, source: "provider-x", quality: "valid" }],
+      ]),
+    };
+    const result = buildMetalTerminalDisplayFacts(facts, currentRates, "USD");
+
+    expect(result?.kind === "sold" ? result.displayRateTrust : undefined).toEqual(
+      [
+        expect.objectContaining({
+          currency: "EGP",
+          source: "provider-x",
+          quality: "valid",
+        }),
+      ]
+    );
+  });
+
   it("tracks both non-identity currencies but ignores unrelated stale metal inputs", () => {
     const currentRates: LiveRatesTrustReadModel = {
       ...rates,

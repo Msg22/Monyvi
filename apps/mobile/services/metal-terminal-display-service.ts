@@ -96,6 +96,8 @@ export function buildMetalTerminalDisplayFacts(
                       state: rate.state,
                       providerObservedAt: rate.providerObservedAt,
                       ageMs: rate.ageMs,
+                      source: rate.source ?? null,
+                      quality: rate.quality ?? null,
                     },
                   ];
             }

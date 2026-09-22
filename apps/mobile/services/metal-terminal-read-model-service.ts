@@ -29,6 +29,8 @@ export interface MetalDisplayRateTrust {
   readonly currency: MetalsIsoCurrencyCode;
   readonly state: LiveRatesTrustValue["state"];
   readonly providerObservedAt: Date | null;
+  readonly quality?: string | null;
+  readonly source?: string | null;
 }
 
 export interface MetalSoldTerminalFacts {
@@ -157,7 +159,7 @@ function toSoldTerminalFacts(
       grossProceedsDecimal: outcome.value.grossProceedsDecimal,
       kind: "sold",
       netProceedsDecimal: outcome.value.netProceedsDecimal,
-      notes: outcome.value.notes,
+      notes: normalizeOptionalNotes(outcome.value.notes),
       proceedsCurrency: outcome.value.proceedsCurrency,
       realizedResultCurrency: outcome.value.purchaseCurrency,
       realizedResultDecimal: outcome.value.combinedDecimal,
@@ -172,7 +174,7 @@ function toSoldTerminalFacts(
     grossProceedsDecimal: outcome.facts.grossProceedsDecimal,
     kind: "sold",
     netProceedsDecimal: outcome.facts.netProceedsDecimal,
-    notes: outcome.facts.notes,
+    notes: normalizeOptionalNotes(outcome.facts.notes),
     proceedsCurrency: outcome.facts.proceedsCurrency,
     realizedResultCurrency: null,
     realizedResultDecimal: null,
@@ -195,11 +197,20 @@ function shapeDisposedFacts(
   return Object.freeze({
     actionId: outcome.value.actionId,
     kind: "disposed",
-    notes: outcome.value.notes,
+    notes: normalizeOptionalNotes(outcome.value.notes),
     reason: outcome.value.reason,
     terminalDate: outcome.value.disposalDate,
     treatment: outcome.value.treatment,
   });
+}
+
+/**
+ * An optional terminal note is present only when it has non-whitespace text.
+ * Blank canonical notes become `null` so neither detail path renders an empty
+ * Notes fact.
+ */
+function normalizeOptionalNotes(value: string | null): string | null {
+  return value !== null && value.trim().length > 0 ? value : null;
 }
 
 function toDisposeEventSnapshot(

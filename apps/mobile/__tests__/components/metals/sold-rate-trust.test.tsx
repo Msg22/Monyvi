@@ -6,10 +6,18 @@ import { formatRateAge } from "@monyvi/logic";
 jest.mock("react-i18next", () => ({
   useTranslation: (): unknown => ({
     i18n: { resolvedLanguage: "en" },
-    t: (key: string, values?: Record<string, string>): string =>
-      key === "portfolio.rates_updated"
-        ? `Updated ${values?.date} ${values?.time}`
-        : key,
+    t: (key: string, values?: Record<string, string>): string => {
+      if (key === "portfolio.rates_updated") {
+        return `Updated ${values?.date} ${values?.time}`;
+      }
+      if (key === "rate.source") {
+        return `Source: ${values?.source}`;
+      }
+      if (key === "rate.quality") {
+        return `Quality: ${values?.quality}`;
+      }
+      return key;
+    },
   }),
 }));
 
@@ -76,4 +84,42 @@ it("shows the consumed stale rate age alongside status and provider date", () =>
   render(<MetalSoldRateTrust rates={[rate]} />);
   expect(screen.getByText("EGP · rate.short_stale · 2 days ago")).toBeTruthy();
   expect(screen.getByText(/Updated 01 Sept 2026 .*PM/)).toBeTruthy();
+});
+
+it("shows the distinct source and quality of each consumed rate", () => {
+  render(
+    <MetalSoldRateTrust
+      rates={[
+        {
+          currency: "EGP",
+          state: "fresh",
+          providerObservedAt: new Date(2026, 8, 1, 12),
+          ageMs: 0,
+          source: "provider-a",
+          quality: "valid",
+        },
+      ]}
+    />
+  );
+
+  expect(screen.getByText("Source: provider-a")).toBeTruthy();
+  expect(screen.getByText("Quality: valid")).toBeTruthy();
+});
+
+it("omits source and quality rows when the consumed rate has no provenance", () => {
+  render(
+    <MetalSoldRateTrust
+      rates={[
+        {
+          currency: "EGP",
+          state: "fresh",
+          providerObservedAt: null,
+          ageMs: null,
+        },
+      ]}
+    />
+  );
+
+  expect(screen.queryByText(/^Source:/)).toBeNull();
+  expect(screen.queryByText(/^Quality:/)).toBeNull();
 });

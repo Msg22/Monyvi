@@ -178,6 +178,35 @@ describe("metal terminal read-model evidence", () => {
     });
   });
 
+  it.each(["", "   ", "\n\t "])(
+    "treats blank sale notes (%j) as absent",
+    (notes): void => {
+      const facts = shapeMetalTerminalFacts(
+        baseInput("sell", salePayload({ notes }), "metals.sell/v2")
+      );
+
+      expect(facts).toMatchObject({ kind: "sold", notes: null });
+    }
+  );
+
+  it.each(["", "   ", "\n\t "])(
+    "treats blank disposal notes (%j) as absent",
+    (notes): void => {
+      const facts = shapeMetalTerminalFacts(
+        baseInput("dispose", disposalPayload({ notes }), "metals.dispose/v1")
+      );
+
+      expect(facts).toEqual({
+        actionId: TERMINAL_ACTION_ID,
+        kind: "disposed",
+        notes: null,
+        reason: "given_away",
+        terminalDate: "2026-08-24",
+        treatment: "external_transfer",
+      });
+    }
+  );
+
   it("fails closed when terminal evidence does not match the holding state", () => {
     const input = baseInput("dispose", disposalPayload(), "metals.dispose/v1");
 

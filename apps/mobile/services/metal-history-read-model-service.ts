@@ -142,56 +142,38 @@ export async function readMetalHistoryReadModel(
     return emptyHistory(options.filter);
   }
 
-  const validatedHistory = await readValidatedHistoryPage(
+  // Validate the whole archive once for truthful per-filter counts, but keep the
+  // number of query rounds constant: read assets and their dependencies for the
+  // entire ordered set in one pass, then shape counts and the bounded page in
+  // memory. Batching per page here previously issued another asset lookup plus
+  // four dependency queries for every page of candidates.
+  const assets = await readHistoryAssets(scope, lifecycleValidatedStates);
+  if (assets.length === 0) {
+    return emptyHistory(options.filter);
+  }
+  const dependencies = await readHistoryDependencies(
     scope,
-    lifecycleValidatedStates,
-    options.filter,
-    pageSize + 1
+    assets,
+    lifecycleValidatedStates
+  );
+  const validated = buildMetalHistoryReadModel({
+    filter: "all",
+    holdings: shapeReadHistoryHoldings(
+      assets,
+      lifecycleValidatedStates,
+      dependencies
+    ),
+    userId: scope.userId,
+  });
+  const filteredItems = validated.items.filter(
+    (item) => options.filter === "all" || item.status === options.filter
   );
   return Object.freeze({
-    counts: Object.freeze({ ...validatedHistory.counts }),
+    counts: Object.freeze({ ...validated.counts }),
     filter: options.filter,
-    hasMore: validatedHistory.items.length > pageSize,
-    items: Object.freeze(validatedHistory.items.slice(0, pageSize)),
+    hasMore: filteredItems.length > pageSize,
+    items: Object.freeze(filteredItems.slice(0, pageSize)),
   });
-}
-
-interface ValidatedHistoryPage {
-  readonly counts: MetalHistoryCounts;
-  readonly items: readonly MetalHistoryItem[];
-}
-
-async function readValidatedHistoryPage(
-  scope: CurrentUserDataScope,
-  candidates: readonly MetalHoldingState[],
-  filter: MetalHistoryFilter,
-  limit: number
-): Promise<ValidatedHistoryPage> {
-  let counts: MetalHistoryCounts = { all: 0, disposed: 0, sold: 0 };
-  const collected: MetalHistoryItem[] = [];
-  for (let offset = 0; offset < candidates.length; offset += METAL_HISTORY_PAGE_SIZE) {
-    const batch = candidates.slice(offset, offset + METAL_HISTORY_PAGE_SIZE);
-    const assets = await readHistoryAssets(scope, batch);
-    if (assets.length === 0) {
-      continue;
-    }
-    const dependencies = await readHistoryDependencies(scope, assets, batch);
-    const page = buildMetalHistoryReadModel({
-      filter: "all",
-      holdings: shapeReadHistoryHoldings(assets, batch, dependencies),
-      userId: scope.userId,
-    });
-    counts = addHistoryCounts(counts, page.counts);
-    for (const item of page.items) {
-      if (
-        collected.length < limit &&
-        (filter === "all" || item.status === filter)
-      ) {
-        collected.push(item);
-      }
-    }
-  }
-  return { counts, items: collected };
 }
 
 async function readReportableTerminalStates(
@@ -545,17 +527,6 @@ function countItems(items: readonly MetalHistoryItem[]): MetalHistoryCounts {
   const sold = items.filter((item) => item.status === "sold").length;
   const disposed = items.filter((item) => item.status === "disposed").length;
   return { all: sold + disposed, disposed, sold };
-}
-
-function addHistoryCounts(
-  left: MetalHistoryCounts,
-  right: MetalHistoryCounts
-): MetalHistoryCounts {
-  return {
-    all: left.all + right.all,
-    disposed: left.disposed + right.disposed,
-    sold: left.sold + right.sold,
-  };
 }
 
 function copyValidDate(value: Date | null): Date | null {
