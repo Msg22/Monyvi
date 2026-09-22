@@ -54,6 +54,7 @@ appId: com.monyvi.app
     id: "verification-email-chip"
 - assertVisible: "Resend email"
 - assertVisible: "Back to sign in"
+- takeScreenshot: issue321-verification-en-light
 
 # Returning unverified users must land on the same pending/resend state.
 - tapOn: "Back to sign in"
