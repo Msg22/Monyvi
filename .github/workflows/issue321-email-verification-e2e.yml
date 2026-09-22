@@ -1,0 +1,190 @@
+name: Issue 321 Email Verification E2E Evidence
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  auth-e2e-evidence:
+    name: Issue 321 Auth E2E Evidence
+    if: github.head_ref == 'codex/issue321-email-verification'
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      CI: "true"
+      EXPO_UNSTABLE_HEADLESS: "1"
+      SENTRYCLI_SKIP_DOWNLOAD: "1"
+      EXPO_PUBLIC_SENTRY_DSN: ""
+      E2E_SUPABASE_MODE: local
+      E2E_AUTH_DEEPLINK_BOOTSTRAP: "1"
+      EXPO_PUBLIC_MONYVI_TEST_MODE: e2e
+      EXPO_PUBLIC_AI_SMS_PARSER_MODE: fixture
+      E2E_PREFLIGHT_ATTEMPT_TIMEOUT_MS: 600000
+      E2E_CI_SUITES: auth
+      E2E_DEVICE_OFFLINE_RETRY_COUNT: "1"
+      ANDROID_SERIAL: emulator-5554
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+          cache: "npm"
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: "zulu"
+          java-version: "17"
+
+      - name: Install dependencies
+        run: npm ci
+        timeout-minutes: 30
+
+      - name: Cache Android debug APK
+        id: apk-cache
+        uses: actions/cache@v4
+        with:
+          path: apps/mobile/android/app/build/outputs/apk/debug/app-debug.apk
+          key: >-
+            monyvi-debug-apk-v1-${{ runner.os }}-${{
+            hashFiles('package-lock.json', 'apps/mobile/package.json',
+            'apps/mobile/app.json', 'apps/mobile/plugins/**',
+            'apps/mobile/assets/**', 'patches/**', 'apps/mobile/android/**') }}
+
+      - name: Prebuild Expo Android
+        if: steps.apk-cache.outputs.cache-hit != 'true'
+        working-directory: apps/mobile
+        run: npx expo prebuild --platform android
+
+      - name: Configure Gradle memory
+        if: steps.apk-cache.outputs.cache-hit != 'true'
+        working-directory: apps/mobile/android
+        run: |
+          {
+            echo ""
+            echo "org.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=1024m -XX:+HeapDumpOnOutOfMemoryError -Dfile.encoding=UTF-8"
+            echo "org.gradle.workers.max=2"
+          } >> gradle.properties
+
+      - name: Build Debug APK
+        if: steps.apk-cache.outputs.cache-hit != 'true'
+        working-directory: apps/mobile/android
+        run: ./gradlew assembleDebug -PreactNativeArchitectures=x86_64 --no-daemon
+
+      - name: Start local Supabase
+        run: npm run supabase:start:local
+        timeout-minutes: 10
+
+      - name: Prepare local E2E environment
+        run: |
+          npx supabase status -o env | grep -E '^(ANON_KEY|SERVICE_ROLE_KEY)=' > supabase.env
+          . ./supabase.env
+          MAESTRO_E2E_EMAIL="e2e-${GITHUB_RUN_ID}-auth@monyvi.test"
+          MAESTRO_E2E_PASSWORD="$(node -e "console.log(require('node:crypto').randomBytes(24).toString('base64url'))")"
+          EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY="$ANON_KEY"
+          SUPABASE_SERVICE_ROLE_KEY="$SERVICE_ROLE_KEY"
+          export MAESTRO_E2E_EMAIL MAESTRO_E2E_PASSWORD EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY SUPABASE_SERVICE_ROLE_KEY
+          node - <<'NODE' >> "$GITHUB_ENV"
+          const { getE2eSeedConfig } = require("./apps/mobile/scripts/e2e-seed");
+          const config = getE2eSeedConfig({
+            E2E_SUPABASE_MODE: "local",
+            EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
+            SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
+            MAESTRO_E2E_EMAIL: process.env.MAESTRO_E2E_EMAIL,
+            MAESTRO_E2E_PASSWORD: process.env.MAESTRO_E2E_PASSWORD,
+          });
+          console.log(`EXPO_PUBLIC_SUPABASE_URL=${config.appSupabaseUrl}`);
+          console.log(`EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=${config.anonKey}`);
+          console.log(`SUPABASE_SERVICE_ROLE_KEY=${config.serviceRoleKey}`);
+          console.log(`MAESTRO_E2E_EMAIL=${config.email}`);
+          console.log(`MAESTRO_E2E_PASSWORD=${config.password}`);
+          NODE
+
+      - name: Install Maestro CLI
+        run: |
+          curl -fsSL "https://get.maestro.mobile.dev" | bash
+          echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Free Android E2E disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/.ghcup /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h
+
+      - name: Cache Android emulator
+        id: avd-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.android/avd/*
+            ~/.android/adb*
+          key: avd-${{ runner.os }}-api35-google-apis-x86-64-pixel-7-v1
+
+      - name: Create cached Android emulator
+        if: steps.avd-cache.outputs.cache-hit != 'true'
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_7
+          disk-size: 4096M
+          force-avd-creation: false
+          emulator-options: >-
+            -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
+            -camera-back none
+          disable-animations: false
+          script: echo "Generated clean Android emulator snapshot."
+
+      - name: Start Metro
+        working-directory: apps/mobile
+        run: |
+          npx expo start --clear --dev-client --port 8081 > ../../metro.log 2>&1 &
+          echo $! > ../../metro.pid
+
+      - name: Run email verification E2E on Android emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_7
+          disk-size: 4096M
+          force-avd-creation: false
+          emulator-options: >-
+            -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio
+            -no-boot-anim -camera-back none
+          disable-animations: true
+          script: bash apps/mobile/scripts/run-android-e2e-ci.sh
+
+      - name: Stop Metro
+        if: always()
+        run: |
+          if [ -f metro.pid ]; then
+            kill "$(cat metro.pid)" || true
+          fi
+
+      - name: Upload verification E2E evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: issue321-email-verification-e2e-evidence
+          path: |
+            ~/.maestro/tests
+            android-e2e-output.log
+            metro.log
+          retention-days: 7
