@@ -375,6 +375,24 @@ chore, perf, ci.
 - For GitHub sprint issue branches, follow the branch base selection rules in
   `.agent/workflows/sprint-issue.md`.
 
+## Git Worktrees & Branch Isolation
+
+- **Worktree Location Invariant (MANDATORY)**: All secondary or isolated
+  worktrees for this project MUST be created on the exact same disk and in the
+  exact same parent folder where the original project repository exists (i.e.
+  `E:\Work\My Projects\`).
+- **NEVER create worktrees on other disks**: Agents MUST NEVER create worktrees
+  on `C:` (such as `~/.codex/worktrees/`, `~/.claude/worktrees/`, or `AppData`),
+  temporary directories, or any disk other than the disk containing the original
+  project (`E:`).
+- **Directory Naming**: Sibling worktree directories MUST follow the pattern:
+  `../Monyvi-<issue-or-feature-name>` (for example,
+  `E:\Work\My Projects\Monyvi-issue321-email-verification`).
+- **Dependency Sharing via Junction**: Secondary worktrees MUST NOT run
+  `npm install`. Instead, link the main checkout's `node_modules` immediately
+  after worktree creation:
+  `powershell -ExecutionPolicy Bypass -File scripts/link-worktree-node-modules.ps1 -RootWorkspace "E:\Work\My Projects\Monyvi"`
+
 ## Pull Request Review Comments
 
 - During PR code review, first look for the matching feature folder under

@@ -62,9 +62,12 @@ but never authorizes merge, release, or deployment.
 
 After approval:
 
-1. Create an isolated sibling worktree and `codex/` branch from the recorded
-   base. Preserve unrelated checkouts and link the existing dependency tree as
-   required by `AGENTS.md`; never install a second dependency tree.
+1. Create an isolated sibling worktree in the same parent directory on the same
+   disk (`E:\Work\My Projects\Monyvi-<issue-or-feature-name>`, never on `C:` or
+   `~/.codex/worktrees/`) and `codex/` branch from the recorded base. Preserve
+   unrelated checkouts and link the existing dependency tree via
+   `scripts/link-worktree-node-modules.ps1` as required by `AGENTS.md`; never
+   install a second dependency tree.
 2. Use the model Mohamed named. If no model was named, select Qwen or GLM based
    on current availability and task fit, and state the selection.
 3. Resolve the exact OpenCode model identifier with `opencode models`
