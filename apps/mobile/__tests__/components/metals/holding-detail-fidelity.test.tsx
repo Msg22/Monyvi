@@ -8,6 +8,43 @@ import type { MetalDetailReadModel } from "@/services/metal-detail-read-model-se
 let mockScreenWidth = 390;
 let mockFontScale = 1;
 
+it("shows saved active-holding notes alongside facts when rates fail", () => {
+  render(
+    <MetalHoldingDetailScreen
+      actions={[]}
+      error={new Error("Rate observation unavailable")}
+      isLoading={false}
+      isOffline={true}
+      model={activeDetail({
+        notes: "Wedding gift\nKeep receipt",
+        currentValueDecimal: null,
+      })}
+      onAction={jest.fn()}
+      onRetry={jest.fn()}
+    />
+  );
+  expect(screen.getByText("Wedding gift\nKeep receipt")).toBeTruthy();
+  expect(screen.getByText("Wedding coin")).toBeTruthy();
+  expect(screen.getByText("Physical facts")).toBeTruthy();
+  expect(screen.getByText("History")).toBeTruthy();
+  expect(screen.getByText("Try again")).toBeTruthy();
+});
+
+it("omits the notes section for an active holding without a note", () => {
+  render(
+    <MetalHoldingDetailScreen
+      actions={[]}
+      error={null}
+      isLoading={false}
+      isOffline={false}
+      model={activeDetail()}
+      onAction={jest.fn()}
+      onRetry={jest.fn()}
+    />
+  );
+  expect(screen.queryByText("Notes")).toBeNull();
+});
+
 jest.mock("react-native/Libraries/Utilities/useWindowDimensions", () => ({
   __esModule: true,
   default: (): {
@@ -174,6 +211,7 @@ function activeDetail(
     itemForm: "coin",
     metalType: "GOLD",
     name: "Wedding coin",
+    notes: null,
     purchaseCurrency: "EGP",
     purchaseDate: new Date("2024-03-14T00:00:00.000Z"),
     purchasePriceDecimal: "151278.20",

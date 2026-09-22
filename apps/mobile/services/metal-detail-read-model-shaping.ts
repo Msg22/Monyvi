@@ -1,4 +1,5 @@
 import type {
+  Asset,
   AssetMetal,
   MetalActionEvidence,
   MetalHoldingState,
@@ -32,6 +33,7 @@ export interface MetalDetailAssetRecord {
   readonly acquisitionActionId: string | null;
   readonly id: string;
   readonly name: string;
+  readonly notes: Asset["notes"];
   readonly purchaseCurrency: string | null;
   readonly purchaseDate: Date | null;
   readonly purchasePriceDecimal: string | null;
@@ -88,6 +90,7 @@ export function toDetailAssetInput(
     acquisitionActionId: asset.acquisitionActionId,
     id: asset.id,
     name: asset.name,
+    notes: asset.notes,
     purchaseCurrency: asset.purchaseCurrency,
     purchaseDate: copyValidDate(asset.purchaseDate),
     purchasePriceDecimal: asset.purchasePriceDecimal,

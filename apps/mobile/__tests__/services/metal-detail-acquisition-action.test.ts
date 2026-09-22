@@ -34,6 +34,7 @@ function detailInput(): BuildMetalDetailReadModelInput {
       acquisitionActionId: "action-add",
       id: "holding-1",
       name: "Gold coin",
+      notes: null,
       purchaseCurrency: "USD",
       purchaseDate: new Date("2026-08-01T00:00:00.000Z"),
       purchasePriceDecimal: "1000",
@@ -224,11 +225,25 @@ describe("metal detail acquisition-action binding", () => {
     expect(model?.attribution?.breakdown.available).toBe(true);
   });
 
-  it("carries the persisted acquisition action into the detail input", () => {
+  it.each([null, "", " \n "])(
+    "omits empty persisted notes: %p",
+    (notes): void => {
+      const input = detailInput();
+      expect(
+        buildMetalDetailReadModel({
+          ...input,
+          asset: { ...input.asset, notes },
+        })?.notes
+      ).toBeNull();
+    }
+  );
+
+  it("carries the persisted acquisition action and notes through the detail projection", (): void => {
     const shaped = toDetailAssetInput({
       acquisitionActionId: "action-add",
       id: "holding-1",
       name: "Gold coin",
+      notes: "  Wedding gift\nKeep receipt  ",
       purchaseCurrency: "USD",
       purchaseDate: null,
       purchasePriceDecimal: "1000",
@@ -236,5 +251,9 @@ describe("metal detail acquisition-action binding", () => {
     });
 
     expect(shaped.acquisitionActionId).toBe("action-add");
+    expect(shaped).toHaveProperty("notes", "  Wedding gift\nKeep receipt  ");
+    expect(
+      buildMetalDetailReadModel({ ...detailInput(), asset: shaped })
+    ).toHaveProperty("notes", "  Wedding gift\nKeep receipt  ");
   });
 });

@@ -851,20 +851,26 @@ function buildManualQaExtraRows({
       }),
     ],
     metalHoldingStates: [
-      ...metalAcquisitions.slice(0, 3).map((acquisition) => ({
-        id: acquisition.holdingId,
-        user_id: userId,
-        holding_id: acquisition.holdingId,
-        status: "active",
-        financial_revision: "1",
-        effective_event_id: acquisition.actionId,
-        effective_action_id: acquisition.actionId,
-        is_visible: true,
-        reconciliation_state: "accepted",
-        deleted: false,
-        created_at: fixedNow,
-        updated_at: currentTimestamp,
-      })),
+      ...metalAcquisitions
+        .filter(
+          (acquisition) =>
+            acquisition.holdingId !== soldHoldingId &&
+            acquisition.holdingId !== disposedHoldingId
+        )
+        .map((acquisition) => ({
+          id: acquisition.holdingId,
+          user_id: userId,
+          holding_id: acquisition.holdingId,
+          status: "active",
+          financial_revision: "1",
+          effective_event_id: acquisition.actionId,
+          effective_action_id: acquisition.actionId,
+          is_visible: true,
+          reconciliation_state: "accepted",
+          deleted: false,
+          created_at: fixedNow,
+          updated_at: currentTimestamp,
+        })),
       createTerminalHoldingState({
         actionId: soldActionId,
         currentTimestamp,

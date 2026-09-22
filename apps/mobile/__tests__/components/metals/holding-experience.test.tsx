@@ -107,6 +107,7 @@ function detail(
     itemForm: "coin",
     metalType: "GOLD",
     name: "Wedding coin",
+    notes: null,
     purchaseCurrency: "EGP",
     purchaseDate: new Date("2024-03-14T00:00:00.000Z"),
     purchasePriceDecimal: "151278.20",

@@ -7,7 +7,9 @@ jest.mock("@expo/vector-icons", () => ({
 }));
 
 jest.mock("react-i18next", () => ({
-  useTranslation: () => ({
+  useTranslation: (): {
+    t: (key: string, options?: Readonly<Record<string, unknown>>) => string;
+  } => ({
     t: (key: string, options?: Readonly<Record<string, unknown>>): string => {
       const price = options?.price;
       return typeof price === "string" || typeof price === "number"

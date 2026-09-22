@@ -64,6 +64,7 @@ export interface MetalDetailAssetInput {
   readonly acquisitionActionId: string | null;
   readonly id: string;
   readonly name: string;
+  readonly notes: Asset["notes"];
   readonly purchaseCurrency: string | null;
   readonly purchaseDate: Date | null;
   readonly purchasePriceDecimal: string | null;
@@ -154,6 +155,7 @@ export interface MetalDetailReadModel {
   readonly itemForm: MetalDetailPhysicalForm | null;
   readonly metalType: SupportedMetal;
   readonly name: string;
+  readonly notes: Asset["notes"];
   readonly purchaseCurrency: string | null;
   readonly purchaseDate: Date | null;
   readonly purchasePriceDecimal: string | null;
@@ -469,6 +471,7 @@ export function buildMetalDetailReadModel(
     itemForm,
     metalType: input.metal.metalType,
     name: input.asset.name,
+    notes: input.asset.notes?.trim() ? input.asset.notes : null,
     purchaseCurrency: input.asset.purchaseCurrency,
     purchaseDate: copyValidDate(input.asset.purchaseDate),
     purchasePriceDecimal: input.asset.purchasePriceDecimal,

@@ -72,15 +72,25 @@ export default function DashboardScreen(): React.JSX.Element {
   } = useMarketRates();
   const { transactions, isLoading: transactionsLoading } =
     useRecentTransactions(3);
-  const { totalAccounts, isLoading: netWorthLoading } = useNetWorth();
+  const {
+    totalAccountsDecimal,
+    isLoading: netWorthLoading,
+    error: netWorthError,
+    refresh: refreshNetWorth,
+  } = useNetWorth();
   const {
     wealthBreakdown,
     isSummaryLoading: isPortfolioSummaryLoading,
     error: portfolioError,
-    refresh: refreshMoneySummary,
+    refresh: refreshPortfolio,
   } = useMetalPortfolio({
-    accountsValueDecimal: totalAccounts === null ? null : String(totalAccounts),
+    accountsValueDecimal: totalAccountsDecimal,
   });
+  const moneySummaryError = netWorthError ?? portfolioError;
+  const refreshMoneySummary = useCallback((): void => {
+    refreshNetWorth();
+    refreshPortfolio();
+  }, [refreshNetWorth, refreshPortfolio]);
   const lifecycleAwareNetWorth = wealthBreakdown?.totalNetWorthDecimal ?? null;
   const lifecycleAwareNetWorthUsd =
     wealthBreakdown?.totalNetWorthUsdDecimal ?? null;
@@ -210,7 +220,7 @@ export default function DashboardScreen(): React.JSX.Element {
           <SectionErrorBoundary name={t("section_onboarding_guide")}>
             <OnboardingGuideCard />
           </SectionErrorBoundary>
-          {portfolioError !== null && wealthBreakdown === null ? (
+          {moneySummaryError !== null && wealthBreakdown === null ? (
             <SectionErrorBoundary name={t("section_net_worth")}>
               <MoneySummaryErrorState
                 message={t("money_summary_error")}
@@ -241,7 +251,7 @@ export default function DashboardScreen(): React.JSX.Element {
                   totalNetWorthUsd={lifecycleAwareNetWorthUsd}
                 />
               </SectionErrorBoundary>
-              {portfolioError !== null ? (
+              {moneySummaryError !== null ? (
                 <MoneySummaryErrorState
                   message={t("money_summary_error")}
                   onRetry={refreshMoneySummary}

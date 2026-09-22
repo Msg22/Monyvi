@@ -15,7 +15,9 @@ interface QueryCondition {
 const mockAssetsCollection = { table: "assets" };
 const mockAssetMetalsCollection = { table: "asset_metals" };
 const mockActionEvidenceCollection = { table: "metal_action_evidence" };
-const mockFinancialActionGroupsCollection = { table: "financial_action_groups" };
+const mockFinancialActionGroupsCollection = {
+  table: "financial_action_groups",
+};
 const mockHoldingStatesCollection = { table: "metal_holding_states" };
 const mockLifecycleEventsCollection = { table: "metal_lifecycle_events" };
 const mockRateReferencesCollection = { table: "metal_rate_references" };
@@ -83,6 +85,7 @@ import {
   observeMetalDetailRateReferences,
   readMetalDetailReadModel,
   type BuildMetalDetailReadModelInput,
+  type MetalDetailLifecycleEventInput,
 } from "@/services/metal-detail-read-model-service";
 import {
   buildMetalHistoryReadModel,
@@ -92,18 +95,9 @@ import {
   type MetalHistoryHoldingInput,
 } from "@/services/metal-history-read-model-service";
 
-interface EventInput {
-  readonly actionState?: "accepted" | "rejected" | "unknown";
-  readonly id: string;
-  readonly isEffective?: boolean;
-  readonly isHistoryVisible?: boolean;
-  readonly kind: "add" | "correct" | "sell" | "dispose" | "delete" | "undo";
-  readonly occurredAt: Date;
-  readonly predecessorEventId: string | null;
-  readonly reversesEventId?: string | null;
-}
-
-function event(overrides: Partial<EventInput> = {}): EventInput {
+function event(
+  overrides: Partial<MetalDetailLifecycleEventInput> = {}
+): MetalDetailLifecycleEventInput {
   return {
     actionState: "accepted",
     id: "created",
@@ -147,6 +141,7 @@ function detailInput(
       acquisitionActionId: "action-add",
       id: "holding-1",
       name: "Gold coin",
+      notes: null,
       purchaseCurrency: "USD",
       purchaseDate: new Date("2026-08-01T00:00:00.000Z"),
       purchasePriceDecimal: "1000",
@@ -214,7 +209,7 @@ function detailInput(
 
 function historyHolding(
   id: string,
-  lifecycleEvents: readonly EventInput[],
+  lifecycleEvents: readonly MetalDetailLifecycleEventInput[],
   userId: string = "user-1"
 ): MetalHistoryHoldingInput {
   return {
@@ -222,6 +217,7 @@ function historyHolding(
       acquisitionActionId: null,
       id,
       name: `${id} holding`,
+      notes: null,
       purchaseCurrency: null,
       purchaseDate: null,
       purchasePriceDecimal: null,
@@ -523,6 +519,7 @@ describe("metal detail and History read models", () => {
           acquisitionActionId: null,
           id: "holding-1",
           name: "Legacy",
+          notes: null,
           purchaseCurrency: "USD",
           purchaseDate: null,
           purchasePriceDecimal: null,

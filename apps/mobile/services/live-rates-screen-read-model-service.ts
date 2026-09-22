@@ -1,4 +1,5 @@
 import type { CurrencyType } from "@monyvi/db";
+import { getCurrencyName } from "@/utils/currency-localization";
 import {
   type CurrencyInfo,
   type CurrentMarketInstrument,
@@ -190,7 +191,7 @@ function buildCurrencies(
 
     return {
       code: currency.code,
-      name: currency.name,
+      name: getCurrencyName(currency.code, locale),
       flag: currency.flag,
       rate: rate === null ? "—" : `${formatRate(rate)} ${currencySymbol}`,
       changePercent: calculateAvailableTrend(rate, previousRate),

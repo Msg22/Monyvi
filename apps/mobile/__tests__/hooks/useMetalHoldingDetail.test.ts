@@ -468,25 +468,48 @@ describe("useMetalHoldingDetail", () => {
     expect(mockRefreshSelectedSnapshot).toHaveBeenCalledTimes(1);
   });
 
-  it("surfaces rate observer failure without starting another synthetic-rate read", async () => {
+  it("preserves locally recorded facts when rates fail before a cached snapshot exists", async () => {
     const rateError = new Error("Local rates unavailable");
-    mockReadMetalDetailReadModel.mockResolvedValue({ holdingId: "holding-1" });
+    const model = { holdingId: "holding-1", currentValueDecimal: null };
+    mockReadMetalDetailReadModel.mockResolvedValue(model);
     mockMarketRatesState = {
       ...mockMarketRatesState,
       selectedSnapshot: null,
+      currentError: rateError,
     };
     const { result } = renderHook(() => useMetalHoldingDetail("holding-1"));
-    const callsBeforeError = mockReadMetalDetailReadModel.mock.calls.length;
-
-    act(() => {
-      emitMarketRates({ currentError: rateError });
-    });
-
     await waitFor(() => expect(result.current.error).toBe(rateError));
-    expect(mockReadMetalDetailReadModel).toHaveBeenCalledTimes(
-      callsBeforeError
+    await waitFor(() => expect(result.current.model).toBe(model));
+    expect(mockReadMetalDetailReadModel).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        snapshotId: null,
+        currentRates: {
+          gold: { state: "missing", ageMs: null, providerObservedAt: null },
+          silver: { state: "missing", ageMs: null, providerObservedAt: null },
+          currencies: new Map(),
+        },
+      })
     );
-    expect(result.current.model).toBeNull();
+    expect(result.current.isLoading).toBe(false);
+  });
+
+  it("invalidates the detail when the persisted holding notes change", async () => {
+    const query = mockCreateLocalQuery();
+    const observeWithColumns = jest.spyOn(query, "observeWithColumns");
+    mockObserveMetalDetailHolding.mockReturnValueOnce(query);
+    mockReadMetalDetailReadModel.mockResolvedValue({ notes: "First note" });
+    const { result } = renderHook(() => useMetalHoldingDetail("holding-1"));
+    await waitFor(() =>
+      expect(result.current.model).toHaveProperty("notes", "First note")
+    );
+    expect(observeWithColumns).toHaveBeenCalledWith(
+      expect.arrayContaining(["notes"])
+    );
+    mockReadMetalDetailReadModel.mockResolvedValue({ notes: "Updated note" });
+    act(() => mockLocalObservers[0]?.next());
+    await waitFor(() =>
+      expect(result.current.model).toHaveProperty("notes", "Updated note")
+    );
   });
 
   it("re-subscribes to rate trust after retry and recovers from an observer failure", async () => {

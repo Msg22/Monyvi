@@ -22,6 +22,7 @@ import { AppState } from "react-native";
 const RATE_STATUS_REFRESH_INTERVAL_MS = 60_000;
 const DETAIL_ASSET_COLUMNS = [
   "name",
+  "notes",
   "purchase_date",
   "purchase_price_decimal",
   "purchase_currency",
@@ -90,8 +91,6 @@ export function useMetalHoldingDetail(
     () => selectedSnapshot?.trust ?? createEmptyTrustReadModel(),
     [selectedSnapshot]
   );
-  const blockingMarketRatesError =
-    selectedSnapshot === null ? marketRatesError : null;
   const { preferredCurrency, isLoading: isCurrencyLoading } =
     usePreferredCurrency();
   const detailIdentity = createDetailIdentity(userId, holdingId);
@@ -221,11 +220,7 @@ export function useMetalHoldingDetail(
       };
     }
 
-    if (observationError !== null || blockingMarketRatesError !== null) {
-      if (blockingMarketRatesError !== null) {
-        modelIdentityRef.current = null;
-        setModel(null);
-      }
+    if (observationError !== null) {
       setIsLoading(false);
       return () => {
         isCurrent = false;
@@ -263,7 +258,6 @@ export function useMetalHoldingDetail(
     };
   }, [
     currentRates,
-    blockingMarketRatesError,
     detailIdentity,
     holdingId,
     isCurrencyLoading,
@@ -278,7 +272,7 @@ export function useMetalHoldingDetail(
   ]);
 
   return {
-    error: observationError ?? blockingMarketRatesError ?? readError,
+    error: observationError ?? readError ?? marketRatesError,
     isLoading,
     isOffline: !isConnected,
     model: modelIdentityRef.current === detailIdentity ? model : null,

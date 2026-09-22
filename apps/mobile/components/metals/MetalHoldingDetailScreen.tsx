@@ -200,6 +200,19 @@ function DetailHeader({
         </>
       ) : null}
       {model.isActiveOwnership ? <PhysicalFacts model={model} /> : null}
+      {model.isActiveOwnership && model.notes !== null ? (
+        <View className="mt-6" testID="metal-holding-notes">
+          <Text
+            accessibilityRole="header"
+            className="text-xl font-semibold text-text-primary dark:text-text-primary-dark"
+          >
+            {t("detail.notes")}
+          </Text>
+          <Text className="mt-3 text-base text-text-primary dark:text-text-primary-dark">
+            {model.notes}
+          </Text>
+        </View>
+      ) : null}
       <View className="mt-6 h-px bg-slate-200 dark:bg-slate-800" />
       <View className="mt-4 flex-row items-center justify-between">
         <Text

@@ -138,6 +138,7 @@ export default function AddTransaction(): React.ReactNode {
 
   // Derived Values
   const selectedAccount = accounts.find((a) => a.id === selectedAccountId);
+  const parsedAmount = parsePositiveFiniteAmountInput(amount);
   const toAccount = accounts.find((a) => a.id === toAccountId);
 
   const relevantCategories =
@@ -602,17 +603,12 @@ export default function AddTransaction(): React.ReactNode {
             {/* Insufficient balance warning */}
             {type === "EXPENSE" &&
               selectedAccount &&
-              amount &&
-              parsePositiveFiniteAmountInput(amount) !== null &&
-              parsePositiveFiniteAmountInput(amount)! >
-                selectedAccount.balance && (
+              parsedAmount !== null &&
+              parsedAmount > selectedAccount.balance && (
                 <Text className="text-amber-500 text-xs font-medium text-center mb-1">
                   ⚠️ {t("warning_negative_balance")} -
                   {formatAmountInput(
-                    (
-                      parsePositiveFiniteAmountInput(amount)! -
-                      selectedAccount.balance
-                    ).toFixed(2)
+                    (parsedAmount - selectedAccount.balance).toFixed(2)
                   )}{" "}
                   {selectedAccount.currency}
                 </Text>

@@ -2,7 +2,6 @@
  * Local-first net worth from the same effective ownership projection as Home.
  */
 import type { Account, DailySnapshotNetWorth } from "@monyvi/db";
-import Decimal from "decimal.js";
 import { useEffect, useMemo, useState } from "react";
 import {
   type NetWorthReadModel,
@@ -21,6 +20,9 @@ interface UseNetWorthResult {
   readonly totalNetWorth: number | null;
   readonly totalNetWorthUsd: number | null;
   readonly totalAccounts: number | null;
+  readonly totalAccountsDecimal:
+    | NetWorthReadModel["totalAccountsDecimal"]
+    | null;
   readonly totalAssets: number | null;
   readonly isLoading: boolean;
   readonly error: Error | null;
@@ -100,10 +102,7 @@ export function useNetWorth(): UseNetWorthResult {
     error: portfolioError,
     refresh: refreshPortfolio,
   } = useMetalPortfolio({
-    accountsValueDecimal:
-      accountModel === null
-        ? null
-        : new Decimal(accountModel.totalAccounts).toFixed(),
+    accountsValueDecimal: accountModel?.totalAccountsDecimal ?? null,
   });
   const canShowTotals = accountModel !== null && error === null;
   const refresh = (): void => {
@@ -118,6 +117,7 @@ export function useNetWorth(): UseNetWorthResult {
       ? displayNumber(wealthBreakdown?.totalNetWorthUsdDecimal)
       : null,
     totalAccounts: accountModel?.totalAccounts ?? null,
+    totalAccountsDecimal: accountModel?.totalAccountsDecimal ?? null,
     totalAssets: canShowTotals
       ? displayNumber(wealthBreakdown?.metals.amountDecimal)
       : null,

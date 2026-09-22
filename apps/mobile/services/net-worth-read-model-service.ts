@@ -64,6 +64,7 @@ export interface NetWorthReadModel {
   readonly totalNetWorth: number;
   readonly totalNetWorthUsd: number;
   readonly totalAccounts: number;
+  readonly totalAccountsDecimal: string;
   readonly totalAssets: number;
 }
 
@@ -242,6 +243,7 @@ export function buildNetWorthReadModel(
     totalNetWorth: Number(preferredNetWorth.value),
     totalNetWorthUsd: Number(backToUsd.value),
     totalAccounts: Number(preferredAccounts.value),
+    totalAccountsDecimal: preferredAccounts.value,
     totalAssets: Number(preferredAssets.value),
   };
 }

@@ -9,7 +9,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import React from "react";
-import { Dimensions, Text, View } from "react-native";
+import { Text, useWindowDimensions, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import Svg, { Defs, RadialGradient, Rect, Stop } from "react-native-svg";
 
@@ -30,8 +30,6 @@ interface Props {
   readonly totalNetWorthUsd: number | string | null;
 }
 
-const { width } = Dimensions.get("window");
-
 function TotalNetWorthCardComponent({
   breakdownDisclosure,
   totalNetWorth,
@@ -41,6 +39,7 @@ function TotalNetWorthCardComponent({
   isLoading,
 }: Props): React.JSX.Element {
   const { t, i18n } = useTranslation("common");
+  const { width } = useWindowDimensions();
 
   if (isLoading) {
     return <TotalNetWorthSkeleton />;
@@ -72,6 +71,7 @@ function TotalNetWorthCardComponent({
       testID="total-net-worth-card"
     >
       <View
+        testID="total-net-worth-glow"
         className="absolute bottom-[-35px] z-[-1] items-center"
         style={{ width, height: 60 }}
       >

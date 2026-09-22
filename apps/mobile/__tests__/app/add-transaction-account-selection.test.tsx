@@ -358,6 +358,21 @@ function account(id: string, name: string, isDefault: boolean): MockAccount {
 }
 
 describe("AddTransaction account selection", () => {
+  it("shows the expense balance warning only for a parsed amount above the balance", () => {
+    mockAccounts = [account("cash-1", "Cash", true)];
+    render(<AddTransaction />);
+    fireEvent.press(screen.getByTestId("key-2"));
+    expect(screen.queryByText(/warning_negative_balance/)).toBeNull();
+    fireEvent.press(screen.getByTestId("key-2"));
+    fireEvent.press(screen.getByTestId("key-2"));
+    fireEvent.press(screen.getByTestId("key-2"));
+    expect(screen.getByText(/warning_negative_balance/)).toHaveTextContent(
+      /-1,222\.00 EGP/
+    );
+    fireEvent.press(screen.getByTestId("key-plus"));
+    expect(screen.queryByText(/warning_negative_balance/)).toBeNull();
+  });
+
   beforeEach(() => {
     mockSelectedSnapshot = null;
     mockAccounts = [

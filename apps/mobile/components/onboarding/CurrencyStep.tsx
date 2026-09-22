@@ -16,6 +16,10 @@ import { ANDROID_SAFE_LIST_PROPS } from "@/constants/virtualized-list-policy";
 import { useTheme } from "@/context/ThemeContext";
 import { useAuth } from "@/context/AuthContext";
 import { useFirstRunTooltip } from "@/context/FirstRunTooltipContext";
+import {
+  currencyMatchesQuery,
+  getCurrencyName,
+} from "@/utils/currency-localization";
 import { useToast } from "@/components/ui/Toast";
 import { confirmCurrencyAndOnboard } from "@/services/profile-service";
 import { detectCurrencyFromTimezone } from "@/utils/currency-detection";
@@ -78,7 +82,7 @@ function CurrencyItemRow({
       <View className="flex-1">
         <View className="flex-row items-center gap-2">
           <Text className="text-base font-semibold text-text-primary dark:text-text-primary-dark">
-            {item.name}
+            {getCurrencyName(item.code)}
           </Text>
           {isSuggested && (
             <View className="px-2 py-0.5 rounded-full bg-nileGreen-500/20">
@@ -112,7 +116,7 @@ export function CurrencyStep(): React.ReactElement {
   const { signOut } = useAuth();
   const { markFirstRunPending } = useFirstRunTooltip();
   const { showToast } = useToast();
-  const { t } = useTranslation("onboarding");
+  const { t, i18n } = useTranslation("onboarding");
   const { t: tCommon } = useTranslation("common");
   const insets = useSafeAreaInsets();
 
@@ -140,13 +144,10 @@ export function CurrencyStep(): React.ReactElement {
 
   const filteredCurrencies = useMemo((): readonly CurrencyInfo[] => {
     if (!searchQuery.trim()) return sortedCurrencies;
-    const query = searchQuery.toLowerCase().trim();
-    return sortedCurrencies.filter(
-      (c) =>
-        c.name.toLowerCase().includes(query) ||
-        c.code.toLowerCase().includes(query)
+    return sortedCurrencies.filter((c) =>
+      currencyMatchesQuery(c.code, searchQuery)
     );
-  }, [searchQuery, sortedCurrencies]);
+  }, [searchQuery, sortedCurrencies, i18n.language]);
 
   const handleConfirm = useCallback(async (): Promise<void> => {
     if (isConfirming) return;

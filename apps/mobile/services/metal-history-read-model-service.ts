@@ -27,6 +27,11 @@ import {
 } from "@/services/metal-detail-read-model-service";
 import { hasBoundEffectiveActionEvidence } from "@/services/metal-portfolio-read-model-service";
 import {
+  toDetailAssetInput,
+  toDetailMetalInput,
+  toDetailHoldingStateInput,
+} from "@/services/metal-detail-read-model-shaping";
+import {
   shapeMetalTerminalFacts,
   type MetalTerminalFacts,
 } from "@/services/metal-terminal-read-model-service";
@@ -469,46 +474,6 @@ function toHistoryItem(
   });
 }
 
-function toDetailAssetInput(asset: Asset): MetalDetailAssetInput {
-  return {
-    acquisitionActionId: asset.acquisitionActionId,
-    id: asset.id,
-    name: asset.name,
-    purchaseCurrency: asset.purchaseCurrency,
-    purchaseDate: copyValidDate(asset.purchaseDate),
-    purchasePriceDecimal: asset.purchasePriceDecimal,
-    userId: asset.userId,
-  };
-}
-
-function toDetailMetalInput(
-  metal: AssetMetal,
-  metalType: SupportedMetal
-): MetalDetailMetalInput {
-  return {
-    itemForm: metal.itemForm ?? null,
-    metalType,
-    purityCatalogVersion: metal.purityCatalogVersion,
-    purityCode: metal.purityCode,
-    purityFactorDecimal: metal.purityFactorDecimal,
-    weightGramsDecimal: metal.weightGramsDecimal,
-  };
-}
-
-function toDetailHoldingStateInput(
-  state: MetalHoldingState
-): MetalDetailHoldingStateInput {
-  return {
-    effectiveActionId: state.effectiveActionId,
-    effectiveEventId: state.effectiveEventId,
-    holdingId: state.holdingId,
-    isVisible: state.isVisible,
-    reconciliationState: state.reconciliationState,
-    status: state.status,
-    userId: state.userId,
-  };
-}
-
 function isTerminalStatus(value: string): value is "sold" | "disposed" {
   return value === "sold" || value === "disposed";
 }
@@ -527,12 +492,6 @@ function countItems(items: readonly MetalHistoryItem[]): MetalHistoryCounts {
   const sold = items.filter((item) => item.status === "sold").length;
   const disposed = items.filter((item) => item.status === "disposed").length;
   return { all: sold + disposed, disposed, sold };
-}
-
-function copyValidDate(value: Date | null): Date | null {
-  return value instanceof Date && Number.isFinite(value.getTime())
-    ? new Date(value.getTime())
-    : null;
 }
 
 function assertRequestedUser(

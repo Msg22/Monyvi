@@ -7,6 +7,7 @@ import {
   type LiveRatesTrustDisplay,
 } from "@/services/live-rates-screen-read-model-service";
 import { logger } from "@/utils/logger";
+import { currencyMatchesQuery } from "@/utils/currency-localization";
 import { formatTimeAgo } from "@/utils/dateHelpers";
 import type { CurrencyType } from "@monyvi/db";
 import { CURRENCY_INFO_MAP } from "@monyvi/logic";
@@ -147,11 +148,8 @@ export function useLiveRatesScreen(): UseLiveRatesScreenResult {
   const filteredCurrencies = useMemo((): readonly CurrencyDisplayItem[] => {
     if (!searchQuery.trim()) return sortedCurrencies;
 
-    const query = searchQuery.trim().toLowerCase();
     return sortedCurrencies.filter(
-      (currency) =>
-        currency.code.toLowerCase().includes(query) ||
-        currency.name.toLowerCase().includes(query)
+      (currency) => currencyMatchesQuery(currency.code, searchQuery)
     );
   }, [searchQuery, sortedCurrencies]);
 

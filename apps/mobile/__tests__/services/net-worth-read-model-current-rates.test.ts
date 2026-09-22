@@ -1,4 +1,5 @@
 import { Decimal } from "decimal.js";
+import { convertCurrentAmountExact } from "@monyvi/logic";
 
 import {
   buildNetWorthReadModel,
@@ -74,6 +75,26 @@ function goldHolding(weightGramsDecimal: string): NetWorthAssetMetalInput {
 }
 
 describe("net-worth current rates consume the exact selected snapshot", () => {
+  it("retains the full canonical account total for downstream wealth calculations", () => {
+    const snapshot = snapshotFor(completeFixtureA());
+    const expected = convertCurrentAmountExact({
+      amountDecimal: "100",
+      fromCurrency: "USD",
+      toCurrency: "EGP",
+      rates: snapshot.ratesByInstrument,
+    });
+    if (!expected.available) throw new Error("Expected convertible fixture");
+    expect(String(Number(expected.value))).not.toBe(expected.value);
+    expect(
+      buildNetWorthReadModel({
+        accounts: [account(100, "USD")],
+        assetMetals: [],
+        currentSnapshot: snapshot,
+        preferredCurrency: "EGP",
+      })
+    ).toHaveProperty("totalAccountsDecimal", expected.value);
+  });
+
   it.each(["PLATINUM", "PALLADIUM"] as const)(
     "ignores unsupported legacy %s without hiding supported balances",
     (metalType) => {

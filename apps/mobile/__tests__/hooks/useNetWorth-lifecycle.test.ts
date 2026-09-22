@@ -63,6 +63,7 @@ jest.mock("@/services/net-worth-read-model-service", () => ({
   observeNetWorthAssetMetals: (): null => null,
   buildNetWorthReadModel: (): unknown => ({
     totalAccounts: 1500,
+    totalAccountsDecimal: "1500.000000000000000123",
     totalAssets: 1000,
     totalNetWorth: 2500,
     totalNetWorthUsd: 50,
@@ -78,6 +79,13 @@ it("uses the effective portfolio projection instead of re-valuing terminal asset
   expect(result.current.totalNetWorth).toBe(1500);
   expect(result.current.totalAssets).toBe(0);
   expect(result.current.totalNetWorthUsd).toBe(30);
+  expect(result.current).toHaveProperty(
+    "totalAccountsDecimal",
+    "1500.000000000000000123"
+  );
+  expect(mockPortfolio).toHaveBeenLastCalledWith({
+    accountsValueDecimal: "1500.000000000000000123",
+  });
   mockWealth = {
     ...mockWealth,
     totalNetWorthDecimal: "2500",

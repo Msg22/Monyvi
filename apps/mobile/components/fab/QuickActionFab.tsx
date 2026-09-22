@@ -21,7 +21,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { palette } from "@/constants/colors";
+import { palette, textShadowColors } from "@/constants/colors";
 import { QUICK_ACTION_FAB_SIZE, TAB_BAR_HEIGHT } from "@/constants/ui";
 import { useIsQuickActionFabSuppressed } from "@/hooks/useQuickActionFabVisibility";
 
@@ -129,6 +129,7 @@ export function QuickActionFab({
       ) : null}
 
       <View
+        testID="fab-position"
         className="absolute z-[100] items-end"
         style={{ bottom: fabBottom, right: FAB_RIGHT_MARGIN }}
       >
@@ -152,7 +153,7 @@ export function QuickActionFab({
                   className="me-2.5 text-sm font-semibold text-white"
                   // eslint-disable-next-line react-native/no-inline-styles
                   style={{
-                    textShadowColor: "rgba(0,0,0,0.3)",
+                    textShadowColor: textShadowColors.floatingActionLabel,
                     textShadowOffset: { width: 0, height: 1 },
                     textShadowRadius: 2,
                   }}

@@ -21,6 +21,7 @@ function soldHolding(index: number): MetalHistoryHoldingInput {
       acquisitionActionId: null,
       id,
       name: `${id} holding`,
+      notes: null,
       purchaseCurrency: null,
       purchaseDate: null,
       purchasePriceDecimal: null,

@@ -4,6 +4,35 @@ import React from "react";
 import { TotalNetWorthCard } from "@/components/dashboard/TotalNetWorthCard";
 
 let mockLanguage: "en" | "ar" = "en";
+let mockWidth = 390;
+jest.mock("react-native/Libraries/Utilities/useWindowDimensions", () => ({
+  __esModule: true,
+  default: (): unknown => ({
+    width: mockWidth,
+    height: 844,
+    scale: 1,
+    fontScale: 1,
+  }),
+}));
+
+it("resizes the card glow after a window size change", () => {
+  const props = {
+    isLoading: false,
+    monthlyPercentageChange: null,
+    preferredCurrency: "EGP" as const,
+    totalNetWorth: "100",
+    totalNetWorthUsd: "2",
+  };
+  const { rerender } = render(<TotalNetWorthCard {...props} />);
+  expect(screen.getByTestId("total-net-worth-glow")).toHaveStyle({
+    width: 390,
+  });
+  mockWidth = 844;
+  rerender(<TotalNetWorthCard {...props} totalNetWorth="101" />);
+  expect(screen.getByTestId("total-net-worth-glow")).toHaveStyle({
+    width: 844,
+  });
+});
 
 jest.mock("react-i18next", () => ({
   useTranslation: () => ({

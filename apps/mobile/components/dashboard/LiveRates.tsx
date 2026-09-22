@@ -3,6 +3,7 @@ import {
   CURRENCY_INFO_MAP,
   getCurrencyRate,
   getMetalPrice,
+  isSupportedMetalsIsoCurrencyCode,
 } from "@monyvi/logic";
 import { FontAwesome5, Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { router } from "expo-router";
@@ -174,7 +175,10 @@ function buildRatesDisplay(
   preferredCurrency: CurrencyType,
   t: (key: string) => string
 ): Rate[] {
-  if (!selectedSnapshot) {
+  if (
+    !selectedSnapshot ||
+    !isSupportedMetalsIsoCurrencyCode(preferredCurrency)
+  ) {
     return [];
   }
 

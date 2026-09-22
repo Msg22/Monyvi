@@ -15,10 +15,7 @@ import {
   type BuildMetalDetailReadModelInput,
 } from "@/services/metal-detail-read-model-service";
 import { toDetailLifecycleEventInput } from "@/services/metal-detail-read-model-shaping";
-import type {
-  MetalActionEvidence,
-  MetalLifecycleEvent,
-} from "@monyvi/db";
+import type { MetalActionEvidence, MetalLifecycleEvent } from "@monyvi/db";
 
 interface EventInput {
   readonly actionState?: "accepted" | "rejected" | "unknown";
@@ -53,6 +50,7 @@ function detailInput(
       acquisitionActionId: "action-add",
       id: "holding-1",
       name: "Gold coin",
+      notes: null,
       purchaseCurrency: "USD",
       purchaseDate: new Date("2026-08-01T00:00:00.000Z"),
       purchasePriceDecimal: "1000",
