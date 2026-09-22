@@ -26,3 +26,7 @@ export const INTRO_SEEN_KEY = "@monyvi/intro-seen";
 
 /** Explicit language preference selected on any pre-auth surface (pitch, auth, or Currency step). Device-scoped — persists across sign-up/sign-out. */
 export const INTRO_LOCALE_OVERRIDE_KEY = "@monyvi/intro-locale-override";
+
+/** Device-scoped transport cursor for the last fully applied market-rate publication. */
+export const MARKET_RATE_PUBLICATION_CHECKPOINT_KEY =
+  "@monyvi/market-rates/publication-checkpoint/v1";

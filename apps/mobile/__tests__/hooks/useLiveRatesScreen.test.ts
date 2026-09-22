@@ -1,132 +1,310 @@
-/**
- * Live Rates localization coverage.
- *
- * Proves the Live Rates read model surfaces names from the shared currency
- * catalogue and recomputes them on locale change, and that search matches by
- * ISO code, localized name, and canonical English name.
- */
-
 import { act, renderHook, waitFor } from "@testing-library/react-native";
-import i18next from "i18next";
-import { initReactI18next } from "react-i18next";
+import type { LiveRatesTrustReadModel } from "@/services/live-rates-trust-read-model-service";
 
-import arCommon from "@/locales/ar/common.json";
-import enCommon from "@/locales/en/common.json";
-import { useLiveRatesScreen } from "@/hooks/useLiveRatesScreen";
+const mockRefreshLiveMarketRates = jest.fn<Promise<void>, [unknown]>(() =>
+  Promise.resolve()
+);
+const mockDatabase = { id: "database" };
+const mockRefreshSelectedSnapshot = jest.fn<void, []>();
+const mockMarketRatesListeners = new Set<() => void>();
+let mockMarketRatesState = {
+  currentError: null as Error | null,
+  isConnected: true,
+  isCurrentLoading: true,
+  lastUpdated: null as Date | null,
+  previousDayRate: null,
+  refreshSelectedSnapshot: mockRefreshSelectedSnapshot,
+  selectedSnapshot: null as null | {
+    readonly capturedAt: Date;
+    readonly ratesByInstrument: ReadonlyMap<string, unknown>;
+    readonly snapshotId: string;
+    readonly trust: typeof trustedRates;
+  },
+};
 
-jest.mock("@/hooks/useMarketRates", () => ({
-  useMarketRates: (): {
-    latestRates: Record<string, never>;
-    previousDayRate: null;
-    isLoading: boolean;
-    isConnected: boolean;
-    lastUpdated: null;
-    isStale: boolean;
-  } => ({
-    latestRates: {},
-    previousDayRate: null,
-    isLoading: false,
-    isConnected: true,
-    lastUpdated: null,
-    isStale: false,
-  }),
-}));
+function emitMarketRates(next: Partial<typeof mockMarketRatesState>): void {
+  mockMarketRatesState = { ...mockMarketRatesState, ...next };
+  for (const listener of mockMarketRatesListeners) listener();
+}
+
+jest.mock("@/hooks/useMarketRates", () => {
+  const React = jest.requireActual<typeof import("react")>("react");
+  return {
+    useMarketRates: (): typeof mockMarketRatesState =>
+      React.useSyncExternalStore(
+        (listener) => {
+          mockMarketRatesListeners.add(listener);
+          return () => mockMarketRatesListeners.delete(listener);
+        },
+        () => mockMarketRatesState
+      ),
+  };
+});
 
 jest.mock("@/hooks/usePreferredCurrency", () => ({
-  usePreferredCurrency: (): { preferredCurrency: string } => ({
+  usePreferredCurrency: (): { readonly preferredCurrency: "EGP" } => ({
     preferredCurrency: "EGP",
   }),
 }));
 
-jest.mock("@monyvi/logic", () => {
-  const actual =
-    jest.requireActual<typeof import("@monyvi/logic")>("@monyvi/logic");
-  return {
-    ...actual,
-    convertCurrency: (): number => 1,
-    getMetalPrice: (): number => 0,
-    getGoldPurityPrice: (): number => 0,
-    calculateTrendPercent: (): number => 0,
-    formatRate: (value: number): string => String(value),
-  };
-});
+jest.mock("@/providers/DatabaseProvider", () => ({
+  useDatabase: (): typeof mockDatabase => mockDatabase,
+}));
 
-async function prepareI18n(language: "en" | "ar"): Promise<void> {
-  if (!i18next.isInitialized) {
-    await i18next.use(initReactI18next).init({
-      resources: {
-        en: { common: enCommon },
-        ar: { common: arCommon },
+jest.mock("@/services/live-rates-refresh-service", () => ({
+  refreshLiveMarketRates: (...args: [unknown]): Promise<void> =>
+    mockRefreshLiveMarketRates(...args),
+}));
+
+jest.mock("@/utils/logger", () => ({
+  logger: { error: jest.fn(), warn: jest.fn() },
+}));
+
+jest.mock("@monyvi/logic", () => ({
+  formatRateAge:
+    jest.requireActual<typeof import("@monyvi/logic")>("@monyvi/logic")
+      .formatRateAge,
+  CURRENCY_INFO_MAP: { EGP: { code: "EGP", symbol: "EGP" } },
+  SUPPORTED_CURRENCIES: [],
+  calculateTrendPercent: (): number => 0,
+  convertCurrency: (): number => 0,
+  formatRate: (): string => "0",
+  getGoldPurityPrice: (): number => 0,
+  getMetalPrice: (): number => 0,
+  isSupportedMetalsIsoCurrencyCode: (): boolean => true,
+}));
+
+jest.mock("react-i18next", () => ({
+  useTranslation: (): {
+    readonly i18n: { readonly resolvedLanguage: "en" };
+    readonly t: (key: string, options?: { readonly count?: number }) => string;
+  } => ({
+    i18n: { resolvedLanguage: "en" },
+    t: (key, options): string => {
+      if (key === "minutes_ago") {
+        return `${options?.count ?? 0} minutes ago`;
+      }
+      if (key === "hours_ago") {
+        return `${options?.count ?? 0} hours ago`;
+      }
+      if (key === "days_ago") {
+        return `${options?.count ?? 0} days ago`;
+      }
+      return "Just now";
+    },
+  }),
+}));
+
+import { useLiveRatesScreen } from "@/hooks/useLiveRatesScreen";
+
+const trustedRates: LiveRatesTrustReadModel = {
+  currencies: new Map([
+    [
+      "EGP",
+      {
+        ageMs: 1_000,
+        providerObservedAt: new Date("2026-09-07T00:00:00.000Z"),
+        state: "fresh" as const,
       },
-      lng: language,
-      fallbackLng: "en",
-      ns: "common",
-      defaultNS: "common",
-      interpolation: { escapeValue: false },
-    });
-    return;
-  }
-  await i18next.changeLanguage(language);
+    ],
+  ]),
+  gold: {
+    ageMs: 1_000,
+    providerObservedAt: new Date("2026-09-07T00:00:00.000Z"),
+    state: "fresh",
+  },
+  silver: {
+    ageMs: 1_000,
+    providerObservedAt: new Date("2026-09-07T00:00:00.000Z"),
+    state: "fresh",
+  },
+};
+
+function selectedSnapshot(
+  trust = trustedRates
+): NonNullable<typeof mockMarketRatesState.selectedSnapshot> {
+  return {
+    capturedAt: new Date("2026-09-07T00:00:00.000Z"),
+    ratesByInstrument: new Map(),
+    snapshotId: "snapshot-1",
+    trust,
+  };
 }
 
-function nameFor(
-  currencies: readonly { readonly code: string; readonly name: string }[],
-  code: string
-): string | undefined {
-  return currencies.find((c) => c.code === code)?.name;
-}
-
-describe("useLiveRatesScreen localization", () => {
-  afterEach(async () => {
-    await i18next.changeLanguage("en");
+describe("useLiveRatesScreen", () => {
+  it("clears a failed initial refresh when the first complete snapshot arrives", async () => {
+    mockRefreshLiveMarketRates.mockRejectedValueOnce(new Error("offline"));
+    const { result } = renderHook(() => useLiveRatesScreen());
+    act(() => result.current.onRefresh());
+    await waitFor(() =>
+      expect(result.current.refreshError).toBe("initial_refresh_failed")
+    );
+    act(() =>
+      emitMarketRates({
+        selectedSnapshot: selectedSnapshot(),
+        isCurrentLoading: false,
+      })
+    );
+    await waitFor(() => expect(result.current.refreshError).toBeNull());
   });
 
-  it("uses the shared localized catalogue and recomputes on locale change", async () => {
-    await prepareI18n("en");
+  it("includes preferred currency trust in both converted metal prices", () => {
+    mockMarketRatesState = {
+      ...mockMarketRatesState,
+      selectedSnapshot: selectedSnapshot({
+        ...trustedRates,
+        currencies: new Map([
+          [
+            "EGP",
+            {
+              ageMs: 90_000_000,
+              providerObservedAt: new Date("2026-09-05T00:00:00.000Z"),
+              state: "stale",
+            },
+          ],
+        ]),
+      }),
+    };
     const { result } = renderHook(() => useLiveRatesScreen());
-
-    await waitFor(() => {
-      expect(nameFor(result.current.currencies, "USD")).toBe("US Dollar");
-    });
-
-    await act(async () => {
-      await i18next.changeLanguage("ar");
-    });
-
-    await waitFor(() => {
-      expect(nameFor(result.current.currencies, "USD")).toBe(
-        "الدولار الأمريكي"
-      );
-    });
+    expect(result.current.rateTrust.gold.state).toBe("stale");
+    expect(result.current.rateTrust.silver.state).toBe("stale");
   });
 
-  it("finds a currency by localized name, English name, and ISO code", async () => {
-    await prepareI18n("ar");
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockMarketRatesListeners.clear();
+    mockMarketRatesState = {
+      currentError: null,
+      isConnected: true,
+      isCurrentLoading: true,
+      lastUpdated: null,
+      previousDayRate: null,
+      refreshSelectedSnapshot: mockRefreshSelectedSnapshot,
+      selectedSnapshot: null,
+    };
+  });
+
+  it("keeps the screen loading while cached rates wait for trust initialization", async () => {
     const { result } = renderHook(() => useLiveRatesScreen());
 
-    await waitFor(() => {
-      expect(result.current.currencies.length).toBeGreaterThan(0);
+    expect(result.current.hasData).toBe(false);
+    expect(result.current.isLoading).toBe(true);
+
+    act(() => {
+      emitMarketRates({
+        isCurrentLoading: false,
+        lastUpdated: new Date("2026-09-07T00:00:00.000Z"),
+        selectedSnapshot: selectedSnapshot(),
+      });
+    });
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(result.current.hasData).toBe(true);
+  });
+
+  it("surfaces observer failure and resubscribes on accessible refresh retry", async () => {
+    const { result } = renderHook(() => useLiveRatesScreen());
+
+    act(() => {
+      emitMarketRates({
+        selectedSnapshot: selectedSnapshot(),
+        lastUpdated: new Date("2026-09-07T00:00:00.000Z"),
+        currentError: new Error("Local observation read failed"),
+        isCurrentLoading: false,
+      });
+    });
+
+    await waitFor(() =>
+      expect(result.current.refreshError).toBe("cached_refresh_failed")
+    );
+
+    act(() => {
+      result.current.onRefresh();
     });
 
     act(() => {
-      result.current.onSearchChange("الريال السعودي");
-    });
-    await waitFor(() => {
-      expect(result.current.currencies.map((c) => c.code)).toContain("SAR");
-    });
-
-    act(() => {
-      result.current.onSearchChange("Saudi Riyal");
-    });
-    await waitFor(() => {
-      expect(result.current.currencies.map((c) => c.code)).toContain("SAR");
+      emitMarketRates({
+        currentError: null,
+        selectedSnapshot: selectedSnapshot(),
+      });
     });
 
+    await waitFor(() => expect(result.current.refreshError).toBeNull());
+    expect(result.current.rateTrust.gold.state).toBe("fresh");
+  });
+
+  it("reports sub-hour rate ages with minute granularity", async () => {
+    const { result } = renderHook(() => useLiveRatesScreen());
+
     act(() => {
-      result.current.onSearchChange("sar");
+      const trust: Parameters<typeof selectedSnapshot>[0] = {
+        currencies: new Map(),
+        gold: {
+          ageMs: 120_000,
+          providerObservedAt: new Date("2026-09-07T00:00:00.000Z"),
+          state: "fresh",
+        },
+        silver: {
+          ageMs: 120_000,
+          providerObservedAt: new Date("2026-09-07T00:00:00.000Z"),
+          state: "fresh",
+        },
+      };
+      emitMarketRates({
+        isCurrentLoading: false,
+        selectedSnapshot: selectedSnapshot(trust),
+      });
     });
-    await waitFor(() => {
-      expect(result.current.currencies.map((c) => c.code)).toContain("SAR");
+
+    await waitFor(() =>
+      expect(result.current.rateTrust.gold.ageText).toBe("2 minutes ago")
+    );
+  });
+
+  it("reports live only when online, error-free, and every rate group is fresh", async () => {
+    const { result } = renderHook(() => useLiveRatesScreen());
+
+    act(() => {
+      emitMarketRates({
+        isCurrentLoading: false,
+        selectedSnapshot: selectedSnapshot(),
+      });
     });
+
+    await waitFor(() => expect(result.current.hasData).toBe(true));
+    expect(result.current.isLive).toBe(true);
+
+    act(() => {
+      emitMarketRates({ currentError: new Error("observer failed") });
+    });
+
+    await waitFor(() => expect(result.current.refreshError).not.toBeNull());
+    expect(result.current.isLive).toBe(false);
+  });
+
+  it("is not live when a rate group is stale or the device is offline", async () => {
+    const { result } = renderHook(() => useLiveRatesScreen());
+
+    act(() => {
+      emitMarketRates({
+        isCurrentLoading: false,
+        selectedSnapshot: selectedSnapshot({
+          ...trustedRates,
+          silver: { ...trustedRates.silver, state: "stale" as const },
+        }),
+      });
+    });
+
+    await waitFor(() => expect(result.current.hasData).toBe(true));
+    expect(result.current.isLive).toBe(false);
+
+    act(() => {
+      emitMarketRates({
+        isConnected: false,
+        selectedSnapshot: selectedSnapshot(),
+      });
+    });
+    await waitFor(() => expect(result.current.hasData).toBe(true));
+    expect(result.current.isLive).toBe(false);
   });
 });

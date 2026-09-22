@@ -190,9 +190,19 @@ describe("Metals deterministic E2E fixture registry", () => {
           instrument_code: "currency:EGP",
           value_decimal: "0.02",
         }),
+        expect.objectContaining({
+          instrument_code: "currency:USD",
+          value_decimal: "1",
+        }),
       ])
     );
-    expect(rows.marketRateObservations).toHaveLength(3);
+    expect(rows.marketRateObservations).toHaveLength(4);
+    const [marketRate] = rows.marketRates as Array<Record<string, unknown>>;
+    expect(
+      (rows.marketRateObservations as Array<Record<string, unknown>>).every(
+        (observation) => observation.batch_id === marketRate?.id
+      )
+    ).toBe(true);
 
     const staleFixture =
       METALS_E2E_FIXTURES["metals-stale-boundary-local-en-light"];
@@ -315,7 +325,7 @@ describe("Metals deterministic E2E fixture registry", () => {
     const inspection = await inspectFixtureData(client, config, fixture);
     expect(inspection.tables.market_rates.expected).toBe(1);
     expect(inspection.tables.metal_holding_states.expected).toBe(1);
-    expect(inspection.tables.market_rate_observations.expected).toBe(3);
+    expect(inspection.tables.market_rate_observations.expected).toBe(38);
     expect(records).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -488,7 +498,7 @@ describe("Metals deterministic E2E fixture registry", () => {
         record.operation === "delete"
     );
     expect(observationDelete).toMatchObject({ column: "id" });
-    expect(observationDelete?.value).toHaveLength(24);
+    expect(observationDelete?.value).toHaveLength(304);
   });
 
   it("exposes materialized cached/offline and one-shot refresh controls", () => {

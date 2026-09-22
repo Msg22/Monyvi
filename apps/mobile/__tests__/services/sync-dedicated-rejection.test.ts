@@ -12,9 +12,11 @@ jest.mock("@/services/supabase", () => ({
     mockGetCurrentUserId() as Promise<string | null>,
 }));
 
-jest.mock("../../services/sync/pull-strategies", () => ({
+jest.mock("../../services/sync/atomic-pull-strategies", () => ({
   pullChanges: jest.fn(),
 }));
+
+jest.mock("@monyvi/db", () => ({ schema: { tables: {} } }));
 
 jest.mock("../../services/sync/push-service", () => ({
   pushChanges: (...args: readonly unknown[]): Promise<unknown> =>

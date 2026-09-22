@@ -1,76 +1,79 @@
-import { palette } from "@/constants/colors";
 import { TotalNetWorthSkeleton } from "@/components/dashboard/skeletons/TotalNetWorthSkeleton";
-import { CurrencyType } from "@monyvi/db";
-import { formatCurrency } from "@monyvi/logic";
+import { palette } from "@/constants/colors";
+import type { CurrencyType } from "@monyvi/db";
+import {
+  formatCanonicalDecimalForDisplay,
+  formatCurrency,
+  resolveCurrencyDisplayMinorUnits,
+} from "@monyvi/logic";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { useTranslation } from "react-i18next";
 import React from "react";
-import { Dimensions, Text, View } from "react-native";
+import { Text, useWindowDimensions, View } from "react-native";
+import { useTranslation } from "react-i18next";
 import Svg, { Defs, RadialGradient, Rect, Stop } from "react-native-svg";
 
-interface Props {
-  totalNetWorth: number | null;
-  totalNetWorthUsd: number | null;
-  preferredCurrency: CurrencyType;
-  monthlyPercentageChange: number | null;
-  isLoading: boolean;
+import { WealthDisclosure } from "./WealthDisclosure";
+
+interface BreakdownDisclosureProps {
+  readonly isExpanded: boolean;
+  readonly label: string;
+  readonly onPress: () => void;
 }
 
-const { width } = Dimensions.get("window");
+interface Props {
+  readonly breakdownDisclosure?: BreakdownDisclosureProps;
+  readonly isLoading: boolean;
+  readonly monthlyPercentageChange: number | null;
+  readonly preferredCurrency: CurrencyType;
+  readonly totalNetWorth: number | string | null;
+  readonly totalNetWorthUsd: number | string | null;
+}
 
-/**
- * Renders a styled "Total Net Worth" card showing the primary balance (formatted in the preferred currency), an optional USD equivalent, and an optional monthly percentage change badge.
- *
- * Displays a loading spinner in place of the primary amount when `isLoading` is true. Shows the USD approximation only when `preferredCurrency` is not `"USD"`. Shows a colored arrow badge with the monthly percentage change when `monthlyPercentageChange` is provided.
- *
- * @param totalNetWorth - Primary net worth amount to display; treated as zero when falsy.
- * @param totalNetWorthUsd - USD equivalent used for the secondary approximate display.
- * @param preferredCurrency - Currency to format and display the primary amount in.
- * @param monthlyPercentageChange - Monthly percentage change displayed as a formatted badge (e.g., "+1.2%"); negative values produce a downward/red badge.
- * @param isLoading - When true, replaces the primary amount with a loading indicator.
- * @returns The JSX element for the Total Net Worth card.
- */
 function TotalNetWorthCardComponent({
+  breakdownDisclosure,
   totalNetWorth,
   totalNetWorthUsd,
   preferredCurrency,
   monthlyPercentageChange,
   isLoading,
 }: Props): React.JSX.Element {
-  const { t } = useTranslation("common");
+  const { t, i18n } = useTranslation("common");
+  const { width } = useWindowDimensions();
 
   if (isLoading) {
     return <TotalNetWorthSkeleton />;
   }
 
-  // Determine arrow icon and color based on percentage change
   const isPositive =
     monthlyPercentageChange !== null && monthlyPercentageChange >= 0;
   const arrowIcon = isPositive ? "arrow-up" : "arrow-down";
   const arrowColor = isPositive ? palette.nileGreen[400] : palette.red[400];
   const arrowRotation = isPositive ? "40deg" : "-40deg";
   const isPreferredCurrencyUSD = preferredCurrency === "USD";
-
-  // Format percentage for display
   const monthlyPercentageChangeFormatted =
     monthlyPercentageChange !== null
       ? `${monthlyPercentageChange >= 0 ? "+" : ""}${monthlyPercentageChange.toFixed(1)}%`
       : null;
-
-  // Glow dimensions
-  const glowWidth = width;
-  const glowHeight = 60;
+  const isRtl =
+    typeof i18n.dir === "function"
+      ? i18n.dir(i18n.resolvedLanguage) === "rtl"
+      : i18n.resolvedLanguage === "ar";
+  const locale = isRtl ? "ar-EG" : "en-US";
+  const amountTextStyle = {
+    textAlign: isRtl ? ("right" as const) : ("left" as const),
+    writingDirection: "ltr" as const,
+  };
 
   return (
-    <View className="relative my-4 items-center justify-center">
-      {/* Bottom Glow */}
+    <View
+      className="relative mb-2 mt-4 items-center justify-center"
+      testID="total-net-worth-card"
+    >
       <View
-        className="absolute bottom-[-35px] items-center z-[-1]"
-        style={{
-          width: glowWidth,
-          height: glowHeight,
-        }}
+        testID="total-net-worth-glow"
+        className="absolute bottom-[-35px] z-[-1] items-center"
+        style={{ width, height: 60 }}
       >
         <Svg height="100%" width="100%">
           <Defs>
@@ -104,60 +107,101 @@ function TotalNetWorthCardComponent({
         colors={[palette.nileGreen[800], palette.nileGreen[600]]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
-        className="relative min-h-[180px] w-full items-center overflow-hidden rounded-2xl border border-white/10 p-6 shadow-lg"
+        className="relative w-full overflow-hidden rounded-3xl border border-nileGreen-500 px-6 pt-6 shadow-lg"
       >
-        {/* Geometric Background Pattern */}
-        <View className="absolute bottom-0 start-0 end-0 top-0 overflow-hidden rounded-[24px]">
+        <View className="absolute bottom-0 start-0 end-0 top-0 overflow-hidden rounded-3xl">
           <View className="absolute -bottom-20 -end-10 h-64 w-64 rotate-45 transform bg-white/5" />
           <View className="absolute bottom-10 -end-4 h-32 w-32 rotate-12 transform bg-white/5" />
           <View className="absolute -bottom-10 end-20 h-32 w-32 -rotate-12 transform bg-white/5" />
         </View>
 
-        <View className="z-10 items-center gap-1">
-          {/* Label */}
-          <Text className="text-sm font-medium tracking-wide text-slate-300 opacity-90">
-            {t("total_net_worth")}
-          </Text>
-          {/* Main Amount */}
-          <Text
-            className="mt-1 text-[42px] font-extrabold tracking-tight text-white text-center"
-            numberOfLines={1}
-            adjustsFontSizeToFit
-            minimumFontScale={0.6}
-          >
-            {formatCurrency({
-              amount: totalNetWorth ?? 0,
-              currency: preferredCurrency,
-            })}
-          </Text>
-          {/* Secondary Amount (USD) */}
-          {!isPreferredCurrencyUSD && (
-            <Text className="text-base font-medium text-slate-100 opacity-80">
-              ≈
-              {formatCurrency({
-                amount: totalNetWorthUsd ?? 0,
-                currency: "USD",
-              })}
+        <View className="z-10 w-full pb-5">
+          <View className="flex-row flex-wrap items-start justify-between gap-3">
+            <Text className="min-w-0 flex-1 text-start text-lg font-semibold text-white">
+              {t("total_net_worth")}
             </Text>
-          )}
-          {/* Monthly Percentage Change */}
-          {monthlyPercentageChangeFormatted && (
-            <View className="mt-2 flex-row items-center gap-1 rounded-full bg-white/10 px-3 py-1">
-              <Ionicons
-                name={arrowIcon}
-                style={{ transform: [{ rotate: arrowRotation }] }}
-                size={12}
-                color={arrowColor}
-              />
-              <Text className="text-xs font-bold" style={{ color: arrowColor }}>
-                {monthlyPercentageChangeFormatted} {t("month")}
+            {monthlyPercentageChangeFormatted ? (
+              <View className="flex-row items-center gap-1 rounded-full border border-white/10 bg-white/10 px-3 py-2">
+                <Ionicons
+                  name={arrowIcon}
+                  style={{ transform: [{ rotate: arrowRotation }] }}
+                  size={13}
+                  color={arrowColor}
+                />
+                <Text
+                  className="text-sm font-bold"
+                  style={{ color: arrowColor }}
+                >
+                  {monthlyPercentageChangeFormatted}{" "}
+                  <Text className="font-medium text-slate-100">
+                    {t("month")}
+                  </Text>
+                </Text>
+              </View>
+            ) : null}
+          </View>
+
+          <View
+            className={`mt-5 w-full ${isRtl ? "items-end" : "items-start"}`}
+            testID="total-net-worth-values"
+          >
+            <Text
+              adjustsFontSizeToFit
+              className="text-[38px] font-extrabold leading-[46px] tracking-tight text-white"
+              minimumFontScale={0.5}
+              numberOfLines={1}
+              style={amountTextStyle}
+              testID="total-net-worth-primary-value"
+            >
+              {formatNetWorthAmount(totalNetWorth, preferredCurrency, locale)}
+            </Text>
+            {!isPreferredCurrencyUSD && totalNetWorthUsd !== null ? (
+              <Text
+                adjustsFontSizeToFit
+                className="mt-2 text-lg font-medium text-slate-100 opacity-80"
+                minimumFontScale={0.75}
+                numberOfLines={1}
+                style={amountTextStyle}
+                testID="total-net-worth-usd-equivalent"
+              >
+                ≈ {formatNetWorthAmount(totalNetWorthUsd, "USD", locale)}
               </Text>
-            </View>
-          )}
+            ) : null}
+          </View>
         </View>
+
+        {breakdownDisclosure ? (
+          <View className="-mx-6 border-t border-white/10 px-6 py-2">
+            <WealthDisclosure {...breakdownDisclosure} />
+          </View>
+        ) : (
+          <View className="h-1" />
+        )}
       </LinearGradient>
     </View>
   );
+}
+
+function formatNetWorthAmount(
+  value: number | string | null,
+  currency: CurrencyType,
+  locale: string
+): string {
+  if (value === null) return "—";
+  if (typeof value === "number") {
+    return formatCurrency({ amount: value, currency });
+  }
+  const precision = resolveCurrencyDisplayMinorUnits(currency);
+  try {
+    const amount = formatCanonicalDecimalForDisplay(value, {
+      locale,
+      minimumFractionDigits: precision,
+      maximumFractionDigits: precision,
+    });
+    return `${currency} ${amount}`;
+  } catch {
+    return "—";
+  }
 }
 
 export const TotalNetWorthCard = React.memo(TotalNetWorthCardComponent);

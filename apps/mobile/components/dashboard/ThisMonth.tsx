@@ -43,7 +43,7 @@ const FILTER_OPTIONS: PeriodFilter[] = [
 // =============================================================================
 
 interface RingGaugeProps {
-  percentage: number;
+  percentage: number | null;
 }
 
 /**
@@ -60,7 +60,7 @@ function RingGauge({ percentage }: RingGaugeProps): React.JSX.Element {
   const { isDark } = useTheme();
   const { t } = useTranslation("common");
   // Clamp percentage between 0 and 100
-  const clampedPercentage = Math.min(100, Math.max(0, percentage));
+  const clampedPercentage = Math.min(100, Math.max(0, percentage ?? 0));
   const strokeDashoffset =
     RING_CIRCUMFERENCE - (clampedPercentage / 100) * RING_CIRCUMFERENCE;
   const gaugeColor = getGaugeColor(clampedPercentage);
@@ -81,24 +81,26 @@ function RingGauge({ percentage }: RingGaugeProps): React.JSX.Element {
           fill="transparent"
         />
         {/* Progress Circle */}
-        <Circle
-          cx={RING_SIZE / 2}
-          cy={RING_SIZE / 2}
-          r={RING_RADIUS}
-          stroke={gaugeColor}
-          strokeWidth={RING_STROKE_WIDTH}
-          fill="transparent"
-          strokeDasharray={RING_CIRCUMFERENCE}
-          strokeDashoffset={strokeDashoffset}
-          strokeLinecap="round"
-          rotation="-90"
-          origin={`${RING_SIZE / 2}, ${RING_SIZE / 2}`}
-        />
+        {percentage !== null && (
+          <Circle
+            cx={RING_SIZE / 2}
+            cy={RING_SIZE / 2}
+            r={RING_RADIUS}
+            stroke={gaugeColor}
+            strokeWidth={RING_STROKE_WIDTH}
+            fill="transparent"
+            strokeDasharray={RING_CIRCUMFERENCE}
+            strokeDashoffset={strokeDashoffset}
+            strokeLinecap="round"
+            rotation="-90"
+            origin={`${RING_SIZE / 2}, ${RING_SIZE / 2}`}
+          />
+        )}
       </Svg>
       {/* Center Text */}
       <View className="absolute items-center justify-center">
         <Text className="text-lg font-bold text-slate-800 dark:text-slate-25">
-          {clampedPercentage}%
+          {percentage === null ? "—" : `${clampedPercentage}%`}
         </Text>
         <Text className="text-[10px] font-medium mt-0.5 text-slate-500 dark:text-slate-400">
           {t("spent")}
@@ -205,11 +207,13 @@ function ThisMonthComponent(): React.JSX.Element {
           <View className="flex-row items-center">
             <Text className="stat-label me-1.5">{t("income_label")}</Text>
             <Text className="text-sm font-semibold text-nileGreen-500">
-              {formatCurrency({
-                amount: data.totalIncome,
-                currency: preferredCurrency,
-              })}{" "}
-              ↑
+              {data.totalIncome === null
+                ? "—"
+                : formatCurrency({
+                    amount: data.totalIncome,
+                    currency: preferredCurrency,
+                  })}{" "}
+              {data.totalIncome === null ? null : "↑"}
             </Text>
           </View>
 
@@ -217,28 +221,36 @@ function ThisMonthComponent(): React.JSX.Element {
           <View className="flex-row items-center">
             <Text className="stat-label me-1.5">{t("expenses_label")}</Text>
             <Text className="text-sm font-semibold text-red-500">
-              {formatCurrency({
-                amount: data.totalExpenses,
-                currency: preferredCurrency,
-              })}{" "}
-              ↓
+              {data.totalExpenses === null
+                ? "—"
+                : formatCurrency({
+                    amount: data.totalExpenses,
+                    currency: preferredCurrency,
+                  })}{" "}
+              {data.totalExpenses === null ? null : "↓"}
             </Text>
           </View>
 
           {/* Saved / Deficit */}
           <View className="flex-row items-center">
             <Text className="stat-label me-1.5">
-              {data.savings >= 0 ? t("saved_label") : t("deficit_label")}
+              {data.savings === null || data.savings >= 0
+                ? t("saved_label")
+                : t("deficit_label")}
             </Text>
             <Text
-              className={`text-sm font-semibold ${data.savings >= 0 ? "text-gold-600" : "text-red-500"}`}
+              className={`text-sm font-semibold ${data.savings === null || data.savings >= 0 ? "text-gold-600" : "text-red-500"}`}
             >
-              {formatCurrency({
-                amount: Math.abs(data.savings),
-                currency: preferredCurrency,
-              })}{" "}
-              ({Math.abs(data.savingsPercentage)}%){" "}
-              {data.savings >= 0 ? "✓" : "⚠"}
+              {data.savings === null
+                ? "—"
+                : formatCurrency({
+                    amount: Math.abs(data.savings),
+                    currency: preferredCurrency,
+                  })}{" "}
+              {data.savingsPercentage !== null
+                ? `(${Math.abs(data.savingsPercentage)}%)`
+                : ""}{" "}
+              {data.savings === null ? "" : data.savings >= 0 ? "✓" : "⚠"}
             </Text>
           </View>
         </View>

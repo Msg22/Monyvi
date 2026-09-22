@@ -202,7 +202,7 @@ function createReviewState(
     incomeCategories: [],
     invalidIndices: new Set(),
     isReviewMetadataReady: true,
-    latestRates: null,
+    selectedSnapshot: null,
     listItems: [],
     needsReviewCount: 0,
     pendingAccounts: [],

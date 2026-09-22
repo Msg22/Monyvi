@@ -234,22 +234,17 @@ describe("recurring-payment-service", () => {
       action: "NOTIFY",
     } as const;
 
-    it.each([
-      -250,
-      0,
-      Number.NaN,
-      Number.POSITIVE_INFINITY,
-      1_000_000_000.01,
-    ])("rejects invalid create amount %p before resolving scope or writing", async (amount) => {
-      await expect(
-        createRecurringPayment({ ...validCreateData, amount })
-      ).rejects.toThrow(
-        RECURRING_PAYMENT_SERVICE_ERROR_CODES.INVALID_AMOUNT
-      );
+    it.each([-250, 0, Number.NaN, Number.POSITIVE_INFINITY, 1_000_000_000.01])(
+      "rejects invalid create amount %p before resolving scope or writing",
+      async (amount) => {
+        await expect(
+          createRecurringPayment({ ...validCreateData, amount })
+        ).rejects.toThrow(RECURRING_PAYMENT_SERVICE_ERROR_CODES.INVALID_AMOUNT);
 
-      expect(mockGetCurrentUserDataScope).not.toHaveBeenCalled();
-      expect(mockWrite).not.toHaveBeenCalled();
-    });
+        expect(mockGetCurrentUserDataScope).not.toHaveBeenCalled();
+        expect(mockWrite).not.toHaveBeenCalled();
+      }
+    );
 
     it("accepts the inclusive maximum and the two-, three-, and eight-decimal currency contract", async () => {
       await expect(
@@ -292,9 +287,7 @@ describe("recurring-payment-service", () => {
           ...validCreateData,
           amount: 12.345,
         })
-      ).rejects.toThrow(
-        RECURRING_PAYMENT_SERVICE_ERROR_CODES.INVALID_AMOUNT
-      );
+      ).rejects.toThrow(RECURRING_PAYMENT_SERVICE_ERROR_CODES.INVALID_AMOUNT);
 
       expect(mockGetCurrentUserDataScope).toHaveBeenCalledTimes(1);
       expect(mockWrite).not.toHaveBeenCalled();
@@ -318,16 +311,19 @@ describe("recurring-payment-service", () => {
       new Date(Number.NaN),
       new Date(2026, 4, 31, 23, 59, 59),
       new Date(2027, 5, 2, 0, 0, 0),
-    ])("rejects invalid or out-of-range create date %p before writing", async (startDate) => {
-      await expect(
-        createRecurringPayment({ ...validCreateData, startDate })
-      ).rejects.toThrow(
-        RECURRING_PAYMENT_SERVICE_ERROR_CODES.INVALID_START_DATE
-      );
+    ])(
+      "rejects invalid or out-of-range create date %p before writing",
+      async (startDate) => {
+        await expect(
+          createRecurringPayment({ ...validCreateData, startDate })
+        ).rejects.toThrow(
+          RECURRING_PAYMENT_SERVICE_ERROR_CODES.INVALID_START_DATE
+        );
 
-      expect(mockGetCurrentUserDataScope).not.toHaveBeenCalled();
-      expect(mockWrite).not.toHaveBeenCalled();
-    });
+        expect(mockGetCurrentUserDataScope).not.toHaveBeenCalled();
+        expect(mockWrite).not.toHaveBeenCalled();
+      }
+    );
 
     it("rejects an invalid End date before writing", async () => {
       await expect(
@@ -335,9 +331,7 @@ describe("recurring-payment-service", () => {
           ...validCreateData,
           endDate: new Date(Number.NaN),
         })
-      ).rejects.toThrow(
-        RECURRING_PAYMENT_SERVICE_ERROR_CODES.INVALID_END_DATE
-      );
+      ).rejects.toThrow(RECURRING_PAYMENT_SERVICE_ERROR_CODES.INVALID_END_DATE);
 
       expect(mockWrite).not.toHaveBeenCalled();
     });
@@ -348,9 +342,7 @@ describe("recurring-payment-service", () => {
           ...validCreateData,
           amount: -250,
         })
-      ).rejects.toThrow(
-        RECURRING_PAYMENT_SERVICE_ERROR_CODES.INVALID_AMOUNT
-      );
+      ).rejects.toThrow(RECURRING_PAYMENT_SERVICE_ERROR_CODES.INVALID_AMOUNT);
 
       expect(mockGetCurrentUserDataScope).not.toHaveBeenCalled();
       expect(mockWrite).not.toHaveBeenCalled();
@@ -418,13 +410,9 @@ describe("recurring-payment-service", () => {
           startDate: new Date("2026-07-01T08:00:00.000Z"),
           expectedNextDueDate: new Date("2026-07-01T08:00:00.000Z"),
         })
-      ).rejects.toThrow(
-        RECURRING_PAYMENT_SERVICE_ERROR_CODES.STALE_SCHEDULE
-      );
+      ).rejects.toThrow(RECURRING_PAYMENT_SERVICE_ERROR_CODES.STALE_SCHEDULE);
 
-      expect(payment.nextDueDate).toEqual(
-        new Date("2026-08-01T08:00:00.000Z")
-      );
+      expect(payment.nextDueDate).toEqual(new Date("2026-08-01T08:00:00.000Z"));
       expect(mockWrite).not.toHaveBeenCalled();
       expect(payment.update).not.toHaveBeenCalled();
     });
@@ -479,7 +467,7 @@ describe("recurring-payment-service", () => {
     });
 
     it("rejects a historical template when no aligned occurrence remains before End date", async () => {
-      jest.setSystemTime(new Date("2026-09-04T12:00:00.000Z"));
+      jest.setSystemTime(new Date(2026, 8, 4, 12));
 
       await expect(
         createRecurringPayment({
@@ -490,14 +478,12 @@ describe("recurring-payment-service", () => {
           accountId: "account-1",
           categoryId: "category-1",
           frequency: "WEEKLY",
-          startDate: new Date("2026-08-01T08:00:00.000Z"),
-          endDate: new Date("2026-09-04T23:59:59.000Z"),
+          startDate: new Date(2026, 7, 1, 8),
+          endDate: new Date(2026, 8, 4, 23, 59, 59),
           initialOccurrenceRecorded: true,
           action: "NOTIFY",
         })
-      ).rejects.toThrow(
-        RECURRING_PAYMENT_SERVICE_ERROR_CODES.INVALID_SCHEDULE
-      );
+      ).rejects.toThrow(RECURRING_PAYMENT_SERVICE_ERROR_CODES.INVALID_SCHEDULE);
 
       expect(mockWrite).not.toHaveBeenCalled();
     });
@@ -632,9 +618,7 @@ describe("recurring-payment-service", () => {
         endDate: new Date("2026-07-01T00:00:00.000Z"),
         action: "NOTIFY",
       })
-    ).rejects.toThrow(
-      RECURRING_PAYMENT_SERVICE_ERROR_CODES.INVALID_SCHEDULE
-    );
+    ).rejects.toThrow(RECURRING_PAYMENT_SERVICE_ERROR_CODES.INVALID_SCHEDULE);
 
     expect(mockWrite).not.toHaveBeenCalled();
     expect(payment.status).toBe("ACTIVE");
@@ -676,9 +660,25 @@ describe("recurring-payment-service", () => {
       endDate: new Date("2026-07-01T00:00:00.000Z"),
       nextDueDate: new Date("2026-08-01T00:00:00.000Z"),
     });
-    mockFindOwned.mockImplementation((_collection: MockCollection, id: string): Promise<unknown> => id === "account-1" ? Promise.resolve({ id, userId: "user-1", currency: "EGP" }) : Promise.resolve(payment));
+    mockFindOwned.mockImplementation(
+      (_collection: MockCollection, id: string): Promise<unknown> =>
+        id === "account-1"
+          ? Promise.resolve({ id, userId: "user-1", currency: "EGP" })
+          : Promise.resolve(payment)
+    );
 
-    await updateRecurringPayment("payment-1", { name: "Netflix", amount: 250, currency: "EGP", type: "EXPENSE", accountId: "account-1", categoryId: "category-1", frequency: "MONTHLY", startDate: payment.startDate, endDate: null, action: "NOTIFY" });
+    await updateRecurringPayment("payment-1", {
+      name: "Netflix",
+      amount: 250,
+      currency: "EGP",
+      type: "EXPENSE",
+      accountId: "account-1",
+      categoryId: "category-1",
+      frequency: "MONTHLY",
+      startDate: payment.startDate,
+      endDate: null,
+      action: "NOTIFY",
+    });
 
     expect(payment.status).toBe("COMPLETED");
     expect(payment.nextDueDate).toEqual(new Date("2026-08-01T00:00:00.000Z"));
@@ -691,7 +691,12 @@ describe("recurring-payment-service", () => {
       endDate: finalPaidDate,
       nextDueDate: finalPaidDate,
     });
-    mockFindOwned.mockImplementation((_collection: MockCollection, id: string): Promise<unknown> => id === "account-1" ? Promise.resolve({ id, userId: "user-1", currency: "EGP" }) : Promise.resolve(payment));
+    mockFindOwned.mockImplementation(
+      (_collection: MockCollection, id: string): Promise<unknown> =>
+        id === "account-1"
+          ? Promise.resolve({ id, userId: "user-1", currency: "EGP" })
+          : Promise.resolve(payment)
+    );
 
     await updateRecurringPayment("payment-1", {
       name: "Netflix",
@@ -1034,7 +1039,11 @@ describe("recurring-payment-service", () => {
       });
       mockFindOwned.mockResolvedValue(payment);
 
-      await submitRecurringPayment({ payment: payment as never, accountId: "account-1", amount: 250 });
+      await submitRecurringPayment({
+        payment: payment as never,
+        accountId: "account-1",
+        amount: 250,
+      });
 
       expect(payment.status).toBe("COMPLETED");
       expect(payment.nextDueDate).toEqual(new Date("2026-07-01T00:00:00.000Z"));
@@ -1054,9 +1063,7 @@ describe("recurring-payment-service", () => {
         amount: 250,
       });
 
-      expect(payment.nextDueDate).toEqual(
-        new Date("2026-03-31T09:00:00.000Z")
-      );
+      expect(payment.nextDueDate).toEqual(new Date("2026-03-31T09:00:00.000Z"));
     });
 
     it("accepts a final due payment on End date when times differ", async () => {

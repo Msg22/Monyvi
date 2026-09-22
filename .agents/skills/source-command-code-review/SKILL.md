@@ -228,8 +228,7 @@ For every selected governed mockup, load its matching
 non-binding-region, spacing, sizing, color, typography, state, interaction,
 transition, or variant facts:
 
-1. Run
-   `node scripts/verify-mockup-binding.js <path/to/mockup.binding.md>` and
+1. Run `node scripts/verify-mockup-binding.js <path/to/mockup.binding.md>` and
    require exit status 0.
 2. Confirm the sidecar records `Binding metadata approval: APPROVED` and the
    explicit approval evidence/reference required by that workflow.
@@ -249,12 +248,23 @@ sidecar authority contract from the reviewed bytes and the governing
 `.agent/workflows/mockup-implementation.md` contract. The independent fallback
 MUST, without relying on the target-branch verifier:
 
-- require valid UTF-8/LF input and locate exactly one real level-two `Binding Facts` heading using Markdown semantics, ignoring fenced/comment-only content when determining section boundaries;
-- require every canonical required Binding Facts key exactly once with a non-empty visible value, recognizing supported Markdown unordered-list markers and indentation and ignoring commented/fenced examples;
-- require all approval fields and SHA-256 revisions to be present and well formed, including `Binding metadata approval: APPROVED`;
-- recompute the current approved image SHA-256 and exact original Binding Facts SHA-256 from the reviewed bytes and require them to match the declared image and `Binding metadata revision`;
-- require `Approved binding metadata revision` to equal `Binding metadata revision`, rebuild the combined `Binding approval revision`, and require `Approved binding approval revision` to equal `Binding approval revision`; and
-- require the approval evidence/reference to identify the approved combined `Approved binding approval revision`.
+- require valid UTF-8/LF input and locate exactly one real level-two
+  `Binding Facts` heading using Markdown semantics, ignoring fenced/comment-only
+  content when determining section boundaries;
+- require every canonical required Binding Facts key exactly once with a
+  non-empty visible value, recognizing supported Markdown unordered-list markers
+  and indentation and ignoring commented/fenced examples;
+- require all approval fields and SHA-256 revisions to be present and well
+  formed, including `Binding metadata approval: APPROVED`;
+- recompute the current approved image SHA-256 and exact original Binding Facts
+  SHA-256 from the reviewed bytes and require them to match the declared image
+  and `Binding metadata revision`;
+- require `Approved binding metadata revision` to equal
+  `Binding metadata revision`, rebuild the combined `Binding approval revision`,
+  and require `Approved binding approval revision` to equal
+  `Binding approval revision`; and
+- require the approval evidence/reference to identify the approved combined
+  `Approved binding approval revision`.
 
 If any part of that independent validation cannot be performed, mark the binding
 context unverified and the changed governed UI not approvable. A target-branch
@@ -309,20 +319,20 @@ Use this table for every selected governed mockup:
 
 Corresponds to: <component or screen>
 
-| Check                  | Status    | Notes |
-| ---------------------- | --------- | ----- |
-| Layout and Structure   | PASS/FAIL | ...   |
-| Spacing and Alignment  | PASS/FAIL | ...   |
-| Typography             | PASS/FAIL | ...   |
-| Colors and Theming     | PASS/FAIL | ...   |
-| Components and UI      | PASS/FAIL | ...   |
-| States                 | PASS/FAIL | ...   |
-| Interactions           | PASS/FAIL | ...   |
+| Check                  | Status    | Notes                         |
+| ---------------------- | --------- | ----------------------------- |
+| Layout and Structure   | PASS/FAIL | ...                           |
+| Spacing and Alignment  | PASS/FAIL | ...                           |
+| Typography             | PASS/FAIL | ...                           |
+| Colors and Theming     | PASS/FAIL | ...                           |
+| Components and UI      | PASS/FAIL | ...                           |
+| States                 | PASS/FAIL | ...                           |
+| Interactions           | PASS/FAIL | ...                           |
 | Approved Image Binding | PASS/FAIL | exact SHA-256 verifier result |
-| Binding UI Context     | PASS/FAIL | ...   |
-| Rendered Comparison    | PASS/FAIL | ...   |
-| Scoped Variants        | PASS/FAIL | ...   |
-| Accessibility Evidence | PASS/FAIL | ...   |
+| Binding UI Context     | PASS/FAIL | ...                           |
+| Rendered Comparison    | PASS/FAIL | ...                           |
+| Scoped Variants        | PASS/FAIL | ...                           |
+| Accessibility Evidence | PASS/FAIL | ...                           |
 ```
 
 For changed governed visual UI, a missing/invalid authoritative sidecar, failed

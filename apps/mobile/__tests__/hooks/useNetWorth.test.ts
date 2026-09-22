@@ -1,3 +1,16 @@
+jest.mock("../../hooks/useMetalPortfolio", () => ({
+  useMetalPortfolio: (): unknown => ({
+    wealthBreakdown: {
+      totalNetWorthDecimal: "2500",
+      totalNetWorthUsdDecimal: "50",
+      metals: { amountDecimal: "1000" },
+    },
+    isSummaryLoading: false,
+    error: null,
+    refresh: jest.fn(),
+  }),
+}));
+
 import { act, renderHook, waitFor } from "@testing-library/react-native";
 import type {
   Account,
@@ -89,10 +102,17 @@ jest.mock("@/utils/logger", () => ({
   },
 }));
 
+const mockSelectedSnapshot = { snapshotId: "snapshot-1" };
+
 jest.mock("../../hooks/useMarketRates", () => ({
-  useMarketRates: (): { latestRates: object; isLoading: boolean } => ({
-    latestRates: {},
+  useMarketRates: (): {
+    selectedSnapshot: typeof mockSelectedSnapshot;
+    isLoading: boolean;
+    isCurrentLoading: boolean;
+  } => ({
+    selectedSnapshot: mockSelectedSnapshot,
     isLoading: false,
+    isCurrentLoading: false,
   }),
 }));
 
@@ -151,144 +171,58 @@ beforeEach(() => {
 });
 
 describe("useNetWorth", () => {
-  it("subscribes through the net-worth read-model service", async () => {
+  it("reads scoped accounts and delegates effective ownership to the portfolio", async () => {
     const { result } = renderHook(() => useNetWorth());
-
-    act(() => {
+    act(() =>
       accountsQuery.observerRef.current?.next([
         { id: "account-1" } as unknown as Account,
-      ]);
-      assetsQuery.observerRef.current?.next([
-        { id: "asset-1" } as unknown as Asset,
-      ]);
-    });
-
-    await waitFor(() => {
-      expect(mockObserveNetWorthAssetMetals).toHaveBeenCalledWith({
-        userId: "user-1",
-        assets: [{ id: "asset-1" }],
-      });
-    });
-
-    act(() => {
-      assetMetalsQuery.observerRef.current?.next([
-        { id: "metal-1" } as unknown as AssetMetal,
-      ]);
-    });
-
-    await waitFor(() => {
-      expect(result.current.isLoading).toBe(false);
-    });
-
+      ])
+    );
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
     expect(mockObserveNetWorthAccounts).toHaveBeenCalledWith("user-1");
-    expect(mockObserveNetWorthAssets).toHaveBeenCalledWith("user-1");
+    expect(mockObserveNetWorthAssets).not.toHaveBeenCalled();
+    expect(mockObserveNetWorthAssetMetals).not.toHaveBeenCalled();
     expect(mockBuildNetWorthReadModel).toHaveBeenCalledWith({
       accounts: [{ id: "account-1" }],
-      assetMetals: [{ id: "metal-1" }],
-      latestRates: {},
+      assetMetals: [],
+      currentSnapshot: mockSelectedSnapshot,
       preferredCurrency: "USD",
     });
     expect(result.current).toMatchObject(netWorthModel);
   });
 
-  it("does not query while current user state is resolving or signed out", async () => {
+  it("does not query or expose totals while resolving or signed out", () => {
     mockIsResolvingUser = true;
     const { result, rerender } = renderHook(() => useNetWorth());
-
     expect(result.current.isLoading).toBe(true);
+    expect(result.current.totalNetWorth).toBeNull();
     expect(mockObserveNetWorthAccounts).not.toHaveBeenCalled();
-
     mockIsResolvingUser = false;
     mockUserId = null;
     rerender(undefined);
-
-    await waitFor(() => {
-      expect(result.current.isLoading).toBe(false);
-    });
-    expect(mockObserveNetWorthAccounts).not.toHaveBeenCalled();
+    expect(result.current.isLoading).toBe(false);
+    expect(result.current.totalNetWorth).toBeNull();
   });
 
-  it("settles loading on an empty local database", async () => {
-    mockObserveNetWorthAssetMetals.mockReturnValue(null);
+  it("settles empty account reads and preserves explicit observer failure", async () => {
     const { result } = renderHook(() => useNetWorth());
-
-    act(() => {
-      accountsQuery.observerRef.current?.next([]);
-      assetsQuery.observerRef.current?.next([]);
-    });
-
-    await waitFor(() => {
-      expect(result.current.isLoading).toBe(false);
-    });
-    expect(result.current.error).toBeNull();
-  });
-
-  it("settles loading when asset metals emit before accounts fail", async () => {
+    act(() => accountsQuery.observerRef.current?.next([]));
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
     const error = new Error("accounts failed");
-    const { result } = renderHook(() => useNetWorth());
-
-    act(() => {
-      assetsQuery.observerRef.current?.next([
-        { id: "asset-1" } as unknown as Asset,
-      ]);
-    });
-
-    await waitFor(() => {
-      expect(mockObserveNetWorthAssetMetals).toHaveBeenCalledWith({
-        userId: "user-1",
-        assets: [{ id: "asset-1" }],
-      });
-    });
-
-    act(() => {
-      assetMetalsQuery.observerRef.current?.next([
-        { id: "metal-1" } as unknown as AssetMetal,
-      ]);
-      accountsQuery.observerRef.current?.error(error);
-    });
-
-    await waitFor(() => {
-      expect(result.current.isLoading).toBe(false);
-      expect(result.current.error).toBe(error);
-    });
-    expect(mockLoggerError).toHaveBeenCalledWith(
-      "netWorth.accounts.observe.failed",
-      error
-    );
+    act(() => accountsQuery.observerRef.current?.error(error));
+    expect(result.current.error).toBe(error);
+    expect(result.current.totalNetWorth).toBeNull();
+    expect(result.current.totalAccounts).toBeNull();
   });
 
-  it("settles loading when accounts emit before asset metals fail", async () => {
-    const error = new Error("asset metals failed");
-    const { result } = renderHook(() => useNetWorth());
-
-    act(() => {
-      accountsQuery.observerRef.current?.next([
-        { id: "account-1" } as unknown as Account,
-      ]);
-      assetsQuery.observerRef.current?.next([
-        { id: "asset-1" } as unknown as Asset,
-      ]);
-    });
-
-    await waitFor(() => {
-      expect(mockObserveNetWorthAssetMetals).toHaveBeenCalledWith({
-        userId: "user-1",
-        assets: [{ id: "asset-1" }],
-      });
-    });
-
-    act(() => {
-      assetMetalsQuery.observerRef.current?.error(error);
-    });
-
-    await waitFor(() => {
-      expect(result.current.isLoading).toBe(false);
-      expect(result.current.error).toBe(error);
-    });
-    expect(mockLoggerError).toHaveBeenCalledWith(
-      "netWorth.assetMetals.observe.failed",
-      error
-    );
+  it("hides the previous user's accounts immediately on identity change", async () => {
+    const { result, rerender } = renderHook(() => useNetWorth());
+    act(() => accountsQuery.observerRef.current?.next([]));
+    await waitFor(() => expect(result.current.totalNetWorth).toBe(2500));
+    mockUserId = "user-2";
+    rerender(undefined);
+    expect(result.current.totalNetWorth).toBeNull();
+    expect(result.current.totalAccounts).toBeNull();
   });
 });
 

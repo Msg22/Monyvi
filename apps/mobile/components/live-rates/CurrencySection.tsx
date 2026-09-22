@@ -46,7 +46,12 @@ interface CurrencyDisplayItem {
   readonly name: string;
   readonly flag: string;
   readonly rate: string;
-  readonly changePercent: number;
+  readonly changePercent: number | null;
+  readonly trust?: {
+    readonly quality: string | null;
+    readonly source: string | null;
+    readonly state: "fresh" | "stale" | "unknown" | "missing" | "invalid";
+  };
 }
 
 interface CurrencySectionProps {
@@ -78,12 +83,10 @@ export function CurrencySection({
 
   const toggleSearch = useCallback((): void => {
     if (isSearchVisible) {
-      // Closing search — clear query
       onSearchChange("");
       setIsSearchVisible(false);
     } else {
       setIsSearchVisible(true);
-      // Focus input after render
       setTimeout(() => inputRef.current?.focus(), 100);
     }
   }, [isSearchVisible, onSearchChange]);
@@ -118,15 +121,13 @@ export function CurrencySection({
   const isEmpty = currencies.length === 0 && searchQuery.trim().length > 0;
 
   return (
-    <View className="mt-5 px-5">
-      {/* Section header */}
+    <View testID="live-rates-currency-section" className="mt-5 px-5">
       <View className="flex-row items-center justify-between mb-2">
         <Text className="text-lg font-bold text-slate-800 dark:text-white">
           {t("currencies")}
         </Text>
 
         <View className="flex-row items-center">
-          {/* Search icon */}
           <TouchableOpacity
             onPress={toggleSearch}
             className="p-1.5 me-2"
@@ -143,7 +144,6 @@ export function CurrencySection({
             />
           </TouchableOpacity>
 
-          {/* "vs USD" badge */}
           <View
             className="rounded-full px-2.5 py-1"
             style={{ backgroundColor: `${palette.nileGreen[500]}1A` }}
@@ -158,7 +158,6 @@ export function CurrencySection({
         </View>
       </View>
 
-      {/* Search input (toggleable) */}
       {isSearchVisible && (
         <View className="mb-3 bg-slate-100 dark:bg-slate-800 rounded-lg px-3 flex-row items-center">
           <Ionicons
@@ -179,7 +178,6 @@ export function CurrencySection({
         </View>
       )}
 
-      {/* Currency list */}
       {isEmpty ? (
         <View className="py-8 items-center">
           <Ionicons
@@ -202,7 +200,6 @@ export function CurrencySection({
         />
       )}
 
-      {/* "See all currencies →" link */}
       {showSeeAll && (
         <TouchableOpacity
           onPress={onToggleExpand}
@@ -218,7 +215,6 @@ export function CurrencySection({
         </TouchableOpacity>
       )}
 
-      {/* Collapse link when expanded */}
       {isExpanded && !searchQuery.trim() && (
         <TouchableOpacity
           onPress={onToggleExpand}

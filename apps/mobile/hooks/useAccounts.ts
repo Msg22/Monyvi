@@ -4,7 +4,8 @@
  */
 
 import { Account, BankDetails, database } from "@monyvi/db";
-import { calculateAccountsTotalBalance, convertCurrency } from "@monyvi/logic";
+import { sumSelectedCurrentAmounts } from "@/services/current-market-snapshot-calculations";
+import { buildAccountConvertedSubtitles } from "@/services/account-list-read-model-service";
 import { Q } from "@nozbe/watermelondb";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -21,7 +22,8 @@ interface UseAccountsResult {
   readonly accounts: Account[];
   readonly isLoading: boolean;
   readonly error: Error | null;
-  readonly totalAccountsBalance: number;
+  readonly totalAccountsBalance: number | null;
+  readonly convertedSubtitlesByAccountId: ReadonlyMap<string, string>;
   readonly refetch: () => void;
 }
 
@@ -76,7 +78,7 @@ export function useAccounts(): UseAccountsResult {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
-  const { latestRates, isLoading: isRatesLoading } = useMarketRates();
+  const { selectedSnapshot } = useMarketRates();
   const { preferredCurrency } = usePreferredCurrency();
   const { userId, isResolvingUser } = useCurrentUser();
 
@@ -126,17 +128,32 @@ export function useAccounts(): UseAccountsResult {
   }, [refreshKey, userId, isResolvingUser]);
 
   const totalAccountsBalance = useMemo(() => {
-    if (!latestRates) return 0;
-    const totalUsd = calculateAccountsTotalBalance(accounts, latestRates);
-    if (preferredCurrency === "USD") return totalUsd;
-    return convertCurrency(totalUsd, "USD", preferredCurrency, latestRates);
-  }, [accounts, latestRates, preferredCurrency]);
+    const total = sumSelectedCurrentAmounts({
+      entries: accounts.map((account) => ({
+        amount: account.balance,
+        currency: account.currency,
+      })),
+      toCurrency: preferredCurrency,
+      currentSnapshot: selectedSnapshot,
+    });
+    return total;
+  }, [accounts, selectedSnapshot, preferredCurrency]);
+
+  const convertedSubtitlesByAccountId = useMemo(
+    () =>
+      buildAccountConvertedSubtitles({
+        accounts,
+        currentSnapshot: selectedSnapshot,
+      }),
+    [accounts, selectedSnapshot]
+  );
 
   return {
     accounts,
-    isLoading: isLoading || isRatesLoading,
+    isLoading,
     error,
     totalAccountsBalance,
+    convertedSubtitlesByAccountId,
     refetch,
   };
 }
