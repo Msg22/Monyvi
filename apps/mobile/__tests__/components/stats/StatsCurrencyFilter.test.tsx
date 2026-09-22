@@ -1,10 +1,15 @@
 import { fireEvent, render, screen } from "@testing-library/react-native";
+import i18next from "i18next";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import React from "react";
 
+import arCommon from "@/locales/ar/common.json";
+import enCommon from "@/locales/en/common.json";
+
 let mockViewportWidth = 390;
 let mockViewportFontScale = 1;
+let mockLanguage = "en";
 
 jest.mock("react-native/Libraries/Utilities/useWindowDimensions", () => ({
   __esModule: true,
@@ -45,7 +50,7 @@ jest.mock("@monyvi/logic", () => ({
 }));
 
 jest.mock("@/context/LocaleContext", () => ({
-  useLocale: (): { readonly language: string } => ({ language: "en" }),
+  useLocale: (): { readonly language: string } => ({ language: mockLanguage }),
 }));
 
 jest.mock("react-i18next", () => ({
@@ -59,6 +64,7 @@ import { StatsCurrencyFilter } from "@/components/stats/StatsCurrencyFilter";
 describe("StatsCurrencyFilter", () => {
   beforeEach(() => {
     mockViewport(390, 1);
+    mockLanguage = "en";
   });
 
   it("shows only currencies with transaction data and selects another currency", () => {
@@ -97,6 +103,38 @@ describe("StatsCurrencyFilter", () => {
     );
     expect(screen.queryByTestId("stats-currency-scope")).toBeNull();
     expect(screen.queryByText(/transactions · EGP/)).toBeNull();
+  });
+
+  it("renders names from the shared localized catalogue in Arabic", async () => {
+    mockLanguage = "ar";
+    if (!i18next.isInitialized) {
+      await i18next.init({
+        resources: { en: { common: enCommon }, ar: { common: arCommon } },
+        lng: "ar",
+        fallbackLng: "en",
+        ns: "common",
+        defaultNS: "common",
+        interpolation: { escapeValue: false },
+      });
+    } else {
+      await i18next.changeLanguage("ar");
+    }
+
+    render(
+      <StatsCurrencyFilter
+        availableCurrencies={["EGP", "USD"]}
+        selectedCurrency="EGP"
+        onSelectCurrency={jest.fn()}
+      />
+    );
+
+    fireEvent.press(screen.getByTestId("stats-currency-trigger"));
+
+    expect(screen.getByText("الجنيه المصري")).toBeOnTheScreen();
+    expect(screen.getByText("الدولار الأمريكي")).toBeOnTheScreen();
+    expect(screen.queryByText("Egyptian Pound")).toBeNull();
+
+    await i18next.changeLanguage("en");
   });
 
   it("keeps the flag and selected currency code inside the selector only", () => {
