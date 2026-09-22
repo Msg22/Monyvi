@@ -1,5 +1,6 @@
 import type { CurrencyType, MarketRate } from "@monyvi/db";
 import { getCurrencyRate } from "./market-rate";
+import { formatMoneyAmount } from "./money-display";
 
 const EXCHANGE_RATE_UNAVAILABLE_MESSAGE = "Exchange rate unavailable";
 const CONVERSION_UNAVAILABLE_MESSAGE = "Conversion unavailable";
@@ -76,6 +77,10 @@ export function formatExchangeRate(
 /**
  * Builds the "≈ X.XX EGP at rate 1 USD = 49.70 EGP" preview string
  * for cross-currency transactions dynamically.
+ *
+ * Retained fixed-precision exception: a conversion preview is anchored to an
+ * exchange rate, so the converted amount intentionally keeps the rate's fixed
+ * 2-decimal precision instead of the money display policy.
  */
 export function formatConversionPreview(
   amount: number | string,
@@ -160,13 +165,12 @@ const CURRENCY_SYMBOLS: Partial<Record<CurrencyType, string>> = {
 };
 
 /**
- * Default decimal precision per currency.
+ * Value precision per currency, used for rounding and validation.
  * Most currencies allow up to 2 decimal places (ISO 4217 standard).
- * Whole amounts hide their fractional part unless the caller overrides
- * `minimumFractionDigits`.
  * BHD/KWD/OMR = 3 (ISO 4217 three-decimal currencies).
  * BTC = 8 (satoshi precision).
- * Override per call via `minimumFractionDigits`/`maximumFractionDigits`.
+ * User-facing display precision lives in `getCurrencyDisplayPrecision`, which
+ * also covers zero-decimal currencies and the full three-decimal set.
  */
 export const CURRENCY_PRECISION: Partial<Record<CurrencyType, number>> = {
   // Three-decimal currencies (ISO 4217)
@@ -186,47 +190,32 @@ export function getCurrencyPrecision(currency: CurrencyType): number {
   return CURRENCY_PRECISION[currency] ?? DEFAULT_PRECISION;
 }
 
-function hasNonZeroFractionAtPrecision(
-  amount: number,
-  precision: number
-): boolean {
-  const factor = 10 ** precision;
-  const roundedMinorUnits = Math.round(Math.abs(amount) * factor);
-  return roundedMinorUnits % factor !== 0;
-}
-
 export const formatCurrency = ({
   amount,
   currency,
+  locale,
   signDisplay = "auto",
   minimumFractionDigits,
   maximumFractionDigits,
 }: {
   amount: number;
   currency: CurrencyType;
+  locale?: string;
   signDisplay?: "always" | "exceptZero" | "negative" | "never" | "auto";
   minimumFractionDigits?: number;
   maximumFractionDigits?: number;
 }): string => {
-  // Use currency-specific precision when caller doesn't override
-  const precision = getCurrencyPrecision(currency);
   // Normalize -0 to 0 (IEEE 754 artifact from floating-point arithmetic)
   const normalizedAmount = amount || 0;
-  const hasFraction = hasNonZeroFractionAtPrecision(
-    normalizedAmount,
-    precision
-  );
-  const maxDigits = maximumFractionDigits ?? precision;
-  const inferredMinDigits = hasFraction ? precision : 0;
-  const minDigits =
-    minimumFractionDigits ?? Math.min(inferredMinDigits, maxDigits);
 
-  const formattedNumber = new Intl.NumberFormat("en-US", {
-    style: "decimal",
-    minimumFractionDigits: minDigits,
-    maximumFractionDigits: maxDigits,
+  // The centralized money display policy owns fraction behavior and precision.
+  const formattedNumber = formatMoneyAmount(normalizedAmount, {
+    currency,
+    locale,
     signDisplay,
-  }).format(normalizedAmount);
+    minimumFractionDigits,
+    maximumFractionDigits,
+  });
 
   const symbol = CURRENCY_SYMBOLS[currency] || currency;
 

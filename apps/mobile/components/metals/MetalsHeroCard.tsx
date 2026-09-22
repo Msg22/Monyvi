@@ -87,15 +87,11 @@ export function MetalsHeroCard({
   const formattedTotal = formatCurrency({
     amount: totalValue,
     currency,
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
   });
 
   const formattedProfitLoss = formatCurrency({
     amount: Math.abs(profitLossAmount),
     currency,
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
   });
 
   const sign = profitLossAmount >= 0 ? "+" : "-";

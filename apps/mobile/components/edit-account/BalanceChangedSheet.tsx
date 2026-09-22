@@ -91,16 +91,11 @@ interface BalanceChangedSheetProps {
 // ---------------------------------------------------------------------------
 
 /**
- * Formats a number as a compact currency string for display.
- * Uses locale-aware formatting with 2 decimal places.
+ * Formats a balance amount with the centralized money display policy.
+ * Whole values omit the fraction; meaningful fractions are retained.
  */
 function formatAmount(amount: number, currency: CurrencyType): string {
-  return formatCurrency({
-    amount,
-    currency,
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
+  return formatCurrency({ amount, currency });
 }
 
 // ---------------------------------------------------------------------------

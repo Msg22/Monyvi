@@ -321,6 +321,41 @@ describe("notification-service", () => {
     expect(mockScheduleNotificationAsync).not.toHaveBeenCalled();
   });
 
+  describe("money display policy", () => {
+    it("omits a zero-only fractional part in the notification body", async () => {
+      mockGetPermissionsAsync.mockResolvedValueOnce(
+        createPermissionStatus({ granted: true })
+      );
+
+      await showTransactionNotification(
+        createParsedSmsTransaction(),
+        "account-1",
+        "MainCIBAccount",
+        "user-1"
+      );
+
+      const body = getScheduledNotificationInput().content.body ?? "";
+      expect(body).toContain("EGP 413 from NBE");
+      expect(body).not.toContain("EGP 413.00");
+    });
+
+    it("retains meaningful fractional digits in the notification body", async () => {
+      mockGetPermissionsAsync.mockResolvedValueOnce(
+        createPermissionStatus({ granted: true })
+      );
+
+      await showTransactionNotification(
+        { ...createParsedSmsTransaction(), amount: 413.1 },
+        "account-1",
+        "MainCIBAccount",
+        "user-1"
+      );
+
+      const body = getScheduledNotificationInput().content.body ?? "";
+      expect(body).toContain("EGP 413.10 from NBE");
+    });
+  });
+
   describe("on Android", () => {
     beforeEach(() => {
       Object.defineProperty(Platform, "OS", {

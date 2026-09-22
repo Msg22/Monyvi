@@ -74,8 +74,6 @@ function HoldingCardInner({
   const formattedValue = formatCurrency({
     amount: currentValue,
     currency,
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
   });
 
   const weight = `${assetMetal.weightGrams.toFixed(1)}${WEIGHT_UNIT}`;

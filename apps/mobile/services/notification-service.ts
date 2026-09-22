@@ -18,7 +18,8 @@
 
 import type * as ExpoNotifications from "expo-notifications";
 import { Linking, Platform } from "react-native";
-import type { ParsedSmsTransaction } from "@monyvi/logic";
+import type { CurrencyType } from "@monyvi/db";
+import { formatMoneyAmount, type ParsedSmsTransaction } from "@monyvi/logic";
 import { getRequiredCurrentUserId } from "@/services/user-data-access";
 import { logger } from "@/utils/logger";
 import { redactIdentifierForLog } from "@/utils/logger-redaction";
@@ -399,14 +400,13 @@ async function dismissDeliveredNotification(
 // ---------------------------------------------------------------------------
 
 /**
- * Format a currency amount for display in notification.
+ * Format a currency amount for the notification surface.
+ *
+ * Uses the centralized money display policy for the number while preserving the
+ * notification surface's existing `CODE amount` placement.
  */
-function formatAmount(amount: number, currency: string): string {
-  const formatted = amount.toLocaleString("en-US", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-  return `${currency} ${formatted}`;
+function formatAmount(amount: number, currency: CurrencyType): string {
+  return `${currency} ${formatMoneyAmount(amount, { currency })}`;
 }
 
 function serializeTransactionData(

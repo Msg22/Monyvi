@@ -82,7 +82,6 @@ export function BudgetAlertModal({
           overage: formatCurrency({
             amount: overage,
             currency: alert.currency,
-            maximumFractionDigits: 0,
           }),
         });
 

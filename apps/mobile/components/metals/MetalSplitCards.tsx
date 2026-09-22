@@ -58,8 +58,6 @@ function SplitCardInner({
   const formattedValue = formatCurrency({
     amount: totalValue,
     currency,
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
   });
 
   const displayPercent = Math.max(percentage, MIN_BAR_WIDTH_PERCENT);

@@ -175,9 +175,18 @@ describe("formatCurrency", () => {
       );
     });
 
-    it("uses DEFAULT_PRECISION (2) for unlisted currencies", () => {
+    it("uses DEFAULT_PRECISION (2) for ordinary two-decimal currencies", () => {
+      expect(formatCurrency({ amount: 100.75, currency: "MAD" })).toBe(
+        "100.75 MAD"
+      );
+    });
+
+    it("uses zero display precision for zero-decimal currencies", () => {
       expect(formatCurrency({ amount: 100.75, currency: "ISK" })).toBe(
-        "100.75 ISK"
+        "101 ISK"
+      );
+      expect(formatCurrency({ amount: 1000, currency: "JPY" })).toBe(
+        "\u00A51,000"
       );
     });
   });

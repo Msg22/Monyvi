@@ -319,7 +319,6 @@ function AccountsSectionComponent({
         balance: formatAccountBalance({
           balance: account.balance,
           currency: account.currency,
-          maximumFractionDigits: 0,
         }),
         type: account.type,
         cardGradient: getCardGradient({
