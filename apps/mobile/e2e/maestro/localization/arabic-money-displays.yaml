@@ -36,12 +36,19 @@ appId: com.monyvi.app
 
 # Changing the preferred currency must refresh Home without reopening the picker.
 - tapOn: "تغيير العملة"
+- scrollUntilVisible:
+    element:
+      id: "currency-code-row-USD"
+    direction: DOWN
 - tapOn:
     id: "currency-code-row-USD"
 - extendedWaitUntil:
-    visible: ".*دولار أمريكي"
+    visible: "٣٨١٫٦١ دولار أمريكي"
     timeout: 120000
+- assertVisible: "USD"
 - assertNotVisible: "١٩٬٠٨٠٫٥٥ جنيه مصري"
+- assertNotVisible:
+    id: "total-net-worth-usd-equivalent"
 
 # Restore the fixture currency for the account and transaction checks.
 - tapOn: "تغيير العملة"

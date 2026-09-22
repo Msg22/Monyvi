@@ -18,7 +18,10 @@ describe("currency localization Maestro journey", () => {
     expect(flow).toContain('id: "home-net-worth-amount"');
     expect(flow).toContain('- tapOn: "تغيير العملة"');
     expect(flow).toContain('id: "currency-code-row-USD"');
-    expect(flow).toContain('visible: ".*دولار أمريكي"');
+    expect(flow).toContain("direction: DOWN");
+    expect(flow).toContain('visible: "٣٨١٫٦١ دولار أمريكي"');
+    expect(flow).toContain('assertVisible: "USD"');
+    expect(flow).toContain('id: "total-net-worth-usd-equivalent"');
     expect(flow).toContain('id: "currency-code-row-EGP"');
     expect(flow).toContain('id: "tab-accounts"');
     expect(flow).toContain('"٢٬٥٠٠ جنيه مصري"');
