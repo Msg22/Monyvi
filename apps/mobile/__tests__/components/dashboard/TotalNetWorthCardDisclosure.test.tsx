@@ -118,11 +118,35 @@ describe("TotalNetWorthCard wealth disclosure", () => {
       textAlign: "left",
       writingDirection: "ltr",
     });
+    expect(screen.getByTestId("total-net-worth-primary-value")).toHaveProp(
+      "numberOfLines",
+      1
+    );
+    expect(screen.getByTestId("total-net-worth-primary-value")).toHaveProp(
+      "adjustsFontSizeToFit",
+      true
+    );
+    expect(screen.getByTestId("total-net-worth-primary-value")).toHaveProp(
+      "minimumFontScale",
+      0.5
+    );
 
     expect(screen.getByTestId("total-net-worth-usd-equivalent")).toHaveStyle({
       textAlign: "left",
       writingDirection: "ltr",
     });
+    expect(screen.getByTestId("total-net-worth-usd-equivalent")).toHaveProp(
+      "numberOfLines",
+      1
+    );
+    expect(screen.getByTestId("total-net-worth-usd-equivalent")).toHaveProp(
+      "adjustsFontSizeToFit",
+      true
+    );
+    expect(screen.getByTestId("total-net-worth-usd-equivalent")).toHaveProp(
+      "minimumFontScale",
+      0.75
+    );
   });
 
   it("aligns Arabic net-worth values to end/right while retaining LTR financial writing direction", () => {

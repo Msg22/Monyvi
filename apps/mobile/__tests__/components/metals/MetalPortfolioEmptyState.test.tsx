@@ -1,11 +1,13 @@
 import { fireEvent, render, screen } from "@testing-library/react-native";
 import React from "react";
 
-import type { MetalPortfolioSectionReadiness } from "@/hooks/metal-portfolio-readiness";
+import {
+  isTrueMetalPortfolioEmpty,
+  type MetalPortfolioSectionReadiness,
+} from "@/hooks/metal-portfolio-readiness";
 import type { MetalPortfolioReadModel } from "@/services/metal-portfolio-read-model-service";
 import {
   getMetalEmptyStateLayout,
-  isTrueMetalPortfolioEmpty,
   MetalPortfolioEmptyState,
 } from "@/components/metals/MetalPortfolioEmptyState";
 

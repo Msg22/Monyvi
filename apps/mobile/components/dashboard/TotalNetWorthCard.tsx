@@ -146,7 +146,10 @@ function TotalNetWorthCardComponent({
             testID="total-net-worth-values"
           >
             <Text
+              adjustsFontSizeToFit
               className="text-[38px] font-extrabold leading-[46px] tracking-tight text-white"
+              minimumFontScale={0.5}
+              numberOfLines={1}
               style={amountTextStyle}
               testID="total-net-worth-primary-value"
             >
@@ -154,7 +157,10 @@ function TotalNetWorthCardComponent({
             </Text>
             {!isPreferredCurrencyUSD && totalNetWorthUsd !== null ? (
               <Text
+                adjustsFontSizeToFit
                 className="mt-2 text-lg font-medium text-slate-100 opacity-80"
+                minimumFontScale={0.75}
+                numberOfLines={1}
                 style={amountTextStyle}
                 testID="total-net-worth-usd-equivalent"
               >

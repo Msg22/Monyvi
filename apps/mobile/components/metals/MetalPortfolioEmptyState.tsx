@@ -4,9 +4,7 @@ import {
   getTabContentBottomClearance,
   shouldUseCompactLayout,
 } from "@/constants/ui";
-import type { MetalPortfolioSectionReadiness } from "@/hooks/metal-portfolio-readiness";
 import { useUiPolishCopy } from "@/hooks/useUiPolishCopy";
-import type { MetalPortfolioReadModel } from "@/services/metal-portfolio-read-model-service";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import React from "react";
@@ -207,19 +205,6 @@ function EmptyMetalsIllustration({
         </View>
       ) : null}
     </View>
-  );
-}
-
-export function isTrueMetalPortfolioEmpty(
-  portfolio: MetalPortfolioReadModel | null,
-  readiness: MetalPortfolioSectionReadiness | undefined
-): boolean {
-  return Boolean(
-    readiness?.summary &&
-    readiness.holdings &&
-    portfolio !== null &&
-    portfolio.listState === "PORTFOLIO_EMPTY" &&
-    portfolio.activeHoldings.length === 0
   );
 }
 

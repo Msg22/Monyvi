@@ -47,6 +47,9 @@ export function HomeWealthSummary({
   useFocusEffect(
     useCallback(() => {
       setIsExpanded(false);
+      return () => {
+        setIsExpanded(false);
+      };
     }, [])
   );
 
@@ -68,9 +71,7 @@ export function HomeWealthSummary({
         opacity: 0,
         transform: [{ translateY: -8 }],
       });
-  const exiting = prefersReducedMotion
-    ? undefined
-    : FadeOutUp.duration(140);
+  const exiting = prefersReducedMotion ? undefined : FadeOutUp.duration(140);
 
   return (
     <>

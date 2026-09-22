@@ -5,13 +5,11 @@ import { View } from "react-native";
 import { useTranslation } from "react-i18next";
 
 import { AddHoldingModal } from "@/components/metals/AddHoldingModal";
-import {
-  isTrueMetalPortfolioEmpty,
-  MetalPortfolioEmptyState,
-} from "@/components/metals/MetalPortfolioEmptyState";
+import { MetalPortfolioEmptyState } from "@/components/metals/MetalPortfolioEmptyState";
 import { MetalPortfolioScreen } from "@/components/metals/MetalPortfolioScreen";
 import { PageHeader } from "@/components/navigation/PageHeader";
 import { palette } from "@/constants/colors";
+import { isTrueMetalPortfolioEmpty } from "@/hooks/metal-portfolio-readiness";
 import { useMetalPortfolio } from "@/hooks/useMetalPortfolio";
 import { usePreferredCurrency } from "@/hooks/usePreferredCurrency";
 import { useSuppressQuickActionFabWhenFocused } from "@/hooks/useQuickActionFabVisibility";

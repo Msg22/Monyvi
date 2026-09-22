@@ -196,6 +196,29 @@ describe("HomeWealthSummary", () => {
     );
   });
 
+  it("resets disclosure in the blur cleanup when Home loses focus", () => {
+    renderSummary();
+    let cleanup: (() => void) | void = undefined;
+    act(() => {
+      cleanup = mockFocusCallback?.();
+    });
+
+    fireEvent.press(screen.getByTestId("mock-wealth-disclosure"));
+    expect(screen.getByTestId("mock-wealth-breakdown")).toBeTruthy();
+
+    act(() => {
+      if (typeof cleanup === "function") {
+        cleanup();
+      }
+    });
+
+    expect(screen.queryByTestId("mock-wealth-breakdown")).toBeNull();
+    expect(screen.getByLabelText("See where your money is")).toHaveProp(
+      "accessibilityState",
+      { expanded: false }
+    );
+  });
+
   it.each(["0.01", "-0.01"])(
     "shows the disclosure for nonzero value %s",
     (totalNetWorth) => {
@@ -224,9 +247,7 @@ describe("HomeWealthSummary", () => {
     expect(screen.getByText("شوف فلوسك موزّعة فين")).toBeTruthy();
     fireEvent.press(screen.getByTestId("mock-wealth-disclosure"));
     expect(screen.getByText("إخفاء التفاصيل")).toBeTruthy();
-    expect(
-      screen.getByLabelText("إغلاق تفاصيل توزيع الفلوس")
-    ).toBeTruthy();
+    expect(screen.getByLabelText("إغلاق تفاصيل توزيع الفلوس")).toBeTruthy();
   });
 
   it("uses no animation duration under Reduce Motion", () => {

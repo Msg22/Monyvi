@@ -8,7 +8,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import Animated, {
   FadeIn,
@@ -105,7 +105,16 @@ export function QuickActionFab({
     transform: [{ rotate: `${fabRotation.value}deg` }],
   }));
 
-  if (shouldHideQuickActionFab(isRecordingActive, isSuppressed)) return null;
+  const isHidden = shouldHideQuickActionFab(isRecordingActive, isSuppressed);
+
+  useEffect(() => {
+    if (isHidden && isExpanded) {
+      setIsExpanded(false);
+      fabRotation.value = 0;
+    }
+  }, [fabRotation, isExpanded, isHidden]);
+
+  if (isHidden) return null;
 
   return (
     <>
