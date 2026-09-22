@@ -319,18 +319,17 @@ export async function completeAuthSessionFromUrl(
       };
     }
 
-    const { error } = await supabase.auth.setSession({
-      access_token: accessToken,
-      refresh_token: refreshToken,
-    });
+    try {
+      const { error } = await supabase.auth.setSession({
+        access_token: accessToken,
+        refresh_token: refreshToken,
+      });
 
-    if (error) {
-      const errorCode = getErrorCode(error);
-      return {
-        success: false,
-        error: getHumanReadableError(error),
-        errorCode: toAuthCallbackErrorCode(errorCode),
-      };
+      if (error) {
+        return createAuthCallbackFailure(error);
+      }
+    } catch (error: unknown) {
+      return createAuthCallbackFailure(error);
     }
 
     return { success: true };
@@ -338,15 +337,14 @@ export async function completeAuthSessionFromUrl(
 
   const code = queryParams?.get("code");
   if (code) {
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    try {
+      const { error } = await supabase.auth.exchangeCodeForSession(code);
 
-    if (error) {
-      const errorCode = getErrorCode(error);
-      return {
-        success: false,
-        error: getHumanReadableError(error),
-        errorCode: toAuthCallbackErrorCode(errorCode),
-      };
+      if (error) {
+        return createAuthCallbackFailure(error);
+      }
+    } catch (error: unknown) {
+      return createAuthCallbackFailure(error);
     }
 
     return { success: true };
@@ -395,9 +393,15 @@ function toAuthCallbackErrorCode(
   return "unknown";
 }
 
-function toOAuthErrorCode(
-  errorCode: AuthCallbackErrorCode
-): OAuthErrorCode {
+function createAuthCallbackFailure(error: unknown): AuthCallbackResult {
+  return {
+    success: false,
+    error: getHumanReadableError(error),
+    errorCode: toAuthCallbackErrorCode(getErrorCode(error)),
+  };
+}
+
+function toOAuthErrorCode(errorCode: AuthCallbackErrorCode): OAuthErrorCode {
   if (errorCode === "network" || errorCode === "timeout") {
     return errorCode;
   }

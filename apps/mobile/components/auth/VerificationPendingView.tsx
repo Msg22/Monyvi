@@ -34,8 +34,7 @@ export function VerificationPendingView({
     <View testID="verification-pending-view" className="flex-1">
       <View
         testID="verification-state-content"
-        className="flex-1 items-center justify-center px-5"
-        style={{ paddingBottom: 70 }}
+        className="flex-1 items-center justify-center px-5 pb-[70px]"
       >
         <View className="mb-6 h-[92px] w-[92px] items-center justify-center rounded-full border border-nileGreen-500/20 bg-nileGreen-500/10">
           <Ionicons name="mail-outline" size={43} color={accentColor} />
@@ -43,11 +42,9 @@ export function VerificationPendingView({
 
         <Text
           accessibilityRole="header"
-          className="text-center text-text-primary dark:text-text-primary-dark"
+          className="text-center text-[27px] leading-[31px] text-text-primary dark:text-text-primary-dark"
           style={{
             fontFamily: fontFamily.bold,
-            fontSize: 27,
-            lineHeight: 31,
             letterSpacing: isRTL ? 0 : -0.6,
           }}
         >
@@ -55,10 +52,9 @@ export function VerificationPendingView({
         </Text>
 
         <Text
-          className="mt-[13px] max-w-[295px] text-center text-text-secondary dark:text-text-secondary-dark"
+          className="mt-[13px] max-w-[295px] text-center text-sm text-text-secondary dark:text-text-secondary-dark"
           style={{
             fontFamily: fontFamily.regular,
-            fontSize: 14,
             lineHeight: isRTL ? 27 : 22,
           }}
         >
@@ -70,10 +66,9 @@ export function VerificationPendingView({
           className="mt-1 rounded-[7px] bg-slate-100 px-2 py-1 dark:bg-slate-800"
         >
           <Text
-            className="text-text-primary dark:text-text-primary-dark"
+            className="text-sm text-text-primary dark:text-text-primary-dark"
             style={{
               fontFamily: fontFamily.semiBold,
-              fontSize: 14,
               writingDirection: "ltr",
             }}
           >
@@ -93,8 +88,8 @@ export function VerificationPendingView({
           style={{ opacity: isResending ? 0.6 : 1 }}
         >
           <Text
-            className="text-nileGreen-700 dark:text-nileGreen-300"
-            style={{ fontFamily: fontFamily.semiBold, fontSize: 13 }}
+            className="text-[13px] text-nileGreen-700 dark:text-nileGreen-300"
+            style={{ fontFamily: fontFamily.semiBold }}
           >
             {resendLabel}
           </Text>
@@ -116,8 +111,8 @@ export function VerificationPendingView({
           color={secondaryTextColor}
         />
         <Text
-          className="text-text-secondary dark:text-text-secondary-dark"
-          style={{ fontFamily: fontFamily.medium, fontSize: 12 }}
+          className="text-xs text-text-secondary dark:text-text-secondary-dark"
+          style={{ fontFamily: fontFamily.medium }}
         >
           {t("back_to_sign_in")}
         </Text>
@@ -125,13 +120,11 @@ export function VerificationPendingView({
 
       <View
         testID="auth-privacy-footer"
-        className="items-center border-t border-slate-200 pt-[14px] dark:border-slate-700"
-        style={{ gap: 9 }}
+        className="items-center gap-[9px] border-t border-slate-200 pt-[14px] dark:border-slate-700"
       >
         <View
           testID="auth-trust-row"
-          className="flex-row items-center"
-          style={{ gap: 7 }}
+          className="flex-row items-center gap-[7px]"
         >
           <Ionicons
             name="shield-checkmark-outline"
@@ -139,18 +132,14 @@ export function VerificationPendingView({
             color={accentColor}
           />
           <Text
-            className="text-text-secondary dark:text-text-secondary-dark"
-            style={{ fontFamily: fontFamily.regular, fontSize: 11.5 }}
+            className="text-[11.5px] text-text-secondary dark:text-text-secondary-dark"
+            style={{ fontFamily: fontFamily.regular }}
           >
             {t("private_by_design")}
           </Text>
         </View>
 
-        <View
-          testID="auth-legal-row"
-          className="flex-row items-center"
-          style={{ gap: 14 }}
-        >
+        <View testID="auth-legal-row" className="flex-row items-center gap-3.5">
           <Pressable
             accessibilityRole="link"
             accessibilityLabel={t("privacy")}
@@ -158,8 +147,8 @@ export function VerificationPendingView({
             onPress={onPrivacyPress}
           >
             <Text
-              className="text-nileGreen-700 dark:text-nileGreen-300"
-              style={{ fontFamily: fontFamily.semiBold, fontSize: 11.5 }}
+              className="text-[11.5px] text-nileGreen-700 dark:text-nileGreen-300"
+              style={{ fontFamily: fontFamily.semiBold }}
             >
               {t("privacy")}
             </Text>
@@ -172,8 +161,8 @@ export function VerificationPendingView({
             onPress={onTermsPress}
           >
             <Text
-              className="text-nileGreen-700 dark:text-nileGreen-300"
-              style={{ fontFamily: fontFamily.semiBold, fontSize: 11.5 }}
+              className="text-[11.5px] text-nileGreen-700 dark:text-nileGreen-300"
+              style={{ fontFamily: fontFamily.semiBold }}
             >
               {t("terms")}
             </Text>

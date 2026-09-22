@@ -65,8 +65,7 @@ export default function AuthCallbackScreen(): React.JSX.Element {
   const params = useLocalSearchParams<Record<string, string | string[]>>();
   const callbackUrl = useURL();
   const processedUrlRef = useRef<string | null>(null);
-  const [callbackState, setCallbackState] =
-    useState<CallbackState>("waiting");
+  const [callbackState, setCallbackState] = useState<CallbackState>("waiting");
 
   useEffect(() => {
     if (!callbackUrl || processedUrlRef.current === callbackUrl) {
@@ -78,12 +77,18 @@ export default function AuthCallbackScreen(): React.JSX.Element {
     let isMounted = true;
 
     const completeCallback = async (): Promise<void> => {
-      const result = await completeAuthSessionFromUrl(callbackUrl);
-      if (!isMounted) {
-        return;
-      }
+      try {
+        const result = await completeAuthSessionFromUrl(callbackUrl);
+        if (!isMounted) {
+          return;
+        }
 
-      setCallbackState(result.success ? "completed" : "failed");
+        setCallbackState(result.success ? "completed" : "failed");
+      } catch {
+        if (isMounted) {
+          setCallbackState("failed");
+        }
+      }
     };
 
     void completeCallback();
@@ -96,11 +101,7 @@ export default function AuthCallbackScreen(): React.JSX.Element {
   let redirectHref: Href | null = null;
   if (callbackState === "failed") {
     redirectHref = "/auth";
-  } else if (
-    callbackState === "completed" &&
-    !isLoading &&
-    isAuthenticated
-  ) {
+  } else if (callbackState === "completed" && !isLoading && isAuthenticated) {
     redirectHref = isPasswordRecoveryLink(params, callbackUrl)
       ? "/settings"
       : "/";

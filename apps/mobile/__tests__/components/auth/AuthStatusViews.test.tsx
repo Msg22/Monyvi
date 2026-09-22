@@ -18,7 +18,9 @@ const COPY: Readonly<Record<string, string>> = {
 };
 
 jest.mock("react-i18next", () => ({
-  useTranslation: (): { t: (key: string, values?: { email?: string }) => string } => ({
+  useTranslation: (): {
+    t: (key: string, values?: { email?: string }) => string;
+  } => ({
     t: (key: string, values?: { email?: string }): string =>
       (COPY[key] ?? key).replace("{{email}}", values?.email ?? ""),
   }),
@@ -49,7 +51,6 @@ jest.mock("@/context/ThemeContext", () => ({
 }));
 
 describe("auth status views", () => {
-
   it("renders the approved full-page verification composition without a card", () => {
     const onResend = jest.fn<Promise<void>, []>().mockResolvedValue(undefined);
     const onBack = jest.fn();
@@ -73,14 +74,16 @@ describe("auth status views", () => {
       "user@example.com"
     );
     expect(screen.getByTestId("auth-privacy-footer")).toBeOnTheScreen();
-    expect(
-      screen.getByRole("link", { name: "Privacy" })
-    ).toBeOnTheScreen();
+    expect(screen.getByRole("link", { name: "Privacy" })).toBeOnTheScreen();
     expect(screen.getByRole("link", { name: "Terms" })).toBeOnTheScreen();
     fireEvent.press(screen.getByRole("link", { name: "Privacy" }));
     fireEvent.press(screen.getByRole("link", { name: "Terms" }));
+    fireEvent.press(screen.getByRole("button", { name: "Resend email" }));
+    fireEvent.press(screen.getByRole("button", { name: "Back to sign in" }));
     expect(onPrivacyPress).toHaveBeenCalledTimes(1);
     expect(onTermsPress).toHaveBeenCalledTimes(1);
+    expect(onResend).toHaveBeenCalledTimes(1);
+    expect(onBack).toHaveBeenCalledTimes(1);
     expect(screen.queryByTestId("verification-card")).not.toBeOnTheScreen();
   });
 
@@ -99,7 +102,9 @@ describe("auth status views", () => {
       />
     );
 
-    expect(screen.getByRole("header", { name: "Check your inbox" })).toBeOnTheScreen();
+    expect(
+      screen.getByRole("header", { name: "Check your inbox" })
+    ).toBeOnTheScreen();
     expect(screen.getByText(/user@example.com/)).toBeOnTheScreen();
     expect(
       screen.getByRole("button", {
@@ -118,7 +123,9 @@ describe("auth status views", () => {
 
     render(<ResetSentView email="user@example.com" onBack={onBack} />);
 
-    expect(screen.getByRole("header", { name: "Reset link sent" })).toBeOnTheScreen();
+    expect(
+      screen.getByRole("header", { name: "Reset link sent" })
+    ).toBeOnTheScreen();
     expect(screen.getByText(/user@example.com/)).toBeOnTheScreen();
     fireEvent.press(screen.getByRole("button", { name: "Back to sign in" }));
     expect(onBack).toHaveBeenCalledTimes(1);

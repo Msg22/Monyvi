@@ -201,7 +201,6 @@ describe("AuthScreen redirect", () => {
   });
 });
 
-
 describe("AuthCallbackScreen verification lifecycle", () => {
   beforeEach(() => {
     mockReplace.mockClear();
@@ -228,7 +227,9 @@ describe("AuthCallbackScreen verification lifecycle", () => {
       await Promise.resolve();
     });
 
-    expect(mockCompleteAuthSessionFromUrl).toHaveBeenCalledWith(mockCallbackUrl);
+    expect(mockCompleteAuthSessionFromUrl).toHaveBeenCalledWith(
+      mockCallbackUrl
+    );
     expect(mockReplace).not.toHaveBeenCalledWith("/auth");
     expect(mockReplace).not.toHaveBeenCalledWith("/");
 
@@ -253,11 +254,12 @@ describe("AuthCallbackScreen verification lifecycle", () => {
       await Promise.resolve();
     });
 
-    expect(mockCompleteAuthSessionFromUrl).toHaveBeenCalledWith(mockCallbackUrl);
+    expect(mockCompleteAuthSessionFromUrl).toHaveBeenCalledWith(
+      mockCallbackUrl
+    );
     expect(mockReplace).toHaveBeenCalledWith("/");
   });
 });
-
 
 describe("AuthCallbackScreen failed verification recovery", () => {
   beforeEach(() => {
@@ -287,10 +289,26 @@ describe("AuthCallbackScreen failed verification recovery", () => {
 
     await act(async () => {
       await Promise.resolve();
-      jest.advanceTimersByTime(60);
     });
 
-    expect(mockCompleteAuthSessionFromUrl).toHaveBeenCalledWith(mockCallbackUrl);
+    expect(mockCompleteAuthSessionFromUrl).toHaveBeenCalledWith(
+      mockCallbackUrl
+    );
+    expect(mockReplace).toHaveBeenCalledWith("/auth");
+    expect(mockReplace).not.toHaveBeenCalledWith("/");
+  });
+
+  it("routes an unexpected callback rejection to auth recovery", async () => {
+    mockCompleteAuthSessionFromUrl.mockRejectedValue(
+      new Error("unexpected callback failure")
+    );
+
+    render(<AuthCallbackScreen />);
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
     expect(mockReplace).toHaveBeenCalledWith("/auth");
     expect(mockReplace).not.toHaveBeenCalledWith("/");
   });

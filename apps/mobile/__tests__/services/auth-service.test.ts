@@ -60,7 +60,7 @@ const mockDismissAuthSession = jest.fn();
 jest.mock("expo-web-browser", () => ({
   maybeCompleteAuthSession: jest.fn(),
   openAuthSessionAsync: (...args: unknown[]): Promise<unknown> =>
-    mockOpenAuthSession(...args) as Promise<unknown>,
+    mockOpenAuthSession(...args),
   dismissAuthSession: (...args: unknown[]): unknown =>
     mockDismissAuthSession(...args) as unknown,
   WebBrowserResultType: {
@@ -99,7 +99,6 @@ function createRetryableFetchError(
   error.status = 0;
   return error;
 }
-
 
 // ---------------------------------------------------------------------------
 // Test Suite: completeAuthSessionFromUrl
@@ -144,9 +143,19 @@ describe("auth-service - completeAuthSessionFromUrl", () => {
     expect(mockSetSession).not.toHaveBeenCalled();
     expect(result).toEqual({ success: true });
   });
+
+  it("rejects callbacks when no URL was provided", async () => {
+    const result = await completeAuthSessionFromUrl(undefined);
+
+    expect(result).toEqual({
+      success: false,
+      error: "No redirect URL received from the browser.",
+      errorCode: "invalid_callback",
+    });
+    expect(mockSetSession).not.toHaveBeenCalled();
+    expect(mockExchangeCodeForSession).not.toHaveBeenCalled();
+  });
 });
-
-
 
 describe("auth-service - callback failure hardening", () => {
   beforeEach(() => {
@@ -206,6 +215,85 @@ describe("auth-service - callback failure hardening", () => {
     if (!result.success) {
       expect(result.error).not.toContain(accessToken);
       expect(result.error).not.toContain(refreshToken);
+      expect(result.error).not.toContain("monyvi://auth-callback");
+    }
+  });
+
+  it("classifies rejected token-session requests without exposing callback secrets", async () => {
+    const accessToken = "rejected-access-secret-321";
+    const refreshToken = "rejected-refresh-secret-321";
+    mockSetSession.mockRejectedValue(
+      createRetryableFetchError(
+        `network failed for ${accessToken} and ${refreshToken}`
+      )
+    );
+
+    const result = await completeAuthSessionFromUrl(
+      `monyvi://auth-callback#access_token=${accessToken}&refresh_token=${refreshToken}`
+    );
+
+    expect(result).toEqual({
+      success: false,
+      error: "No internet connection. Please check your network and try again.",
+      errorCode: "network",
+    });
+    if (!result.success) {
+      expect(result.error).not.toContain(accessToken);
+      expect(result.error).not.toContain(refreshToken);
+      expect(result.error).not.toContain("monyvi://auth-callback");
+    }
+  });
+
+  it("fails closed when only one implicit-flow token is present", async () => {
+    const result = await completeAuthSessionFromUrl(
+      "monyvi://auth-callback#access_token=orphaned-access-token"
+    );
+
+    expect(result).toEqual({
+      success: false,
+      error: "Could not extract session from the sign-in response.",
+      errorCode: "invalid_callback",
+    });
+    expect(mockSetSession).not.toHaveBeenCalled();
+    expect(mockExchangeCodeForSession).not.toHaveBeenCalled();
+  });
+
+  it("sanitizes resolved PKCE exchange failures", async () => {
+    const authorizationCode = "pkce-secret-321";
+    mockExchangeCodeForSession.mockResolvedValue({
+      data: { session: null },
+      error: new Error(`provider failed for ${authorizationCode}`),
+    });
+
+    const result = await completeAuthSessionFromUrl(
+      `monyvi://auth-callback?code=${authorizationCode}`
+    );
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.errorCode).toBe("unknown");
+      expect(result.error).not.toContain(authorizationCode);
+      expect(result.error).not.toContain("monyvi://auth-callback");
+    }
+  });
+
+  it("classifies rejected PKCE exchanges without exposing callback secrets", async () => {
+    const authorizationCode = "rejected-pkce-secret-321";
+    mockExchangeCodeForSession.mockRejectedValue(
+      createRetryableFetchError(`network failed for ${authorizationCode}`)
+    );
+
+    const result = await completeAuthSessionFromUrl(
+      `monyvi://auth-callback?code=${authorizationCode}`
+    );
+
+    expect(result).toEqual({
+      success: false,
+      error: "No internet connection. Please check your network and try again.",
+      errorCode: "network",
+    });
+    if (!result.success) {
+      expect(result.error).not.toContain(authorizationCode);
       expect(result.error).not.toContain("monyvi://auth-callback");
     }
   });
