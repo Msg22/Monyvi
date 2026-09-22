@@ -75,10 +75,10 @@ remains unavailable until that succeeds.
 
 ### End-to-end and evidence
 
-- [ ] T017 [US1] Add a deterministic local verification E2E journey covering fresh signup, pending state, captured confirmation email/link, callback opening, and authenticated routing in `apps/mobile/e2e/maestro/auth/email-verification.yaml` plus only the focused local test helper/config files required to retrieve the local auth email
+- [x] T017 [US1] Add a deterministic local verification E2E journey covering fresh signup, pending state, captured confirmation email/link, callback opening, and authenticated routing in focused Maestro/helper files — implemented by `run-email-verification-e2e.js` plus pending/confirm/invalid auth flows; helper contract and CI registration are Green at `81ece656eb5269e7b9b39948d4184a43d155d330`; emulator execution remains part of T039 because PR CI skips Android E2E by repository policy
 - [ ] T018 [US1] Capture rendered baseline side-by-side/overlay evidence against `specs/321-email-verification/mockups/verification-en-light.png` at the declared ordinary-phone context and record evidence reference plus **functional status** and **visual-fidelity status** separately in `specs/321-email-verification/tasks.md`
 - [ ] T019 [US1] Capture rendered scoped-variant evidence for English dark, Arabic RTL light/dark, compact phone, tablet/landscape where supported, and enlarged text; compare against approved bindings and record evidence/status in `specs/321-email-verification/tasks.md`
-- [ ] T020 [US1] Verify accessibility tree/screen-reader or appropriate automated evidence for verification heading, email presentation, resend button disabled/busy state, back action, language control, Privacy, and Terms; record separate accessibility status/reference in `specs/321-email-verification/tasks.md`
+- [x] T020 [US1] Verify accessibility tree/screen-reader or appropriate automated evidence for verification heading, email presentation, resend button disabled/busy state, back action, language control, Privacy, and Terms — PASS via `AuthStatusViews.test.tsx` role/state assertions and existing `LanguageSwitcherPill.test.tsx` expanded/selected button semantics; full mobile Jest Green at `81ece656eb5269e7b9b39948d4184a43d155d330`
 
 **Checkpoint**: Functional implementation/tests T010-T016 PASS at exact head `3c310feae93c1f0e75b578f722e61891337afd6d`; T017-T020 remain required before US1 visual/E2E completion.
 
@@ -102,7 +102,7 @@ the submitted email → resend → new captured verification email.
 
 - [x] T024 [US2] Expose the stable unverified-email auth classification needed by the controller without leaking raw provider copy in `apps/mobile/services/supabase.ts`
 - [x] T025 [US2] Route `email_not_confirmed` sign-in into `verificationPending`, retain the submitted normalized email, preserve resend/back behavior, and keep ordinary invalid credentials inline in `apps/mobile/hooks/useAuthScreenController.ts`
-- [ ] T026 [US2] Add/extend the local E2E recovery path for returning unverified sign-in and resend in `apps/mobile/e2e/maestro/auth/email-verification.yaml`
+- [x] T026 [US2] Add/extend the local E2E recovery path for returning unverified sign-in and resend — covered in `apps/mobile/e2e/maestro/auth/email-verification-pending.yaml`; harness/unit registration Green at `81ece656eb5269e7b9b39948d4184a43d155d330`; emulator execution remains T039
 
 **Checkpoint**: Functional US2 T021-T025 PASS at exact head `f711d0e27e748f2bc15fcef196fdd62e7766b940` — typecheck, lint, repository checks, full mobile Jest, pgTAP, and Android build are Green; T026 local E2E remains pending.
 
@@ -126,7 +126,7 @@ runtime mounts, no token appears in UI/log output, and recovery remains possible
 
 - [x] T030 [US3] Complete fail-closed callback error classification/sanitization in `apps/mobile/services/auth-service.ts` while preserving only stable user-safe error information
 - [x] T031 [US3] Implement safe invalid/expired callback recovery behavior in `apps/mobile/app/auth-callback.tsx` without introducing a second auth-state or onboarding-routing authority
-- [ ] T032 [US3] Add deterministic local/manual invalid-link coverage for malformed, expired, and reused confirmation links to `apps/mobile/e2e/maestro/auth/email-verification.yaml` where automation is reliable, and record manual-only cases in `specs/321-email-verification/quickstart.md`
+- [x] T032 [US3] Add deterministic local/manual invalid-link coverage — provider-error + missing-material Maestro flow added in `email-verification-invalid.yaml`; expired/reused/offline server-state cases documented in `quickstart.md`; helper/CI registration Green at `81ece656eb5269e7b9b39948d4184a43d155d330`
 
 **Checkpoint**: Functional US3 T027-T031 PASS at exact head `6e828813a64825bbfbed29f11e14b92c2f679d1d` — non-canonical token callbacks are rejected before session mutation; provider-declared failures recover to auth; callback secrets are not surfaced; full mobile Jest, typecheck/lint, Android build, and pgTAP are Green. T032 E2E/manual invalid-link evidence remains pending.
 
@@ -137,9 +137,9 @@ runtime mounts, no token appears in UI/log output, and recovery remains possible
 **Purpose**: Prove #321 does not regress other auth flows and complete external
 release configuration without putting secrets in Git.
 
-- [ ] T033 [P] Run and, only if needed, extend Google OAuth regression coverage in `apps/mobile/__tests__/services/auth-service.test.ts` and `apps/mobile/__tests__/app/auth-redirect.test.tsx`
-- [ ] T034 [P] Run and, only if needed, extend password-reset regression coverage in the existing auth tests under `apps/mobile/__tests__/`; do not expand the separate password-reset UX scope
-- [ ] T035 Audit #321-touched auth code for raw token/callback/SMTP logging and repository/mobile-bundle secret exposure; record the security audit result in `specs/321-email-verification/tasks.md`
+- [x] T033 [P] Run and, only if needed, extend Google OAuth regression coverage — existing implicit/PKCE/cancel/network/exception OAuth tests remained Green in full mobile Jest at exact head `81ece656eb5269e7b9b39948d4184a43d155d330`; no extra production change required
+- [x] T034 [P] Run and, only if needed, extend password-reset regression coverage — `requestPasswordReset` delegation and existing auth tests remained Green at exact head `81ece656eb5269e7b9b39948d4184a43d155d330`; password-reset UX scope unchanged
+- [x] T035 Audit #321-touched auth code for raw token/callback/SMTP logging and repository/mobile-bundle secret exposure — PASS: production auth service/route/controller contain no console/logger emission of callback/token material; callback errors are sanitized; SMTP/Resend credentials are not present in production/mobile code; E2E helper only passes token-bearing callbacks in process env to Maestro and never prints them
 - [ ] T036 Configure the hosted Monyvi Supabase project with approved Resend custom SMTP, Confirm email enabled, and the exact `monyvi://auth-callback` redirect allow-list; record non-secret configuration evidence/status in `specs/321-email-verification/quickstart.md`
 - [ ] T037 Verify Resend sending-domain DNS/authentication and delivery/bounce/suppression behavior without committing credentials; record non-secret evidence in `specs/321-email-verification/quickstart.md`
 - [ ] T038 Perform real verification-email delivery QA to Gmail, Outlook/Hotmail, and one additional common mailbox provider and record delivery/spam observations in `specs/321-email-verification/quickstart.md`
@@ -228,7 +228,7 @@ Populate during implementation:
 
 - **Functional status**: PENDING
 - **Visual fidelity status**: PENDING
-- **Accessibility evidence status**: PENDING
+- **Accessibility evidence status**: PASS — automated role/state/link/language-control semantics Green at `81ece656eb5269e7b9b39948d4184a43d155d330`
 - **External production configuration status**: PENDING
 - **Exact-head Green SHA**: PENDING
 - **Mockup binding verifier result at completion**: PENDING
