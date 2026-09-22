@@ -16,6 +16,7 @@ import { VerificationPendingView } from "@/components/auth/VerificationPendingVi
 import { LanguageSwitcherPill } from "@/components/onboarding/LanguageSwitcherPill";
 import { MonyviLogo } from "@/components/ui/MonyviLogo";
 import { palette } from "@/constants/colors";
+import { RESPONSIVE_FONT_SCALE } from "@/constants/ui";
 import { useTheme } from "@/context/ThemeContext";
 import { useAuthScreenController } from "@/hooks/useAuthScreenController";
 import { useFormScroll } from "@/hooks/useFormScroll";
@@ -28,13 +29,20 @@ export function getAuthBottomPadding(
   return bottomInset + (isCompactViewport ? 8 : 22);
 }
 
+export function shouldEnableAuthScroll(fontScale: number): boolean {
+  return fontScale >= RESPONSIVE_FONT_SCALE.denseLayout;
+}
+
 export default function AuthScreen(): React.JSX.Element {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { isDark } = useTheme();
   const isKeyboardVisible = useKeyboardVisibility();
-  const { width: viewportWidth, height: viewportHeight } =
-    useWindowDimensions();
+  const {
+    width: viewportWidth,
+    height: viewportHeight,
+    fontScale,
+  } = useWindowDimensions();
   const isCompactViewport = viewportWidth <= 390 || viewportHeight <= 850;
   const controller = useAuthScreenController();
   const { scrollViewRef, getFieldRef, onScroll, scrollToField } = useFormScroll<
@@ -61,7 +69,7 @@ export default function AuthScreen(): React.JSX.Element {
           ref={scrollViewRef}
           onScroll={onScroll}
           scrollEventThrottle={16}
-          scrollEnabled={false}
+          scrollEnabled={shouldEnableAuthScroll(fontScale)}
           bounces={false}
           overScrollMode="never"
           contentContainerStyle={{

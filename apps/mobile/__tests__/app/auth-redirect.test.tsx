@@ -24,6 +24,17 @@ let mockSafeAreaInsets: {
   bottom: number;
   left: number;
 };
+let mockFontScale: number;
+
+jest.mock("react-native/Libraries/Utilities/useWindowDimensions", () => ({
+  __esModule: true,
+  default: (): {
+    readonly width: number;
+    readonly height: number;
+    readonly scale: number;
+    readonly fontScale: number;
+  } => ({ width: 400, height: 900, scale: 1, fontScale: mockFontScale }),
+}));
 
 jest.mock("expo-linking", () => ({
   useURL: (): string | null => mockCallbackUrl,
@@ -120,9 +131,11 @@ const AuthModule = require("../../app/auth") as {
     bottomInset: number,
     isCompactViewport: boolean
   ) => number;
+  shouldEnableAuthScroll: (fontScale: number) => boolean;
 };
 const AuthScreen = AuthModule.default;
 const { getAuthBottomPadding } = AuthModule;
+const { shouldEnableAuthScroll } = AuthModule;
 const AuthCallbackScreen = (
   require("../../app/auth-callback") as {
     default: () => React.JSX.Element;
@@ -141,6 +154,7 @@ describe("AuthScreen redirect", () => {
       isLoading: false,
     };
     mockSafeAreaInsets = { top: 24, right: 0, bottom: 34, left: 0 };
+    mockFontScale = 1;
   });
 
   it("waits for the navigation container ref before redirecting authenticated users", () => {
@@ -198,6 +212,16 @@ describe("AuthScreen redirect", () => {
       "overScrollMode",
       "never"
     );
+  });
+
+  it("enables recovery scrolling only at the shared enlarged-text threshold", () => {
+    expect(shouldEnableAuthScroll(1)).toBe(false);
+    expect(shouldEnableAuthScroll(1.34)).toBe(false);
+    expect(shouldEnableAuthScroll(1.35)).toBe(true);
+
+    mockFontScale = 1.35;
+    render(<AuthScreen />);
+    expect(screen.getByTestId("auth-scroll")).toHaveProp("scrollEnabled", true);
   });
 });
 

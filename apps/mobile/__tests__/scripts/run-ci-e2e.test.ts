@@ -42,6 +42,9 @@ interface RunCiE2eModule {
     readonly env: Readonly<Record<string, string>>;
     readonly retryOnDeviceFailure: boolean;
   };
+  getEmailVerificationSuiteOptions(): {
+    readonly retryOnDeviceFailure: boolean;
+  };
   getMaestroSuiteFlowOptions(
     flow: string,
     env?: Readonly<Record<string, string | undefined>>
@@ -213,6 +216,12 @@ describe("run-ci-e2e helpers", () => {
     expect(runCiE2e.getBudgetAuthBootstrapOptions()).toEqual({
       env: { E2E_CLEAR_APP_STATE: "1" },
       retryOnDeviceFailure: true,
+    });
+  });
+
+  it("does not replay email verification sends after a device transport failure", () => {
+    expect(runCiE2e.getEmailVerificationSuiteOptions()).toEqual({
+      retryOnDeviceFailure: false,
     });
   });
 

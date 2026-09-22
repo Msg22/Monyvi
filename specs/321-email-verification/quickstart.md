@@ -106,6 +106,15 @@ Manual release configuration:
 
 No SMTP credential is committed to the repository or bundled in Expo.
 
+### Hosted configuration status (verified 2026-09-22)
+
+- **Confirm email:** enabled in the hosted Monyvi Supabase project.
+- **Native redirect allow-list:** includes the exact
+  `monyvi://auth-callback` URL.
+- **Custom SMTP:** not configured. The project still uses Supabase's built-in
+  email service, so Resend domain verification, scoped SMTP credentials, and
+  real-provider delivery evidence remain release blockers.
+
 ## Manual device QA matrix
 
 | Scenario | Android | iOS | Expected |
@@ -139,9 +148,7 @@ labels, disabled/busy states, and navigation semantics.
 
 Do not call #321 release-ready while any of these remain:
 
-- hosted confirm-email setting unverified;
 - custom SMTP not configured;
-- production redirect allow-list unverified;
 - callback E2E not proven;
 - binding verifier failing;
 - required visual/accessibility evidence missing;

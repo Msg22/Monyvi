@@ -487,9 +487,17 @@ function shouldRestoreDefaultFixtureAfterBudgets(selectedSuites) {
 }
 
 async function runEmailVerificationSuite() {
-  await runNodeScript("scripts/run-email-verification-e2e.js", [], {
-    retryOnDeviceFailure: true,
-  });
+  await runNodeScript(
+    "scripts/run-email-verification-e2e.js",
+    [],
+    getEmailVerificationSuiteOptions()
+  );
+}
+
+function getEmailVerificationSuiteOptions() {
+  return {
+    retryOnDeviceFailure: false,
+  };
 }
 
 async function maybeRunAuthBootstrap() {
@@ -633,6 +641,7 @@ module.exports = {
   getAuthBootstrapFlow,
   getInitialAuthBootstrapOptions,
   getBudgetAuthBootstrapOptions,
+  getEmailVerificationSuiteOptions,
   getMaestroSuiteFlowOptions,
   getSmsSyncJourneyOptions,
   isDeviceOfflineFailure,
