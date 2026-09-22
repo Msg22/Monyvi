@@ -43,6 +43,50 @@ fresh email signup
 
 Do not send local/E2E mail through production Resend.
 
+### Implemented local E2E harness
+
+The branch includes:
+
+- `apps/mobile/scripts/run-email-verification-e2e.js`
+- `apps/mobile/e2e/maestro/auth/email-verification-pending.yaml`
+- `apps/mobile/e2e/maestro/auth/email-verification-confirm.yaml`
+- `apps/mobile/e2e/maestro/auth/email-verification-invalid.yaml`
+- helper/unit coverage in `apps/mobile/__tests__/scripts/e2e-email-verification.test.ts`
+
+Run locally with:
+
+```bash
+npm run e2e:email-verification:local
+```
+
+The harness uses Supabase CLI's local Mailpit capture service on port 54324,
+polls the recipient-specific latest message, resolves the Supabase verification
+request without following the native redirect, verifies that the redirect base
+is exactly `monyvi://auth-callback`, and then opens that callback through
+Maestro.
+
+The auth suite is registered with the repository E2E scope resolver and CI
+runner. Existing PR CI intentionally skips emulator E2E by repository policy;
+the executable journey is therefore also part of release/device QA below.
+
+### Invalid-link manual cases
+
+The deterministic Maestro invalid flow covers a provider-declared callback
+error and a callback with missing auth material. Also verify these auth-server
+state-dependent cases manually against local Supabase and a release build:
+
+1. Open a valid confirmation link once and complete verification.
+2. Open the same single-use link again. Expected: no private runtime access;
+   return to auth recovery.
+3. Generate a confirmation link, allow it to expire (or use a controlled local
+   expiry configuration), then open it. Expected: no authenticated session and
+   safe auth recovery.
+4. Disable connectivity before opening a still-valid callback. Expected: no
+   private runtime access; recovery/retry remains possible after connectivity
+   returns.
+
+Never record raw token-bearing callback URLs in QA evidence.
+
 ## Production configuration runbook
 
 Manual release configuration:
