@@ -7,7 +7,7 @@
  */
 
 import { act, renderHook, waitFor } from "@testing-library/react-native";
-import { changeLanguage, isInitialized, use as registerPlugin } from "i18next";
+import i18next, { changeLanguage, use as registerPlugin } from "i18next";
 import { initReactI18next } from "react-i18next";
 
 import arCommon from "@/locales/ar/common.json";
@@ -63,7 +63,7 @@ jest.mock("@monyvi/logic", (): unknown => {
 });
 
 async function prepareI18n(language: "en" | "ar"): Promise<void> {
-  if (!isInitialized) {
+  if (!i18next.isInitialized) {
     await registerPlugin(initReactI18next).init({
       resources: {
         en: { common: enCommon },
