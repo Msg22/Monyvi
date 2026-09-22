@@ -3,15 +3,25 @@ import React from "react";
 
 import { TotalNetWorthCard } from "@/components/dashboard/TotalNetWorthCard";
 
+let mockLanguage: "en" | "ar" = "en";
+
 jest.mock("react-i18next", () => ({
   useTranslation: () => ({
-    i18n: { resolvedLanguage: "en" },
-    t: (key: string): string =>
-      key === "total_net_worth"
-        ? "Total net worth"
-        : key === "month"
-          ? "this month"
-          : key,
+    i18n: {
+      dir: (lng?: string): "rtl" | "ltr" =>
+        (lng ?? mockLanguage) === "ar" ? "rtl" : "ltr",
+      language: mockLanguage,
+      resolvedLanguage: mockLanguage,
+    },
+    t: (key: string): string => {
+      if (key === "total_net_worth") {
+        return mockLanguage === "ar" ? "إجمالي صافي الثروة" : "Total net worth";
+      }
+      if (key === "month") {
+        return mockLanguage === "ar" ? "هذا الشهر" : "this month";
+      }
+      return key;
+    },
   }),
 }));
 
@@ -69,6 +79,10 @@ describe("TotalNetWorthCard wealth disclosure", () => {
     expect(onPress).toHaveBeenCalledTimes(1);
   });
 
+  beforeEach(() => {
+    mockLanguage = "en";
+  });
+
   it("does not render disclosure chrome when the controller omits it", () => {
     render(
       <TotalNetWorthCard
@@ -81,5 +95,112 @@ describe("TotalNetWorthCard wealth disclosure", () => {
     );
 
     expect(screen.queryByTestId("wealth-breakdown-disclosure")).toBeNull();
+  });
+
+  it("aligns English net-worth values to start/left while retaining LTR writing direction", () => {
+    mockLanguage = "en";
+    render(
+      <TotalNetWorthCard
+        isLoading={false}
+        monthlyPercentageChange={2.4}
+        preferredCurrency="EGP"
+        totalNetWorth="1243663.92"
+        totalNetWorthUsd="23848.78"
+      />
+    );
+
+    expect(screen.getByTestId("total-net-worth-values")).toHaveProp(
+      "className",
+      expect.stringContaining("items-start")
+    );
+
+    expect(screen.getByTestId("total-net-worth-primary-value")).toHaveStyle({
+      textAlign: "left",
+      writingDirection: "ltr",
+    });
+
+    expect(screen.getByTestId("total-net-worth-usd-equivalent")).toHaveStyle({
+      textAlign: "left",
+      writingDirection: "ltr",
+    });
+  });
+
+  it("aligns Arabic net-worth values to end/right while retaining LTR financial writing direction", () => {
+    mockLanguage = "ar";
+    render(
+      <TotalNetWorthCard
+        isLoading={false}
+        monthlyPercentageChange={2.4}
+        preferredCurrency="EGP"
+        totalNetWorth="1243663.92"
+        totalNetWorthUsd="23848.78"
+      />
+    );
+
+    expect(screen.getByTestId("total-net-worth-values")).toHaveProp(
+      "className",
+      expect.stringContaining("items-end")
+    );
+
+    expect(screen.getByTestId("total-net-worth-primary-value")).toHaveStyle({
+      textAlign: "right",
+      writingDirection: "ltr",
+    });
+
+    expect(screen.getByTestId("total-net-worth-usd-equivalent")).toHaveStyle({
+      textAlign: "right",
+      writingDirection: "ltr",
+    });
+  });
+
+  it("aligns zero net-worth values correctly for both English and Arabic", () => {
+    mockLanguage = "ar";
+    const { unmount } = render(
+      <TotalNetWorthCard
+        isLoading={false}
+        monthlyPercentageChange={null}
+        preferredCurrency="EGP"
+        totalNetWorth="0"
+        totalNetWorthUsd="0"
+      />
+    );
+
+    expect(screen.getByTestId("total-net-worth-values")).toHaveProp(
+      "className",
+      expect.stringContaining("items-end")
+    );
+    expect(screen.getByTestId("total-net-worth-primary-value")).toHaveStyle({
+      textAlign: "right",
+      writingDirection: "ltr",
+    });
+    expect(screen.getByTestId("total-net-worth-usd-equivalent")).toHaveStyle({
+      textAlign: "right",
+      writingDirection: "ltr",
+    });
+
+    unmount();
+    mockLanguage = "en";
+    render(
+      <TotalNetWorthCard
+        isLoading={false}
+        monthlyPercentageChange={null}
+        preferredCurrency="EGP"
+        totalNetWorth="0"
+        totalNetWorthUsd="0"
+      />
+    );
+
+    expect(screen.getByTestId("total-net-worth-values")).toHaveProp(
+      "className",
+      expect.stringContaining("items-start")
+    );
+    expect(screen.getByTestId("total-net-worth-primary-value")).toHaveStyle({
+      textAlign: "left",
+      writingDirection: "ltr",
+    });
+    expect(screen.getByTestId("total-net-worth-usd-equivalent")).toHaveStyle({
+      textAlign: "left",
+      writingDirection: "ltr",
+    });
   });
 });

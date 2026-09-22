@@ -34,7 +34,8 @@ const populatedPortfolio = {
 jest.mock("react-i18next", () => ({
   useTranslation: () => ({
     t: (key: string): string => {
-      if (key === "my_metals") return mockLanguage === "ar" ? "معادني" : "My Metals";
+      if (key === "my_metals")
+        return mockLanguage === "ar" ? "معادني" : "My Metals";
       if (key === "add_holding")
         return mockLanguage === "ar" ? "إضافة مقتنى" : "Add holding";
       return key;
@@ -125,9 +126,9 @@ jest.mock("@/components/metals/MetalPortfolioEmptyState", () => {
   const ReactActual = jest.requireActual<typeof import("react")>("react");
   const { Pressable, View } =
     jest.requireActual<typeof import("react-native")>("react-native");
-  const actual = jest.requireActual(
-    "@/components/metals/MetalPortfolioEmptyState"
-  ) as typeof import("@/components/metals/MetalPortfolioEmptyState");
+  const actual = jest.requireActual<
+    typeof import("@/components/metals/MetalPortfolioEmptyState")
+  >("@/components/metals/MetalPortfolioEmptyState");
   return {
     ...actual,
     MetalPortfolioEmptyState: ({
@@ -175,7 +176,11 @@ jest.mock("@/components/metals/AddHoldingModal", () => {
   const { View } =
     jest.requireActual<typeof import("react-native")>("react-native");
   return {
-    AddHoldingModal: ({ visible }: { readonly visible: boolean }): React.JSX.Element =>
+    AddHoldingModal: ({
+      visible,
+    }: {
+      readonly visible: boolean;
+    }): React.JSX.Element =>
       ReactActual.createElement(View, {
         accessibilityState: { expanded: visible },
         testID: "mock-add-holding-modal",
@@ -197,8 +202,9 @@ describe("MyMetalsRoute premium empty-state chrome", () => {
     render(<MyMetalsRoute />);
 
     expect(screen.getByText("My Metals")).toBeTruthy();
-    expect(screen.queryByTestId("mock-header-add")).toBeNull();
     expect(screen.getByTestId("mock-premium-empty-state")).toBeTruthy();
+    expect(screen.getAllByTestId("mock-empty-cta")).toHaveLength(1);
+    expect(screen.queryByTestId("mock-header-add")).toBeNull();
     expect(screen.queryByTestId("metal-portfolio-summary-layout")).toBeNull();
     expect(screen.queryByTestId("metal-portfolio-filter-bar")).toBeNull();
     expect(screen.queryByText("Holdings")).toBeNull();
@@ -236,7 +242,7 @@ describe("MyMetalsRoute premium empty-state chrome", () => {
     mockPortfolioState = {
       ...emptyPortfolio,
       hasTerminalHistory: true,
-    } as unknown as MetalPortfolioReadModel;
+    };
 
     render(<MyMetalsRoute />);
 

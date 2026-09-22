@@ -9,7 +9,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import React from "react";
-import { Dimensions, I18nManager, Text, View } from "react-native";
+import { Dimensions, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import Svg, { Defs, RadialGradient, Rect, Stop } from "react-native-svg";
 
@@ -56,9 +56,13 @@ function TotalNetWorthCardComponent({
     monthlyPercentageChange !== null
       ? `${monthlyPercentageChange >= 0 ? "+" : ""}${monthlyPercentageChange.toFixed(1)}%`
       : null;
-  const locale = i18n.resolvedLanguage === "ar" ? "ar-EG" : "en-US";
+  const isRtl =
+    typeof i18n.dir === "function"
+      ? i18n.dir(i18n.resolvedLanguage) === "rtl"
+      : i18n.resolvedLanguage === "ar";
+  const locale = isRtl ? "ar-EG" : "en-US";
   const amountTextStyle = {
-    textAlign: I18nManager.isRTL ? ("right" as const) : ("left" as const),
+    textAlign: isRtl ? ("right" as const) : ("left" as const),
     writingDirection: "ltr" as const,
   };
 
@@ -124,7 +128,10 @@ function TotalNetWorthCardComponent({
                   size={13}
                   color={arrowColor}
                 />
-                <Text className="text-sm font-bold" style={{ color: arrowColor }}>
+                <Text
+                  className="text-sm font-bold"
+                  style={{ color: arrowColor }}
+                >
                   {monthlyPercentageChangeFormatted}{" "}
                   <Text className="font-medium text-slate-100">
                     {t("month")}
@@ -134,20 +141,27 @@ function TotalNetWorthCardComponent({
             ) : null}
           </View>
 
-          <Text
-            className="mt-5 text-[38px] font-extrabold leading-[46px] tracking-tight text-white"
-            style={amountTextStyle}
+          <View
+            className={`mt-5 w-full ${isRtl ? "items-end" : "items-start"}`}
+            testID="total-net-worth-values"
           >
-            {formatNetWorthAmount(totalNetWorth, preferredCurrency, locale)}
-          </Text>
-          {!isPreferredCurrencyUSD && totalNetWorthUsd !== null ? (
             <Text
-              className="mt-2 text-lg font-medium text-slate-100 opacity-80"
+              className="text-[38px] font-extrabold leading-[46px] tracking-tight text-white"
               style={amountTextStyle}
+              testID="total-net-worth-primary-value"
             >
-              ≈ {formatNetWorthAmount(totalNetWorthUsd, "USD", locale)}
+              {formatNetWorthAmount(totalNetWorth, preferredCurrency, locale)}
             </Text>
-          ) : null}
+            {!isPreferredCurrencyUSD && totalNetWorthUsd !== null ? (
+              <Text
+                className="mt-2 text-lg font-medium text-slate-100 opacity-80"
+                style={amountTextStyle}
+                testID="total-net-worth-usd-equivalent"
+              >
+                ≈ {formatNetWorthAmount(totalNetWorthUsd, "USD", locale)}
+              </Text>
+            ) : null}
+          </View>
         </View>
 
         {breakdownDisclosure ? (

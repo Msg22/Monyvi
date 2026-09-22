@@ -13,7 +13,12 @@ let mockLanguage: "en" | "ar" = "en";
 
 jest.mock("react-i18next", () => ({
   useTranslation: () => ({
-    i18n: { language: mockLanguage, resolvedLanguage: mockLanguage },
+    i18n: {
+      dir: (lng?: string): "rtl" | "ltr" =>
+        (lng ?? mockLanguage) === "ar" ? "rtl" : "ltr",
+      language: mockLanguage,
+      resolvedLanguage: mockLanguage,
+    },
     t: (key: string): string =>
       key === "portfolio.recent_history"
         ? mockLanguage === "ar"
@@ -109,17 +114,15 @@ describe("MetalPortfolioEmptyState", () => {
     const onAddPress = jest.fn();
     render(<MetalPortfolioEmptyState onAddPress={onAddPress} />);
 
-    expect(screen.getByText("Start tracking your gold and silver")).toBeTruthy();
+    expect(
+      screen.getByText("Start tracking your gold and silver")
+    ).toBeTruthy();
     expect(
       screen.getByText("Add your first holding to follow its value over time.")
     ).toBeTruthy();
+
     expect(
-      screen.getByTestId("metal-empty-silver-bar-back", {
-        includeHiddenElements: true,
-      })
-    ).toBeTruthy();
-    expect(
-      screen.getByTestId("metal-empty-silver-bar-front", {
+      screen.getByTestId("metal-empty-silver-stack", {
         includeHiddenElements: true,
       })
     ).toBeTruthy();
@@ -128,6 +131,8 @@ describe("MetalPortfolioEmptyState", () => {
         includeHiddenElements: true,
       })
     ).toBeTruthy();
+    expect(screen.queryByTestId("metal-empty-silver-bar-back")).toBeNull();
+    expect(screen.queryByTestId("metal-empty-silver-bar-front")).toBeNull();
 
     expect(
       screen.getByTestId("metal-empty-illustration", {
@@ -148,15 +153,37 @@ describe("MetalPortfolioEmptyState", () => {
       "className",
       expect.stringContaining("min-h-14")
     );
+    expect(screen.getByLabelText("Add your first holding")).toHaveProp(
+      "className",
+      expect.stringContaining("rounded-full")
+    );
+    expect(screen.getByLabelText("Add your first holding")).toHaveProp(
+      "className",
+      expect.stringContaining("overflow-hidden")
+    );
+
     expect(screen.getByTestId("metal-empty-add-gradient")).toHaveProp(
       "className",
       expect.stringContaining("rounded-full")
     );
+    expect(screen.getByTestId("metal-empty-add-gradient")).toHaveProp(
+      "startPoint",
+      [0, 0]
+    );
+    expect(screen.getByTestId("metal-empty-add-gradient")).toHaveProp(
+      "endPoint",
+      [1, 0]
+    );
+
+    expect(
+      screen.getAllByRole("button", { name: "Add your first holding" })
+    ).toHaveLength(1);
+
     fireEvent.press(screen.getByLabelText("Add your first holding"));
     expect(onAddPress).toHaveBeenCalledTimes(1);
   });
 
-  it("uses the approved Arabic copy without English UI", () => {
+  it("mirrors CTA gradient and layout for Arabic without English UI", () => {
     mockLanguage = "ar";
     render(<MetalPortfolioEmptyState onAddPress={jest.fn()} />);
 
@@ -165,20 +192,53 @@ describe("MetalPortfolioEmptyState", () => {
       screen.getByText("ضيف أول قطعة علشان تتابع قيمتها مع الوقت.")
     ).toBeTruthy();
     expect(screen.getByText("ضيف أول قطعة")).toBeTruthy();
-    expect(screen.queryByText("Start tracking your gold and silver")).toBeNull();
+    expect(
+      screen.queryByText("Start tracking your gold and silver")
+    ).toBeNull();
+
+    expect(screen.getByLabelText("ضيف أول قطعة")).toHaveProp(
+      "className",
+      expect.stringContaining("overflow-hidden")
+    );
+    expect(screen.getByLabelText("ضيف أول قطعة")).toHaveProp(
+      "className",
+      expect.stringContaining("rounded-full")
+    );
+
+    expect(screen.getByTestId("metal-empty-add-gradient")).toHaveProp(
+      "startPoint",
+      [1, 0]
+    );
+    expect(screen.getByTestId("metal-empty-add-gradient")).toHaveProp(
+      "endPoint",
+      [0, 0]
+    );
+
+    expect(
+      screen.getByTestId("metal-empty-silver-stack", {
+        includeHiddenElements: true,
+      })
+    ).toBeTruthy();
+    expect(
+      screen.getByTestId("metal-empty-gold-coin", {
+        includeHiddenElements: true,
+      })
+    ).toBeTruthy();
   });
 
-  it("reduces illustration size and gaps for compact or enlarged text", () => {
+  it("reduces illustration size and gaps for compact or enlarged text, and supports one-line title on ordinary layout", () => {
     const ordinary = getMetalEmptyStateLayout(390, 1);
     const compact = getMetalEmptyStateLayout(320, 1);
     const enlarged = getMetalEmptyStateLayout(390, 2);
 
     expect(ordinary.isCompact).toBe(false);
     expect(ordinary.illustrationSize).toBe(316);
+    expect(ordinary.titleFontSize).toBeLessThanOrEqual(22);
     expect(compact.isCompact).toBe(true);
     expect(enlarged.isCompact).toBe(true);
     expect(compact.illustrationSize).toBeLessThan(ordinary.illustrationSize);
     expect(enlarged.verticalGap).toBeLessThan(ordinary.verticalGap);
+    expect(compact.titleFontSize).toBeLessThanOrEqual(ordinary.titleFontSize);
   });
 
   it("keeps terminal History reachable as a secondary action", () => {

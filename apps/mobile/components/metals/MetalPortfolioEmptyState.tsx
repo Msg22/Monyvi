@@ -11,7 +11,6 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import React from "react";
 import {
-  I18nManager,
   Image,
   Pressable,
   ScrollView,
@@ -31,6 +30,8 @@ interface MetalPortfolioEmptyStateProps {
 export interface MetalEmptyStateLayout {
   readonly illustrationSize: number;
   readonly isCompact: boolean;
+  readonly titleFontSize: number;
+  readonly titleLineHeight: number;
   readonly verticalGap: number;
 }
 
@@ -41,7 +42,11 @@ export function MetalPortfolioEmptyState({
   onHistoryPress,
 }: MetalPortfolioEmptyStateProps): React.JSX.Element {
   const copy = useUiPolishCopy();
-  const { t } = useTranslation("metals");
+  const { t, i18n } = useTranslation("metals");
+  const isRtl =
+    typeof i18n.dir === "function"
+      ? i18n.dir(i18n.resolvedLanguage) === "rtl"
+      : i18n.resolvedLanguage === "ar";
   const { fontScale, width } = useWindowDimensions();
   const layout = getMetalEmptyStateLayout(width, fontScale);
 
@@ -64,7 +69,12 @@ export function MetalPortfolioEmptyState({
         >
           <Text
             accessibilityRole="header"
-            className="text-center text-[28px] font-bold leading-9 text-text-primary dark:text-text-primary-dark"
+            className="text-center font-bold text-text-primary dark:text-text-primary-dark"
+            style={{
+              fontSize: layout.titleFontSize,
+              lineHeight: layout.titleLineHeight,
+            }}
+            testID="metal-empty-title"
           >
             {copy.metals_empty.title}
           </Text>
@@ -77,7 +87,7 @@ export function MetalPortfolioEmptyState({
           accessible
           accessibilityLabel={copy.metals_empty.cta}
           accessibilityRole="button"
-          className="mt-7 min-h-14 w-full rounded-full"
+          className="mt-7 min-h-14 w-full overflow-hidden rounded-full"
           onPress={onAddPress}
           style={({ pressed }) => ({ opacity: pressed ? 0.78 : 1 })}
           testID="metal-empty-add"
@@ -85,8 +95,8 @@ export function MetalPortfolioEmptyState({
           <LinearGradient
             className="min-h-14 w-full flex-row items-center justify-center gap-4 rounded-full px-5 py-1.5"
             colors={[palette.nileGreen[400], palette.nileGreen[500]]}
-            end={{ x: 1, y: 0 }}
-            start={{ x: 0, y: 0 }}
+            end={isRtl ? { x: 0, y: 0 } : { x: 1, y: 0 }}
+            start={isRtl ? { x: 1, y: 0 } : { x: 0, y: 0 }}
             testID="metal-empty-add-gradient"
           >
             <View className="h-11 w-11 items-center justify-center rounded-full bg-nileGreen-900">
@@ -111,7 +121,7 @@ export function MetalPortfolioEmptyState({
               {t("portfolio.recent_history")}
             </Text>
             <Ionicons
-              name={I18nManager.isRTL ? "chevron-back" : "chevron-forward"}
+              name={isRtl ? "chevron-back" : "chevron-forward"}
               size={18}
               color={palette.nileGreen[600]}
             />
@@ -139,77 +149,46 @@ function EmptyMetalsIllustration({
       style={{ width: size, height }}
       testID="metal-empty-illustration"
     >
-      <View
-        className="absolute rounded-full border border-nileGreen-600 bg-nileGreen-800 dark:bg-nileGreen-900"
-        style={{
-          bottom: 0,
-          left: size * 0.04,
-          width: size * 0.92,
-          height: size * 0.2,
-          transform: [{ scaleY: 0.5 }],
-        }}
-      />
-
       {silverBar.kind === "object" ? (
-        <>
-          <View
-            className="absolute"
-            style={{
-              right: size * 0.07,
-              top: size * 0.03,
-              width: size * 0.59,
-              height: size * 0.34,
-              zIndex: 1,
-              shadowColor: palette.slate[950],
-              shadowOffset: { width: 0, height: 5 },
-              shadowOpacity: 0.28,
-              shadowRadius: 7,
-              elevation: 4,
-            }}
-          >
-            <Image
-              accessible={false}
-              resizeMode="contain"
-              source={silverBar.source}
-              style={{ width: "100%", height: "100%" }}
-              testID="metal-empty-silver-bar-back"
-            />
-          </View>
-          <View
-            className="absolute"
-            style={{
-              right: size * 0.02,
-              top: size * 0.18,
-              width: size * 0.59,
-              height: size * 0.34,
-              zIndex: 2,
-              shadowColor: palette.slate[950],
-              shadowOffset: { width: 0, height: 5 },
-              shadowOpacity: 0.28,
-              shadowRadius: 7,
-              elevation: 4,
-            }}
-          >
-            <Image
-              accessible={false}
-              resizeMode="contain"
-              source={silverBar.source}
-              style={{ width: "100%", height: "100%" }}
-              testID="metal-empty-silver-bar-front"
-            />
-          </View>
-        </>
+        <View
+          accessible={false}
+          importantForAccessibility="no-hide-descendants"
+          className="absolute"
+          style={{
+            right: size * 0.08,
+            top: size * 0.04,
+            width: size * 0.62,
+            height: size * 0.62,
+            zIndex: 1,
+            shadowColor: palette.slate[950],
+            shadowOffset: { width: 0, height: 6 },
+            shadowOpacity: 0.3,
+            shadowRadius: 8,
+            elevation: 4,
+          }}
+        >
+          <Image
+            accessible={false}
+            importantForAccessibility="no-hide-descendants"
+            resizeMode="contain"
+            source={silverBar.source}
+            style={{ width: "100%", height: "100%" }}
+            testID="metal-empty-silver-stack"
+          />
+        </View>
       ) : null}
 
       {goldCoin.kind === "object" ? (
         <View
+          accessible={false}
+          importantForAccessibility="no-hide-descendants"
           className="absolute"
           style={{
-            left: size * 0.05,
-            top: size * 0.22,
-            width: size * 0.54,
-            height: size * 0.54,
-            zIndex: 3,
+            left: size * 0.08,
+            top: size * 0.16,
+            width: size * 0.52,
+            height: size * 0.52,
+            zIndex: 2,
             shadowColor: palette.slate[950],
             shadowOffset: { width: 0, height: 6 },
             shadowOpacity: 0.32,
@@ -219,6 +198,7 @@ function EmptyMetalsIllustration({
         >
           <Image
             accessible={false}
+            importantForAccessibility="no-hide-descendants"
             resizeMode="contain"
             source={goldCoin.source}
             style={{ width: "100%", height: "100%" }}
@@ -236,10 +216,10 @@ export function isTrueMetalPortfolioEmpty(
 ): boolean {
   return Boolean(
     readiness?.summary &&
-      readiness.holdings &&
-      portfolio !== null &&
-      portfolio.listState === "PORTFOLIO_EMPTY" &&
-      portfolio.activeHoldings.length === 0
+    readiness.holdings &&
+    portfolio !== null &&
+    portfolio.listState === "PORTFOLIO_EMPTY" &&
+    portfolio.activeHoldings.length === 0
   );
 }
 
@@ -252,5 +232,7 @@ export function getMetalEmptyStateLayout(
     isCompact,
     illustrationSize: isCompact ? 244 : 316,
     verticalGap: isCompact ? 12 : 24,
+    titleFontSize: isCompact ? 20 : 22,
+    titleLineHeight: isCompact ? 26 : 28,
   };
 }
