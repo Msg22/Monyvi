@@ -17,7 +17,8 @@ import type {
   RecurringPayment,
   RecurringStatus,
 } from "@monyvi/db";
-import { calculateCalendarDaysUntil, formatCurrency } from "@monyvi/logic";
+import { calculateCalendarDaysUntil } from "@monyvi/logic";
+import { formatLocalizedMoneyAmount } from "@/utils/localized-money-display";
 import React from "react";
 import { useTranslation } from "react-i18next";
 import {
@@ -152,7 +153,10 @@ export function HeroSummary({
           <Text className="text-2xl font-extrabold mt-0.5 text-nileGreen-700 dark:text-nileGreen-400">
             {thisMonth === null
               ? "—"
-              : formatCurrency({ amount: thisMonth, currency: currencyCode })}
+              : formatLocalizedMoneyAmount({
+                  amount: thisMonth,
+                  currency: currencyCode,
+                })}
           </Text>
         </View>
 
@@ -164,7 +168,7 @@ export function HeroSummary({
             value={
               next7Days === null
                 ? "—"
-                : formatCurrency({
+                : formatLocalizedMoneyAmount({
                     amount: next7Days,
                     currency: currencyCode,
                   })
@@ -224,7 +228,7 @@ export function NextPaymentInsight({
               testID="recurring-payments-next-insight-amount"
               className="shrink-0 text-sm font-bold me-2 text-nileGreen-700 dark:text-nileGreen-400"
             >
-              {formatCurrency({
+              {formatLocalizedMoneyAmount({
                 amount: payment.amount,
                 currency: payment.currency,
               })}
@@ -366,7 +370,7 @@ export function PaymentRow({
                   : "text-text-primary dark:text-text-primary-dark"
               }`}
             >
-              {formatCurrency({
+              {formatLocalizedMoneyAmount({
                 amount: payment.amount,
                 currency: payment.currency,
               })}

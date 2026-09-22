@@ -77,7 +77,7 @@ describe("PR #271 review follow-up regressions", () => {
     expect(route).not.toMatch(/const parsed = Number\(value\)/);
     expect(card).toMatch(/totalNetWorth:\s*number \| string \| null/);
     expect(card).toMatch(/totalNetWorthUsd:\s*number \| string \| null/);
-    expect(card).toContain("formatCanonicalDecimalForDisplay");
+    expect(card).toContain("formatLocalizedMoneyAmount");
   });
 
   it("validates History lifecycle entries before counts and pagination", () => {
@@ -234,7 +234,7 @@ describe("PR #271 review follow-up regressions", () => {
       "apps/mobile/services/account-list-read-model-service.ts"
     );
     expect(service).toContain("convertSelectedCurrentAmount");
-    expect(service).toContain("formatCurrency");
+    expect(service).toContain("formatLocalizedMoneyAmount");
   });
 
   it("observes snapshot evidence columns that can change in place", () => {

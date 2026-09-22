@@ -23,6 +23,7 @@ const MOCK_RATE_COPY: Readonly<
     live_rates: "Live Rates",
     rates: "Rates",
     live_badge: "Live",
+    price_per_gram: "{{amount}}/g",
   },
   ar: {
     "rate.fresh":
@@ -40,6 +41,7 @@ const MOCK_RATE_COPY: Readonly<
     live_rates: "الأسعار المباشرة",
     rates: "أسعار السوق",
     live_badge: "مباشر",
+    price_per_gram: "{{amount}}/جم",
   },
 };
 
@@ -102,11 +104,11 @@ function screenState(
     isStale: false,
     hasData: true,
     metals: {
-      price24k: "3,100",
-      price21k: "2,712",
-      price18k: "2,325",
+      price24k: "EGP 3,100",
+      price21k: "EGP 2,712",
+      price18k: "EGP 2,325",
       goldTrendPercent: 1.2,
-      silverPrice: "40",
+      silverPrice: "EGP 40",
       silverTrendPercent: -0.2,
       platinumPrice: "999",
       platinumTrendPercent: 0.5,
@@ -185,7 +187,7 @@ describe("LiveRatesScreen Metals V1 production presentation", () => {
 
     render(<LiveRatesScreen />);
 
-    expect(screen.getByText("E£ 40/g")).toBeOnTheScreen();
+    expect(screen.getByText("EGP 40/g")).toBeOnTheScreen();
     expect(screen.getByText("offline_mode")).toBeOnTheScreen();
     fireEvent.press(screen.getByLabelText("Open currency search"));
     expect(screen.getByPlaceholderText("search_currencies")).toBeOnTheScreen();
@@ -228,7 +230,7 @@ describe("LiveRatesScreen Metals V1 production presentation", () => {
 
     render(<LiveRatesScreen />);
 
-    expect(screen.getByText("E£ 40/g")).toBeOnTheScreen();
+    expect(screen.getByText("EGP 40/g")).toBeOnTheScreen();
     expect(
       screen.getByText(
         "Rates: couldn’t refresh. Showing the last available rate."

@@ -1,11 +1,9 @@
 import { TotalNetWorthSkeleton } from "@/components/dashboard/skeletons/TotalNetWorthSkeleton";
 import { palette } from "@/constants/colors";
+import type { SupportedLanguage } from "@/i18n/translation-schema";
+import { formatLocalizedMoneyAmount } from "@/utils/localized-money-display";
 import type { CurrencyType } from "@monyvi/db";
-import {
-  formatCanonicalDecimalForDisplay,
-  formatCurrency,
-  resolveCurrencyDisplayMinorUnits,
-} from "@monyvi/logic";
+import { resolveCurrencyDisplayMinorUnits } from "@monyvi/logic";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import React from "react";
@@ -59,7 +57,7 @@ function TotalNetWorthCardComponent({
     typeof i18n.dir === "function"
       ? i18n.dir(i18n.resolvedLanguage) === "rtl"
       : i18n.resolvedLanguage === "ar";
-  const locale = isRtl ? "ar-EG" : "en-US";
+  const language: SupportedLanguage = isRtl ? "ar" : "en";
   const amountTextStyle = {
     textAlign: isRtl ? ("right" as const) : ("left" as const),
     writingDirection: "ltr" as const,
@@ -145,16 +143,22 @@ function TotalNetWorthCardComponent({
             className={`mt-5 w-full ${isRtl ? "items-end" : "items-start"}`}
             testID="total-net-worth-values"
           >
-            <Text
-              adjustsFontSizeToFit
-              className="text-[38px] font-extrabold leading-[46px] tracking-tight text-white"
-              minimumFontScale={0.5}
-              numberOfLines={1}
-              style={amountTextStyle}
-              testID="total-net-worth-primary-value"
-            >
-              {formatNetWorthAmount(totalNetWorth, preferredCurrency, locale)}
-            </Text>
+            <View testID="home-net-worth-amount">
+              <Text
+                adjustsFontSizeToFit
+                className="text-[38px] font-extrabold leading-[46px] tracking-tight text-white"
+                minimumFontScale={0.5}
+                numberOfLines={1}
+                style={amountTextStyle}
+                testID="total-net-worth-primary-value"
+              >
+                {formatNetWorthAmount(
+                  totalNetWorth,
+                  preferredCurrency,
+                  language
+                )}
+              </Text>
+            </View>
             {!isPreferredCurrencyUSD && totalNetWorthUsd !== null ? (
               <Text
                 adjustsFontSizeToFit
@@ -164,7 +168,7 @@ function TotalNetWorthCardComponent({
                 style={amountTextStyle}
                 testID="total-net-worth-usd-equivalent"
               >
-                ≈ {formatNetWorthAmount(totalNetWorthUsd, "USD", locale)}
+                ≈ {formatNetWorthAmount(totalNetWorthUsd, "USD", language)}
               </Text>
             ) : null}
           </View>
@@ -185,20 +189,25 @@ function TotalNetWorthCardComponent({
 function formatNetWorthAmount(
   value: number | string | null,
   currency: CurrencyType,
-  locale: string
+  language: SupportedLanguage
 ): string {
   if (value === null) return "—";
-  if (typeof value === "number") {
-    return formatCurrency({ amount: value, currency });
-  }
-  const precision = resolveCurrencyDisplayMinorUnits(currency);
+
   try {
-    const amount = formatCanonicalDecimalForDisplay(value, {
-      locale,
-      minimumFractionDigits: precision,
-      maximumFractionDigits: precision,
+    const isCanonicalEnglishAmount =
+      typeof value === "string" && language === "en";
+    const fractionDigits = isCanonicalEnglishAmount
+      ? resolveCurrencyDisplayMinorUnits(currency)
+      : undefined;
+    return formatLocalizedMoneyAmount({
+      amount: value,
+      currency,
+      language,
+      minimumFractionDigits: fractionDigits,
+      maximumFractionDigits: fractionDigits,
+      englishPresentation:
+        typeof value === "string" ? "code-prefix" : "standard",
     });
-    return `${currency} ${amount}`;
   } catch {
     return "—";
   }

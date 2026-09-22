@@ -732,7 +732,7 @@ describe("approved active holding-detail fidelity", () => {
     expect(screen.queryByText("EGP 1,000.00")).toBeNull();
     fireEvent.press(screen.getByText("How this value was calculated"));
     expect(screen.getByText("EGP 1,000.00")).toBeTruthy();
-    expect(screen.getByText("EGP -150.00")).toBeTruthy();
+    expect(screen.getByText("- EGP 150.00")).toBeTruthy();
     expect(screen.getByText("EGP 1,550.00 profit from this sale")).toBeTruthy();
   });
 

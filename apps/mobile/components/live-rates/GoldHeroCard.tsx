@@ -37,7 +37,6 @@ interface GoldHeroCardProps {
   readonly price21k: string;
   readonly price18k: string;
   readonly trendPercent: number | null;
-  readonly currencySymbol: string;
 }
 
 // =============================================================================
@@ -95,14 +94,9 @@ function TrendBadge({
 interface PurityChipProps {
   readonly karat: number;
   readonly price: string;
-  readonly currencySymbol: string;
 }
 
-function PurityChip({
-  karat,
-  price,
-  currencySymbol,
-}: PurityChipProps): React.JSX.Element {
+function PurityChip({ karat, price }: PurityChipProps): React.JSX.Element {
   const { t } = useTranslation("metals");
   return (
     <View
@@ -113,7 +107,7 @@ function PurityChip({
         {t("karat_label", { karat })}
       </Text>
       <Text className="text-sm font-semibold text-white">
-        {t("price_gram_with_symbol", { currencySymbol, price })}
+        {t("price_per_gram", { amount: price })}
       </Text>
     </View>
   );
@@ -128,7 +122,6 @@ export function GoldHeroCard({
   price21k,
   price18k,
   trendPercent,
-  currencySymbol,
 }: GoldHeroCardProps): React.JSX.Element {
   const { t } = useTranslation("metals");
   return (
@@ -149,7 +142,7 @@ export function GoldHeroCard({
 
       {/* 24K Price — large display */}
       <Text className="text-[28px] font-bold text-white tracking-tight">
-        {t("price_gram_with_symbol", { currencySymbol, price: price24k })}
+        {t("price_per_gram", { amount: price24k })}
       </Text>
 
       {/* Subtitle + trend */}
@@ -160,16 +153,8 @@ export function GoldHeroCard({
 
       {/* 21K and 18K chips */}
       <View className="flex-row mt-3">
-        <PurityChip
-          karat={KARAT_21}
-          price={price21k}
-          currencySymbol={currencySymbol}
-        />
-        <PurityChip
-          karat={KARAT_18}
-          price={price18k}
-          currencySymbol={currencySymbol}
-        />
+        <PurityChip karat={KARAT_21} price={price21k} />
+        <PurityChip karat={KARAT_18} price={price18k} />
       </View>
     </View>
   );

@@ -8,6 +8,7 @@ import { sumSelectedCurrentAmounts } from "@/services/current-market-snapshot-ca
 import { buildAccountConvertedSubtitles } from "@/services/account-list-read-model-service";
 import { Q } from "@nozbe/watermelondb";
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   observeOwnedById,
   queryChildrenOfOwnedParents,
@@ -81,6 +82,8 @@ export function useAccounts(): UseAccountsResult {
   const { selectedSnapshot } = useMarketRates();
   const { preferredCurrency } = usePreferredCurrency();
   const { userId, isResolvingUser } = useCurrentUser();
+  const { i18n } = useTranslation();
+  const language = i18n.language === "ar" ? "ar" : "en";
 
   const refetch = (): void => {
     setRefreshKey((prev) => prev + 1);
@@ -144,8 +147,9 @@ export function useAccounts(): UseAccountsResult {
       buildAccountConvertedSubtitles({
         accounts,
         currentSnapshot: selectedSnapshot,
+        language,
       }),
-    [accounts, selectedSnapshot]
+    [accounts, language, selectedSnapshot]
   );
 
   return {

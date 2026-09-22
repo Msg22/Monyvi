@@ -11,6 +11,7 @@ import { useTranslation } from "react-i18next";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   formatCanonicalDecimalForDisplay,
+  isSupportedMetalsIsoCurrencyCode,
   resolvePuritySelection,
 } from "@monyvi/logic";
 
@@ -39,6 +40,7 @@ import type {
   MetalDetailReadModel,
   MetalDetailTimelineItem,
 } from "@/services/metal-detail-read-model-service";
+import { formatLocalizedMoneyAmount } from "@/utils/localized-money-display";
 
 interface MetalHoldingDetailScreenProps {
   readonly actions: readonly HoldingActionDescriptor[];
@@ -864,24 +866,36 @@ function displayAmount(
   currency: string,
   locale: string
 ): string {
+  if (!isSupportedMetalsIsoCurrencyCode(currency)) return "—";
   try {
     const decimalPlaces = resolveCurrencyDisplayDecimalPlaces(currency);
-    return `${currency} ${formatCanonicalDecimalForDisplay(value, {
-      locale,
+    return formatLocalizedMoneyAmount({
+      amount: value,
+      currency,
+      language: locale.toLowerCase().startsWith("ar") ? "ar" : "en",
       minimumFractionDigits: decimalPlaces,
       maximumFractionDigits: decimalPlaces,
-    })}`;
+      englishPresentation: "code-prefix",
+    });
   } catch {
     return "—";
   }
 }
 
 function signedAmount(value: string, currency: string, locale: string): string {
+  if (!isSupportedMetalsIsoCurrencyCode(currency)) return "—";
   const sign = getCurrencyDisplaySign(value, currency);
   if (sign === null) return "—";
-  const prefix = sign === "positive" ? "+ " : sign === "negative" ? "- " : "";
-  const unsignedValue = value.startsWith("-") ? value.slice(1) : value;
-  return `${prefix}${displayAmount(unsignedValue, currency, locale)}`;
+  const decimalPlaces = resolveCurrencyDisplayDecimalPlaces(currency);
+  return formatLocalizedMoneyAmount({
+    amount: value,
+    currency,
+    language: locale.toLowerCase().startsWith("ar") ? "ar" : "en",
+    signDisplay: "exceptZero",
+    minimumFractionDigits: decimalPlaces,
+    maximumFractionDigits: decimalPlaces,
+    englishPresentation: "code-prefix",
+  });
 }
 
 function getGainTextClass(value: CurrencyDisplaySign | null): string {

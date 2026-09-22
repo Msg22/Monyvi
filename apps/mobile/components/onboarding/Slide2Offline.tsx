@@ -3,6 +3,7 @@ import { View, Text } from "react-native";
 import { useTranslation } from "react-i18next";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { palette } from "@/constants/colors";
+import { formatLocalizedMoneyAmount } from "@/utils/localized-money-display";
 import { PitchMockCard } from "./PitchMockCard";
 
 /**
@@ -19,7 +20,7 @@ import { PitchMockCard } from "./PitchMockCard";
  */
 interface MockTx {
   readonly emoji: string;
-  readonly amount: string;
+  readonly amount: number;
   readonly category: string;
   readonly time: string;
 }
@@ -27,16 +28,17 @@ interface MockTx {
 const MOCK_TX: readonly MockTx[] = [
   {
     emoji: "☕",
-    amount: "200 EGP",
+    amount: 200,
     category: "Food & Drinks",
     time: "12:45 PM",
   },
-  { emoji: "🚌", amount: "85 EGP", category: "Transport", time: "12:52 PM" },
-  { emoji: "🛒", amount: "340 EGP", category: "Groceries", time: "1:03 PM" },
+  { emoji: "🚌", amount: 85, category: "Transport", time: "12:52 PM" },
+  { emoji: "🛒", amount: 340, category: "Groceries", time: "1:03 PM" },
 ];
 
 export function Slide2Offline(): React.ReactElement {
-  const { t } = useTranslation("onboarding");
+  const { t, i18n } = useTranslation("onboarding");
+  const language = i18n.dir() === "rtl" ? "ar" : "en";
 
   return (
     <PitchMockCard>
@@ -71,7 +73,7 @@ export function Slide2Offline(): React.ReactElement {
       <View className="mt-2" style={{ gap: 8 }}>
         {MOCK_TX.map((tx) => (
           <View
-            key={tx.amount + tx.time}
+            key={`${tx.amount}-${tx.time}`}
             className="flex-row items-center"
             style={{ gap: 10 }}
           >
@@ -80,8 +82,14 @@ export function Slide2Offline(): React.ReactElement {
             </View>
             <View className="flex-1">
               <Text className="text-sm font-semibold text-slate-900 dark:text-white">
-                {/* i18n-ignore: numeric mock value baked into the illustration */}
-                {tx.amount}
+                {formatLocalizedMoneyAmount({
+                  amount: tx.amount,
+                  currency: "EGP",
+                  language,
+                  englishPresentation: "code-suffix",
+                  minimumFractionDigits: 0,
+                  maximumFractionDigits: 0,
+                })}
               </Text>
               <Text className="text-xs text-slate-500 dark:text-slate-400">
                 {/* i18n-ignore: mock category + timestamp string for the illustration */}

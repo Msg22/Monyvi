@@ -294,9 +294,9 @@ describe("issue #302 cross-consumer snapshot identity", () => {
     const usdRow = result.current.currencies.find(
       (currency) => currency.code === "USD"
     );
-    const expectedUsd = formatRate(
+    const expectedUsd = `EGP ${formatRate(
       Number(new Decimal("3738.74000000").div("0.0210523309"))
-    );
+    )}`;
     expect(usdRow?.trust.source).toBe("metals.dev");
     expect(usdRow).toBeDefined();
     expect(result.current.metals.price24k).toBe(expectedUsd);

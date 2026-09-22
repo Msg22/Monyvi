@@ -33,6 +33,7 @@ interface DropdownBaseProps<T> {
   className?: string;
   placeholder?: string;
   disabled?: boolean;
+  testID?: string;
 }
 
 interface DropdownInlineProps<T> extends DropdownBaseProps<T> {
@@ -61,6 +62,7 @@ interface DropdownItemRowProps<T> {
   isLast: boolean;
   isDark: boolean;
   onPress: () => void;
+  testID?: string;
 }
 
 function DropdownItemRow<T extends string | number>({
@@ -69,9 +71,11 @@ function DropdownItemRow<T extends string | number>({
   isLast,
   isDark,
   onPress,
+  testID,
 }: DropdownItemRowProps<T>): React.JSX.Element {
   return (
     <TouchableOpacity
+      testID={testID}
       onPress={onPress}
       activeOpacity={0.6}
       className={`flex-row items-center p-4 ${
@@ -136,6 +140,7 @@ interface DropdownModalViewProps<T> {
   isDark: boolean;
   onChange: (value: T) => void;
   onToggle: () => void;
+  testID?: string;
 }
 
 function DropdownModalView<T extends string | number>({
@@ -146,6 +151,7 @@ function DropdownModalView<T extends string | number>({
   isDark,
   onChange,
   onToggle,
+  testID,
 }: DropdownModalViewProps<T>): React.JSX.Element {
   const bottomInset = useModalBottomInset();
 
@@ -193,6 +199,11 @@ function DropdownModalView<T extends string | number>({
                     isSelected={item.value === value}
                     isLast={index === items.length - 1}
                     isDark={isDark}
+                    testID={
+                      testID
+                        ? `${testID}-option-${String(item.value)}`
+                        : undefined
+                    }
                     onPress={() => {
                       onChange(item.value);
                       onToggle();
@@ -231,6 +242,7 @@ export function Dropdown<T extends string | number>({
   placeholder = "Select...",
   useModal = false,
   disabled = false,
+  testID,
 }: DropdownProps<T>): React.JSX.Element {
   const { isDark } = useTheme();
   const selectedItem = items.find((item) => item.value === value);
@@ -241,6 +253,7 @@ export function Dropdown<T extends string | number>({
 
       <View className="rounded-2xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800 overflow-hidden shadow-sm">
         <TouchableOpacity
+          testID={testID ? `${testID}-trigger` : undefined}
           onPress={onToggle}
           activeOpacity={0.7}
           disabled={disabled}
@@ -285,6 +298,9 @@ export function Dropdown<T extends string | number>({
                 isSelected={item.value === value}
                 isLast={index === items.length - 1}
                 isDark={isDark}
+                testID={
+                  testID ? `${testID}-option-${String(item.value)}` : undefined
+                }
                 onPress={() => {
                   onChange(item.value);
                   onToggle();
@@ -305,6 +321,7 @@ export function Dropdown<T extends string | number>({
           isDark={isDark}
           onChange={onChange}
           onToggle={onToggle}
+          testID={testID}
         />
       )}
     </View>

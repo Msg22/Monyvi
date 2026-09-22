@@ -14,6 +14,7 @@ import { useTranslation } from "react-i18next";
 
 import { resolveLocale } from "@/components/metals/portfolio-presentation";
 import type { WealthBreakdownReadModel } from "@/services/net-worth-read-model-service";
+import { formatLocalizedMoneyAmount } from "@/utils/localized-money-display";
 
 interface WealthBreakdownSectionProps {
   readonly breakdown: WealthBreakdownReadModel | null;
@@ -112,11 +113,7 @@ export function WealthBreakdownSection({
             style={({ pressed }) => ({ opacity: pressed ? 0.72 : 1 })}
             testID="wealth-breakdown-close"
           >
-            <Ionicons
-              color={palette.slate[500]}
-              name="close"
-              size={24}
-            />
+            <Ionicons color={palette.slate[500]} name="close" size={24} />
           </Pressable>
         ) : null}
       </View>
@@ -339,12 +336,14 @@ function formatDecimalCurrency(
   if (value === null) return "—";
   const maximumFractionDigits = resolveCurrencyDisplayMinorUnits(currency);
   try {
-    const amount = formatCanonicalDecimalForDisplay(value, {
-      locale,
+    return formatLocalizedMoneyAmount({
+      amount: value,
+      currency,
+      language: locale.toLowerCase().startsWith("ar") ? "ar" : "en",
       minimumFractionDigits: 0,
       maximumFractionDigits,
+      englishPresentation: "code-suffix",
     });
-    return `${amount} ${currency}`;
   } catch {
     return "—";
   }

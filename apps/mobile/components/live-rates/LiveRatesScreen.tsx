@@ -142,7 +142,6 @@ export function LiveRatesScreen(): React.JSX.Element {
               price21k={metals.price21k}
               price18k={metals.price18k}
               trendPercent={metals.goldTrendPercent}
-              currencySymbol={metals.currencySymbol}
             />
 
             <View testID="live-rates-silver-card" className="mt-3 w-full">
@@ -151,7 +150,6 @@ export function LiveRatesScreen(): React.JSX.Element {
                 price={metals.silverPrice}
                 trendPercent={metals.silverTrendPercent}
                 borderColor={palette.silver[500]}
-                currencySymbol={metals.currencySymbol}
               />
             </View>
 

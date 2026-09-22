@@ -6,7 +6,7 @@
  * Features: Filter chips for different time periods, dynamic title
  */
 
-import { formatCurrency } from "@monyvi/logic";
+import { formatLocalizedMoneyAmount } from "@/utils/localized-money-display";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import React, { useCallback, useState } from "react";
@@ -209,7 +209,7 @@ function ThisMonthComponent(): React.JSX.Element {
             <Text className="text-sm font-semibold text-nileGreen-500">
               {data.totalIncome === null
                 ? "—"
-                : formatCurrency({
+                : formatLocalizedMoneyAmount({
                     amount: data.totalIncome,
                     currency: preferredCurrency,
                   })}{" "}
@@ -223,7 +223,7 @@ function ThisMonthComponent(): React.JSX.Element {
             <Text className="text-sm font-semibold text-red-500">
               {data.totalExpenses === null
                 ? "—"
-                : formatCurrency({
+                : formatLocalizedMoneyAmount({
                     amount: data.totalExpenses,
                     currency: preferredCurrency,
                   })}{" "}
@@ -243,7 +243,7 @@ function ThisMonthComponent(): React.JSX.Element {
             >
               {data.savings === null
                 ? "—"
-                : formatCurrency({
+                : formatLocalizedMoneyAmount({
                     amount: Math.abs(data.savings),
                     currency: preferredCurrency,
                   })}{" "}

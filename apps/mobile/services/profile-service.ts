@@ -89,6 +89,17 @@ async function getProfile(): Promise<Profile> {
   return profile;
 }
 
+export async function getPreferredLanguageForUser(
+  expectedUserId: string
+): Promise<SupportedLanguage | null> {
+  const profile = await getProfile();
+  if (profile.userId !== expectedUserId) {
+    return null;
+  }
+
+  return profile.preferredLanguage;
+}
+
 function normalizeAiProcessingConsent(
   consent: unknown
 ): AiProcessingConsent | null {

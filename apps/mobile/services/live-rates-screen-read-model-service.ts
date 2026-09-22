@@ -1,13 +1,13 @@
-import type { CurrencyType } from "@monyvi/db";
+import type { SupportedLanguage } from "@/i18n/translation-schema";
 import { getCurrencyName } from "@/utils/currency-localization";
+import { formatLocalizedMoneyAmount } from "@/utils/localized-money-display";
+import type { CurrencyType } from "@monyvi/db";
 import {
   type CurrencyInfo,
   type CurrentMarketInstrument,
   type SupportedMetal,
-  CURRENCY_INFO_MAP,
   SUPPORTED_CURRENCIES,
   calculateTrendPercent,
-  formatRate,
   getCurrencyUsdValue,
   isSupportedMetalsIsoCurrencyCode,
   parseCanonicalDecimal,
@@ -30,7 +30,6 @@ export interface MetalDisplayData {
   readonly goldTrendPercent: number | null;
   readonly silverPrice: string;
   readonly silverTrendPercent: number | null;
-  readonly currencySymbol: string;
 }
 
 export interface CurrencyDisplayItem {
@@ -74,23 +73,19 @@ export interface LiveRatesScreenReadModel {
 export function buildLiveRatesScreenReadModel(
   input: LiveRatesScreenReadModelInput
 ): LiveRatesScreenReadModel {
-  const currencySymbol =
-    CURRENCY_INFO_MAP[input.preferredCurrency]?.symbol ??
-    input.preferredCurrency;
   return {
-    metals: buildMetals(input, currencySymbol),
-    currencies: buildCurrencies(input, currencySymbol),
+    metals: buildMetals(input),
+    currencies: buildCurrencies(input),
     rateTrust: buildTrust(input),
   };
 }
-function buildMetals(
-  {
-    selectedSnapshot,
-    previousDayRate,
-    preferredCurrency,
-  }: LiveRatesScreenReadModelInput,
-  currencySymbol: string
-): MetalDisplayData {
+function buildMetals({
+  selectedSnapshot,
+  previousDayRate,
+  preferredCurrency,
+  locale,
+}: LiveRatesScreenReadModelInput): MetalDisplayData {
+  const language = resolveMoneyLanguage(locale);
   const preferredUsdPerUnit = preferredRateDecimal(
     selectedSnapshot,
     preferredCurrency
@@ -103,7 +98,6 @@ function buildMetals(
       goldTrendPercent: null,
       silverPrice: "—",
       silverTrendPercent: null,
-      currencySymbol,
     };
   }
 
@@ -143,25 +137,54 @@ function buildMetals(
     : null;
 
   return {
-    price24k: gold24k === null ? "—" : formatRate(gold24k),
-    price21k: gold21k === null ? "—" : formatRate(gold21k),
-    price18k: gold18k === null ? "—" : formatRate(gold18k),
+    price24k:
+      gold24k === null
+        ? "—"
+        : formatLiveRateAmount(
+            gold24k,
+            preferredCurrency,
+            language,
+            "code-prefix"
+          ),
+    price21k:
+      gold21k === null
+        ? "—"
+        : formatLiveRateAmount(
+            gold21k,
+            preferredCurrency,
+            language,
+            "code-prefix"
+          ),
+    price18k:
+      gold18k === null
+        ? "—"
+        : formatLiveRateAmount(
+            gold18k,
+            preferredCurrency,
+            language,
+            "code-prefix"
+          ),
     goldTrendPercent: calculateAvailableTrend(gold24k, previousGold24k),
-    silverPrice: silver === null ? "—" : formatRate(silver),
+    silverPrice:
+      silver === null
+        ? "—"
+        : formatLiveRateAmount(
+            silver,
+            preferredCurrency,
+            language,
+            "code-prefix"
+          ),
     silverTrendPercent: calculateAvailableTrend(silver, previousSilver),
-    currencySymbol,
   };
 }
-function buildCurrencies(
-  {
-    selectedSnapshot,
-    previousDayRate,
-    preferredCurrency,
-    locale,
-    translateRelativeTime,
-  }: LiveRatesScreenReadModelInput,
-  currencySymbol: string
-): readonly CurrencyDisplayItem[] {
+function buildCurrencies({
+  selectedSnapshot,
+  previousDayRate,
+  preferredCurrency,
+  locale,
+  translateRelativeTime,
+}: LiveRatesScreenReadModelInput): readonly CurrencyDisplayItem[] {
+  const language = resolveMoneyLanguage(locale);
   if (!selectedSnapshot) return [];
 
   const preferredUsdPerUnit = preferredRateDecimal(
@@ -193,7 +216,15 @@ function buildCurrencies(
       code: currency.code,
       name: getCurrencyName(currency.code, locale),
       flag: currency.flag,
-      rate: rate === null ? "—" : `${formatRate(rate)} ${currencySymbol}`,
+      rate:
+        rate === null
+          ? "—"
+          : formatLiveRateAmount(
+              rate,
+              preferredCurrency,
+              language,
+              "code-suffix"
+            ),
       changePercent: calculateAvailableTrend(rate, previousRate),
       trust: toCombinedTrustDisplay(
         [
@@ -207,6 +238,26 @@ function buildCurrencies(
       ),
     };
   });
+}
+
+function formatLiveRateAmount(
+  amount: number,
+  currency: CurrencyType,
+  language: SupportedLanguage,
+  englishPresentation: "code-prefix" | "code-suffix"
+): string {
+  return formatLocalizedMoneyAmount({
+    amount,
+    currency,
+    language,
+    englishPresentation,
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  });
+}
+
+function resolveMoneyLanguage(locale: string): SupportedLanguage {
+  return locale.toLowerCase().startsWith("ar") ? "ar" : "en";
 }
 function buildTrust({
   selectedSnapshot,

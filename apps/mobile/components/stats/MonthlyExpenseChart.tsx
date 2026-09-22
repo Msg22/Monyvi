@@ -8,7 +8,7 @@ import { palette } from "@/constants/colors";
 import { useTheme } from "@/context/ThemeContext";
 import { useMonthlyChartData } from "@/hooks/useAnalytics";
 import type { CurrencyType } from "@monyvi/db";
-import { formatCurrency } from "@monyvi/logic";
+import { formatLocalizedMoneyAmount } from "@/utils/localized-money-display";
 import React, { useState } from "react";
 import { Text, TouchableOpacity, View } from "react-native";
 import { BarChart } from "react-native-gifted-charts";
@@ -188,7 +188,7 @@ function MonthlyExpenseChartData({
             {t("total_income")}
           </Text>
           <Text className="text-sm font-bold text-nileGreen-500 mt-0.5">
-            {formatCurrency({ amount: totalIncome, currency })}
+            {formatLocalizedMoneyAmount({ amount: totalIncome, currency })}
           </Text>
         </View>
         <View className="items-center flex-1">
@@ -196,7 +196,7 @@ function MonthlyExpenseChartData({
             {t("total_expenses")}
           </Text>
           <Text className="text-sm font-bold text-red-500 dark:text-red-400 mt-0.5">
-            {formatCurrency({ amount: totalExpenses, currency })}
+            {formatLocalizedMoneyAmount({ amount: totalExpenses, currency })}
           </Text>
         </View>
         <View className="items-center flex-1">
@@ -206,7 +206,7 @@ function MonthlyExpenseChartData({
           <Text
             className={`text-sm font-bold mt-0.5 ${netSavings >= 0 ? "text-nileGreen-500" : "text-red-400"}`}
           >
-            {formatCurrency({ amount: netSavings, currency })}
+            {formatLocalizedMoneyAmount({ amount: netSavings, currency })}
           </Text>
         </View>
       </View>

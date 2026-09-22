@@ -31,7 +31,6 @@ describe("Live Rates historical trend availability", () => {
         price21k="2,712"
         price18k="2,325"
         trendPercent={null}
-        currencySymbol="E£"
       />
     );
 
@@ -45,7 +44,6 @@ describe("Live Rates historical trend availability", () => {
         price21k="2,712"
         price18k="2,325"
         trendPercent={0}
-        currencySymbol="E£"
       />
     );
 
@@ -59,7 +57,6 @@ describe("Live Rates historical trend availability", () => {
         price="40"
         trendPercent={null}
         borderColor="#ffffff"
-        currencySymbol="E£"
       />
     );
 
@@ -73,7 +70,6 @@ describe("Live Rates historical trend availability", () => {
         price="40"
         trendPercent={0}
         borderColor="#ffffff"
-        currencySymbol="E£"
       />
     );
 

@@ -10,7 +10,10 @@ jest.mock("@/context/ThemeContext", (): unknown => ({
 }));
 jest.mock("expo-router", (): unknown => ({ router: { push: jest.fn() } }));
 jest.mock("react-i18next", (): unknown => ({
-  useTranslation: (): unknown => ({ t: (key: string): string => key }),
+  useTranslation: (): unknown => ({
+    i18n: { language: "en", resolvedLanguage: "en" },
+    t: (key: string): string => key,
+  }),
 }));
 jest.mock("@expo/vector-icons", (): unknown => ({
   FontAwesome5: (): null => null,

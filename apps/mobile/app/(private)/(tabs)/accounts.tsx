@@ -14,7 +14,7 @@ import { TAB_BAR_HEIGHT } from "@/constants/ui";
 import { useAccounts } from "@/hooks";
 import { usePreferredCurrency } from "@/hooks/usePreferredCurrency";
 import type { CurrencyType } from "@monyvi/db";
-import { formatCurrency } from "@monyvi/logic";
+import { formatLocalizedMoneyAmount } from "@/utils/localized-money-display";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
@@ -120,7 +120,10 @@ function TotalBalanceCard({
       <Text className="text-3xl font-black text-slate-900 dark:text-white">
         {balance === null
           ? "—"
-          : formatCurrency({ amount: balance, currency: currencyCode })}
+          : formatLocalizedMoneyAmount({
+              amount: balance,
+              currency: currencyCode,
+            })}
       </Text>
     </View>
   );

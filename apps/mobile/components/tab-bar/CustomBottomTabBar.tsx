@@ -168,6 +168,7 @@ function CustomBottomTabBarComponent({
     return (
       <TouchableOpacity
         key={routeName}
+        testID={`tab-${routeName === "index" ? "home" : routeName}`}
         accessibilityRole="tab"
         accessibilityState={{ selected: isFocused }}
         accessibilityLabel={label}

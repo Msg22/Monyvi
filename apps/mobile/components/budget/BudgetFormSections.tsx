@@ -11,7 +11,11 @@ import {
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { CURRENCY_PRECISION, DEFAULT_PRECISION } from "@monyvi/logic";
+import {
+  getCurrencyAmountLabel,
+  formatLocalizedMoneyAmount,
+  formatLocalizedMoneyNumber,
+} from "@/utils/localized-money-display";
 import { LinearGradient } from "expo-linear-gradient";
 import { useTranslation } from "react-i18next";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -33,25 +37,35 @@ import {
 
 type IconName = React.ComponentProps<typeof Ionicons>["name"];
 
-function formatAmount(
-  value: number,
-  currency: BudgetFormState["currency"],
-  locale: string
-): string {
-  const maximumFractionDigits = currency
-    ? (CURRENCY_PRECISION[currency] ?? DEFAULT_PRECISION)
-    : DEFAULT_PRECISION;
-  return new Intl.NumberFormat(locale, { maximumFractionDigits }).format(value);
-}
-
 function formatPreviewAmount(
   value: number | null,
   currency: BudgetFormState["currency"],
   locale: string
 ): string {
-  const formattedValue =
-    value === null ? "—" : formatAmount(value, currency, locale);
-  return currency ? `${currency} ${formattedValue}` : formattedValue;
+  const language = locale.startsWith("ar") ? "ar" : "en";
+
+  if (!currency) {
+    return value === null
+      ? "—"
+      : formatLocalizedMoneyNumber({
+          amount: value,
+          currency: "EGP",
+          language,
+        });
+  }
+
+  if (value === null) {
+    return language === "ar"
+      ? `— ${getCurrencyAmountLabel(currency, language)}`
+      : `${currency} —`;
+  }
+
+  return formatLocalizedMoneyAmount({
+    amount: value,
+    currency,
+    language,
+    englishPresentation: "code-prefix",
+  });
 }
 
 function capitalizeFirst(value: string): string {

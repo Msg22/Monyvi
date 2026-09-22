@@ -1,0 +1,75 @@
+appId: com.monyvi.app
+---
+# Localized money journey.
+# Preconditions: authenticated E2E user with the default deterministic fixture.
+# The runner owns app launch/recovery.
+
+- runFlow: ../helpers/open-settings.yaml
+
+- scrollUntilVisible:
+    element:
+      id: "settings-language-trigger"
+    direction: DOWN
+    timeout: 120000
+
+- tapOn:
+    id: "settings-language-trigger"
+
+- tapOn:
+    id: "settings-language-option-ar"
+
+# Switching writing direction reloads the React Native runtime.
+- extendedWaitUntil:
+    visible:
+      id: "tab-home"
+    timeout: 120000
+
+- tapOn:
+    id: "tab-home"
+
+- extendedWaitUntil:
+    visible:
+      id: "home-net-worth-amount"
+    timeout: 120000
+
+- assertVisible: "١٩٬٠٨٠٫٥٥ جنيه مصري"
+
+# Verify a deterministic account amount.
+- tapOn:
+    id: "tab-accounts"
+
+- extendedWaitUntil:
+    visible: "E2E Cash"
+    timeout: 120000
+
+- assertVisible: "٢٬٥٠٠ جنيه مصري"
+
+# Verify a deterministic transaction amount and Arabic sign/decimal literals.
+- tapOn:
+    id: "tab-transactions"
+
+- extendedWaitUntil:
+    visible: "E2E Grocery"
+    timeout: 120000
+
+- assertVisible: "؜-١٢٥٫٠٠ جنيه مصري"
+
+# Restore English so this standalone journey does not leak locale state.
+- runFlow: ../helpers/open-settings.yaml
+
+- scrollUntilVisible:
+    element:
+      id: "settings-language-trigger"
+    direction: DOWN
+    timeout: 120000
+
+- tapOn:
+    id: "settings-language-trigger"
+
+- tapOn:
+    id: "settings-language-option-en"
+
+- extendedWaitUntil:
+    visible:
+      id: "tab-home"
+    timeout: 120000
