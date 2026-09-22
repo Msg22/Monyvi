@@ -1,6 +1,6 @@
-import { palette } from "@/constants/colors";
 import { TotalNetWorthSkeleton } from "@/components/dashboard/skeletons/TotalNetWorthSkeleton";
-import { CurrencyType } from "@monyvi/db";
+import { palette } from "@/constants/colors";
+import type { CurrencyType } from "@monyvi/db";
 import {
   formatCanonicalDecimalForDisplay,
   formatCurrency,
@@ -8,22 +8,32 @@ import {
 } from "@monyvi/logic";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { useTranslation } from "react-i18next";
 import React from "react";
 import { Dimensions, Text, View } from "react-native";
+import { useTranslation } from "react-i18next";
 import Svg, { Defs, RadialGradient, Rect, Stop } from "react-native-svg";
 
+import { WealthDisclosure } from "./WealthDisclosure";
+
+interface BreakdownDisclosureProps {
+  readonly isExpanded: boolean;
+  readonly label: string;
+  readonly onPress: () => void;
+}
+
 interface Props {
-  totalNetWorth: number | string | null;
-  totalNetWorthUsd: number | string | null;
-  preferredCurrency: CurrencyType;
-  monthlyPercentageChange: number | null;
-  isLoading: boolean;
+  readonly breakdownDisclosure?: BreakdownDisclosureProps;
+  readonly isLoading: boolean;
+  readonly monthlyPercentageChange: number | null;
+  readonly preferredCurrency: CurrencyType;
+  readonly totalNetWorth: number | string | null;
+  readonly totalNetWorthUsd: number | string | null;
 }
 
 const { width } = Dimensions.get("window");
 
 function TotalNetWorthCardComponent({
+  breakdownDisclosure,
   totalNetWorth,
   totalNetWorthUsd,
   preferredCurrency,
@@ -46,15 +56,24 @@ function TotalNetWorthCardComponent({
     monthlyPercentageChange !== null
       ? `${monthlyPercentageChange >= 0 ? "+" : ""}${monthlyPercentageChange.toFixed(1)}%`
       : null;
-  const glowWidth = width;
-  const glowHeight = 60;
-  const locale = i18n.resolvedLanguage === "ar" ? "ar-EG" : "en-US";
+  const isRtl =
+    typeof i18n.dir === "function"
+      ? i18n.dir(i18n.resolvedLanguage) === "rtl"
+      : i18n.resolvedLanguage === "ar";
+  const locale = isRtl ? "ar-EG" : "en-US";
+  const amountTextStyle = {
+    textAlign: isRtl ? ("right" as const) : ("left" as const),
+    writingDirection: "ltr" as const,
+  };
 
   return (
-    <View className="relative my-4 items-center justify-center">
+    <View
+      className="relative mb-2 mt-4 items-center justify-center"
+      testID="total-net-worth-card"
+    >
       <View
-        className="absolute bottom-[-35px] items-center z-[-1]"
-        style={{ width: glowWidth, height: glowHeight }}
+        className="absolute bottom-[-35px] z-[-1] items-center"
+        style={{ width, height: 60 }}
       >
         <Svg height="100%" width="100%">
           <Defs>
@@ -88,45 +107,76 @@ function TotalNetWorthCardComponent({
         colors={[palette.nileGreen[800], palette.nileGreen[600]]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
-        className="relative min-h-[180px] w-full items-center overflow-hidden rounded-2xl border border-white/10 p-6 shadow-lg"
+        className="relative w-full overflow-hidden rounded-3xl border border-nileGreen-500 px-6 pt-6 shadow-lg"
       >
-        <View className="absolute bottom-0 start-0 end-0 top-0 overflow-hidden rounded-[24px]">
+        <View className="absolute bottom-0 start-0 end-0 top-0 overflow-hidden rounded-3xl">
           <View className="absolute -bottom-20 -end-10 h-64 w-64 rotate-45 transform bg-white/5" />
           <View className="absolute bottom-10 -end-4 h-32 w-32 rotate-12 transform bg-white/5" />
           <View className="absolute -bottom-10 end-20 h-32 w-32 -rotate-12 transform bg-white/5" />
         </View>
 
-        <View className="z-10 items-center gap-1">
-          <Text className="text-sm font-medium tracking-wide text-slate-300 opacity-90">
-            {t("total_net_worth")}
-          </Text>
-          <Text
-            className="mt-1 text-[42px] font-extrabold tracking-tight text-white text-center"
-            numberOfLines={1}
-            adjustsFontSizeToFit
-            minimumFontScale={0.6}
-          >
-            {formatNetWorthAmount(totalNetWorth, preferredCurrency, locale)}
-          </Text>
-          {!isPreferredCurrencyUSD && totalNetWorthUsd !== null && (
-            <Text className="text-base font-medium text-slate-100 opacity-80">
-              ≈{formatNetWorthAmount(totalNetWorthUsd, "USD", locale)}
+        <View className="z-10 w-full pb-5">
+          <View className="flex-row flex-wrap items-start justify-between gap-3">
+            <Text className="min-w-0 flex-1 text-start text-lg font-semibold text-white">
+              {t("total_net_worth")}
             </Text>
-          )}
-          {monthlyPercentageChangeFormatted && (
-            <View className="mt-2 flex-row items-center gap-1 rounded-full bg-white/10 px-3 py-1">
-              <Ionicons
-                name={arrowIcon}
-                style={{ transform: [{ rotate: arrowRotation }] }}
-                size={12}
-                color={arrowColor}
-              />
-              <Text className="text-xs font-bold" style={{ color: arrowColor }}>
-                {monthlyPercentageChangeFormatted} {t("month")}
+            {monthlyPercentageChangeFormatted ? (
+              <View className="flex-row items-center gap-1 rounded-full border border-white/10 bg-white/10 px-3 py-2">
+                <Ionicons
+                  name={arrowIcon}
+                  style={{ transform: [{ rotate: arrowRotation }] }}
+                  size={13}
+                  color={arrowColor}
+                />
+                <Text
+                  className="text-sm font-bold"
+                  style={{ color: arrowColor }}
+                >
+                  {monthlyPercentageChangeFormatted}{" "}
+                  <Text className="font-medium text-slate-100">
+                    {t("month")}
+                  </Text>
+                </Text>
+              </View>
+            ) : null}
+          </View>
+
+          <View
+            className={`mt-5 w-full ${isRtl ? "items-end" : "items-start"}`}
+            testID="total-net-worth-values"
+          >
+            <Text
+              adjustsFontSizeToFit
+              className="text-[38px] font-extrabold leading-[46px] tracking-tight text-white"
+              minimumFontScale={0.5}
+              numberOfLines={1}
+              style={amountTextStyle}
+              testID="total-net-worth-primary-value"
+            >
+              {formatNetWorthAmount(totalNetWorth, preferredCurrency, locale)}
+            </Text>
+            {!isPreferredCurrencyUSD && totalNetWorthUsd !== null ? (
+              <Text
+                adjustsFontSizeToFit
+                className="mt-2 text-lg font-medium text-slate-100 opacity-80"
+                minimumFontScale={0.75}
+                numberOfLines={1}
+                style={amountTextStyle}
+                testID="total-net-worth-usd-equivalent"
+              >
+                ≈ {formatNetWorthAmount(totalNetWorthUsd, "USD", locale)}
               </Text>
-            </View>
-          )}
+            ) : null}
+          </View>
         </View>
+
+        {breakdownDisclosure ? (
+          <View className="-mx-6 border-t border-white/10 px-6 py-2">
+            <WealthDisclosure {...breakdownDisclosure} />
+          </View>
+        ) : (
+          <View className="h-1" />
+        )}
       </LinearGradient>
     </View>
   );

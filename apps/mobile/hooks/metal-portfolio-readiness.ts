@@ -1,3 +1,5 @@
+import type { MetalPortfolioReadModel } from "@/services/metal-portfolio-read-model-service";
+
 export interface MetalPortfolioReadinessInput {
   readonly assetIdsKey: string;
   readonly assetMetalsDependencyKey: string | null;
@@ -47,4 +49,17 @@ export function resolveMetalPortfolioReadiness(
     realizedSale,
     summary: lifecycleFactsReady && rateCurrency,
   });
+}
+
+export function isTrueMetalPortfolioEmpty(
+  portfolio: MetalPortfolioReadModel | null,
+  readiness: MetalPortfolioSectionReadiness | undefined
+): boolean {
+  return Boolean(
+    readiness?.summary &&
+    readiness.holdings &&
+    portfolio !== null &&
+    portfolio.listState === "PORTFOLIO_EMPTY" &&
+    portfolio.activeHoldings.length === 0
+  );
 }

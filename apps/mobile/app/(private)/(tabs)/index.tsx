@@ -1,6 +1,7 @@
 import { CurrencyPicker } from "@/components/currency/CurrencyPicker";
 import { AccountsSection } from "@/components/dashboard/AccountsSection";
 import { CashAccountTooltip } from "@/components/dashboard/CashAccountTooltip";
+import { HomeWealthSummary } from "@/components/dashboard/HomeWealthSummary";
 import { LiveRates } from "@/components/dashboard/LiveRates";
 import { MicButtonTooltip } from "@/components/dashboard/MicButtonTooltip";
 import { MoneySummaryErrorState } from "@/components/dashboard/MoneySummaryErrorState";
@@ -9,9 +10,7 @@ import { RecentTransactions } from "@/components/dashboard/RecentTransactions";
 import { DashboardSkeleton } from "@/components/dashboard/skeletons/DashboardSkeleton";
 import { ThisMonth } from "@/components/dashboard/ThisMonth";
 import { TopNav } from "@/components/dashboard/TopNav";
-import { TotalNetWorthCard } from "@/components/dashboard/TotalNetWorthCard";
 import { UpcomingPayments } from "@/components/dashboard/UpcomingPayments";
-import { WealthBreakdownSection } from "@/components/dashboard/WealthBreakdownSection";
 import { AppDrawer } from "@/components/navigation/AppDrawer";
 import { SmsPermissionPrompt } from "@/components/sms-sync/SmsPermissionPrompt";
 import { SectionErrorBoundary } from "@/components/ui/SectionErrorBoundary";
@@ -202,7 +201,7 @@ export default function DashboardScreen(): React.JSX.Element {
 
           <Text
             numberOfLines={1}
-            className="text-base font-semibold mb-4 text-slate-800 dark:text-slate-25"
+            className="mb-4 text-base font-semibold text-slate-800 dark:text-slate-25"
           >
             {greetingText}
             {greetingName ? `, ${greetingName}` : ""} 👋
@@ -223,25 +222,23 @@ export default function DashboardScreen(): React.JSX.Element {
           ) : (
             <>
               <SectionErrorBoundary name={t("section_net_worth")}>
-                <TotalNetWorthCard
-                  totalNetWorth={lifecycleAwareNetWorth}
-                  totalNetWorthUsd={lifecycleAwareNetWorthUsd}
-                  preferredCurrency={preferredCurrency}
+                {/* HomeWealthSummary owns TotalNetWorthCard and forwards the lifecycle-aware value. */}
+                <HomeWealthSummary
+                  breakdown={wealthBreakdown}
+                  currency={preferredCurrency}
+                  isBreakdownLoading={
+                    netWorthLoading || isPortfolioSummaryLoading
+                  }
+                  isLoading={isLoading || isPortfolioSummaryLoading}
                   monthlyPercentageChange={
                     lifecycleAwareNetWorth === null
                       ? null
                       : monthlyPercentageChange
                   }
-                  isLoading={isLoading || isPortfolioSummaryLoading}
-                />
-              </SectionErrorBoundary>
-              <SectionErrorBoundary name={t("section_net_worth")}>
-                <WealthBreakdownSection
-                  currency={preferredCurrency}
-                  isLoading={netWorthLoading || isPortfolioSummaryLoading}
-                  breakdown={wealthBreakdown}
                   onAccountsPress={() => router.push("/accounts")}
                   onMetalsPress={() => router.push("/metals")}
+                  totalNetWorth={lifecycleAwareNetWorth}
+                  totalNetWorthUsd={lifecycleAwareNetWorthUsd}
                 />
               </SectionErrorBoundary>
               {portfolioError !== null ? (

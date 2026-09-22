@@ -102,6 +102,15 @@ describe("WealthBreakdownSection", () => {
     expect(screen.getByText("Silver")).toBeTruthy();
     expect(screen.getByLabelText(/Accounts.*85.4/)).toBeTruthy();
     expect(screen.getByLabelText(/Gold & silver.*14.6/)).toBeTruthy();
+    expect(screen.queryByText("1,243,663.92 EGP")).toBeNull();
+    expect(screen.getByTestId("wealth-breakdown-gold-detail")).toHaveProp(
+      "className",
+      expect.stringContaining("rounded-2xl")
+    );
+    expect(screen.getByTestId("wealth-breakdown-silver-detail")).toHaveProp(
+      "className",
+      expect.stringContaining("rounded-2xl")
+    );
 
     fireEvent.press(screen.getByTestId("wealth-breakdown-accounts"));
     fireEvent.press(screen.getByTestId("wealth-breakdown-metals"));
@@ -125,7 +134,7 @@ describe("WealthBreakdownSection", () => {
       />
     );
 
-    expect(screen.getAllByText("9,007,199,254,740,993.24 EGP")).toHaveLength(2);
+    expect(screen.getByText("9,007,199,254,740,993.24 EGP")).toBeTruthy();
     expect(screen.queryByText(/9,007,199,254,740,992/)).toBeNull();
   });
 

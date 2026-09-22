@@ -12,6 +12,20 @@ import type {
   QaSmsPatternIntakeTranslations,
 } from "./translation-schema";
 
+export interface UiPolishTranslations {
+  readonly wealth_breakdown: {
+    readonly show: string;
+    readonly hide: string;
+    readonly close: string;
+  };
+  readonly metals_empty: {
+    readonly header: string;
+    readonly title: string;
+    readonly body: string;
+    readonly cta: string;
+  };
+}
+
 /**
  * TypeScript module augmentation for react-i18next.
  *
@@ -36,7 +50,9 @@ declare module "react-i18next" {
      * Available translation namespaces.
      * Maps to the folder structure in locales/ directory.
      */
-    resources: TranslationResources;
+    resources: TranslationResources & {
+      readonly "ui-polish": UiPolishTranslations;
+    };
 
     /**
      * Type-safe return type for the t() function when using namespaces.
