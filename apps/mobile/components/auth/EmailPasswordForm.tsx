@@ -172,8 +172,8 @@ export function EmailPasswordForm({
             height: fieldHeight,
             borderRadius: 14,
             paddingVertical: 0,
-            writingDirection: isRTL ? "rtl" : "ltr",
-            textAlign: isRTL ? "right" : "left",
+            writingDirection: "ltr",
+            textAlign: "left",
           }}
           leadingAdornment={
             <Ionicons name="mail-outline" size={17} color={iconColor} />
