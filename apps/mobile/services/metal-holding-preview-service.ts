@@ -63,10 +63,7 @@ export function calculateMetalHoldingPreviewValuation(
   }
   return {
     available: true,
-    valueDecimal: roundDecimal(
-      valuation.valueDecimal,
-      rates.currencyMinorUnits
-    ),
+    valueDecimal: valuation.valueDecimal,
   };
 }
 

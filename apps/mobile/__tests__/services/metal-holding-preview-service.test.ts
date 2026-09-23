@@ -1,4 +1,7 @@
-import { calculateMetalHoldingPreviewDetails } from "@/services/metal-holding-preview-service";
+import {
+  calculateMetalHoldingPreviewDetails,
+  calculateMetalHoldingPreviewValuation,
+} from "@/services/metal-holding-preview-service";
 import type { NormalizedMetalHoldingFormData } from "@/validation/metal-holding-form-validation";
 
 const HOLDING: NormalizedMetalHoldingFormData = {
@@ -19,6 +22,27 @@ const HOLDING: NormalizedMetalHoldingFormData = {
 };
 
 describe("metal holding preview service", () => {
+  it("retains exact valuation until the final since-purchase rounding", () => {
+    const holding: NormalizedMetalHoldingFormData = {
+      ...HOLDING,
+      weightGramsDecimal: "1",
+      purity: { ...HOLDING.purity, factorDecimal: "1" },
+      purchasePriceDecimal: "0.01",
+    };
+    const valuation = calculateMetalHoldingPreviewValuation(holding, {
+      metalUsdPerPureGramDecimal: "1.005",
+      currencyUsdPerUnitDecimal: "1",
+      currencyMinorUnits: 2,
+    });
+
+    expect(valuation).toEqual({ available: true, valueDecimal: "1.005" });
+    expect(calculateMetalHoldingPreviewDetails(holding, valuation, 2)).toEqual({
+      resultSincePurchaseDecimal: "1.00",
+      resultDirection: "positive",
+      purityPercentDecimal: "100.0",
+    });
+  });
+
   it("calculates exact current result and purity disclosure for the live preview", () => {
     const valuation = {
       available: true,
