@@ -387,7 +387,9 @@ describe("Add metal holding route", () => {
 
     // Discard dismisses guard and dispatches the blocked action
     fireEvent.press(screen.getByText("add.discard"));
-    const nav = jest.mocked(useNavigation)();
+    const nav = jest.mocked(useNavigation)() as {
+      readonly dispatch: jest.Mock;
+    };
     expect(nav.dispatch).toHaveBeenCalledWith(mockAction);
   });
 });
