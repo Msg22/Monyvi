@@ -152,6 +152,7 @@ export function TextField({
       </View>
       {error ? (
         <Text
+          testID={testID ? `${testID}-error` : undefined}
           accessibilityRole="alert"
           className="input-error"
           style={errorStyle}

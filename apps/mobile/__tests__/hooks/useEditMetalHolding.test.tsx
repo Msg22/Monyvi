@@ -245,5 +245,38 @@ describe("useEditMetalHolding correctness tests", () => {
       expect(success).toBe(true);
       expect(mockSaveEditedMetalHolding).toHaveBeenCalledTimes(1);
     });
+
+    it("sets validation error for blank correction reason on material changes and clears it on input", async () => {
+      mockLoadEditableMetalHolding.mockResolvedValue(activeModel());
+
+      const { result } = renderHook(() => useEditMetalHolding(testInput()));
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      // Material change without reason
+      act(() => {
+        result.current.updateField("weightGrams", "10");
+      });
+
+      expect(result.current.comparison.hasMaterialChanges).toBe(true);
+
+      let success = true;
+      await act(async () => {
+        success = await result.current.submit();
+      });
+
+      expect(success).toBe(false);
+      expect(result.current.validationErrors.correctionReason).toBe("required");
+
+      // Typing correction reason clears validation error
+      act(() => {
+        result.current.setCorrectionReason("Correction of weight error");
+      });
+
+      expect(result.current.validationErrors.correctionReason).toBeUndefined();
+      expect(result.current.correctionReason).toBe("Correction of weight error");
+    });
   });
 });

@@ -13,6 +13,8 @@ appId: com.monyvi.app
 #
 # Slice 7 authored the Add route and local command. The clean-data fixture
 # profiles and runner wiring have not been validated; this flow has not run.
+# The purchase date defaults to today. The purchase date picker tap step is
+# authored per spec below and has not been run on a physical/virtual device.
 - runFlow: ../helpers/setup.yaml
 - openLink: monyvi://metals/add
 - extendedWaitUntil:
@@ -42,8 +44,9 @@ appId: com.monyvi.app
 - tapOn: EGP
 - tapOn:
     id: metal-holding-purchase-date-field
-- eraseText: 10
-- inputText: "2024-03-14"
+- tapOn:
+    text: "OK"
+    optional: true
 - tapOn:
     id: metal-holding-physical-form-field
 - tapOn:
@@ -87,10 +90,6 @@ appId: com.monyvi.app
 - inputText: "1500.00"
 - tapOn: Purchase currency
 - tapOn: EGP
-- tapOn:
-    id: metal-holding-purchase-date-field
-- eraseText: 10
-- inputText: "2024-03-14"
 - assertVisible:
     id: metal-holding-live-preview
 - runFlow:

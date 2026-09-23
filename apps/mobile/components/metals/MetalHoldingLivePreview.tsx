@@ -10,6 +10,7 @@ import { MetalHoldingRender } from "./MetalHoldingRender";
 import type {
   MetalHoldingFormCopy,
   MetalHoldingFormPreview,
+  MetalHoldingPreviewRateTrust,
 } from "./MetalHoldingForm";
 
 interface MetalHoldingLivePreviewProps {
@@ -130,7 +131,28 @@ export function MetalHoldingLivePreview({
             text={`${metalLabel} · ${formatAmount("USD", preview.metalUsdPerPureGramDecimal, locale)} ${copy.perPureGram}`}
           />
         ) : null}
-        {rateSources ? (
+        {preview.metalRateTrust ? (
+          <RateTrustRow
+            testID="metal-holding-metal-rate-trust"
+            label={copy.metalRateLabel ?? "Metal rate"}
+            currency="USD"
+            trust={preview.metalRateTrust}
+            copy={copy}
+            locale={locale}
+          />
+        ) : null}
+        {preview.fxRateTrust ? (
+          <RateTrustRow
+            testID="metal-holding-fx-rate-trust"
+            label={copy.fxRateLabel ?? "FX rate"}
+            currency="USD"
+            valueSuffix={currency ? ` / ${currency}` : ""}
+            trust={preview.fxRateTrust}
+            copy={copy}
+            locale={locale}
+          />
+        ) : null}
+        {!preview.metalRateTrust && !preview.fxRateTrust && rateSources ? (
           <DisclosureRow
             icon="time-outline"
             text={
@@ -139,7 +161,7 @@ export function MetalHoldingLivePreview({
                 : rateSources
             }
           />
-        ) : preview.rateFreshness ? (
+        ) : !preview.metalRateTrust && !preview.fxRateTrust && preview.rateFreshness ? (
           <DisclosureRow
             icon="time-outline"
             text={getRateFreshnessLabel(preview.rateFreshness, copy)}
@@ -148,6 +170,70 @@ export function MetalHoldingLivePreview({
       </View>
     </View>
   );
+}
+
+function RateTrustRow({
+  testID,
+  label,
+  currency,
+  valueSuffix = "",
+  trust,
+  copy,
+  locale,
+}: {
+  readonly testID: string;
+  readonly label: string;
+  readonly currency: string;
+  readonly valueSuffix?: string;
+  readonly trust: MetalHoldingPreviewRateTrust;
+  readonly copy: MetalHoldingFormCopy;
+  readonly locale: "en" | "ar";
+}): React.JSX.Element {
+  const value = trust.valueDecimal === null
+    ? copy.rateUnavailable
+    : formatAmount(currency, trust.valueDecimal, locale);
+  const age = trust.ageMs === null
+    ? (copy.rateAgeUnavailable ?? copy.rateUnknown)
+    : formatRateAge(trust.ageMs, locale, copy);
+  const freshness = getRateFreshnessLabel(
+    trust.state === "missing" || trust.state === "invalid" ? "unavailable" : trust.state,
+    copy
+  );
+  return (
+    <View testID={testID} className="gap-1">
+      <Text className="text-xs font-semibold text-text-primary dark:text-text-primary-dark">
+        {`${label} · ${value}${trust.valueDecimal === null ? "" : valueSuffix}`}
+      </Text>
+      <Text className="text-xs text-text-secondary dark:text-text-secondary-dark">
+        {`${trust.source ?? copy.unknownRateSource ?? "Source unknown"} · ${trust.quality ?? copy.unknownRateQuality ?? "Quality unknown"} · ${freshness} · ${age}`}
+      </Text>
+      {trust.providerObservedAt && trust.state !== "unknown" ? (
+        <Text className="text-xs text-text-muted dark:text-text-muted-dark">
+          {`${copy.ratesUpdated} ${formatObservedAt(trust.providerObservedAt, locale)}`}
+        </Text>
+      ) : (
+        <Text className="text-xs text-text-muted dark:text-text-muted-dark">
+          {copy.rateObservationUnavailable ?? `${copy.ratesUpdated} ${copy.rateAgeUnavailable ?? copy.rateUnknown}`}
+        </Text>
+      )}
+    </View>
+  );
+}
+
+export function formatRateAge(
+  ageMs: number,
+  locale: "en" | "ar",
+  copy?: MetalHoldingFormCopy
+): string {
+  if (ageMs < 60_000) {
+    return copy?.rateJustNow ?? (locale === "ar" ? "الآن" : "just now");
+  }
+  const minutes = Math.floor(ageMs / 60_000);
+  const hours = Math.floor(minutes / 60);
+  const formatter = new Intl.RelativeTimeFormat(locale === "ar" ? "ar-EG" : "en-US", { numeric: "always" });
+  return hours > 0
+    ? formatter.format(-hours, "hour")
+    : formatter.format(-minutes, "minute");
 }
 
 function DisclosureRow({
@@ -196,7 +282,7 @@ function formatResult(
   );
 }
 
-function formatAmount(
+export function formatAmount(
   currency: string,
   value: string,
   locale: "en" | "ar",
@@ -241,7 +327,7 @@ function getRateFreshnessLabel(
 ): string {
   if (value === "fresh") return copy.rateFresh;
   if (value === "stale") return copy.rateStale;
-  if (value === "unknown") return copy.rateUnknown;
+  if (value === "unknown") return copy.rateFreshnessUnknown ?? "Freshness unknown";
   return copy.rateUnavailable;
 }
 

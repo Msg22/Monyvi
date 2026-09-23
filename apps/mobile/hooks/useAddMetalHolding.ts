@@ -10,6 +10,7 @@ import type {
   MetalHoldingFormField,
   MetalHoldingFormPreview,
   MetalHoldingFormValues,
+  MetalHoldingPreviewRateTrust,
 } from "@/components/metals/MetalHoldingForm";
 import type {
   AddMetalHoldingFormSubmission,
@@ -43,7 +44,7 @@ export interface UseAddMetalHoldingFormInput {
   readonly safeRange: MetalHoldingFormValidationContext["safeRange"];
   readonly previewRates: (
     holding: NormalizedMetalHoldingFormData
-  ) => MetalHoldingPreviewRates;
+  ) => MetalHoldingPreviewRatesWithTrust;
   readonly isUnusualValue: MetalHoldingFormValidationContext["isUnusualValue"];
   readonly createId: () => string;
   readonly addHolding: (
@@ -75,7 +76,12 @@ export interface UseAddMetalHoldingFormResult {
 export interface UseMetalAddPreviewRatesResult {
   readonly getPreviewRates: (
     holding: NormalizedMetalHoldingFormData
-  ) => MetalHoldingPreviewRates;
+  ) => MetalHoldingPreviewRatesWithTrust;
+}
+
+export interface MetalHoldingPreviewRatesWithTrust extends MetalHoldingPreviewRates {
+  readonly metalRateTrust?: MetalHoldingPreviewRateTrust;
+  readonly fxRateTrust?: MetalHoldingPreviewRateTrust;
 }
 
 function initialValues(
@@ -250,6 +256,8 @@ export function useAddMetalHoldingForm(
       metalUsdPerPureGramDecimal: previewRates.metalUsdPerPureGramDecimal,
       rateSources: previewRates.rateSources,
       providerObservedAt: previewRates.providerObservedAt,
+      metalRateTrust: previewRates.metalRateTrust,
+      fxRateTrust: previewRates.fxRateTrust,
       ...details,
     };
   }, [input, validation.normalized, values]);
@@ -398,7 +406,7 @@ export function useMetalAddPreviewRates(): UseMetalAddPreviewRatesResult {
   const rates = selectedSnapshot?.trust ?? missingTrustReadModel();
 
   const getPreviewRates = useCallback(
-    (holding: NormalizedMetalHoldingFormData): MetalHoldingPreviewRates => {
+    (holding: NormalizedMetalHoldingFormData): MetalHoldingPreviewRatesWithTrust => {
       if (!isSupportedMetalsIsoCurrencyCode(holding.purchaseCurrency)) {
         return {
           metalUsdPerPureGramDecimal: null,
@@ -406,6 +414,8 @@ export function useMetalAddPreviewRates(): UseMetalAddPreviewRatesResult {
           egpUsdPerUnitDecimal: null,
           currencyMinorUnits: 2,
           rateFreshness: "unavailable",
+          metalRateTrust: toPreviewRateTrust(undefined),
+          fxRateTrust: toPreviewRateTrust(undefined),
         };
       }
       const currencyMinorUnits = resolveMetalsCurrencyMinorUnits(
@@ -427,11 +437,26 @@ export function useMetalAddPreviewRates(): UseMetalAddPreviewRatesResult {
           metalRate,
           currencyRate,
         ]),
+        metalRateTrust: toPreviewRateTrust(metalRate),
+        fxRateTrust: toPreviewRateTrust(currencyRate),
       };
     },
     [rates]
   );
   return { getPreviewRates };
+}
+
+function toPreviewRateTrust(
+  value: LiveRatesTrustValue | undefined
+): MetalHoldingPreviewRateTrust {
+  return {
+    valueDecimal: availableRateValue(value),
+    state: value?.state ?? "missing",
+    ageMs: value?.ageMs ?? null,
+    source: value?.source ?? null,
+    quality: value?.quality ?? null,
+    providerObservedAt: value?.providerObservedAt ?? null,
+  };
 }
 
 function uniqueSources(

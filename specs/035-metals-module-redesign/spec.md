@@ -79,7 +79,7 @@ As a user, I want a focused full-screen flow for recording a physical Gold or Si
 
 **Why this priority**: The portfolio has no value unless users can safely create trustworthy holdings.
 
-**Independent Test**: Add Gold and Silver holdings with English, Arabic-Indic, and decimal-comma input while online and offline, then verify the saved facts, validation, live preview, direct submission, and resulting portfolio totals.
+**Independent Test**: Add Gold and Silver holdings with English and Arabic-Indic dot-decimal and grouped input while online and offline, then verify the saved facts, validation (including rejection of comma-decimal notation under global dot-only amount grammar), live preview, direct submission, and resulting portfolio totals.
 
 **Acceptance Scenarios**:
 
@@ -258,7 +258,7 @@ As a user, I want every Add, Edit, Sell, Dispose, Delete, and Undo submission to
 - A consumed metal or FX value has an unknown or unparseable provider observation time; its freshness is Unknown, never Fresh, and the financial review identifies the affected input.
 - Purchase and sale use different currencies but one historical conversion reference is missing; the event facts persist while unsupported combined or detailed P/L remains unavailable.
 - A holding has valid physical facts but its preferred display currency rate is missing; the holding stays visible in its recorded currency and converted totals are unavailable.
-- Arabic-Indic digits, Arabic decimal marks, decimal commas, and supported thousands separators normalize to the same reviewed numeric value.
+- Arabic-Indic digits, Arabic decimal marks, dot decimals, and supported thousands separators normalize to the same reviewed numeric value; comma-decimal notation is rejected under global dot-only amount grammar.
 - A user-facing karat or fineness choice has no valid normalized purity factor in `(0, 1]`; confirmation is blocked and no valuation uses an inferred or free-text purity.
 - Blank, zero, negative, non-finite, unsupported-precision, and out-of-safe-range values are rejected with field-specific recovery guidance.
 - A fee is negative or greater than gross proceeds; submission is blocked until corrected or the user chooses No Longer when no sale money exists.

@@ -309,7 +309,7 @@ function normalizeEnglishSeparators(
   }
   const usesGrouping = value.includes(".") || commaCount > 1;
   if (!usesGrouping) {
-    return value.replace(",", ".");
+    throw new Error("Expected valid English thousands grouping");
   }
   if (!ENGLISH_GROUPED_DECIMAL_PATTERN.test(value)) {
     throw new Error("Expected valid English thousands grouping");

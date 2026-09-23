@@ -27,7 +27,6 @@ export interface MetalHoldingFormData {
 
 export interface MetalHoldingFormValidationContext {
   readonly locale: "en" | "ar";
-  readonly decimalSeparator?: "." | ",";
   readonly today: string;
   readonly currencyMinorUnits: number;
   readonly safeRange: {
@@ -231,10 +230,7 @@ interface ValidateDecimalFieldInput {
   readonly field: "weightGrams" | "purchasePrice";
   readonly maximumDecimalPlaces: number;
   readonly maximumValue: string;
-  readonly context: Pick<
-    MetalHoldingFormValidationContext,
-    "locale" | "decimalSeparator"
-  >;
+  readonly context: Pick<MetalHoldingFormValidationContext, "locale">;
   readonly errors: Record<string, string | undefined>;
   readonly precisionError?: "currency_precision";
 }
@@ -355,10 +351,7 @@ function isCalendarDate(value: string): boolean {
 
 function normalizeLocalizedDecimal(
   raw: string,
-  context: Pick<
-    MetalHoldingFormValidationContext,
-    "locale" | "decimalSeparator"
-  >
+  _context?: Pick<MetalHoldingFormValidationContext, "locale">
 ): string | null {
   let normalized = raw
     .trim()
@@ -369,11 +362,7 @@ function normalizeLocalizedDecimal(
     .replaceAll("٬", ",");
   if (!/^[0-9.,]+$/.test(normalized)) return null;
 
-  const decimalSeparator = context.decimalSeparator ?? ".";
-  if (decimalSeparator === ",") {
-    if ((normalized.match(/,/g) ?? []).length > 1) return null;
-    normalized = normalized.replaceAll(".", "").replace(",", ".");
-  } else if (normalized.includes(",")) {
+  if (normalized.includes(",")) {
     if (!isValidGroupedInteger(normalized)) return null;
     normalized = normalized.replaceAll(",", "");
   }

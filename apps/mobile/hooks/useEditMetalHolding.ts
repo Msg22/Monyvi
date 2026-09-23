@@ -5,6 +5,7 @@ import {
 } from "@monyvi/logic";
 
 import type { DropdownItem } from "@/components/ui/Dropdown";
+import type { MetalHoldingPreviewRatesWithTrust } from "./useAddMetalHolding";
 import type {
   MetalHoldingFormField,
   MetalHoldingFormPreview,
@@ -13,7 +14,6 @@ import type {
 import {
   calculateMetalHoldingPreviewDetails,
   calculateMetalHoldingPreviewValuation,
-  type MetalHoldingPreviewRates,
 } from "@/services/metal-holding-preview-service";
 import {
   compareMetalHoldingEdit,
@@ -41,7 +41,7 @@ export interface UseEditMetalHoldingInput {
   readonly safeRange: MetalHoldingFormValidationContext["safeRange"];
   readonly getPreviewRates: (
     holding: NormalizedMetalHoldingFormData
-  ) => MetalHoldingPreviewRates;
+  ) => MetalHoldingPreviewRatesWithTrust;
   readonly createId: () => string;
 }
 export interface UseEditMetalHoldingResult {
@@ -226,6 +226,8 @@ export function useEditMetalHolding(
       metalUsdPerPureGramDecimal: rates.metalUsdPerPureGramDecimal,
       rateSources: rates.rateSources,
       providerObservedAt: rates.providerObservedAt,
+      metalRateTrust: rates.metalRateTrust,
+      fxRateTrust: rates.fxRateTrust,
       ...calculateMetalHoldingPreviewDetails(
         normalized,
         valuation,
@@ -271,6 +273,14 @@ export function useEditMetalHolding(
     },
     []
   );
+  const handleCorrectionReasonChange = useCallback((value: string): void => {
+    setCorrectionReason(value);
+    setValidationErrors((current) => {
+      if (!current.correctionReason) return current;
+      const { correctionReason: _, ...rest } = current;
+      return rest;
+    });
+  }, []);
   const submit = useCallback(async (): Promise<boolean> => {
     if (inFlightRef.current || !model || !isDirty) return false;
     const result = validateMetalHoldingForm(
@@ -369,7 +379,7 @@ export function useEditMetalHolding(
     error,
     submitError,
     updateField,
-    setCorrectionReason,
+    setCorrectionReason: handleCorrectionReasonChange,
     acknowledgeUnusualValue: (): void => setUnusualValueAcknowledged(true),
     acknowledgeStaleRate: (): void => setStaleRateAcknowledged(true),
     submit,

@@ -1,5 +1,24 @@
 import { fireEvent, render, screen } from "@testing-library/react-native";
+import { init } from "i18next";
 import React from "react";
+
+import arCommon from "@/locales/ar/common.json";
+import enCommon from "@/locales/en/common.json";
+import type { MetalHoldingFormCopy } from "@/components/metals/MetalHoldingForm";
+
+beforeAll(async () => {
+  await init({
+    resources: {
+      en: { common: enCommon },
+      ar: { common: arCommon },
+    },
+    lng: "en",
+    fallbackLng: "en",
+    ns: "common",
+    defaultNS: "common",
+    interpolation: { escapeValue: false },
+  });
+});
 
 jest.mock("react-i18next", () => ({
   useTranslation: () => ({
@@ -9,9 +28,8 @@ jest.mock("react-i18next", () => ({
 }));
 
 jest.mock("@/components/navigation/PageHeader", () => {
-  const { Pressable, Text, View } = jest.requireActual(
-    "react-native"
-  ) as typeof import("react-native");
+  const { Pressable, Text, View } =
+    jest.requireActual<typeof import("react-native")>("react-native");
   return {
     PageHeader: ({
       title,
@@ -44,6 +62,7 @@ interface EditMetalHoldingFormProps {
   readonly width: number;
   readonly fontScale: number;
   readonly bottomInset: number;
+  readonly copy?: MetalHoldingFormCopy;
   readonly holdingStatus: "active" | "sold" | "disposed";
   readonly values: {
     readonly name: string;
@@ -65,19 +84,22 @@ interface EditMetalHoldingFormProps {
     readonly name?: string;
     readonly weightGramsDecimal?: string;
     readonly displayCurrency?: string;
-    readonly valuation: {
-      readonly available: true;
-      readonly valueDecimal: string;
-    };
+    readonly resultSincePurchaseDecimal?: string | null;
+    readonly resultDirection?: "positive" | "negative" | "zero" | "unavailable";
+    readonly metalRateTrust?: { readonly valueDecimal: string | null; readonly state: "fresh" | "stale" | "unknown" | "missing" | "invalid"; readonly ageMs: number | null; readonly source: string | null; readonly quality: string | null; readonly providerObservedAt: Date | null };
+    readonly fxRateTrust?: { readonly valueDecimal: string | null; readonly state: "fresh" | "stale" | "unknown" | "missing" | "invalid"; readonly ageMs: number | null; readonly source: string | null; readonly quality: string | null; readonly providerObservedAt: Date | null };
+    readonly valuation:
+      | { readonly available: true; readonly valueDecimal: string }
+      | { readonly available: false; readonly reason: "missing_rate" };
   };
   readonly editState: {
-    readonly affectedChanges: readonly {
+    readonly affectedChanges: ReadonlyArray<{
       readonly field: string;
       readonly label: string;
       readonly before: string;
       readonly after: string;
       readonly isFinancial: boolean;
-    }[];
+    }>;
     readonly correctionReason: string;
     readonly requiresConsequenceAcknowledgment?: boolean;
   };
@@ -124,6 +146,62 @@ const original: EditFacts = {
   performanceDecimal: "3400",
 };
 
+const ARABIC_EDIT_COPY: MetalHoldingFormCopy = {
+  title: "حفظ التغييرات",
+  back: "رجوع",
+  name: "اسم المقتنى",
+  namePlaceholder: "مثال: خاتم الزواج",
+  metal: "المعدن",
+  gold: "ذهب",
+  silver: "فضة",
+  weight: "الوزن",
+  purity: "النقاء",
+  purchasePrice: "سعر الشراء",
+  purchasePriceHint: "إجمالي المبلغ المدفوع",
+  purchaseCurrency: "عملة الشراء",
+  purchaseDate: "تاريخ الشراء",
+  physicalForm: "الشكل",
+  coin: "عملة",
+  bar: "سبيكة",
+  jewelry: "مجوهرات",
+  notes: "ملاحظات",
+  notesPlaceholder: "أضف ملاحظة",
+  preview: "القيمة التقديرية",
+  valuationUnavailable: "التقدير غير متاح",
+  savedLocally: "سيتم حفظ هذا التغيير على هذا الجهاز أولاً.",
+  submit: "حفظ التغييرات",
+  submitting: "جارٍ حفظ التغييرات…",
+  unusualValue: "هذه القيمة كبيرة على نحو غير معتاد.",
+  acknowledge: "راجعت القيمة",
+  staleRateAcknowledgment: "يعتمد هذا التقدير على سعر محفوظ أقدم.",
+  submitFailed: "تعذر الحفظ",
+  rateFresh: "الأسعار حديثة",
+  rateStale: "نستخدم سعراً محفوظاً أقدم",
+  rateUnknown: "عمر السعر غير متاح",
+  rateFreshnessUnknown: "حداثة السعر غير معروفة",
+  rateAgeUnavailable: "عمر السعر غير متاح",
+  rateObservationUnavailable: "وقت الرصد غير متاح",
+  rateJustNow: "الآن",
+  rateUnavailable: "بعض تفاصيل السعر غير متاحة",
+  pure: "نقي",
+  perPureGram: "لكل غرام نقي",
+  estimatedGainSincePurchase: "مكسب تقديري منذ الشراء",
+  estimatedLossSincePurchase: "خسارة تقديرية منذ الشراء",
+  ratesUpdated: "تم تحديث الأسعار",
+  metalRateLabel: "سعر المعدن",
+  fxRateLabel: "سعر الصرف",
+  unknownRateSource: "المصدر غير معروف",
+  unknownRateQuality: "الجودة غير معروفة",
+  noFinancialChange: "تظل القيمة الحالية",
+  unchangedGain: "يبقى ربحك منذ الشراء",
+  unchangedLoss: "تبقى خسارتك منذ الشراء",
+  unchangedResult: "تبقى نتيجتك منذ الشراء",
+  whatWillChange: "ما الذي سيتغير",
+  correctionReason: "سبب التصحيح",
+  imageDescriptionUpdate: "سيتم تحديث صورة المقتنى ووصفه.",
+  correctionHistory: "سيظهر هذا التصحيح في السجل.",
+};
+
 function renderEdit(
   overrides: Partial<EditMetalHoldingFormProps> = {}
 ): EditMetalHoldingFormProps {
@@ -141,6 +219,7 @@ function renderEdit(
       affectedChanges: [],
       correctionReason: "",
     },
+    copy: overrides.copy,
     onChange: jest.fn(),
     onSubmit: jest.fn(),
     onRequestExit: jest.fn(),
@@ -177,6 +256,8 @@ function toPreview(facts: EditFacts): EditMetalHoldingFormProps["preview"] {
     name: facts.name,
     weightGramsDecimal: facts.weightGramsDecimal,
     displayCurrency: facts.purchaseCurrency,
+    resultSincePurchaseDecimal: facts.performanceDecimal,
+    resultDirection: "positive",
     valuation: {
       available: true,
       valueDecimal: facts.currentValueDecimal ?? "0",
@@ -272,7 +353,8 @@ describe("Edit metal holding form", () => {
       screen.getByTestId("metal-holding-correction-reason")
     ).toBeOnTheScreen();
     expect(screen.getByText("Weight: 10.125 → 11.125")).toBeOnTheScreen();
-    expect(screen.queryByTestId("metal-holding-live-preview")).toBeNull();
+    expect(screen.getByTestId("metal-holding-live-preview")).toBeOnTheScreen();
+    expect(screen.getByText("EGP 51,200")).toBeOnTheScreen();
     expect(
       screen.queryByTestId("metal-holding-consequence-acknowledgment")
     ).toBeNull();
@@ -313,10 +395,287 @@ describe("Edit metal holding form", () => {
     );
 
     expect(screen.getByText("Physical form: Coin → Bar")).toBeOnTheScreen();
-    expect(screen.getByText("Current value stays 51200")).toBeOnTheScreen();
+    expect(screen.getByText("Current value stays EGP 51,200")).toBeOnTheScreen();
+    expect(screen.getByText("Your gain since purchase stays EGP 3,400")).toBeOnTheScreen();
+    expect(screen.getByText("The holding image and description will update.")).toBeOnTheScreen();
     expect(
       screen.getByText("This correction will appear in History")
     ).toBeOnTheScreen();
+  });
+
+  it("formats physical-form correction with negative and zero results in English", (): void => {
+    renderEdit({
+      ...materialOverride(
+        { ...original, physicalForm: "BAR", performanceDecimal: "-500" },
+        "physicalForm",
+        "Physical form",
+        "Coin",
+        "Bar",
+        false
+      ),
+      preview: {
+        ...toPreview({ ...original, physicalForm: "BAR", performanceDecimal: "-500" }),
+        resultDirection: "negative",
+      },
+    });
+
+    expect(screen.getByText("Current value stays EGP 51,200")).toBeOnTheScreen();
+    expect(screen.getByText("Your loss since purchase stays EGP 500")).toBeOnTheScreen();
+
+    renderEdit({
+      ...materialOverride(
+        { ...original, physicalForm: "BAR", performanceDecimal: "0" },
+        "physicalForm",
+        "Physical form",
+        "Coin",
+        "Bar",
+        false
+      ),
+      preview: {
+        ...toPreview({ ...original, physicalForm: "BAR", performanceDecimal: "0" }),
+        resultDirection: "zero",
+      },
+    });
+
+    expect(screen.getByText("Your result since purchase stays EGP 0")).toBeOnTheScreen();
+  });
+
+  it("formats physical-form correction with positive, negative, and zero results in Arabic", (): void => {
+    renderEdit({
+      locale: "ar",
+      isRtl: true,
+      copy: ARABIC_EDIT_COPY,
+      ...materialOverride(
+        { ...original, physicalForm: "BAR" },
+        "physicalForm",
+        "الشكل",
+        "عملة",
+        "سبيكة",
+        false
+      ),
+    });
+
+    expect(screen.getByText("تظل القيمة الحالية ٥١٬٢٠٠ جنيه مصري")).toBeOnTheScreen();
+    expect(screen.getByText("يبقى ربحك منذ الشراء ٣٬٤٠٠ جنيه مصري")).toBeOnTheScreen();
+
+    renderEdit({
+      locale: "ar",
+      isRtl: true,
+      copy: ARABIC_EDIT_COPY,
+      ...materialOverride(
+        { ...original, physicalForm: "BAR", performanceDecimal: "-500" },
+        "physicalForm",
+        "الشكل",
+        "عملة",
+        "سبيكة",
+        false
+      ),
+      preview: {
+        ...toPreview({ ...original, physicalForm: "BAR", performanceDecimal: "-500" }),
+        resultDirection: "negative",
+      },
+    });
+
+    expect(screen.getByText("تبقى خسارتك منذ الشراء ٥٠٠ جنيه مصري")).toBeOnTheScreen();
+
+    renderEdit({
+      locale: "ar",
+      isRtl: true,
+      copy: ARABIC_EDIT_COPY,
+      ...materialOverride(
+        { ...original, physicalForm: "BAR", performanceDecimal: "0" },
+        "physicalForm",
+        "الشكل",
+        "عملة",
+        "سبيكة",
+        false
+      ),
+      preview: {
+        ...toPreview({ ...original, physicalForm: "BAR", performanceDecimal: "0" }),
+        resultDirection: "zero",
+      },
+    });
+
+    expect(screen.getByText("تبقى نتيجتك منذ الشراء ٠ جنيه مصري")).toBeOnTheScreen();
+  });
+
+  it("shows and focuses the missing correction reason error", (): void => {
+    renderEdit({
+      ...materialOverride(
+        { ...original, weightGramsDecimal: "11.125" },
+        "weight",
+        "Weight",
+        "10.125",
+        "11.125"
+      ),
+      editState: {
+        affectedChanges: [{ field: "weight", label: "Weight", before: "10.125", after: "11.125", isFinancial: true }],
+        correctionReason: "",
+      },
+      validationErrors: { correctionReason: "Reason is required" },
+    });
+
+    expect(screen.getByTestId("metal-holding-correction-reason")).toHaveProp("autoFocus", true);
+    expect(screen.getByTestId("metal-holding-correction-reason-error")).toHaveTextContent("Reason is required");
+    expect(screen.getByText("Reason is required")).toBeOnTheScreen();
+  });
+
+  it("does not focus correction reason when an earlier field is invalid", (): void => {
+    renderEdit({
+      ...materialOverride(
+        { ...original, weightGramsDecimal: "11.125" },
+        "weight",
+        "Weight",
+        "10.125",
+        "11.125"
+      ),
+      editState: {
+        affectedChanges: [{ field: "weight", label: "Weight", before: "10.125", after: "11.125", isFinancial: true }],
+        correctionReason: "",
+      },
+      validationErrors: {
+        name: "Name is required",
+        correctionReason: "Reason is required",
+      },
+    });
+
+    expect(screen.getByTestId("metal-holding-name-field")).toHaveProp("autoFocus", true);
+    expect(screen.getByTestId("metal-holding-correction-reason")).toHaveProp("autoFocus", false);
+  });
+
+  it("shows image update consequence alongside financial changes without unchanged value claims", (): void => {
+    renderEdit({
+      values: toValues({ ...original, weightGramsDecimal: "11.125", physicalForm: "BAR" }),
+      preview: toPreview({ ...original, weightGramsDecimal: "11.125", physicalForm: "BAR", currentValueDecimal: "56000", performanceDecimal: "8200" }),
+      editState: {
+        affectedChanges: [
+          { field: "weight", label: "Weight", before: "10.125", after: "11.125", isFinancial: true },
+          { field: "physicalForm", label: "Physical form", before: "Coin", after: "Bar", isFinancial: false },
+        ],
+        correctionReason: "Updated weight and form",
+      },
+    });
+
+    expect(screen.getByText("Weight: 10.125 → 11.125")).toBeOnTheScreen();
+    expect(screen.getByText("Physical form: Coin → Bar")).toBeOnTheScreen();
+    expect(screen.getByText("The holding image and description will update.")).toBeOnTheScreen();
+    expect(screen.queryByText(/Current value stays/)).toBeNull();
+    expect(screen.queryByText(/Your gain since purchase stays/)).toBeNull();
+    expect(screen.getByText("EGP 56,000")).toBeOnTheScreen();
+    expect(screen.getByText("+ EGP 8,200")).toBeOnTheScreen();
+  });
+
+  it("shows valuation unavailable during financial edit when market rates are missing without inventing values", (): void => {
+    renderEdit({
+      values: toValues({ ...original, weightGramsDecimal: "11.125" }),
+      preview: {
+        ...toPreview({ ...original, weightGramsDecimal: "11.125" }),
+        valuation: { available: false, reason: "missing_rate" },
+        resultSincePurchaseDecimal: null,
+      },
+      editState: {
+        affectedChanges: [
+          { field: "weight", label: "Weight", before: "10.125", after: "11.125", isFinancial: true },
+        ],
+        correctionReason: "Corrected weight",
+      },
+    });
+
+    expect(screen.getByTestId("metal-holding-valuation-unavailable")).toHaveTextContent("Valuation unavailable");
+    expect(screen.queryByText(/Current value stays/)).toBeNull();
+  });
+
+  it("shows metal and FX value, source, quality, age, and freshness independently", (): void => {
+    renderEdit({
+      preview: {
+        ...toPreview(original),
+        metalRateTrust: {
+          valueDecimal: "100",
+          state: "fresh",
+          ageMs: 60_000,
+          source: "Metal feed",
+          quality: "verified",
+          providerObservedAt: new Date("2026-09-01T10:00:00Z"),
+        },
+        fxRateTrust: {
+          valueDecimal: "0.02",
+          state: "stale",
+          ageMs: 3_600_000,
+          source: "FX feed",
+          quality: "indicative",
+          providerObservedAt: new Date("2026-09-01T09:00:00Z"),
+        },
+      },
+    });
+    expect(screen.getByText("Metal rate · USD 100")).toBeOnTheScreen();
+    expect(screen.getByText("Metal feed · verified · Rates are current · 1 minute ago")).toBeOnTheScreen();
+    expect(screen.getByText("FX rate · USD 0.02 / EGP")).toBeOnTheScreen();
+    expect(screen.getByText("FX feed · indicative · Using an older saved rate · 1 hour ago")).toBeOnTheScreen();
+  });
+
+  it("explicitly discloses distinct unknown freshness, unknown age, and unknown observation time and formats age under 1 minute as just now", (): void => {
+    renderEdit({
+      preview: {
+        ...toPreview(original),
+        metalRateTrust: {
+          valueDecimal: "100",
+          state: "unknown",
+          ageMs: null,
+          source: "Metal feed",
+          quality: "unverified",
+          providerObservedAt: null,
+        },
+        fxRateTrust: {
+          valueDecimal: "0.02",
+          state: "fresh",
+          ageMs: 30_000,
+          source: "FX feed",
+          quality: "verified",
+          providerObservedAt: new Date("2026-09-01T09:00:00Z"),
+        },
+      },
+    });
+
+    expect(screen.getByText("Metal rate · USD 100")).toBeOnTheScreen();
+    expect(
+      screen.getByText("Metal feed · unverified · Freshness unknown · Rate age is unavailable")
+    ).toBeOnTheScreen();
+    expect(screen.getByText("Observation time unavailable")).toBeOnTheScreen();
+    expect(screen.getByText("FX rate · USD 0.02 / EGP")).toBeOnTheScreen();
+    expect(screen.getByText("FX feed · verified · Rates are current · just now")).toBeOnTheScreen();
+  });
+
+  it("renders distinct unknown trust copy and just now in Arabic", (): void => {
+    renderEdit({
+      locale: "ar",
+      isRtl: true,
+      copy: ARABIC_EDIT_COPY,
+      preview: {
+        ...toPreview(original),
+        metalRateTrust: {
+          valueDecimal: "100",
+          state: "unknown",
+          ageMs: null,
+          source: "Metal feed",
+          quality: "unverified",
+          providerObservedAt: null,
+        },
+        fxRateTrust: {
+          valueDecimal: "0.02",
+          state: "fresh",
+          ageMs: 25_000,
+          source: "FX feed",
+          quality: "verified",
+          providerObservedAt: new Date("2026-09-01T09:00:00Z"),
+        },
+      },
+    });
+
+    expect(
+      screen.getByText("Metal feed · unverified · حداثة السعر غير معروفة · عمر السعر غير متاح")
+    ).toBeOnTheScreen();
+    expect(screen.getByText("وقت الرصد غير متاح")).toBeOnTheScreen();
+    expect(screen.getByText("FX feed · verified · الأسعار حديثة · الآن")).toBeOnTheScreen();
   });
 
   it("limits terminal holdings to metadata and keeps dirty exit, focus, pending lock, safe area, Arabic RTL, theme, and compact 200 percent reflow accessible", (): void => {

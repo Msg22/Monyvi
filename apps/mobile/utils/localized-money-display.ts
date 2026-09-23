@@ -82,7 +82,7 @@ export function getCurrencyAmountLabel(
     fallbackLng: false,
   });
 
-  return translated === key ? currency : translated;
+  return !translated || translated === key ? currency : translated;
 }
 
 /** Formats a locale-aware monetary numeric run without a currency label. */

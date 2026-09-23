@@ -12,6 +12,7 @@ jest.mock("../../hooks/useMarketRates", () => ({
 
 import {
   useAddMetalHoldingForm,
+  useMetalAddPreviewRates,
   type UseAddMetalHoldingFormInput,
   type UseAddMetalHoldingFormResult,
 } from "../../hooks/useAddMetalHolding";
@@ -52,6 +53,19 @@ function completeForm(result: { current: UseAddMetalHoldingFormResult }): void {
 }
 
 describe("useAddMetalHoldingForm", () => {
+  it("preserves separate metal and FX trust from the selected snapshot", () => {
+    const useMarketRates = (jest.requireMock("../../hooks/useMarketRates") as { useMarketRates: jest.Mock }).useMarketRates;
+    useMarketRates.mockReturnValue({ selectedSnapshot: { trust: {
+      gold: { valueDecimal: "100", state: "fresh", ageMs: 60_000, source: "Metal feed", quality: "verified", providerObservedAt: new Date("2026-09-01T10:00:00Z") },
+      silver: { valueDecimal: "1", state: "fresh", ageMs: 60_000, source: "Metal feed", quality: "verified", providerObservedAt: new Date("2026-09-01T10:00:00Z") },
+      currencies: new Map([["EGP", { valueDecimal: "0.02", state: "stale", ageMs: 3_600_000, source: "FX feed", quality: "indicative", providerObservedAt: new Date("2026-09-01T09:00:00Z") }]]),
+    } } });
+    const { result } = renderHook(() => useMetalAddPreviewRates());
+    const form = renderHook(() => useAddMetalHoldingForm(input({ previewRates: result.current.getPreviewRates })));
+    act(() => completeForm(form.result));
+    expect(form.result.current.preview.metalRateTrust).toMatchObject({ source: "Metal feed", state: "fresh", quality: "verified", ageMs: 60_000 });
+    expect(form.result.current.preview.fxRateTrust).toMatchObject({ source: "FX feed", state: "stale", quality: "indicative", ageMs: 3_600_000 });
+  });
   it("submits normalized facts directly with one stable seven-ID action bundle", async () => {
     const addHolding = jest.fn<Promise<void>, [AddMetalHoldingFormSubmission]>(
       () => Promise.resolve()

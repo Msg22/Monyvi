@@ -236,12 +236,20 @@ function createCopy(
     rateFresh: t("add.rate_fresh"),
     rateStale: t("add.rate_stale"),
     rateUnknown: t("add.rate_unknown"),
+    rateFreshnessUnknown: t("add.rate_freshness_unknown"),
+    rateAgeUnavailable: t("add.rate_age_unavailable"),
+    rateObservationUnavailable: t("add.rate_observation_unavailable"),
+    rateJustNow: t("add.rate_just_now"),
     rateUnavailable: t("add.rate_unavailable"),
     pure: t("add.pure"),
     perPureGram: t("add.per_pure_gram"),
     estimatedGainSincePurchase: t("add.estimated_gain_since_purchase"),
     estimatedLossSincePurchase: t("add.estimated_loss_since_purchase"),
     ratesUpdated: t("add.rates_updated"),
+    metalRateLabel: t("add.metal_rate_label"),
+    fxRateLabel: t("add.fx_rate_label"),
+    unknownRateSource: t("add.unknown_rate_source"),
+    unknownRateQuality: t("add.unknown_rate_quality"),
   };
 }
 

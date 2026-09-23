@@ -20,6 +20,7 @@ import { palette } from "@/constants/colors";
 import { shouldUseCompactLayout } from "@/constants/ui";
 
 import { MetalHoldingLivePreview } from "./MetalHoldingLivePreview";
+import { MetalHoldingCorrectionState } from "./MetalHoldingCorrectionState";
 import {
   MetalSelector,
   PhysicalFormSelector,
@@ -61,12 +62,23 @@ export interface MetalHoldingFormPreview {
   readonly metalUsdPerPureGramDecimal?: string | null;
   readonly rateSources?: readonly string[];
   readonly providerObservedAt?: Date | null;
+  readonly metalRateTrust?: MetalHoldingPreviewRateTrust;
+  readonly fxRateTrust?: MetalHoldingPreviewRateTrust;
   readonly resultSincePurchaseDecimal?: string | null;
   readonly resultDirection?: "positive" | "negative" | "zero" | "unavailable";
   readonly purityPercentDecimal?: string;
   readonly valuation:
     | { readonly available: true; readonly valueDecimal: string }
     | { readonly available: false; readonly reason: "missing_rate" };
+}
+
+export interface MetalHoldingPreviewRateTrust {
+  readonly valueDecimal: string | null;
+  readonly state: "fresh" | "stale" | "unknown" | "missing" | "invalid";
+  readonly ageMs: number | null;
+  readonly source: string | null;
+  readonly quality: string | null;
+  readonly providerObservedAt: Date | null;
 }
 
 export interface MetalHoldingFormCopy {
@@ -107,12 +119,24 @@ export interface MetalHoldingFormCopy {
   readonly estimatedGainSincePurchase: string;
   readonly estimatedLossSincePurchase: string;
   readonly ratesUpdated: string;
+  readonly rateFreshnessUnknown?: string;
+  readonly rateAgeUnavailable?: string;
+  readonly rateObservationUnavailable?: string;
+  readonly rateJustNow?: string;
+  readonly metalRateLabel?: string;
+  readonly fxRateLabel?: string;
+  readonly unknownRateSource?: string;
+  readonly unknownRateQuality?: string;
   readonly correctionReason?: string;
   readonly whatWillChange?: string;
   readonly previous?: string;
   readonly current?: string;
   readonly correctionHistory?: string;
   readonly noFinancialChange?: string;
+  readonly unchangedGain?: string;
+  readonly unchangedLoss?: string;
+  readonly unchangedResult?: string;
+  readonly imageDescriptionUpdate?: string;
   readonly editTitle?: string;
   readonly editSubmit?: string;
   readonly editSubmitting?: string;
@@ -219,6 +243,11 @@ const DEFAULT_COPY: MetalHoldingFormCopy = {
   estimatedGainSincePurchase: "estimated gain since purchase",
   estimatedLossSincePurchase: "estimated loss since purchase",
   ratesUpdated: "Rates updated",
+  rateFreshnessUnknown: "Freshness unknown",
+  rateAgeUnavailable: "Rate age is unavailable",
+  rateObservationUnavailable: "Observation time unavailable",
+  rateJustNow: "just now",
+  unchangedResult: "Your result since purchase stays",
 };
 
 const DEFAULT_PURITY_OPTIONS: ReadonlyArray<DropdownItem<string>> = [
@@ -245,6 +274,7 @@ const FOCUSABLE_ERROR_ORDER = [
   ["weightGrams", "metal-holding-weight-field"],
   ["purchasePrice", "metal-holding-purchase-price-field"],
   ["purchaseDate", "metal-holding-purchase-date-field"],
+  ["correctionReason", "metal-holding-correction-reason"],
 ] as const;
 
 export function MetalHoldingForm({
@@ -567,27 +597,31 @@ export function MetalHoldingForm({
           />
 
           {mode === "edit" && hasMaterialChanges && editState ? (
-            <CorrectionState
+            <MetalHoldingCorrectionState
               copy={copy}
               state={editState}
+              currency={preview.displayCurrency ?? ""}
+              locale={locale}
               currentValue={
                 preview.valuation.available
                   ? preview.valuation.valueDecimal
                   : null
               }
+              resultSincePurchase={preview.resultSincePurchaseDecimal ?? null}
+              resultDirection={preview.resultDirection}
+              reasonError={validationErrors.correctionReason}
               onReasonChange={onCorrectionReasonChange}
               isDisabled={isSubmitting}
+              autoFocus={firstError === "metal-holding-correction-reason"}
             />
           ) : null}
 
-          {mode !== "edit" || !hasMaterialChanges ? (
-            <MetalHoldingLivePreview
-              copy={copy}
-              preview={preview}
-              isStacked={shouldStackDenseFields}
-              locale={locale}
-            />
-          ) : null}
+          <MetalHoldingLivePreview
+            copy={copy}
+            preview={preview}
+            isStacked={shouldStackDenseFields}
+            locale={locale}
+          />
 
           {requiresUnusualValueAcknowledgment ? (
             <View className="rounded-2xl border border-amber-300 bg-amber-50 p-4 dark:border-amber-700 dark:bg-amber-950">
@@ -696,59 +730,6 @@ export function MetalHoldingForm({
   );
 }
 
-function CorrectionState({
-  copy,
-  state,
-  currentValue,
-  onReasonChange,
-  isDisabled,
-}: {
-  readonly copy: MetalHoldingFormCopy;
-  readonly state: MetalHoldingFormEditState;
-  readonly currentValue: string | null;
-  readonly onReasonChange?: (value: string) => void;
-  readonly isDisabled: boolean;
-}): React.JSX.Element {
-  const hasFinancialChange = state.affectedChanges.some(
-    (change) => change.isFinancial
-  );
-  return (
-    <View className="gap-4">
-      <TextField
-        testID="metal-holding-correction-reason"
-        label={copy.correctionReason ?? "Why are you changing this?"}
-        value={state.correctionReason}
-        editable={!isDisabled}
-        onChangeText={onReasonChange}
-        multiline
-      />
-      <View
-        testID="metal-holding-what-will-change"
-        className="gap-3 rounded-2xl border border-slate-200 bg-slate-25 p-4 dark:border-slate-700 dark:bg-slate-900"
-      >
-        <Text className="text-base font-semibold text-nileGreen-700 dark:text-nileGreen-400">
-          {copy.whatWillChange ?? "What will change"}
-        </Text>
-        {state.affectedChanges.map((change) => (
-          <Text
-            key={change.field}
-            className="text-sm text-text-secondary dark:text-text-secondary-dark"
-          >
-            {`${change.label}: ${change.before} → ${change.after}`}
-          </Text>
-        ))}
-        {!hasFinancialChange && currentValue ? (
-          <Text className="text-sm text-text-secondary dark:text-text-secondary-dark">
-            {`${copy.noFinancialChange ?? "Current value stays"} ${currentValue}`}
-          </Text>
-        ) : null}
-        <Text className="text-sm text-text-secondary dark:text-text-secondary-dark">
-          {copy.correctionHistory ?? "This correction will appear in History"}
-        </Text>
-      </View>
-    </View>
-  );
-}
 
 function PreviousValueCue({
   change,

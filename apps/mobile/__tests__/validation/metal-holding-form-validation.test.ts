@@ -13,7 +13,6 @@ interface MetalHoldingFormData {
 
 interface MetalHoldingFormValidationContext {
   readonly locale: "en" | "ar";
-  readonly decimalSeparator?: "." | ",";
   readonly today: string;
   readonly currencyMinorUnits: number;
   readonly safeRange: {
@@ -105,7 +104,7 @@ function validate(
 }
 
 describe("validateMetalHoldingForm", () => {
-  it("normalizes English, Arabic-Indic, and decimal-comma entries to canonical exact facts", () => {
+  it("normalizes English and Arabic-Indic dot-decimal and grouped entries to canonical exact facts while rejecting comma-decimal notation", () => {
     const english = validate({
       weightGrams: "1,250.125",
       purchasePrice: "47,800.00",
@@ -117,13 +116,14 @@ describe("validateMetalHoldingForm", () => {
       },
       { locale: "ar" }
     );
-    const decimalComma = validate(
-      {
-        weightGrams: "10,125",
-        purchasePrice: "47800,00",
-      },
-      { decimalSeparator: "," }
-    );
+    const dotDecimal = validate({
+      weightGrams: "12.5",
+      purchasePrice: "1,234.50",
+    });
+    const commaDecimal = validate({
+      weightGrams: "12,5",
+      purchasePrice: "47800.00",
+    });
 
     expect(english).toMatchObject({
       isValid: false,
@@ -139,13 +139,15 @@ describe("validateMetalHoldingForm", () => {
         purchasePriceDecimal: "47800",
       },
     });
-    expect(decimalComma).toMatchObject({
+    expect(dotDecimal).toMatchObject({
       isValid: true,
       normalized: {
-        weightGramsDecimal: "10.125",
-        purchasePriceDecimal: "47800",
+        weightGramsDecimal: "12.5",
+        purchasePriceDecimal: "1234.5",
       },
     });
+    expect(commaDecimal.isValid).toBe(false);
+    expect(commaDecimal.errors.weightGrams).toBe("invalid");
   });
 
   it("requires every Add fact while representing an unselected purity with null, never an empty ID sentinel", () => {
