@@ -198,9 +198,14 @@ function runHarness({
         path.join(stage, file)
       );
     }
-    fsModule.copyFileSync(
-      path.join(repoRoot, "supabase", "migrations", MIGRATION_075),
-      path.join(stage, MIGRATION_075)
+    fsModule.writeFileSync(
+      path.join(stage, MIGRATION_075),
+      wrapMigration(
+        fsModule.readFileSync(
+          path.join(repoRoot, "supabase", "migrations", MIGRATION_075),
+          "utf8"
+        )
+      )
     );
     fsModule.copyFileSync(
       path.join(repoRoot, "supabase", "tests", "metals_backfill_replay_test.sql"),

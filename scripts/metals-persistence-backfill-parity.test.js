@@ -39,6 +39,11 @@ const EXPECTED_TUPLES = [
 ];
 
 const normalize = (value) => value.replace(/\s+/g, "");
+const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const containsRep = (text, rep) =>
+  new RegExp(`(?<![0-9.])${escapeRegExp(normalize(rep))}(?![0-9])`).test(
+    normalize(text)
+  );
 
 function whenClausesFor(sql, metal, thenPattern) {
   const clauses = [];
@@ -71,7 +76,7 @@ test("local WatermelonDB migration names every expected legacy representation", 
         .split("\n")
         .find(
           (candidate) =>
-            normalize(candidate).includes(normalize(rep)) &&
+            containsRep(candidate, rep) &&
             candidate.includes(`'${tuple.code}'`)
         );
       assert.ok(
@@ -98,7 +103,7 @@ test("075 server backfill ports every legacy representation with local outputs",
     );
     for (const rep of tuple.reps) {
       assert.ok(
-        codeLines.some((line) => normalize(line).includes(normalize(rep))),
+        codeLines.some((line) => containsRep(line, rep)),
         `075 code CASE maps ${rep} to ${tuple.code}`
       );
     }
@@ -113,7 +118,7 @@ test("075 server backfill ports every legacy representation with local outputs",
     );
     for (const rep of tuple.reps) {
       assert.ok(
-        factorLines.some((line) => normalize(line).includes(normalize(rep))),
+        factorLines.some((line) => containsRep(line, rep)),
         `075 factor CASE maps ${rep} to ${tuple.factor}`
       );
     }

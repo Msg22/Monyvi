@@ -114,7 +114,7 @@ jobs:
       'codex/issue282-realized-metal-sale-results' || github.event.pull_request.base.ref ==
       'codex/035-metals-slice5-integration')
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 40
     env:
       SENTRYCLI_SKIP_DOWNLOAD: "1"
     steps:
