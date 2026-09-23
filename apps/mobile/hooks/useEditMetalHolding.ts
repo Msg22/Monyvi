@@ -52,6 +52,8 @@ export interface UseEditMetalHoldingResult {
   readonly validationErrors: Readonly<Record<string, string>>;
   readonly correctionReason: string;
   readonly unusualValueAcknowledged: boolean;
+  readonly requiresStaleRateAcknowledgment: boolean;
+  readonly staleRateAcknowledged: boolean;
   readonly requiresUnusualValueAcknowledgment: boolean;
   readonly comparison: ReturnType<typeof compareMetalHoldingEdit>;
   readonly isLoading: boolean;
@@ -65,6 +67,7 @@ export interface UseEditMetalHoldingResult {
   ) => void;
   readonly setCorrectionReason: (value: string) => void;
   readonly acknowledgeUnusualValue: () => void;
+  readonly acknowledgeStaleRate: () => void;
   readonly submit: () => Promise<boolean>;
   readonly retry: () => void;
 }
@@ -110,6 +113,7 @@ export function useEditMetalHolding(
   const [correctionReason, setCorrectionReason] = useState("");
   const [unusualValueAcknowledged, setUnusualValueAcknowledged] =
     useState(false);
+  const [staleRateAcknowledged, setStaleRateAcknowledged] = useState(false);
   const idsRef = useRef<EditMetalHoldingRequestIds | null>(null);
   const inFlightRef = useRef(false);
 
@@ -239,6 +243,10 @@ export function useEditMetalHolding(
   );
   const isDirty =
     comparison.hasMetadataChanges || comparison.hasMaterialChanges;
+  const requiresStaleRateAcknowledgment =
+    comparison.hasFinancialConsequences &&
+    preview.valuation.available &&
+    preview.rateFreshness === "stale";
 
   const updateField = useCallback(
     (field: MetalHoldingFormField, value: string | null): void => {
@@ -248,6 +256,7 @@ export function useEditMetalHolding(
       setSubmitError(null);
       setValidationErrors({});
       setUnusualValueAcknowledged(false);
+      setStaleRateAcknowledged(false);
       setValues((current) =>
         field === "physicalForm"
           ? {
@@ -270,7 +279,11 @@ export function useEditMetalHolding(
     );
     const errors: Record<string, string> = Object.fromEntries(
       Object.entries(result.errors).filter(
-        (entry): entry is [string, string] => typeof entry[1] === "string"
+        (entry): entry is [string, string] =>
+          typeof entry[1] === "string" &&
+          (comparison.hasMaterialChanges ||
+            entry[0] === "name" ||
+            entry[0] === "notes")
       )
     );
     if (!values.name.trim()) errors.name = "required";
@@ -287,6 +300,9 @@ export function useEditMetalHolding(
       setValidationErrors(errors);
       return false;
     }
+    if (requiresStaleRateAcknowledgment && !staleRateAcknowledged) {
+      return false;
+    }
     inFlightRef.current = true;
     setIsSubmitting(true);
     setSubmitError(null);
@@ -294,6 +310,8 @@ export function useEditMetalHolding(
       actionId: input.createId(),
       actionEvidenceId: input.createId(),
       lifecycleEventId: input.createId(),
+      metalRateReferenceId: input.createId(),
+      currencyRateReferenceId: input.createId(),
     };
     try {
       await saveEditedMetalHolding({
@@ -304,6 +322,7 @@ export function useEditMetalHolding(
           ? correctionReason
           : null,
         cairoTodayDate: input.today,
+        staleRateAcknowledged,
       });
       idsRef.current = null;
       return true;
@@ -323,6 +342,8 @@ export function useEditMetalHolding(
     input,
     isDirty,
     model,
+    requiresStaleRateAcknowledgment,
+    staleRateAcknowledged,
     unusualValueAcknowledged,
     validationContext,
     values,
@@ -337,7 +358,10 @@ export function useEditMetalHolding(
     correctionReason,
     unusualValueAcknowledged,
     requiresUnusualValueAcknowledgment:
+      comparison.hasMaterialChanges &&
       validation.requiresUnusualValueAcknowledgment,
+    requiresStaleRateAcknowledgment,
+    staleRateAcknowledged,
     comparison,
     isLoading,
     isSubmitting,
@@ -347,6 +371,7 @@ export function useEditMetalHolding(
     updateField,
     setCorrectionReason,
     acknowledgeUnusualValue: (): void => setUnusualValueAcknowledged(true),
+    acknowledgeStaleRate: (): void => setStaleRateAcknowledged(true),
     submit,
     retry: (): void => setReloadKey((value) => value + 1),
   };

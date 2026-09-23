@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+
 import { Q, type Database, type Model } from "@nozbe/watermelondb";
 import type SQLiteAdapter from "@nozbe/watermelondb/adapters/sqlite";
 import type {
@@ -337,12 +338,110 @@ describe("Edit metal holding command SQLite atomicity", () => {
     await expect(
       service.save(command({ materialFacts: null, correctionReason: null }))
     ).resolves.toEqual({ kind: "metadata" });
+    const stateAfterMetadata = (
+      await database
+        .get<MetalHoldingState>("metal_holding_states")
+        .query()
+        .fetch()
+    )[0];
+    expect(stateAfterMetadata.nameWrittenAt).toBe(
+      new Date("2026-09-01T10:15:30.123Z").getTime()
+    );
+    expect(stateAfterMetadata.nameWriterId).toBe(IDS.user);
+    expect(stateAfterMetadata.notesWrittenAt).toBe(
+      new Date("2026-09-01T10:15:30.123Z").getTime()
+    );
+    expect(stateAfterMetadata.notesWriterId).toBe(IDS.user);
     expect(
       await database.get<Model>("metal_action_evidence").query().fetch()
     ).toHaveLength(0);
     await expect(
       service.save(command({ correctionReason: null }))
     ).rejects.toThrow("correction_reason_required");
+  });
+  it("ignores older metadata edit and honors newer clock under LWW", async (): Promise<void> => {
+    await seedHolding();
+    const service = createService();
+    await service.save(
+      command({
+        materialFacts: null,
+        correctionReason: null,
+        metadata: { name: "Newer Name", notes: "Newer Note" },
+        occurredAt: "2026-09-01T12:00:00.000Z",
+      })
+    );
+    expect((await database.get<Asset>("assets").find(IDS.holding)).name).toBe(
+      "Newer Name"
+    );
+
+    await service.save(
+      command({
+        materialFacts: null,
+        correctionReason: null,
+        metadata: { name: "Older Name", notes: "Older Note" },
+        occurredAt: "2026-09-01T11:00:00.000Z",
+      })
+    );
+    expect((await database.get<Asset>("assets").find(IDS.holding)).name).toBe(
+      "Newer Name"
+    );
+  });
+  it("updates metadata clocks in mixed edits and ignores older metadata in mixed edits", async (): Promise<void> => {
+    await seedHolding();
+    const service = createService();
+    await service.save(
+      command({
+        metadata: { name: "Mixed Newer Name", notes: "Mixed Newer Note" },
+        occurredAt: "2026-09-01T12:00:00.000Z",
+      })
+    );
+    const asset = await database.get<Asset>("assets").find(IDS.holding);
+    const state = (
+      await database
+        .get<MetalHoldingState>("metal_holding_states")
+        .query()
+        .fetch()
+    )[0];
+    expect(asset.name).toBe("Mixed Newer Name");
+    expect(state.nameWrittenAt).toBe(
+      new Date("2026-09-01T12:00:00.000Z").getTime()
+    );
+    expect(state.nameWriterId).toBe(IDS.user);
+    expect(state.notesWrittenAt).toBe(
+      new Date("2026-09-01T12:00:00.000Z").getTime()
+    );
+    expect(state.notesWriterId).toBe(IDS.user);
+
+    const nextCmd = command({
+      actionId: "018f0c7a-1234-7abc-8def-000000000091",
+      actionEvidenceId: "018f0c7a-1234-7abc-8def-000000000092",
+      lifecycleEventId: "018f0c7a-1234-7abc-8def-000000000093",
+      predecessorEventId: IDS.correctionEvent,
+      expectedFinancialRevision: "1",
+      originalMetadata: { name: "Mixed Newer Name", notes: "Mixed Newer Note" },
+      originalMaterialFacts: {
+        ...command().originalMaterialFacts,
+        weightGramsDecimal: "11.125",
+      },
+      materialFacts: {
+        ...command().originalMaterialFacts,
+        weightGramsDecimal: "12.125",
+      },
+      metadata: { name: "Mixed Older Name", notes: "Mixed Older Note" },
+      occurredAt: "2026-09-01T11:00:00.000Z",
+    });
+    await service.save(nextCmd);
+    const assetAfter = await database.get<Asset>("assets").find(IDS.holding);
+    const stateAfter = (
+      await database
+        .get<MetalHoldingState>("metal_holding_states")
+        .query()
+        .fetch()
+    )[0];
+    expect(assetAfter.name).toBe("Mixed Newer Name");
+    expect(stateAfter.nameWrittenAt).toBe(
+      new Date("2026-09-01T12:00:00.000Z").getTime()
+    );
   });
   it("keeps legacy Name and Notes editable without fabricating exact material evidence", async (): Promise<void> => {
     await seedHolding("active", true);

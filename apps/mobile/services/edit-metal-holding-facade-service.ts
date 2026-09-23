@@ -12,6 +12,8 @@ import type {
   Sha256Provider,
 } from "@monyvi/logic";
 
+import { loadAcquisitionRateSnapshots } from "./add-metal-holding-facade-service";
+import { readStoredMetalActionReplay } from "./metal-action-replay-service";
 import type {
   EditableMetalHoldingFacts,
   MetalHoldingStatus,
@@ -40,6 +42,8 @@ export interface EditMetalHoldingRequestIds {
   readonly actionId: string;
   readonly actionEvidenceId: string;
   readonly lifecycleEventId: string;
+  readonly metalRateReferenceId: string;
+  readonly currencyRateReferenceId: string;
 }
 
 export interface EditMetalHoldingSubmission {
@@ -48,6 +52,7 @@ export interface EditMetalHoldingSubmission {
   readonly current: EditableMetalHoldingFacts;
   readonly correctionReason: string | null;
   readonly cairoTodayDate: string;
+  readonly staleRateAcknowledged: boolean;
 }
 
 const sha256Provider: Sha256Provider = {
@@ -133,18 +138,32 @@ export async function saveEditedMetalHolding(
 ): Promise<void> {
   const scope = await getCurrentUserDataScope();
   const existing = await getFinancialActionGroup(submission.ids.actionId);
-  if (existing) {
-    if (
-      existing.kind !== "correct" ||
-      existing.domainReferenceId !== submission.original.holdingId
-    )
-      throw new Error("action_id_payload_mismatch");
-    return;
-  }
-  const occurredAt = new Date().toISOString();
+  const replay = existing
+    ? readStoredMetalActionReplay(
+        existing,
+        "correct",
+        submission.original.holdingId,
+        submission.cairoTodayDate
+      )
+    : null;
+  const occurredAt = replay?.occurredAt ?? new Date().toISOString();
   const hasMaterialChanges =
     materialJson(submission.original.facts) !==
     materialJson(submission.current);
+  const rateSnapshots = hasMaterialChanges
+    ? replay
+      ? (replay.rateSnapshots as unknown as EditMetalHoldingCommandInput["rateSnapshots"])
+      : await loadAcquisitionRateSnapshots({
+          holding: submission.current,
+          ids: submission.ids,
+        })
+    : [];
+  if (
+    !submission.staleRateAcknowledged &&
+    rateSnapshots.some((snapshot) => snapshot.capturedFreshness === "stale")
+  ) {
+    throw new Error("stale_rate_acknowledgment_required");
+  }
   const input: EditMetalHoldingCommandInput = {
     actionId: submission.ids.actionId,
     actionEvidenceId: submission.ids.actionEvidenceId,
@@ -166,7 +185,7 @@ export async function saveEditedMetalHolding(
     },
     originalMaterialFacts: toMaterial(submission.original.facts),
     materialFacts: hasMaterialChanges ? toMaterial(submission.current) : null,
-    rateSnapshots: [],
+    rateSnapshots,
   };
   const service = createEditMetalHoldingCommandService({
     database,

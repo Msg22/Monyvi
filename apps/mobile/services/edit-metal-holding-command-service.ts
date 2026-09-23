@@ -19,7 +19,16 @@ import type {
   FinancialActionLinkedOperationPlan,
 } from "./financial-action-foundation-repository";
 import { incrementCanonicalMetalRevision } from "./metal-financial-action-adapter";
-import { findOwnedById, queryChildrenOfOwnedParent } from "./user-data-access";
+import {
+  compareMetalMetadataClock,
+  createMetalMetadataService,
+  type MetalMetadataClockDecision,
+} from "./metal-metadata-service";
+import {
+  findOwnedById,
+  getCurrentUserDataScope,
+  queryChildrenOfOwnedParent,
+} from "./user-data-access";
 
 export interface EditMetalMaterialFacts {
   readonly weightGramsDecimal: string;
@@ -32,7 +41,7 @@ export interface EditMetalMaterialFacts {
   readonly physicalForm: "COIN" | "BAR" | "JEWELRY" | null;
 }
 
-export interface EditMetalRateSnapshot extends RegisteredActionPayload {
+export interface EditMetalRateSnapshot {
   readonly referenceId: string;
   readonly role: "acquisition_metal" | "acquisition_purchase_currency";
   readonly kind: "metal" | "currency";
@@ -189,10 +198,6 @@ function assertOriginalProjection(
   input: EditMetalHoldingCommandInput,
   projection: Awaited<ReturnType<typeof loadProjection>>
 ): void {
-  const persistedMetadata = {
-    name: projection.asset.name,
-    notes: projection.asset.notes ?? null,
-  };
   const persistedMaterial: EditMetalMaterialFacts = {
     weightGramsDecimal:
       projection.metal.weightGramsDecimal ??
@@ -217,13 +222,37 @@ function assertOriginalProjection(
         : null,
   };
   if (
-    JSON.stringify(persistedMetadata) !==
-      JSON.stringify(input.originalMetadata) ||
     JSON.stringify(persistedMaterial) !==
-      JSON.stringify(input.originalMaterialFacts)
+    JSON.stringify(input.originalMaterialFacts)
   ) {
     throw new Error("holding_projection_changed");
   }
+}
+
+function metadataDecision(
+  input: EditMetalHoldingCommandInput,
+  field: "name" | "notes",
+  state: MetalHoldingState,
+  asset: Asset
+): MetalMetadataClockDecision {
+  if (input.originalMetadata[field] === input.metadata[field]) return "ignore";
+  const candidate = {
+    value: input.metadata[field],
+    writtenAt: new Date(input.occurredAt).getTime(),
+    writerId: input.userId,
+  };
+  const decision = compareMetalMetadataClock(
+    field === "name" ? state.nameWrittenAt : state.notesWrittenAt,
+    field === "name" ? state.nameWriterId : state.notesWriterId,
+    candidate
+  );
+  if (
+    decision === "same" &&
+    (field === "name" ? asset.name : (asset.notes ?? null)) !== candidate.value
+  ) {
+    throw new Error("metal_metadata_tuple_conflict");
+  }
+  return decision;
 }
 
 function prepareCorrectionPlan(
@@ -240,6 +269,18 @@ function prepareCorrectionPlan(
   )
     throw new Error("holding_revision_conflict");
   assertOriginalProjection(input, projection);
+  const nameDecision = metadataDecision(
+    input,
+    "name",
+    projection.state,
+    projection.asset
+  );
+  const notesDecision = metadataDecision(
+    input,
+    "notes",
+    projection.state,
+    projection.asset
+  );
   const material = input.materialFacts;
   if (!material) throw new Error("metal_correction_material_required");
   const occurredAt = new Date(input.occurredAt);
@@ -311,8 +352,9 @@ function prepareCorrectionPlan(
         model: projection.asset,
         update: (model): void => {
           const asset = model as Asset;
-          asset.name = input.metadata.name;
-          asset.notes = input.metadata.notes ?? null;
+          if (nameDecision === "apply") asset.name = input.metadata.name;
+          if (notesDecision === "apply")
+            asset.notes = input.metadata.notes ?? null;
           asset.currency = material.purchaseCurrency as Asset["currency"];
           asset.purchaseCurrency = material.purchaseCurrency;
           asset.purchaseDate = new Date(
@@ -349,6 +391,14 @@ function prepareCorrectionPlan(
           state.effectiveEventId = input.lifecycleEventId;
           state.financialRevision = nextRevision;
           state.reconciliationState = "sync_pending";
+          if (nameDecision === "apply") {
+            state.nameWrittenAt = occurredAt.getTime();
+            state.nameWriterId = input.userId;
+          }
+          if (notesDecision === "apply") {
+            state.notesWrittenAt = occurredAt.getTime();
+            state.notesWriterId = input.userId;
+          }
           state.updatedAt = occurredAt;
         },
       },
@@ -371,13 +421,38 @@ async function saveMetadata(
   database: Database,
   input: EditMetalHoldingCommandInput
 ): Promise<void> {
-  const projection = await loadProjection(database, input);
-  await database.write(async (): Promise<void> => {
-    await projection.asset.update((asset): void => {
-      asset.name = input.metadata.name;
-      asset.notes = input.metadata.notes ?? null;
-      asset.updatedAt = new Date(input.occurredAt);
-    });
+  const changedName = input.originalMetadata.name !== input.metadata.name;
+  const changedNotes = input.originalMetadata.notes !== input.metadata.notes;
+  if (!changedName && !changedNotes) return;
+  const metadataService = createMetalMetadataService({
+    database,
+    getCurrentUserId: async (): Promise<string> =>
+      (await getCurrentUserDataScope()).userId,
+  });
+  const writtenAt = new Date(input.occurredAt).getTime();
+  await metadataService.applyPatch({
+    holdingId: input.holdingId,
+    userId: input.userId,
+    fields: {
+      ...(changedName
+        ? {
+            name: {
+              value: input.metadata.name,
+              writtenAt,
+              writerId: input.userId,
+            },
+          }
+        : {}),
+      ...(changedNotes
+        ? {
+            notes: {
+              value: input.metadata.notes,
+              writtenAt,
+              writerId: input.userId,
+            },
+          }
+        : {}),
+    },
   });
 }
 

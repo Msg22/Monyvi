@@ -108,8 +108,10 @@ describe("useAddMetalHoldingForm", () => {
       duplicate = result.current.submit();
     });
     await expect(duplicate).resolves.toBeNull();
-    act(() => rejectFirst?.(new Error("write_failed")));
-    await expect(first).resolves.toBeNull();
+    await act(async () => {
+      rejectFirst?.(new Error("write_failed"));
+      await expect(first).resolves.toBeNull();
+    });
 
     await act(async () => {
       await result.current.submit();
@@ -167,5 +169,53 @@ describe("useAddMetalHoldingForm", () => {
       purchaseCurrency: "KWD",
       purchasePriceDecimal: "1.234",
     });
+  });
+
+  it("requires explicit acknowledgment when rates are stale before submitting", async () => {
+    const addHolding = jest.fn<Promise<void>, [AddMetalHoldingFormSubmission]>(
+      () => Promise.resolve()
+    );
+    const { result } = renderHook(() =>
+      useAddMetalHoldingForm(
+        input({
+          addHolding,
+          previewRates: () => ({
+            metalUsdPerPureGramDecimal: "100",
+            currencyUsdPerUnitDecimal: "0.02",
+            egpUsdPerUnitDecimal: "0.02",
+            currencyMinorUnits: 2,
+            rateFreshness: "stale",
+          }),
+        })
+      )
+    );
+    act(() => completeForm(result));
+
+    expect(
+      (
+        result.current as unknown as {
+          requiresStaleRateAcknowledgment: boolean;
+        }
+      ).requiresStaleRateAcknowledgment
+    ).toBe(true);
+
+    let holdingId: string | null = null;
+    await act(async () => {
+      holdingId = await result.current.submit();
+    });
+    expect(holdingId).toBeNull();
+    expect(addHolding).not.toHaveBeenCalled();
+
+    act(() => {
+      (
+        result.current as unknown as { acknowledgeStaleRate: () => void }
+      ).acknowledgeStaleRate();
+    });
+
+    await act(async () => {
+      holdingId = await result.current.submit();
+    });
+    expect(holdingId).toBe("018f0c7a-1234-7abc-8def-000000000002");
+    expect(addHolding).toHaveBeenCalledTimes(1);
   });
 });

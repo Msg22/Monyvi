@@ -96,6 +96,7 @@ export interface MetalHoldingFormCopy {
   readonly submitting: string;
   readonly unusualValue: string;
   readonly acknowledge: string;
+  readonly staleRateAcknowledgment: string;
   readonly submitFailed: string;
   readonly rateFresh: string;
   readonly rateStale: string;
@@ -151,6 +152,8 @@ export interface MetalHoldingFormProps {
   readonly submitError?: string | null;
   readonly requiresUnusualValueAcknowledgment?: boolean;
   readonly unusualValueAcknowledged?: boolean;
+  readonly requiresStaleRateAcknowledgment?: boolean;
+  readonly staleRateAcknowledged?: boolean;
   readonly preview: MetalHoldingFormPreview;
   readonly onChange: (
     field: MetalHoldingFormField,
@@ -159,6 +162,7 @@ export interface MetalHoldingFormProps {
   readonly onSubmit: () => void;
   readonly onRequestExit: () => void;
   readonly onAcknowledgeUnusualValue?: () => void;
+  readonly onAcknowledgeStaleRate?: () => void;
   readonly onCorrectionReasonChange?: (value: string) => void;
 }
 
@@ -203,6 +207,8 @@ const DEFAULT_COPY: MetalHoldingFormCopy = {
   submitting: "Adding holding",
   unusualValue: "This value is unusually large. Review it before continuing.",
   acknowledge: "I reviewed it",
+  staleRateAcknowledgment:
+    "This estimate uses an older saved rate. Review it before continuing.",
   submitFailed: "We couldn't add this holding. Try again.",
   rateFresh: "Rates are current",
   rateStale: "Using an older saved rate",
@@ -260,11 +266,14 @@ export function MetalHoldingForm({
   submitError = null,
   requiresUnusualValueAcknowledgment = false,
   unusualValueAcknowledged = false,
+  requiresStaleRateAcknowledgment = false,
+  staleRateAcknowledged = false,
   preview,
   onChange,
   onSubmit,
   onRequestExit,
   onAcknowledgeUnusualValue,
+  onAcknowledgeStaleRate,
   onCorrectionReasonChange,
 }: MetalHoldingFormProps): React.JSX.Element {
   const [isPurityOpen, setIsPurityOpen] = useState(false);
@@ -590,6 +599,29 @@ export function MetalHoldingForm({
                   accessibilityRole="button"
                   disabled={isSubmitting}
                   onPress={onAcknowledgeUnusualValue}
+                  className="mt-3 min-h-11 items-center justify-center rounded-xl border border-amber-700 px-4"
+                >
+                  <Text className="font-semibold text-amber-900 dark:text-amber-100">
+                    {copy.acknowledge}
+                  </Text>
+                </TouchableOpacity>
+              ) : null}
+            </View>
+          ) : null}
+
+          {requiresStaleRateAcknowledgment ? (
+            <View
+              testID="metal-holding-stale-rate-acknowledgment"
+              className="rounded-2xl border border-amber-300 bg-amber-50 p-4 dark:border-amber-700 dark:bg-amber-950"
+            >
+              <Text className="text-sm text-amber-900 dark:text-amber-100">
+                {copy.staleRateAcknowledgment}
+              </Text>
+              {!staleRateAcknowledged ? (
+                <TouchableOpacity
+                  accessibilityRole="button"
+                  disabled={isSubmitting}
+                  onPress={onAcknowledgeStaleRate}
                   className="mt-3 min-h-11 items-center justify-center rounded-xl border border-amber-700 px-4"
                 >
                   <Text className="font-semibold text-amber-900 dark:text-amber-100">

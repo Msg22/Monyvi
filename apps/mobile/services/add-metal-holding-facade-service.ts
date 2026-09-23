@@ -17,6 +17,7 @@ import {
   commitFinancialActionGroupLocally,
   getFinancialActionGroup,
 } from "./financial-action-foundation-repository";
+import { readStoredMetalActionReplay } from "./metal-action-replay-service";
 import { createMetalFinancialActionEnvelope } from "./metal-financial-action-adapter";
 import {
   readSelectedMarketRateSnapshot,
@@ -38,6 +39,7 @@ export interface AddMetalHoldingFormSubmission {
   readonly ids: AddMetalHoldingRequestIds;
   readonly holding: NormalizedMetalHoldingFormData;
   readonly cairoTodayDate: string;
+  readonly staleRateAcknowledged: boolean;
 }
 
 const sha256Provider: Sha256Provider = {
@@ -49,18 +51,28 @@ export async function addMetalHoldingFromForm(
   submission: AddMetalHoldingFormSubmission
 ): Promise<void> {
   const existingAction = await getFinancialActionGroup(submission.ids.actionId);
-  if (existingAction) {
-    if (
-      existingAction.kind !== "add" ||
-      existingAction.domainReferenceId !== submission.ids.holdingId
-    ) {
-      throw new Error("action_id_payload_mismatch");
-    }
-    return;
-  }
+  const replay = existingAction
+    ? readStoredMetalActionReplay(
+        existingAction,
+        "add",
+        submission.ids.holdingId,
+        submission.cairoTodayDate
+      )
+    : null;
   const scope = await getCurrentUserDataScope();
-  const occurredAt = new Date().toISOString();
-  const rateSnapshots = await loadAcquisitionRateSnapshots(submission);
+  const occurredAt = replay?.occurredAt ?? new Date().toISOString();
+  const rateSnapshots = replay
+    ? (replay.rateSnapshots as unknown as AddMetalHoldingCommandInput["rateSnapshots"])
+    : await loadAcquisitionRateSnapshots({
+        holding: submission.holding,
+        ids: submission.ids,
+      });
+  if (
+    !submission.staleRateAcknowledged &&
+    rateSnapshots.some((snapshot) => snapshot.capturedFreshness === "stale")
+  ) {
+    throw new Error("stale_rate_acknowledgment_required");
+  }
   const commandInput: AddMetalHoldingCommandInput = {
     actionId: submission.ids.actionId,
     holdingId: submission.ids.holdingId,
@@ -120,9 +132,16 @@ function createAddEnvelope(
   });
 }
 
-async function loadAcquisitionRateSnapshots(
-  submission: AddMetalHoldingFormSubmission
-): Promise<AddMetalHoldingCommandInput["rateSnapshots"]> {
+export async function loadAcquisitionRateSnapshots(submission: {
+  readonly holding: Pick<
+    NormalizedMetalHoldingFormData,
+    "metal" | "purchaseCurrency"
+  >;
+  readonly ids: Pick<
+    AddMetalHoldingRequestIds,
+    "metalRateReferenceId" | "currencyRateReferenceId"
+  >;
+}): Promise<AddMetalHoldingCommandInput["rateSnapshots"]> {
   const metalInstrumentCode: CurrentMarketInstrument =
     submission.holding.metal === "GOLD" ? "metal:GOLD" : "metal:SILVER";
   if (!isSupportedMetalsIsoCurrencyCode(submission.holding.purchaseCurrency)) {

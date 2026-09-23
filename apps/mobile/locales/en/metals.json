@@ -113,6 +113,7 @@
     "submitting": "Adding holding…",
     "unusual_value": "This value is unusually large. Review it before continuing.",
     "acknowledge": "I reviewed it",
+    "stale_rate_acknowledgment": "This estimate uses an older saved rate. Review it before continuing.",
     "exit_title": "Discard changes?",
     "exit_message": "Your unsaved changes will be lost.",
     "keep_editing": "Keep editing",

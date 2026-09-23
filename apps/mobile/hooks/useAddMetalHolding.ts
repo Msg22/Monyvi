@@ -61,11 +61,14 @@ export interface UseAddMetalHoldingFormResult {
   readonly submitError: string | null;
   readonly requiresUnusualValueAcknowledgment: boolean;
   readonly unusualValueAcknowledged: boolean;
+  readonly requiresStaleRateAcknowledgment: boolean;
+  readonly staleRateAcknowledged: boolean;
   readonly updateField: (
     field: MetalHoldingFormField,
     value: string | null
   ) => void;
   readonly acknowledgeUnusualValue: () => void;
+  readonly acknowledgeStaleRate: () => void;
   readonly submit: () => Promise<string | null>;
 }
 
@@ -160,6 +163,7 @@ export function useAddMetalHoldingForm(
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [unusualValueAcknowledged, setUnusualValueAcknowledged] =
     useState(false);
+  const [staleRateAcknowledged, setStaleRateAcknowledged] = useState(false);
   const pendingIdsRef = useRef<AddMetalHoldingRequestIds | null>(null);
   const inFlightRef = useRef(false);
 
@@ -257,6 +261,8 @@ export function useAddMetalHoldingForm(
       })),
     [values.metal]
   );
+  const requiresStaleRateAcknowledgment =
+    preview.valuation.available && preview.rateFreshness === "stale";
 
   const updateField = useCallback(
     (field: MetalHoldingFormField, value: string | null): void => {
@@ -264,6 +270,7 @@ export function useAddMetalHoldingForm(
       setIsDirty(true);
       setSubmitError(null);
       setUnusualValueAcknowledged(false);
+      setStaleRateAcknowledged(false);
       setValidationErrors({});
       setValues((current) => {
         if (field === "metal" && (value === "GOLD" || value === "SILVER")) {
@@ -304,6 +311,9 @@ export function useAddMetalHoldingForm(
       setValidationErrors(errors);
       return null;
     }
+    if (requiresStaleRateAcknowledgment && !staleRateAcknowledged) {
+      return null;
+    }
 
     inFlightRef.current = true;
     setIsSubmitting(true);
@@ -315,6 +325,7 @@ export function useAddMetalHoldingForm(
         ids: pendingIdsRef.current,
         holding: result.normalized,
         cairoTodayDate: input.today,
+        staleRateAcknowledged,
       });
       pendingIdsRef.current = null;
       setIsDirty(false);
@@ -328,7 +339,14 @@ export function useAddMetalHoldingForm(
       inFlightRef.current = false;
       setIsSubmitting(false);
     }
-  }, [input, unusualValueAcknowledged, validationContext, values]);
+  }, [
+    input,
+    requiresStaleRateAcknowledgment,
+    staleRateAcknowledged,
+    unusualValueAcknowledged,
+    validationContext,
+    values,
+  ]);
 
   return {
     values,
@@ -341,8 +359,11 @@ export function useAddMetalHoldingForm(
     requiresUnusualValueAcknowledgment:
       validation.requiresUnusualValueAcknowledgment,
     unusualValueAcknowledged,
+    requiresStaleRateAcknowledgment,
+    staleRateAcknowledged,
     updateField,
     acknowledgeUnusualValue: () => setUnusualValueAcknowledged(true),
+    acknowledgeStaleRate: () => setStaleRateAcknowledged(true),
     submit,
   };
 }

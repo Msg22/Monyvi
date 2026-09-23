@@ -110,6 +110,9 @@ export default function AddMetalHoldingRoute(): React.JSX.Element {
         }
         unusualValueAcknowledged={form.unusualValueAcknowledged}
         onAcknowledgeUnusualValue={form.acknowledgeUnusualValue}
+        requiresStaleRateAcknowledgment={form.requiresStaleRateAcknowledgment}
+        staleRateAcknowledged={form.staleRateAcknowledged}
+        onAcknowledgeStaleRate={form.acknowledgeStaleRate}
         onChange={form.updateField}
         onSubmit={submit}
         onRequestExit={requestExit}
@@ -228,6 +231,7 @@ function createCopy(
     submitting: t("add.submitting"),
     unusualValue: t("add.unusual_value"),
     acknowledge: t("add.acknowledge"),
+    staleRateAcknowledgment: t("add.stale_rate_acknowledgment"),
     submitFailed: t("error_save_failed"),
     rateFresh: t("add.rate_fresh"),
     rateStale: t("add.rate_stale"),

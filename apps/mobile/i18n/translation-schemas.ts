@@ -107,6 +107,7 @@ export const metalsTranslationSchema = NamespaceSchema.and(
       submitting: z.string(),
       unusual_value: z.string(),
       acknowledge: z.string(),
+      stale_rate_acknowledgment: z.string(),
       exit_title: z.string(),
       exit_message: z.string(),
       keep_editing: z.string(),
