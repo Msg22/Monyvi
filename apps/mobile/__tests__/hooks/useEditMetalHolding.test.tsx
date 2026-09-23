@@ -217,7 +217,7 @@ describe("useEditMetalHolding correctness tests", () => {
 
       // Retry succeeds
       mockLoadEditableMetalHolding.mockResolvedValueOnce(activeModel());
-      await act(async () => {
+      act(() => {
         result.current.retry();
       });
       await act(async () => {

@@ -25,6 +25,7 @@ import { CURRENT_MARKET_INSTRUMENT_CODES } from "@monyvi/logic";
 import { createFinancialActionGroup } from "../../services/financial-action-foundation-repository";
 import { createMetalFinancialActionEnvelope } from "../../services/metal-financial-action-adapter";
 import { formatMetalLocalCalendarDate } from "../../services/metal-financial-action-repository";
+import { getCurrentUserDataScope } from "../../services/user-data-access";
 
 interface TestDatabaseModule {
   readonly database: Database;
@@ -651,9 +652,8 @@ describe("Metal holding facades replay contract and rate provenance", () => {
   describe("addMetalHoldingFromForm user scope binding (FR-077)", () => {
     it("binds submission to initiating user and throws user_scope_changed if scope changes", async () => {
       const submission = validAddSubmission();
-      const userDataAccess = jest.requireMock("../../services/user-data-access");
       let callCount = 0;
-      userDataAccess.getCurrentUserDataScope.mockImplementation(() => {
+      jest.mocked(getCurrentUserDataScope).mockImplementation(() => {
         callCount++;
         const userId = callCount <= 2 ? IDS.user : "another-user-id";
         return Promise.resolve({
