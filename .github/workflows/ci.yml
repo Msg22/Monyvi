@@ -146,6 +146,10 @@ jobs:
 
       - name: Run snapshot publication concurrency pgTAP
         run: node scripts/test-market-snapshot-concurrency.js
+
+      - name: Run Metals backfill replay harness
+        run: node scripts/metals-backfill-replay-harness.js
+        timeout-minutes: 15
   android-build:
     name: Android Build Verification
     runs-on: ubuntu-latest

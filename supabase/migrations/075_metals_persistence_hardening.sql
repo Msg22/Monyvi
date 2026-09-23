@@ -91,8 +91,14 @@ SET
       THEN '1'
     ELSE metal.purity_catalog_version
   END
+-- Touch only wholly missing tuples with a valid mapping, so reruns match
+-- zero rows and the updated_at touch trigger never fires on a second run.
 FROM purity_mapping
-WHERE purity_mapping.id = metal.id;
+WHERE purity_mapping.id = metal.id
+  AND metal.purity_code IS NULL
+  AND metal.purity_factor_decimal IS NULL
+  AND metal.purity_catalog_version IS NULL
+  AND purity_mapping.purity_code IS NOT NULL;
 
 -- r3939851779: freeze persisted action evidence on UPDATE. The INSERT path
 -- keeps the exact 068 root-binding check; the UPDATE path now rejects any
