@@ -128,4 +128,90 @@ describe("account.balance-effects/v1", () => {
       })
     ).toThrow();
   });
+
+  it("accepts an account edit with its balance-adjustment transaction evidence", () => {
+    const transactionId = "50000000-0000-4000-8000-000000000005";
+    const value = accountEditEnvelope();
+    const envelope = {
+      ...value,
+      payload: {
+        ...value.payload,
+        domainMutation: {
+          records: [
+            ...value.payload.domainMutation.records,
+            {
+              after: {
+                accountId: ACCOUNT_ID,
+                amountMinorUnits: "2500",
+                categoryId: "00000000-0000-0000-0001-000000000200",
+                counterparty: null,
+                createdAt: "2026-09-18T12:00:00.000Z",
+                currency: "EGP",
+                date: "2026-09-18",
+                deleted: false,
+                id: transactionId,
+                isDraft: false,
+                linkedAssetId: null,
+                linkedDebtId: null,
+                linkedRecurringId: null,
+                note: "Balance adjustment: 100 → 125",
+                smsFingerprint: null,
+                source: "MANUAL",
+                type: "INCOME",
+              },
+              entity: "transaction",
+              expectedUpdatedAt: null,
+              mode: "create",
+            },
+          ],
+        },
+        domainRecordRefs: [ACCOUNT_ID, transactionId],
+      },
+    };
+    expect(canonicalizeFinancialActionEnvelope(envelope)).toEqual(envelope);
+  });
+
+  it("rejects an account edit whose adjustment transaction belongs to another account", () => {
+    const transactionId = "50000000-0000-4000-8000-000000000005";
+    const foreignAccountId = "60000000-0000-4000-8000-000000000006";
+    const value = accountEditEnvelope();
+    expect(() =>
+      canonicalizeFinancialActionEnvelope({
+        ...value,
+        payload: {
+          ...value.payload,
+          domainMutation: {
+            records: [
+              ...value.payload.domainMutation.records,
+              {
+                after: {
+                  accountId: foreignAccountId,
+                  amountMinorUnits: "2500",
+                  categoryId: "00000000-0000-0000-0001-000000000200",
+                  counterparty: null,
+                  createdAt: "2026-09-18T12:00:00.000Z",
+                  currency: "EGP",
+                  date: "2026-09-18",
+                  deleted: false,
+                  id: transactionId,
+                  isDraft: false,
+                  linkedAssetId: null,
+                  linkedDebtId: null,
+                  linkedRecurringId: null,
+                  note: "Balance adjustment: 100 → 125",
+                  smsFingerprint: null,
+                  source: "MANUAL",
+                  type: "INCOME",
+                },
+                entity: "transaction",
+                expectedUpdatedAt: null,
+                mode: "create",
+              },
+            ],
+          },
+          domainRecordRefs: [ACCOUNT_ID, transactionId],
+        },
+      })
+    ).toThrow("financial_action_invalid_payload");
+  });
 });

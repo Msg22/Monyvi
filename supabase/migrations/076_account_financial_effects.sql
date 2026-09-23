@@ -307,6 +307,10 @@ BEGIN
         )
         OR (p_operation_code = 'account.edit-balance' AND v_mode <> 'update')
         OR (p_operation_code <> 'account.edit-balance' AND v_mode <> 'create')
+        -- Balance edits never delete: a forged deleted=true would soft-delete
+        -- the account through the financial RPC.
+        OR (p_operation_code = 'account.edit-balance'
+          AND (v_after ->> 'deleted')::boolean)
         OR jsonb_typeof(v_after -> 'name') IS DISTINCT FROM 'string'
         OR length(btrim(v_after ->> 'name')) = 0
         OR v_after ->> 'type' NOT IN ('CASH', 'BANK', 'DIGITAL_WALLET')
@@ -338,13 +342,13 @@ BEGIN
           'transaction.create', 'transaction.update', 'transaction.delete',
           'transaction.convert-to-transfer', 'transaction.batch-delete',
         'transaction.batch-import', 'transfer.convert-to-transaction',
-        'recurring.pay-now', 'sms.review-durable'
+        'recurring.pay-now', 'sms.review-durable', 'account.edit-balance'
         )
         OR (
         p_operation_code IN (
           'transaction.create', 'transaction.batch-import',
           'transfer.convert-to-transaction', 'recurring.pay-now',
-          'sms.review-durable'
+          'sms.review-durable', 'account.edit-balance'
         )
           AND v_mode <> 'create'
         )
@@ -356,6 +360,24 @@ BEGIN
           )
           AND v_mode <> 'delete'
         )
+        -- Balance-adjustment evidence is a closed vocabulary: a manual,
+        -- non-draft, unlinked transaction whose category matches its type.
+        -- Anything else smuggles foreign semantics into the edit group.
+        OR (p_operation_code = 'account.edit-balance' AND (
+          v_after ->> 'source' IS DISTINCT FROM 'MANUAL'
+          OR (v_after ->> 'isDraft')::boolean
+          OR v_after ->> 'linkedAssetId' IS NOT NULL
+          OR v_after ->> 'linkedDebtId' IS NOT NULL
+          OR v_after ->> 'linkedRecurringId' IS NOT NULL
+          OR v_after ->> 'smsFingerprint' IS NOT NULL
+          OR v_after ->> 'counterparty' IS NOT NULL
+          OR (v_after ->> 'type' = 'INCOME'
+            AND v_after ->> 'categoryId' IS DISTINCT FROM
+              '00000000-0000-0000-0001-000000000200')
+          OR (v_after ->> 'type' = 'EXPENSE'
+            AND v_after ->> 'categoryId' IS DISTINCT FROM
+              '00000000-0000-0000-0001-000000000201')
+        ))
         OR jsonb_typeof(v_after -> 'amountMinorUnits') IS DISTINCT FROM 'string'
         OR (v_after ->> 'amountMinorUnits') !~ '^[1-9][0-9]{0,18}$'
         OR v_after ->> 'type' NOT IN ('EXPENSE', 'INCOME')
@@ -461,11 +483,36 @@ BEGIN
   IF p_operation_code IN (
       'account.cash.create-within-writer', 'account.cash.prepare',
       'account.cash.prepare-named', 'account.create', 'account.pending.prepare',
-      'account.edit-balance', 'transaction.create', 'transaction.update', 'transaction.delete',
+      'transaction.create', 'transaction.update', 'transaction.delete',
       'transfer.create', 'transfer.update', 'transfer.delete'
     ) AND jsonb_array_length(p_mutation -> 'records') <> 1
   THEN
     RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'financial_action_invalid_domain_mutation';
+  END IF;
+  -- Balance edits carry exactly one account record (silent metadata+balance
+  -- edit) or exactly two linked records (account plus its signed adjustment
+  -- transaction). The canonical record order is account first, transaction
+  -- second; the transaction must point at the edited account in the same
+  -- currency. Anything else is an arbitrary record smuggled into the group.
+  IF p_operation_code = 'account.edit-balance' THEN
+    IF jsonb_array_length(p_mutation -> 'records') = 1 THEN
+      IF p_mutation -> 'records' -> 0 ->> 'entity' <> 'account' THEN
+        RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'financial_action_invalid_domain_mutation';
+      END IF;
+    ELSIF jsonb_array_length(p_mutation -> 'records') = 2
+      AND p_mutation -> 'records' -> 0 ->> 'entity' = 'account'
+      AND p_mutation -> 'records' -> 0 ->> 'mode' = 'update'
+      AND p_mutation -> 'records' -> 1 ->> 'entity' = 'transaction'
+      AND p_mutation -> 'records' -> 1 ->> 'mode' = 'create'
+      AND p_mutation -> 'records' -> 1 -> 'after' ->> 'accountId'
+        IS NOT DISTINCT FROM p_mutation -> 'records' -> 0 -> 'after' ->> 'id'
+      AND p_mutation -> 'records' -> 1 -> 'after' ->> 'currency'
+        IS NOT DISTINCT FROM p_mutation -> 'records' -> 0 -> 'after' ->> 'currency'
+    THEN
+      NULL;
+    ELSE
+      RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'financial_action_invalid_domain_mutation';
+    END IF;
   END IF;
   IF p_operation_code IN (
       'transaction.convert-to-transfer', 'transfer.convert-to-transaction'
@@ -596,7 +643,22 @@ DECLARE
   v_converted bigint;
   v_old_amount bigint;
   v_currency public.currency_type;
+  v_is_edit_adjustment boolean;
+  v_edit_target text;
+  v_edit_delta bigint;
+  v_txn_magnitude bigint;
 BEGIN
+  -- An edit-balance group pairs one account update with its signed
+  -- adjustment transaction. The pair represents one delta, not two.
+  v_is_edit_adjustment :=
+    jsonb_array_length(p_domain_mutation -> 'records') = 2
+    AND p_domain_mutation -> 'records' -> 0 ->> 'entity' = 'account'
+    AND p_domain_mutation -> 'records' -> 0 ->> 'mode' = 'update'
+    AND p_domain_mutation -> 'records' -> 1 ->> 'entity' = 'transaction'
+    AND p_domain_mutation -> 'records' -> 1 ->> 'mode' = 'create'
+    AND p_domain_mutation -> 'records' -> 1 -> 'after' ->> 'accountId'
+      IS NOT DISTINCT FROM
+        p_domain_mutation -> 'records' -> 0 -> 'after' ->> 'id';
   FOR v_record IN
     SELECT record.value
     FROM jsonb_array_elements(p_domain_mutation -> 'records') WITH ORDINALITY
@@ -634,6 +696,42 @@ BEGIN
         v_amount
       );
     ELSIF v_record ->> 'entity' = 'transaction' THEN
+      IF v_is_edit_adjustment
+        AND (v_after ->> 'accountId') IS NOT DISTINCT FROM
+          (p_domain_mutation -> 'records' -> 0 -> 'after' ->> 'id')
+      THEN
+        -- Adjustment evidence mirrors the paired account delta. Accumulating
+        -- it here would count the same money twice, so validate the exact
+        -- signed linkage (owner account, currency, magnitude, direction)
+        -- and derive the effect once from the account record instead.
+        SELECT account.* INTO STRICT v_account
+        FROM public.accounts AS account
+        WHERE account.user_id = p_owner_id
+          AND account.id = (v_after ->> 'accountId')::uuid;
+        IF (v_after ->> 'currency') IS DISTINCT FROM v_account.currency::text THEN
+          RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'financial_action_invalid_domain_mutation';
+        END IF;
+        v_txn_magnitude := private.financial_action_signed_minor_units_from_text_v1(
+          v_after ->> 'amountMinorUnits'
+        );
+        IF v_txn_magnitude <= 0 THEN
+          RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'financial_action_invalid_domain_mutation';
+        END IF;
+        v_edit_target := p_domain_mutation -> 'records' -> 0 -> 'after' ->> 'targetBalanceMinorUnits';
+        v_edit_delta := CASE v_edit_target
+          WHEN '0' THEN 0
+          ELSE private.financial_action_signed_minor_units_from_text_v1(v_edit_target)
+        END - private.account_financial_minor_units_from_numeric_v1(
+          v_account.balance,
+          v_account.currency
+        );
+        IF (CASE v_after ->> 'type' WHEN 'INCOME' THEN v_txn_magnitude ELSE -v_txn_magnitude END)
+          IS DISTINCT FROM v_edit_delta
+        THEN
+          RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'financial_action_invalid_domain_mutation';
+        END IF;
+        CONTINUE;
+      END IF;
       IF v_record ->> 'mode' <> 'create' THEN
         SELECT transaction.* INTO STRICT v_transaction
         FROM public.transactions AS transaction
@@ -822,8 +920,14 @@ BEGIN
     'transaction.create', 'transaction.update', 'transaction.delete',
     'transaction.convert-to-transfer', 'transaction.batch-delete',
     'transaction.batch-import', 'transfer.convert-to-transaction',
-    'recurring.pay-now', 'sms.review-durable'
+    'recurring.pay-now', 'sms.review-durable', 'account.edit-balance'
   ) THEN
+    RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'financial_action_unknown_operation';
+  END IF;
+
+  -- Balance-adjustment evidence is always a fresh transaction row; the
+  -- closed vocabulary is enforced by the domain-mutation validator above.
+  IF p_operation_code = 'account.edit-balance' AND p_record ->> 'mode' <> 'create' THEN
     RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'financial_action_unknown_operation';
   END IF;
 
@@ -1232,6 +1336,18 @@ BEGIN
   END IF;
 
   IF p_expected_operation_code IN ('recurring.pay-now', 'sms.review-durable')
+    AND p_payload -> 'domainMutation' -> 'records' -> 0 -> 'after' ->> 'id'
+      IS DISTINCT FROM p_domain_reference_id
+  THEN
+    RAISE EXCEPTION USING
+      ERRCODE = '22023',
+      MESSAGE = 'financial_action_invalid_account_payload';
+  END IF;
+
+  -- A balance edit is anchored on the edited account: the leading account
+  -- record must be the domain reference so adjustment evidence cannot be
+  -- smuggled in as the referenced root.
+  IF p_expected_operation_code = 'account.edit-balance'
     AND p_payload -> 'domainMutation' -> 'records' -> 0 -> 'after' ->> 'id'
       IS DISTINCT FROM p_domain_reference_id
   THEN
@@ -1891,6 +2007,7 @@ DECLARE
   v_new_account_record jsonb;
   v_account public.accounts%ROWTYPE;
   v_expected_revision bigint;
+  v_identity_record jsonb;
   v_now timestamptz := clock_timestamp();
   v_is_stale boolean := false;
   v_stale_account_ids jsonb := '[]'::jsonb;
@@ -1899,6 +2016,7 @@ DECLARE
   v_expected_effects jsonb;
   v_outcome jsonb;
   v_outcome_text text;
+  v_updated integer;
 BEGIN
   v_owner_id := (SELECT auth.uid());
   IF v_owner_id IS NULL THEN
@@ -1997,6 +2115,16 @@ BEGIN
         'code', 'NOT_OWNED',
         'status', 'rejected'
       );
+    -- Derivation failures are validation failures (forged linkage, bad
+    -- amounts, mismatched currency): reject ephemerally like the canonical
+    -- validator. Persisting the offending evidence would violate the
+    -- deferred guard/effect parity invariant (e.g. a forged currency).
+    WHEN SQLSTATE '22023' THEN
+      RETURN jsonb_build_object(
+        'actionId', v_action_id::text,
+        'code', 'INCOMPLETE_GROUP',
+        'status', 'rejected'
+      );
   END;
   IF v_expected_effects IS DISTINCT FROM (
     SELECT jsonb_agg(
@@ -2061,6 +2189,33 @@ BEGIN
         );
       END IF;
       CONTINUE;
+    END IF;
+
+    -- Edit identity gate: a balance edit must preserve the stored type,
+    -- currency, and non-deleted state. This runs before any write (and
+    -- before the effect-currency check), so a forged mutation fails
+    -- ephemeral with no rows changed.
+    SELECT record.value INTO v_identity_record
+    FROM jsonb_array_elements(
+      v_envelope -> 'payload' -> 'domainMutation' -> 'records'
+    ) AS record(value)
+    WHERE record.value ->> 'entity' = 'account'
+      AND record.value ->> 'mode' = 'update'
+      AND record.value -> 'after' ->> 'id' = v_guard ->> 'accountId';
+    IF FOUND
+      AND (
+        (v_identity_record -> 'after' ->> 'deleted')::boolean
+        OR (v_identity_record -> 'after' ->> 'type')
+          IS DISTINCT FROM v_account.type::text
+        OR (v_identity_record -> 'after' ->> 'currency')
+          IS DISTINCT FROM v_account.currency::text
+      )
+    THEN
+      RETURN jsonb_build_object(
+        'actionId', v_action_id::text,
+        'code', 'INCOMPLETE_GROUP',
+        'status', 'rejected'
+      );
     END IF;
 
     SELECT effect.value
@@ -2185,7 +2340,12 @@ BEGIN
       financial_revision = account.financial_revision + 1,
       updated_at = v_now
     WHERE account.user_id = v_owner_id
-      AND account.id = (v_effect ->> 'accountId')::uuid;
+      AND account.id = (v_effect ->> 'accountId')::uuid
+      AND account.deleted = false;
+    GET DIAGNOSTICS v_updated = ROW_COUNT;
+    IF v_updated <> 1 THEN
+      RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'financial_action_invalid_domain_mutation';
+    END IF;
 
     SELECT account.*
     INTO STRICT v_account

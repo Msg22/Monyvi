@@ -399,8 +399,8 @@ function assertOperationShape(
       records.length === 1 &&
       all("account:create")) ||
     (operationCode === "account.edit-balance" &&
-      records.length === 1 &&
-      all("account:update")) ||
+      ((records.length === 1 && all("account:update")) ||
+        shapes.join(",") === "account:update,transaction:create")) ||
     (["transaction.create", "transaction.batch-import"].includes(
       operationCode
     ) &&
@@ -460,6 +460,11 @@ function assertCompositeLinks(
       transaction?.source !== "SMS"
     )
       fail(invalidPayloadCode);
+  }
+  if (operationCode === "account.edit-balance" && records.length === 2) {
+    const account = records[0]?.after;
+    const transaction = records[1]?.after;
+    if (transaction?.accountId !== account?.id) fail(invalidPayloadCode);
   }
 }
 
