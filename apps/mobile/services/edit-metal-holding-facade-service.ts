@@ -159,6 +159,7 @@ export async function saveEditedMetalHolding(
         })
     : [];
   if (
+    !existing &&
     !submission.staleRateAcknowledged &&
     rateSnapshots.some((snapshot) => snapshot.capturedFreshness === "stale")
   ) {

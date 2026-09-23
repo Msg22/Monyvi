@@ -68,6 +68,7 @@ export async function addMetalHoldingFromForm(
         ids: submission.ids,
       });
   if (
+    !existingAction &&
     !submission.staleRateAcknowledged &&
     rateSnapshots.some((snapshot) => snapshot.capturedFreshness === "stale")
   ) {

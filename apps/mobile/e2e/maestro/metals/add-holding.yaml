@@ -11,10 +11,8 @@ appId: com.monyvi.app
 # - E2E_FIXTURE_PROFILE=metals-stale-restart-ar-dark:
 #   repeat with Arabic RTL, dark theme, and 200% text-scale restart coverage.
 #
-# Slice 7 only authors this contract. The current fixture registry has no
-# Add-specific clean-data profile and the Add route is intentionally absent, so
-# no successful Maestro execution is claimed until T081/T082 provide the route,
-# local command, and runner fixture wiring.
+# Slice 7 authored the Add route and local command. The clean-data fixture
+# profiles and runner wiring have not been validated; this flow has not run.
 - runFlow: ../helpers/setup.yaml
 - openLink: monyvi://metals/add
 - extendedWaitUntil:

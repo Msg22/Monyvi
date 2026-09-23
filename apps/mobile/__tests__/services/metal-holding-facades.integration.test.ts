@@ -480,6 +480,28 @@ describe("Metal holding facades replay contract and rate provenance", () => {
         .query(Q.where("action_id", IDS.addAction))
         .fetch();
       expect(references).toHaveLength(2);
+
+      await expect(
+        addMetalHoldingFromForm(submission)
+      ).resolves.toBeUndefined();
+      await expect(
+        addMetalHoldingFromForm({
+          ...submission,
+          holding: { ...submission.holding, name: "Changed after commit" },
+        })
+      ).rejects.toThrow("action_id_payload_mismatch");
+      expect(
+        await database
+          .get<MetalLifecycleEvent>("metal_lifecycle_events")
+          .query(Q.where("action_id", IDS.addAction))
+          .fetch()
+      ).toHaveLength(1);
+      expect(
+        await database
+          .get<MetalRateReference>("metal_rate_references")
+          .query(Q.where("action_id", IDS.addAction))
+          .fetch()
+      ).toHaveLength(2);
     });
   });
 
@@ -562,6 +584,26 @@ describe("Metal holding facades replay contract and rate provenance", () => {
       expect(
         references.every((reference) => reference.capturedFreshness === "stale")
       ).toBe(true);
+
+      await expect(saveEditedMetalHolding(submission)).resolves.toBeUndefined();
+      await expect(
+        saveEditedMetalHolding({
+          ...submission,
+          correctionReason: "Changed after commit",
+        })
+      ).rejects.toThrow("action_id_payload_mismatch");
+      expect(
+        await database
+          .get<MetalLifecycleEvent>("metal_lifecycle_events")
+          .query(Q.where("action_id", IDS.editAction))
+          .fetch()
+      ).toHaveLength(1);
+      expect(
+        await database
+          .get<MetalRateReference>("metal_rate_references")
+          .query()
+          .fetch()
+      ).toHaveLength(2);
     });
   });
 });

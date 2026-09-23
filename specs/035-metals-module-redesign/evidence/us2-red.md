@@ -81,4 +81,6 @@ The seven cases reached the missing `MetalHoldingForm` and Add route boundaries:
 
 ## T080 Status
 
-T076–T078 failing test evidence confirmed and recorded. Proceeding to T081/T082 Green implementation.
+T076–T078 failing test evidence confirmed and recorded. T079 Maestro was
+authored but not executed, so T080 remains unchecked. Later automated Green
+results are recorded in `coverage/us2.md`.

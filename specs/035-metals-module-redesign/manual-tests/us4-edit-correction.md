@@ -2,6 +2,11 @@
 
 Owner: Slice 7 US4. Source: FR-018–FR-021, FR-086, FR-088–FR-090; SC-003, SC-005, SC-010, SC-011, SC-015, SC-016, SC-021, SC-024, SC-026.
 
+Automated checkpoint (2026-09-23): Edit preview, SQLite command, route UI,
+hook, and facade tests passed in the combined Slice 7 run (11 suites / 53
+tests). Maestro journey is authored but unrun. Device/manual QA and explicit
+Edit CAS/rollback/restart coverage remain pending.
+
 | ID | Journey | Expected observable result | Automation |
 | --- | --- | --- | --- |
 | US4-M01 | Edit active Gold name/Arabic notes only | Same full form saves directly, no reason, review route, financial action, or History correction. | UI, integration, Maestro |

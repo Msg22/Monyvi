@@ -1,6 +1,10 @@
 # US4 Red Evidence
 
-Status: Red confirmed.
+Status: Red partially confirmed.
+
+This is partial Red evidence: T086/T087 were run, while T085's named suite
+was not authored and the T088 Maestro journey has not run. T089 remains
+unchecked. Later automated Green results are recorded in `coverage/us4.md`.
 
 T084 defines US4-M01–M08 and coverage mapping. T086–T088 assert approved one-form Edit behavior: metadata LWW; whole-fact material correction CAS; immutable exact before/after evidence and History; terminal immutability; locked Metal; persisted/current cues; conditional reason; physical-form-only consequences; direct Save/no review; dirty exit, focus, pending lock, safe area, EN/AR RTL, theme, compact reflow, and offline local-first flow.
 
