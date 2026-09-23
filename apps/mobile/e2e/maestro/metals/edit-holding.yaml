@@ -12,6 +12,7 @@ appId: com.monyvi.app
 # Metadata only: no reason/review, direct local Save.
 - tapOn:
     id: metal-holding-name-field
+- eraseText: 50
 - inputText: Corrected E2E Gold Coin
 - assertNotVisible:
     id: metal-holding-correction-reason
@@ -28,6 +29,7 @@ appId: com.monyvi.app
 - openLink: monyvi://metals/holding-e2e-gold/edit
 - tapOn:
     id: metal-holding-weight-field
+- eraseText: 20
 - inputText: "11.125"
 - assertVisible:
     id: metal-holding-weight-previous

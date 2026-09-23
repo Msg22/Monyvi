@@ -20,13 +20,16 @@ import type {
 } from "./edit-metal-holding-preview-service";
 import {
   createEditMetalHoldingCommandService,
+  getPersistedMetalMaterialFacts,
   type EditMetalHoldingCommandInput,
+  type EditMetalMaterialFacts,
 } from "./edit-metal-holding-command-service";
 import {
   commitFinancialActionGroupLocally,
   getFinancialActionGroup,
 } from "./financial-action-foundation-repository";
 import { createMetalFinancialActionEnvelope } from "./metal-financial-action-adapter";
+import { formatMetalLocalCalendarDate } from "./metal-financial-action-repository";
 import { getCurrentUserDataScope } from "./user-data-access";
 
 export interface EditMetalHoldingReadModel {
@@ -36,6 +39,7 @@ export interface EditMetalHoldingReadModel {
   readonly status: MetalHoldingStatus;
   readonly hasCompleteMaterialFacts: boolean;
   readonly facts: EditableMetalHoldingFacts;
+  readonly persistedMaterialFacts: EditMetalMaterialFacts;
 }
 
 export interface EditMetalHoldingRequestIds {
@@ -101,6 +105,7 @@ export async function loadEditableMetalHolding(
     purchaseCurrency &&
     weightGramsDecimal
   );
+  const persistedMaterialFacts = getPersistedMetalMaterialFacts(asset, metal);
   return {
     holdingId,
     financialRevision: state.financialRevision,
@@ -122,7 +127,7 @@ export async function loadEditableMetalHolding(
       purityFactorDecimal: purityFactorDecimal ?? "",
       purchasePriceDecimal: purchasePriceDecimal ?? "",
       purchaseCurrency: purchaseCurrency ?? asset.currency,
-      purchaseDate: asset.purchaseDate.toISOString().slice(0, 10),
+      purchaseDate: formatMetalLocalCalendarDate(asset.purchaseDate),
       physicalForm:
         metal.itemForm === "COIN" ||
         metal.itemForm === "BAR" ||
@@ -130,6 +135,7 @@ export async function loadEditableMetalHolding(
           ? metal.itemForm
           : null,
     },
+    persistedMaterialFacts,
   };
 }
 
@@ -148,9 +154,12 @@ export async function saveEditedMetalHolding(
     : null;
   const occurredAt = replay?.occurredAt ?? new Date().toISOString();
   const hasMaterialChanges =
-    materialJson(submission.original.facts) !==
-    materialJson(submission.current);
-  const rateSnapshots = hasMaterialChanges
+    JSON.stringify(submission.original.persistedMaterialFacts) !==
+    JSON.stringify(toMaterial(submission.current));
+  const hasFinancialChanges =
+    financialJson(submission.original.facts) !==
+    financialJson(submission.current);
+  const rateSnapshots = hasFinancialChanges
     ? replay
       ? (replay.rateSnapshots as unknown as EditMetalHoldingCommandInput["rateSnapshots"])
       : await loadAcquisitionRateSnapshots({
@@ -161,7 +170,11 @@ export async function saveEditedMetalHolding(
   if (
     !existing &&
     !submission.staleRateAcknowledged &&
-    rateSnapshots.some((snapshot) => snapshot.capturedFreshness === "stale")
+    rateSnapshots.some(
+      (snapshot) =>
+        snapshot.capturedFreshness === "stale" ||
+        snapshot.capturedFreshness === "unknown"
+    )
   ) {
     throw new Error("stale_rate_acknowledgment_required");
   }
@@ -184,7 +197,7 @@ export async function saveEditedMetalHolding(
       name: submission.current.name,
       notes: submission.current.notes,
     },
-    originalMaterialFacts: toMaterial(submission.original.facts),
+    originalMaterialFacts: submission.original.persistedMaterialFacts,
     materialFacts: hasMaterialChanges ? toMaterial(submission.current) : null,
     rateSnapshots,
   };
@@ -230,6 +243,7 @@ function toMaterial(
   };
 }
 
-function materialJson(facts: EditableMetalHoldingFacts): string {
-  return JSON.stringify(toMaterial(facts));
+function financialJson(facts: EditableMetalHoldingFacts): string {
+  const { physicalForm: _ignored, ...financial } = toMaterial(facts);
+  return JSON.stringify(financial);
 }

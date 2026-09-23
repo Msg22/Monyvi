@@ -2,12 +2,13 @@ import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker, {
   type DateTimePickerEvent,
 } from "@react-native-community/datetimepicker";
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -310,6 +311,23 @@ export function MetalHoldingForm({
   const [isCurrencyOpen, setIsCurrencyOpen] = useState(false);
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   const shouldStackDenseFields = shouldUseCompactLayout(width, fontScale);
+  const nameInputRef = useRef<TextInput>(null);
+  const weightInputRef = useRef<TextInput>(null);
+  const purchasePriceInputRef = useRef<TextInput>(null);
+  const correctionReasonInputRef = useRef<TextInput>(null);
+
+  useEffect(() => {
+    if (validationErrors.name) {
+      nameInputRef.current?.focus();
+    } else if (validationErrors.weightGrams) {
+      weightInputRef.current?.focus();
+    } else if (validationErrors.purchasePrice) {
+      purchasePriceInputRef.current?.focus();
+    } else if (validationErrors.correctionReason) {
+      correctionReasonInputRef.current?.focus();
+    }
+  }, [validationErrors]);
+
   const firstError = useMemo(
     () => FOCUSABLE_ERROR_ORDER.find(([field]) => validationErrors[field])?.[1],
     [validationErrors]
@@ -385,6 +403,7 @@ export function MetalHoldingForm({
         >
           <TextField
             testID="metal-holding-name-field"
+            inputRef={nameInputRef}
             label={copy.name}
             accessibilityLabel={copy.name}
             value={values.name}
@@ -422,6 +441,7 @@ export function MetalHoldingForm({
               >
                 <TextField
                   testID="metal-holding-weight-field"
+                  inputRef={weightInputRef}
                   containerClassName="flex-1"
                   label={copy.weight}
                   accessibilityLabel={copy.weight}
@@ -438,12 +458,9 @@ export function MetalHoldingForm({
                     </Text>
                   }
                 />
-                <View
-                  className="flex-1"
-                  accessible
-                  accessibilityLabel={copy.purity}
-                >
+                <View className="flex-1">
                   <Dropdown
+                    testID="metal-holding-purity"
                     label={copy.purity}
                     items={purityOptions}
                     value={values.purityCode}
@@ -473,6 +490,7 @@ export function MetalHoldingForm({
             <View>
               <TextField
                 testID="metal-holding-purchase-price-field"
+                inputRef={purchasePriceInputRef}
                 label={copy.purchasePrice}
                 value={values.purchasePrice}
                 editable={!isSubmitting}
@@ -613,15 +631,18 @@ export function MetalHoldingForm({
               onReasonChange={onCorrectionReasonChange}
               isDisabled={isSubmitting}
               autoFocus={firstError === "metal-holding-correction-reason"}
+              inputRef={correctionReasonInputRef}
             />
           ) : null}
 
-          <MetalHoldingLivePreview
-            copy={copy}
-            preview={preview}
-            isStacked={shouldStackDenseFields}
-            locale={locale}
-          />
+          {!isTerminalEdit ? (
+            <MetalHoldingLivePreview
+              copy={copy}
+              preview={preview}
+              isStacked={shouldStackDenseFields}
+              locale={locale}
+            />
+          ) : null}
 
           {requiresUnusualValueAcknowledgment ? (
             <View className="rounded-2xl border border-amber-300 bg-amber-50 p-4 dark:border-amber-700 dark:bg-amber-950">

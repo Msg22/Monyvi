@@ -35,8 +35,10 @@ appId: com.monyvi.app
 - tapOn:
     id: metal-holding-weight-field
 - inputText: "10.125"
-- tapOn: Purity
-- tapOn: 24K · 999
+- tapOn:
+    id: metal-holding-purity-trigger
+- tapOn:
+    id: metal-holding-purity-option-gold-999
 - tapOn:
     id: metal-holding-purchase-price-field
 - inputText: "47800.00"
@@ -83,8 +85,10 @@ appId: com.monyvi.app
 - tapOn:
     id: metal-holding-weight-field
 - inputText: "25.500"
-- tapOn: Purity
-- tapOn: 925
+- tapOn:
+    id: metal-holding-purity-trigger
+- tapOn:
+    id: metal-holding-purity-option-silver-925
 - tapOn:
     id: metal-holding-purchase-price-field
 - inputText: "1500.00"
@@ -116,8 +120,7 @@ appId: com.monyvi.app
     id: metal-holding-submit
 - assertVisible:
     id: metal-holding-name-field-error
-- assertVisible: Enter a number greater than 0.
-- assertVisible: Use the supported decimal places for this currency.
+- assertVisible: Enter this field.
 - tapOn:
     id: metal-holding-name-field
 - inputText: Unsaved holding

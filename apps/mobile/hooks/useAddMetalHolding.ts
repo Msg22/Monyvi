@@ -270,7 +270,8 @@ export function useAddMetalHoldingForm(
     [values.metal]
   );
   const requiresStaleRateAcknowledgment =
-    preview.valuation.available && preview.rateFreshness === "stale";
+    preview.valuation.available &&
+    (preview.rateFreshness === "stale" || preview.rateFreshness === "unknown");
 
   const updateField = useCallback(
     (field: MetalHoldingFormField, value: string | null): void => {

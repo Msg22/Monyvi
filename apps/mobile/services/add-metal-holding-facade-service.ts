@@ -23,6 +23,7 @@ import {
   readSelectedMarketRateSnapshot,
   type SelectedCurrentMarketRate,
 } from "./market-rate-snapshot-read-model-service";
+import { formatMetalLocalCalendarDate } from "./metal-financial-action-repository";
 import { getCurrentUserDataScope } from "./user-data-access";
 
 export interface AddMetalHoldingRequestIds {
@@ -39,7 +40,7 @@ export interface AddMetalHoldingFormSubmission {
   readonly ids: AddMetalHoldingRequestIds;
   readonly holding: NormalizedMetalHoldingFormData;
   readonly cairoTodayDate: string;
-  readonly staleRateAcknowledged: boolean;
+  readonly staleRateAcknowledged?: boolean;
 }
 
 const sha256Provider: Sha256Provider = {
@@ -50,6 +51,7 @@ const sha256Provider: Sha256Provider = {
 export async function addMetalHoldingFromForm(
   submission: AddMetalHoldingFormSubmission
 ): Promise<void> {
+  const initialScope = await getCurrentUserDataScope();
   const existingAction = await getFinancialActionGroup(submission.ids.actionId);
   const replay = existingAction
     ? readStoredMetalActionReplay(
@@ -60,6 +62,9 @@ export async function addMetalHoldingFromForm(
       )
     : null;
   const scope = await getCurrentUserDataScope();
+  if (scope.userId !== initialScope.userId) {
+    throw new Error("user_scope_changed");
+  }
   const occurredAt = replay?.occurredAt ?? new Date().toISOString();
   const rateSnapshots = replay
     ? (replay.rateSnapshots as unknown as AddMetalHoldingCommandInput["rateSnapshots"])
@@ -70,7 +75,11 @@ export async function addMetalHoldingFromForm(
   if (
     !existingAction &&
     !submission.staleRateAcknowledged &&
-    rateSnapshots.some((snapshot) => snapshot.capturedFreshness === "stale")
+    rateSnapshots.some(
+      (snapshot) =>
+        snapshot.capturedFreshness === "stale" ||
+        snapshot.capturedFreshness === "unknown"
+    )
   ) {
     throw new Error("stale_rate_acknowledgment_required");
   }
@@ -136,7 +145,7 @@ function createAddEnvelope(
 export async function loadAcquisitionRateSnapshots(submission: {
   readonly holding: Pick<
     NormalizedMetalHoldingFormData,
-    "metal" | "purchaseCurrency"
+    "metal" | "purchaseCurrency" | "purchaseDate"
   >;
   readonly ids: Pick<
     AddMetalHoldingRequestIds,
@@ -154,6 +163,13 @@ export async function loadAcquisitionRateSnapshots(submission: {
 
   const snapshot = await readSelectedMarketRateSnapshot(database);
   if (!snapshot) return [];
+
+  const snapshotCalendarDate = formatMetalLocalCalendarDate(
+    snapshot.capturedAt
+  );
+  if (submission.holding.purchaseDate !== snapshotCalendarDate) {
+    return [];
+  }
 
   const metalRate = snapshot.ratesByInstrument.get(metalInstrumentCode);
   const currencyRate = snapshot.ratesByInstrument.get(currencyInstrumentCode);

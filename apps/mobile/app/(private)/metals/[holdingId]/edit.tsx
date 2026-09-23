@@ -1,6 +1,11 @@
 import * as Crypto from "expo-crypto";
 import { router, useLocalSearchParams } from "expo-router";
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useMemo, useRef, useState } from "react";
+import {
+  useNavigation,
+  usePreventRemove,
+  type NavigationAction,
+} from "@react-navigation/native";
 import {
   I18nManager,
   Modal,
@@ -16,6 +21,7 @@ import {
   isSupportedMetalsIsoCurrencyCode,
 } from "@monyvi/logic";
 
+import { PageHeader } from "@/components/navigation/PageHeader";
 import {
   MetalHoldingForm,
   type MetalHoldingFormCopy,
@@ -71,16 +77,67 @@ export default function EditMetalHoldingRoute(): React.JSX.Element {
     }),
     [form, t]
   );
+  const navigation = useNavigation();
+  const pendingActionRef = useRef<NavigationAction | null>(null);
+  const allowExitRef = useRef(false);
+
+  usePreventRemove(form.isDirty && !allowExitRef.current, ({ data }) => {
+    if (form.isSubmitting) return;
+    pendingActionRef.current = data.action;
+    setIsExitGuardVisible(true);
+  });
+
   const requestExit = useCallback((): void => {
     if (form.isSubmitting) return;
-    if (form.isDirty) setIsExitGuardVisible(true);
-    else router.back();
+    if (form.isDirty) {
+      pendingActionRef.current = null;
+      setIsExitGuardVisible(true);
+    } else {
+      allowExitRef.current = true;
+      router.back();
+    }
   }, [form.isDirty, form.isSubmitting]);
   const submit = useCallback((): void => {
     void form.submit().then((saved) => {
-      if (saved) router.back();
+      if (saved) {
+        allowExitRef.current = true;
+        router.back();
+      }
     });
   }, [form]);
+  if (!form.isLoading && (form.error || !form.model)) {
+    return (
+      <View className="flex-1 bg-slate-25 dark:bg-slate-950">
+        <PageHeader
+          title={copy.editTitle ?? t("edit.title")}
+          showBackButton
+          showDrawer={false}
+          onBack={router.back}
+        />
+        <View
+          testID="metal-holding-edit-error"
+          className="flex-1 items-center justify-center gap-4 px-6"
+        >
+          <Text className="text-center text-lg font-semibold text-text-primary dark:text-text-primary-dark">
+            {form.error?.message === "metal_holding_not_found"
+              ? t("detail.not_found")
+              : t("detail.load_error")}
+          </Text>
+          <TouchableOpacity
+            testID="metal-holding-edit-retry"
+            accessibilityRole="button"
+            className="min-h-11 items-center justify-center rounded-xl border border-nileGreen-700 px-5 dark:border-nileGreen-400"
+            onPress={form.retry}
+          >
+            <Text className="font-semibold text-nileGreen-700 dark:text-nileGreen-400">
+              {t("detail.retry")}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View className="flex-1 bg-slate-25 dark:bg-slate-950">
       <MetalHoldingForm
@@ -117,10 +174,18 @@ export default function EditMetalHoldingRoute(): React.JSX.Element {
       <ExitGuard
         visible={isExitGuardVisible}
         bottomInset={insets.bottom}
-        onKeep={(): void => setIsExitGuardVisible(false)}
+        onKeep={(): void => {
+          setIsExitGuardVisible(false);
+          pendingActionRef.current = null;
+        }}
         onDiscard={(): void => {
           setIsExitGuardVisible(false);
-          router.back();
+          allowExitRef.current = true;
+          if (pendingActionRef.current) {
+            navigation.dispatch(pendingActionRef.current);
+          } else {
+            router.back();
+          }
         }}
         copy={{
           title: t("edit.exit_title"),
@@ -163,10 +228,10 @@ function ExitGuard({
           className="rounded-t-3xl bg-slate-25 px-5 pt-6 dark:bg-slate-900"
           style={{ paddingBottom: bottomInset + 20 }}
         >
-          <Text className="text-xl font-bold text-text-primary">
+          <Text className="text-xl font-bold text-text-primary dark:text-text-primary-dark">
             {copy.title}
           </Text>
-          <Text className="mt-2 text-sm text-text-secondary">
+          <Text className="mt-2 text-sm text-text-secondary dark:text-text-secondary-dark">
             {copy.message}
           </Text>
           <View className="mt-5 gap-3">

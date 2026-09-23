@@ -198,6 +198,30 @@ export function useEditMetalHolding(
     [currentFacts, model]
   );
   const preview = useMemo<MetalHoldingFormPreview>(() => {
+    if (model && model.status !== "active") {
+      const purity = getSupportedMetalPurities(model.facts.metal).find(
+        (entry) => entry.code === model.facts.purityCode
+      );
+      return {
+        metal: model.facts.metal,
+        purityCode: model.facts.purityCode,
+        purityLabel: purity?.displayLabel ?? model.facts.purityCode,
+        purityFactorDecimal: model.facts.purityFactorDecimal,
+        physicalForm: model.facts.physicalForm,
+        name: values.name.trim() || undefined,
+        weightGramsDecimal: model.facts.weightGramsDecimal,
+        displayCurrency: undefined,
+        valuation: { available: false, reason: "missing_rate" },
+        resultSincePurchaseDecimal: null,
+        resultDirection: "unavailable",
+        rateFreshness: "unavailable",
+        metalUsdPerPureGramDecimal: null,
+        rateSources: undefined,
+        providerObservedAt: null,
+        metalRateTrust: undefined,
+        fxRateTrust: undefined,
+      };
+    }
     const normalized = validation.normalized;
     if (!normalized) return fallbackPreview(values);
     const rates = input.getPreviewRates(normalized);
@@ -248,7 +272,7 @@ export function useEditMetalHolding(
   const requiresStaleRateAcknowledgment =
     comparison.hasFinancialConsequences &&
     preview.valuation.available &&
-    preview.rateFreshness === "stale";
+    (preview.rateFreshness === "stale" || preview.rateFreshness === "unknown");
 
   const updateField = useCallback(
     (field: MetalHoldingFormField, value: string | null): void => {
@@ -299,9 +323,14 @@ export function useEditMetalHolding(
     if (!values.name.trim()) errors.name = "required";
     if (comparison.hasMaterialChanges && !correctionReason.trim())
       errors.correctionReason = "required";
-    const normalizedCurrent = result.normalized
-      ? toFacts(result.normalized)
-      : currentFacts;
+    const normalizedCurrent: EditableMetalHoldingFacts =
+      comparison.hasMaterialChanges && result.normalized
+        ? toFacts(result.normalized)
+        : {
+            ...model.facts,
+            name: values.name.trim(),
+            notes: values.notes.trim() || null,
+          };
     if (
       (comparison.hasMaterialChanges &&
         (!result.normalized || !result.isValid)) ||

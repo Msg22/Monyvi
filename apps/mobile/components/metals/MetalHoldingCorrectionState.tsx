@@ -1,5 +1,5 @@
 import React from "react";
-import { Text, View } from "react-native";
+import { Text, type TextInput, View } from "react-native";
 
 import { TextField } from "@/components/ui/TextField";
 import { formatAmount } from "./MetalHoldingLivePreview";
@@ -21,6 +21,7 @@ export interface MetalHoldingCorrectionStateProps {
   readonly onReasonChange?: (value: string) => void;
   readonly isDisabled: boolean;
   readonly autoFocus?: boolean;
+  readonly inputRef?: React.Ref<TextInput>;
 }
 
 /**
@@ -39,6 +40,7 @@ export function MetalHoldingCorrectionState({
   onReasonChange,
   isDisabled,
   autoFocus,
+  inputRef,
 }: MetalHoldingCorrectionStateProps): React.JSX.Element {
   const hasFinancialChange = state.affectedChanges.some(
     (change) => change.isFinancial
@@ -74,6 +76,7 @@ export function MetalHoldingCorrectionState({
         onChangeText={onReasonChange}
         error={reasonError}
         autoFocus={autoFocus}
+        inputRef={inputRef}
         multiline
       />
       <View

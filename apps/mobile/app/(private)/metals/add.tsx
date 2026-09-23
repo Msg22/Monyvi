@@ -1,6 +1,11 @@
 import * as Crypto from "expo-crypto";
 import { router } from "expo-router";
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useMemo, useRef, useState } from "react";
+import {
+  useNavigation,
+  usePreventRemove,
+  type NavigationAction,
+} from "@react-navigation/native";
 import {
   I18nManager,
   Modal,
@@ -71,17 +76,32 @@ export default function AddMetalHoldingRoute(): React.JSX.Element {
     [form.validationErrors, t]
   );
 
+  const navigation = useNavigation();
+  const pendingActionRef = useRef<NavigationAction | null>(null);
+  const allowExitRef = useRef(false);
+
+  usePreventRemove(form.isDirty && !allowExitRef.current, ({ data }) => {
+    if (form.isSubmitting) return;
+    pendingActionRef.current = data.action;
+    setIsExitGuardVisible(true);
+  });
+
   const requestExit = useCallback((): void => {
     if (form.isSubmitting) return;
     if (form.isDirty) {
+      pendingActionRef.current = null;
       setIsExitGuardVisible(true);
       return;
     }
+    allowExitRef.current = true;
     router.back();
   }, [form.isDirty, form.isSubmitting]);
   const submit = useCallback((): void => {
     void form.submit().then((holdingId) => {
-      if (holdingId) router.replace(`/metals/${holdingId}`);
+      if (holdingId) {
+        allowExitRef.current = true;
+        router.replace(`/metals/${holdingId}`);
+      }
     });
   }, [form]);
 
@@ -120,10 +140,18 @@ export default function AddMetalHoldingRoute(): React.JSX.Element {
       <DirtyExitGuard
         isVisible={isExitGuardVisible}
         bottomInset={insets.bottom}
-        onKeepEditing={() => setIsExitGuardVisible(false)}
+        onKeepEditing={() => {
+          setIsExitGuardVisible(false);
+          pendingActionRef.current = null;
+        }}
         onDiscard={() => {
           setIsExitGuardVisible(false);
-          router.back();
+          allowExitRef.current = true;
+          if (pendingActionRef.current) {
+            navigation.dispatch(pendingActionRef.current);
+          } else {
+            router.back();
+          }
         }}
         copy={{
           title: t("add.exit_title"),
@@ -169,10 +197,10 @@ function DirtyExitGuard({
           className="rounded-t-3xl bg-slate-25 px-5 pt-6 dark:bg-slate-900"
           style={{ paddingBottom: bottomInset + 20 }}
         >
-          <Text className="text-xl font-bold text-text-primary">
+          <Text className="text-xl font-bold text-text-primary dark:text-text-primary-dark">
             {copy.title}
           </Text>
-          <Text className="mt-2 text-sm text-text-secondary">
+          <Text className="mt-2 text-sm text-text-secondary dark:text-text-secondary-dark">
             {copy.message}
           </Text>
           <View className="mt-5 gap-3">

@@ -232,4 +232,52 @@ describe("useAddMetalHoldingForm", () => {
     expect(holdingId).toBe("018f0c7a-1234-7abc-8def-000000000002");
     expect(addHolding).toHaveBeenCalledTimes(1);
   });
+
+  it("requires explicit acknowledgment when rates have unknown freshness before submitting", async () => {
+    const addHolding = jest.fn<Promise<void>, [AddMetalHoldingFormSubmission]>(
+      () => Promise.resolve()
+    );
+    const { result } = renderHook(() =>
+      useAddMetalHoldingForm(
+        input({
+          addHolding,
+          previewRates: () => ({
+            metalUsdPerPureGramDecimal: "100",
+            currencyUsdPerUnitDecimal: "0.02",
+            egpUsdPerUnitDecimal: "0.02",
+            currencyMinorUnits: 2,
+            rateFreshness: "unknown",
+          }),
+        })
+      )
+    );
+    act(() => completeForm(result));
+
+    expect(
+      (
+        result.current as unknown as {
+          requiresStaleRateAcknowledgment: boolean;
+        }
+      ).requiresStaleRateAcknowledgment
+    ).toBe(true);
+
+    let holdingId: string | null = null;
+    await act(async () => {
+      holdingId = await result.current.submit();
+    });
+    expect(holdingId).toBeNull();
+    expect(addHolding).not.toHaveBeenCalled();
+
+    act(() => {
+      (
+        result.current as unknown as { acknowledgeStaleRate: () => void }
+      ).acknowledgeStaleRate();
+    });
+
+    await act(async () => {
+      holdingId = await result.current.submit();
+    });
+    expect(holdingId).toBe("018f0c7a-1234-7abc-8def-000000000002");
+    expect(addHolding).toHaveBeenCalledTimes(1);
+  });
 });

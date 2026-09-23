@@ -24,6 +24,7 @@ import {
 import { CURRENT_MARKET_INSTRUMENT_CODES } from "@monyvi/logic";
 import { createFinancialActionGroup } from "../../services/financial-action-foundation-repository";
 import { createMetalFinancialActionEnvelope } from "../../services/metal-financial-action-adapter";
+import { formatMetalLocalCalendarDate } from "../../services/metal-financial-action-repository";
 
 interface TestDatabaseModule {
   readonly database: Database;
@@ -179,8 +180,9 @@ async function resetDatabase(): Promise<void> {
 function validAddSubmission(
   overrides: Partial<AddMetalHoldingFormSubmission> = {}
 ): AddMetalHoldingFormSubmission {
+  const today = formatMetalLocalCalendarDate(new Date());
   return {
-    cairoTodayDate: "2026-09-01",
+    cairoTodayDate: today,
     staleRateAcknowledged: false,
     ids: {
       actionId: IDS.addAction,
@@ -203,7 +205,7 @@ function validAddSubmission(
       },
       purchasePriceDecimal: "32000",
       purchaseCurrency: "EGP",
-      purchaseDate: "2026-08-15",
+      purchaseDate: today,
       physicalForm: "COIN",
       notes: "Birthday gift",
     },
@@ -327,8 +329,9 @@ async function seedHoldingForEdit(
 function validEditSubmission(
   overrides: Partial<EditMetalHoldingSubmission> = {}
 ): EditMetalHoldingSubmission {
+  const today = formatMetalLocalCalendarDate(new Date());
   return {
-    cairoTodayDate: "2026-09-01",
+    cairoTodayDate: today,
     staleRateAcknowledged: false,
     correctionReason: "Correcting wrong purchase price",
     ids: {
@@ -348,6 +351,16 @@ function validEditSubmission(
         name: "Initial Gold Coin",
         notes: null,
         metal: "GOLD",
+        weightGramsDecimal: "8",
+        purityCode: "gold-999",
+        purityCatalogVersion: "1",
+        purityFactorDecimal: "0.999",
+        purchasePriceDecimal: "25000",
+        purchaseCurrency: "EGP",
+        purchaseDate: "2026-08-01",
+        physicalForm: "COIN",
+      },
+      persistedMaterialFacts: {
         weightGramsDecimal: "8",
         purityCode: "gold-999",
         purityCatalogVersion: "1",
@@ -538,7 +551,13 @@ describe("Metal holding facades replay contract and rate provenance", () => {
   describe("saveEditedMetalHolding rate provenance persistence (FR-073/075)", () => {
     it("captures and persists available rate snapshots instead of passing empty rateSnapshots", async () => {
       await seedHoldingForEdit({ withMarketRates: true });
-      const submission = validEditSubmission();
+      const today = formatMetalLocalCalendarDate(new Date());
+      const submission = validEditSubmission({
+        current: {
+          ...validEditSubmission().current,
+          purchaseDate: today,
+        },
+      });
       await saveEditedMetalHolding(submission);
 
       const rateRefs = await database
@@ -562,7 +581,13 @@ describe("Metal holding facades replay contract and rate provenance", () => {
         withMarketRates: true,
         staleMarketRates: true,
       });
-      const submission = validEditSubmission();
+      const today = formatMetalLocalCalendarDate(new Date());
+      const submission = validEditSubmission({
+        current: {
+          ...validEditSubmission().current,
+          purchaseDate: today,
+        },
+      });
       await expect(saveEditedMetalHolding(submission)).rejects.toThrow(
         "stale_rate_acknowledgment_required"
       );
@@ -604,6 +629,46 @@ describe("Metal holding facades replay contract and rate provenance", () => {
           .query()
           .fetch()
       ).toHaveLength(2);
+    });
+
+    it("does not capture rate snapshots when purchase date is in the past", async () => {
+      await seedHoldingForEdit({ withMarketRates: true });
+      const pastSubmission = validEditSubmission({
+        current: {
+          ...validEditSubmission().current,
+          purchaseDate: "2020-01-01",
+        },
+      });
+      await saveEditedMetalHolding(pastSubmission);
+      const rateRefs = await database
+        .get<MetalRateReference>("metal_rate_references")
+        .query()
+        .fetch();
+      expect(rateRefs).toHaveLength(0);
+    });
+  });
+
+  describe("addMetalHoldingFromForm user scope binding (FR-077)", () => {
+    it("binds submission to initiating user and throws user_scope_changed if scope changes", async () => {
+      const submission = validAddSubmission();
+      const userDataAccess = jest.requireMock("../../services/user-data-access");
+      let callCount = 0;
+      userDataAccess.getCurrentUserDataScope.mockImplementation(() => {
+        callCount++;
+        const userId = callCount <= 2 ? IDS.user : "another-user-id";
+        return Promise.resolve({
+          userId,
+          queryOwned: (
+            collection: { query: (...clauses: unknown[]) => unknown },
+            ...clauses: unknown[]
+          ) => collection.query(Q.where("user_id", userId), ...clauses),
+          assertOwned: <T extends { userId: string }>(record: T): T => record,
+        });
+      });
+
+      await expect(addMetalHoldingFromForm(submission)).rejects.toThrow(
+        "user_scope_changed"
+      );
     });
   });
 });

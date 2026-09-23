@@ -1,4 +1,5 @@
-import { fireEvent, render, screen } from "@testing-library/react-native";
+import { act, fireEvent, render, screen } from "@testing-library/react-native";
+import { useNavigation, usePreventRemove } from "@react-navigation/native";
 import React from "react";
 
 jest.mock("react-i18next", () => ({
@@ -36,39 +37,44 @@ jest.mock("@/hooks/usePreferredCurrency", () => ({
   usePreferredCurrency: () => ({ preferredCurrency: "EGP", isLoading: false }),
 }));
 
+const mockForm = {
+  values: {
+    name: "",
+    metal: "GOLD" as const,
+    weightGrams: "",
+    purityCode: "gold-999",
+    purchasePrice: "",
+    purchaseCurrency: "EGP",
+    purchaseDate: "2026-09-01",
+    physicalForm: null,
+    notes: "",
+  },
+  validationErrors: {},
+  preview: {
+    metal: "GOLD" as const,
+    purityCode: "gold-999",
+    purityLabel: "24K · 999",
+    purityFactorDecimal: "0.999",
+    physicalForm: null,
+    valuation: { available: false, reason: "missing_rate" } as const,
+  },
+  purityOptions: [{ value: "gold-999", label: "24K · 999" }],
+  isDirty: false,
+  isSubmitting: false,
+  submitError: null,
+  requiresUnusualValueAcknowledgment: false,
+  unusualValueAcknowledged: false,
+  requiresStaleRateAcknowledgment: false,
+  staleRateAcknowledged: false,
+  acknowledgeStaleRate: jest.fn(),
+  updateField: jest.fn(),
+  acknowledgeUnusualValue: jest.fn(),
+  submit: jest.fn(() => Promise.resolve(null)),
+};
+
 jest.mock("@/hooks/useAddMetalHolding", () => ({
   useMetalAddPreviewRates: () => ({ getPreviewRates: jest.fn() }),
-  useAddMetalHoldingForm: () => ({
-    values: {
-      name: "",
-      metal: "GOLD",
-      weightGrams: "",
-      purityCode: "gold-999",
-      purchasePrice: "",
-      purchaseCurrency: "EGP",
-      purchaseDate: "2026-09-01",
-      physicalForm: null,
-      notes: "",
-    },
-    validationErrors: {},
-    preview: {
-      metal: "GOLD",
-      purityCode: "gold-999",
-      purityLabel: "24K · 999",
-      purityFactorDecimal: "0.999",
-      physicalForm: null,
-      valuation: { available: false, reason: "missing_rate" },
-    },
-    purityOptions: [{ value: "gold-999", label: "24K · 999" }],
-    isDirty: false,
-    isSubmitting: false,
-    submitError: null,
-    requiresUnusualValueAcknowledgment: false,
-    unusualValueAcknowledged: false,
-    updateField: jest.fn(),
-    acknowledgeUnusualValue: jest.fn(),
-    submit: jest.fn(() => Promise.resolve(null)),
-  }),
+  useAddMetalHoldingForm: () => mockForm,
 }));
 
 jest.mock("@/services/add-metal-holding-facade-service", () => ({
@@ -229,7 +235,10 @@ describe("Add metal holding form", () => {
       screen.getByTestId("metal-holding-weight-purity-stacked")
     ).toBeOnTheScreen();
     expect(screen.getByLabelText("Weight in grams")).toBeOnTheScreen();
-    expect(screen.getByLabelText("Purity")).toBeOnTheScreen();
+    expect(
+      screen.getByTestId("metal-holding-purity-trigger")
+    ).toBeOnTheScreen();
+    expect(screen.getByText("Purity")).toBeOnTheScreen();
     expect(screen.getByTestId("metal-holding-submit")).toHaveProp(
       "accessibilityRole",
       "button"
@@ -345,11 +354,40 @@ describe("Add metal holding form", () => {
 
 describe("Add metal holding route", () => {
   it("renders the full form directly instead of a modal or a review route", () => {
+    mockForm.isDirty = false;
     const AddHoldingRoute = loadAddHoldingRoute();
     render(<AddHoldingRoute />);
 
     expect(screen.getByTestId("metal-holding-add-screen")).toBeOnTheScreen();
     expect(screen.getByTestId("metal-holding-form")).toBeOnTheScreen();
     expect(screen.queryByTestId("metal-holding-review-screen")).toBeNull();
+  });
+
+  it("registers navigation removal prevention when dirty and handles discard", () => {
+    mockForm.isDirty = true;
+    const AddHoldingRoute = loadAddHoldingRoute();
+    render(<AddHoldingRoute />);
+
+    expect(usePreventRemove).toHaveBeenCalledWith(true, expect.any(Function));
+
+    // Simulate navigation removal attempt (hardware back / gesture)
+    const preventCalls = jest.mocked(usePreventRemove).mock.calls;
+    const lastCall = preventCalls[preventCalls.length - 1];
+    const preventCallback = lastCall?.[1];
+    const mockAction = { type: "GO_BACK" };
+    if (typeof preventCallback === "function") {
+      act(() => {
+        preventCallback({ data: { action: mockAction } });
+      });
+    }
+
+    expect(
+      screen.getByTestId("metal-holding-dirty-exit-guard")
+    ).toBeOnTheScreen();
+
+    // Discard dismisses guard and dispatches the blocked action
+    fireEvent.press(screen.getByText("add.discard"));
+    const nav = jest.mocked(useNavigation)();
+    expect(nav.dispatch).toHaveBeenCalledWith(mockAction);
   });
 });

@@ -291,15 +291,12 @@ export function formatAmount(
   if (!isSupportedMetalsIsoCurrencyCode(currency)) {
     return formatDecimal(value, locale);
   }
-  const fractionDigits = value.split(".")[1]?.length ?? 0;
   return formatLocalizedMoneyAmount({
     amount: value,
     currency,
     language: locale,
     englishPresentation: "code-prefix",
     signDisplay,
-    minimumFractionDigits: fractionDigits,
-    maximumFractionDigits: fractionDigits,
   });
 }
 

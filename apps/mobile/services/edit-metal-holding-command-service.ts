@@ -24,6 +24,7 @@ import {
   createMetalMetadataService,
   type MetalMetadataClockDecision,
 } from "./metal-metadata-service";
+import { formatMetalLocalCalendarDate } from "./metal-financial-action-repository";
 import {
   findOwnedById,
   getCurrentUserDataScope,
@@ -31,12 +32,12 @@ import {
 } from "./user-data-access";
 
 export interface EditMetalMaterialFacts {
-  readonly weightGramsDecimal: string;
-  readonly purityCode: string;
-  readonly purityCatalogVersion: "1";
-  readonly purityFactorDecimal: string;
-  readonly purchasePriceDecimal: string;
-  readonly purchaseCurrency: string;
+  readonly weightGramsDecimal: string | null;
+  readonly purityCode: string | null;
+  readonly purityCatalogVersion: "1" | null;
+  readonly purityFactorDecimal: string | null;
+  readonly purchasePriceDecimal: string | null;
+  readonly purchaseCurrency: string | null;
   readonly purchaseDate: string;
   readonly physicalForm: "COIN" | "BAR" | "JEWELRY" | null;
 }
@@ -194,33 +195,47 @@ async function loadProjection(
   return { asset, metal: metal[0], state: state[0], predecessor };
 }
 
+export function getPersistedMetalMaterialFacts(
+  asset: Pick<
+    Asset,
+    "purchasePriceDecimal" | "purchaseCurrency" | "currency" | "purchaseDate"
+  >,
+  metal: Pick<
+    AssetMetal,
+    | "weightGramsDecimal"
+    | "purityCode"
+    | "purityCatalogVersion"
+    | "purityFactorDecimal"
+    | "itemForm"
+  >
+): EditMetalMaterialFacts {
+  const purityCatalogVersion =
+    metal.purityCode && metal.purityCatalogVersion === "1" ? "1" : null;
+  return {
+    weightGramsDecimal: metal.weightGramsDecimal ?? null,
+    purityCode: metal.purityCode ?? null,
+    purityCatalogVersion,
+    purityFactorDecimal: metal.purityFactorDecimal ?? null,
+    purchasePriceDecimal: asset.purchasePriceDecimal ?? null,
+    purchaseCurrency: asset.purchaseCurrency ?? (asset.currency || null),
+    purchaseDate: formatMetalLocalCalendarDate(asset.purchaseDate),
+    physicalForm:
+      metal.itemForm === "COIN" ||
+      metal.itemForm === "BAR" ||
+      metal.itemForm === "JEWELRY"
+        ? metal.itemForm
+        : null,
+  };
+}
+
 function assertOriginalProjection(
   input: EditMetalHoldingCommandInput,
   projection: Awaited<ReturnType<typeof loadProjection>>
 ): void {
-  const persistedMaterial: EditMetalMaterialFacts = {
-    weightGramsDecimal:
-      projection.metal.weightGramsDecimal ??
-      String(projection.metal.weightGrams),
-    purityCode: projection.metal.purityCode ?? "",
-    purityCatalogVersion:
-      projection.metal.purityCatalogVersion === "1" ? "1" : "1",
-    purityFactorDecimal:
-      projection.metal.purityFactorDecimal ??
-      String(projection.metal.purityFraction),
-    purchasePriceDecimal:
-      projection.asset.purchasePriceDecimal ??
-      String(projection.asset.purchasePrice),
-    purchaseCurrency:
-      projection.asset.purchaseCurrency ?? projection.asset.currency,
-    purchaseDate: projection.asset.purchaseDate.toISOString().slice(0, 10),
-    physicalForm:
-      projection.metal.itemForm === "COIN" ||
-      projection.metal.itemForm === "BAR" ||
-      projection.metal.itemForm === "JEWELRY"
-        ? projection.metal.itemForm
-        : null,
-  };
+  const persistedMaterial = getPersistedMetalMaterialFacts(
+    projection.asset,
+    projection.metal
+  );
   if (
     JSON.stringify(persistedMaterial) !==
     JSON.stringify(input.originalMaterialFacts)
@@ -263,6 +278,8 @@ function prepareCorrectionPlan(
 ): FinancialActionLinkedOperationPlan {
   if (projection.state.status !== "active")
     throw new Error("terminal_holding_material_edit_forbidden");
+  if (projection.state.reconciliationState === "reconciliation_incomplete")
+    throw new Error("holding_reconciliation_incomplete");
   if (
     projection.state.financialRevision !== input.expectedFinancialRevision ||
     projection.state.effectiveEventId !== input.predecessorEventId
@@ -352,6 +369,15 @@ function prepareCorrectionPlan(
         model: projection.asset,
         update: (model): void => {
           const asset = model as Asset;
+          const originalPurchaseDate = formatMetalLocalCalendarDate(
+            asset.purchaseDate
+          );
+          const originalCurrency =
+            asset.purchaseCurrency ?? asset.currency;
+          const acquisitionBasisChanged =
+            material.purchaseDate !== originalPurchaseDate ||
+            material.purchaseCurrency !== originalCurrency;
+
           if (nameDecision === "apply") asset.name = input.metadata.name;
           if (notesDecision === "apply")
             asset.notes = input.metadata.notes ?? null;
@@ -362,8 +388,12 @@ function prepareCorrectionPlan(
           );
           asset.purchasePrice = Number(material.purchasePriceDecimal);
           asset.purchasePriceDecimal = material.purchasePriceDecimal;
-          if (input.rateSnapshots.length > 0)
+
+          if (input.rateSnapshots.length > 0) {
             asset.acquisitionActionId = input.actionId;
+          } else if (acquisitionBasisChanged) {
+            asset.acquisitionActionId = null;
+          }
           asset.updatedAt = occurredAt;
         },
       },

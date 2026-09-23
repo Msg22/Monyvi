@@ -498,4 +498,74 @@ describe("Edit metal holding command SQLite atomicity", () => {
       service.save(command({ materialFacts: null, correctionReason: null }))
     ).resolves.toEqual({ kind: "metadata" });
   });
+  it("blocks material corrections during reconciliation_incomplete", async (): Promise<void> => {
+    await seedHolding();
+    await database.write(async () => {
+      const state = (
+        await database
+          .get<MetalHoldingState>("metal_holding_states")
+          .query()
+          .fetch()
+      )[0];
+      await state.update((record) => {
+        record.reconciliationState = "reconciliation_incomplete";
+      });
+    });
+    const service = createService();
+    await expect(service.save(command())).rejects.toThrow(
+      "holding_reconciliation_incomplete"
+    );
+  });
+  it("invalidates acquisition links when acquisition basis changes without rate snapshots", async (): Promise<void> => {
+    await seedHolding();
+    const service = createService();
+    const cmd = command({
+      materialFacts: {
+        ...command().originalMaterialFacts,
+        purchaseDate: "2024-03-20",
+      },
+      rateSnapshots: [],
+    });
+    await service.save(cmd);
+    const asset = await database.get<Asset>("assets").find(IDS.holding);
+    expect(asset.acquisitionActionId).toBeNull();
+  });
+  it("corrects a legacy holding without throwing holding_projection_changed", async (): Promise<void> => {
+    await seedHolding("active", true);
+    const legacyFacts = {
+      weightGramsDecimal: null,
+      purityCode: null,
+      purityCatalogVersion: null,
+      purityFactorDecimal: null,
+      purchasePriceDecimal: null,
+      purchaseCurrency: "EGP",
+      purchaseDate: "2024-03-14",
+      physicalForm: "COIN" as const,
+    };
+    const completeFacts = {
+      weightGramsDecimal: "10.125",
+      purityCode: "gold-999",
+      purityCatalogVersion: "1" as const,
+      purityFactorDecimal: "0.999",
+      purchasePriceDecimal: "47800",
+      purchaseCurrency: "EGP",
+      purchaseDate: "2024-03-14",
+      physicalForm: "COIN" as const,
+    };
+    const service = createService();
+    await expect(
+      service.save(
+        command({
+          originalMaterialFacts: legacyFacts,
+          materialFacts: completeFacts,
+          correctionReason: "Adding missing receipt facts",
+        })
+      )
+    ).resolves.toEqual({ kind: "correction" });
+    const metal = (
+      await database.get<AssetMetal>("asset_metals").query().fetch()
+    )[0];
+    expect(metal.weightGramsDecimal).toBe("10.125");
+    expect(metal.purityCode).toBe("gold-999");
+  });
 });

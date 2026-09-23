@@ -5,6 +5,7 @@ import React from "react";
 import arCommon from "@/locales/ar/common.json";
 import enCommon from "@/locales/en/common.json";
 import type { MetalHoldingFormCopy } from "@/components/metals/MetalHoldingForm";
+import { formatAmount } from "@/components/metals/MetalHoldingLivePreview";
 
 beforeAll(async () => {
   await init({
@@ -705,9 +706,16 @@ describe("Edit metal holding form", () => {
     expect(
       screen.queryByTestId("metal-holding-weight-purity-stacked")
     ).toBeNull();
+    expect(screen.queryByTestId("metal-holding-live-preview")).toBeNull();
     fireEvent.press(screen.getByTestId("header-back"));
     expect(props.onRequestExit).not.toHaveBeenCalled();
     fireEvent.press(screen.getByTestId("metal-holding-submit"));
     expect(props.onSubmit).not.toHaveBeenCalled();
+  });
+
+  it("rounds preview money at currency display precision", (): void => {
+    expect(formatAmount("EGP", "1.005", "en", "never")).toBe("EGP 1");
+    expect(formatAmount("EGP", "1.015", "en", "never")).toBe("EGP 1.02");
+    expect(formatAmount("EGP", "1.250", "en", "never")).toBe("EGP 1.25");
   });
 });
