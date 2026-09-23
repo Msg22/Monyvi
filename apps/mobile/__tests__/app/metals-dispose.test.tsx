@@ -34,8 +34,8 @@ jest.mock("@/context/ThemeContext", () => ({
 }));
 
 type Category =
-  | "lost_stolen"
-  | "destroyed_damaged"
+  | "lost_or_stolen"
+  | "destroyed_or_damaged"
   | "given_away"
   | "donated"
   | "other";
@@ -47,6 +47,7 @@ interface RateEvidenceDisplay {
   readonly freshness: "fresh" | "stale" | "unknown";
   readonly sourceLabel: string;
   readonly observedLabel: string;
+  readonly qualityLabel: string;
 }
 
 interface DisposeCopy {
@@ -126,8 +127,8 @@ const copy: DisposeCopy = {
   intro: "Use this when you no longer own the holding and did not sell it.",
   reasonLabel: "Reason",
   categoryLabels: {
-    lost_stolen: "Lost or stolen",
-    destroyed_damaged: "Destroyed or damaged",
+    lost_or_stolen: "Lost or stolen",
+    destroyed_or_damaged: "Destroyed or damaged",
     given_away: "Given away",
     donated: "Donated",
     other: "Other",
@@ -230,7 +231,7 @@ describe("Dispose metal holding direct form", () => {
     }
     expect(
       screen.getAllByTestId(
-        /^dispose-category-(lost_stolen|destroyed_damaged|given_away|donated|other)$/
+        /^dispose-category-(lost_or_stolen|destroyed_or_damaged|given_away|donated|other)$/
       )
     ).toHaveLength(5);
     expect(screen.getByText("Optional")).toBeOnTheScreen();
@@ -257,8 +258,8 @@ describe("Dispose metal holding direct form", () => {
   });
 
   it.each([
-    ["lost_stolen", "writeOffSummary"],
-    ["destroyed_damaged", "writeOffSummary"],
+    ["lost_or_stolen", "writeOffSummary"],
+    ["destroyed_or_damaged", "writeOffSummary"],
     ["given_away", "externalTransferSummary"],
     ["donated", "externalTransferSummary"],
   ] as const)(
@@ -364,7 +365,7 @@ describe("Dispose metal holding direct form", () => {
       "accessible",
       true
     );
-    expect(screen.getByTestId("dispose-category-lost_stolen")).toHaveProp(
+    expect(screen.getByTestId("dispose-category-lost_or_stolen")).toHaveProp(
       "accessibilityRole",
       "radio"
     );
@@ -436,7 +437,7 @@ describe("Dispose metal holding direct form", () => {
 
   it("renders the shaped treatment prop without reclassifying the category", (): void => {
     renderScreen({
-      category: "lost_stolen",
+      category: "lost_or_stolen",
       treatment: "external_transfer",
     });
     expect(screen.getByText(copy.externalTransferSummary)).toBeOnTheScreen();
@@ -454,6 +455,7 @@ describe("Dispose metal holding direct form", () => {
           freshness: "stale",
           sourceLabel: "provider-a",
           observedLabel: "5 Sep 10:00",
+          qualityLabel: "Valid",
         },
         {
           role: "terminal_purchase_currency",
@@ -461,6 +463,7 @@ describe("Dispose metal holding direct form", () => {
           freshness: "fresh",
           sourceLabel: "provider-b",
           observedLabel: "5 Sep 11:30",
+          qualityLabel: "Valid",
         },
       ],
       requiresRateAcknowledgment: true,
@@ -499,10 +502,53 @@ describe("Dispose metal holding direct form", () => {
           freshness: "fresh",
           sourceLabel: "provider-a",
           observedLabel: "5 Sep 11:30",
+          qualityLabel: "Valid",
         },
       ],
     });
     expect(screen.queryByTestId("dispose-rate-acknowledgment")).toBeNull();
+  });
+
+  it("renders each consumed terminal rate source quality for trust disclosure", (): void => {
+    renderScreen({
+      category: "donated",
+      treatment: "external_transfer",
+      rateEvidence: [
+        {
+          role: "terminal_metal",
+          valueLabel: "3,600 USD/g",
+          freshness: "stale",
+          sourceLabel: "provider-a",
+          observedLabel: "5 Sep 10:00",
+          qualityLabel: "Valid",
+        },
+      ],
+      requiresRateAcknowledgment: true,
+    });
+    expect(
+      within(
+        screen.getByTestId("dispose-rate-quality-terminal_metal")
+      ).getByText(/Valid/)
+    ).toBeOnTheScreen();
+  });
+
+  it("shows a visible checked indicator for the rate acknowledgment", (): void => {
+    renderScreen({
+      requiresRateAcknowledgment: true,
+      rateAcknowledged: false,
+      onRateAcknowledgmentChange: jest.fn(),
+    });
+    expect(
+      screen.queryByTestId("dispose-rate-acknowledgment-indicator")
+    ).toBeNull();
+    renderScreen({
+      requiresRateAcknowledgment: true,
+      rateAcknowledged: true,
+      onRateAcknowledgmentChange: jest.fn(),
+    });
+    expect(
+      screen.getByTestId("dispose-rate-acknowledgment-indicator")
+    ).toBeOnTheScreen();
   });
 
   it("surfaces the acknowledgment error and toggles through the callback", (): void => {
@@ -578,8 +624,8 @@ describe("Dispose metal holding direct form", () => {
       title: "dispose.title",
       intro: "dispose.intro",
       categories: {
-        lost_stolen: "dispose.categories.lostOrStolen",
-        destroyed_damaged: "dispose.categories.destroyedOrDamaged",
+        lost_or_stolen: "dispose.categories.lostOrStolen",
+        destroyed_or_damaged: "dispose.categories.destroyedOrDamaged",
         given_away: "dispose.categories.givenAway",
         donated: "dispose.categories.donated",
         other: "dispose.categories.other",

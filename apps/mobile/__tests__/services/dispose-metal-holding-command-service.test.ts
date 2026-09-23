@@ -61,6 +61,8 @@ const IDS = {
   conflictingDisposeEventB: "018f0c7a-1234-7abc-8def-000000000014",
   deleteAction: "018f0c7a-1234-7abc-8def-000000000015",
   deleteEvent: "018f0c7a-1234-7abc-8def-000000000016",
+  terminalHeadAction: "018f0c7a-1234-7abc-8def-000000000017",
+  terminalHeadEvent: "018f0c7a-1234-7abc-8def-000000000018",
 } as const;
 
 jest.mock("../../services/user-data-access", () => ({
@@ -127,10 +129,10 @@ function command(
     holdingId: IDS.holding,
     userId: IDS.user,
     occurredAt: "2026-09-05T10:15:30.123Z",
-    cairoTodayDate: "2026-09-05",
+    latestAllowedCalendarDate: "2026-09-05",
     expectedFinancialRevision: "0",
     disposalDate: "2026-09-05",
-    category: "lost_stolen",
+    category: "lost_or_stolen",
     otherTreatment: null,
     notes: null,
     rateSnapshots: [],
@@ -180,7 +182,7 @@ function createEnvelope(
       payload,
     },
     registry,
-    { cairoTodayDate: input.cairoTodayDate }
+    { latestAllowedCalendarDate: input.latestAllowedCalendarDate }
   );
 }
 
@@ -319,8 +321,8 @@ async function seedHolding(
 
 describe("Dispose metal holding category and consequence contract", () => {
   it.each([
-    ["lost_stolen", null, "lost_stolen", "write_off"],
-    ["destroyed_damaged", null, "destroyed_damaged", "write_off"],
+    ["lost_or_stolen", null, "lost_or_stolen", "write_off"],
+    ["destroyed_or_damaged", null, "destroyed_or_damaged", "write_off"],
     ["given_away", null, "given_away", "external_transfer"],
     ["donated", null, "donated", "external_transfer"],
     ["other", "write_off", "other_write_off", "write_off"],
@@ -357,11 +359,11 @@ describe("Dispose metal holding category and consequence contract", () => {
       "dispose_other_treatment_required"
     );
     expect(() =>
-      service.resolveDisposeReason("lost_stolen", "write_off")
+      service.resolveDisposeReason("lost_or_stolen", "write_off")
     ).toThrow("dispose_known_category_treatment_forbidden");
     expect(() =>
       service.resolveDisposeReason(
-        "lost_or_stolen" as DisposeMetalHoldingCommandInput["category"],
+        "unknown_category" as DisposeMetalHoldingCommandInput["category"],
         null
       )
     ).toThrow("dispose_category_invalid");
@@ -421,7 +423,7 @@ describe("Dispose metal holding command SQLite lifecycle", () => {
       predecessorEventId: IDS.createdEvent,
       reversesEventId: null,
       disposalDate: "2026-09-05",
-      reason: "lost_stolen",
+      reason: "lost_or_stolen",
       notes: null,
       rateSnapshots: [],
     };
@@ -628,7 +630,7 @@ describe("Dispose metal holding command SQLite lifecycle", () => {
     await seedHolding();
     await database.write(async (): Promise<void> => {
       for (const [id, reason] of [
-        [IDS.conflictingDisposeEventA, "lost_stolen"],
+        [IDS.conflictingDisposeEventA, "lost_or_stolen"],
         [IDS.conflictingDisposeEventB, "donated"],
       ] as const) {
         await database
@@ -661,6 +663,89 @@ describe("Dispose metal holding command SQLite lifecycle", () => {
     await expect(createService().dispose(command())).rejects.toThrow(
       "metal_dispose_lifecycle_conflict"
     );
+  });
+
+  it("rejects extending a terminal effective head even when the mutable state still says active", async (): Promise<void> => {
+    await seedHolding();
+    await database.write(async (): Promise<void> => {
+      await database
+        .get<FinancialActionGroup>("financial_action_groups")
+        .create((record): void => {
+          record._raw.id = IDS.terminalHeadAction;
+          record.accountGuardsJson = "[]";
+          record.actionId = IDS.terminalHeadAction;
+          record.deleted = false;
+          record.domain = "metals";
+          record.domainReferenceId = IDS.holding;
+          record.kind = "dispose";
+          record.outcomeJson = null;
+          record.payloadHash = "b".repeat(64);
+          record.payloadJson = "{}";
+          record.rejectionCode = null;
+          record.serverOutcome = null;
+          record.state = "accepted";
+          record.updatedAt = new Date("2026-09-04T11:00:00.000Z");
+          record.userId = IDS.user;
+        });
+      await database
+        .get<MetalLifecycleEvent>("metal_lifecycle_events")
+        .create((record): void => {
+          record._raw.id = IDS.terminalHeadEvent;
+          record.actionId = IDS.terminalHeadAction;
+          record.deleted = false;
+          record.holdingId = IDS.holding;
+          record.isEffective = true;
+          record.isHistoryVisible = true;
+          record.kind = "dispose";
+          record.occurredAt = new Date("2026-09-04T11:00:00.000Z");
+          record.payloadJson = "{}";
+          record.predecessorEventId = IDS.createdEvent;
+          record.reversesEventId = null;
+          record.updatedAt = new Date("2026-09-04T11:00:00.000Z");
+          record.userId = IDS.user;
+        });
+      const state = await database
+        .get<MetalHoldingState>("metal_holding_states")
+        .find(IDS.state);
+      await state.update((record): void => {
+        record.effectiveActionId = IDS.terminalHeadAction;
+        record.effectiveEventId = IDS.terminalHeadEvent;
+        record.financialRevision = "1";
+        record.status = "active";
+      });
+    });
+
+    await expect(
+      createService().dispose(
+        command({
+          predecessorEventId: IDS.terminalHeadEvent,
+          expectedFinancialRevision: "1",
+        })
+      )
+    ).rejects.toThrow("metal_dispose_lifecycle_conflict");
+    expect(
+      await database.get<Model>("metal_action_evidence").query().fetch()
+    ).toHaveLength(0);
+  });
+
+  it("rejects a METAL asset whose owned subtype row is missing even without rate evidence", async (): Promise<void> => {
+    await seedHolding();
+    await database.write(async (): Promise<void> => {
+      const metals = await database
+        .get<AssetMetal>("asset_metals")
+        .query()
+        .fetch();
+      for (const metal of metals) {
+        await metal.destroyPermanently();
+      }
+    });
+
+    await expect(createService().dispose(command())).rejects.toThrow(
+      "metal_holding_not_found"
+    );
+    expect(
+      await database.get<Model>("metal_action_evidence").query().fetch()
+    ).toHaveLength(0);
   });
 
   it("rejects an auth scope change before reading the holding", async (): Promise<void> => {

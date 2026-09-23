@@ -112,10 +112,10 @@ function command(
     holdingId: IDS.holding,
     userId: IDS.user,
     occurredAt: "2026-09-05T10:15:30.123Z",
-    cairoTodayDate: "2026-09-05",
+    latestAllowedCalendarDate: "2026-09-05",
     expectedFinancialRevision: "0",
     disposalDate: "2026-09-05",
-    category: "lost_stolen",
+    category: "lost_or_stolen",
     otherTreatment: null,
     notes: null,
     rateSnapshots: [],
@@ -198,7 +198,7 @@ function createEnvelope(
       payload,
     },
     DEFAULT_FINANCIAL_ACTION_REGISTRY,
-    { cairoTodayDate: input.cairoTodayDate }
+    { latestAllowedCalendarDate: input.latestAllowedCalendarDate }
   );
 }
 

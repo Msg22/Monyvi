@@ -784,11 +784,17 @@ export function createMetalsActionPayloadRegistry(
       "holdingId",
       "notes",
       "predecessorEventId",
-      "rateSnapshots",
       "reason",
       "reversesEventId",
     ];
-    if (!isPlainObject(value) || !hasExactKeys(value, keys)) fail();
+    const hasRateSnapshots = Object.prototype.hasOwnProperty.call(
+      value,
+      "rateSnapshots"
+    );
+    if (
+      !hasExactKeys(value, hasRateSnapshots ? [...keys, "rateSnapshots"] : keys)
+    )
+      fail();
     validateLinks(value, false, false);
     if (
       !validDate(value.disposalDate, input) ||
@@ -797,7 +803,7 @@ export function createMetalsActionPayloadRegistry(
       !boundedText(value.notes, MAX_NOTES_UTF8_BYTES, true)
     )
       fail();
-    return {
+    const payload: RegisteredActionPayload = {
       holdingId: value.holdingId,
       expectedHoldingRevision: value.expectedHoldingRevision,
       predecessorEventId: value.predecessorEventId,
@@ -805,13 +811,18 @@ export function createMetalsActionPayloadRegistry(
       disposalDate: value.disposalDate,
       reason: value.reason,
       notes: value.notes,
-      rateSnapshots: validateSnapshots(
-        value.rateSnapshots,
-        TERMINAL_DISPOSAL_SNAPSHOT_ROLES,
-        null,
-        null
-      ),
     };
+    return hasRateSnapshots
+      ? {
+          ...payload,
+          rateSnapshots: validateSnapshots(
+            value.rateSnapshots,
+            TERMINAL_DISPOSAL_SNAPSHOT_ROLES,
+            null,
+            null
+          ),
+        }
+      : payload;
   };
 
   const validateEventOnly = (

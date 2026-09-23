@@ -32,8 +32,8 @@ export const DISPOSE_METAL_HOLDING_COPY_KEYS = Object.freeze({
   intro: "dispose.intro",
   reasonLabel: "dispose.reasonLabel",
   categories: Object.freeze({
-    lost_stolen: "dispose.categories.lostOrStolen",
-    destroyed_damaged: "dispose.categories.destroyedOrDamaged",
+    lost_or_stolen: "dispose.categories.lostOrStolen",
+    destroyed_or_damaged: "dispose.categories.destroyedOrDamaged",
     given_away: "dispose.categories.givenAway",
     donated: "dispose.categories.donated",
     other: "dispose.categories.other",
@@ -147,6 +147,7 @@ export interface DisposeRateEvidenceDisplay {
   readonly freshness: "fresh" | "stale" | "unknown";
   readonly sourceLabel: string;
   readonly observedLabel: string;
+  readonly qualityLabel: string;
 }
 
 export interface DisposeMetalHoldingScreenProps {
@@ -181,8 +182,8 @@ export interface DisposeMetalHoldingScreenProps {
 }
 
 const CATEGORIES: readonly DisposeCategory[] = [
-  "lost_stolen",
-  "destroyed_damaged",
+  "lost_or_stolen",
+  "destroyed_or_damaged",
   "given_away",
   "donated",
   "other",
@@ -560,6 +561,12 @@ export function DisposeMetalHoldingScreen({
                       {copy.rateFreshness[reference.freshness]} ·{" "}
                       {reference.sourceLabel} · {reference.observedLabel}
                     </Text>
+                    <Text
+                      testID={`dispose-rate-quality-${reference.role}`}
+                      className="text-xs text-text-secondary dark:text-text-secondary-dark"
+                    >
+                      {reference.qualityLabel}
+                    </Text>
                   </View>
                 ))}
               </View>
@@ -577,8 +584,22 @@ export function DisposeMetalHoldingScreen({
                 onPress={(): void =>
                   onRateAcknowledgmentChange?.(!rateAcknowledged)
                 }
-                className="min-h-12 flex-row items-center gap-3 rounded-2xl border border-slate-300 px-4 dark:border-slate-700"
+                className={`min-h-12 flex-row items-center gap-3 rounded-2xl border px-4 ${
+                  rateAcknowledged
+                    ? "border-nileGreen-700 bg-nileGreen-50 dark:border-nileGreen-400 dark:bg-slate-800"
+                    : "border-slate-300 dark:border-slate-700"
+                }`}
               >
+                {rateAcknowledged ? (
+                  <View
+                    testID="dispose-rate-acknowledgment-indicator"
+                    className="h-5 w-5 items-center justify-center rounded border border-nileGreen-700 bg-nileGreen-700 dark:border-nileGreen-400 dark:bg-nileGreen-400"
+                  >
+                    <Text className="text-xs font-bold text-slate-25 dark:text-slate-900">
+                      ✓
+                    </Text>
+                  </View>
+                ) : null}
                 <Text className="text-sm font-medium text-text-primary dark:text-text-primary-dark">
                   {copy.rateAcknowledgment}
                 </Text>

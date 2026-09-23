@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
+  getFinancialActionUtf8ByteLength,
+  MAX_ACTION_NOTES_UTF8_BYTES,
+} from "@monyvi/logic";
+
+import {
   DISPOSE_RATE_ROLES,
   resolveDisposeTreatment,
   type DisposeCategory,
@@ -76,6 +81,7 @@ function validate(
   disposalDate: string,
   today: string,
   purchaseDate: string | null,
+  notes: string,
   terminalRates: readonly DisposeRateSnapshotDraft[],
   rateAcknowledged: boolean
 ): Readonly<Record<string, string>> {
@@ -87,6 +93,9 @@ function validate(
     errors.disposalDate = "dispose_date_invalid";
   } else if (purchaseDate !== null && disposalDate < purchaseDate) {
     errors.disposalDate = "dispose_date_before_acquisition";
+  }
+  if (getFinancialActionUtf8ByteLength(notes) > MAX_ACTION_NOTES_UTF8_BYTES) {
+    errors.notes = "dispose_notes_too_long";
   }
   if (
     terminalRates.some((rate) => rate.capturedFreshness !== "fresh") &&
@@ -142,6 +151,9 @@ function snapshotsFromDrafts(
 export function useDisposeMetalHolding(
   input: UseDisposeMetalHoldingInput
 ): UseDisposeMetalHoldingResult {
+  const { createId: stableCreateId, today: stableToday } = input;
+  const { disposeHolding, loadHolding, loadTerminalRateSnapshots } =
+    input.dependencies;
   const [reloadKey, setReloadKey] = useState(0);
   const [model, setModel] = useState<DisposableMetalHoldingReadModel | null>(
     null
@@ -149,7 +161,7 @@ export function useDisposeMetalHolding(
   const [category, setCategoryState] = useState<DisposeCategory | null>(null);
   const [otherTreatment, setOtherTreatmentState] =
     useState<DisposeTreatment | null>(null);
-  const [disposalDate, setDisposalDateState] = useState(input.today);
+  const [disposalDate, setDisposalDateState] = useState(stableToday);
   const [notes, setNotesState] = useState("");
   const [terminalRates, setTerminalRates] = useState<
     readonly DisposeRateSnapshotDraft[]
@@ -178,22 +190,22 @@ export function useDisposeMetalHolding(
     let isCancelled = false;
     setIsLoading(true);
     setLoadError(null);
-    if (!isInFlightRef.current) commandRef.current = null;
     if (requestedHoldingIdRef.current !== input.holdingId) {
       requestedHoldingIdRef.current = input.holdingId;
+      if (!isInFlightRef.current) commandRef.current = null;
       setRateAcknowledgedState(false);
       setCategoryState(null);
       setOtherTreatmentState(null);
-      setDisposalDateState(input.today);
+      setDisposalDateState(stableToday);
       setNotesState("");
       setValidationErrors({});
       setSubmitError(null);
     }
     void Promise.all([
-      input.dependencies.loadHolding(input.holdingId),
-      input.dependencies
-        .loadTerminalRateSnapshots(input.holdingId)
-        .catch((): readonly DisposeRateSnapshotDraft[] => []),
+      loadHolding(input.holdingId),
+      loadTerminalRateSnapshots(input.holdingId).catch(
+        (): readonly DisposeRateSnapshotDraft[] => []
+      ),
     ])
       .then(([loaded, drafts]) => {
         if (isCancelled) return;
@@ -211,7 +223,13 @@ export function useDisposeMetalHolding(
     return (): void => {
       isCancelled = true;
     };
-  }, [input.dependencies, input.holdingId, input.today, reloadKey]);
+  }, [
+    loadHolding,
+    loadTerminalRateSnapshots,
+    input.holdingId,
+    stableToday,
+    reloadKey,
+  ]);
 
   const invalidateIntent = useCallback((): void => {
     if (!isInFlightRef.current) commandRef.current = null;
@@ -262,9 +280,9 @@ export function useDisposeMetalHolding(
     () =>
       category !== null ||
       otherTreatment !== null ||
-      disposalDate !== input.today ||
+      disposalDate !== stableToday ||
       notes.length > 0,
-    [category, disposalDate, input.today, notes.length, otherTreatment]
+    [category, disposalDate, stableToday, notes.length, otherTreatment]
   );
   const treatment = useMemo(
     () => resolveDisposeTreatment(category, otherTreatment),
@@ -281,8 +299,9 @@ export function useDisposeMetalHolding(
       category,
       otherTreatment,
       disposalDate,
-      input.today,
+      stableToday,
       model?.purchaseDate ?? null,
+      notes,
       terminalRates,
       rateAcknowledged
     );
@@ -299,24 +318,24 @@ export function useDisposeMetalHolding(
         commandRef.current = {
           holdingId: model.holdingId,
           command: {
-            actionId: input.createId(),
-            actionEvidenceId: input.createId(),
-            lifecycleEventId: input.createId(),
+            actionId: stableCreateId(),
+            actionEvidenceId: stableCreateId(),
+            lifecycleEventId: stableCreateId(),
             predecessorEventId: model.predecessorEventId,
             holdingId: model.holdingId,
             userId: model.userId,
             occurredAt: new Date().toISOString(),
-            cairoTodayDate: input.today,
+            latestAllowedCalendarDate: stableToday,
             expectedFinancialRevision: model.expectedFinancialRevision,
             disposalDate,
             category,
             otherTreatment,
             notes: notes.trim().length === 0 ? null : notes,
-            rateSnapshots: snapshotsFromDrafts(terminalRates, input.createId),
+            rateSnapshots: snapshotsFromDrafts(terminalRates, stableCreateId),
           },
         };
       }
-      await input.dependencies.disposeHolding(commandRef.current.command);
+      await disposeHolding(commandRef.current.command);
       commandRef.current = null;
       return true;
     } catch (caught: unknown) {
@@ -330,7 +349,9 @@ export function useDisposeMetalHolding(
   }, [
     category,
     disposalDate,
-    input,
+    disposeHolding,
+    stableCreateId,
+    stableToday,
     model,
     notes,
     otherTreatment,

@@ -8,8 +8,17 @@ Branch: `codex/035-metals-dispose`
 
 ## Consolidated deterministic Green
 
-The focused Dispose and payload-registry suites pass: `3` suites, `64` tests,
-`0` failures.
+Command:
+
+```text
+npm test -w @monyvi/mobile -- --runInBand dispose-metal-holding-command-service.test dispose-metal-holding-command-service.rates metals-dispose.test
+npm test -w @monyvi/logic -- --runInBand metals-action-payloads rate-reference-contract
+```
+
+At this base the focused Dispose and payload-registry suites pass: `3` suites,
+`64` tests, `0` failures. The later review-correction added
+`useDisposeMetalHolding.test.ts`, so `coverage/us6.md` records the refreshed
+`4`-suite / `74`-test mobile run and `2`-suite / `58`-test logic run.
 
 Coverage across the owned service, hook, and screen is `97.48%` statements,
 `89.91%` branches, `96.77%` functions, and `98.85%` lines. The terminal command

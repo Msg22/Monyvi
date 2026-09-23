@@ -18,12 +18,17 @@ runner-controlled offline fixture, and device fidelity remain open.
 
 ## Verification evidence
 
-- Focused Jest: mobile `4` suites / `67` tests and logic financial-actions
-  `5` suites / `142` tests passed.
-- Focused coverage: `96.82%` statements, `91.2%` branches, `97.56%` functions,
-  `98.57%` lines across the Dispose service, hook, and component. The command
-  service is `98.83%` statements, `95.34%` branches, `100%` functions, and
-  `99.4%` lines.
+- Focused Jest (mobile, exact suites):
+  `npm test -w @monyvi/mobile -- --runInBand dispose-metal-holding-command-service.test dispose-metal-holding-command-service.rates metals-dispose.test useDisposeMetalHolding`
+  → `4` suites / `74` tests passed.
+- Focused Jest (logic, exact suites):
+  `npm test -w @monyvi/logic -- --runInBand metals-action-payloads rate-reference-contract`
+  → `2` suites / `58` tests passed.
+- Focused coverage (isolated feature run, base `a190d8f`, recorded in
+  `evidence/us6-green.md`): `96.82%` statements, `91.2%` branches, `97.56%`
+  functions, `98.57%` lines across the Dispose service, hook, and component. The
+  command service is `98.83%` statements, `95.34%` branches, `100%` functions,
+  and `99.4%` lines.
 - Focused ESLint: passed with zero findings.
 - Prettier check/write: all owned files formatted.
 - Mobile typecheck: no Dispose errors; the command remains blocked overall by

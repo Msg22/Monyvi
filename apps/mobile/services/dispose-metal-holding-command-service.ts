@@ -28,16 +28,16 @@ type DisposeUserDataScope = FinancialActionUserDataScope &
   Pick<CurrentUserDataScope, "queryChildrenOfOwnedParent">;
 
 export const DISPOSE_CATEGORIES = [
-  "lost_stolen",
-  "destroyed_damaged",
+  "lost_or_stolen",
+  "destroyed_or_damaged",
   "given_away",
   "donated",
   "other",
 ] as const;
 export const DISPOSE_TREATMENTS = ["write_off", "external_transfer"] as const;
 export const DISPOSE_REASONS = [
-  "lost_stolen",
-  "destroyed_damaged",
+  "lost_or_stolen",
+  "destroyed_or_damaged",
   "given_away",
   "donated",
   "other_write_off",
@@ -85,7 +85,7 @@ export interface DisposeMetalHoldingCommandInput {
   readonly holdingId: string;
   readonly userId: string;
   readonly occurredAt: string;
-  readonly cairoTodayDate: string;
+  readonly latestAllowedCalendarDate: string;
   readonly expectedFinancialRevision: string;
   readonly disposalDate: string;
   readonly category: DisposeCategory | null;
@@ -224,7 +224,7 @@ export function resolveDisposeTreatment(
   category: DisposeCategory | null,
   otherTreatment: DisposeTreatment | null
 ): DisposeTreatment | null {
-  if (category === "lost_stolen" || category === "destroyed_damaged")
+  if (category === "lost_or_stolen" || category === "destroyed_or_damaged")
     return "write_off";
   if (category === "given_away" || category === "donated")
     return "external_transfer";
@@ -235,8 +235,8 @@ export function shapeDisposeMetalHoldingConsequences(
   reason: DisposeReason
 ): DisposeMetalHoldingConsequences {
   const treatment: DisposeTreatment =
-    reason === "lost_stolen" ||
-    reason === "destroyed_damaged" ||
+    reason === "lost_or_stolen" ||
+    reason === "destroyed_or_damaged" ||
     reason === "other_write_off"
       ? "write_off"
       : "external_transfer";
@@ -366,9 +366,9 @@ function assertRateSnapshotContext(
   projection: Projection,
   input: DisposeMetalHoldingCommandInput
 ): void {
-  if (input.rateSnapshots.length === 0) return;
   const metal = projection.metal;
   if (!metal) throw new Error("metal_holding_not_found");
+  if (input.rateSnapshots.length === 0) return;
   const byRole = new Map<DisposeRateRole, DisposeRateSnapshot>();
   for (const snapshot of input.rateSnapshots) {
     if (
@@ -441,8 +441,12 @@ function assertProjection(
   ) {
     throw new Error("holding_revision_conflict");
   }
+  const reducedProjection = reduced.projection;
   if (
-    reduced.projection?.effectiveEventId !== input.predecessorEventId ||
+    reducedProjection === null ||
+    reducedProjection.effectiveEventId !== input.predecessorEventId ||
+    reducedProjection.status !== "active" ||
+    !reducedProjection.isVisible ||
     reduced.rejectedEvents.some(({ reasonCode }) =>
       BLOCKING_LIFECYCLE_REJECTIONS.has(reasonCode)
     )
@@ -660,7 +664,7 @@ export function createDisposeMetalHoldingCommandService(
       const result = await dependencies.commitFinancialActionGroupLocally({
         envelope,
         hashProvider: dependencies.hashProvider,
-        validationInput: { cairoTodayDate: input.cairoTodayDate },
+        validationInput: { latestAllowedCalendarDate: input.latestAllowedCalendarDate },
         prepareLinkedOperationPlan: async () => {
           const projection = await loadProjection(dependencies, input);
           return preparePlan(dependencies, input, envelope, projection);

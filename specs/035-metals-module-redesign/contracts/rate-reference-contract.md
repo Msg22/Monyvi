@@ -126,14 +126,16 @@ above.
 | Display conversion, different canonical/preferred currencies | `display_purchase_currency`, `display_preferred_currency` |
 | Display conversion, same canonical/preferred currency | No arithmetic references required; factor is exact `1` |
 
-Terminal sale and Terminal disposal contexts have no holding-derived instrument
-context inside the payload, so the `metals.dispose/v1` validator checks the
-terminal snapshot pair structurally (approved metal/currency instruments, role
-uniqueness, and self-consistent freshness), while the Dispose command
-additionally verifies each snapshot's instrument against the loaded owned
-holding's metal type and purchase currency before committing. Like acquisition,
-terminal disposal evidence is all-or-nothing: the pair is captured only when
-both terminal references are available.
+The Terminal disposal context has no holding-derived instrument context inside
+the payload, so the `metals.dispose/v1` validator checks the terminal snapshot
+pair structurally (approved metal/currency instruments, role uniqueness, and
+self-consistent freshness), while the Dispose command additionally verifies each
+snapshot's instrument against the loaded owned holding's metal type and purchase
+currency before committing. Terminal sale, by contrast, carries `metalType`,
+`purchaseCurrency`, and `saleCurrency` in its payload, so its validator enforces
+the exact instrument match. Like acquisition, terminal disposal evidence is
+all-or-nothing: the pair is captured only when both terminal references are
+available.
 
 An available acquisition calculation consumes exactly one `acquisition_metal` and one
 `acquisition_purchase_currency` reference. They are distinct role-unique records even

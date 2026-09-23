@@ -7,14 +7,16 @@ SC-020, SC-022–SC-024, and SC-027–SC-030.
 Preconditions: use an authenticated current-user profile with one Active Gold or
 Silver holding, deterministic Cairo date `2026-09-05`, and the approved
 `metals.dispose/v1` contract. Run light/dark and English/Arabic profiles where
-listed. Never use another user's local rows as fixtures.
+listed. Never use another user's local rows as fixtures. For D14, seed a
+synthetic holding with a distinct foreign owner ID directly in the isolated test
+database; it is a test fixture only and never a real user's local row.
 
 | ID  | Scenario                                                                                                       | Expected evidence                                                                                                                                                                                                                                     |
 | --- | -------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | D01 | Open No Longer from an Active holding                                                                          | Direct form opens for the whole holding; exactly Lost or stolen, Destroyed or damaged, Given away, Donated, Other; no partial quantity, Review route, or second confirmation.                                                                         |
 | D02 | Submit without a reason                                                                                        | Submission is blocked, the reason group is announced/focused, and no local action row changes.                                                                                                                                                        |
-| D03 | Choose Lost or stolen                                                                                          | Treatment auto-maps to write-off; live summary shows cost-basis loss, active-ownership removal, permanent History, no sale money/account effect, and no realized sale P/L; persisted category is `lost_stolen`.                                       |
-| D04 | Choose Destroyed or damaged                                                                                    | Same write-off contract as D03, persisted as canonical `destroyed_damaged`.                                                                                                                                                                           |
+| D03 | Choose Lost or stolen                                                                                          | Treatment auto-maps to write-off; live summary shows cost-basis loss, active-ownership removal, permanent History, no sale money/account effect, and no realized sale P/L; persisted category is `lost_or_stolen`.                                       |
+| D04 | Choose Destroyed or damaged                                                                                    | Same write-off contract as D03, persisted as canonical `destroyed_or_damaged`.                                                                                                                                                                           |
 | D05 | Choose Given away                                                                                              | Treatment auto-maps to external transfer; live summary shows moved-out ownership, permanent History, no proceeds/account/ordinary-income effect, and no realized sale P/L.                                                                            |
 | D06 | Choose Donated                                                                                                 | Same external-transfer contract as D05, persisted as canonical `donated`.                                                                                                                                                                             |
 | D07 | Choose Other without a treatment                                                                               | Only Other reveals Record a loss / Record it as moved out; submit remains blocked and announced until one is chosen.                                                                                                                                  |
@@ -32,5 +34,7 @@ listed. Never use another user's local rows as fixtures.
 Device-only fidelity for D15 and shared-shell dirty-exit integration for D16
 remain required before release. The isolated story can prove their component
 contracts, but it must not claim production end-to-end success until the shared
-route, translation resources, revision-zero action-registry contract, and runner
-fixture/offline profile are integrated by their owners.
+route, translation resources, and runner fixture/offline profile are integrated
+by their owners. The revision-zero action-registry contract is now satisfied by
+the production registry (a predecessor-less revision-zero Dispose payload is
+accepted for revision `0` only), so it is no longer an open gate.

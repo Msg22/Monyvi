@@ -1,12 +1,7 @@
 import { act, renderHook, waitFor } from "@testing-library/react-native";
 
-type Category =
-  | "lost_stolen"
-  | "destroyed_damaged"
-  | "given_away"
-  | "donated"
-  | "other";
-type Treatment = "write_off" | "external_transfer";
+import { useDisposeMetalHolding } from "@/hooks/useDisposeMetalHolding";
+import type { DisposeMetalHoldingCommandInput } from "@/services/dispose-metal-holding-command-service";
 
 interface HookHolding {
   readonly holdingId: string;
@@ -23,8 +18,11 @@ interface HookRateDraft {
   readonly kind: "metal" | "currency";
   readonly instrumentCode: string;
   readonly valueDecimal: string;
-  readonly unit: string;
-  readonly orientation: string;
+  readonly unit:
+    | "usd_per_pure_gram"
+    | "usd_per_currency_unit"
+    | "currency_units_per_usd";
+  readonly orientation: "quote_per_base" | "base_per_quote";
   readonly providerObservedAt: string | null;
   readonly source: string | null;
   readonly quality: "valid";
@@ -38,42 +36,8 @@ interface HookDependencies {
     holdingId: string
   ) => Promise<readonly HookRateDraft[]>;
   readonly disposeHolding: (
-    input: Readonly<Record<string, unknown>>
+    input: DisposeMetalHoldingCommandInput
   ) => Promise<unknown>;
-}
-
-interface DisposeHookResult {
-  readonly model: HookHolding | null;
-  readonly category: Category | null;
-  readonly otherTreatment: Treatment | null;
-  readonly treatment: Treatment | null;
-  readonly disposalDate: string;
-  readonly notes: string;
-  readonly terminalRates: readonly HookRateDraft[];
-  readonly requiresRateAcknowledgment: boolean;
-  readonly rateAcknowledged: boolean;
-  readonly isLoading: boolean;
-  readonly isSubmitting: boolean;
-  readonly isDirty: boolean;
-  readonly loadError: string | null;
-  readonly submitError: string | null;
-  readonly validationErrors: Readonly<Record<string, string>>;
-  readonly setCategory: (value: Category) => void;
-  readonly setOtherTreatment: (value: Treatment) => void;
-  readonly setDisposalDate: (value: string) => void;
-  readonly setNotes: (value: string) => void;
-  readonly setRateAcknowledged: (value: boolean) => void;
-  readonly submit: () => Promise<boolean>;
-  readonly retryLoad: () => void;
-}
-
-interface DisposeHookModule {
-  readonly useDisposeMetalHolding: (input: {
-    readonly holdingId: string;
-    readonly today: string;
-    readonly createId: () => string;
-    readonly dependencies: HookDependencies;
-  }) => DisposeHookResult;
 }
 
 const holding: HookHolding = {
@@ -85,12 +49,6 @@ const holding: HookHolding = {
   predecessorEventId: "event-1",
   purchaseDate: "2024-03-14",
 };
-
-function loadHook(): DisposeHookModule {
-  return jest.requireActual<DisposeHookModule>(
-    "@/hooks/useDisposeMetalHolding"
-  );
-}
 
 function rateDrafts(
   metalFreshness: "fresh" | "stale" | "unknown",
@@ -145,7 +103,7 @@ describe("useDisposeMetalHolding lifecycle", () => {
   it("validates required category and conditional Other treatment while notes remain optional", async (): Promise<void> => {
     const dependencies = createDependencies();
     const { result } = renderHook(() =>
-      loadHook().useDisposeMetalHolding({
+      useDisposeMetalHolding({
         holdingId: holding.holdingId,
         today: "2026-09-05",
         createId: jest.fn(() => "stable-id"),
@@ -196,7 +154,7 @@ describe("useDisposeMetalHolding lifecycle", () => {
     const ids = ["action-1", "evidence-1", "event-1"];
     const createId = jest.fn(() => ids.shift() ?? "unexpected-id");
     const { result } = renderHook(() =>
-      loadHook().useDisposeMetalHolding({
+      useDisposeMetalHolding({
         holdingId: holding.holdingId,
         today: "2026-09-05",
         createId,
@@ -241,7 +199,7 @@ describe("useDisposeMetalHolding lifecycle", () => {
       throw new Error("secure_random_unavailable");
     });
     const { result } = renderHook(() =>
-      loadHook().useDisposeMetalHolding({
+      useDisposeMetalHolding({
         holdingId: holding.holdingId,
         today: "2026-09-05",
         createId,
@@ -272,7 +230,7 @@ describe("useDisposeMetalHolding lifecycle", () => {
       disposeHolding: jest.fn(() => Promise.resolve({ kind: "committed" })),
     };
     const { result } = renderHook(() =>
-      loadHook().useDisposeMetalHolding({
+      useDisposeMetalHolding({
         holdingId: holding.holdingId,
         today: "2026-09-05",
         createId: jest.fn(() => "stable-id"),
@@ -298,7 +256,7 @@ describe("useDisposeMetalHolding lifecycle", () => {
   it("rejects a disposal date before the holding acquisition date", async (): Promise<void> => {
     const dependencies = createDependencies();
     const { result } = renderHook(() =>
-      loadHook().useDisposeMetalHolding({
+      useDisposeMetalHolding({
         holdingId: holding.holdingId,
         today: "2026-09-05",
         createId: jest.fn(() => "stable-id"),
@@ -347,7 +305,7 @@ describe("useDisposeMetalHolding lifecycle", () => {
     };
     const { result, rerender } = renderHook(
       ({ holdingId }: { readonly holdingId: string }) =>
-        loadHook().useDisposeMetalHolding({
+        useDisposeMetalHolding({
           holdingId,
           today: "2026-09-05",
           createId: jest.fn((): string => "stable-id"),
@@ -370,7 +328,7 @@ describe("useDisposeMetalHolding lifecycle", () => {
       expect(result.current.model?.holdingId).toBe("holding-2")
     );
     expect(result.current.category).toBeNull();
-    act((): void => result.current.setCategory("lost_stolen"));
+    act((): void => result.current.setCategory("lost_or_stolen"));
     await act(async (): Promise<void> => {
       await expect(result.current.submit()).resolves.toBe(true);
     });
@@ -379,7 +337,7 @@ describe("useDisposeMetalHolding lifecycle", () => {
       holdingId: "holding-2",
       predecessorEventId: "event-2",
       expectedFinancialRevision: "3",
-      category: "lost_stolen",
+      category: "lost_or_stolen",
     });
   });
 
@@ -397,7 +355,7 @@ describe("useDisposeMetalHolding lifecycle", () => {
     ];
     const createId = jest.fn(() => ids.shift() ?? "unexpected-id");
     const { result } = renderHook(() =>
-      loadHook().useDisposeMetalHolding({
+      useDisposeMetalHolding({
         holdingId: holding.holdingId,
         today: "2026-09-05",
         createId,
@@ -444,7 +402,7 @@ describe("useDisposeMetalHolding lifecycle", () => {
       jest.fn(() => Promise.resolve(rateDrafts("fresh", "fresh")))
     );
     const { result } = renderHook(() =>
-      loadHook().useDisposeMetalHolding({
+      useDisposeMetalHolding({
         holdingId: holding.holdingId,
         today: "2026-09-05",
         createId: jest.fn((): string => "stable-id"),
@@ -473,7 +431,7 @@ describe("useDisposeMetalHolding lifecycle", () => {
       jest.fn(() => Promise.resolve(rateDrafts("fresh", "fresh").slice(0, 1)))
     );
     const { result } = renderHook(() =>
-      loadHook().useDisposeMetalHolding({
+      useDisposeMetalHolding({
         holdingId: holding.holdingId,
         today: "2026-09-05",
         createId: jest.fn((): string => "stable-id"),
@@ -492,13 +450,101 @@ describe("useDisposeMetalHolding lifecycle", () => {
     );
   });
 
+  it("retains the original command across a retryLoad reload for idempotent replay", async (): Promise<void> => {
+    const disposeHolding = jest
+      .fn<
+        ReturnType<HookDependencies["disposeHolding"]>,
+        Parameters<HookDependencies["disposeHolding"]>
+      >()
+      .mockRejectedValueOnce(new Error("disk_full"))
+      .mockResolvedValueOnce({ kind: "committed" });
+    const dependencies = createDependencies(disposeHolding);
+    const { result } = renderHook(() =>
+      useDisposeMetalHolding({
+        holdingId: holding.holdingId,
+        today: "2026-09-05",
+        createId: jest.fn((): string => "stable-id"),
+        dependencies,
+      })
+    );
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    act((): void => result.current.setCategory("donated"));
+    await act(async (): Promise<void> => {
+      await expect(result.current.submit()).resolves.toBe(false);
+    });
+    const retained = disposeHolding.mock.calls[0][0];
+    act((): void => result.current.retryLoad());
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    await act(async (): Promise<void> => {
+      await expect(result.current.submit()).resolves.toBe(true);
+    });
+    expect(disposeHolding).toHaveBeenCalledTimes(2);
+    expect(disposeHolding.mock.calls[1][0]).toBe(retained);
+  });
+
+  it("does not reload when the dependency container identity changes but its members are stable", async (): Promise<void> => {
+    const loadHolding = jest.fn((): Promise<HookHolding> =>
+      Promise.resolve(holding)
+    );
+    const loadTerminalRateSnapshots = jest.fn(
+      (): Promise<readonly HookRateDraft[]> => Promise.resolve([])
+    );
+    const disposeHolding = jest.fn(() => Promise.resolve({ kind: "committed" }));
+    const stable: HookDependencies = {
+      loadHolding,
+      loadTerminalRateSnapshots,
+      disposeHolding,
+    };
+    const { rerender } = renderHook(
+      ({ dependencies }: { readonly dependencies: HookDependencies }) =>
+        useDisposeMetalHolding({
+          holdingId: holding.holdingId,
+          today: "2026-09-05",
+          createId: jest.fn((): string => "stable-id"),
+          dependencies,
+        }),
+      { initialProps: { dependencies: stable } }
+    );
+    await waitFor(() => expect(loadHolding).toHaveBeenCalledTimes(1));
+    rerender({ dependencies: { ...stable } });
+    await act(async (): Promise<void> => {
+      await Promise.resolve();
+    });
+    expect(loadHolding).toHaveBeenCalledTimes(1);
+    expect(loadTerminalRateSnapshots).toHaveBeenCalledTimes(1);
+  });
+
+  it("blocks submission when notes exceed the UTF-8 byte limit before dispatch", async (): Promise<void> => {
+    const dependencies = createDependencies();
+    const { result } = renderHook(() =>
+      useDisposeMetalHolding({
+        holdingId: holding.holdingId,
+        today: "2026-09-05",
+        createId: jest.fn((): string => "stable-id"),
+        dependencies,
+      })
+    );
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    act((): void => {
+      result.current.setCategory("donated");
+      result.current.setNotes("x".repeat(4097));
+    });
+    await act(async (): Promise<void> => {
+      await expect(result.current.submit()).resolves.toBe(false);
+    });
+    expect(result.current.validationErrors.notes).toBe(
+      "dispose_notes_too_long"
+    );
+    expect(dependencies.disposeHolding).not.toHaveBeenCalled();
+  });
+
   it("treats a terminal rate loader failure as no evidence", async (): Promise<void> => {
     const dependencies = createDependencies(
       undefined,
       jest.fn(() => Promise.reject(new Error("rate_store_unavailable")))
     );
     const { result } = renderHook(() =>
-      loadHook().useDisposeMetalHolding({
+      useDisposeMetalHolding({
         holdingId: holding.holdingId,
         today: "2026-09-05",
         createId: jest.fn((): string => "stable-id"),

@@ -42,13 +42,15 @@ speculative flow was therefore removed; its category, summary, local completion,
 history, and restart scenarios remain in the manual coverage matrix until an
 honest integration harness exists.
 
-## Shared integration boundary
+## Shared integration boundary (historical pre-fix Red evidence)
 
-The shared default registry now includes `metals.dispose/v1`, but its payload
-validator requires a predecessor event. The approved migration contract permits
-an Active revision-zero holding with no predecessor, so deterministic tests use
-a test-only registry variant for that case. Updating the shared registry,
-translation resources, route, and runner fixture remains owned by their
+At this base the shared default registry included `metals.dispose/v1`, but its
+payload validator required a predecessor event. The approved migration contract
+permits an Active revision-zero holding with no predecessor, so deterministic
+tests used a test-only registry variant for that case. This gap is now resolved:
+the production registry accepts a predecessor-less revision-zero Dispose payload
+(revision `0` only), so the test-only variant is no longer required. Updating
+translation resources, the route, and the runner fixture remains owned by their
 integration owners; this slice neither bypasses nor modifies them.
 
 ## Review-correction Red — 2026-09-06
