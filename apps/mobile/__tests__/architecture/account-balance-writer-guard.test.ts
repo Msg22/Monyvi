@@ -64,6 +64,8 @@ const LEGACY_MUTATION_OWNER_BY_SYMBOL: Readonly<Record<string, string>> = {
     "account.cash.prepare-named",
   "apps/mobile/services/account-service.ts#createAccountForUser":
     "account.create",
+  "apps/mobile/services/account-service.ts#createNonZeroBalanceAccount":
+    "account.create",
   "apps/mobile/services/pending-account-service.ts#preparePendingAccounts":
     "account.pending.prepare",
   "apps/mobile/services/edit-account-service.ts#updateAccountWithinWriter":
@@ -237,7 +239,7 @@ describe("issue #242 account-balance writer completeness guard", () => {
     );
   });
 
-  it("marks only the completed Lane A transaction and transfer writers guarded", () => {
+  it("tracks completed core-writer cutovers without promoting unfinished paths", () => {
     const registry = readText(
       "apps/mobile/services/account-balance-writer-registry.ts"
     );
@@ -258,9 +260,7 @@ describe("issue #242 account-balance writer completeness guard", () => {
     [
       "account.cash.prepare",
       "account.cash.prepare-named",
-      "account.create",
       "account.pending.prepare",
-      "account.edit-balance",
       "transaction.batch-import",
       "sms.live-atm",
     ].forEach((writerId) => {
@@ -268,6 +268,12 @@ describe("issue #242 account-balance writer completeness guard", () => {
         `{ writerId: "${writerId}", status: "blocked" }`
       );
     });
+    expect(registry).toContain(
+      '{ writerId: "account.create", status: "guarded" }'
+    );
+    expect(registry).toContain(
+      '{ writerId: "account.edit-balance", status: "guarded" }'
+    );
   });
 
   it("keeps the no-active-debt path guarded by the assignment completeness scan", () => {

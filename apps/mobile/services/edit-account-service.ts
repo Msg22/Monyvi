@@ -26,7 +26,7 @@ import {
   type CurrencyType,
   type TransactionType,
 } from "@monyvi/db";
-import { roundForCurrency } from "@monyvi/logic";
+import { roundForCurrency, toMinorUnits, getCurrencyPrecision } from "@monyvi/logic";
 import { Q, type Model } from "@nozbe/watermelondb";
 import { t } from "i18next";
 import { logger } from "@/utils/logger";
@@ -40,6 +40,8 @@ import {
   queryOwned,
 } from "./user-data-access";
 import { replaceAccountSmsSendersWithinWriter } from "./account-sms-sender-service";
+import { editGuardedAccount } from "./account-core-writer-production";
+import type { AccountMetadataProjection } from "./account-core-writer-service";
 import { normalizeCardLast4ForStorage } from "./card-last4-normalizer";
 
 // ---------------------------------------------------------------------------
@@ -68,8 +70,6 @@ const BALANCE_ADJUSTMENT_INCOME_CATEGORY_ID =
 const BALANCE_ADJUSTMENT_EXPENSE_CATEGORY_ID =
   "00000000-0000-0000-0001-000000000201";
 
-/** Tolerance for floating-point balance comparison. */
-const BALANCE_EPSILON = 0.001;
 const NO_PROVIDER_IDENTITY = "none";
 
 /**
@@ -175,6 +175,41 @@ function buildProviderIdentity(
 
 function hasOwnDataField<T extends object>(data: T, field: keyof T): boolean {
   return Object.prototype.hasOwnProperty.call(data, field);
+}
+
+/**
+ * Signed balance delta in minor units, using the same canonical conversion
+ * as the guarded account writer. A zero minor-unit delta takes the plain
+ * metadata path; anything else becomes a guarded account effect.
+ */
+function minorUnitDelta(
+  previousBalance: number,
+  newBalance: number,
+  currency: CurrencyType
+): bigint {
+  const places = getCurrencyPrecision(currency);
+  return (
+    BigInt(toMinorUnits(String(newBalance), places)) -
+    BigInt(toMinorUnits(String(previousBalance), places))
+  );
+}
+
+function resolveAccountMetadataUpdate(
+  data: UpdateAccountData
+): (projection: AccountMetadataProjection) => void {
+  return (projection): void => {
+    projection.name = data.name.trim();
+    projection.isDefault = data.isDefault;
+    if (hasOwnDataField(data, "institutionId")) {
+      projection.institutionId = data.institutionId?.trim() || undefined;
+    }
+    if (hasOwnDataField(data, "providerDisplayName")) {
+      projection.providerDisplayName =
+        data.providerDisplayName?.trim() || undefined;
+    } else if (hasOwnDataField(data, "bankName")) {
+      projection.providerDisplayName = data.bankName?.trim() || undefined;
+    }
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -320,34 +355,41 @@ export async function getAccountLinkedRecordCounts(
 // ---------------------------------------------------------------------------
 
 /**
- * Update an account inside an already-open `database.write` block.
+ * Update an account, routing balance-changing edits through the guarded
+ * account writer and metadata-only edits through a plain atomic writer.
  *
- * Mirrors the `createCashAccountWithinWriter` pattern in `account-service.ts`:
- * this helper performs all the work of an update minus the `database.write`
- * wrapper, so callers can compose it with other writes (e.g., a
- * balance-adjustment transaction) atomically.
+ * Guarded path: the balance delta commits as one idempotent account effect
+ * with the expected financial revision, while the row metadata, default
+ * reassignment, SMS senders, bank details, and the optional
+ * balance-adjustment transaction commit in the same atomic group via the
+ * inside-writer hook. A stale row (moved balance or revision since this call
+ * read it) fails closed inside the command and aborts the whole group.
  *
- * Throws on failure — callers rely on WatermelonDB's rollback semantics so
- * any throw inside the writer aborts the whole batch.
+ * Plain path: when the delta rounds to zero minor units there is no
+ * financial effect to guard, so the row metadata and siblings commit through
+ * a plain writer exactly like the legacy flow, without touching the
+ * protected revision.
+ *
+ * Throws on failure — guarded-path failures abort the command group, and
+ * plain-path throws roll back the writer batch.
  *
  * Performs an ownership check before writing — if the account's `userId`
- * does not match `currentUserId`, returns `OWNERSHIP_FAILED` and performs
+ * does not match `currentUserId`, throws `OWNERSHIP_FAILED` and performs
  * no writes.
  *
  * @param accountId - The ID of the account to update
- * @param data - The new account data
+ * @param data - The new account data (the new balance is `data.balance`)
  * @param currentUserId - The authenticated user's id (for the ownership check)
- * @returns The account's balance as it stood **before** this update applied.
- *   Callers that pair this with a balance-adjustment transaction MUST use
- *   this returned value as the previous balance — never form-state values,
- *   which can be stale if another flow (e.g., sync) moved the balance while
- *   the form was open.
+ * @param adjustment - When non-null, also creates a balance-adjustment
+ *   transaction within the same atomic group. The delta is computed from the
+ *   live balance read inside the group, never from form-state values.
  */
 export async function updateAccountWithinWriter(
   accountId: string,
   data: UpdateAccountData,
-  currentUserId: string
-): Promise<{ readonly previousBalance: number }> {
+  currentUserId: string,
+  adjustment: BalanceAdjustmentPayload | null
+): Promise<void> {
   const accountsCollection = database.get<Account>("accounts");
 
   let existingAccount: Account;
@@ -404,74 +446,208 @@ export async function updateAccountWithinWriter(
   }
 
   const previousBalance = existingAccount.balance;
+  const newBalance = roundForCurrency(data.balance, existingAccount.currency);
 
-  // If setting as default, unset any current default for this user
-  if (data.isDefault && !existingAccount.isDefault) {
-    const currentDefaults = await queryOwned(
-      accountsCollection,
-      existingAccount.userId,
-      Q.where("is_default", true),
-      Q.where("deleted", Q.notEq(true)),
-      Q.where("id", Q.notEq(accountId))
-    ).fetch();
-
-    // There should be at most one default, but we defensively unset all that match the criteria just in case of data inconsistency.
-    const currentDefault = currentDefaults[0];
-    if (currentDefault) {
-      await currentDefault.update((acc) => {
-        acc.isDefault = false;
-      });
-    }
+  if (
+    minorUnitDelta(previousBalance, newBalance, existingAccount.currency) ===
+    0n
+  ) {
+    await updateAccountMetadataWithinWriter(
+      accountId,
+      data,
+      currentUserId,
+      existingAccount,
+      previousBalance,
+      newBalance,
+      adjustment
+    );
+    return;
   }
 
-  // Update account fields
-  await existingAccount.update((acc) => {
-    acc.name = data.name.trim();
-    acc.balance = roundForCurrency(data.balance, existingAccount.currency);
-    acc.isDefault = data.isDefault;
-    if (hasOwnDataField(data, "institutionId")) {
-      acc.institutionId = data.institutionId?.trim() || undefined;
+  const prepareInsideWriter = async (): Promise<void> => {
+    // Reassigning the default touches a different account row without a
+    // balance effect, so it runs here as a direct owned metadata write
+    // inside the same writer instead of a plan operation.
+    if (data.isDefault && !existingAccount.isDefault) {
+      const currentDefaults = await queryOwned(
+        accountsCollection,
+        existingAccount.userId,
+        Q.where("is_default", true),
+        Q.where("deleted", Q.notEq(true)),
+        Q.where("id", Q.notEq(accountId))
+      ).fetch();
+
+      // There should be at most one default, but we defensively unset the
+      // first match just in case of data inconsistency.
+      const currentDefault = currentDefaults[0];
+      if (currentDefault) {
+        await currentDefault.update((acc) => {
+          acc.isDefault = false;
+        });
+      }
     }
 
-    if (hasOwnDataField(data, "providerDisplayName")) {
-      acc.providerDisplayName = data.providerDisplayName?.trim() || undefined;
-    } else if (hasOwnDataField(data, "bankName")) {
-      acc.providerDisplayName = data.bankName?.trim() || undefined;
+    if (hasOwnDataField(data, "senderNames")) {
+      await replaceAccountSmsSendersWithinWriter(
+        existingAccount,
+        currentUserId,
+        data.senderNames ?? []
+      );
+    }
+
+    // Update bank details if this is a bank account
+    if (existingAccount.isBank) {
+      const [activeBankDetail] = await queryChildrenOfOwnedParent(
+        database.get<BankDetails>("bank_details"),
+        existingAccount,
+        currentUserId,
+        "account_id",
+        Q.where("deleted", false)
+      ).fetch();
+
+      if (activeBankDetail) {
+        await activeBankDetail.update((bd) => {
+          bd.cardLast4 = normalizeCardLast4ForStorage(data.cardLast4);
+        });
+      } else if (hasBankDetailsData(data)) {
+        await database.get<BankDetails>("bank_details").create((bd) => {
+          bd.accountId = accountId;
+          bd.cardLast4 = normalizeCardLast4ForStorage(data.cardLast4);
+          bd.deleted = false;
+        });
+      }
+    }
+  };
+
+  const difference = newBalance - previousBalance;
+  const isIncrease = difference > 0;
+  const adjustmentTransaction =
+    adjustment === null
+      ? undefined
+      : {
+          accountId,
+          amount: roundForCurrency(
+            Math.abs(difference),
+            existingAccount.currency
+          ),
+          categoryId: isIncrease
+            ? BALANCE_ADJUSTMENT_INCOME_CATEGORY_ID
+            : BALANCE_ADJUSTMENT_EXPENSE_CATEGORY_ID,
+          currency: existingAccount.currency,
+          date: new Date(),
+          note: `Balance adjustment: ${previousBalance} \u2192 ${newBalance}`,
+          source: "MANUAL" as const,
+          type: (isIncrease ? "INCOME" : "EXPENSE") as TransactionType,
+          userId: currentUserId,
+        };
+
+  await editGuardedAccount({
+    account: existingAccount,
+    adjustmentTransaction,
+    nextBalance: newBalance,
+    prepareInsideWriter,
+    updateMetadata: resolveAccountMetadataUpdate(data),
+    userId: currentUserId,
+  });
+}
+
+/**
+ * Metadata-only account update inside an already-open `database.write`
+ * block: the legacy composition (default reassignment, row metadata, SMS
+ * senders, bank details, optional adjustment transaction) without touching
+ * the protected balance revision. Used only when the balance delta rounds
+ * to zero minor units and there is no financial effect to guard.
+ */
+async function updateAccountMetadataWithinWriter(
+  accountId: string,
+  data: UpdateAccountData,
+  currentUserId: string,
+  existingAccount: Account,
+  previousBalance: number,
+  newBalance: number,
+  adjustment: BalanceAdjustmentPayload | null
+): Promise<void> {
+  const accountsCollection = database.get<Account>("accounts");
+
+  await database.write(async () => {
+    // If setting as default, unset any current default for this user
+    if (data.isDefault && !existingAccount.isDefault) {
+      const currentDefaults = await queryOwned(
+        accountsCollection,
+        existingAccount.userId,
+        Q.where("is_default", true),
+        Q.where("deleted", Q.notEq(true)),
+        Q.where("id", Q.notEq(accountId))
+      ).fetch();
+
+      // There should be at most one default, but we defensively unset all that match the criteria just in case of data inconsistency.
+      const currentDefault = currentDefaults[0];
+      if (currentDefault) {
+        await currentDefault.update((acc) => {
+          acc.isDefault = false;
+        });
+      }
+    }
+
+    // Update account metadata fields. The protected balance column is
+    // deliberately untouched here: this path runs only for zero minor-unit
+    // deltas, so any float dust below one minor unit is dropped instead of
+    // being written outside the guarded boundary.
+    await existingAccount.update((acc) => {
+      acc.name = data.name.trim();
+      acc.isDefault = data.isDefault;
+      if (hasOwnDataField(data, "institutionId")) {
+        acc.institutionId = data.institutionId?.trim() || undefined;
+      }
+
+      if (hasOwnDataField(data, "providerDisplayName")) {
+        acc.providerDisplayName = data.providerDisplayName?.trim() || undefined;
+      } else if (hasOwnDataField(data, "bankName")) {
+        acc.providerDisplayName = data.bankName?.trim() || undefined;
+      }
+    });
+
+    if (hasOwnDataField(data, "senderNames")) {
+      await replaceAccountSmsSendersWithinWriter(
+        existingAccount,
+        currentUserId,
+        data.senderNames ?? []
+      );
+    }
+
+    // Update bank details if this is a bank account
+    if (existingAccount.isBank) {
+      const [activeBankDetail] = await queryChildrenOfOwnedParent(
+        database.get<BankDetails>("bank_details"),
+        existingAccount,
+        currentUserId,
+        "account_id",
+        Q.where("deleted", false)
+      ).fetch();
+
+      if (activeBankDetail) {
+        await activeBankDetail.update((bd) => {
+          bd.cardLast4 = normalizeCardLast4ForStorage(data.cardLast4);
+        });
+      } else if (hasBankDetailsData(data)) {
+        await database.get<BankDetails>("bank_details").create((bd) => {
+          bd.accountId = accountId;
+          bd.cardLast4 = normalizeCardLast4ForStorage(data.cardLast4);
+          bd.deleted = false;
+        });
+      }
+    }
+
+    if (adjustment !== null) {
+      await createBalanceAdjustmentTransactionWithinWriter(
+        accountId,
+        currentUserId,
+        adjustment.currency,
+        previousBalance,
+        newBalance
+      );
     }
   });
-
-  if (hasOwnDataField(data, "senderNames")) {
-    await replaceAccountSmsSendersWithinWriter(
-      existingAccount,
-      currentUserId,
-      data.senderNames ?? []
-    );
-  }
-
-  // Update bank details if this is a bank account
-  if (existingAccount.isBank) {
-    const [activeBankDetail] = await queryChildrenOfOwnedParent(
-      database.get<BankDetails>("bank_details"),
-      existingAccount,
-      currentUserId,
-      "account_id",
-      Q.where("deleted", false)
-    ).fetch();
-
-    if (activeBankDetail) {
-      await activeBankDetail.update((bd) => {
-        bd.cardLast4 = normalizeCardLast4ForStorage(data.cardLast4);
-      });
-    } else if (hasBankDetailsData(data)) {
-      await database.get<BankDetails>("bank_details").create((bd) => {
-        bd.accountId = accountId;
-        bd.cardLast4 = normalizeCardLast4ForStorage(data.cardLast4);
-        bd.deleted = false;
-      });
-    }
-  }
-
-  return { previousBalance };
 }
 
 // ---------------------------------------------------------------------------
@@ -636,13 +812,14 @@ export async function deleteAccountWithCascade(
  * Create a balance-adjustment transaction inside an already-open
  * `database.write` block.
  *
- * Skips creation entirely when the balance change is below
- * `BALANCE_EPSILON` (no-op for floating-point noise).
+ * Skips creation entirely when the delta rounds to zero minor units for the
+ * account currency — a fixed float epsilon would omit real high-precision
+ * changes (for example 1000 satoshis on a BTC account).
  *
  * Throws on failure so the surrounding writer rolls back.
  *
  * @returns `true` if a transaction was actually created, `false` if skipped
- *          due to a sub-epsilon balance delta.
+ *          due to a zero minor-unit delta.
  */
 async function createBalanceAdjustmentTransactionWithinWriter(
   accountId: string,
@@ -651,11 +828,11 @@ async function createBalanceAdjustmentTransactionWithinWriter(
   previousBalance: number,
   newBalance: number
 ): Promise<boolean> {
-  const difference = newBalance - previousBalance;
-  if (Math.abs(difference) < BALANCE_EPSILON) {
+  if (minorUnitDelta(previousBalance, newBalance, currency) === 0n) {
     return false;
   }
 
+  const difference = newBalance - previousBalance;
   const isIncome = difference > 0;
   const categoryId = isIncome
     ? BALANCE_ADJUSTMENT_INCOME_CATEGORY_ID
@@ -700,21 +877,23 @@ export interface BalanceAdjustmentPayload {
 
 /**
  * Update an account and (optionally) record the balance change as a
- * transaction in a single `database.write` block.
+ * transaction in a single atomic group.
  *
- * Either both rows commit or neither does \u2014 if the transaction insert fails,
- * the account row update is rolled back so the ledger never diverges from the
- * stored balance.
+ * Balance-changing edits route through the guarded account writer: the delta
+ * commits as one idempotent account effect while the row metadata, default
+ * reassignment, SMS senders, bank details, and the adjustment transaction
+ * commit in the same group. Metadata-only edits (zero minor-unit delta) use
+ * a plain writer without touching the protected revision.
  *
  * The balance-adjustment delta is computed from the **live** pre-update
  * balance (captured inside the writer) and `data.balance`. Callers do not
- * pass a `previousBalance` \u2014 this defends against stale form state if the
+ * pass a `previousBalance` — this defends against stale form state if the
  * balance was moved by another flow (e.g., sync) while the form was open.
  *
  * @param accountId - The ID of the account to update
  * @param data - The new account data (the new balance is `data.balance`)
  * @param adjustment - When non-null, also creates a balance-adjustment
- *   transaction within the same writer batch.
+ *   transaction within the same atomic group.
  * @returns ServiceResult with success and optional error
  */
 export async function updateAccountWithBalanceAdjustment(
@@ -724,22 +903,7 @@ export async function updateAccountWithBalanceAdjustment(
   adjustment: BalanceAdjustmentPayload | null
 ): Promise<ServiceResult> {
   try {
-    await database.write(async () => {
-      const { previousBalance } = await updateAccountWithinWriter(
-        accountId,
-        data,
-        userId
-      );
-      if (adjustment !== null) {
-        await createBalanceAdjustmentTransactionWithinWriter(
-          accountId,
-          userId,
-          adjustment.currency,
-          previousBalance,
-          data.balance
-        );
-      }
-    });
+    await updateAccountWithinWriter(accountId, data, userId, adjustment);
 
     return { success: true };
   } catch (error) {

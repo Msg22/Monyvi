@@ -34,6 +34,8 @@ import { Q } from "@nozbe/watermelondb";
 import { readIntroLocaleOverride } from "./intro-flag-service";
 import { assertExpectedCurrentUser, queryOwned } from "./user-data-access";
 import { createAccountSmsSendersWithinWriter } from "./account-sms-sender-service";
+import { createGuardedAccount } from "./account-core-writer-production";
+import { ACCOUNT_CORE_WRITER_ERROR_CODES } from "./account-core-writer-service";
 import { normalizeCardLast4ForStorage } from "./card-last4-normalizer";
 
 // ---------------------------------------------------------------------------
@@ -90,6 +92,17 @@ export type CreateAccountErrorCode =
 
 const pendingCreateKeys = new Set<string>();
 const NO_PROVIDER_IDENTITY = "none";
+
+/**
+ * Bounded optimistic-concurrency retries for non-zero account creation.
+ *
+ * The provisional default assignment is read outside the guarded writer; the
+ * inside-writer hook re-checks it authoritatively and throws
+ * `STALE_ACCOUNT_STATE` when a concurrent writer committed first. Each retry
+ * re-reads the provisional state, so a locally serialized second writer
+ * converges on the next attempt.
+ */
+const ACCOUNT_CREATE_MAX_ATTEMPTS = 3;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -396,6 +409,102 @@ function hasDuplicateAccountIdentity(
   });
 }
 
+async function readActiveAccountCount(userId: string): Promise<number> {
+  return queryOwned(
+    database.get<Account>("accounts"),
+    userId,
+    Q.where("deleted", Q.notEq(true))
+  ).fetchCount();
+}
+
+/**
+ * Authoritative inside-writer preparation for a guarded non-zero account
+ * create.
+ *
+ * Runs inside the financial command's writer, where local writers are
+ * serialized: duplicate identity and the first-account default are re-checked
+ * against committed state, then the account's SMS senders and bank details
+ * are written in the same atomic group as the account row and its opening
+ * effect. Any throw aborts the whole group before anything commits.
+ */
+async function prepareAccountCreateInsideWriter(
+  account: Account,
+  data: AccountFormData,
+  userId: string,
+  provisionalIsFirstAccount: boolean
+): Promise<void> {
+  const accountsCollection = database.get<Account>("accounts");
+  const existingAccounts = await queryOwned(
+    accountsCollection,
+    userId,
+    Q.where("currency", data.currency),
+    Q.where("deleted", Q.notEq(true))
+  ).fetch();
+  if (hasDuplicateAccountIdentity(existingAccounts, data)) {
+    throw new Error(ACCOUNT_CORE_WRITER_ERROR_CODES.DUPLICATE_ACCOUNT);
+  }
+  const activeAccountCount = await readActiveAccountCount(userId);
+  const authoritativeIsFirstAccount = activeAccountCount === 0;
+  if (authoritativeIsFirstAccount !== provisionalIsFirstAccount) {
+    throw new Error(ACCOUNT_CORE_WRITER_ERROR_CODES.STALE_ACCOUNT_STATE);
+  }
+
+  await createAccountSmsSendersWithinWriter(account.id, data.senderNames ?? []);
+  if (data.accountType === "BANK") {
+    await database.get<BankDetails>("bank_details").create((details) => {
+      details.accountId = account.id;
+      details.cardLast4 = normalizeCardLast4ForStorage(data.cardLast4);
+      details.deleted = false;
+    });
+  }
+}
+
+async function createNonZeroBalanceAccount(
+  userId: string,
+  data: AccountFormData,
+  openingBalance: number
+): Promise<CreateAccountResult> {
+  const accountsCollection = database.get<Account>("accounts");
+  for (let attempt = 1; ; attempt += 1) {
+    const provisionalIsFirstAccount =
+      (await readActiveAccountCount(userId)) === 0;
+    const account = accountsCollection.prepareCreate((acc) => {
+      acc.userId = userId;
+      acc.name = data.name.trim();
+      acc.type = data.accountType;
+      acc.institutionId = data.institutionId ?? undefined;
+      acc.providerDisplayName = getProviderDisplayName(data);
+      acc.balance = openingBalance;
+      acc.currency = data.currency;
+      acc.financialRevision = "1";
+      acc.deleted = false;
+      acc.isDefault = provisionalIsFirstAccount;
+    });
+    try {
+      await createGuardedAccount({
+        account,
+        prepareInsideWriter: () =>
+          prepareAccountCreateInsideWriter(
+            account,
+            data,
+            userId,
+            provisionalIsFirstAccount
+          ),
+        userId,
+      });
+      return { success: true, accountId: account.id, created: true };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (
+        message !== ACCOUNT_CORE_WRITER_ERROR_CODES.STALE_ACCOUNT_STATE ||
+        attempt >= ACCOUNT_CREATE_MAX_ATTEMPTS
+      ) {
+        throw error;
+      }
+    }
+  }
+}
+
 /**
  * Create a user-owned account and optional bank details with duplicate-submit
  * protection.
@@ -437,65 +546,78 @@ export async function createAccountForUser(
   pendingCreateKeys.add(createKey);
 
   try {
-    let accountId: string | undefined;
+    const openingBalance = roundForCurrency(
+      parseFloat(validatedData.balance),
+      validatedData.currency
+    );
 
-    await database.write(async () => {
-      const accountsCollection = database.get<Account>("accounts");
-      const existingAccounts = await queryOwned(
-        accountsCollection,
-        normalizedUserId,
-        Q.where("currency", validatedData.currency),
-        Q.where("deleted", Q.notEq(true))
-      ).fetch();
+    if (openingBalance === 0) {
+      let accountId: string | undefined;
 
-      if (hasDuplicateAccountIdentity(existingAccounts, validatedData)) {
-        throw new Error(CREATE_ACCOUNT_ERROR_CODES.DUPLICATE_ACCOUNT);
-      }
+      await database.write(async () => {
+        const accountsCollection = database.get<Account>("accounts");
+        const existingAccounts = await queryOwned(
+          accountsCollection,
+          normalizedUserId,
+          Q.where("currency", validatedData.currency),
+          Q.where("deleted", Q.notEq(true))
+        ).fetch();
 
-      const activeAccountCount = await queryOwned(
-        accountsCollection,
-        normalizedUserId,
-        Q.where("deleted", Q.notEq(true))
-      ).fetchCount();
-      const isFirstAccount = activeAccountCount === 0;
+        if (hasDuplicateAccountIdentity(existingAccounts, validatedData)) {
+          throw new Error(CREATE_ACCOUNT_ERROR_CODES.DUPLICATE_ACCOUNT);
+        }
 
-      const account = await accountsCollection.create((acc) => {
-        acc.userId = normalizedUserId;
-        acc.name = validatedData.name.trim();
-        acc.type = validatedData.accountType;
-        acc.institutionId = validatedData.institutionId ?? undefined;
-        acc.providerDisplayName = getProviderDisplayName(validatedData);
-        acc.balance = roundForCurrency(
-          parseFloat(validatedData.balance),
-          validatedData.currency
-        );
-        acc.currency = validatedData.currency;
-        acc.financialRevision = "0";
-        acc.deleted = false;
-        acc.isDefault = isFirstAccount;
-      });
-      accountId = account.id;
+        const activeAccountCount = await queryOwned(
+          accountsCollection,
+          normalizedUserId,
+          Q.where("deleted", Q.notEq(true))
+        ).fetchCount();
+        const isFirstAccount = activeAccountCount === 0;
 
-      await createAccountSmsSendersWithinWriter(
-        account.id,
-        validatedData.senderNames ?? []
-      );
-
-      if (validatedData.accountType === "BANK") {
-        await database.get<BankDetails>("bank_details").create((details) => {
-          details.accountId = account.id;
-          details.cardLast4 = normalizeCardLast4ForStorage(
-            validatedData.cardLast4
-          );
-          details.deleted = false;
+        const account = await accountsCollection.create((acc) => {
+          acc.userId = normalizedUserId;
+          acc.name = validatedData.name.trim();
+          acc.type = validatedData.accountType;
+          acc.institutionId = validatedData.institutionId ?? undefined;
+          acc.providerDisplayName = getProviderDisplayName(validatedData);
+          acc.balance = 0;
+          acc.currency = validatedData.currency;
+          acc.financialRevision = "0";
+          acc.deleted = false;
+          acc.isDefault = isFirstAccount;
         });
-      }
-    });
+        accountId = account.id;
 
-    return { success: true, accountId, created: true };
+        await createAccountSmsSendersWithinWriter(
+          account.id,
+          validatedData.senderNames ?? []
+        );
+
+        if (validatedData.accountType === "BANK") {
+          await database.get<BankDetails>("bank_details").create((details) => {
+            details.accountId = account.id;
+            details.cardLast4 = normalizeCardLast4ForStorage(
+              validatedData.cardLast4
+            );
+            details.deleted = false;
+          });
+        }
+      });
+
+      return { success: true, accountId, created: true };
+    }
+
+    return await createNonZeroBalanceAccount(
+      normalizedUserId,
+      validatedData,
+      openingBalance
+    );
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    if (message === CREATE_ACCOUNT_ERROR_CODES.DUPLICATE_ACCOUNT) {
+    if (
+      message === CREATE_ACCOUNT_ERROR_CODES.DUPLICATE_ACCOUNT ||
+      message === ACCOUNT_CORE_WRITER_ERROR_CODES.DUPLICATE_ACCOUNT
+    ) {
       return {
         success: false,
         error: CREATE_ACCOUNT_ERROR_CODES.DUPLICATE_ACCOUNT,

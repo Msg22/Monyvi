@@ -61,6 +61,7 @@ export interface ExecuteCoreAccountFinancialActionInput {
   readonly mutationRecords: readonly CoreFinancialActionMutationRecord[];
   readonly occurredAt: string;
   readonly operationCode: string;
+  readonly prepareInsideWriter?: () => Promise<void>;
   readonly userId: string;
 }
 
@@ -437,9 +438,10 @@ export function createCoreAccountFinancialActionService(
       const command: ExecuteAccountBalanceCommandInput = {
         envelope: buildEnvelope(input, effects),
         hashProvider: dependencies.hashProvider,
-        prepareDomainOperationPlan:
-          (): Promise<FinancialActionLinkedOperationPlan> =>
-            Promise.resolve(buildPlan(effects, input.mutationRecords)),
+        prepareDomainOperationPlan: async (): Promise<FinancialActionLinkedOperationPlan> => {
+          await input.prepareInsideWriter?.();
+          return buildPlan(effects, input.mutationRecords);
+        },
       };
       return dependencies.executeAccountBalanceCommand(command);
     },

@@ -398,4 +398,90 @@ describe("core account financial action service", () => {
     expect(accountA.balance).toBe(900);
     expect(accountA.financialRevision).toBe("7");
   });
+
+  it("runs inside-writer preparation before building the domain plan", async () => {
+    const created = account(ACCOUNT_A_ID, 10, "USD", "1");
+    Object.assign(created, { _preparedState: "create" });
+    const events: string[] = [];
+    const execute = jest.fn(
+      async (command: ExecuteAccountBalanceCommandInput) => {
+        events.push("command-received");
+        const plan = await command.prepareDomainOperationPlan();
+        events.push("plan-built");
+        plan.existingOperations.forEach((operation) => {
+          if (operation.kind === "update") operation.update(operation.model);
+        });
+        return {
+          kind: "committed" as const,
+          record: fakeModel(
+            "financial_action_groups",
+            ACTION_ID,
+            {}
+          ) as unknown as FinancialActionGroup,
+        };
+      }
+    );
+    const harness = createHarness({ execute });
+    const prepareInsideWriter = jest.fn(() => {
+      events.push("inside-writer");
+      return Promise.resolve();
+    });
+
+    await harness.service.execute({
+      accountEffects: [{ account: created, amountMinorUnits: "1000" }],
+      actionId: ACTION_ID,
+      domain: "accounts",
+      domainReferenceId: ACCOUNT_A_ID,
+      kind: "create",
+      mutationRecords: [
+        {
+          after: { id: ACCOUNT_A_ID },
+          entity: "account",
+          expectedUpdatedAt: null,
+          mode: "create",
+          model: created,
+        },
+      ],
+      occurredAt: OCCURRED_AT,
+      operationCode: "account.create",
+      prepareInsideWriter,
+      userId: USER_ID,
+    });
+
+    expect(prepareInsideWriter).toHaveBeenCalledTimes(1);
+    expect(events).toEqual(["command-received", "inside-writer", "plan-built"]);
+  });
+
+  it("propagates inside-writer preparation failures before committing", async () => {
+    const created = account(ACCOUNT_A_ID, 10, "USD", "1");
+    Object.assign(created, { _preparedState: "create" });
+    const harness = createHarness();
+    const prepareInsideWriter = jest.fn(() =>
+      Promise.reject(new Error("inside_writer_rejected"))
+    );
+
+    await expect(
+      harness.service.execute({
+        accountEffects: [{ account: created, amountMinorUnits: "1000" }],
+        actionId: ACTION_ID,
+        domain: "accounts",
+        domainReferenceId: ACCOUNT_A_ID,
+        kind: "create",
+        mutationRecords: [
+          {
+            after: { id: ACCOUNT_A_ID },
+            entity: "account",
+            expectedUpdatedAt: null,
+            mode: "create",
+            model: created,
+          },
+        ],
+        occurredAt: OCCURRED_AT,
+        operationCode: "account.create",
+        prepareInsideWriter,
+        userId: USER_ID,
+      })
+    ).rejects.toThrow("inside_writer_rejected");
+    expect(prepareInsideWriter).toHaveBeenCalledTimes(1);
+  });
 });
