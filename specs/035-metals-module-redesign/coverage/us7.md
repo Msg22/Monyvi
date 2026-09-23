@@ -1,6 +1,6 @@
 # US7 Delete Coverage
 
-Stable base: `a190d8f`.
+Stable base: `e08536e6` (origin/main rebase trial; originally `a190d8f`).
 
 Scope: T112–T119 Active-only mistaken-record Delete. Shared adapter/registry,
 locales, fixture registry, detail composition, and live route activation remain
@@ -9,7 +9,7 @@ integration-owned.
 | Scenario | Requirement / criterion | Service integration | UI/hook | E2E | Status |
 | --- | --- | --- | --- | --- | --- |
 | Effective Active-only grouped Delete | FR-037–040, FR-087, SC-003–004 | SQLite Green | Hook/sheet Green | Route missing/blocked | Isolated Green |
-| Predecessor-less revision-zero migrated Active Delete | Data model revision-zero migration contract, FR-077–080 | SQLite Green via injected approved registry | N/A | Shared registry/route blocked | Service Green; integration open |
+| Predecessor-less revision-zero migrated Active Delete | Data model revision-zero migration contract, FR-077–080 | SQLite Green via real shared `DEFAULT_FINANCIAL_ACTION_REGISTRY` | N/A | Shared route blocked | Service Green; route/integration open |
 | Hidden non-effective audit and no reappearance | FR-037, FR-040, FR-079, SC-007, SC-030 | SQLite Green | Consequence Green | Restart sequence only; route blocked | Isolated Green |
 | Zero sale/disposal/proceeds/P&L/write-off/transfer/account effect | FR-037, FR-091, SC-023 | SQLite Green | Destructive semantics Green | Authored visible proof | Isolated Green |
 | Sold/Disposed/non-effective rejection | FR-038, FR-087 | SQLite Green | Descriptor boundary Green | Missing; terminal fixtures/routes blocked | Isolated Green; runtime open |
@@ -36,9 +36,19 @@ integration-owned.
 - The Maestro file is a partial blocked contract, not completed E2E coverage.
   It lacks offline establishment and terminal-state assertions because no owned
   shared harness control, terminal fixture, or live route exists on this branch.
-- The isolated command uses the approved `metals.delete/v1` payload only through
-  an injected envelope creator. Revision-zero service behavior is verified with
-  a test-only registry matching the approved nullable-predecessor contract; the
-  shared registry remains an integration gate. No shared adapter, registry, locale, fixture,
-  barrel, detail route, schema, sync, Sell, Dispose, or Undo file changed.
+- The isolated command still injects its envelope creator, but that creator and
+  the commit path now resolve `metals.delete/v1` from the real shared
+  `DEFAULT_FINANCIAL_ACTION_REGISTRY`. The current main base accepts
+  predecessor-less revision-zero (`legacyRoot`) Delete envelopes, so the
+  legacy-base test-only registry shim was removed and revision-zero behavior is
+  verified against the shared registry end to end. Evidence:
+  `apps/mobile/__tests__/services/delete-metal-holding-command-service.integration.test.ts`
+  — "deletes a predecessor-less revision-zero migrated Active holding without
+  fabricating prior lifecycle evidence" passes through both envelope
+  canonicalization and `commitFinancialActionGroupLocally` payload validation
+  on the real registry (suite: 17/17 pass; mobile `tsc --noEmit` clean). The
+  shared-registry integration gate is closed; the live route, Maestro T115
+  offline/terminal proof, and device gates remain open integration work. No
+  shared adapter, registry, locale, fixture, barrel, detail route, schema,
+  sync, Sell, Dispose, or Undo file changed.
 - No live route, shared registration, device, or E2E completion is claimed.

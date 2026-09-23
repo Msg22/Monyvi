@@ -13,7 +13,6 @@ import type {
 import {
   DEFAULT_FINANCIAL_ACTION_REGISTRY,
   canonicalizeFinancialActionEnvelope,
-  createFinancialActionRegistry,
   type FinancialActionEnvelopeV1,
   type FinancialActionRegistry,
   type RegisteredActionPayload,
@@ -241,47 +240,6 @@ function createService(
       createEnvelope(input, payload, registry),
     hashProvider: sha256Provider,
   });
-}
-
-function createRevisionZeroDeleteTestRegistry(): FinancialActionRegistry {
-  return createFinancialActionRegistry(
-    DEFAULT_FINANCIAL_ACTION_REGISTRY.definitions.map((definition) =>
-      definition.domain === "metals" &&
-      definition.kind === "delete" &&
-      definition.payloadVersion === "metals.delete/v1"
-        ? {
-            ...definition,
-            validatePayload: (
-              value,
-              validationInput
-            ): RegisteredActionPayload => {
-              if (
-                typeof value === "object" &&
-                value !== null &&
-                Object.keys(value).sort().join(",") ===
-                  "expectedHoldingRevision,holdingId,predecessorEventId,reversesEventId" &&
-                "holdingId" in value &&
-                value.holdingId === IDS.holding &&
-                "expectedHoldingRevision" in value &&
-                value.expectedHoldingRevision === "0" &&
-                "predecessorEventId" in value &&
-                value.predecessorEventId === null &&
-                "reversesEventId" in value &&
-                value.reversesEventId === null
-              ) {
-                return Object.freeze({
-                  expectedHoldingRevision: "0",
-                  holdingId: IDS.holding,
-                  predecessorEventId: null,
-                  reversesEventId: null,
-                });
-              }
-              return definition.validatePayload(value, validationInput);
-            },
-          }
-        : definition
-    )
-  );
 }
 
 async function openFreshDatabase(): Promise<Database> {
@@ -537,7 +495,7 @@ describe("Delete metal holding command SQLite atomicity", () => {
     await seedHolding("active", true);
 
     await expect(
-      createService(database, createRevisionZeroDeleteTestRegistry()).delete(
+      createService(database).delete(
         command({
           predecessorEventId: null,
           expectedFinancialRevision: "0",
