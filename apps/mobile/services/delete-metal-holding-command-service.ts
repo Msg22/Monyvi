@@ -33,7 +33,7 @@ export interface DeleteMetalHoldingCommandInput {
   readonly holdingId: string;
   readonly userId: string;
   readonly occurredAt: string;
-  readonly cairoTodayDate: string;
+  readonly latestAllowedCalendarDate: string;
   readonly expectedFinancialRevision: string;
 }
 
@@ -400,7 +400,9 @@ export function createDeleteMetalHoldingCommandService(
       const result = await dependencies.commitFinancialActionGroupLocally({
         envelope,
         hashProvider: dependencies.hashProvider,
-        validationInput: { cairoTodayDate: input.cairoTodayDate },
+        validationInput: {
+          latestAllowedCalendarDate: input.latestAllowedCalendarDate,
+        },
         prepareLinkedOperationPlan: () =>
           Promise.resolve(
             prepareDeletePlan(

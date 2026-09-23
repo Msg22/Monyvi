@@ -33,7 +33,7 @@ interface DeleteMetalHoldingCommandInput {
   readonly holdingId: string;
   readonly userId: string;
   readonly occurredAt: string;
-  readonly cairoTodayDate: string;
+  readonly latestAllowedCalendarDate: string;
   readonly expectedFinancialRevision: string;
 }
 
@@ -193,7 +193,7 @@ function command(
     holdingId: IDS.holding,
     userId: IDS.user,
     occurredAt: "2026-09-05T10:15:30.123Z",
-    cairoTodayDate: "2026-09-05",
+    latestAllowedCalendarDate: "2026-09-05",
     expectedFinancialRevision: "1",
     ...overrides,
   };
@@ -218,7 +218,7 @@ function createEnvelope(
       payload,
     },
     registry,
-    { cairoTodayDate: input.cairoTodayDate }
+    { latestAllowedCalendarDate: input.latestAllowedCalendarDate }
   );
 }
 
