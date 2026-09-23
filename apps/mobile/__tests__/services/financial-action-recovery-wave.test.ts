@@ -22,7 +22,9 @@ const ACCOUNT_ID = "30000000-0000-4000-8000-000000000003";
 const EFFECT_ID = "40000000-0000-4000-8000-000000000004";
 const TRANSACTION_ID = "70000000-0000-4000-8000-000000000007";
 
-interface TestFinancialActionEnvelope extends Readonly<Record<string, unknown>> {
+interface TestFinancialActionEnvelope extends Readonly<
+  Record<string, unknown>
+> {
   readonly payload: Readonly<Record<string, unknown>> & {
     readonly domainRecordRefs: readonly string[];
   };
@@ -191,7 +193,9 @@ describe("issue #242 recovery-wave client contracts", () => {
     const recover = jest.fn().mockResolvedValue(undefined);
     const dependencies = {
       invokeAccountFinancialActionRpc: invokeRpc,
-      markFinancialActionGroupSyncFailed: jest.fn().mockResolvedValue(undefined),
+      markFinancialActionGroupSyncFailed: jest
+        .fn()
+        .mockResolvedValue(undefined),
       markFinancialActionGroupSyncPending: markPending,
       reconcileFinancialActionGroup: recover,
       recordFinancialActionGroupServerOutcome: jest
@@ -285,13 +289,14 @@ describe("issue #242 recovery-wave client contracts", () => {
     };
     const messages = {
       accountRequired: "Account is required",
-      amountPrecision: "Amount supports at most 2 decimal places",
+      amountPrecision: (_precision: number): string =>
+        "Amount supports at most 2 decimal places",
       destinationAccountRequired: "Destination account is required",
       sourceAccountRequired: "Source account is required",
     };
 
     expect(validateTransactionForm("EXPENSE", formData, messages)).toEqual({
-      errors: { amount: messages.amountPrecision },
+      errors: { amount: "Amount supports at most 2 decimal places" },
       isValid: false,
     });
   });
@@ -336,9 +341,9 @@ describe("issue #242 recovery-wave client contracts", () => {
       "apps/mobile/services/pending-account-service.ts"
     );
 
-    expect(accountService.match(/financialRevision\s*=\s*["']0["']/g)).toHaveLength(
-      4
-    );
+    expect(
+      accountService.match(/financialRevision\s*=\s*["']0["']/g)
+    ).toHaveLength(4);
     expect(pendingAccountService).toContain('financialRevision = "0"');
   });
 });

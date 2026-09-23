@@ -83,8 +83,10 @@ const EXPLICIT_NULL_MODEL_FIELDS = new Set([
   "asset_metals.purity_factor_decimal",
   "asset_metals.weight_grams_decimal",
   "assets.acquisition_action_id",
+  "assets.notes",
   "assets.purchase_currency",
   "assets.purchase_price_decimal",
+
   "financial_action_groups.outcome_json",
   "financial_action_groups.rejection_code",
   "financial_action_groups.server_outcome",

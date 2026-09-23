@@ -8,7 +8,8 @@
  */
 
 import { database, Transaction } from "@monyvi/db";
-import { convertCurrency, getYearMonthBoundaries } from "@monyvi/logic";
+import { getYearMonthBoundaries } from "@monyvi/logic";
+import { sumSelectedCurrentAmounts } from "@/services/current-market-snapshot-calculations";
 import { Q } from "@nozbe/watermelondb";
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { useMarketRates } from "./useMarketRates";
@@ -32,11 +33,11 @@ export type PeriodFilter =
   | "all_time";
 
 export interface PeriodSummary {
-  totalIncome: number;
-  totalExpenses: number;
-  savings: number;
-  savingsPercentage: number;
-  spentPercentage: number;
+  totalIncome: number | null;
+  totalExpenses: number | null;
+  savings: number | null;
+  savingsPercentage: number | null;
+  spentPercentage: number | null;
 }
 
 export interface UsePeriodSummaryResult {
@@ -167,7 +168,7 @@ export function usePeriodSummary(
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
-  const { latestRates, isLoading: isRatesLoading } = useMarketRates();
+  const { selectedSnapshot, isCurrentLoading } = useMarketRates();
   const { preferredCurrency } = usePreferredCurrency();
   const { userId, isResolvingUser } = useCurrentUser();
 
@@ -230,35 +231,36 @@ export function usePeriodSummary(
 
   // Calculate summary — convert each transaction to preferred currency first
   const data = useMemo((): PeriodSummary => {
-    if (!latestRates) {
+    const totalExpenses = sumSelectedCurrentAmounts({
+      entries: transactions
+        .filter((transaction) => transaction.type === "EXPENSE")
+        .map((transaction) => ({
+          amount: transaction.amount,
+          currency: transaction.currency,
+        })),
+      toCurrency: preferredCurrency,
+      currentSnapshot: selectedSnapshot,
+    });
+    const totalIncome = sumSelectedCurrentAmounts({
+      entries: transactions
+        .filter((transaction) => transaction.type === "INCOME")
+        .map((transaction) => ({
+          amount: transaction.amount,
+          currency: transaction.currency,
+        })),
+      toCurrency: preferredCurrency,
+      currentSnapshot: selectedSnapshot,
+    });
+    if (totalExpenses === null || totalIncome === null) {
       return {
-        totalIncome: 0,
-        totalExpenses: 0,
-        savings: 0,
-        savingsPercentage: 0,
-        spentPercentage: 0,
+        totalIncome,
+        totalExpenses,
+        savings: null,
+        savingsPercentage: null,
+        spentPercentage: null,
       };
     }
-
-    // Sum amounts after converting each transaction to preferred currency
-    const totals = transactions.reduce(
-      (acc, t) => {
-        const convertedAmount = convertCurrency(
-          t.amount,
-          t.currency,
-          preferredCurrency,
-          latestRates
-        );
-
-        if (t.type === "EXPENSE") {
-          acc.totalExpenses += convertedAmount;
-        } else {
-          acc.totalIncome += convertedAmount;
-        }
-        return acc;
-      },
-      { totalExpenses: 0, totalIncome: 0 }
-    );
+    const totals = { totalExpenses, totalIncome };
 
     // Savings can be negative (deficit) when expenses exceed income
     const savings = totals.totalIncome - totals.totalExpenses;
@@ -278,7 +280,15 @@ export function usePeriodSummary(
       savingsPercentage,
       spentPercentage,
     };
-  }, [transactions, latestRates, preferredCurrency]);
+  }, [transactions, selectedSnapshot, preferredCurrency]);
 
-  return { data, isLoading: isLoading || isRatesLoading, error, refetch };
+  return {
+    data,
+    isLoading:
+      isLoading ||
+      (isCurrentLoading &&
+        (data.totalIncome === null || data.totalExpenses === null)),
+    error,
+    refetch,
+  };
 }

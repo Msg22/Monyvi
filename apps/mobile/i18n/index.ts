@@ -22,6 +22,7 @@ import enMetals from "../locales/en/metals.json";
 import enCategories from "../locales/en/categories.json";
 import enDrawer from "../locales/en/drawer.json";
 import enQaSmsPatternIntake from "../locales/en/qa-sms-pattern-intake.json";
+import enUiPolish from "../locales/en/ui-polish.json";
 
 import arCommon from "../locales/ar/common.json";
 import arTransactions from "../locales/ar/transactions.json";
@@ -34,6 +35,7 @@ import arMetals from "../locales/ar/metals.json";
 import arCategories from "../locales/ar/categories.json";
 import arDrawer from "../locales/ar/drawer.json";
 import arQaSmsPatternIntake from "../locales/ar/qa-sms-pattern-intake.json";
+import arUiPolish from "../locales/ar/ui-polish.json";
 
 /**
  * Translation resources organized by language and namespace.
@@ -56,6 +58,7 @@ const resources: Resource = {
     categories: enCategories,
     drawer: enDrawer,
     "qa-sms-pattern-intake": enQaSmsPatternIntake,
+    "ui-polish": enUiPolish,
   },
   ar: {
     common: arCommon,
@@ -69,6 +72,7 @@ const resources: Resource = {
     categories: arCategories,
     drawer: arDrawer,
     "qa-sms-pattern-intake": arQaSmsPatternIntake,
+    "ui-polish": arUiPolish,
   },
 };
 
@@ -108,6 +112,10 @@ export async function initI18n(): Promise<void> {
   const language = await detectInitialLanguage();
 
   await initializeI18n(language);
+}
+
+export function isI18nInitialized(): boolean {
+  return i18next.isInitialized;
 }
 
 /**

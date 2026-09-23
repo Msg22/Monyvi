@@ -10,6 +10,7 @@
  * @module currency.test
  */
 
+import * as CurrencyUtils from "../currency";
 import {
   convertCurrency,
   formatCurrency,
@@ -19,6 +20,42 @@ import {
   roundForCurrency,
 } from "../currency";
 import type { MarketRate } from "@monyvi/db";
+
+it.each(["ar-EG", "en-US"])(
+  "formats one negative sign for prefix currencies in %s",
+  (locale) => {
+    expect(
+      formatCurrency({ amount: -1234.5, currency: "USD", locale }).match(/-/g)
+    ).toHaveLength(1);
+    expect(
+      formatCurrency({
+        amount: -1234.5,
+        currency: "USD",
+        locale,
+        signDisplay: "never",
+      })
+    ).not.toContain("-");
+    expect(
+      formatCurrency({ amount: -0, currency: "USD", locale })
+    ).not.toContain("-");
+  }
+);
+
+it("formats currency numbers in an explicitly supplied Arabic locale", () => {
+  const input = {
+    amount: 1234.5,
+    currency: "EGP" as const,
+    locale: "ar-EG",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  };
+  expect(formatCurrency(input)).toContain(
+    new Intl.NumberFormat("ar-EG", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(1234.5)
+  );
+});
 
 // =============================================================================
 // Helpers
@@ -39,6 +76,26 @@ const nanRates = createMockRates({ egpUsd: Number.NaN });
 
 /** A mock that returns Infinity for any cross-currency conversion */
 const infinityRates = createMockRates({ egpUsd: Number.POSITIVE_INFINITY });
+
+// =============================================================================
+// Currency precision contract
+// =============================================================================
+
+describe("getCurrencyPrecision", () => {
+  it("exposes the existing default, three-decimal, and BTC precision rules", () => {
+    const candidate = Reflect.get(CurrencyUtils, "getCurrencyPrecision");
+    expect(typeof candidate).toBe("function");
+    const getCurrencyPrecision = candidate as (
+      currency: import("@monyvi/db").CurrencyType
+    ) => number;
+
+    expect(getCurrencyPrecision("EGP")).toBe(2);
+    expect(getCurrencyPrecision("KWD")).toBe(3);
+    expect(getCurrencyPrecision("BHD")).toBe(3);
+    expect(getCurrencyPrecision("OMR")).toBe(3);
+    expect(getCurrencyPrecision("BTC")).toBe(8);
+  });
+});
 
 // =============================================================================
 // convertCurrency

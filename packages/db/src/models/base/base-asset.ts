@@ -29,7 +29,7 @@ export abstract class BaseAsset extends Model {
   @field("deleted") deleted!: boolean;
   @field("is_liquid") isLiquid!: boolean;
   @field("name") name!: string;
-  @field("notes") notes?: string;
+  @field("notes") notes!: string | null;
   @date("purchase_date") purchaseDate!: Date;
   @field("purchase_currency") purchaseCurrency!: string | null;
   @field("purchase_price_decimal") purchasePriceDecimal!: string | null;

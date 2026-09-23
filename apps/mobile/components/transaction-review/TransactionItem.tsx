@@ -30,7 +30,8 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import type { MatchReason } from "@/services/sms-account-matcher";
 import { isSameDay } from "@/utils/dateHelpers";
 import { useLocale } from "@/context/LocaleContext";
-import { formatCurrency, type ReviewableTransaction } from "@monyvi/logic";
+import type { ReviewableTransaction } from "@monyvi/logic";
+import { formatLocalizedMoneyAmount } from "@/utils/localized-money-display";
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
 import React, { memo, useCallback, useState } from "react";
@@ -207,6 +208,22 @@ function TransactionItemInner({
   const { language } = useLocale();
   const { t } = useTranslation("transactions");
   const isExpense = transaction.type === "EXPENSE";
+  const formattedAmount = formatLocalizedMoneyAmount({
+    amount: transaction.amount,
+    currency: transaction.currency,
+    language,
+  });
+  const formattedSignedAmount =
+    language === "ar"
+      ? formatLocalizedMoneyAmount({
+          amount: isExpense
+            ? -Math.abs(transaction.amount)
+            : Math.abs(transaction.amount),
+          currency: transaction.currency,
+          language,
+          signDisplay: "always",
+        })
+      : `${isExpense ? "-" : "+"}${formattedAmount}`;
   const isVoice = transaction.source === "VOICE";
   const hasExpandableContent = !isVoice && !!expandedContentBody;
   const accessibleName =
@@ -297,9 +314,14 @@ function TransactionItemInner({
           activeOpacity={0.7}
           accessibilityRole="button"
           accessibilityLanguage={language}
-          accessibilityLabel={`${transaction.originLabel}, ${t(
-            isExpense ? "expense" : "income"
-          )} ${formatCurrency({ amount: transaction.amount, currency: transaction.currency })}, ${counterpartyText ?? ""}, ${transaction.categoryDisplayName}${accountName ? `, ${accountName}` : ""}`}
+          accessibilityLabel={t("transaction_review_accessibility", {
+            origin: transaction.originLabel,
+            type: t(isExpense ? "expense" : "income"),
+            amount: formattedAmount,
+            counterparty: counterpartyText ?? "",
+            category: transaction.categoryDisplayName,
+            account: accountName ?? "",
+          })}
           accessibilityHint={t("tap_to_edit_transaction")}
         >
           <InstitutionLogoMark
@@ -364,11 +386,7 @@ function TransactionItemInner({
                       : "text-nileGreen-600 dark:text-nileGreen-400"
                   }`}
                 >
-                  {isExpense ? "-" : "+"}
-                  {formatCurrency({
-                    amount: transaction.amount,
-                    currency: transaction.currency,
-                  })}
+                  {formattedSignedAmount}
                 </Text>
                 {primaryBadge && (
                   <View className="mt-1.5 items-end">

@@ -2,7 +2,12 @@ import { CategoryIcon } from "@/components/common/CategoryIcon";
 import { palette } from "@/constants/colors";
 import { getCategoryIconConfig } from "@/utils/category-icon-config";
 import type { Category, CurrencyType, RecurringStatus } from "@monyvi/db";
-import { formatCurrency, parseAmountInput } from "@monyvi/logic";
+import {
+  getCurrencyPrecision,
+  MAX_TRANSACTION_AMOUNT,
+  parseStrictAmountInput,
+} from "@monyvi/logic";
+import { formatLocalizedMoneyAmount } from "@/utils/localized-money-display";
 import { Ionicons } from "@expo/vector-icons";
 import React from "react";
 import { useTranslation } from "react-i18next";
@@ -32,11 +37,17 @@ export function RecurringPaymentSummaryCard({
   category,
 }: PaymentSummaryCardProps): React.JSX.Element {
   const { t } = useTranslation("transactions");
-  const parsedAmount = Number.parseFloat(parseAmountInput(amount));
-  const displayAmount = Number.isFinite(parsedAmount) ? parsedAmount : 0;
-  const formattedAmount = formatCurrency({
-    amount: displayAmount,
+  const parsedAmount = parseStrictAmountInput(amount, {
+    maxAmount: MAX_TRANSACTION_AMOUNT,
+    maxFractionDigits: getCurrencyPrecision(currency),
+  });
+  const displayAmount = parsedAmount.success ? parsedAmount.amount : 0;
+  const signedAmount =
+    displayAmount === 0 ? 0 : isIncome ? displayAmount : -displayAmount;
+  const formattedAmount = formatLocalizedMoneyAmount({
+    amount: signedAmount,
     currency,
+    signDisplay: "exceptZero",
   });
   const iconConfig = category ? getCategoryIconConfig(category) : null;
   const statusClasses = getStatusPillClasses(statusKind);
@@ -100,7 +111,6 @@ export function RecurringPaymentSummaryCard({
               isIncome ? "text-nileGreen-500" : "text-red-500"
             }`}
           >
-            {isIncome ? "+" : "-"}
             {formattedAmount}
           </Text>
         </View>

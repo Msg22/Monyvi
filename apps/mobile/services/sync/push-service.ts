@@ -1,4 +1,5 @@
 import type { Database } from "@nozbe/watermelondb";
+import * as Crypto from "expo-crypto";
 import type {
   SyncPushArgs,
   SyncPushResult,
@@ -8,6 +9,10 @@ import type {
 
 import { logger } from "@/utils/logger";
 
+import {
+  commitCanonicalMetalMetadataLocally,
+  type MetalMetadataRpcOutcome,
+} from "../metal-metadata-service";
 import {
   commitMetalRpcOutcomeLocally,
   type MetalRpcOutcome,
@@ -55,6 +60,10 @@ export const GENERIC_SYNC_ERROR_CODES = {
 
 const METAL_ACTION_RPC = "apply_metal_action_v1";
 const METAL_METADATA_RPC = "apply_metal_metadata_patch_v1";
+const metalOutcomeHashProvider = {
+  digestUtf8: (value: string): Promise<string> =>
+    Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, value),
+};
 
 interface MetalRpcResult {
   readonly data: unknown;
@@ -73,6 +82,10 @@ export interface MetalDedicatedPushResult {
 export type MetalOutcomeCommitter = (
   outcome: MetalRpcOutcome
 ) => Promise<"accepted" | "reconciled" | "incomplete">;
+
+export type MetalMetadataOutcomeCommitter = (
+  outcome: MetalMetadataRpcOutcome
+) => Promise<void>;
 
 function changedRecords(
   changes: SyncPushArgs["changes"],
@@ -156,6 +169,25 @@ function parseMetalRpcOutcome(
     };
   }
   return null;
+}
+
+function parseMetalMetadataRpcOutcome(
+  value: unknown,
+  holdingId: string
+): MetalMetadataRpcOutcome | null {
+  const outcome = asRpcObject(value);
+  const canonical = asRpcObject(outcome?.canonicalMetadata);
+  if (
+    !outcome ||
+    !["applied", "idempotent", "ignored"].includes(String(outcome.status)) ||
+    outcome.holdingId !== holdingId ||
+    !canonical ||
+    !("name" in canonical) ||
+    !("notes" in canonical)
+  ) {
+    return null;
+  }
+  return outcome as unknown as MetalMetadataRpcOutcome;
 }
 
 function isCompleteMetalActionGroup(
@@ -268,7 +300,8 @@ export async function pushMetalDedicatedChanges(
   changes: SyncPushArgs["changes"],
   userId: string,
   rpc: MetalSyncRpc = defaultMetalRpc,
-  commitOutcome?: MetalOutcomeCommitter
+  commitOutcome?: MetalOutcomeCommitter,
+  commitMetadataOutcome?: MetalMetadataOutcomeCommitter
 ): Promise<MetalDedicatedPushResult> {
   if (!hasDedicatedRows(changes)) {
     return { acknowledgeAllDedicatedRows: true };
@@ -367,12 +400,16 @@ export async function pushMetalDedicatedChanges(
       p_patch: { fields },
     });
     if (error) throw new Error("metal_metadata_rpc_failed");
-    const outcome = asRpcObject(data);
-    if (
-      !outcome ||
-      !["applied", "idempotent", "ignored"].includes(String(outcome.status)) ||
-      outcome.holdingId !== holdingId
-    ) {
+    const outcome = parseMetalMetadataRpcOutcome(data, holdingId);
+    if (!outcome || !commitMetadataOutcome) {
+      return { acknowledgeAllDedicatedRows: false };
+    }
+    try {
+      await commitMetadataOutcome(outcome);
+    } catch (error) {
+      logger.error("sync.push.metal.metadata.commit.failed", error, {
+        holdingId,
+      });
       return { acknowledgeAllDedicatedRows: false };
     }
     metadataHoldingIds.add(holdingId);
@@ -645,7 +682,17 @@ export async function pushChanges(
     pushArgs.changes,
     userId,
     defaultMetalRpc,
-    (outcome) => commitMetalRpcOutcomeLocally(database, outcome, userId)
+    (outcome) =>
+      commitMetalRpcOutcomeLocally(
+        database,
+        outcome,
+        userId,
+        metalOutcomeHashProvider
+      ),
+    (outcome) =>
+      database.write(() =>
+        commitCanonicalMetalMetadataLocally(database, outcome, userId)
+      )
   );
   const protectedFinancialActionIds = mergeRejectedIds(
     dedicatedPush.acknowledgeAllDedicatedRows

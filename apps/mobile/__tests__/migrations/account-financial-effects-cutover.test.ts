@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 const ROOT = resolve(__dirname, "../../../..");
-const MIGRATION_PATH = "supabase/migrations/069_account_financial_effects.sql";
+const MIGRATION_PATH = "supabase/migrations/076_account_financial_effects.sql";
 
 function source(relativePath: string): string {
   return readFileSync(resolve(ROOT, relativePath), "utf8");

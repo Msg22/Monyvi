@@ -12,8 +12,8 @@ import { database, type CurrencyType, type MarketRate } from "@monyvi/db";
 import {
   assertValidMarketRateModel,
   convertCurrency,
-  formatCurrency,
 } from "@monyvi/logic";
+import { formatLocalizedMoneyAmount } from "@/utils/localized-money-display";
 import { Q } from "@nozbe/watermelondb";
 import { useEffect, useMemo, useState } from "react";
 import { logger } from "../utils/logger";
@@ -99,7 +99,7 @@ function computeEquivalentText(
 
   if (converted === amount) return null;
 
-  return `≈ ${formatCurrency({ amount: converted, currency: preferredCurrency })}`;
+  return `≈ ${formatLocalizedMoneyAmount({ amount: converted, currency: preferredCurrency })}`;
 }
 
 // =============================================================================

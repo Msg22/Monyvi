@@ -288,13 +288,14 @@ set with `E2E_CI_LIVE_SMS_JOURNEYS=01,02,...` when debugging a smaller slice.
 
 ## Test Layout
 
-| Folder                | Purpose                                     |
-| --------------------- | ------------------------------------------- |
-| `helpers/`            | Shared setup and visible navigation helpers |
-| `auth/`               | Signed-out authentication journeys          |
-| `transactions/`       | Transaction create/edit/delete/search flows |
-| `sms-sync/`           | SMS sync permission and recovery flows      |
-| `live-sms-detection/` | Live SMS detection journeys and helpers     |
+| Folder                | Purpose                                      |
+| --------------------- | -------------------------------------------- |
+| `helpers/`            | Shared setup and visible navigation helpers  |
+| `auth/`               | Signed-out authentication journeys           |
+| `transactions/`       | Transaction create/edit/delete/search flows  |
+| `sms-sync/`           | SMS sync permission and recovery flows       |
+| `live-sms-detection/` | Live SMS detection journeys and helpers      |
+| `localization/`       | Runtime locale and monetary display journeys |
 
 ## Transaction Flows
 
@@ -310,32 +311,42 @@ set with `E2E_CI_LIVE_SMS_JOURNEYS=01,02,...` when debugging a smaller slice.
 | `transactions/delete-transaction.yaml`  | Delete with confirmation              | Transaction exists       |
 | `transactions/search-filter.yaml`       | Search + type filter                  | Multiple transactions    |
 
+## Localization Flows
+
+| Flow                                      | Description                                        | Preconditions                 |
+| ----------------------------------------- | -------------------------------------------------- | ----------------------------- |
+| `localization/arabic-money-displays.yaml` | Arabic Home, account, and transaction money output | Default authenticated fixture |
+
 ## testID Reference
 
-| testID                     | Component                           |
-| -------------------------- | ----------------------------------- |
-| `auth-mode-sign-in`        | Sign-in mode segment                |
-| `auth-mode-sign-up`        | Sign-up mode segment                |
-| `auth-google-button`       | Google authentication action        |
-| `auth-email-input`         | Email input                         |
-| `auth-password-input`      | Password input                      |
-| `auth-password-visibility` | Password visibility action          |
-| `auth-forgot-password`     | Password recovery action            |
-| `auth-submit-button`       | Email authentication CTA            |
-| `fab-button`               | Main FAB button                     |
-| `fab-transaction`          | "Add Transaction" action            |
-| `transaction-card-{id}`    | Transaction card                    |
-| `card-category-{id}`       | Category icon on card               |
-| `card-amount-{id}`         | Amount area on card                 |
-| `type-tab-{VALUE}`         | Type tabs (EXPENSE/INCOME/TRANSFER) |
-| `header-save`              | Save button                         |
-| `header-delete`            | Delete button                       |
-| `header-back`              | Back button                         |
-| `modal-confirm`            | Confirm button                      |
-| `modal-cancel`             | Cancel button                       |
-| `search-input`             | Search input                        |
-| `filter-period`            | Period filter                       |
-| `filter-type`              | Type filter                         |
+| testID                            | Component                                   |
+| --------------------------------- | ------------------------------------------- |
+| `auth-mode-sign-in`               | Sign-in mode segment                        |
+| `auth-mode-sign-up`               | Sign-up mode segment                        |
+| `auth-google-button`              | Google authentication action                |
+| `auth-email-input`                | Email input                                 |
+| `auth-password-input`             | Password input                              |
+| `auth-password-visibility`        | Password visibility action                  |
+| `auth-forgot-password`            | Password recovery action                    |
+| `auth-submit-button`              | Email authentication CTA                    |
+| `fab-button`                      | Main FAB button                             |
+| `fab-transaction`                 | "Add Transaction" action                    |
+| `transaction-card-{id}`           | Transaction card                            |
+| `card-category-{id}`              | Category icon on card                       |
+| `card-amount-{id}`                | Amount area on card                         |
+| `type-tab-{VALUE}`                | Type tabs (EXPENSE/INCOME/TRANSFER)         |
+| `header-save`                     | Save button                                 |
+| `header-delete`                   | Delete button                               |
+| `header-back`                     | Back button                                 |
+| `modal-confirm`                   | Confirm button                              |
+| `modal-cancel`                    | Cancel button                               |
+| `search-input`                    | Search input                                |
+| `filter-period`                   | Period filter                               |
+| `filter-type`                     | Type filter                                 |
+| `settings-language-trigger`       | Language dropdown trigger                   |
+| `settings-language-option-{code}` | Language option (`en` or `ar`)              |
+| `tab-{name}`                      | Home, accounts, transactions, or metals tab |
+| `home-net-worth-amount`           | Home net-worth monetary output              |
 
 ## Live SMS Permission Flows
 

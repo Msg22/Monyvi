@@ -36,12 +36,13 @@ import {
   validateTransactionForm,
   type TransactionValidationErrors,
 } from "@/validation/transaction-validation";
+import { formatLocalizedMoneyAmount } from "@/utils/localized-money-display";
 import { Ionicons } from "@expo/vector-icons";
 import type { TransactionType } from "@monyvi/db";
 import {
   calculateEditedTransactionBalanceProjection,
   evaluateAmountExpression,
-  formatAmountInput,
+  formatStoredAmountInput,
 } from "@monyvi/logic";
 import * as Haptics from "expo-haptics";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -179,7 +180,7 @@ export default function EditTransaction(): React.ReactNode {
   useEffect(() => {
     if (!transaction || isInitialized) return;
 
-    const amountStr = transaction.amount.toString();
+    const amountStr = formatStoredAmountInput(transaction.amount);
     setAmount(amountStr);
     setTypeRaw(transaction.type);
     setSelectedAccountId(transaction.accountId);
@@ -319,11 +320,26 @@ export default function EditTransaction(): React.ReactNode {
     }
 
     // --- Branch: Regular Transaction Update ---
-    const { isValid, errors } = validateTransactionForm(type, {
-      amount,
-      accountId: selectedAccountId,
-      categoryId: selectedCategoryId,
-    });
+    const { isValid, errors } = validateTransactionForm(
+      type,
+      {
+        amount,
+        accountId: selectedAccountId,
+        categoryId: selectedCategoryId,
+      },
+      {
+        amountRequired: t("amount_required"),
+        invalidAmount: t("invalid_amount"),
+        amountMustBePositive: t("amount_must_be_positive"),
+        amountMaximum: (maximum) =>
+          t("amount_maximum_error", {
+            maximum: maximum.toLocaleString("en-US"),
+          }),
+        amountPrecision: (precision) =>
+          t("amount_precision_error", { precision }),
+      },
+      { currency: selectedAccount?.currency }
+    );
 
     if (!isValid) {
       setFormErrors(errors);
@@ -566,11 +582,13 @@ export default function EditTransaction(): React.ReactNode {
           {balanceWarning && balanceWarningAccount && (
             <Text className="text-amber-500 text-xs font-medium text-center mb-1">
               {t("warning_negative_balance")}{" "}
-              {formatAmountInput(
-                balanceWarning.projectedBalance.toFixed(2),
-                "0"
-              )}{" "}
-              {balanceWarningAccount.currency}
+              {formatLocalizedMoneyAmount({
+                amount: balanceWarning.projectedBalance,
+                currency: balanceWarningAccount.currency,
+                englishPresentation: "code-suffix",
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}
             </Text>
           )}
           <AmountDisplay

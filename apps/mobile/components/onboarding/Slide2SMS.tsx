@@ -3,6 +3,7 @@ import { View, Text } from "react-native";
 import { useTranslation } from "react-i18next";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { palette } from "@/constants/colors";
+import { formatLocalizedMoneyAmount } from "@/utils/localized-money-display";
 import { PitchMockCard } from "./PitchMockCard";
 
 /**
@@ -21,11 +22,19 @@ import { PitchMockCard } from "./PitchMockCard";
  * MaterialCommunityIcons, alongside an emoji-free i18n label
  * `"CIB Bank · 2 min ago"`.
  *
- * Numeric values ("485 EGP") are baked into the marketing illustration and
- * not translated — see `// i18n-ignore` comments.
+ * Monetary mock values follow the active locale while preserving the illustration.
  */
 export function Slide2SMS(): React.ReactElement {
-  const { t } = useTranslation("onboarding");
+  const { t, i18n } = useTranslation("onboarding");
+  const language = i18n.dir() === "rtl" ? "ar" : "en";
+  const amount = formatLocalizedMoneyAmount({
+    amount: 485,
+    currency: "EGP",
+    language,
+    englishPresentation: "code-prefix",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  });
 
   return (
     <PitchMockCard>
@@ -42,7 +51,7 @@ export function Slide2SMS(): React.ReactElement {
           </Text>
         </View>
         <Text className="mt-1 text-xs leading-relaxed text-slate-600 dark:text-slate-300">
-          {t("pitch_slide_sms_bank_body")}
+          {t("pitch_slide_sms_bank_body", { amount })}
         </Text>
       </View>
 
@@ -58,12 +67,7 @@ export function Slide2SMS(): React.ReactElement {
       <View className="rounded-xl border border-slate-100 p-3 dark:border-slate-700">
         <View className="flex-row items-center justify-between">
           <Text className="text-2xl font-bold text-slate-900 dark:text-white">
-            {/* i18n-ignore: numeric mock value baked into the illustration */}
-            485{" "}
-            <Text className="text-base font-medium text-slate-500 dark:text-slate-400">
-              {/* i18n-ignore: ISO currency code, not translatable */}
-              EGP
-            </Text>
+            {amount}
           </Text>
           <View className="rounded-full bg-nileGreen-500/15 px-3 py-1">
             <Text className="text-xs font-semibold text-nileGreen-600 dark:text-nileGreen-300">

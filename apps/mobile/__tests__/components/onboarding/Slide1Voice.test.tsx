@@ -1,7 +1,10 @@
 import { render, screen } from "@testing-library/react-native";
 import React from "react";
+import i18next from "i18next";
 
 import { Slide1Voice } from "@/components/onboarding/Slide1Voice";
+import arCommon from "@/locales/ar/common.json";
+import enCommon from "@/locales/en/common.json";
 
 let mockDirection: "ltr" | "rtl" = "ltr";
 
@@ -18,24 +21,45 @@ const copy: Readonly<Record<string, string>> = {
   pitch_slide_voice_result_borrowed_category: "Borrowed Money · Income",
   pitch_slide_voice_review_ready: "3 transactions ready to review",
   pitch_slide_voice_result_coffee_accessibility:
-    "Expense, Coffee at Starbucks, 40 EGP, Food & Drinks",
+    "Expense, Coffee at Starbucks, {{amount}}, Food & Drinks",
   pitch_slide_voice_result_clothes_accessibility:
-    "Expense, Clothes, 2,000 EGP, Shopping",
+    "Expense, Clothes, {{amount}}, Shopping",
   pitch_slide_voice_result_borrowed_accessibility:
-    "Income, Borrowed from Ahmed, 500 EGP, Borrowed Money",
+    "Income, Borrowed from Ahmed, {{amount}}, Borrowed Money",
 };
 
 jest.mock("react-i18next", () => ({
   useTranslation: (): {
-    readonly t: (key: string) => string;
+    readonly t: (
+      key: string,
+      values?: Readonly<Record<string, string>>
+    ) => string;
     readonly i18n: { readonly dir: () => "ltr" | "rtl" };
   } => ({
-    t: (key: string): string => copy[key] ?? key,
+    t: (key: string, values?: Readonly<Record<string, string>>): string => {
+      const template = copy[key] ?? key;
+      return values?.amount
+        ? template.replace("{{amount}}", values.amount)
+        : template;
+    },
     i18n: { dir: (): "ltr" | "rtl" => mockDirection },
   }),
 }));
 
 describe("Slide1Voice", () => {
+  beforeAll(async () => {
+    await i18next.init({
+      resources: {
+        en: { common: enCommon },
+        ar: { common: arCommon },
+      },
+      lng: "en",
+      fallbackLng: "en",
+      ns: "common",
+      defaultNS: "common",
+      interpolation: { escapeValue: false },
+    });
+  });
   beforeEach(() => {
     mockDirection = "ltr";
   });
@@ -89,20 +113,25 @@ describe("Slide1Voice", () => {
     ).toHaveStyle({
       writingDirection: "ltr",
     });
+    expect(screen.getByText("؜-٤٠ جنيه مصري")).toBeVisible();
+    expect(screen.getByText("؜-٢٬٠٠٠ جنيه مصري")).toBeVisible();
+    expect(screen.getByText("؜+٥٠٠ جنيه مصري")).toBeVisible();
   });
 
   it("gives each parsed result a complete accessible description", () => {
     render(<Slide1Voice />);
 
     expect(
-      screen.getByLabelText(copy.pitch_slide_voice_result_coffee_accessibility)
+      screen.getByLabelText(
+        "Expense, Coffee at Starbucks, −40 EGP, Food & Drinks"
+      )
     ).toBeVisible();
     expect(
-      screen.getByLabelText(copy.pitch_slide_voice_result_clothes_accessibility)
+      screen.getByLabelText("Expense, Clothes, −2,000 EGP, Shopping")
     ).toBeVisible();
     expect(
       screen.getByLabelText(
-        copy.pitch_slide_voice_result_borrowed_accessibility
+        "Income, Borrowed from Ahmed, +500 EGP, Borrowed Money"
       )
     ).toBeVisible();
   });

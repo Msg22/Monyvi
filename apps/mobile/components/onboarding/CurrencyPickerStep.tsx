@@ -20,6 +20,10 @@ import { palette } from "@/constants/colors";
 import { ANDROID_SAFE_LIST_PROPS } from "@/constants/virtualized-list-policy";
 import { useTheme } from "@/context/ThemeContext";
 import { detectCurrencyFromTimezone } from "@/utils/currency-detection";
+import {
+  currencyMatchesQuery,
+  getCurrencyName,
+} from "@/utils/currency-localization";
 import type { CurrencyType } from "@monyvi/db";
 import { CurrencyInfo, SUPPORTED_CURRENCIES } from "@monyvi/logic";
 import { Ionicons } from "@expo/vector-icons";
@@ -65,7 +69,7 @@ export function CurrencyPickerStep({
   const insets = useSafeAreaInsets();
   const { theme, isDark } = useTheme();
   const [searchQuery, setSearchQuery] = useState("");
-  const { t } = useTranslation("onboarding");
+  const { t, i18n } = useTranslation("onboarding");
   const { t: tCommon } = useTranslation("common");
 
   // Detect suggested currency from timezone (one-time on mount)
@@ -94,13 +98,10 @@ export function CurrencyPickerStep({
   const filteredCurrencies = useMemo((): readonly CurrencyInfo[] => {
     if (!searchQuery.trim()) return sortedCurrencies;
 
-    const query = searchQuery.toLowerCase().trim();
-    return sortedCurrencies.filter(
-      (c) =>
-        c.name.toLowerCase().includes(query) ||
-        c.code.toLowerCase().includes(query)
+    return sortedCurrencies.filter((c) =>
+      currencyMatchesQuery(c.code, searchQuery)
     );
-  }, [searchQuery, sortedCurrencies]);
+  }, [searchQuery, sortedCurrencies, i18n.language]);
 
   const handleSelect = useCallback((code: CurrencyType): void => {
     setSelectedCode(code);
@@ -156,7 +157,7 @@ export function CurrencyPickerStep({
           <View className="flex-1">
             <View className="flex-row items-center gap-2">
               <Text className="text-base font-semibold text-text-primary dark:text-text-primary-dark">
-                {item.name}
+                {getCurrencyName(item.code)}
               </Text>
               {isSuggested && (
                 <View className="px-2 py-0.5 rounded-full bg-nileGreen-500/20">

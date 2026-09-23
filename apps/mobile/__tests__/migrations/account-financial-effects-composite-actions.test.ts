@@ -3,7 +3,7 @@ import path from "node:path";
 
 const MIGRATION_PATH = path.resolve(
   __dirname,
-  "../../../../supabase/migrations/069_account_financial_effects.sql"
+  "../../../../supabase/migrations/076_account_financial_effects.sql"
 );
 
 describe("migration 069 composite writer actions", () => {

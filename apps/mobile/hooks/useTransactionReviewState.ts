@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { Category, MarketRate } from "@monyvi/db";
+import type { Category } from "@monyvi/db";
 import { useToast } from "@/components/ui/Toast";
 import { useCategories } from "@/hooks/useCategories";
 import { useCategoryLookup } from "@/context/CategoriesContext";
 import { useMarketRates } from "@/hooks/useMarketRates";
+import type { SelectedMarketRateSnapshot } from "@/services/market-rate-snapshot-read-model-service";
 import { getPeriodDateRange } from "@/hooks/usePeriodSummary";
 import type {
   GroupingPeriod,
@@ -199,7 +200,7 @@ export interface UseTransactionReviewStateResult {
   readonly categoryMap: ReadonlyMap<string, Category>;
   readonly expenseCategories: readonly Category[];
   readonly incomeCategories: readonly Category[];
-  readonly latestRates: MarketRate | null;
+  readonly selectedSnapshot: SelectedMarketRateSnapshot | null;
 }
 
 interface AccountMatchState {
@@ -316,7 +317,7 @@ export function useTransactionReviewState({
     );
   }, []);
 
-  const { latestRates } = useMarketRates();
+  const { selectedSnapshot } = useMarketRates();
   const [editModalIndex, setEditModalIndex] = useState<number | null>(null);
   const { expenseCategories, incomeCategories } = useCategories();
   const categoryMap = useCategoryLookup();
@@ -957,6 +958,6 @@ export function useTransactionReviewState({
     categoryMap,
     expenseCategories,
     incomeCategories,
-    latestRates,
+    selectedSnapshot,
   };
 }

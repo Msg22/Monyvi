@@ -173,6 +173,7 @@ jest.mock("@/services/supabase", () => ({
 // =============================================================================
 
 import {
+  getPreferredLanguageForUser,
   setPreferredLanguage,
   setPreferredCurrency,
   completeOnboarding,
@@ -290,6 +291,24 @@ describe("setPreferredLanguage", () => {
   it("throws if no profile row exists", async (): Promise<void> => {
     setupProfileNotFound();
     await expect(setPreferredLanguage("en")).rejects.toThrow();
+  });
+});
+
+describe("getPreferredLanguageForUser", () => {
+  it("returns the scoped profile language for the expected user", async (): Promise<void> => {
+    setupProfileFound(
+      createMockProfile({ preferredLanguage: "ar", userId: "user-1" })
+    );
+
+    await expect(getPreferredLanguageForUser("user-1")).resolves.toBe("ar");
+  });
+
+  it("returns null when the authenticated user changes", async (): Promise<void> => {
+    setupProfileFound(
+      createMockProfile({ preferredLanguage: "ar", userId: "user-2" })
+    );
+
+    await expect(getPreferredLanguageForUser("user-1")).resolves.toBeNull();
   });
 });
 

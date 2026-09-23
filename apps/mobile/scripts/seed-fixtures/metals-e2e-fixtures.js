@@ -1,29 +1,10 @@
 const FIXED_NOW = "2026-08-31T10:15:30.123Z";
+const {
+  MARKET_RATE_OBSERVATION_DEFINITIONS,
+  buildMarketRateObservations,
+} = require("./market-rate-snapshot-fixture");
 const STALE_RATE_AGE_MS = 3 * 24 * 60 * 60 * 1000;
 const STALE_BOUNDARY_AGE_MS = 24 * 60 * 60 * 1000 + 1;
-const RATE_OBSERVATIONS = Object.freeze([
-  Object.freeze({
-    instrumentCode: "metal:GOLD",
-    label: "gold",
-    orientation: "quote_per_base",
-    unit: "usd_per_pure_gram",
-    valueDecimal: "75.25",
-  }),
-  Object.freeze({
-    instrumentCode: "metal:SILVER",
-    label: "silver",
-    orientation: "quote_per_base",
-    unit: "usd_per_pure_gram",
-    valueDecimal: "0.95",
-  }),
-  Object.freeze({
-    instrumentCode: "currency:EGP",
-    label: "display-egp",
-    orientation: "quote_per_base",
-    unit: "usd_per_currency_unit",
-    valueDecimal: "0.02",
-  }),
-]);
 const METALS_PROFILE_NAMES = Object.freeze([
   "metals-fresh-local-en-light",
   "metals-stale-restart-ar-dark",
@@ -41,7 +22,7 @@ function buildMetalsCleanupRows() {
       id: deterministicUuid(`e2e-${name}`, userId, "metals:market-rate"),
     })),
     marketRateObservations: METALS_PROFILE_NAMES.flatMap((name) =>
-      RATE_OBSERVATIONS.map(({ label }) => ({
+      MARKET_RATE_OBSERVATION_DEFINITIONS.map(({ label }) => ({
         id: deterministicUuid(`e2e-${name}`, userId, `metals:rate:${label}`),
       }))
     ),
@@ -69,6 +50,15 @@ function buildMetalsRows(scenario) {
             ).toISOString()
           : currentTimestamp;
     const isMissing = scenario.rateState === "missing";
+    const marketRate = {
+      ...marketRateTemplate,
+      id: deterministicUuid(seedScope, userId, "metals:market-rate"),
+      egp_usd: 0.02,
+      gold_usd_per_gram: 75.25,
+      silver_usd_per_gram: 0.95,
+      timestamp_currency: providerObservedAt,
+      timestamp_metal: providerObservedAt,
+    };
     return {
       assets: [
         {
@@ -125,35 +115,19 @@ function buildMetalsRows(scenario) {
           updated_at: currentTimestamp,
         },
       ],
-      marketRates: isMissing
-        ? []
-        : [
-            {
-              ...marketRateTemplate,
-              id: deterministicUuid(seedScope, userId, "metals:market-rate"),
-              gold_usd_per_gram: 75.25,
-              timestamp_currency: providerObservedAt,
-              timestamp_metal: providerObservedAt,
-            },
-          ],
+      marketRates: isMissing ? [] : [marketRate],
       marketRateObservations: isMissing
         ? []
-        : RATE_OBSERVATIONS.map((rate) => ({
-            id: deterministicUuid(
-              seedScope,
-              userId,
-              `metals:rate:${rate.label}`
-            ),
-            batch_id: deterministicUuid(seedScope, userId, "metals:rate-batch"),
-            instrument_code: rate.instrumentCode,
-            value_decimal: rate.valueDecimal,
-            unit: rate.unit,
-            orientation: rate.orientation,
-            provider_observed_at: providerObservedAt,
+        : buildMarketRateObservations({
+            createdAt: currentTimestamp,
+            deterministicUuid,
+            marketRate,
+            observationIdKey: ({ label }) => `metals:rate:${label}`,
+            providerObservedAt,
+            seedScope,
             source: `e2e_fixture:${seedScope}`,
-            quality: "valid",
-            created_at: currentTimestamp,
-          })),
+            userId,
+          }),
     };
   };
 }

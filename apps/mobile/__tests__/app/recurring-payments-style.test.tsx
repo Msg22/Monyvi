@@ -180,7 +180,10 @@ jest.mock("@/components/modals/ConfirmationModal", () => ({
     return (
       <View testID="reactivate-confirmation-modal">
         <Text>{title}</Text>
-        <TouchableOpacity testID="reactivate-confirmation-confirm" onPress={onConfirm} />
+        <TouchableOpacity
+          testID="reactivate-confirmation-confirm"
+          onPress={onConfirm}
+        />
       </View>
     );
   },
@@ -220,10 +223,15 @@ jest.mock("@/hooks/usePreferredCurrency", () => ({
 
 jest.mock("@/hooks/useMarketRates", () => ({
   useMarketRates: (): {
-    readonly latestRates: { readonly egpUsd: number };
+    readonly selectedSnapshot: {
+      readonly ratesByInstrument: ReadonlyMap<
+        string,
+        { readonly valueDecimal: string }
+      >;
+    };
   } => ({
-    latestRates: {
-      egpUsd: 0.02,
+    selectedSnapshot: {
+      ratesByInstrument: new Map([["currency:EGP", { valueDecimal: "0.02" }]]),
     },
   }),
 }));
@@ -236,6 +244,7 @@ jest.mock("@/hooks/useRecurringPayments", () => ({
 }));
 
 jest.mock("@monyvi/logic", () => ({
+  ...jest.requireActual<typeof import("@monyvi/logic")>("@monyvi/logic"),
   calculateCalendarDaysUntil: (date: Date): number => {
     const now = new Date();
     return (
@@ -324,10 +333,9 @@ describe("RecurringPaymentsScreen dashboard", () => {
       "className",
       expect.stringContaining("min-h-[88px]")
     );
-    expect(screen.getByTestId("recurring-payment-row-payment-1")).not.toHaveProp(
-      "className",
-      "flex-1"
-    );
+    expect(
+      screen.getByTestId("recurring-payment-row-payment-1")
+    ).not.toHaveProp("className", "flex-1");
   });
 
   it("uses the themed app background on the dashboard root", () => {
@@ -698,9 +706,7 @@ describe("RecurringPaymentsScreen dashboard", () => {
     ).toHaveTextContent(/status_active/i);
 
     fireEvent.press(
-      screen.getByTestId(
-        "recurring-payment-pay-now-payment-final-overdue"
-      )
+      screen.getByTestId("recurring-payment-pay-now-payment-final-overdue")
     );
 
     expect(mockPayNowModal).toHaveBeenLastCalledWith(
@@ -815,9 +821,6 @@ describe("RecurringPaymentsScreen dashboard", () => {
       screen.getByTestId(
         "recurring-payment-pay-now-layout-payment-stacked-pay-now"
       )
-    ).toHaveProp(
-      "className",
-      expect.stringContaining("mt-3 self-stretch")
-    );
+    ).toHaveProp("className", expect.stringContaining("mt-3 self-stretch"));
   });
 });

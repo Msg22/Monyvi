@@ -17,7 +17,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
 import type { CurrencyType } from "@monyvi/db";
-import { formatCurrency } from "@monyvi/logic";
+import { formatLocalizedMoneyAmount } from "@/utils/localized-money-display";
 import React, { useEffect, useState } from "react";
 import {
   BackHandler,
@@ -95,7 +95,7 @@ interface BalanceChangedSheetProps {
  * Uses locale-aware formatting with 2 decimal places.
  */
 function formatAmount(amount: number, currency: CurrencyType): string {
-  return formatCurrency({
+  return formatLocalizedMoneyAmount({
     amount,
     currency,
     minimumFractionDigits: 2,

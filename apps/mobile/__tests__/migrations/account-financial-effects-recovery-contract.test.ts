@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 const ROOT = resolve(__dirname, "../../../..");
-const MIGRATION_PATH = "supabase/migrations/069_account_financial_effects.sql";
+const MIGRATION_PATH = "supabase/migrations/076_account_financial_effects.sql";
 
 function source(relativePath: string): string {
   return readFileSync(resolve(ROOT, relativePath), "utf8");
@@ -87,7 +87,9 @@ describe("069 account financial-effects recovery contracts", () => {
     expect(sql).toMatch(
       /payment\.financial_revision\s*=\s*private\.financial_action_account_revision_from_text_v1/i
     );
-    expect(sql).toMatch(/financial_revision\s*=\s*payment\.financial_revision\s*\+\s*1/i);
+    expect(sql).toMatch(
+      /financial_revision\s*=\s*payment\.financial_revision\s*\+\s*1/i
+    );
     expect(sql).not.toMatch(
       /payment\.updated_at\s*=\s*\(p_record\s*->>\s*'expectedUpdatedAt'\)::timestamptz/i
     );

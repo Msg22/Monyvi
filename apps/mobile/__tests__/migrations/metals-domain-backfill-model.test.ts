@@ -16,7 +16,7 @@ describe("068 Metals domain migration and persisted models", () => {
     ).toContain("financial_action_groups");
     expect(() => source(migrationPath)).not.toThrow();
     expect(
-      source("supabase/migrations/069_account_financial_effects.sql")
+      source("supabase/migrations/076_account_financial_effects.sql")
     ).toContain("account_financial_effects");
   });
 

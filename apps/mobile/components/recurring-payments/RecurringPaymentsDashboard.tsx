@@ -17,7 +17,8 @@ import type {
   RecurringPayment,
   RecurringStatus,
 } from "@monyvi/db";
-import { calculateCalendarDaysUntil, formatCurrency } from "@monyvi/logic";
+import { calculateCalendarDaysUntil } from "@monyvi/logic";
+import { formatLocalizedMoneyAmount } from "@/utils/localized-money-display";
 import React from "react";
 import { useTranslation } from "react-i18next";
 import {
@@ -36,9 +37,9 @@ interface StatusTabsProps {
 }
 
 interface HeroSummaryProps {
-  readonly next7Days: number;
+  readonly next7Days: number | null;
   readonly overdueCount: number;
-  readonly thisMonth: number;
+  readonly thisMonth: number | null;
   readonly currencyCode: CurrencyType;
 }
 
@@ -150,7 +151,12 @@ export function HeroSummary({
             {t("due_this_month")}
           </Text>
           <Text className="text-2xl font-extrabold mt-0.5 text-nileGreen-700 dark:text-nileGreen-400">
-            {formatCurrency({ amount: thisMonth, currency: currencyCode })}
+            {thisMonth === null
+              ? "—"
+              : formatLocalizedMoneyAmount({
+                  amount: thisMonth,
+                  currency: currencyCode,
+                })}
           </Text>
         </View>
 
@@ -159,10 +165,14 @@ export function HeroSummary({
         <View className="w-[112px] ps-3 justify-center gap-2">
           <MetricText
             label={t("next_7_days")}
-            value={formatCurrency({
-              amount: next7Days,
-              currency: currencyCode,
-            })}
+            value={
+              next7Days === null
+                ? "—"
+                : formatLocalizedMoneyAmount({
+                    amount: next7Days,
+                    currency: currencyCode,
+                  })
+            }
             valueClassName="text-nileGreen-700 dark:text-nileGreen-400"
           />
           <MetricText
@@ -218,7 +228,7 @@ export function NextPaymentInsight({
               testID="recurring-payments-next-insight-amount"
               className="shrink-0 text-sm font-bold me-2 text-nileGreen-700 dark:text-nileGreen-400"
             >
-              {formatCurrency({
+              {formatLocalizedMoneyAmount({
                 amount: payment.amount,
                 currency: payment.currency,
               })}
@@ -304,83 +314,83 @@ export function PaymentRow({
         <View testID="recurring-payment-row" className="flex-row items-center">
           <View
             className={`w-12 h-12 rounded-2xl items-center justify-center me-3 ${
-            payment.isIncome
-              ? "bg-nileGreen-50 dark:bg-nileGreen-900"
-              : "bg-slate-100 dark:bg-slate-700"
-          }`}
-        >
-          {category ? (
-            <CategoryIcon
-              iconName={iconConfig?.iconName ?? "repeat-outline"}
-              iconLibrary={iconConfig?.iconLibrary ?? "Ionicons"}
-              color={iconConfig?.iconColor}
-              size={20}
-            />
-          ) : (
-            <Ionicons
-              name={getPaymentIcon(payment.name)}
-              size={22}
-              color={
-                payment.isIncome
-                  ? palette.nileGreen[500]
-                  : isDark
-                    ? palette.slate[300]
-                    : palette.slate[600]
-              }
-            />
-          )}
-        </View>
-
-        <View className="flex-1 me-3">
-          <Text
-            className="text-base font-bold text-text-primary dark:text-text-primary-dark"
-            numberOfLines={1}
-          >
-            {payment.name}
-          </Text>
-          <View className="flex-row items-center mt-1">
-            <Text
-              testID={`recurring-payment-frequency-label-${payment.id}`}
-              className="text-xs text-text-muted dark:text-text-muted-dark"
-              numberOfLines={1}
-            >
-              {getFrequencyLabel(payment.frequency, t)} {typeLabel}
-            </Text>
-          </View>
-          <View className="mt-1.5 self-start">
-            <StatusPill status={payment.status} />
-          </View>
-        </View>
-
-        <View className="items-end min-w-[82px]">
-          <Text
-            className={`text-base font-extrabold ${
               payment.isIncome
-                ? "text-nileGreen-600 dark:text-nileGreen-400"
-                : "text-text-primary dark:text-text-primary-dark"
+                ? "bg-nileGreen-50 dark:bg-nileGreen-900"
+                : "bg-slate-100 dark:bg-slate-700"
             }`}
           >
-            {formatCurrency({
-              amount: payment.amount,
-              currency: payment.currency,
-            })}
-          </Text>
-          <View className="flex-row items-center mt-2">
-            <Ionicons
-              name="calendar-outline"
-              size={13}
-              color={palette.slate[500]}
-            />
+            {category ? (
+              <CategoryIcon
+                iconName={iconConfig?.iconName ?? "repeat-outline"}
+                iconLibrary={iconConfig?.iconLibrary ?? "Ionicons"}
+                color={iconConfig?.iconColor}
+                size={20}
+              />
+            ) : (
+              <Ionicons
+                name={getPaymentIcon(payment.name)}
+                size={22}
+                color={
+                  payment.isIncome
+                    ? palette.nileGreen[500]
+                    : isDark
+                      ? palette.slate[300]
+                      : palette.slate[600]
+                }
+              />
+            )}
+          </View>
+
+          <View className="flex-1 me-3">
             <Text
-              className={`text-xs font-medium ms-1 ${
-                isOverdueLabel
-                  ? "text-red-500"
-                  : "text-text-muted dark:text-text-muted-dark"
+              className="text-base font-bold text-text-primary dark:text-text-primary-dark"
+              numberOfLines={1}
+            >
+              {payment.name}
+            </Text>
+            <View className="flex-row items-center mt-1">
+              <Text
+                testID={`recurring-payment-frequency-label-${payment.id}`}
+                className="text-xs text-text-muted dark:text-text-muted-dark"
+                numberOfLines={1}
+              >
+                {getFrequencyLabel(payment.frequency, t)} {typeLabel}
+              </Text>
+            </View>
+            <View className="mt-1.5 self-start">
+              <StatusPill status={payment.status} />
+            </View>
+          </View>
+
+          <View className="items-end min-w-[82px]">
+            <Text
+              className={`text-base font-extrabold ${
+                payment.isIncome
+                  ? "text-nileGreen-600 dark:text-nileGreen-400"
+                  : "text-text-primary dark:text-text-primary-dark"
               }`}
             >
-              {dueLabel}
+              {formatLocalizedMoneyAmount({
+                amount: payment.amount,
+                currency: payment.currency,
+              })}
             </Text>
-          </View>
+            <View className="flex-row items-center mt-2">
+              <Ionicons
+                name="calendar-outline"
+                size={13}
+                color={palette.slate[500]}
+              />
+              <Text
+                className={`text-xs font-medium ms-1 ${
+                  isOverdueLabel
+                    ? "text-red-500"
+                    : "text-text-muted dark:text-text-muted-dark"
+                }`}
+              >
+                {dueLabel}
+              </Text>
+            </View>
           </View>
           {!hasInlineAction ? (
             <Ionicons

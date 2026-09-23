@@ -8,6 +8,9 @@ import { UpcomingPayments } from "@/components/dashboard/UpcomingPayments";
 import { TransactionFiltersBar } from "@/components/transactions/TransactionFiltersBar";
 import arCommon from "@/locales/ar/common.json";
 import enCommon from "@/locales/en/common.json";
+import type { PeriodSummary } from "@/hooks/usePeriodSummary";
+
+let mockMissingRates = false;
 
 jest.mock("expo-router", () => ({
   router: { push: jest.fn() },
@@ -35,21 +38,15 @@ jest.mock("@/hooks/usePreferredCurrency", () => ({
 
 jest.mock("@/hooks/usePeriodSummary", () => ({
   usePeriodSummary: (): {
-    readonly data: {
-      readonly totalIncome: number;
-      readonly totalExpenses: number;
-      readonly savings: number;
-      readonly savingsPercentage: number;
-      readonly spentPercentage: number;
-    };
+    readonly data: PeriodSummary;
     readonly isLoading: boolean;
   } => ({
     data: {
       totalIncome: 100,
-      totalExpenses: 40,
-      savings: 60,
-      savingsPercentage: 60,
-      spentPercentage: 40,
+      totalExpenses: mockMissingRates ? null : 40,
+      savings: mockMissingRates ? null : 60,
+      savingsPercentage: mockMissingRates ? null : 60,
+      spentPercentage: mockMissingRates ? null : 40,
     },
     isLoading: false,
   }),
@@ -65,11 +62,11 @@ jest.mock("@/hooks/useRecurringPayments", () => ({
   }),
   useRecurringPayments: (): {
     readonly filteredPayments: ReadonlyArray<{ readonly id: string }>;
-    readonly totalDueFiltered: number;
+    readonly totalDueFiltered: number | null;
     readonly isLoading: boolean;
   } => ({
     filteredPayments: [{ id: "payment-1" }],
-    totalDueFiltered: 250,
+    totalDueFiltered: mockMissingRates ? null : 250,
     isLoading: false,
   }),
 }));
@@ -108,6 +105,25 @@ async function switchToArabic(instance: i18n): Promise<void> {
 }
 
 describe("period filter localization", () => {
+  beforeEach(() => {
+    mockMissingRates = false;
+  });
+
+  it("renders unavailable period metrics and bills without invented zero amounts", async () => {
+    mockMissingRates = true;
+    const instance = await createTestI18n();
+    render(
+      <I18nextProvider i18n={instance}>
+        <ThisMonth />
+        <UpcomingPayments onPayNow={jest.fn()} />
+      </I18nextProvider>
+    );
+    expect(screen.getAllByText(/—/)).toHaveLength(4);
+    expect(screen.queryByText("0%")).toBeNull();
+    expect(screen.queryByText(/NaN/)).toBeNull();
+    expect(screen.queryByText(/—\s*[↑↓]/)).toBeNull();
+    expect(screen.getByText(enCommon.details)).toBeTruthy();
+  });
   it("ships a one-year translation in both common locales", () => {
     expect(enCommon.period_one_year).toBe("1 Year");
     expect(arCommon.period_one_year).toBe("سنة واحدة");

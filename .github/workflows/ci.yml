@@ -4,7 +4,11 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main, codex/035-metals-module-redesign]
+    branches:
+      - main
+      - codex/035-metals-module-redesign
+      - codex/issue282-realized-metal-sale-results
+      - codex/035-metals-slice5-integration
 
 concurrency:
   group: ci-${{ github.event.pull_request.number || github.ref }}
@@ -80,6 +84,9 @@ jobs:
       - name: Test Logic Package
         run: npm test -w @monyvi/logic
 
+      - name: Market Rate Edge Contract
+        run: npm run test:market-rate-edge
+
       - name: Test Repository Scripts
         run: npm run test:scripts
 
@@ -103,7 +110,9 @@ jobs:
     if: >-
       github.event_name == 'pull_request' && (github.event.pull_request.base.ref
       == 'main' || github.event.pull_request.base.ref ==
-      'codex/035-metals-module-redesign')
+      'codex/035-metals-module-redesign' || github.event.pull_request.base.ref ==
+      'codex/issue282-realized-metal-sale-results' || github.event.pull_request.base.ref ==
+      'codex/035-metals-slice5-integration')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
@@ -131,7 +140,12 @@ jobs:
           npx supabase test db --local supabase/tests/financial_action_canonicalization_test.sql
           npx supabase test db --local supabase/tests/account_financial_action_rpc_test.sql
           npx supabase test db --local supabase/tests/account_financial_effects_test.sql
+          npx supabase test db --local supabase/tests/metals_issue285_reconciliation_test.sql
+          npx supabase test db --local supabase/tests/atomic_market_rate_snapshots_test.sql
+          npx supabase test db --local supabase/tests/market_snapshot_publication_test.sql
 
+      - name: Run snapshot publication concurrency pgTAP
+        run: node scripts/test-market-snapshot-concurrency.js
   android-build:
     name: Android Build Verification
     runs-on: ubuntu-latest

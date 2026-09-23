@@ -10,6 +10,10 @@
 
 import { palette } from "@/constants/colors";
 import { ANDROID_SAFE_LIST_PROPS } from "@/constants/virtualized-list-policy";
+import {
+  currencyMatchesQuery,
+  getCurrencyName,
+} from "@/utils/currency-localization";
 import { Ionicons } from "@expo/vector-icons";
 import type { CurrencyType } from "@monyvi/db";
 import { SORTED_SUPPORTED_CURRENCIES, type CurrencyInfo } from "@monyvi/logic";
@@ -87,7 +91,7 @@ function CurrencyRow({
               ) : null}
             </View>
             <Text className="text-xs text-slate-500 dark:text-slate-400">
-              {item.name}
+              {getCurrencyName(item.code)}
             </Text>
           </View>
           <Text className="text-sm text-slate-400 dark:text-slate-500 me-2">
@@ -125,17 +129,14 @@ export function CurrencyPicker({
 }: CurrencyPickerProps): React.JSX.Element {
   const bottomInset = useModalBottomInset();
   const [searchQuery, setSearchQuery] = useState("");
-  const { t } = useTranslation("common");
+  const { t, i18n } = useTranslation("common");
 
   const filteredCurrencies = useMemo(() => {
     if (!searchQuery.trim()) return [...SORTED_SUPPORTED_CURRENCIES];
-    const query = searchQuery.toLowerCase();
-    return SORTED_SUPPORTED_CURRENCIES.filter(
-      (c) =>
-        c.code.toLowerCase().includes(query) ||
-        c.name.toLowerCase().includes(query)
+    return SORTED_SUPPORTED_CURRENCIES.filter((c) =>
+      currencyMatchesQuery(c.code, searchQuery)
     );
-  }, [searchQuery]);
+  }, [searchQuery, i18n.language]);
 
   const handleSelect = useCallback(
     (currency: CurrencyType) => {

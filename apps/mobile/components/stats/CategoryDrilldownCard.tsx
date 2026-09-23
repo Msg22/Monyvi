@@ -17,7 +17,7 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { useCategoryDrilldownTransactions } from "@/hooks/useCategoryDrilldownTransactions";
 import { useTheme } from "@/context/ThemeContext";
 import type { CurrencyType } from "@monyvi/db";
-import { formatCurrency } from "@monyvi/logic";
+import { formatLocalizedMoneyAmount } from "@/utils/localized-money-display";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
@@ -300,7 +300,7 @@ export function CategoryDrilldownCard({
                     {t("total")}
                   </Text>
                   <Text className="text-sm font-bold text-slate-800 dark:text-white">
-                    {formatCurrency({
+                    {formatLocalizedMoneyAmount({
                       amount: totalAmount,
                       currency,
                     })}

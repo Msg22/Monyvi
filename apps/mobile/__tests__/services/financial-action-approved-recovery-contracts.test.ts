@@ -72,9 +72,9 @@ function source(path: string): string {
   return readFileSync(resolve(ROOT, path), "utf8");
 }
 
-function transactionAfter(sourceName: "MANUAL" | "RECURRING"): Readonly<
-  Record<string, unknown>
-> {
+function transactionAfter(
+  sourceName: "MANUAL" | "RECURRING"
+): Readonly<Record<string, unknown>> {
   return {
     accountId: ACCOUNT_ID,
     amountMinorUnits: "100",
@@ -96,9 +96,9 @@ function transactionAfter(sourceName: "MANUAL" | "RECURRING"): Readonly<
   };
 }
 
-function accountEnvelope(includeEffectId: boolean): Readonly<
-  Record<string, unknown>
-> {
+function accountEnvelope(
+  includeEffectId: boolean
+): Readonly<Record<string, unknown>> {
   return {
     accountGuards: [{ accountId: ACCOUNT_ID, expectedRevision: "7" }],
     actionId: ACTION_ID,
@@ -234,7 +234,9 @@ function coordinatorHarness(input?: {
   return {
     dependencies: {
       invokeAccountFinancialActionRpc: invokeRpc,
-      markFinancialActionGroupSyncFailed: jest.fn().mockResolvedValue(undefined),
+      markFinancialActionGroupSyncFailed: jest
+        .fn()
+        .mockResolvedValue(undefined),
       markFinancialActionGroupSyncPending: markPending,
       reconcileFinancialActionGroup: reconcile,
       recordFinancialActionGroupServerOutcome: recordOutcome,
@@ -482,9 +484,11 @@ describe("PR #278 approved financial-action recovery contracts", () => {
   });
 
   describe("field-boundary precision", () => {
+    const AMOUNT_PRECISION_MESSAGE =
+      "Use no more than the currency's supported decimals";
     const messages = {
       accountRequired: "Select an account",
-      amountPrecision: "Use no more than the currency's supported decimals",
+      amountPrecision: (_precision: number): string => AMOUNT_PRECISION_MESSAGE,
     };
 
     it("rejects excess EGP precision with a friendly field error", () => {
@@ -497,7 +501,7 @@ describe("PR #278 approved financial-action recovery contracts", () => {
       const result = validateTransactionForm("EXPENSE", formData, messages);
 
       expect(result.isValid).toBe(false);
-      expect(result.errors.amount).toBe(messages.amountPrecision);
+      expect(result.errors.amount).toBe(AMOUNT_PRECISION_MESSAGE);
     });
 
     it("accepts eight BTC decimals and rejects a ninth", () => {
@@ -524,14 +528,14 @@ describe("PR #278 approved financial-action recovery contracts", () => {
 
       expect(accepted.isValid).toBe(true);
       expect(rejected.isValid).toBe(false);
-      expect(rejected.errors.amount).toBe(messages.amountPrecision);
+      expect(rejected.errors.amount).toBe(AMOUNT_PRECISION_MESSAGE);
     });
   });
 
   describe("generated, SQL, pull, and production wiring", () => {
     it("widens account-domain numeric storage for BTC precision", () => {
       const migration = source(
-        "supabase/migrations/069_account_financial_effects.sql"
+        "supabase/migrations/076_account_financial_effects.sql"
       );
 
       for (const [table, column] of [
@@ -552,7 +556,7 @@ describe("PR #278 approved financial-action recovery contracts", () => {
 
     it("stores the recurring monotonic revision locally and remotely", () => {
       const migration = source(
-        "supabase/migrations/069_account_financial_effects.sql"
+        "supabase/migrations/076_account_financial_effects.sql"
       );
       const localMigrations = source("packages/db/src/migrations.ts");
       const schema = source("packages/db/src/schema.ts");
@@ -570,7 +574,9 @@ describe("PR #278 approved financial-action recovery contracts", () => {
         /name:\s*["']recurring_payments["'][\s\S]*name:\s*["']financial_revision["'][\s\S]*type:\s*["']string["']/
       );
       expect(service).toContain("expectedFinancialRevision");
-      expect(service).not.toContain("expectedUpdatedAt: input.payment.updatedAt");
+      expect(service).not.toContain(
+        "expectedUpdatedAt: input.payment.updatedAt"
+      );
     });
 
     it("pulls exact account revisions and immutable effect evidence", () => {
@@ -593,7 +599,7 @@ describe("PR #278 approved financial-action recovery contracts", () => {
 
     it("preserves local effect identity in server inserts", () => {
       const migration = source(
-        "supabase/migrations/069_account_financial_effects.sql"
+        "supabase/migrations/076_account_financial_effects.sql"
       );
 
       expect(migration).toMatch(
@@ -604,7 +610,7 @@ describe("PR #278 approved financial-action recovery contracts", () => {
 
     it("retains every active Metals payload definition", () => {
       const migration = source(
-        "supabase/migrations/069_account_financial_effects.sql"
+        "supabase/migrations/076_account_financial_effects.sql"
       );
 
       for (const version of [

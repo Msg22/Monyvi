@@ -201,6 +201,20 @@ All schema changes MUST go through local SQL migration files in
 Commit format: `<type>: <description>` — Types: feat, fix, refactor, docs, test,
 chore, perf, ci.
 
+## Git Worktrees & Branch Isolation
+
+- **Worktree Location Invariant (MANDATORY)**: All secondary or isolated
+  worktrees MUST be created on the exact same disk and in the exact same parent
+  folder where the original project repository exists (`E:\Work\My Projects\`).
+- **NEVER create worktrees on other disks**: Never create worktrees on `C:`
+  (such as `~/.codex/worktrees/`, `~/.claude/worktrees/`, or `AppData`),
+  temporary directories, or any other disk.
+- **Directory Naming**: Sibling worktrees following
+  `../Monyvi-<issue-or-feature-name>`.
+- **Dependency Sharing**: Secondary worktrees MUST NOT run `npm install`. Link
+  `node_modules` via
+  `powershell -ExecutionPolicy Bypass -File scripts/link-worktree-node-modules.ps1 -RootWorkspace "E:\Work\My Projects\Monyvi"`.
+
 ## Security
 
 - No hardcoded secrets. Use environment variables or secret manager.

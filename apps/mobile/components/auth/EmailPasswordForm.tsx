@@ -275,7 +275,7 @@ export function EmailPasswordForm({
               disabled: isAnyActionPending,
               busy: isResetPending,
             }}
-            className="min-h-5 self-end justify-center"
+            className="min-h-5 justify-center rtl:self-start ltr:self-end"
             hitSlop={{ top: 24, right: 12, bottom: 0, left: 12 }}
             style={{ marginTop: 11, opacity: isAnyActionPending ? 0.55 : 1 }}
           >

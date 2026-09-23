@@ -34,7 +34,7 @@ const GAP = 12;
 
 export function LiveRatesScreenSkeleton(): React.JSX.Element {
   return (
-    <View className="px-5 pt-2">
+    <View testID="live-rates-skeleton" className="px-5 pt-2">
       {/* Hero Gold Card skeleton */}
       <Skeleton width="100%" height={HERO_HEIGHT} borderRadius={16} />
 

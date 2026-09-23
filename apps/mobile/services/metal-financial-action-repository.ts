@@ -54,6 +54,32 @@ export interface MetalFinancialActionRepository {
 
 type Payload = Readonly<Record<string, unknown>>;
 
+export function formatMetalLocalCalendarDate(date: Date): string {
+  const isLegacyUtcMidnight =
+    date.getUTCHours() === 0 &&
+    date.getUTCMinutes() === 0 &&
+    date.getUTCSeconds() === 0 &&
+    date.getUTCMilliseconds() === 0;
+  const year = String(
+    isLegacyUtcMidnight ? date.getUTCFullYear() : date.getFullYear()
+  ).padStart(4, "0");
+  const month = String(
+    (isLegacyUtcMidnight ? date.getUTCMonth() : date.getMonth()) + 1
+  ).padStart(2, "0");
+  const day = String(
+    isLegacyUtcMidnight ? date.getUTCDate() : date.getDate()
+  ).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+export function parseMetalLocalCalendarDate(value: unknown): Date {
+  const [year, month, day] = String(value).split("-").map(Number);
+  if (year === undefined || month === undefined || day === undefined) {
+    throw new Error("invalid_metal_action_payload");
+  }
+  return new Date(year, month - 1, day);
+}
+
 function asObject(value: unknown): Payload {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     throw new Error("invalid_metal_action_payload");
@@ -215,7 +241,7 @@ function applyAssetFacts(
   asset.acquisitionActionId = actionId;
   asset.currency = facts.purchaseCurrency as Asset["currency"];
   asset.purchaseCurrency = facts.purchaseCurrency as string;
-  asset.purchaseDate = new Date(`${String(facts.purchaseDate)}T00:00:00.000Z`);
+  asset.purchaseDate = parseMetalLocalCalendarDate(facts.purchaseDate);
   asset.purchasePriceDecimal = facts.purchasePriceDecimal as string;
   asset.purchasePrice = Number(facts.purchasePriceDecimal);
   asset.updatedAt = now;
@@ -236,7 +262,7 @@ function currentMaterialFacts(asset: Asset, metal: AssetMetal): Payload {
   return {
     physicalForm: metal.itemForm,
     purchaseCurrency: asset.purchaseCurrency,
-    purchaseDate: asset.purchaseDate.toISOString().slice(0, 10),
+    purchaseDate: formatMetalLocalCalendarDate(asset.purchaseDate),
     purchasePriceDecimal: asset.purchasePriceDecimal,
     purityCatalogVersion: metal.purityCatalogVersion,
     purityCode: metal.purityCode,
@@ -303,8 +329,15 @@ function assertPayloadMatchesProjection(
     throw new Error("metal_action_projection_mismatch");
   }
   if (
+    envelope.kind === "sell" &&
+    String(payload.saleDate) < formatMetalLocalCalendarDate(asset.purchaseDate)
+  ) {
+    throw new Error("metal_sale_before_acquisition");
+  }
+  if (
     envelope.kind === "dispose" &&
-    String(payload.disposalDate) < asset.purchaseDate.toISOString().slice(0, 10)
+    String(payload.disposalDate) <
+      formatMetalLocalCalendarDate(asset.purchaseDate)
   ) {
     throw new Error("metal_disposal_before_acquisition");
   }
@@ -325,7 +358,7 @@ function prepareAddPlan(
       row.deleted = false;
       row.isLiquid = false;
       row.name = metadata.name as string;
-      row.notes = (metadata.notes as string | null) ?? undefined;
+      row.notes = metadata.notes as string | null;
       row.type = "METAL";
       row.userId = envelope.userId;
       applyAssetFacts(row, facts, envelope.actionId, now);
@@ -488,7 +521,7 @@ async function prepareExistingPlan(
           }
           if (metadataAfter) {
             row.name = metadataAfter.name as string;
-            row.notes = (metadataAfter.notes as string | null) ?? undefined;
+            row.notes = metadataAfter.notes as string | null;
             row.updatedAt = now;
           }
         },

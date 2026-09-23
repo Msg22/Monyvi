@@ -74,6 +74,7 @@ jest.mock("@/hooks", () => ({
       currency: "EGP",
     })),
     totalAccountsBalance: 1700,
+    convertedSubtitlesByAccountId: new Map<string, string>(),
     isLoading: false,
   }),
 }));
