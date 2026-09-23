@@ -3,10 +3,14 @@
 Use this workflow for a large Monyvi module, epic, redesign, migration, or
 cross-layer change that benefits from specialist ownership and parallel work.
 
-OpenCode models are not execution lanes in this workflow. When Mohamed
-explicitly requests a Codex-planned implementation handoff to Qwen or GLM, use
-[`opencode-implementation-handoff.md`](./opencode-implementation-handoff.md)
-instead.
+OpenCode is an approved execution pool only after explicit user opt-in and
+only when every dispatch loads
+[`opencode-team-delegation.md`](./opencode-team-delegation.md), which owns
+OpenCode runtime and usage policy, model selection, limits, fallback, and
+session rules. When Mohamed explicitly requests a Codex-planned implementation
+handoff, use
+[`opencode-implementation-handoff.md`](./opencode-implementation-handoff.md) and
+still load the delegation workflow.
 
 ## 1. Trigger And Authority
 
@@ -202,12 +206,31 @@ when user explicitly requests one.
 The approved execution pools are:
 
 - Native Codex subagents;
-- Normal ChatGPT.
+- Normal ChatGPT;
+- OpenCode (runtime and usage policy in
+  [`opencode-team-delegation.md`](./opencode-team-delegation.md));
+- Gemini (via the Antigravity CLI `agy`).
 
 Select the worker by required context, demonstrated capability, risk, cost, and
 current availability. Verify runtime, authentication, exact model identifier,
 tools, and required permissions before dispatch; a configured name does not
 prove availability.
+
+OpenCode is enabled only by explicit user opt-in, never by configuration alone.
+Every OpenCode dispatch must load
+[`opencode-team-delegation.md`](./opencode-team-delegation.md); that workflow
+owns model selection, Go limits, usage checks, fallback, and session discipline
+without re-stating team ownership, DAG, gates, or review rules from this file.
+
+Gemini through the Antigravity CLI (`agy`) is a named optional execution pool
+subject to the same external-provider opt-in and data-sharing boundary rules.
+Per task, reuse one visible persistent conversation; verify the `agy` path,
+authentication, exact model, permissions, and quota before dispatch; and when
+full repository permissions are authorized, run with
+`--dangerously-skip-permissions --mode accept-edits`. Preserve work and resume
+the same conversation after a quota reset. Never create a concurrent replacement
+writer in the same worktree, and independently verify all output. Do not invent
+model limits.
 
 #### Executor Preference And ChatGPT Remote Readiness
 
