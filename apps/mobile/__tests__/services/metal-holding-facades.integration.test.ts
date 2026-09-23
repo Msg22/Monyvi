@@ -268,6 +268,7 @@ async function seedHoldingForEdit(
       record.effectiveEventId = IDS.editPredecessorEvent;
       record.reconciliationState = "sync_pending";
       record.status = "active";
+      record.isVisible = true;
       record.deleted = false;
       record.updatedAt = now;
     });
