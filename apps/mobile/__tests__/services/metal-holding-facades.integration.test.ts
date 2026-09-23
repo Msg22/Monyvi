@@ -25,7 +25,10 @@ import { CURRENT_MARKET_INSTRUMENT_CODES } from "@monyvi/logic";
 import { createFinancialActionGroup } from "../../services/financial-action-foundation-repository";
 import { createMetalFinancialActionEnvelope } from "../../services/metal-financial-action-adapter";
 import { formatMetalLocalCalendarDate } from "../../services/metal-financial-action-repository";
-import { getCurrentUserDataScope } from "../../services/user-data-access";
+import {
+  getCurrentUserDataScope,
+  type CurrentUserDataScope,
+} from "../../services/user-data-access";
 
 interface TestDatabaseModule {
   readonly database: Database;
@@ -663,7 +666,7 @@ describe("Metal holding facades replay contract and rate provenance", () => {
             ...clauses: unknown[]
           ) => collection.query(Q.where("user_id", userId), ...clauses),
           assertOwned: <T extends { userId: string }>(record: T): T => record,
-        });
+        } as unknown as CurrentUserDataScope);
       });
 
       await expect(addMetalHoldingFromForm(submission)).rejects.toThrow(
