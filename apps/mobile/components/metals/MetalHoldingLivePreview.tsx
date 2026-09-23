@@ -3,6 +3,8 @@ import React from "react";
 import { Text, View } from "react-native";
 
 import { palette } from "@/constants/colors";
+import { isSupportedMetalsIsoCurrencyCode } from "@monyvi/logic";
+import { formatLocalizedMoneyAmount } from "@/utils/localized-money-display";
 
 import { MetalHoldingRender } from "./MetalHoldingRender";
 import type {
@@ -125,7 +127,7 @@ export function MetalHoldingLivePreview({
         {preview.metalUsdPerPureGramDecimal ? (
           <DisclosureRow
             icon="trending-up-outline"
-            text={`${metalLabel} · USD ${formatDecimal(preview.metalUsdPerPureGramDecimal, locale)} ${copy.perPureGram}`}
+            text={`${metalLabel} · ${formatAmount("USD", preview.metalUsdPerPureGramDecimal, locale)} ${copy.perPureGram}`}
           />
         ) : null}
         {rateSources ? (
@@ -186,22 +188,33 @@ function formatResult(
   ) {
     return null;
   }
-  const sign =
-    preview.resultDirection === "positive"
-      ? "+"
-      : preview.resultDirection === "negative"
-        ? "-"
-        : "";
-  const absolute = preview.resultSincePurchaseDecimal.replace(/^-/, "");
-  return `${sign} ${formatAmount(preview.displayCurrency ?? "", absolute, locale)}`.trim();
+  return formatAmount(
+    preview.displayCurrency ?? "",
+    preview.resultSincePurchaseDecimal,
+    locale,
+    preview.resultDirection === "zero" ? "never" : "always"
+  );
 }
 
 function formatAmount(
   currency: string,
   value: string,
-  locale: "en" | "ar"
+  locale: "en" | "ar",
+  signDisplay: "auto" | "always" | "never" = "auto"
 ): string {
-  return `${currency} ${formatDecimal(value, locale)}`.trim();
+  if (!isSupportedMetalsIsoCurrencyCode(currency)) {
+    return formatDecimal(value, locale);
+  }
+  const fractionDigits = value.split(".")[1]?.length ?? 0;
+  return formatLocalizedMoneyAmount({
+    amount: value,
+    currency,
+    language: locale,
+    englishPresentation: "code-prefix",
+    signDisplay,
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits,
+  });
 }
 
 function formatDecimal(value: string, locale: "en" | "ar"): string {
