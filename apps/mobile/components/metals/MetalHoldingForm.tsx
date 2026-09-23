@@ -138,6 +138,8 @@ export interface MetalHoldingFormCopy {
   readonly unchangedLoss?: string;
   readonly unchangedResult?: string;
   readonly imageDescriptionUpdate?: string;
+  readonly reconciliationIncomplete?: string;
+  readonly retry?: string;
   readonly editTitle?: string;
   readonly editSubmit?: string;
   readonly editSubmitting?: string;
@@ -161,6 +163,8 @@ export interface MetalHoldingFormEditState {
 export interface MetalHoldingFormProps {
   readonly mode?: "add" | "edit";
   readonly holdingStatus?: "active" | "sold" | "disposed";
+  readonly reconciliationState?: string;
+  readonly onRetryReconciliation?: () => void;
   readonly editState?: MetalHoldingFormEditState;
   readonly locale: "en" | "ar";
   readonly isRtl: boolean;
@@ -281,6 +285,8 @@ const FOCUSABLE_ERROR_ORDER = [
 export function MetalHoldingForm({
   mode = "add",
   holdingStatus = "active",
+  reconciliationState,
+  onRetryReconciliation,
   editState,
   locale,
   isRtl,
@@ -359,6 +365,9 @@ export function MetalHoldingForm({
   };
   const submitAreaMetadata: { readonly bottomInset: number } = { bottomInset };
   const isTerminalEdit = mode === "edit" && holdingStatus !== "active";
+  const isReconciliationIncomplete =
+    mode === "edit" && reconciliationState === "reconciliation_incomplete";
+  const isMaterialEditDisabled = isTerminalEdit || isReconciliationIncomplete;
   const hasMaterialChanges = Boolean(editState?.affectedChanges.length);
   const title =
     mode === "edit" ? (copy.editTitle ?? "Edit holding") : copy.title;
@@ -425,7 +434,31 @@ export function MetalHoldingForm({
             isDisabled={isSubmitting}
           />
 
-          {!isTerminalEdit ? (
+          {isReconciliationIncomplete ? (
+            <View
+              testID="metal-holding-reconciliation-incomplete-banner"
+              className="gap-2 rounded-2xl border border-amber-300 bg-amber-50 p-4 dark:border-amber-700 dark:bg-amber-950/40"
+            >
+              <Text className="text-sm text-text-secondary dark:text-text-secondary-dark">
+                {copy.reconciliationIncomplete ??
+                  "Changes are still being checked. The last complete state remains active."}
+              </Text>
+              {onRetryReconciliation ? (
+                <TouchableOpacity
+                  accessibilityRole="button"
+                  testID="metal-holding-reconciliation-retry"
+                  className="min-h-11 justify-center"
+                  onPress={onRetryReconciliation}
+                >
+                  <Text className="font-semibold text-nileGreen-700 dark:text-nileGreen-400">
+                    {copy.retry ?? "Retry"}
+                  </Text>
+                </TouchableOpacity>
+              ) : null}
+            </View>
+          ) : null}
+
+          {!isMaterialEditDisabled ? (
             <View
               testID="metal-holding-weight-purity-section"
               className="gap-2"
@@ -486,7 +519,7 @@ export function MetalHoldingForm({
             </View>
           ) : null}
 
-          {!isTerminalEdit ? (
+          {!isMaterialEditDisabled ? (
             <View>
               <TextField
                 testID="metal-holding-purchase-price-field"
@@ -516,7 +549,7 @@ export function MetalHoldingForm({
             </View>
           ) : null}
 
-          {!isTerminalEdit ? (
+          {!isMaterialEditDisabled ? (
             <View testID="metal-holding-purchase-currency-field">
               <Dropdown
                 label={copy.purchaseCurrency}
@@ -538,7 +571,7 @@ export function MetalHoldingForm({
             </View>
           ) : null}
 
-          {!isTerminalEdit ? (
+          {!isMaterialEditDisabled ? (
             <View>
               <TouchableOpacity
                 testID="metal-holding-purchase-date-field"
@@ -574,7 +607,7 @@ export function MetalHoldingForm({
             </View>
           ) : null}
 
-          {isDatePickerOpen && !isTerminalEdit && !isSubmitting ? (
+          {isDatePickerOpen && !isMaterialEditDisabled && !isSubmitting ? (
             <DateTimePicker
               testID="metal-holding-purchase-date-picker"
               value={parsePurchaseDate(values.purchaseDate) ?? new Date()}
@@ -585,7 +618,7 @@ export function MetalHoldingForm({
             />
           ) : null}
 
-          {!isTerminalEdit ? (
+          {!isMaterialEditDisabled ? (
             <View>
               <PhysicalFormSelector
                 copy={copy}
@@ -635,7 +668,7 @@ export function MetalHoldingForm({
             />
           ) : null}
 
-          {!isTerminalEdit ? (
+          {!isMaterialEditDisabled ? (
             <MetalHoldingLivePreview
               copy={copy}
               preview={preview}

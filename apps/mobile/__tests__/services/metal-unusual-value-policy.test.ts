@@ -64,4 +64,21 @@ describe("metals unusual-value policy v1", () => {
       }).reasons
     ).toEqual(["weight"]);
   });
+
+  it("warns when purchase amount is EGP 10,000,000 or more even when FX rates are unavailable offline", () => {
+    expect(
+      evaluateMetalUnusualValuePolicy({
+        metal: "GOLD",
+        weightGramsDecimal: "10",
+        purchasePriceDecimal: "10000000",
+        purchaseCurrency: "EGP",
+        purchaseCurrencyUsdPerUnitDecimal: null,
+        egpUsdPerUnitDecimal: null,
+      })
+    ).toEqual({
+      policyVersion: "metals-unusual-value/v1",
+      isUnusual: true,
+      reasons: ["purchase_amount"],
+    });
+  });
 });

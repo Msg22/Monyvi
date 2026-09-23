@@ -6,6 +6,7 @@ import arCommon from "@/locales/ar/common.json";
 import enCommon from "@/locales/en/common.json";
 import type { MetalHoldingFormCopy } from "@/components/metals/MetalHoldingForm";
 import { formatAmount } from "@/components/metals/MetalHoldingLivePreview";
+import { readAffectedValue } from "@/app/(private)/metals/[holdingId]/edit";
 
 beforeAll(async () => {
   await init({
@@ -26,6 +27,15 @@ jest.mock("react-i18next", () => ({
     t: (key: string): string => key,
     i18n: { language: "en", dir: (): "ltr" => "ltr" },
   }),
+}));
+
+jest.mock("@/hooks/useEditMetalHolding", () => ({
+  useEditMetalHolding: jest.fn(),
+}));
+
+jest.mock("@/hooks/useAddMetalHolding", () => ({
+  useMetalAddPreviewRates: () => ({ getPreviewRates: jest.fn() }),
+  useAddMetalHoldingForm: jest.fn(),
 }));
 
 jest.mock("@/components/navigation/PageHeader", () => {
@@ -65,6 +75,8 @@ interface EditMetalHoldingFormProps {
   readonly bottomInset: number;
   readonly copy?: MetalHoldingFormCopy;
   readonly holdingStatus: "active" | "sold" | "disposed";
+  readonly reconciliationState?: string;
+  readonly onRetryReconciliation?: () => void;
   readonly values: {
     readonly name: string;
     readonly metal: "GOLD" | "SILVER";
@@ -614,6 +626,23 @@ describe("Edit metal holding form", () => {
     expect(screen.getByText("FX feed · indicative · Using an older saved rate · 1 hour ago")).toBeOnTheScreen();
   });
 
+  it("preserves rate precision in FX rate trust display for small unit values", (): void => {
+    renderEdit({
+      preview: {
+        ...toPreview(original),
+        fxRateTrust: {
+          valueDecimal: "0.0067",
+          state: "fresh",
+          ageMs: 60_000,
+          source: "FX feed",
+          quality: "verified",
+          providerObservedAt: new Date("2026-09-01T10:00:00Z"),
+        },
+      },
+    });
+    expect(screen.getByText("FX rate · USD 0.0067 / EGP")).toBeOnTheScreen();
+  });
+
   it("explicitly discloses distinct unknown freshness, unknown age, and unknown observation time and formats age under 1 minute as just now", (): void => {
     renderEdit({
       preview: {
@@ -718,4 +747,54 @@ describe("Edit metal holding form", () => {
     expect(formatAmount("EGP", "1.015", "en", "never")).toBe("EGP 1.02");
     expect(formatAmount("EGP", "1.250", "en", "never")).toBe("EGP 1.25");
   });
+
+  it("disables material editing and displays checking changes banner when reconciliation is incomplete", (): void => {
+    const onRetryReconciliation = jest.fn();
+    renderEdit({
+      holdingStatus: "active",
+      reconciliationState: "reconciliation_incomplete",
+      onRetryReconciliation,
+    });
+
+    expect(
+      screen.getByTestId("metal-holding-reconciliation-incomplete-banner")
+    ).toBeTruthy();
+    expect(
+      screen.queryByTestId("metal-holding-weight-purity-section")
+    ).toBeNull();
+    expect(
+      screen.queryByTestId("metal-holding-purchase-price-field")
+    ).toBeNull();
+    expect(screen.queryByTestId("metal-holding-live-preview")).toBeNull();
+    expect(screen.getByTestId("metal-holding-name-field")).toBeTruthy();
+
+    fireEvent.press(screen.getByTestId("metal-holding-reconciliation-retry"));
+    expect(onRetryReconciliation).toHaveBeenCalledTimes(1);
+  });
+
+  it("resolves purityCode to catalog display label instead of raw code in affected changes", (): void => {
+    const mockT = ((key: string): string =>
+      key === "purity_gold_999" ? "عيار 24 · 999" : key) as ReturnType<
+      typeof jest.fn
+    >;
+
+    const valueWithTranslation = readAffectedValue(
+      { purityCode: "gold-999" },
+      "purity",
+      mockT as never
+    );
+    expect(valueWithTranslation).toBe("عيار 24 · 999");
+
+    const fallbackT = ((key: string): string => key) as ReturnType<
+      typeof jest.fn
+    >;
+    const valueWithoutTranslation = readAffectedValue(
+      { purityCode: "gold-999" },
+      "purity",
+      fallbackT as never
+    );
+    expect(valueWithoutTranslation).toBe("24K · 999");
+    expect(valueWithoutTranslation).not.toBe("gold-999");
+  });
 });
+

@@ -276,7 +276,7 @@ function prepareCorrectionPlan(
   envelope: FinancialActionEnvelopeV1,
   projection: Awaited<ReturnType<typeof loadProjection>>
 ): FinancialActionLinkedOperationPlan {
-  if (projection.state.status !== "active")
+  if (projection.state.status !== "active" || !projection.state.isVisible)
     throw new Error("terminal_holding_material_edit_forbidden");
   if (projection.state.reconciliationState === "reconciliation_incomplete")
     throw new Error("holding_reconciliation_incomplete");

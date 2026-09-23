@@ -147,6 +147,12 @@ export function getSupportedMetalPurities(
   return PURITY_CATALOG.filter((entry) => entry.metal === metal);
 }
 
+export function getPurityCatalogEntry(
+  code: string
+): MetalPurityCatalogEntry | null {
+  return PURITY_CATALOG.find((entry) => entry.code === code) ?? null;
+}
+
 export function validateMetalHoldingForm(
   data: MetalHoldingFormData,
   context: MetalHoldingFormValidationContext
@@ -353,9 +359,10 @@ function normalizeLocalizedDecimal(
   raw: string,
   _context?: Pick<MetalHoldingFormValidationContext, "locale">
 ): string | null {
-  let normalized = raw
-    .trim()
-    .replace(/[\s\u00a0\u202f]/g, "")
+  const trimmed = raw.trim();
+  if (/[\s\u00a0\u202f]/.test(trimmed)) return null;
+
+  let normalized = trimmed
     .replace(/[٠-٩]/g, (digit) => String(ARABIC_DIGITS.indexOf(digit)))
     .replace(/[۰-۹]/g, (digit) => String(EASTERN_ARABIC_DIGITS.indexOf(digit)))
     .replaceAll("٫", ".")

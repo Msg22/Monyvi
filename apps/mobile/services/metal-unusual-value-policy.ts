@@ -13,6 +13,7 @@ export interface MetalUnusualValuePolicyInput {
   readonly metal: "GOLD" | "SILVER";
   readonly weightGramsDecimal: string;
   readonly purchasePriceDecimal: string;
+  readonly purchaseCurrency?: string;
   readonly purchaseCurrencyUsdPerUnitDecimal: string | null;
   readonly egpUsdPerUnitDecimal: string | null;
 }
@@ -58,6 +59,13 @@ export function evaluateMetalUnusualValuePolicy(
 function convertPurchaseAmountToEgp(
   input: MetalUnusualValuePolicyInput
 ): ReturnType<typeof parseCanonicalDecimal> | null {
+  if (input.purchaseCurrency === "EGP") {
+    try {
+      return parseCanonicalDecimal(input.purchasePriceDecimal);
+    } catch {
+      return null;
+    }
+  }
   if (
     input.purchaseCurrencyUsdPerUnitDecimal === null ||
     input.egpUsdPerUnitDecimal === null

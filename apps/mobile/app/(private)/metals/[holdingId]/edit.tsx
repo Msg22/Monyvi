@@ -1,6 +1,6 @@
 import * as Crypto from "expo-crypto";
 import { router, useLocalSearchParams } from "expo-router";
-import React, { useCallback, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   useNavigation,
   usePreventRemove,
@@ -29,6 +29,7 @@ import {
 } from "@/components/metals/MetalHoldingForm";
 import { useEditMetalHolding } from "@/hooks/useEditMetalHolding";
 import { useMetalAddPreviewRates } from "@/hooks/useAddMetalHolding";
+import { getPurityCatalogEntry } from "@/validation/metal-holding-form-validation";
 
 const SAFE_RANGE = {
   maximumWeightGramsDecimal: "999999999.999",
@@ -79,13 +80,29 @@ export default function EditMetalHoldingRoute(): React.JSX.Element {
   );
   const navigation = useNavigation();
   const pendingActionRef = useRef<NavigationAction | null>(null);
-  const allowExitRef = useRef(false);
+  const [isExitAllowed, setIsExitAllowed] = useState(false);
+  const pendingExitActionRef = useRef<(() => void) | null>(null);
 
-  usePreventRemove(form.isDirty && !allowExitRef.current, ({ data }) => {
+  usePreventRemove(form.isDirty && !isExitAllowed, ({ data }) => {
     if (form.isSubmitting) return;
     pendingActionRef.current = data.action;
     setIsExitGuardVisible(true);
   });
+
+  useEffect(() => {
+    if (!isExitAllowed) return;
+    if (pendingExitActionRef.current) {
+      const exitAction = pendingExitActionRef.current;
+      pendingExitActionRef.current = null;
+      exitAction();
+    } else if (pendingActionRef.current) {
+      const action = pendingActionRef.current;
+      pendingActionRef.current = null;
+      navigation.dispatch(action);
+    } else {
+      router.back();
+    }
+  }, [isExitAllowed, navigation]);
 
   const requestExit = useCallback((): void => {
     if (form.isSubmitting) return;
@@ -93,15 +110,14 @@ export default function EditMetalHoldingRoute(): React.JSX.Element {
       pendingActionRef.current = null;
       setIsExitGuardVisible(true);
     } else {
-      allowExitRef.current = true;
       router.back();
     }
   }, [form.isDirty, form.isSubmitting]);
   const submit = useCallback((): void => {
     void form.submit().then((saved) => {
       if (saved) {
-        allowExitRef.current = true;
-        router.back();
+        pendingExitActionRef.current = () => router.back();
+        setIsExitAllowed(true);
       }
     });
   }, [form]);
@@ -143,6 +159,8 @@ export default function EditMetalHoldingRoute(): React.JSX.Element {
       <MetalHoldingForm
         mode="edit"
         holdingStatus={form.model?.status ?? "active"}
+        reconciliationState={form.model?.reconciliationState}
+        onRetryReconciliation={form.retry}
         editState={editState}
         locale={locale}
         isRtl={I18nManager.isRTL}
@@ -180,12 +198,7 @@ export default function EditMetalHoldingRoute(): React.JSX.Element {
         }}
         onDiscard={(): void => {
           setIsExitGuardVisible(false);
-          allowExitRef.current = true;
-          if (pendingActionRef.current) {
-            navigation.dispatch(pendingActionRef.current);
-          } else {
-            router.back();
-          }
+          setIsExitAllowed(true);
         }}
         copy={{
           title: t("edit.exit_title"),
@@ -324,6 +337,8 @@ function createCopy(
     imageDescriptionUpdate: t("edit.image_description_update"),
     lockedMetalHint: t("edit.locked_metal_hint"),
     cancel: t("edit.cancel"),
+    reconciliationIncomplete: t("reconciliation.incomplete"),
+    retry: t("detail.retry_sync"),
   };
 }
 function toCurrentFacts(
@@ -341,7 +356,7 @@ function toCurrentFacts(
     physicalForm: form.values.physicalForm,
   };
 }
-interface EditableFactsLike {
+export interface EditableFactsLike {
   readonly name?: string;
   readonly notes?: string | null;
   readonly weightGramsDecimal?: string;
@@ -351,7 +366,7 @@ interface EditableFactsLike {
   readonly purchaseDate?: string;
   readonly physicalForm?: "COIN" | "BAR" | "JEWELRY" | null;
 }
-function readAffectedValue(
+export function readAffectedValue(
   facts: EditableFactsLike | undefined,
   field: string,
   t: ReturnType<typeof useTranslation<"metals">>["t"]
@@ -359,7 +374,15 @@ function readAffectedValue(
   if (!facts) return t("edit.not_recorded");
   if (field === "weight")
     return facts.weightGramsDecimal || t("edit.not_recorded");
-  if (field === "purity") return facts.purityCode || t("edit.not_recorded");
+  if (field === "purity") {
+    if (!facts.purityCode) return t("edit.not_recorded");
+    const entry = getPurityCatalogEntry(facts.purityCode);
+    if (!entry) return facts.purityCode;
+    const translated = t(entry.labelKey);
+    return translated && translated !== entry.labelKey
+      ? translated
+      : entry.displayLabel;
+  }
   if (field === "purchasePrice")
     return facts.purchasePriceDecimal || t("edit.not_recorded");
   if (field === "purchaseCurrency")

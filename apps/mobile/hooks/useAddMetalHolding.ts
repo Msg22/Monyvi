@@ -202,6 +202,7 @@ export function useAddMetalHoldingForm(
           metal: holding.metal,
           weightGramsDecimal: holding.weightGramsDecimal,
           purchasePriceDecimal: holding.purchasePriceDecimal,
+          purchaseCurrency: holding.purchaseCurrency,
           purchaseCurrencyUsdPerUnitDecimal:
             previewRates.currencyUsdPerUnitDecimal,
           egpUsdPerUnitDecimal: previewRates.egpUsdPerUnitDecimal ?? null,

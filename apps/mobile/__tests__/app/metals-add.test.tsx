@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen } from "@testing-library/react-native";
 import { useNavigation, usePreventRemove } from "@react-navigation/native";
+import { router } from "expo-router";
 import React from "react";
 
 jest.mock("react-i18next", () => ({
@@ -391,5 +392,35 @@ describe("Add metal holding route", () => {
       readonly dispatch: jest.Mock;
     };
     expect(nav.dispatch).toHaveBeenCalledWith(mockAction);
+  });
+
+  it("disables prevent remove and calls router.back on discard from header back", () => {
+    mockForm.isDirty = true;
+    let trapped = false;
+    const backSpy = jest.spyOn(router, "back").mockImplementation(() => {
+      const preventCalls = jest.mocked(usePreventRemove).mock.calls;
+      const lastCall = preventCalls[preventCalls.length - 1];
+      if (lastCall?.[0] === true) {
+        trapped = true;
+      }
+    });
+    const AddHoldingRoute = loadAddHoldingRoute();
+    render(<AddHoldingRoute />);
+
+    expect(usePreventRemove).toHaveBeenCalledWith(true, expect.any(Function));
+
+    fireEvent.press(screen.getByTestId("header-back"));
+
+    expect(
+      screen.getByTestId("metal-holding-dirty-exit-guard")
+    ).toBeOnTheScreen();
+
+    fireEvent.press(screen.getByText("add.discard"));
+
+    expect(trapped).toBe(false);
+    expect(backSpy).toHaveBeenCalledTimes(1);
+    expect(usePreventRemove).toHaveBeenLastCalledWith(false, expect.any(Function));
+
+    backSpy.mockRestore();
   });
 });

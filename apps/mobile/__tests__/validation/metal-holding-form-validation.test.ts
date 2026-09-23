@@ -150,6 +150,24 @@ describe("validateMetalHoldingForm", () => {
     expect(commaDecimal.errors.weightGrams).toBe("invalid");
   });
 
+  it("rejects embedded whitespace in numeric inputs instead of deleting it, while preserving surrounding whitespace trim", () => {
+    const embeddedSpaceWeight = validate({ weightGrams: "12 34" });
+    expect(embeddedSpaceWeight.isValid).toBe(false);
+    expect(embeddedSpaceWeight.errors.weightGrams).toBe("invalid");
+
+    const embeddedSpacePrice = validate({ purchasePrice: "47 800" });
+    expect(embeddedSpacePrice.isValid).toBe(false);
+    expect(embeddedSpacePrice.errors.purchasePrice).toBe("invalid");
+
+    const embeddedNBSP = validate({ weightGrams: "12\u00a034" });
+    expect(embeddedNBSP.isValid).toBe(false);
+    expect(embeddedNBSP.errors.weightGrams).toBe("invalid");
+
+    const surroundingSpace = validate({ weightGrams: "  12.34  " });
+    expect(surroundingSpace.errors.weightGrams).toBeUndefined();
+    expect(surroundingSpace.normalized?.weightGramsDecimal).toBe("12.34");
+  });
+
   it("requires every Add fact while representing an unselected purity with null, never an empty ID sentinel", () => {
     const result = validate({
       name: "   ",

@@ -169,6 +169,7 @@ export function useEditMetalHolding(
           metal: holding.metal,
           weightGramsDecimal: holding.weightGramsDecimal,
           purchasePriceDecimal: holding.purchasePriceDecimal,
+          purchaseCurrency: holding.purchaseCurrency,
           purchaseCurrencyUsdPerUnitDecimal: rates.currencyUsdPerUnitDecimal,
           egpUsdPerUnitDecimal: rates.egpUsdPerUnitDecimal ?? null,
         }).isUnusual;

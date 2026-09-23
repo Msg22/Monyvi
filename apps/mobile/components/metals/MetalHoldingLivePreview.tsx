@@ -128,7 +128,7 @@ export function MetalHoldingLivePreview({
         {preview.metalUsdPerPureGramDecimal ? (
           <DisclosureRow
             icon="trending-up-outline"
-            text={`${metalLabel} · ${formatAmount("USD", preview.metalUsdPerPureGramDecimal, locale)} ${copy.perPureGram}`}
+            text={`${metalLabel} · ${formatRateAmount("USD", preview.metalUsdPerPureGramDecimal, locale)} ${copy.perPureGram}`}
           />
         ) : null}
         {preview.metalRateTrust ? (
@@ -191,7 +191,7 @@ function RateTrustRow({
 }): React.JSX.Element {
   const value = trust.valueDecimal === null
     ? copy.rateUnavailable
-    : formatAmount(currency, trust.valueDecimal, locale);
+    : formatRateAmount(currency, trust.valueDecimal, locale);
   const age = trust.ageMs === null
     ? (copy.rateAgeUnavailable ?? copy.rateUnknown)
     : formatRateAge(trust.ageMs, locale, copy);
@@ -286,10 +286,14 @@ export function formatAmount(
   currency: string,
   value: string,
   locale: "en" | "ar",
-  signDisplay: "auto" | "always" | "never" = "auto"
+  signDisplay: "auto" | "always" | "never" = "auto",
+  precision?: {
+    readonly minimumFractionDigits?: number;
+    readonly maximumFractionDigits?: number;
+  }
 ): string {
   if (!isSupportedMetalsIsoCurrencyCode(currency)) {
-    return formatDecimal(value, locale);
+    return formatDecimal(value, locale, precision);
   }
   return formatLocalizedMoneyAmount({
     amount: value,
@@ -297,13 +301,46 @@ export function formatAmount(
     language: locale,
     englishPresentation: "code-prefix",
     signDisplay,
+    minimumFractionDigits: precision?.minimumFractionDigits,
+    maximumFractionDigits: precision?.maximumFractionDigits,
   });
 }
 
-function formatDecimal(value: string, locale: "en" | "ar"): string {
-  const fractionDigits = value.split(".")[1]?.length ?? 0;
+export function formatRateAmount(
+  currency: string,
+  value: string,
+  locale: "en" | "ar"
+): string {
+  const fractionDigits = value.includes(".")
+    ? value.split(".")[1]?.length ?? 0
+    : 0;
+  return formatAmount(
+    currency,
+    value,
+    locale,
+    "never",
+    fractionDigits > 2
+      ? {
+          minimumFractionDigits: fractionDigits,
+          maximumFractionDigits: fractionDigits,
+        }
+      : undefined
+  );
+}
+
+function formatDecimal(
+  value: string,
+  locale: "en" | "ar",
+  precision?: {
+    readonly minimumFractionDigits?: number;
+    readonly maximumFractionDigits?: number;
+  }
+): string {
+  const fractionDigits =
+    precision?.maximumFractionDigits ?? (value.split(".")[1]?.length ?? 0);
+  const minDigits = precision?.minimumFractionDigits ?? fractionDigits;
   return new Intl.NumberFormat(locale === "ar" ? "ar-EG" : "en-US", {
-    minimumFractionDigits: fractionDigits,
+    minimumFractionDigits: minDigits,
     maximumFractionDigits: fractionDigits,
   }).format(Number(value));
 }

@@ -33,6 +33,7 @@ function legacyModel(): EditMetalHoldingReadModel {
     financialRevision: "0",
     predecessorEventId: "018f0c7a-1234-7abc-8def-000000000011",
     status: "active",
+    reconciliationState: "reconciled",
     hasCompleteMaterialFacts: false,
     facts: {
       name: "Old Legacy Gold",
@@ -66,6 +67,7 @@ function activeModel(): EditMetalHoldingReadModel {
     financialRevision: "0",
     predecessorEventId: "018f0c7a-1234-7abc-8def-000000000011",
     status: "active",
+    reconciliationState: "reconciled",
     hasCompleteMaterialFacts: true,
     facts: {
       name: "Active Gold Sovereign",

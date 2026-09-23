@@ -37,6 +37,7 @@ export interface EditMetalHoldingReadModel {
   readonly financialRevision: string;
   readonly predecessorEventId: string;
   readonly status: MetalHoldingStatus;
+  readonly reconciliationState?: string;
   readonly hasCompleteMaterialFacts: boolean;
   readonly facts: EditableMetalHoldingFacts;
   readonly persistedMaterialFacts: EditMetalMaterialFacts;
@@ -90,7 +91,7 @@ export async function loadEditableMetalHolding(
   ]);
   const metal = metals[0];
   const state = states[0];
-  if (!metal || !state || !state.effectiveEventId)
+  if (!metal || !state || !state.effectiveEventId || !state.isVisible)
     throw new Error("metal_holding_not_found");
   const metalType = metal.metalType === "SILVER" ? "SILVER" : "GOLD";
   const purityCode = metal.purityCode;
@@ -116,6 +117,7 @@ export async function loadEditableMetalHolding(
         : state.status === "disposed"
           ? "disposed"
           : "active",
+    reconciliationState: state.reconciliationState,
     hasCompleteMaterialFacts,
     facts: {
       name: asset.name,

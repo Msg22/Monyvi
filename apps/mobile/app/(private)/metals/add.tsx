@@ -1,6 +1,6 @@
 import * as Crypto from "expo-crypto";
 import { router } from "expo-router";
-import React, { useCallback, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   useNavigation,
   usePreventRemove,
@@ -78,13 +78,29 @@ export default function AddMetalHoldingRoute(): React.JSX.Element {
 
   const navigation = useNavigation();
   const pendingActionRef = useRef<NavigationAction | null>(null);
-  const allowExitRef = useRef(false);
+  const [isExitAllowed, setIsExitAllowed] = useState(false);
+  const pendingExitActionRef = useRef<(() => void) | null>(null);
 
-  usePreventRemove(form.isDirty && !allowExitRef.current, ({ data }) => {
+  usePreventRemove(form.isDirty && !isExitAllowed, ({ data }) => {
     if (form.isSubmitting) return;
     pendingActionRef.current = data.action;
     setIsExitGuardVisible(true);
   });
+
+  useEffect(() => {
+    if (!isExitAllowed) return;
+    if (pendingExitActionRef.current) {
+      const exitAction = pendingExitActionRef.current;
+      pendingExitActionRef.current = null;
+      exitAction();
+    } else if (pendingActionRef.current) {
+      const action = pendingActionRef.current;
+      pendingActionRef.current = null;
+      navigation.dispatch(action);
+    } else {
+      router.back();
+    }
+  }, [isExitAllowed, navigation]);
 
   const requestExit = useCallback((): void => {
     if (form.isSubmitting) return;
@@ -93,14 +109,14 @@ export default function AddMetalHoldingRoute(): React.JSX.Element {
       setIsExitGuardVisible(true);
       return;
     }
-    allowExitRef.current = true;
     router.back();
   }, [form.isDirty, form.isSubmitting]);
   const submit = useCallback((): void => {
     void form.submit().then((holdingId) => {
       if (holdingId) {
-        allowExitRef.current = true;
-        router.replace(`/metals/${holdingId}`);
+        pendingExitActionRef.current = () =>
+          router.replace(`/metals/${holdingId}`);
+        setIsExitAllowed(true);
       }
     });
   }, [form]);
@@ -146,12 +162,7 @@ export default function AddMetalHoldingRoute(): React.JSX.Element {
         }}
         onDiscard={() => {
           setIsExitGuardVisible(false);
-          allowExitRef.current = true;
-          if (pendingActionRef.current) {
-            navigation.dispatch(pendingActionRef.current);
-          } else {
-            router.back();
-          }
+          setIsExitAllowed(true);
         }}
         copy={{
           title: t("add.exit_title"),

@@ -498,6 +498,24 @@ describe("Edit metal holding command SQLite atomicity", () => {
       service.save(command({ materialFacts: null, correctionReason: null }))
     ).resolves.toEqual({ kind: "metadata" });
   });
+  it("refuses material correction of hidden deleted holdings whose status is active", async (): Promise<void> => {
+    await seedHolding();
+    await database.write(async () => {
+      const state = (
+        await database
+          .get<MetalHoldingState>("metal_holding_states")
+          .query()
+          .fetch()
+      )[0];
+      await state.update((record) => {
+        record.isVisible = false;
+      });
+    });
+    const service = createService();
+    await expect(service.save(command())).rejects.toThrow(
+      "terminal_holding_material_edit_forbidden"
+    );
+  });
   it("blocks material corrections during reconciliation_incomplete", async (): Promise<void> => {
     await seedHolding();
     await database.write(async () => {
