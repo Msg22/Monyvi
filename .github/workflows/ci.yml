@@ -141,6 +141,7 @@ jobs:
           supabase/tests/financial_action_canonicalization_test.sql
           supabase/tests/metals_issue285_reconciliation_test.sql
           supabase/tests/metals_issue284_persistence_test.sql
+          supabase/tests/metals_dispose_rate_snapshots_test.sql
           supabase/tests/atomic_market_rate_snapshots_test.sql
           supabase/tests/market_snapshot_publication_test.sql
 
