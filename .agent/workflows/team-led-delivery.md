@@ -208,7 +208,8 @@ The approved execution pools are:
 - Native Codex subagents;
 - Normal ChatGPT;
 - OpenCode (runtime and usage policy in
-  [`opencode-team-delegation.md`](./opencode-team-delegation.md)).
+  [`opencode-team-delegation.md`](./opencode-team-delegation.md));
+- Gemini (via the Antigravity CLI `agy`).
 
 Select the worker by required context, demonstrated capability, risk, cost, and
 current availability. Verify runtime, authentication, exact model identifier,
@@ -220,6 +221,16 @@ Every OpenCode dispatch must load
 [`opencode-team-delegation.md`](./opencode-team-delegation.md); that workflow
 owns model selection, Go limits, usage checks, fallback, and session discipline
 without re-stating team ownership, DAG, gates, or review rules from this file.
+
+Gemini through the Antigravity CLI (`agy`) is a named optional execution pool
+subject to the same external-provider opt-in and data-sharing boundary rules.
+Per task, reuse one visible persistent conversation; verify the `agy` path,
+authentication, exact model, permissions, and quota before dispatch; and when
+full repository permissions are authorized, run with
+`--dangerously-skip-permissions --mode accept-edits`. Preserve work and resume
+the same conversation after a quota reset. Never create a concurrent replacement
+writer in the same worktree, and independently verify all output. Do not invent
+model limits.
 
 #### Executor Preference And ChatGPT Remote Readiness
 
