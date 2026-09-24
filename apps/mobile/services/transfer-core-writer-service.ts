@@ -329,10 +329,7 @@ function prepareTransaction(
   });
 }
 
-function transactionAfter(
-  transaction: Transaction,
-  transfer: Transfer
-): TransactionAfter {
+function transactionAfter(transaction: Transaction): TransactionAfter {
   return {
     accountId: transaction.accountId,
     amountMinorUnits: positiveMinorUnits(
@@ -615,7 +612,7 @@ export function createTransferCoreWriterService(
         transactionAmount,
         targetAccount.currency
       );
-      const transactionPostimage = transactionAfter(transaction, transfer);
+      const transactionPostimage = transactionAfter(transaction);
       await dependencies.executeCoreFinancialAction({
         accountEffects: [
           ...effectsFor(fromAccount, toAccount, projection, "reverse"),
