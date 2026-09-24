@@ -1,6 +1,6 @@
 # US7 Delete Coverage
 
-Stable base: `e08536e6` (origin/main rebase trial; originally `a190d8f`).
+Integrated base: `e12d56b0` (`origin/main` after PR #292).
 
 Scope: T112–T119 Active-only mistaken-record Delete. Shared adapter/registry
 and fixture registry remain integration-owned. The Delete Expo route and the
@@ -68,4 +68,4 @@ harness control, terminal fixtures, and device gates remain open.
   the shared `DELETE_REVISION_CONFLICT_CODE` export on the lane-owned command
   service. No shared adapter, registry, fixture, barrel, schema, sync,
   Sell, Dispose, or Undo file changed.
-- No live route, shared registration, device, or E2E completion is claimed.
+- No device or E2E completion is claimed.
