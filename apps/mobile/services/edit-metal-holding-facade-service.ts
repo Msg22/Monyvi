@@ -156,7 +156,7 @@ export async function saveEditedMetalHolding(
     : null;
   const occurredAt = replay?.occurredAt ?? new Date().toISOString();
   const hasMaterialChanges =
-    JSON.stringify(submission.original.persistedMaterialFacts) !==
+    JSON.stringify(toMaterial(submission.original.facts)) !==
     JSON.stringify(toMaterial(submission.current));
   const hasFinancialChanges =
     financialJson(submission.original.facts) !==
