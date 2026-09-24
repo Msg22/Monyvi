@@ -114,7 +114,7 @@ jobs:
       'codex/issue282-realized-metal-sale-results' || github.event.pull_request.base.ref ==
       'codex/035-metals-slice5-integration')
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 65
     env:
       SENTRYCLI_SKIP_DOWNLOAD: "1"
     steps:
@@ -140,11 +140,16 @@ jobs:
           npx supabase test db --local
           supabase/tests/financial_action_canonicalization_test.sql
           supabase/tests/metals_issue285_reconciliation_test.sql
+          supabase/tests/metals_issue284_persistence_test.sql
           supabase/tests/atomic_market_rate_snapshots_test.sql
           supabase/tests/market_snapshot_publication_test.sql
 
       - name: Run snapshot publication concurrency pgTAP
         run: node scripts/test-market-snapshot-concurrency.js
+
+      - name: Run Metals backfill replay harness
+        run: node scripts/metals-backfill-replay-harness.js
+        timeout-minutes: 15
   android-build:
     name: Android Build Verification
     runs-on: ubuntu-latest
