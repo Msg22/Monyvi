@@ -1,4 +1,4 @@
--- T029/T031 RPC acceptance. Run only against an isolated database with 069 applied.
+-- T029/T031 RPC acceptance. Run only against an isolated database with 076 applied.
 BEGIN;
 SELECT no_plan();
 

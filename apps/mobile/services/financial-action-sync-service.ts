@@ -58,13 +58,12 @@ export interface FinancialActionPushCoordinator {
   ) => Promise<{ readonly decisions: readonly FinancialActionPushDecision[] }>;
 }
 
-export interface FinancialActionPushCoordinatorDependencies
-  extends Pick<
-    FinancialActionFoundationRepository,
-    | "markFinancialActionGroupSyncFailed"
-    | "markFinancialActionGroupSyncPending"
-    | "recordFinancialActionGroupServerOutcome"
-  > {
+export interface FinancialActionPushCoordinatorDependencies extends Pick<
+  FinancialActionFoundationRepository,
+  | "markFinancialActionGroupSyncFailed"
+  | "markFinancialActionGroupSyncPending"
+  | "recordFinancialActionGroupServerOutcome"
+> {
   readonly invokeAccountFinancialActionRpc: (
     input: FinancialActionRpcInput
   ) => Promise<unknown>;
@@ -181,7 +180,18 @@ export function createFinancialActionPushCoordinator(
   return Object.freeze({
     coordinatePush: async (
       candidates: readonly FinancialActionPushCandidate[]
-    ): Promise<{ readonly decisions: readonly FinancialActionPushDecision[] }> => {
+    ): Promise<{
+      readonly decisions: readonly FinancialActionPushDecision[];
+    }> => {
+      const reconcileSafely = async (
+        actionId: string
+      ): Promise<string | null | undefined> => {
+        try {
+          return await dependencies.reconcileFinancialActionGroup?.(actionId);
+        } catch {
+          return undefined;
+        }
+      };
       const decisions: FinancialActionPushDecision[] = [];
       for (const candidate of candidates) {
         assertSyncable(candidate);
@@ -205,10 +215,7 @@ export function createFinancialActionPushCoordinator(
           candidate.state === "rejected_compensating" ||
           candidate.state === "reconciliation_incomplete"
         ) {
-          const reconciliation =
-            await dependencies.reconcileFinancialActionGroup?.(
-              candidate.actionId
-            );
+          const reconciliation = await reconcileSafely(candidate.actionId);
           decisions.push({
             actionId: candidate.actionId,
             disposition:
@@ -247,9 +254,7 @@ export function createFinancialActionPushCoordinator(
         const needsReconciliation =
           outcome.status === "stale" || outcome.status === "rejected";
         const reconciliation = needsReconciliation
-          ? await dependencies.reconcileFinancialActionGroup?.(
-              candidate.actionId
-            )
+          ? await reconcileSafely(candidate.actionId)
           : null;
         decisions.push({
           actionId: candidate.actionId,

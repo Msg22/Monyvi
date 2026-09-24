@@ -14,8 +14,8 @@ fixture, generated, and sync history were excluded. Current-main's dedicated
 Metals push remains intact and is composed with account-action RPC
 acknowledgements.
 
-Migration `069_account_financial_effects.sql` remains the next migration after
-current-main migration 068. Local WatermelonDB schema version 29 adds exact-text
+Migration `076_account_financial_effects.sql` remains the next migration after
+current-main migration 075. Local WatermelonDB schema version 29 adds exact-text
 account revisions and account-effect minor units, registers the effect model,
 and preserves local uniqueness. Generator safeguards keep private server-only
 cutover quarantine data out of the device schema.
@@ -26,7 +26,7 @@ cutover quarantine data out of the device schema.
 | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | T025      | Complete: writer inventory and completeness guard are present.                                                                                                                                            |
 | T026-T028 | Complete: Red contracts and recorded failure evidence are present.                                                                                                                                        |
-| T029      | Checkpoint-complete: migration 069 compiles after 068 and both SQL suites pass.                                                                                                                           |
+| T029      | Checkpoint-complete: migration 076 compiles after 075 and both SQL suites pass.                                                                                                                           |
 | T030      | Partial Green: local model/schema/atomic command exist; direct transaction creation and recurring Pay Now use the boundary.                                                                               |
 | T031      | Checkpoint-complete: dedicated push acknowledgement, protected-field handling, device-local SMS recovery, and compensation tests pass.                                                                    |
 | T032      | Partial: fail-closed registry exists, but the remaining legacy writers below have not been cut over and the deterministic cutover fixture is absent.                                                      |
@@ -73,14 +73,14 @@ Already guarded at this checkpoint: `account.cash.create-within-writer`,
 ## Verification
 
 The PostgreSQL checks used disposable database `codex_issue242_cm_20260906`,
-cloned from the local current-main schema-068 database. Migration 069 was
-applied only to that copy; the shared manual-QA runtime remained on schema 068.
+cloned from the local current-main schema-075 database. Migration 076 was
+applied only to that copy; the shared manual-QA runtime remained on schema 075.
 
 | Check                                                  | Result                    |
 | ------------------------------------------------------ | ------------------------- |
-| Migration 069 compile on current-main schema 068 clone | Passed                    |
-| `supabase/tests/account_financial_effects_test.sql`    | 38/38 passed              |
-| `supabase/tests/account_financial_action_rpc_test.sql` | 36/36 passed              |
+| Migration 076 compile on current-main schema 075 clone | Passed                    |
+| `supabase/tests/account_financial_effects_test.sql`    | 44/44 passed              |
+| `supabase/tests/account_financial_action_rpc_test.sql` | 44/44 passed              |
 | Focused mobile Jest                                    | 12 suites, 121/121 passed |
 | Focused logic Jest                                     | 5 suites, 114/114 passed  |
 | Generator script tests                                 | 18/18 passed              |

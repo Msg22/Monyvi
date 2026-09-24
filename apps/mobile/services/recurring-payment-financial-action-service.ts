@@ -49,10 +49,7 @@ export interface SubmitRecurringPaymentFinancialActionInput {
 export interface RecurringPaymentFinancialActionDependencies {
   readonly accountsCollection: () => Collection<Account>;
   readonly assertExpectedCurrentUser: (userId: string) => Promise<void>;
-  readonly calculateNextDueDate: (
-    date: Date,
-    frequency: string
-  ) => Date;
+  readonly calculateNextDueDate: (date: Date, frequency: string) => Date;
   readonly createId: () => string;
   readonly executeAccountBalanceCommand: AccountBalanceCommandService["execute"];
   readonly getCurrentUserDataScope: () => Promise<CurrentUserDataScope>;
@@ -86,17 +83,11 @@ function fail(code: string): never {
   throw new Error(code);
 }
 
-function readRaw(
-  raw: Readonly<Model["_raw"]>,
-  key: string
-): unknown {
+function readRaw(raw: Readonly<Model["_raw"]>, key: string): unknown {
   return (raw as unknown as Readonly<Record<string, unknown>>)[key];
 }
 
-function assertOwnedRaw(
-  raw: Readonly<Model["_raw"]>,
-  userId: string
-): void {
+function assertOwnedRaw(raw: Readonly<Model["_raw"]>, userId: string): void {
   if (readRaw(raw, "user_id") !== userId) {
     fail(RECURRING_FINANCIAL_ACTION_ERROR_CODES.OWNERSHIP_FAILED);
   }
@@ -107,7 +98,11 @@ function assertPaymentIsAvailable(payment: RecurringPayment): void {
     payment.endDate === undefined ||
     payment.endDate === null ||
     isOnOrBeforeDay(payment.nextDueDate, payment.endDate);
-  if (payment.deleted || payment.status !== "ACTIVE" || !hasEligibleDuePayment) {
+  if (
+    payment.deleted ||
+    payment.status !== "ACTIVE" ||
+    !hasEligibleDuePayment
+  ) {
     fail(RECURRING_FINANCIAL_ACTION_ERROR_CODES.PAYMENT_UNAVAILABLE);
   }
 }
@@ -125,12 +120,11 @@ function buildScheduleResult(
     payment.endDate !== null &&
     !isOnOrBeforeDay(candidate, payment.endDate);
   const nextDueDate = isFinalOccurrence ? payment.nextDueDate : candidate;
-  const status: RecurringStatus = isFinalOccurrence
-    ? "COMPLETED"
-    : "ACTIVE";
-  const financialRevision = (
-    BigInt(payment.financialRevision) + 1n
-  ).toString();
+  const status: RecurringStatus = isFinalOccurrence ? "COMPLETED" : "ACTIVE";
+  const expectedRevision = parseCanonicalUnsignedIntegerString(
+    payment.financialRevision
+  );
+  const financialRevision = (BigInt(expectedRevision) + 1n).toString();
   return {
     after: {
       financialRevision,
@@ -151,7 +145,9 @@ function buildEnvelope(input: {
   readonly transaction: TransactionAfter;
   readonly userId: string;
 }): FinancialActionEnvelopeV1 {
-  const expectedFinancialRevision = input.payment.financialRevision;
+  const expectedFinancialRevision = parseCanonicalUnsignedIntegerString(
+    input.payment.financialRevision
+  );
   return {
     accountGuards: [
       {
@@ -243,15 +239,16 @@ function assertPreparedOwnership(
   schedule: RecurringPaymentAfter,
   transaction: TransactionAfter
 ): void {
-  preparedPostimages.forEach((postimage) => assertOwnedRaw(postimage.raw, userId));
+  preparedPostimages.forEach((postimage) =>
+    assertOwnedRaw(postimage.raw, userId)
+  );
   const preparedTransaction = preparedPostimages.find(
     (postimage) =>
       postimage.table === "transactions" && postimage.id === transaction.id
   );
   const preparedSchedule = preparedPostimages.find(
     (postimage) =>
-      postimage.table === "recurring_payments" &&
-      postimage.id === schedule.id
+      postimage.table === "recurring_payments" && postimage.id === schedule.id
   );
   if (
     !preparedTransaction ||
@@ -306,7 +303,10 @@ function buildPlan(input: {
       );
       return Promise.resolve();
     },
-    assertPreparedOwnership: ({ userId, preparedPostimages }): Promise<void> => {
+    assertPreparedOwnership: ({
+      userId,
+      preparedPostimages,
+    }): Promise<void> => {
       assertPreparedOwnership(
         userId,
         preparedPostimages,
@@ -339,9 +339,7 @@ export function createRecurringPaymentFinancialActionService(
         fail(RECURRING_FINANCIAL_ACTION_ERROR_CODES.ACCOUNT_UNAVAILABLE);
       }
       if (account.currency !== payment.currency) {
-        fail(
-          RECURRING_FINANCIAL_ACTION_ERROR_CODES.ACCOUNT_CURRENCY_MISMATCH
-        );
+        fail(RECURRING_FINANCIAL_ACTION_ERROR_CODES.ACCOUNT_CURRENCY_MISMATCH);
       }
       const occurredAt = dependencies.now();
       const amountMinorUnits = getExactTransactionMinorUnits({
@@ -378,9 +376,7 @@ export function createRecurringPaymentFinancialActionService(
         amountMinorUnits
       );
       const signedMinorUnits =
-        payment.type === "EXPENSE"
-          ? `-${amountMinorUnits}`
-          : amountMinorUnits;
+        payment.type === "EXPENSE" ? `-${amountMinorUnits}` : amountMinorUnits;
       const schedule = buildScheduleResult(
         payment,
         dependencies.calculateNextDueDate
@@ -396,24 +392,25 @@ export function createRecurringPaymentFinancialActionService(
       await dependencies.executeAccountBalanceCommand({
         envelope,
         hashProvider: dependencies.hashProvider,
-        prepareDomainOperationPlan: (): Promise<FinancialActionLinkedOperationPlan> =>
-          Promise.resolve(
-            buildPlan({
-              account,
-              nextAccountBalance: getNextAccountBalance(
-                account.balance,
-                signedMinorUnits,
-                account.currency
-              ),
-              nextAccountRevision: getNextAccountFinancialRevision(
-                account.financialRevision
-              ),
-              payment,
-              schedule,
-              transaction,
-              transactionAfter,
-            })
-          ),
+        prepareDomainOperationPlan:
+          (): Promise<FinancialActionLinkedOperationPlan> =>
+            Promise.resolve(
+              buildPlan({
+                account,
+                nextAccountBalance: getNextAccountBalance(
+                  account.balance,
+                  signedMinorUnits,
+                  account.currency
+                ),
+                nextAccountRevision: getNextAccountFinancialRevision(
+                  account.financialRevision
+                ),
+                payment,
+                schedule,
+                transaction,
+                transactionAfter,
+              })
+            ),
       });
       return transaction;
     },

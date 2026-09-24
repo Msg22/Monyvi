@@ -181,7 +181,7 @@ function transferAfter(
   return {
     amountMinorUnits: positiveMinorUnits(transfer.amount, transfer.currency),
     convertedAmountMinorUnits:
-      transfer.convertedAmount === undefined
+      transfer.convertedAmount == null
         ? null
         : positiveMinorUnits(transfer.convertedAmount, destinationCurrency),
     createdAt: isoTimestamp(transfer.createdAt),
@@ -189,7 +189,7 @@ function transferAfter(
     date: formatFinancialActionLocalDate(transfer.date),
     deleted: transfer.deleted,
     exchangeRate:
-      transfer.exchangeRate === undefined
+      transfer.exchangeRate == null
         ? null
         : serializeDecimal(String(transfer.exchangeRate)),
     fromAccountId: transfer.fromAccountId,

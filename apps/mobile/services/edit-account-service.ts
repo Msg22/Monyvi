@@ -26,7 +26,11 @@ import {
   type CurrencyType,
   type TransactionType,
 } from "@monyvi/db";
-import { roundForCurrency, toMinorUnits, getCurrencyPrecision } from "@monyvi/logic";
+import {
+  roundForCurrency,
+  toMinorUnits,
+  getCurrencyPrecision,
+} from "@monyvi/logic";
 import { Q, type Model } from "@nozbe/watermelondb";
 import { t } from "i18next";
 import { logger } from "@/utils/logger";
@@ -39,7 +43,12 @@ import {
   queryChildrenOfOwnedParent,
   queryOwned,
 } from "./user-data-access";
-import { replaceAccountSmsSendersWithinWriter } from "./account-sms-sender-service";
+import {
+  prepareReplaceAccountSmsSenders,
+  replaceAccountSmsSendersWithinWriter,
+} from "./account-sms-sender-service";
+import type { PrepareInsideWriterResult } from "./core-account-financial-action-service";
+import type { FinancialActionLinkedExistingOperation } from "./financial-action-foundation-repository";
 import { editGuardedAccount } from "./account-core-writer-production";
 import type { AccountMetadataProjection } from "./account-core-writer-service";
 import { normalizeCardLast4ForStorage } from "./card-last4-normalizer";
@@ -188,9 +197,11 @@ function minorUnitDelta(
   currency: CurrencyType
 ): bigint {
   const places = getCurrencyPrecision(currency);
+  const normalizedPrevious = roundForCurrency(previousBalance, currency);
+  const normalizedNew = roundForCurrency(newBalance, currency);
   return (
-    BigInt(toMinorUnits(String(newBalance), places)) -
-    BigInt(toMinorUnits(String(previousBalance), places))
+    BigInt(toMinorUnits(normalizedNew.toFixed(places), places)) -
+    BigInt(toMinorUnits(normalizedPrevious.toFixed(places), places))
   );
 }
 
@@ -449,8 +460,7 @@ export async function updateAccountWithinWriter(
   const newBalance = roundForCurrency(data.balance, existingAccount.currency);
 
   if (
-    minorUnitDelta(previousBalance, newBalance, existingAccount.currency) ===
-    0n
+    minorUnitDelta(previousBalance, newBalance, existingAccount.currency) === 0n
   ) {
     await updateAccountMetadataWithinWriter(
       accountId,
@@ -464,10 +474,15 @@ export async function updateAccountWithinWriter(
     return;
   }
 
-  const prepareInsideWriter = async (): Promise<void> => {
+  const prepareInsideWriter = async (): Promise<PrepareInsideWriterResult> => {
+    // Sibling writes are returned as plan fragments so they commit atomically
+    // with the guarded account effect instead of committing early through
+    // direct Model.update()/create() calls.
+    const preparedCreates: Model[] = [];
+    const existingOperations: FinancialActionLinkedExistingOperation[] = [];
     // Reassigning the default touches a different account row without a
-    // balance effect, so it runs here as a direct owned metadata write
-    // inside the same writer instead of a plan operation.
+    // balance effect, so it runs here as a plan operation inside the same
+    // guarded batch.
     if (data.isDefault && !existingAccount.isDefault) {
       const currentDefaults = await queryOwned(
         accountsCollection,
@@ -481,18 +496,25 @@ export async function updateAccountWithinWriter(
       // first match just in case of data inconsistency.
       const currentDefault = currentDefaults[0];
       if (currentDefault) {
-        await currentDefault.update((acc) => {
-          acc.isDefault = false;
+        const model: Model = currentDefault;
+        existingOperations.push({
+          kind: "update",
+          model,
+          update: (target): void => {
+            (target as Account).isDefault = false;
+          },
         });
       }
     }
 
     if (hasOwnDataField(data, "senderNames")) {
-      await replaceAccountSmsSendersWithinWriter(
+      const senders = await prepareReplaceAccountSmsSenders(
         existingAccount,
         currentUserId,
         data.senderNames ?? []
       );
+      preparedCreates.push(...senders.preparedCreates);
+      existingOperations.push(...senders.existingOperations);
     }
 
     // Update bank details if this is a bank account
@@ -506,17 +528,30 @@ export async function updateAccountWithinWriter(
       ).fetch();
 
       if (activeBankDetail) {
-        await activeBankDetail.update((bd) => {
-          bd.cardLast4 = normalizeCardLast4ForStorage(data.cardLast4);
+        const model: Model = activeBankDetail;
+        existingOperations.push({
+          kind: "update",
+          model,
+          update: (target): void => {
+            (target as BankDetails).cardLast4 = normalizeCardLast4ForStorage(
+              data.cardLast4
+            );
+          },
         });
       } else if (hasBankDetailsData(data)) {
-        await database.get<BankDetails>("bank_details").create((bd) => {
-          bd.accountId = accountId;
-          bd.cardLast4 = normalizeCardLast4ForStorage(data.cardLast4);
-          bd.deleted = false;
-        });
+        preparedCreates.push(
+          database.get<BankDetails>("bank_details").prepareCreate((bd) => {
+            bd.accountId = accountId;
+            bd.cardLast4 = normalizeCardLast4ForStorage(data.cardLast4);
+            bd.deleted = false;
+          })
+        );
       }
     }
+    return Object.freeze({
+      preparedCreates: Object.freeze([...preparedCreates]),
+      existingOperations: Object.freeze([...existingOperations]),
+    });
   };
 
   const difference = newBalance - previousBalance;

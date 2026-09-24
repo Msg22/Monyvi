@@ -30,10 +30,14 @@ import {
   database,
 } from "@monyvi/db";
 import { roundForCurrency } from "@monyvi/logic";
-import { Q } from "@nozbe/watermelondb";
+import { Q, type Model } from "@nozbe/watermelondb";
 import { readIntroLocaleOverride } from "./intro-flag-service";
 import { assertExpectedCurrentUser, queryOwned } from "./user-data-access";
-import { createAccountSmsSendersWithinWriter } from "./account-sms-sender-service";
+import {
+  createAccountSmsSendersWithinWriter,
+  prepareCreateAccountSmsSenders,
+} from "./account-sms-sender-service";
+import type { PrepareInsideWriterResult } from "./core-account-financial-action-service";
 import { createGuardedAccount } from "./account-core-writer-production";
 import { ACCOUNT_CORE_WRITER_ERROR_CODES } from "./account-core-writer-service";
 import { normalizeCardLast4ForStorage } from "./card-last4-normalizer";
@@ -432,7 +436,7 @@ async function prepareAccountCreateInsideWriter(
   data: AccountFormData,
   userId: string,
   provisionalIsFirstAccount: boolean
-): Promise<void> {
+): Promise<PrepareInsideWriterResult> {
   const accountsCollection = database.get<Account>("accounts");
   const existingAccounts = await queryOwned(
     accountsCollection,
@@ -449,14 +453,24 @@ async function prepareAccountCreateInsideWriter(
     throw new Error(ACCOUNT_CORE_WRITER_ERROR_CODES.STALE_ACCOUNT_STATE);
   }
 
-  await createAccountSmsSendersWithinWriter(account.id, data.senderNames ?? []);
+  const senders = prepareCreateAccountSmsSenders(
+    account.id,
+    data.senderNames ?? []
+  );
+  const preparedCreates: Model[] = [...senders.preparedCreates];
   if (data.accountType === "BANK") {
-    await database.get<BankDetails>("bank_details").create((details) => {
-      details.accountId = account.id;
-      details.cardLast4 = normalizeCardLast4ForStorage(data.cardLast4);
-      details.deleted = false;
-    });
+    preparedCreates.push(
+      database.get<BankDetails>("bank_details").prepareCreate((details) => {
+        details.accountId = account.id;
+        details.cardLast4 = normalizeCardLast4ForStorage(data.cardLast4);
+        details.deleted = false;
+      })
+    );
   }
+  return Object.freeze({
+    preparedCreates: Object.freeze(preparedCreates),
+    existingOperations: Object.freeze([]),
+  });
 }
 
 async function createNonZeroBalanceAccount(

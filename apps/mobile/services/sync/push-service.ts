@@ -97,6 +97,40 @@ function changedRecords(
   return changeSet ? [...changeSet.created, ...changeSet.updated] : [];
 }
 
+const ACCOUNT_FINANCIAL_COLUMNS: ReadonlySet<string> = new Set([
+  "balance",
+  "financial_revision",
+]);
+
+function readChangedColumns(record: unknown): readonly string[] {
+  if (typeof record !== "object" || record === null) return [];
+  const changed = (record as Record<string, unknown>)._changed;
+  if (typeof changed !== "string" || changed.length === 0) return [];
+  return Object.freeze(changed.split(","));
+}
+
+function hasPendingAccountMetadata(record: unknown): boolean {
+  return readChangedColumns(record).some(
+    (column) => !ACCOUNT_FINANCIAL_COLUMNS.has(column)
+  );
+}
+
+function collectAcknowledgedAccountIdsWithMetadata(
+  changes: SyncPushArgs["changes"],
+  handledIds: SyncRejectedIds | undefined,
+  rejectedIds: SyncRejectedIds | undefined
+): ReadonlySet<string> {
+  const handled = new Set(readRejectedIdsForTable(handledIds, "accounts"));
+  const rejected = new Set(readRejectedIdsForTable(rejectedIds, "accounts"));
+  const allowed = new Set<string>();
+  changedRecords(changes, "accounts").forEach((record) => {
+    const id = record.id;
+    if (typeof id !== "string" || !handled.has(id) || rejected.has(id)) return;
+    if (hasPendingAccountMetadata(record)) allowed.add(id);
+  });
+  return allowed;
+}
+
 function hasDedicatedDeletes(changes: SyncPushArgs["changes"]): boolean {
   return [...DEDICATED_SYNC_TABLES].some((table) => {
     const changeSet = (
@@ -314,17 +348,15 @@ export async function pushMetalDedicatedChanges(
     ...changedRecords(changes, "financial_action_groups").filter(
       (root) => root.domain === "metals"
     ),
-  ].sort(
-    (left: Record<string, unknown>, right: Record<string, unknown>) => {
-      const leftRevision = expectedRevisionOrder(left);
-      const rightRevision = expectedRevisionOrder(right);
-      return leftRevision === rightRevision
-        ? 0
-        : leftRevision < rightRevision
-          ? -1
-          : 1;
-    }
-  );
+  ].sort((left: Record<string, unknown>, right: Record<string, unknown>) => {
+    const leftRevision = expectedRevisionOrder(left);
+    const rightRevision = expectedRevisionOrder(right);
+    return leftRevision === rightRevision
+      ? 0
+      : leftRevision < rightRevision
+        ? -1
+        : 1;
+  });
   const acceptedActionIds = new Set<string>();
   const handledActionIds = new Set<string>();
   for (const root of roots) {
@@ -712,6 +744,11 @@ export async function pushChanges(
     ),
     accountActionAcknowledgements.rejectedIds
   );
+  const metadataOnlyAccountIds = collectAcknowledgedAccountIdsWithMetadata(
+    pushArgs.changes,
+    accountActionAcknowledgements.handledIds,
+    accountActionAcknowledgements.rejectedIds
+  );
 
   const { changes } = pushArgs;
   for (const [tableName, rawTableChanges] of Object.entries(changes).sort(
@@ -760,15 +797,21 @@ export async function pushChanges(
       const upsertRecords = async (
         records: ReadonlyArray<Record<string, unknown>>
       ): Promise<void> => {
-        const pushableRecords = records.filter(
-          (record) =>
-            isPushableRecord(table, record) &&
+        const pushableRecords = records.filter((record) => {
+          if (!isPushableRecord(table, record)) return false;
+          if (
             !isProtectedFinancialActionRow(
               protectedFinancialActionIds,
               table,
               record
             )
-        );
+          ) {
+            return true;
+          }
+          if (table !== "accounts") return false;
+          const id = record.id;
+          return typeof id === "string" && metadataOnlyAccountIds.has(id);
+        });
         if (pushableRecords.length === 0) {
           return;
         }

@@ -46,7 +46,9 @@ interface AccountBalanceEnvelope {
   readonly payload: Readonly<Record<string, unknown>>;
 }
 
-function readAccountBalanceEnvelope(record: unknown): AccountBalanceEnvelope | null {
+function readAccountBalanceEnvelope(
+  record: unknown
+): AccountBalanceEnvelope | null {
   if (!isObject(record) || typeof record.payload_json !== "string") return null;
   let envelope: unknown;
   try {
@@ -76,9 +78,12 @@ function protectedRefsFromRoot(record: unknown): ReadonlyArray<{
   if (isObject(domainMutation) && Array.isArray(domainMutation.records)) {
     domainMutation.records.forEach((candidate) => {
       if (!isObject(candidate)) return;
-      const table = ENTITY_TABLES[candidate.entity as keyof typeof ENTITY_TABLES];
-      const recordId = readChangeId(candidate.after) ?? readChangeId(candidate.before);
-      if (typeof table === "string" && recordId) refs.push({ id: recordId, table });
+      const table =
+        ENTITY_TABLES[candidate.entity as keyof typeof ENTITY_TABLES];
+      const recordId =
+        readChangeId(candidate.after) ?? readChangeId(candidate.before);
+      if (typeof table === "string" && recordId)
+        refs.push({ id: recordId, table });
     });
   }
   const accountEffects = envelope.payload.accountEffects;
@@ -104,7 +109,9 @@ function collectFinanciallyDirtyAccountIds(
   changes: SyncPushArgs["changes"]
 ): readonly string[] {
   const accounts = (
-    changes as unknown as Readonly<Record<string, SyncTableChangeSet | undefined>>
+    changes as unknown as Readonly<
+      Record<string, SyncTableChangeSet | undefined>
+    >
   ).accounts;
   if (!accounts) return [];
   return [...accounts.created, ...accounts.updated].flatMap((candidate) => {
@@ -120,8 +127,11 @@ function collectFinanciallyDirtyAccountIds(
       Object.prototype.hasOwnProperty.call(candidate, "financial_revision");
     const hasProtectedChange =
       changed.includes("balance") || changed.includes("financial_revision");
+    const hasNonInitialFinancialValue =
+      candidate.balance !== 0 || candidate.financial_revision !== "0";
     return hasProtectedValue &&
-      (candidate._status === "created" || hasProtectedChange)
+      (hasProtectedChange ||
+        (candidate._status === "created" && hasNonInitialFinancialValue))
       ? [id]
       : [];
   });
@@ -171,9 +181,10 @@ function groupRowIds(
     grouped.set("account_financial_effects", [...effectIds].sort());
   }
   refs.forEach((ref) => {
-    grouped.set(ref.table, [
-      ...new Set([...(grouped.get(ref.table) ?? []), ref.id]),
-    ].sort());
+    grouped.set(
+      ref.table,
+      [...new Set([...(grouped.get(ref.table) ?? []), ref.id])].sort()
+    );
   });
   return Object.freeze(Object.fromEntries([...grouped.entries()].sort()));
 }
@@ -366,7 +377,9 @@ export function isProtectedFinancialActionRow(
   recordOrId: unknown
 ): boolean {
   const id = readChangeId(recordOrId);
-  return id !== null && readRejectedIdsForTable(rejectedIds, table).includes(id);
+  return (
+    id !== null && readRejectedIdsForTable(rejectedIds, table).includes(id)
+  );
 }
 
 export function readRejectedIdsForTable(
@@ -376,7 +389,9 @@ export function readRejectedIdsForTable(
   if (!isObject(rejectedIds)) return [];
   const value = rejectedIds[table];
   return Array.isArray(value)
-    ? value.filter((candidate): candidate is string => typeof candidate === "string")
+    ? value.filter(
+        (candidate): candidate is string => typeof candidate === "string"
+      )
     : [];
 }
 

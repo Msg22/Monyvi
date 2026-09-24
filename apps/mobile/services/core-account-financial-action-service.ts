@@ -52,6 +52,11 @@ export interface CoreFinancialActionMutationRecord {
   readonly update?: (model: Model) => void;
 }
 
+export interface PrepareInsideWriterResult {
+  readonly preparedCreates: readonly Model[];
+  readonly existingOperations: readonly FinancialActionLinkedExistingOperation[];
+}
+
 export interface ExecuteCoreAccountFinancialActionInput {
   readonly accountEffects: readonly CoreAccountEffectInput[];
   readonly actionId: string;
@@ -61,7 +66,9 @@ export interface ExecuteCoreAccountFinancialActionInput {
   readonly mutationRecords: readonly CoreFinancialActionMutationRecord[];
   readonly occurredAt: string;
   readonly operationCode: string;
-  readonly prepareInsideWriter?: () => Promise<void>;
+  readonly prepareInsideWriter?: () => Promise<
+    PrepareInsideWriterResult | undefined | void
+  >;
   readonly userId: string;
 }
 
@@ -438,10 +445,23 @@ export function createCoreAccountFinancialActionService(
       const command: ExecuteAccountBalanceCommandInput = {
         envelope: buildEnvelope(input, effects),
         hashProvider: dependencies.hashProvider,
-        prepareDomainOperationPlan: async (): Promise<FinancialActionLinkedOperationPlan> => {
-          await input.prepareInsideWriter?.();
-          return buildPlan(effects, input.mutationRecords);
-        },
+        prepareDomainOperationPlan:
+          async (): Promise<FinancialActionLinkedOperationPlan> => {
+            const extra = await input.prepareInsideWriter?.();
+            const plan = buildPlan(effects, input.mutationRecords);
+            if (!extra) return plan;
+            return {
+              ...plan,
+              preparedCreates: Object.freeze([
+                ...plan.preparedCreates,
+                ...extra.preparedCreates,
+              ]),
+              existingOperations: Object.freeze([
+                ...plan.existingOperations,
+                ...extra.existingOperations,
+              ]),
+            };
+          },
       };
       return dependencies.executeAccountBalanceCommand(command);
     },

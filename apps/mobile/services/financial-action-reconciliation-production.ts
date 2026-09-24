@@ -3,12 +3,15 @@ import {
   Account,
   AccountFinancialEffect,
   FinancialActionGroup,
+  Transaction,
+  Transfer,
   database,
 } from "@monyvi/db";
 import {
   CURRENCY_PRECISION,
   DEFAULT_PRECISION,
   fromMinorUnits,
+  parseFinancialActionEnvelopeJson,
   serializeDecimal,
 } from "@monyvi/logic";
 
@@ -160,7 +163,10 @@ async function findOwnedEffects(
       Q.where("action_id", actionId)
     )
     .fetch();
-  if (effects.length === 0 || effects.some((effect) => effect.actionId !== actionId)) {
+  if (
+    effects.length === 0 ||
+    effects.some((effect) => effect.actionId !== actionId)
+  ) {
     fail();
   }
   return Object.freeze(effects.map((effect) => scope.assertOwned(effect)));
@@ -234,7 +240,8 @@ function balanceFromMinorUnits(value: string, currency: string): number {
     DEFAULT_PRECISION;
   const exact = serializeDecimal(fromMinorUnits(value, precision));
   const result = Number(exact);
-  if (!Number.isFinite(result) || serializeDecimal(String(result)) !== exact) fail();
+  if (!Number.isFinite(result) || serializeDecimal(String(result)) !== exact)
+    fail();
   return result;
 }
 
@@ -248,6 +255,46 @@ function matchesExpectedAccount(
     account.currency === expected.currency &&
     account.financialRevision === expected.financialRevision
   );
+}
+
+type LosingDomainCreateTable = "transactions" | "transfers";
+
+const LOSING_CREATE_ENTITY_TABLES: Readonly<
+  Record<string, LosingDomainCreateTable>
+> = {
+  transaction: "transactions",
+  transfer: "transfers",
+};
+
+function readLosingDomainCreates(payloadJson: string): ReadonlyArray<{
+  readonly id: string;
+  readonly table: LosingDomainCreateTable;
+}> {
+  let envelope: ReturnType<typeof parseFinancialActionEnvelopeJson>;
+  try {
+    envelope = parseFinancialActionEnvelopeJson(payloadJson);
+  } catch {
+    fail();
+  }
+  const domainMutation = envelope.payload.domainMutation as unknown;
+  if (!isObject(domainMutation)) fail();
+  const records = domainMutation.records;
+  if (!Array.isArray(records)) fail();
+  const creates: Array<{
+    readonly id: string;
+    readonly table: LosingDomainCreateTable;
+  }> = [];
+  records.forEach((record: unknown) => {
+    if (!isObject(record)) return;
+    if (record.mode !== "create" || typeof record.entity !== "string") return;
+    const table = LOSING_CREATE_ENTITY_TABLES[record.entity];
+    if (!isObject(record.after)) return;
+    const id = record.after.id;
+    if (table && typeof id === "string" && id.length > 0) {
+      creates.push({ id, table });
+    }
+  });
+  return Object.freeze(creates);
 }
 
 async function installCanonicalSnapshotAtomically(
@@ -314,6 +361,39 @@ async function installCanonicalSnapshotAtomically(
     const operations: Model[] = [];
     let hasCommitted = false;
     try {
+      const losingCreates = readLosingDomainCreates(root.payloadJson);
+      const stageLosingDelete = (row: Transaction | Transfer): void => {
+        snapshots.push(captureCachedModelSnapshot(row));
+        operations.push(
+          row.prepareUpdate((candidate) => {
+            candidate.deleted = true;
+            candidate.updatedAt = now;
+          })
+        );
+      };
+      for (const record of losingCreates) {
+        if (record.table === "transactions") {
+          const rows = await scope
+            .queryOwned(
+              database.get<Transaction>("transactions"),
+              Q.where("id", record.id)
+            )
+            .fetch();
+          const row = rows.find((candidate) => candidate.id === record.id);
+          if (!row) continue;
+          stageLosingDelete(row);
+        } else {
+          const rows = await scope
+            .queryOwned(
+              database.get<Transfer>("transfers"),
+              Q.where("id", record.id)
+            )
+            .fetch();
+          const row = rows.find((candidate) => candidate.id === record.id);
+          if (!row) continue;
+          stageLosingDelete(row);
+        }
+      }
       accounts.forEach((account) => {
         const canonical = canonicalAccounts.get(account.id);
         if (!canonical) fail();

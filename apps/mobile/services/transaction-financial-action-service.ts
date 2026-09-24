@@ -118,17 +118,11 @@ function startOfFinancialActionLocalDate(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }
 
-function readRaw(
-  raw: Readonly<Model["_raw"]>,
-  key: string
-): unknown {
+function readRaw(raw: Readonly<Model["_raw"]>, key: string): unknown {
   return (raw as unknown as Readonly<Record<string, unknown>>)[key];
 }
 
-function assertOwnedRaw(
-  raw: Readonly<Model["_raw"]>,
-  userId: string
-): void {
+function assertOwnedRaw(raw: Readonly<Model["_raw"]>, userId: string): void {
   if (readRaw(raw, "user_id") !== userId) {
     fail(TRANSACTION_FINANCIAL_ACTION_ERROR_CODES.OWNERSHIP_FAILED);
   }
@@ -156,12 +150,19 @@ export function assertRawTransactionMatches(
 ): void {
   const exactEntries: ReadonlyArray<readonly [string, unknown]> = [
     ["account_id", expected.accountId],
-    ["amount", Number(fromMinorUnits(expected.amountMinorUnits, currencyPlaces(expected.currency)))],
+    [
+      "amount",
+      Number(
+        fromMinorUnits(
+          expected.amountMinorUnits,
+          currencyPlaces(expected.currency)
+        )
+      ),
+    ],
     ["category_id", expected.categoryId],
     ["counterparty", expected.counterparty],
     ["created_at", Date.parse(expected.createdAt)],
     ["currency", expected.currency],
-    ["date", new Date(`${expected.date}T00:00:00`).getTime()],
     ["deleted", expected.deleted],
     ["is_draft", expected.isDraft],
     ["linked_asset_id", expected.linkedAssetId],
@@ -172,7 +173,12 @@ export function assertRawTransactionMatches(
     ["source", expected.source],
     ["type", expected.type],
   ];
-  if (exactEntries.some(([key, value]) => readRaw(raw, key) !== value)) {
+  const rawDate = readRaw(raw, "date");
+  if (
+    typeof rawDate !== "number" ||
+    formatFinancialActionLocalDate(new Date(rawDate)) !== expected.date ||
+    exactEntries.some(([key, value]) => readRaw(raw, key) !== value)
+  ) {
     fail(TRANSACTION_FINANCIAL_ACTION_ERROR_CODES.INVALID_PLAN);
   }
 }
@@ -182,7 +188,9 @@ function assertPreparedOwnership(
   preparedPostimages: readonly FinancialActionLinkedOperationPostimage[],
   expected: TransactionAfter
 ): void {
-  preparedPostimages.forEach((postimage) => assertOwnedRaw(postimage.raw, userId));
+  preparedPostimages.forEach((postimage) =>
+    assertOwnedRaw(postimage.raw, userId)
+  );
   const transaction = preparedPostimages.find(
     (postimage) =>
       postimage.table === "transactions" && postimage.id === expected.id
@@ -362,7 +370,10 @@ function buildPlan(input: {
       assertCachedOwnership(userId, cachedPreimages, input.account.id);
       return Promise.resolve();
     },
-    assertPreparedOwnership: ({ userId, preparedPostimages }): Promise<void> => {
+    assertPreparedOwnership: ({
+      userId,
+      preparedPostimages,
+    }): Promise<void> => {
       assertPreparedOwnership(userId, preparedPostimages, input.after);
       return Promise.resolve();
     },
@@ -390,7 +401,9 @@ export function createTransactionFinancialActionService(
         fail(TRANSACTION_FINANCIAL_ACTION_ERROR_CODES.ACCOUNT_UNAVAILABLE);
       }
       if (account.currency !== data.currency) {
-        fail(TRANSACTION_FINANCIAL_ACTION_ERROR_CODES.ACCOUNT_CURRENCY_MISMATCH);
+        fail(
+          TRANSACTION_FINANCIAL_ACTION_ERROR_CODES.ACCOUNT_CURRENCY_MISMATCH
+        );
       }
       await dependencies.assertExpectedCurrentUser(scope.userId);
 
@@ -412,22 +425,23 @@ export function createTransactionFinancialActionService(
       const command: ExecuteAccountBalanceCommandInput = {
         envelope,
         hashProvider: dependencies.hashProvider,
-        prepareDomainOperationPlan: (): Promise<FinancialActionLinkedOperationPlan> =>
-          Promise.resolve(
-            buildPlan({
-              account,
-              after,
-              nextAccountBalance: getNextAccountBalance(
-                account.balance,
-                signedMinorUnits,
-                account.currency
-              ),
-              nextAccountRevision: getNextAccountFinancialRevision(
-                account.financialRevision
-              ),
-              transaction,
-            })
-          ),
+        prepareDomainOperationPlan:
+          (): Promise<FinancialActionLinkedOperationPlan> =>
+            Promise.resolve(
+              buildPlan({
+                account,
+                after,
+                nextAccountBalance: getNextAccountBalance(
+                  account.balance,
+                  signedMinorUnits,
+                  account.currency
+                ),
+                nextAccountRevision: getNextAccountFinancialRevision(
+                  account.financialRevision
+                ),
+                transaction,
+              })
+            ),
       };
       await dependencies.executeAccountBalanceCommand(command);
       return transaction;

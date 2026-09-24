@@ -322,6 +322,7 @@ function prepareTransaction(
     transaction.counterparty = input.counterparty;
     transaction.date = transfer.date;
     transaction.note = transfer.notes;
+    transaction.smsFingerprint = transfer.smsFingerprint;
     transaction.source = "MANUAL";
     transaction.isDraft = false;
     transaction.deleted = false;
@@ -350,7 +351,7 @@ function transactionAfter(
     linkedDebtId: null,
     linkedRecurringId: null,
     note: transaction.note ?? null,
-    smsFingerprint: transfer.smsFingerprint ?? null,
+    smsFingerprint: transaction.smsFingerprint ?? null,
     source: "MANUAL",
     type: transaction.type,
   };

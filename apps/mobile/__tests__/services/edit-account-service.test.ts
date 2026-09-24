@@ -256,15 +256,22 @@ jest.mock("@/services/supabase", () => ({
   getCurrentUserId: (): Promise<string> => Promise.resolve("user-1"),
 }));
 
-interface MockGuardedEditInput
-  extends Omit<AccountCoreEditInput, "account" | "updateMetadata"> {
+interface MockGuardedEditInput extends Omit<
+  AccountCoreEditInput,
+  "account" | "updateMetadata"
+> {
   readonly account: MockModelRecord;
   readonly updateMetadata: (projection: Record<string, unknown>) => void;
 }
 
 const mockEditGuardedAccount = jest.fn(
   async (input: MockGuardedEditInput): Promise<void> => {
-    await input.prepareInsideWriter();
+    const extra = await input.prepareInsideWriter();
+    extra?.existingOperations.forEach((operation) => {
+      if (operation.kind === "update") {
+        operation.update(operation.model);
+      }
+    });
   }
 );
 
@@ -915,6 +922,9 @@ describe("edit-account-service", () => {
             create: jest.fn(() =>
               Promise.reject(new Error("Bank details failed"))
             ),
+            prepareCreate: jest.fn(() => {
+              throw new Error("Bank details failed");
+            }),
           };
         }
         return {
@@ -1140,7 +1150,7 @@ describe("edit-account-service", () => {
       expect(acc.name).toBe("Trimmed Name");
     });
 
-      it("unsets the previous default inside the guarded group when setting a new default", async () => {
+    it("unsets the previous default inside the guarded group when setting a new default", async () => {
       const oldDefault = seedAccount("acc-old", {
         name: "Old Default",
         balance: 50,

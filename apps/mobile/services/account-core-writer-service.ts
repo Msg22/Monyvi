@@ -3,6 +3,7 @@ import type { Collection, Model } from "@nozbe/watermelondb";
 import {
   fromMinorUnits,
   getCurrencyPrecision,
+  roundForCurrency,
   toMinorUnits,
   type CanonicalJsonValue,
 } from "@monyvi/logic";
@@ -10,6 +11,7 @@ import {
 import type {
   CoreAccountFinancialActionService,
   CoreFinancialActionMutationRecord,
+  PrepareInsideWriterResult,
 } from "./core-account-financial-action-service";
 import {
   assertRawTransactionMatches,
@@ -33,7 +35,9 @@ export type AccountCoreWriterErrorCode =
 
 export interface AccountCoreCreateInput {
   readonly account: Account;
-  readonly prepareInsideWriter: () => Promise<void>;
+  readonly prepareInsideWriter: () => Promise<
+    PrepareInsideWriterResult | undefined | void
+  >;
   readonly userId: string;
 }
 
@@ -55,7 +59,9 @@ export interface AccountCoreEditInput {
   readonly account: Account;
   readonly adjustmentTransaction?: GuardedTransactionCreateData;
   readonly nextBalance: number;
-  readonly prepareInsideWriter: () => Promise<void>;
+  readonly prepareInsideWriter: () => Promise<
+    PrepareInsideWriterResult | undefined | void
+  >;
   readonly updateMetadata: (projection: AccountMetadataProjection) => void;
   readonly userId: string;
 }
@@ -83,8 +89,9 @@ function signedMinorUnits(amount: number, currency: CurrencyType): string {
     fail(ACCOUNT_CORE_WRITER_ERROR_CODES.INVALID_BALANCE);
   }
   const places = getCurrencyPrecision(currency);
-  const result = toMinorUnits(String(amount), places);
-  if (Number(fromMinorUnits(result, places)) !== amount) {
+  const normalized = roundForCurrency(amount, currency);
+  const result = toMinorUnits(normalized.toFixed(places), places);
+  if (Number(fromMinorUnits(result, places)) !== normalized) {
     fail(ACCOUNT_CORE_WRITER_ERROR_CODES.INVALID_BALANCE);
   }
   return result;

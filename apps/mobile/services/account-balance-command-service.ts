@@ -260,9 +260,15 @@ function hardenPlan(
     ...accountCreates.map((model) => model.id),
     ...accountUpdates.map((operation) => operation.model.id),
   ];
+  const effectAccountIds = new Set(
+    expectations.map((expectation) => expectation.accountId)
+  );
+  const effectAccountOps = knownAccountIds.filter((accountId) =>
+    effectAccountIds.has(accountId)
+  );
   if (
-    knownAccountIds.length !== expectations.length ||
-    new Set(knownAccountIds).size !== knownAccountIds.length ||
+    effectAccountOps.length !== expectations.length ||
+    new Set(effectAccountOps).size !== effectAccountOps.length ||
     expectations.some(
       (expectation) => !knownAccountIds.includes(expectation.accountId)
     )
@@ -284,7 +290,7 @@ function hardenPlan(
     const expectation = expectations.find(
       (candidate) => candidate.accountId === operation.model.id
     );
-    if (!expectation) fail(ACCOUNT_BALANCE_COMMAND_ERROR_CODES.INVALID_PLAN);
+    if (!expectation) return operation;
     return wrapAccountUpdate(operation, expectation, envelope.userId);
   });
   const effects = expectations.map((expectation) =>

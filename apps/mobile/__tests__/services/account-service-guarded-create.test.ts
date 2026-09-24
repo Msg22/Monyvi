@@ -122,10 +122,26 @@ describe("createAccountForUser guarded non-zero creation", () => {
           return { id: "bank-details-1", ...details };
         }
       ),
+      prepareCreate: jest.fn(
+        (writer: (details: Record<string, unknown>) => void) => {
+          const details: Record<string, unknown> = {};
+          writer(details);
+          bankDetailsCreateCalls.push({ ...details });
+          return { id: "bank-details-1", ...details };
+        }
+      ),
     };
     const accountSmsSendersCollection = {
       create: jest.fn(
         async (writer: (sender: Record<string, unknown>) => void) => {
+          const sender: Record<string, unknown> = {};
+          writer(sender);
+          senderCreateCalls.push({ ...sender });
+          return { id: `sender-${senderCreateCalls.length}`, ...sender };
+        }
+      ),
+      prepareCreate: jest.fn(
+        (writer: (sender: Record<string, unknown>) => void) => {
           const sender: Record<string, unknown> = {};
           writer(sender);
           senderCreateCalls.push({ ...sender });
@@ -635,10 +651,7 @@ describe("createAccountForUser guarded non-zero creation", () => {
       created: true,
     });
     expect(mockCreateGuardedAccount).toHaveBeenCalledTimes(2);
-    expect(preparedAccounts.map((acc) => acc.isDefault)).toEqual([
-      true,
-      false,
-    ]);
+    expect(preparedAccounts.map((acc) => acc.isDefault)).toEqual([true, false]);
   });
 
   it("commits exactly one default across concurrent first-account creates", async () => {
@@ -737,6 +750,9 @@ describe("createAccountForUser guarded non-zero creation", () => {
     };
     const bankDetailsCollection = {
       create: jest.fn().mockRejectedValue(new Error("bank details failed")),
+      prepareCreate: jest.fn(() => {
+        throw new Error("bank details failed");
+      }),
     };
     const accountSmsSendersCollection = { create: jest.fn() };
     mockDatabaseGet.mockImplementation((collectionName: string) => {
