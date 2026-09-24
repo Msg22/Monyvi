@@ -496,7 +496,9 @@ BEGIN
   -- currency. Anything else is an arbitrary record smuggled into the group.
   IF p_operation_code = 'account.edit-balance' THEN
     IF jsonb_array_length(p_mutation -> 'records') = 1 THEN
-      IF p_mutation -> 'records' -> 0 ->> 'entity' <> 'account' THEN
+      IF p_mutation -> 'records' -> 0 ->> 'entity' <> 'account'
+        OR p_mutation -> 'records' -> 0 ->> 'mode' <> 'update'
+      THEN
         RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'financial_action_invalid_domain_mutation';
       END IF;
     ELSIF jsonb_array_length(p_mutation -> 'records') = 2

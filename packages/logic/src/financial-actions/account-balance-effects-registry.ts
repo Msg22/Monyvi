@@ -464,7 +464,31 @@ function assertCompositeLinks(
   if (operationCode === "account.edit-balance" && records.length === 2) {
     const account = records[0]?.after;
     const transaction = records[1]?.after;
-    if (transaction?.accountId !== account?.id) fail(invalidPayloadCode);
+    // Closed adjustment vocabulary mirroring 076
+    // financial_action_validate_domain_mutation_v1: the paired transaction is
+    // manual, non-draft, unlinked evidence without sms linkage or
+    // counterparty, its category matches its direction, and it shares the
+    // edited account and currency. Anything wider would canonicalize locally
+    // but fail closed on the server and force optimistic compensation.
+    const categoryMatchesType =
+      (transaction?.type === "INCOME" &&
+        transaction?.categoryId ===
+          "00000000-0000-0000-0001-000000000200") ||
+      (transaction?.type === "EXPENSE" &&
+        transaction?.categoryId === "00000000-0000-0000-0001-000000000201");
+    if (
+      transaction?.accountId !== account?.id ||
+      transaction?.currency !== account?.currency ||
+      transaction?.source !== "MANUAL" ||
+      transaction?.isDraft !== false ||
+      transaction?.linkedAssetId !== null ||
+      transaction?.linkedDebtId !== null ||
+      transaction?.linkedRecurringId !== null ||
+      transaction?.smsFingerprint !== null ||
+      transaction?.counterparty !== null ||
+      !categoryMatchesType
+    )
+      fail(invalidPayloadCode);
   }
 }
 

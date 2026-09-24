@@ -257,6 +257,74 @@ INSERT INTO edit_inputs(name, envelope) VALUES ('forged_currency', pg_temp.edit_
   jsonb_build_array('018f0c7a-1234-7abc-8def-000000000219'),
   '018f0c7a-1234-7abc-8def-000000000416', 'USD'));
 
+-- Reversed order: canonical record order is account first, transaction
+-- second. Transaction-first must fail closed at canonicalization.
+INSERT INTO edit_inputs(name, envelope) VALUES ('reversed_order', pg_temp.edit_envelope(
+  '018f0c7a-1234-7abc-8def-000000000318', '018f0c7a-1234-7abc-8def-000000000214', '5000',
+  jsonb_build_array(
+    jsonb_build_object(
+      'after', pg_temp.edit_txn_after('018f0c7a-1234-7abc-8def-000000001322', '018f0c7a-1234-7abc-8def-000000000214', '5000', '00000000-0000-0000-0001-000000000200', 'INCOME'),
+      'entity', 'transaction', 'expectedUpdatedAt', null, 'mode', 'create'),
+    jsonb_build_object(
+      'after', pg_temp.edit_account_after('018f0c7a-1234-7abc-8def-000000000214', '15000', 'Reject'),
+      'entity', 'account', 'expectedUpdatedAt', '2026-09-01T12:00:00.000Z', 'mode', 'update')),
+  jsonb_build_array('018f0c7a-1234-7abc-8def-000000000214', '018f0c7a-1234-7abc-8def-000000001322'),
+  '018f0c7a-1234-7abc-8def-000000000418'));
+
+-- Wrong second mode: adjustment evidence must be a fresh create, never an
+-- update of an existing transaction.
+INSERT INTO edit_inputs(name, envelope) VALUES ('wrong_second_mode', pg_temp.edit_envelope(
+  '018f0c7a-1234-7abc-8def-000000000319', '018f0c7a-1234-7abc-8def-000000000214', '5000',
+  jsonb_build_array(
+    jsonb_build_object(
+      'after', pg_temp.edit_account_after('018f0c7a-1234-7abc-8def-000000000214', '15000', 'Reject'),
+      'entity', 'account', 'expectedUpdatedAt', '2026-09-01T12:00:00.000Z', 'mode', 'update'),
+    jsonb_build_object(
+      'after', pg_temp.edit_txn_after('018f0c7a-1234-7abc-8def-000000001323', '018f0c7a-1234-7abc-8def-000000000214', '5000', '00000000-0000-0000-0001-000000000200', 'INCOME'),
+      'entity', 'transaction', 'expectedUpdatedAt', '2026-09-01T12:00:00.000Z', 'mode', 'update')),
+  jsonb_build_array('018f0c7a-1234-7abc-8def-000000000214', '018f0c7a-1234-7abc-8def-000000001323'),
+  '018f0c7a-1234-7abc-8def-000000000419'));
+
+-- Duplicate id: the transaction reuses the account id, so the collected
+-- record ids can never match the sorted-unique domain refs.
+INSERT INTO edit_inputs(name, envelope) VALUES ('duplicate_id', pg_temp.edit_envelope(
+  '018f0c7a-1234-7abc-8def-000000000320', '018f0c7a-1234-7abc-8def-000000000214', '5000',
+  jsonb_build_array(
+    jsonb_build_object(
+      'after', pg_temp.edit_account_after('018f0c7a-1234-7abc-8def-000000000214', '15000', 'Reject'),
+      'entity', 'account', 'expectedUpdatedAt', '2026-09-01T12:00:00.000Z', 'mode', 'update'),
+    jsonb_build_object(
+      'after', pg_temp.edit_txn_after('018f0c7a-1234-7abc-8def-000000000214', '018f0c7a-1234-7abc-8def-000000000214', '5000', '00000000-0000-0000-0001-000000000200', 'INCOME'),
+      'entity', 'transaction', 'expectedUpdatedAt', null, 'mode', 'create')),
+  jsonb_build_array('018f0c7a-1234-7abc-8def-000000000214'),
+  '018f0c7a-1234-7abc-8def-000000000420'));
+
+-- Stale-revision composite: account 212 already advanced to revision 1 via
+-- adjust_inc, so a new composite still guarding revision 0 must lose the
+-- guard race with a durable stale outcome and move no balance.
+INSERT INTO edit_inputs(name, envelope) VALUES ('stale_composite', pg_temp.edit_envelope(
+  '018f0c7a-1234-7abc-8def-000000000317', '018f0c7a-1234-7abc-8def-000000000212', '1000',
+  jsonb_build_array(
+    jsonb_build_object(
+      'after', pg_temp.edit_account_after('018f0c7a-1234-7abc-8def-000000000212', '16000', 'Adjust up'),
+      'entity', 'account', 'expectedUpdatedAt', '2026-09-01T12:00:00.000Z', 'mode', 'update'),
+    jsonb_build_object(
+      'after', pg_temp.edit_txn_after('018f0c7a-1234-7abc-8def-000000001324', '018f0c7a-1234-7abc-8def-000000000212', '1000', '00000000-0000-0000-0001-000000000200', 'INCOME'),
+      'entity', 'transaction', 'expectedUpdatedAt', null, 'mode', 'create')),
+  jsonb_build_array('018f0c7a-1234-7abc-8def-000000000212', '018f0c7a-1234-7abc-8def-000000001324'),
+  '018f0c7a-1234-7abc-8def-000000000417'));
+
+-- Zero delta: target equals the stored balance, so derivation yields no
+-- effects while the payload claims one. Metadata-only edits carry no
+-- financial evidence and must fail closed, never mint a zero effect.
+INSERT INTO edit_inputs(name, envelope) VALUES ('zero_delta', pg_temp.edit_envelope(
+  '018f0c7a-1234-7abc-8def-000000000321', '018f0c7a-1234-7abc-8def-000000000215', '2500',
+  jsonb_build_array(jsonb_build_object(
+    'after', pg_temp.edit_account_after('018f0c7a-1234-7abc-8def-000000000215', '10000', 'Mismatch'),
+    'entity', 'account', 'expectedUpdatedAt', '2026-09-01T12:00:00.000Z', 'mode', 'update')),
+  jsonb_build_array('018f0c7a-1234-7abc-8def-000000000215'),
+  '018f0c7a-1234-7abc-8def-000000000421'));
+
 UPDATE edit_inputs SET payload_json = private.financial_action_encode_jsonb_v1(envelope);
 UPDATE edit_inputs SET payload_hash = encode(extensions.digest(convert_to(payload_json, 'UTF8'), 'sha256'), 'hex');
 GRANT SELECT ON edit_inputs TO authenticated;
@@ -321,6 +389,22 @@ SELECT is((SELECT public.apply_account_financial_action_v1(payload_json,payload_
 SELECT is((SELECT currency::text FROM public.accounts WHERE id='018f0c7a-1234-7abc-8def-000000000219'), 'EGP', 'forged currency change keeps currency');
 SELECT is((SELECT balance FROM public.accounts WHERE id='018f0c7a-1234-7abc-8def-000000000219'), 100::numeric, 'forged currency change moves no balance');
 SELECT is((SELECT financial_revision FROM public.accounts WHERE id='018f0c7a-1234-7abc-8def-000000000219'), 0::bigint, 'forged currency change advances no revision');
+SELECT is((SELECT public.apply_account_financial_action_v1(payload_json,payload_hash)->>'status' FROM edit_inputs WHERE name='reversed_order'), 'rejected', 'reversed record order rejected');
+SELECT is((SELECT public.apply_account_financial_action_v1(payload_json,payload_hash)->>'code' FROM edit_inputs WHERE name='reversed_order'), 'INCOMPLETE_GROUP', 'reversed record order fails closed');
+SELECT is((SELECT count(*) FROM public.transactions WHERE id='018f0c7a-1234-7abc-8def-000000001322'), 0::bigint, 'reversed order evidence absent');
+SELECT is((SELECT public.apply_account_financial_action_v1(payload_json,payload_hash)->>'status' FROM edit_inputs WHERE name='wrong_second_mode'), 'rejected', 'non-create adjustment evidence rejected');
+SELECT is((SELECT public.apply_account_financial_action_v1(payload_json,payload_hash)->>'code' FROM edit_inputs WHERE name='wrong_second_mode'), 'INCOMPLETE_GROUP', 'non-create adjustment evidence fails closed');
+SELECT is((SELECT public.apply_account_financial_action_v1(payload_json,payload_hash)->>'status' FROM edit_inputs WHERE name='duplicate_id'), 'rejected', 'duplicate record id rejected');
+SELECT is((SELECT public.apply_account_financial_action_v1(payload_json,payload_hash)->>'code' FROM edit_inputs WHERE name='duplicate_id'), 'INCOMPLETE_GROUP', 'duplicate record id fails closed');
+SELECT is((SELECT public.apply_account_financial_action_v1(payload_json,payload_hash)->>'status' FROM edit_inputs WHERE name='stale_composite'), 'stale', 'stale composite loses the guard race');
+SELECT is((SELECT public.apply_account_financial_action_v1(payload_json,payload_hash)->>'code' FROM edit_inputs WHERE name='stale_composite'), 'ACCOUNT_REVISION_STALE', 'stale composite carries the canonical code');
+SELECT is((SELECT balance FROM public.accounts WHERE id='018f0c7a-1234-7abc-8def-000000000212'), 150::numeric, 'stale composite moves no balance');
+SELECT is((SELECT financial_revision FROM public.accounts WHERE id='018f0c7a-1234-7abc-8def-000000000212'), 1::bigint, 'stale composite advances no revision');
+SELECT is((SELECT count(*) FROM public.transactions WHERE id='018f0c7a-1234-7abc-8def-000000001324'), 0::bigint, 'stale composite evidence absent');
+SELECT is((SELECT public.apply_account_financial_action_v1(payload_json,payload_hash)->>'status' FROM edit_inputs WHERE name='zero_delta'), 'rejected', 'zero delta edit rejected');
+SELECT is((SELECT public.apply_account_financial_action_v1(payload_json,payload_hash)->>'code' FROM edit_inputs WHERE name='zero_delta'), 'INCOMPLETE_GROUP', 'zero delta edit fails closed');
+SELECT is((SELECT balance FROM public.accounts WHERE id='018f0c7a-1234-7abc-8def-000000000215'), 100::numeric, 'zero delta moves no balance');
+SELECT is((SELECT financial_revision FROM public.accounts WHERE id='018f0c7a-1234-7abc-8def-000000000215'), 0::bigint, 'zero delta advances no revision');
 SELECT is((SELECT balance FROM public.accounts WHERE id='018f0c7a-1234-7abc-8def-000000000214'), 100::numeric, 'all rejections leave balance untouched');
 SELECT is((SELECT financial_revision FROM public.accounts WHERE id='018f0c7a-1234-7abc-8def-000000000214'), 0::bigint, 'all rejections leave revision untouched');
 SELECT lives_ok('SET CONSTRAINTS ALL IMMEDIATE', 'all deferred action/effect constraints hold');
