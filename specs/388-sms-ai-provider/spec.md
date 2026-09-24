@@ -55,7 +55,7 @@ As a Monyvi maintainer, I want the active SMS AI provider and model to be select
 
 As the product owner, I want unchanged shared SMS parsing instructions to be reusable across requests when the selected provider supports it, so that repeated SMS parsing costs less while user-specific categories and message content remain correctly isolated.
 
-**Why this priority**: Reducing AI cost is the primary reason to retire Gemini from SMS parsing, but cost optimization must not weaken financial correctness or leak one user's dynamic context into another request.
+**Why this priority**: Reducing AI cost is the primary reason to retire the current SMS AI provider, but cost optimization must not weaken financial correctness or leak one user's dynamic context into another request.
 
 **Independent Test**: Send repeated SMS parsing requests that share the same platform parsing rules but contain different message content, then verify that the reusable shared context can receive discounted reuse when supported while request-specific SMS/category data remains distinct and the functional result is unchanged whether reuse occurs or not.
 
@@ -112,7 +112,7 @@ As the product owner, I want unchanged shared SMS parsing instructions to be reu
 - **FR-023**: The feature MUST NOT add automatic multi-provider fallback, provider benchmarking infrastructure, or a generic abstraction shared by unrelated AI capabilities.
 - **FR-024**: Existing provider-specific SMS QA documentation MUST be updated so routine deterministic SMS QA proves zero production-configured SMS AI calls and zero production allowance consumption without incorrectly naming a legacy provider as the current SMS provider.
 - **FR-025**: The product owner's already-approved initial SMS provider and model selection MUST be honored during planning; exact request formatting and integration mechanics are planning decisions.
-- **FR-026**: The migration does not require a Gemini-versus-DeepSeek quality benchmark before adoption because Monyvi is pre-production; representative SMS functional QA remains required before the feature is considered complete.
+- **FR-026**: The migration does not require a comparative provider-quality benchmark before adoption because Monyvi is pre-production; representative SMS functional QA remains required before the feature is considered complete.
 
 ### Key Entities
 
@@ -126,7 +126,7 @@ As the product owner, I want unchanged shared SMS parsing instructions to be reu
 
 ### In Scope
 
-- Direct replacement of the SMS full-parser's current Gemini dependency with the approved replacement provider.
+- Direct replacement of the SMS full-parser's current provider dependency with the approved replacement provider.
 - Configuration-based SMS provider/model selection.
 - A provider-neutral SMS parsing boundary that future providers can satisfy.
 - Cost-efficient reuse of unchanged shared parsing context when supported.
@@ -138,7 +138,7 @@ As the product owner, I want unchanged shared SMS parsing instructions to be reu
 
 ### Out of Scope
 
-- Any change to voice parsing or its current Gemini provider.
+- Any change to voice parsing or its current provider.
 - Automatic fallback from the configured SMS provider to another provider.
 - A comparative model benchmark or shadow-comparison system.
 - Implementing the future user-created custom-category feature.
@@ -152,7 +152,7 @@ As the product owner, I want unchanged shared SMS parsing instructions to be reu
 
 - Existing SMS authentication, consent, safeguard, quota, fingerprint, negative-outcome, telemetry, and review behavior remain authoritative.
 - Existing SMS semantic validation remains authoritative for accepted provider results.
-- Existing business decisions for SMS safeguards remain authoritative except for provider-specific wording that becomes stale when Gemini is retired from SMS.
+- Existing business decisions for SMS safeguards remain authoritative except for provider-specific wording that becomes stale when the legacy SMS provider is retired.
 - The voice feature remains independently owned and continues using its existing provider.
 - The approved replacement service must continue supporting the structured financial result contract required by Monyvi.
 
