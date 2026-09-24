@@ -1,5 +1,5 @@
 import * as Crypto from "expo-crypto";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef } from "react";
 
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import type {
@@ -39,7 +39,7 @@ export interface UseDeleteHoldingCommandInput {
 
 export interface UseDeleteHoldingCommandResult {
   readonly input: UseDeleteHoldingCommandInput;
-  readonly refreshToken: () => Promise<void>;
+  readonly ensureToken: () => Promise<DeleteHoldingConcurrencyToken | null>;
 }
 
 export function useDeleteHoldingCommand(
@@ -47,14 +47,16 @@ export function useDeleteHoldingCommand(
 ): UseDeleteHoldingCommandResult {
   const database = useDatabase();
   const { userId } = useCurrentUser();
-  const [token, setToken] = useState<DeleteHoldingConcurrencyToken | null>(
-    null
-  );
+  const tokenRef = useRef<DeleteHoldingConcurrencyToken | null>(null);
 
-  const loadToken =
+  // Reads the live revision on demand instead of caching it in state, so
+  // confirm and retry always build against the freshest token and never a
+  // stale render closure. A null result surfaces through command
+  // construction as an unavailable command with an explicit retry.
+  const ensureToken =
     useCallback(async (): Promise<DeleteHoldingConcurrencyToken | null> => {
       if (!holdingId || !userId) {
-        setToken(null);
+        tokenRef.current = null;
         return null;
       }
       try {
@@ -63,17 +65,13 @@ export function useDeleteHoldingCommand(
           userId,
           holdingId
         );
-        setToken(next);
+        tokenRef.current = next;
         return next;
       } catch {
-        setToken(null);
+        tokenRef.current = null;
         return null;
       }
     }, [database, holdingId, userId]);
-
-  useEffect(() => {
-    void loadToken();
-  }, [loadToken]);
 
   const service = useMemo(
     () =>
@@ -112,6 +110,7 @@ export function useDeleteHoldingCommand(
 
   const createCommand = useCallback(
     (ids: DeleteMetalHoldingRequestIds): DeleteHoldingCommand => {
+      const token = tokenRef.current;
       if (!holdingId || !userId || !token)
         throw new Error("metal_delete_unavailable");
       const occurredAt = new Date().toISOString();
@@ -130,7 +129,7 @@ export function useDeleteHoldingCommand(
         },
       };
     },
-    [holdingId, token, userId]
+    [holdingId, userId]
   );
 
   const execute = useCallback(
@@ -145,14 +144,10 @@ export function useDeleteHoldingCommand(
 
   const createId = useCallback((): string => Crypto.randomUUID(), []);
 
-  const refreshToken = useCallback(async (): Promise<void> => {
-    await loadToken();
-  }, [loadToken]);
-
   const input = useMemo<UseDeleteHoldingCommandInput>(
     () => ({ createCommand, execute, createId }),
     [createCommand, createId, execute]
   );
 
-  return { input, refreshToken };
+  return { input, ensureToken };
 }

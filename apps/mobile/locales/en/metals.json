@@ -258,7 +258,8 @@
     "pending": "Deleting holding…",
     "offline": "Saved locally first",
     "failure": "We couldn't delete this holding. Try again.",
-    "confirm_accessibility": "Delete holding {{holdingName}}"
+    "confirm_accessibility": "Delete holding {{holdingName}}",
+    "terminal_unavailable": "To correct this terminal action, undo it first."
   },
   "actions": {
     "sell": "Sell holding",

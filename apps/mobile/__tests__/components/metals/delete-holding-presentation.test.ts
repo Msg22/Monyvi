@@ -94,8 +94,14 @@ describe("delete holding sheet facts", () => {
       description: "Gold · 24K · 999 · Coin",
       weightLabel: "31.125 g",
       currentValueLabel: "EGP 162,317.87",
-      performanceLabel: "+ EGP 11,039.67 since purchase",
+      performanceLabel: "+ EGP 11,039.67",
     });
+  });
+
+  it("keeps the performance value free of the card label wording", () => {
+    const holding = getDeleteHoldingSheetHolding(activeModel(), tMetals);
+
+    expect(holding?.performanceLabel).not.toContain("since purchase");
   });
 
   it("returns null when the holding model is unavailable", () => {

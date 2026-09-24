@@ -55,6 +55,7 @@ interface DeleteMetalHoldingCommandService {
 }
 
 interface DeleteCommandModule {
+  readonly DELETE_REVISION_CONFLICT_CODE: string;
   readonly createDeleteMetalHoldingCommandService: (
     dependencies: DeleteMetalHoldingCommandDependencies
   ) => DeleteMetalHoldingCommandService;
@@ -695,6 +696,34 @@ describe("Delete metal holding command SQLite atomicity", () => {
         .query()
         .fetch()
     ).toHaveLength(2);
+  });
+
+  it("rejects a stale revision with the shared conflict code before any grouped write", async (): Promise<void> => {
+    await seedHolding();
+
+    await expect(
+      createService().delete(command({ expectedFinancialRevision: "0" }))
+    ).rejects.toThrow(loadCommandModule().DELETE_REVISION_CONFLICT_CODE);
+    expect(
+      await database
+        .get<FinancialActionGroup>("financial_action_groups")
+        .query()
+        .fetch()
+    ).toHaveLength(2);
+    expect(
+      await database
+        .get<MetalLifecycleEvent>("metal_lifecycle_events")
+        .query()
+        .fetch()
+    ).toHaveLength(2);
+    const state = await database
+      .get<MetalHoldingState>("metal_holding_states")
+      .find(IDS.state);
+    expect(state).toMatchObject({
+      isVisible: true,
+      effectiveEventId: IDS.correctionEvent,
+      financialRevision: "1",
+    });
   });
 
   it("replays exactly once after service recreation and rejects a hash mismatch", async (): Promise<void> => {

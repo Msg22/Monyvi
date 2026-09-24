@@ -1,7 +1,7 @@
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { Text, View, useWindowDimensions } from "react-native";
+import { Pressable, Text, View, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { DeleteMetalHoldingSheet } from "@/components/metals/DeleteMetalHoldingSheet";
@@ -30,14 +30,19 @@ export default function DeleteMetalHoldingRoute(): React.JSX.Element | null {
   const insets = useSafeAreaInsets();
 
   const handleConfirm = useCallback(async (): Promise<void> => {
+    await command.ensureToken();
     const succeeded = await submission.submit();
-    if (succeeded) router.replace("/metals");
-  }, [submission]);
+    // Dismiss to the existing portfolio instead of replacing the top route,
+    // so the now-deleted holding detail is removed from the back stack. When
+    // the route was deep-linked with no portfolio underneath, dismissTo
+    // replaces the current screen instead.
+    if (succeeded) router.dismissTo("/metals");
+  }, [command, submission]);
 
   const handleRetry = useCallback(async (): Promise<void> => {
-    await command.refreshToken();
+    await command.ensureToken();
     const succeeded = await submission.retry();
-    if (succeeded) router.replace("/metals");
+    if (succeeded) router.dismissTo("/metals");
   }, [command, submission]);
 
   const handleCancel = useCallback((): void => {
@@ -68,7 +73,10 @@ export default function DeleteMetalHoldingRoute(): React.JSX.Element | null {
     tMetals,
     i18n.resolvedLanguage
   );
-  if (holding === null) {
+  // A deep link can land here for a holding that Delete must never touch.
+  // Never show the confirmation for a terminal holding; direct recovery to
+  // Undo with the approved explanation instead.
+  if (detail.model !== null && !detail.model.isActiveOwnership) {
     return (
       <View className="flex-1 bg-background dark:bg-background-dark">
         <PageHeader
@@ -78,10 +86,38 @@ export default function DeleteMetalHoldingRoute(): React.JSX.Element | null {
         />
         <View className="flex-1 items-center justify-center px-6">
           <Text className="text-center text-lg font-semibold text-text-primary dark:text-text-primary-dark">
+            {t("delete.terminal_unavailable")}
+          </Text>
+        </View>
+      </View>
+    );
+  }
+  if (holding === null) {
+    return (
+      <View className="flex-1 bg-background dark:bg-background-dark">
+        <PageHeader
+          showBackButton
+          showDrawer={false}
+          title={t("actions.delete")}
+        />
+        <View className="flex-1 items-center justify-center gap-4 px-6">
+          <Text className="text-center text-lg font-semibold text-text-primary dark:text-text-primary-dark">
             {detail.error === null
               ? t("detail.not_found")
               : t("detail.load_error")}
           </Text>
+          {detail.error === null ? null : (
+            <Pressable
+              testID="metal-holding-delete-load-retry"
+              accessibilityRole="button"
+              className="min-h-11 items-center justify-center rounded-xl border border-nileGreen-600 px-4 dark:border-nileGreen-400"
+              onPress={detail.retry}
+            >
+              <Text className="font-semibold text-nileGreen-700 dark:text-nileGreen-400">
+                {t("detail.retry")}
+              </Text>
+            </Pressable>
+          )}
         </View>
       </View>
     );

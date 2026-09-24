@@ -37,6 +37,12 @@ export interface DeleteMetalHoldingCommandInput {
   readonly expectedFinancialRevision: string;
 }
 
+// Surfaces when the live holding revision moved past the command's expected
+// revision. The failed command wrote nothing, so a retry must build a fresh
+// command (and fresh action identity) against a fresh concurrency token
+// instead of replaying the stale command.
+export const DELETE_REVISION_CONFLICT_CODE = "holding_revision_conflict";
+
 type Commit = (
   input: CommitFinancialActionGroupLocallyInput
 ) => Promise<CommitFinancialActionGroupLocallyResult>;
@@ -195,7 +201,7 @@ function assertEffectiveActiveProjection(
     throw new Error("metal_delete_effective_active_holding_required");
   }
   if (state.financialRevision !== input.expectedFinancialRevision) {
-    throw new Error("holding_revision_conflict");
+    throw new Error(DELETE_REVISION_CONFLICT_CODE);
   }
   const isRevisionZeroLegacyProjection =
     input.expectedFinancialRevision === "0" &&

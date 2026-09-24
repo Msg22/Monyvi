@@ -1,7 +1,6 @@
 import {
   act,
   renderHook,
-  waitFor,
   type RenderHookResult,
 } from "@testing-library/react-native";
 
@@ -86,21 +85,14 @@ describe("useDeleteHoldingCommand", () => {
   async function renderCommand(
     options: {
       readonly holdingId?: string;
-      readonly expectTokenLoad?: boolean;
     } = {}
   ): Promise<RenderHookResult<UseDeleteHoldingCommandResult, unknown>> {
-    const { holdingId = "holding-1", expectTokenLoad = true } = options;
+    const holdingId =
+      "holdingId" in options ? options.holdingId : "holding-1";
     const hook = renderHook(() => useDeleteHoldingCommand(holdingId));
-    if (expectTokenLoad) {
-      await waitFor(() => {
-        expect(mockReadToken).toHaveBeenCalled();
-        hook.result.current.input.createCommand({
-          actionId: "probe-action",
-          actionEvidenceId: "probe-evidence",
-          lifecycleEventId: "probe-event",
-        });
-      });
-    }
+    await act(async (): Promise<void> => {
+      await hook.result.current.ensureToken();
+    });
     return hook;
   }
 
@@ -179,22 +171,55 @@ describe("useDeleteHoldingCommand", () => {
     expect(mockDigest).toHaveBeenCalledWith("SHA-256", "canonical");
   });
 
-  it("refreshes the concurrency token without rebuilding service wiring", async () => {
+  it("returns a fresh token on every ensure call without rebuilding service wiring", async () => {
     const { result } = await renderCommand();
-    mockReadToken.mockClear();
 
+    const first = result.current.input.createCommand({
+      actionId: "test-uuid-1",
+      actionEvidenceId: "test-uuid-2",
+      lifecycleEventId: "test-uuid-3",
+    });
+    expect(first.input.expectedFinancialRevision).toBe("1");
+
+    mockReadToken.mockResolvedValue({
+      expectedFinancialRevision: "2",
+      predecessorEventId: "event-second",
+    });
     await act(async (): Promise<void> => {
-      await result.current.refreshToken();
+      await result.current.ensureToken();
     });
 
-    expect(mockReadToken).toHaveBeenCalledTimes(1);
+    const second = result.current.input.createCommand({
+      actionId: "test-uuid-4",
+      actionEvidenceId: "test-uuid-5",
+      lifecycleEventId: "test-uuid-6",
+    });
+    expect(second.input.expectedFinancialRevision).toBe("2");
+    expect(second.input.predecessorEventId).toBe("event-second");
+    expect(mockReadToken).toHaveBeenCalledTimes(2);
     expect(mockCreateService).toHaveBeenCalledTimes(1);
+  });
+
+  it("surfaces a token-load failure as an unavailable command", async () => {
+    mockReadToken.mockRejectedValue(new Error("database_unavailable"));
+    const { result } = await renderCommand();
+
+    await act(async (): Promise<void> => {
+      await expect(result.current.ensureToken()).resolves.toBeNull();
+    });
+    expect(() =>
+      result.current.input.createCommand({
+        actionId: "test-uuid-1",
+        actionEvidenceId: "test-uuid-2",
+        lifecycleEventId: "test-uuid-3",
+      })
+    ).toThrow("metal_delete_unavailable");
+    expect(mockDelete).not.toHaveBeenCalled();
   });
 
   it("refuses command construction without a holding identity", async () => {
     const { result } = await renderCommand({
       holdingId: undefined,
-      expectTokenLoad: false,
     });
 
     expect(() =>
@@ -209,7 +234,7 @@ describe("useDeleteHoldingCommand", () => {
 
   it("refuses command construction while signed out", async () => {
     mockUserId = null;
-    const { result } = await renderCommand({ expectTokenLoad: false });
+    const { result } = await renderCommand();
 
     expect(() =>
       result.current.input.createCommand({

@@ -13,9 +13,9 @@ harness control, terminal fixtures, and device gates remain open.
 | Predecessor-less revision-zero migrated Active Delete | Data model revision-zero migration contract, FR-077–080 | SQLite Green via real shared `DEFAULT_FINANCIAL_ACTION_REGISTRY` | N/A | Route live; fixtures pending | Service + route Green; integration open |
 | Hidden non-effective audit and no reappearance | FR-037, FR-040, FR-079, SC-007, SC-030 | SQLite Green | Consequence Green | Restart sequence only; fixtures pending | Route Green; runtime open |
 | Zero sale/disposal/proceeds/P&L/write-off/transfer/account effect | FR-037, FR-091, SC-023 | SQLite Green | Destructive semantics Green | Authored visible proof | Isolated Green |
-| Sold/Disposed/non-effective rejection | FR-038, FR-087 | SQLite Green | Descriptor boundary Green | Delete hidden by composition (unit Green); terminal fixtures/routes blocked | Service + composition Green; runtime open |
-| Replay, hash mismatch, duplicate lock | FR-076–077, FR-080, SC-015 | SQLite Green | Hook/sheet Green | Double-tap authored | Isolated Green |
-| Atomic rollback and retry | FR-039, FR-078, FR-089–090 | SQLite Green | Hook/sheet Green | Authored | Isolated Green |
+| Sold/Disposed/non-effective rejection | FR-038, FR-087 | SQLite Green | Descriptor boundary Green | Delete hidden by composition and deep-link gate (unit Green); terminal fixtures blocked | Service + composition + route gate Green; runtime open |
+| Replay, hash mismatch, duplicate lock | FR-076–077, FR-080, SC-015 | SQLite Green | Hook/sheet Green | Double-tap authored; conflict rebuild + same-ID replay covered in hook/route journeys | Route Green; runtime open |
+| Atomic rollback and retry | FR-039, FR-078, FR-089–090 | SQLite Green | Hook/sheet Green | Authored; token-ensure confirm/retry + load-error retry covered in route journey | Route Green; runtime open |
 | User scope and offline/restart persistence | FR-060–064, SC-003 | SQLite Green | Offline copy Green | Offline control missing; restart sequence blocked | Isolated Green; runtime open |
 | Approved focused Screen 14 facts and copy | FR-092, FR-102 | N/A | Sheet Green | Authored against the live route; fixtures pending | Route Green; device gate open |
 | Safe area, RTL/theme, compact/ordinary/tablet/200% reflow | FR-065–071, SC-010–013 | N/A | Contract Green | Manual device proof | Isolated Green; device gate open |
@@ -33,6 +33,14 @@ harness control, terminal fixtures, and device gates remain open.
 - T118 route and composition work is Green: the holding-scoped Delete route,
   the `useDeleteHoldingCommand` facade, the delete-only detail composition,
   and the runtime-wired `delete.*` copy are covered by unit/journey tests.
+  Follow-up review findings are addressed on this branch: revision-conflict
+  retry discards the stale cached command and rebuilds with fresh identity
+  (same-ID replay preserved for uncertain commits, pinned by a SQLite
+  zero-write conflict test), success uses `dismissTo("/metals")` so the
+  deleted detail leaves the back stack, deep-linked terminal holdings get the
+  approved undo-first gate, token-load failures surface with retry, and the
+  load-error branch offers an explicit retry. The sheet card value no longer
+  repeats the "Since purchase" label wording; the fact itself is unchanged.
   Maestro execution, device fidelity, and fixture-gated terminal proof remain
   with T115/T119.
 - T119 remains partial pending Maestro, device fidelity, real assistive
@@ -55,7 +63,9 @@ harness control, terminal fixtures, and device gates remain open.
   shared-registry integration gate is closed; Maestro T115 offline/terminal
   proof and device gates remain open integration work. This lane added the
   Delete route, the delete-only detail composition, the command facade hook,
-  the concurrency-token service, the sheet presentation helper, and `delete.*`
-  en/ar copy. No shared adapter, registry, fixture, barrel, schema, sync,
+  the concurrency-token service, the sheet presentation helper, `delete.*`
+  en/ar copy (including the approved `terminal_unavailable` gate line), and
+  the shared `DELETE_REVISION_CONFLICT_CODE` export on the lane-owned command
+  service. No shared adapter, registry, fixture, barrel, schema, sync,
   Sell, Dispose, or Undo file changed.
 - No live route, shared registration, device, or E2E completion is claimed.

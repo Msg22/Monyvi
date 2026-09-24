@@ -6,15 +6,19 @@ import type { MetalDetailReadModel } from "@/services/metal-detail-read-model-se
 import DeleteMetalHoldingRoute from "../../app/(private)/metals/[holdingId]/delete";
 
 const mockBack = jest.fn();
-const mockReplace = jest.fn();
-const mockRefreshToken = jest.fn();
+const mockDismissTo = jest.fn();
+const mockEnsureToken = jest.fn();
 const mockExecute = jest.fn();
 const mockCreateCommand = jest.fn();
 const mockCreateId = jest.fn();
+const mockDetailRetry = jest.fn();
 
 let mockHoldingId: string | undefined = "holding-1";
 let mockModel: MetalDetailReadModel | null = null;
 let mockIsLoading = false;
+let mockDetailError: Error | null = null;
+let mockIdCounter = 0;
+let mockTokenAvailable = true;
 
 interface CapturedSheetProps {
   readonly holding: {
@@ -42,23 +46,32 @@ jest.mock("expo-router", () => ({
   }),
   router: {
     back: (...args: unknown[]): unknown => mockBack(...args),
-    replace: (...args: unknown[]): unknown => mockReplace(...args),
+    dismissTo: (...args: unknown[]): unknown => mockDismissTo(...args),
   },
+}));
+
+// The route renders the real submission hook, which shares the
+// revision-conflict code with the command service. Stub the native-backed
+// user-data-access chain so the real service module loads without Supabase
+// environment variables; the journey never executes the service itself.
+jest.mock("@/services/user-data-access", () => ({
+  findOwnedById: jest.fn(),
+  queryChildrenOfOwnedParent: jest.fn(),
 }));
 
 jest.mock("@/hooks/useMetalHoldingDetail", () => ({
   useMetalHoldingDetail: (): {
-    readonly error: null;
+    readonly error: Error | null;
     readonly isLoading: boolean;
     readonly isOffline: boolean;
     readonly model: MetalDetailReadModel | null;
     readonly retry: jest.Mock;
   } => ({
-    error: null,
+    error: mockDetailError,
     isLoading: mockIsLoading,
     isOffline: true,
     model: mockModel,
-    retry: jest.fn(),
+    retry: mockDetailRetry,
   }),
 }));
 
@@ -69,14 +82,14 @@ jest.mock("@/hooks/useDeleteHoldingCommand", () => ({
       readonly execute: jest.Mock;
       readonly createId: jest.Mock;
     };
-    readonly refreshToken: jest.Mock;
+    readonly ensureToken: jest.Mock;
   } => ({
     input: {
       createCommand: mockCreateCommand,
       execute: mockExecute,
       createId: mockCreateId,
     },
-    refreshToken: mockRefreshToken,
+    ensureToken: mockEnsureToken,
   }),
 }));
 
@@ -116,7 +129,10 @@ const mockMetalsCopy: Record<string, string> = {
   "delete.offline": "Saved locally first",
   "delete.pending": "Deleting holding…",
   "delete.performance": "Since purchase",
+  "delete.terminal_unavailable":
+    "To correct this terminal action, undo it first.",
   "detail.current_value": "Current value",
+  "detail.load_error": "We couldn't load this holding.",
   "detail.not_found": "Holding not found",
   "detail.retry": "Try again",
   "detail.since_purchase": "{{amount}} since purchase",
@@ -211,6 +227,17 @@ function activeModel(): MetalDetailReadModel {
   };
 }
 
+function terminalModel(
+  status: "sold" | "disposed"
+): MetalDetailReadModel {
+  return {
+    ...activeModel(),
+    isActiveOwnership: false,
+    isFinancialActionLocked: false,
+    status,
+  };
+}
+
 function deferred<T>(): {
   readonly promise: Promise<T>;
   readonly resolve: (value: T) => void;
@@ -228,18 +255,37 @@ function deferred<T>(): {
 describe("delete holding route journey", () => {
   beforeEach((): void => {
     mockBack.mockClear();
-    mockReplace.mockClear();
-    mockRefreshToken.mockReset();
-    mockRefreshToken.mockResolvedValue(undefined);
+    mockDismissTo.mockClear();
+    mockEnsureToken.mockReset();
+    mockTokenAvailable = true;
+    mockEnsureToken.mockImplementation(() =>
+      Promise.resolve(
+        mockTokenAvailable
+          ? {
+              expectedFinancialRevision: "1",
+              predecessorEventId: "event-correction",
+            }
+          : null
+      )
+    );
     mockExecute.mockReset();
     mockExecute.mockResolvedValue(undefined);
     mockCreateCommand.mockReset();
-    mockCreateCommand.mockImplementation((ids: unknown) => ({ ids }));
+    mockCreateCommand.mockImplementation((ids: unknown) => {
+      if (!mockTokenAvailable) throw new Error("metal_delete_unavailable");
+      return { ids };
+    });
     mockCreateId.mockReset();
-    mockCreateId.mockReturnValue("test-uuid");
+    mockIdCounter = 0;
+    mockCreateId.mockImplementation(() => {
+      mockIdCounter += 1;
+      return `test-uuid-${mockIdCounter}`;
+    });
+    mockDetailRetry.mockClear();
     mockHoldingId = "holding-1";
     mockModel = activeModel();
     mockIsLoading = false;
+    mockDetailError = null;
     lastSheetProps = null;
   });
 
@@ -252,7 +298,7 @@ describe("delete holding route journey", () => {
       description: "Gold · 24K · 999 · Coin",
       weightLabel: "31.125 g",
       currentValueLabel: "EGP 162,317.87",
-      performanceLabel: "+ EGP 11,039.67 since purchase",
+      performanceLabel: "+ EGP 11,039.67",
     });
     expect(lastSheetProps?.copy.title).toBe("Delete holding");
     expect(lastSheetProps?.copy.consequence).toBe(
@@ -265,14 +311,17 @@ describe("delete holding route journey", () => {
     expect(lastSheetProps?.copy.offline).toBe("Saved locally first");
   });
 
-  it("confirms once and returns to the portfolio on local success", async () => {
+  it("confirms once and dismisses to the existing portfolio on local success", async () => {
     render(<DeleteMetalHoldingRoute />);
 
     fireEvent.press(screen.getByTestId("sheet-confirm"));
 
-    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith("/metals"));
+    await waitFor(() =>
+      expect(mockDismissTo).toHaveBeenCalledWith("/metals")
+    );
     expect(mockExecute).toHaveBeenCalledTimes(1);
     expect(mockCreateCommand).toHaveBeenCalledTimes(1);
+    expect(mockEnsureToken).toHaveBeenCalled();
   });
 
   it("locks the confirmation while the local action is pending", async () => {
@@ -283,9 +332,11 @@ describe("delete holding route journey", () => {
     fireEvent.press(screen.getByTestId("sheet-confirm"));
 
     await waitFor(() => expect(lastSheetProps?.isSubmitting).toBe(true));
-    expect(mockReplace).not.toHaveBeenCalled();
+    expect(mockDismissTo).not.toHaveBeenCalled();
     pending.resolve(undefined);
-    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith("/metals"));
+    await waitFor(() =>
+      expect(mockDismissTo).toHaveBeenCalledWith("/metals")
+    );
   });
 
   it("keeps exact facts visible on failure and retries the same command", async () => {
@@ -295,17 +346,73 @@ describe("delete holding route journey", () => {
     fireEvent.press(screen.getByTestId("sheet-confirm"));
     await waitFor(() => expect(lastSheetProps?.submitError).not.toBeNull());
     expect(lastSheetProps?.holding.name).toBe("Wedding coin");
-    expect(mockReplace).not.toHaveBeenCalled();
+    expect(mockDismissTo).not.toHaveBeenCalled();
 
     fireEvent.press(screen.getByTestId("sheet-retry"));
-    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith("/metals"));
-    expect(mockRefreshToken).toHaveBeenCalledTimes(1);
+    await waitFor(() =>
+      expect(mockDismissTo).toHaveBeenCalledWith("/metals")
+    );
+    expect(mockEnsureToken).toHaveBeenCalledTimes(2);
     expect(mockExecute).toHaveBeenCalledTimes(2);
     const executeCalls = mockExecute.mock.calls as Array<
       readonly [Record<string, unknown>]
     >;
     expect(executeCalls[1][0]).toBe(executeCalls[0][0]);
   });
+
+  it("recovers from a revision conflict with a fresh command identity", async () => {
+    mockExecute.mockRejectedValueOnce(new Error("holding_revision_conflict"));
+    render(<DeleteMetalHoldingRoute />);
+
+    fireEvent.press(screen.getByTestId("sheet-confirm"));
+    await waitFor(() => expect(lastSheetProps?.submitError).not.toBeNull());
+    expect(mockDismissTo).not.toHaveBeenCalled();
+
+    fireEvent.press(screen.getByTestId("sheet-retry"));
+    await waitFor(() =>
+      expect(mockDismissTo).toHaveBeenCalledWith("/metals")
+    );
+    expect(mockExecute).toHaveBeenCalledTimes(2);
+    const executeCalls = mockExecute.mock.calls as Array<
+      readonly [Record<string, unknown>]
+    >;
+    expect(executeCalls[1][0]).not.toBe(executeCalls[0][0]);
+    expect(mockCreateCommand).toHaveBeenCalledTimes(2);
+    expect(mockCreateId).toHaveBeenCalledTimes(6);
+  });
+
+  it("surfaces a token-load failure on confirm and recovers on retry", async () => {
+    mockTokenAvailable = false;
+    render(<DeleteMetalHoldingRoute />);
+
+    fireEvent.press(screen.getByTestId("sheet-confirm"));
+    await waitFor(() => expect(lastSheetProps?.submitError).not.toBeNull());
+    expect(lastSheetProps?.holding.name).toBe("Wedding coin");
+    expect(mockExecute).not.toHaveBeenCalled();
+    expect(mockDismissTo).not.toHaveBeenCalled();
+
+    mockTokenAvailable = true;
+    fireEvent.press(screen.getByTestId("sheet-retry"));
+    await waitFor(() =>
+      expect(mockDismissTo).toHaveBeenCalledWith("/metals")
+    );
+    expect(mockExecute).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(["sold", "disposed"] as const)(
+    "gates a deep-linked %s holding with the undo-first explanation",
+    (status) => {
+      mockModel = terminalModel(status);
+
+      render(<DeleteMetalHoldingRoute />);
+
+      expect(
+        screen.getByText("To correct this terminal action, undo it first.")
+      ).toBeTruthy();
+      expect(lastSheetProps).toBeNull();
+      expect(mockExecute).not.toHaveBeenCalled();
+    }
+  );
 
   it("returns to the holding detail without writing when cancelled", () => {
     render(<DeleteMetalHoldingRoute />);
@@ -323,6 +430,18 @@ describe("delete holding route journey", () => {
 
     expect(screen.getByText("Holding not found")).toBeTruthy();
     expect(lastSheetProps).toBeNull();
+  });
+
+  it("offers an explicit retry when the holding fails to load", () => {
+    mockModel = null;
+    mockDetailError = new Error("holding_detail_unavailable");
+
+    render(<DeleteMetalHoldingRoute />);
+
+    expect(screen.getByText("We couldn't load this holding.")).toBeTruthy();
+    fireEvent.press(screen.getByTestId("metal-holding-delete-load-retry"));
+    expect(mockDetailRetry).toHaveBeenCalledTimes(1);
+    expect(mockExecute).not.toHaveBeenCalled();
   });
 
   it("renders nothing without a holding identity", () => {

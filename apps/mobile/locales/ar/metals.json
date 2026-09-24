@@ -266,7 +266,8 @@
     "pending": "جارٍ حذف المقتنى…",
     "offline": "يُحفظ محليًا أولًا",
     "failure": "تعذّر حذف هذا المقتنى. حاول مرة أخرى.",
-    "confirm_accessibility": "حذف المقتنى {{holdingName}}"
+    "confirm_accessibility": "حذف المقتنى {{holdingName}}",
+    "terminal_unavailable": "لتصحيح هذا الإجراء النهائي، تراجع عنه أولاً."
   },
   "actions": {
     "sell": "بيع المقتنى",

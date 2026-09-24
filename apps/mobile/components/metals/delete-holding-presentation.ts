@@ -125,12 +125,10 @@ function resolveSheetPerformance(
     return t("portfolio.performance_unavailable");
   const currency =
     model.currentValueCurrency ?? model.purchaseCurrency ?? "EGP";
-  const signed = signedSheetAmount(
-    model.totalGainDecimal,
-    currency,
-    language
-  );
-  return t("detail.since_purchase", { amount: signed });
+  // The card already labels this row with delete.performance ("Since
+  // purchase"), so the value carries the signed amount only instead of
+  // repeating the label wording.
+  return signedSheetAmount(model.totalGainDecimal, currency, language);
 }
 
 function displaySheetAmount(

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { DELETE_REVISION_CONFLICT_CODE } from "@/services/delete-metal-holding-command-service";
+
 export interface DeleteMetalHoldingRequestIds {
   readonly actionId: string;
   readonly actionEvidenceId: string;
@@ -58,8 +60,19 @@ export function useDeleteMetalHolding(
       idsRef.current = null;
       commandRef.current = null;
       return true;
-    } catch {
+    } catch (error: unknown) {
       if (isMountedRef.current) setSubmitError("metal_delete_failed");
+      if (
+        error instanceof Error &&
+        error.message === DELETE_REVISION_CONFLICT_CODE
+      ) {
+        // The live revision moved past the cached command, which wrote
+        // nothing and can never succeed. Drop it so the next attempt builds
+        // fresh identity against a fresh token. Every other failure keeps
+        // the cached command for same-ID replay of an uncertain commit.
+        idsRef.current = null;
+        commandRef.current = null;
+      }
       return false;
     } finally {
       inFlightRef.current = false;

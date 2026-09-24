@@ -9,6 +9,15 @@ import {
 } from "@testing-library/react-native";
 import React, { StrictMode } from "react";
 
+// The submission hook shares the revision-conflict code with the command
+// service. Stub the native-backed user-data-access chain so the real service
+// module (and its shared code) loads without Supabase environment variables;
+// the hook tests never execute the service itself.
+jest.mock("@/services/user-data-access", () => ({
+  findOwnedById: jest.fn(),
+  queryChildrenOfOwnedParent: jest.fn(),
+}));
+
 interface DeleteMetalHoldingSheetCopy {
   readonly title: string;
   readonly consequence: string;
@@ -418,6 +427,39 @@ describe("useDeleteMetalHolding", () => {
     expect(execute.mock.calls[1][0].expectedFinancialRevision).toBe("1");
     expect(createCommand).toHaveBeenCalledTimes(1);
     expect(input.createId).toHaveBeenCalledTimes(3);
+    await waitFor(() => expect(result.current.submitError).toBeNull());
+  });
+
+  it("discards the cached command after a revision conflict and rebuilds with fresh identity", async () => {
+    let expectedFinancialRevision = "1";
+    const execute = jest
+      .fn<Promise<void>, [DeleteCommand]>()
+      .mockRejectedValueOnce(new Error("holding_revision_conflict"))
+      .mockResolvedValueOnce(undefined);
+    const createCommand = jest.fn(
+      (ids: DeleteRequestIds): DeleteCommand => ({
+        ids,
+        expectedFinancialRevision,
+      })
+    );
+    const { result, input } = renderDeleteHook({ execute, createCommand });
+
+    await act(async () => {
+      await expect(result.current.submit()).resolves.toBe(false);
+    });
+    expect(result.current.submitError).toBe("metal_delete_failed");
+    expectedFinancialRevision = "2";
+    await act(async () => {
+      await expect(result.current.retry()).resolves.toBe(true);
+    });
+    expect(execute).toHaveBeenCalledTimes(2);
+    expect(execute.mock.calls[1][0]).not.toBe(execute.mock.calls[0][0]);
+    expect(execute.mock.calls[1][0].expectedFinancialRevision).toBe("2");
+    expect(execute.mock.calls[1][0].ids).not.toBe(
+      execute.mock.calls[0][0].ids
+    );
+    expect(createCommand).toHaveBeenCalledTimes(2);
+    expect(input.createId).toHaveBeenCalledTimes(6);
     await waitFor(() => expect(result.current.submitError).toBeNull());
   });
 
