@@ -3,15 +3,15 @@
 **Feature Branch**: `388-sms-ai-provider`  
 **Created**: 2026-09-24  
 **Status**: Draft  
-**Input**: User description: "Replace the SMS full-parser's current Gemini dependency with a lower-cost configurable SMS AI provider, initially DeepSeek V4 Flash 0731 through DeepInfra, while keeping Gemini for voice. Make future SMS provider changes easy, preserve the existing SMS safety and client contracts, and reuse stable parser context to reduce recurring input cost. Supported currencies and built-in categories are mostly stable; future user-created categories will be dynamic."
+**Input**: User description: "Replace the SMS full-parser's current AI dependency with a lower-cost configurable SMS AI provider while keeping voice unchanged. Make future SMS provider changes easy, preserve the existing SMS safety and client contracts, and reuse stable parser context to reduce recurring input cost. Supported currencies and built-in categories are mostly stable; future user-created categories will be dynamic."
 
 ## Clarifications
 
 ### Session 2026-09-24
 
 - Q: Should the SMS provider be selected in code or configuration? → A: Configuration-based selection is required.
-- Q: Should Gemini remain as a fallback for SMS during this pre-production migration? → A: No. Replace the SMS provider directly; no comparison benchmark or automatic fallback is required.
-- Q: Does the voice feature change? → A: No. Voice continues using the current Gemini-based flow.
+- Q: Should the current SMS provider remain as a fallback during this pre-production migration? → A: No. Replace the SMS provider directly; no comparison benchmark or automatic fallback is required.
+- Q: Does the voice feature change? → A: No. Voice continues using its current provider and flow.
 - Q: How should repeated parser context be treated for cost control? → A: Unchanged shared parser context should be reusable when the selected provider supports discounted reuse, without weakening correctness or mixing user-specific content.
 - Q: How stable are currencies and categories? → A: Supported currencies are unlikely to change; built-in categories are also mostly stable, while future user-created categories will be dynamic user-specific context.
 
@@ -73,7 +73,7 @@ As the product owner, I want unchanged shared SMS parsing instructions to be reu
 - The selected provider is temporarily rate-limited or unavailable.
 - A provider request times out after SMS provider usage has started.
 - The provider returns valid structured output with an empty transaction list.
-- The provider returns malformed JSON, a truncated response, an unknown completion state, or transactions that fail Monyvi's existing semantic validation.
+- The provider returns malformed structured output, a truncated response, an unknown completion state, or transactions that fail Monyvi's existing semantic validation.
 - A retryable provider failure occurs after earlier SMS safeguards have reserved capacity.
 - A non-retryable configuration/authentication error occurs; the system must not repeatedly retry it.
 - Stable shared parsing context is reusable for one request but not another; both must produce equivalent functional behavior.
@@ -88,9 +88,9 @@ As the product owner, I want unchanged shared SMS parsing instructions to be reu
 ### Functional Requirements
 
 - **FR-001**: The SMS full-parser MUST use an independently configurable AI provider that is separate from the voice AI provider.
-- **FR-002**: The completed feature MUST replace the current SMS Gemini dependency with the approved lower-cost SMS provider for this release.
+- **FR-002**: The completed feature MUST replace the current SMS AI dependency with the approved lower-cost SMS provider for this release.
 - **FR-003**: The SMS provider and model MUST be selectable through deployment configuration without changing the mobile SMS request/response contract.
-- **FR-004**: Missing, incomplete, or unsupported SMS provider configuration MUST fail closed and MUST NOT silently fall back to Gemini or another provider.
+- **FR-004**: Missing, incomplete, or unsupported SMS provider configuration MUST fail closed and MUST NOT silently fall back to a previous or alternate provider.
 - **FR-005**: SMS financial content MUST be sent only to an explicitly approved configured provider destination.
 - **FR-006**: Existing SMS authentication, AI consent, request validation, fingerprint validation, scan-window rules, hard exclusions, quotas, reservations, provider-start accounting, negative-outcome reconciliation, and operational telemetry MUST retain their current behavior.
 - **FR-007**: Existing SMS transaction semantic validation MUST remain authoritative regardless of which provider produced the candidate response.
@@ -110,13 +110,13 @@ As the product owner, I want unchanged shared SMS parsing instructions to be reu
 - **FR-021**: The provider migration MUST NOT change the voice parsing provider, voice request contract, voice usage accounting, or voice user experience.
 - **FR-022**: The provider migration MUST NOT introduce a database schema change or a mobile API contract change.
 - **FR-023**: The feature MUST NOT add automatic multi-provider fallback, provider benchmarking infrastructure, or a generic abstraction shared by unrelated AI capabilities.
-- **FR-024**: Existing provider-specific SMS QA documentation MUST be updated so routine deterministic SMS QA proves zero production-configured SMS AI calls and zero production allowance consumption without incorrectly naming Gemini as the SMS provider.
-- **FR-025**: The approved initial SMS provider for this release is DeepSeek V4 Flash 0731 served through DeepInfra; exact request formatting and integration mechanics are planning decisions.
+- **FR-024**: Existing provider-specific SMS QA documentation MUST be updated so routine deterministic SMS QA proves zero production-configured SMS AI calls and zero production allowance consumption without incorrectly naming a legacy provider as the current SMS provider.
+- **FR-025**: The product owner's already-approved initial SMS provider and model selection MUST be honored during planning; exact request formatting and integration mechanics are planning decisions.
 - **FR-026**: The migration does not require a Gemini-versus-DeepSeek quality benchmark before adoption because Monyvi is pre-production; representative SMS functional QA remains required before the feature is considered complete.
 
 ### Key Entities
 
-- **SMS AI Provider Configuration**: The deployment-selected SMS parsing service, model, service class, and required credentials. It is independent from voice provider configuration.
+- **SMS AI Provider Configuration**: The deployment-selected SMS parsing service and model, together with the secure operational configuration needed to use it. It is independent from voice provider configuration.
 - **SMS Parsing Request Context**: The provider-independent financial parsing instructions and request context, including supported currencies, category context, and the current eligible SMS batch.
 - **Reusable Shared Parser Context**: The unchanged platform-level portion of SMS parsing context that may be reused across requests for cost efficiency without containing request-specific SMS content.
 - **User-Specific Category Context**: Dynamic category information that may differ by user, including future custom categories, and therefore must remain separate from globally reusable shared context.
@@ -140,7 +140,7 @@ As the product owner, I want unchanged shared SMS parsing instructions to be reu
 
 - Any change to voice parsing or its current Gemini provider.
 - Automatic fallback from the configured SMS provider to another provider.
-- A Gemini-versus-DeepSeek model benchmark or shadow-comparison system.
+- A comparative model benchmark or shadow-comparison system.
 - Implementing the future user-created custom-category feature.
 - Changing the built-in category taxonomy or supported-currency product scope.
 - Database schema changes.
@@ -162,7 +162,7 @@ As the product owner, I want unchanged shared SMS parsing instructions to be reu
 
 - **SC-001**: 100% of existing SMS provider-contract and safeguard acceptance scenarios continue to produce the same client-visible outcome categories after the provider replacement.
 - **SC-002**: 100% of missing, unsupported, or incomplete SMS provider configuration scenarios fail before SMS content is sent to an unintended provider.
-- **SC-003**: Representative uncached SMS full-parse usage is estimated to cost at least 30% less than the current SMS Gemini baseline when comparing the same input/output token counts at the providers' published rates at deployment time.
+- **SC-003**: For representative SMS requests of the same size, projected third-party AI processing cost is at least 30% lower than the current SMS baseline before any reuse discount, based on published pricing at deployment time.
 - **SC-004**: In repeated-request verification where the provider supports reusable input context, unchanged shared parser context is eligible for discounted reuse while different SMS bodies and user-specific category context remain isolated.
 - **SC-005**: 100% of cache/reuse hit and miss verification cases produce equivalent functional parsing and validation behavior for the same request.
 - **SC-006**: A future approved SMS provider can be introduced without changing the mobile SMS contract, voice parsing, SMS safeguard policy, negative-outcome reconciliation, or semantic transaction validation.
@@ -174,10 +174,10 @@ As the product owner, I want unchanged shared SMS parsing instructions to be reu
 ## Assumptions
 
 - Monyvi is pre-production, so direct SMS provider replacement is acceptable without a comparative model benchmark or staged production rollout.
-- The initial approved SMS replacement provider is DeepInfra serving DeepSeek V4 Flash 0731.
+- The product owner has already selected the initial replacement SMS provider and model; planning will bind that approved choice without reopening model selection.
 - The current supported-currency set is expected to remain stable for the foreseeable future.
 - The built-in category catalogue is expected to remain mostly stable, while a future separately specified feature will allow user-created custom categories.
 - Cost reduction is a primary reason for the SMS provider migration; correctness and safety still take precedence over cache/reuse optimization.
 - The selected provider's reusable-input feature may miss or be unavailable at times; a miss must affect cost only, never parsing correctness.
-- Provider credentials and deployment configuration are available to the hosted SMS parsing environment through the project's existing deployment-secret/configuration mechanism.
+- Provider credentials and operational configuration are available to the hosted SMS parsing environment through the project's existing secure deployment configuration mechanism.
 - The existing SMS client contract and database schema are sufficient for this provider migration.
