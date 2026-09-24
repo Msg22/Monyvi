@@ -102,8 +102,7 @@ export async function prepareReplaceAccountSmsSenders(
       continue;
     }
     const normalized = normalizeAccountSmsSender(sender.senderName);
-    const desiredSenderName = desiredByNormalizedSender.get(normalized);
-    if (desiredSenderName === undefined) {
+    if (!desiredByNormalizedSender.has(normalized)) {
       const model = sender;
       existingOperations.push({
         kind: "update",
@@ -113,18 +112,6 @@ export async function prepareReplaceAccountSmsSenders(
         },
       });
       continue;
-    }
-    if (sender.senderName !== desiredSenderName) {
-      const model = sender;
-      existingOperations.push({
-        kind: "update",
-        model,
-        update: (target): void => {
-          const draft = target as AccountSmsSender;
-          draft.senderName = desiredSenderName;
-          draft.normalizedSenderName = normalized;
-        },
-      });
     }
   }
 
