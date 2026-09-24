@@ -252,6 +252,14 @@
     "treatment_write_off": "Record a loss",
     "treatment_external_transfer": "Record it as moved out"
   },
+  "delete": {
+    "consequence": "Only delete a holding added by mistake. It will be removed from your portfolio and History. Sell and No Longer are separate actions.",
+    "performance": "Since purchase",
+    "pending": "Deleting holding…",
+    "offline": "Saved locally first",
+    "failure": "We couldn't delete this holding. Try again.",
+    "confirm_accessibility": "Delete holding {{holdingName}}"
+  },
   "actions": {
     "sell": "Sell holding",
     "edit": "Edit details",

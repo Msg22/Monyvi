@@ -1,10 +1,13 @@
 appId: com.monyvi.app
 ---
-# T115 partial Red contract. Shared integration must provide an effective Active
-# Gold holding, live route, and retained creation/correction evidence before this
-# sequence can run. Offline and terminal-state proof remain explicitly missing:
-# the shared harness has no Delete offline profile/connectivity control or
-# deterministic Sold/Disposed fixture available to this isolated lane.
+# T115 partial Red contract. The PR276 Delete route
+# (app/(private)/metals/[holdingId]/delete.tsx) and the detail Delete action
+# composition are live, so this sequence can open the real confirmation.
+# Shared integration must still provide an effective Active Gold holding with
+# retained creation/correction evidence before this sequence can run. Offline
+# and terminal-state proof remain explicitly missing: the shared harness has
+# no Delete offline profile/connectivity control or deterministic
+# Sold/Disposed fixture available to this isolated lane.
 - runFlow: ../helpers/setup.yaml
 - openLink: monyvi://metals/holding-e2e-gold/delete
 - extendedWaitUntil:
@@ -28,7 +31,7 @@ appId: com.monyvi.app
     delay: 25
 - extendedWaitUntil:
     visible:
-      id: metal-portfolio-screen
+      id: metal-portfolio-root
     timeout: 30000
 - assertNotVisible: "E2E Gold Bar"
 
@@ -40,13 +43,13 @@ appId: com.monyvi.app
 - openLink: monyvi://metals
 - extendedWaitUntil:
     visible:
-      id: metal-portfolio-screen
+      id: metal-portfolio-root
     timeout: 30000
 - assertNotVisible: "E2E Gold Bar"
 - openLink: monyvi://metals/history
 - extendedWaitUntil:
     visible:
-      id: metal-history-screen
+      id: metal-history-root
     timeout: 30000
 - assertNotVisible: "E2E Gold Bar"
 # MISSING/BLOCKED: deterministic Sold and Disposed fixtures plus their live

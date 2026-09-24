@@ -14,7 +14,7 @@ Sell, No Longer, or Undo and must create no financial outcome.
 
 | ID      | Preconditions and fixture                                                       | User journey                                                                   | Expected observable result                                                                                                          | Automated? | Evidence                                                |
 | ------- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- | ---------- | ------------------------------------------------------- |
-| US7-M01 | Effective Active Gold holding with creation and correction evidence             | Open Delete and confirm once                                                   | Focused Screen 14 confirmation shows exact identity, purity, weight, and value; holding leaves portfolio/detail/History             | Partial    | Service/UI Green; Maestro route blocked                 |
+| US7-M01 | Effective Active Gold holding with creation and correction evidence             | Open Delete and confirm once                                                   | Focused Screen 14 confirmation shows exact identity, purity, weight, and value; holding leaves portfolio/detail/History             | Partial    | Service/UI/route Green; Maestro fixtures blocked                 |
 | US7-M02 | Same holding, device offline                                                    | Confirm Delete, close app, restart, inspect portfolio and History              | Local grouped action survives restart; holding and creation/correction/Delete timeline stay absent from normal surfaces             | Partial    | SQLite restart Green; offline E2E missing               |
 | US7-M03 | Same holding and existing account                                               | Confirm Delete                                                                 | Account, transactions, transfers, proceeds, P/L, write-off, disposal, and sale effects stay unchanged                               | Yes        | SQLite integration Green                                |
 | US7-M04 | Same action identity delivered twice                                            | Confirm, replay exact command, then alter the payload under the same action ID | Exact replay remains one grouped action; hash mismatch is rejected                                                                  | Yes        | SQLite integration Green                                |
@@ -45,8 +45,8 @@ gate.
 
 ## Shared-integration dependency
 
-The isolated Delete implementation must not add a dead Expo route. Runtime and
-Maestro execution resume only after the shared action adapter and registry can
-create both ordinary and predecessor-less revision-zero `metals.delete/v1`
-envelopes, and the integration owner supplies shared approved copy, an offline
-profile/connectivity control, and deterministic Active and terminal fixtures.
+The Delete Expo route and the detail Delete action composition are live on
+this branch and must not be duplicated by integration work. Maestro execution
+resumes only after the integration owner supplies an offline
+profile/connectivity control and deterministic Active and terminal fixtures
+plus shared approved copy review for the new `delete.*` locale keys.
