@@ -1,4 +1,9 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react-native";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react-native";
 import React from "react";
 
 import type { MetalDetailReadModel } from "@/services/metal-detail-read-model-service";
@@ -19,6 +24,7 @@ let mockIsLoading = false;
 let mockDetailError: Error | null = null;
 let mockIdCounter = 0;
 let mockTokenAvailable = true;
+let mockTopInset = 0;
 
 interface CapturedSheetProps {
   readonly holding: {
@@ -107,7 +113,7 @@ jest.mock("react-native-safe-area-context", () => ({
     readonly left: number;
     readonly right: number;
     readonly top: number;
-  } => ({ bottom: 24, left: 0, right: 0, top: 0 }),
+  } => ({ bottom: 24, left: 0, right: 0, top: mockTopInset }),
 }));
 
 jest.mock("react-native/Libraries/Utilities/useWindowDimensions", () => ({
@@ -139,7 +145,7 @@ const mockMetalsCopy: Record<string, string> = {
   "detail.value_unavailable": "Value unavailable",
   "form.coin": "Coin",
   "metal.gold": "Gold",
-  "purity_gold_999": "24K · 999",
+  purity_gold_999: "24K · 999",
   weight_unit: "g",
 };
 
@@ -154,7 +160,7 @@ jest.mock("react-i18next", () => ({
     t: (key: string, options?: Record<string, string>): string => {
       const template =
         namespace === "common"
-          ? ({ cancel: "Cancel" })[key] ?? key
+          ? ({ cancel: "Cancel" }[key] ?? key)
           : (mockMetalsCopy[key] ?? key);
       if (!options) return template;
       return Object.entries(options).reduce(
@@ -227,9 +233,7 @@ function activeModel(): MetalDetailReadModel {
   };
 }
 
-function terminalModel(
-  status: "sold" | "disposed"
-): MetalDetailReadModel {
+function terminalModel(status: "sold" | "disposed"): MetalDetailReadModel {
   return {
     ...activeModel(),
     isActiveOwnership: false,
@@ -286,7 +290,20 @@ describe("delete holding route journey", () => {
     mockModel = activeModel();
     mockIsLoading = false;
     mockDetailError = null;
+    mockTopInset = 0;
     lastSheetProps = null;
+  });
+
+  it("keeps the loading skeleton below the top safe area", () => {
+    mockIsLoading = true;
+    mockModel = null;
+    mockTopInset = 24;
+
+    render(<DeleteMetalHoldingRoute />);
+
+    expect(screen.getByTestId("metal-delete-loading")).toHaveStyle({
+      paddingTop: 36,
+    });
   });
 
   it("renders the focused Screen 14 confirmation with exact holding facts", () => {
@@ -316,9 +333,7 @@ describe("delete holding route journey", () => {
 
     fireEvent.press(screen.getByTestId("sheet-confirm"));
 
-    await waitFor(() =>
-      expect(mockDismissTo).toHaveBeenCalledWith("/metals")
-    );
+    await waitFor(() => expect(mockDismissTo).toHaveBeenCalledWith("/metals"));
     expect(mockExecute).toHaveBeenCalledTimes(1);
     expect(mockCreateCommand).toHaveBeenCalledTimes(1);
     expect(mockEnsureToken).toHaveBeenCalled();
@@ -334,9 +349,7 @@ describe("delete holding route journey", () => {
     await waitFor(() => expect(lastSheetProps?.isSubmitting).toBe(true));
     expect(mockDismissTo).not.toHaveBeenCalled();
     pending.resolve(undefined);
-    await waitFor(() =>
-      expect(mockDismissTo).toHaveBeenCalledWith("/metals")
-    );
+    await waitFor(() => expect(mockDismissTo).toHaveBeenCalledWith("/metals"));
   });
 
   it("keeps exact facts visible on failure and retries the same command", async () => {
@@ -349,9 +362,7 @@ describe("delete holding route journey", () => {
     expect(mockDismissTo).not.toHaveBeenCalled();
 
     fireEvent.press(screen.getByTestId("sheet-retry"));
-    await waitFor(() =>
-      expect(mockDismissTo).toHaveBeenCalledWith("/metals")
-    );
+    await waitFor(() => expect(mockDismissTo).toHaveBeenCalledWith("/metals"));
     expect(mockEnsureToken).toHaveBeenCalledTimes(2);
     expect(mockExecute).toHaveBeenCalledTimes(2);
     const executeCalls = mockExecute.mock.calls as Array<
@@ -369,9 +380,7 @@ describe("delete holding route journey", () => {
     expect(mockDismissTo).not.toHaveBeenCalled();
 
     fireEvent.press(screen.getByTestId("sheet-retry"));
-    await waitFor(() =>
-      expect(mockDismissTo).toHaveBeenCalledWith("/metals")
-    );
+    await waitFor(() => expect(mockDismissTo).toHaveBeenCalledWith("/metals"));
     expect(mockExecute).toHaveBeenCalledTimes(2);
     const executeCalls = mockExecute.mock.calls as Array<
       readonly [Record<string, unknown>]
@@ -393,9 +402,7 @@ describe("delete holding route journey", () => {
 
     mockTokenAvailable = true;
     fireEvent.press(screen.getByTestId("sheet-retry"));
-    await waitFor(() =>
-      expect(mockDismissTo).toHaveBeenCalledWith("/metals")
-    );
+    await waitFor(() => expect(mockDismissTo).toHaveBeenCalledWith("/metals"));
     expect(mockExecute).toHaveBeenCalledTimes(1);
   });
 

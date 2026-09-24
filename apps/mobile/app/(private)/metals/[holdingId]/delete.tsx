@@ -62,7 +62,11 @@ export default function DeleteMetalHoldingRoute(): React.JSX.Element | null {
 
   if (detail.isLoading && detail.model === null) {
     return (
-      <View className="flex-1 bg-background px-5 pt-3 dark:bg-background-dark">
+      <View
+        testID="metal-delete-loading"
+        className="flex-1 bg-background px-5 dark:bg-background-dark"
+        style={{ paddingTop: insets.top + 12 }}
+      >
         <Skeleton width="100%" height={260} borderRadius={16} />
       </View>
     );
