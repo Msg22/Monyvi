@@ -82,6 +82,18 @@ const RECURRING_SCHEDULE_AFTER_KEYS = [
   "nextDueDate",
   "status",
 ] as const;
+const RECURRING_SCHEDULE_BEFORE_KEYS = [
+  "financialRevision",
+  "nextDueDate",
+  "status",
+] as const;
+const REVISION_MUTATION_RECORD_WITH_BEFORE_KEYS = [
+  "after",
+  "before",
+  "entity",
+  "expectedRevision",
+  "mode",
+] as const;
 const SMS_REVIEW_DRAFT_CLEANUP_AFTER_KEYS = [
   "id",
   "queueId",
@@ -361,6 +373,23 @@ function validateRecurringScheduleAfter(
     fail(invalidPayloadCode);
 }
 
+function validateRecurringScheduleBefore(
+  value: unknown,
+  expectedRevision: unknown,
+  invalidPayloadCode: string
+): void {
+  if (
+    !isObject(value) ||
+    !hasExactKeys(value, RECURRING_SCHEDULE_BEFORE_KEYS) ||
+    !isSignedMinorUnits(value.financialRevision, true) ||
+    value.financialRevision.startsWith("-") ||
+    value.financialRevision !== expectedRevision ||
+    !isDate(value.nextDueDate) ||
+    !["ACTIVE", "COMPLETED"].includes(value.status as string)
+  )
+    fail(invalidPayloadCode);
+}
+
 function validateSmsReviewDraftCleanupAfter(
   value: RawObject,
   invalidPayloadCode: string
@@ -472,8 +501,7 @@ function assertCompositeLinks(
     // but fail closed on the server and force optimistic compensation.
     const categoryMatchesType =
       (transaction?.type === "INCOME" &&
-        transaction?.categoryId ===
-          "00000000-0000-0000-0001-000000000200") ||
+        transaction?.categoryId === "00000000-0000-0000-0001-000000000200") ||
       (transaction?.type === "EXPENSE" &&
         transaction?.categoryId === "00000000-0000-0000-0001-000000000201");
     if (
@@ -546,62 +574,94 @@ function validatePayload(
   const sortKeys: string[] = [];
   const records = raw.domainMutation.records.map(
     (rawRecord): NormalizedMutationRecord => {
-    if (
-      !isObject(rawRecord) ||
-      ![
-        "account",
-        "recurring_payment",
-        "sms_review_draft_item",
-        "transaction",
-        "transfer",
-      ].includes(rawRecord.entity as string) ||
-      !["create", "update", "delete"].includes(rawRecord.mode as string) ||
-      !isObject(rawRecord.after)
-    )
-      fail(invalidPayloadCode);
-    const entity = rawRecord.entity as MutationEntity;
-    const mode = rawRecord.mode as MutationMode;
-    const usesRevision = entity === "recurring_payment";
-    if (usesRevision) {
       if (
-        !hasExactKeys(rawRecord, REVISION_MUTATION_RECORD_KEYS) ||
-        mode === "create" ||
-        !isSignedMinorUnits(rawRecord.expectedRevision, true) ||
-        rawRecord.expectedRevision.startsWith("-")
+        !isObject(rawRecord) ||
+        ![
+          "account",
+          "recurring_payment",
+          "sms_review_draft_item",
+          "transaction",
+          "transfer",
+        ].includes(rawRecord.entity as string) ||
+        !["create", "update", "delete"].includes(rawRecord.mode as string) ||
+        !isObject(rawRecord.after)
       )
         fail(invalidPayloadCode);
-    } else if (
-      !hasExactKeys(rawRecord, TIMESTAMP_MUTATION_RECORD_KEYS) ||
-      (mode === "create" && rawRecord.expectedUpdatedAt !== null) ||
-      (mode !== "create" && !isTimestamp(rawRecord.expectedUpdatedAt))
-    ) {
-      fail(invalidPayloadCode);
-    }
-    if (entity === "account")
-      validateAccountAfter(rawRecord.after, invalidPayloadCode);
-    else if (entity === "recurring_payment")
-      validateRecurringScheduleAfter(rawRecord.after, invalidPayloadCode);
-    else if (entity === "sms_review_draft_item")
-      validateSmsReviewDraftCleanupAfter(rawRecord.after, invalidPayloadCode);
-    else if (entity === "transaction")
-      validateTransactionAfter(rawRecord.after, invalidPayloadCode);
-    else validateTransferAfter(rawRecord.after, invalidPayloadCode);
-    recordRefs.push(rawRecord.after.id as string);
-    sortKeys.push(`${entity}:${String(rawRecord.after.id)}`);
+      const entity = rawRecord.entity as MutationEntity;
+      const mode = rawRecord.mode as MutationMode;
+      const usesRevision = entity === "recurring_payment";
+      const before = rawRecord.before;
+      if (usesRevision) {
+        if (
+          !(
+            hasExactKeys(rawRecord, REVISION_MUTATION_RECORD_KEYS) ||
+            (before !== undefined &&
+              mode === "update" &&
+              hasExactKeys(
+                rawRecord,
+                REVISION_MUTATION_RECORD_WITH_BEFORE_KEYS
+              ))
+          ) ||
+          mode === "create" ||
+          !isSignedMinorUnits(rawRecord.expectedRevision, true) ||
+          rawRecord.expectedRevision.startsWith("-")
+        )
+          fail(invalidPayloadCode);
+        if (before !== undefined)
+          validateRecurringScheduleBefore(
+            before,
+            rawRecord.expectedRevision,
+            invalidPayloadCode
+          );
+      } else if (
+        !hasExactKeys(rawRecord, TIMESTAMP_MUTATION_RECORD_KEYS) ||
+        (mode === "create" && rawRecord.expectedUpdatedAt !== null) ||
+        (mode !== "create" && !isTimestamp(rawRecord.expectedUpdatedAt))
+      ) {
+        fail(invalidPayloadCode);
+      }
+      if (entity === "account")
+        validateAccountAfter(rawRecord.after, invalidPayloadCode);
+      else if (entity === "recurring_payment")
+        validateRecurringScheduleAfter(rawRecord.after, invalidPayloadCode);
+      else if (entity === "sms_review_draft_item")
+        validateSmsReviewDraftCleanupAfter(rawRecord.after, invalidPayloadCode);
+      else if (entity === "transaction")
+        validateTransactionAfter(rawRecord.after, invalidPayloadCode);
+      else validateTransferAfter(rawRecord.after, invalidPayloadCode);
+      recordRefs.push(rawRecord.after.id as string);
+      sortKeys.push(`${entity}:${String(rawRecord.after.id)}`);
       const after = rawRecord.after as Record<string, CanonicalJsonValue>;
-      return usesRevision
-        ? {
-            after,
-            entity,
-            expectedRevision: rawRecord.expectedRevision as string,
-            mode,
-          }
-        : {
-            after,
-            entity,
-            expectedUpdatedAt: rawRecord.expectedUpdatedAt as string | null,
-            mode,
-          };
+      if (usesRevision) {
+        const revisionRecord: {
+          readonly after: Readonly<Record<string, CanonicalJsonValue>>;
+          readonly before?: Readonly<Record<string, CanonicalJsonValue>>;
+          readonly entity: MutationEntity;
+          readonly expectedRevision: string;
+          readonly mode: MutationMode;
+        } =
+          before !== undefined
+            ? {
+                after,
+                before: before as Readonly<Record<string, CanonicalJsonValue>>,
+                entity,
+                expectedRevision: rawRecord.expectedRevision as string,
+                mode,
+              }
+            : {
+                after,
+                entity,
+                expectedRevision: rawRecord.expectedRevision as string,
+                mode,
+              };
+        return revisionRecord;
+      }
+      return {
+        after,
+        entity,
+        expectedUpdatedAt: rawRecord.expectedUpdatedAt as string | null,
+        mode,
+      };
     }
   );
   sortKeys.forEach((key, index) => {

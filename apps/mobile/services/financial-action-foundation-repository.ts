@@ -12,11 +12,7 @@ import {
   type FinancialActionHashResult,
   type FinancialActionState,
 } from "../../../packages/logic/src/financial-actions";
-import {
-  Q,
-  type Collection,
-  type Model,
-} from "@nozbe/watermelondb";
+import { Q, type Collection, type Model } from "@nozbe/watermelondb";
 
 import {
   assertExpectedCurrentUser as assertProductionCurrentUser,
@@ -263,17 +259,18 @@ export function createFinancialActionFoundationRepository(
     operations: readonly FinancialActionLinkedExistingOperation[]
   ): readonly FinancialActionLinkedExistingOperation[] {
     return Object.freeze(
-      operations.map((operation): FinancialActionLinkedExistingOperation =>
-        operation.kind === "update"
-          ? Object.freeze({
-              kind: "update",
-              model: operation.model,
-              update: operation.update,
-            })
-          : Object.freeze({
-              kind: "markAsDeleted",
-              model: operation.model,
-            })
+      operations.map(
+        (operation): FinancialActionLinkedExistingOperation =>
+          operation.kind === "update"
+            ? Object.freeze({
+                kind: "update",
+                model: operation.model,
+                update: operation.update,
+              })
+            : Object.freeze({
+                kind: "markAsDeleted",
+                model: operation.model,
+              })
       )
     );
   }
@@ -381,21 +378,25 @@ export function createFinancialActionFoundationRepository(
         isEditing: false,
       })
     );
-    const updateExpectations = preparedExistingOperations.map((model, index) => {
-      const existing = existingExpectations[index];
-      if (!existing || model !== existing.model) {
-        throw new Error(FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.INVALID_INPUT);
+    const updateExpectations = preparedExistingOperations.map(
+      (model, index) => {
+        const existing = existingExpectations[index];
+        if (!existing || model !== existing.model) {
+          throw new Error(
+            FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.INVALID_INPUT
+          );
+        }
+        return Object.freeze({
+          model,
+          table: existing.table,
+          id: existing.id,
+          kind: existing.kind,
+          expectedPreparedState: existing.expectedPreparedState,
+          raw: Object.freeze(cloneWatermelonRaw(model._raw)),
+          isEditing: false,
+        });
       }
-      return Object.freeze({
-        model,
-        table: existing.table,
-        id: existing.id,
-        kind: existing.kind,
-        expectedPreparedState: existing.expectedPreparedState,
-        raw: Object.freeze(cloneWatermelonRaw(model._raw)),
-        isEditing: false,
-      });
-    });
+    );
     return Object.freeze([...createExpectations, ...updateExpectations]);
   }
 
@@ -436,7 +437,9 @@ export function createFinancialActionFoundationRepository(
       snapshots.map((snapshot, index) => {
         const expectation = expectations[index];
         if (!expectation) {
-          throw new Error(FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.INVALID_INPUT);
+          throw new Error(
+            FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.INVALID_INPUT
+          );
         }
         return Object.freeze({
           id: expectation.id,
@@ -534,9 +537,8 @@ export function createFinancialActionFoundationRepository(
     const existingOperations = captureExistingOperations(
       plan.existingOperations
     );
-    const existingExpectations = captureExistingOperationExpectations(
-      existingOperations
-    );
+    const existingExpectations =
+      captureExistingOperationExpectations(existingOperations);
     const preparedCreates = capturePreparedCreates(plan.preparedCreates);
     const cachedModels = Object.freeze(
       existingOperations.map((operation) => operation.model)
@@ -555,7 +557,8 @@ export function createFinancialActionFoundationRepository(
       cachedSnapshots,
       existingExpectations
     );
-    const preparedCreateSnapshots = capturePreparedCreateSnapshots(preparedCreates);
+    const preparedCreateSnapshots =
+      capturePreparedCreateSnapshots(preparedCreates);
     const initialPreparedCreateExpectations = capturePreparedExpectations(
       preparedCreates,
       [],
@@ -563,10 +566,12 @@ export function createFinancialActionFoundationRepository(
     );
     let hasCommitted = false;
     try {
-      await assertCachedOwnership(Object.freeze({
-        userId: context.scope.userId,
-        cachedPreimages,
-      }));
+      await assertCachedOwnership(
+        Object.freeze({
+          userId: context.scope.userId,
+          cachedPreimages,
+        })
+      );
       assertPendingFinancialActionRootUnchanged(
         foundRecord,
         pendingRootExpectation,
@@ -592,13 +597,35 @@ export function createFinancialActionFoundationRepository(
       const preparedExistingOperations: Model[] = [];
       const preparedExistingExpectations: PreparedOperationExpectation[] = [];
       for (const [index, operation] of existingOperations.entries()) {
-        assertPreparedOperationsMatch(preparedExistingOperations, preparedExistingExpectations);
-        assertCachedOperationsUnchanged(cachedModels.slice(index), cachedSnapshots.slice(index), existingExpectations.slice(index), preparedCreates);
+        assertPreparedOperationsMatch(
+          preparedExistingOperations,
+          preparedExistingExpectations
+        );
+        assertCachedOperationsUnchanged(
+          cachedModels.slice(index),
+          cachedSnapshots.slice(index),
+          existingExpectations.slice(index),
+          preparedCreates
+        );
         const preparedOperation = prepareExistingOperation(operation);
         preparedExistingOperations.push(preparedOperation);
-        preparedExistingExpectations.push(...capturePreparedExpectations([], [preparedOperation], existingExpectations.slice(index, index + 1)));
-        assertPreparedOperationsMatch(preparedExistingOperations, preparedExistingExpectations);
-        assertCachedOperationsUnchanged(cachedModels.slice(index + 1), cachedSnapshots.slice(index + 1), existingExpectations.slice(index + 1), preparedCreates);
+        preparedExistingExpectations.push(
+          ...capturePreparedExpectations(
+            [],
+            [preparedOperation],
+            existingExpectations.slice(index, index + 1)
+          )
+        );
+        assertPreparedOperationsMatch(
+          preparedExistingOperations,
+          preparedExistingExpectations
+        );
+        assertCachedOperationsUnchanged(
+          cachedModels.slice(index + 1),
+          cachedSnapshots.slice(index + 1),
+          existingExpectations.slice(index + 1),
+          preparedCreates
+        );
       }
       assertPreparedOperationsMatch(
         preparedCreates,
@@ -616,12 +643,15 @@ export function createFinancialActionFoundationRepository(
         ...preparedExistingExpectations,
       ]);
       assertPreparedOperationsMatch(linkedOperations, preparedExpectations);
-      const preparedPostimages = createImmutablePostimages(preparedExpectations);
-      await assertPreparedOwnership(Object.freeze({
-        userId: context.scope.userId,
-        cachedPreimages,
-        preparedPostimages,
-      }));
+      const preparedPostimages =
+        createImmutablePostimages(preparedExpectations);
+      await assertPreparedOwnership(
+        Object.freeze({
+          userId: context.scope.userId,
+          cachedPreimages,
+          preparedPostimages,
+        })
+      );
       assertPendingFinancialActionRootUnchanged(
         foundRecord,
         pendingRootExpectation,
@@ -822,12 +852,17 @@ export function createFinancialActionFoundationRepository(
     outcomeJson: string,
     rejectionCode: string | null
   ): Promise<void> {
+    // The RPC reports codes in UPPER_SNAKE form while local evidence keeps
+    // the stable lowercase form also persisted server-side as rejection_code.
+    const normalizedRejectionCode =
+      rejectionCode === null ? null : rejectionCode.toLowerCase();
     if (
       outcomeJson.trim().length === 0 ||
       ((serverOutcome === "accepted" || serverOutcome === "idempotent") &&
-        rejectionCode !== null) ||
+        normalizedRejectionCode !== null) ||
       ((serverOutcome === "stale" || serverOutcome === "rejected") &&
-        (rejectionCode === null || rejectionCode.trim().length === 0))
+        (normalizedRejectionCode === null ||
+          normalizedRejectionCode.trim().length === 0))
     ) {
       throw new Error(FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.INVALID_INPUT);
     }
@@ -840,12 +875,12 @@ export function createFinancialActionFoundationRepository(
       assertFinancialActionStateEvidence(nextState, {
         serverOutcome,
         outcomeJson,
-        rejectionCode,
+        rejectionCode: normalizedRejectionCode,
       });
       record.state = nextState;
       record.serverOutcome = serverOutcome;
       record.outcomeJson = outcomeJson;
-      record.rejectionCode = rejectionCode;
+      record.rejectionCode = normalizedRejectionCode;
     });
   }
 

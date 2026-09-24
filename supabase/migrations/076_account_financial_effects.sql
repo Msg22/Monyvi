@@ -268,7 +268,25 @@ BEGIN
         SELECT array_agg(key ORDER BY key)
         FROM jsonb_object_keys(v_record) AS key
       ) IS DISTINCT FROM ARRAY['after', 'entity', 'expectedRevision', 'mode']::text[]
+        AND (
+          SELECT array_agg(key ORDER BY key)
+          FROM jsonb_object_keys(v_record) AS key
+        ) IS DISTINCT FROM ARRAY['after', 'before', 'entity', 'expectedRevision', 'mode']::text[]
         OR jsonb_typeof(v_record -> 'expectedRevision') <> 'string'
+        OR (
+          v_record ? 'before' AND (
+            jsonb_typeof(v_record -> 'before') IS DISTINCT FROM 'object'
+            OR (
+              SELECT array_agg(key ORDER BY key)
+              FROM jsonb_object_keys(v_record -> 'before') AS key
+            ) IS DISTINCT FROM ARRAY['financialRevision', 'nextDueDate', 'status']::text[]
+            OR v_record -> 'before' ->> 'financialRevision'
+              IS DISTINCT FROM v_record ->> 'expectedRevision'
+            OR v_record -> 'before' ->> 'nextDueDate'
+              !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
+            OR v_record -> 'before' ->> 'status' NOT IN ('ACTIVE', 'COMPLETED')
+          )
+        )
       THEN
         RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'financial_action_invalid_domain_mutation';
       END IF;
@@ -1178,6 +1196,21 @@ BEGIN
       OR payment.next_due_date <= payment.end_date
     )
   FOR UPDATE;
+
+  -- A supplied pre-image must describe the locked row: the winner applies
+  -- `after` while a rejected loser later restores `before` locally.
+  IF p_record ? 'before'
+    AND (
+      (p_record -> 'before' ->> 'financialRevision')::bigint
+        IS DISTINCT FROM v_payment.financial_revision
+      OR (p_record -> 'before' ->> 'nextDueDate')::date
+        IS DISTINCT FROM v_payment.next_due_date
+      OR (p_record -> 'before' ->> 'status')::public.recurring_status
+        IS DISTINCT FROM v_payment.status
+    )
+  THEN
+    RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'financial_action_invalid_domain_mutation';
+  END IF;
 
   v_next_due_date := CASE v_payment.frequency
     WHEN 'DAILY'::public.recurring_frequency THEN v_payment.next_due_date + 1

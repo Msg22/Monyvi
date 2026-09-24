@@ -176,6 +176,13 @@ function buildEnvelope(input: {
         records: [
           {
             after: input.schedule,
+            before: {
+              financialRevision: expectedFinancialRevision,
+              nextDueDate: formatFinancialActionLocalDate(
+                input.payment.nextDueDate
+              ),
+              status: input.payment.status,
+            },
             entity: "recurring_payment",
             expectedRevision: expectedFinancialRevision,
             mode: "update",

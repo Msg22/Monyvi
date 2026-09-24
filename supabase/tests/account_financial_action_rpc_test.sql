@@ -17,12 +17,20 @@ VALUES
  ('018f0c7a-1234-7abc-8def-000000000241', '018f0c7a-1234-7abc-8def-000000000201', 'checkpoint', 'Checkpoint', 'wallet', 1),
  ('018f0c7a-1234-7abc-8def-000000000242', '018f0c7a-1234-7abc-8def-000000000202', 'foreign-checkpoint', 'Foreign', 'wallet', 1);
 INSERT INTO public.recurring_payments (
- account_id, amount, category_id, currency, financial_revision, frequency, id,
- name, next_due_date, start_date, type, user_id
+  account_id, amount, category_id, currency, financial_revision, frequency, id,
+  name, next_due_date, start_date, type, user_id
 ) VALUES (
- '018f0c7a-1234-7abc-8def-000000000211', 25, '018f0c7a-1234-7abc-8def-000000000241',
- 'EGP', 0, 'MONTHLY', '018f0c7a-1234-7abc-8def-000000000251', 'Rent',
- '2026-09-01', '2026-08-01', 'EXPENSE', '018f0c7a-1234-7abc-8def-000000000201'
+  '018f0c7a-1234-7abc-8def-000000000211', 25, '018f0c7a-1234-7abc-8def-000000000241',
+  'EGP', 0, 'MONTHLY', '018f0c7a-1234-7abc-8def-000000000251', 'Rent',
+  '2026-09-01', '2026-08-01', 'EXPENSE', '018f0c7a-1234-7abc-8def-000000000201'
+);
+INSERT INTO public.recurring_payments (
+  account_id, amount, category_id, currency, financial_revision, frequency, id,
+  name, next_due_date, start_date, type, user_id
+) VALUES (
+  '018f0c7a-1234-7abc-8def-000000000211', 25, '018f0c7a-1234-7abc-8def-000000000241',
+  'EGP', 0, 'MONTHLY', '018f0c7a-1234-7abc-8def-000000000252', 'Insurance',
+  '2026-09-01', '2026-08-01', 'EXPENSE', '018f0c7a-1234-7abc-8def-000000000201'
 );
 
 CREATE FUNCTION pg_temp.transaction_envelope(p_suffix text, p_account text DEFAULT '018f0c7a-1234-7abc-8def-000000000211', p_revision text DEFAULT '0')
@@ -99,6 +107,26 @@ INSERT INTO action_inputs(name, envelope) VALUES ('recurring', jsonb_build_objec
   'operationCode', 'recurring.pay-now', 'schemaVersion', 'account.balance-effects/v1'),
  'payloadVersion', 'account.balance-effects/v1', 'userId', '018f0c7a-1234-7abc-8def-000000000201'));
 
+INSERT INTO action_inputs(name, envelope) VALUES ('recurring_before', jsonb_build_object(
+ 'accountGuards', '[{"accountId":"018f0c7a-1234-7abc-8def-000000000211","expectedRevision":"3"}]'::jsonb,
+ 'actionId', '018f0c7a-1234-7abc-8def-000000000312', 'domain', 'recurring_payments',
+ 'domainReferenceId', '018f0c7a-1234-7abc-8def-000000000252', 'envelopeVersion', 'monyvi.financial-action/v1',
+ 'kind', 'pay_now', 'occurredAt', '2026-09-01T12:00:00.000Z',
+ 'payload', jsonb_build_object(
+  'accountEffects', '[{"accountId":"018f0c7a-1234-7abc-8def-000000000211","amountMinorUnits":"-2500","currency":"EGP","effectId":"018f0c7a-1234-7abc-8def-000000002312"}]'::jsonb,
+  'domainMutation', '{"records":[{"after":{"financialRevision":"1","id":"018f0c7a-1234-7abc-8def-000000000252","nextDueDate":"2026-10-01","status":"ACTIVE"},"before":{"financialRevision":"0","nextDueDate":"2026-09-01","status":"ACTIVE"},"entity":"recurring_payment","expectedRevision":"0","mode":"update"},{"after":{"accountId":"018f0c7a-1234-7abc-8def-000000000211","amountMinorUnits":"2500","categoryId":"018f0c7a-1234-7abc-8def-000000000241","counterparty":null,"createdAt":"2026-09-01T12:00:00.000Z","currency":"EGP","date":"2026-09-01","deleted":false,"id":"018f0c7a-1234-7abc-8def-000000001312","isDraft":false,"linkedAssetId":null,"linkedDebtId":null,"linkedRecurringId":"018f0c7a-1234-7abc-8def-000000000252","note":null,"smsFingerprint":null,"source":"RECURRING","type":"EXPENSE"},"entity":"transaction","expectedUpdatedAt":null,"mode":"create"}]}'::jsonb,
+  'domainRecordRefs', '["018f0c7a-1234-7abc-8def-000000000252","018f0c7a-1234-7abc-8def-000000001312"]'::jsonb,
+  'operationCode', 'recurring.pay-now', 'schemaVersion', 'account.balance-effects/v1'),
+ 'payloadVersion', 'account.balance-effects/v1', 'userId', '018f0c7a-1234-7abc-8def-000000000201'));
+
+INSERT INTO action_inputs(name, envelope)
+SELECT 'recurring_before_mismatch',
+ jsonb_set(
+  jsonb_set(envelope, '{actionId}', '"018f0c7a-1234-7abc-8def-000000000313"'),
+  '{payload,domainMutation,records,0,before,financialRevision}', '"1"'
+ )
+FROM action_inputs WHERE name = 'recurring_before';
+
 UPDATE action_inputs SET payload_json = private.financial_action_encode_jsonb_v1(envelope);
 UPDATE action_inputs SET payload_hash = encode(extensions.digest(convert_to(payload_json, 'UTF8'), 'sha256'), 'hex');
 GRANT SELECT ON action_inputs TO authenticated;
@@ -149,6 +177,13 @@ SELECT is((SELECT outcome->>'status' FROM action_results WHERE name='recurring')
 SELECT is((SELECT financial_revision FROM public.recurring_payments WHERE id='018f0c7a-1234-7abc-8def-000000000251'), 1::bigint, 'recurring revision advanced exactly once');
 SELECT is((SELECT next_due_date FROM public.recurring_payments WHERE id='018f0c7a-1234-7abc-8def-000000000251'), '2026-10-01'::date, 'recurring schedule advanced atomically');
 SELECT is((SELECT count(*) FROM public.transactions WHERE id='018f0c7a-1234-7abc-8def-000000001311'), 1::bigint, 'recurring transaction committed once');
+SELECT lives_ok($$INSERT INTO action_results SELECT name, public.apply_account_financial_action_v1(payload_json,payload_hash) FROM action_inputs WHERE name='recurring_before'$$, 'recurring pay-now with schedule pre-image commits');
+SELECT is((SELECT outcome->>'status' FROM action_results WHERE name='recurring_before'), 'accepted', 'pre-image pay-now accepted');
+SELECT is((SELECT financial_revision FROM public.recurring_payments WHERE id='018f0c7a-1234-7abc-8def-000000000252'), 1::bigint, 'pre-image schedule revision advanced once');
+SELECT is((SELECT next_due_date FROM public.recurring_payments WHERE id='018f0c7a-1234-7abc-8def-000000000252'), '2026-10-01'::date, 'pre-image schedule advanced atomically');
+SELECT is((SELECT count(*) FROM public.transactions WHERE id='018f0c7a-1234-7abc-8def-000000001312'), 1::bigint, 'pre-image transaction committed once');
+SELECT is((SELECT public.apply_account_financial_action_v1(payload_json,payload_hash)->>'code' FROM action_inputs WHERE name='recurring_before_mismatch'), 'INCOMPLETE_GROUP', 'forged schedule pre-image rejected ephemerally');
+SELECT is((SELECT count(*) FROM public.financial_action_groups WHERE action_id='018f0c7a-1234-7abc-8def-000000000313'), 0::bigint, 'forged pre-image persists no rejected root');
 SELECT lives_ok('SET CONSTRAINTS ALL IMMEDIATE', 'all deferred action/effect constraints hold');
 RESET ROLE;
 SELECT is((SELECT count(*) FROM public.financial_action_groups WHERE action_id='018f0c7a-1234-7abc-8def-000000000306'), 1::bigint, 'domain conflict leaves one durable rejected action root');

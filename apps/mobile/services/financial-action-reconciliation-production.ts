@@ -3,9 +3,11 @@ import {
   Account,
   AccountFinancialEffect,
   FinancialActionGroup,
+  RecurringPayment,
   Transaction,
   Transfer,
   database,
+  type RecurringStatus,
 } from "@monyvi/db";
 import {
   CURRENCY_PRECISION,
@@ -297,6 +299,98 @@ function readLosingDomainCreates(payloadJson: string): ReadonlyArray<{
   return Object.freeze(creates);
 }
 
+interface LosingScheduleRevert {
+  readonly appliedFinancialRevision: string;
+  readonly appliedNextDueDate: Date;
+  readonly appliedStatus: RecurringStatus;
+  readonly financialRevision: string;
+  readonly nextDueDate: Date;
+  readonly paymentId: string;
+  readonly status: RecurringStatus;
+}
+
+const SCHEDULE_REVERT_STATUSES: readonly RecurringStatus[] = [
+  "ACTIVE",
+  "COMPLETED",
+];
+
+function startOfLocalDay(dayText: string): Date | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dayText)) return null;
+  const midnight = new Date(`${dayText}T00:00:00`);
+  if (!Number.isFinite(midnight.getTime())) return null;
+  const year = midnight.getFullYear();
+  const month = String(midnight.getMonth() + 1).padStart(2, "0");
+  const day = String(midnight.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}` === dayText ? midnight : null;
+}
+
+function readLosingScheduleReverts(
+  payloadJson: string
+): readonly LosingScheduleRevert[] {
+  let envelope: ReturnType<typeof parseFinancialActionEnvelopeJson>;
+  try {
+    envelope = parseFinancialActionEnvelopeJson(payloadJson);
+  } catch {
+    fail();
+  }
+  const domainMutation = envelope.payload.domainMutation as unknown;
+  if (!isObject(domainMutation)) fail();
+  const records = domainMutation.records;
+  if (!Array.isArray(records)) fail();
+  const reverts: LosingScheduleRevert[] = [];
+  records.forEach((record: unknown) => {
+    if (!isObject(record)) return;
+    if (record.entity !== "recurring_payment" || record.mode !== "update")
+      return;
+    if (!isObject(record.after)) return;
+    const paymentId = record.after.id;
+    if (typeof paymentId !== "string" || paymentId.length === 0) return;
+    if (record.before === undefined) return;
+    if (!isObject(record.before)) fail();
+    const before = record.before;
+    const financialRevision = before.financialRevision;
+    const nextDueDateText = before.nextDueDate;
+    const status = before.status;
+    const nextDueDate =
+      typeof nextDueDateText === "string"
+        ? startOfLocalDay(nextDueDateText)
+        : null;
+    const appliedFinancialRevision = record.after.financialRevision;
+    const appliedNextDueDateText = record.after.nextDueDate;
+    const appliedStatus = record.after.status;
+    const appliedNextDueDate =
+      typeof appliedNextDueDateText === "string"
+        ? startOfLocalDay(appliedNextDueDateText)
+        : null;
+    if (
+      typeof financialRevision !== "string" ||
+      !/^(0|[1-9][0-9]*)$/.test(financialRevision) ||
+      financialRevision !== record.expectedRevision ||
+      nextDueDate === null ||
+      typeof status !== "string" ||
+      !SCHEDULE_REVERT_STATUSES.includes(status as RecurringStatus) ||
+      typeof appliedFinancialRevision !== "string" ||
+      appliedFinancialRevision !==
+        (BigInt(financialRevision) + 1n).toString() ||
+      appliedNextDueDate === null ||
+      typeof appliedStatus !== "string" ||
+      !SCHEDULE_REVERT_STATUSES.includes(appliedStatus as RecurringStatus)
+    ) {
+      fail();
+    }
+    reverts.push({
+      appliedFinancialRevision,
+      appliedNextDueDate,
+      appliedStatus: appliedStatus as RecurringStatus,
+      financialRevision,
+      nextDueDate,
+      paymentId,
+      status: status as RecurringStatus,
+    });
+  });
+  return Object.freeze(reverts);
+}
+
 async function installCanonicalSnapshotAtomically(
   input: InstallCanonicalAccountSnapshotInput
 ): Promise<void> {
@@ -393,6 +487,43 @@ async function installCanonicalSnapshotAtomically(
           if (!row) continue;
           stageLosingDelete(row);
         }
+      }
+      const scheduleReverts = readLosingScheduleReverts(root.payloadJson);
+      for (const revert of scheduleReverts) {
+        const rows = await scope
+          .queryOwned(
+            database.get<RecurringPayment>("recurring_payments"),
+            Q.where("id", revert.paymentId)
+          )
+          .fetch();
+        const paymentRow = rows.find(
+          (candidate) => candidate.id === revert.paymentId
+        );
+        if (!paymentRow) fail();
+        const matchesOriginal =
+          paymentRow.financialRevision === revert.financialRevision &&
+          paymentRow.nextDueDate.getTime() === revert.nextDueDate.getTime() &&
+          paymentRow.status === revert.status;
+        if (matchesOriginal) continue;
+        if (
+          paymentRow.financialRevision !== revert.appliedFinancialRevision ||
+          paymentRow.nextDueDate.getTime() !==
+            revert.appliedNextDueDate.getTime() ||
+          paymentRow.status !== revert.appliedStatus
+        ) {
+          throw new Error(
+            FINANCIAL_ACTION_RECONCILIATION_ERROR_CODES.INCOMPLETE
+          );
+        }
+        snapshots.push(captureCachedModelSnapshot(paymentRow));
+        operations.push(
+          paymentRow.prepareUpdate((candidate) => {
+            candidate.nextDueDate = revert.nextDueDate;
+            candidate.status = revert.status;
+            candidate.financialRevision = revert.financialRevision;
+            candidate.updatedAt = now;
+          })
+        );
       }
       accounts.forEach((account) => {
         const canonical = canonicalAccounts.get(account.id);

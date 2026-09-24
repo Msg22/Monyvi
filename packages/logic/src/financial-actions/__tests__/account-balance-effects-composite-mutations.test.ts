@@ -89,6 +89,183 @@ describe("account.balance-effects/v1 composite writer variants", () => {
     expect(canonicalizeFinancialActionEnvelope(value)).toEqual(value);
   });
 
+  it("accepts recurring Pay Now carrying the original schedule pre-image", () => {
+    const value = {
+      accountGuards: [{ accountId: ACCOUNT_ID, expectedRevision: "7" }],
+      actionId: ACTION_ID,
+      domain: "recurring_payments",
+      domainReferenceId: ROOT_RECORD_ID,
+      envelopeVersion: "monyvi.financial-action/v1",
+      kind: "pay_now",
+      occurredAt: "2026-09-01T12:00:00.000Z",
+      payload: {
+        accountEffects: [
+          {
+            accountId: ACCOUNT_ID,
+            amountMinorUnits: "-12500",
+            currency: "EGP",
+            effectId: TRANSACTION_ID,
+          },
+        ],
+        domainMutation: {
+          records: [
+            {
+              after: {
+                financialRevision: "8",
+                id: ROOT_RECORD_ID,
+                nextDueDate: "2026-10-01",
+                status: "ACTIVE",
+              },
+              before: {
+                financialRevision: "7",
+                nextDueDate: "2026-09-01",
+                status: "ACTIVE",
+              },
+              entity: "recurring_payment",
+              expectedRevision: "7",
+              mode: "update",
+            },
+            {
+              after: transactionAfter({
+                linkedRecurringId: ROOT_RECORD_ID,
+                smsFingerprint: null,
+                source: "RECURRING",
+              }),
+              entity: "transaction",
+              expectedUpdatedAt: null,
+              mode: "create",
+            },
+          ],
+        },
+        domainRecordRefs: [ROOT_RECORD_ID, TRANSACTION_ID],
+        operationCode: "recurring.pay-now",
+        schemaVersion: "account.balance-effects/v1",
+      },
+      payloadVersion: "account.balance-effects/v1",
+      userId: USER_ID,
+    };
+
+    expect(canonicalizeFinancialActionEnvelope(value)).toEqual(value);
+  });
+
+  it("rejects a schedule pre-image whose revision diverges from the expected revision", () => {
+    const value = {
+      accountGuards: [{ accountId: ACCOUNT_ID, expectedRevision: "7" }],
+      actionId: ACTION_ID,
+      domain: "recurring_payments",
+      domainReferenceId: ROOT_RECORD_ID,
+      envelopeVersion: "monyvi.financial-action/v1",
+      kind: "pay_now",
+      occurredAt: "2026-09-01T12:00:00.000Z",
+      payload: {
+        accountEffects: [
+          {
+            accountId: ACCOUNT_ID,
+            amountMinorUnits: "-12500",
+            currency: "EGP",
+            effectId: TRANSACTION_ID,
+          },
+        ],
+        domainMutation: {
+          records: [
+            {
+              after: {
+                financialRevision: "8",
+                id: ROOT_RECORD_ID,
+                nextDueDate: "2026-10-01",
+                status: "ACTIVE",
+              },
+              before: {
+                financialRevision: "6",
+                nextDueDate: "2026-09-01",
+                status: "ACTIVE",
+              },
+              entity: "recurring_payment",
+              expectedRevision: "7",
+              mode: "update",
+            },
+            {
+              after: transactionAfter({
+                linkedRecurringId: ROOT_RECORD_ID,
+                smsFingerprint: null,
+                source: "RECURRING",
+              }),
+              entity: "transaction",
+              expectedUpdatedAt: null,
+              mode: "create",
+            },
+          ],
+        },
+        domainRecordRefs: [ROOT_RECORD_ID, TRANSACTION_ID],
+        operationCode: "recurring.pay-now",
+        schemaVersion: "account.balance-effects/v1",
+      },
+      payloadVersion: "account.balance-effects/v1",
+      userId: USER_ID,
+    };
+
+    expect(() => canonicalizeFinancialActionEnvelope(value)).toThrow();
+  });
+
+  it("rejects a schedule pre-image with a malformed next due date", () => {
+    const value = {
+      accountGuards: [{ accountId: ACCOUNT_ID, expectedRevision: "7" }],
+      actionId: ACTION_ID,
+      domain: "recurring_payments",
+      domainReferenceId: ROOT_RECORD_ID,
+      envelopeVersion: "monyvi.financial-action/v1",
+      kind: "pay_now",
+      occurredAt: "2026-09-01T12:00:00.000Z",
+      payload: {
+        accountEffects: [
+          {
+            accountId: ACCOUNT_ID,
+            amountMinorUnits: "-12500",
+            currency: "EGP",
+            effectId: TRANSACTION_ID,
+          },
+        ],
+        domainMutation: {
+          records: [
+            {
+              after: {
+                financialRevision: "8",
+                id: ROOT_RECORD_ID,
+                nextDueDate: "2026-10-01",
+                status: "ACTIVE",
+              },
+              before: {
+                financialRevision: "7",
+                nextDueDate: "09/01/2026",
+                status: "ACTIVE",
+              },
+              entity: "recurring_payment",
+              expectedRevision: "7",
+              mode: "update",
+            },
+            {
+              after: transactionAfter({
+                linkedRecurringId: ROOT_RECORD_ID,
+                smsFingerprint: null,
+                source: "RECURRING",
+              }),
+              entity: "transaction",
+              expectedUpdatedAt: null,
+              mode: "create",
+            },
+          ],
+        },
+        domainRecordRefs: [ROOT_RECORD_ID, TRANSACTION_ID],
+        operationCode: "recurring.pay-now",
+        schemaVersion: "account.balance-effects/v1",
+      },
+      payloadVersion: "account.balance-effects/v1",
+      userId: USER_ID,
+    };
+
+    expect(() => canonicalizeFinancialActionEnvelope(value)).toThrow();
+  });
+
   it("accepts SMS review confirmation with only its selected draft deletion", () => {
     const value = {
       accountGuards: [{ accountId: ACCOUNT_ID, expectedRevision: "7" }],
