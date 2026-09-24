@@ -636,10 +636,20 @@ provider cannot satisfy the established provider contract.
 This design has been checked against Monyvi Constitution 1.7.0 and current
 repository guidance.
 
-It introduces no new financial business rule and does not alter an existing
-business rule in `docs/business/business-decisions.md`; therefore no business
-decision update is required before this architecture-only provider migration.
+The provider migration does not introduce a new financial calculation or user
+workflow rule. However, `docs/business/business-decisions.md` currently
+contains SMS safeguard-QA wording that explicitly names the Gemini provider and
+requires routine QA to prove zero production Gemini calls. That wording would
+become stale when SMS moves to a configurable provider.
 
-If implementation discovery finds a business-rule change is actually necessary,
-work must stop and the business decision must be approved/documented before
-that production change proceeds.
+Before production implementation begins, the provider-specific SMS QA wording
+must be updated to be provider-neutral while preserving the existing safety
+intent: fixture/provider substitution is allowed only inside the deterministic
+QA profile, routine QA must make zero calls to the production-configured SMS AI
+provider, and routine QA must consume zero production allowance. The separate
+Voice Entry section remains explicitly Gemini 2.5 Flash-Lite and must not be
+changed by this SMS migration.
+
+If implementation discovery finds any additional business-rule change is
+necessary, work must stop and that decision must be approved/documented before
+the production change proceeds.
