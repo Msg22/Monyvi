@@ -166,6 +166,7 @@ export interface DisposeMetalHoldingScreenProps {
   readonly rateEvidence?: readonly DisposeRateEvidenceDisplay[];
   readonly requiresRateAcknowledgment?: boolean;
   readonly rateAcknowledged?: boolean;
+  readonly rateEvidenceError?: string | null;
   readonly isLoading?: boolean;
   readonly isSubmitting?: boolean;
   readonly loadError?: string | null;
@@ -289,6 +290,7 @@ export function DisposeMetalHoldingScreen({
   rateEvidence = [],
   requiresRateAcknowledgment = false,
   rateAcknowledged = false,
+  rateEvidenceError = null,
   isLoading = false,
   isSubmitting = false,
   loadError = null,
@@ -309,6 +311,7 @@ export function DisposeMetalHoldingScreen({
   const firstCategoryRef = useRef<ChoiceButtonHandle>(null);
   const firstTreatmentRef = useRef<ChoiceButtonHandle>(null);
   const dateFieldRef = useRef<TextInput>(null);
+  const rateEvidenceErrorRef = useRef<View>(null);
   const submitErrorRef = useRef<View>(null);
   const submit = useCallback((): void => {
     if (!isSubmitting) onSubmit();
@@ -341,8 +344,11 @@ export function DisposeMetalHoldingScreen({
         validationErrors.rateAcknowledgment
           ? copy.rateAcknowledgmentRequired
           : null,
+        validationErrors.rateEvidence && rateEvidenceError
+          ? rateEvidenceError
+          : null,
       ].filter((message): message is string => message !== null),
-    [copy, validationErrors]
+    [copy, rateEvidenceError, validationErrors]
   );
 
   useEffect(() => {
@@ -356,9 +362,11 @@ export function DisposeMetalHoldingScreen({
         ? firstCategoryRef.current
         : validationErrors.treatment
           ? firstTreatmentRef.current
-          : validationErrors.rateAcknowledgment
-            ? null
-            : dateFieldRef.current;
+          : validationErrors.rateEvidence
+            ? rateEvidenceErrorRef.current
+            : validationErrors.rateAcknowledgment
+              ? null
+              : dateFieldRef.current;
       const targetHandle = findNodeHandle(firstInvalidTarget);
       if (targetHandle !== null) {
         AccessibilityInfo.setAccessibilityFocus(targetHandle);
@@ -569,6 +577,32 @@ export function DisposeMetalHoldingScreen({
                     </Text>
                   </View>
                 ))}
+              </View>
+            ) : null}
+
+            {rateEvidenceError ? (
+              <View
+                ref={rateEvidenceErrorRef}
+                accessibilityRole="alert"
+                className="gap-2 rounded-2xl border border-red-600 p-3 dark:border-red-400"
+              >
+                <Text
+                  testID="dispose-rate-evidence-error"
+                  className="text-sm text-red-700 dark:text-red-300"
+                >
+                  {rateEvidenceError}
+                </Text>
+                <TouchableOpacity
+                  testID="dispose-rate-evidence-retry"
+                  accessibilityRole="button"
+                  disabled={isSubmitting}
+                  onPress={onRetry}
+                  className="min-h-12 justify-center self-start rounded-2xl border border-red-600 px-4 dark:border-red-400"
+                >
+                  <Text className="font-semibold text-red-700 dark:text-red-300">
+                    {copy.retryLabel}
+                  </Text>
+                </TouchableOpacity>
               </View>
             ) : null}
 

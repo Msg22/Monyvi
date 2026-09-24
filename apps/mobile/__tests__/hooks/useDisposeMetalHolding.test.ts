@@ -33,7 +33,8 @@ interface HookRateDraft {
 interface HookDependencies {
   readonly loadHolding: (holdingId: string) => Promise<HookHolding>;
   readonly loadTerminalRateSnapshots: (
-    holdingId: string
+    holdingId: string,
+    disposalDate: string
   ) => Promise<readonly HookRateDraft[]>;
   readonly disposeHolding: (
     input: DisposeMetalHoldingCommandInput
@@ -396,6 +397,62 @@ describe("useDisposeMetalHolding lifecycle", () => {
     );
   });
 
+  it("requires acknowledgment after loaded references become stale while the form remains open", async (): Promise<void> => {
+    const dependencies = createDependencies(
+      undefined,
+      jest.fn(() => Promise.resolve(rateDrafts("fresh", "fresh")))
+    );
+    let currentNowMs = Date.parse("2026-09-05T10:00:00.000Z");
+    const nowMs = jest.fn(() => currentNowMs);
+    const { result } = renderHook(() =>
+      useDisposeMetalHolding({
+        holdingId: holding.holdingId,
+        today: "2026-09-05",
+        createId: jest.fn((): string => "stable-id"),
+        nowMs,
+        dependencies,
+      })
+    );
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(result.current.terminalRateTrust).toEqual([
+      { role: "terminal_metal", currentFreshness: "fresh" },
+      { role: "terminal_purchase_currency", currentFreshness: "fresh" },
+    ]);
+    expect(result.current.requiresRateAcknowledgment).toBe(false);
+    currentNowMs = Date.parse("2026-09-06T09:00:00.001Z");
+    act((): void => result.current.setCategory("donated"));
+    await act(async (): Promise<void> => {
+      await expect(result.current.submit()).resolves.toBe(false);
+    });
+    expect(result.current.validationErrors.rateAcknowledgment).toBe(
+      "dispose_rate_acknowledgment_required"
+    );
+    expect(result.current.terminalRateTrust).toEqual([
+      { role: "terminal_metal", currentFreshness: "stale" },
+      { role: "terminal_purchase_currency", currentFreshness: "stale" },
+    ]);
+    expect(result.current.requiresRateAcknowledgment).toBe(true);
+    expect(dependencies.disposeHolding).not.toHaveBeenCalled();
+    act((): void => result.current.setRateAcknowledged(true));
+    await act(async (): Promise<void> => {
+      await expect(result.current.submit()).resolves.toBe(true);
+    });
+    expect(dependencies.disposeHolding).toHaveBeenCalledWith(
+      expect.objectContaining({
+        rateSnapshots: [
+          expect.objectContaining({
+            capturedFreshness: "fresh",
+            providerObservedAt: "2026-09-05T09:00:00.000Z",
+          }),
+          expect.objectContaining({
+            capturedFreshness: "fresh",
+            providerObservedAt: "2026-09-05T09:00:00.000Z",
+          }),
+        ],
+      })
+    );
+  });
+
   it("submits fresh terminal rate pairs without acknowledgment", async (): Promise<void> => {
     const dependencies = createDependencies(
       undefined,
@@ -406,6 +463,7 @@ describe("useDisposeMetalHolding lifecycle", () => {
         holdingId: holding.holdingId,
         today: "2026-09-05",
         createId: jest.fn((): string => "stable-id"),
+        nowMs: () => Date.parse("2026-09-05T10:00:00.000Z"),
         dependencies,
       })
     );
@@ -450,6 +508,56 @@ describe("useDisposeMetalHolding lifecycle", () => {
     );
   });
 
+  it("reloads terminal-rate evidence for the selected disposal date", async (): Promise<void> => {
+    const loadTerminalRateSnapshots = jest.fn(
+      (
+        holdingId: string,
+        disposalDate: string
+      ): Promise<readonly HookRateDraft[]> => {
+        expect(holdingId).toBe(holding.holdingId);
+        return Promise.resolve(
+          disposalDate === "2026-09-05"
+            ? rateDrafts("fresh", "fresh")
+            : rateDrafts("stale", "stale")
+        );
+      }
+    );
+    const dependencies = createDependencies(
+      undefined,
+      loadTerminalRateSnapshots
+    );
+    const { result } = renderHook(() =>
+      useDisposeMetalHolding({
+        holdingId: holding.holdingId,
+        today: "2026-09-05",
+        createId: jest.fn((): string => "stable-id"),
+        dependencies,
+      })
+    );
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(loadTerminalRateSnapshots).toHaveBeenCalledWith(
+      holding.holdingId,
+      "2026-09-05"
+    );
+    act((): void => {
+      result.current.setCategory("donated");
+      result.current.setDisposalDate("2026-09-03");
+    });
+    await waitFor(() =>
+      expect(loadTerminalRateSnapshots).toHaveBeenCalledWith(
+        holding.holdingId,
+        "2026-09-03"
+      )
+    );
+    await waitFor(() =>
+      expect(
+        result.current.terminalRates.map((rate) => rate.capturedFreshness)
+      ).toEqual(["stale", "stale"])
+    );
+    expect(result.current.terminalRates).toHaveLength(2);
+    expect(result.current.requiresRateAcknowledgment).toBe(true);
+  });
+
   it("retains the original command across a retryLoad reload for idempotent replay", async (): Promise<void> => {
     const disposeHolding = jest
       .fn<
@@ -483,13 +591,15 @@ describe("useDisposeMetalHolding lifecycle", () => {
   });
 
   it("does not reload when the dependency container identity changes but its members are stable", async (): Promise<void> => {
-    const loadHolding = jest.fn((): Promise<HookHolding> =>
-      Promise.resolve(holding)
+    const loadHolding = jest.fn(
+      (): Promise<HookHolding> => Promise.resolve(holding)
     );
     const loadTerminalRateSnapshots = jest.fn(
       (): Promise<readonly HookRateDraft[]> => Promise.resolve([])
     );
-    const disposeHolding = jest.fn(() => Promise.resolve({ kind: "committed" }));
+    const disposeHolding = jest.fn(() =>
+      Promise.resolve({ kind: "committed" })
+    );
     const stable: HookDependencies = {
       loadHolding,
       loadTerminalRateSnapshots,
@@ -538,10 +648,14 @@ describe("useDisposeMetalHolding lifecycle", () => {
     expect(dependencies.disposeHolding).not.toHaveBeenCalled();
   });
 
-  it("treats a terminal rate loader failure as no evidence", async (): Promise<void> => {
+  it("reports a terminal rate loader failure separately and blocks submission until it is retried", async (): Promise<void> => {
+    const loadTerminalRateSnapshots = jest
+      .fn<Promise<readonly HookRateDraft[]>, [string, string]>()
+      .mockRejectedValueOnce(new Error("rate_store_unavailable"))
+      .mockResolvedValue([]);
     const dependencies = createDependencies(
       undefined,
-      jest.fn(() => Promise.reject(new Error("rate_store_unavailable")))
+      loadTerminalRateSnapshots
     );
     const { result } = renderHook(() =>
       useDisposeMetalHolding({
@@ -554,5 +668,22 @@ describe("useDisposeMetalHolding lifecycle", () => {
     await waitFor(() => expect(result.current.isLoading).toBe(false));
     expect(result.current.loadError).toBeNull();
     expect(result.current.terminalRates).toEqual([]);
+    expect(result.current.rateEvidenceError).toBe("rate_store_unavailable");
+    act((): void => result.current.setCategory("donated"));
+    await act(async (): Promise<void> => {
+      await expect(result.current.submit()).resolves.toBe(false);
+    });
+    expect(result.current.validationErrors.rateEvidence).toBe(
+      "dispose_rate_evidence_unavailable"
+    );
+    expect(dependencies.disposeHolding).not.toHaveBeenCalled();
+
+    act((): void => result.current.retryLoad());
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(result.current.rateEvidenceError).toBeNull();
+    await act(async (): Promise<void> => {
+      await expect(result.current.submit()).resolves.toBe(true);
+    });
+    expect(dependencies.disposeHolding).toHaveBeenCalledTimes(1);
   });
 });

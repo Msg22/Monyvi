@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
+  classifyRateTrust,
   getFinancialActionUtf8ByteLength,
   MAX_ACTION_NOTES_UTF8_BYTES,
 } from "@monyvi/logic";
@@ -31,7 +32,8 @@ export interface DisposeMetalHoldingFacadeDependencies {
     holdingId: string
   ) => Promise<DisposableMetalHoldingReadModel>;
   readonly loadTerminalRateSnapshots: (
-    holdingId: string
+    holdingId: string,
+    disposalDate: string
   ) => Promise<readonly DisposeRateSnapshotDraft[]>;
   readonly disposeHolding: (
     input: DisposeMetalHoldingCommandInput
@@ -42,7 +44,13 @@ export interface UseDisposeMetalHoldingInput {
   readonly holdingId: string;
   readonly today: string;
   readonly createId: () => string;
+  readonly nowMs?: () => number;
   readonly dependencies: DisposeMetalHoldingFacadeDependencies;
+}
+
+export interface DisposeTerminalRateTrust {
+  readonly role: DisposeRateRole;
+  readonly currentFreshness: "fresh" | "stale" | "unknown";
 }
 
 export interface UseDisposeMetalHoldingResult {
@@ -53,12 +61,14 @@ export interface UseDisposeMetalHoldingResult {
   readonly disposalDate: string;
   readonly notes: string;
   readonly terminalRates: readonly DisposeRateSnapshotDraft[];
+  readonly terminalRateTrust: readonly DisposeTerminalRateTrust[];
   readonly requiresRateAcknowledgment: boolean;
   readonly rateAcknowledged: boolean;
   readonly isLoading: boolean;
   readonly isSubmitting: boolean;
   readonly isDirty: boolean;
   readonly loadError: string | null;
+  readonly rateEvidenceError: string | null;
   readonly submitError: string | null;
   readonly validationErrors: Readonly<Record<string, string>>;
   readonly setCategory: (value: DisposeCategory) => void;
@@ -82,8 +92,9 @@ function validate(
   today: string,
   purchaseDate: string | null,
   notes: string,
-  terminalRates: readonly DisposeRateSnapshotDraft[],
-  rateAcknowledged: boolean
+  requiresRateAcknowledgment: boolean,
+  rateAcknowledged: boolean,
+  rateEvidenceError: string | null
 ): Readonly<Record<string, string>> {
   const errors: Record<string, string> = {};
   if (category === null) errors.category = "dispose_category_required";
@@ -97,11 +108,11 @@ function validate(
   if (getFinancialActionUtf8ByteLength(notes) > MAX_ACTION_NOTES_UTF8_BYTES) {
     errors.notes = "dispose_notes_too_long";
   }
-  if (
-    terminalRates.some((rate) => rate.capturedFreshness !== "fresh") &&
-    !rateAcknowledged
-  ) {
+  if (requiresRateAcknowledgment && !rateAcknowledged) {
     errors.rateAcknowledgment = "dispose_rate_acknowledgment_required";
+  }
+  if (rateEvidenceError !== null) {
+    errors.rateEvidence = "dispose_rate_evidence_unavailable";
   }
   return Object.freeze(errors);
 }
@@ -148,10 +159,66 @@ function snapshotsFromDrafts(
   return drafts.map((draft) => ({ ...draft, referenceId: createId() }));
 }
 
+function parseTimestampMs(value: string | null): number | null {
+  if (value === null) return null;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function currentFreshnessForRate(
+  rate: DisposeRateSnapshotDraft,
+  nowMs: number
+): "fresh" | "stale" | "unknown" {
+  const trust = classifyRateTrust(
+    {
+      valueDecimal: rate.valueDecimal,
+      providerObservedAt: parseTimestampMs(rate.providerObservedAt),
+      capturedAt: parseTimestampMs(rate.capturedAt) ?? Number.NaN,
+      quality: rate.quality,
+    },
+    nowMs
+  );
+  return trust.state === "missing" ? "unknown" : trust.state;
+}
+
+function terminalRateTrustForRates(
+  rates: readonly DisposeRateSnapshotDraft[],
+  nowMs: number
+): readonly DisposeTerminalRateTrust[] {
+  return Object.freeze(
+    rates.map((rate) => ({
+      role: rate.role,
+      currentFreshness: currentFreshnessForRate(rate, nowMs),
+    }))
+  );
+}
+
+type TerminalRateLoadResult =
+  | {
+      readonly status: "loaded";
+      readonly drafts: readonly DisposeRateSnapshotDraft[];
+    }
+  | { readonly status: "failed"; readonly error: unknown };
+
+function settleTerminalRateSnapshots(
+  loadTerminalRateSnapshots: (
+    holdingId: string,
+    disposalDate: string
+  ) => Promise<readonly DisposeRateSnapshotDraft[]>,
+  holdingId: string,
+  disposalDate: string
+): Promise<TerminalRateLoadResult> {
+  return loadTerminalRateSnapshots(holdingId, disposalDate).then(
+    (drafts): TerminalRateLoadResult => ({ status: "loaded", drafts }),
+    (error: unknown): TerminalRateLoadResult => ({ status: "failed", error })
+  );
+}
+
 export function useDisposeMetalHolding(
   input: UseDisposeMetalHoldingInput
 ): UseDisposeMetalHoldingResult {
   const { createId: stableCreateId, today: stableToday } = input;
+  const nowMs = input.nowMs ?? Date.now;
   const { disposeHolding, loadHolding, loadTerminalRateSnapshots } =
     input.dependencies;
   const [reloadKey, setReloadKey] = useState(0);
@@ -167,9 +234,15 @@ export function useDisposeMetalHolding(
     readonly DisposeRateSnapshotDraft[]
   >([]);
   const [rateAcknowledged, setRateAcknowledgedState] = useState(false);
+  const [trustEvaluatedAtMs, setTrustEvaluatedAtMs] = useState<number | null>(
+    null
+  );
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [rateEvidenceError, setRateEvidenceError] = useState<string | null>(
+    null
+  );
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [validationErrors, setValidationErrors] = useState<
     Readonly<Record<string, string>>
@@ -190,6 +263,7 @@ export function useDisposeMetalHolding(
     let isCancelled = false;
     setIsLoading(true);
     setLoadError(null);
+    setRateEvidenceError(null);
     if (requestedHoldingIdRef.current !== input.holdingId) {
       requestedHoldingIdRef.current = input.holdingId;
       if (!isInFlightRef.current) commandRef.current = null;
@@ -203,14 +277,24 @@ export function useDisposeMetalHolding(
     }
     void Promise.all([
       loadHolding(input.holdingId),
-      loadTerminalRateSnapshots(input.holdingId).catch(
-        (): readonly DisposeRateSnapshotDraft[] => []
+      settleTerminalRateSnapshots(
+        loadTerminalRateSnapshots,
+        input.holdingId,
+        disposalDate
       ),
     ])
-      .then(([loaded, drafts]) => {
+      .then(([loaded, rates]) => {
         if (isCancelled) return;
         setModel(loaded);
-        setTerminalRates(normalizeTerminalRates(drafts));
+        if (rates.status === "loaded") {
+          setTerminalRates(normalizeTerminalRates(rates.drafts));
+          setRateEvidenceError(null);
+        } else {
+          setTerminalRates([]);
+          setRateEvidenceError(
+            toErrorCode(rates.error, "metal_rate_evidence_load_failed")
+          );
+        }
         setIsLoading(false);
       })
       .catch((caught: unknown) => {
@@ -227,6 +311,7 @@ export function useDisposeMetalHolding(
     loadHolding,
     loadTerminalRateSnapshots,
     input.holdingId,
+    disposalDate,
     stableToday,
     reloadKey,
   ]);
@@ -288,13 +373,24 @@ export function useDisposeMetalHolding(
     () => resolveDisposeTreatment(category, otherTreatment),
     [category, otherTreatment]
   );
+  const terminalRateTrust = useMemo(
+    () =>
+      terminalRateTrustForRates(terminalRates, trustEvaluatedAtMs ?? nowMs()),
+    [terminalRates, trustEvaluatedAtMs, nowMs]
+  );
   const requiresRateAcknowledgment = useMemo(
-    () => terminalRates.some((rate) => rate.capturedFreshness !== "fresh"),
-    [terminalRates]
+    () => terminalRateTrust.some((rate) => rate.currentFreshness !== "fresh"),
+    [terminalRateTrust]
   );
 
   const submit = useCallback(async (): Promise<boolean> => {
     if (isInFlightRef.current) return false;
+    const confirmationMs = nowMs();
+    setTrustEvaluatedAtMs(confirmationMs);
+    const confirmationTrust = terminalRateTrustForRates(
+      terminalRates,
+      confirmationMs
+    );
     const errors = validate(
       category,
       otherTreatment,
@@ -302,8 +398,9 @@ export function useDisposeMetalHolding(
       stableToday,
       model?.purchaseDate ?? null,
       notes,
-      terminalRates,
-      rateAcknowledged
+      confirmationTrust.some((rate) => rate.currentFreshness !== "fresh"),
+      rateAcknowledged,
+      rateEvidenceError
     );
     setValidationErrors(errors);
     if (Object.keys(errors).length > 0 || !model) return false;
@@ -354,8 +451,10 @@ export function useDisposeMetalHolding(
     stableToday,
     model,
     notes,
+    nowMs,
     otherTreatment,
     rateAcknowledged,
+    rateEvidenceError,
     terminalRates,
   ]);
 
@@ -372,12 +471,14 @@ export function useDisposeMetalHolding(
     disposalDate,
     notes,
     terminalRates,
+    terminalRateTrust,
     requiresRateAcknowledgment,
     rateAcknowledged,
     isLoading,
     isSubmitting,
     isDirty,
     loadError,
+    rateEvidenceError,
     submitError,
     validationErrors,
     setCategory,

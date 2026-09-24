@@ -102,6 +102,7 @@ interface DisposeScreenProps {
   readonly rateEvidence?: readonly RateEvidenceDisplay[];
   readonly requiresRateAcknowledgment?: boolean;
   readonly rateAcknowledged?: boolean;
+  readonly rateEvidenceError?: string | null;
   readonly isLoading?: boolean;
   readonly isSubmitting?: boolean;
   readonly loadError?: string | null;
@@ -549,6 +550,22 @@ describe("Dispose metal holding direct form", () => {
     expect(
       screen.getByTestId("dispose-rate-acknowledgment-indicator")
     ).toBeOnTheScreen();
+  });
+
+  it("surfaces a terminal rate-store failure separately with a retry", (): void => {
+    const props = renderScreen({
+      rateEvidenceError: "Terminal rates could not be checked.",
+      validationErrors: { rateEvidence: "dispose_rate_evidence_unavailable" },
+    });
+    expect(screen.getByTestId("dispose-rate-evidence-error")).toHaveTextContent(
+      "Terminal rates could not be checked."
+    );
+    expect(screen.getByTestId("dispose-validation-summary")).toHaveProp(
+      "accessibilityLabel",
+      "Terminal rates could not be checked."
+    );
+    fireEvent.press(screen.getByTestId("dispose-rate-evidence-retry"));
+    expect(props.onRetry).toHaveBeenCalledTimes(1);
   });
 
   it("surfaces the acknowledgment error and toggles through the callback", (): void => {
