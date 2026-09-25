@@ -1,5 +1,6 @@
 import {
   formatCanonicalDecimalForDisplay,
+  formatRateAge,
   isSupportedMetalsIsoCurrencyCode,
   resolvePuritySelection,
 } from "@monyvi/logic";
@@ -14,14 +15,75 @@ import type {
 } from "@/components/metals/DeleteMetalHoldingSheet";
 import type { MetalDetailReadModel } from "@/services/metal-detail-read-model-service";
 import { formatLocalizedMoneyAmount } from "@/utils/localized-money-display";
+import { formatPortfolioRateUpdatedParts } from "@/components/metals/portfolio-rate-presentation";
 
 export type DeleteSheetTranslator = (
   key: string,
   options?: Record<string, string | number>
 ) => string;
 
-export type DeleteHoldingSheetHolding =
-  DeleteMetalHoldingSheetProps["holding"];
+export type DeleteHoldingSheetHolding = DeleteMetalHoldingSheetProps["holding"];
+
+export type DeleteHoldingRateWarning = NonNullable<
+  DeleteMetalHoldingSheetProps["rateWarnings"]
+>[number];
+
+export function getDeleteHoldingRateWarnings(
+  model: MetalDetailReadModel | null,
+  t: DeleteSheetTranslator,
+  language?: string
+): readonly DeleteHoldingRateWarning[] {
+  if (
+    model === null ||
+    (model.currentValueDecimal === null && model.totalGainDecimal === null)
+  )
+    return [];
+  return (model.currentValueRateInputs ?? []).flatMap((rate) => {
+    if (rate.state !== "stale" && rate.state !== "unknown") return [];
+    const name =
+      rate.id === "metal:GOLD"
+        ? t("metal.gold")
+        : rate.id === "metal:SILVER"
+          ? t("metal.silver")
+          : rate.id.replace("currency:", "");
+    const age =
+      rate.state === "stale"
+        ? formatRateAge(rate.ageMs, language ?? "en")
+        : null;
+    const state = age === null ? "unknown" : rate.state;
+    const options = { rateName: name, rateAge: age ?? "" };
+    const observed = formatPortfolioRateUpdatedParts(
+      rate.providerObservedAt,
+      language
+    );
+    return [
+      {
+        id: rate.id,
+        name,
+        state,
+        summary: t(
+          state === "stale" ? "delete.rate_stale" : "delete.rate_unknown",
+          options
+        ),
+        source: rate.source ?? t("delete.rate_source_unknown"),
+        quality: rate.quality ?? t("delete.rate_quality_unknown"),
+        updated:
+          observed === null
+            ? t("delete.rate_updated_unknown")
+            : t("delete.rate_updated", {
+                date: observed.date,
+                time: observed.time,
+              }),
+        acknowledgment: t(
+          state === "stale"
+            ? "delete.rate_ack_stale"
+            : "delete.rate_ack_unknown",
+          options
+        ),
+      },
+    ];
+  });
+}
 
 export function getDeleteHoldingSheetHolding(
   model: MetalDetailReadModel | null,

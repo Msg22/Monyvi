@@ -3,6 +3,7 @@ import type { MetalDetailReadModel } from "@/services/metal-detail-read-model-se
 import {
   getDeleteHoldingSheetCopy,
   getDeleteHoldingSheetHolding,
+  getDeleteHoldingRateWarnings,
 } from "@/components/metals/delete-holding-presentation";
 
 type TranslateOptions = Record<string, string | number>;
@@ -16,6 +17,14 @@ const METALS_COPY: Record<string, string> = {
   "delete.offline": "Saved locally first",
   "delete.pending": "Deleting holding…",
   "delete.performance": "Since purchase",
+  "delete.rate_stale": "{{rateName}} is {{rateAge}} old.",
+  "delete.rate_unknown": "The age of {{rateName}} is unknown.",
+  "delete.rate_ack_stale": "I understand that {{rateName}} is {{rateAge}} old.",
+  "delete.rate_ack_unknown":
+    "I understand that the age of {{rateName}} is unknown.",
+  "delete.rate_source_unknown": "Source unknown",
+  "delete.rate_quality_unknown": "Quality unknown",
+  "delete.rate_updated_unknown": "Provider update time unknown",
   "detail.current_value": "Current value",
   "detail.retry": "Try again",
   "detail.since_purchase": "{{amount}} since purchase",
@@ -26,7 +35,7 @@ const METALS_COPY: Record<string, string> = {
   "metal.silver": "Silver",
   "portfolio.performance_unavailable":
     "Since-purchase result unavailable. Purchase cost is not available.",
-  "purity_gold_999": "24K · 999",
+  purity_gold_999: "24K · 999",
   weight_unit: "g",
 };
 
@@ -86,6 +95,52 @@ function activeModel(
 }
 
 describe("delete holding sheet facts", () => {
+  it("names each stale or unknown rate input separately before Delete", () => {
+    const warnings = getDeleteHoldingRateWarnings(
+      activeModel({
+        currentValueRateInputs: [
+          {
+            id: "metal:GOLD",
+            state: "stale",
+            ageMs: 172800000,
+            providerObservedAt: null,
+            source: "Metal provider",
+            quality: "valid",
+          },
+          {
+            id: "currency:EGP",
+            state: "unknown",
+            ageMs: null,
+            providerObservedAt: null,
+            source: null,
+            quality: null,
+          },
+        ],
+      }),
+      tMetals,
+      "en"
+    );
+
+    expect(warnings).toHaveLength(2);
+    expect(warnings[0]).toMatchObject({
+      id: "metal:GOLD",
+      name: "Gold",
+      state: "stale",
+      source: "Metal provider",
+      quality: "valid",
+    });
+    expect(warnings[0].acknowledgment).toContain("Gold");
+    expect(warnings[1]).toMatchObject({
+      id: "currency:EGP",
+      name: "EGP",
+      state: "unknown",
+      source: "Source unknown",
+      quality: "Quality unknown",
+    });
+    expect(warnings[1].acknowledgment).toBe(
+      "I understand that the age of EGP is unknown."
+    );
+  });
   it("shapes the approved Screen 14 identity, purity, weight, and value facts", () => {
     const holding = getDeleteHoldingSheetHolding(activeModel(), tMetals);
 

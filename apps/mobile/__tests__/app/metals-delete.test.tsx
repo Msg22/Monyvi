@@ -51,6 +51,16 @@ interface DeleteMetalHoldingSheetProps {
   readonly isOffline: boolean;
   readonly isSubmitting: boolean;
   readonly submitError: string | null;
+  readonly rateWarnings: readonly {
+    readonly id: string;
+    readonly name: string;
+    readonly state: string;
+    readonly summary: string;
+    readonly source: string;
+    readonly quality: string;
+    readonly updated: string;
+    readonly acknowledgment: string;
+  }[];
   readonly onConfirm: () => void;
   readonly onCancel: () => void;
   readonly onRetry: () => void;
@@ -63,8 +73,6 @@ interface DeleteMetalHoldingSheetModule {
 
 interface DeleteRequestIds {
   readonly actionId: string;
-  readonly actionEvidenceId: string;
-  readonly lifecycleEventId: string;
 }
 
 interface DeleteCommand {
@@ -158,6 +166,7 @@ function renderSheet(
     isOffline: true,
     isSubmitting: false,
     submitError: null,
+    rateWarnings: [],
     onConfirm: jest.fn(),
     onCancel: jest.fn(),
     onRetry: jest.fn(),
@@ -274,6 +283,55 @@ describe("DeleteMetalHoldingSheet approved focused confirmation", () => {
     expect(props.onCancel).toHaveBeenCalledTimes(1);
     fireEvent.press(screen.getByTestId("metal-holding-delete-backdrop"));
     expect(props.onCancel).toHaveBeenCalledTimes(2);
+  });
+
+  it("requires explicit acknowledgement of each stale or unknown input before Delete", () => {
+    const props = renderSheet({
+      rateWarnings: [
+        {
+          id: "metal:GOLD",
+          name: "Gold",
+          state: "stale",
+          summary: "Gold is 2 days old.",
+          source: "Metal provider",
+          quality: "valid",
+          updated: "Provider update time unknown",
+          acknowledgment: "I understand that Gold is 2 days old.",
+        },
+        {
+          id: "currency:EGP",
+          name: "EGP",
+          state: "unknown",
+          summary: "The age of EGP is unknown.",
+          source: "FX provider",
+          quality: "valid",
+          updated: "Provider update time unknown",
+          acknowledgment: "I understand that the age of EGP is unknown.",
+        },
+      ],
+    });
+
+    expect(
+      screen.getByRole("button", { name: copy.accessibilityLabel })
+    ).toBeDisabled();
+    expect(screen.getByText("Gold is 2 days old.")).toBeTruthy();
+    expect(screen.getByText("The age of EGP is unknown.")).toBeTruthy();
+    fireEvent.press(
+      screen.getByTestId("metal-holding-delete-rate-ack-metal:GOLD")
+    );
+    expect(
+      screen.getByRole("button", { name: copy.accessibilityLabel })
+    ).toBeDisabled();
+    fireEvent.press(
+      screen.getByTestId("metal-holding-delete-rate-ack-currency:EGP")
+    );
+    expect(
+      screen.getByRole("button", { name: copy.accessibilityLabel })
+    ).toBeEnabled();
+    fireEvent.press(
+      screen.getByRole("button", { name: copy.accessibilityLabel })
+    );
+    expect(props.onConfirm).toHaveBeenCalledTimes(1);
   });
 
   it("locks confirm, cancel, backdrop, and duplicate input while the local action is pending", () => {
@@ -426,7 +484,7 @@ describe("useDeleteMetalHolding", () => {
     expect(execute.mock.calls[1][0]).toBe(execute.mock.calls[0][0]);
     expect(execute.mock.calls[1][0].expectedFinancialRevision).toBe("1");
     expect(createCommand).toHaveBeenCalledTimes(1);
-    expect(input.createId).toHaveBeenCalledTimes(3);
+    expect(input.createId).toHaveBeenCalledTimes(1);
     await waitFor(() => expect(result.current.submitError).toBeNull());
   });
 
@@ -455,11 +513,9 @@ describe("useDeleteMetalHolding", () => {
     expect(execute).toHaveBeenCalledTimes(2);
     expect(execute.mock.calls[1][0]).not.toBe(execute.mock.calls[0][0]);
     expect(execute.mock.calls[1][0].expectedFinancialRevision).toBe("2");
-    expect(execute.mock.calls[1][0].ids).not.toBe(
-      execute.mock.calls[0][0].ids
-    );
+    expect(execute.mock.calls[1][0].ids).not.toBe(execute.mock.calls[0][0].ids);
     expect(createCommand).toHaveBeenCalledTimes(2);
-    expect(input.createId).toHaveBeenCalledTimes(6);
+    expect(input.createId).toHaveBeenCalledTimes(2);
     await waitFor(() => expect(result.current.submitError).toBeNull());
   });
 

@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   AccessibilityInfo,
   findNodeHandle,
@@ -47,6 +47,16 @@ export interface DeleteMetalHoldingSheetProps {
   readonly isOffline: boolean;
   readonly isSubmitting: boolean;
   readonly submitError: string | null;
+  readonly rateWarnings: readonly {
+    readonly id: string;
+    readonly name: string;
+    readonly state: string;
+    readonly summary: string;
+    readonly source: string;
+    readonly quality: string;
+    readonly updated: string;
+    readonly acknowledgment: string;
+  }[];
   readonly onConfirm: () => void;
   readonly onCancel: () => void;
   readonly onRetry: () => void;
@@ -58,7 +68,34 @@ export function DeleteMetalHoldingSheet(
 ): React.JSX.Element | null {
   const headingRef = useRef<React.ElementRef<typeof Text>>(null);
   const recoveryRef = useRef<React.ElementRef<typeof Text>>(null);
+  const [acknowledgedRates, setAcknowledgedRates] = useState<
+    ReadonlySet<string>
+  >(new Set());
   const { visible, submitError } = props;
+  const warnings = props.rateWarnings;
+  const warningKey = (warning: (typeof warnings)[number]): string =>
+    [
+      warning.id,
+      warning.state,
+      warning.summary,
+      warning.source,
+      warning.quality,
+      warning.updated,
+    ].join("|");
+  const hasUnacknowledgedRates = warnings.some(
+    (warning) => !acknowledgedRates.has(warningKey(warning))
+  );
+  const toggleRateAcknowledgment = (
+    warning: (typeof warnings)[number]
+  ): void => {
+    const key = warningKey(warning);
+    setAcknowledgedRates((current) => {
+      const next = new Set(current);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
 
   useEffect((): void => {
     if (visible) {
@@ -111,6 +148,10 @@ export function DeleteMetalHoldingSheet(
           props={props}
           headingRef={headingRef}
           recoveryRef={recoveryRef}
+          acknowledgedRates={acknowledgedRates}
+          warningKey={warningKey}
+          hasUnacknowledgedRates={hasUnacknowledgedRates}
+          onToggleRateAcknowledgment={toggleRateAcknowledgment}
         />
       </View>
     </Modal>
@@ -121,10 +162,22 @@ function DeletePanel({
   props,
   headingRef,
   recoveryRef,
+  acknowledgedRates,
+  warningKey,
+  hasUnacknowledgedRates,
+  onToggleRateAcknowledgment,
 }: {
   readonly props: DeleteMetalHoldingSheetProps;
   readonly headingRef: React.RefObject<React.ElementRef<typeof Text> | null>;
   readonly recoveryRef: React.RefObject<React.ElementRef<typeof Text> | null>;
+  readonly acknowledgedRates: ReadonlySet<string>;
+  readonly warningKey: (
+    warning: NonNullable<DeleteMetalHoldingSheetProps["rateWarnings"]>[number]
+  ) => string;
+  readonly hasUnacknowledgedRates: boolean;
+  readonly onToggleRateAcknowledgment: (
+    warning: NonNullable<DeleteMetalHoldingSheetProps["rateWarnings"]>[number]
+  ) => void;
 }): React.JSX.Element {
   const directionStyle = props.isRtl
     ? RTL_DIRECTION_STYLE
@@ -186,6 +239,36 @@ function DeletePanel({
           >
             {props.copy.consequence}
           </Text>
+          {props.rateWarnings.map((warning) => (
+            <View
+              key={warning.id}
+              className="gap-2 rounded-xl border border-amber-300 bg-amber-50 p-3 dark:border-amber-700 dark:bg-amber-950"
+            >
+              <Text className="font-semibold text-text-primary dark:text-text-primary-dark">
+                {warning.summary}
+              </Text>
+              <Text className="text-sm text-text-secondary dark:text-text-secondary-dark">
+                {warning.source} · {warning.updated} · {warning.quality}
+              </Text>
+              <TouchableOpacity
+                testID={`metal-holding-delete-rate-ack-${warning.id}`}
+                accessibilityRole="checkbox"
+                accessibilityLabel={warning.acknowledgment}
+                accessibilityState={{
+                  checked: acknowledgedRates.has(warningKey(warning)),
+                  disabled: props.isSubmitting,
+                }}
+                disabled={props.isSubmitting}
+                onPress={() => onToggleRateAcknowledgment(warning)}
+                className="min-h-11 justify-center"
+              >
+                <Text className="text-sm text-text-primary dark:text-text-primary-dark">
+                  {acknowledgedRates.has(warningKey(warning)) ? "☑" : "☐"}{" "}
+                  {warning.acknowledgment}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          ))}
           {props.submitError ? (
             <DeleteError
               message={props.copy.failure}
@@ -202,7 +285,10 @@ function DeletePanel({
           ) : null}
         </View>
       </ScrollView>
-      <DeleteActions props={props} />
+      <DeleteActions
+        props={props}
+        hasUnacknowledgedRates={hasUnacknowledgedRates}
+      />
     </View>
   );
 }
@@ -324,8 +410,10 @@ function DeleteError({
 
 function DeleteActions({
   props,
+  hasUnacknowledgedRates,
 }: {
   readonly props: DeleteMetalHoldingSheetProps;
+  readonly hasUnacknowledgedRates: boolean;
 }): React.JSX.Element {
   const confirmLabel = props.isSubmitting
     ? props.copy.pending
@@ -341,10 +429,10 @@ function DeleteActions({
         accessibilityRole="button"
         accessibilityLabel={confirmLabel}
         accessibilityState={{
-          disabled: props.isSubmitting,
+          disabled: props.isSubmitting || hasUnacknowledgedRates,
           busy: props.isSubmitting,
         }}
-        disabled={props.isSubmitting}
+        disabled={props.isSubmitting || hasUnacknowledgedRates}
         onPress={props.onConfirm}
         className="min-h-11 items-center justify-center rounded-2xl bg-red-600 px-4 dark:bg-red-600"
       >

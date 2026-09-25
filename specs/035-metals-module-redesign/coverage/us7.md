@@ -19,6 +19,9 @@ harness control, terminal fixtures, and device gates remain open.
 | User scope and offline/restart persistence | FR-060–064, SC-003 | SQLite Green | Offline copy Green | Offline control missing; restart sequence blocked | Isolated Green; runtime open |
 | Approved focused Screen 14 facts and copy | FR-092, FR-102 | N/A | Sheet Green | Authored against the live route; fixtures pending | Route Green; device gate open |
 | Safe area, RTL/theme, compact/ordinary/tablet/200% reflow | FR-065–071, SC-010–013 | N/A | Contract Green | Manual device proof | Isolated Green; device gate open |
+| Rejected Delete restores Active timeline and original action identity | FR-079–080, FR-088–089 | SQLite rejection/restart Green | N/A | Multi-device QA open | Service Green; runtime open |
+| Stale/unknown metal and FX inputs in Delete review | FR-055, FR-074–075 | Separate trust inputs Green | Per-input warnings and acknowledgment Green | Device QA open | UI Green; device gate open |
+| Reconciliation lock and explicit success | FR-078, FR-089, FR-092 | N/A | Route recovery and success toast Green | Assistive QA open | Route Green; device gate open |
 
 ## Activation and verification status
 

@@ -27,8 +27,6 @@ import { findOwnedById, queryChildrenOfOwnedParent } from "./user-data-access";
 
 export interface DeleteMetalHoldingCommandInput {
   readonly actionId: string;
-  readonly actionEvidenceId: string;
-  readonly lifecycleEventId: string;
   readonly predecessorEventId: string | null;
   readonly holdingId: string;
   readonly userId: string;
@@ -91,11 +89,7 @@ const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function assertStableLocalIds(input: DeleteMetalHoldingCommandInput): void {
-  const ids = [input.actionEvidenceId, input.lifecycleEventId];
-  if (
-    ids.some((id) => !UUID_PATTERN.test(id)) ||
-    new Set(ids).size !== ids.length
-  ) {
+  if (!UUID_PATTERN.test(input.actionId)) {
     throw new Error("metal_delete_invalid_local_id");
   }
 }
@@ -330,9 +324,9 @@ function prepareDeletePlan(
   const evidence = database
     .get<MetalActionEvidence>("metal_action_evidence")
     .prepareCreate((record): void => {
-      setPreparedId(record, input.actionEvidenceId);
+      setPreparedId(record, input.actionId);
       record.actionId = input.actionId;
-      record.canonicalHoldingRevision = nextRevision;
+      record.canonicalHoldingRevision = null;
       record.deleted = false;
       record.domainPayloadJson = payloadJson;
       record.expectedHoldingRevision = input.expectedFinancialRevision;
@@ -344,7 +338,7 @@ function prepareDeletePlan(
   const deleteEvent = database
     .get<MetalLifecycleEvent>("metal_lifecycle_events")
     .prepareCreate((record): void => {
-      setPreparedId(record, input.lifecycleEventId);
+      setPreparedId(record, input.actionId);
       record.actionId = input.actionId;
       record.deleted = false;
       record.holdingId = input.holdingId;
@@ -367,23 +361,13 @@ function prepareDeletePlan(
         update: (model): void => {
           const state = model as MetalHoldingState;
           state.effectiveActionId = input.actionId;
-          state.effectiveEventId = input.lifecycleEventId;
+          state.effectiveEventId = input.actionId;
           state.financialRevision = nextRevision;
           state.isVisible = false;
           state.reconciliationState = "sync_pending";
           state.updatedAt = occurredAt;
         },
       },
-      ...projection.timeline.map((timelineEvent) => ({
-        kind: "update" as const,
-        model: timelineEvent,
-        update: (model: Model): void => {
-          const event = model as MetalLifecycleEvent;
-          event.isEffective = false;
-          event.isHistoryVisible = false;
-          event.updatedAt = occurredAt;
-        },
-      })),
     ],
     assertCachedOwnership: ({ userId, cachedPreimages }) =>
       assertOwnedRows(userId, cachedPreimages),

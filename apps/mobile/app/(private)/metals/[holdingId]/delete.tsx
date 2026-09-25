@@ -8,10 +8,12 @@ import { DeleteMetalHoldingSheet } from "@/components/metals/DeleteMetalHoldingS
 import {
   getDeleteHoldingSheetCopy,
   getDeleteHoldingSheetHolding,
+  getDeleteHoldingRateWarnings,
   type DeleteSheetTranslator,
 } from "@/components/metals/delete-holding-presentation";
 import { PageHeader } from "@/components/navigation/PageHeader";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { useToast } from "@/components/ui/Toast";
 import { useDeleteHoldingCommand } from "@/hooks/useDeleteHoldingCommand";
 import { useDeleteMetalHolding } from "@/hooks/useDeleteMetalHolding";
 import { useMetalHoldingDetail } from "@/hooks/useMetalHoldingDetail";
@@ -28,6 +30,12 @@ export default function DeleteMetalHoldingRoute(): React.JSX.Element | null {
   const { t: tCommon } = useTranslation("common");
   const { width, fontScale } = useWindowDimensions();
   const insets = useSafeAreaInsets();
+  const { showToast } = useToast();
+
+  const finishDelete = useCallback((): void => {
+    showToast({ type: "success", title: t("delete.success") });
+    router.dismissTo("/metals");
+  }, [showToast, t]);
 
   const handleConfirm = useCallback(async (): Promise<void> => {
     await command.ensureToken();
@@ -36,14 +44,14 @@ export default function DeleteMetalHoldingRoute(): React.JSX.Element | null {
     // so the now-deleted holding detail is removed from the back stack. When
     // the route was deep-linked with no portfolio underneath, dismissTo
     // replaces the current screen instead.
-    if (succeeded) router.dismissTo("/metals");
-  }, [command, submission]);
+    if (succeeded) finishDelete();
+  }, [command, finishDelete, submission]);
 
   const handleRetry = useCallback(async (): Promise<void> => {
     await command.ensureToken();
     const succeeded = await submission.retry();
-    if (succeeded) router.dismissTo("/metals");
-  }, [command, submission]);
+    if (succeeded) finishDelete();
+  }, [command, finishDelete, submission]);
 
   const handleCancel = useCallback((): void => {
     router.back();
@@ -68,6 +76,39 @@ export default function DeleteMetalHoldingRoute(): React.JSX.Element | null {
         style={{ paddingTop: insets.top + 12 }}
       >
         <Skeleton width="100%" height={260} borderRadius={16} />
+      </View>
+    );
+  }
+
+  if (detail.model?.isFinancialActionLocked) {
+    return (
+      <View className="flex-1 bg-background dark:bg-background-dark">
+        <PageHeader
+          showBackButton
+          showDrawer={false}
+          title={t("actions.delete")}
+        />
+        <View className="flex-1 items-center justify-center gap-4 px-6">
+          <Text
+            accessibilityRole="header"
+            className="text-center text-lg font-semibold text-text-primary dark:text-text-primary-dark"
+          >
+            {t("delete.checking_changes")}
+          </Text>
+          <Text className="text-center text-sm text-text-secondary dark:text-text-secondary-dark">
+            {t("delete.checking_changes_body")}
+          </Text>
+          <Pressable
+            testID="metal-holding-delete-sync-retry"
+            accessibilityRole="button"
+            className="min-h-11 items-center justify-center rounded-xl border border-nileGreen-600 px-4 dark:border-nileGreen-400"
+            onPress={detail.retry}
+          >
+            <Text className="font-semibold text-nileGreen-700 dark:text-nileGreen-400">
+              {t("detail.retry_sync")}
+            </Text>
+          </Pressable>
+        </View>
       </View>
     );
   }
@@ -136,6 +177,11 @@ export default function DeleteMetalHoldingRoute(): React.JSX.Element | null {
     <DeleteMetalHoldingSheet
       visible
       holding={holding}
+      rateWarnings={getDeleteHoldingRateWarnings(
+        detail.model,
+        tMetals,
+        i18n.resolvedLanguage
+      )}
       copy={getDeleteHoldingSheetCopy(
         tMetals,
         tCommonCallback,

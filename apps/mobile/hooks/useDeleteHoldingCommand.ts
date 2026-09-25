@@ -118,8 +118,6 @@ export function useDeleteHoldingCommand(
         ids,
         input: {
           actionId: ids.actionId,
-          actionEvidenceId: ids.actionEvidenceId,
-          lifecycleEventId: ids.lifecycleEventId,
           predecessorEventId: token.predecessorEventId,
           holdingId,
           userId,

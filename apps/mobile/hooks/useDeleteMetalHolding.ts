@@ -4,8 +4,6 @@ import { DELETE_REVISION_CONFLICT_CODE } from "@/services/delete-metal-holding-c
 
 export interface DeleteMetalHoldingRequestIds {
   readonly actionId: string;
-  readonly actionEvidenceId: string;
-  readonly lifecycleEventId: string;
 }
 
 export interface DeleteMetalHoldingHookCommand {
@@ -52,8 +50,6 @@ export function useDeleteMetalHolding(
     try {
       idsRef.current ??= {
         actionId: input.createId(),
-        actionEvidenceId: input.createId(),
-        lifecycleEventId: input.createId(),
       };
       commandRef.current ??= input.createCommand(idsRef.current);
       await input.execute(commandRef.current);

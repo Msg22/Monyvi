@@ -17,6 +17,7 @@ const mockExecute = jest.fn();
 const mockCreateCommand = jest.fn();
 const mockCreateId = jest.fn();
 const mockDetailRetry = jest.fn();
+const mockShowToast = jest.fn();
 
 let mockHoldingId: string | undefined = "holding-1";
 let mockModel: MetalDetailReadModel | null = null;
@@ -39,6 +40,10 @@ interface CapturedSheetProps {
   readonly isOffline: boolean;
   readonly isSubmitting: boolean;
   readonly submitError: string | null;
+  readonly rateWarnings: readonly {
+    readonly id: string;
+    readonly acknowledgment: string;
+  }[];
   readonly onConfirm: () => void;
   readonly onCancel: () => void;
   readonly onRetry: () => void;
@@ -107,6 +112,12 @@ jest.mock("@/components/ui/Skeleton", () => ({
   Skeleton: (): null => null,
 }));
 
+jest.mock("@/components/ui/Toast", () => ({
+  useToast: (): { readonly showToast: jest.Mock } => ({
+    showToast: mockShowToast,
+  }),
+}));
+
 jest.mock("react-native-safe-area-context", () => ({
   useSafeAreaInsets: (): {
     readonly bottom: number;
@@ -134,6 +145,10 @@ const mockMetalsCopy: Record<string, string> = {
   "delete.failure": "We couldn't delete this holding. Try again.",
   "delete.offline": "Saved locally first",
   "delete.pending": "Deleting holding…",
+  "delete.success": "Holding deleted.",
+  "delete.checking_changes": "Checking changes",
+  "delete.checking_changes_body":
+    "This holding changed on another device. We’re checking the holding and account before showing the final result.",
   "delete.performance": "Since purchase",
   "delete.terminal_unavailable":
     "To correct this terminal action, undo it first.",
@@ -286,6 +301,7 @@ describe("delete holding route journey", () => {
       return `test-uuid-${mockIdCounter}`;
     });
     mockDetailRetry.mockClear();
+    mockShowToast.mockClear();
     mockHoldingId = "holding-1";
     mockModel = activeModel();
     mockIsLoading = false;
@@ -328,6 +344,37 @@ describe("delete holding route journey", () => {
     expect(lastSheetProps?.copy.offline).toBe("Saved locally first");
   });
 
+  it("passes stale and unknown input warnings into the live Delete confirmation", () => {
+    mockModel = {
+      ...activeModel(),
+      currentValueRateInputs: [
+        {
+          id: "metal:GOLD",
+          state: "stale",
+          ageMs: 172800000,
+          providerObservedAt: null,
+          source: "Metal provider",
+          quality: "valid",
+        },
+        {
+          id: "currency:EGP",
+          state: "unknown",
+          ageMs: null,
+          providerObservedAt: null,
+          source: "FX provider",
+          quality: null,
+        },
+      ],
+    };
+
+    render(<DeleteMetalHoldingRoute />);
+
+    expect(lastSheetProps?.rateWarnings).toMatchObject([
+      { id: "metal:GOLD" },
+      { id: "currency:EGP" },
+    ]);
+  });
+
   it("confirms once and dismisses to the existing portfolio on local success", async () => {
     render(<DeleteMetalHoldingRoute />);
 
@@ -337,6 +384,25 @@ describe("delete holding route journey", () => {
     expect(mockExecute).toHaveBeenCalledTimes(1);
     expect(mockCreateCommand).toHaveBeenCalledTimes(1);
     expect(mockEnsureToken).toHaveBeenCalled();
+    expect(mockShowToast).toHaveBeenCalledWith({
+      type: "success",
+      title: "Holding deleted.",
+    });
+  });
+
+  it("locks a reconciliation-incomplete active holding and offers recovery", () => {
+    mockModel = {
+      ...activeModel(),
+      isFinancialActionLocked: true,
+      reconciliationState: "reconciliation_incomplete",
+    };
+    render(<DeleteMetalHoldingRoute />);
+
+    expect(screen.getByText("Checking changes")).toBeTruthy();
+    expect(lastSheetProps).toBeNull();
+    fireEvent.press(screen.getByTestId("metal-holding-delete-sync-retry"));
+    expect(mockDetailRetry).toHaveBeenCalledTimes(1);
+    expect(mockExecute).not.toHaveBeenCalled();
   });
 
   it("locks the confirmation while the local action is pending", async () => {
@@ -387,7 +453,7 @@ describe("delete holding route journey", () => {
     >;
     expect(executeCalls[1][0]).not.toBe(executeCalls[0][0]);
     expect(mockCreateCommand).toHaveBeenCalledTimes(2);
-    expect(mockCreateId).toHaveBeenCalledTimes(6);
+    expect(mockCreateId).toHaveBeenCalledTimes(2);
   });
 
   it("surfaces a token-load failure on confirm and recovers on retry", async () => {

@@ -23,11 +23,10 @@ import {
   createFinancialActionFoundationRepository,
   type FinancialActionUserDataScope,
 } from "../../services/financial-action-foundation-repository";
+import { commitMetalRpcOutcomeLocally } from "../../services/metal-reconciliation-service";
 
 interface DeleteMetalHoldingCommandInput {
   readonly actionId: string;
-  readonly actionEvidenceId: string;
-  readonly lifecycleEventId: string;
   readonly predecessorEventId: string | null;
   readonly holdingId: string;
   readonly userId: string;
@@ -79,8 +78,8 @@ const IDS = {
   correctionEvidence: "018f0c7a-1234-7abc-8def-000000000210",
   correctionEvent: "018f0c7a-1234-7abc-8def-000000000211",
   deleteAction: "018f0c7a-1234-7abc-8def-000000000212",
-  deleteEvidence: "018f0c7a-1234-7abc-8def-000000000213",
-  deleteEvent: "018f0c7a-1234-7abc-8def-000000000214",
+  deleteEvidence: "018f0c7a-1234-7abc-8def-000000000212",
+  deleteEvent: "018f0c7a-1234-7abc-8def-000000000212",
   account: "018f0c7a-1234-7abc-8def-000000000215",
 } as const;
 
@@ -187,8 +186,6 @@ function command(
 ): DeleteMetalHoldingCommandInput {
   return {
     actionId: IDS.deleteAction,
-    actionEvidenceId: IDS.deleteEvidence,
-    lifecycleEventId: IDS.deleteEvent,
     predecessorEventId: IDS.correctionEvent,
     holdingId: IDS.holding,
     userId: IDS.user,
@@ -418,6 +415,11 @@ describe("Delete metal holding command SQLite atomicity", () => {
 
   it("hides only an effective Active holding in one grouped action while retaining non-effective audit evidence", async (): Promise<void> => {
     await seedHolding();
+    const priorEventUpdatedAt = (
+      await database
+        .get<MetalLifecycleEvent>("metal_lifecycle_events")
+        .find(IDS.correctionEvent)
+    ).updatedAt;
 
     await expect(createService().delete(command())).resolves.toEqual({
       kind: "committed",
@@ -449,8 +451,21 @@ describe("Delete metal holding command SQLite atomicity", () => {
       .fetch();
     expect(events).toHaveLength(3);
     expect(events.every((event) => !event.deleted)).toBe(true);
-    expect(events.every((event) => !event.isEffective)).toBe(true);
-    expect(events.every((event) => !event.isHistoryVisible)).toBe(true);
+    expect(
+      events.find((event) => event.id === IDS.correctionEvent)?.isEffective
+    ).toBe(true);
+    expect(
+      events.find((event) => event.id === IDS.correctionEvent)?.updatedAt
+    ).toEqual(priorEventUpdatedAt);
+    expect(
+      events.find((event) => event.id === IDS.deleteEvent)?.isEffective
+    ).toBe(false);
+    expect(
+      events.find((event) => event.id === IDS.createdEvent)?.isHistoryVisible
+    ).toBe(true);
+    expect(
+      events.find((event) => event.id === IDS.correctionEvent)?.isHistoryVisible
+    ).toBe(true);
     expect(events.find((event) => event.id === IDS.deleteEvent)).toMatchObject({
       actionId: IDS.deleteAction,
       kind: "delete",
@@ -479,7 +494,7 @@ describe("Delete metal holding command SQLite atomicity", () => {
         .fetch()
     )[0];
     expect(deleteEvidence).toMatchObject({
-      canonicalHoldingRevision: "2",
+      canonicalHoldingRevision: null,
       expectedHoldingRevision: "1",
       kind: "delete",
       deleted: false,
@@ -526,13 +541,13 @@ describe("Delete metal holding command SQLite atomicity", () => {
     });
   });
 
-  it.each(["bad-id", IDS.deleteEvidence] as const)(
-    "rejects malformed or duplicate generated persistence IDs before the local commit: %s",
-    async (lifecycleEventId): Promise<void> => {
+  it.each(["bad-id"] as const)(
+    "rejects malformed action IDs before the local commit: %s",
+    async (actionId): Promise<void> => {
       await seedHolding();
 
       await expect(
-        createService().delete(command({ lifecycleEventId }))
+        createService().delete(command({ actionId }))
       ).rejects.toThrow("metal_delete_invalid_local_id");
       expect(
         await database
@@ -611,13 +626,59 @@ describe("Delete metal holding command SQLite atomicity", () => {
       deleted: false,
     });
     expect(events).toHaveLength(3);
-    expect(events.every((event) => !event.isHistoryVisible)).toBe(true);
+    expect(
+      events.find((event) => event.id === IDS.createdEvent)?.isHistoryVisible
+    ).toBe(true);
+    expect(
+      events.find((event) => event.id === IDS.correctionEvent)?.isHistoryVisible
+    ).toBe(true);
+    expect(
+      events.find((event) => event.id === IDS.deleteEvent)?.isHistoryVisible
+    ).toBe(false);
     expect(events.every((event) => !event.deleted)).toBe(true);
     expect(evidence).toHaveLength(3);
     expect(evidence.every((item) => !item.deleted)).toBe(true);
     expect(
       (await reopened.get<Asset>("assets").find(IDS.holding)).deleted
     ).toBe(false);
+  });
+
+  it("restores the prior active timeline after a rejected Delete and remains visible after restart", async (): Promise<void> => {
+    await seedHolding();
+    await createService().delete(command());
+
+    await expect(
+      commitMetalRpcOutcomeLocally(
+        database,
+        {
+          status: "rejected",
+          actionId: IDS.deleteAction,
+          code: "INVALID_STATE",
+          payloadHashMatches: true,
+          userId: IDS.user,
+        },
+        IDS.user
+      )
+    ).resolves.toBe("reconciled");
+
+    const reopened = await openFreshDatabase();
+    const state = await reopened
+      .get<MetalHoldingState>("metal_holding_states")
+      .find(IDS.state);
+    const predecessor = await reopened
+      .get<MetalLifecycleEvent>("metal_lifecycle_events")
+      .find(IDS.correctionEvent);
+    expect(state).toMatchObject({
+      effectiveActionId: IDS.correctionAction,
+      effectiveEventId: IDS.correctionEvent,
+      financialRevision: "1",
+      isVisible: true,
+      reconciliationState: "reconciled",
+    });
+    expect(predecessor).toMatchObject({
+      isEffective: true,
+      isHistoryVisible: true,
+    });
   });
 
   it.each(["sold", "disposed"] as const)(

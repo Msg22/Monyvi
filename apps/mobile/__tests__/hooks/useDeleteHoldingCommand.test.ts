@@ -87,8 +87,7 @@ describe("useDeleteHoldingCommand", () => {
       readonly holdingId?: string;
     } = {}
   ): Promise<RenderHookResult<UseDeleteHoldingCommandResult, unknown>> {
-    const holdingId =
-      "holdingId" in options ? options.holdingId : "holding-1";
+    const holdingId = "holdingId" in options ? options.holdingId : "holding-1";
     const hook = renderHook(() => useDeleteHoldingCommand(holdingId));
     await act(async (): Promise<void> => {
       await hook.result.current.ensureToken();
@@ -101,14 +100,10 @@ describe("useDeleteHoldingCommand", () => {
 
     const command = result.current.input.createCommand({
       actionId: "test-uuid-1",
-      actionEvidenceId: "test-uuid-2",
-      lifecycleEventId: "test-uuid-3",
     });
 
     expect(command.ids).toEqual({
       actionId: "test-uuid-1",
-      actionEvidenceId: "test-uuid-2",
-      lifecycleEventId: "test-uuid-3",
     });
     const input = command.input;
     expect(input.predecessorEventId).toBe("event-correction");
@@ -130,8 +125,6 @@ describe("useDeleteHoldingCommand", () => {
 
     const command = result.current.input.createCommand({
       actionId: "test-uuid-1",
-      actionEvidenceId: "test-uuid-2",
-      lifecycleEventId: "test-uuid-3",
     });
 
     expect(command.input.expectedFinancialRevision).toBe("0");
@@ -143,8 +136,6 @@ describe("useDeleteHoldingCommand", () => {
     mockDelete.mockResolvedValue({ kind: "committed" });
     const command = result.current.input.createCommand({
       actionId: "test-uuid-1",
-      actionEvidenceId: "test-uuid-2",
-      lifecycleEventId: "test-uuid-3",
     });
 
     await act(async (): Promise<void> => {
@@ -159,8 +150,9 @@ describe("useDeleteHoldingCommand", () => {
     const { result } = await renderCommand();
 
     expect(result.current.input.createId()).toBe("test-uuid-1");
-    const createServiceArgs = mockCreateService.mock
-      .calls as Array<readonly [Record<string, unknown>]>;
+    const createServiceArgs = mockCreateService.mock.calls as Array<
+      readonly [Record<string, unknown>]
+    >;
     const dependencies = createServiceArgs[0][0];
     const hashProvider = dependencies.hashProvider as {
       readonly digestUtf8: (text: string) => Promise<string>;
@@ -176,8 +168,6 @@ describe("useDeleteHoldingCommand", () => {
 
     const first = result.current.input.createCommand({
       actionId: "test-uuid-1",
-      actionEvidenceId: "test-uuid-2",
-      lifecycleEventId: "test-uuid-3",
     });
     expect(first.input.expectedFinancialRevision).toBe("1");
 
@@ -191,8 +181,6 @@ describe("useDeleteHoldingCommand", () => {
 
     const second = result.current.input.createCommand({
       actionId: "test-uuid-4",
-      actionEvidenceId: "test-uuid-5",
-      lifecycleEventId: "test-uuid-6",
     });
     expect(second.input.expectedFinancialRevision).toBe("2");
     expect(second.input.predecessorEventId).toBe("event-second");
@@ -210,8 +198,6 @@ describe("useDeleteHoldingCommand", () => {
     expect(() =>
       result.current.input.createCommand({
         actionId: "test-uuid-1",
-        actionEvidenceId: "test-uuid-2",
-        lifecycleEventId: "test-uuid-3",
       })
     ).toThrow("metal_delete_unavailable");
     expect(mockDelete).not.toHaveBeenCalled();
@@ -225,8 +211,6 @@ describe("useDeleteHoldingCommand", () => {
     expect(() =>
       result.current.input.createCommand({
         actionId: "test-uuid-1",
-        actionEvidenceId: "test-uuid-2",
-        lifecycleEventId: "test-uuid-3",
       })
     ).toThrow("metal_delete_unavailable");
     expect(mockDelete).not.toHaveBeenCalled();
@@ -239,8 +223,6 @@ describe("useDeleteHoldingCommand", () => {
     expect(() =>
       result.current.input.createCommand({
         actionId: "test-uuid-1",
-        actionEvidenceId: "test-uuid-2",
-        lifecycleEventId: "test-uuid-3",
       })
     ).toThrow("metal_delete_unavailable");
     expect(mockDelete).not.toHaveBeenCalled();
