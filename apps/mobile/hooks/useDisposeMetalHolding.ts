@@ -307,6 +307,7 @@ export function useDisposeMetalHolding(
   }, [loadHolding, input.holdingId, stableToday, reloadKey]);
 
   useEffect(() => {
+    if (commandRef.current !== null) return undefined;
     let isCancelled = false;
     setTerminalRates([]);
     setRateEvidenceError(null);
@@ -516,10 +517,16 @@ export function useDisposeMetalHolding(
     terminalRates,
   ]);
 
-  const retryLoad = useCallback(
-    (): void => setReloadKey((value) => value + 1),
-    []
-  );
+  const retryLoad = useCallback((): void => {
+    const shouldReloadSubmitState =
+      submitError === "holding_revision_conflict" ||
+      submitError === "metal_holding_not_active" ||
+      submitError === "metal_dispose_lifecycle_conflict";
+    setSubmitError(null);
+    if (submitError !== null && !shouldReloadSubmitState) return;
+    if (shouldReloadSubmitState) commandRef.current = null;
+    setReloadKey((value) => value + 1);
+  }, [submitError]);
 
   return {
     model,
