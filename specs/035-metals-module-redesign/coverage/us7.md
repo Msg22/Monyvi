@@ -7,6 +7,13 @@ and fixture registry remain integration-owned. The Delete Expo route and the
 detail Delete action composition are PR276-live (unit/journey Green); offline
 harness control, terminal fixtures, and device gates remain open.
 
+Current implementation head:
+`8720ce7cee3872c1be4e5a910c3d846b7c0a7a9e`. Hosted Code Quality & Tests,
+Financial Action pgTAP, and Android Build Verification passed. The hosted mobile
+step reports 423 suites / 3,722 tests; Android E2E was skipped. The current
+Delete route suite contains 15 passing cases in that hosted run. No new local
+verification is claimed by this documentation update.
+
 | Scenario | Requirement / criterion | Service integration | UI/hook | E2E | Status |
 | --- | --- | --- | --- | --- | --- |
 | Effective Active-only grouped Delete | FR-037–040, FR-087, SC-003–004 | SQLite Green | Hook/sheet Green | Route live (unit/journey Green); device + fixtures open | Route + composition Green |
@@ -25,10 +32,11 @@ harness control, terminal fixtures, and device gates remain open.
 
 ## Activation and verification status
 
-- T112–T114, T117, and the hook/sheet/descriptor subset of T118 are Green within
-  the Delete-owned injected boundary: 2 suites and 32 tests pass, including
-  lifecycle-kind, revision-zero, generated-ID, recovery-replay, bounded-scroll,
-  complete-command retry, construction-failure, and StrictMode cases.
+- Current hosted evidence supersedes the earlier 2-suite/32-test checkpoint:
+  the mobile step passes 423 suites / 3,722 tests and includes the Delete route,
+  sheet, presentation, hook, command integration, concurrency, architecture,
+  and reconciliation regressions. The route suite now has 15 cases, including
+  success feedback and reconciliation lock.
 - T115 is partial and not run. Its Active/restart sequence is authored against
   the now-live Delete route, but offline establishment and terminal assertions
   are missing. It cannot execute honestly without deterministic fixtures,
@@ -37,13 +45,13 @@ harness control, terminal fixtures, and device gates remain open.
   the `useDeleteHoldingCommand` facade, the delete-only detail composition,
   and the runtime-wired `delete.*` copy are covered by unit/journey tests.
   Follow-up review findings are addressed on this branch: revision-conflict
-  retry discards the stale cached command and rebuilds with fresh identity
-  (same-ID replay preserved for uncertain commits, pinned by a SQLite
-  zero-write conflict test), success uses `dismissTo("/metals")` so the
-  deleted detail leaves the back stack, deep-linked terminal holdings get the
-  approved undo-first gate, token-load failures surface with retry, and the
-  load-error branch offers an explicit retry. The sheet card value no longer
-  repeats the "Since purchase" label wording; the fact itself is unchanged.
+  retry rebuilds with fresh identity while uncertain commits preserve same-ID
+  replay; root/evidence/event IDs have parity; predicted canonical revision is
+  not stored before acceptance; prior lifecycle actions are not dirtied; Delete
+  compensation restores predecessor effective/history flags; incomplete
+  reconciliation locks the route; success is shown/announced and uses
+  `dismissTo("/metals")`; and Mohamed-approved per-input stale/unknown rate
+  warnings require acknowledgment before Delete.
   Maestro execution, device fidelity, and fixture-gated terminal proof remain
   with T115/T119.
 - T119 remains partial pending Maestro, device fidelity, real assistive
@@ -61,8 +69,9 @@ harness control, terminal fixtures, and device gates remain open.
   `apps/mobile/__tests__/services/delete-metal-holding-command-service.integration.test.ts`
   — "deletes a predecessor-less revision-zero migrated Active holding without
   fabricating prior lifecycle evidence" passes through both envelope
-  canonicalization and `commitFinancialActionGroupLocally` payload validation
-  on the real registry (suite: 17/17 pass; mobile `tsc --noEmit` clean). The
+  canonicalization and `commitFinancialActionGroupLocally` validation in the
+  current hosted mobile run. The earlier 17/17 focused count predates the seven
+  review-fix regressions and is not reused as current-head evidence. The
   shared-registry integration gate is closed; Maestro T115 offline/terminal
   proof and device gates remain open integration work. This lane added the
   Delete route, the delete-only detail composition, the command facade hook,
@@ -71,4 +80,4 @@ harness control, terminal fixtures, and device gates remain open.
   the shared `DELETE_REVISION_CONFLICT_CODE` export on the lane-owned command
   service. No shared adapter, registry, fixture, barrel, schema, sync,
   Sell, Dispose, or Undo file changed.
-- No device or E2E completion is claimed.
+- No device or E2E completion is claimed; Android E2E was skipped in the current hosted workflow.
