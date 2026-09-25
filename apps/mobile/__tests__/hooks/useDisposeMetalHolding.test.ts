@@ -34,10 +34,10 @@ interface HookDependencies {
   readonly loadHolding: (holdingId: string) => Promise<HookHolding>;
   readonly loadTerminalRateSnapshots: (
     holdingId: string,
-    disposalDate: string,
+    disposalDate: string
   ) => Promise<readonly HookRateDraft[]>;
   readonly disposeHolding: (
-    input: DisposeMetalHoldingCommandInput,
+    input: DisposeMetalHoldingCommandInput
   ) => Promise<unknown>;
 }
 
@@ -54,11 +54,11 @@ const holding: HookHolding = {
 describe("useDisposeMetalHolding lifecycle", () => {
   function createDependencies(
     disposeHolding: HookDependencies["disposeHolding"] = jest.fn(() =>
-      Promise.resolve({ kind: "committed" }),
+      Promise.resolve({ kind: "committed" })
     ),
     loadTerminalRateSnapshots: HookDependencies["loadTerminalRateSnapshots"] = jest.fn(
-      () => Promise.resolve([]),
-    ),
+      () => Promise.resolve([])
+    )
   ): HookDependencies {
     return {
       loadHolding: jest.fn(() => Promise.resolve(holding)),
@@ -75,21 +75,21 @@ describe("useDisposeMetalHolding lifecycle", () => {
         today: "2026-09-05",
         createId: jest.fn(() => "stable-id"),
         dependencies,
-      }),
+      })
     );
     await waitFor(() => expect(result.current.isLoading).toBe(false));
     await act(async (): Promise<void> => {
       await expect(result.current.submit()).resolves.toBe(false);
     });
     expect(result.current.validationErrors.category).toBe(
-      "dispose_category_required",
+      "dispose_category_required"
     );
     act((): void => result.current.setCategory("other"));
     await act(async (): Promise<void> => {
       await expect(result.current.submit()).resolves.toBe(false);
     });
     expect(result.current.validationErrors.treatment).toBe(
-      "dispose_other_treatment_required",
+      "dispose_other_treatment_required"
     );
     act((): void => result.current.setOtherTreatment("write_off"));
     expect(result.current.treatment).toBe("write_off");
@@ -101,7 +101,7 @@ describe("useDisposeMetalHolding lifecycle", () => {
         notes: null,
         category: "other",
         otherTreatment: "write_off",
-      }),
+      })
     );
   });
 
@@ -126,7 +126,7 @@ describe("useDisposeMetalHolding lifecycle", () => {
         today: "2026-09-05",
         createId,
         dependencies,
-      }),
+      })
     );
     await waitFor(() => expect(result.current.isLoading).toBe(false));
     act((): void => {
@@ -171,7 +171,7 @@ describe("useDisposeMetalHolding lifecycle", () => {
         today: "2026-09-05",
         createId,
         dependencies,
-      }),
+      })
     );
     await waitFor(() => expect(result.current.isLoading).toBe(false));
     act((): void => result.current.setCategory("donated"));
@@ -202,7 +202,7 @@ describe("useDisposeMetalHolding lifecycle", () => {
         today: "2026-09-05",
         createId: jest.fn(() => "stable-id"),
         dependencies,
-      }),
+      })
     );
     await waitFor(() => expect(result.current.loadError).toBe("load_failed"));
     act((): void => result.current.retryLoad());
@@ -215,7 +215,7 @@ describe("useDisposeMetalHolding lifecycle", () => {
       await expect(result.current.submit()).resolves.toBe(false);
     });
     expect(result.current.validationErrors.disposalDate).toBe(
-      "dispose_date_invalid",
+      "dispose_date_invalid"
     );
     expect(dependencies.disposeHolding).not.toHaveBeenCalled();
   });
@@ -228,7 +228,7 @@ describe("useDisposeMetalHolding lifecycle", () => {
         today: "2026-09-05",
         createId: jest.fn(() => "stable-id"),
         dependencies,
-      }),
+      })
     );
     await waitFor(() => expect(result.current.isLoading).toBe(false));
     act((): void => {
@@ -239,7 +239,7 @@ describe("useDisposeMetalHolding lifecycle", () => {
       await expect(result.current.submit()).resolves.toBe(false);
     });
     expect(result.current.validationErrors.disposalDate).toBe(
-      "dispose_date_before_acquisition",
+      "dispose_date_before_acquisition"
     );
     expect(dependencies.disposeHolding).not.toHaveBeenCalled();
   });
@@ -265,7 +265,7 @@ describe("useDisposeMetalHolding lifecycle", () => {
     const dependencies: HookDependencies = {
       loadHolding: jest.fn(
         (holdingId: string): Promise<HookHolding> =>
-          Promise.resolve(holdingId === "holding-1" ? holding : secondHolding),
+          Promise.resolve(holdingId === "holding-1" ? holding : secondHolding)
       ),
       loadTerminalRateSnapshots: jest.fn(() => Promise.resolve([])),
       disposeHolding,
@@ -278,10 +278,10 @@ describe("useDisposeMetalHolding lifecycle", () => {
           createId: jest.fn((): string => "stable-id"),
           dependencies,
         }),
-      { initialProps: { holdingId: "holding-1" } },
+      { initialProps: { holdingId: "holding-1" } }
     );
     await waitFor(() =>
-      expect(result.current.model?.holdingId).toBe("holding-1"),
+      expect(result.current.model?.holdingId).toBe("holding-1")
     );
     act((): void => result.current.setCategory("donated"));
     await act(async (): Promise<void> => {
@@ -292,7 +292,7 @@ describe("useDisposeMetalHolding lifecycle", () => {
     expect(result.current.submitError).toBe("disk_full");
     rerender({ holdingId: "holding-2" });
     await waitFor(() =>
-      expect(result.current.model?.holdingId).toBe("holding-2"),
+      expect(result.current.model?.holdingId).toBe("holding-2")
     );
     expect(result.current.category).toBeNull();
     act((): void => result.current.setCategory("lost_or_stolen"));
@@ -310,13 +310,13 @@ describe("useDisposeMetalHolding lifecycle", () => {
 
   it("does not reload when the dependency container identity changes but its members are stable", async (): Promise<void> => {
     const loadHolding = jest.fn(
-      (): Promise<HookHolding> => Promise.resolve(holding),
+      (): Promise<HookHolding> => Promise.resolve(holding)
     );
     const loadTerminalRateSnapshots = jest.fn(
-      (): Promise<readonly HookRateDraft[]> => Promise.resolve([]),
+      (): Promise<readonly HookRateDraft[]> => Promise.resolve([])
     );
     const disposeHolding = jest.fn(() =>
-      Promise.resolve({ kind: "committed" }),
+      Promise.resolve({ kind: "committed" })
     );
     const stable: HookDependencies = {
       loadHolding,
@@ -331,7 +331,7 @@ describe("useDisposeMetalHolding lifecycle", () => {
           createId: jest.fn((): string => "stable-id"),
           dependencies,
         }),
-      { initialProps: { dependencies: stable } },
+      { initialProps: { dependencies: stable } }
     );
     await waitFor(() => expect(loadHolding).toHaveBeenCalledTimes(1));
     rerender({ dependencies: { ...stable } });
@@ -350,7 +350,7 @@ describe("useDisposeMetalHolding lifecycle", () => {
         today: "2026-09-05",
         createId: jest.fn((): string => "stable-id"),
         dependencies,
-      }),
+      })
     );
     await waitFor(() => expect(result.current.isLoading).toBe(false));
     act((): void => {
@@ -361,7 +361,7 @@ describe("useDisposeMetalHolding lifecycle", () => {
       await expect(result.current.submit()).resolves.toBe(false);
     });
     expect(result.current.validationErrors.notes).toBe(
-      "dispose_notes_too_long",
+      "dispose_notes_too_long"
     );
     expect(dependencies.disposeHolding).not.toHaveBeenCalled();
   });
