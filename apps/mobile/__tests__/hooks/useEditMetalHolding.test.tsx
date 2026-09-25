@@ -204,6 +204,50 @@ describe("useEditMetalHolding correctness tests", () => {
       expect(call.current.weightGramsDecimal).toBe("10.000");
       expect(call.correctionReason).toBeNull();
     });
+    it("preserves exact persisted decimal strings on physical-form-only edits", async () => {
+      const base = activeModel();
+      const model: EditMetalHoldingReadModel = {
+        ...base,
+        facts: {
+          ...base.facts,
+          purchasePriceDecimal: "47800.00",
+          weightGramsDecimal: "10.000",
+        },
+        persistedMaterialFacts: {
+          ...base.persistedMaterialFacts,
+          purchasePriceDecimal: "47800.00",
+          weightGramsDecimal: "10.000",
+        },
+      };
+      mockLoadEditableMetalHolding.mockResolvedValue(model);
+
+      const { result } = renderHook(() => useEditMetalHolding(testInput()));
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      act(() => {
+        result.current.updateField("physicalForm", "BAR");
+        result.current.setCorrectionReason("Corrected form");
+      });
+
+      expect(result.current.comparison.hasMaterialChanges).toBe(true);
+      expect(result.current.comparison.hasFinancialConsequences).toBe(false);
+
+      let success = false;
+      await act(async () => {
+        success = await result.current.submit();
+      });
+
+      expect(success).toBe(true);
+      const call = mockSaveEditedMetalHolding.mock.calls[0]?.[0];
+      // Normalized validation output would strip trailing zeros ("10",
+      // "47800"); sending those would read as a false financial change
+      // downstream. The raw facts must be preserved instead.
+      expect(call.current.weightGramsDecimal).toBe("10.000");
+      expect(call.current.purchasePriceDecimal).toBe("47800.00");
+      expect(call.current.physicalForm).toBe("BAR");
+    });
 
     it("captures load errors and allows retrying via retry()", async () => {
       mockLoadEditableMetalHolding.mockRejectedValueOnce(new Error("load_failure"));

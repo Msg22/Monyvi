@@ -325,13 +325,17 @@ export function useEditMetalHolding(
     if (comparison.hasMaterialChanges && !correctionReason.trim())
       errors.correctionReason = "required";
     const normalizedCurrent: EditableMetalHoldingFacts =
-      comparison.hasMaterialChanges && result.normalized
+      comparison.hasMaterialChanges &&
+      comparison.hasFinancialConsequences &&
+      result.normalized
         ? toFacts(result.normalized)
-        : {
-            ...model.facts,
-            name: values.name.trim(),
-            notes: values.notes.trim() || null,
-          };
+        : comparison.hasMaterialChanges && !comparison.hasFinancialConsequences
+          ? currentFacts
+          : {
+              ...model.facts,
+              name: values.name.trim(),
+              notes: values.notes.trim() || null,
+            };
     if (
       (comparison.hasMaterialChanges &&
         (!result.normalized || !result.isValid)) ||
@@ -377,6 +381,7 @@ export function useEditMetalHolding(
     }
   }, [
     comparison.hasMaterialChanges,
+    comparison.hasFinancialConsequences,
     correctionReason,
     currentFacts,
     input,

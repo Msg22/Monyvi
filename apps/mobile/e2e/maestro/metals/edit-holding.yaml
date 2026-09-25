@@ -26,6 +26,9 @@ appId: com.monyvi.app
     timeout: 30000
 
 # Material correction: persisted/current cues, reason, only affected summary.
+# The weight "after" value is rendered only as text inside the What will
+# change summary (PreviousValueCue renders metal-holding-weight-previous for
+# the "before" cue); there is no metal-holding-weight-current testID.
 - openLink: monyvi://metals/holding-e2e-gold/edit
 - tapOn:
     id: metal-holding-weight-field
@@ -33,8 +36,7 @@ appId: com.monyvi.app
 - inputText: "11.125"
 - assertVisible:
     id: metal-holding-weight-previous
-- assertVisible:
-    id: metal-holding-weight-current
+- assertVisible: "Weight:.*11.125"
 - assertVisible:
     id: metal-holding-correction-reason
 - assertVisible:

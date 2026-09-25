@@ -6,7 +6,7 @@ This is partial Red evidence: T086/T087 were run, while T085's named suite
 was not authored and the T088 Maestro journey has not run. T089 remains
 unchecked. Later automated Green results are recorded in `coverage/us4.md`.
 
-T084 defines US4-M01–M08 and coverage mapping. T086–T088 assert approved one-form Edit behavior: metadata LWW; whole-fact material correction CAS; immutable exact before/after evidence and History; terminal immutability; locked Metal; persisted/current cues; conditional reason; physical-form-only consequences; direct Save/no review; dirty exit, focus, pending lock, safe area, EN/AR RTL, theme, compact reflow, and offline local-first flow.
+T084 defines US4-M01–M08 and their intended coverage. The executed T086/T087 Red suites below establish that the Edit form and command modules were absent at base, after the UI and SQLite harnesses loaded. They do not prove any Edit behavior. T088 Maestro, whole-fact CAS, rollback/restart, and offline flow are not evidenced here; see `coverage/us4.md` for later results and gaps.
 
 ## Executed
 

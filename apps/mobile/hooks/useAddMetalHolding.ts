@@ -408,7 +408,9 @@ export function useMetalAddPreviewRates(): UseMetalAddPreviewRatesResult {
   const rates = selectedSnapshot?.trust ?? missingTrustReadModel();
 
   const getPreviewRates = useCallback(
-    (holding: NormalizedMetalHoldingFormData): MetalHoldingPreviewRatesWithTrust => {
+    (
+      holding: NormalizedMetalHoldingFormData
+    ): MetalHoldingPreviewRatesWithTrust => {
       if (!isSupportedMetalsIsoCurrencyCode(holding.purchaseCurrency)) {
         return {
           metalUsdPerPureGramDecimal: null,
@@ -427,13 +429,16 @@ export function useMetalAddPreviewRates(): UseMetalAddPreviewRatesResult {
       const currencyRate = rates.currencies.get(
         holding.purchaseCurrency as CurrencyType
       );
+      // egpRate feeds only the unusual-value policy. Preview freshness
+      // must mirror the acquisition facade (metal + purchase-currency
+      // snapshots), so a stale EGP reference must not mark the preview stale.
       const egpRate = rates.currencies.get("EGP");
       return {
         metalUsdPerPureGramDecimal: availableRateValue(metalRate),
         currencyUsdPerUnitDecimal: availableRateValue(currencyRate),
         egpUsdPerUnitDecimal: availableRateValue(egpRate),
         currencyMinorUnits: currencyMinorUnits ?? 2,
-        rateFreshness: combineRateFreshness([metalRate, currencyRate, egpRate]),
+        rateFreshness: combineRateFreshness([metalRate, currencyRate]),
         rateSources: uniqueSources([metalRate, currencyRate]),
         providerObservedAt: oldestProviderObservation([
           metalRate,

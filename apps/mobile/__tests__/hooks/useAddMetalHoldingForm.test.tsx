@@ -279,5 +279,79 @@ describe("useAddMetalHoldingForm", () => {
     });
     expect(holdingId).toBe("018f0c7a-1234-7abc-8def-000000000002");
     expect(addHolding).toHaveBeenCalledTimes(1);
+  });  it("stays fresh when only the EGP reference rate is stale for a non-EGP purchase", () => {
+    const useMarketRates = (
+      jest.requireMock("../../hooks/useMarketRates") as {
+        useMarketRates: jest.Mock;
+      }
+    ).useMarketRates;
+    useMarketRates.mockReturnValue({
+      selectedSnapshot: {
+        trust: {
+          gold: {
+            valueDecimal: "100",
+            state: "fresh",
+            ageMs: 60_000,
+            source: "Metal feed",
+            quality: "verified",
+            providerObservedAt: new Date("2026-09-01T10:00:00Z"),
+          },
+          silver: {
+            valueDecimal: "1",
+            state: "fresh",
+            ageMs: 60_000,
+            source: "Metal feed",
+            quality: "verified",
+            providerObservedAt: new Date("2026-09-01T10:00:00Z"),
+          },
+          currencies: new Map([
+            [
+              "USD",
+              {
+                valueDecimal: "1",
+                state: "fresh",
+                ageMs: 60_000,
+                source: "FX feed",
+                quality: "verified",
+                providerObservedAt: new Date("2026-09-01T10:00:00Z"),
+              },
+            ],
+            [
+              "EGP",
+              {
+                valueDecimal: "0.02",
+                state: "stale",
+                ageMs: 3_600_000,
+                source: "FX feed",
+                quality: "indicative",
+                providerObservedAt: new Date("2026-09-01T09:00:00Z"),
+              },
+            ],
+          ]),
+        },
+      },
+    });
+    const { result } = renderHook(() => useMetalAddPreviewRates());
+    // The EGP rate only feeds the unusual-value policy; the acquisition facade
+    // snapshots metal + purchase-currency rates, so a stale EGP reference must
+    // not mark a USD purchase preview stale.
+    const rates = result.current.getPreviewRates({
+      name: "Savings coin",
+      metal: "GOLD",
+      weightGramsDecimal: "10.125",
+      purity: {
+        code: "gold-999",
+        catalogVersion: "1",
+        factorDecimal: "0.999",
+        labelKey: "purity_gold_999",
+      },
+      purchasePriceDecimal: "47800",
+      purchaseCurrency: "USD",
+      purchaseDate: "2024-03-14",
+      physicalForm: "COIN",
+      notes: null,
+    });
+    expect(rates.rateFreshness).toBe("fresh");
+    expect(rates.egpUsdPerUnitDecimal).toBe("0.02");
   });
 });

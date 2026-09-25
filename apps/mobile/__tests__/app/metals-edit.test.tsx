@@ -739,7 +739,24 @@ describe("Edit metal holding form", () => {
     fireEvent.press(screen.getByTestId("header-back"));
     expect(props.onRequestExit).not.toHaveBeenCalled();
     fireEvent.press(screen.getByTestId("metal-holding-submit"));
-    expect(props.onSubmit).not.toHaveBeenCalled();
+    expect(props.onSubmit).not.toHaveBeenCalled();    // The sold holding above hides the weight/purity section entirely, so it
+    // cannot prove compact reflow. Render the same compact 320px RTL 200%
+    // viewport against an active holding and assert the stacked row.
+    renderEdit({
+      holdingStatus: "active",
+      locale: "ar",
+      isRtl: true,
+      width: 320,
+      fontScale: 2,
+    });
+    expect(screen.getByTestId("metal-holding-weight-field")).toBeOnTheScreen();
+    expect(
+      screen.getByTestId("metal-holding-weight-purity-stacked")
+    ).toBeOnTheScreen();
+    expect(screen.getByTestId("metal-holding-form")).toHaveProp(
+      "writingDirection",
+      "rtl"
+    );
   });
 
   it("rounds preview money at currency display precision", (): void => {
