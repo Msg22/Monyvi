@@ -56,6 +56,11 @@ const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const UTC_MILLISECOND_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 const CALENDAR_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+const METAL_INSTRUMENT_CODES = new Set(["metal:GOLD", "metal:SILVER"]);
+const TERMINAL_DISPOSAL_SNAPSHOT_ROLES = Object.freeze([
+  "terminal_metal",
+  "terminal_purchase_currency",
+] as const);
 const APPROVED_CURRENCIES = new Set([
   "EGP",
   "SAR",
@@ -388,9 +393,9 @@ export function createMetalsActionPayloadRegistry(
   const validateSnapshots = (
     rawValue: unknown,
     roles: readonly string[],
-    metalType: "GOLD" | "SILVER",
-    purchaseCurrency: string,
-    proceedsCurrency = purchaseCurrency
+    metalType: "GOLD" | "SILVER" | null,
+    purchaseCurrency: string | null,
+    proceedsCurrency: string | null = purchaseCurrency
   ): readonly RegisteredActionPayload[] => {
     if (!Array.isArray(rawValue)) fail();
     const value = rawValue as RawPayloadValue[];
@@ -455,11 +460,15 @@ export function createMetalsActionPayloadRegistry(
       if (
         (raw.kind === "metal") !== metalRole ||
         (raw.kind === "metal" &&
-          (raw.instrumentCode !== `metal:${metalType}` ||
+          ((metalType === null
+            ? !METAL_INSTRUMENT_CODES.has(raw.instrumentCode)
+            : raw.instrumentCode !== `metal:${metalType}`) ||
             raw.unit !== "usd_per_pure_gram" ||
             raw.orientation !== "quote_per_base")) ||
         (raw.kind === "currency" &&
-          (raw.instrumentCode !== `currency:${expectedCurrency}` ||
+          (raw.instrumentCode !== `currency:${currencyCode}` ||
+            (expectedCurrency !== null &&
+              raw.instrumentCode !== `currency:${expectedCurrency}`) ||
             !APPROVED_CURRENCIES.has(currencyCode) ||
             !(
               (raw.unit === "usd_per_currency_unit" &&
@@ -778,7 +787,14 @@ export function createMetalsActionPayloadRegistry(
       "reason",
       "reversesEventId",
     ];
-    if (!isPlainObject(value) || !hasExactKeys(value, keys)) fail();
+    const hasRateSnapshots = Object.prototype.hasOwnProperty.call(
+      value,
+      "rateSnapshots"
+    );
+    if (
+      !hasExactKeys(value, hasRateSnapshots ? [...keys, "rateSnapshots"] : keys)
+    )
+      fail();
     validateLinks(value, false, false);
     if (
       !validDate(value.disposalDate, input) ||
@@ -787,7 +803,7 @@ export function createMetalsActionPayloadRegistry(
       !boundedText(value.notes, MAX_NOTES_UTF8_BYTES, true)
     )
       fail();
-    return {
+    const payload: RegisteredActionPayload = {
       holdingId: value.holdingId,
       expectedHoldingRevision: value.expectedHoldingRevision,
       predecessorEventId: value.predecessorEventId,
@@ -796,6 +812,17 @@ export function createMetalsActionPayloadRegistry(
       reason: value.reason,
       notes: value.notes,
     };
+    return hasRateSnapshots
+      ? {
+          ...payload,
+          rateSnapshots: validateSnapshots(
+            value.rateSnapshots,
+            TERMINAL_DISPOSAL_SNAPSHOT_ROLES,
+            null,
+            null
+          ),
+        }
+      : payload;
   };
 
   const validateEventOnly = (

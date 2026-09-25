@@ -159,6 +159,42 @@ export function toDetailLifecycleEventInput(
   };
 }
 
+export function toReducerEvent(
+  event: MetalDetailLifecycleEventInput
+): LifecycleEvent {
+  return {
+    canonicalCasStatus: event.actionState ?? "unknown",
+    evidenceState:
+      event.isEffective === false
+        ? "ineffective"
+        : event.actionState === "unknown"
+          ? "incomplete"
+          : "effective",
+    fingerprint: event.payloadJson ?? event.id,
+    id: event.id,
+    kind: toLifecycleKind(event.kind),
+    occurredAt: event.occurredAt.getTime(),
+    predecessorEventId: event.predecessorEventId,
+    reversesEventId: event.reversesEventId ?? null,
+  };
+}
+
+function toLifecycleKind(
+  kind: MetalDetailLifecycleEventInput["kind"]
+): LifecycleEvent["kind"] {
+  const mappedKinds: Readonly<
+    Record<MetalDetailLifecycleEventInput["kind"], LifecycleEvent["kind"]>
+  > = {
+    add: "created",
+    correct: "corrected",
+    delete: "deleted",
+    dispose: "disposed",
+    sell: "sold",
+    undo: "reversed",
+  };
+  return mappedKinds[kind];
+}
+
 export function toRateReferenceInput(
   reference: MetalRateReference
 ): Readonly<Record<string, unknown>> {

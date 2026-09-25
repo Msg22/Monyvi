@@ -1,0 +1,558 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+
+import {
+  classifyRateTrust,
+  getFinancialActionUtf8ByteLength,
+  MAX_ACTION_NOTES_UTF8_BYTES,
+} from "@monyvi/logic";
+
+import {
+  DISPOSE_RATE_ROLES,
+  resolveDisposeTreatment,
+  type DisposeCategory,
+  type DisposeMetalHoldingCommandInput,
+  type DisposeRateRole,
+  type DisposeRateSnapshot,
+  type DisposeRateSnapshotDraft,
+  type DisposeTreatment,
+} from "@/services/dispose-metal-holding-command-service";
+
+export interface DisposableMetalHoldingReadModel {
+  readonly holdingId: string;
+  readonly name: string;
+  readonly userId: string;
+  readonly status: "active" | "sold" | "disposed";
+  readonly expectedFinancialRevision: string;
+  readonly predecessorEventId: string | null;
+  readonly purchaseDate: string;
+}
+
+export interface DisposeMetalHoldingFacadeDependencies {
+  readonly loadHolding: (
+    holdingId: string
+  ) => Promise<DisposableMetalHoldingReadModel>;
+  readonly loadTerminalRateSnapshots: (
+    holdingId: string,
+    disposalDate: string
+  ) => Promise<readonly DisposeRateSnapshotDraft[]>;
+  readonly disposeHolding: (
+    input: DisposeMetalHoldingCommandInput
+  ) => Promise<unknown>;
+}
+
+export interface UseDisposeMetalHoldingInput {
+  readonly holdingId: string;
+  readonly today: string;
+  readonly createId: () => string;
+  readonly nowMs?: () => number;
+  readonly dependencies: DisposeMetalHoldingFacadeDependencies;
+}
+
+export interface DisposeTerminalRateTrust {
+  readonly role: DisposeRateRole;
+  readonly currentFreshness: "fresh" | "stale" | "unknown";
+}
+
+export interface UseDisposeMetalHoldingResult {
+  readonly model: DisposableMetalHoldingReadModel | null;
+  readonly category: DisposeCategory | null;
+  readonly otherTreatment: DisposeTreatment | null;
+  readonly treatment: DisposeTreatment | null;
+  readonly disposalDate: string;
+  readonly notes: string;
+  readonly terminalRates: readonly DisposeRateSnapshotDraft[];
+  readonly terminalRateTrust: readonly DisposeTerminalRateTrust[];
+  readonly requiresRateAcknowledgment: boolean;
+  readonly rateAcknowledged: boolean;
+  readonly isLoading: boolean;
+  readonly isRateLoading: boolean;
+  readonly isSubmitting: boolean;
+  readonly isDirty: boolean;
+  readonly loadError: string | null;
+  readonly rateEvidenceError: string | null;
+  readonly submitError: string | null;
+  readonly validationErrors: Readonly<Record<string, string>>;
+  readonly setCategory: (value: DisposeCategory) => void;
+  readonly setOtherTreatment: (value: DisposeTreatment) => void;
+  readonly setDisposalDate: (value: string) => void;
+  readonly setNotes: (value: string) => void;
+  readonly setRateAcknowledged: (value: boolean) => void;
+  readonly submit: () => Promise<boolean>;
+  readonly retryLoad: () => void;
+}
+
+interface RetainedDisposeIntent {
+  readonly holdingId: string;
+  readonly command: DisposeMetalHoldingCommandInput;
+}
+
+function validate(
+  category: DisposeCategory | null,
+  otherTreatment: DisposeTreatment | null,
+  disposalDate: string,
+  today: string,
+  purchaseDate: string | null,
+  notes: string,
+  requiresRateAcknowledgment: boolean,
+  rateAcknowledged: boolean,
+  rateEvidenceError: string | null
+): Readonly<Record<string, string>> {
+  const errors: Record<string, string> = {};
+  if (category === null) errors.category = "dispose_category_required";
+  if (category === "other" && otherTreatment === null)
+    errors.treatment = "dispose_other_treatment_required";
+  if (!isCalendarDate(disposalDate) || disposalDate > today) {
+    errors.disposalDate = "dispose_date_invalid";
+  } else if (purchaseDate !== null && disposalDate < purchaseDate) {
+    errors.disposalDate = "dispose_date_before_acquisition";
+  }
+  if (getFinancialActionUtf8ByteLength(notes) > MAX_ACTION_NOTES_UTF8_BYTES) {
+    errors.notes = "dispose_notes_too_long";
+  }
+  if (requiresRateAcknowledgment && !rateAcknowledged) {
+    errors.rateAcknowledgment = "dispose_rate_acknowledgment_required";
+  }
+  if (rateEvidenceError !== null) {
+    errors.rateEvidence = "dispose_rate_evidence_unavailable";
+  }
+  return Object.freeze(errors);
+}
+
+function isCalendarDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  return (
+    Number.isFinite(parsed.getTime()) &&
+    parsed.toISOString().slice(0, 10) === value
+  );
+}
+
+function toErrorCode(caught: unknown, fallback: string): string {
+  return caught instanceof Error ? caught.message : fallback;
+}
+
+function normalizeTerminalRates(
+  drafts: readonly DisposeRateSnapshotDraft[]
+): readonly DisposeRateSnapshotDraft[] {
+  const byRole = new Map<DisposeRateRole, DisposeRateSnapshotDraft>();
+  for (const draft of drafts) {
+    if (
+      !DISPOSE_RATE_ROLES.includes(draft.role) ||
+      byRole.has(draft.role) ||
+      (draft.role === "terminal_metal" && draft.kind !== "metal") ||
+      (draft.role === "terminal_purchase_currency" && draft.kind !== "currency")
+    ) {
+      return Object.freeze([]);
+    }
+    byRole.set(draft.role, draft);
+  }
+  if (byRole.size !== DISPOSE_RATE_ROLES.length) return Object.freeze([]);
+  const metal = byRole.get("terminal_metal");
+  const currency = byRole.get("terminal_purchase_currency");
+  if (!metal || !currency) return Object.freeze([]);
+  return Object.freeze([metal, currency]);
+}
+
+function snapshotsFromDrafts(
+  drafts: readonly DisposeRateSnapshotDraft[],
+  createId: () => string
+): readonly DisposeRateSnapshot[] {
+  return drafts.map((draft) => ({ ...draft, referenceId: createId() }));
+}
+
+function parseTimestampMs(value: string | null): number | null {
+  if (value === null) return null;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function currentFreshnessForRate(
+  rate: DisposeRateSnapshotDraft,
+  nowMs: number
+): "fresh" | "stale" | "unknown" {
+  const trust = classifyRateTrust(
+    {
+      valueDecimal: rate.valueDecimal,
+      providerObservedAt: parseTimestampMs(rate.providerObservedAt),
+      capturedAt: parseTimestampMs(rate.capturedAt) ?? Number.NaN,
+      quality: rate.quality,
+    },
+    nowMs
+  );
+  return trust.state === "missing" ? "unknown" : trust.state;
+}
+
+function terminalRateTrustForRates(
+  rates: readonly DisposeRateSnapshotDraft[],
+  nowMs: number
+): readonly DisposeTerminalRateTrust[] {
+  return Object.freeze(
+    rates.map((rate) => ({
+      role: rate.role,
+      currentFreshness: currentFreshnessForRate(rate, nowMs),
+    }))
+  );
+}
+
+type TerminalRateLoadResult =
+  | {
+      readonly status: "loaded";
+      readonly drafts: readonly DisposeRateSnapshotDraft[];
+    }
+  | { readonly status: "failed"; readonly error: unknown };
+
+function settleTerminalRateSnapshots(
+  loadTerminalRateSnapshots: (
+    holdingId: string,
+    disposalDate: string
+  ) => Promise<readonly DisposeRateSnapshotDraft[]>,
+  holdingId: string,
+  disposalDate: string
+): Promise<TerminalRateLoadResult> {
+  return loadTerminalRateSnapshots(holdingId, disposalDate).then(
+    (drafts): TerminalRateLoadResult => ({ status: "loaded", drafts }),
+    (error: unknown): TerminalRateLoadResult => ({ status: "failed", error })
+  );
+}
+
+export function useDisposeMetalHolding(
+  input: UseDisposeMetalHoldingInput
+): UseDisposeMetalHoldingResult {
+  const { createId: stableCreateId, today: stableToday } = input;
+  const nowMs = input.nowMs ?? Date.now;
+  const nowMsRef = useRef(nowMs);
+  nowMsRef.current = nowMs;
+  const readNowMs = useCallback((): number => nowMsRef.current(), []);
+  const { disposeHolding, loadHolding, loadTerminalRateSnapshots } =
+    input.dependencies;
+  const [reloadKey, setReloadKey] = useState(0);
+  const [model, setModel] = useState<DisposableMetalHoldingReadModel | null>(
+    null
+  );
+  const [category, setCategoryState] = useState<DisposeCategory | null>(null);
+  const [otherTreatment, setOtherTreatmentState] =
+    useState<DisposeTreatment | null>(null);
+  const [disposalDate, setDisposalDateState] = useState(stableToday);
+  const [notes, setNotesState] = useState("");
+  const [terminalRates, setTerminalRates] = useState<
+    readonly DisposeRateSnapshotDraft[]
+  >([]);
+  const [rateAcknowledged, setRateAcknowledgedState] = useState(false);
+  const [trustEvaluatedAtMs, setTrustEvaluatedAtMs] = useState<number | null>(
+    null
+  );
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRateLoading, setIsRateLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [rateEvidenceError, setRateEvidenceError] = useState<string | null>(
+    null
+  );
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [validationErrors, setValidationErrors] = useState<
+    Readonly<Record<string, string>>
+  >({});
+  const commandRef = useRef<RetainedDisposeIntent | null>(null);
+  const requestedHoldingIdRef = useRef(input.holdingId);
+  const isInFlightRef = useRef(false);
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return (): void => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let isCancelled = false;
+    setIsLoading(true);
+    setLoadError(null);
+    if (requestedHoldingIdRef.current !== input.holdingId) {
+      requestedHoldingIdRef.current = input.holdingId;
+      if (!isInFlightRef.current) commandRef.current = null;
+      setRateAcknowledgedState(false);
+      setCategoryState(null);
+      setOtherTreatmentState(null);
+      setDisposalDateState(stableToday);
+      setNotesState("");
+      setValidationErrors({});
+      setSubmitError(null);
+    }
+    void loadHolding(input.holdingId)
+      .then((loaded) => {
+        if (isCancelled) return;
+        if (
+          !isInFlightRef.current &&
+          commandRef.current?.holdingId === loaded.holdingId &&
+          (commandRef.current.command.expectedFinancialRevision !==
+            loaded.expectedFinancialRevision ||
+            commandRef.current.command.predecessorEventId !==
+              loaded.predecessorEventId)
+        ) {
+          commandRef.current = null;
+        }
+        setModel(loaded);
+        setIsLoading(false);
+      })
+      .catch((caught: unknown) => {
+        if (isCancelled) return;
+        setModel(null);
+        setLoadError(toErrorCode(caught, "metal_holding_load_failed"));
+        setIsLoading(false);
+      });
+    return (): void => {
+      isCancelled = true;
+    };
+  }, [loadHolding, input.holdingId, stableToday, reloadKey]);
+
+  useEffect(() => {
+    if (commandRef.current !== null) return undefined;
+    let isCancelled = false;
+    setTerminalRates([]);
+    setRateEvidenceError(null);
+    setRateAcknowledgedState(false);
+    setTrustEvaluatedAtMs(null);
+    if (!isCalendarDate(disposalDate)) {
+      setIsRateLoading(false);
+      return (): void => {
+        isCancelled = true;
+      };
+    }
+    setIsRateLoading(true);
+    void settleTerminalRateSnapshots(
+      loadTerminalRateSnapshots,
+      input.holdingId,
+      disposalDate
+    ).then((rates) => {
+      if (isCancelled) return;
+      if (rates.status === "loaded") {
+        setTerminalRates(normalizeTerminalRates(rates.drafts));
+      } else {
+        setRateEvidenceError(
+          toErrorCode(rates.error, "metal_rate_evidence_load_failed")
+        );
+      }
+      setIsRateLoading(false);
+    });
+    return (): void => {
+      isCancelled = true;
+    };
+  }, [loadTerminalRateSnapshots, input.holdingId, disposalDate, reloadKey]);
+
+  useEffect(() => {
+    if (terminalRates.length === 0) return undefined;
+    let timeout: ReturnType<typeof setTimeout> | null = null;
+    function refreshTrust(): void {
+      const currentMs = readNowMs();
+      setTrustEvaluatedAtMs(currentMs);
+      const nextBoundary = terminalRates.reduce<number | null>(
+        (earliest, rate) => {
+          const observedMs = parseTimestampMs(rate.providerObservedAt);
+          if (
+            observedMs === null ||
+            currentFreshnessForRate(rate, currentMs) !== "fresh"
+          )
+            return earliest;
+          const boundary = observedMs + 24 * 60 * 60 * 1000 + 1;
+          return earliest === null ? boundary : Math.min(earliest, boundary);
+        },
+        null
+      );
+      if (nextBoundary !== null) {
+        timeout = setTimeout(
+          refreshTrust,
+          Math.max(1, nextBoundary - currentMs)
+        );
+      }
+    }
+    refreshTrust();
+    return (): void => {
+      if (timeout !== null) clearTimeout(timeout);
+    };
+  }, [terminalRates, readNowMs]);
+
+  const invalidateIntent = useCallback((): void => {
+    if (!isInFlightRef.current) commandRef.current = null;
+    setSubmitError(null);
+    setValidationErrors({});
+  }, []);
+
+  const setCategory = useCallback(
+    (value: DisposeCategory): void => {
+      invalidateIntent();
+      setCategoryState(value);
+      if (value !== "other") setOtherTreatmentState(null);
+    },
+    [invalidateIntent]
+  );
+  const setOtherTreatment = useCallback(
+    (value: DisposeTreatment): void => {
+      invalidateIntent();
+      setOtherTreatmentState(value);
+    },
+    [invalidateIntent]
+  );
+  const setDisposalDate = useCallback(
+    (value: string): void => {
+      invalidateIntent();
+      setDisposalDateState(value);
+    },
+    [invalidateIntent]
+  );
+  const setNotes = useCallback(
+    (value: string): void => {
+      invalidateIntent();
+      setNotesState(value);
+    },
+    [invalidateIntent]
+  );
+  const setRateAcknowledged = useCallback((value: boolean): void => {
+    setRateAcknowledgedState(value);
+    setValidationErrors((current) => {
+      if (!("rateAcknowledgment" in current)) return current;
+      const next = { ...current };
+      delete next.rateAcknowledgment;
+      return Object.freeze(next);
+    });
+  }, []);
+
+  const isDirty = useMemo(
+    () =>
+      category !== null ||
+      otherTreatment !== null ||
+      disposalDate !== stableToday ||
+      notes.length > 0,
+    [category, disposalDate, stableToday, notes.length, otherTreatment]
+  );
+  const treatment = useMemo(
+    () => resolveDisposeTreatment(category, otherTreatment),
+    [category, otherTreatment]
+  );
+  const terminalRateTrust = useMemo(
+    () =>
+      terminalRateTrustForRates(terminalRates, trustEvaluatedAtMs ?? nowMs()),
+    [terminalRates, trustEvaluatedAtMs, nowMs]
+  );
+  const requiresRateAcknowledgment = useMemo(
+    () => terminalRateTrust.some((rate) => rate.currentFreshness !== "fresh"),
+    [terminalRateTrust]
+  );
+
+  const submit = useCallback(async (): Promise<boolean> => {
+    if (isInFlightRef.current) return false;
+    const confirmationMs = nowMs();
+    setTrustEvaluatedAtMs(confirmationMs);
+    const confirmationTrust = terminalRateTrustForRates(
+      terminalRates,
+      confirmationMs
+    );
+    const errors = validate(
+      category,
+      otherTreatment,
+      disposalDate,
+      stableToday,
+      model?.purchaseDate ?? null,
+      notes,
+      confirmationTrust.some((rate) => rate.currentFreshness !== "fresh"),
+      rateAcknowledged,
+      rateEvidenceError
+    );
+    setValidationErrors(errors);
+    if (Object.keys(errors).length > 0 || !model || isRateLoading || isLoading)
+      return false;
+    isInFlightRef.current = true;
+    setIsSubmitting(true);
+    setSubmitError(null);
+    try {
+      if (
+        commandRef.current === null ||
+        commandRef.current.holdingId !== model.holdingId
+      ) {
+        commandRef.current = {
+          holdingId: model.holdingId,
+          command: {
+            actionId: stableCreateId(),
+            actionEvidenceId: stableCreateId(),
+            lifecycleEventId: stableCreateId(),
+            predecessorEventId: model.predecessorEventId,
+            holdingId: model.holdingId,
+            userId: model.userId,
+            occurredAt: new Date().toISOString(),
+            latestAllowedCalendarDate: stableToday,
+            expectedFinancialRevision: model.expectedFinancialRevision,
+            disposalDate,
+            category,
+            otherTreatment,
+            notes: notes.trim().length === 0 ? null : notes,
+            rateSnapshots: snapshotsFromDrafts(terminalRates, stableCreateId),
+          },
+        };
+      }
+      await disposeHolding(commandRef.current.command);
+      commandRef.current = null;
+      return true;
+    } catch (caught: unknown) {
+      if (isMountedRef.current)
+        setSubmitError(toErrorCode(caught, "metal_holding_dispose_failed"));
+      return false;
+    } finally {
+      isInFlightRef.current = false;
+      if (isMountedRef.current) setIsSubmitting(false);
+    }
+  }, [
+    category,
+    disposalDate,
+    disposeHolding,
+    stableCreateId,
+    stableToday,
+    model,
+    notes,
+    nowMs,
+    otherTreatment,
+    rateAcknowledged,
+    rateEvidenceError,
+    isRateLoading,
+    isLoading,
+    terminalRates,
+  ]);
+
+  const retryLoad = useCallback((): void => {
+    const shouldReloadSubmitState =
+      submitError === "holding_revision_conflict" ||
+      submitError === "metal_holding_not_active" ||
+      submitError === "metal_dispose_lifecycle_conflict";
+    setSubmitError(null);
+    if (submitError !== null && !shouldReloadSubmitState) return;
+    if (shouldReloadSubmitState) commandRef.current = null;
+    setReloadKey((value) => value + 1);
+  }, [submitError]);
+
+  return {
+    model,
+    category,
+    otherTreatment,
+    treatment,
+    disposalDate,
+    notes,
+    terminalRates,
+    terminalRateTrust,
+    requiresRateAcknowledgment,
+    rateAcknowledged,
+    isLoading,
+    isRateLoading,
+    isSubmitting,
+    isDirty,
+    loadError,
+    rateEvidenceError,
+    submitError,
+    validationErrors,
+    setCategory,
+    setOtherTreatment,
+    setDisposalDate,
+    setNotes,
+    setRateAcknowledged,
+    submit,
+    retryLoad,
+  };
+}
