@@ -1,72 +1,81 @@
 # US2: Add Gold or Silver holding
 
-Owner: Slice 7 Add/Edit
-Base: `8d34c15248711507d31a65b042b633eb22c9c8c9`
-Requirements: FR-008–FR-015, FR-017, FR-087–FR-094
+Owner: Slice 7 Add/Edit  
+Requirements: FR-008–FR-015, FR-017, FR-087–FR-094  
 Success criteria: SC-002, SC-003, SC-005, SC-010, SC-011, SC-015, SC-021,
-SC-024, SC-026
-Automated counterpart: `metal-holding-form-validation.test.ts`,
-`add-metal-holding-command-service.integration.test.ts`, `metals-add.test.tsx`,
-and `e2e/maestro/metals/add-holding.yaml`.
+SC-024, SC-026  
+Automated counterparts: `metal-holding-form-validation.test.ts`,
+`useAddMetalHoldingForm.test.tsx`,
+`add-metal-holding-command-service.integration.test.ts`,
+`metals-add.test.tsx`, and `e2e/maestro/metals/add-holding.yaml`.
 
-Automated checkpoint (2026-09-23): relevant Jest tests passed in the combined
-Slice 7 run (11 suites / 53 tests). T076–T078 and the Add SQLite command tests
-are authored and passing. T079 Maestro journey is authored but has not run;
-physical-device, manual, and timed results remain pending.
+## Evidence boundary
+
+Recorded implementation head: `c6a371974662ef60cd44eccd9ad53e03f1ffcf1b`.
+
+- Hosted Code Quality & Tests, Financial Action pgTAP, and Android Build
+  Verification passed on that head. Android E2E was skipped.
+- The recorded review-focused Add/Edit group is 62/62 tests: Add hook 8, Edit
+  hook 9, Edit route 18, facade integration 9, legacy Edit 2, validation 8,
+  unusual-value policy 5, and holding preview 3.
+- `add-holding.yaml` is authored but has not run. Physical-device, manual, and
+  timed results remain pending.
+- This document does not claim a new local run.
 
 ## Preconditions
 
-- Authenticated fixture user with no foreign-user data visible to the form.
-- Gold and Silver catalog-v1 fixtures; `gold-999` is the exact `24K · 999`
-  choice and factor `0.999`.
-- Fresh, stale, unknown, missing, and offline rate fixtures; Add facts must
-  never depend on a network response.
-- Approved normal-flow reference: `05-add-holding-entry.png`.
-- Test date fixed before and after each purchase-date boundary.
+- Use a disposable authenticated fixture user.
+- Prepare Gold and Silver catalog-v1 choices; `gold-999` is displayed as
+  `24K · 999` and carries factor `0.999`.
+- Prepare fresh, stale, unknown, missing, and offline rate fixtures. Add facts
+  must never depend on a network response.
+- Use English and Arabic app language fixtures. Editable financial input always
+  uses Latin digits and `.` as the decimal separator in both languages.
+- Fix the test date before and after each purchase-date boundary.
 
-| ID      | Preconditions and fixture                         | User journey                                                                                           | Expected observable result                                                                                                                            | Automated?                        | Evidence                  |
-| ------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- | ------------------------- |
-| US2-M01 | Fresh Gold rate; English LTR                      | Enter all required Gold facts, optional Coin and Arabic/emoji note                                     | Same form normalizes input, shows chosen purity/factor and compact preview, then saves with direct Add holding.                                       | Unit + UI + Maestro               | Unit/UI pass; Maestro not run    |
-| US2-M02 | Fresh Silver rate; Arabic RTL                     | Enter Arabic-Indic digits, Arabic decimal mark, and Arabic grouping                                    | Form and preview show same normalized exact values without bidi breakage.                                                                             | Unit + UI + device                | Unit/UI pass; device pending              |
-| US2-M03 | Fresh rate; decimal-comma input                   | Enter decimal-comma weight and price                                                                   | Values normalize once; preview matches submitted canonical decimals.                                                                                  | Unit + UI + Maestro               | Unit/UI pass; Maestro not run    |
-| US2-M04 | Any rate state                                    | Leave every required field blank or use null for unselected purity/currency/date                       | Focusable field errors identify each missing fact; empty-string IDs are never used as a missing-value sentinel.                                       | Unit + UI                         | Unit/UI pass; manual pending         |
-| US2-M05 | Any rate state                                    | Try zero, negative, non-finite, over-precision, over-range, wrong currency scale, and future date      | Submission remains blocked with specific recovery state; no command is attempted.                                                                     | Unit + UI + Maestro               | Unit/UI pass; Maestro not run    |
-| US2-M06 | Any rate state                                    | Choose Platinum, mismatched purity, or bare/generic 24K                                                | Only Gold/Silver catalog choices are possible; `24K · 999` persists as code `gold-999`, version `1`, factor `0.999`.                                  | Unit + UI + Maestro               | Unit/UI pass; Maestro not run    |
-| US2-M07 | Policy-selected unusual supported weight or price | Submit before, then after, acknowledgment                                                              | First submission stays in form with explicit warning; acknowledgment permits direct Add without a review route or arbitrary currency-blind rejection. | Unit + UI + Maestro               | Unit/UI pass; Maestro not run    |
-| US2-M08 | Missing/invalid rate or offline cache             | Complete valid facts and inspect preview, then submit                                                  | Preview says valuation unavailable; holding facts remain complete, save locally, and later sync is pending rather than blocking.                      | Unit + integration + UI + Maestro | Unit/SQLite/UI pass; Maestro not run         |
-| US2-M09 | Offline valid fixture                             | Add holding, restart app, reopen portfolio                                                             | One locally saved holding remains with exact acquisition facts and no partial record.                                                                 | Integration + Maestro + device    | SQLite pass; Maestro/device pending         |
-| US2-M10 | Pending local writer / injected local failure     | Repeatedly tap Add, then retry after failure                                                           | Pending state prevents duplicate/exit; failure preserves input and produces no partial holding; retry yields one outcome.                             | Integration + UI + Maestro        | SQLite/UI pass; Maestro not run         |
-| US2-M11 | Fresh and unavailable rates                       | Add with Bar, Coin, Jewelry, then no physical form or notes                                            | Optional facts stay optional, render/description changes only with physical form, and valuation inputs are unchanged.                                 | Unit + UI + device                | Unit/UI pass; device pending         |
-| US2-M12 | Add route                                         | Test EN/AR RTL, light/dark, compact/ordinary/tablet/landscape, 200% text, keyboard, TalkBack/VoiceOver | Required order, preview, status, error focus, safe-area CTA, names, and input associations remain reachable and understandable.                       | UI + device                       | UI pass; device proof pending |
+## Scenario matrix
+
+| ID | Preconditions | Steps | Expected observable result | Evidence status |
+| --- | --- | --- | --- | --- |
+| US2-M01 | Fresh Gold rate; English LTR | Enter all required Gold facts, optional Coin, and an Arabic/emoji note; submit once | The same form shows the selected purity and compact preview, then saves directly with one local holding | Automated pass recorded; Maestro/manual pending |
+| US2-M02 | Fresh Silver rate; Arabic RTL | Enter valid Latin-digit values such as `10.125` and `1,234.50); inspect preview and submit | RTL layout remains readable; the exact values are not reinterpreted; later display localization does not alter stored facts | Automated pass recorded; device pending |
+| US2-M03 | Any rate state | Try grouped `1,234.50`, then `12,5`, Arabic-Indic digits, Arabic decimal mark, scientific notation, signs, and embedded whitespace such as `12 34` | Correct three-digit grouping is accepted; every other form is rejected without deletion or reinterpretation of characters | Automated pass recorded; manual pending |
+| US2-M04 | Any rate state | Leave required fields blank or leave purity/currency/date unselected; submit | Focusable field errors identify every missing fact; no empty-string ID is used as a missing sentinel | Automated pass recorded; manual pending |
+| US2-M05 | Any rate state | Try zero, negative, non-finite, over-precision, over-range, wrong currency scale, and future date | Submission stays in the form, no command runs, and recovery copy identifies the invalid fact | Automated pass recorded; Maestro/manual pending |
+| US2-M06 | Catalog fixture | Inspect Gold/Silver purity choices and attempt an unsupported metal or mismatched purity through the available test fixture | Only Gold/Silver catalog choices are accepted; user-facing labels appear instead of internal codes; `24K · 999` persists as `gold-999` version `1` factor `0.999` | Automated pass recorded; device pending |
+| US2-M07 | EGP 10,000,000+ purchase; no rates/offline | Submit before and after acknowledging the unusual-value warning | The EGP warning appears without needing market rates; acknowledgment permits direct Add and does not invent a review route | Automated pass recorded; manual pending |
+| US2-M08 | Fresh/stale/unknown/missing rates | Compare the displayed metal/FX rate digits with the fixture, then submit a valid holding | Displayed reference precision matches the consumed snapshot; stale/unknown required rates request acknowledgment; missing rates make valuation unavailable but do not block valid local save | Automated pass recorded; device pending |
+| US2-M09 | Offline valid fixture | Add, terminate the app, restart, and reopen My Metals | Exactly one locally saved holding remains with complete acquisition facts and no partial row | SQLite pass recorded; Maestro/device pending |
+| US2-M10 | Dirty form, pending writer, and injected failure | Attempt header Back, Cancel, Android hardware Back, and iOS gesture; then submit repeatedly and retry after failure | Every dirty exit offers Keep editing/Discard; pending blocks exit and duplicates; failure preserves input and retry creates one result | Automated pass recorded; Maestro/device pending |
+| US2-M11 | Fresh and unavailable rates | Add Bar, Coin, Jewelry, then omit physical form and notes | Optional facts stay optional; physical form changes description only and never valuation inputs | Automated pass recorded; device pending |
+| US2-M12 | Add route | Exercise EN/AR, light/dark, compact/ordinary/tablet/landscape, 200% text, keyboard, TalkBack/VoiceOver, and top/bottom safe areas | Required order, stacked reflow, preview, status, errors, labels, dirty-exit sheet, and CTA remain reachable and understandable | UI automation recorded; physical-device proof pending |
+
+## Review-fix spot checks
+
+1. In Arabic mode, paste `12,5` and `12 34` into Weight and Purchase price.
+   Confirm each remains invalid and is not silently changed to `125` or
+   `1234`.
+2. With no usable market rates, enter an EGP purchase of at least 10,000,000.
+   Confirm the unusual-value warning still appears and must be acknowledged.
+3. Load a low-value FX reference such as `0.0067`. Confirm the preview shows
+   the supplied rate precision rather than rounding it to ordinary money
+   precision.
+4. For a non-EGP purchase, make only the EGP reference stale. Confirm the
+   acquisition preview freshness follows the required metal and purchase-
+   currency references; the EGP rate affects only the unusual-value policy.
+5. Change any field, then try every navigation exit. Confirm each path uses the
+   same dirty-exit decision and Discard actually exits.
 
 ## Timed acceptance
 
 Measure US2-M01 and US2-M02 from opening Add Holding until local success. Record
-locale, direction, device, build, fixture, duration, and whether optional fields
-were skipped. SC-002 passes only when a valid Add completes in under two
-minutes; no timing claim exists until QA records it.
+locale, direction, device, build, fixture, duration, and optional fields used.
+SC-002 passes only when a valid Add completes in under two minutes; no timing
+claim exists until QA records it.
 
-## Manual-only rationale
+## Manual-only record
 
-### Manual-only: US2-M09, US2-M12, SC-002
-
-Scenario: Physical offline/restart, native accessibility, visual reflow,
-safe-area, keyboard, and timing inspection across device matrix.
-
-Why automation cannot honestly control it: current Maestro/device harness cannot
-reliably configure all native assistive technologies, font scales, tablets,
-orientations, gesture/navigation-bar modes, and measured human completion time.
-
-Deterministic coverage retained: T076 validates normalization and field
-contracts; T077 proves SQLite atomicity/re-instantiation; T078 covers controlled
-UI state. T079 remains an authored, unrun Gold/Silver/offline journey.
-
-Human owner and environment: Mohamed on current Android and iOS builds, EN/AR,
-light/dark, compact phone and tablet, with fresh and unavailable-rate fixtures.
-
-Pass/fail evidence: video or screenshots plus build, device/OS,
-locale/direction, theme, scale, viewport, navigation mode, network/rate fixture,
-timings, and result.
-
-Runner follow-up: add a controlled native accessibility/reflow harness when
-those conditions become reliable.
+For device-only rows, record build/head, device and OS, locale/direction, theme,
+font scale, viewport/orientation, navigation mode, network/rate fixture, steps,
+screenshots or video, duration where required, and Pass/Fail/Blocked. Hosted CI
+does not replace this evidence.
