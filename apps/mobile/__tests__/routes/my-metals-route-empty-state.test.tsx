@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react-native";
+import { router } from "expo-router";
 import React from "react";
 
 import type { MetalPortfolioSectionReadiness } from "@/hooks/metal-portfolio-readiness";
@@ -190,6 +191,7 @@ jest.mock("@/components/metals/AddHoldingModal", () => {
 
 describe("MyMetalsRoute premium empty-state chrome", () => {
   beforeEach(() => {
+    jest.clearAllMocks();
     mockLanguage = "en";
     mockPortfolioState = emptyPortfolio;
     mockReadinessState = ready;
@@ -211,10 +213,8 @@ describe("MyMetalsRoute premium empty-state chrome", () => {
     expect(mockFabSuppression).toBe(true);
 
     fireEvent.press(screen.getByTestId("mock-empty-cta"));
-    expect(screen.getByTestId("mock-add-holding-modal")).toHaveProp(
-      "accessibilityState",
-      { expanded: true }
-    );
+    expect(router.push).toHaveBeenCalledWith("/metals/add");
+    expect(screen.queryByTestId("mock-add-holding-modal")).toBeNull();
   });
 
   it("retains populated controls and both existing Add entry points", () => {
@@ -227,6 +227,10 @@ describe("MyMetalsRoute premium empty-state chrome", () => {
     expect(screen.getByTestId("metal-portfolio-filter-bar")).toBeTruthy();
     expect(screen.getByText("Holdings")).toBeTruthy();
     expect(mockFabSuppression).toBe(false);
+
+    fireEvent.press(screen.getByTestId("mock-header-add"));
+    expect(router.push).toHaveBeenCalledWith("/metals/add");
+    expect(screen.queryByTestId("mock-add-holding-modal")).toBeNull();
   });
 
   it("preserves the existing error surface instead of claiming the portfolio is empty", () => {
