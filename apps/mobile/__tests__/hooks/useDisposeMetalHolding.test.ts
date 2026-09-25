@@ -453,6 +453,42 @@ describe("useDisposeMetalHolding lifecycle", () => {
     );
   });
 
+  it("updates displayed freshness at the 24-hour boundary without a submit", async (): Promise<void> => {
+    jest.useFakeTimers();
+    try {
+      let currentNowMs = Date.parse("2026-09-05T10:00:00.000Z");
+      const dependencies = createDependencies(
+        undefined,
+        jest.fn(() => Promise.resolve(rateDrafts("fresh", "fresh")))
+      );
+      const { result } = renderHook(() =>
+        useDisposeMetalHolding({
+          holdingId: holding.holdingId,
+          today: "2026-09-05",
+          createId: jest.fn(() => "stable-id"),
+          nowMs: () => currentNowMs,
+          dependencies,
+        })
+      );
+      await act(async (): Promise<void> => {
+        await Promise.resolve();
+      });
+      expect(result.current.terminalRateTrust[0]?.currentFreshness).toBe(
+        "fresh"
+      );
+      currentNowMs = Date.parse("2026-09-06T09:00:00.001Z");
+      act((): void => {
+        jest.advanceTimersByTime(23 * 60 * 60 * 1000 + 1);
+      });
+      expect(result.current.terminalRateTrust[0]?.currentFreshness).toBe(
+        "stale"
+      );
+      expect(result.current.requiresRateAcknowledgment).toBe(true);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   it("submits fresh terminal rate pairs without acknowledgment", async (): Promise<void> => {
     const dependencies = createDependencies(
       undefined,
@@ -556,6 +592,148 @@ describe("useDisposeMetalHolding lifecycle", () => {
     );
     expect(result.current.terminalRates).toHaveLength(2);
     expect(result.current.requiresRateAcknowledgment).toBe(true);
+  });
+
+  it("keeps the form mounted and skips rate requests for partial dates", async (): Promise<void> => {
+    const dependencies = createDependencies();
+    const { result } = renderHook(() =>
+      useDisposeMetalHolding({
+        holdingId: holding.holdingId,
+        today: "2026-09-05",
+        createId: jest.fn(() => "stable-id"),
+        dependencies,
+      })
+    );
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    await waitFor(() =>
+      expect(dependencies.loadTerminalRateSnapshots).toHaveBeenCalledTimes(1)
+    );
+    act((): void => result.current.setDisposalDate("2026-09-0"));
+    expect(result.current.isLoading).toBe(false);
+    expect(dependencies.loadHolding).toHaveBeenCalledTimes(1);
+    expect(dependencies.loadTerminalRateSnapshots).toHaveBeenCalledTimes(1);
+    expect(result.current.terminalRates).toEqual([]);
+  });
+
+  it("blocks submission while the selected date's rate evidence is pending", async (): Promise<void> => {
+    let settleNext: ((rates: readonly HookRateDraft[]) => void) | undefined;
+    const loadTerminalRateSnapshots = jest
+      .fn<Promise<readonly HookRateDraft[]>, [string, string]>()
+      .mockResolvedValueOnce(rateDrafts("fresh", "fresh"))
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve): void => {
+            settleNext = resolve;
+          })
+      );
+    const dependencies = createDependencies(
+      undefined,
+      loadTerminalRateSnapshots
+    );
+    const { result } = renderHook(() =>
+      useDisposeMetalHolding({
+        holdingId: holding.holdingId,
+        today: "2026-09-05",
+        createId: jest.fn(() => "stable-id"),
+        dependencies,
+      })
+    );
+    await waitFor(() => expect(result.current.terminalRates).toHaveLength(2));
+    act((): void => {
+      result.current.setCategory("donated");
+      result.current.setDisposalDate("2026-09-04");
+    });
+    expect(result.current.isLoading).toBe(false);
+    expect(result.current.terminalRates).toEqual([]);
+    await act(async (): Promise<void> => {
+      await expect(result.current.submit()).resolves.toBe(false);
+    });
+    expect(dependencies.disposeHolding).not.toHaveBeenCalled();
+    await act(async (): Promise<void> => {
+      settleNext?.(rateDrafts("fresh", "fresh"));
+      await Promise.resolve();
+    });
+    expect(result.current.terminalRates).toHaveLength(2);
+  });
+
+  it("clears acknowledgment when another date loads different rate evidence", async (): Promise<void> => {
+    const dependencies = createDependencies(
+      undefined,
+      jest.fn(
+        (_holdingId: string, date: string): Promise<readonly HookRateDraft[]> =>
+          Promise.resolve(
+            rateDrafts("stale", "stale").map((rate) => ({
+              ...rate,
+              capturedAt: `${date}T10:00:00.000Z`,
+            }))
+          )
+      )
+    );
+    const { result } = renderHook(() =>
+      useDisposeMetalHolding({
+        holdingId: holding.holdingId,
+        today: "2026-09-05",
+        createId: jest.fn(() => "stable-id"),
+        dependencies,
+      })
+    );
+    await waitFor(() => expect(result.current.terminalRates).toHaveLength(2));
+    act((): void => result.current.setRateAcknowledged(true));
+    act((): void => result.current.setDisposalDate("2026-09-04"));
+    await waitFor(() =>
+      expect(result.current.terminalRates[0]?.capturedAt).toBe(
+        "2026-09-04T10:00:00.000Z"
+      )
+    );
+    expect(result.current.rateAcknowledged).toBe(false);
+  });
+
+  it("rebuilds a rejected revision-conflict command after loading the new revision", async (): Promise<void> => {
+    const newer = {
+      ...holding,
+      expectedFinancialRevision: "2",
+      predecessorEventId: "event-2",
+    };
+    const loadHolding = jest
+      .fn<Promise<HookHolding>, [string]>()
+      .mockResolvedValueOnce(holding)
+      .mockResolvedValueOnce(newer);
+    const disposeHolding = jest
+      .fn<Promise<unknown>, [DisposeMetalHoldingCommandInput]>()
+      .mockRejectedValueOnce(new Error("holding_revision_conflict"))
+      .mockResolvedValueOnce({ kind: "committed" });
+    const dependencies: HookDependencies = {
+      loadHolding,
+      loadTerminalRateSnapshots: jest.fn(() => Promise.resolve([])),
+      disposeHolding,
+    };
+    let nextId = 0;
+    const { result } = renderHook(() =>
+      useDisposeMetalHolding({
+        holdingId: holding.holdingId,
+        today: "2026-09-05",
+        createId: () => `id-${++nextId}`,
+        dependencies,
+      })
+    );
+    await waitFor(() => expect(result.current.model).toEqual(holding));
+    act((): void => result.current.setCategory("donated"));
+    await act(async (): Promise<void> => {
+      await expect(result.current.submit()).resolves.toBe(false);
+    });
+    const rejected = disposeHolding.mock.calls[0][0];
+    act((): void => result.current.retryLoad());
+    await waitFor(() => expect(result.current.model).toEqual(newer));
+    await act(async (): Promise<void> => {
+      await expect(result.current.submit()).resolves.toBe(true);
+    });
+    expect(disposeHolding.mock.calls[1][0]).toMatchObject({
+      expectedFinancialRevision: "2",
+      predecessorEventId: "event-2",
+    });
+    expect(disposeHolding.mock.calls[1][0].actionId).not.toBe(
+      rejected.actionId
+    );
   });
 
   it("retains the original command across a retryLoad reload for idempotent replay", async (): Promise<void> => {

@@ -72,6 +72,9 @@ interface DisposeCopy {
   readonly rateFreshness: Readonly<Record<string, string>>;
   readonly rateAcknowledgment: string;
   readonly rateAcknowledgmentRequired: string;
+  readonly rateEvidenceUnavailable: string;
+  readonly ratePendingLabel: string;
+  readonly notesTooLong: string;
   readonly submitLabel: string;
   readonly pendingLabel: string;
   readonly cancelLabel: string;
@@ -104,6 +107,7 @@ interface DisposeScreenProps {
   readonly rateAcknowledged?: boolean;
   readonly rateEvidenceError?: string | null;
   readonly isLoading?: boolean;
+  readonly isRateLoading?: boolean;
   readonly isSubmitting?: boolean;
   readonly loadError?: string | null;
   readonly submitError?: string | null;
@@ -161,6 +165,9 @@ const copy: DisposeCopy = {
   },
   rateAcknowledgment: "I understand these rates may be old or unknown",
   rateAcknowledgmentRequired: "Confirm the rate note to continue.",
+  rateEvidenceUnavailable: "We could not check the rates. Try again.",
+  ratePendingLabel: "Checking rates",
+  notesTooLong: "Shorten your notes and try again.",
   submitLabel: "Record change",
   pendingLabel: "Recording change",
   cancelLabel: "Cancel",
@@ -554,18 +561,46 @@ describe("Dispose metal holding direct form", () => {
 
   it("surfaces a terminal rate-store failure separately with a retry", (): void => {
     const props = renderScreen({
-      rateEvidenceError: "Terminal rates could not be checked.",
+      rateEvidenceError: "rate_store_unavailable",
       validationErrors: { rateEvidence: "dispose_rate_evidence_unavailable" },
     });
     expect(screen.getByTestId("dispose-rate-evidence-error")).toHaveTextContent(
-      "Terminal rates could not be checked."
+      copy.rateEvidenceUnavailable
     );
     expect(screen.getByTestId("dispose-validation-summary")).toHaveProp(
       "accessibilityLabel",
-      "Terminal rates could not be checked."
+      copy.rateEvidenceUnavailable
     );
+    expect(screen.queryByText("rate_store_unavailable")).toBeNull();
     fireEvent.press(screen.getByTestId("dispose-rate-evidence-retry"));
     expect(props.onRetry).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the form visible but blocks recording while date rates load", (): void => {
+    const props = renderScreen({ isRateLoading: true });
+    expect(screen.getByTestId("dispose-date-field")).toBeOnTheScreen();
+    expect(screen.getByTestId("dispose-submit")).toHaveProp(
+      "accessibilityState",
+      { disabled: true, busy: true }
+    );
+    expect(screen.getByTestId("dispose-submit")).toHaveTextContent(
+      copy.ratePendingLabel
+    );
+    fireEvent.press(screen.getByTestId("dispose-submit"));
+    expect(props.onSubmit).not.toHaveBeenCalled();
+  });
+
+  it("explains the notes byte limit in the field and validation summary", (): void => {
+    renderScreen({ validationErrors: { notes: "dispose_notes_too_long" } });
+    expect(screen.getByTestId("dispose-notes-field")).toHaveProp(
+      "aria-invalid",
+      true
+    );
+    expect(screen.getByTestId("dispose-validation-summary")).toHaveProp(
+      "accessibilityLabel",
+      copy.notesTooLong
+    );
+    expect(screen.getAllByText(copy.notesTooLong).length).toBeGreaterThan(1);
   });
 
   it("surfaces the acknowledgment error and toggles through the callback", (): void => {

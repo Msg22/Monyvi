@@ -100,13 +100,15 @@ BEGIN
         )
       )
       OR (v_is_metal AND (
-        v_snapshot ->> 'kind' <> 'metal'
+        (v_snapshot ->> 'kind') IS DISTINCT FROM 'metal'
+        OR (v_snapshot ->> 'instrumentCode') IS NULL
         OR v_snapshot ->> 'instrumentCode' NOT IN ('metal:GOLD', 'metal:SILVER')
-        OR v_snapshot ->> 'unit' <> 'usd_per_pure_gram'
-        OR v_snapshot ->> 'orientation' <> 'quote_per_base'
+        OR (v_snapshot ->> 'unit') IS DISTINCT FROM 'usd_per_pure_gram'
+        OR (v_snapshot ->> 'orientation') IS DISTINCT FROM 'quote_per_base'
       ))
       OR (NOT v_is_metal AND (
-        v_snapshot ->> 'kind' <> 'currency'
+        (v_snapshot ->> 'kind') IS DISTINCT FROM 'currency'
+        OR (v_snapshot ->> 'instrumentCode') IS NULL
         OR v_snapshot ->> 'instrumentCode' NOT IN (
           'currency:EGP', 'currency:SAR', 'currency:AED', 'currency:KWD',
           'currency:QAR', 'currency:BHD', 'currency:OMR', 'currency:JOD',
@@ -118,11 +120,12 @@ BEGIN
           'currency:SEK', 'currency:NOK', 'currency:DKK', 'currency:ISK',
           'currency:TRY', 'currency:RUB', 'currency:ZAR'
         )
-        OR NOT (
+        OR NOT coalesce(
           (v_snapshot ->> 'unit' = 'usd_per_currency_unit'
             AND v_snapshot ->> 'orientation' = 'quote_per_base')
           OR (v_snapshot ->> 'unit' = 'currency_units_per_usd'
-            AND v_snapshot ->> 'orientation' = 'base_per_quote')
+            AND v_snapshot ->> 'orientation' = 'base_per_quote'),
+          false
         )
         OR (v_snapshot ->> 'instrumentCode' = 'currency:USD'
           AND v_snapshot ->> 'valueDecimal' <> '1')

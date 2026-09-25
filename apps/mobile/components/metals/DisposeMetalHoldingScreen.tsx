@@ -46,6 +46,7 @@ export const DISPOSE_METAL_HOLDING_COPY_KEYS = Object.freeze({
   dateLabel: "dispose.dateLabel",
   notesLabel: "dispose.notesLabel",
   notesOptional: "dispose.notesOptional",
+  notesTooLong: "dispose.notesTooLong",
   summaryTitle: "dispose.summaryTitle",
   writeOffSummary: "dispose.writeOffSummary",
   externalTransferSummary: "dispose.externalTransferSummary",
@@ -65,6 +66,8 @@ export const DISPOSE_METAL_HOLDING_COPY_KEYS = Object.freeze({
   }),
   rateAcknowledgment: "dispose.rateAcknowledgment",
   rateAcknowledgmentRequired: "dispose.rateAcknowledgmentRequired",
+  rateEvidenceUnavailable: "dispose.rateEvidenceUnavailable",
+  ratePendingLabel: "dispose.ratePendingLabel",
   submitLabel: "dispose.submitLabel",
   pendingLabel: "dispose.pendingLabel",
   cancelLabel: "dispose.cancelLabel",
@@ -113,6 +116,7 @@ export interface DisposeMetalHoldingCopy {
   readonly dateLabel: string;
   readonly notesLabel: string;
   readonly notesOptional: string;
+  readonly notesTooLong: string;
   readonly summaryTitle: string;
   readonly writeOffSummary: string;
   readonly externalTransferSummary: string;
@@ -127,6 +131,8 @@ export interface DisposeMetalHoldingCopy {
   >;
   readonly rateAcknowledgment: string;
   readonly rateAcknowledgmentRequired: string;
+  readonly rateEvidenceUnavailable: string;
+  readonly ratePendingLabel: string;
   readonly submitLabel: string;
   readonly pendingLabel: string;
   readonly cancelLabel: string;
@@ -168,6 +174,7 @@ export interface DisposeMetalHoldingScreenProps {
   readonly rateAcknowledged?: boolean;
   readonly rateEvidenceError?: string | null;
   readonly isLoading?: boolean;
+  readonly isRateLoading?: boolean;
   readonly isSubmitting?: boolean;
   readonly loadError?: string | null;
   readonly submitError?: string | null;
@@ -292,6 +299,7 @@ export function DisposeMetalHoldingScreen({
   rateAcknowledged = false,
   rateEvidenceError = null,
   isLoading = false,
+  isRateLoading = false,
   isSubmitting = false,
   loadError = null,
   submitError = null,
@@ -311,11 +319,12 @@ export function DisposeMetalHoldingScreen({
   const firstCategoryRef = useRef<ChoiceButtonHandle>(null);
   const firstTreatmentRef = useRef<ChoiceButtonHandle>(null);
   const dateFieldRef = useRef<TextInput>(null);
+  const notesFieldRef = useRef<TextInput>(null);
   const rateEvidenceErrorRef = useRef<View>(null);
   const submitErrorRef = useRef<View>(null);
   const submit = useCallback((): void => {
-    if (!isSubmitting) onSubmit();
-  }, [isSubmitting, onSubmit]);
+    if (!isSubmitting && !isRateLoading) onSubmit();
+  }, [isSubmitting, isRateLoading, onSubmit]);
   const requestExit = useCallback((): void => {
     if (!isSubmitting) onRequestExit();
   }, [isSubmitting, onRequestExit]);
@@ -341,11 +350,12 @@ export function DisposeMetalHoldingScreen({
         validationErrors.disposalDate
           ? dateValidationMessage(validationErrors.disposalDate, copy)
           : null,
+        validationErrors.notes ? copy.notesTooLong : null,
         validationErrors.rateAcknowledgment
           ? copy.rateAcknowledgmentRequired
           : null,
         validationErrors.rateEvidence && rateEvidenceError
-          ? rateEvidenceError
+          ? copy.rateEvidenceUnavailable
           : null,
       ].filter((message): message is string => message !== null),
     [copy, rateEvidenceError, validationErrors]
@@ -362,11 +372,15 @@ export function DisposeMetalHoldingScreen({
         ? firstCategoryRef.current
         : validationErrors.treatment
           ? firstTreatmentRef.current
-          : validationErrors.rateEvidence
-            ? rateEvidenceErrorRef.current
-            : validationErrors.rateAcknowledgment
-              ? null
-              : dateFieldRef.current;
+          : validationErrors.disposalDate
+            ? dateFieldRef.current
+            : validationErrors.notes
+              ? notesFieldRef.current
+              : validationErrors.rateEvidence
+                ? rateEvidenceErrorRef.current
+                : validationErrors.rateAcknowledgment
+                  ? null
+                  : dateFieldRef.current;
       const targetHandle = findNodeHandle(firstInvalidTarget);
       if (targetHandle !== null) {
         AccessibilityInfo.setAccessibilityFocus(targetHandle);
@@ -532,12 +546,15 @@ export function DisposeMetalHoldingScreen({
             />
             <View className="gap-1">
               <TextField
+                inputRef={notesFieldRef}
                 testID="dispose-notes-field"
                 label={copy.notesLabel}
                 value={notes}
                 onChangeText={onNotesChange}
                 editable={!isSubmitting}
                 multiline
+                aria-invalid={Boolean(validationErrors.notes)}
+                error={validationErrors.notes ? copy.notesTooLong : undefined}
               />
               <Text className="text-xs text-text-muted dark:text-text-muted-dark">
                 {copy.notesOptional}
@@ -590,7 +607,7 @@ export function DisposeMetalHoldingScreen({
                   testID="dispose-rate-evidence-error"
                   className="text-sm text-red-700 dark:text-red-300"
                 >
-                  {rateEvidenceError}
+                  {copy.rateEvidenceUnavailable}
                 </Text>
                 <TouchableOpacity
                   testID="dispose-rate-evidence-retry"
@@ -728,14 +745,23 @@ export function DisposeMetalHoldingScreen({
           <TouchableOpacity
             testID="dispose-submit"
             accessibilityRole="button"
-            accessibilityState={{ disabled: isSubmitting, busy: isSubmitting }}
-            disabled={isSubmitting}
+            accessibilityState={{
+              disabled: isSubmitting || isRateLoading,
+              busy: isSubmitting || isRateLoading,
+            }}
+            disabled={isSubmitting || isRateLoading}
             onPress={submit}
             className="min-h-12 items-center justify-center rounded-2xl bg-nileGreen-700 px-5 py-3 dark:bg-nileGreen-500"
-            style={isSubmitting ? { opacity: 0.55 } : undefined}
+            style={
+              isSubmitting || isRateLoading ? { opacity: 0.55 } : undefined
+            }
           >
             <Text className="text-base font-bold text-slate-25 dark:text-slate-950">
-              {isSubmitting ? copy.pendingLabel : copy.submitLabel}
+              {isSubmitting
+                ? copy.pendingLabel
+                : isRateLoading
+                  ? copy.ratePendingLabel
+                  : copy.submitLabel}
             </Text>
           </TouchableOpacity>
           <TouchableOpacity

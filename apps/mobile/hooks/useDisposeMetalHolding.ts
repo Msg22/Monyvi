@@ -65,6 +65,7 @@ export interface UseDisposeMetalHoldingResult {
   readonly requiresRateAcknowledgment: boolean;
   readonly rateAcknowledged: boolean;
   readonly isLoading: boolean;
+  readonly isRateLoading: boolean;
   readonly isSubmitting: boolean;
   readonly isDirty: boolean;
   readonly loadError: string | null;
@@ -219,6 +220,9 @@ export function useDisposeMetalHolding(
 ): UseDisposeMetalHoldingResult {
   const { createId: stableCreateId, today: stableToday } = input;
   const nowMs = input.nowMs ?? Date.now;
+  const nowMsRef = useRef(nowMs);
+  nowMsRef.current = nowMs;
+  const readNowMs = useCallback((): number => nowMsRef.current(), []);
   const { disposeHolding, loadHolding, loadTerminalRateSnapshots } =
     input.dependencies;
   const [reloadKey, setReloadKey] = useState(0);
@@ -238,6 +242,7 @@ export function useDisposeMetalHolding(
     null
   );
   const [isLoading, setIsLoading] = useState(true);
+  const [isRateLoading, setIsRateLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [rateEvidenceError, setRateEvidenceError] = useState<string | null>(
@@ -263,7 +268,6 @@ export function useDisposeMetalHolding(
     let isCancelled = false;
     setIsLoading(true);
     setLoadError(null);
-    setRateEvidenceError(null);
     if (requestedHoldingIdRef.current !== input.holdingId) {
       requestedHoldingIdRef.current = input.holdingId;
       if (!isInFlightRef.current) commandRef.current = null;
@@ -275,46 +279,97 @@ export function useDisposeMetalHolding(
       setValidationErrors({});
       setSubmitError(null);
     }
-    void Promise.all([
-      loadHolding(input.holdingId),
-      settleTerminalRateSnapshots(
-        loadTerminalRateSnapshots,
-        input.holdingId,
-        disposalDate
-      ),
-    ])
-      .then(([loaded, rates]) => {
+    void loadHolding(input.holdingId)
+      .then((loaded) => {
         if (isCancelled) return;
-        setModel(loaded);
-        if (rates.status === "loaded") {
-          setTerminalRates(normalizeTerminalRates(rates.drafts));
-          setRateEvidenceError(null);
-        } else {
-          setTerminalRates([]);
-          setRateEvidenceError(
-            toErrorCode(rates.error, "metal_rate_evidence_load_failed")
-          );
+        if (
+          !isInFlightRef.current &&
+          commandRef.current?.holdingId === loaded.holdingId &&
+          (commandRef.current.command.expectedFinancialRevision !==
+            loaded.expectedFinancialRevision ||
+            commandRef.current.command.predecessorEventId !==
+              loaded.predecessorEventId)
+        ) {
+          commandRef.current = null;
         }
+        setModel(loaded);
         setIsLoading(false);
       })
       .catch((caught: unknown) => {
         if (isCancelled) return;
         setModel(null);
-        setTerminalRates([]);
         setLoadError(toErrorCode(caught, "metal_holding_load_failed"));
         setIsLoading(false);
       });
     return (): void => {
       isCancelled = true;
     };
-  }, [
-    loadHolding,
-    loadTerminalRateSnapshots,
-    input.holdingId,
-    disposalDate,
-    stableToday,
-    reloadKey,
-  ]);
+  }, [loadHolding, input.holdingId, stableToday, reloadKey]);
+
+  useEffect(() => {
+    let isCancelled = false;
+    setTerminalRates([]);
+    setRateEvidenceError(null);
+    setRateAcknowledgedState(false);
+    setTrustEvaluatedAtMs(null);
+    if (!isCalendarDate(disposalDate)) {
+      setIsRateLoading(false);
+      return (): void => {
+        isCancelled = true;
+      };
+    }
+    setIsRateLoading(true);
+    void settleTerminalRateSnapshots(
+      loadTerminalRateSnapshots,
+      input.holdingId,
+      disposalDate
+    ).then((rates) => {
+      if (isCancelled) return;
+      if (rates.status === "loaded") {
+        setTerminalRates(normalizeTerminalRates(rates.drafts));
+      } else {
+        setRateEvidenceError(
+          toErrorCode(rates.error, "metal_rate_evidence_load_failed")
+        );
+      }
+      setIsRateLoading(false);
+    });
+    return (): void => {
+      isCancelled = true;
+    };
+  }, [loadTerminalRateSnapshots, input.holdingId, disposalDate, reloadKey]);
+
+  useEffect(() => {
+    if (terminalRates.length === 0) return undefined;
+    let timeout: ReturnType<typeof setTimeout> | null = null;
+    function refreshTrust(): void {
+      const currentMs = readNowMs();
+      setTrustEvaluatedAtMs(currentMs);
+      const nextBoundary = terminalRates.reduce<number | null>(
+        (earliest, rate) => {
+          const observedMs = parseTimestampMs(rate.providerObservedAt);
+          if (
+            observedMs === null ||
+            currentFreshnessForRate(rate, currentMs) !== "fresh"
+          )
+            return earliest;
+          const boundary = observedMs + 24 * 60 * 60 * 1000 + 1;
+          return earliest === null ? boundary : Math.min(earliest, boundary);
+        },
+        null
+      );
+      if (nextBoundary !== null) {
+        timeout = setTimeout(
+          refreshTrust,
+          Math.max(1, nextBoundary - currentMs)
+        );
+      }
+    }
+    refreshTrust();
+    return (): void => {
+      if (timeout !== null) clearTimeout(timeout);
+    };
+  }, [terminalRates, readNowMs]);
 
   const invalidateIntent = useCallback((): void => {
     if (!isInFlightRef.current) commandRef.current = null;
@@ -403,7 +458,8 @@ export function useDisposeMetalHolding(
       rateEvidenceError
     );
     setValidationErrors(errors);
-    if (Object.keys(errors).length > 0 || !model) return false;
+    if (Object.keys(errors).length > 0 || !model || isRateLoading || isLoading)
+      return false;
     isInFlightRef.current = true;
     setIsSubmitting(true);
     setSubmitError(null);
@@ -455,6 +511,8 @@ export function useDisposeMetalHolding(
     otherTreatment,
     rateAcknowledged,
     rateEvidenceError,
+    isRateLoading,
+    isLoading,
     terminalRates,
   ]);
 
@@ -475,6 +533,7 @@ export function useDisposeMetalHolding(
     requiresRateAcknowledgment,
     rateAcknowledged,
     isLoading,
+    isRateLoading,
     isSubmitting,
     isDirty,
     loadError,

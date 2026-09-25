@@ -15,12 +15,15 @@ runner-controlled offline fixture, and device fidelity remain open.
 | D15 | FR-066–FR-072, FR-077–FR-079, SC-013, SC-022, SC-024 | screen safe-area/RTL/theme/shared-breakpoint/text-scale/accessibility tests, individually accessible radio choices, focus on validation and operational submit failures, and localized command-failure/date/acquisition-boundary messages | Manual device fidelity gate | Green: component contract; device open |
 | D16 | FR-080, FR-086 | pending dismissal contract; dirty-exit callback contract | Manual shared-shell guard integration | Partial: component/hook only; route open |
 | D17 | FR-034–FR-036, FR-040–FR-047, FR-091 | exact consequence object and immutable state/event/evidence assertions, including a verified revision-zero legacy disposal that remains readable in detail and History | Manual integrated portfolio/detail/history/reporting | Green: story evidence; downstream integration open |
+| D18 | FR-054–FR-055, FR-075 | hook partial-date/loading, changed-evidence acknowledgment, and clock-boundary timer tests; screen pending-button contract | Manual date keyboard focus and open-form trust fidelity | Green: deterministic hook/screen; device open |
+| D19 | FR-033, FR-067, FR-092 | hook UTF-8 byte validation plus notes field and summary feedback test | Manual Arabic/emoji entry and TalkBack/VoiceOver | Green: deterministic hook/screen; device open |
+| D20 | FR-076–FR-080 | hook tests for refreshed revision/new action IDs and unchanged-revision idempotent retry | Manual two-device conflict/reload journey | Green: deterministic hook; device open |
 
 ## Verification evidence
 
 - Focused Jest (mobile Dispose suites, exact names):
   `npm test -w @monyvi/mobile -- --runInBand __tests__/app/metals-dispose.test.tsx __tests__/hooks/useDisposeMetalHolding.test.ts __tests__/services/dispose-metal-holding-command-service.test.ts __tests__/services/dispose-metal-holding-command-service.rates.test.ts __tests__/services/metal-legacy-disposal-baseline-read-model.test.ts __tests__/services/metal-detail-history-read-model.test.ts`
-  → `6` suites / `91` tests passed.
+  → `6` suites / `98` tests passed.
 - Focused Jest (adjacent main-contract suites, exact names):
   `npm test -w @monyvi/mobile -- --runInBand __tests__/services/metal-terminal-read-model-service.test.ts __tests__/services/metal-disposed-evidence-service.test.ts`
   → `2` suites / `39` tests passed.

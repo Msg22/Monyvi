@@ -1,6 +1,6 @@
 begin;
 
-select plan(23);
+select plan(29);
 
 select has_function(
   'private', 'financial_action_validate_metals_dispose_payload_v1', array['jsonb'],
@@ -204,6 +204,74 @@ select throws_ok(
   )$$,
   '22023', 'financial_action_invalid_payload',
   'dispose rejects a snapshot missing a structural field'
+);
+
+-- JSON null is not a valid enum or instrument value in either role.
+select throws_ok(
+  $$select private.financial_action_validate_metals_dispose_payload_v1(
+    pg_temp.dispose_payload(jsonb_build_array(
+      pg_temp.dispose_rate_snapshot('terminal_metal', 'metal', 'metal:GOLD', '3738.74')
+        || jsonb_build_object('kind', null),
+      pg_temp.dispose_rate_snapshot('terminal_purchase_currency', 'currency', 'currency:USD', '1')
+    ))
+  )$$,
+  '22023', 'financial_action_invalid_payload',
+  'dispose rejects JSON null kind'
+);
+select throws_ok(
+  $$select private.financial_action_validate_metals_dispose_payload_v1(
+    pg_temp.dispose_payload(jsonb_build_array(
+      pg_temp.dispose_rate_snapshot('terminal_metal', 'metal', 'metal:GOLD', '3738.74')
+        || jsonb_build_object('instrumentCode', null),
+      pg_temp.dispose_rate_snapshot('terminal_purchase_currency', 'currency', 'currency:USD', '1')
+    ))
+  )$$,
+  '22023', 'financial_action_invalid_payload',
+  'dispose rejects JSON null instrumentCode'
+);
+select throws_ok(
+  $$select private.financial_action_validate_metals_dispose_payload_v1(
+    pg_temp.dispose_payload(jsonb_build_array(
+      pg_temp.dispose_rate_snapshot('terminal_metal', 'metal', 'metal:GOLD', '3738.74')
+        || jsonb_build_object('unit', null),
+      pg_temp.dispose_rate_snapshot('terminal_purchase_currency', 'currency', 'currency:USD', '1')
+    ))
+  )$$,
+  '22023', 'financial_action_invalid_payload',
+  'dispose rejects JSON null unit'
+);
+select throws_ok(
+  $$select private.financial_action_validate_metals_dispose_payload_v1(
+    pg_temp.dispose_payload(jsonb_build_array(
+      pg_temp.dispose_rate_snapshot('terminal_metal', 'metal', 'metal:GOLD', '3738.74')
+        || jsonb_build_object('orientation', null),
+      pg_temp.dispose_rate_snapshot('terminal_purchase_currency', 'currency', 'currency:USD', '1')
+    ))
+  )$$,
+  '22023', 'financial_action_invalid_payload',
+  'dispose rejects JSON null orientation'
+);
+select throws_ok(
+  $$select private.financial_action_validate_metals_dispose_payload_v1(
+    pg_temp.dispose_payload(jsonb_build_array(
+      pg_temp.dispose_rate_snapshot('terminal_metal', 'metal', 'metal:GOLD', '3738.74'),
+      pg_temp.dispose_rate_snapshot('terminal_purchase_currency', 'currency', 'currency:USD', '1')
+        || jsonb_build_object('unit', null)
+    ))
+  )$$,
+  '22023', 'financial_action_invalid_payload',
+  'dispose rejects JSON null currency unit'
+);
+select throws_ok(
+  $$select private.financial_action_validate_metals_dispose_payload_v1(
+    pg_temp.dispose_payload(jsonb_build_array(
+      pg_temp.dispose_rate_snapshot('terminal_metal', 'metal', 'metal:GOLD', '3738.74'),
+      pg_temp.dispose_rate_snapshot('terminal_purchase_currency', 'currency', 'currency:USD', '1')
+        || jsonb_build_object('orientation', null)
+    ))
+  )$$,
+  '22023', 'financial_action_invalid_payload',
+  'dispose rejects JSON null currency orientation'
 );
 
 -- Non-valid quality is rejected.

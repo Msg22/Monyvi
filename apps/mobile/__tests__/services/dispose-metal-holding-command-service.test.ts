@@ -1,4 +1,4 @@
-﻿import { createHash } from "node:crypto";
+import { createHash } from "node:crypto";
 import { Q, type Database, type Model } from "@nozbe/watermelondb";
 import type SQLiteAdapter from "@nozbe/watermelondb/adapters/sqlite";
 import type {
@@ -476,7 +476,7 @@ describe("Dispose metal holding command SQLite lifecycle", () => {
       command({
         category: "other",
         otherTreatment: "external_transfer",
-        notes: "Ù‡Ø¯ÙŠØ© ðŸŽ",
+        notes: "هدية 🎁",
       })
     );
     expect(observedEnvelopes).toHaveLength(1);
@@ -485,7 +485,7 @@ describe("Dispose metal holding command SQLite lifecycle", () => {
       kind: "dispose",
       payload: {
         reason: "other_external_transfer",
-        notes: "Ù‡Ø¯ÙŠØ© ðŸŽ",
+        notes: "هدية 🎁",
       },
     });
   });
