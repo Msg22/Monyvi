@@ -688,23 +688,32 @@ describe("useDisposeMetalHolding lifecycle", () => {
     expect(result.current.rateAcknowledged).toBe(false);
   });
 
-  it("rebuilds a rejected revision-conflict command after loading the new revision", async (): Promise<void> => {
+  it("discards a revision-conflict command and reloads the holding and terminal-rate evidence", async (): Promise<void> => {
     const newer = {
       ...holding,
       expectedFinancialRevision: "2",
       predecessorEventId: "event-2",
     };
+    const initialRates = rateDrafts("stale", "stale");
+    const refreshedRates = rateDrafts("stale", "stale").map((rate) => ({
+      ...rate,
+      valueDecimal: rate.role === "terminal_metal" ? "3700" : "0.019",
+    }));
     const loadHolding = jest
       .fn<Promise<HookHolding>, [string]>()
       .mockResolvedValueOnce(holding)
       .mockResolvedValueOnce(newer);
+    const loadTerminalRateSnapshots = jest
+      .fn<Promise<readonly HookRateDraft[]>, [string, string]>()
+      .mockResolvedValueOnce(initialRates)
+      .mockResolvedValueOnce(refreshedRates);
     const disposeHolding = jest
       .fn<Promise<unknown>, [DisposeMetalHoldingCommandInput]>()
       .mockRejectedValueOnce(new Error("holding_revision_conflict"))
       .mockResolvedValueOnce({ kind: "committed" });
     const dependencies: HookDependencies = {
       loadHolding,
-      loadTerminalRateSnapshots: jest.fn(() => Promise.resolve([])),
+      loadTerminalRateSnapshots,
       disposeHolding,
     };
     let nextId = 0;
@@ -713,30 +722,66 @@ describe("useDisposeMetalHolding lifecycle", () => {
         holdingId: holding.holdingId,
         today: "2026-09-05",
         createId: () => `id-${++nextId}`,
+        nowMs: () => Date.parse("2026-09-06T10:00:00.000Z"),
         dependencies,
       })
     );
     await waitFor(() => expect(result.current.model).toEqual(holding));
-    act((): void => result.current.setCategory("donated"));
+    await waitFor(() =>
+      expect(result.current.terminalRates).toEqual(initialRates)
+    );
+    act((): void => {
+      result.current.setCategory("donated");
+      result.current.setRateAcknowledged(true);
+    });
     await act(async (): Promise<void> => {
       await expect(result.current.submit()).resolves.toBe(false);
     });
     const rejected = disposeHolding.mock.calls[0][0];
+
     act((): void => result.current.retryLoad());
+
     await waitFor(() => expect(result.current.model).toEqual(newer));
+    await waitFor(() =>
+      expect(result.current.terminalRates).toEqual(refreshedRates)
+    );
+    expect(result.current.rateAcknowledged).toBe(false);
+    act((): void => result.current.setRateAcknowledged(true));
     await act(async (): Promise<void> => {
       await expect(result.current.submit()).resolves.toBe(true);
     });
     expect(disposeHolding.mock.calls[1][0]).toMatchObject({
       expectedFinancialRevision: "2",
       predecessorEventId: "event-2",
+      rateSnapshots: [
+        expect.objectContaining({
+          role: "terminal_metal",
+          valueDecimal: "3700",
+        }),
+        expect.objectContaining({
+          role: "terminal_purchase_currency",
+          valueDecimal: "0.019",
+        }),
+      ],
     });
     expect(disposeHolding.mock.calls[1][0].actionId).not.toBe(
       rejected.actionId
     );
   });
 
-  it("retains the original command across a retryLoad reload for idempotent replay", async (): Promise<void> => {
+  it("pins displayed and acknowledged terminal rates to an operational retry's retained command", async (): Promise<void> => {
+    const initialRates = rateDrafts("stale", "unknown");
+    const replacementRates = rateDrafts("stale", "unknown").map((rate) => ({
+      ...rate,
+      valueDecimal: rate.role === "terminal_metal" ? "3700" : "0.019",
+    }));
+    const initialRateLoader = jest.fn(
+      (): Promise<readonly HookRateDraft[]> => Promise.resolve(initialRates)
+    );
+    const replacementRateLoader = jest.fn(
+      (): Promise<readonly HookRateDraft[]> =>
+        Promise.resolve(replacementRates)
+    );
     const disposeHolding = jest
       .fn<
         ReturnType<HookDependencies["disposeHolding"]>,
@@ -744,28 +789,77 @@ describe("useDisposeMetalHolding lifecycle", () => {
       >()
       .mockRejectedValueOnce(new Error("disk_full"))
       .mockResolvedValueOnce({ kind: "committed" });
-    const dependencies = createDependencies(disposeHolding);
-    const { result } = renderHook(() =>
-      useDisposeMetalHolding({
-        holdingId: holding.holdingId,
-        today: "2026-09-05",
-        createId: jest.fn((): string => "stable-id"),
-        dependencies,
-      })
+    const dependencies = createDependencies(disposeHolding, initialRateLoader);
+    const ids = [
+      "action-1",
+      "evidence-1",
+      "event-1",
+      "rate-metal-1",
+      "rate-currency-1",
+    ];
+    const createId = jest.fn(() => ids.shift() ?? "unexpected-id");
+    const { result, rerender } = renderHook(
+      ({
+        currentDependencies,
+      }: {
+        readonly currentDependencies: HookDependencies;
+      }) =>
+        useDisposeMetalHolding({
+          holdingId: holding.holdingId,
+          today: "2026-09-05",
+          createId,
+          nowMs: () => Date.parse("2026-09-06T10:00:00.000Z"),
+          dependencies: currentDependencies,
+        }),
+      { initialProps: { currentDependencies: dependencies } }
     );
-    await waitFor(() => expect(result.current.isLoading).toBe(false));
-    act((): void => result.current.setCategory("donated"));
+    await waitFor(() =>
+      expect(result.current.terminalRates).toEqual(initialRates)
+    );
+    act((): void => {
+      result.current.setCategory("donated");
+      result.current.setRateAcknowledged(true);
+    });
     await act(async (): Promise<void> => {
       await expect(result.current.submit()).resolves.toBe(false);
     });
     const retained = disposeHolding.mock.calls[0][0];
+    expect(retained.rateSnapshots).toEqual([
+      expect.objectContaining({
+        referenceId: "rate-metal-1",
+        role: "terminal_metal",
+        valueDecimal: "3600",
+      }),
+      expect.objectContaining({
+        referenceId: "rate-currency-1",
+        role: "terminal_purchase_currency",
+        valueDecimal: "0.02",
+      }),
+    ]);
+
+    rerender({
+      currentDependencies: {
+        ...dependencies,
+        loadTerminalRateSnapshots: replacementRateLoader,
+      },
+    });
+    await act(async (): Promise<void> => {
+      await Promise.resolve();
+    });
     act((): void => result.current.retryLoad());
-    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(result.current.submitError).toBeNull();
+    expect(dependencies.loadHolding).toHaveBeenCalledTimes(1);
+    expect(initialRateLoader).toHaveBeenCalledTimes(1);
+    expect(replacementRateLoader).not.toHaveBeenCalled();
+    expect(result.current.terminalRates).toEqual(initialRates);
+    expect(result.current.rateAcknowledged).toBe(true);
     await act(async (): Promise<void> => {
       await expect(result.current.submit()).resolves.toBe(true);
     });
     expect(disposeHolding).toHaveBeenCalledTimes(2);
     expect(disposeHolding.mock.calls[1][0]).toBe(retained);
+    expect(createId).toHaveBeenCalledTimes(5);
   });
 
   it("does not reload when the dependency container identity changes but its members are stable", async (): Promise<void> => {
