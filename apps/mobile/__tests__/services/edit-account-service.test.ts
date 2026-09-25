@@ -256,6 +256,30 @@ jest.mock("@/services/supabase", () => ({
   getCurrentUserId: (): Promise<string> => Promise.resolve("user-1"),
 }));
 
+interface MockGuardedEditInput extends Omit<
+  AccountCoreEditInput,
+  "account" | "updateMetadata"
+> {
+  readonly account: MockModelRecord;
+  readonly updateMetadata: (projection: Record<string, unknown>) => void;
+}
+
+const mockEditGuardedAccount = jest.fn(
+  async (input: MockGuardedEditInput): Promise<void> => {
+    const extra = await input.prepareInsideWriter();
+    extra?.existingOperations.forEach((operation) => {
+      if (operation.kind === "update") {
+        operation.update(operation.model);
+      }
+    });
+  }
+);
+
+jest.mock("@/services/account-core-writer-production", () => ({
+  editGuardedAccount: (input: MockGuardedEditInput): Promise<void> =>
+    mockEditGuardedAccount(input),
+}));
+
 // ---------------------------------------------------------------------------
 // Import module under test
 // ---------------------------------------------------------------------------
@@ -266,6 +290,7 @@ import {
   deleteAccountWithCascade,
   EDIT_ACCOUNT_ERROR_CODES,
 } from "@/services/edit-account-service";
+import type { AccountCoreEditInput } from "@/services/account-core-writer-service";
 
 // ---------------------------------------------------------------------------
 // Grab mock helpers
@@ -303,6 +328,12 @@ function seedAccount(
   return acc;
 }
 
+function guardedEditInput(): MockGuardedEditInput {
+  const input = mockEditGuardedAccount.mock.calls[0]?.[0];
+  if (!input) throw new Error("missing guarded edit input");
+  return input;
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -313,6 +344,7 @@ describe("edit-account-service", () => {
     mockDb.write.mockClear();
     mockDb.get.mockClear();
     mockDb.batch.mockClear();
+    mockEditGuardedAccount.mockClear();
     mockRewire();
   });
 
@@ -792,7 +824,7 @@ describe("edit-account-service", () => {
 
     // ---- batching contract (atomicity) ---------------------------------
 
-    it("opens exactly one database.write block when adjustment is provided", async () => {
+    it("delegates balance-changing edits to the guarded command exactly once", async () => {
       seedAccount("acc-1", { name: "Old", balance: 100, userId: "user-1" });
 
       const result = await updateAccountWithBalanceAdjustment(
@@ -803,10 +835,16 @@ describe("edit-account-service", () => {
       );
 
       expect(result.success).toBe(true);
-      expect(mockDb.write).toHaveBeenCalledTimes(1);
+      expect(mockEditGuardedAccount).toHaveBeenCalledTimes(1);
+      const input = guardedEditInput();
+      expect(input.nextBalance).toBe(250);
+      expect(input.userId).toBe("user-1");
+      expect(input.account.id).toBe("acc-1");
+      // The guarded command owns the writer; this layer opens none.
+      expect(mockDb.write).not.toHaveBeenCalled();
     });
 
-    it("opens exactly one database.write block when adjustment is null", async () => {
+    it("routes metadata-only edits through the plain writer without the guarded command", async () => {
       seedAccount("acc-1", { name: "Old", balance: 100 });
 
       const result = await updateAccountWithBalanceAdjustment(
@@ -817,10 +855,11 @@ describe("edit-account-service", () => {
       );
 
       expect(result.success).toBe(true);
+      expect(mockEditGuardedAccount).not.toHaveBeenCalled();
       expect(mockDb.write).toHaveBeenCalledTimes(1);
     });
 
-    it("updates the account row AND creates a transaction in one batch", async () => {
+    it("builds the guarded input with the live delta and resolved metadata", async () => {
       const acc = seedAccount("acc-1", {
         name: "Old",
         balance: 100,
@@ -829,55 +868,6 @@ describe("edit-account-service", () => {
       const tx = captureTxCreate();
       wireAccountAndTransactionMocks(acc, tx.create);
 
-      await updateAccountWithBalanceAdjustment(
-        "acc-1",
-        "user-1",
-        { name: "Renamed", balance: 350, isDefault: false },
-        { userId: "user-1", currency: "EGP" }
-      );
-
-      expect(acc.name).toBe("Renamed");
-      expect(acc.balance).toBe(350);
-      const created = tx.captured();
-      expect(created).toBeDefined();
-      expect(created?.amount).toBe(250);
-      expect(created?.type).toBe("INCOME");
-    });
-
-    // ---- rollback semantics (issue #374 AC5) ---------------------------
-
-    it("preserves the original account state when the adjustment write throws (snapshot-restore mock)", async () => {
-      // This mock simulates WatermelonDB's writer-batch rollback: take a
-      // shallow snapshot of the account fields BEFORE running the writer
-      // callback; if the callback throws, restore the snapshot. That way
-      // we can assert the post-failure account state matches what a real
-      // rollback would produce.
-      const acc = seedAccount("acc-1", {
-        name: "Original",
-        balance: 100,
-        userId: "user-1",
-      });
-
-      wireAccountAndTransactionMocks(
-        acc,
-        jest.fn(() => Promise.reject(new Error("Transaction insert failed")))
-      );
-
-      mockDb.write.mockImplementation(async (cb: () => Promise<unknown>) => {
-        const snapshot = { ...acc };
-        try {
-          await cb();
-        } catch (err) {
-          // Restore the in-memory account fields, mirroring SQLite rollback.
-          for (const key of Object.keys(snapshot)) {
-            (acc as Record<string, unknown>)[key] = (
-              snapshot as Record<string, unknown>
-            )[key];
-          }
-          throw err;
-        }
-      });
-
       const result = await updateAccountWithBalanceAdjustment(
         "acc-1",
         "user-1",
@@ -885,9 +875,86 @@ describe("edit-account-service", () => {
         { userId: "user-1", currency: "EGP" }
       );
 
+      expect(result.success).toBe(true);
+      const input = guardedEditInput();
+      expect(input.nextBalance).toBe(350);
+      const projection: Record<string, unknown> = {};
+      input.updateMetadata(projection);
+      expect(projection.name).toBe("Renamed");
+      expect(input.adjustmentTransaction).toEqual({
+        accountId: "acc-1",
+        amount: 250,
+        categoryId: "00000000-0000-0000-0001-000000000200",
+        currency: "EGP",
+        date: expect.any(Date) as unknown as Date,
+        note: "Balance adjustment: 100 → 350",
+        source: "MANUAL",
+        type: "INCOME",
+        userId: "user-1",
+      });
+      // The row itself is updated by the guarded command, not the hook.
+      expect(acc.name).toBe("Old");
+      // The adjustment transaction commits through the group mutation, not
+      // the hook, so the hook creates no transaction rows.
+      expect(tx.create).not.toHaveBeenCalled();
+      expect(mockGetStore("transactions").size).toBe(0);
+    });
+
+    // ---- guarded sibling failure --------------------------------------
+
+    it("fails the edit when guarded sibling writes fail without touching the row", async () => {
+      const acc = seedAccount("acc-1", {
+        name: "Original",
+        balance: 100,
+        type: "BANK",
+        isBank: true,
+        userId: "user-1",
+      });
+      mockDb.get.mockImplementation((tableName: string) => {
+        if (tableName === "accounts") {
+          return { find: jest.fn(() => Promise.resolve(acc)) };
+        }
+        if (tableName === "bank_details") {
+          return {
+            query: jest.fn(() => ({
+              fetch: jest.fn(() => Promise.resolve([])),
+            })),
+            create: jest.fn(() =>
+              Promise.reject(new Error("Bank details failed"))
+            ),
+            prepareCreate: jest.fn(() => {
+              throw new Error("Bank details failed");
+            }),
+          };
+        }
+        return {
+          find: jest.fn(() =>
+            Promise.reject(new Error(`unexpected find: ${tableName}`))
+          ),
+          query: jest.fn(() => ({
+            fetch: jest.fn(() => Promise.resolve([])),
+          })),
+          create: jest.fn(() =>
+            Promise.reject(new Error(`unexpected create: ${tableName}`))
+          ),
+        };
+      });
+
+      const result = await updateAccountWithBalanceAdjustment(
+        "acc-1",
+        "user-1",
+        {
+          name: "Renamed",
+          balance: 350,
+          isDefault: false,
+          cardLast4: "1234",
+        },
+        { userId: "user-1", currency: "EGP" }
+      );
+
       expect(result.success).toBe(false);
-      expect(result.error).toBe("Transaction insert failed");
-      // The account row MUST be untouched after rollback.
+      expect(result.error).toBe("Bank details failed");
+      // The account row is updated by the guarded command, which never ran.
       expect(acc.name).toBe("Original");
       expect(acc.balance).toBe(100);
     });
@@ -914,15 +981,16 @@ describe("edit-account-service", () => {
         { userId: "user-1", currency: "EGP" }
       );
 
-      const created = tx.captured();
-      expect(created).toBeDefined();
-      expect(created?.amount).toBe(150);
-      expect(created?.type).toBe("INCOME");
+      expect(guardedEditInput().nextBalance).toBe(400);
+      expect(guardedEditInput().adjustmentTransaction).toEqual(
+        expect.objectContaining({ amount: 150, type: "INCOME" })
+      );
+      expect(tx.create).not.toHaveBeenCalled();
     });
 
     // ---- INCOME / EXPENSE / amount math --------------------------------
 
-    it("creates an INCOME transaction when the live balance increases", async () => {
+    it("builds an INCOME adjustment spec when the live balance increases", async () => {
       const acc = seedAccount("acc-1", { balance: 1000, userId: "user-1" });
       const tx = captureTxCreate();
       wireAccountAndTransactionMocks(acc, tx.create);
@@ -934,13 +1002,17 @@ describe("edit-account-service", () => {
         { userId: "user-1", currency: "EGP" }
       );
 
-      const created = tx.captured();
-      expect(created?.type).toBe("INCOME");
-      expect(created?.categoryId).toBe("00000000-0000-0000-0001-000000000200");
-      expect(created?.amount).toBe(500);
+      expect(guardedEditInput().adjustmentTransaction).toEqual(
+        expect.objectContaining({
+          amount: 500,
+          categoryId: "00000000-0000-0000-0001-000000000200",
+          type: "INCOME",
+        })
+      );
+      expect(tx.create).not.toHaveBeenCalled();
     });
 
-    it("creates an EXPENSE transaction when the live balance decreases", async () => {
+    it("builds an EXPENSE adjustment spec when the live balance decreases", async () => {
       const acc = seedAccount("acc-1", { balance: 1500, userId: "user-1" });
       const tx = captureTxCreate();
       wireAccountAndTransactionMocks(acc, tx.create);
@@ -952,10 +1024,14 @@ describe("edit-account-service", () => {
         { userId: "user-1", currency: "EGP" }
       );
 
-      const created = tx.captured();
-      expect(created?.type).toBe("EXPENSE");
-      expect(created?.categoryId).toBe("00000000-0000-0000-0001-000000000201");
-      expect(created?.amount).toBe(500);
+      expect(guardedEditInput().adjustmentTransaction).toEqual(
+        expect.objectContaining({
+          amount: 500,
+          categoryId: "00000000-0000-0000-0001-000000000201",
+          type: "EXPENSE",
+        })
+      );
+      expect(tx.create).not.toHaveBeenCalled();
     });
 
     it("uses the absolute difference as transaction amount", async () => {
@@ -970,10 +1046,45 @@ describe("edit-account-service", () => {
         { userId: "user-1", currency: "EGP" }
       );
 
-      expect(tx.captured()?.amount).toBe(300);
+      expect(guardedEditInput().adjustmentTransaction).toEqual(
+        expect.objectContaining({ amount: 300 })
+      );
+      expect(tx.create).not.toHaveBeenCalled();
     });
 
-    it("skips the transaction insert when the balance change is below epsilon", async () => {
+    it("keeps real high-precision BTC minor-unit changes that a fixed epsilon would omit", async () => {
+      // 0.00001 BTC is 1000 satoshis: below the legacy 0.001 float epsilon
+      // but a real minor-unit delta that must become a guarded effect with
+      // adjustment evidence.
+      const acc = seedAccount("acc-1", {
+        balance: 1,
+        currency: "BTC",
+        userId: "user-1",
+      });
+      const tx = captureTxCreate();
+      wireAccountAndTransactionMocks(acc, tx.create);
+
+      const result = await updateAccountWithBalanceAdjustment(
+        "acc-1",
+        "user-1",
+        { name: "BTC", balance: 1.00001, isDefault: false },
+        { userId: "user-1", currency: "BTC" }
+      );
+
+      expect(result.success).toBe(true);
+      expect(mockEditGuardedAccount).toHaveBeenCalledTimes(1);
+      expect(guardedEditInput().nextBalance).toBe(1.00001);
+      expect(guardedEditInput().adjustmentTransaction).toEqual(
+        expect.objectContaining({
+          amount: 0.00001,
+          currency: "BTC",
+          type: "INCOME",
+        })
+      );
+      expect(tx.create).not.toHaveBeenCalled();
+    });
+
+    it("skips the adjustment when the delta rounds to zero minor units", async () => {
       const acc = seedAccount("acc-1", {
         name: "Old",
         balance: 100,
@@ -992,26 +1103,38 @@ describe("edit-account-service", () => {
       expect(result.success).toBe(true);
       expect(tx.create).not.toHaveBeenCalled();
       expect(acc.name).toBe("Renamed");
+      // Sub-minor-unit dust never touches the protected balance column.
+      expect(acc.balance).toBe(100);
+      expect(mockEditGuardedAccount).not.toHaveBeenCalled();
     });
 
     // ---- migrated `updateAccount` coverage (adjustment: null) ----------
 
-    it("updates account fields with null adjustment", async () => {
+    it("routes balance-changing metadata through the guarded command without an adjustment transaction", async () => {
       const acc = seedAccount("acc-1", {
         name: "Old Name",
         balance: 100,
         isDefault: false,
       });
+      const tx = captureTxCreate();
+      wireAccountAndTransactionMocks(acc, tx.create);
 
-      await updateAccountWithBalanceAdjustment(
+      const result = await updateAccountWithBalanceAdjustment(
         "acc-1",
         "user-1",
         { name: "New Name", balance: 500, isDefault: false },
         null
       );
 
-      expect(acc.name).toBe("New Name");
-      expect(acc.balance).toBe(500);
+      expect(result.success).toBe(true);
+      expect(mockEditGuardedAccount).toHaveBeenCalledTimes(1);
+      const input = guardedEditInput();
+      expect(input.nextBalance).toBe(500);
+      const projection: Record<string, unknown> = {};
+      input.updateMetadata(projection);
+      expect(projection.name).toBe("New Name");
+      expect(input.adjustmentTransaction).toBeUndefined();
+      expect(tx.create).not.toHaveBeenCalled();
     });
 
     it("trims the account name", async () => {
@@ -1025,6 +1148,36 @@ describe("edit-account-service", () => {
       );
 
       expect(acc.name).toBe("Trimmed Name");
+    });
+
+    it("unsets the previous default inside the guarded group when setting a new default", async () => {
+      const oldDefault = seedAccount("acc-old", {
+        name: "Old Default",
+        balance: 50,
+        isDefault: true,
+        userId: "user-1",
+      });
+      seedAccount("acc-new", {
+        name: "New Default",
+        balance: 0,
+        isDefault: false,
+        userId: "user-1",
+      });
+
+      const result = await updateAccountWithBalanceAdjustment(
+        "acc-new",
+        "user-1",
+        { name: "New Default", balance: 75, isDefault: true },
+        null
+      );
+
+      expect(result.success).toBe(true);
+      expect(oldDefault.isDefault).toBe(false);
+      const input = guardedEditInput();
+      const projection: Record<string, unknown> = {};
+      input.updateMetadata(projection);
+      expect(projection.isDefault).toBe(true);
+      expect(mockGetStore("transactions").size).toBe(0);
     });
 
     it("unsets previous default when setting new default", async () => {
@@ -1101,7 +1254,7 @@ describe("edit-account-service", () => {
     });
 
     it("preserves provider metadata when a partial account update omits provider fields", async () => {
-      const account = seedAccount("acc-1", {
+      seedAccount("acc-1", {
         name: "Bank Account",
         type: "BANK",
         isBank: true,
@@ -1109,7 +1262,7 @@ describe("edit-account-service", () => {
         providerDisplayName: "CIB",
       });
 
-      await updateAccountWithBalanceAdjustment(
+      const result = await updateAccountWithBalanceAdjustment(
         "acc-1",
         "user-1",
         {
@@ -1120,20 +1273,24 @@ describe("edit-account-service", () => {
         null
       );
 
-      expect(account.name).toBe("Updated Bank Account");
-      expect(account.institutionId).toBe("cib");
-      expect(account.providerDisplayName).toBe("CIB");
+      expect(result.success).toBe(true);
+      const input = guardedEditInput();
+      const projection: Record<string, unknown> = {};
+      input.updateMetadata(projection);
+      expect(projection.name).toBe("Updated Bank Account");
+      expect(projection).not.toHaveProperty("institutionId");
+      expect(projection).not.toHaveProperty("providerDisplayName");
     });
 
     it("respects an explicit provider display name clear", async () => {
-      const account = seedAccount("acc-1", {
+      seedAccount("acc-1", {
         name: "Bank Account",
         type: "BANK",
         isBank: true,
         providerDisplayName: "Legacy Bank",
       });
 
-      await updateAccountWithBalanceAdjustment(
+      const result = await updateAccountWithBalanceAdjustment(
         "acc-1",
         "user-1",
         {
@@ -1146,7 +1303,11 @@ describe("edit-account-service", () => {
         null
       );
 
-      expect(account.providerDisplayName).toBeUndefined();
+      expect(result.success).toBe(true);
+      const input = guardedEditInput();
+      const projection: Record<string, unknown> = {};
+      input.updateMetadata(projection);
+      expect(projection.providerDisplayName).toBeUndefined();
     });
 
     it("rejects institution ids that do not match the existing account type", async () => {

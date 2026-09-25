@@ -8,6 +8,9 @@ interface TestDatabaseModule {
   readonly __modelClasses: Array<typeof Model>;
 }
 
+const mockUserId = "018f0c7a-1234-4abc-8def-000000000201";
+const CATEGORY_ID = "018f0c7a-1234-4abc-8def-000000000202";
+
 jest.mock("@nozbe/watermelondb/adapters/sqlite/makeDispatcher", (): unknown => {
   const dispatcherModule: unknown = jest.requireActual(
     "@nozbe/watermelondb/adapters/sqlite/makeDispatcher/index.js"
@@ -23,18 +26,30 @@ jest.mock("@monyvi/db", () => {
   const SQLiteAdapter = jest.requireActual<
     typeof import("@nozbe/watermelondb/adapters/sqlite")
   >("@nozbe/watermelondb/adapters/sqlite").default;
+  const { setGenerator } = jest.requireActual<
+    typeof import("@nozbe/watermelondb/utils/common/randomId")
+  >("@nozbe/watermelondb/utils/common/randomId");
+  const { randomUUID } = jest.requireActual<typeof import("node:crypto")>(
+    "node:crypto"
+  );
   const { schema } = jest.requireActual<
     typeof import("../../../../packages/db/src/schema")
   >("../../../../packages/db/src/schema");
   const { Account } = jest.requireActual<
     typeof import("../../../../packages/db/src/models/Account")
   >("../../../../packages/db/src/models/Account");
+  const { AccountFinancialEffect } = jest.requireActual<
+    typeof import("../../../../packages/db/src/models/AccountFinancialEffect")
+  >("../../../../packages/db/src/models/AccountFinancialEffect");
   const { Category } = jest.requireActual<
     typeof import("../../../../packages/db/src/models/Category")
   >("../../../../packages/db/src/models/Category");
   const { RecurringPayment } = jest.requireActual<
     typeof import("../../../../packages/db/src/models/RecurringPayment")
   >("../../../../packages/db/src/models/RecurringPayment");
+  const { FinancialActionGroup } = jest.requireActual<
+    typeof import("../../../../packages/db/src/models/FinancialActionGroup")
+  >("../../../../packages/db/src/models/FinancialActionGroup");
   const { Transaction } = jest.requireActual<
     typeof import("../../../../packages/db/src/models/Transaction")
   >("../../../../packages/db/src/models/Transaction");
@@ -42,10 +57,13 @@ jest.mock("@monyvi/db", () => {
     typeof import("../../../../packages/db/src/models/Transfer")
   >("../../../../packages/db/src/models/Transfer");
 
+  setGenerator(randomUUID);
   const adapter = new SQLiteAdapter({ schema });
   const modelClasses = [
     Account,
+    AccountFinancialEffect,
     Category,
+    FinancialActionGroup,
     RecurringPayment,
     Transaction,
     Transfer,
@@ -54,7 +72,9 @@ jest.mock("@monyvi/db", () => {
 
   return {
     Account,
+    AccountFinancialEffect,
     Category,
+    FinancialActionGroup,
     RecurringPayment,
     Transaction,
     Transfer,
@@ -66,8 +86,21 @@ jest.mock("@monyvi/db", () => {
 });
 
 jest.mock("@/services/supabase", () => ({
-  getCurrentUserId: (): Promise<string> => Promise.resolve("user-1"),
+  getCurrentUserId: (): Promise<string> => Promise.resolve(mockUserId),
 }));
+
+jest.mock("expo-crypto", () => {
+  const actual = jest.requireActual<typeof import("expo-crypto")>("expo-crypto");
+  const { createHash, randomUUID } = jest.requireActual<
+    typeof import("node:crypto")
+  >("node:crypto");
+  return {
+    ...actual,
+    digestStringAsync: (_algorithm: string, value: string): Promise<string> =>
+      Promise.resolve(createHash("sha256").update(value).digest("hex")),
+    randomUUID,
+  };
+});
 
 import { submitRecurringPayment } from "@/services/recurring-payment-service";
 
@@ -88,24 +121,26 @@ async function seedAtomicityFixture(
 }> {
   return await database.write(async () => {
     const account = await database.get<Account>("accounts").create((record) => {
-      record.userId = "user-1";
+      record.userId = mockUserId;
       record.name = "Cash";
       record.type = "CASH";
       record.currency = "EGP";
       record.balance = 1000;
+      record.financialRevision = "0";
       record.isDefault = true;
       record.deleted = false;
     });
     const payment = await database
       .get<RecurringPayment>("recurring_payments")
       .create((record) => {
-        record.userId = "user-1";
+        record.userId = mockUserId;
         record.name = "Rent";
         record.amount = 250;
         record.currency = "EGP";
+        record.financialRevision = "0";
         record.type = "EXPENSE";
         record.accountId = account.id;
-        record.categoryId = "category-1";
+        record.categoryId = CATEGORY_ID;
         record.frequency = "MONTHLY";
         record.startDate = new Date("2026-06-01T00:00:00.000Z");
         record.endDate = endDate;
@@ -117,12 +152,12 @@ async function seedAtomicityFixture(
 
     await database.get<Transaction>("transactions").create((record) => {
       record._raw.id = conflictTransactionId;
-      record.userId = "user-1";
+      record.userId = mockUserId;
       record.accountId = account.id;
       record.amount = 1;
       record.currency = "EGP";
       record.type = "EXPENSE";
-      record.categoryId = "category-1";
+      record.categoryId = CATEGORY_ID;
       record.date = new Date("2026-06-01T00:00:00.000Z");
       record.source = "MANUAL";
       record.isDraft = false;
@@ -186,17 +221,16 @@ describe("recurring payment SQLite atomicity", () => {
     const adapterBatchSpy = jest
       .spyOn(database.adapter, "batch")
       .mockImplementation(async (operations): Promise<void> => {
-        if (operations.length !== 3) {
-          await originalAdapterBatch(operations);
-          return;
-        }
-
-        const transactionCreateOperation = operations[0];
+        const transactionCreateOperation = operations.find(
+          (operation) =>
+            operation[0] === "create" && operation[1] === "transactions"
+        );
         if (
           transactionCreateOperation?.[0] !== "create" ||
           transactionCreateOperation[1] !== "transactions"
         ) {
-          throw new Error("Expected transaction create operation first");
+          await originalAdapterBatch(operations);
+          return;
         }
 
         const conflictingOperation: typeof transactionCreateOperation = [

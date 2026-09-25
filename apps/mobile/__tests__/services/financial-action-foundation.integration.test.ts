@@ -10,6 +10,7 @@ import type { Model } from "@nozbe/watermelondb";
 import {
   assertDirectCachedLinkedOperationOwnership,
   assertDirectPreparedLinkedOperationOwnership,
+  createDatabaseBatchBridge,
   type MockFinancialActionRecord as MockRecord,
 } from "./financial-action-foundation-test-model";
 import { LEGACY_FINANCIAL_ACTION_TEST_REGISTRY } from "./financial-action-foundation-test-registry";
@@ -89,6 +90,7 @@ const mockDatabaseBatch = jest.fn(
     return Promise.resolve();
   }
 );
+const mockBatchBridge = createDatabaseBatchBridge(mockDatabaseBatch);
 
 jest.mock("@monyvi/db", () => ({
   database: {
@@ -96,7 +98,7 @@ jest.mock("@monyvi/db", () => ({
     write: <T>(action: () => Promise<T>): Promise<T> =>
       mockDatabaseWrite(action) as Promise<T>,
     batch: (...operations: MockRecord[]): Promise<void> =>
-      mockDatabaseBatch(...operations),
+      mockBatchBridge.batch(...operations),
   },
 }));
 
@@ -145,9 +147,11 @@ import {
   createFinancialActionFoundationRepository,
 } from "../../services/financial-action-foundation-repository";
 
+const mockDbModule: typeof import("@monyvi/db") =
+  jest.requireMock("@monyvi/db");
+Reflect.set(mockDbModule.database, "adapter", mockBatchBridge.adapter);
 const testRepository = createFinancialActionFoundationRepository({
-  database:
-    jest.requireMock<typeof import("@monyvi/db")>("@monyvi/db").database,
+  database: mockDbModule.database,
   getCurrentUserDataScope: jest.requireMock<
     typeof import("../../services/user-data-access")
   >("../../services/user-data-access").getCurrentUserDataScope,
@@ -717,10 +721,9 @@ describe("financial action foundation repository", () => {
 
   it("never batches a child model whose owned parent is foreign", async () => {
     const child = existingLinkedOperation("foreign-owned-parent-row");
-    const parentUserId = "018f0c7a-1234-7abc-8def-000000000099";
     const assertOwnedParent = jest.fn(
       (expectedUserId: string): Promise<void> => {
-        if (parentUserId !== expectedUserId)
+        if ("018f0c7a-1234-7abc-8def-000000000099" !== expectedUserId)
           throw new Error("ownership_failed");
         return Promise.resolve();
       }

@@ -1,0 +1,335 @@
+import { canonicalizeFinancialActionEnvelope } from "../action-contracts";
+import { DEFAULT_FINANCIAL_ACTION_REGISTRY } from "../action-registry";
+
+const ACTION_ID = "10000000-0000-4000-8000-000000000001";
+const USER_ID = "20000000-0000-4000-8000-000000000002";
+const ACCOUNT_ID = "30000000-0000-4000-8000-000000000003";
+const EFFECT_ID = "40000000-0000-4000-8000-000000000004";
+
+const ACCOUNT_EDIT_ENVELOPE = {
+  accountGuards: [{ accountId: ACCOUNT_ID, expectedRevision: "7" }],
+  actionId: ACTION_ID,
+  domain: "accounts",
+  domainReferenceId: ACCOUNT_ID,
+  envelopeVersion: "monyvi.financial-action/v1",
+  kind: "edit_balance",
+  occurredAt: "2026-09-01T12:00:00.000Z",
+  payload: {
+    accountEffects: [
+      {
+        accountId: ACCOUNT_ID,
+        amountMinorUnits: "2500",
+        currency: "EGP",
+        effectId: EFFECT_ID,
+      },
+    ],
+    domainMutation: {
+      records: [
+        {
+          after: {
+            createdAt: "2026-08-01T12:00:00.000Z",
+            currency: "EGP",
+            deleted: false,
+            id: ACCOUNT_ID,
+            institutionId: null,
+            isDefault: true,
+            name: "Cash",
+            openingBalanceMinorUnits: null,
+            providerDisplayName: null,
+            targetBalanceMinorUnits: "12500",
+            type: "CASH",
+          },
+          entity: "account",
+          expectedUpdatedAt: "2026-08-31T12:00:00.000Z",
+          mode: "update",
+        },
+      ],
+    },
+    domainRecordRefs: [ACCOUNT_ID],
+    operationCode: "account.edit-balance",
+    schemaVersion: "account.balance-effects/v1",
+  },
+  payloadVersion: "account.balance-effects/v1",
+  userId: USER_ID,
+};
+type AccountEditEnvelope = typeof ACCOUNT_EDIT_ENVELOPE;
+
+function accountEditEnvelope(): AccountEditEnvelope {
+  return ACCOUNT_EDIT_ENVELOPE;
+}
+
+describe("account.balance-effects/v1", () => {
+  it("keeps all six Metals definitions and registers every guarded writer tuple", () => {
+    expect(DEFAULT_FINANCIAL_ACTION_REGISTRY.definitions).toHaveLength(24);
+    expect(
+      DEFAULT_FINANCIAL_ACTION_REGISTRY.resolve(
+        "accounts",
+        "edit_balance",
+        "account.balance-effects/v1"
+      )
+    ).toBeDefined();
+  });
+
+  it("accepts an exact guarded account mutation", () => {
+    expect(canonicalizeFinancialActionEnvelope(accountEditEnvelope())).toEqual(
+      accountEditEnvelope()
+    );
+  });
+
+  it("rejects extra payload keys", () => {
+    const value = accountEditEnvelope();
+    expect(() =>
+      canonicalizeFinancialActionEnvelope({
+        ...value,
+        payload: { ...value.payload, extra: true },
+      })
+    ).toThrow();
+  });
+
+  it("rejects zero effects", () => {
+    const value = accountEditEnvelope();
+    expect(() =>
+      canonicalizeFinancialActionEnvelope({
+        ...value,
+        payload: {
+          ...value.payload,
+          accountEffects: [
+            { ...value.payload.accountEffects[0], amountMinorUnits: "0" },
+          ],
+        },
+      })
+    ).toThrow();
+  });
+
+  it("rejects unknown operations", () => {
+    const value = accountEditEnvelope();
+    expect(() =>
+      canonicalizeFinancialActionEnvelope({
+        ...value,
+        payload: { ...value.payload, operationCode: "account.unknown" },
+      })
+    ).toThrow();
+  });
+
+  it("rejects missing domain mutations", () => {
+    const value = accountEditEnvelope();
+    const { domainMutation: _domainMutation, ...payload } = value.payload;
+    expect(() =>
+      canonicalizeFinancialActionEnvelope({ ...value, payload })
+    ).toThrow();
+  });
+
+  it("rejects guard/effect mismatches", () => {
+    const value = accountEditEnvelope();
+    expect(() =>
+      canonicalizeFinancialActionEnvelope({
+        ...value,
+        accountGuards: [{ accountId: ACTION_ID, expectedRevision: "7" }],
+      })
+    ).toThrow();
+  });
+
+  it("accepts an account edit with its balance-adjustment transaction evidence", () => {
+    const transactionId = "50000000-0000-4000-8000-000000000005";
+    const value = accountEditEnvelope();
+    const envelope = {
+      ...value,
+      payload: {
+        ...value.payload,
+        domainMutation: {
+          records: [
+            ...value.payload.domainMutation.records,
+            {
+              after: {
+                accountId: ACCOUNT_ID,
+                amountMinorUnits: "2500",
+                categoryId: "00000000-0000-0000-0001-000000000200",
+                counterparty: null,
+                createdAt: "2026-09-18T12:00:00.000Z",
+                currency: "EGP",
+                date: "2026-09-18",
+                deleted: false,
+                id: transactionId,
+                isDraft: false,
+                linkedAssetId: null,
+                linkedDebtId: null,
+                linkedRecurringId: null,
+                note: "Balance adjustment: 100 → 125",
+                smsFingerprint: null,
+                source: "MANUAL",
+                type: "INCOME",
+              },
+              entity: "transaction",
+              expectedUpdatedAt: null,
+              mode: "create",
+            },
+          ],
+        },
+        domainRecordRefs: [ACCOUNT_ID, transactionId],
+      },
+    };
+    expect(canonicalizeFinancialActionEnvelope(envelope)).toEqual(envelope);
+  });
+
+  it("rejects an account edit whose adjustment transaction belongs to another account", () => {    const transactionId = "50000000-0000-4000-8000-000000000005";
+    const foreignAccountId = "60000000-0000-4000-8000-000000000006";
+    const value = accountEditEnvelope();
+    expect(() =>
+      canonicalizeFinancialActionEnvelope({
+        ...value,
+        payload: {
+          ...value.payload,
+          domainMutation: {
+            records: [
+              ...value.payload.domainMutation.records,
+              {
+                after: {
+                  accountId: foreignAccountId,
+                  amountMinorUnits: "2500",
+                  categoryId: "00000000-0000-0000-0001-000000000200",
+                  counterparty: null,
+                  createdAt: "2026-09-18T12:00:00.000Z",
+                  currency: "EGP",
+                  date: "2026-09-18",
+                  deleted: false,
+                  id: transactionId,
+                  isDraft: false,
+                  linkedAssetId: null,
+                  linkedDebtId: null,
+                  linkedRecurringId: null,
+                  note: "Balance adjustment: 100 → 125",
+                  smsFingerprint: null,
+                  source: "MANUAL",
+                  type: "INCOME",
+                },
+                entity: "transaction",
+                expectedUpdatedAt: null,
+                mode: "create",
+              },
+            ],
+          },
+          domainRecordRefs: [ACCOUNT_ID, transactionId],
+        },
+      })
+    ).toThrow("financial_action_invalid_payload");
+  });
+
+  function adjustmentEnvelope(
+    overrides: Record<string, unknown>
+  ): Record<string, unknown> {
+    const transactionId = "50000000-0000-4000-8000-000000000005";
+    const value = accountEditEnvelope();
+    return {
+      ...value,
+      payload: {
+        ...value.payload,
+        domainMutation: {
+          records: [
+            ...value.payload.domainMutation.records,
+            {
+              after: {
+                accountId: ACCOUNT_ID,
+                amountMinorUnits: "2500",
+                categoryId: "00000000-0000-0000-0001-000000000200",
+                counterparty: null,
+                createdAt: "2026-09-18T12:00:00.000Z",
+                currency: "EGP",
+                date: "2026-09-18",
+                deleted: false,
+                id: transactionId,
+                isDraft: false,
+                linkedAssetId: null,
+                linkedDebtId: null,
+                linkedRecurringId: null,
+                note: "Balance adjustment: 100 → 125",
+                smsFingerprint: null,
+                source: "MANUAL",
+                type: "INCOME",
+                ...overrides,
+              },
+              entity: "transaction",
+              expectedUpdatedAt: null,
+              mode: "create",
+            },
+          ],
+        },
+        domainRecordRefs: [ACCOUNT_ID, transactionId],
+      },
+    };
+  }
+
+  it.each(["VOICE", "SMS", "RECURRING"])(
+    "rejects an adjustment transaction with non-MANUAL source %s",
+    (source) => {
+      expect(() =>
+        canonicalizeFinancialActionEnvelope(adjustmentEnvelope({ source }))
+      ).toThrow("financial_action_invalid_payload");
+    }
+  );
+
+  it("rejects an adjustment transaction that is a draft", () => {
+    expect(() =>
+      canonicalizeFinancialActionEnvelope(
+        adjustmentEnvelope({ isDraft: true })
+      )
+    ).toThrow("financial_action_invalid_payload");
+  });
+
+  it.each(["linkedAssetId", "linkedDebtId", "linkedRecurringId"])(
+    "rejects an adjustment transaction with link %s",
+    (field) => {
+      expect(() =>
+        canonicalizeFinancialActionEnvelope(
+          adjustmentEnvelope({
+            [field]: "60000000-0000-4000-8000-000000000006",
+          })
+        )
+      ).toThrow("financial_action_invalid_payload");
+    }
+  );
+
+  it("rejects an adjustment transaction carrying an sms fingerprint", () => {
+    expect(() =>
+      canonicalizeFinancialActionEnvelope(
+        adjustmentEnvelope({ smsFingerprint: "fp-1" })
+      )
+    ).toThrow("financial_action_invalid_payload");
+  });
+
+  it("rejects an adjustment transaction carrying a counterparty", () => {
+    expect(() =>
+      canonicalizeFinancialActionEnvelope(
+        adjustmentEnvelope({ counterparty: "Store" })
+      )
+    ).toThrow("financial_action_invalid_payload");
+  });
+
+  it("rejects an adjustment transaction with mismatched income category", () => {
+    expect(() =>
+      canonicalizeFinancialActionEnvelope(
+        adjustmentEnvelope({
+          categoryId: "00000000-0000-0000-0001-000000000201",
+        })
+      )
+    ).toThrow("financial_action_invalid_payload");
+  });
+
+  it("rejects an adjustment transaction with mismatched expense category", () => {
+    expect(() =>
+      canonicalizeFinancialActionEnvelope(
+        adjustmentEnvelope({
+          categoryId: "00000000-0000-0000-0001-000000000200",
+          type: "EXPENSE",
+        })
+      )
+    ).toThrow("financial_action_invalid_payload");
+  });
+
+  it("rejects an adjustment transaction with divergent currency", () => {
+    expect(() =>
+      canonicalizeFinancialActionEnvelope(
+        adjustmentEnvelope({ currency: "USD" })
+      )
+    ).toThrow("financial_action_invalid_payload");
+  });
+});

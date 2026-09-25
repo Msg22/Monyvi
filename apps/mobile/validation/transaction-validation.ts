@@ -15,6 +15,7 @@ export interface TransactionFormData {
   readonly amount: string;
   readonly accountId: string | null;
   readonly categoryId: string;
+  readonly currency?: CurrencyType;
   readonly isRecurring?: boolean;
   readonly recurringName?: string;
 }
@@ -23,6 +24,7 @@ export interface TransferFormData {
   readonly amount: string;
   readonly fromAccountId: string | null;
   readonly toAccountId: string | null;
+  readonly currency?: CurrencyType;
 }
 
 export interface TransactionValidationMessages {
@@ -144,6 +146,7 @@ function createTransferSchema(
       amount: createAmountSchema(options, messages),
       fromAccountId: requiredIdSchema(messages.sourceAccountRequired),
       toAccountId: requiredIdSchema(messages.destinationAccountRequired),
+      currency: z.custom<CurrencyType>().optional(),
     })
     .refine((data) => data.fromAccountId !== data.toAccountId, {
       message: "Source and destination accounts must be different",
@@ -185,10 +188,20 @@ export function validateTransactionForm(
   options: TransactionValidationOptions = {}
 ): { isValid: boolean; errors: TransactionValidationErrors } {
   const validationMessages = { ...defaultValidationMessages, ...messages };
+  // If options.currency is not provided, derive it from the form data (supports
+  // callers that embed currency in form data rather than separate options).
+  const dataCurrency =
+    "currency" in data && data.currency !== undefined
+      ? data.currency
+      : undefined;
+  const resolvedOptions: TransactionValidationOptions =
+    options.currency !== undefined
+      ? options
+      : { ...options, currency: dataCurrency };
   const schema =
     type === "TRANSFER"
-      ? createTransferSchema(validationMessages, options)
-      : createBaseTransactionSchema(validationMessages, options);
+      ? createTransferSchema(validationMessages, resolvedOptions)
+      : createBaseTransactionSchema(validationMessages, resolvedOptions);
   const result = schema.safeParse(data);
 
   if (result.success) {
