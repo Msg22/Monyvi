@@ -110,7 +110,8 @@ function createDependencies(
       return true;
     },
     getPolicy: () => DEFAULT_SMS_SAFEGUARD_POLICY,
-    fixedPrompt: "prompt",
+    buildFixedPrompt: () => "prompt",
+    buildCategoryContext: (categories) => categories,
     buildResponseSchema: (supportedCurrencies) =>
       JSON.stringify({ supportedCurrencies }),
     shouldExclude: () => false,
