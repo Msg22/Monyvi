@@ -3,7 +3,13 @@ appId: com.monyvi.app
 # T088 Red contract. Runner profiles must provide a single active Gold holding
 # with immutable persisted facts, plus offline and Arabic RTL variants.
 - runFlow: ../helpers/setup.yaml
-- openLink: monyvi://metals/holding-e2e-gold/edit
+- openLink: monyvi://metals/holding-e2e-gold
+- scrollUntilVisible:
+    element:
+      id: metal-holding-action-edit
+    direction: DOWN
+- tapOn:
+    id: metal-holding-action-edit
 - extendedWaitUntil:
     visible:
       id: metal-holding-edit-screen
@@ -29,7 +35,13 @@ appId: com.monyvi.app
 # The weight "after" value is rendered only as text inside the What will
 # change summary (PreviousValueCue renders metal-holding-weight-previous for
 # the "before" cue); there is no metal-holding-weight-current testID.
-- openLink: monyvi://metals/holding-e2e-gold/edit
+- openLink: monyvi://metals/holding-e2e-gold
+- scrollUntilVisible:
+    element:
+      id: metal-holding-action-edit
+    direction: DOWN
+- tapOn:
+    id: metal-holding-action-edit
 - tapOn:
     id: metal-holding-weight-field
 - eraseText: 20
@@ -52,7 +64,13 @@ appId: com.monyvi.app
     timeout: 30000
 
 # Reverted material delta restores ordinary direct-save state; offline cannot block it.
-- openLink: monyvi://metals/holding-e2e-gold/edit
+- openLink: monyvi://metals/holding-e2e-gold
+- scrollUntilVisible:
+    element:
+      id: metal-holding-action-edit
+    direction: DOWN
+- tapOn:
+    id: metal-holding-action-edit
 - tapOn:
     id: metal-holding-physical-form-field
 - tapOn:

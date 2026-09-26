@@ -2,7 +2,9 @@ import { getHoldingDetailTitleKey } from "@/components/metals/holding-detail-pre
 import { MetalHoldingDetailScreen } from "@/components/metals/MetalHoldingDetailScreen";
 import { PageHeader } from "@/components/navigation/PageHeader";
 import { useMetalHoldingDetail } from "@/hooks/useMetalHoldingDetail";
-import { useLocalSearchParams } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
+import { getHoldingActionDescriptors } from "@/components/metals/holding-actions/registry";
+import { getEditMetalHoldingHref } from "@/components/metals/holding-actions/edit-action";
 import React from "react";
 import { View } from "react-native";
 import { useTranslation } from "react-i18next";
@@ -21,7 +23,17 @@ export default function MetalHoldingDetailRoute(): React.JSX.Element {
         title={t(getHoldingDetailTitleKey(detail.model?.status))}
       />
       <MetalHoldingDetailScreen
-        actions={[]}
+        actions={
+          detail.model
+            ? getHoldingActionDescriptors(detail.model).filter(
+                (action) => action.id === "edit"
+              )
+            : []
+        }
+        onAction={(action): void => {
+          if (action === "edit" && holdingId)
+            router.push(getEditMetalHoldingHref(holdingId));
+        }}
         {...detail}
         onRetry={detail.retry}
       />

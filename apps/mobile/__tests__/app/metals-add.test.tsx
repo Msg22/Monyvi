@@ -193,6 +193,19 @@ describe("Add metal holding form", () => {
     jest.clearAllMocks();
   });
 
+  it("uses sentence-case form labels and a supported dark preview surface", () => {
+    renderForm();
+    expect(screen.getByText("Holding name").props.className).not.toContain(
+      "input-label"
+    );
+    expect(
+      screen.getByTestId("metal-holding-live-preview").props.className
+    ).toContain("dark:bg-slate-900");
+    expect(screen.getByTestId("metal-holding-submit-area")).toHaveStyle({
+      paddingBottom: 46,
+    });
+  });
+
   it("renders V1's direct-Add fields in canonical order with the ordinary-phone Weight/Purity row", () => {
     renderForm();
 
@@ -419,7 +432,10 @@ describe("Add metal holding route", () => {
 
     expect(trapped).toBe(false);
     expect(backSpy).toHaveBeenCalledTimes(1);
-    expect(usePreventRemove).toHaveBeenLastCalledWith(false, expect.any(Function));
+    expect(usePreventRemove).toHaveBeenLastCalledWith(
+      false,
+      expect.any(Function)
+    );
 
     backSpy.mockRestore();
   });

@@ -727,7 +727,7 @@ describe("US1 portfolio surfaces", () => {
     expect(screen.getByText("No Silver holdings yet")).toBeTruthy();
     expect(screen.queryByText(/older than 24 hours/i)).toBeNull();
     expect(screen.getByText(/Prices last updated/)).toBeTruthy();
-    expect(screen.getByText("Offline mode")).toBeTruthy();
+    expect(screen.queryByText("Offline mode")).toBeNull();
 
     const onRetry = jest.fn();
     renderPortfolio({ error: new Error("local observer failed"), onRetry });

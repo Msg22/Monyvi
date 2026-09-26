@@ -86,7 +86,6 @@ export function MetalHoldingDetailScreen(
         <DetailHeader
           error={props.error}
           hasMoreHistory={model.timeline.length > 2}
-          isOffline={props.isOffline}
           model={model}
           onRetry={props.onRetry}
           onToggleCalculation={() => setShowCalculation((value) => !value)}
@@ -136,7 +135,6 @@ function DetailSkeleton(): React.JSX.Element {
 function DetailHeader({
   error,
   hasMoreHistory,
-  isOffline,
   model,
   onRetry,
   onToggleCalculation,
@@ -146,7 +144,6 @@ function DetailHeader({
 }: {
   readonly error: Error | null;
   readonly hasMoreHistory: boolean;
-  readonly isOffline: boolean;
   readonly model: MetalDetailReadModel;
   readonly onRetry: () => void;
   readonly onToggleCalculation: () => void;
@@ -179,11 +176,6 @@ function DetailHeader({
       ) : (
         <MetalTerminalDetail model={model} />
       )}
-      {isOffline ? (
-        <Text className="mt-3 text-sm text-text-muted dark:text-text-muted-dark">
-          {t("detail.offline")}
-        </Text>
-      ) : null}
       {error === null ? null : <Retry onRetry={onRetry} />}
       {model.isActiveOwnership ? <ValueJourney model={model} /> : null}
       {canExplainCalculation ? (

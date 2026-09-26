@@ -76,11 +76,6 @@ export function MetalHistoryScreen(
           <Text className="text-base text-text-secondary dark:text-text-secondary-dark">
             {t("history.subtitle")}
           </Text>
-          {props.isOffline ? (
-            <Text className="mt-3 text-sm text-text-muted dark:text-text-muted-dark">
-              {t("history.offline")}
-            </Text>
-          ) : null}
           <View className="mt-5">
             <FilterBar
               counts={props.history.counts}

@@ -29,14 +29,14 @@ export function MetalSelector({
       testID="metal-holding-metal-field"
       accessibilityState={{ disabled: isDisabled || isLocked }}
     >
-      <Text className="mb-2 text-sm font-semibold text-text-secondary dark:text-text-secondary-dark">
+      <Text className="mb-1 text-sm font-normal text-text-secondary dark:text-text-secondary-dark">
         {copy.metal}
       </Text>
       {isLocked ? (
         <>
           <View
             testID="metal-holding-metal-locked"
-            className="min-h-14 flex-row items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 dark:border-slate-700 dark:bg-slate-800"
+            className="min-h-11 flex-row items-center gap-3 rounded-lg border border-slate-200 bg-white px-4 dark:border-slate-700 dark:bg-slate-800"
           >
             <Ionicons
               name="lock-closed-outline"
@@ -67,19 +67,19 @@ export function MetalSelector({
                 accessibilityState={{ checked: isSelected }}
                 disabled={isDisabled}
                 onPress={() => onChange("metal", metal)}
-                className={`min-h-14 flex-1 flex-row items-center justify-center gap-2 rounded-2xl border ${
+                className={`min-h-11 flex-1 flex-row items-center justify-center gap-2 rounded-lg border ${
                   isSelected
-                    ? "border-nileGreen-700 bg-nileGreen-50 dark:border-nileGreen-400 dark:bg-nileGreen-950"
-                    : "border-slate-300 bg-slate-25 dark:border-slate-700 dark:bg-slate-950"
+                    ? "border-nileGreen-700 bg-slate-25 dark:border-nileGreen-400 dark:bg-slate-900"
+                    : "border-slate-300 bg-slate-25 dark:border-slate-700 dark:bg-slate-900"
                 }`}
               >
                 <View
-                  className={`h-3 w-3 rounded-full ${metal === "GOLD" ? "bg-gold-500" : "bg-slate-400"}`}
+                  className={`h-3 w-3 rounded-full ${metal === "GOLD" ? "bg-gold-400" : "bg-slate-400"}`}
                 />
                 <Text
                   className={
                     isSelected
-                      ? "font-semibold text-nileGreen-800 dark:text-nileGreen-300"
+                      ? "font-semibold text-nileGreen-800 dark:text-nileGreen-400"
                       : "text-text-secondary dark:text-text-secondary-dark"
                   }
                 >
@@ -116,7 +116,7 @@ export function PhysicalFormSelector({
   ];
   return (
     <View testID="metal-holding-physical-form-field">
-      <Text className="mb-2 text-sm font-semibold text-text-secondary dark:text-text-secondary-dark">
+      <Text className="mb-1 text-sm font-normal text-text-secondary dark:text-text-secondary-dark">
         {copy.physicalForm}
       </Text>
       <View className={isStacked ? "gap-2" : "flex-row gap-2"}>
@@ -132,15 +132,16 @@ export function PhysicalFormSelector({
               onPress={() =>
                 onChange("physicalForm", isSelected ? null : form.value)
               }
-              className={`min-h-28 items-center justify-center rounded-2xl border px-2 py-2 ${
+              className={`min-h-20 items-center justify-center rounded-lg border px-2 py-2 ${
                 isStacked ? "w-full" : "flex-1"
               } ${
                 isSelected
-                  ? "border-nileGreen-700 bg-nileGreen-50 dark:border-nileGreen-400 dark:bg-nileGreen-950"
-                  : "border-slate-300 bg-slate-25 dark:border-slate-700 dark:bg-slate-950"
+                  ? "border-nileGreen-700 bg-slate-25 dark:border-nileGreen-400 dark:bg-slate-900"
+                  : "border-slate-300 bg-slate-25 dark:border-slate-700 dark:bg-slate-900"
               }`}
             >
               <MetalHoldingRender
+                size="form"
                 itemForm={
                   form.value.toLowerCase() as "coin" | "bar" | "jewelry"
                 }
@@ -155,11 +156,11 @@ export function PhysicalFormSelector({
                 }`}
               >
                 {isSelected ? (
-                  <View className="h-2.5 w-2.5 rounded-full bg-nileGreen-700 dark:border-nileGreen-400" />
+                  <View className="h-2.5 w-2.5 rounded-full bg-nileGreen-700 dark:bg-nileGreen-400" />
                 ) : null}
               </View>
               <Text
-                className={`text-sm ${isSelected ? "font-semibold text-nileGreen-800 dark:text-nileGreen-300" : "text-text-secondary dark:text-text-secondary-dark"}`}
+                className={`text-sm ${isSelected ? "font-semibold text-nileGreen-800 dark:text-nileGreen-400" : "text-text-secondary dark:text-text-secondary-dark"}`}
               >
                 {form.label}
               </Text>

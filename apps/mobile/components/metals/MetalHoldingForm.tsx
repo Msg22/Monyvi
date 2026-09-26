@@ -2,7 +2,13 @@ import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker, {
   type DateTimePickerEvent,
 } from "@react-native-community/datetimepicker";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   KeyboardAvoidingView,
   Platform,
@@ -18,6 +24,7 @@ import { Dropdown, type DropdownItem } from "@/components/ui/Dropdown";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { TextField } from "@/components/ui/TextField";
 import { palette } from "@/constants/colors";
+import { useTheme } from "@/context/ThemeContext";
 import { shouldUseCompactLayout } from "@/constants/ui";
 
 import { MetalHoldingLivePreview } from "./MetalHoldingLivePreview";
@@ -313,6 +320,7 @@ export function MetalHoldingForm({
   onAcknowledgeStaleRate,
   onCorrectionReasonChange,
 }: MetalHoldingFormProps): React.JSX.Element {
+  const { isDark } = useTheme();
   const [isPurityOpen, setIsPurityOpen] = useState(false);
   const [isCurrencyOpen, setIsCurrencyOpen] = useState(false);
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
@@ -394,6 +402,8 @@ export function MetalHoldingForm({
         }
       />
       <PageHeader
+        variant="review"
+        includeTopSafeAreaInset
         title={title}
         showDrawer={false}
         showBackButton
@@ -406,11 +416,12 @@ export function MetalHoldingForm({
       ) : (
         <ScrollView
           className="flex-1"
-          contentContainerClassName="gap-4 px-5 pb-6"
+          contentContainerClassName="w-full max-w-2xl self-center gap-3 px-5 pb-4 pt-2"
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
           <TextField
+            variant="outlined"
             testID="metal-holding-name-field"
             inputRef={nameInputRef}
             label={copy.name}
@@ -473,6 +484,7 @@ export function MetalHoldingForm({
                 className={shouldStackDenseFields ? "gap-5" : "flex-row gap-3"}
               >
                 <TextField
+                  variant="outlined"
                   testID="metal-holding-weight-field"
                   inputRef={weightInputRef}
                   containerClassName="flex-1"
@@ -486,13 +498,16 @@ export function MetalHoldingForm({
                   keyboardType="decimal-pad"
                   inputMode="decimal"
                   trailingAdornment={
-                    <Text className="text-base text-text-secondary dark:text-text-secondary-dark">
-                      g
-                    </Text>
+                    <View className="h-full w-full items-center justify-center border-s border-slate-200 dark:border-slate-700">
+                      <Text className="text-base text-text-secondary dark:text-text-secondary-dark">
+                        g
+                      </Text>
+                    </View>
                   }
                 />
                 <View className="flex-1">
                   <Dropdown
+                    variant="outlined"
                     testID="metal-holding-purity"
                     label={copy.purity}
                     items={purityOptions}
@@ -522,6 +537,7 @@ export function MetalHoldingForm({
           {!isMaterialEditDisabled ? (
             <View>
               <TextField
+                variant="outlined"
                 testID="metal-holding-purchase-price-field"
                 inputRef={purchasePriceInputRef}
                 label={copy.purchasePrice}
@@ -552,6 +568,7 @@ export function MetalHoldingForm({
           {!isMaterialEditDisabled ? (
             <View testID="metal-holding-purchase-currency-field">
               <Dropdown
+                variant="outlined"
                 label={copy.purchaseCurrency}
                 items={currencyOptions}
                 value={values.purchaseCurrency}
@@ -582,6 +599,7 @@ export function MetalHoldingForm({
               >
                 <View pointerEvents="none">
                   <TextField
+                    variant="outlined"
                     testID="metal-holding-purchase-date-input"
                     label={copy.purchaseDate}
                     value={formatPurchaseDate(values.purchaseDate, locale)}
@@ -636,6 +654,7 @@ export function MetalHoldingForm({
           ) : null}
 
           <TextField
+            variant="outlined"
             testID="metal-holding-notes-field"
             label={copy.notes}
             value={values.notes}
@@ -736,7 +755,7 @@ export function MetalHoldingForm({
             <Ionicons
               name="lock-closed-outline"
               size={18}
-              color={palette.nileGreen[700]}
+              color={isDark ? palette.nileGreen[400] : palette.nileGreen[700]}
             />
             <Text className="flex-1 text-xs leading-5 text-text-secondary dark:text-text-secondary-dark">
               {copy.savedLocally}
@@ -747,7 +766,7 @@ export function MetalHoldingForm({
 
       <View
         testID="metal-holding-submit-area"
-        className="border-t border-slate-200 bg-slate-25 px-5 pt-3 dark:border-slate-800 dark:bg-slate-950"
+        className="w-full max-w-2xl self-center bg-slate-25 px-5 pt-2 dark:bg-slate-950"
         style={{ paddingBottom: bottomInset + 12 }}
         {...submitAreaMetadata}
       >
@@ -758,7 +777,7 @@ export function MetalHoldingForm({
           accessibilityState={{ disabled: isSubmitting, busy: isSubmitting }}
           disabled={isSubmitting}
           onPress={submit}
-          className="min-h-12 items-center justify-center rounded-2xl bg-nileGreen-700 px-5 py-3 dark:bg-nileGreen-500"
+          className="min-h-12 items-center justify-center rounded-lg bg-nileGreen-800 px-5 py-3 dark:bg-nileGreen-500"
           style={isSubmitting ? { opacity: 0.55 } : undefined}
         >
           <Text className="text-base font-bold text-slate-25 dark:text-slate-950">
@@ -784,7 +803,6 @@ export function MetalHoldingForm({
   );
 }
 
-
 function PreviousValueCue({
   change,
   copy,
@@ -794,7 +812,7 @@ function PreviousValueCue({
 }): React.JSX.Element | null {
   if (change === null) return null;
   return (
-    <View className="mt-1 flex-row items-center gap-2 self-start rounded-lg bg-nileGreen-50 px-2 py-1 dark:bg-nileGreen-950">
+    <View className="mt-1 flex-row items-center gap-2 self-start rounded-lg bg-nileGreen-50 px-2 py-1 dark:bg-slate-900">
       <Ionicons
         name="information-circle-outline"
         size={16}

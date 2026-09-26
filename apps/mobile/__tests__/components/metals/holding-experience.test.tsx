@@ -318,7 +318,7 @@ describe("US3 holding experience", () => {
       />
     );
     expect(screen.getByText("Current value unavailable")).toBeTruthy();
-    expect(screen.getByText("Offline mode")).toBeTruthy();
+    expect(screen.queryByText("Offline mode")).toBeNull();
     fireEvent.press(screen.getByText("Try again"));
     expect(onRetry).toHaveBeenCalledTimes(1);
   });

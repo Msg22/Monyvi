@@ -20,6 +20,7 @@ import { palette } from "@/constants/colors";
 
 interface TextFieldProps extends TextInputProps {
   readonly label: string;
+  readonly variant?: "default" | "outlined";
   readonly error?: string;
   readonly containerStyle?: ViewStyle;
   readonly containerClassName?: string;
@@ -36,6 +37,7 @@ const TRAILING_ADORNMENT_SPACE = 48;
 
 export function TextField({
   label,
+  variant = "default",
   error,
   containerStyle,
   containerClassName,
@@ -58,6 +60,9 @@ export function TextField({
   const externalValue = value ?? "";
   const [draftValue, setDraftValue] = useState(externalValue);
   const isFocusedRef = useRef(false);
+  const [leadingWidth, setLeadingWidth] = useState(LEADING_ADORNMENT_SPACE);
+  const leadingPadding =
+    variant === "outlined" ? leadingWidth + 8 : LEADING_ADORNMENT_SPACE;
 
   useEffect(() => {
     if (!isFocusedRef.current) {
@@ -90,15 +95,26 @@ export function TextField({
   );
 
   return (
-    <View style={containerStyle} className={containerClassName ?? "mb-4"}>
-      <Text className={labelClassName ?? "input-label"} style={labelStyle}>
+    <View
+      style={containerStyle}
+      className={containerClassName ?? (variant === "outlined" ? "" : "mb-4")}
+    >
+      <Text
+        className={
+          labelClassName ??
+          (variant === "outlined"
+            ? "mb-1 text-sm font-normal text-text-secondary dark:text-text-secondary-dark"
+            : "input-label")
+        }
+        style={labelStyle}
+      >
         {label}
       </Text>
       <View className="relative">
         <TextInput
           ref={inputRef}
           placeholderTextColor={palette.slate[400]}
-          className={`rounded-2xl border bg-white p-4 text-base font-semibold text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white ${
+          className={`${variant === "outlined" ? "min-h-11 rounded-lg border bg-slate-25 px-3 py-2 text-base font-normal text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-25" : "rounded-2xl border bg-white p-4 text-base font-semibold text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"} ${
             error ? "border-red-500" : "border-slate-200"
           } ${className || ""}`}
           {...props}
@@ -107,7 +123,7 @@ export function TextField({
           aria-invalid={Boolean(error)}
           style={[
             style,
-            leadingAdornment ? { paddingStart: LEADING_ADORNMENT_SPACE } : null,
+            leadingAdornment ? { paddingStart: leadingPadding } : null,
             trailingAdornment ? { paddingEnd: TRAILING_ADORNMENT_SPACE } : null,
           ]}
           value={draftValue}
@@ -119,12 +135,19 @@ export function TextField({
           <View
             testID={testID ? `${testID}-leading-adornment` : undefined}
             pointerEvents="none"
+            onLayout={
+              variant === "outlined"
+                ? (event): void =>
+                    setLeadingWidth(event.nativeEvent.layout.width)
+                : undefined
+            }
+            className={variant === "outlined" ? "ps-3" : undefined}
             style={{
               position: "absolute",
               top: 0,
               bottom: 0,
               start: 0,
-              width: 47,
+              width: variant === "outlined" ? undefined : 47,
               alignItems: "center",
               justifyContent: "center",
             }}

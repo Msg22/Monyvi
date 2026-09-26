@@ -62,7 +62,6 @@ export function MetalPortfolioScreen({
   currency,
   error,
   isLoading,
-  isOffline,
   onFilterChange,
   onHistoryPress,
   onHoldingPress,
@@ -114,7 +113,6 @@ export function MetalPortfolioScreen({
           <PortfolioHeader
             currency={currency}
             error={error}
-            isOffline={isOffline}
             onFilterChange={onFilterChange}
             onRetry={onRetry}
             portfolio={portfolio}
@@ -233,7 +231,6 @@ function RecentHistorySkeleton(): React.JSX.Element {
 function PortfolioHeader({
   currency,
   error,
-  isOffline,
   onFilterChange,
   onRetry,
   portfolio,
@@ -243,7 +240,6 @@ function PortfolioHeader({
 }: {
   readonly currency: CurrencyType;
   readonly error: Error | null;
-  readonly isOffline: boolean;
   readonly onFilterChange: (filter: MetalPortfolioFilter) => void;
   readonly onRetry: () => void;
   readonly portfolio: MetalPortfolioReadModel | null;
@@ -251,7 +247,6 @@ function PortfolioHeader({
   readonly readiness: MetalPortfolioSectionReadiness;
   readonly selectedFilter: MetalPortfolioFilter;
 }): React.JSX.Element {
-  const { t } = useTranslation("metals");
   const { t: tCommon } = useTranslation("common");
   return (
     <>
@@ -274,11 +269,6 @@ function PortfolioHeader({
           />
           {portfolio.listState === "POPULATED" ? <HoldingsHeader /> : null}
         </>
-      ) : null}
-      {isOffline ? (
-        <Text className="mt-3 text-xs text-text-secondary dark:text-text-secondary-dark">
-          {t("offline_mode")}
-        </Text>
       ) : null}
       {error !== null &&
       (readiness.summary || readiness.holdings || readiness.recentHistory) ? (

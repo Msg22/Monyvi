@@ -5,6 +5,21 @@ import { Pressable, Text } from "react-native";
 import { TextField } from "@/components/ui/TextField";
 
 describe("TextField", () => {
+  it("reserves measured currency width for enlarged outlined inputs", () => {
+    render(
+      <TextField
+        variant="outlined"
+        testID="amount"
+        label="Amount"
+        value="47800"
+        leadingAdornment={<Text>EGP</Text>}
+      />
+    );
+    fireEvent(screen.getByTestId("amount-leading-adornment"), "layout", {
+      nativeEvent: { layout: { width: 80, height: 44, x: 0, y: 0 } },
+    });
+    expect(screen.getByLabelText("Amount")).toHaveStyle({ paddingStart: 88 });
+  });
   it("keeps fast typed text visible while a focused parent render is stale", () => {
     const onChangeText = jest.fn();
     const { rerender } = render(

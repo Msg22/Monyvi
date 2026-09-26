@@ -1,8 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
 import React from "react";
+import { t } from "i18next";
 import { Text, View } from "react-native";
 
 import { palette } from "@/constants/colors";
+import { useTheme } from "@/context/ThemeContext";
 import { isSupportedMetalsIsoCurrencyCode } from "@monyvi/logic";
 import { formatLocalizedMoneyAmount } from "@/utils/localized-money-display";
 
@@ -57,19 +59,20 @@ export function MetalHoldingLivePreview({
   return (
     <View
       testID="metal-holding-live-preview"
-      className="rounded-3xl border border-nileGreen-700 bg-nileGreen-50 p-4 dark:border-nileGreen-500 dark:bg-nileGreen-950"
+      className="rounded-lg border border-nileGreen-700 bg-slate-25 p-3 dark:border-nileGreen-400 dark:bg-slate-900"
       {...previewMetadata}
     >
-      <Text className="mb-3 text-sm font-semibold text-nileGreen-800 dark:text-nileGreen-300">
+      <Text className="mb-3 text-sm font-semibold text-nileGreen-800 dark:text-nileGreen-400">
         {copy.preview}
       </Text>
       <View className={isStacked ? "gap-3" : "flex-row items-center gap-3"}>
         <View
           testID="metal-holding-item-render"
-          className="h-24 w-24 items-center justify-center"
+          className="h-12 w-12 items-center justify-center"
           {...renderMetadata}
         >
           <MetalHoldingRender
+            size="form"
             itemForm={toRenderPhysicalForm(preview.physicalForm)}
             metalType={preview.metal}
           />
@@ -97,7 +100,7 @@ export function MetalHoldingLivePreview({
             {result ? (
               <>
                 <Text
-                  className={`text-end text-sm font-semibold ${preview.resultDirection === "negative" ? "text-red-500" : "text-nileGreen-700 dark:text-nileGreen-300"}`}
+                  className={`text-end text-sm font-semibold ${preview.resultDirection === "negative" ? "text-red-500" : "text-nileGreen-700 dark:text-nileGreen-400"}`}
                 >
                   {result}
                 </Text>
@@ -118,7 +121,7 @@ export function MetalHoldingLivePreview({
           </Text>
         )}
       </View>
-      <View className="mt-4 gap-2 border-t border-nileGreen-200 pt-3 dark:border-nileGreen-800">
+      <View className="mt-3 gap-2">
         {preview.purityPercentDecimal ? (
           <DisclosureRow
             icon="shield-checkmark-outline"
@@ -161,7 +164,9 @@ export function MetalHoldingLivePreview({
                 : rateSources
             }
           />
-        ) : !preview.metalRateTrust && !preview.fxRateTrust && preview.rateFreshness ? (
+        ) : !preview.metalRateTrust &&
+          !preview.fxRateTrust &&
+          preview.rateFreshness ? (
           <DisclosureRow
             icon="time-outline"
             text={getRateFreshnessLabel(preview.rateFreshness, copy)}
@@ -189,14 +194,18 @@ function RateTrustRow({
   readonly copy: MetalHoldingFormCopy;
   readonly locale: "en" | "ar";
 }): React.JSX.Element {
-  const value = trust.valueDecimal === null
-    ? copy.rateUnavailable
-    : formatRateAmount(currency, trust.valueDecimal, locale);
-  const age = trust.ageMs === null
-    ? (copy.rateAgeUnavailable ?? copy.rateUnknown)
-    : formatRateAge(trust.ageMs, locale, copy);
+  const value =
+    trust.valueDecimal === null
+      ? copy.rateUnavailable
+      : formatRateAmount(currency, trust.valueDecimal, locale);
+  const age =
+    trust.ageMs === null
+      ? (copy.rateAgeUnavailable ?? copy.rateUnknown)
+      : formatRateAge(trust.ageMs, locale, copy);
   const freshness = getRateFreshnessLabel(
-    trust.state === "missing" || trust.state === "invalid" ? "unavailable" : trust.state,
+    trust.state === "missing" || trust.state === "invalid"
+      ? "unavailable"
+      : trust.state,
     copy
   );
   return (
@@ -213,7 +222,8 @@ function RateTrustRow({
         </Text>
       ) : (
         <Text className="text-xs text-text-muted dark:text-text-muted-dark">
-          {copy.rateObservationUnavailable ?? `${copy.ratesUpdated} ${copy.rateAgeUnavailable ?? copy.rateUnknown}`}
+          {copy.rateObservationUnavailable ??
+            `${copy.ratesUpdated} ${copy.rateAgeUnavailable ?? copy.rateUnknown}`}
         </Text>
       )}
     </View>
@@ -230,10 +240,9 @@ export function formatRateAge(
   }
   const minutes = Math.floor(ageMs / 60_000);
   const hours = Math.floor(minutes / 60);
-  const formatter = new Intl.RelativeTimeFormat(locale === "ar" ? "ar-EG" : "en-US", { numeric: "always" });
   return hours > 0
-    ? formatter.format(-hours, "hour")
-    : formatter.format(-minutes, "minute");
+    ? t("common:hours_ago", { count: hours, lng: locale })
+    : t("common:minutes_ago", { count: minutes, lng: locale });
 }
 
 function DisclosureRow({
@@ -243,9 +252,14 @@ function DisclosureRow({
   readonly icon: React.ComponentProps<typeof Ionicons>["name"];
   readonly text: string;
 }): React.JSX.Element {
+  const { isDark } = useTheme();
   return (
     <View className="flex-row items-center gap-2">
-      <Ionicons name={icon} size={18} color={palette.nileGreen[700]} />
+      <Ionicons
+        name={icon}
+        size={18}
+        color={isDark ? palette.nileGreen[400] : palette.nileGreen[700]}
+      />
       <Text className="min-w-0 flex-1 text-xs text-text-secondary dark:text-text-secondary-dark">
         {text}
       </Text>
@@ -312,7 +326,7 @@ export function formatRateAmount(
   locale: "en" | "ar"
 ): string {
   const fractionDigits = value.includes(".")
-    ? value.split(".")[1]?.length ?? 0
+    ? (value.split(".")[1]?.length ?? 0)
     : 0;
   return formatAmount(
     currency,
@@ -337,7 +351,7 @@ function formatDecimal(
   }
 ): string {
   const fractionDigits =
-    precision?.maximumFractionDigits ?? (value.split(".")[1]?.length ?? 0);
+    precision?.maximumFractionDigits ?? value.split(".")[1]?.length ?? 0;
   const minDigits = precision?.minimumFractionDigits ?? fractionDigits;
   return new Intl.NumberFormat(locale === "ar" ? "ar-EG" : "en-US", {
     minimumFractionDigits: minDigits,
@@ -361,7 +375,8 @@ function getRateFreshnessLabel(
 ): string {
   if (value === "fresh") return copy.rateFresh;
   if (value === "stale") return copy.rateStale;
-  if (value === "unknown") return copy.rateFreshnessUnknown ?? "Freshness unknown";
+  if (value === "unknown")
+    return copy.rateFreshnessUnknown ?? "Freshness unknown";
   return copy.rateUnavailable;
 }
 

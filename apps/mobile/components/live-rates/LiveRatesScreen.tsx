@@ -28,23 +28,17 @@ interface LiveRatesStatusProps {
 }
 
 function LiveRatesStatus({
-  isConnected,
   refreshError,
   onRetryRefresh,
 }: LiveRatesStatusProps): React.JSX.Element | null {
   const { t } = useTranslation("metals");
 
-  if (isConnected && refreshError !== "cached_refresh_failed") {
+  if (refreshError !== "cached_refresh_failed") {
     return null;
   }
 
   return (
     <View className="mt-3" accessibilityLiveRegion="polite">
-      {!isConnected && (
-        <Text className="mb-2 text-xs font-medium text-text-secondary dark:text-text-secondary-dark">
-          {t("offline_mode")}
-        </Text>
-      )}
       {refreshError === "cached_refresh_failed" && (
         <View className="mb-2">
           <Text className="text-xs font-medium text-text-secondary dark:text-text-secondary-dark">

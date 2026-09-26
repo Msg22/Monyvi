@@ -1,7 +1,7 @@
 import React from "react";
 import { View, Text } from "react-native";
 import { useTranslation } from "react-i18next";
-import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import { palette } from "@/constants/colors";
 import { formatLocalizedMoneyAmount } from "@/utils/localized-money-display";
 import { PitchMockCard } from "./PitchMockCard";
@@ -10,7 +10,7 @@ import { PitchMockCard } from "./PitchMockCard";
  * Mock card for the Offline-first pitch slide (iOS only).
  *
  * Mirrors `specs/026-onboarding-restructure/mockups/02b-slide-offline-ios.png`:
- *  - Top row: 📡 "Offline mode" pill (slate) + "⚡ INSTANT" pill (green).
+ *  - Top row: "⚡ INSTANT" pill (green).
  *  - Section heading: "RECENTLY ADDED".
  *  - 3-row recent transaction list — emoji + amount + category · time + chevron.
  *  - Footer row: lightning + "All saved instantly" + "{N} pending" pill.
@@ -44,19 +44,6 @@ export function Slide2Offline(): React.ReactElement {
     <PitchMockCard>
       {/* Status pills row */}
       <View className="flex-row items-center justify-between">
-        <View
-          className="flex-row items-center rounded-full bg-slate-100 px-3 py-1 dark:bg-slate-700"
-          style={{ gap: 4 }}
-        >
-          <MaterialCommunityIcons
-            name="wifi-off"
-            size={12}
-            color={palette.slate[500]}
-          />
-          <Text className="text-xs font-medium text-slate-600 dark:text-slate-300">
-            {t("pitch_slide_offline_status_offline")}
-          </Text>
-        </View>
         <View className="rounded-full bg-nileGreen-500/15 px-3 py-1">
           <Text className="text-xs font-bold uppercase tracking-wider text-nileGreen-600 dark:text-nileGreen-300">
             {t("pitch_slide_offline_status_instant")}
