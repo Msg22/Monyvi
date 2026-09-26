@@ -1,9 +1,10 @@
 # Monyvi Development Guidelines
 
-Auto-generated from all feature plans. Last updated: 2026-02-14
+Auto-generated from all feature plans. Last updated: 2026-09-26
 
 ## Active Technologies
 
+- TypeScript ~5.9.2 in strict mode; Deno-based Supabase Edge Functions + `@supabase/supabase-js@^2.49.1`, Zod 4.4.3, native Fetch/AbortController, DeepInfra OpenAI-compatible Chat Completions API (388-sms-ai-provider)
 - TypeScript (strict mode) **Primary Dependencies**: React
   (002-refactor-upcoming-payments)
 
@@ -25,6 +26,7 @@ conventions
 
 ## Recent Changes
 
+- 388-sms-ai-provider: Added configurable SMS AI provider boundary with DeepInfra/DeepSeek planning, strict external-response validation, and provider-independent prompt caching design
 - 002-refactor-upcoming-payments: Added TypeScript (strict mode) **Primary
   Dependencies**: React
 
