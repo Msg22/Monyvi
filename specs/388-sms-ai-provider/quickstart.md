@@ -15,6 +15,8 @@ SMS_AI_MODEL=deepseek-ai/DeepSeek-V4-Flash-0731
 SMS_AI_SERVICE_TIER=default
 ~~~
 
+All four values above are required; missing `SMS_AI_SERVICE_TIER` does not silently default. Provider configuration is resolved before the per-request handler can reserve or mark provider usage.
+
 Do not configure a provider endpoint URL. The approved DeepInfra endpoint is fixed by the adapter.
 
 Do not remove `GEMINI_API_KEY` globally: voice and SMS category enrichment still use Gemini.
@@ -74,14 +76,15 @@ Focused provider tests must cover:
 8. HTTP 408/429/5xx/network/timeout retry;
 9. HTTP 400/401/403/404 no retry;
 10. retry exhaustion;
-11. malformed provider envelope;
-12. missing completion content;
-13. malformed inner JSON;
-14. `length` -> truncated;
-15. unknown finish reason -> failed;
-16. semantically invalid transaction -> existing validator rejection;
-17. missing/unsupported provider configuration fails before fetch;
-18. API key absent fails before fetch.
+11. one logical admitted request records exactly one provider start even when the adapter performs multiple internal retries;
+12. malformed provider envelope;
+13. missing completion content;
+14. malformed inner JSON;
+15. `length` -> truncated;
+16. unknown finish reason -> failed;
+17. semantically invalid transaction -> provider-neutral existing-validator rejection outside the DeepInfra adapter;
+18. missing/blank/unsupported provider, model, service tier, or API key fails before request admission/fetch/provider-start accounting;
+19. input-token estimation counts the stable prompt, category context, response schema, and SMS candidate content exactly once after prompt refactoring.
 
 ## 5. Prompt-cache verification
 
@@ -89,15 +92,15 @@ DeepInfra prompt caching is best-effort and must never be a correctness dependen
 
 For an explicit development-only verification:
 
-1. send two requests using identical stable Monyvi parser instructions;
-2. vary only the dynamic category/SMS tail as needed;
+1. send two requests whose stable prefix contains identical Monyvi rules, supported-currency context, and built-in category definitions;
+2. vary a future custom-category tail and/or SMS body only after that stable prefix;
 3. inspect provider usage metadata for `prompt_tokens_details.cached_tokens`;
 4. confirm no raw SMS/prompt text is logged;
-5. confirm both cached and uncached responses pass the same Monyvi semantic validation.
+5. confirm both cached and uncached responses pass the same provider-neutral Monyvi semantic validation.
 
 A cache miss is not a functional failure.
 
-Do **not** use `prompt_cache_options` retention TTL for DeepSeek V4 Flash 0731 unless DeepInfra later documents support for this model.
+Feature 388 sends neither `prompt_cache_key` nor `prompt_cache_options`; automatic prefix matching is the only caching mechanism in this release.
 
 ## 6. Representative manual QA
 
