@@ -1238,11 +1238,11 @@ Business rules:
 - Deterministic safeguard QA uses named fixture/provider/policy profiles with a
   fixed clock and isolated reset namespace. Client-owned boundaries may use a
   pure preflight, but server-owned profiles must execute the local Supabase Edge
-  handler and real safeguard RPCs; only the fixture inbox and Gemini provider
-  may be substituted. Routine QA must prove zero production Gemini calls and
-  zero production allowance consumption. Any selected-model count-token
-  calibration is a separately named explicit opt-in operation and never
-  generates content.
+  handler and real safeguard RPCs; only the fixture inbox and configured SMS AI
+  provider may be substituted. Routine QA must prove zero calls to the
+  production-configured SMS AI provider and zero production allowance
+  consumption. Any selected-model count-token calibration is a separately named
+  explicit opt-in operation and never generates content.
 - These safeguards are SMS-specific. Voice consent, parsing, request contracts,
   and usage accounting remain unchanged. Persistent review drafts and dismissed
   fingerprints remain owned by issue #770.
