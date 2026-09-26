@@ -22,7 +22,7 @@ No database migration or mobile API-contract change is required.
 
 **Language/Version**: TypeScript ~5.9.2 in strict mode; Deno-based Supabase Edge Functions  
 **Primary Dependencies**: `@supabase/supabase-js@^2.49.1`, Zod 4.4.3, native Fetch/AbortController, existing SMS shared modules; DeepInfra OpenAI-compatible Chat Completions API (no new provider SDK)  
-**Storage**: No new storage; existing Supabase SMS safeguard/usage/negative-outcome state remains unchanged  
+**Storage**: N/A  
 **Testing**: Node `tsx --test` for shared Edge modules, existing SMS safeguard/parser suites, mocked provider fetch fixtures, `deno check`, scoped lint/format checks, representative manual SMS QA  
 **Target Platform**: Supabase Edge Functions (Deno) serving the existing Android/iOS Monyvi client  
 **Project Type**: Mobile + serverless API monorepo; this feature changes the server-side SMS full-parser provider boundary plus provider-specific documentation/comments  
