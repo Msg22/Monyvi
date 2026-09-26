@@ -2,7 +2,7 @@
  * AI SMS Parser Service
  *
  * Mobile-side service client for the `/parse-sms` Edge Function.
- * Sends filtered SMS candidates to Gemini via Supabase Edge Function
+ * Sends filtered SMS candidates to the configured SMS AI provider via Supabase Edge Function
  * and maps the AI response back to `ParsedSmsTransaction` objects.
  *
  * Falls back to `sms-category-mapper.ts` if the AI call fails.
@@ -137,7 +137,7 @@ export interface SmsCandidate {
  */
 const CLIENT_CHUNK_SIZE = 50;
 
-/** Delay between chunks (ms) to avoid Gemini rate limits. */
+/** Delay between chunks (ms) to avoid provider burst/rate limits. */
 const INTER_CHUNK_DELAY_MS = 2000;
 const AI_CONSENT_REQUIRED_STATUS = 403;
 const AI_CONSENT_REQUIRED_ERROR_NAME = "AiConsentRequiredError";
