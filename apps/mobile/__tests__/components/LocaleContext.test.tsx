@@ -3,9 +3,6 @@ import { Text, I18nManager, Platform } from "react-native";
 import { render, screen } from "@testing-library/react-native";
 import { LocaleProvider, useLocale } from "@/context/LocaleContext";
 
-jest.mock("@/hooks/useLocaleStartup", (): object => ({
-  useLanguageScope: jest.fn(),
-}));
 jest.mock("@/i18n", (): object => ({
   __esModule: true,
   default: { language: "ar", on: jest.fn(), off: jest.fn() },

@@ -3,10 +3,12 @@ import { Text } from "react-native";
 import { render, screen } from "@testing-library/react-native";
 import type { LanguageSnapshot } from "@/services/language-coordinator";
 import {
+  LanguageScopeSync,
   PrivateLanguageBoundary,
   PublicLanguageBoundary,
 } from "@/components/LanguageRuntimeBoundary";
 
+const mockUseLanguageScope = jest.fn();
 let mockAuthenticated = false;
 let mockMissingProfile = false;
 let mockState: LanguageSnapshot = {
@@ -19,6 +21,9 @@ jest.mock("@/context/AuthContext", (): object => ({
   useAuth: (): object => ({ isAuthenticated: mockAuthenticated }),
 }));
 jest.mock("@/hooks/useLocaleStartup", (): object => ({
+  useLanguageScope: (): void => {
+    mockUseLanguageScope();
+  },
   usePublicLocaleStartup: (): LanguageSnapshot => mockState,
   usePrivateLocaleStartup: (): object => ({
     state: mockState,
@@ -89,5 +94,10 @@ describe("language content boundaries", (): void => {
       </PrivateLanguageBoundary>
     );
     expect(screen.getByText("Profile recovery")).toBeOnTheScreen();
+  });
+  it("mounts language scope sync to invoke useLanguageScope at the auth root", (): void => {
+    mockUseLanguageScope.mockClear();
+    render(<LanguageScopeSync />);
+    expect(mockUseLanguageScope).toHaveBeenCalledTimes(1);
   });
 });

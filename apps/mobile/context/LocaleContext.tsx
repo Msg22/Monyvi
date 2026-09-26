@@ -1,7 +1,6 @@
 import { createContext, useContext, useMemo } from "react";
 import { I18nManager, Platform, View } from "react-native";
 import { arabicFontFamily, fontFamily } from "../constants/typography";
-import { useLanguageScope } from "@/hooks/useLocaleStartup";
 import { useTranslationLanguage } from "@/hooks/useTranslationLanguage";
 
 export type { SupportedLanguage } from "../i18n/translation-schema";
@@ -37,7 +36,6 @@ const LocaleContext = createContext<LocaleContextType | undefined>(undefined);
 export const LocaleProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
-  useLanguageScope();
   const currentLanguage = useTranslationLanguage();
 
   const value = useMemo<LocaleContextType>(

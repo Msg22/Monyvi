@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { View } from "react-native";
 import { useAuth } from "@/context/AuthContext";
 import {
+  useLanguageScope,
   usePrivateLocaleStartup,
   usePublicLocaleStartup,
 } from "@/hooks/useLocaleStartup";
@@ -12,6 +13,11 @@ import { LanguageFailureNotice } from "./LanguageFailureNotice";
 
 interface LanguageBoundaryProps {
   readonly children: ReactNode;
+}
+
+export function LanguageScopeSync(): null {
+  useLanguageScope();
+  return null;
 }
 
 function hasSettled(state: LanguageSnapshot): boolean {

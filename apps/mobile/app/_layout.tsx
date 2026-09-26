@@ -32,7 +32,10 @@ import { ErrorBoundary } from "../components/ErrorBoundary";
 import { ToastProvider } from "../components/ui/Toast";
 import { AuthProvider, useAuth } from "../context/AuthContext";
 import { LocaleProvider } from "../context/LocaleContext";
-import { PublicLanguageBoundary } from "@/components/LanguageRuntimeBoundary";
+import {
+  LanguageScopeSync,
+  PublicLanguageBoundary,
+} from "@/components/LanguageRuntimeBoundary";
 import { useLanguageState } from "@/hooks/useLanguageRuntime";
 import { useTranslationLanguage } from "@/hooks/useTranslationLanguage";
 import { ThemeProvider, useTheme } from "../context/ThemeContext";
@@ -166,6 +169,7 @@ function RootLayout(): React.ReactNode {
           accessibilityLanguage={accessibilityLanguage}
         >
           <AuthProvider>
+            <LanguageScopeSync />
             <LocaleProvider>
               <ThemeProvider>
                 <SafeAreaProvider initialMetrics={initialWindowMetrics}>
