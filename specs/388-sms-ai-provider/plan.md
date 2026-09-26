@@ -72,7 +72,7 @@ Key decisions:
 9. DeepInfra response envelope validated with exact Zod 4.4.3.
 10. No schema/client/voice changes.
 
-No `NEEDS CLARIFICATION` items remain.
+No unresolved planning questions remain.
 
 ## Phase 1: Design
 
