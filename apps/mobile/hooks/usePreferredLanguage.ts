@@ -4,8 +4,9 @@ import { observeProfileLanguage } from "@/services/profile-language-read-model-s
 import type { SupportedLanguage } from "@/i18n/translation-schema";
 import { logger } from "@/utils/logger";
 
-interface PreferredLanguageState {
+export interface PreferredLanguageState {
   readonly language: SupportedLanguage | null;
+  readonly profileExists: boolean;
   readonly isLoading: boolean;
   readonly hasError: boolean;
 }
@@ -15,6 +16,7 @@ export function usePreferredLanguage(): PreferredLanguageState {
   const [snapshot, setSnapshot] = useState<{
     readonly userId: string;
     readonly language: SupportedLanguage | null;
+    readonly profileExists: boolean;
     readonly hasError: boolean;
   } | null>(null);
   useEffect(() => {
@@ -22,12 +24,24 @@ export function usePreferredLanguage(): PreferredLanguageState {
     let cancelled = false;
     const subscription = observeProfileLanguage(
       userId,
-      (language): void => {
-        if (!cancelled) setSnapshot({ userId, language, hasError: false });
+      (obs): void => {
+        if (!cancelled)
+          setSnapshot({
+            userId,
+            language: obs.language,
+            profileExists: obs.profileExists,
+            hasError: false,
+          });
       },
       (error): void => {
         logger.error("language.profile.observe.failed", error);
-        if (!cancelled) setSnapshot({ userId, language: null, hasError: true });
+        if (!cancelled)
+          setSnapshot({
+            userId,
+            language: null,
+            profileExists: false,
+            hasError: true,
+          });
       }
     );
     return (): void => {
@@ -41,6 +55,7 @@ export function usePreferredLanguage(): PreferredLanguageState {
       : null;
   return {
     language: current?.language ?? null,
+    profileExists: current?.profileExists ?? false,
     isLoading: isResolvingUser || (userId !== null && current === null),
     hasError: current?.hasError ?? false,
   };

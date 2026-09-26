@@ -119,7 +119,10 @@ describe("language coordination", (): void => {
   it("normalizes matching direction and clears restart marker", async (): Promise<void> => {
     const { coordinator, dependencies, markers, reload } = createHarness();
     jest.mocked(dependencies.needsReload).mockReturnValue(false);
-    markers.set("attempt", "old");
+    markers.set(
+      "attempt",
+      JSON.stringify({ scope: "user-a", language: "en" })
+    );
     await coordinator.apply("en");
     expect(dependencies.normalizeDirection).toHaveBeenCalledWith("en");
     expect(markers.size).toBe(0);
@@ -202,5 +205,36 @@ describe("language coordination", (): void => {
       language: "en",
       phase: "ready",
     });
+  });
+
+  it("retries reload when explicit selection passes persist even after restart-incomplete", async (): Promise<void> => {
+    const { coordinator, reload, markers } = createHarness();
+    const marker = JSON.stringify({ scope: "user-a", language: "ar" });
+    markers.set("attempt", marker);
+
+    // Without persist or retry, automatic reconciliation fails
+    await expect(coordinator.apply("ar")).rejects.toThrow(
+      "Language restart did not apply the requested direction"
+    );
+    expect(reload).not.toHaveBeenCalled();
+
+    // With persist (explicit selection), it proceeds to reload again
+    const persist = jest.fn().mockResolvedValue(undefined);
+    await coordinator.apply("ar", { persist });
+    expect(reload).toHaveBeenCalledTimes(1);
+    expect(persist).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not clear a restart marker belonging to another scoped target when reload is not needed", async (): Promise<void> => {
+    const { coordinator, dependencies, markers } = createHarness();
+    const foreignMarker = JSON.stringify({ scope: "user-other", language: "ar" });
+    markers.set("attempt", foreignMarker);
+
+    jest.mocked(dependencies.needsReload).mockReturnValue(false);
+    coordinator.setScope("user-b");
+    await coordinator.apply("en");
+
+    expect(markers.get("attempt")).toBe(foreignMarker);
+    expect(dependencies.clearMarker).not.toHaveBeenCalled();
   });
 });

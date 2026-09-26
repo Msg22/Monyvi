@@ -100,4 +100,47 @@ describe("language content boundaries", (): void => {
     render(<LanguageScopeSync />);
     expect(mockUseLanguageScope).toHaveBeenCalledTimes(1);
   });
+  it("keeps public controls mounted during applying phase after initial settlement", (): void => {
+    mockState = { ...mockState, phase: "ready" };
+    const { rerender } = render(
+      <PublicLanguageBoundary>
+        <Text>Sign in form</Text>
+      </PublicLanguageBoundary>
+    );
+    expect(screen.getByText("Sign in form")).toBeOnTheScreen();
+
+    mockState = { ...mockState, phase: "applying" };
+    rerender(
+      <PublicLanguageBoundary>
+        <Text>Sign in form</Text>
+      </PublicLanguageBoundary>
+    );
+    expect(screen.getByText("Sign in form")).toBeOnTheScreen();
+
+    mockState = { ...mockState, phase: "restarting" };
+    rerender(
+      <PublicLanguageBoundary>
+        <Text>Sign in form</Text>
+      </PublicLanguageBoundary>
+    );
+    expect(screen.queryByText("Sign in form")).toBeNull();
+  });
+  it("keeps private content mounted during applying phase after initial settlement", (): void => {
+    mockState = { ...mockState, phase: "ready" };
+    const { rerender } = render(
+      <PrivateLanguageBoundary>
+        <Text>Dashboard</Text>
+      </PrivateLanguageBoundary>
+    );
+    expect(screen.getByText("Dashboard")).toBeOnTheScreen();
+
+    mockState = { ...mockState, phase: "applying" };
+    rerender(
+      <PrivateLanguageBoundary>
+        <Text>Dashboard</Text>
+      </PrivateLanguageBoundary>
+    );
+    expect(screen.getByText("Dashboard")).toBeOnTheScreen();
+  });
 });
+

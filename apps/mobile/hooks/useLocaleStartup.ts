@@ -56,13 +56,47 @@ export function usePrivateLocaleStartup(): {
 } {
   const { user, isLoading } = useAuth();
   const preference = usePreferredLanguage();
+  const [fallbackLanguage, setFallbackLanguage] =
+    useState<SupportedLanguage | null>(null);
+
+  useEffect(() => {
+    if (isLoading || !user) {
+      setFallbackLanguage(null);
+      return;
+    }
+    let cancelled = false;
+    void readIntroLocaleOverride().then((override): void => {
+      if (!cancelled) {
+        setFallbackLanguage(
+          override ?? (getDeviceLanguage() === "ar" ? "ar" : "en")
+        );
+      }
+    });
+    return (): void => {
+      cancelled = true;
+      setFallbackLanguage(null);
+    };
+  }, [isLoading, user?.id]);
+
+  const targetLanguage = preference.profileExists
+    ? (preference.language ?? fallbackLanguage)
+    : null;
+
+  const isReconciling =
+    isLoading ||
+    preference.isLoading ||
+    (preference.profileExists && targetLanguage === null);
+
   const state = useLanguageReconciliation(
-    preference.language,
+    targetLanguage,
     user?.id ?? null,
-    isLoading || preference.isLoading
+    isReconciling
   );
+
   return {
     state,
-    isProfileUnavailable: !preference.isLoading && preference.language === null,
+    isProfileUnavailable:
+      !isLoading && !preference.isLoading && !preference.profileExists,
   };
 }
+

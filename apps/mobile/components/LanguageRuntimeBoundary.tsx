@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useRef, type ReactNode } from "react";
 import { View } from "react-native";
 import { useAuth } from "@/context/AuthContext";
 import {
@@ -40,14 +40,24 @@ export function PublicLanguageBoundary({
 }: LanguageBoundaryProps): ReactNode {
   const { isAuthenticated } = useAuth();
   const state = usePublicLocaleStartup();
+  const hasSettledOnceRef = useRef(false);
+
+  if (hasSettled(state)) {
+    hasSettledOnceRef.current = true;
+  }
+
   if (isAuthenticated) return children;
-  return hasSettled(state) ? (
+
+  const showPending =
+    !hasSettledOnceRef.current || state.phase === "restarting";
+
+  return showPending ? (
+    <LanguagePending />
+  ) : (
     <>
       {children}
       <LanguageFailureNotice />
     </>
-  ) : (
-    <LanguagePending />
   );
 }
 
@@ -55,12 +65,21 @@ export function PrivateLanguageBoundary({
   children,
 }: LanguageBoundaryProps): ReactNode {
   const { state, isProfileUnavailable } = usePrivateLocaleStartup();
-  // Account/profile recovery must remain reachable; its own safety gate still applies.
-  const isSettled = isProfileUnavailable || hasSettled(state);
+  const hasSettledOnceRef = useRef(false);
+  const settled = isProfileUnavailable || hasSettled(state);
+
+  if (settled) {
+    hasSettledOnceRef.current = true;
+  }
+
+  const showPending =
+    !hasSettledOnceRef.current || state.phase === "restarting";
+
   return (
     <>
-      <AppReadyGate isLocaleSettled={isSettled} />
-      {isSettled ? children : <LanguagePending />}
+      <AppReadyGate isLocaleSettled={hasSettledOnceRef.current || settled} />
+      {showPending ? <LanguagePending /> : children}
     </>
   );
 }
+

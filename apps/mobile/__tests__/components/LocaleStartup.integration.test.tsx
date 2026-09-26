@@ -35,13 +35,21 @@ jest.mock("@/context/AuthContext", (): object => ({
 jest.mock("@/services/intro-flag-service", (): object => ({
   readIntroLocaleOverride: jest.fn().mockResolvedValue("en"),
 }));
+let mockPreferredLanguage: {
+  readonly language: "en" | "ar" | null;
+  readonly profileExists: boolean;
+  readonly isLoading: boolean;
+  readonly hasError: boolean;
+} = {
+  language: null,
+  profileExists: false,
+  isLoading: false,
+  hasError: true,
+};
 jest.mock("@/hooks/usePreferredLanguage", (): object => ({
-  usePreferredLanguage: (): object => ({
-    language: null,
-    isLoading: false,
-    hasError: true,
-  }),
+  usePreferredLanguage: (): object => mockPreferredLanguage,
 }));
+
 jest.mock("@/hooks/useProfile", (): object => ({
   useProfile: (): object => ({
     profile: { preferredLanguage: "en" },
@@ -104,6 +112,12 @@ describe("locale startup integration", (): void => {
   });
   it("does not deadlock splash when language observation fails but normal profile succeeds", async (): Promise<void> => {
     mockUser = { id: "user-a" };
+    mockPreferredLanguage = {
+      language: null,
+      profileExists: false,
+      isLoading: false,
+      hasError: true,
+    };
     render(
       <ScopeOwner>
         <PrivateLanguageBoundary>
@@ -114,4 +128,27 @@ describe("locale startup integration", (): void => {
     await waitFor(() => expect(mockHide).toHaveBeenCalled());
     expect(screen.getByText("Account gate")).toBeOnTheScreen();
   });
+  it("reconciles fallback language when profile exists but preferred language is null", async (): Promise<void> => {
+    mockUser = { id: "user-b" };
+    mockPreferredLanguage = {
+      language: null,
+      profileExists: true,
+      isLoading: false,
+      hasError: false,
+    };
+    render(
+      <ScopeOwner>
+        <PrivateLanguageBoundary>
+          <Text>Account gate</Text>
+        </PrivateLanguageBoundary>
+      </ScopeOwner>
+    );
+    await waitFor(() => expect(mockTranslate).toHaveBeenCalledWith("en"));
+    expect(mockCoordinator.getSnapshot()).toMatchObject({
+      scope: "user-b",
+      language: "en",
+    });
+    expect(screen.getByText("Account gate")).toBeOnTheScreen();
+  });
 });
+

@@ -107,14 +107,18 @@ export function createLanguageCoordinator(
       failureCode = "direction-failed";
       dependencies.normalizeDirection(language);
       if (!dependencies.needsReload(language)) {
-        await dependencies.clearMarker();
+        const previous = await dependencies.readMarker();
+        if (!current()) return;
+        if (previous === marker) {
+          await dependencies.clearMarker();
+        }
         if (current())
           publish({ phase: "ready", scope, language, errorCode: null });
         return;
       }
       const previous = await dependencies.readMarker();
       if (!current()) return;
-      if (previous === marker && !options.retry) {
+      if (previous === marker && !options.retry && !options.persist) {
         publish({
           phase: "error",
           scope,
