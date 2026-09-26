@@ -11,6 +11,8 @@ import {
   estimateSmsRequestInputTokensAtEdge,
 } from "./sms-input-estimator.ts";
 import { DEFAULT_SMS_SAFEGUARD_POLICY } from "./sms-safeguard-policy.ts";
+import { executeSmsAiProvider } from "./sms-ai/sms-ai-provider-executor.ts";
+import type { SmsAiProvider } from "./sms-ai/sms-ai-provider.ts";
 
 interface CallState {
   auth: number;
@@ -1157,4 +1159,37 @@ test("keeps provider implementation metadata out of the public success response"
   assert.equal("model" in data, false);
   assert.equal("serviceTier" in data, false);
   assert.equal("usage" in data, false);
+});
+
+
+test("supports a future raw SMS adapter without changing handler safeguards or public shape", async () => {
+  const state = createState();
+  const futureAdapter: SmsAiProvider = {
+    execute: async () => ({
+      completionStatus: "complete",
+      content: JSON.stringify({ transactions: [] }),
+    }),
+  };
+  const handler = createParseSmsHandler(
+    createDependencies(state, {
+      executeProvider: (input) => executeSmsAiProvider(futureAdapter, input),
+    })
+  );
+
+  const response = await handler(
+    post({
+      ...requestBody(),
+      categories:
+        "EXPENSE categories (return the system_name value):\n  L1: shopping",
+    })
+  );
+  const data = await readJson(response);
+
+  assert.equal(response.status, 200);
+  assert.equal(state.reserve, 1);
+  assert.equal(state.start, 1);
+  assert.equal(state.provider, 0);
+  assert.equal("provider" in data, false);
+  assert.equal("model" in data, false);
+  assert.deepEqual(data.transactions, []);
 });
