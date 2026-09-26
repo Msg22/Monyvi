@@ -12,8 +12,9 @@ Replace the SMS full-parser's Gemini-specific provider code with a configuration
 The implementation uses Strategy + Adapter + Factory + Dependency Injection:
 
 - the existing SMS handler depends only on `SmsProviderExecutionResult`;
-- a typed factory resolves the configured SMS provider;
-- a DeepInfra adapter owns only provider HTTP/configuration/completion concerns;
+- a typed factory resolves the configured raw SMS provider adapter;
+- a provider-neutral Monyvi executor owns prompt/schema construction, JSON parsing, and authoritative financial semantic validation;
+- a DeepInfra adapter owns only provider HTTP/auth/request-envelope serialization, timeout/retry, external-envelope validation, and completion normalization;
 - Monyvi owns prompts, response schema, financial validation, safeguards, reconciliation, and telemetry.
 
 No database migration or mobile API-contract change is required.
@@ -64,10 +65,10 @@ Key decisions:
 1. DeepInfra direct + `deepseek-ai/DeepSeek-V4-Flash-0731`, Standard tier.
 2. Native `fetch` adapter instead of a new OpenAI SDK dependency.
 3. Typed SMS-specific Strategy/Adapter plus configuration factory.
-4. Fixed DeepInfra endpoint; provider/model/tier + API key from hosted/local environment.
-5. Strict DeepInfra JSON Schema output plus existing Monyvi semantic validation.
+4. Fixed DeepInfra endpoint; provider/model/service tier + API key are all explicit required hosted/local configuration and are resolved before request admission.
+5. Strict DeepInfra JSON Schema output plus provider-neutral Monyvi semantic validation outside the DeepInfra adapter.
 6. `reasoning_effort: "none"`.
-7. Automatic stable-prefix prompt caching; no explicit retention TTL for this model.
+7. Automatic prefix caching only; no explicit `prompt_cache_key` or retention TTL in this release.
 8. Existing 3-retry/2s-4s-8s shape retained with a 25-second per-attempt timeout.
 9. DeepInfra response envelope validated with exact Zod 4.4.3.
 10. No schema/client/voice changes.
@@ -84,29 +85,34 @@ parse-sms/index.ts
         +-- existing auth / consent / safeguards / reconciliation
         |
         v
-readSmsAiProviderConfig()
+readSmsAiProviderConfig()  # module initialization; before request admission
         |
         v
 createSmsAiProvider()
         |
         v
-SmsAiProvider
+SmsAiProvider raw adapter
         |
         +-- DeepInfraSmsProvider
                 |
                 +-- fixed DeepInfra endpoint
-                +-- strict JSON-schema request
+                +-- provider request-envelope serialization
                 +-- reasoning disabled
                 +-- Standard/priority/flex mapping
                 +-- timeout/retry classification
-                +-- Zod envelope validation
+                +-- Zod external-envelope validation
                 +-- completion normalization
+                +-- raw content string
+        |
+        v
+executeSmsAiProvider()  # provider-neutral Monyvi executor
+        |
+        +-- build stable/dynamic prompt + strict response schema
+        +-- parse inner JSON
+        +-- existing parseSmsProviderTransactions()
         |
         v
 SmsProviderExecutionResult
-        |
-        v
-existing parseSmsProviderTransactions()
 ```
 
 ### Prompt composition
@@ -117,31 +123,31 @@ Provider-independent prompt construction is split so stable material remains the
 message 1 (system)
   stable Monyvi rules
   transaction/exclusion/trust rules
-  category-selection instructions
+  supported-currency context when unchanged
+  built-in category definitions
         |
         | automatic prefix-cache opportunity
         v
-message 2 (system)
-  current category context
-  (future custom categories may vary)
+message 2 (system, optional/dynamic)
+  future user-specific custom categories only
         |
         v
 message 3 (user)
   current SMS batch
 ```
 
-Supported currencies remain enforced in the strict response schema and authoritative Monyvi validator.
+Supported currencies remain enforced in the strict response schema and authoritative Monyvi validator. The current full category context must be normalized so code-owned built-ins stay before any future custom-category additions; custom categories are not part of the stable shared prefix.
 
 ### Structured-output contract
 
-The current response-schema builder is moved/treated as provider-neutral Monyvi schema material. The DeepInfra adapter wraps it using:
+The current response-schema builder is moved/treated as provider-neutral Monyvi schema material. The provider-neutral executor supplies it to the DeepInfra adapter, which serializes it using:
 
 ```text
 response_format.type = json_schema
 json_schema.strict = true
 ```
 
-The provider adapter never bypasses `parseSmsProviderTransactions`.
+The DeepInfra adapter never calls or owns `parseSmsProviderTransactions`; the provider-neutral Monyvi executor parses the returned JSON and applies `parseSmsProviderTransactions` before constructing `SmsProviderExecutionResult`.
 
 ### Provider completion/error contract
 
@@ -164,11 +170,9 @@ complete envelope/content
 
 ### Caching
 
-DeepInfra's automatic prompt caching is the initial implementation. Stable instructions come first and cache usage is observable through privacy-safe usage metadata.
+DeepInfra's automatic prefix caching is the only caching mechanism used in this release. Stable Monyvi rules, unchanged supported-currency context, and built-in category definitions come first; future user-specific custom categories follow; SMS content remains last. Cache usage is observable through privacy-safe usage metadata.
 
-No feature behavior depends on a cache hit. Explicit `prompt_cache_options` retention is not used because DeepSeek V4 Flash 0731 is not currently listed by DeepInfra as a retention-supported model.
-
-If implementation measurements show that an explicit `prompt_cache_key` materially improves reuse, it may use a code-owned, non-PII prompt-family key such as `monyvi:sms-parser:v1`; it is not an operator-managed secret and must never include user/request/SMS data.
+No feature behavior depends on a cache hit. The implementation MUST NOT send `prompt_cache_key` or `prompt_cache_options` in feature 388. A future explicit-cache-key/retention decision requires separate evidence and planning.
 
 ### Configuration
 
@@ -179,7 +183,7 @@ SMS_AI_MODEL=deepseek-ai/DeepSeek-V4-Flash-0731
 SMS_AI_SERVICE_TIER=default
 ```
 
-`default` means omit DeepInfra's `service_tier` request field. Priority and Flex remain valid typed operational choices but are not the initial setting.
+All four values are required and validated during module/provider composition before the per-request SMS handler can reserve or mark provider usage. Missing, blank, or unsupported configuration fails closed before request admission. `default` means omit DeepInfra's `service_tier` request field. Priority and Flex remain valid typed operational choices but are not the initial setting.
 
 ### Dependency resolution
 
@@ -237,15 +241,16 @@ supabase/functions/
 │   ├── sms-provider-transaction-validator.ts    # existing authoritative financial validator
 │   ├── sms-input-estimator.ts                   # existing dynamic SMS user-prompt helper
 │   └── sms-ai/
-│       ├── sms-ai-provider.ts                   # Strategy contract / shared provider types
+│       ├── sms-ai-provider.ts                   # raw Strategy contract + normalized Monyvi provider-result types
 │       ├── sms-ai-provider-config.ts            # typed fail-closed environment parsing
 │       ├── sms-ai-provider-config.test.ts
-│       ├── sms-ai-provider-factory.ts           # configuration -> concrete adapter
+│       ├── sms-ai-provider-factory.ts           # configuration -> concrete raw adapter
 │       ├── sms-ai-provider-factory.test.ts
-│       ├── sms-ai-prompt.ts                     # stable rules + dynamic category composition + response schema
+│       ├── sms-ai-provider-executor.ts          # provider-neutral prompt/JSON/semantic validation -> handler result
+│       ├── sms-ai-prompt.ts                     # stable built-ins/currencies + future custom tail + response schema
 │       ├── sms-ai-prompt.test.ts
 │       └── providers/
-│           ├── deepinfra-sms-provider.ts        # HTTP, timeout/retry, schema, completion normalization
+│           ├── deepinfra-sms-provider.ts        # HTTP, timeout/retry, external envelope, completion normalization
 │           └── deepinfra-sms-provider.test.ts
 ├── parse-sms/
 │   ├── index.ts                                 # composition/wiring; no concrete Gemini provider
@@ -269,10 +274,10 @@ This is sequencing guidance for later `speckit.tasks`; no implementation occurs 
 
 1. Add failing configuration/factory/prompt/provider tests first.
 2. Add exact Zod Deno mappings required by the external-boundary validator.
-3. Extract provider-independent stable prompt/schema construction without changing semantic rules.
-4. Implement fail-closed SMS provider configuration.
-5. Implement the DeepInfra adapter with injected/mockable fetch, timeout, retry classification, strict structured output, reasoning disabled, completion mapping, and Zod envelope validation.
-6. Wire the adapter through the existing `createParseSmsHandler` dependency.
+3. Extract provider-independent stable prompt/schema construction with built-in/currency context before future custom-category context, without changing semantic rules or conservative input-token accounting.
+4. Implement fail-closed SMS provider configuration and resolve it during module composition before request admission/provider-start accounting.
+5. Implement the DeepInfra raw adapter with injected/mockable fetch, timeout, retry classification, strict structured output serialization, reasoning disabled, completion mapping, and Zod external-envelope validation.
+6. Implement the provider-neutral Monyvi executor that parses the provider content and applies `parseSmsProviderTransactions`, then wire that executor through the existing `createParseSmsHandler` dependency.
 7. Remove Gemini-specific code/import from `parse-sms` only.
 8. Update provider-specific SMS comments/business QA wording.
 9. Run focused provider tests, existing handler/safeguard/parser tests, `deno check`, lint/format/diff checks.
@@ -284,12 +289,13 @@ This is sequencing guidance for later `speckit.tasks`; no implementation occurs 
 Implementation is not complete until all are true:
 
 - no routine automated test makes a real DeepInfra/Gemini SMS full-parser call;
-- invalid provider config fails before network execution;
-- strict DeepInfra envelope + Monyvi transaction validation both pass/fail as intended;
+- invalid provider/model/service-tier/credential config fails before request admission, network execution, reservation, or provider-start accounting;
+- strict DeepInfra external-envelope validation and provider-neutral Monyvi semantic transaction validation both pass/fail as intended;
 - valid empty transaction arrays are accepted;
-- transient retries remain bounded;
+- transient internal provider retries remain bounded while one logical admitted request records exactly one provider start;
+- input-token estimation still counts stable prompt, category context, response schema, and SMS candidate content exactly once after prompt refactoring;
 - existing safeguards/negative outcomes/client response semantics pass unchanged;
-- cache hit and miss produce equivalent functional results;
+- automatic-cache hit and miss produce equivalent functional results;
 - projected Standard-tier cost remains >=30% below Gemini text baseline at equal token counts;
 - voice files and voice behavior are unchanged;
 - `docs/business/business-decisions.md` no longer falsely identifies Gemini as the SMS full-parser provider in routine QA wording.
