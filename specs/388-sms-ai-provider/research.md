@@ -45,12 +45,14 @@
 
 ## R-003: Provider architecture
 
-**Decision**: Formalize the existing injected `executeProvider` seam as an SMS-specific Strategy/Adapter boundary with a small configuration-driven factory.
+**Decision**: Formalize the existing injected `executeProvider` seam as an SMS-specific raw Strategy/Adapter boundary plus a provider-neutral Monyvi executor and a small configuration-driven factory.
 
 **Rationale**:
 
 - `createParseSmsHandler` is already provider-neutral and consumes `SmsProviderExecutionResult`.
-- Provider-specific authentication, request serialization, response-envelope validation, finish-reason mapping, and retry classification can move behind one adapter without changing safeguards, reconciliation, mobile contracts, or voice.
+- Provider-specific authentication, HTTP request serialization, external-envelope validation, finish-reason mapping, and retry classification belong behind the raw adapter.
+- Provider-independent prompt construction, inner JSON parsing, and `parseSmsProviderTransactions` semantic validation belong in a Monyvi executor outside the DeepInfra adapter.
+- This keeps financial semantics provider-independent while preserving safeguards, reconciliation, mobile contracts, and voice.
 - A capability-specific interface avoids an over-generalized all-AI abstraction.
 
 **Alternatives considered**:
@@ -60,14 +62,14 @@
 
 ## R-004: Runtime configuration
 
-**Decision**: Read and validate these hosted/local values centrally:
+**Decision**: Read and validate these hosted/local values centrally, with all four required:
 
 - `SMS_AI_PROVIDER=deepinfra`
 - `SMS_AI_MODEL=deepseek-ai/DeepSeek-V4-Flash-0731`
 - `SMS_AI_SERVICE_TIER=default`
 - `DEEPINFRA_API_KEY=<secret>`
 
-The DeepInfra API endpoint remains a code constant, not runtime configuration.
+Missing, blank, incomplete, or unsupported configuration fails during module/provider composition before the per-request handler can reserve or mark provider usage. The DeepInfra API endpoint remains a code constant, not runtime configuration.
 
 **Rationale**:
 
@@ -136,28 +138,31 @@ The DeepInfra API endpoint remains a code constant, not runtime configuration.
 
 ## R-008: Prompt caching
 
-**Decision**: Rely primarily on DeepInfra's automatic prefix caching by making the stable Monyvi parser instructions the first request content. Do not use explicit cache retention TTL for this model. A code-owned prompt-family key may be sent only if implementation verification shows it improves cache reuse safely; it must contain no user/request data.
+**Decision**: Use only DeepInfra's automatic prefix caching in feature 388. Do not send `prompt_cache_key` or `prompt_cache_options`. Order stable Monyvi rules, unchanged supported-currency context, and built-in category definitions before future user-specific custom-category context and SMS content.
 
 **Rationale**:
 
 - DeepInfra automatically reuses identical prompt prefixes and reports `usage.prompt_tokens_details.cached_tokens`.
-- Stable content must be placed first; dynamic category context and SMS messages follow it.
-- Explicit 5-minute/1-hour retention currently lists other supported models, not DeepSeek V4 Flash 0731, so this plan must not depend on `prompt_cache_options`.
+- Stable rules, supported currencies, and built-in categories must remain before any future custom-category additions; the custom-category tail may differ per user without discarding reuse of the earlier stable prefix.
+- SMS content is always last and request-specific.
+- Explicit 5-minute/1-hour retention currently lists other supported models, not DeepSeek V4 Flash 0731.
 - Correctness must be identical on cache hit and cache miss.
-- A prompt semantic change naturally changes the prefix; any explicit family key, if used, will be versioned in code (for example `monyvi:sms-parser:v1`).
+- Explicit cache-key/retention behavior is deferred to a future evidence-backed decision rather than left optional inside this implementation.
 
 **Prompt order**:
 
 1. stable Monyvi SMS parsing rules;
-2. dynamic category context (kept as system-level context);
-3. request-specific SMS batch.
+2. unchanged supported-currency context and built-in category definitions;
+3. future user-specific custom-category context, when that feature exists;
+4. request-specific SMS batch.
 
-Supported currencies remain enforced through the response schema and application validator. Future custom categories can vary in step 2 without moving user-specific data into the stable prefix.
+Supported currencies remain enforced through the response schema and application validator. The current full category input must be normalized so built-in definitions precede any future custom-category additions.
 
 **Alternatives considered**:
 
 - Put dynamic SMS/category data before the system rules: rejected because it destroys prefix reuse.
 - Explicit retention TTL: unsupported for the selected model today.
+- Explicit `prompt_cache_key`: deferred entirely for feature 388; automatic prefix matching is sufficient for this release and avoids an underspecified optional path.
 - Cache key containing user ID/request ID: rejected because it reduces shared reuse and unnecessarily couples cache identity to user data.
 
 **Sources**:
@@ -214,13 +219,13 @@ Supported currencies remain enforced through the response schema and application
 
 ## R-011: External response validation
 
-**Decision**: Validate the DeepInfra chat-completion envelope with Zod 4.4.3 before reading choices, finish reason, content, service tier, or usage metadata.
+**Decision**: Validate the DeepInfra chat-completion envelope with Zod 4.4.3 inside the DeepInfra adapter before reading choices, finish reason, content, service tier, or usage metadata; parse and semantically validate the returned inner JSON in the provider-neutral Monyvi executor.
 
 **Rationale**:
 
 - The Monyvi Constitution requires runtime validation of external API responses.
 - DeepInfra is an external boundary even when it advertises OpenAI-compatible JSON.
-- Existing transaction validation operates on the inner Monyvi payload, so both envelope validation and semantic validation are needed.
+- Existing transaction validation operates on the inner Monyvi payload, so external-envelope validation and provider-neutral semantic validation are both required but remain separate responsibilities.
 
 **Dependency plan**:
 
@@ -258,14 +263,17 @@ Supported currencies remain enforced through the response schema and application
 
 **Required verification**:
 
-- provider/config factory fail-closed behavior;
+- provider/config factory fail-closed behavior, including missing service tier and configuration failure before request admission/accounting;
 - exact request structure, strict JSON schema, disabled reasoning, configured model/tier;
 - retry classification and exhaustion;
+- one `markProviderStarted` for a logical request even when the DeepInfra adapter performs multiple internal retries;
 - malformed external envelope/JSON/semantic result rejection;
 - valid empty transaction array;
 - completion mapping;
-- stable-prefix ordering;
+- stable built-in/currency prefix followed by future custom-category context and SMS content;
+- no explicit `prompt_cache_key` or `prompt_cache_options`;
 - cache hit/miss functional equivalence (cache billing metadata is observed, not required for correctness);
+- conservative input-estimator regression proving prompt, categories, schema, and SMS candidate content are each counted once after refactoring;
 - existing SMS handler/safeguard tests;
 - `deno check supabase/functions/parse-sms/index.ts`;
 - representative manual SMS QA.
