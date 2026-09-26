@@ -2,7 +2,7 @@
 
 **Feature Branch**: `388-sms-ai-provider`  
 **Created**: 2026-09-24  
-**Status**: Draft  
+**Status**: Approved  
 **Input**: User description: "Replace the SMS full-parser's current AI dependency with a lower-cost configurable SMS AI provider while keeping voice unchanged. Make future SMS provider changes easy, preserve the existing SMS safety and client contracts, and reuse stable parser context to reduce recurring input cost. Supported currencies and built-in categories are mostly stable; future user-created categories will be dynamic."
 
 ## Clarifications
@@ -10,6 +10,8 @@
 ### Session 2026-09-24
 
 - Q: Should the SMS provider be selected in code or configuration? → A: Configuration-based selection is required.
+- Q: May provider/model/service-tier configuration be omitted and defaulted? → A: No. Provider, model, service tier, and provider credential must be explicitly configured; missing, blank, incomplete, or unsupported values fail closed before request admission/provider-start accounting.
+- Q: How should reusable category/currency context be ordered? → A: Stable shared parser rules, supported currencies, and built-in categories come first; future user-specific custom-category context follows; request-specific SMS content comes last.
 - Q: Should the current SMS provider remain as a fallback during this pre-production migration? → A: No. Replace the SMS provider directly; no comparison benchmark or automatic fallback is required.
 - Q: Does the voice feature change? → A: No. Voice continues using its current provider and flow.
 - Q: How should repeated parser context be treated for cost control? → A: Unchanged shared parser context should be reusable when the selected provider supports discounted reuse, without weakening correctness or mixing user-specific content.
@@ -90,7 +92,7 @@ As the product owner, I want unchanged shared SMS parsing instructions to be reu
 - **FR-001**: The SMS full-parser MUST use an independently configurable AI provider that is separate from the voice AI provider.
 - **FR-002**: The completed feature MUST replace the current SMS AI dependency with the approved lower-cost SMS provider for this release.
 - **FR-003**: The SMS provider and model MUST be selectable through deployment configuration without changing the mobile SMS request/response contract.
-- **FR-004**: Missing, incomplete, or unsupported SMS provider configuration MUST fail closed and MUST NOT silently fall back to a previous or alternate provider.
+- **FR-004**: Missing, blank, incomplete, or unsupported SMS provider configuration—including provider, model, service tier, or required provider credential—MUST fail closed before request admission/provider-start accounting and MUST NOT silently fall back to a previous or alternate provider.
 - **FR-005**: SMS financial content MUST be sent only to an explicitly approved configured provider destination.
 - **FR-006**: Existing SMS authentication, AI consent, request validation, fingerprint validation, scan-window rules, hard exclusions, quotas, reservations, provider-start accounting, negative-outcome reconciliation, and operational telemetry MUST retain their current behavior.
 - **FR-007**: Existing SMS transaction semantic validation MUST remain authoritative regardless of which provider produced the candidate response.
@@ -100,10 +102,10 @@ As the product owner, I want unchanged shared SMS parsing instructions to be reu
 - **FR-011**: Retry behavior MUST distinguish transient provider/network failures from non-retryable authentication, authorization, configuration, and malformed-request failures.
 - **FR-012**: Retries MUST remain bounded and MUST preserve the existing SMS usage-accounting and idempotency guarantees.
 - **FR-013**: The shared SMS parsing rules, supported currencies, and built-in category definitions MUST remain provider-independent.
-- **FR-014**: Unchanged shared SMS parser context SHOULD be reusable across requests when the selected provider supports discounted input reuse, without making correctness depend on a reuse hit.
-- **FR-015**: Request-specific SMS content MUST remain outside shared reusable identity/context so one request's message content cannot become reusable context for another request.
-- **FR-016**: Future user-created custom categories MUST be supportable as dynamic user-specific parsing context without requiring a redesign of the SMS provider boundary.
-- **FR-017**: Built-in categories and supported currencies MAY be treated as stable shared context while they remain unchanged; a material change MUST invalidate reliance on the prior shared context.
+- **FR-014**: When the selected provider supports discounted prefix reuse, unchanged shared parser rules, supported currencies, and built-in category definitions SHOULD be ordered as the reusable prefix before any user-specific category context or SMS content, without making correctness depend on a reuse hit.
+- **FR-015**: Request-specific SMS content MUST remain after all reusable shared context and outside any explicit shared cache identity so one request's message content cannot become reusable identity/context for another request.
+- **FR-016**: Future user-created custom categories MUST be supportable as dynamic user-specific parsing context ordered after stable built-in category/currency context and before SMS content, without requiring a redesign of the SMS provider boundary.
+- **FR-017**: Built-in categories and supported currencies MAY be treated as stable shared context while unchanged; future custom categories MUST NOT be mixed into that stable portion, and any material change to the stable built-in/currency context MUST invalidate reliance on the prior reusable prefix.
 - **FR-018**: The provider boundary MUST NOT assume that all future categories are permanently identified only by current built-in category names.
 - **FR-019**: Provider credentials MUST remain server-side and MUST NOT be committed, returned to clients, or exposed in logs.
 - **FR-020**: Operational configuration for SMS provider selection MUST be managed separately from source code so hosted deployments can change provider/model settings without embedding credentials or mutable configuration values in the function bundle.
@@ -163,7 +165,7 @@ As the product owner, I want unchanged shared SMS parsing instructions to be reu
 - **SC-001**: 100% of existing SMS provider-contract and safeguard acceptance scenarios continue to produce the same client-visible outcome categories after the provider replacement.
 - **SC-002**: 100% of missing, unsupported, or incomplete SMS provider configuration scenarios fail before SMS content is sent to an unintended provider.
 - **SC-003**: For representative SMS requests of the same size, projected third-party AI processing cost is at least 30% lower than the current SMS baseline before any reuse discount, based on published pricing at deployment time.
-- **SC-004**: In repeated-request verification where the provider supports reusable input context, unchanged shared parser context is eligible for discounted reuse while different SMS bodies and user-specific category context remain isolated.
+- **SC-004**: In repeated-request verification where the provider supports reusable input context, unchanged parser rules, supported currencies, and built-in categories remain an identical reusable prefix while different user-specific custom-category context and SMS bodies remain isolated after that prefix.
 - **SC-005**: 100% of cache/reuse hit and miss verification cases produce equivalent functional parsing and validation behavior for the same request.
 - **SC-006**: A future approved SMS provider can be introduced without changing the mobile SMS contract, voice parsing, SMS safeguard policy, negative-outcome reconciliation, or semantic transaction validation.
 - **SC-007**: 100% of malformed, truncated, or semantically invalid provider-response fixtures produce no accepted partial financial suggestion.
