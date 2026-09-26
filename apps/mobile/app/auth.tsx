@@ -1,5 +1,4 @@
 import { LinearGradient } from "expo-linear-gradient";
-import { useRouter } from "expo-router";
 import {
   KeyboardAvoidingView,
   Platform,
@@ -16,6 +15,7 @@ import { VerificationPendingView } from "@/components/auth/VerificationPendingVi
 import { LanguageSwitcherPill } from "@/components/onboarding/LanguageSwitcherPill";
 import { MonyviLogo } from "@/components/ui/MonyviLogo";
 import { palette } from "@/constants/colors";
+import { RESPONSIVE_FONT_SCALE } from "@/constants/ui";
 import { useTheme } from "@/context/ThemeContext";
 import { useAuthScreenController } from "@/hooks/useAuthScreenController";
 import { useFormScroll } from "@/hooks/useFormScroll";
@@ -28,13 +28,32 @@ export function getAuthBottomPadding(
   return bottomInset + (isCompactViewport ? 8 : 22);
 }
 
+export function shouldEnableAuthScroll(
+  fontScale: number,
+  viewportHeight: number = 900,
+  viewportWidth?: number
+): boolean {
+  if (fontScale >= RESPONSIVE_FONT_SCALE.denseLayout) {
+    return true;
+  }
+  if (viewportHeight <= 850) {
+    return true;
+  }
+  if (viewportWidth !== undefined && viewportWidth > viewportHeight) {
+    return true;
+  }
+  return false;
+}
+
 export default function AuthScreen(): React.JSX.Element {
   const insets = useSafeAreaInsets();
-  const router = useRouter();
   const { isDark } = useTheme();
   const isKeyboardVisible = useKeyboardVisibility();
-  const { width: viewportWidth, height: viewportHeight } =
-    useWindowDimensions();
+  const {
+    width: viewportWidth,
+    height: viewportHeight,
+    fontScale,
+  } = useWindowDimensions();
   const isCompactViewport = viewportWidth <= 390 || viewportHeight <= 850;
   const controller = useAuthScreenController();
   const { scrollViewRef, getFieldRef, onScroll, scrollToField } = useFormScroll<
@@ -61,7 +80,11 @@ export default function AuthScreen(): React.JSX.Element {
           ref={scrollViewRef}
           onScroll={onScroll}
           scrollEventThrottle={16}
-          scrollEnabled={false}
+          scrollEnabled={shouldEnableAuthScroll(
+            fontScale,
+            viewportHeight,
+            viewportWidth
+          )}
           bounces={false}
           overScrollMode="never"
           contentContainerStyle={{
@@ -112,8 +135,6 @@ export default function AuthScreen(): React.JSX.Element {
                 onForgotPassword={controller.handleForgotPassword}
                 onClearError={controller.clearEmailError}
                 onClearNetworkError={controller.clearNetworkError}
-                onPrivacyPress={() => router.push("/privacy-policy")}
-                onTermsPress={() => router.push("/terms")}
                 onEmailFocus={() => scrollToField("email")}
                 onPasswordFocus={() => scrollToField("password")}
               />

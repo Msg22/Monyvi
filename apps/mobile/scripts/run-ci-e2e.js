@@ -23,6 +23,7 @@ const defaultDeviceOfflineRetryCount = 5;
 
 const shouldBootstrapAuth = process.env.E2E_SKIP_AUTH_BOOTSTRAP !== "1";
 const allCiSuites = [
+  "auth",
   "accounts",
   "transactions",
   "recurring-payments",
@@ -493,6 +494,27 @@ function shouldRestoreDefaultFixtureAfterBudgets(selectedSuites) {
   );
 }
 
+async function runEmailVerificationSuite() {
+  await runNodeScript(
+    "scripts/run-email-verification-e2e.js",
+    [],
+    getEmailVerificationSuiteOptions()
+  );
+}
+
+function getEmailVerificationSuiteOptions() {
+  return {
+    retryOnDeviceFailure: false,
+  };
+}
+
+function shouldRunEmailVerificationSuite(
+  selectedSuites,
+  supabaseMode = getSupabaseMode()
+) {
+  return selectedSuites.has("auth") && supabaseMode === "local";
+}
+
 function shouldRestoreDefaultFixtureBeforeLocalization(selectedSuites) {
   if (!selectedSuites.has("localization")) return false;
 
@@ -500,7 +522,6 @@ function shouldRestoreDefaultFixtureBeforeLocalization(selectedSuites) {
     (suite) => selectedSuites.has(suite)
   );
 }
-
 async function maybeRunAuthBootstrap() {
   if (shouldBootstrapAuth && !hasRunAuthBootstrap) {
     await runAuthBootstrap(getInitialAuthBootstrapOptions());
@@ -583,6 +604,14 @@ async function main() {
   assertRequiredEnv();
   await maybeSeedE2eData();
 
+  if (shouldRunEmailVerificationSuite(selectedSuites, getSupabaseMode())) {
+    await runEmailVerificationSuite();
+  } else if (selectedSuites.has("auth")) {
+    console.log(
+      "Skipping local email verification suite because E2E_SUPABASE_MODE is not local."
+    );
+  }
+
   if (selectedSuites.has("accounts")) {
     await runMaestroFlows(accountMaestroFlows);
   }
@@ -646,6 +675,7 @@ module.exports = {
   getAuthBootstrapFlow,
   getInitialAuthBootstrapOptions,
   getBudgetAuthBootstrapOptions,
+  getEmailVerificationSuiteOptions,
   getMaestroSuiteFlowOptions,
   getSmsSyncJourneyOptions,
   isDeviceOfflineFailure,
@@ -656,4 +686,5 @@ module.exports = {
   shouldBootstrapBeforeLiveSms,
   shouldRestoreDefaultFixtureAfterBudgets,
   shouldRestoreDefaultFixtureBeforeLocalization,
+  shouldRunEmailVerificationSuite,
 };

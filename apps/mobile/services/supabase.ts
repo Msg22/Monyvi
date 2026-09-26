@@ -308,6 +308,9 @@ export async function signUpWithEmail(
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
+    options: {
+      emailRedirectTo: AUTH_REDIRECT_URL,
+    },
   });
 
   if (error) {
@@ -339,7 +342,11 @@ export async function signInWithEmail(
   });
 
   if (error) {
-    return { success: false, error };
+    return {
+      success: false,
+      error,
+      needsVerification: error.code === "email_not_confirmed",
+    };
   }
 
   return { success: true };
@@ -380,6 +387,9 @@ export async function resendVerificationEmail(
   const { error } = await supabase.auth.resend({
     type: "signup",
     email,
+    options: {
+      emailRedirectTo: AUTH_REDIRECT_URL,
+    },
   });
 
   if (error) {
