@@ -15,7 +15,7 @@ Represents validated server-side runtime configuration.
 | --- | --- | --- |
 | `provider` | `"deepinfra"` initially | Required; unsupported values fail closed |
 | `model` | non-empty string | Required; initial value `deepseek-ai/DeepSeek-V4-Flash-0731` |
-| `serviceTier` | `"default" \| "priority" \| "flex"` | Required after defaulting; `default` omits provider request field |
+| `serviceTier` | `"default" \| "priority" \| "flex"` | Explicitly required; no missing-value default. `default` omits provider request field |
 | `apiKey` | secret string | Required for DeepInfra; never logged/serialized to clients |
 
 ### Source
@@ -27,45 +27,75 @@ Represents validated server-side runtime configuration.
 
 ### Validation
 
-Configuration is parsed once at composition/provider creation. Invalid or incomplete values prevent provider execution.
+Configuration is parsed once during module/provider composition before the per-request handler can reserve or mark provider usage. Missing, blank, incomplete, or unsupported values prevent provider execution and request admission.
 
-## 2. SMS AI Provider Strategy
+## 2. Raw SMS AI Provider Strategy
 
-A capability-specific runtime contract.
+A capability-specific provider adapter contract. It owns provider transport/envelope mechanics but not Monyvi financial semantics.
 
 ~~~ts
 interface SmsAiProvider {
-  execute(input: ExecuteSmsProviderInput): Promise<SmsProviderExecutionResult>;
+  execute(request: SmsAiProviderRequest): Promise<SmsAiProviderRawResult>;
+}
+
+interface SmsAiProviderRawResult {
+  readonly completionStatus:
+    | "complete"
+    | "truncated"
+    | "safety_stopped"
+    | "failed";
+  readonly content: string;
+  readonly operationalMetadata?: SmsAiProviderOperationalMetadata;
 }
 ~~~
 
-The implementation may reuse the repository's existing `ExecuteSmsProviderInput` and `SmsProviderExecutionResult` types instead of duplicating them.
+`SmsAiProviderRequest` contains provider-independent prompt messages and strict response-schema material prepared by Monyvi.
+
+## 3. Provider-Neutral Monyvi Executor
+
+The executor bridges the raw adapter to the existing handler contract.
+
+~~~ts
+async function executeSmsAiProvider(
+  provider: SmsAiProvider,
+  input: ExecuteSmsProviderInput
+): Promise<SmsProviderExecutionResult>;
+~~~
+
+Responsibilities:
+
+- build stable/dynamic Monyvi prompt context and strict response schema;
+- call the raw provider adapter;
+- parse the returned inner JSON;
+- apply existing `parseSmsProviderTransactions` semantic validation;
+- construct `SmsProviderExecutionResult`.
 
 ### Invariant
 
-The handler depends on this contract, not on DeepInfra-specific request/response types.
+The handler depends on `SmsProviderExecutionResult`, while provider adapters never own or bypass Monyvi semantic transaction validation.
 
-## 3. SMS Parsing Prompt Context
+## 4. SMS Parsing Prompt Context
 
 Logical provider-independent prompt material.
 
 | Part | Stability | Content |
 | --- | --- | --- |
 | Stable system rules | stable/versioned | Monyvi transaction qualification, exclusions, trust rules, field extraction rules, category-selection instructions |
-| Category context | request/user dependent | current accessible category tree; future custom categories may vary per user |
-| Supported currencies | mostly stable | current allowed currency codes; also enforced by response schema |
+| Stable supported-currency context | mostly stable | unchanged globally supported currency codes; also enforced by response schema |
+| Built-in category context | stable/versioned | code-owned built-in category definitions ordered before custom categories |
+| User-specific custom-category context | dynamic/optional | future custom categories only; empty/not present in the current release |
 | User prompt | request-specific | candidate message IDs, sender, received date, SMS body |
 | Response schema | derived | Monyvi transaction shape + request-supported currency/category constraints |
 
 ### Ordering invariant
 
-Stable system rules MUST precede dynamic category context and SMS content so provider prefix caching can reuse the shared prefix.
+Stable system rules, unchanged supported-currency context, and built-in category definitions MUST precede future user-specific custom-category context and SMS content so automatic provider prefix caching can reuse the shared portion even when custom categories differ.
 
 ### Privacy invariant
 
-Raw SMS data, user IDs, account IDs, and secrets MUST NOT be placed in any shared cache identity.
+Raw SMS data, user IDs, account IDs, and secrets MUST NOT be placed in any shared cache identity. Feature 388 sends no explicit `prompt_cache_key` or `prompt_cache_options`; reuse relies only on automatic prefix matching.
 
-## 4. DeepInfra Chat Completion Envelope
+## 5. DeepInfra Chat Completion Envelope
 
 External provider response validated at runtime before use.
 
@@ -86,13 +116,13 @@ External provider response validated at runtime before use.
 
 ### Validation
 
-- Envelope: Zod 4.4.3.
-- Inner content: JSON parse.
-- Transaction payload: existing `parseSmsProviderTransactions`.
+- External DeepInfra envelope: Zod 4.4.3 inside the adapter.
+- Inner content: JSON parse in the provider-neutral Monyvi executor.
+- Transaction payload: existing `parseSmsProviderTransactions` in the provider-neutral Monyvi executor.
 
 A failure at any stage must not yield partial accepted transactions.
 
-## 5. Existing Monyvi Provider Result
+## 6. Existing Monyvi Provider Result
 
 No shape change:
 
@@ -122,34 +152,35 @@ Existing transaction fields remain unchanged:
 - `confidenceScore`
 - `isTrusted`
 
-## 6. Runtime State Flow
+## 7. Runtime State Flow
 
 ~~~text
 request admitted by existing SMS safeguards
         |
         v
 validated SMS provider configuration
+(module composition; before request admission/accounting)
         |
         v
-provider-neutral prompt + response schema
+provider-neutral executor builds stable/dynamic prompt + response schema
         |
         v
-DeepInfra adapter
+DeepInfra raw adapter
         |
-        +-- transient failure -> bounded retry
+        +-- transient failure -> bounded internal retry
         |
         +-- non-retryable failure -> provider error
         |
         v
-Zod-validated provider envelope
+Zod-validated external provider envelope
         |
         v
-normalized completion status
+normalized completion status + raw content
         |
         +-- non-complete -> existing handler failure path
         |
         v
-JSON content parse
+provider-neutral Monyvi executor parses inner JSON
         |
         v
 existing semantic transaction validator
@@ -157,10 +188,10 @@ existing semantic transaction validator
         +-- invalid -> response_invalid
         |
         v
-existing reconciliation/completion flow
+existing SmsProviderExecutionResult -> reconciliation/completion flow
 ~~~
 
-## 7. Persistent Storage Impact
+## 8. Persistent Storage Impact
 
 None.
 
@@ -172,8 +203,8 @@ The feature MUST NOT add or change:
 - negative-outcome schema;
 - mobile review-draft schema.
 
-## 8. Future Custom Categories
+## 9. Future Custom Categories
 
-This feature does not implement custom categories, but the runtime prompt boundary must allow category context to become user-specific.
+This feature does not implement custom categories, but the runtime prompt boundary must preserve a stable built-in category prefix and allow a separate user-specific custom-category tail before SMS content.
 
 Future category identity must not be assumed to equal a mutable display name. The custom-category feature owns its final identity/output contract.
