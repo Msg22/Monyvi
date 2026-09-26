@@ -242,3 +242,66 @@ test("normalizes provider finish reasons without parsing financial semantics", a
     assert.equal(result.content, "not-json-by-design");
   }
 });
+
+
+test("logs only aggregate cache usage metadata and never request/provider-body content", async () => {
+  const logs: Array<{
+    readonly event: string;
+    readonly metadata: Readonly<Record<string, unknown>>;
+  }> = [];
+  const provider = new DeepInfraSmsProvider(CONFIG, {
+    fetch: async () => successResponse('{"transactions":[]}'),
+    sleep: async () => undefined,
+    createTimeoutSignal: () => new AbortController().signal,
+    log: (event, metadata) => {
+      logs.push({ event, metadata });
+    },
+  });
+
+  await provider.execute({
+    messages: [
+      {
+        role: "user",
+        content: "SECRET SMS BODY EGP 100 at merchant",
+      },
+    ],
+    responseSchema: REQUEST.responseSchema,
+  });
+
+  assert.equal(logs.length, 1);
+  assert.equal(logs[0].event, "smsAi.providerUsage");
+  assert.deepEqual(logs[0].metadata, {
+    serviceTier: "default",
+    promptTokens: 100,
+    completionTokens: 20,
+    cachedTokens: 80,
+    estimatedCost: 0.00001,
+  });
+  const serialized = JSON.stringify(logs);
+  assert.equal(serialized.includes("SECRET SMS BODY"), false);
+  assert.equal(serialized.includes("test-key"), false);
+  assert.equal(serialized.includes("transactions"), false);
+});
+
+test("never logs an upstream error body that may echo SMS content", async () => {
+  const logs: unknown[] = [];
+  let calls = 0;
+  const provider = new DeepInfraSmsProvider(CONFIG, {
+    fetch: async () => {
+      calls++;
+      return new Response("ECHOED SECRET SMS BODY", { status: 503 });
+    },
+    sleep: async () => undefined,
+    createTimeoutSignal: () => new AbortController().signal,
+    log: (...values) => {
+      logs.push(values);
+    },
+  });
+
+  await assert.rejects(
+    () => provider.execute(REQUEST),
+    /DeepInfra SMS request failed/
+  );
+  assert.equal(calls, 4);
+  assert.equal(JSON.stringify(logs).includes("ECHOED SECRET SMS BODY"), false);
+});
