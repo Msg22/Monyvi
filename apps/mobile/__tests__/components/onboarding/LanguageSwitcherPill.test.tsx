@@ -19,6 +19,9 @@ let mockIsDark = true;
 let mockIsAuthenticated = false;
 let mockMeasureRect = { x: 30, y: 70, width: 80, height: 36 };
 let mockScreenWidth = 390;
+jest.mock("@/hooks/useLanguageRuntime", (): object => ({
+  useLanguageState: (): object => ({ phase: "ready" }),
+}));
 
 jest.mock("react-i18next", () => ({
   useTranslation: (): {

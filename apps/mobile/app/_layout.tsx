@@ -32,6 +32,12 @@ import { ErrorBoundary } from "../components/ErrorBoundary";
 import { ToastProvider } from "../components/ui/Toast";
 import { AuthProvider, useAuth } from "../context/AuthContext";
 import { LocaleProvider } from "../context/LocaleContext";
+import {
+  LanguageScopeSync,
+  PublicLanguageBoundary,
+} from "@/components/LanguageRuntimeBoundary";
+import { useLanguageState } from "@/hooks/useLanguageRuntime";
+import { useTranslationLanguage } from "@/hooks/useTranslationLanguage";
 import { ThemeProvider, useTheme } from "../context/ThemeContext";
 import i18n, { initI18n, initI18nFallback } from "../i18n";
 import { initializeNotifications } from "../services/notification-service";
@@ -74,6 +80,7 @@ SplashScreen.preventAutoHideAsync().catch((error: unknown) => {
 });
 
 function RootLayout(): React.ReactNode {
+  const accessibilityLanguage = useTranslationLanguage();
   const [fontsLoaded, fontError] = useFonts({
     Inter_400Regular,
     Inter_500Medium,
@@ -159,14 +166,17 @@ function RootLayout(): React.ReactNode {
       <I18nextProvider i18n={i18n}>
         <GestureHandlerRootView
           className="flex-1"
-          accessibilityLanguage={i18n.language === "ar" ? "ar" : "en"}
+          accessibilityLanguage={accessibilityLanguage}
         >
           <AuthProvider>
+            <LanguageScopeSync />
             <LocaleProvider>
               <ThemeProvider>
                 <SafeAreaProvider initialMetrics={initialWindowMetrics}>
                   <ToastProvider>
-                    <RootLayoutNav />
+                    <PublicLanguageBoundary>
+                      <RootLayoutNav />
+                    </PublicLanguageBoundary>
                     <AndroidNavigationBarSurface />
                     <PublicSplashGate />
                   </ToastProvider>
@@ -183,13 +193,20 @@ function RootLayout(): React.ReactNode {
 export default Sentry.wrap(RootLayout);
 
 function PublicSplashGate(): null {
+  const languageState = useLanguageState();
   const { isAuthenticated, isLoading } = useAuth();
   const segments = useSegments();
   const hiddenRef = useRef(false);
   const isPublicRoute = PUBLIC_ROUTES.has(segments[0] ?? "");
 
   useEffect(() => {
-    if (hiddenRef.current || isLoading || isAuthenticated || !isPublicRoute) {
+    if (
+      hiddenRef.current ||
+      isLoading ||
+      isAuthenticated ||
+      !isPublicRoute ||
+      (languageState.phase !== "ready" && languageState.phase !== "error")
+    ) {
       return;
     }
 
@@ -203,7 +220,7 @@ function PublicSplashGate(): null {
           error instanceof Error ? { message: error.message } : { error }
         );
       });
-  }, [isAuthenticated, isLoading, isPublicRoute]);
+  }, [isAuthenticated, isLoading, isPublicRoute, languageState.phase]);
 
   return null;
 }

@@ -1,300 +1,102 @@
-/**
- * Unit tests for AppReadyGate — composite splash-hide coordinator.
- *
- * Validates:
- * - Splash is NOT hidden while initialSyncState is "in-progress".
- * - Splash is NOT hidden while the profile is still loading (for authenticated users).
- * - Splash IS hidden once sync settles AND profile is loaded.
- * - Unauthenticated users don't gate on sync/profile — splash hides as soon
- *   as auth resolves.
- * - SplashScreen.hideAsync is called at most once per session.
- * - When profile.preferredLanguage differs from i18n.language, the language
- *   is applied BEFORE splash hides.
- */
-
 import React from "react";
-
-// react-test-renderer has no TS types; minimal shape used by this test.
-interface ReactTestRendererInstance {
-  update: (element: React.ReactElement) => void;
-  unmount: () => void;
-}
-interface ReactTestRendererModule {
-  act: (fn: () => void | Promise<void>) => void;
-  create: (element: React.ReactElement) => ReactTestRendererInstance;
-}
-// eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-unsafe-assignment
-const RTR: ReactTestRendererModule = require("react-test-renderer");
-
-// =============================================================================
-// Mocks
-// =============================================================================
-
-jest.mock("expo-splash-screen", () => ({
-  hideAsync: jest.fn().mockResolvedValue(undefined),
-  preventAutoHideAsync: jest.fn().mockResolvedValue(undefined),
-}));
-
-jest.mock("@/i18n", () => ({
-  __esModule: true,
-  default: { language: "en" },
-}));
-
-jest.mock("@/i18n/changeLanguage", () => ({
-  changeLanguage: jest.fn().mockResolvedValue(undefined),
-}));
-
-jest.mock("@/utils/logger", () => ({
-  logger: {
-    info: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn(),
-  },
-}));
-
-// Mock the three hooks the gate consumes. Tests override return values per case.
-const mockUseAuth = jest.fn();
-const mockUseSync = jest.fn();
-const mockUseProfile = jest.fn();
-
-jest.mock("@/context/AuthContext", () => ({
-  useAuth: (): unknown => mockUseAuth(),
-}));
-
-jest.mock("@/providers/SyncProvider", () => ({
-  useSync: (): unknown => mockUseSync(),
-}));
-
-jest.mock("@/hooks/useProfile", () => ({
-  useProfile: (): unknown => mockUseProfile(),
-}));
-
-// =============================================================================
-// Imports (after mocks)
-// =============================================================================
-
-import * as SplashScreen from "expo-splash-screen";
-import { changeLanguage } from "@/i18n/changeLanguage";
+import { render, waitFor } from "@testing-library/react-native";
 import { AppReadyGate } from "@/components/AppReadyGate";
+import * as SplashScreen from "expo-splash-screen";
 
-const mockHideAsync = SplashScreen.hideAsync as jest.Mock;
-const mockChangeLanguage = changeLanguage as jest.Mock;
+let mockAuthLoading = false;
+let mockProfile: object | null = {};
+let mockProfileLoading = false;
+let mockSyncState = "success";
+let mockPhase = "ready";
+let mockScope = "user-a";
+jest.mock("expo-splash-screen", (): object => ({
+  hideAsync: jest.fn().mockResolvedValue(undefined),
+}));
+jest.mock("@/context/AuthContext", (): object => ({
+  useAuth: (): object => ({
+    isLoading: mockAuthLoading,
+    isAuthenticated: true,
+    user: { id: "user-a" },
+  }),
+}));
+jest.mock("@/hooks/useProfile", (): object => ({
+  useProfile: (): object => ({
+    profile: mockProfile,
+    isLoading: mockProfileLoading,
+  }),
+}));
+jest.mock("@/providers/SyncProvider", (): object => ({
+  useSync: (): object => ({ initialSyncState: mockSyncState }),
+}));
+jest.mock("@/hooks/useLanguageRuntime", (): object => ({
+  useLanguageState: (): object => ({ scope: mockScope, phase: mockPhase }),
+}));
+jest.mock("@/utils/logger", (): object => ({ logger: { warn: jest.fn() } }));
 
-beforeEach(() => {
-  jest.clearAllMocks();
-});
-
-async function flushPromises(): Promise<void> {
-  await new Promise((r) => setImmediate(r));
-}
-
-// =============================================================================
-// Helpers
-// =============================================================================
-
-function setState(opts: {
-  authIsLoading: boolean;
-  isAuthenticated: boolean;
-  initialSyncState?: "in-progress" | "success" | "failed" | "timeout";
-  profileIsLoading?: boolean;
-  profile?: Record<string, unknown> | null;
-}): void {
-  mockUseAuth.mockReturnValue({
-    isLoading: opts.authIsLoading,
-    isAuthenticated: opts.isAuthenticated,
+describe("AppReadyGate", (): void => {
+  beforeEach((): void => {
+    jest.clearAllMocks();
+    mockAuthLoading = false;
+    mockProfile = {};
+    mockProfileLoading = false;
+    mockSyncState = "success";
+    mockPhase = "ready";
+    mockScope = "user-a";
   });
-  mockUseSync.mockReturnValue({
-    initialSyncState: opts.initialSyncState ?? "in-progress",
+  it.each(["resolving", "applying", "restarting"])(
+    "keeps splash for locale %s",
+    (phase): void => {
+      mockPhase = phase;
+      render(<AppReadyGate />);
+      expect(SplashScreen.hideAsync).not.toHaveBeenCalled();
+    }
+  );
+  it("hides splash after account and locale settle", async (): Promise<void> => {
+    render(<AppReadyGate />);
+    await waitFor(() =>
+      expect(SplashScreen.hideAsync).toHaveBeenCalledTimes(1)
+    );
   });
-  mockUseProfile.mockReturnValue({
-    profile: opts.profile ?? null,
-    isLoading: opts.profileIsLoading ?? true,
+  it("does not expose private UI for a previous user's ready locale", (): void => {
+    mockScope = "other";
+    render(<AppReadyGate />);
+    expect(SplashScreen.hideAsync).not.toHaveBeenCalled();
   });
-}
-
-// =============================================================================
-// Tests
-// =============================================================================
-
-describe("AppReadyGate", () => {
-  it("does NOT hide splash while auth is still loading", async (): Promise<void> => {
-    setState({ authIsLoading: true, isAuthenticated: false });
-
-    RTR.act(() => {
-      RTR.create(React.createElement(AppReadyGate));
-    });
-    await flushPromises();
-
-    expect(mockHideAsync).not.toHaveBeenCalled();
+  it("direction error does not block account access", async (): Promise<void> => {
+    mockPhase = "error";
+    render(<AppReadyGate />);
+    await waitFor(() => expect(SplashScreen.hideAsync).toHaveBeenCalled());
   });
-
-  it("does NOT hide splash while initial sync is in-progress (authenticated)", async (): Promise<void> => {
-    setState({
-      authIsLoading: false,
-      isAuthenticated: true,
-      initialSyncState: "in-progress",
-      profileIsLoading: false,
-      profile: { preferredLanguage: "en" },
-    });
-
-    RTR.act(() => {
-      RTR.create(React.createElement(AppReadyGate));
-    });
-    await flushPromises();
-
-    expect(mockHideAsync).not.toHaveBeenCalled();
+  it("language error never bypasses account startup safety", (): void => {
+    mockPhase = "error";
+    mockSyncState = "in-progress";
+    render(<AppReadyGate />);
+    expect(SplashScreen.hideAsync).not.toHaveBeenCalled();
   });
-
-  it("does NOT hide splash while profile is still loading (authenticated)", async (): Promise<void> => {
-    setState({
-      authIsLoading: false,
-      isAuthenticated: true,
-      initialSyncState: "success",
-      profileIsLoading: true,
-      profile: null,
-    });
-
-    RTR.act(() => {
-      RTR.create(React.createElement(AppReadyGate));
-    });
-    await flushPromises();
-
-    expect(mockHideAsync).not.toHaveBeenCalled();
+  it("shows missing-profile recovery without waiting for nonexistent language", async (): Promise<void> => {
+    mockProfile = null;
+    mockPhase = "resolving";
+    mockSyncState = "failed";
+    render(<AppReadyGate />);
+    await waitFor(() => expect(SplashScreen.hideAsync).toHaveBeenCalled());
   });
-
-  it("hides splash once sync + profile are ready (authenticated)", async (): Promise<void> => {
-    setState({
-      authIsLoading: false,
-      isAuthenticated: true,
-      initialSyncState: "success",
-      profileIsLoading: false,
-      profile: { preferredLanguage: "en" },
-    });
-
-    RTR.act(() => {
-      RTR.create(React.createElement(AppReadyGate));
-    });
-    await flushPromises();
-
-    expect(mockHideAsync).toHaveBeenCalledTimes(1);
+  it("settled locale cannot bypass unresolved auth", (): void => {
+    mockAuthLoading = true;
+    render(<AppReadyGate isLocaleSettled />);
+    expect(SplashScreen.hideAsync).not.toHaveBeenCalled();
   });
-
-  it("hides splash immediately once auth resolves (unauthenticated)", async (): Promise<void> => {
-    // Unauthenticated users don't gate on sync or profile.
-    setState({
-      authIsLoading: false,
-      isAuthenticated: false,
-      initialSyncState: "in-progress",
-      profileIsLoading: true,
-      profile: null,
-    });
-
-    RTR.act(() => {
-      RTR.create(React.createElement(AppReadyGate));
-    });
-    await flushPromises();
-
-    expect(mockHideAsync).toHaveBeenCalledTimes(1);
+  it("settled locale cannot bypass loading profile", (): void => {
+    mockProfileLoading = true;
+    render(<AppReadyGate isLocaleSettled />);
+    expect(SplashScreen.hideAsync).not.toHaveBeenCalled();
   });
-
-  it("hides splash on sync failure (retry path)", async (): Promise<void> => {
-    // Failed sync counts as "not in-progress", so the splash should hide
-    // and the retry screen can render.
-    setState({
-      authIsLoading: false,
-      isAuthenticated: true,
-      initialSyncState: "failed",
-      profileIsLoading: false,
-      profile: null,
-    });
-
-    RTR.act(() => {
-      RTR.create(React.createElement(AppReadyGate));
-    });
-    await flushPromises();
-
-    expect(mockHideAsync).toHaveBeenCalledTimes(1);
-  });
-
-  it("hides splash on sync timeout", async (): Promise<void> => {
-    setState({
-      authIsLoading: false,
-      isAuthenticated: true,
-      initialSyncState: "timeout",
-      profileIsLoading: false,
-      profile: null,
-    });
-
-    RTR.act(() => {
-      RTR.create(React.createElement(AppReadyGate));
-    });
-    await flushPromises();
-
-    expect(mockHideAsync).toHaveBeenCalledTimes(1);
-  });
-
-  it("applies the user's stored language BEFORE hiding splash", async (): Promise<void> => {
-    setState({
-      authIsLoading: false,
-      isAuthenticated: true,
-      initialSyncState: "success",
-      profileIsLoading: false,
-      profile: { preferredLanguage: "ar" }, // differs from i18n.language = "en"
-    });
-
-    RTR.act(() => {
-      RTR.create(React.createElement(AppReadyGate));
-    });
-    await flushPromises();
-
-    expect(mockChangeLanguage).toHaveBeenCalledWith("ar");
-    expect(mockHideAsync).toHaveBeenCalledTimes(1);
-
-    // changeLanguage should have been invoked before hideAsync.
-    const changeLanguageOrder = mockChangeLanguage.mock.invocationCallOrder[0];
-    const hideAsyncOrder = mockHideAsync.mock.invocationCallOrder[0];
-    expect(changeLanguageOrder).toBeLessThan(hideAsyncOrder);
-  });
-
-  it("does NOT call changeLanguage when stored language matches current i18n", async (): Promise<void> => {
-    setState({
-      authIsLoading: false,
-      isAuthenticated: true,
-      initialSyncState: "success",
-      profileIsLoading: false,
-      profile: { preferredLanguage: "en" }, // matches mocked i18n.language
-    });
-
-    RTR.act(() => {
-      RTR.create(React.createElement(AppReadyGate));
-    });
-    await flushPromises();
-
-    expect(mockChangeLanguage).not.toHaveBeenCalled();
-    expect(mockHideAsync).toHaveBeenCalledTimes(1);
-  });
-
-  it("hides splash at most once even if inputs re-resolve", async (): Promise<void> => {
-    setState({
-      authIsLoading: false,
-      isAuthenticated: true,
-      initialSyncState: "success",
-      profileIsLoading: false,
-      profile: { preferredLanguage: "en" },
-    });
-
-    let renderer: ReactTestRendererInstance | null = null;
-    RTR.act(() => {
-      renderer = RTR.create(React.createElement(AppReadyGate));
-    });
-    await flushPromises();
-
-    // Re-render with the same (ready) state — should NOT call hideAsync again.
-    RTR.act(() => {
-      renderer?.update(React.createElement(AppReadyGate));
-    });
-    await flushPromises();
-
-    expect(mockHideAsync).toHaveBeenCalledTimes(1);
+  it("hides splash once on sync timeout and remains idempotent on rerender", async (): Promise<void> => {
+    mockSyncState = "timeout";
+    const { rerender } = render(<AppReadyGate isLocaleSettled />);
+    await waitFor(() =>
+      expect(SplashScreen.hideAsync).toHaveBeenCalledTimes(1)
+    );
+    rerender(<AppReadyGate isLocaleSettled />);
+    expect(SplashScreen.hideAsync).toHaveBeenCalledTimes(1);
   });
 });

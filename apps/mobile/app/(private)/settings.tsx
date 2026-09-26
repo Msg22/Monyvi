@@ -38,7 +38,6 @@ import { usePreferredCurrency } from "@/hooks/usePreferredCurrency";
 import { useSettingsAiConsentToggle } from "@/hooks/useSettingsAiConsentToggle";
 import { useSettingsAiConsentState } from "@/hooks/useSettingsAiConsentState";
 import { useSettingsSmsSyncActions } from "@/hooks/useSettingsSmsSyncActions";
-import { setIntroLocaleOverride } from "@/services/intro-flag-service";
 import { setPreferredLanguage } from "@/services/profile-service";
 import { useSmsPermission } from "@/hooks/useSmsPermission";
 import { useSmsSync } from "@/hooks/useSmsSync";
@@ -766,21 +765,14 @@ export default function SettingsScreen(): React.JSX.Element {
       try {
         // Keep the device override and profile language in sync before the
         // RTL-flip reload so cold launch starts with the selected language.
-        await setIntroLocaleOverride(lang);
         await setPreferredLanguage(lang);
       } catch (error) {
-        // TODO: Replace with structured logging (e.g., Sentry)
-        console.error("Failed to change language:", error);
-        showToast({
-          type: "error",
-          title: tCommon("error"),
-          message: t("language_change_failed"),
-        });
+        logger.warn("language.selection.failed", { error });
       } finally {
         setIsChangingLanguage(false);
       }
     },
-    [isChangingLanguage, showToast, t, tCommon]
+    [isChangingLanguage]
   );
 
   return (
@@ -825,7 +817,9 @@ export default function SettingsScreen(): React.JSX.Element {
           preferredCurrency={preferredCurrency}
           currencyFlag={currencyInfo?.flag ?? "💱"}
           currencyName={
-            currencyInfo ? getCurrencyName(currencyInfo.code) : preferredCurrency
+            currencyInfo
+              ? getCurrencyName(currencyInfo.code)
+              : preferredCurrency
           }
           chevronColor={theme.text.secondary}
           onPress={() => setIsCurrencyPickerVisible(true)}

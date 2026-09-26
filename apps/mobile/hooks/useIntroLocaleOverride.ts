@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   readIntroLocaleOverride,
-  setIntroLocaleOverride,
+  persistIntroLocaleOverride,
 } from "@/services/intro-flag-service";
 import { changeLanguage } from "@/i18n/changeLanguage";
 import { logger } from "@/utils/logger";
@@ -51,8 +51,9 @@ export function useIntroLocaleOverride(): {
   }, []);
 
   const setOverride = useCallback(async (lang: "en" | "ar"): Promise<void> => {
-    await setIntroLocaleOverride(lang);
-    await changeLanguage(lang);
+    await changeLanguage(lang, {
+      persist: (): Promise<void> => persistIntroLocaleOverride(lang),
+    });
     setOverrideState(lang);
   }, []);
 
