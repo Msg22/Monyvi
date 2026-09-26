@@ -513,7 +513,8 @@ const parseSmsHandler = createParseSmsHandler({
   },
   hasConsent: hasActiveAiProcessingConsent,
   getPolicy: () => readSmsSafeguardPolicyFromEnvironment(Deno.env.get),
-  fixedPrompt: buildSystemPrompt(""),
+  buildFixedPrompt: () => buildSystemPrompt(""),
+  buildCategoryContext: (categories) => categories,
   buildResponseSchema: (supportedCurrencies) =>
     JSON.stringify(buildResponseSchema(supportedCurrencies)),
   shouldExclude: (message) =>
