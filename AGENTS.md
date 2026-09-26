@@ -12,7 +12,7 @@ with Angular equivalents in chat (never in code comments).
 
 <!-- SPECKIT START -->
 
-Active Speckit plan: `specs/302-atomic-market-rate-snapshots/plan.md`
+Active Speckit plan: `specs/345-language-direction/plan.md`
 
 <!-- SPECKIT END -->
 

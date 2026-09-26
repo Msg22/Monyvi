@@ -169,6 +169,14 @@ function ToastHarness(): React.JSX.Element {
       >
         <Text>Show instant</Text>
       </Pressable>
+      <Pressable
+        testID="show-dismissible-toast"
+        onPress={(): void =>
+          showToast({ type: "warning", title: "Reopen app", dismissible: true })
+        }
+      >
+        <Text>Show warning</Text>
+      </Pressable>
     </>
   );
 }
@@ -207,6 +215,17 @@ function getReactTestInstanceProps(instance: unknown): Record<string, unknown> {
 }
 
 describe("ToastProvider", () => {
+  it("allows opt-in warning dismissal by touch and accessibility action", (): void => {
+    renderToastHarness();
+    fireEvent.press(screen.getByTestId("show-dismissible-toast"));
+    fireEvent(screen.getByTestId("toast-container"), "responderRelease");
+    expect(screen.queryByText("Reopen app")).toBeNull();
+    fireEvent.press(screen.getByTestId("show-dismissible-toast"));
+    fireEvent(screen.getByTestId("toast-container"), "accessibilityAction", {
+      nativeEvent: { actionName: "activate" },
+    });
+    expect(screen.queryByText("Reopen app")).toBeNull();
+  });
   beforeEach(() => {
     jest.useFakeTimers();
     mockUseTheme.mockReturnValue({ isDark: false });

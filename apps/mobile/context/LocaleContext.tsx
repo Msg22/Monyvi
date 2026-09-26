@@ -1,7 +1,8 @@
-import { createContext, useContext, useMemo, useState, useEffect } from "react";
-import { I18nManager } from "react-native";
-import i18n from "../i18n";
-import { getLocaleFontFamily } from "../constants/typography";
+import { createContext, useContext, useMemo } from "react";
+import { I18nManager, Platform, View } from "react-native";
+import { arabicFontFamily, fontFamily } from "../constants/typography";
+import { useLanguageScope } from "@/hooks/useLocaleStartup";
+import { useTranslationLanguage } from "@/hooks/useTranslationLanguage";
 
 export type { SupportedLanguage } from "../i18n/translation-schema";
 
@@ -27,14 +28,6 @@ interface LocaleContextType {
 const LocaleContext = createContext<LocaleContextType | undefined>(undefined);
 
 /**
- * Helper to get current language from i18n instance
- */
-function getCurrentI18nLanguage(): SupportedLanguage {
-  const lang = i18n.language;
-  return lang === "ar" ? "ar" : "en";
-}
-
-/**
  * LocaleProvider component that provides locale information to the app.
  *
  * This context exposes the current language, RTL state, and locale-appropriate
@@ -44,33 +37,36 @@ function getCurrentI18nLanguage(): SupportedLanguage {
 export const LocaleProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
-  const [currentLanguage, setCurrentLanguage] = useState<"en" | "ar">(() =>
-    getCurrentI18nLanguage()
-  );
-
-  // Listen for language changes via i18next's built-in event
-  useEffect(() => {
-    const handleLanguageChange = (lng: string): void => {
-      setCurrentLanguage(lng === "ar" ? "ar" : "en");
-    };
-
-    i18n.on("languageChanged", handleLanguageChange);
-    return () => {
-      i18n.off("languageChanged", handleLanguageChange);
-    };
-  }, []);
+  useLanguageScope();
+  const currentLanguage = useTranslationLanguage();
 
   const value = useMemo<LocaleContextType>(
     () => ({
       language: currentLanguage,
-      isRTL: I18nManager.isRTL,
-      fontFamily: getLocaleFontFamily(),
+      isRTL:
+        Platform.OS === "web" ? currentLanguage === "ar" : I18nManager.isRTL,
+      fontFamily: currentLanguage === "ar" ? arabicFontFamily : fontFamily,
     }),
     [currentLanguage]
   );
 
+  const webLocaleProps: {
+    readonly dir: "rtl" | "ltr";
+    readonly lang: SupportedLanguage;
+  } = {
+    dir: currentLanguage === "ar" ? "rtl" : "ltr",
+    lang: currentLanguage,
+  };
   return (
-    <LocaleContext.Provider value={value}>{children}</LocaleContext.Provider>
+    <LocaleContext.Provider value={value}>
+      {Platform.OS === "web" ? (
+        <View {...webLocaleProps} testID="web-locale-root" className="flex-1">
+          {children}
+        </View>
+      ) : (
+        children
+      )}
+    </LocaleContext.Provider>
   );
 };
 

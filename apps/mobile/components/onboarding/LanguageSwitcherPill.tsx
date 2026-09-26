@@ -56,7 +56,7 @@ import { arabicFontFamily, fontFamily } from "@/constants/typography";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
 import { useIntroLocaleOverride } from "@/hooks/useIntroLocaleOverride";
-import { setIntroLocaleOverride } from "@/services/intro-flag-service";
+import { useLanguageState } from "@/hooks/useLanguageRuntime";
 import { setPreferredLanguage } from "@/services/profile-service";
 import { logger } from "@/utils/logger";
 
@@ -191,6 +191,7 @@ function computePopoverLeft(
 }
 
 export function LanguageSwitcherPill(): React.ReactElement {
+  const languageState = useLanguageState();
   const { i18n } = useTranslation();
   const { t: tCommon } = useTranslation("common");
   const { isDark } = useTheme();
@@ -218,7 +219,11 @@ export function LanguageSwitcherPill(): React.ReactElement {
    * same race that `AnchoredTooltip` works around.
    */
   const handlePress = useCallback((): void => {
-    if (isChanging) return;
+    if (
+      isChanging ||
+      (languageState.phase !== "ready" && languageState.phase !== "error")
+    )
+      return;
     pillRef.current?.measureInWindow((x, y, width, height) => {
       if (width <= 0 || height <= 0) {
         // Defensive — bail rather than render a popover at (0,0).
@@ -228,7 +233,7 @@ export function LanguageSwitcherPill(): React.ReactElement {
       setPillRect({ x, y, width, height });
       setIsOpen(true);
     });
-  }, [isChanging]);
+  }, [isChanging, languageState.phase]);
 
   const handleClose = useCallback((): void => {
     setIsOpen(false);
@@ -240,27 +245,15 @@ export function LanguageSwitcherPill(): React.ReactElement {
       // No-op if the user picked the language that's already active.
       // `changeLanguage` would still trigger the i18next event chain and
       // potentially an unnecessary RTL reload check. Skip it cleanly.
-      if (lang === currentLang) {
+      if (lang === currentLang && languageState.phase !== "error") {
         return;
       }
       setIsChanging(true);
-      // Always write the override first so a cold launch (after the RTL
-      // reload) starts in the right language. Then, when authenticated,
-      // also persist to the profile so `AppReadyGate` won't override it
-      // back. Order matters — if we wrote the profile first and the RTL
-      // reload happened before the override write committed, AsyncStorage
-      // would be one tick behind and the splash would show the old locale.
-      //
-      // Authenticated path uses `setIntroLocaleOverride` (raw service)
-      // followed by `setPreferredLanguage`, so `changeLanguage` runs
-      // exactly once (mirrors `app/settings.tsx`). Pre-auth path calls
-      // the `useIntroLocaleOverride` hook's `setOverride`, which writes
-      // the override AND calls `changeLanguage` itself — that's correct
-      // because there's no profile to persist into pre-auth.
+      // Services persist the selected language inside the serialized operation,
+      // before translations or native restart can run.
       void (async (): Promise<void> => {
         try {
           if (isAuthenticated) {
-            await setIntroLocaleOverride(lang);
             await setPreferredLanguage(lang);
           } else {
             await setOverride(lang);
@@ -275,7 +268,13 @@ export function LanguageSwitcherPill(): React.ReactElement {
         }
       })();
     },
-    [currentLang, setOverride, handleClose, isAuthenticated]
+    [
+      currentLang,
+      setOverride,
+      handleClose,
+      isAuthenticated,
+      languageState.phase,
+    ]
   );
 
   const popoverLeft = pillRect ? computePopoverLeft(pillRect, screenWidth) : 0;
@@ -313,9 +312,18 @@ export function LanguageSwitcherPill(): React.ReactElement {
       <Pressable
         ref={pillRef}
         onPress={handlePress}
-        disabled={isChanging}
+        disabled={
+          isChanging ||
+          (languageState.phase !== "ready" && languageState.phase !== "error")
+        }
         accessibilityRole="button"
-        accessibilityState={{ disabled: isChanging, expanded: isOpen }}
+        accessibilityState={{
+          disabled:
+            isChanging ||
+            (languageState.phase !== "ready" &&
+              languageState.phase !== "error"),
+          expanded: isOpen,
+        }}
         accessibilityLabel={`Language: ${currentLang.toUpperCase()}`}
         className="flex-row items-center rounded-full bg-slate-100 px-2.5 py-1 dark:bg-slate-800"
         style={{
