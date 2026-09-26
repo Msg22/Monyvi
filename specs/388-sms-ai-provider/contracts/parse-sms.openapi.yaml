@@ -1,0 +1,246 @@
+openapi: 3.1.0
+info:
+  title: Monyvi parse-sms Edge Function
+  version: 1.0.0
+  description: >
+    Existing public contract preserved by feature 388. The configured AI provider
+    is an internal implementation detail and is not exposed to the mobile client.
+paths:
+  /functions/v1/parse-sms:
+    post:
+      summary: Parse eligible SMS candidates into reviewable transaction suggestions
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ParseSmsRequest"
+      responses:
+        "200":
+          description: Completed request, including legitimate empty results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ParseSmsSuccess"
+        "400":
+          description: Malformed request or request-unit limit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Refusal"
+        "401":
+          description: Unauthenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Refusal"
+        "403":
+          description: Active AI consent required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Refusal"
+        "413":
+          description: Payload or estimated-input limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Refusal"
+        "429":
+          description: SMS safeguard capacity/cooldown refusal
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Refusal"
+        "502":
+          description: Provider response invalid or incomplete
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Refusal"
+        "503":
+          description: Dependency/provider unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Refusal"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+  schemas:
+    ParseSmsRequest:
+      type: object
+      additionalProperties: true
+      required:
+        - requestKey
+        - scanSessionId
+        - scanKind
+        - scanStartedAt
+        - messages
+        - categories
+        - supportedCurrencies
+      properties:
+        requestKey:
+          type: string
+          minLength: 1
+          maxLength: 160
+        scanSessionId:
+          type:
+            - string
+            - "null"
+          maxLength: 160
+          description: >
+            Required and non-empty for non-live scans. Live requests may use null.
+        scanKind:
+          type: string
+          enum: [initial, incremental, history, live]
+        scanStartedAt:
+          type: string
+          format: date-time
+        messages:
+          type: array
+          maxItems: 50
+          items:
+            $ref: "#/components/schemas/SmsMessage"
+        categories:
+          type: string
+          minLength: 1
+          description: Current category tree available to the parser.
+        supportedCurrencies:
+          type: array
+          maxItems: 64
+          items:
+            type: string
+            minLength: 1
+            maxLength: 16
+    SmsMessage:
+      type: object
+      additionalProperties: true
+      required: [id, body, sender, date, smsFingerprint]
+      properties:
+        id:
+          type: string
+          minLength: 1
+          maxLength: 160
+        body:
+          type: string
+          minLength: 1
+        sender:
+          type: string
+          minLength: 1
+          maxLength: 500
+        date:
+          type: string
+          format: date-time
+        smsFingerprint:
+          type: string
+          minLength: 1
+          maxLength: 256
+    ParsedTransaction:
+      type: object
+      additionalProperties: false
+      required:
+        - messageId
+        - amount
+        - currency
+        - type
+        - counterparty
+        - date
+        - categorySystemName
+        - confidenceScore
+        - isTrusted
+      properties:
+        messageId:
+          type: string
+        amount:
+          type: number
+          exclusiveMinimum: 0
+        currency:
+          type: string
+        type:
+          type: string
+          enum: [EXPENSE, INCOME]
+        counterparty:
+          type: string
+        date:
+          type: string
+        categorySystemName:
+          type: string
+        isAtmWithdrawal:
+          type: boolean
+        cardLast4:
+          type: string
+          pattern: "^[0-9]{4}$"
+        confidenceScore:
+          type: number
+          minimum: 0
+          maximum: 1
+        isTrusted:
+          type: boolean
+    ParseSmsSuccess:
+      type: object
+      additionalProperties: false
+      required:
+        - transactions
+        - completionStatus
+        - negativeFingerprints
+        - terminalFingerprints
+        - unresolvedFingerprints
+      properties:
+        transactions:
+          type: array
+          items:
+            $ref: "#/components/schemas/ParsedTransaction"
+        completionStatus:
+          type: string
+          const: complete
+        negativeFingerprints:
+          type: array
+          items:
+            type: string
+        terminalFingerprints:
+          type: array
+          items:
+            type: string
+        unresolvedFingerprints:
+          type: array
+          items:
+            type: string
+    Refusal:
+      type: object
+      additionalProperties: true
+      required:
+        - transactions
+        - reason
+        - negativeFingerprints
+        - terminalFingerprints
+        - unresolvedFingerprints
+      properties:
+        transactions:
+          type: array
+          maxItems: 0
+        reason:
+          type: string
+        availableAt:
+          type:
+            - string
+            - "null"
+        negativeFingerprints:
+          type: array
+          items:
+            type: string
+        terminalFingerprints:
+          type: array
+          items:
+            type: string
+        unresolvedFingerprints:
+          type: array
+          items:
+            type: string
+        sizeScope:
+          type: string
+          enum: [candidate, request]
