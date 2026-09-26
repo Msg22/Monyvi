@@ -786,4 +786,163 @@ describe("metal portfolio read model", () => {
       expect(activeWithLifecycle([matchingEvent]).isEffective).toBe(true);
     });
   });
+
+  describe("My Metals refinement: purity price tiles and allocation", () => {
+    it("builds the four purity price tiles with exact prices and trust state", () => {
+      const currentRates: LiveRatesTrustReadModel = {
+        gold: {
+          state: "fresh",
+          ageMs: 1000,
+          providerObservedAt: new Date("2026-09-26T00:58:00Z"),
+          valueDecimal: "71.5",
+        },
+        silver: {
+          state: "fresh",
+          ageMs: 1000,
+          providerObservedAt: new Date("2026-09-26T00:58:00Z"),
+          valueDecimal: "1.073",
+        },
+        currencies: new Map([
+          [
+            "EGP",
+            {
+              state: "fresh",
+              ageMs: 1000,
+              providerObservedAt: new Date("2026-09-26T00:58:00Z"),
+              valueDecimal: "0.02", // 1 USD = 50 EGP
+            },
+          ],
+        ]),
+      };
+
+      const model = buildMetalPortfolioReadModel({
+        currentRates,
+        filter: "ALL",
+        holdings: [],
+        preferredCurrency: "EGP",
+        rateStatus: { state: "fresh", ageMs: 1000 },
+        userId: "user-1",
+      });
+
+      expect(model.purityPriceTiles).toEqual([
+        {
+          id: "gold-999",
+          metal: "GOLD",
+          purityCode: "gold-999",
+          karatEn: "24K",
+          karatAr: "عيار ٢٤",
+          pricePerGramDecimal: "3571.425", // 0.999 * 71.5 / 0.02
+          state: "fresh",
+        },
+        {
+          id: "gold-875",
+          metal: "GOLD",
+          purityCode: "gold-875",
+          karatEn: "21K",
+          karatAr: "عيار ٢١",
+          pricePerGramDecimal: "3128.125", // 0.875 * 71.5 / 0.02
+          state: "fresh",
+        },
+        {
+          id: "gold-750",
+          metal: "GOLD",
+          purityCode: "gold-750",
+          karatEn: "18K",
+          karatAr: "عيار ١٨",
+          pricePerGramDecimal: "2681.25", // 0.75 * 71.5 / 0.02
+          state: "fresh",
+        },
+        {
+          id: "silver-999",
+          metal: "SILVER",
+          purityCode: "silver-999",
+          karatEn: "999",
+          karatAr: "نقاوة ٩٩٩",
+          pricePerGramDecimal: "53.59635", // 0.999 * 1.073 / 0.02
+          state: "fresh",
+        },
+      ]);
+    });
+
+    it("marks silver purity tile stale when silver rate is stale", () => {
+      const currentRates: LiveRatesTrustReadModel = {
+        gold: {
+          state: "fresh",
+          ageMs: 1000,
+          providerObservedAt: new Date("2026-09-26T00:58:00Z"),
+          valueDecimal: "71.5",
+        },
+        silver: {
+          state: "stale",
+          ageMs: 90000,
+          providerObservedAt: new Date("2026-09-25T00:58:00Z"),
+          valueDecimal: "1.073",
+        },
+        currencies: new Map([
+          [
+            "USD",
+            {
+              state: "fresh",
+              ageMs: 1000,
+              providerObservedAt: new Date("2026-09-26T00:58:00Z"),
+              valueDecimal: "1",
+            },
+          ],
+        ]),
+      };
+
+      const model = buildMetalPortfolioReadModel({
+        currentRates,
+        filter: "ALL",
+        holdings: [],
+        preferredCurrency: "USD",
+        rateStatus: { state: "stale", ageMs: 90000 },
+        userId: "user-1",
+      });
+
+      const gold24k = model.purityPriceTiles.find(
+        (t) => t.purityCode === "gold-999"
+      );
+      const silver999 = model.purityPriceTiles.find(
+        (t) => t.purityCode === "silver-999"
+      );
+
+      expect(gold24k?.state).toBe("fresh");
+      expect(silver999?.state).toBe("stale");
+    });
+
+    it("handles 100% single-metal allocation without misleading zero-value percentage", () => {
+      const singleGoldHolding = buildHolding({
+        metalType: "GOLD",
+        currentValueDecimal: "5000",
+      });
+
+      const model = buildMetalPortfolioReadModel({
+        filter: "ALL",
+        holdings: [singleGoldHolding],
+        rateStatus: { state: "fresh", ageMs: 1000 },
+        userId: "user-1",
+      });
+
+      expect(model.allocation).toEqual({
+        gold: "100",
+        silver: "0",
+      });
+    });
+
+    it("returns null for allocation shares when total value is zero", () => {
+      const model = buildMetalPortfolioReadModel({
+        filter: "ALL",
+        holdings: [],
+        rateStatus: { state: "fresh", ageMs: 1000 },
+        userId: "user-1",
+      });
+
+      expect(model.allocation).toEqual({
+        gold: null,
+        silver: null,
+      });
+    });
+  });
 });
+

@@ -684,8 +684,10 @@ export function useMetalPortfolio(
     );
 
     return buildMetalPortfolioReadModel({
+      currentRates,
       filter: selectedFilter,
       holdings: portfolioShapedHoldings,
+      preferredCurrency,
       rateStatus: getPortfolioRateStatus(
         currentRates,
         preferredCurrency,

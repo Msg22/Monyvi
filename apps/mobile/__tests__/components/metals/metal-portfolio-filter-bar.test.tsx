@@ -102,6 +102,7 @@ const portfolio: MetalPortfolioReadModel = {
   hasTerminalHistory: false,
   holdings: [],
   listState: "POPULATED",
+  purityPriceTiles: [],
   rateStatus: { state: "fresh", ageMs: 1_000 },
   recentHistory: [],
   soldResultDecimal: null,

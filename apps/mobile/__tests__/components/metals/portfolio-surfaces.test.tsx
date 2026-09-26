@@ -37,11 +37,15 @@ const mockTranslations: Record<string, string> = {
   "portfolio.filter_empty": "No {{filter}} holdings yet",
   "portfolio.offline": "Offline mode",
   "portfolio.error": "We couldn’t load your metals. Try again.",
-  "portfolio.retry": "Try again",
-  "portfolio.bought": "{{weight}} · Bought {{date}}",
-  "portfolio.active_portfolio": "Your gold and silver",
-  "portfolio.active_portfolio_value": "Your gold and silver value",
-  "portfolio.active_holdings": "active holdings",
+  "portfolio.active_portfolio": "Your Metals",
+  "portfolio.active_portfolio_value": "Your Metals Value",
+  "portfolio.active_holdings_one": "{{count}} item",
+  "portfolio.active_holdings_other": "{{count}} items",
+  "portfolio.items_heading": "Your items",
+  "portfolio.prices_per_gram": "Prices per gram",
+  "portfolio.per_gram": "/ g",
+  "portfolio.rates_updated_compact": "Updated {{date}}, {{time}}",
+  "portfolio.rates_updated_today": "Updated today, {{time}}",
   "portfolio.since_purchase_label": "since purchase",
   "portfolio.holdings": "Holdings",
   "portfolio.view_all": "View all",
@@ -116,10 +120,15 @@ const arabicTranslations: Record<string, string> = {
   "portfolio.total_accessibility":
     "قيمة محفظة المعادن {{amount}}. الحالة: {{status}}.",
   "portfolio.current_rate": "سعر حديث",
-  "portfolio.rates_updated_fresh": "تم تحديث الأسعار {{date}} في {{time}}",
-  "portfolio.active_portfolio": "تابع قيمة ذهبك وفضتك",
-  "portfolio.active_portfolio_value": "قيمة ذهبك وفضتك",
-  "portfolio.active_holdings": "مقتنيات نشطة",
+  "portfolio.active_portfolio": "معادنك",
+  "portfolio.active_portfolio_value": "قيمة معادنك",
+  "portfolio.active_holdings_one": "قطعة واحدة",
+  "portfolio.active_holdings_other": "{{count}} قطع",
+  "portfolio.items_heading": "قطعك",
+  "portfolio.prices_per_gram": "أسعار الغرام",
+  "portfolio.per_gram": "/ غ",
+  "portfolio.rates_updated_compact": "آخر تحديث {{date}}، {{time}}",
+  "portfolio.rates_updated_today": "آخر تحديث اليوم، {{time}}",
   "portfolio.since_purchase_label": "منذ الشراء",
   "portfolio.holdings": "المقتنيات",
   "portfolio.view_all": "عرض الكل",
@@ -243,6 +252,44 @@ const portfolio: MetalPortfolioReadModel = {
   hasTerminalHistory: false,
   holdings: [],
   listState: "POPULATED",
+  purityPriceTiles: [
+    {
+      id: "gold-24k",
+      metal: "GOLD",
+      purityCode: "gold-999",
+      karatEn: "24K",
+      karatAr: "عيار ٢٤",
+      pricePerGramDecimal: "5215.00",
+      state: "fresh",
+    },
+    {
+      id: "gold-21k",
+      metal: "GOLD",
+      purityCode: "gold-875",
+      karatEn: "21K",
+      karatAr: "عيار ٢١",
+      pricePerGramDecimal: "4567.97",
+      state: "fresh",
+    },
+    {
+      id: "gold-18k",
+      metal: "GOLD",
+      purityCode: "gold-750",
+      karatEn: "18K",
+      karatAr: "عيار ١٨",
+      pricePerGramDecimal: "3915.16",
+      state: "fresh",
+    },
+    {
+      id: "silver-999",
+      metal: "SILVER",
+      purityCode: "silver-999",
+      karatEn: "Silver 999",
+      karatAr: "نقاوة ٩٩٩",
+      pricePerGramDecimal: "65.20",
+      state: "fresh",
+    },
+  ],
   rateStatus: { state: "fresh", ageMs: 1_000 },
   recentHistory: [],
   soldResultDecimal: null,
@@ -282,13 +329,17 @@ describe("US1 portfolio surfaces", () => {
     );
     expect(enMetals.wealth_breakdown.metals).toBe("Gold & silver");
     expect(enMetals.portfolio.bought).toBe("{{weight}} · Bought {{date}}");
-    expect(enMetals.portfolio.active_portfolio).toBe("Your gold and silver");
+    expect(enMetals.portfolio.active_portfolio).toBe("Your Metals");
+    expect(enMetals.portfolio.active_portfolio_value).toBe("Your Metals Value");
+    expect(enMetals.portfolio.items_heading).toBe("Your items");
     expect(arMetals.wealth_breakdown.title).toBe("فلوسك موزّعة فين");
     expect(arMetals.wealth_breakdown.inside_metals).toBe("تفاصيل الذهب والفضة");
     expect(arMetals.wealth_breakdown.metals).toBe("الذهب والفضة");
     expect(arMetals.wealth_breakdown.accounts).toBe("الفلوس في الحسابات");
     expect(arMetals.portfolio.bought).toBe("{{weight}} · تم الشراء {{date}}");
-    expect(arMetals.portfolio.active_portfolio).toBe("تابع قيمة ذهبك وفضتك");
+    expect(arMetals.portfolio.active_portfolio).toBe("معادنك");
+    expect(arMetals.portfolio.active_portfolio_value).toBe("قيمة معادنك");
+    expect(arMetals.portfolio.items_heading).toBe("قطعك");
   });
 
   it("keeps section skeletons semantically visible while local reads settle", () => {
@@ -329,7 +380,7 @@ describe("US1 portfolio surfaces", () => {
       recentHistory: [historyHolding],
     });
 
-    expect(screen.getByText("Your gold and silver")).toBeTruthy();
+    expect(screen.getByText("Your Metals")).toBeTruthy();
     expect(screen.getByText(/Sold ready holding/)).toBeTruthy();
     expect(
       screen.getByTestId("metal-portfolio-holdings-skeleton")
@@ -359,12 +410,15 @@ describe("US1 portfolio surfaces", () => {
     expect(onFilterChange).toHaveBeenCalledWith("GOLD");
   });
 
-  it("hides allocation until both Gold and Silver have positive owned value", () => {
+  it("fills the single-metal allocation rail and provides continuous boundary when both metals are present", () => {
     renderPortfolio();
 
-    expect(screen.queryByTestId("metal-portfolio-allocation")).toBeNull();
+    expect(screen.getByTestId("metal-portfolio-allocation")).toBeTruthy();
+    expect(screen.getByTestId("metal-portfolio-allocation-gold")).toHaveStyle({
+      width: "100%",
+    });
     expect(
-      screen.queryByTestId("metal-portfolio-allocation-legend")
+      screen.queryByTestId("metal-portfolio-allocation-silver")
     ).toBeNull();
   });
 
@@ -556,7 +610,7 @@ describe("US1 portfolio surfaces", () => {
     mockActiveTranslations = arabicTranslations;
     renderPortfolio();
 
-    expect(screen.getByText("تابع قيمة ذهبك وفضتك")).toBeTruthy();
+    expect(screen.getByText("معادنك")).toBeTruthy();
     expect(screen.getByText(/تم الشراء/)).toBeTruthy();
     expect(screen.getByLabelText(/عامل التصفية الكل/)).toBeTruthy();
   });
@@ -726,8 +780,10 @@ describe("US1 portfolio surfaces", () => {
     });
     expect(screen.getByText("No Silver holdings yet")).toBeTruthy();
     expect(screen.queryByText(/older than 24 hours/i)).toBeNull();
-    expect(screen.getByText(/Prices last updated/)).toBeTruthy();
-    expect(screen.getByText("Offline mode")).toBeTruthy();
+    expect(screen.getByTestId("metal-portfolio-rate-updated")).toHaveTextContent(
+      /Updated /
+    );
+    expect(screen.queryByText("Offline mode")).toBeNull();
 
     const onRetry = jest.fn();
     renderPortfolio({ error: new Error("local observer failed"), onRetry });
@@ -770,7 +826,7 @@ describe("US1 portfolio surfaces", () => {
     // Visible and spoken copy agree and both carry the provider timestamp.
     expect(
       screen.getByTestId("metal-portfolio-rate-updated")
-    ).toHaveTextContent(/Rates updated .* at /);
+    ).toHaveTextContent(/Updated /);
     expect(
       screen.getByLabelText(/Metals portfolio value .*Rates updated .* at /)
     ).toBeTruthy();
@@ -789,7 +845,7 @@ describe("US1 portfolio surfaces", () => {
 
     expect(
       screen.getByTestId("metal-portfolio-rate-updated")
-    ).toHaveTextContent(/Rates updated today at /);
+    ).toHaveTextContent(/Updated today/);
   });
 
   it("speaks last-updated info instead of a current rate for a stale trusted rate", () => {
@@ -848,7 +904,7 @@ describe("US1 portfolio surfaces", () => {
     ).toBeTruthy();
   });
 
-  it("wraps the last-updated sentence responsively instead of clamping one line", () => {
+  it("displays the compact timestamp with provider date and time", () => {
     renderPortfolio({
       portfolio: {
         ...portfolio,
@@ -858,17 +914,20 @@ describe("US1 portfolio surfaces", () => {
       rateProviderObservedAt: new Date("2026-08-24T10:30:00.000Z"),
     });
 
-    expect(screen.getByTestId("metal-portfolio-rate-updated")).toHaveProp(
-      "className",
-      expect.stringContaining("min-w-0 flex-1")
+    expect(screen.getByTestId("metal-portfolio-rate-updated")).toHaveTextContent(
+      /Updated 24 Aug 2026/
     );
-    expect(screen.getByTestId("metal-portfolio-rate-updated")).toHaveProp(
-      "className",
-      expect.stringContaining("leading-")
-    );
-    expect(screen.getByTestId("metal-portfolio-rate-updated")).not.toHaveProp(
-      "numberOfLines"
-    );
+  });
+
+  it("renders exactly four compact purity price tiles and Your items section header", () => {
+    renderPortfolio();
+
+    expect(screen.getByText("Prices per gram")).toBeTruthy();
+    expect(screen.getByText("Your items")).toBeTruthy();
+    expect(screen.getByTestId("metal-rate-tile-gold-24k")).toBeTruthy();
+    expect(screen.getByTestId("metal-rate-tile-gold-21k")).toBeTruthy();
+    expect(screen.getByTestId("metal-rate-tile-gold-18k")).toBeTruthy();
+    expect(screen.getByTestId("metal-rate-tile-silver-999")).toBeTruthy();
   });
 
   it("renders loaded holding values once rate/currency readiness settles and a skeleton while pending", () => {

@@ -8,7 +8,6 @@ import { AddHoldingModal } from "@/components/metals/AddHoldingModal";
 import { MetalPortfolioEmptyState } from "@/components/metals/MetalPortfolioEmptyState";
 import { MetalPortfolioScreen } from "@/components/metals/MetalPortfolioScreen";
 import { PageHeader } from "@/components/navigation/PageHeader";
-import { palette } from "@/constants/colors";
 import { isTrueMetalPortfolioEmpty } from "@/hooks/metal-portfolio-readiness";
 import { useMetalPortfolio } from "@/hooks/useMetalPortfolio";
 import { usePreferredCurrency } from "@/hooks/usePreferredCurrency";
@@ -62,18 +61,12 @@ export default function MyMetalsRoute(): React.JSX.Element {
     <View className="flex-1 bg-background dark:bg-background-dark">
       <PageHeader
         title={isPortfolioEmpty ? copy.metals_empty.header : t("my_metals")}
-        rightAction={
-          isPortfolioEmpty
-            ? undefined
-            : {
-                icon: "add",
-                label: t("add_holding"),
-                iconColor: palette.nileGreen[600],
-                darkIconColor: palette.nileGreen[400],
-                transparent: true,
-                onPress: openAddHolding,
-              }
-        }
+        rightAction={{
+          icon: "add",
+          accessibilityLabel: t("add_metal_item"),
+          testID: "metals-add-button",
+          onPress: openAddHolding,
+        }}
       />
       {isPortfolioEmpty ? (
         <MetalPortfolioEmptyState
