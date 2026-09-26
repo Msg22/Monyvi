@@ -1087,3 +1087,74 @@ test("releases a reservation when provider start definitely did not complete", a
   assert.equal(state.release, 1);
   assert.equal(state.provider, 0);
 });
+
+
+test("accepts a complete provider result with zero transactions", async () => {
+  const state = createState();
+  const handler = createParseSmsHandler(
+    createDependencies(state, {
+      executeProvider: async () => {
+        state.provider++;
+        return providerResult({ transactions: [] });
+      },
+      reconcileOutcomes: async () => {
+        state.reconcile++;
+        return {
+          status: "reconciled",
+          positiveFingerprints: [],
+          negativeFingerprints: ["fingerprint-1"],
+        };
+      },
+    })
+  );
+
+  const response = await handler(post(requestBody()));
+  const data = await readJson(response);
+
+  assert.equal(response.status, 200);
+  assert.equal(data.completionStatus, "complete");
+  assert.deepEqual(data.transactions, []);
+  assert.equal(state.start, 1);
+  assert.equal(state.provider, 1);
+  assert.equal(state.reconcile, 1);
+  assert.equal(state.complete, 1);
+});
+
+test("rejects a schema-invalid normalized provider result without reconciliation", async () => {
+  const state = createState();
+  const handler = createParseSmsHandler(
+    createDependencies(state, {
+      executeProvider: async () => {
+        state.provider++;
+        return providerResult({
+          isResponseSchemaValid: false,
+          transactions: [],
+        });
+      },
+    })
+  );
+
+  const response = await handler(post(requestBody()));
+  const data = await readJson(response);
+
+  assert.equal(response.status, 502);
+  assert.equal(data.reason, "response_invalid");
+  assert.equal(state.start, 1);
+  assert.equal(state.provider, 1);
+  assert.equal(state.reconcile, 0);
+  assert.equal(state.complete, 1);
+});
+
+test("keeps provider implementation metadata out of the public success response", async () => {
+  const state = createState();
+  const handler = createParseSmsHandler(createDependencies(state));
+
+  const response = await handler(post(requestBody()));
+  const data = await readJson(response);
+
+  assert.equal(response.status, 200);
+  assert.equal("provider" in data, false);
+  assert.equal("model" in data, false);
+  assert.equal("serviceTier" in data, false);
+  assert.equal("usage" in data, false);
+});
