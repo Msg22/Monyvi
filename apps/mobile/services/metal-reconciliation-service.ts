@@ -723,6 +723,16 @@ async function commitNonAcceptedOutcome(
           root.domainReferenceId
         )
       : null;
+  const priorDeleteEvent =
+    canRestorePrior &&
+    envelope.kind === "delete" &&
+    typeof envelope.payload.predecessorEventId === "string"
+      ? await findOwnedById(
+          database.get<MetalLifecycleEvent>("metal_lifecycle_events"),
+          envelope.payload.predecessorEventId,
+          userId
+        )
+      : null;
   const isReconciled = canRestorePrior || canInstallStale;
   const canonicalInstallPlan =
     canInstallStale && canonicalActionGroup
@@ -788,9 +798,10 @@ async function commitNonAcceptedOutcome(
             }
             row.status = canonical.status;
           } else if (canRestorePrior) {
-            row.effectiveActionId = envelope.payload.predecessorEventId as
-              | string
-              | null;
+            row.effectiveActionId =
+              envelope.kind === "delete"
+                ? (priorDeleteEvent?.actionId ?? null)
+                : (envelope.payload.predecessorEventId as string | null);
             row.effectiveEventId = envelope.payload.predecessorEventId as
               | string
               | null;

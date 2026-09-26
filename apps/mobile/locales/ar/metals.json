@@ -260,6 +260,26 @@
     "treatment_write_off": "تسجيل خسارة",
     "treatment_external_transfer": "تسجيل خروجها من ملكيتك"
   },
+  "delete": {
+    "consequence": "احذف المقتنى فقط إذا أُضيف عن طريق الخطأ. ستتم إزالته من محفظتك ومن السجل. البيع و«لم يعد بحوزتي» إجراءان منفصلان.",
+    "performance": "منذ الشراء",
+    "pending": "جارٍ حذف المقتنى…",
+    "success": "تم حذف الحيازة.",
+    "checking_changes": "جارٍ التحقق من التغييرات",
+    "checking_changes_body": "تغيّرت هذه الحيازة على جهاز آخر. نتحقق من الحيازة والحساب قبل عرض النتيجة النهائية.",
+    "rate_stale": "مرّ على سعر {{rateName}} {{rateAge}}.",
+    "rate_unknown": "عمر سعر {{rateName}} غير معروف.",
+    "rate_ack_stale": "أفهم أن سعر {{rateName}} مرّ عليه {{rateAge}}.",
+    "rate_ack_unknown": "أفهم أن عمر سعر {{rateName}} غير معروف.",
+    "rate_source_unknown": "المصدر غير معروف",
+    "rate_quality_unknown": "جودة السعر غير معروفة",
+    "rate_updated_unknown": "وقت تحديث المزود غير معروف",
+    "rate_updated": "حدّث المزود السعر في {{date}} الساعة {{time}}",
+    "offline": "يُحفظ محليًا أولًا",
+    "failure": "تعذّر حذف هذا المقتنى. حاول مرة أخرى.",
+    "confirm_accessibility": "حذف المقتنى {{holdingName}}",
+    "terminal_unavailable": "لتصحيح هذا الإجراء النهائي، تراجع عنه أولاً."
+  },
   "actions": {
     "sell": "بيع المقتنى",
     "edit": "تعديل التفاصيل",

@@ -44,6 +44,11 @@ import {
   type LiveRatesTrustValue,
 } from "@/services/live-rates-trust-read-model-service";
 import {
+  buildCurrentRateInputs,
+  getCurrentValueRates,
+  type MetalDetailRateInputStatus,
+} from "@/services/metal-detail-rate-inputs";
+import {
   buildTimeline,
   copyValidDate,
   getUnavailableExactFacts,
@@ -139,6 +144,8 @@ export interface MetalDetailRateStatus {
   readonly state: LiveRatesTrustState;
 }
 
+export type { MetalDetailRateInputStatus } from "@/services/metal-detail-rate-inputs";
+
 export type MetalDetailPhysicalForm = "bar" | "coin" | "jewelry";
 export type MetalDetailRenderKey =
   `${"gold" | "silver"}:${MetalDetailPhysicalForm}`;
@@ -149,6 +156,7 @@ export interface MetalDetailReadModel {
   readonly currentValueDecimal: string | null;
   readonly currentValueObservedAt?: Date | null;
   readonly currentValueRateStatus: MetalDetailRateStatus | null;
+  readonly currentValueRateInputs?: readonly MetalDetailRateInputStatus[];
   readonly id: string;
   readonly isActiveOwnership: boolean;
   readonly isFinancialActionLocked: boolean;
@@ -464,6 +472,12 @@ export function buildMetalDetailReadModel(
     currentValueDecimal: currentValue?.valueDecimal ?? null,
     currentValueObservedAt: currentValue?.observedAt ?? null,
     currentValueRateStatus: active ? buildCurrentRateStatus(input) : null,
+    currentValueRateInputs: active
+      ? buildCurrentRateInputs(
+          input,
+          typeof attribution?.totalGainDecimal === "string"
+        )
+      : [],
     id: input.asset.id,
     isActiveOwnership: active,
     isFinancialActionLocked:
@@ -574,25 +588,6 @@ function buildCurrentRateStatus(
     source: sources.size === 1 ? Array.from(sources)[0] : null,
     state: summarizeLiveRatesTrust(values),
   };
-}
-
-function getCurrentValueRates(
-  input: BuildMetalDetailReadModelInput
-): readonly LiveRatesTrustValue[] {
-  if (
-    input.currentRates === undefined ||
-    input.preferredCurrency === undefined ||
-    !isSupportedMetalsIsoCurrencyCode(input.preferredCurrency)
-  ) {
-    return [];
-  }
-  const metal =
-    input.metal.metalType === "GOLD"
-      ? input.currentRates.gold
-      : input.currentRates.silver;
-  if (input.preferredCurrency === "USD") return [metal];
-  const currency = input.currentRates.currencies.get(input.preferredCurrency);
-  return currency === undefined ? [] : [metal, currency];
 }
 
 function hasTrustedCurrentRate(
