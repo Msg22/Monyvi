@@ -90,3 +90,42 @@ test("builds the strict Monyvi response schema with the requested currencies", (
   ]);
   assert.deepEqual(schema.required, ["transactions"]);
 });
+
+
+test("keeps the reusable prefix byte-identical while dynamic category and SMS tails differ", () => {
+  const first = buildSmsAiProviderMessages({
+    messages: [
+      {
+        id: "message-a",
+        body: "Paid EGP 100",
+        sender: "BANK A",
+        date: "2026-07-20T01:00:00.000Z",
+        smsFingerprint: "fingerprint-a",
+      },
+    ],
+    categories:
+      "EXPENSE categories:\n  L1: shopping\n    L2: user_custom_a",
+    supportedCurrencies: SUPPORTED_CURRENCIES,
+  });
+  const second = buildSmsAiProviderMessages({
+    messages: [
+      {
+        id: "message-b",
+        body: "Paid EGP 200",
+        sender: "BANK B",
+        date: "2026-07-20T02:00:00.000Z",
+        smsFingerprint: "fingerprint-b",
+      },
+    ],
+    categories:
+      "EXPENSE categories:\n  L1: shopping\n    L2: user_custom_b",
+    supportedCurrencies: SUPPORTED_CURRENCIES,
+  });
+
+  assert.equal(first[0].content, second[0].content);
+  assert.notEqual(first[1].content, second[1].content);
+  assert.notEqual(first[2].content, second[2].content);
+  assert.ok(first[0].content.indexOf("BUILT-IN CATEGORY TREE") >= 0);
+  assert.ok(first[1].content.indexOf("CURRENT ACCESSIBLE CATEGORY CONTEXT") >= 0);
+  assert.ok(first[2].content.indexOf("MESSAGE ID: message-a") >= 0);
+});
