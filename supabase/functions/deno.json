@@ -3,9 +3,13 @@
     "edge-runtime": "jsr:@supabase/functions-js/edge-runtime.d.ts",
     "openai": "npm:openai@^4.28.0",
     "@supabase/supabase-js": "npm:@supabase/supabase-js@^2.49.1",
-    "@google/genai": "npm:@google/genai@^1.0.0"
+    "@google/genai": "npm:@google/genai@^1.0.0",
+    "zod": "npm:zod@4.4.3"
   },
   "compilerOptions": {
-    "lib": ["deno.ns", "deno.window"]
+    "lib": [
+      "deno.ns",
+      "deno.window"
+    ]
   }
 }
