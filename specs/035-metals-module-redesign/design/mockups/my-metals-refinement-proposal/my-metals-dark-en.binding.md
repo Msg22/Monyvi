@@ -2,12 +2,12 @@
 
 - Approved reference image: my-metals-dark-en.png
 - Approved reference image revision: sha256:655647c0f04eea695e294b0f7ec218c46b5b67a7427846258911d4db59f86080
-- Binding metadata approval: PENDING
+- Binding metadata approval: APPROVED
 - Binding metadata revision: sha256:0e21c4ac2d804d75b92b5f3777944937f2c84b77daeb1661269c05adbae6206e
-- Approved binding metadata revision: PENDING
+- Approved binding metadata revision: sha256:0e21c4ac2d804d75b92b5f3777944937f2c84b77daeb1661269c05adbae6206e
 - Binding approval revision: sha256:80cb82065b424a0fe951dff0904966806536125e2b49cc6b3f8d0bac509868c7
-- Approved binding approval revision: PENDING
-- Binding metadata approval evidence/reference: PENDING
+- Approved binding approval revision: sha256:80cb82065b424a0fe951dff0904966806536125e2b49cc6b3f8d0bac509868c7
+- Binding metadata approval evidence/reference: Mohamed approved the image-and-binding pair in this Codex conversation on 2026-09-27, selecting “Approve binding and start Gemini” for sha256:80cb82065b424a0fe951dff0904966806536125e2b49cc6b3f8d0bac509868c7.
 - Legacy metadata migration: no
 - Image approval evidence/reference: Mohamed's "approved" message following the final Gold 24K/21K/18K and Silver 999 label revision in the My Metals mockup conversation on 2026-09-27.
 
