@@ -53,9 +53,7 @@ export const DEFAULT_SMS_CURRENCIES: readonly string[] = [
   "KWD",
 ];
 
-function resolveCurrencies(
-  currencies: readonly string[]
-): readonly string[] {
+function resolveCurrencies(currencies: readonly string[]): readonly string[] {
   return currencies.length > 0 ? currencies : DEFAULT_SMS_CURRENCIES;
 }
 
@@ -157,9 +155,7 @@ If the message contains "IPN transfer" and you can't extract the counterparty fr
 `;
 }
 
-export function buildSmsAiDynamicCategoryContext(
-  categories: string
-): string {
+export function buildSmsAiDynamicCategoryContext(categories: string): string {
   const trimmed = categories.trim();
   if (!trimmed || trimmed === BUILT_IN_SMS_CATEGORY_TREE.trim()) {
     return "";
@@ -263,9 +259,7 @@ export function buildSmsAiProviderMessages(
       content: buildSmsAiStableSystemPrompt(input.supportedCurrencies),
     },
   ];
-  const dynamicCategories = buildSmsAiDynamicCategoryContext(
-    input.categories
-  );
+  const dynamicCategories = buildSmsAiDynamicCategoryContext(input.categories);
   if (dynamicCategories) {
     messages.push({ role: "system", content: dynamicCategories });
   }

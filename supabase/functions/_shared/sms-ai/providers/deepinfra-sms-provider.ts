@@ -193,15 +193,10 @@ export class DeepInfraSmsProvider implements SmsAiProvider {
     const body = buildRequestBody(this.config, request);
     let lastError: unknown = null;
 
-    for (
-      let attempt = 0;
-      attempt <= DEEPINFRA_SMS_MAX_RETRIES;
-      attempt++
-    ) {
+    for (let attempt = 0; attempt <= DEEPINFRA_SMS_MAX_RETRIES; attempt++) {
       if (attempt > 0) {
         await this.sleep(
-          DEEPINFRA_SMS_BASE_RETRY_DELAY_MS *
-            Math.pow(2, attempt - 1)
+          DEEPINFRA_SMS_BASE_RETRY_DELAY_MS * Math.pow(2, attempt - 1)
         );
       }
 
@@ -213,9 +208,7 @@ export class DeepInfraSmsProvider implements SmsAiProvider {
             Authorization: `Bearer ${this.config.apiKey}`,
           },
           body: JSON.stringify(body),
-          signal: this.createTimeoutSignal(
-            DEEPINFRA_SMS_ATTEMPT_TIMEOUT_MS
-          ),
+          signal: this.createTimeoutSignal(DEEPINFRA_SMS_ATTEMPT_TIMEOUT_MS),
         });
 
         if (!response.ok) {
@@ -250,15 +243,12 @@ export class DeepInfraSmsProvider implements SmsAiProvider {
         return {
           completionStatus: mapCompletionStatus(choice.finish_reason),
           content: choice.message.content ?? "",
-          ...(operationalMetadata === undefined
-            ? {}
-            : { operationalMetadata }),
+          ...(operationalMetadata === undefined ? {} : { operationalMetadata }),
         };
       } catch (error: unknown) {
         if (
           error instanceof DeepInfraSmsInvalidResponseError ||
-          (error instanceof DeepInfraSmsHttpError &&
-            !error.isRetryable)
+          (error instanceof DeepInfraSmsHttpError && !error.isRetryable)
         ) {
           throw error;
         }

@@ -8,9 +8,7 @@ export interface SmsAiProviderConfig {
   readonly apiKey: string;
 }
 
-export type GetSmsAiEnvironmentValue = (
-  name: string
-) => string | undefined;
+export type GetSmsAiEnvironmentValue = (name: string) => string | undefined;
 
 function readRequiredValue(
   getEnvironmentValue: GetSmsAiEnvironmentValue,
@@ -28,19 +26,13 @@ function readRequiredValue(
 export function readSmsAiProviderConfig(
   getEnvironmentValue: GetSmsAiEnvironmentValue
 ): SmsAiProviderConfig {
-  const provider = readRequiredValue(
-    getEnvironmentValue,
-    "SMS_AI_PROVIDER"
-  );
+  const provider = readRequiredValue(getEnvironmentValue, "SMS_AI_PROVIDER");
   const model = readRequiredValue(getEnvironmentValue, "SMS_AI_MODEL");
   const serviceTier = readRequiredValue(
     getEnvironmentValue,
     "SMS_AI_SERVICE_TIER"
   );
-  const apiKey = readRequiredValue(
-    getEnvironmentValue,
-    "DEEPINFRA_API_KEY"
-  );
+  const apiKey = readRequiredValue(getEnvironmentValue, "DEEPINFRA_API_KEY");
 
   if (provider !== "deepinfra") {
     throw new Error(`Unsupported SMS AI provider: ${provider}`);
@@ -50,9 +42,7 @@ export function readSmsAiProviderConfig(
     serviceTier !== "priority" &&
     serviceTier !== "flex"
   ) {
-    throw new Error(
-      `Unsupported SMS AI service tier: ${serviceTier}`
-    );
+    throw new Error(`Unsupported SMS AI service tier: ${serviceTier}`);
   }
 
   return {

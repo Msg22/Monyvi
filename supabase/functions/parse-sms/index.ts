@@ -172,10 +172,8 @@ const parseSmsHandler = createParseSmsHandler({
 Deno.serve(async (request: Request): Promise<Response> => {
   try {
     const response = await parseSmsHandler(request);
-    await logSmsAiOperationalResponse(
-      "sms_full_parse",
-      response,
-      (...values) => console.warn(...values)
+    await logSmsAiOperationalResponse("sms_full_parse", response, (...values) =>
+      console.warn(...values)
     );
     return response;
   } catch (error: unknown) {

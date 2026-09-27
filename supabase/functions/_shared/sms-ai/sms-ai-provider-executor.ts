@@ -17,9 +17,7 @@ export async function executeSmsAiProvider(
 ): Promise<SmsProviderExecutionResult> {
   const raw = await provider.execute({
     messages: buildSmsAiProviderMessages(input),
-    responseSchema: buildSmsAiResponseSchema(
-      input.supportedCurrencies
-    ),
+    responseSchema: buildSmsAiResponseSchema(input.supportedCurrencies),
   });
 
   if (raw.completionStatus !== "complete") {
