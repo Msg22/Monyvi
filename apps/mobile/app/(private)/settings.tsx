@@ -871,10 +871,12 @@ export default function SettingsScreen(): React.JSX.Element {
         <DevelopmentToolsSettingsSection
           t={t}
           isVisible={qaSmsPatternIntakeAvailability.isAvailable}
+          isStartupQaVisible={__DEV__}
           chevronColor={theme.text.secondary}
           onQaSmsPatternIntakePress={() =>
             router.push("/qa-sms-pattern-intake")
           }
+          onStartupQaPress={() => router.push("/startup-qa")}
         />
 
         <ProfileNotificationsSection
