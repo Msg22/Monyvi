@@ -16,6 +16,11 @@ jest.mock(
   { virtual: true }
 );
 
+// Provide placeholder environment variables for Supabase in test environments
+// to prevent module-load errors if services/supabase.ts is evaluated.
+process.env.EXPO_PUBLIC_SUPABASE_URL ??= "https://placeholder.supabase.co";
+process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??= "placeholder-anon-key";
+
 // Mock expo-secure-store — referenced by services/supabase.ts for token storage
 // but not needed in unit tests. Supplying stubs prevents module-load failures.
 jest.mock(

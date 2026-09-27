@@ -26,6 +26,23 @@ import {
 } from "./config";
 import { createSyncTableError } from "./errors";
 import {
+  collectAccountFinancialActionPushBundles,
+  collectProtectedFinancialActionRowIds,
+  isProtectedFinancialActionRow,
+  readRejectedIdsForTable,
+  stripProtectedAccountFields,
+} from "./account-protected-fields";
+import {
+  createFinancialActionPushCoordinator,
+  type FinancialActionPushCoordinator,
+} from "../financial-action-sync-service";
+import {
+  markFinancialActionGroupSyncFailed,
+  markFinancialActionGroupSyncPending,
+  recordFinancialActionGroupServerOutcome,
+} from "../financial-action-foundation-repository";
+import { productionFinancialActionReconciliationService } from "../financial-action-reconciliation-production";
+import {
   assertPushRecordBelongsToCurrentUser,
   fetchOwnedParentIds,
   isSharedSystemCategoryPushRecord,
@@ -37,6 +54,7 @@ import type { SupabaseWriteTable, WritableSupabaseTablesNames } from "./types";
 
 export const GENERIC_SYNC_ERROR_CODES = {
   AUTH_SCOPE_LOST: "sync_push_auth_scope_lost",
+  INVALID_ACTION_PUSH_OUTCOME: "sync_invalid_action_push_outcome",
   INVALID_CHANGE_ID: "sync_invalid_change_id",
 } as const;
 
@@ -77,6 +95,40 @@ function changedRecords(
     changes as unknown as Record<string, SyncTableChangeSet | undefined>
   )[table];
   return changeSet ? [...changeSet.created, ...changeSet.updated] : [];
+}
+
+const ACCOUNT_FINANCIAL_COLUMNS: ReadonlySet<string> = new Set([
+  "balance",
+  "financial_revision",
+]);
+
+function readChangedColumns(record: unknown): readonly string[] {
+  if (typeof record !== "object" || record === null) return [];
+  const changed = (record as Record<string, unknown>)._changed;
+  if (typeof changed !== "string" || changed.length === 0) return [];
+  return Object.freeze(changed.split(","));
+}
+
+function hasPendingAccountMetadata(record: unknown): boolean {
+  return readChangedColumns(record).some(
+    (column) => !ACCOUNT_FINANCIAL_COLUMNS.has(column)
+  );
+}
+
+function collectAcknowledgedAccountIdsWithMetadata(
+  changes: SyncPushArgs["changes"],
+  handledIds: SyncRejectedIds | undefined,
+  rejectedIds: SyncRejectedIds | undefined
+): ReadonlySet<string> {
+  const handled = new Set(readRejectedIdsForTable(handledIds, "accounts"));
+  const rejected = new Set(readRejectedIdsForTable(rejectedIds, "accounts"));
+  const allowed = new Set<string>();
+  changedRecords(changes, "accounts").forEach((record) => {
+    const id = record.id;
+    if (typeof id !== "string" || !handled.has(id) || rejected.has(id)) return;
+    if (hasPendingAccountMetadata(record)) allowed.add(id);
+  });
+  return allowed;
 }
 
 function hasDedicatedDeletes(changes: SyncPushArgs["changes"]): boolean {
@@ -292,17 +344,19 @@ export async function pushMetalDedicatedChanges(
     return { acknowledgeAllDedicatedRows: false };
   }
 
-  const roots = [...changedRecords(changes, "financial_action_groups")].sort(
-    (left: Record<string, unknown>, right: Record<string, unknown>) => {
-      const leftRevision = expectedRevisionOrder(left);
-      const rightRevision = expectedRevisionOrder(right);
-      return leftRevision === rightRevision
-        ? 0
-        : leftRevision < rightRevision
-          ? -1
-          : 1;
-    }
-  );
+  const roots = [
+    ...changedRecords(changes, "financial_action_groups").filter(
+      (root) => root.domain === "metals"
+    ),
+  ].sort((left: Record<string, unknown>, right: Record<string, unknown>) => {
+    const leftRevision = expectedRevisionOrder(left);
+    const rightRevision = expectedRevisionOrder(right);
+    return leftRevision === rightRevision
+      ? 0
+      : leftRevision < rightRevision
+        ? -1
+        : 1;
+  });
   const acceptedActionIds = new Set<string>();
   const handledActionIds = new Set<string>();
   for (const root of roots) {
@@ -424,6 +478,55 @@ export async function pushMetalDedicatedChanges(
   };
 }
 
+const ACCOUNT_FINANCIAL_ACTION_RPC = "apply_account_financial_action_v1";
+let productionFinancialActionPushCoordinator:
+  | FinancialActionPushCoordinator
+  | undefined;
+
+interface FinancialActionRpcClient {
+  readonly rpc: (
+    functionName: string,
+    args: Readonly<Record<string, string>>
+  ) => Promise<{
+    readonly data: unknown;
+    readonly error: { readonly message?: string } | null;
+  }>;
+}
+
+function getProductionFinancialActionPushCoordinator(): FinancialActionPushCoordinator {
+  if (productionFinancialActionPushCoordinator) {
+    return productionFinancialActionPushCoordinator;
+  }
+  productionFinancialActionPushCoordinator =
+    createFinancialActionPushCoordinator({
+      invokeAccountFinancialActionRpc: async ({
+        payloadHash,
+        payloadJson,
+      }): Promise<unknown> => {
+        const { data, error } = await (
+          supabase as unknown as FinancialActionRpcClient
+        ).rpc(ACCOUNT_FINANCIAL_ACTION_RPC, {
+          p_payload_hash: payloadHash,
+          p_payload_json: payloadJson,
+        });
+        if (error) {
+          throw new Error(
+            error.message ?? "account_financial_action_rpc_failed"
+          );
+        }
+        return data;
+      },
+      markFinancialActionGroupSyncFailed,
+      markFinancialActionGroupSyncPending,
+      reconcileFinancialActionGroup: (actionId) =>
+        productionFinancialActionReconciliationService.reconcileRejectedAction(
+          actionId
+        ),
+      recordFinancialActionGroupServerOutcome,
+    });
+  return productionFinancialActionPushCoordinator;
+}
+
 async function assertExpectedPushUser(
   expectedUserId?: string
 ): Promise<string> {
@@ -475,6 +578,92 @@ function collectDedicatedRejectedIds(
   return Object.keys(rejectedIds).length > 0 ? rejectedIds : undefined;
 }
 
+function mergeRejectedIds(
+  left: SyncRejectedIds | undefined,
+  right: SyncRejectedIds | undefined
+): SyncRejectedIds | undefined {
+  const tables = new Set([
+    ...Object.keys(left ?? {}),
+    ...Object.keys(right ?? {}),
+  ]);
+  if (tables.size === 0) return undefined;
+  return Object.fromEntries(
+    [...tables].map((table) => [
+      table,
+      [
+        ...new Set([
+          ...readRejectedIdsForTable(left, table),
+          ...readRejectedIdsForTable(right, table),
+        ]),
+      ],
+    ])
+  );
+}
+
+function subtractRejectedIds(
+  source: SyncRejectedIds | undefined,
+  removed: SyncRejectedIds | undefined
+): SyncRejectedIds | undefined {
+  if (!source) return undefined;
+  const remaining = Object.fromEntries(
+    Object.keys(source).flatMap((table) => {
+      const removedIds = new Set(readRejectedIdsForTable(removed, table));
+      const ids = readRejectedIdsForTable(source, table).filter(
+        (id) => !removedIds.has(id)
+      );
+      return ids.length > 0 ? [[table, ids]] : [];
+    })
+  );
+  return Object.keys(remaining).length > 0 ? remaining : undefined;
+}
+
+function mergeBundleRowIds(
+  bundles: ReadonlyArray<{
+    readonly rowIds: Readonly<Record<string, readonly string[]>>;
+  }>
+): SyncRejectedIds | undefined {
+  return bundles.reduce<SyncRejectedIds | undefined>(
+    (result, bundle) => mergeRejectedIds(result, bundle.rowIds),
+    undefined
+  );
+}
+
+async function resolveAccountActionAcknowledgements(
+  changes: SyncPushArgs["changes"],
+  coordinator: FinancialActionPushCoordinator | undefined
+): Promise<{
+  readonly handledIds: SyncRejectedIds | undefined;
+  readonly rejectedIds: SyncRejectedIds | undefined;
+}> {
+  const bundles = collectAccountFinancialActionPushBundles(changes);
+  if (bundles.length === 0) {
+    return { handledIds: undefined, rejectedIds: undefined };
+  }
+  const resolvedCoordinator =
+    coordinator ?? getProductionFinancialActionPushCoordinator();
+  const { decisions } = await resolvedCoordinator.coordinatePush(
+    bundles.map((bundle) => bundle.candidate)
+  );
+  const decisionByActionId = new Map(
+    decisions.map((decision) => [decision.actionId, decision])
+  );
+  if (
+    decisionByActionId.size !== bundles.length ||
+    bundles.some((bundle) => !decisionByActionId.has(bundle.candidate.actionId))
+  ) {
+    throw new Error(GENERIC_SYNC_ERROR_CODES.INVALID_ACTION_PUSH_OUTCOME);
+  }
+  const rejectedBundles = bundles.filter(
+    (bundle) =>
+      decisionByActionId.get(bundle.candidate.actionId)?.disposition !==
+      "acknowledge"
+  );
+  return {
+    handledIds: mergeBundleRowIds(bundles),
+    rejectedIds: mergeBundleRowIds(rejectedBundles),
+  };
+}
+
 function comparePushTableOrder(
   [leftTableName]: readonly [string, unknown],
   [rightTableName]: readonly [string, unknown]
@@ -517,7 +706,8 @@ function getUpsertConflictColumn(table: SyncableTable): "id" | "user_id" {
 export async function pushChanges(
   database: Database,
   pushArgs: SyncPushArgs,
-  expectedUserId?: string
+  expectedUserId?: string,
+  financialActionPushCoordinator?: FinancialActionPushCoordinator
 ): Promise<SyncPushResult | undefined | void> {
   const userId = await assertExpectedPushUser(expectedUserId);
   const dedicatedPush = await pushMetalDedicatedChanges(
@@ -536,9 +726,29 @@ export async function pushChanges(
         commitCanonicalMetalMetadataLocally(database, outcome, userId)
       )
   );
-  const dedicatedRejectedIds = dedicatedPush.acknowledgeAllDedicatedRows
-    ? undefined
-    : collectDedicatedRejectedIds(pushArgs.changes);
+  const protectedFinancialActionIds = mergeRejectedIds(
+    dedicatedPush.acknowledgeAllDedicatedRows
+      ? undefined
+      : collectDedicatedRejectedIds(pushArgs.changes),
+    collectProtectedFinancialActionRowIds(pushArgs.changes)
+  );
+  const accountActionAcknowledgements =
+    await resolveAccountActionAcknowledgements(
+      pushArgs.changes,
+      financialActionPushCoordinator
+    );
+  const returnedRejectedIds = mergeRejectedIds(
+    subtractRejectedIds(
+      protectedFinancialActionIds,
+      accountActionAcknowledgements.handledIds
+    ),
+    accountActionAcknowledgements.rejectedIds
+  );
+  const metadataOnlyAccountIds = collectAcknowledgedAccountIdsWithMetadata(
+    pushArgs.changes,
+    accountActionAcknowledgements.handledIds,
+    accountActionAcknowledgements.rejectedIds
+  );
 
   const { changes } = pushArgs;
   for (const [tableName, rawTableChanges] of Object.entries(changes).sort(
@@ -587,9 +797,21 @@ export async function pushChanges(
       const upsertRecords = async (
         records: ReadonlyArray<Record<string, unknown>>
       ): Promise<void> => {
-        const pushableRecords = records.filter((record) =>
-          isPushableRecord(table, record)
-        );
+        const pushableRecords = records.filter((record) => {
+          if (!isPushableRecord(table, record)) return false;
+          if (
+            !isProtectedFinancialActionRow(
+              protectedFinancialActionIds,
+              table,
+              record
+            )
+          ) {
+            return true;
+          }
+          if (table !== "accounts") return false;
+          const id = record.id;
+          return typeof id === "string" && metadataOnlyAccountIds.has(id);
+        });
         if (pushableRecords.length === 0) {
           return;
         }
@@ -604,7 +826,10 @@ export async function pushChanges(
           );
           return transformToSupabase(
             table,
-            stripMetalActionFragments(table, record),
+            stripProtectedAccountFields(
+              table,
+              stripMetalActionFragments(table, record)
+            ),
             userId,
             isChildTable
           );
@@ -628,7 +853,15 @@ export async function pushChanges(
         await upsertRecords(softDeletedUpdates);
       }
 
-      if (tableChanges.deleted.length > 0) {
+      const genericDeletedIds = tableChanges.deleted.filter(
+        (recordId) =>
+          !isProtectedFinancialActionRow(
+            protectedFinancialActionIds,
+            table,
+            recordId
+          )
+      );
+      if (genericDeletedIds.length > 0) {
         let query = getSupabaseWriteTable(table).update({
           deleted: true,
           updated_at: new Date().toISOString(),
@@ -640,7 +873,7 @@ export async function pushChanges(
           query = query.eq("user_id", userId);
         }
 
-        const { error } = await query.in("id", tableChanges.deleted);
+        const { error } = await query.in("id", genericDeletedIds);
         if (error) {
           throw createSyncTableError("delete", table, error);
         }
@@ -661,8 +894,8 @@ export async function pushChanges(
 
   await assertExpectedPushUser(userId);
 
-  return dedicatedRejectedIds
-    ? { experimentalRejectedIds: dedicatedRejectedIds }
+  return returnedRejectedIds
+    ? { experimentalRejectedIds: returnedRejectedIds }
     : undefined;
 }
 

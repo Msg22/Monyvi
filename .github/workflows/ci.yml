@@ -136,13 +136,15 @@ jobs:
         timeout-minutes: 10
 
       - name: Run financial action pgTAP
-        run:
-          npx supabase test db --local
-          supabase/tests/financial_action_canonicalization_test.sql
-          supabase/tests/metals_issue285_reconciliation_test.sql
-          supabase/tests/metals_issue284_persistence_test.sql
-          supabase/tests/atomic_market_rate_snapshots_test.sql
-          supabase/tests/market_snapshot_publication_test.sql
+        run: |
+          npx supabase test db --local supabase/tests/financial_action_canonicalization_test.sql
+          npx supabase test db --local supabase/tests/account_financial_action_rpc_test.sql
+          npx supabase test db --local supabase/tests/account_financial_effects_test.sql
+          npx supabase test db --local supabase/tests/account_edit_balance_adjustment_test.sql
+          npx supabase test db --local supabase/tests/metals_issue285_reconciliation_test.sql
+          npx supabase test db --local supabase/tests/metals_issue284_persistence_test.sql
+          npx supabase test db --local supabase/tests/atomic_market_rate_snapshots_test.sql
+          npx supabase test db --local supabase/tests/market_snapshot_publication_test.sql
 
       - name: Run snapshot publication concurrency pgTAP
         run: node scripts/test-market-snapshot-concurrency.js

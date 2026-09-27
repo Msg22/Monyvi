@@ -59,6 +59,7 @@
   "proceed_anyway": "المتابعة على أي حال",
   "language_change_error_title": "فشل تغيير اللغة",
   "language_change_failed": "فشل تغيير اللغة. يرجى المحاولة مرة أخرى.",
+  "language_direction_reopen": "تغيير اللغة ما اكتملش. اقفل التطبيق وافتحه تاني.",
   "ai_features": "ميزات الذكاء الاصطناعي",
   "ai_processing": "أدوات المعاملات بالذكاء الاصطناعي",
   "ai_processing_description": "استخدم الذكاء الاصطناعي للإدخال الصوتي واستيراد رسائل SMS والكشف المباشر عن الرسائل.",

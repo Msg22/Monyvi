@@ -172,8 +172,8 @@ function createRepository(): FinancialActionFoundationRepository {
       return root as unknown as Model;
     },
   };
-  const database = {
-    batch: async (...operations: Model[]): Promise<void> => {
+  const adapter = {
+    batch: async (operations: readonly Model[]): Promise<void> => {
       await mockBatch(...operations);
       const root = operations.find(
         (operation) => operation.table === "financial_action_groups"
@@ -184,6 +184,11 @@ function createRepository(): FinancialActionFoundationRepository {
         ownedRoot = root;
       }
     },
+  };
+  const database = {
+    adapter,
+    batch: (...operations: Model[]): Promise<void> =>
+      adapter.batch(Array.isArray(operations[0]) ? operations[0] : operations),
     get: jest.fn(() => rootCollection),
     write: async <T>(action: () => Promise<T>): Promise<T> => action(),
   } as unknown as Database;

@@ -35,6 +35,8 @@ import { clearOnboardingStep } from "@/services/onboarding-cursor-service";
 import { supabase } from "@/services/supabase";
 import { getCurrentUserDataScope } from "@/services/user-data-access";
 import { logger } from "@/utils/logger";
+import { languageCoordinator } from "./language-runtime-service";
+import { persistIntroLocaleOverride } from "./intro-flag-service";
 
 /**
  * Runtime-visible set of supported currency codes. Used to guard the
@@ -217,13 +219,23 @@ async function writeLocalAiProcessingConsent(
 export async function setPreferredLanguage(
   language: PreferredLanguageCode
 ): Promise<void> {
-  const profile = await getProfile();
-  await database.write(async () => {
-    await profile.update((p) => {
-      p.preferredLanguage = language;
-    });
+  const scope = languageCoordinator.getSnapshot().scope;
+  await changeLanguage(language, {
+    persist: async (isCurrent): Promise<void> => {
+      const profile = await getProfile();
+      if (!isCurrent()) return;
+      if (scope !== null && profile.userId !== scope)
+        throw new Error("Language selection account changed");
+      await database.write(async (): Promise<void> => {
+        if (!isCurrent()) return;
+        await profile.update((p): void => {
+          p.preferredLanguage = language;
+        });
+      });
+      if (!isCurrent()) return;
+      await persistIntroLocaleOverride(language);
+    },
   });
-  await changeLanguage(language);
 }
 
 /**

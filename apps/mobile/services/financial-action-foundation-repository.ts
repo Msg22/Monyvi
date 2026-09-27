@@ -10,22 +10,13 @@ import {
   hashFinancialActionEnvelope,
   type FinancialActionEnvelopeV1,
   type FinancialActionHashResult,
-  type FinancialActionRegistry,
   type FinancialActionState,
-  type FinancialActionValidationInput,
-  type Sha256Provider,
 } from "../../../packages/logic/src/financial-actions";
-import {
-  Q,
-  type Collection,
-  type Database,
-  type Model,
-} from "@nozbe/watermelondb";
+import { Q, type Collection, type Model } from "@nozbe/watermelondb";
 
 import {
   assertExpectedCurrentUser as assertProductionCurrentUser,
   getCurrentUserDataScope as getProductionCurrentUserDataScope,
-  type CurrentUserDataScope,
 } from "./user-data-access";
 import {
   captureCachedModelSnapshot,
@@ -41,84 +32,40 @@ import {
   cloneWatermelonRaw,
   watermelonRawRecordsMatch,
 } from "./watermelon-raw-integrity";
+import { commitPreparedBatch } from "./watermelon-atomic-batch";
 import { APPROVED_FINANCIAL_ACTION_REGISTRY } from "./financial-action-approved-registry";
+import {
+  FINANCIAL_ACTION_FOUNDATION_ERROR_CODES,
+  type CommitFinancialActionGroupLocallyInput,
+  type CommitFinancialActionGroupLocallyResult,
+  type CreateFinancialActionGroupInput,
+  type CreateFinancialActionGroupResult,
+  type FinancialActionFoundationRepository,
+  type FinancialActionFoundationRepositoryDependencies,
+  type FinancialActionLinkedExistingOperation,
+  type FinancialActionLinkedOperationPlan,
+  type FinancialActionLinkedOperationPostimage,
+  type FinancialActionLinkedOperationPreimage,
+  type FinancialActionUserDataScope,
+  resolveFinancialActionServerOutcomeState,
+} from "./financial-action-foundation-contracts";
 
-export const FINANCIAL_ACTION_FOUNDATION_ERROR_CODES = {
-  AUTH_SCOPE_CHANGED: "financial_action_auth_scope_changed",
-  ACTION_ID_PAYLOAD_MISMATCH: "action_id_payload_mismatch",
-  NOT_FOUND: "financial_action_not_found",
-  INVALID_INPUT: "financial_action_invalid_input",
-} as const;
-
-export interface CreateFinancialActionGroupInput {
-  readonly envelope: FinancialActionEnvelopeV1;
-  readonly hashProvider: Sha256Provider;
-  readonly validationInput?: FinancialActionValidationInput;
-}
-
-export type CreateFinancialActionGroupResult =
-  | { readonly kind: "created"; readonly record: FinancialActionGroup }
-  | { readonly kind: "replay"; readonly record: FinancialActionGroup };
-
-export interface FinancialActionLinkedOperationPlan {
-  readonly preparedCreates: readonly Model[];
-  readonly existingOperations: readonly FinancialActionLinkedExistingOperation[];
-  readonly assertCachedOwnership: (
-    input: FinancialActionLinkedOperationCachedOwnershipInput
-  ) => Promise<void>;
-  readonly assertPreparedOwnership: (
-    input: FinancialActionLinkedOperationPreparedOwnershipInput
-  ) => Promise<void>;
-}
-
-export type FinancialActionLinkedExistingOperation =
-  | {
-      readonly kind: "update";
-      readonly model: Model;
-      readonly update: (model: Model) => void;
-    }
-  | {
-      readonly kind: "markAsDeleted";
-      readonly model: Model;
-    };
-
-export interface FinancialActionLinkedOperationPreimage {
-  readonly id: string;
-  readonly kind: FinancialActionLinkedExistingOperation["kind"];
-  readonly table: string;
-  readonly raw: Readonly<Model["_raw"]>;
-}
-
-export interface FinancialActionLinkedOperationPostimage {
-  readonly id: string;
-  readonly kind: "create" | FinancialActionLinkedExistingOperation["kind"];
-  readonly table: string;
-  readonly raw: Readonly<Model["_raw"]>;
-}
-
-export interface FinancialActionLinkedOperationCachedOwnershipInput {
-  readonly userId: string;
-  readonly cachedPreimages: readonly FinancialActionLinkedOperationPreimage[];
-}
-
-export interface FinancialActionLinkedOperationPreparedOwnershipInput {
-  readonly userId: string;
-  readonly cachedPreimages: readonly FinancialActionLinkedOperationPreimage[];
-  readonly preparedPostimages: readonly FinancialActionLinkedOperationPostimage[];
-}
-
-export interface CommitFinancialActionGroupLocallyInput extends CreateFinancialActionGroupInput {
-  readonly prepareLinkedOperationPlan: () => Promise<FinancialActionLinkedOperationPlan>;
-}
-
-export type CommitFinancialActionGroupLocallyResult =
-  | { readonly kind: "committed"; readonly record: FinancialActionGroup }
-  | { readonly kind: "replay"; readonly record: FinancialActionGroup };
-
-export type FinancialActionUserDataScope = Pick<
-  CurrentUserDataScope,
-  "userId" | "queryOwned" | "assertOwned"
->;
+export { FINANCIAL_ACTION_FOUNDATION_ERROR_CODES } from "./financial-action-foundation-contracts";
+export type {
+  CommitFinancialActionGroupLocallyInput,
+  CommitFinancialActionGroupLocallyResult,
+  CreateFinancialActionGroupInput,
+  CreateFinancialActionGroupResult,
+  FinancialActionFoundationRepository,
+  FinancialActionFoundationRepositoryDependencies,
+  FinancialActionLinkedExistingOperation,
+  FinancialActionLinkedOperationCachedOwnershipInput,
+  FinancialActionLinkedOperationPlan,
+  FinancialActionLinkedOperationPostimage,
+  FinancialActionLinkedOperationPreimage,
+  FinancialActionLinkedOperationPreparedOwnershipInput,
+  FinancialActionUserDataScope,
+} from "./financial-action-foundation-contracts";
 
 interface PreparedFinancialActionContext {
   readonly envelope: FinancialActionEnvelopeV1;
@@ -154,30 +101,6 @@ interface PreparedCreateSnapshot {
   readonly raw: Model["_raw"];
   readonly preparedState: Model["_preparedState"];
   readonly isEditing: boolean;
-}
-
-export interface FinancialActionFoundationRepositoryDependencies {
-  readonly database: Database;
-  readonly getCurrentUserDataScope: () => Promise<FinancialActionUserDataScope>;
-  readonly assertExpectedCurrentUser: (expectedUserId: string) => Promise<void>;
-  readonly registry: FinancialActionRegistry;
-}
-
-export interface FinancialActionFoundationRepository {
-  readonly createFinancialActionGroup: (
-    input: CreateFinancialActionGroupInput
-  ) => Promise<CreateFinancialActionGroupResult>;
-  readonly commitFinancialActionGroupLocally: (
-    input: CommitFinancialActionGroupLocallyInput
-  ) => Promise<CommitFinancialActionGroupLocallyResult>;
-  readonly getFinancialActionGroup: (
-    actionId: string
-  ) => Promise<FinancialActionGroup | null>;
-  readonly markFinancialActionGroupSyncFailed: (
-    actionId: string,
-    rejectionCode: string
-  ) => Promise<void>;
-  readonly retryFinancialActionGroup: (actionId: string) => Promise<void>;
 }
 
 const TABLE_NAME = "financial_action_groups";
@@ -275,7 +198,9 @@ export function createFinancialActionFoundationRepository(
       candidate.domainReferenceId = context.envelope.domainReferenceId;
       candidate.payloadJson = context.payload.canonicalText;
       candidate.payloadHash = context.payload.payloadHash;
-      candidate.accountGuardsJson = "[]";
+      candidate.accountGuardsJson = JSON.stringify(
+        context.envelope.accountGuards
+      );
       candidate.state = state;
       candidate.serverOutcome = null;
       candidate.outcomeJson = null;
@@ -334,17 +259,18 @@ export function createFinancialActionFoundationRepository(
     operations: readonly FinancialActionLinkedExistingOperation[]
   ): readonly FinancialActionLinkedExistingOperation[] {
     return Object.freeze(
-      operations.map((operation): FinancialActionLinkedExistingOperation =>
-        operation.kind === "update"
-          ? Object.freeze({
-              kind: "update",
-              model: operation.model,
-              update: operation.update,
-            })
-          : Object.freeze({
-              kind: "markAsDeleted",
-              model: operation.model,
-            })
+      operations.map(
+        (operation): FinancialActionLinkedExistingOperation =>
+          operation.kind === "update"
+            ? Object.freeze({
+                kind: "update",
+                model: operation.model,
+                update: operation.update,
+              })
+            : Object.freeze({
+                kind: "markAsDeleted",
+                model: operation.model,
+              })
       )
     );
   }
@@ -452,21 +378,25 @@ export function createFinancialActionFoundationRepository(
         isEditing: false,
       })
     );
-    const updateExpectations = preparedExistingOperations.map((model, index) => {
-      const existing = existingExpectations[index];
-      if (!existing || model !== existing.model) {
-        throw new Error(FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.INVALID_INPUT);
+    const updateExpectations = preparedExistingOperations.map(
+      (model, index) => {
+        const existing = existingExpectations[index];
+        if (!existing || model !== existing.model) {
+          throw new Error(
+            FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.INVALID_INPUT
+          );
+        }
+        return Object.freeze({
+          model,
+          table: existing.table,
+          id: existing.id,
+          kind: existing.kind,
+          expectedPreparedState: existing.expectedPreparedState,
+          raw: Object.freeze(cloneWatermelonRaw(model._raw)),
+          isEditing: false,
+        });
       }
-      return Object.freeze({
-        model,
-        table: existing.table,
-        id: existing.id,
-        kind: existing.kind,
-        expectedPreparedState: existing.expectedPreparedState,
-        raw: Object.freeze(cloneWatermelonRaw(model._raw)),
-        isEditing: false,
-      });
-    });
+    );
     return Object.freeze([...createExpectations, ...updateExpectations]);
   }
 
@@ -507,7 +437,9 @@ export function createFinancialActionFoundationRepository(
       snapshots.map((snapshot, index) => {
         const expectation = expectations[index];
         if (!expectation) {
-          throw new Error(FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.INVALID_INPUT);
+          throw new Error(
+            FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.INVALID_INPUT
+          );
         }
         return Object.freeze({
           id: expectation.id,
@@ -605,9 +537,8 @@ export function createFinancialActionFoundationRepository(
     const existingOperations = captureExistingOperations(
       plan.existingOperations
     );
-    const existingExpectations = captureExistingOperationExpectations(
-      existingOperations
-    );
+    const existingExpectations =
+      captureExistingOperationExpectations(existingOperations);
     const preparedCreates = capturePreparedCreates(plan.preparedCreates);
     const cachedModels = Object.freeze(
       existingOperations.map((operation) => operation.model)
@@ -626,7 +557,8 @@ export function createFinancialActionFoundationRepository(
       cachedSnapshots,
       existingExpectations
     );
-    const preparedCreateSnapshots = capturePreparedCreateSnapshots(preparedCreates);
+    const preparedCreateSnapshots =
+      capturePreparedCreateSnapshots(preparedCreates);
     const initialPreparedCreateExpectations = capturePreparedExpectations(
       preparedCreates,
       [],
@@ -634,10 +566,12 @@ export function createFinancialActionFoundationRepository(
     );
     let hasCommitted = false;
     try {
-      await assertCachedOwnership(Object.freeze({
-        userId: context.scope.userId,
-        cachedPreimages,
-      }));
+      await assertCachedOwnership(
+        Object.freeze({
+          userId: context.scope.userId,
+          cachedPreimages,
+        })
+      );
       assertPendingFinancialActionRootUnchanged(
         foundRecord,
         pendingRootExpectation,
@@ -663,13 +597,35 @@ export function createFinancialActionFoundationRepository(
       const preparedExistingOperations: Model[] = [];
       const preparedExistingExpectations: PreparedOperationExpectation[] = [];
       for (const [index, operation] of existingOperations.entries()) {
-        assertPreparedOperationsMatch(preparedExistingOperations, preparedExistingExpectations);
-        assertCachedOperationsUnchanged(cachedModels.slice(index), cachedSnapshots.slice(index), existingExpectations.slice(index), preparedCreates);
+        assertPreparedOperationsMatch(
+          preparedExistingOperations,
+          preparedExistingExpectations
+        );
+        assertCachedOperationsUnchanged(
+          cachedModels.slice(index),
+          cachedSnapshots.slice(index),
+          existingExpectations.slice(index),
+          preparedCreates
+        );
         const preparedOperation = prepareExistingOperation(operation);
         preparedExistingOperations.push(preparedOperation);
-        preparedExistingExpectations.push(...capturePreparedExpectations([], [preparedOperation], existingExpectations.slice(index, index + 1)));
-        assertPreparedOperationsMatch(preparedExistingOperations, preparedExistingExpectations);
-        assertCachedOperationsUnchanged(cachedModels.slice(index + 1), cachedSnapshots.slice(index + 1), existingExpectations.slice(index + 1), preparedCreates);
+        preparedExistingExpectations.push(
+          ...capturePreparedExpectations(
+            [],
+            [preparedOperation],
+            existingExpectations.slice(index, index + 1)
+          )
+        );
+        assertPreparedOperationsMatch(
+          preparedExistingOperations,
+          preparedExistingExpectations
+        );
+        assertCachedOperationsUnchanged(
+          cachedModels.slice(index + 1),
+          cachedSnapshots.slice(index + 1),
+          existingExpectations.slice(index + 1),
+          preparedCreates
+        );
       }
       assertPreparedOperationsMatch(
         preparedCreates,
@@ -687,12 +643,15 @@ export function createFinancialActionFoundationRepository(
         ...preparedExistingExpectations,
       ]);
       assertPreparedOperationsMatch(linkedOperations, preparedExpectations);
-      const preparedPostimages = createImmutablePostimages(preparedExpectations);
-      await assertPreparedOwnership(Object.freeze({
-        userId: context.scope.userId,
-        cachedPreimages,
-        preparedPostimages,
-      }));
+      const preparedPostimages =
+        createImmutablePostimages(preparedExpectations);
+      await assertPreparedOwnership(
+        Object.freeze({
+          userId: context.scope.userId,
+          cachedPreimages,
+          preparedPostimages,
+        })
+      );
       assertPendingFinancialActionRootUnchanged(
         foundRecord,
         pendingRootExpectation,
@@ -733,7 +692,10 @@ export function createFinancialActionFoundationRepository(
           FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.INVALID_INPUT
         );
       }
-      await dependencies.database.batch(root.operation, ...linkedOperations);
+      await commitPreparedBatch(
+        [root.operation, ...linkedOperations],
+        dependencies.database
+      );
       hasCommitted = true;
       await reassertExpectedCurrentUser(context.scope.userId);
       return { kind: "committed", record: root.record };
@@ -864,6 +826,64 @@ export function createFinancialActionFoundationRepository(
     });
   }
 
+  async function markFinancialActionGroupSyncPending(
+    actionId: string
+  ): Promise<void> {
+    await updateFinancialActionGroup(actionId, (record) => {
+      assertFinancialActionTransition(
+        asFinancialActionState(record.state),
+        "sync_pending"
+      );
+      assertFinancialActionStateEvidence("sync_pending", {
+        serverOutcome: null,
+        outcomeJson: null,
+        rejectionCode: null,
+      });
+      record.state = "sync_pending";
+      record.serverOutcome = null;
+      record.outcomeJson = null;
+      record.rejectionCode = null;
+    });
+  }
+
+  async function recordFinancialActionGroupServerOutcome(
+    actionId: string,
+    serverOutcome: "accepted" | "idempotent" | "stale" | "rejected",
+    outcomeJson: string,
+    rejectionCode: string | null
+  ): Promise<void> {
+    // The RPC reports codes in UPPER_SNAKE form while local evidence keeps
+    // the stable lowercase form also persisted server-side as rejection_code.
+    const normalizedRejectionCode =
+      rejectionCode === null ? null : rejectionCode.toLowerCase();
+    if (
+      outcomeJson.trim().length === 0 ||
+      ((serverOutcome === "accepted" || serverOutcome === "idempotent") &&
+        normalizedRejectionCode !== null) ||
+      ((serverOutcome === "stale" || serverOutcome === "rejected") &&
+        (normalizedRejectionCode === null ||
+          normalizedRejectionCode.trim().length === 0))
+    ) {
+      throw new Error(FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.INVALID_INPUT);
+    }
+    const nextState = resolveFinancialActionServerOutcomeState(serverOutcome);
+    await updateFinancialActionGroup(actionId, (record) => {
+      assertFinancialActionTransition(
+        asFinancialActionState(record.state),
+        nextState
+      );
+      assertFinancialActionStateEvidence(nextState, {
+        serverOutcome,
+        outcomeJson,
+        rejectionCode: normalizedRejectionCode,
+      });
+      record.state = nextState;
+      record.serverOutcome = serverOutcome;
+      record.outcomeJson = outcomeJson;
+      record.rejectionCode = normalizedRejectionCode;
+    });
+  }
+
   async function retryFinancialActionGroup(actionId: string): Promise<void> {
     await updateFinancialActionGroup(actionId, (record) => {
       assertFinancialActionTransition(
@@ -887,6 +907,8 @@ export function createFinancialActionFoundationRepository(
     commitFinancialActionGroupLocally,
     getFinancialActionGroup,
     markFinancialActionGroupSyncFailed,
+    markFinancialActionGroupSyncPending,
+    recordFinancialActionGroupServerOutcome,
     retryFinancialActionGroup,
   });
 }
@@ -906,5 +928,9 @@ export const getFinancialActionGroup =
   productionRepository.getFinancialActionGroup;
 export const markFinancialActionGroupSyncFailed =
   productionRepository.markFinancialActionGroupSyncFailed;
+export const markFinancialActionGroupSyncPending =
+  productionRepository.markFinancialActionGroupSyncPending;
+export const recordFinancialActionGroupServerOutcome =
+  productionRepository.recordFinancialActionGroupServerOutcome;
 export const retryFinancialActionGroup =
   productionRepository.retryFinancialActionGroup;

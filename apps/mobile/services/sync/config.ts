@@ -57,6 +57,7 @@ export const METALS_DEDICATED_SYNC_TABLES = [
 ] as const;
 export const DEDICATED_SYNC_TABLES = new Set<string>([
   "financial_action_groups",
+  "account_financial_effects",
   ...METALS_DEDICATED_SYNC_TABLES,
 ]);
 export const PULL_ONLY_SHARED_TABLES = new Set<string>([
