@@ -70,5 +70,7 @@
   "ai_privacy_details": "AI privacy details",
   "development_tools": "Development tools",
   "qa_sms_pattern_intake": "QA SMS pattern intake",
-  "qa_sms_pattern_intake_description": "Review and sanitize verified SMS samples"
+  "qa_sms_pattern_intake_description": "Review and sanitize verified SMS samples",
+  "startup_qa_rates": "Cached market rates",
+  "startup_qa_rates_description": "Clear rates saved on this device"
 }
