@@ -22,7 +22,13 @@ interface ManualQaSeedModule {
   readonly seedManualQaData: (
     client: unknown,
     config: SeedConfig,
-    options?: { readonly includeAccountSwitchUser?: boolean }
+    options?: {
+      readonly includeAccountSwitchUser?: boolean;
+      readonly accountWriter?: {
+        readonly upsert: (rows: readonly unknown[]) => Promise<void>;
+        readonly restore: (rows: readonly unknown[]) => Promise<void>;
+      };
+    }
   ) => Promise<unknown>;
 }
 
@@ -144,6 +150,38 @@ describe("manual-qa-seed script helpers", () => {
     expect(rootPackageJson.scripts?.["local:reset-and-seed"]).toContain(
       "manual:seed-user"
     );
+  });
+
+  it("uses local privileged account writer instead of guarded account API writes", async () => {
+    const operations: string[] = [];
+    const upsert = jest.fn(
+      async (_rows: readonly unknown[]): Promise<void> => {}
+    );
+    const restore = jest.fn(
+      async (_rows: readonly unknown[]): Promise<void> => {}
+    );
+
+    await seedManualQaData(
+      createMockClient(operations),
+      {
+        ...getManualQaSeedConfig({ E2E_LOCAL_JWT_SECRET: "test-local-secret" }),
+        userId: "user-manual-qa",
+      },
+      { accountWriter: { upsert, restore } }
+    );
+
+    expect(upsert).toHaveBeenCalledTimes(1);
+    expect(upsert.mock.calls[0]?.[0]).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: "Cash Wallet", balance: 2500 }),
+      ])
+    );
+    expect(restore).toHaveBeenCalledTimes(1);
+    expect(restore.mock.calls[0]?.[0]).toEqual(upsert.mock.calls[0]?.[0]);
+    expect(operations).not.toContain("upsert:accounts:8");
+    expect(
+      operations.some((operation) => operation.startsWith("update:accounts:"))
+    ).toBe(false);
   });
 
   it("preserves an existing password and carries a local creation fallback", () => {
