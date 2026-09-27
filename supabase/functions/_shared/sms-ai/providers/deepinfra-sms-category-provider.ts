@@ -22,10 +22,7 @@ type FetchLike = (
   init?: RequestInit
 ) => Promise<Response>;
 
-type Sleep = (
-  milliseconds: number,
-  signal: AbortSignal
-) => Promise<void>;
+type Sleep = (milliseconds: number, signal: AbortSignal) => Promise<void>;
 
 type WithTimeout = <T>(
   operation: (signal: AbortSignal) => Promise<T>,
@@ -156,63 +153,12 @@ export class DeepInfraSmsCategoryProvider {
       attempt++
     ) {
       try {
-        if (attempt > 0) {
-          await this.sleepImpl(
-            DEEPINFRA_SMS_CATEGORY_BASE_RETRY_DELAY_MS *
-              Math.pow(2, attempt - 1),
-            requestSignal
-          );
-        }
-
-        const response = await this.withTimeoutImpl(
-          (signal) =>
-            this.fetchImpl(DEEPINFRA_SMS_ENDPOINT, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${this.config.apiKey}`,
-              },
-              body: JSON.stringify(body),
-              signal,
-            }),
-          DEEPINFRA_SMS_CATEGORY_ATTEMPT_TIMEOUT_MS,
-          requestSignal
-        );
-
-        if (!response.ok) {
-          throw new Error(`DeepInfra category request failed with HTTP ${response.status}`);
-        }
-
-        const payload: unknown = await response.json();
-        const parsedEnvelope =
-          DeepInfraCategoryResponseEnvelopeSchema.safeParse(payload);
-        if (!parsedEnvelope.success) {
-          throw new Error("InvalidProviderResponse");
-        }
-
-        const choice = parsedEnvelope.data.choices[0];
-        if (choice.finish_reason !== "stop") {
-          throw new Error("InvalidProviderResponse");
-        }
-
-        const text = choice.message.content ?? "";
-        if (text.length === 0) {
-          throw new Error("EmptyProviderResponse");
-        }
-
-        const parsed = parseSmsCategoryResponse(JSON.parse(text), request);
-        if (parsed === null) {
-          throw new Error("InvalidProviderResponse");
-        }
-        return parsed;
+        await this.waitForRetry(attempt, requestSignal);
+        return await this.executeAttempt(request, body, requestSignal);
       } catch (error: unknown) {
         if (requestSignal.aborted) throw error;
         lastError = error;
-        this.logWarn("[enrich-sms-categories] Provider attempt failed", {
-          attempt: attempt + 1,
-          errorType: getSafeErrorType(error),
-          phase: getProviderFailurePhase(error),
-        });
+        this.logAttemptFailure(attempt, error);
       }
     }
 
@@ -221,5 +167,82 @@ export class DeepInfraSmsCategoryProvider {
       phase: getProviderFailurePhase(lastError),
     });
     return null;
+  }
+
+  private async waitForRetry(
+    attempt: number,
+    requestSignal: AbortSignal
+  ): Promise<void> {
+    if (attempt === 0) return;
+
+    await this.sleepImpl(
+      DEEPINFRA_SMS_CATEGORY_BASE_RETRY_DELAY_MS *
+        Math.pow(2, attempt - 1),
+      requestSignal
+    );
+  }
+
+  private async executeAttempt(
+    request: SmsCategoryRequest,
+    body: Readonly<Record<string, unknown>>,
+    requestSignal: AbortSignal
+  ): Promise<SmsCategoryResponse> {
+    const response = await this.withTimeoutImpl(
+      (signal) =>
+        this.fetchImpl(DEEPINFRA_SMS_ENDPOINT, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${this.config.apiKey}`,
+          },
+          body: JSON.stringify(body),
+          signal,
+        }),
+      DEEPINFRA_SMS_CATEGORY_ATTEMPT_TIMEOUT_MS,
+      requestSignal
+    );
+
+    if (!response.ok) {
+      throw new Error(
+        `DeepInfra category request failed with HTTP ${response.status}`
+      );
+    }
+
+    return this.parseResponse(await response.json(), request);
+  }
+
+  private parseResponse(
+    payload: unknown,
+    request: SmsCategoryRequest
+  ): SmsCategoryResponse {
+    const parsedEnvelope =
+      DeepInfraCategoryResponseEnvelopeSchema.safeParse(payload);
+    if (!parsedEnvelope.success) {
+      throw new Error("InvalidProviderResponse");
+    }
+
+    const choice = parsedEnvelope.data.choices[0];
+    if (choice.finish_reason !== "stop") {
+      throw new Error("InvalidProviderResponse");
+    }
+
+    const text = choice.message.content ?? "";
+    if (text.length === 0) {
+      throw new Error("EmptyProviderResponse");
+    }
+
+    const parsed = parseSmsCategoryResponse(JSON.parse(text), request);
+    if (parsed === null) {
+      throw new Error("InvalidProviderResponse");
+    }
+    return parsed;
+  }
+
+  private logAttemptFailure(attempt: number, error: unknown): void {
+    this.logWarn("[enrich-sms-categories] Provider attempt failed", {
+      attempt: attempt + 1,
+      errorType: getSafeErrorType(error),
+      phase: getProviderFailurePhase(error),
+    });
   }
 }
