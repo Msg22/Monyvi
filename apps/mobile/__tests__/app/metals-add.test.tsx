@@ -305,9 +305,6 @@ describe("Add metal holding form", () => {
     expect(
       screen.getByText("Gold · USD 104.51 per pure gram")
     ).toBeOnTheScreen();
-    expect(
-      screen.getByText(/Monyvi market provider · Rates updated/)
-    ).toBeOnTheScreen();
     expect(screen.getByTestId("metal-holding-item-render")).toHaveProp(
       "metal",
       "GOLD"
@@ -315,14 +312,11 @@ describe("Add metal holding form", () => {
     expect(screen.queryByTestId("metal-holding-review-screen")).toBeNull();
   });
 
-  it("preserves a valid Silver entry when valuation is unavailable and keeps its direct Add action enabled", () => {
+  it("hides the Estimated Value section when valuation is unavailable and keeps its direct Add action enabled", () => {
     const props = renderForm({ preview: silverPreview });
 
-    expect(screen.getByTestId("metal-holding-live-preview")).toHaveProp(
-      "valuationState",
-      "unavailable"
-    );
-    expect(screen.getByText("Valuation unavailable")).toBeOnTheScreen();
+    expect(screen.queryByTestId("metal-holding-live-preview")).toBeNull();
+    expect(screen.queryByText("Valuation unavailable")).toBeNull();
     fireEvent.press(screen.getByTestId("metal-holding-submit"));
     expect(props.onSubmit).toHaveBeenCalledTimes(1);
   });

@@ -72,9 +72,9 @@ appId: com.monyvi.app
       id: metal-holding-detail-screen
     timeout: 30000
 
-# Silver: a missing rate must make preview valuation unavailable without
-# blocking valid local Add facts. The unavailable assertion is conditional so
-# this one runner-controllable flow also runs against the fresh rate profile.
+# Silver: a missing rate hides the Estimated Value section entirely without
+# blocking valid local Add facts. The submit action must stay enabled and the
+# holding must save locally.
 - openLink: monyvi://metals/add
 - extendedWaitUntil:
     visible:
@@ -102,14 +102,7 @@ appId: com.monyvi.app
 - tapOn:
     id: currency-code-row-EGP
 - assertVisible:
-    id: metal-holding-live-preview
-- runFlow:
-    when:
-      visible:
-        id: metal-holding-valuation-unavailable
-    commands:
-      - assertVisible:
-          id: metal-holding-submit
+    id: metal-holding-submit
 - tapOn:
     id: metal-holding-submit
 - extendedWaitUntil:

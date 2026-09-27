@@ -1,5 +1,6 @@
 import {
   compareMetalHoldingEdit,
+  normalizeEditPhysicalForm,
   type EditableMetalHoldingFacts,
 } from "../../services/edit-metal-holding-preview-service";
 
@@ -78,5 +79,33 @@ describe("edit metal holding comparison", () => {
       hasMaterialChanges: true,
       isMaterialEditAllowed: false,
     });
+  });
+});
+
+describe("normalizeEditPhysicalForm", () => {
+  it("passes through canonical uppercase forms", (): void => {
+    expect(normalizeEditPhysicalForm("COIN")).toBe("COIN");
+    expect(normalizeEditPhysicalForm("BAR")).toBe("BAR");
+    expect(normalizeEditPhysicalForm("JEWELRY")).toBe("JEWELRY");
+  });
+
+  it("normalizes lowercase seed/QA rows so the edit form can preselect them", (): void => {
+    expect(normalizeEditPhysicalForm("coin")).toBe("COIN");
+    expect(normalizeEditPhysicalForm("bar")).toBe("BAR");
+    expect(normalizeEditPhysicalForm("jewelry")).toBe("JEWELRY");
+  });
+
+  it("trims whitespace and ignores case", (): void => {
+    expect(normalizeEditPhysicalForm(" Coin ")).toBe("COIN");
+    expect(normalizeEditPhysicalForm("Bar")).toBe("BAR");
+  });
+
+  it("returns null for missing or unsupported forms", (): void => {
+    expect(normalizeEditPhysicalForm(null)).toBeNull();
+    expect(normalizeEditPhysicalForm(undefined)).toBeNull();
+    expect(normalizeEditPhysicalForm("")).toBeNull();
+    expect(normalizeEditPhysicalForm("amulet")).toBeNull();
+    expect(normalizeEditPhysicalForm("RING")).toBeNull();
+    expect(normalizeEditPhysicalForm(42)).toBeNull();
   });
 });

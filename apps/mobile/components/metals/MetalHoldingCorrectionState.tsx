@@ -45,9 +45,6 @@ export function MetalHoldingCorrectionState({
   const hasFinancialChange = state.affectedChanges.some(
     (change) => change.isFinancial
   );
-  const hasPhysicalFormChange = state.affectedChanges.some(
-    (change) => change.field === "physicalForm"
-  );
   const formattedCurrentValue = currentValue
     ? formatAmount(currency, currentValue, locale, "never")
     : null;
@@ -107,11 +104,6 @@ export function MetalHoldingCorrectionState({
               </Text>
             ) : null}
           </>
-        ) : null}
-        {hasPhysicalFormChange ? (
-          <Text className="text-sm text-text-secondary dark:text-text-secondary-dark">
-            {copy.imageDescriptionUpdate ?? "The holding image and description will update."}
-          </Text>
         ) : null}
         <Text className="text-sm text-text-secondary dark:text-text-secondary-dark">
           {copy.correctionHistory ?? "This correction will appear in History"}

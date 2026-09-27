@@ -385,23 +385,7 @@ function ValueSummary({
       >
         {displayAmount(model.currentValueDecimal, currency, locale)}
       </Text>
-      {rateStatus === null ? null : (
-        <View testID="metal-holding-detail-rate-trust" className="mt-2 gap-1">
-          <Text className="text-xs font-medium text-text-secondary dark:text-text-secondary-dark">
-            {t(`rate.short_${rateStatus.state}`)}
-          </Text>
-          {rateStatus.source === null ? null : (
-            <Text className="text-xs text-text-muted dark:text-text-muted-dark">
-              {t("rate.source", { source: rateStatus.source })}
-            </Text>
-          )}
-          {rateStatus.quality === null ? null : (
-            <Text className="text-xs text-text-muted dark:text-text-muted-dark">
-              {t("rate.quality", { quality: rateStatus.quality })}
-            </Text>
-          )}
-        </View>
-      )}
+
       {model.totalGainDecimal === null ? (
         <Text className="mt-1 text-sm text-text-secondary dark:text-text-secondary-dark">
           {model.unavailableExactFacts.includes("purchase_cost")

@@ -148,7 +148,6 @@ export interface MetalHoldingFormCopy {
   readonly unchangedGain?: string;
   readonly unchangedLoss?: string;
   readonly unchangedResult?: string;
-  readonly imageDescriptionUpdate?: string;
   readonly reconciliationIncomplete?: string;
   readonly retry?: string;
   readonly editTitle?: string;
@@ -708,7 +707,8 @@ export function MetalHoldingForm({
             />
           ) : null}
 
-          {!isMaterialEditDisabled ? (
+          {!isMaterialEditDisabled &&
+          (mode === "edit" || preview.valuation.available) ? (
             <MetalHoldingLivePreview
               copy={copy}
               preview={preview}

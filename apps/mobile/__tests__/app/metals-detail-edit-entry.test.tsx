@@ -11,9 +11,30 @@ jest.mock("expo-router", () => ({
 jest.mock("react-i18next", () => ({
   useTranslation: () => ({ t: (key: string): string => key }),
 }));
-jest.mock("@/components/navigation/PageHeader", () => ({
-  PageHeader: (): null => null,
-}));
+jest.mock("@/components/navigation/PageHeader", () => {
+  const { Pressable, Text } =
+    jest.requireActual<typeof import("react-native")>("react-native");
+  return {
+    PageHeader: ({
+      rightAction,
+    }: {
+      readonly rightAction?: {
+        readonly testID?: string;
+        readonly accessibilityLabel?: string;
+        readonly onPress: () => void;
+      };
+    }): React.JSX.Element | null =>
+      rightAction ? (
+        <Pressable
+          testID={rightAction.testID ?? "header-right-action"}
+          accessibilityLabel={rightAction.accessibilityLabel}
+          onPress={rightAction.onPress}
+        >
+          <Text>Edit</Text>
+        </Pressable>
+      ) : null,
+  };
+});
 jest.mock("@/hooks/useMetalHoldingDetail", () => ({
   useMetalHoldingDetail: () => ({
     model: {
@@ -28,28 +49,21 @@ jest.mock("@/hooks/useMetalHoldingDetail", () => ({
   }),
 }));
 jest.mock("@/components/metals/MetalHoldingDetailScreen", () => {
-  const { Text, Pressable } =
+  const { View } =
     jest.requireActual<typeof import("react-native")>("react-native");
   return {
     MetalHoldingDetailScreen: ({
       actions,
-      onAction,
     }: {
-      actions: ReadonlyArray<{ id: string; labelKey: string }>;
-      onAction: (id: string) => void;
-    }): React.JSX.Element => (
-      <>
-        {actions.map((action) => (
-          <Pressable key={action.id} onPress={() => onAction(action.id)}>
-            <Text>{action.labelKey}</Text>
-          </Pressable>
-        ))}
-      </>
-    ),
+      readonly actions: ReadonlyArray<{ id: string; labelKey: string }>;
+    }): React.JSX.Element => <View testID="detail-screen-actions-empty">{actions.length === 0 ? "no-actions" : "has-actions"}</View>,
   };
 });
-it("opens the existing Edit route from holding details", () => {
+it("opens the existing Edit route from the detail header action", () => {
   render(<MetalHoldingDetailRoute />);
-  fireEvent.press(screen.getByText("actions.edit"));
+  expect(screen.getByTestId("detail-screen-actions-empty")).toHaveTextContent(
+    "no-actions"
+  );
+  fireEvent.press(screen.getByTestId("metal-holding-detail-edit"));
   expect(router.push).toHaveBeenCalledWith("/metals/holding-123/edit");
 });

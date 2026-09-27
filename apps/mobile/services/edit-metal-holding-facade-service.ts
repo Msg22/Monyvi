@@ -18,6 +18,7 @@ import type {
   EditableMetalHoldingFacts,
   MetalHoldingStatus,
 } from "./edit-metal-holding-preview-service";
+import { normalizeEditPhysicalForm } from "./edit-metal-holding-preview-service";
 import {
   createEditMetalHoldingCommandService,
   getPersistedMetalMaterialFacts,
@@ -130,12 +131,7 @@ export async function loadEditableMetalHolding(
       purchasePriceDecimal: purchasePriceDecimal ?? "",
       purchaseCurrency: purchaseCurrency ?? asset.currency,
       purchaseDate: formatMetalLocalCalendarDate(asset.purchaseDate),
-      physicalForm:
-        metal.itemForm === "COIN" ||
-        metal.itemForm === "BAR" ||
-        metal.itemForm === "JEWELRY"
-          ? metal.itemForm
-          : null,
+      physicalForm: normalizeEditPhysicalForm(metal.itemForm),
     },
     persistedMaterialFacts,
   };

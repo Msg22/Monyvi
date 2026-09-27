@@ -155,7 +155,6 @@ export const metalsTranslationSchema = NamespaceSchema.and(
       unchanged_gain: z.string(),
       unchanged_loss: z.string(),
       unchanged_result: z.string(),
-      image_description_update: z.string(),
       not_recorded: z.string(),
       locked_metal_hint: z.string(),
       cancel: z.string(),

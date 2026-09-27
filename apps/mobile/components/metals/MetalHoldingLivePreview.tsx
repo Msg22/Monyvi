@@ -14,7 +14,6 @@ import { getPurityCatalogEntry } from "@/validation/metal-holding-form-validatio
 import type {
   MetalHoldingFormCopy,
   MetalHoldingFormPreview,
-  MetalHoldingPreviewRateTrust,
 } from "./MetalHoldingForm";
 
 interface MetalHoldingLivePreviewProps {
@@ -64,7 +63,7 @@ export function MetalHoldingLivePreview({
     .join(" · ");
   const currency = preview.displayCurrency ?? "";
   const result = formatResult(preview, locale);
-  const rateSources = preview.rateSources?.join(" + ") ?? null;
+  const renderForm = toRenderPhysicalForm(preview.physicalForm);
 
   return (
     <View
@@ -76,17 +75,19 @@ export function MetalHoldingLivePreview({
         {copy.preview}
       </Text>
       <View className={isStacked ? "gap-3" : "flex-row items-center gap-3"}>
-        <View
-          testID="metal-holding-item-render"
-          className="h-12 w-12 items-center justify-center"
-          {...renderMetadata}
-        >
-          <MetalHoldingRender
-            size="form"
-            itemForm={toRenderPhysicalForm(preview.physicalForm)}
-            metalType={preview.metal}
-          />
-        </View>
+        {renderForm === null ? null : (
+          <View
+            testID="metal-holding-item-render"
+            className="h-12 w-12 items-center justify-center"
+            {...renderMetadata}
+          >
+            <MetalHoldingRender
+              size="form"
+              itemForm={renderForm}
+              metalType={preview.metal}
+            />
+          </View>
+        )}
         <View className="min-w-0 flex-1">
           {preview.name ? (
             <Text className="text-base font-semibold text-text-primary dark:text-text-primary-dark">
@@ -114,7 +115,12 @@ export function MetalHoldingLivePreview({
                 >
                   {result}
                 </Text>
-                <Text className="text-end text-xs text-text-secondary dark:text-text-secondary-dark">
+                <Text
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.8}
+                  className="text-end text-xs text-text-secondary dark:text-text-secondary-dark"
+                >
                   {preview.resultDirection === "negative"
                     ? copy.estimatedLossSincePurchase
                     : copy.estimatedGainSincePurchase}
@@ -131,128 +137,16 @@ export function MetalHoldingLivePreview({
           </Text>
         )}
       </View>
-      <View className="mt-3 gap-2">
-        {preview.metal === "SILVER" && preview.purityPercentDecimal ? (
-          <DisclosureRow
-            icon="shield-checkmark-outline"
-            text={`${purityLabel} · ${preview.purityPercentDecimal}% ${copy.pure}`}
-          />
-        ) : null}
-        {preview.metalUsdPerPureGramDecimal ? (
+      {preview.metalUsdPerPureGramDecimal ? (
+        <View className="mt-3 gap-2">
           <DisclosureRow
             icon="trending-up-outline"
             text={`${metalLabel} · ${formatRateAmount("USD", preview.metalUsdPerPureGramDecimal, locale)} ${copy.perPureGram}`}
           />
-        ) : null}
-        {preview.metalRateTrust ? (
-          <RateTrustRow
-            testID="metal-holding-metal-rate-trust"
-            label={copy.metalRateLabel ?? "Metal rate"}
-            currency="USD"
-            trust={preview.metalRateTrust}
-            copy={copy}
-            locale={locale}
-          />
-        ) : null}
-        {preview.fxRateTrust ? (
-          <RateTrustRow
-            testID="metal-holding-fx-rate-trust"
-            label={copy.fxRateLabel ?? "FX rate"}
-            currency="USD"
-            valueSuffix={currency ? ` / ${currency}` : ""}
-            trust={preview.fxRateTrust}
-            copy={copy}
-            locale={locale}
-          />
-        ) : null}
-        {!preview.metalRateTrust && !preview.fxRateTrust && rateSources ? (
-          <DisclosureRow
-            icon="time-outline"
-            text={
-              preview.providerObservedAt
-                ? `${rateSources} · ${copy.ratesUpdated} ${formatObservedAt(preview.providerObservedAt, locale)}`
-                : rateSources
-            }
-          />
-        ) : !preview.metalRateTrust &&
-          !preview.fxRateTrust &&
-          preview.rateFreshness ? (
-          <DisclosureRow
-            icon="time-outline"
-            text={getRateFreshnessLabel(preview.rateFreshness, copy)}
-          />
-        ) : null}
-      </View>
+        </View>
+      ) : null}
     </View>
   );
-}
-
-function RateTrustRow({
-  testID,
-  label,
-  currency,
-  valueSuffix = "",
-  trust,
-  copy,
-  locale,
-}: {
-  readonly testID: string;
-  readonly label: string;
-  readonly currency: string;
-  readonly valueSuffix?: string;
-  readonly trust: MetalHoldingPreviewRateTrust;
-  readonly copy: MetalHoldingFormCopy;
-  readonly locale: "en" | "ar";
-}): React.JSX.Element {
-  const value =
-    trust.valueDecimal === null
-      ? copy.rateUnavailable
-      : formatRateAmount(currency, trust.valueDecimal, locale);
-  const age =
-    trust.ageMs === null
-      ? (copy.rateAgeUnavailable ?? copy.rateUnknown)
-      : formatRateAge(trust.ageMs, locale, copy);
-  const freshness = getRateFreshnessLabel(
-    trust.state === "missing" || trust.state === "invalid"
-      ? "unavailable"
-      : trust.state,
-    copy
-  );
-  return (
-    <View testID={testID} className="gap-1">
-      <Text className="text-xs font-semibold text-text-primary dark:text-text-primary-dark">
-        {`${label} · ${value}${trust.valueDecimal === null ? "" : valueSuffix}`}
-      </Text>
-      <Text className="text-xs text-text-secondary dark:text-text-secondary-dark">
-        {`${trust.source ?? copy.unknownRateSource ?? "Source unknown"} · ${trust.quality ?? copy.unknownRateQuality ?? "Quality unknown"} · ${freshness} · ${age}`}
-      </Text>
-      {trust.providerObservedAt && trust.state !== "unknown" ? (
-        <Text className="text-xs text-text-muted dark:text-text-muted-dark">
-          {`${copy.ratesUpdated} ${formatObservedAt(trust.providerObservedAt, locale)}`}
-        </Text>
-      ) : (
-        <Text className="text-xs text-text-muted dark:text-text-muted-dark">
-          {copy.rateObservationUnavailable ??
-            `${copy.ratesUpdated} ${copy.rateAgeUnavailable ?? copy.rateUnknown}`}
-        </Text>
-      )}
-    </View>
-  );
-}
-
-export function formatRateAge(
-  ageMs: number,
-  locale: "en" | "ar",
-  copy?: MetalHoldingFormCopy
-): string {
-  if (ageMs < 60_000) {
-    return copy?.rateJustNow ?? (locale === "ar" ? "الآن" : "just now");
-  }
-  const minutes = Math.floor(ageMs / 60_000);
-  const hours = Math.floor(minutes / 60);
-  return hours > 0
-    ? t("common:hours_ago", { count: hours, lng: locale })
-    : t("common:minutes_ago", { count: minutes, lng: locale });
 }
 
 function DisclosureRow({
@@ -367,27 +261,6 @@ function formatDecimal(
     minimumFractionDigits: minDigits,
     maximumFractionDigits: fractionDigits,
   }).format(Number(value));
-}
-
-function formatObservedAt(value: Date, locale: "en" | "ar"): string {
-  return new Intl.DateTimeFormat(locale === "ar" ? "ar-EG" : "en-GB", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(value);
-}
-
-function getRateFreshnessLabel(
-  value: NonNullable<MetalHoldingFormPreview["rateFreshness"]>,
-  copy: MetalHoldingFormCopy
-): string {
-  if (value === "fresh") return copy.rateFresh;
-  if (value === "stale") return copy.rateStale;
-  if (value === "unknown")
-    return copy.rateFreshnessUnknown ?? "Freshness unknown";
-  return copy.rateUnavailable;
 }
 
 function toRenderPhysicalForm(

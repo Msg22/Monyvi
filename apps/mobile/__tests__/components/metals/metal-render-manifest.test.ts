@@ -14,6 +14,7 @@ const expectedHashes = {
   "gold-jewelry.png": "4925134a9ca2c46a0d14b96bc23db56ed2f97577d7fc60887088521782c20466",
   "silver-bar.png": "96b993e8ef32a1bd0d6320b3581c1e503d5f8b6f4c3eb57ceeabfcdab9b48633",
   "silver-coin.png": "9081e7e0dc2e79af4185ce549b6a5359155d72576aa38b50f402c7f36bccd8eb",
+  "silver-jewelry.png": "0065391d373e808ce7b458ac1096d58f63eb8de09e650e752081914003077bb6",
 } as const;
 
 describe("FR-103 production Metal render manifest", () => {
@@ -27,9 +28,9 @@ describe("FR-103 production Metal render manifest", () => {
       }
     }
     expect(getMetalRenderEntry("silver", "jewelry")).toMatchObject({
-      kind: "neutral",
-      source: null,
-      accessibilityLabelKey: "render.neutralFallback",
+      kind: "object",
+      source: expect.anything(),
+      accessibilityLabelKey: "render.objectAccessibility",
     });
     expect(getMetalRenderEntry("gold", "Ring")).toMatchObject({
       kind: "neutral",

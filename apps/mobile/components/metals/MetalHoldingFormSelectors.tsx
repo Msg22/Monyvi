@@ -71,7 +71,7 @@ export function MetalSelector({
                   metal === "GOLD" ? "rounded-s-lg" : "-ms-px rounded-e-lg"
                 } ${
                   isSelected
-                    ? "border-nileGreen-700 bg-slate-25 dark:border-nileGreen-400 dark:bg-slate-900"
+                    ? "z-10 border-nileGreen-700 bg-slate-25 dark:border-nileGreen-400 dark:bg-slate-900"
                     : "border-slate-300 bg-slate-25 dark:border-slate-700 dark:bg-slate-900"
                 }`}
               >

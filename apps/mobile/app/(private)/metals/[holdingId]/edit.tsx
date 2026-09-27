@@ -335,7 +335,6 @@ function createCopy(
     unchangedGain: t("edit.unchanged_gain"),
     unchangedLoss: t("edit.unchanged_loss"),
     unchangedResult: t("edit.unchanged_result"),
-    imageDescriptionUpdate: t("edit.image_description_update"),
     lockedMetalHint: t("edit.locked_metal_hint"),
     cancel: t("edit.cancel"),
     reconciliationIncomplete: t("reconciliation.incomplete"),

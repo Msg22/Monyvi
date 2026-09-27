@@ -211,7 +211,6 @@ const ARABIC_EDIT_COPY: MetalHoldingFormCopy = {
   unchangedResult: "تبقى نتيجتك منذ الشراء",
   whatWillChange: "ما الذي سيتغير",
   correctionReason: "سبب التصحيح",
-  imageDescriptionUpdate: "سيتم تحديث صورة المقتنى ووصفه.",
   correctionHistory: "سيظهر هذا التصحيح في السجل.",
 };
 
@@ -409,7 +408,9 @@ describe("Edit metal holding form", () => {
     expect(screen.getByText("Physical form: Coin → Bar")).toBeOnTheScreen();
     expect(screen.getByText("Current value stays EGP 51,200")).toBeOnTheScreen();
     expect(screen.getByText("Your gain since purchase stays EGP 3,400")).toBeOnTheScreen();
-    expect(screen.getByText("The holding image and description will update.")).toBeOnTheScreen();
+    expect(
+      screen.queryByText("The holding image and description will update.")
+    ).toBeNull();
     expect(
       screen.getByText("This correction will appear in History")
     ).toBeOnTheScreen();
@@ -555,7 +556,7 @@ describe("Edit metal holding form", () => {
     expect(screen.getByTestId("metal-holding-correction-reason")).toHaveProp("autoFocus", false);
   });
 
-  it("shows image update consequence alongside financial changes without unchanged value claims", (): void => {
+  it("shows financial changes without image update claims or unchanged value claims", (): void => {
     renderEdit({
       values: toValues({ ...original, weightGramsDecimal: "11.125", physicalForm: "BAR" }),
       preview: toPreview({ ...original, weightGramsDecimal: "11.125", physicalForm: "BAR", currentValueDecimal: "56000", performanceDecimal: "8200" }),
@@ -570,7 +571,9 @@ describe("Edit metal holding form", () => {
 
     expect(screen.getByText("Weight: 10.125 → 11.125")).toBeOnTheScreen();
     expect(screen.getByText("Physical form: Coin → Bar")).toBeOnTheScreen();
-    expect(screen.getByText("The holding image and description will update.")).toBeOnTheScreen();
+    expect(
+      screen.queryByText("The holding image and description will update.")
+    ).toBeNull();
     expect(screen.queryByText(/Current value stays/)).toBeNull();
     expect(screen.queryByText(/Your gain since purchase stays/)).toBeNull();
     expect(screen.getByText("EGP 56,000")).toBeOnTheScreen();
@@ -597,7 +600,7 @@ describe("Edit metal holding form", () => {
     expect(screen.queryByText(/Current value stays/)).toBeNull();
   });
 
-  it("shows metal and FX value, source, quality, age, and freshness independently", (): void => {
+  it("hides rate source, quality, age, and freshness while keeping the estimated value", (): void => {
     renderEdit({
       preview: {
         ...toPreview(original),
@@ -619,13 +622,15 @@ describe("Edit metal holding form", () => {
         },
       },
     });
-    expect(screen.getByText("Metal rate · USD 100")).toBeOnTheScreen();
-    expect(screen.getByText("Metal feed · verified · Rates are current · 1 minute ago")).toBeOnTheScreen();
-    expect(screen.getByText("FX rate · USD 0.02 / EGP")).toBeOnTheScreen();
-    expect(screen.getByText("FX feed · indicative · Using an older saved rate · 1 hour ago")).toBeOnTheScreen();
+    expect(screen.queryByText(/Metal rate ·/)).toBeNull();
+    expect(screen.queryByText(/Metal feed ·/)).toBeNull();
+    expect(screen.queryByText(/FX rate ·/)).toBeNull();
+    expect(screen.queryByText(/FX feed ·/)).toBeNull();
+    expect(screen.getByText("EGP 51,200")).toBeOnTheScreen();
+    expect(screen.getByText("+ EGP 3,400")).toBeOnTheScreen();
   });
 
-  it("preserves rate precision in FX rate trust display for small unit values", (): void => {
+  it("hides rate trust display for small unit values while keeping the estimated value", (): void => {
     renderEdit({
       preview: {
         ...toPreview(original),
@@ -639,10 +644,12 @@ describe("Edit metal holding form", () => {
         },
       },
     });
-    expect(screen.getByText("FX rate · USD 0.0067 / EGP")).toBeOnTheScreen();
+    expect(screen.queryByText(/FX rate ·/)).toBeNull();
+    expect(screen.queryByText(/FX feed ·/)).toBeNull();
+    expect(screen.getByText("EGP 51,200")).toBeOnTheScreen();
   });
 
-  it("explicitly discloses distinct unknown freshness, unknown age, and unknown observation time and formats age under 1 minute as just now", (): void => {
+  it("hides unknown rate trust copy while keeping the estimated value", (): void => {
     renderEdit({
       preview: {
         ...toPreview(original),
@@ -665,16 +672,15 @@ describe("Edit metal holding form", () => {
       },
     });
 
-    expect(screen.getByText("Metal rate · USD 100")).toBeOnTheScreen();
-    expect(
-      screen.getByText("Metal feed · unverified · Freshness unknown · Rate age is unavailable")
-    ).toBeOnTheScreen();
-    expect(screen.getByText("Observation time unavailable")).toBeOnTheScreen();
-    expect(screen.getByText("FX rate · USD 0.02 / EGP")).toBeOnTheScreen();
-    expect(screen.getByText("FX feed · verified · Rates are current · just now")).toBeOnTheScreen();
+    expect(screen.queryByText(/Metal rate ·/)).toBeNull();
+    expect(screen.queryByText(/Metal feed ·/)).toBeNull();
+    expect(screen.queryByText("Observation time unavailable")).toBeNull();
+    expect(screen.queryByText(/FX rate ·/)).toBeNull();
+    expect(screen.queryByText(/FX feed ·/)).toBeNull();
+    expect(screen.getByText("EGP 51,200")).toBeOnTheScreen();
   });
 
-  it("renders distinct unknown trust copy and just now in Arabic", (): void => {
+  it("hides rate trust copy in Arabic while keeping the estimated value", (): void => {
     renderEdit({
       locale: "ar",
       isRtl: true,
@@ -700,11 +706,10 @@ describe("Edit metal holding form", () => {
       },
     });
 
-    expect(
-      screen.getByText("Metal feed · unverified · حداثة السعر غير معروفة · عمر السعر غير متاح")
-    ).toBeOnTheScreen();
-    expect(screen.getByText("وقت الرصد غير متاح")).toBeOnTheScreen();
-    expect(screen.getByText("FX feed · verified · الأسعار حديثة · الآن")).toBeOnTheScreen();
+    expect(screen.queryByText(/Metal feed ·/)).toBeNull();
+    expect(screen.queryByText("وقت الرصد غير متاح")).toBeNull();
+    expect(screen.queryByText(/FX feed ·/)).toBeNull();
+    expect(screen.getByTestId("metal-holding-live-preview")).toBeOnTheScreen();
   });
 
   it("limits terminal holdings to metadata and keeps dirty exit, focus, pending lock, safe area, Arabic RTL, theme, and compact 200 percent reflow accessible", (): void => {

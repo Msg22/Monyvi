@@ -716,8 +716,8 @@ describe("approved active holding-detail fidelity", () => {
     expect(screen.getAllByText("Net proceeds")).toHaveLength(2);
     expect(screen.getAllByText("EGP 10,450.00")).toHaveLength(2);
     expect(screen.getByText("EGP 1,550.00 profit from this sale")).toBeTruthy();
-    expect(screen.getByText("USD · Last available · 2 days ago")).toBeTruthy();
-    expect(screen.getByText(/Prices last updated 01 Aug 2026/)).toBeTruthy();
+    expect(screen.queryByTestId("metal-sold-display-rate-trust")).toBeNull();
+    expect(screen.queryByText(/Last available/)).toBeNull();
     expect(screen.getByText("Holding story")).toBeTruthy();
     expect(screen.getAllByText("Sold").length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText("22 Aug 2026")).toBeTruthy();

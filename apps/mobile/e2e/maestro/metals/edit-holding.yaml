@@ -6,10 +6,10 @@ appId: com.monyvi.app
 - openLink: monyvi://metals/holding-e2e-gold
 - scrollUntilVisible:
     element:
-      id: metal-holding-action-edit
+      id: metal-holding-detail-edit
     direction: DOWN
 - tapOn:
-    id: metal-holding-action-edit
+    id: metal-holding-detail-edit
 - extendedWaitUntil:
     visible:
       id: metal-holding-edit-screen
@@ -38,10 +38,10 @@ appId: com.monyvi.app
 - openLink: monyvi://metals/holding-e2e-gold
 - scrollUntilVisible:
     element:
-      id: metal-holding-action-edit
+      id: metal-holding-detail-edit
     direction: DOWN
 - tapOn:
-    id: metal-holding-action-edit
+    id: metal-holding-detail-edit
 - tapOn:
     id: metal-holding-weight-field
 - eraseText: 20
@@ -67,10 +67,10 @@ appId: com.monyvi.app
 - openLink: monyvi://metals/holding-e2e-gold
 - scrollUntilVisible:
     element:
-      id: metal-holding-action-edit
+      id: metal-holding-detail-edit
     direction: DOWN
 - tapOn:
-    id: metal-holding-action-edit
+    id: metal-holding-detail-edit
 - tapOn:
     id: metal-holding-physical-form-field
 - tapOn:

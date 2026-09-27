@@ -5,6 +5,7 @@ import GoldCoinImage from "./gold-coin.png";
 import GoldJewelryImage from "./gold-jewelry.png";
 import SilverBarImage from "./silver-bar.png";
 import SilverCoinImage from "./silver-coin.png";
+import SilverJewelryImage from "./silver-jewelry.png";
 
 export const METAL_RENDER_METALS = ["gold", "silver"] as const;
 export const METAL_RENDER_FORMS = ["bar", "coin", "jewelry"] as const;
@@ -99,7 +100,12 @@ export const METAL_RENDER_MANIFEST: Readonly<Record<MetalRenderKey, MetalRenderE
       SilverCoinImage,
       "9081e7e0dc2e79af4185ce549b6a5359155d72576aa38b50f402c7f36bccd8eb"
     ),
-    "silver:jewelry": neutralEntry("silver", "jewelry"),
+    "silver:jewelry": objectEntry(
+      "silver",
+      "jewelry",
+      SilverJewelryImage,
+      "0065391d373e808ce7b458ac1096d58f63eb8de09e650e752081914003077bb6"
+    ),
   });
 
 const UNKNOWN_RENDER_ENTRY = neutralEntry("unknown", "unknown");

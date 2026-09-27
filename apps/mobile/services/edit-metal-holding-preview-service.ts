@@ -30,6 +30,20 @@ export interface MetalHoldingEditComparison {
   readonly affectedFields: readonly MetalHoldingAffectedField[];
 }
 
+export type MetalHoldingEditPhysicalForm = "COIN" | "BAR" | "JEWELRY";
+
+export function normalizeEditPhysicalForm(
+  value: unknown
+): MetalHoldingEditPhysicalForm | null {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim().toUpperCase();
+  return normalized === "COIN" ||
+    normalized === "BAR" ||
+    normalized === "JEWELRY"
+    ? normalized
+    : null;
+}
+
 const MATERIAL_FIELDS: ReadonlyArray<{
   readonly field: MetalHoldingAffectedField;
   readonly read: (facts: EditableMetalHoldingFacts) => string | null;

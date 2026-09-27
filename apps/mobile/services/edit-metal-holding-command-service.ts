@@ -25,6 +25,7 @@ import {
   type MetalMetadataClockDecision,
 } from "./metal-metadata-service";
 import { formatMetalLocalCalendarDate } from "./metal-financial-action-repository";
+import { normalizeEditPhysicalForm } from "./edit-metal-holding-preview-service";
 import {
   findOwnedById,
   getCurrentUserDataScope,
@@ -219,12 +220,7 @@ export function getPersistedMetalMaterialFacts(
     purchasePriceDecimal: asset.purchasePriceDecimal ?? null,
     purchaseCurrency: asset.purchaseCurrency ?? (asset.currency || null),
     purchaseDate: formatMetalLocalCalendarDate(asset.purchaseDate),
-    physicalForm:
-      metal.itemForm === "COIN" ||
-      metal.itemForm === "BAR" ||
-      metal.itemForm === "JEWELRY"
-        ? metal.itemForm
-        : null,
+    physicalForm: normalizeEditPhysicalForm(metal.itemForm),
   };
 }
 
