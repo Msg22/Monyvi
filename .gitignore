@@ -98,6 +98,8 @@ temp/
 !.agents/skills/team-led-delivery/**
 !.agents/skills/gpt-taste/
 !.agents/skills/gpt-taste/**
+!.agents/skills/pr-comment-followup/
+!.agents/skills/pr-comment-followup/**
 
 
 

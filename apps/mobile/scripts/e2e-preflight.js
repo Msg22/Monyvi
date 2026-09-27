@@ -536,7 +536,7 @@ function clearE2eMetalsLocalState() {
 function getE2eMetalsObservationCount() {
   if (!hasE2eWatermelonTable(metalsObservationTableName)) return 0;
   const output = runE2eWatermelonSql(
-    `select count(*) from "${metalsObservationTableName}" where "source" = 'e2e_fixture';`
+    `select count(*) from "${metalsObservationTableName}" where "source" like 'e2e_fixture:%';`
   );
   const count = Number.parseInt(output, 10);
   if (!Number.isFinite(count) || count < 0) {

@@ -6,6 +6,7 @@ export * from "./types";
 
 // Models (extended classes with custom logic)
 export { Account } from "./models/Account";
+export { AccountFinancialEffect } from "./models/AccountFinancialEffect";
 export { AccountSmsSender } from "./models/AccountSmsSender";
 export { AssetMetal } from "./models/AssetMetal";
 export { Asset } from "./models/Asset";

@@ -12,7 +12,7 @@ with Angular equivalents in chat (never in code comments).
 
 <!-- SPECKIT START -->
 
-Active Speckit plan: `specs/302-atomic-market-rate-snapshots/plan.md`
+Active Speckit plan: `specs/345-language-direction/plan.md`
 
 <!-- SPECKIT END -->
 
@@ -255,6 +255,10 @@ Dependency direction: `apps/ → packages/logic → packages/db`. **Never revers
   background services, or device settings work. Explain what happened in plain
   language, why it matters only when helpful, and what the user can do next.
   Prefer short, actionable copy over long explanations.
+- For user-visible financial labels, check the English and Arabic wording in
+  context with the intended audience. Prefer familiar words over internal domain
+  terms; keep the same concept named consistently across screens, actions, and
+  summaries. Put any proposed terminology change in the mockup for approval.
 - Permission flows MUST use Monyvi custom explanatory/recovery UI before
   triggering any native permission request. Do not use Android native rationale
   dialogs or `Alert.alert()` as the app-level explanation. The OS permission
@@ -298,6 +302,10 @@ the true domain model.
   coding. The workflow's narrowly defined micro-UI exception may be used for
   small, unambiguous changes that preserve the existing layout, interaction,
   flow, and design-system pattern.
+- Before designing or implementing a screen header action, compare the equivalent
+  action on existing sibling screens. Reuse their `PageHeader` action pattern,
+  icon, placement, size, and accessibility behavior unless the approved mockup
+  explicitly calls for a difference. Check both visible and empty states.
 
 - **Responsive mockup implementation**: Treat the approved mockup as the
   normal-width composition, then validate it at compact-phone, ordinary-phone,

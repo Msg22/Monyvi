@@ -1,10 +1,16 @@
 # Codex To OpenCode Implementation Handoff
 
 Use this workflow only when Mohamed explicitly asks Codex to plan a task and
-delegate the approved implementation to Qwen or GLM in OpenCode.
+delegate the approved implementation to an OpenCode model.
 
 Do not auto-trigger it. Small and low-reasoning tasks may be assigned directly
 to an OpenCode model without Codex involvement.
+
+This workflow covers planning, handoff, and completion only. Runtime and usage
+policy — exact model identifiers, OpenCode Go limits, usage checks, fallback,
+and session discipline — is canonical in
+[`opencode-team-delegation.md`](./opencode-team-delegation.md) and applies to
+every dispatch.
 
 ## 1. Responsibility Split
 
@@ -25,7 +31,8 @@ Use it for a medium-to-large task when:
 - the difficult reasoning can be completed before coding;
 - the desired behavior and boundaries can be expressed in an approved plan;
 - implementation can proceed independently from that plan; and
-- Qwen or GLM has the tools and repository access required to finish the task.
+- the selected OpenCode model has the tools and repository access required to
+  finish the task.
 
 Do not hand off while a product, business, schema, sync, security, or visual
 decision remains unresolved. Resolve it with Mohamed during planning first.
@@ -68,11 +75,14 @@ After approval:
    unrelated checkouts and link the existing dependency tree via
    `scripts/link-worktree-node-modules.ps1` as required by `AGENTS.md`; never
    install a second dependency tree.
-2. Use the model Mohamed named. If no model was named, select Qwen or GLM based
-   on current availability and task fit, and state the selection.
+2. Use the model Mohamed named. If no model was named, select the lowest-cost
+   capable model per the model-selection and limit rules in
+   [`opencode-team-delegation.md`](./opencode-team-delegation.md) and state the
+   selection.
 3. Resolve the exact OpenCode model identifier with `opencode models`
-   immediately before launch; never infer or autocomplete the identifier. The
-   currently verified Qwen 3.8 Flash identifier is `bai/qwen3.8-flash`. If the
+   immediately before launch; never infer or autocomplete the identifier, and
+   check rolling usage and limits per
+   [`opencode-team-delegation.md`](./opencode-team-delegation.md). If the
    requested model is not listed or cannot be accessed, stop and report the
    blocker instead of silently substituting another model.
 4. Create one persistent OpenCode session bound to that worktree, branch, and

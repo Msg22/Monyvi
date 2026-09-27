@@ -306,12 +306,17 @@ added after dedicated action synchronization is proven, may change; it governs t
 dedicated path, not generic selection. This prevents action roots from activating
 independently of their complete domain evidence and durable outcome protocol.
 
-Generic push returns every captured dedicated-table row ID through
-WatermelonDB's rejected-ID result, regardless of owner, and never sends those rows to a
-generic remote writer. WatermelonDB may then complete the pull and push unrelated
-owner-scoped generic rows while keeping dedicated created, updated, and deleted rows
-dirty for the future dedicated synchronizer. Empty dedicated change sets remain
-excluded and non-blocking. The synchronization wrapper binds one authenticated user to
+Generic push never sends a dedicated-table row or a domain row linked by an account
+financial action to a generic remote writer. Before WatermelonDB acknowledges those
+captured rows, the dedicated account-action capability submits the immutable root to the
+owner-scoped account RPC. Accepted or idempotent roots, effects, and linked domain rows
+are omitted from the rejected-ID result so WatermelonDB acknowledges that exact captured
+group. Stale, rejected, incomplete, malformed, foreign, deleted, and unsupported
+dedicated groups remain in the rejected-ID result and stay dirty for reconciliation or
+their own dedicated synchronizer. A locally persisted accepted-outcome update may remain
+dirty for one additional pass; it is acknowledged without resubmitting the already
+accepted financial mutation. Empty dedicated change sets remain excluded and
+non-blocking. The synchronization wrapper binds one authenticated user to
 the complete pull/push lifecycle. If that user disappears or changes before pull starts
 or returns, pull throws `sync_pull_auth_scope_lost` and returns no timestamp, including
 when no table changes exist, so WatermelonDB cannot advance its global watermark over

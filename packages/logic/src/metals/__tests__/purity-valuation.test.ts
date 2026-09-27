@@ -1,15 +1,21 @@
 import {
   createPuritySnapshot,
+  FEATURED_PURITY_CODES,
   getPurityCatalog,
   getPurityEntry,
   isSupportedMetal,
   PURITY_CATALOG_VERSION,
   resolvePuritySelection,
 } from "../purity-catalog";
-import { calculateMetalReferenceValue, calculatePureGrams } from "../valuation";
+import {
+  calculateMetalReferenceValue,
+  calculatePureGrams,
+  calculatePurityGramPriceDecimal,
+} from "../valuation";
 
 function loadPurityCatalogApi(): {
   readonly createPuritySnapshot: typeof createPuritySnapshot;
+  readonly FEATURED_PURITY_CODES: typeof FEATURED_PURITY_CODES;
   readonly getPurityCatalog: typeof getPurityCatalog;
   readonly getPurityEntry: typeof getPurityEntry;
   readonly PURITY_CATALOG_VERSION: typeof PURITY_CATALOG_VERSION;
@@ -17,6 +23,7 @@ function loadPurityCatalogApi(): {
 } {
   return {
     createPuritySnapshot,
+    FEATURED_PURITY_CODES,
     getPurityCatalog,
     getPurityEntry,
     PURITY_CATALOG_VERSION,
@@ -27,8 +34,13 @@ function loadPurityCatalogApi(): {
 function loadValuationApi(): {
   readonly calculateMetalReferenceValue: typeof calculateMetalReferenceValue;
   readonly calculatePureGrams: typeof calculatePureGrams;
+  readonly calculatePurityGramPriceDecimal: typeof calculatePurityGramPriceDecimal;
 } {
-  return { calculateMetalReferenceValue, calculatePureGrams };
+  return {
+    calculateMetalReferenceValue,
+    calculatePureGrams,
+    calculatePurityGramPriceDecimal,
+  };
 }
 
 const EXPECTED_CATALOG_V1 = [
@@ -436,4 +448,46 @@ describe("exact purity and valuation", () => {
       });
     }
   );
+
+  describe("FEATURED_PURITY_CODES and per-gram calculations", () => {
+    it("defines exactly the four approved purity codes and derives factors from getPurityEntry", () => {
+      const { FEATURED_PURITY_CODES, getPurityEntry } = loadPurityCatalogApi();
+
+      expect(FEATURED_PURITY_CODES).toEqual([
+        { metal: "GOLD", purityCode: "gold-999" },
+        { metal: "GOLD", purityCode: "gold-875" },
+        { metal: "GOLD", purityCode: "gold-750" },
+        { metal: "SILVER", purityCode: "silver-999" },
+      ]);
+
+      // Factors must be derived directly from the canonical purity catalog, not duplicated.
+      expect(getPurityEntry("GOLD", "gold-999").factorDecimal).toBe("0.999");
+      expect(getPurityEntry("GOLD", "gold-875").factorDecimal).toBe("0.875");
+      expect(getPurityEntry("GOLD", "gold-750").factorDecimal).toBe("0.75");
+      expect(getPurityEntry("SILVER", "silver-999").factorDecimal).toBe("0.999");
+    });
+
+    it("calculates exact per-gram price using calculatePurityGramPriceDecimal", () => {
+      const { calculatePurityGramPriceDecimal } = loadValuationApi();
+
+      // e.g. Gold pure USD rate = 71.50, USD/EGP rate = 0.02 (50 EGP per USD)
+      // 1 gram of 21K (0.875 factor) = 0.875 * 71.50 / 0.02 = 3128.125
+      const price21k = calculatePurityGramPriceDecimal({
+        purityFactorDecimal: "0.875",
+        metalUsdPerPureGramDecimal: "71.5",
+        currencyUsdPerUnitDecimal: "0.02",
+      });
+
+      expect(price21k).toBe("3128.125");
+
+      // Invalid or unavailable rate returns null
+      expect(
+        calculatePurityGramPriceDecimal({
+          purityFactorDecimal: "0.875",
+          metalUsdPerPureGramDecimal: "0",
+          currencyUsdPerUnitDecimal: "0.02",
+        })
+      ).toBeNull();
+    });
+  });
 });

@@ -1,6 +1,6 @@
 begin;
 
-select plan(113);
+select plan(114);
 
 select has_table('public', 'metal_holding_states', 'holding projection exists');
 select has_table('public', 'metal_action_evidence', 'action evidence exists');
@@ -682,21 +682,45 @@ select throws_ok(
   '23514', null,
   'observation matrix rejects inverse metal rates'
 );
-select throws_ok(
+-- Approved 074 behavior: BTC observations exist so BTC-account totals never go
+-- unavailable. The parent batch row satisfies the observations FK; the matrix
+-- itself is what the assertions below pin.
+insert into public.market_rates (
+  id, gold_usd_per_gram, silver_usd_per_gram, egp_usd, eur_usd,
+  platinum_usd_per_gram, palladium_usd_per_gram, aed_usd, aud_usd, bhd_usd,
+  btc_usd, cad_usd, chf_usd, cny_usd, dkk_usd, dzd_usd, gbp_usd, hkd_usd,
+  inr_usd, iqd_usd, isk_usd, jod_usd, jpy_usd, kpw_usd, krw_usd, kwd_usd,
+  lyd_usd, mad_usd, myr_usd, nok_usd, nzd_usd, omr_usd, qar_usd, rub_usd,
+  sar_usd, sek_usd, sgd_usd, tnd_usd, try_usd, zar_usd
+) values (
+  '018f0c7a-1234-7abc-8def-0000000000b0',
+  1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+  1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1
+);
+select lives_ok(
   $$insert into public.market_rate_observations (
       batch_id, instrument_code, value_decimal, unit, orientation, quality
     ) values (
-      '018f0c7a-1234-7abc-8def-000000000020', 'currency:BTC', 1,
+      '018f0c7a-1234-7abc-8def-0000000000b0', 'currency:BTC', 1,
       'usd_per_currency_unit', 'quote_per_base', 'valid'
     )$$,
-  '23514', null,
-  'observation matrix rejects BTC'
+  'observation matrix accepts approved 074 BTC observations'
 );
 select throws_ok(
   $$insert into public.market_rate_observations (
       batch_id, instrument_code, value_decimal, unit, orientation, quality
     ) values (
-      '018f0c7a-1234-7abc-8def-000000000020', 'currency:EGP', 0.02,
+      '018f0c7a-1234-7abc-8def-0000000000b0', 'metal:BTC', 1,
+      'usd_per_pure_gram', 'quote_per_base', 'valid'
+    )$$,
+  '23514', null,
+  'observation matrix rejects non-contract instruments'
+);
+select throws_ok(
+  $$insert into public.market_rate_observations (
+      batch_id, instrument_code, value_decimal, unit, orientation, quality
+    ) values (
+      '018f0c7a-1234-7abc-8def-0000000000b0', 'currency:EGP', 0.02,
       'usd_per_currency_unit', 'quote_per_base', 'unknown'
     )$$,
   '23514', null,

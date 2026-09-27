@@ -30,9 +30,11 @@ to current task.
 
 When lead selects an OpenCode execution pool, load
 [`$opencode-team-delegation`](../opencode-team-delegation/SKILL.md) for its
-detailed security, pilot, session, and evidence procedure. Keep capability and
-ownership routing in authoritative workflow above; do not copy external-runtime
-mechanics into this entrypoint.
+detailed runtime, usage, model-selection, fallback, and session procedure. When
+lead selects the Gemini/Antigravity CLI pool, apply its execution-pool rules
+from the authoritative workflow (no separate delegation skill). Keep capability
+and ownership routing in authoritative workflow above; do not copy
+external-runtime mechanics into this entrypoint.
 
 When explicitly invoked for a small task, run scaling check and avoid a swarm.
 Delegate to one bounded worker if team-led handling remains requested. Lead

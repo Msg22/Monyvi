@@ -42,6 +42,7 @@ interface ToastConfig {
   title: string;
   message?: string;
   duration?: number;
+  dismissible?: boolean;
 }
 
 interface ToastContextValue {
@@ -240,8 +241,15 @@ function Toast({ config, onHide }: ToastProps): React.JSX.Element {
       className="absolute start-4 end-4 z-[110]"
       style={containerPositionStyle}
       testID="toast-container"
-      pointerEvents="none"
-      accessibilityRole="alert"
+      pointerEvents={config.dismissible ? "auto" : "none"}
+      onStartShouldSetResponder={(): boolean => config.dismissible === true}
+      onResponderRelease={config.dismissible ? onHide : undefined}
+      accessibilityRole={config.dismissible ? "button" : "alert"}
+      accessibilityActions={
+        config.dismissible ? [{ name: "activate" }] : undefined
+      }
+      onAccessibilityAction={config.dismissible ? onHide : undefined}
+      onAccessibilityEscape={config.dismissible ? onHide : undefined}
       accessibilityLiveRegion="polite"
     >
       <View

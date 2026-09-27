@@ -1,6 +1,7 @@
 import {
   formatPortfolioRateUpdatedParts,
   getPortfolioRateAccessibilityCopy,
+  getPortfolioRateCompactLabel,
   resolvePortfolioRateCopy,
 } from "@/components/metals/portfolio-rate-presentation";
 
@@ -96,6 +97,83 @@ describe("portfolio rate status copy (state-driven)", () => {
       getPortfolioRateAccessibilityCopy("unknown", null, "en", new Date())
     ).toEqual({
       key: "rate.unknown",
+    });
+  });
+
+  describe("getPortfolioRateCompactLabel", () => {
+    const mockT = (key: string, values?: Record<string, string>): string => {
+      const map: Record<string, string> = {
+        "portfolio.rates_updated_today": `Updated today, ${values?.time ?? ""}`,
+        "portfolio.rates_updated_compact": `Updated ${values?.date ?? ""}, ${values?.time ?? ""}`,
+        "rate.short_fresh": "Current",
+        "rate.short_stale": "Last available",
+        "rate.short_unknown": "Age unknown",
+        "rate.missing": "Rates: current rate unavailable",
+        "rate.stale": "Last available price",
+        "rate.unknown": "Rates: rate age is unknown",
+      };
+      return map[key] ?? key;
+    };
+
+    it("returns unqualified updated today for a fresh same-day rate", () => {
+      const sameDayNow = new Date("2026-09-08T20:00:00.000Z");
+      const parts = formatPortfolioRateUpdatedParts(observedAt, "en");
+      const label = getPortfolioRateCompactLabel(
+        "fresh",
+        observedAt,
+        "en",
+        sameDayNow,
+        mockT
+      );
+      expect(label).toBe(`Updated today, ${parts?.time}`);
+    });
+
+    it("qualifies stale rates with a localized state prefix while preserving observation timestamp", () => {
+      const sameDayNow = new Date("2026-09-08T20:00:00.000Z");
+      const parts = formatPortfolioRateUpdatedParts(observedAt, "en");
+      const label = getPortfolioRateCompactLabel(
+        "stale",
+        observedAt,
+        "en",
+        sameDayNow,
+        mockT
+      );
+      expect(label).toBe(`Last available · Updated today, ${parts?.time}`);
+    });
+
+    it("qualifies unknown-age rates with a localized state prefix while preserving observation timestamp", () => {
+      const sameDayNow = new Date("2026-09-08T20:00:00.000Z");
+      const parts = formatPortfolioRateUpdatedParts(observedAt, "en");
+      const label = getPortfolioRateCompactLabel(
+        "unknown",
+        observedAt,
+        "en",
+        sameDayNow,
+        mockT
+      );
+      expect(label).toBe(`Age unknown · Updated today, ${parts?.time}`);
+    });
+
+    it("returns missing label when state is missing", () => {
+      const label = getPortfolioRateCompactLabel(
+        "missing",
+        observedAt,
+        "en",
+        new Date(),
+        mockT
+      );
+      expect(label).toBe("Rates: current rate unavailable");
+    });
+
+    it("falls back to base state label when timestamp is absent", () => {
+      const label = getPortfolioRateCompactLabel(
+        "stale",
+        null,
+        "en",
+        new Date(),
+        mockT
+      );
+      expect(label).toBe("Last available price");
     });
   });
 });
