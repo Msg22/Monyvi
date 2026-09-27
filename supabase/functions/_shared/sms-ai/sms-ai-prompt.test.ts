@@ -129,3 +129,61 @@ test("keeps the reusable prefix byte-identical while dynamic category and SMS ta
   assert.ok(first[1].content.indexOf("CURRENT ACCESSIBLE CATEGORY CONTEXT") >= 0);
   assert.ok(first[2].content.indexOf("MESSAGE ID: message-a") >= 0);
 });
+
+
+test("uses the default currency catalogue consistently when no currencies are supplied", () => {
+  const stable = buildSmsAiStableSystemPrompt([]);
+  const schema = buildSmsAiResponseSchema([]);
+  const properties = schema.properties as Record<string, unknown>;
+  const transactions = properties.transactions as Record<string, unknown>;
+  const items = transactions.items as Record<string, unknown>;
+  const transactionProperties = items.properties as Record<string, unknown>;
+  const currency = transactionProperties.currency as Record<string, unknown>;
+
+  assert.match(stable, /SUPPORTED CURRENCIES:\nEGP, USD, EUR, GBP, SAR, AED, KWD/);
+  assert.deepEqual(currency.enum, [
+    "EGP",
+    "USD",
+    "EUR",
+    "GBP",
+    "SAR",
+    "AED",
+    "KWD",
+  ]);
+});
+
+test("does not duplicate the built-in category tree as dynamic context", () => {
+  const messages = buildSmsAiProviderMessages({
+    messages: [],
+    categories: `\n${BUILT_IN_SMS_CATEGORY_TREE.trim()}\n`,
+    supportedCurrencies: SUPPORTED_CURRENCIES,
+  });
+
+  assert.deepEqual(
+    messages.map((message) => message.role),
+    ["system", "user"]
+  );
+  assert.equal(
+    messages[0].content.indexOf("BUILT-IN CATEGORY TREE"),
+    messages[0].content.lastIndexOf("BUILT-IN CATEGORY TREE")
+  );
+});
+
+test("marks the root and transaction object schemas as strict", () => {
+  const schema = buildSmsAiResponseSchema(SUPPORTED_CURRENCIES);
+  const properties = schema.properties as Record<string, unknown>;
+  const transactions = properties.transactions as Record<string, unknown>;
+  const items = transactions.items as Record<string, unknown>;
+
+  assert.equal(schema.additionalProperties, false);
+  assert.equal(items.additionalProperties, false);
+});
+
+test("material currency changes change the reusable stable prefix", () => {
+  const egpOnly = buildSmsAiStableSystemPrompt(["EGP"]);
+  const egpAndUsd = buildSmsAiStableSystemPrompt(["EGP", "USD"]);
+
+  assert.notEqual(egpOnly, egpAndUsd);
+  assert.match(egpOnly, /SUPPORTED CURRENCIES:\nEGP/);
+  assert.match(egpAndUsd, /SUPPORTED CURRENCIES:\nEGP, USD/);
+});
