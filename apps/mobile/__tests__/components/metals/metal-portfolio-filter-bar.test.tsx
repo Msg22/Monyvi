@@ -116,7 +116,6 @@ function renderFilterBar(
     <MetalPortfolioScreen
       currency={currency}
       isLoading={false}
-      isOffline={false}
       error={null}
       portfolio={{ ...portfolio, holdings: portfolio.activeHoldings }}
       rateProviderObservedAt={new Date()}

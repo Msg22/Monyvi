@@ -1,7 +1,8 @@
 import type { CurrencyType } from "@monyvi/db";
 import {
   calculatePurityGramPriceDecimal,
-  FEATURED_PURITY_TILES,
+  FEATURED_PURITY_CODES,
+  getPurityEntry,
   parseCanonicalDecimal,
   roundDecimal,
   serializeDecimal,
@@ -17,27 +18,23 @@ export interface MetalPortfolioPurityPriceTile {
   readonly id: string;
   readonly metal: SupportedMetal;
   readonly purityCode: string;
-  readonly karatEn: string;
-  readonly karatAr: string;
   readonly pricePerGramDecimal: string | null;
   readonly state: "fresh" | "stale" | "unknown" | "missing";
 }
 
 /**
  * Builds the exactly four canonical purity price tiles (Gold 24K, 21K, 18K,
- * Silver 999) using live rate snapshots and purity factors.
+ * Silver 999) using live rate snapshots and canonical purity factors.
  */
 export function buildFeaturedPurityPriceTiles(
   currentRates: LiveRatesTrustReadModel | undefined,
   preferredCurrency: CurrencyType | undefined
 ): readonly MetalPortfolioPurityPriceTile[] {
   if (!currentRates || !preferredCurrency) {
-    return FEATURED_PURITY_TILES.map((def) => ({
+    return FEATURED_PURITY_CODES.map((def) => ({
       id: def.purityCode,
       metal: def.metal,
       purityCode: def.purityCode,
-      karatEn: def.karatEn,
-      karatAr: def.karatAr,
       pricePerGramDecimal: null,
       state: "missing",
     }));
@@ -53,7 +50,8 @@ export function buildFeaturedPurityPriceTiles(
       ? "1"
       : currencyTrust.valueDecimal ?? null;
 
-  return FEATURED_PURITY_TILES.map((def) => {
+  return FEATURED_PURITY_CODES.map((def) => {
+    const purityEntry = getPurityEntry(def.metal, def.purityCode);
     const metalTrust =
       def.metal === "GOLD" ? currentRates.gold : currentRates.silver;
     const metalRateDecimal = metalTrust.valueDecimal ?? null;
@@ -63,7 +61,7 @@ export function buildFeaturedPurityPriceTiles(
     let pricePerGramDecimal: string | null = null;
     if (metalRateDecimal !== null && currencyRateDecimal !== null) {
       pricePerGramDecimal = calculatePurityGramPriceDecimal({
-        purityFactorDecimal: def.factorDecimal,
+        purityFactorDecimal: purityEntry.factorDecimal,
         metalUsdPerPureGramDecimal: metalRateDecimal,
         currencyUsdPerUnitDecimal: currencyRateDecimal,
       });
@@ -76,8 +74,6 @@ export function buildFeaturedPurityPriceTiles(
       id: def.purityCode,
       metal: def.metal,
       purityCode: def.purityCode,
-      karatEn: def.karatEn,
-      karatAr: def.karatAr,
       pricePerGramDecimal: state === "missing" ? null : pricePerGramDecimal,
       state,
     };

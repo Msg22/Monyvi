@@ -95,7 +95,14 @@
     "rates_updated": "آخر تحديث للأسعار: {{date}}، {{time}}. قد تكون تغيّرت بعد ذلك.",
     "rates_updated_fresh": "تم تحديث الأسعار {{date}} في {{time}}",
     "rates_updated_compact": "آخر تحديث {{date}}، {{time}}",
-    "rates_updated_today": "آخر تحديث اليوم، {{time}}"
+    "rates_updated_today": "آخر تحديث اليوم، {{time}}",
+    "allocation_accessibility": "توزيع المحفظة: {{goldShare}} ذهب، {{silverShare}} فضة.",
+    "purity_tile": {
+      "gold-999": "عيار ٢٤",
+      "gold-875": "عيار ٢١",
+      "gold-750": "عيار ١٨",
+      "silver-999": "نقاوة ٩٩٩"
+    }
   },
   "add_metal_item": "إضافة قطعة معدنية",
   "add_holding": "إضافة مقتنى",

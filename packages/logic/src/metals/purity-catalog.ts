@@ -24,43 +24,28 @@ export type PurityResolution =
 
 export const PURITY_CATALOG_VERSION = "1" as const;
 
-export interface FeaturedPurityTileDefinition {
+export interface FeaturedPurityCode {
   readonly metal: SupportedMetal;
   readonly purityCode: string;
-  readonly karatEn: string;
-  readonly karatAr: string;
-  readonly factorDecimal: string;
 }
 
-export const FEATURED_PURITY_TILES: readonly FeaturedPurityTileDefinition[] =
+export const FEATURED_PURITY_CODES: readonly FeaturedPurityCode[] =
   Object.freeze([
     {
       metal: "GOLD",
       purityCode: "gold-999",
-      karatEn: "24K",
-      karatAr: "عيار ٢٤",
-      factorDecimal: "0.999",
     },
     {
       metal: "GOLD",
       purityCode: "gold-875",
-      karatEn: "21K",
-      karatAr: "عيار ٢١",
-      factorDecimal: "0.875",
     },
     {
       metal: "GOLD",
       purityCode: "gold-750",
-      karatEn: "18K",
-      karatAr: "عيار ١٨",
-      factorDecimal: "0.75",
     },
     {
       metal: "SILVER",
       purityCode: "silver-999",
-      karatEn: "999",
-      karatAr: "نقاوة ٩٩٩",
-      factorDecimal: "0.999",
     },
   ]);
 

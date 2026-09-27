@@ -45,7 +45,6 @@ interface MetalPortfolioScreenProps {
   readonly currency: CurrencyType;
   readonly error: Error | null;
   readonly isLoading: boolean;
-  readonly isOffline: boolean;
   readonly onFilterChange: (filter: MetalPortfolioFilter) => void;
   readonly onHistoryPress: () => void;
   readonly onHoldingPress: (holdingId: string) => void;
@@ -64,7 +63,6 @@ export function MetalPortfolioScreen({
   currency,
   error,
   isLoading,
-  isOffline,
   onFilterChange,
   onHistoryPress,
   onHoldingPress,
@@ -116,7 +114,6 @@ export function MetalPortfolioScreen({
           <PortfolioHeader
             currency={currency}
             error={error}
-            isOffline={isOffline}
             onFilterChange={onFilterChange}
             onRetry={onRetry}
             portfolio={portfolio}
@@ -250,7 +247,6 @@ function RecentHistorySkeleton(): React.JSX.Element {
 function PortfolioHeader({
   currency,
   error,
-  isOffline: _isOffline,
   onFilterChange,
   onRetry,
   portfolio,
@@ -260,7 +256,6 @@ function PortfolioHeader({
 }: {
   readonly currency: CurrencyType;
   readonly error: Error | null;
-  readonly isOffline: boolean;
   readonly onFilterChange: (filter: MetalPortfolioFilter) => void;
   readonly onRetry: () => void;
   readonly portfolio: MetalPortfolioReadModel | null;
@@ -489,6 +484,13 @@ function AllocationBar({
   const goldShare = parseShare(allocation.gold);
   const silverShare = parseShare(allocation.silver);
   const hasValue = goldShare > 0 || silverShare > 0;
+  const goldShareLabel = allocation.gold !== null ? `${allocation.gold}%` : "—";
+  const silverShareLabel =
+    allocation.silver !== null ? `${allocation.silver}%` : "—";
+  const allocationA11y = t("portfolio.allocation_accessibility", {
+    goldShare: goldShareLabel,
+    silverShare: silverShareLabel,
+  });
 
   return (
     <View
@@ -497,7 +499,7 @@ function AllocationBar({
     >
       <View
         accessibilityRole="image"
-        accessibilityLabel={`Gold ${allocation.gold ?? "—"}%, silver ${allocation.silver ?? "—"}%`}
+        accessibilityLabel={allocationA11y}
         className="h-[9px] flex-row overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800"
       >
         {goldShare > 0 ? (
@@ -573,8 +575,9 @@ function PricesPerGramSection({
   readonly purityPriceTiles?: readonly MetalPortfolioPurityPriceTile[];
   readonly rateUpdatedLabel: string;
 }): React.JSX.Element {
-  const { t, i18n } = useTranslation("metals");
-  const isArabic = i18n?.resolvedLanguage?.startsWith("ar") ?? false;
+  const { t } = useTranslation("metals");
+  const { width, fontScale } = useWindowDimensions();
+  const isCompact = shouldUseCompactLayout(width, fontScale);
 
   return (
     <View testID="metal-portfolio-rates-section" className="mt-4">
@@ -596,7 +599,7 @@ function PricesPerGramSection({
         {purityPriceTiles.map((tile) => {
           const isGold = tile.metal === "GOLD";
           const metalName = t(isGold ? "gold" : "silver");
-          const karat = isArabic ? tile.karatAr : tile.karatEn;
+          const purityLabel = t(`portfolio.purity_tile.${tile.purityCode}`);
           const formattedPrice =
             tile.pricePerGramDecimal === null
               ? "—"
@@ -609,8 +612,10 @@ function PricesPerGramSection({
               testID={`metal-rate-tile-${tile.id}`}
               accessible
               accessibilityRole="text"
-              accessibilityLabel={`${metalName} ${karat}. ${formattedPrice} ${unit}.`}
-              className="min-h-[54px] w-[48.5%] rounded-[11px] border border-slate-200 bg-surface px-2.5 py-2 dark:border-slate-800 dark:bg-slate-900"
+              accessibilityLabel={`${metalName} ${purityLabel}. ${formattedPrice} ${unit}.`}
+              className={`min-h-[54px] ${
+                isCompact ? "w-full" : "w-[48.5%]"
+              } rounded-[11px] border border-slate-200 bg-surface px-2.5 py-2 dark:border-slate-700 dark:bg-slate-800`}
             >
               <View className="flex-row items-center gap-1.5">
                 <View
@@ -622,7 +627,7 @@ function PricesPerGramSection({
                   numberOfLines={1}
                   className="text-[11px] font-bold text-text-primary dark:text-text-primary-dark"
                 >
-                  {metalName} · {karat}
+                  {metalName} · {purityLabel}
                 </Text>
               </View>
               <View className="mt-1 flex-row items-baseline gap-1">

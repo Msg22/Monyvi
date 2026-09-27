@@ -91,7 +91,14 @@
     "rates_updated": "Prices last updated {{date}} at {{time}}. They may have changed since then.",
     "rates_updated_fresh": "Rates updated {{date}} at {{time}}",
     "rates_updated_compact": "Updated {{date}}, {{time}}",
-    "rates_updated_today": "Updated today, {{time}}"
+    "rates_updated_today": "Updated today, {{time}}",
+    "allocation_accessibility": "Portfolio allocation: {{goldShare}} gold, {{silverShare}} silver.",
+    "purity_tile": {
+      "gold-999": "24K",
+      "gold-875": "21K",
+      "gold-750": "18K",
+      "silver-999": "999"
+    }
   },
   "add_metal_item": "Add metal item",
   "add_holding": "Add holding",

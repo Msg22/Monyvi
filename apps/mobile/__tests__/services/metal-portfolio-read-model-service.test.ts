@@ -829,8 +829,6 @@ describe("metal portfolio read model", () => {
           id: "gold-999",
           metal: "GOLD",
           purityCode: "gold-999",
-          karatEn: "24K",
-          karatAr: "عيار ٢٤",
           pricePerGramDecimal: "3571.425", // 0.999 * 71.5 / 0.02
           state: "fresh",
         },
@@ -838,8 +836,6 @@ describe("metal portfolio read model", () => {
           id: "gold-875",
           metal: "GOLD",
           purityCode: "gold-875",
-          karatEn: "21K",
-          karatAr: "عيار ٢١",
           pricePerGramDecimal: "3128.125", // 0.875 * 71.5 / 0.02
           state: "fresh",
         },
@@ -847,8 +843,6 @@ describe("metal portfolio read model", () => {
           id: "gold-750",
           metal: "GOLD",
           purityCode: "gold-750",
-          karatEn: "18K",
-          karatAr: "عيار ١٨",
           pricePerGramDecimal: "2681.25", // 0.75 * 71.5 / 0.02
           state: "fresh",
         },
@@ -856,8 +850,6 @@ describe("metal portfolio read model", () => {
           id: "silver-999",
           metal: "SILVER",
           purityCode: "silver-999",
-          karatEn: "999",
-          karatAr: "نقاوة ٩٩٩",
           pricePerGramDecimal: "53.59635", // 0.999 * 1.073 / 0.02
           state: "fresh",
         },

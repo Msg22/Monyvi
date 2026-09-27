@@ -12,6 +12,10 @@ appId: com.monyvi.app
 - assertVisible:
     id: metal-portfolio-root
 - assertVisible:
+    id: metal-portfolio-allocation
+- assertVisible:
+    id: metal-portfolio-rates-section
+- assertVisible:
     id: metal-portfolio-filter-ALL
 - tapOn:
     id: metal-portfolio-filter-GOLD

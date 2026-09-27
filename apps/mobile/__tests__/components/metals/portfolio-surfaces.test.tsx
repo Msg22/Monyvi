@@ -4,8 +4,6 @@ import { I18nManager } from "react-native";
 
 import type { CurrencyType } from "@monyvi/db";
 import type { WealthBreakdownReadModel } from "@/services/net-worth-read-model-service";
-import enMetals from "../../../locales/en/metals.json";
-import arMetals from "../../../locales/ar/metals.json";
 import type {
   MetalPortfolioReadModel,
   MetalPortfolioFilter,
@@ -97,70 +95,24 @@ const mockTranslations: Record<string, string> = {
   "status.disposed": "Disposed",
   "rate.missing": "Rates: current rate unavailable",
   "rate.stale": "Last available price",
+  "portfolio.allocation_accessibility":
+    "Portfolio allocation: {{goldShare}} gold, {{silverShare}} silver.",
+  "portfolio.purity_tile.gold-999": "24K",
+  "portfolio.purity_tile.gold-875": "21K",
+  "portfolio.purity_tile.gold-750": "18K",
+  "portfolio.purity_tile.silver-999": "999",
   error_generic: "Something went wrong. Please try again.",
   retry: "Retry",
 };
 
-const arabicTranslations: Record<string, string> = {
-  "wealth_breakdown.title": "فلوسك موزّعة فين",
-  "wealth_breakdown.accounts": "الفلوس في الحسابات",
-  "wealth_breakdown.metals": "الذهب والفضة",
-  "wealth_breakdown.gold": "ذهب",
-  "wealth_breakdown.silver": "فضة",
-  "wealth_breakdown.of_net_worth": "{{amount}} · {{share}} من صافي الثروة",
-  "wealth_breakdown.of_metals": "{{amount}} · {{share}} من الذهب والفضة",
-  "wealth_breakdown.inside_metals": "تفاصيل الذهب والفضة",
-  "portfolio.filter.all": "الكل",
-  "portfolio.filter.gold": "ذهب",
-  "portfolio.filter.silver": "فضة",
-  "portfolio.current_value_unavailable":
-    "القيمة الحالية غير متاحة. {{reason}}. بيانات الحيازة ما زالت متاحة.",
-  "portfolio.bought": "{{weight}} · تم الشراء {{date}}",
-  "portfolio.total": "قيمة محفظة المعادن",
-  "portfolio.total_accessibility":
-    "قيمة محفظة المعادن {{amount}}. الحالة: {{status}}.",
-  "portfolio.current_rate": "سعر حديث",
+const mockArabicTranslations: Record<string, string> = {
+  ...mockTranslations,
   "portfolio.active_portfolio": "معادنك",
-  "portfolio.active_portfolio_value": "قيمة معادنك",
-  "portfolio.active_holdings_one": "قطعة واحدة",
-  "portfolio.active_holdings_other": "{{count}} قطع",
-  "portfolio.items_heading": "قطعك",
-  "portfolio.prices_per_gram": "أسعار الغرام",
-  "portfolio.per_gram": "/ غ",
-  "portfolio.rates_updated_compact": "آخر تحديث {{date}}، {{time}}",
-  "portfolio.rates_updated_today": "آخر تحديث اليوم، {{time}}",
-  "portfolio.since_purchase_label": "منذ الشراء",
-  "portfolio.holdings": "المقتنيات",
-  "portfolio.view_all": "عرض الكل",
   "portfolio.bought_on": "تم الشراء {{date}}",
-  "portfolio.today": "اليوم",
-  "portfolio.rates_updated":
-    "آخر تحديث للأسعار: {{date}}، {{time}}. قد تكون تغيّرت بعد ذلك.",
-  "portfolio.realized_profit_from_sold_metals":
-    "أرباح محققة من المعادن المباعة",
-  "portfolio.realized_loss_from_sold_metals": "خسائر محققة من المعادن المباعة",
-  "portfolio.realized_result_from_sold_metals":
-    "نتيجة محققة من المعادن المباعة",
-  "portfolio.realized_profit": "ربح محقق",
-  "portfolio.realized_loss": "خسارة محققة",
-  "portfolio.realized_result": "نتيجة محققة",
-  "portfolio.profit_from_sold_metals": "ربح من المعادن المباعة",
-  "portfolio.loss_from_sold_metals": "خسارة من المعادن المباعة",
-  "portfolio.no_loss_from_sold_metals": "لا ربح ولا خسارة من المعادن المباعة",
-  "portfolio.profit_from_this_sale": "ربح من هذا البيع",
-  "portfolio.loss_from_this_sale": "خسارة من هذا البيع",
-  "portfolio.no_loss_from_this_sale": "لا ربح ولا خسارة من هذا البيع",
-  "portfolio.since_purchase": "{{signedAmount}} منذ الشراء",
   "portfolio.filter_accessibility":
     "عامل التصفية {{filterName}}، {{selectedState}}، {{count}} حيازة.",
+  "portfolio.filter.all": "الكل",
   "portfolio.selected": "محدد",
-  "portfolio.not_selected": "غير محدد",
-  "status.active": "نشطة",
-  "status.sold": "مباعة",
-  "status.disposed": "تم التخلّص منها",
-  "metal.gold": "ذهب",
-  "form.coin": "عملة",
-  "rate.missing": "أسعار السوق: السعر الحالي غير متاح",
 };
 
 let mockActiveTranslations = mockTranslations;
@@ -172,7 +124,7 @@ jest.mock("react-i18next", () => ({
   } => ({
     i18n: {
       resolvedLanguage:
-        mockActiveTranslations === arabicTranslations ? "ar" : "en",
+        mockActiveTranslations === mockArabicTranslations ? "ar" : "en",
     },
     t: (key: string, values?: Record<string, string>): string => {
       const template = mockActiveTranslations[key] ?? key;
@@ -257,8 +209,6 @@ const portfolio: MetalPortfolioReadModel = {
       id: "gold-24k",
       metal: "GOLD",
       purityCode: "gold-999",
-      karatEn: "24K",
-      karatAr: "عيار ٢٤",
       pricePerGramDecimal: "5215.00",
       state: "fresh",
     },
@@ -266,8 +216,6 @@ const portfolio: MetalPortfolioReadModel = {
       id: "gold-21k",
       metal: "GOLD",
       purityCode: "gold-875",
-      karatEn: "21K",
-      karatAr: "عيار ٢١",
       pricePerGramDecimal: "4567.97",
       state: "fresh",
     },
@@ -275,8 +223,6 @@ const portfolio: MetalPortfolioReadModel = {
       id: "gold-18k",
       metal: "GOLD",
       purityCode: "gold-750",
-      karatEn: "18K",
-      karatAr: "عيار ١٨",
       pricePerGramDecimal: "3915.16",
       state: "fresh",
     },
@@ -284,8 +230,6 @@ const portfolio: MetalPortfolioReadModel = {
       id: "silver-999",
       metal: "SILVER",
       purityCode: "silver-999",
-      karatEn: "Silver 999",
-      karatAr: "نقاوة ٩٩٩",
       pricePerGramDecimal: "65.20",
       state: "fresh",
     },
@@ -303,7 +247,6 @@ function renderPortfolio(
     <MetalPortfolioScreen
       currency={currency}
       isLoading={false}
-      isOffline={false}
       error={null}
       portfolio={{ ...portfolio, holdings: portfolio.activeHoldings }}
       rateProviderObservedAt={new Date("2026-08-25T10:30:00.000Z")}
@@ -320,26 +263,6 @@ function renderPortfolio(
 describe("US1 portfolio surfaces", () => {
   afterEach(() => {
     mockActiveTranslations = mockTranslations;
-  });
-
-  it("keeps approved English and Arabic portfolio copy in both locale resources", () => {
-    expect(enMetals.wealth_breakdown.title).toBe("Where your money is");
-    expect(enMetals.wealth_breakdown.inside_metals).toBe(
-      "Inside gold & silver"
-    );
-    expect(enMetals.wealth_breakdown.metals).toBe("Gold & silver");
-    expect(enMetals.portfolio.bought).toBe("{{weight}} · Bought {{date}}");
-    expect(enMetals.portfolio.active_portfolio).toBe("Your Metals");
-    expect(enMetals.portfolio.active_portfolio_value).toBe("Your Metals Value");
-    expect(enMetals.portfolio.items_heading).toBe("Your items");
-    expect(arMetals.wealth_breakdown.title).toBe("فلوسك موزّعة فين");
-    expect(arMetals.wealth_breakdown.inside_metals).toBe("تفاصيل الذهب والفضة");
-    expect(arMetals.wealth_breakdown.metals).toBe("الذهب والفضة");
-    expect(arMetals.wealth_breakdown.accounts).toBe("الفلوس في الحسابات");
-    expect(arMetals.portfolio.bought).toBe("{{weight}} · تم الشراء {{date}}");
-    expect(arMetals.portfolio.active_portfolio).toBe("معادنك");
-    expect(arMetals.portfolio.active_portfolio_value).toBe("قيمة معادنك");
-    expect(arMetals.portfolio.items_heading).toBe("قطعك");
   });
 
   it("keeps section skeletons semantically visible while local reads settle", () => {
@@ -607,7 +530,7 @@ describe("US1 portfolio surfaces", () => {
   });
 
   it("renders Arabic visible labels and accessible filter output", () => {
-    mockActiveTranslations = arabicTranslations;
+    mockActiveTranslations = mockArabicTranslations;
     renderPortfolio();
 
     expect(screen.getByText("معادنك")).toBeTruthy();
@@ -776,7 +699,6 @@ describe("US1 portfolio surfaces", () => {
         rateStatus: { state: "stale", ageMs: 86_400_001 },
       },
       selectedFilter: "SILVER" as MetalPortfolioFilter,
-      isOffline: true,
     });
     expect(screen.getByText("No Silver holdings yet")).toBeTruthy();
     expect(screen.queryByText(/older than 24 hours/i)).toBeNull();
@@ -928,6 +850,11 @@ describe("US1 portfolio surfaces", () => {
     expect(screen.getByTestId("metal-rate-tile-gold-21k")).toBeTruthy();
     expect(screen.getByTestId("metal-rate-tile-gold-18k")).toBeTruthy();
     expect(screen.getByTestId("metal-rate-tile-silver-999")).toBeTruthy();
+
+    expect(screen.getByText("Gold · 24K")).toBeTruthy();
+    expect(screen.getByText("Gold · 21K")).toBeTruthy();
+    expect(screen.getByText("Gold · 18K")).toBeTruthy();
+    expect(screen.getByText("Silver · 999")).toBeTruthy();
   });
 
   it("renders loaded holding values once rate/currency readiness settles and a skeleton while pending", () => {

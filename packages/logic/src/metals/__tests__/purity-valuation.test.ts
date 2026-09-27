@@ -1,6 +1,6 @@
 import {
   createPuritySnapshot,
-  FEATURED_PURITY_TILES,
+  FEATURED_PURITY_CODES,
   getPurityCatalog,
   getPurityEntry,
   isSupportedMetal,
@@ -15,7 +15,7 @@ import {
 
 function loadPurityCatalogApi(): {
   readonly createPuritySnapshot: typeof createPuritySnapshot;
-  readonly FEATURED_PURITY_TILES: typeof FEATURED_PURITY_TILES;
+  readonly FEATURED_PURITY_CODES: typeof FEATURED_PURITY_CODES;
   readonly getPurityCatalog: typeof getPurityCatalog;
   readonly getPurityEntry: typeof getPurityEntry;
   readonly PURITY_CATALOG_VERSION: typeof PURITY_CATALOG_VERSION;
@@ -23,7 +23,7 @@ function loadPurityCatalogApi(): {
 } {
   return {
     createPuritySnapshot,
-    FEATURED_PURITY_TILES,
+    FEATURED_PURITY_CODES,
     getPurityCatalog,
     getPurityEntry,
     PURITY_CATALOG_VERSION,
@@ -449,40 +449,22 @@ describe("exact purity and valuation", () => {
     }
   );
 
-  describe("FEATURED_PURITY_TILES and per-gram calculations", () => {
-    it("defines exactly the four approved purity tiles for My Metals", () => {
-      const { FEATURED_PURITY_TILES } = loadPurityCatalogApi();
+  describe("FEATURED_PURITY_CODES and per-gram calculations", () => {
+    it("defines exactly the four approved purity codes and derives factors from getPurityEntry", () => {
+      const { FEATURED_PURITY_CODES, getPurityEntry } = loadPurityCatalogApi();
 
-      expect(FEATURED_PURITY_TILES).toEqual([
-        {
-          metal: "GOLD",
-          purityCode: "gold-999",
-          karatEn: "24K",
-          karatAr: "عيار ٢٤",
-          factorDecimal: "0.999",
-        },
-        {
-          metal: "GOLD",
-          purityCode: "gold-875",
-          karatEn: "21K",
-          karatAr: "عيار ٢١",
-          factorDecimal: "0.875",
-        },
-        {
-          metal: "GOLD",
-          purityCode: "gold-750",
-          karatEn: "18K",
-          karatAr: "عيار ١٨",
-          factorDecimal: "0.75",
-        },
-        {
-          metal: "SILVER",
-          purityCode: "silver-999",
-          karatEn: "999",
-          karatAr: "نقاوة ٩٩٩",
-          factorDecimal: "0.999",
-        },
+      expect(FEATURED_PURITY_CODES).toEqual([
+        { metal: "GOLD", purityCode: "gold-999" },
+        { metal: "GOLD", purityCode: "gold-875" },
+        { metal: "GOLD", purityCode: "gold-750" },
+        { metal: "SILVER", purityCode: "silver-999" },
       ]);
+
+      // Factors must be derived directly from the canonical purity catalog, not duplicated.
+      expect(getPurityEntry("GOLD", "gold-999").factorDecimal).toBe("0.999");
+      expect(getPurityEntry("GOLD", "gold-875").factorDecimal).toBe("0.875");
+      expect(getPurityEntry("GOLD", "gold-750").factorDecimal).toBe("0.75");
+      expect(getPurityEntry("SILVER", "silver-999").factorDecimal).toBe("0.999");
     });
 
     it("calculates exact per-gram price using calculatePurityGramPriceDecimal", () => {

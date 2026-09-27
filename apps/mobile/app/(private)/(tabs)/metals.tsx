@@ -22,7 +22,6 @@ export default function MyMetalsRoute(): React.JSX.Element {
   const {
     error,
     isLoading,
-    isOffline,
     onFilterChange,
     portfolio,
     rateProviderObservedAt,
@@ -81,7 +80,6 @@ export default function MyMetalsRoute(): React.JSX.Element {
           currency={preferredCurrency}
           error={error}
           isLoading={isLoading}
-          isOffline={isOffline}
           onFilterChange={onFilterChange}
           onHistoryPress={openHistory}
           onHoldingPress={openHolding}
