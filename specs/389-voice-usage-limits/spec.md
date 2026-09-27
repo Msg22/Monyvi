@@ -2,7 +2,7 @@
 
 **Feature Branch**: `389-voice-usage-limits`  
 **Created**: 2026-09-27  
-**Status**: Draft  
+**Status**: Approved  
 **Input**: User description: "Expand the voice-limit issue into the approved Add Transaction redesign: one Add Transaction page with Manual and Voice tabs, the existing manual form under Manual, the approved voice mockup under Voice, and the global Add Transaction FAB opening the same page with Manual selected; keep Gemini voice parsing unchanged, enforce daily voice limits, and remain ready for future subscription entitlements."
 
 ## Clarifications
@@ -18,7 +18,7 @@
 - Q: Which failed requests consume allowance? → A: Once provider execution actually starts, exactly one daily allowance unit is consumed for that logical request even if it later fails, times out, or returns invalid output. Requests rejected before provider start consume zero.
 - Q: Is the approved mockup now part of this feature scope? → A: Yes. The current app does not yet match it; this issue now includes implementing that approved Add Transaction / Voice redesign. Do not regenerate or materially alter the approved mockup without new product approval.
 - Q: How should the unified Add Transaction page behave? → A: It has Manual and Voice modes/tabs. Manual renders the existing manual transaction form; Voice renders the approved voice design. The global Add Transaction FAB opens this same page with Manual selected by default.
-- Q: What reset copy should appear in the UI? → A: The latest approved mockup wording is "Your limit resets tomorrow at the same time" (and equivalent Arabic), but this conflicts with the earlier approved local-calendar-day reset semantics. [NEEDS CLARIFICATION: should the authoritative reset remain next local midnight, or should the accounting semantics change to a rolling 24-hour/same-time reset so UI copy and behavior match?]
+- Q: What reset behavior and copy are authoritative? → A: The allowance resets at the start of the next calendar day in the user’s local timezone (local midnight). The UI copy must reflect that behavior and must not say "tomorrow at the same time".
 
 ## User Scenarios & Testing _(mandatory)_
 
@@ -139,7 +139,7 @@ As a Monyvi maintainer, I want the voice flow to consume a general entitlement r
 - **FR-014**: The client MUST expose a clear voice-usage-limited state before exhaustion and a distinct exhausted state after the authoritative daily allowance reaches zero.
 - **FR-015**: The client MUST refresh from server-authoritative availability after a voice attempt and whenever a server response shows its local allowance state is stale.
 - **FR-016**: The client SHOULD display remaining voice usage as a concrete count when the authoritative policy provides a numeric allowance; exact visual placement and styling require the normal Monyvi mockup approval workflow before UI implementation.
-- **FR-017**: When the allowance is exhausted, the client MUST prevent another known-exhausted provider attempt and communicate that voice becomes available again at the start of the next local calendar day according to the user's local timezone.
+- **FR-017**: When the allowance is exhausted, the client MUST prevent another known-exhausted provider attempt and communicate that voice becomes available again at the start of the next local calendar day according to the user's local timezone; user-facing copy MUST describe the next-day reset accurately and MUST NOT imply a rolling 24-hour or "same time tomorrow" reset.
 - **FR-018**: User-visible voice limit, remaining-usage, exhausted, and recovery copy MUST support English and Arabic.
 - **FR-019**: Voice allowance state shown for one authenticated user MUST NOT be shown to another user on the same device.
 - **FR-020**: The system MUST expose a provider-independent voice entitlement result that can represent at least the current free-launch policy and future plan-specific allowances.
@@ -235,5 +235,5 @@ As a Monyvi maintainer, I want the voice flow to consume a general entitlement r
 - Burst protection is a secondary abuse/retry safeguard and does not replace the daily allowance; the initial free-launch policy is 2 provider-starting logical requests per minute.
 - Future subscriptions will provide an entitlement policy rather than requiring provider-specific plan branching.
 - The allowance policy can be changed operationally without embedding commercial plan details in the mobile client.
-- "Daily" means a calendar day in the user's local timezone rather than Egypt time or UTC; timezone-source and anti-abuse mechanics for timezone changes are planning details and must preserve server-authoritative accounting.
+- "Daily" means a calendar day in the user's local timezone rather than Egypt time or UTC; the reset occurs at local midnight. Timezone-source and anti-abuse mechanics for timezone changes are planning details and must preserve server-authoritative accounting.
 - Exact paid subscription policies are intentionally deferred.
