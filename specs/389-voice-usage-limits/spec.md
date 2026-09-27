@@ -2,7 +2,7 @@
 
 **Feature Branch**: `389-voice-usage-limits`  
 **Created**: 2026-09-27  
-**Status**: Draft  
+**Status**: Approved  
 **Input**: User description: "Keep the current voice provider for the free-launch phase, enforce configurable daily voice usage limits on the server and reflect them in the client UI, and make the quota model ready for future subscription-plan entitlements without redesigning the voice flow."
 
 ## Clarifications
