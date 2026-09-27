@@ -67,18 +67,16 @@ test("fails closed on blank provider, model, service tier, or API key", () => {
 
 test("rejects unsupported providers and service tiers", () => {
   assert.throws(
-    () => readSmsAiProviderConfig(getEnvironment({ SMS_AI_PROVIDER: "gemini" })),
+    () =>
+      readSmsAiProviderConfig(getEnvironment({ SMS_AI_PROVIDER: "gemini" })),
     /Unsupported SMS AI provider/
   );
   assert.throws(
     () =>
-      readSmsAiProviderConfig(
-        getEnvironment({ SMS_AI_SERVICE_TIER: "turbo" })
-      ),
+      readSmsAiProviderConfig(getEnvironment({ SMS_AI_SERVICE_TIER: "turbo" })),
     /Unsupported SMS AI service tier/
   );
 });
-
 
 test("trims explicit configuration values before returning them", () => {
   assert.deepEqual(

@@ -81,9 +81,7 @@ function post(): Request {
   });
 }
 
-function createHandler(
-  responses: Response[]
-): {
+function createHandler(responses: Response[]): {
   readonly handler: (request: Request) => Promise<Response>;
   readonly getStartCount: () => number;
   readonly getFetchCount: () => number;

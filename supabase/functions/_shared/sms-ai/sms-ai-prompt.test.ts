@@ -91,7 +91,6 @@ test("builds the strict Monyvi response schema with the requested currencies", (
   assert.deepEqual(schema.required, ["transactions"]);
 });
 
-
 test("keeps the reusable prefix byte-identical while dynamic category and SMS tails differ", () => {
   const first = buildSmsAiProviderMessages({
     messages: [
@@ -103,8 +102,7 @@ test("keeps the reusable prefix byte-identical while dynamic category and SMS ta
         smsFingerprint: "fingerprint-a",
       },
     ],
-    categories:
-      "EXPENSE categories:\n  L1: shopping\n    L2: user_custom_a",
+    categories: "EXPENSE categories:\n  L1: shopping\n    L2: user_custom_a",
     supportedCurrencies: SUPPORTED_CURRENCIES,
   });
   const second = buildSmsAiProviderMessages({
@@ -117,8 +115,7 @@ test("keeps the reusable prefix byte-identical while dynamic category and SMS ta
         smsFingerprint: "fingerprint-b",
       },
     ],
-    categories:
-      "EXPENSE categories:\n  L1: shopping\n    L2: user_custom_b",
+    categories: "EXPENSE categories:\n  L1: shopping\n    L2: user_custom_b",
     supportedCurrencies: SUPPORTED_CURRENCIES,
   });
 
@@ -126,10 +123,11 @@ test("keeps the reusable prefix byte-identical while dynamic category and SMS ta
   assert.notEqual(first[1].content, second[1].content);
   assert.notEqual(first[2].content, second[2].content);
   assert.ok(first[0].content.indexOf("BUILT-IN CATEGORY TREE") >= 0);
-  assert.ok(first[1].content.indexOf("CURRENT ACCESSIBLE CATEGORY CONTEXT") >= 0);
+  assert.ok(
+    first[1].content.indexOf("CURRENT ACCESSIBLE CATEGORY CONTEXT") >= 0
+  );
   assert.ok(first[2].content.indexOf("MESSAGE ID: message-a") >= 0);
 });
-
 
 test("uses the default currency catalogue consistently when no currencies are supplied", () => {
   const stable = buildSmsAiStableSystemPrompt([]);
@@ -140,7 +138,10 @@ test("uses the default currency catalogue consistently when no currencies are su
   const transactionProperties = items.properties as Record<string, unknown>;
   const currency = transactionProperties.currency as Record<string, unknown>;
 
-  assert.match(stable, /SUPPORTED CURRENCIES:\nEGP, USD, EUR, GBP, SAR, AED, KWD/);
+  assert.match(
+    stable,
+    /SUPPORTED CURRENCIES:\nEGP, USD, EUR, GBP, SAR, AED, KWD/
+  );
   assert.deepEqual(currency.enum, [
     "EGP",
     "USD",

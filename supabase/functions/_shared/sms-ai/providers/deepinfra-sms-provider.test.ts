@@ -81,7 +81,10 @@ test("serializes the strict DeepInfra request without explicit cache controls", 
     (capturedInit?.headers as Record<string, string>).Authorization,
     "Bearer test-key"
   );
-  const body = JSON.parse(String(capturedInit?.body)) as Record<string, unknown>;
+  const body = JSON.parse(String(capturedInit?.body)) as Record<
+    string,
+    unknown
+  >;
   assert.equal(body.model, CONFIG.model);
   assert.equal(body.temperature, 0);
   assert.equal(body.max_tokens, 8192);
@@ -187,7 +190,10 @@ test("retries a network error but does not retry auth or malformed-request statu
       createTimeoutSignal: () => new AbortController().signal,
     });
 
-    await assert.rejects(() => provider.execute(REQUEST), /DeepInfra SMS request failed/);
+    await assert.rejects(
+      () => provider.execute(REQUEST),
+      /DeepInfra SMS request failed/
+    );
     assert.equal(calls, 1);
   }
 });
@@ -206,7 +212,10 @@ test("exhausts bounded retries after four transient attempts", async () => {
     createTimeoutSignal: () => new AbortController().signal,
   });
 
-  await assert.rejects(() => provider.execute(REQUEST), /DeepInfra SMS request failed/);
+  await assert.rejects(
+    () => provider.execute(REQUEST),
+    /DeepInfra SMS request failed/
+  );
   assert.equal(calls, 4);
   assert.deepEqual(delays, [2000, 4000, 8000]);
 });
@@ -219,7 +228,10 @@ test("fails closed on a malformed successful provider envelope", async () => {
     createTimeoutSignal: () => new AbortController().signal,
   });
 
-  await assert.rejects(() => provider.execute(REQUEST), /Invalid DeepInfra SMS response/);
+  await assert.rejects(
+    () => provider.execute(REQUEST),
+    /Invalid DeepInfra SMS response/
+  );
 });
 
 test("normalizes provider finish reasons without parsing financial semantics", async () => {
@@ -242,7 +254,6 @@ test("normalizes provider finish reasons without parsing financial semantics", a
     assert.equal(result.content, "not-json-by-design");
   }
 });
-
 
 test("logs only aggregate cache usage metadata and never request/provider-body content", async () => {
   const logs: Array<{
