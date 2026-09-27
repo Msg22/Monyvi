@@ -25,7 +25,8 @@ const CONFIG: SmsAiProviderConfig = {
 function providerResponse(
   content: string,
   finishReason = "stop",
-  status = 200
+  status = 200,
+  cachedTokens?: number
 ): Response {
   if (status !== 200) return new Response(null, { status });
   return new Response(
@@ -36,6 +37,16 @@ function providerResponse(
           message: { content },
         },
       ],
+      ...(cachedTokens === undefined
+        ? {}
+        : {
+            usage: {
+              prompt_tokens: 120,
+              completion_tokens: 40,
+              total_tokens: 160,
+              prompt_tokens_details: { cached_tokens: cachedTokens },
+            },
+          }),
     }),
     { status: 200, headers: { "content-type": "application/json" } }
   );
@@ -169,6 +180,37 @@ test("returns a valid parsed purchase through the provider-neutral executor", as
 
   assert.equal(response.status, 200);
   assert.equal((data.transactions as readonly unknown[]).length, 1);
+});
+
+test("cache hit and miss return the same validated financial result", async () => {
+  const transaction = {
+    messageId: "message-1",
+    amount: 100,
+    currency: "EGP",
+    type: "EXPENSE",
+    counterparty: "Carrefour",
+    date: "2026-07-20",
+    categorySystemName: "groceries",
+    confidenceScore: 0.95,
+    isTrusted: true,
+  };
+  const content = JSON.stringify({ transactions: [transaction] });
+  const results: Record<string, unknown>[] = [];
+
+  for (const cachedTokens of [0, 80]) {
+    const { handler } = createHandler([
+      providerResponse(content, "stop", 200, cachedTokens),
+    ]);
+    const response = await handler(post());
+    const data = await readJson(response);
+
+    assert.equal(response.status, 200);
+    assert.equal(data.completionStatus, "complete");
+    assert.deepEqual(data.transactions, [transaction]);
+    results.push(data);
+  }
+
+  assert.deepEqual(results[0], results[1]);
 });
 
 test("accepts a complete empty provider result", async () => {
