@@ -13,9 +13,9 @@
 - Q: Is the client-side limit authoritative? → A: No. The server is authoritative; the client reflects server state for UX and may proactively block known-exhausted usage.
 - Q: Does this feature implement subscriptions or paywalls? → A: No. It prepares a plan-aware entitlement boundary so a future subscriptions module can provide plan-specific allowances without redesigning voice.
 - Q: Should users know about the limit before exhausting it? → A: Yes. The voice UI must clearly communicate that usage is limited, expose remaining availability, and show a friendly exhausted state.
-- Q: What is the initial free-launch allowance and anti-abuse burst cap? → A: [NEEDS CLARIFICATION: choose the initial daily voice-parse allowance per authenticated user and the short-window provider-start burst cap.]
-- Q: When does a daily allowance reset? → A: [NEEDS CLARIFICATION: choose calendar/reset semantics and timezone basis for a "daily" voice allowance.]
-- Q: Which failed requests consume allowance? → A: [NEEDS CLARIFICATION: define whether provider-started requests consume allowance when parsing ultimately fails, times out, or returns invalid output.]
+- Q: What is the initial free-launch allowance and anti-abuse burst cap? → A: 5 provider-starting voice parses per authenticated user per local calendar day, with a burst cap of 2 provider-starting logical requests per minute.
+- Q: When does a daily allowance reset? → A: At the start of each calendar day in the user's local timezone; the policy is not Egypt-specific because Monyvi may be used outside Egypt.
+- Q: Which failed requests consume allowance? → A: Once provider execution actually starts, exactly one daily allowance unit is consumed for that logical request even if it later fails, times out, or returns invalid output. Requests rejected before provider start consume zero.
 
 ## User Scenarios & Testing _(mandatory)_
 
@@ -94,9 +94,9 @@ As a Monyvi maintainer, I want the voice flow to consume a general entitlement r
 ### Functional Requirements
 
 - **FR-001**: The current voice parsing provider, request/response transaction contract, and parsing behavior MUST remain unchanged by this feature.
-- **FR-002**: The system MUST enforce an authenticated-user-scoped daily voice allowance on the server for provider-starting voice requests.
+- **FR-002**: The system MUST enforce an authenticated-user-scoped daily allowance of 5 provider-starting voice parses per local calendar day.
 - **FR-003**: The daily allowance value MUST be configurable operational policy rather than permanently hardcoded into voice parsing behavior.
-- **FR-004**: The system MUST enforce a configurable short-window burst/rate limit for provider-starting voice requests.
+- **FR-004**: The system MUST enforce a configurable burst/rate limit whose initial free-launch value is no more than 2 provider-starting logical voice requests per minute per authenticated user.
 - **FR-005**: The server MUST be authoritative for voice availability, usage consumption, reset state, and exhausted decisions.
 - **FR-006**: The client MUST NOT be treated as a security, billing, or cost-control authority for voice usage.
 - **FR-007**: The system MUST reject an exhausted user's new provider-starting voice request before starting provider execution.
@@ -105,11 +105,11 @@ As a Monyvi maintainer, I want the voice flow to consume a general entitlement r
 - **FR-010**: Where the current request contract can identify one logical request across retries/replays, usage accounting MUST avoid consuming multiple daily units for that same logical provider-starting request.
 - **FR-011**: Existing voice authentication, AI consent, request validation, response validation, and user-scope protections MUST remain authoritative and MUST NOT be bypassed by the new quota flow.
 - **FR-012**: Requests refused before provider start because of authentication, consent, malformed input, exhausted allowance, burst limit, or unavailable authoritative quota state MUST NOT consume a provider-start allowance.
-- **FR-013**: [NEEDS CLARIFICATION: provider-started failure consumption rule] MUST be applied consistently to successful, failed, timed-out, malformed-output, and ambiguous provider outcomes.
+- **FR-013**: Once provider execution actually starts, the logical voice request MUST consume exactly one daily allowance unit even if the provider later fails, times out, returns malformed/invalid output, or the final outcome is otherwise unsuccessful; requests rejected before provider start MUST consume zero.
 - **FR-014**: The client MUST expose a clear voice-usage-limited state before exhaustion and a distinct exhausted state after the authoritative daily allowance reaches zero.
 - **FR-015**: The client MUST refresh from server-authoritative availability after a voice attempt and whenever a server response shows its local allowance state is stale.
 - **FR-016**: The client SHOULD display remaining voice usage as a concrete count when the authoritative policy provides a numeric allowance; exact visual placement and styling require the normal Monyvi mockup approval workflow before UI implementation.
-- **FR-017**: When the allowance is exhausted, the client MUST prevent another known-exhausted provider attempt and communicate when voice is expected to become available again according to the approved reset semantics.
+- **FR-017**: When the allowance is exhausted, the client MUST prevent another known-exhausted provider attempt and communicate that voice becomes available again at the start of the next local calendar day according to the user's local timezone.
 - **FR-018**: User-visible voice limit, remaining-usage, exhausted, and recovery copy MUST support English and Arabic.
 - **FR-019**: Voice allowance state shown for one authenticated user MUST NOT be shown to another user on the same device.
 - **FR-020**: The system MUST expose a provider-independent voice entitlement result that can represent at least the current free-launch policy and future plan-specific allowances.
@@ -167,8 +167,8 @@ As a Monyvi maintainer, I want the voice flow to consume a general entitlement r
 
 ### Measurable Outcomes
 
-- **SC-001**: 100% of exhausted daily-limit test cases reject new provider-starting voice requests before provider execution.
-- **SC-002**: 100% of burst-limit test cases above the configured threshold reject the excess provider-starting request before provider execution.
+- **SC-001**: 100% of test cases beyond the 5-per-local-calendar-day allowance reject new provider-starting voice requests before provider execution.
+- **SC-002**: 100% of test cases above 2 provider-starting logical voice requests per minute reject the excess provider-starting request before provider execution.
 - **SC-003**: 100% of pre-provider refusals covered by this feature consume zero daily provider-start allowance.
 - **SC-004**: Replaying the same identifiable logical voice request does not consume more than one daily allowance unit in 100% of idempotency test cases.
 - **SC-005**: Concurrent last-unit test cases never permit more provider-starting requests than the authoritative allowance permits.
@@ -185,7 +185,8 @@ As a Monyvi maintainer, I want the voice flow to consume a general entitlement r
 - Users are authenticated when using voice entry; guest voice usage is not introduced.
 - The current voice provider is retained for this feature.
 - The client will show a concrete remaining count when a numeric daily entitlement applies; exact composition awaits approved mockups.
-- Burst protection is a secondary abuse/retry safeguard and does not replace the daily allowance.
+- Burst protection is a secondary abuse/retry safeguard and does not replace the daily allowance; the initial free-launch policy is 2 provider-starting logical requests per minute.
 - Future subscriptions will provide an entitlement policy rather than requiring provider-specific plan branching.
 - The allowance policy can be changed operationally without embedding commercial plan details in the mobile client.
+- "Daily" means a calendar day in the user's local timezone rather than Egypt time or UTC; timezone-source and anti-abuse mechanics for timezone changes are planning details and must preserve server-authoritative accounting.
 - Exact paid subscription policies are intentionally deferred.
