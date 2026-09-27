@@ -1,9 +1,9 @@
-# Feature Specification: Voice Usage Limits and Subscription-Ready Entitlements
+# Feature Specification: Add Transaction Voice Redesign, Usage Limits and Subscription-Ready Entitlements
 
 **Feature Branch**: `389-voice-usage-limits`  
 **Created**: 2026-09-27  
-**Status**: Approved  
-**Input**: User description: "Keep the current voice provider for the free-launch phase, enforce configurable daily voice usage limits on the server and reflect them in the client UI, and make the quota model ready for future subscription-plan entitlements without redesigning the voice flow."
+**Status**: Draft  
+**Input**: User description: "Expand the voice-limit issue into the approved Add Transaction redesign: one Add Transaction page with Manual and Voice tabs, the existing manual form under Manual, the approved voice mockup under Voice, and the global Add Transaction FAB opening the same page with Manual selected; keep Gemini voice parsing unchanged, enforce daily voice limits, and remain ready for future subscription entitlements."
 
 ## Clarifications
 
@@ -16,8 +16,31 @@
 - Q: What is the initial free-launch allowance and anti-abuse burst cap? → A: 5 provider-starting voice parses per authenticated user per local calendar day, with a burst cap of 2 provider-starting logical requests per minute.
 - Q: When does a daily allowance reset? → A: At the start of each calendar day in the user's local timezone; the policy is not Egypt-specific because Monyvi may be used outside Egypt.
 - Q: Which failed requests consume allowance? → A: Once provider execution actually starts, exactly one daily allowance unit is consumed for that logical request even if it later fails, times out, or returns invalid output. Requests rejected before provider start consume zero.
+- Q: Is the approved mockup now part of this feature scope? → A: Yes. The current app does not yet match it; this issue now includes implementing that approved Add Transaction / Voice redesign. Do not regenerate or materially alter the approved mockup without new product approval.
+- Q: How should the unified Add Transaction page behave? → A: It has Manual and Voice modes/tabs. Manual renders the existing manual transaction form; Voice renders the approved voice design. The global Add Transaction FAB opens this same page with Manual selected by default.
+- Q: What reset copy should appear in the UI? → A: The latest approved mockup wording is "Your limit resets tomorrow at the same time" (and equivalent Arabic), but this conflicts with the earlier approved local-calendar-day reset semantics. [NEEDS CLARIFICATION: should the authoritative reset remain next local midnight, or should the accounting semantics change to a rolling 24-hour/same-time reset so UI copy and behavior match?]
 
 ## User Scenarios & Testing _(mandatory)_
+
+### User Story 0 - Use One Unified Add Transaction Experience (Priority: P1)
+
+As a Monyvi user, I want Manual and Voice transaction entry in one Add Transaction page, so that I can switch entry methods without navigating between unrelated screens.
+
+**Why this priority**: The approved mockup is now the target product experience for this issue, and the global Add Transaction entry point must lead to the redesigned page consistently.
+
+**Independent Test**: Open Add Transaction from the global FAB, verify Manual is selected and the existing transaction form is shown, switch to Voice and verify the approved voice experience is shown, then switch back without changing the underlying manual/voice transaction contracts.
+
+**Acceptance Scenarios**:
+
+1. **Given** the user taps the global Add Transaction FAB, **When** the Add Transaction page opens, **Then** the unified page is shown with **Manual** selected by default.
+2. **Given** Manual is selected, **When** the page renders, **Then** the existing manual transaction form and its current submission behavior are presented inside the redesigned page.
+3. **Given** the user switches to Voice, **When** Voice becomes active, **Then** the page matches the already-approved voice mockup and exposes the current voice transaction flow plus allowance state.
+4. **Given** the user switches between Manual and Voice, **When** no submission has occurred, **Then** switching modes does not unexpectedly destroy unrelated transaction-entry state; exact retention behavior must follow current form/voice state contracts established during planning.
+5. **Given** the app is in Arabic, **When** the unified page renders, **Then** the tab order, navigation affordances, layout direction, and copy are RTL-correct while preserving the approved design.
+6. **Given** the app is in English, **When** the unified page renders, **Then** the same approved design is presented with correct LTR layout.
+7. **Given** the approved mockup differs from today's existing screens, **When** implementation is reviewed, **Then** the approved mockup is treated as the visual target rather than the current screen as the target.
+
+---
 
 ### User Story 1 - Understand and Use the Daily Voice Allowance (Priority: P1)
 
@@ -75,6 +98,13 @@ As a Monyvi maintainer, I want the voice flow to consume a general entitlement r
 
 ### Edge Cases
 
+- The user partially fills the Manual form, switches to Voice, then returns to Manual.
+- The user records/starts Voice, then attempts to switch to Manual while recording or processing.
+- The global FAB opens Add Transaction while a previous Add Transaction route instance/state exists.
+- The Voice mode is exhausted but Manual entry remains fully available.
+- The app language changes between English and Arabic while the redesigned page is reachable.
+- The approved mockup spacing/layout conflicts with a small screen or accessibility text scaling; behavior must preserve semantics without silently redesigning the approved composition.
+
 - A request reaches the server at the exact daily-reset boundary.
 - Two requests arrive concurrently when only one daily allowance unit remains.
 - Multiple devices for the same authenticated user submit voice requests at nearly the same time.
@@ -120,6 +150,15 @@ As a Monyvi maintainer, I want the voice flow to consume a general entitlement r
 - **FR-025**: Operational limit changes MUST NOT require a mobile release solely to adjust the free-launch daily allowance or burst cap.
 - **FR-026**: Voice usage/entitlement failures MUST fail closed for new provider-starting requests and MUST NOT silently bypass the authoritative limit.
 - **FR-027**: Usage/availability telemetry MUST be privacy-safe and MUST NOT expose raw voice audio, transcript text, credentials, or financial transaction content solely for quota accounting.
+- **FR-028**: The feature MUST implement the already-approved Add Transaction / Voice mockup as the target user-facing redesign; it MUST NOT generate, substitute, or materially redesign that approved mockup without new product approval.
+- **FR-029**: The app MUST expose one unified Add Transaction page containing Manual and Voice modes/tabs.
+- **FR-030**: Manual mode MUST render the existing manual transaction form and preserve its existing transaction-entry/submission behavior.
+- **FR-031**: Voice mode MUST render the approved voice design and preserve the current voice provider/parsing transaction contract while integrating allowance/remaining/exhausted states.
+- **FR-032**: The global Add Transaction FAB MUST navigate to the unified Add Transaction page with Manual selected by default.
+- **FR-033**: Switching between Manual and Voice MUST use one page/shell and MUST NOT require separate unrelated navigation destinations.
+- **FR-034**: Manual entry MUST remain available when Voice is exhausted, burst-limited, or temporarily unavailable.
+- **FR-035**: The redesigned Add Transaction page MUST support English/LTR and Arabic/RTL behavior consistent with the approved mockup and existing application localization standards.
+- **FR-036**: Any implementation-specific handling of mode switching during active recording/processing or partially completed manual entry MUST preserve current transaction safety and MUST be documented in planning before implementation.
 
 ### Key Entities
 
@@ -133,6 +172,10 @@ As a Monyvi maintainer, I want the voice flow to consume a general entitlement r
 
 ### In Scope
 
+- Implementation of the already-approved Add Transaction / Voice mockup as a new unified Manual/Voice transaction-entry page.
+- Routing the global Add Transaction FAB to the unified page with Manual selected by default.
+- Reusing the existing manual transaction form inside Manual mode.
+- Reusing the existing voice parsing contract inside the approved Voice redesign.
 - Server-authoritative daily per-user voice usage limits.
 - Configurable free-launch allowance and burst protection.
 - Idempotent usage accounting where the existing request identity supports it.
@@ -153,14 +196,14 @@ As a Monyvi maintainer, I want the voice flow to consume a general entitlement r
 - Changing the voice transaction schema or transaction-review behavior.
 - Unrelated SMS AI provider work.
 - Database or sync changes not strictly required by the approved voice usage/accounting contract.
-- Any UI redesign beyond the voice-limit states required by this feature.
+- Any additional UI redesign beyond the already-approved Add Transaction / Voice mockup and the states required to make that approved design functional.
 
 ## Dependencies
 
 - Existing voice authentication, AI consent, request validation, structured transaction parsing, and response validation remain authoritative.
 - Current voice parsing continues using its existing provider until a separately approved provider-migration feature changes it.
 - Existing user identity/session behavior remains authoritative for allowance ownership.
-- Any meaningful visible UI change requires approved mockups and binding metadata before implementation.
+- The approved Add Transaction / Voice mockup from this discussion is the binding visual target for this feature; implementation planning must preserve it and record the repository binding metadata required by Monyvi's UI workflow.
 - Future subscriptions work will own paid plan definitions, commercial rules, and the source that supplies plan-specific entitlements.
 
 ## Success Criteria _(mandatory)_
@@ -178,13 +221,17 @@ As a Monyvi maintainer, I want the voice flow to consume a general entitlement r
 - **SC-009**: A controlled alternate entitlement profile with a different allowance can be applied without changing the voice transaction parsing contract.
 - **SC-010**: Adjusting the free-launch daily allowance or burst cap can be performed operationally without requiring a new mobile application release.
 - **SC-011**: Routine quota/accounting QA records no raw audio, transcript, provider credential, or financial content in usage telemetry.
+- **SC-012**: 100% of FAB-entry navigation tests open the unified Add Transaction page with Manual selected and the existing manual form available.
+- **SC-013**: Manual-to-Voice and Voice-to-Manual switching tests use the same Add Transaction page and preserve the existing manual/voice transaction contracts.
+- **SC-014**: Approved-mockup review confirms the implemented Voice mode and unified Add Transaction shell match the approved design in English/LTR and Arabic/RTL, subject only to explicitly approved accessibility/responsive adaptations.
+- **SC-015**: Exhausting or temporarily blocking Voice never prevents the user from switching to and using Manual entry.
 
 ## Assumptions
 
 - Monyvi remains in a free-launch/pre-subscription phase while this feature ships.
 - Users are authenticated when using voice entry; guest voice usage is not introduced.
 - The current voice provider is retained for this feature.
-- The client will show a concrete remaining count when a numeric daily entitlement applies; exact composition awaits approved mockups.
+- The client will show the concrete remaining count and exhausted state using the already-approved Add Transaction / Voice mockup; no new mockup should be generated unless the product owner explicitly requests a redesign.
 - Burst protection is a secondary abuse/retry safeguard and does not replace the daily allowance; the initial free-launch policy is 2 provider-starting logical requests per minute.
 - Future subscriptions will provide an entitlement policy rather than requiring provider-specific plan branching.
 - The allowance policy can be changed operationally without embedding commercial plan details in the mobile client.
