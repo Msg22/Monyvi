@@ -3,8 +3,8 @@
 Use this workflow for a large Monyvi module, epic, redesign, migration, or
 cross-layer change that benefits from specialist ownership and parallel work.
 
-OpenCode is an approved execution pool only after explicit user opt-in and
-only when every dispatch loads
+OpenCode is an approved execution pool only after explicit user opt-in and only
+when every dispatch loads
 [`opencode-team-delegation.md`](./opencode-team-delegation.md), which owns
 OpenCode runtime and usage policy, model selection, limits, fallback, and
 session rules. When Mohamed explicitly requests a Codex-planned implementation
@@ -119,6 +119,9 @@ Before forming team:
 7. Separate facts, assumptions, decisions, defects, and product ideas. Keep
    ideas outside defect order unless user requests planning.
 8. Record deliverables and unauthorized actions.
+9. Classify each task by remote versus local/device requirements. Check the
+   relevant pools' runtime, authentication, tools, and ability to start the
+   task; record unavailable pools without making a proactive quota inquiry.
 
 For parallel implementation:
 
@@ -189,7 +192,9 @@ instructions govern execution.
 ## 6. Model And Effort
 
 Use lowest-cost model and effort safe for risk and ambiguity. Prefer inherited
-defaults unless supported overrides improve outcome.
+defaults unless supported overrides improve outcome. The following Codex model
+examples apply only when a native subagent is eligible under the external-pool
+fallback rule below; they do not make native subagents the default team.
 
 | Work                                                                                     | Current example when available | Effort         |
 | ---------------------------------------------------------------------------------------- | ------------------------------ | -------------- |
@@ -203,53 +208,84 @@ when user explicitly requests one.
 
 ### Execution Pools
 
-The approved execution pools are:
+Form the execution team from these three primary pools:
 
-- Native Codex subagents;
-- Normal ChatGPT;
-- OpenCode (runtime and usage policy in
-  [`opencode-team-delegation.md`](./opencode-team-delegation.md));
-- Gemini (via the Antigravity CLI `agy`).
+1. Normal ChatGPT for work reachable from published remote state, including
+   strong reasoning, substantial refactoring and implementation, tests, and
+   documentation. Task size or reasoning difficulty alone does not disqualify
+   it; its limitation is lack of access to this machine's local state. It works
+   in a cloud/remote environment and cannot run commands against this machine's
+   checkout, device, or unpublished files. A later need for local verification
+   does not disqualify it as implementation owner; assign local verification and
+   integration as dependent tasks after its work is reviewable.
+2. Antigravity CLI (`agy`) using an available Gemini or Claude model. Verify the
+   exact model identifier at dispatch; requested examples such as Gemini 3.8
+   Flash or Claude 4.6 are preferences, not proof those models are installed.
+3. OpenCode using available free or paid models (runtime and usage policy in
+   [`opencode-team-delegation.md`](./opencode-team-delegation.md)).
 
-Select the worker by required context, demonstrated capability, risk, cost, and
-current availability. Verify runtime, authentication, exact model identifier,
-tools, and required permissions before dispatch; a configured name does not
-prove availability.
+Native Codex subagents are a fallback, not a routine fourth pool. Use one for an
+assigned task only after checking the three primary pools and recording why none
+can start that task safely and capably now: unavailable runtime or auth, a
+reported limit during attempted work, missing required tools/context or
+permissions, or inability to access the needed local/device state. Do not use
+native subagents merely to fill concurrency slots or because implementation will
+need later local checks. Recheck the primary pools before each new native
+assignment. A native subagent may still perform trusted local verification,
+integration, or independent review when no primary pool can perform that
+specific task; this does not transfer implementation ownership away from an
+external worker.
+
+Do not inspect, estimate, or route work by remaining model quota before
+assignment. Verify that the chosen runtime, authentication, exact model, tools,
+and permissions work, then require the first non-error response before treating
+the worker as live. If a Gemini, Claude, OpenCode, or Normal ChatGPT worker
+reports a quota/rate limit during work, stop that writer, preserve its session
+and partial artifacts, and hand the unfinished task to another capable model.
+Carry forward the task brief, branch/head, completed changes, verification,
+remaining work, and limit error. Confirm the former writer is stopped before
+another writer uses its worktree; use an isolated branch/worktree when writers
+remain concurrent. Update the ownership ledger and verify the successor's first
+response. Do not repeatedly retry the limited model or discard its work. Never
+print credentials or tokens.
+
+Select among ready primary pools by required context, demonstrated capability,
+risk, cost, and ownership safety. Use OpenCode free models for small tasks,
+routine verification, unit tests, and medium implementation they can handle.
+Reserve OpenCode paid models for medium or large tasks that need strong
+reasoning. Multiple sessions across or within pools are allowed when writers
+have isolated branches/worktrees and exclusive artifacts. Preserve a limited
+session for possible later resumption; never add a concurrent writer to its
+worktree.
 
 OpenCode is enabled only by explicit user opt-in, never by configuration alone.
 Every OpenCode dispatch must load
 [`opencode-team-delegation.md`](./opencode-team-delegation.md); that workflow
-owns model selection, Go limits, usage checks, fallback, and session discipline
-without re-stating team ownership, DAG, gates, or review rules from this file.
+owns model selection, limit-response fallback, and session discipline without
+re-stating team ownership, DAG, gates, or review rules from this file.
 
-Gemini through the Antigravity CLI (`agy`) is a named optional execution pool
-subject to the same external-provider opt-in and data-sharing boundary rules.
-Per task, reuse one visible persistent conversation; verify the `agy` path,
-authentication, exact model, permissions, and quota before dispatch; and when
+Antigravity (`agy`) is a primary execution pool for available Gemini and Claude
+models, subject to the same external-provider opt-in and data-sharing boundary
+rules. Per task, reuse one visible persistent conversation; verify the `agy`
+path, authentication, exact model, and permissions before dispatch; and when
 full repository permissions are authorized, run with
 `--dangerously-skip-permissions --mode accept-edits`. Preserve work and resume
-the same conversation after a quota reset. Never create a concurrent replacement
-writer in the same worktree, and independently verify all output. Do not invent
-model limits.
+the same conversation after a reported limit clears when safe. Otherwise hand
+off unfinished work under the limit-response rule above. Never create a
+concurrent replacement writer in the same worktree, and independently verify all
+output.
 
 #### Executor Preference And ChatGPT Remote Readiness
 
-Apply this preference to execution ownership after authorization, capability,
-and safety checks. It does not replace independent review, trusted-native
-verification, integration, or merge control:
-
-1. **Normal ChatGPT first** when the complete task can be executed from
-   published remote state and every requested remote mutation is explicitly
-   authorized.
-2. **Native Codex subagents only when required** by unpublished local state,
-   device/runtime access, trusted-native verification, integration, or merge
-   control.
-
-This ordering governs the preferred execution owner. It does not override
-capability, ownership safety, or final authority. A trusted-native worker may
-still verify or integrate externally owned work without becoming that task's
-implementation owner. All external output requires independent verification, and
-the lead retains merge authority.
+Prefer Normal ChatGPT for a complete remote implementation task when published
+state and authorization support it. Separate later local verification or
+integration into dependent team tasks rather than moving the implementation to a
+native subagent. When Normal ChatGPT cannot safely start, consider a ready
+Antigravity or OpenCode session before the native fallback. For work requiring
+unpublished local state, device/runtime access, or local verification, consider
+Antigravity and OpenCode local sessions first. Keep independent review, trusted
+verification, integration, and merge control with the lead; verify all external
+output before acceptance.
 
 ##### Remote Context References And Volatile Handoff Facts
 
@@ -364,8 +400,9 @@ ownership/conflict state is unsafe, a pre-PR branch unexpectedly exists, the
 selected topology no longer matches remote state, required local-only evidence
 is unavailable, or the requested mutation is not explicitly authorized.
 
-Do not use workload quotas. Select the smallest capable team based on the task,
-available context, ownership boundaries, and current authorization.
+Do not impose arbitrary task-count quotas on workers or precheck provider usage
+limits. Select the smallest capable team based on the task, available context,
+ownership boundaries, and current authorization.
 
 Normal ChatGPT may own complex remote coding, tests, documentation, GitHub
 issues, branches, and PRs when explicit user authorization covers the mutation,
@@ -375,7 +412,9 @@ independently verifies the result, and retains merge control. Never ask Normal
 ChatGPT to review or change local work that has not been pushed.
 
 Before first dispatch to each external provider/model pool in a task, obtain
-explicit user opt-in and record the approved data-sharing boundary.
+explicit user opt-in and record the approved data-sharing boundary. A user's
+explicit request to form a team from the named pools counts as opt-in for those
+pools within the stated task and data boundary; do not infer broader access.
 Authorization may cover later bounded dispatches only while provider, model
 pool, data class, and purpose remain inside that recorded boundary.
 Auto-triggering team-led workflow never grants third-party disclosure.
@@ -450,19 +489,21 @@ context that preserves correctness:
 
 ## 8. Concurrency And Waves
 
-Inspect live agents before assignment.
+Inspect live agents and the remote/local capability and start readiness of the
+primary pools before assignment; do not run quota prechecks.
 
 ```text
 free worker capacity = maximum concurrency - currently active agents
 new assignments = min(free worker capacity, ready independent items, ownership-safe items)
 ```
 
-Native slot capacity is not the execution target. Fill only ready,
-ownership-safe work and keep independent review capacity for high-risk work.
-Multiple writers are allowed only when task/worktree ownership, artifact/file
-ownership, readable/writable boundaries, state, and merge dependencies are
-genuinely independent. One writer owns each artifact per wave; stop affected
-lanes immediately when overlap is discovered.
+Native slot capacity is not the execution target. First use ready primary-pool
+sessions for ownership-safe work; use a native slot only under the fallback rule
+in Section 6. Keep independent review capacity for high-risk work. Multiple
+writers are allowed only when task/worktree ownership, artifact/file ownership,
+readable/writable boundaries, state, and merge dependencies are genuinely
+independent. One writer owns each artifact per wave; stop affected lanes
+immediately when overlap is discovered.
 
 Reuse a completed worker through follow-up when context and skills fit the next
 task. Continue a recoverable external task in its same persistent session. Spawn

@@ -21,7 +21,9 @@ Start by stating:
 - which specialized workflows also govern the task;
 - current authorization boundary;
 - roster, ownership, dependencies, model/effort rationale, and active
-  concurrency.
+  concurrency;
+- remote/local capability and start-readiness of Normal ChatGPT, Antigravity,
+  and OpenCode, plus the reason for any native-subagent fallback.
 
 This skill routes orchestration only. Do not duplicate or replace
 `sprint-issue.md`, Speckit, `$source-command-module-audit`, TDD, design,
