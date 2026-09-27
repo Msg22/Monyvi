@@ -197,7 +197,7 @@ components:
             $ref: "#/components/schemas/ParsedTransaction"
         completionStatus:
           type: string
-          const: complete
+          enum: [complete, truncated, safety_stopped, failed]
         negativeFingerprints:
           type: array
           items:
@@ -243,4 +243,4 @@ components:
             type: string
         sizeScope:
           type: string
-          enum: [candidate, request]
+          enum: [candidate, batch, shared_request]

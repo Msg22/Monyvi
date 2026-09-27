@@ -161,9 +161,163 @@ export function buildSmsAiDynamicCategoryContext(categories: string): string {
     return "";
   }
 
-  return `CURRENT ACCESSIBLE CATEGORY CONTEXT:
-The following request-scoped category context may include future user-specific custom categories. It supplements the built-in category tree above and must not change any other parsing rule.
+  const builtInNames = extractSmsCategoryNames(BUILT_IN_SMS_CATEGORY_TREE);
+  const requestNames = extractSmsCategoryNames(trimmed);
+  if (requestNames.size === 0) {
+    return `CURRENT ACCESSIBLE CATEGORY CONTEXT:
+The raw request-scoped category tree below is authoritative. Choose only categories listed in it.
 ${trimmed}`;
+  }
+
+  const missingNames = [...builtInNames]
+    .filter((name) => !requestNames.has(name))
+    .sort();
+  const customNames = [...requestNames]
+    .filter((name) => !builtInNames.has(name))
+    .sort();
+  if (missingNames.length === 0 && customNames.length === 0) {
+    return "";
+  }
+
+  const sections = [
+    "CURRENT ACCESSIBLE CATEGORY CONTEXT:",
+    missingNames.length > 0
+      ? "The request-scoped list below is authoritative. Choose from the stable built-in tree above EXCEPT the names in the Not accessible list below, plus the custom categories below."
+      : "The request-scoped list below is authoritative. All stable built-in categories remain accessible, plus the custom categories below.",
+  ];
+  if (missingNames.length > 0) {
+    sections.push(
+      `Not accessible in this request (do NOT choose): ${missingNames.join(", ")}`
+    );
+  }
+  const customStructureLines = extractCustomStructureLines(
+    trimmed,
+    new Set(customNames)
+  );
+  if (customStructureLines.length > 0) {
+    sections.push(
+      `Additional custom categories accessible in this request:\n${customStructureLines.join("\n")}`
+    );
+  } else if (customNames.length > 0) {
+    sections.push(
+      `Additional custom categories accessible in this request: ${customNames.join(", ")}`
+    );
+  }
+  return sections.join("\n");
+}
+
+function extractSmsCategoryNames(value: string): Set<string> {
+  const names = new Set<string>();
+  for (const line of value.split("\n")) {
+    const match = line.match(/L[12]:\s*(.+)$/);
+    if (!match) {
+      continue;
+    }
+    for (const name of splitSmsCategoryNames(match[1])) {
+      names.add(name);
+    }
+  }
+  return names;
+}
+
+function splitSmsCategoryNames(value: string): readonly string[] {
+  return value
+    .split(/[,\s]+/)
+    .map((token) => token.trim())
+    .filter((token) => token.length > 0);
+}
+
+function extractCustomStructureLines(
+  categories: string,
+  customNames: ReadonlySet<string>
+): readonly string[] {
+  const output: string[] = [];
+  const state: CustomStructureState = {
+    pendingHeader: null,
+    parentCandidate: null,
+    emittedParent: null,
+  };
+
+  for (const line of categories.split("\n")) {
+    const trimmedLine = line.trim();
+    if (!trimmedLine) {
+      continue;
+    }
+    if (/^(EXPENSE|INCOME)\b/i.test(trimmedLine)) {
+      state.pendingHeader = trimmedLine;
+      state.parentCandidate = null;
+      state.emittedParent = null;
+      continue;
+    }
+    const l1Match = line.match(/L1:\s*(.+)$/);
+    if (l1Match) {
+      const customInLine = customNamesInLine(l1Match[1], customNames);
+      if (customInLine.length > 0) {
+        appendCustomL1(output, state, customInLine);
+      } else {
+        state.parentCandidate = trimmedLine;
+      }
+      continue;
+    }
+    const l2Match = line.match(/L2:\s*(.+)$/);
+    if (l2Match) {
+      const customInLine = customNamesInLine(l2Match[1], customNames);
+      if (customInLine.length > 0) {
+        appendCustomL2(output, state, customInLine);
+      }
+    }
+  }
+  return output;
+}
+
+interface CustomStructureState {
+  pendingHeader: string | null;
+  parentCandidate: string | null;
+  emittedParent: string | null;
+}
+
+function flushCustomSectionHeader(
+  output: string[],
+  state: CustomStructureState
+): void {
+  if (state.pendingHeader) {
+    output.push(state.pendingHeader);
+    state.pendingHeader = null;
+  }
+}
+
+function customNamesInLine(
+  lineBody: string,
+  customNames: ReadonlySet<string>
+): readonly string[] {
+  return splitSmsCategoryNames(lineBody).filter((name) =>
+    customNames.has(name)
+  );
+}
+
+function appendCustomL1(
+  output: string[],
+  state: CustomStructureState,
+  customInLine: readonly string[]
+): void {
+  flushCustomSectionHeader(output, state);
+  const customL1 = `  L1: ${customInLine.join(", ")}`;
+  output.push(customL1);
+  state.parentCandidate = customL1;
+  state.emittedParent = customL1;
+}
+
+function appendCustomL2(
+  output: string[],
+  state: CustomStructureState,
+  customInLine: readonly string[]
+): void {
+  flushCustomSectionHeader(output, state);
+  if (state.parentCandidate && state.parentCandidate !== state.emittedParent) {
+    output.push(state.parentCandidate);
+    state.emittedParent = state.parentCandidate;
+  }
+  output.push(`    L2: ${customInLine.join(", ")}`);
 }
 
 export function buildSmsAiResponseSchema(
