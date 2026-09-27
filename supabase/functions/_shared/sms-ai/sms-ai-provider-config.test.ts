@@ -78,3 +78,32 @@ test("rejects unsupported providers and service tiers", () => {
     /Unsupported SMS AI service tier/
   );
 });
+
+
+test("trims explicit configuration values before returning them", () => {
+  assert.deepEqual(
+    readSmsAiProviderConfig(
+      getEnvironment({
+        SMS_AI_PROVIDER: "  deepinfra  ",
+        SMS_AI_MODEL: "  deepseek-ai/DeepSeek-V4-Flash-0731  ",
+        SMS_AI_SERVICE_TIER: "  priority  ",
+        DEEPINFRA_API_KEY: "  test-secret  ",
+      })
+    ),
+    {
+      provider: "deepinfra",
+      model: "deepseek-ai/DeepSeek-V4-Flash-0731",
+      serviceTier: "priority",
+      apiKey: "test-secret",
+    }
+  );
+});
+
+test("treats the configured model as an opaque non-empty deployment value", () => {
+  assert.equal(
+    readSmsAiProviderConfig(
+      getEnvironment({ SMS_AI_MODEL: "deepseek-ai/future-approved-model" })
+    ).model,
+    "deepseek-ai/future-approved-model"
+  );
+});
