@@ -446,15 +446,19 @@ export function ProfileNotificationsSection({
 export function DevelopmentToolsSettingsSection({
   t,
   isVisible,
+  isStartupQaVisible,
   chevronColor,
   onQaSmsPatternIntakePress,
+  onStartupQaPress,
 }: {
   readonly t: TranslateFn;
   readonly isVisible: boolean;
+  readonly isStartupQaVisible: boolean;
   readonly chevronColor: string;
   readonly onQaSmsPatternIntakePress: () => void;
+  readonly onStartupQaPress: () => void;
 }): React.JSX.Element | null {
-  if (!isVisible) {
+  if (!isVisible && !isStartupQaVisible) {
     return null;
   }
 
@@ -462,27 +466,53 @@ export function DevelopmentToolsSettingsSection({
     <View className="mb-8">
       <SectionLabel>{t("development_tools")}</SectionLabel>
 
-      <TouchableOpacity
-        testID="qa-sms-pattern-intake-settings-link"
-        onPress={onQaSmsPatternIntakePress}
-        className="flex-row items-center justify-between p-4 rounded-2xl bg-white dark:bg-slate-800"
-      >
-        <View className="flex-1 flex-row items-center gap-3">
-          <SettingsIconTile
-            name="flask-outline"
-            className="bg-teal-600 dark:bg-teal-500"
-          />
-          <View className="flex-1">
-            <Text className="text-base font-medium text-slate-900 dark:text-slate-50">
-              {t("qa_sms_pattern_intake")}
-            </Text>
-            <Text className="text-xs text-slate-500 dark:text-slate-400">
-              {t("qa_sms_pattern_intake_description")}
-            </Text>
+      {isVisible && (
+        <TouchableOpacity
+          testID="qa-sms-pattern-intake-settings-link"
+          onPress={onQaSmsPatternIntakePress}
+          className="flex-row items-center justify-between p-4 rounded-2xl bg-white dark:bg-slate-800"
+        >
+          <View className="flex-1 flex-row items-center gap-3">
+            <SettingsIconTile
+              name="flask-outline"
+              className="bg-teal-600 dark:bg-teal-500"
+            />
+            <View className="flex-1">
+              <Text className="text-base font-medium text-slate-900 dark:text-slate-50">
+                {t("qa_sms_pattern_intake")}
+              </Text>
+              <Text className="text-xs text-slate-500 dark:text-slate-400">
+                {t("qa_sms_pattern_intake_description")}
+              </Text>
+            </View>
           </View>
-        </View>
-        <Ionicons name="chevron-forward" size={20} color={chevronColor} />
-      </TouchableOpacity>
+          <Ionicons name="chevron-forward" size={20} color={chevronColor} />
+        </TouchableOpacity>
+      )}
+
+      {isStartupQaVisible && (
+        <TouchableOpacity
+          testID="startup-qa-rates-settings-link"
+          onPress={onStartupQaPress}
+          className="mt-2 flex-row items-center justify-between rounded-2xl bg-white p-4 dark:bg-slate-800"
+        >
+          <View className="flex-1 flex-row items-center gap-3">
+            <SettingsIconTile
+              name="refresh-outline"
+              className="bg-teal-600 dark:bg-teal-500"
+            />
+            <View className="flex-1">
+              <Text className="text-base font-medium text-slate-900 dark:text-slate-50">
+                {t("startup_qa_rates")}
+              </Text>
+              <Text className="text-xs text-slate-500 dark:text-slate-400">
+                {t("startup_qa_rates_description")}
+              </Text>
+            </View>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={chevronColor} />
+        </TouchableOpacity>
+      )}
     </View>
   );
 }

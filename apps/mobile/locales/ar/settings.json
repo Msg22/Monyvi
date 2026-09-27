@@ -70,5 +70,7 @@
   "ai_privacy_details": "تفاصيل خصوصية الذكاء الاصطناعي",
   "development_tools": "أدوات التطوير",
   "qa_sms_pattern_intake": "إدخال أنماط رسائل الاختبار",
-  "qa_sms_pattern_intake_description": "راجع ونقّح نماذج الرسائل الموثقة"
+  "qa_sms_pattern_intake_description": "راجع ونقّح نماذج الرسائل الموثقة",
+  "startup_qa_rates": "أسعار السوق المحفوظة",
+  "startup_qa_rates_description": "امسح الأسعار المحفوظة على هذا الجهاز"
 }
