@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   createParseSmsHandler,
+  type ExecuteSmsProviderInput,
   type ParseSmsHandlerDependencies,
   type SmsProviderExecutionResult,
 } from "./parse-sms-handler.ts";
@@ -1192,4 +1193,98 @@ test("supports a future raw SMS adapter without changing handler safeguards or p
   assert.equal("provider" in data, false);
   assert.equal("model" in data, false);
   assert.deepEqual(data.transactions, []);
+});
+
+
+test("propagates provider-independent category and currency context unchanged", async () => {
+  const state = createState();
+  const fixedPromptCurrencies: string[][] = [];
+  const responseSchemaCurrencies: string[][] = [];
+  const categoryInputs: string[] = [];
+  let providerInput: ExecuteSmsProviderInput | undefined;
+  const categories =
+    "EXPENSE categories (return the system_name value):\n  L1: shopping";
+  const supportedCurrencies = ["EGP", "USD"];
+
+  const handler = createParseSmsHandler(
+    createDependencies(state, {
+      buildFixedPrompt: (currencies) => {
+        fixedPromptCurrencies.push([...currencies]);
+        return "stable prompt";
+      },
+      buildCategoryContext: (value) => {
+        categoryInputs.push(value);
+        return `dynamic:${value}`;
+      },
+      buildResponseSchema: (currencies) => {
+        responseSchemaCurrencies.push([...currencies]);
+        return JSON.stringify({ currencies });
+      },
+      executeProvider: async (input) => {
+        state.provider++;
+        providerInput = input;
+        return providerResult({ transactions: [] });
+      },
+    })
+  );
+
+  const response = await handler(
+    post({
+      ...requestBody(),
+      categories,
+      supportedCurrencies,
+    })
+  );
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(fixedPromptCurrencies, [["EGP", "USD"]]);
+  assert.deepEqual(responseSchemaCurrencies, [["EGP", "USD"]]);
+  assert.deepEqual(categoryInputs, [categories]);
+  assert.deepEqual(providerInput?.supportedCurrencies, ["EGP", "USD"]);
+  assert.equal(providerInput?.categories, categories);
+  assert.deepEqual(
+    providerInput?.messages.map((value) => value.id),
+    ["message-1"]
+  );
+});
+
+test("provider-independent prompt builders affect admission estimation but not provider input", async () => {
+  const state = createState();
+  let estimatedInputTokens = 0;
+  let providerInput: ExecuteSmsProviderInput | undefined;
+  const handler = createParseSmsHandler(
+    createDependencies(state, {
+      buildFixedPrompt: () => "stable prompt sentinel",
+      buildCategoryContext: () => "dynamic category sentinel",
+      buildResponseSchema: () => "schema sentinel",
+      reserveWork: async (input) => {
+        state.reserve++;
+        estimatedInputTokens = input.estimatedInputTokens;
+        return {
+          requestId: "work-request-id",
+          accepted: true,
+          decisionCode: "accepted",
+          availableAt: null,
+          isReplay: false,
+        };
+      },
+      executeProvider: async (input) => {
+        state.provider++;
+        providerInput = input;
+        return providerResult({ transactions: [] });
+      },
+    })
+  );
+
+  const body = {
+    ...requestBody(),
+    categories: "original category context",
+    supportedCurrencies: ["EGP"],
+  };
+  const response = await handler(post(body));
+
+  assert.equal(response.status, 200);
+  assert.ok(estimatedInputTokens > 0);
+  assert.equal(providerInput?.categories, "original category context");
+  assert.deepEqual(providerInput?.supportedCurrencies, ["EGP"]);
 });
