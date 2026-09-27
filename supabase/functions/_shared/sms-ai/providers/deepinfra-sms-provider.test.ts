@@ -162,6 +162,52 @@ test("retries transient HTTP failures with 2s/4s backoff", async () => {
   assert.deepEqual(delays, [2000, 4000]);
 });
 
+test("retries HTTP 408 explicitly with 2s backoff", async () => {
+  const delays: number[] = [];
+  let calls = 0;
+  const provider = new DeepInfraSmsProvider(CONFIG, {
+    fetch: async () => {
+      calls++;
+      if (calls === 1) return new Response(null, { status: 408 });
+      return successResponse();
+    },
+    sleep: async (milliseconds) => {
+      delays.push(milliseconds);
+    },
+    createTimeoutSignal: () => new AbortController().signal,
+  });
+
+  const result = await provider.execute(REQUEST);
+
+  assert.equal(result.completionStatus, "complete");
+  assert.equal(calls, 2);
+  assert.deepEqual(delays, [2000]);
+});
+
+test("retries a thrown timeout AbortError with bounded backoff", async () => {
+  const delays: number[] = [];
+  let calls = 0;
+  const provider = new DeepInfraSmsProvider(CONFIG, {
+    fetch: async () => {
+      calls++;
+      if (calls === 1) {
+        throw new DOMException("The operation was aborted", "AbortError");
+      }
+      return successResponse();
+    },
+    sleep: async (milliseconds) => {
+      delays.push(milliseconds);
+    },
+    createTimeoutSignal: () => new AbortController().signal,
+  });
+
+  const result = await provider.execute(REQUEST);
+
+  assert.equal(result.completionStatus, "complete");
+  assert.equal(calls, 2);
+  assert.deepEqual(delays, [2000]);
+});
+
 test("retries a network error but does not retry auth or malformed-request statuses", async () => {
   let networkCalls = 0;
   const networkProvider = new DeepInfraSmsProvider(CONFIG, {

@@ -128,7 +128,7 @@ export interface SmsCandidate {
 /**
  * Client-side chunk size — messages per Edge Function call.
  * Each chunk should complete well within the Supabase ~150s wall-time limit.
- * 50 messages ≈ 10–15s (one Gemini call on the server).
+ * 50 messages ≈ 10–15s (one SMS AI provider call on the server).
  *
  * Reduced from 100 to 50 to:
  * - Stay safely within the ~150s edge function wall-time
@@ -673,7 +673,7 @@ export async function parseSmsWithAi(
     while (chunkIndex < chunkQueue.length) {
       throwIfAborted(abortSignal);
 
-      // Delay between chunks to avoid Gemini rate limits (skip for first chunk)
+      // Delay between chunks to avoid SMS AI provider rate limits (skip for first chunk)
       if (chunkIndex > 0) {
         await waitForInterChunkDelay(abortSignal);
       }

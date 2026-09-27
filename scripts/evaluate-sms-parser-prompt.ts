@@ -3,12 +3,15 @@ import path from "node:path";
 import { LOCAL_SMS_FIXTURE_CORPUS } from "../packages/logic/src/parsers/local-sms-fixture-corpus";
 import type { LocalSmsFixture } from "../packages/logic/src/parsers/local-sms-parser-types";
 import { getUtf8ByteLength } from "../packages/logic/src/sms-safeguards/sms-input-estimator";
+import {
+  BUILT_IN_SMS_CATEGORY_TREE,
+  buildSmsAiResponseSchema,
+  buildSmsAiStableSystemPrompt,
+  DEFAULT_SMS_CURRENCIES,
+} from "../supabase/functions/_shared/sms-ai/sms-ai-prompt";
 
 const CONSERVATIVE_BYTES_PER_TOKEN = 3;
-const DEFAULT_MODEL = "gemini-2.5-flash-lite";
-const PRODUCTION_PROMPT_PATH = "supabase/functions/parse-sms/index.ts";
-const SPECIAL_CASES_PATH =
-  "supabase/functions/_shared/sms-parser-special-cases.ts";
+const DEFAULT_GEMINI_CALIBRATION_MODEL = "gemini-2.5-flash-lite";
 
 export interface PromptVariant {
   readonly name: string;
@@ -100,6 +103,7 @@ export interface PromptFileEvaluationOptions {
   readonly corpusPath?: string;
   readonly calibrate?: boolean;
   readonly model?: string;
+  readonly countTokens?: SelectedModelTokenCounter["countTokens"];
   readonly apiKey?: string;
 }
 
@@ -107,113 +111,6 @@ export interface PromptFileEvaluationResult {
   readonly mode: "local" | "selected-model-count-tokens";
   readonly comparison: PromptComparisonReport;
 }
-
-const DEFAULT_CURRENCY_ENUM = ["EGP", "USD", "EUR", "GBP", "SAR", "AED", "KWD"];
-
-const DEFAULT_RESPONSE_SCHEMA = {
-  type: "object",
-  properties: {
-    transactions: {
-      type: "array",
-      description:
-        "Array of parsed transactions. Only include CLEARLY financial transactions.",
-      items: {
-        type: "object",
-        properties: {
-          messageId: {
-            type: "string",
-            description: "Original SMS message ID.",
-          },
-          amount: {
-            type: "number",
-            description: "Transaction amount as positive number.",
-          },
-          currency: { type: "string", enum: DEFAULT_CURRENCY_ENUM },
-          type: { type: "string", enum: ["EXPENSE", "INCOME"] },
-          counterparty: {
-            type: "string",
-            description:
-              "Counterparty name (merchant, vendor, person, or entity).",
-          },
-          date: { type: "string", description: "YYYY-MM-DD format." },
-          categorySystemName: {
-            type: "string",
-            description:
-              "Exactly ONE system_name from the category tree. Use a specific L2 ONLY when confident. If uncertain about which L2 fits, use the L1 parent instead. NEVER use *_other L2 categories (e.g. food_other, shopping_other) — use the L1 parent. Fall back to 'other' only as last resort.",
-          },
-          isAtmWithdrawal: {
-            type: "boolean",
-            description: "True for ATM/Bank cash withdrawals only.",
-          },
-          cardLast4: {
-            type: "string",
-            description: "Last 4 digits of card if mentioned.",
-          },
-          confidenceScore: {
-            type: "number",
-            description:
-              "Your confidence in the accuracy of this extraction (0.0 to 1.0). 1.0 = all fields are perfectly clear in the SMS. 0.5 = some fields required guessing. 0.0 = mostly guessing.",
-          },
-          isTrusted: {
-            type: "boolean",
-            description:
-              "True if you are confident this is a REAL completed transaction (money actually moved). False if the message is ambiguous, promotional with amounts, or you are not 100% sure it represents actual money movement.",
-          },
-        },
-        required: [
-          "messageId",
-          "amount",
-          "currency",
-          "type",
-          "counterparty",
-          "date",
-          "categorySystemName",
-          "confidenceScore",
-          "isTrusted",
-        ],
-      },
-    },
-  },
-  required: ["transactions"],
-} as const;
-
-const FALLBACK_CATEGORY_TREE = `
-EXPENSE categories (return the system_name value):
-  L1: food_drinks
-    L2: groceries, restaurant, coffee_tea, snacks, drinks, food_other
-  L1: transportation
-    L2: public_transport, private_transport, transport_other
-  L1: vehicle
-    L2: fuel, parking, rental, license_fees, vehicle_tax, traffic_fine, vehicle_buy, vehicle_sell, vehicle_maintenance, vehicle_other
-  L1: shopping
-    L2: clothes, electronics_appliances, accessories, footwear, bags, kids_baby, beauty, home_garden, pets, sports_fitness, toys_games, wedding, detergents, decorations, personal_care, shopping_other
-  L1: health_medical
-    L2: doctor, medicine, surgery, dental, health_other
-  L1: utilities_bills
-    L2: electricity, water, internet, phone, gas, trash, online_subscription, streaming, taxes, utilities_other
-  L1: entertainment
-    L2: events, tickets, trips_holidays, entertainment_other
-  L1: charity
-    L2: donations, fundraising, charity_gifts, charity_other
-  L1: education
-    L2: books, tuition, education_fees, education_other
-  L1: housing
-    L2: rent, housing_maintenance, housing_tax, housing_buy, housing_sell, housing_other
-  L1: travel
-    L2: vacation, business_travel, holiday, travel_other
-  L1: debt_loans
-    L2: lent_money, debt_repayment_paid, debt_other
-  L1: asset_purchase
-  L1: other
-    L2: uncategorized
-
-INCOME categories:
-  L1: income
-    L2: salary, bonus, commission, refund, loan_income, gift_income, check, rental_income, freelance, business_income, income_other
-  L1: asset_sale
-  L1: debt_loans
-    L2: borrowed_money, debt_repayment_received
-`;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -429,55 +326,19 @@ export function comparePromptVariants(
   };
 }
 
-function extractTemplateLiteral(source: string, marker: string): string | null {
-  const markerIndex = source.indexOf(marker);
-  if (markerIndex < 0) return null;
-  const openingTick = source.indexOf("`", markerIndex + marker.length);
-  if (openingTick < 0) return null;
-  const closingTick = source.indexOf("`", openingTick + 1);
-  if (closingTick < 0) return null;
-  return source.slice(openingTick + 1, closingTick);
-}
-
-function readProductionPromptVariant(rootDirectory: string): PromptVariant {
-  const source = readFileSync(
-    path.join(rootDirectory, PRODUCTION_PROMPT_PATH),
-    "utf8"
-  );
-  const specialCasesSource = readFileSync(
-    path.join(rootDirectory, SPECIAL_CASES_PATH),
-    "utf8"
-  );
-  const categoryTree =
-    extractTemplateLiteral(source, "const CATEGORY_TREE =") ??
-    FALLBACK_CATEGORY_TREE;
-  const specialCases =
-    extractTemplateLiteral(specialCasesSource, "return") ?? "";
-  const promptStart = source.indexOf("return `You are Monyvi AI");
-  const promptEndMarker = "\n\nCATEGORY TREE:\n${categoryTree}";
-  const promptEnd = source.indexOf(promptEndMarker, promptStart);
-  if (promptStart < 0 || promptEnd < 0) {
+export function loadCurrentPromptVariant(): PromptVariant {
+  const categoryTree = BUILT_IN_SMS_CATEGORY_TREE.trim();
+  const categorySection = `BUILT-IN CATEGORY TREE:\n${categoryTree}`;
+  const systemPrompt = buildSmsAiStableSystemPrompt(DEFAULT_SMS_CURRENCIES);
+  if (!systemPrompt.includes(categorySection)) {
     throw new Error("production_sms_prompt_not_extractable");
   }
-  const fixedOpeningTick = source.indexOf("`", promptStart);
-  const fixedInstructions = source
-    .slice(fixedOpeningTick + 1, promptEnd)
-    .replace("${buildSmsParserSpecialCaseRules()}", specialCases)
-    .replaceAll("\\n", "\n")
-    .replaceAll("\\t", "\t");
-
   return {
     name: "current",
-    fixedInstructions,
+    fixedInstructions: systemPrompt.replace(categorySection, ""),
     categoryTree,
-    schema: DEFAULT_RESPONSE_SCHEMA,
+    schema: buildSmsAiResponseSchema(DEFAULT_SMS_CURRENCIES),
   };
-}
-
-export function loadCurrentPromptVariant(
-  rootDirectory: string = process.cwd()
-): PromptVariant {
-  return readProductionPromptVariant(rootDirectory);
 }
 
 function toPromptCorpusCase(fixture: LocalSmsFixture): PromptCorpusCase {
@@ -569,7 +430,8 @@ function createGeminiCountTokensCounter(
     if (
       !isRecord(payload) ||
       typeof payload.totalTokens !== "number" ||
-      !Number.isInteger(payload.totalTokens)
+      !Number.isInteger(payload.totalTokens) ||
+      payload.totalTokens < 0
     ) {
       throw new Error("selected_model_count_tokens_invalid_response");
     }
@@ -586,7 +448,7 @@ export async function evaluatePromptFiles(
         readJsonFile(path.resolve(rootDirectory, options.currentPath)),
         options.currentPath
       )
-    : loadCurrentPromptVariant(rootDirectory);
+    : loadCurrentPromptVariant();
   if (!options.candidatePath) {
     throw new Error("prompt_candidate_path_required");
   }
@@ -602,10 +464,17 @@ export async function evaluatePromptFiles(
     : createDefaultPromptCorpus();
 
   if (options.calibrate === true) {
-    const apiKey = options.apiKey ?? process.env.GEMINI_API_KEY;
-    if (!apiKey) throw new Error("selected_model_calibration_api_key_required");
-    const model = options.model ?? DEFAULT_MODEL;
-    const counter = createGeminiCountTokensCounter(apiKey);
+    const model = options.model ?? DEFAULT_GEMINI_CALIBRATION_MODEL;
+    if (!model.trim()) throw new Error("selected_model_calibration_model_required");
+    let counter = options.countTokens;
+    if (!counter) {
+      if (!model.startsWith("gemini-")) {
+        throw new Error("selected_model_calibration_unsupported_model");
+      }
+      const apiKey = options.apiKey ?? process.env.GEMINI_API_KEY;
+      if (!apiKey) throw new Error("selected_model_calibration_api_key_required");
+      counter = createGeminiCountTokensCounter(apiKey);
+    }
     const [currentReport, candidateReport] = await Promise.all([
       calibratePromptTokenReport({
         prompt: current,
