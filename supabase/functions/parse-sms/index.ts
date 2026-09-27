@@ -12,7 +12,9 @@
  */
 
 import "edge-runtime";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+
+import type { Database } from "../../../packages/db/src/supabase-types.ts";
 
 import { hasActiveAiProcessingConsent } from "../_shared/ai-consent.ts";
 import { isExcludedBeforeSmsParsingAtEdge } from "../_shared/sms-hard-exclusions.ts";
@@ -67,7 +69,7 @@ async function verifyAuth(
   return { userId: data.user.id };
 }
 
-function createServiceClient(): ReturnType<typeof createClient> {
+function createServiceClient(): SupabaseClient<Database> {
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
@@ -75,7 +77,7 @@ function createServiceClient(): ReturnType<typeof createClient> {
     throw new Error("Supabase environment is not configured");
   }
 
-  return createClient(supabaseUrl, supabaseServiceKey);
+  return createClient<Database>(supabaseUrl, supabaseServiceKey);
 }
 
 async function getProcessingOutcomes(

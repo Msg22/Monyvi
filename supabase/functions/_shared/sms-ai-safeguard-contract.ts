@@ -44,10 +44,10 @@ export interface ReconcileSmsAiOutcomesInput {
 }
 
 export interface SmsSafeguardRpcClient {
-  readonly rpc: (
+  rpc(
     name: string,
     params: Readonly<Record<string, unknown>>
-  ) => PromiseLike<{ readonly data: unknown; readonly error: unknown }>;
+  ): PromiseLike<{ readonly data: unknown; readonly error: unknown }>;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

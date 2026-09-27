@@ -27,7 +27,7 @@ type Sleep = (milliseconds: number) => Promise<void>;
 type CreateTimeoutSignal = (milliseconds: number) => AbortSignal;
 type ProviderLogger = (
   event: string,
-  metadata: Readonly<Record<string, unknown>>
+  metadata: SmsAiProviderOperationalMetadata
 ) => void;
 
 export interface DeepInfraSmsProviderDependencies {
