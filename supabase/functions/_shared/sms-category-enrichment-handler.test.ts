@@ -526,7 +526,6 @@ test("Edge entry point uses the service-role safeguard adapter", () => {
   assert.match(source, /releaseSmsAiWork\(createServiceClient\(\),/);
 });
 
-
 test("Edge entry point resolves the shared fail-closed DeepInfra config without Gemini", () => {
   const source = readFileSync(
     new URL("../enrich-sms-categories/index.ts", import.meta.url),
