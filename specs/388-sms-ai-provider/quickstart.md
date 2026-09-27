@@ -12,10 +12,11 @@ Keep real secrets in the ignored local Edge Function environment file.
 DEEPINFRA_API_KEY=<local development token>
 SMS_AI_PROVIDER=deepinfra
 SMS_AI_MODEL=deepseek-ai/DeepSeek-V4-Flash-0731
+SMS_AI_APPROVED_MODELS=deepseek-ai/DeepSeek-V4-Flash-0731
 SMS_AI_SERVICE_TIER=default
 ~~~
 
-All four values above are required; missing `SMS_AI_SERVICE_TIER` does not silently default. Provider configuration is resolved before the per-request handler can reserve or mark provider usage.
+All five values above are required; missing `SMS_AI_SERVICE_TIER` does not silently default. `SMS_AI_APPROVED_MODELS` is the hosted allowlist: an explicit comma-separated list of approved model IDs, distinct from the `SMS_AI_MODEL` selection. The selected model must exactly match one allowlist entry; missing, blank, malformed (empty entries, wildcards, whitespace inside an ID), or unapproved selections fail closed during config composition. Approving a future model is a config change only: append its ID to the allowlist (and select it via `SMS_AI_MODEL`) with no code change. Provider configuration is resolved before the per-request handler can reserve or mark provider usage.
 
 Do not configure a provider endpoint URL. The approved DeepInfra endpoint is fixed by the adapter.
 
@@ -27,13 +28,27 @@ Hosted Edge Functions do not automatically receive values from the local `.env`.
 
 Set the SMS provider values in the target Supabase project's hosted secrets/environment before deploying `parse-sms`.
 
+Rollout precondition: set hosted `SMS_AI_APPROVED_MODELS` before deploying the new function code. The new code fails closed when the allowlist is missing, so deploying code first would refuse all parses until the value exists. No hosted secret is mutated by development; apply the value with the project owner before release.
+
 Example:
 
 ~~~powershell
-npx supabase secrets set DEEPINFRA_API_KEY="<secret>" SMS_AI_PROVIDER="deepinfra" SMS_AI_MODEL="deepseek-ai/DeepSeek-V4-Flash-0731" SMS_AI_SERVICE_TIER="default" --project-ref yulbcndyssdjicbpmlrk
+npx supabase secrets set DEEPINFRA_API_KEY="<secret>" SMS_AI_PROVIDER="deepinfra" SMS_AI_MODEL="deepseek-ai/DeepSeek-V4-Flash-0731" SMS_AI_APPROVED_MODELS="deepseek-ai/DeepSeek-V4-Flash-0731" SMS_AI_SERVICE_TIER="default" --project-ref yulbcndyssdjicbpmlrk
 ~~~
 
 Never commit the real DeepInfra token.
+
+### Manual approved-model config matrix
+
+Run these against a local Edge runtime (never production) by varying only the two model variables:
+
+| Case | `SMS_AI_MODEL` | `SMS_AI_APPROVED_MODELS` | Expected |
+| --- | --- | --- | --- |
+| Baseline | `deepseek-ai/DeepSeek-V4-Flash-0731` | same single ID | parses |
+| Future model | new ID | baseline ID plus new ID | parses (config-only approval) |
+| Unapproved selection | other ID | baseline ID | fails closed before admission |
+| Missing/blank allowlist | baseline ID | missing or blank | fails closed before admission |
+| Malformed allowlist | baseline ID | trailing comma, `a,,b`, `*`, or inner whitespace | fails closed before admission |
 
 ## 3. Routine deterministic verification
 
@@ -83,7 +98,7 @@ Focused provider tests must cover:
 15. `length` -> truncated;
 16. unknown finish reason -> failed;
 17. semantically invalid transaction -> provider-neutral existing-validator rejection outside the DeepInfra adapter;
-18. missing/blank/unsupported provider, model, service tier, or API key fails before request admission/fetch/provider-start accounting;
+18. missing/blank/unsupported provider, model, approved-model list, service tier, or API key fails before request admission/fetch/provider-start accounting;
 19. input-token estimation counts the stable prompt, category context, response schema, and SMS candidate content exactly once after prompt refactoring.
 
 ## 5. Prompt-cache verification

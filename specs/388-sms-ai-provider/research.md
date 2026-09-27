@@ -66,10 +66,11 @@
 
 - `SMS_AI_PROVIDER=deepinfra`
 - `SMS_AI_MODEL=deepseek-ai/DeepSeek-V4-Flash-0731`
+- `SMS_AI_APPROVED_MODELS=deepseek-ai/DeepSeek-V4-Flash-0731`
 - `SMS_AI_SERVICE_TIER=default`
 - `DEEPINFRA_API_KEY=<secret>`
 
-Missing, blank, incomplete, or unsupported configuration fails during module/provider composition before the per-request handler can reserve or mark provider usage. The DeepInfra API endpoint remains a code constant, not runtime configuration.
+Missing, blank, incomplete, malformed, or unsupported configuration fails during module/provider composition before the per-request handler can reserve or mark provider usage. `SMS_AI_APPROVED_MODELS` is an explicit comma-separated allowlist, distinct from the `SMS_AI_MODEL` selection: the selected model must exactly match one allowlist entry, with no wildcards and no silent malformed entries. Approving a future model is a hosted config change only. The DeepInfra API endpoint remains a code constant, not runtime configuration.
 
 **Rationale**:
 

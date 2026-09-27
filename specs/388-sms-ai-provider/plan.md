@@ -180,10 +180,11 @@ No feature behavior depends on a cache hit. The implementation MUST NOT send `pr
 DEEPINFRA_API_KEY=<secret>
 SMS_AI_PROVIDER=deepinfra
 SMS_AI_MODEL=deepseek-ai/DeepSeek-V4-Flash-0731
+SMS_AI_APPROVED_MODELS=deepseek-ai/DeepSeek-V4-Flash-0731
 SMS_AI_SERVICE_TIER=default
 ```
 
-All four values are required and validated during module/provider composition before the per-request SMS handler can reserve or mark provider usage. Missing, blank, or unsupported configuration fails closed before request admission. `default` means omit DeepInfra's `service_tier` request field. Priority and Flex remain valid typed operational choices but are not the initial setting.
+All five values are required and validated during module/provider composition before the per-request SMS handler can reserve or mark provider usage. Missing, blank, malformed, or unsupported configuration fails closed before request admission. `SMS_AI_APPROVED_MODELS` is the explicit comma-separated allowlist the `SMS_AI_MODEL` selection must exactly match; future models are approved by config change only. `default` means omit DeepInfra's `service_tier` request field. Priority and Flex remain valid typed operational choices but are not the initial setting.
 
 ### Dependency resolution
 

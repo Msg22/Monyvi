@@ -76,6 +76,7 @@ test("configured provider creation fails before constructing a provider when env
   const base = {
     SMS_AI_PROVIDER: "deepinfra",
     SMS_AI_MODEL: CONFIG.model,
+    SMS_AI_APPROVED_MODELS: CONFIG.model,
     SMS_AI_SERVICE_TIER: "default",
     DEEPINFRA_API_KEY: "test-key",
   };
@@ -94,6 +95,40 @@ test("configured provider creation fails before constructing a provider when env
           },
         }),
       /SMS AI provider configuration/
+    );
+  }
+
+  assert.equal(fetchCalls, 0);
+});
+
+test("configured provider creation makes zero fetch calls for unapproved selection and malformed allowlist", () => {
+  let fetchCalls = 0;
+  const validBase: Record<string, string | undefined> = {
+    SMS_AI_PROVIDER: "deepinfra",
+    SMS_AI_MODEL: CONFIG.model,
+    SMS_AI_APPROVED_MODELS: CONFIG.model,
+    SMS_AI_SERVICE_TIER: "default",
+    DEEPINFRA_API_KEY: "test-key",
+  };
+  const cases: ReadonlyArray<Record<string, string | undefined>> = [
+    { ...validBase, SMS_AI_MODEL: "openai/gpt-4o" },
+    {
+      ...validBase,
+      SMS_AI_APPROVED_MODELS: "deepseek-ai/DeepSeek-V4-Flash-0731,",
+    },
+    { ...validBase, SMS_AI_APPROVED_MODELS: "deepseek-ai/*" },
+  ];
+
+  for (const env of cases) {
+    assert.throws(
+      () =>
+        createConfiguredSmsAiProvider((name) => env[name], {
+          fetch: async () => {
+            fetchCalls++;
+            return new Response();
+          },
+        }),
+      /SMS AI provider configuration|Unsupported SMS AI model/
     );
   }
 

@@ -6,6 +6,7 @@ import { readSmsAiProviderConfig } from "./sms-ai-provider-config.ts";
 const VALID_ENV: Readonly<Record<string, string>> = {
   SMS_AI_PROVIDER: "deepinfra",
   SMS_AI_MODEL: "deepseek-ai/DeepSeek-V4-Flash-0731",
+  SMS_AI_APPROVED_MODELS: "deepseek-ai/DeepSeek-V4-Flash-0731",
   SMS_AI_SERVICE_TIER: "default",
   DEEPINFRA_API_KEY: "test-secret",
 };
@@ -41,6 +42,7 @@ test("fails closed when any required configuration value is missing", () => {
   for (const key of [
     "SMS_AI_PROVIDER",
     "SMS_AI_MODEL",
+    "SMS_AI_APPROVED_MODELS",
     "SMS_AI_SERVICE_TIER",
     "DEEPINFRA_API_KEY",
   ] as const) {
@@ -51,10 +53,11 @@ test("fails closed when any required configuration value is missing", () => {
   }
 });
 
-test("fails closed on blank provider, model, service tier, or API key", () => {
+test("fails closed on blank provider, model, approved list, service tier, or API key", () => {
   for (const key of [
     "SMS_AI_PROVIDER",
     "SMS_AI_MODEL",
+    "SMS_AI_APPROVED_MODELS",
     "SMS_AI_SERVICE_TIER",
     "DEEPINFRA_API_KEY",
   ] as const) {
@@ -84,6 +87,8 @@ test("trims explicit configuration values before returning them", () => {
       getEnvironment({
         SMS_AI_PROVIDER: "  deepinfra  ",
         SMS_AI_MODEL: "  deepseek-ai/DeepSeek-V4-Flash-0731  ",
+        SMS_AI_APPROVED_MODELS:
+          "  deepseek-ai/DeepSeek-V4-Flash-0731 , deepseek-ai/Future-Model-2  ",
         SMS_AI_SERVICE_TIER: "  priority  ",
         DEEPINFRA_API_KEY: "  test-secret  ",
       })
@@ -97,11 +102,58 @@ test("trims explicit configuration values before returning them", () => {
   );
 });
 
-test("treats the configured model as an opaque non-empty deployment value", () => {
+test("accepts a model selection present in the hosted approved-model list", () => {
+  assert.equal(
+    readSmsAiProviderConfig(getEnvironment()).model,
+    "deepseek-ai/DeepSeek-V4-Flash-0731"
+  );
+});
+
+test("approves a future model by hosted config change only", () => {
   assert.equal(
     readSmsAiProviderConfig(
-      getEnvironment({ SMS_AI_MODEL: "deepseek-ai/future-approved-model" })
+      getEnvironment({
+        SMS_AI_MODEL: "deepseek-ai/Future-Model-2",
+        SMS_AI_APPROVED_MODELS:
+          "deepseek-ai/DeepSeek-V4-Flash-0731, deepseek-ai/Future-Model-2",
+      })
     ).model,
-    "deepseek-ai/future-approved-model"
+    "deepseek-ai/Future-Model-2"
   );
+});
+
+test("rejects a model selection outside the hosted approved-model list", () => {
+  assert.throws(
+    () =>
+      readSmsAiProviderConfig(
+        getEnvironment({ SMS_AI_MODEL: "openai/gpt-4o" })
+      ),
+    /Unsupported SMS AI model/
+  );
+  assert.throws(
+    () =>
+      readSmsAiProviderConfig(
+        getEnvironment({ SMS_AI_MODEL: "deepseek-ai/future-unapproved-model" })
+      ),
+    /Unsupported SMS AI model/
+  );
+});
+
+test("fails closed on malformed approved-model lists", () => {
+  for (const approvedModels of [
+    "deepseek-ai/DeepSeek-V4-Flash-0731,,deepseek-ai/Other",
+    "deepseek-ai/DeepSeek-V4-Flash-0731,",
+    ",deepseek-ai/DeepSeek-V4-Flash-0731",
+    "deepseek-ai/*",
+    "*",
+    "deepseek-ai/Deep Seek",
+  ]) {
+    assert.throws(
+      () =>
+        readSmsAiProviderConfig(
+          getEnvironment({ SMS_AI_APPROVED_MODELS: approvedModels })
+        ),
+      /SMS AI provider configuration/
+    );
+  }
 });

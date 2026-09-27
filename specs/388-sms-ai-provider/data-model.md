@@ -14,20 +14,23 @@ Represents validated server-side runtime configuration.
 | Field | Type | Rules |
 | --- | --- | --- |
 | `provider` | `"deepinfra"` initially | Required; unsupported values fail closed |
-| `model` | non-empty string | Required; initial value `deepseek-ai/DeepSeek-V4-Flash-0731` |
+| `model` | non-empty string | Required; must exactly match one hosted allowlist entry |
 | `serviceTier` | `"default" \| "priority" \| "flex"` | Explicitly required; no missing-value default. `default` omits provider request field |
 | `apiKey` | secret string | Required for DeepInfra; never logged/serialized to clients |
+
+`SMS_AI_APPROVED_MODELS` is hosted environment input only (explicit comma-separated allowlist). It is validated during composition but is not part of the returned provider configuration.
 
 ### Source
 
 - `SMS_AI_PROVIDER`
 - `SMS_AI_MODEL`
+- `SMS_AI_APPROVED_MODELS`
 - `SMS_AI_SERVICE_TIER`
 - `DEEPINFRA_API_KEY`
 
 ### Validation
 
-Configuration is parsed once during module/provider composition before the per-request handler can reserve or mark provider usage. Missing, blank, incomplete, or unsupported values prevent provider execution and request admission.
+Configuration is parsed once during module/provider composition before the per-request handler can reserve or mark provider usage. Missing, blank, incomplete, malformed, or unsupported values prevent provider execution and request admission. A future model is approved by hosted config change only (append its ID to the allowlist); no code change is required.
 
 ## 2. Raw SMS AI Provider Strategy
 
