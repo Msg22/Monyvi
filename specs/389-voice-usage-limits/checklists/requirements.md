@@ -13,8 +13,8 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain
-- [ ] Requirements are testable and unambiguous
+- [x] No [NEEDS CLARIFICATION] markers remain
+- [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic
 - [x] All acceptance scenarios are defined
@@ -24,13 +24,14 @@
 
 ## Feature Readiness
 
-- [ ] All functional requirements have clear acceptance criteria
+- [x] All functional requirements have clear acceptance criteria
 - [x] User scenarios cover primary flows
 - [x] Feature meets measurable outcomes defined in Success Criteria
 - [x] No implementation details leak into specification
 
 ## Notes
 
-- The specification is intentionally blocked on three product decisions: initial daily/burst allowance values, daily reset semantics/timezone, and accounting for provider-started failures.
+- Clarifications recorded 2026-09-27: 5 provider-starting voice parses per authenticated user per local calendar day; burst cap 2 provider-starting logical requests per minute; provider-started logical requests consume exactly one daily unit even when they later fail, time out, or return invalid output, while pre-provider refusals consume zero.
+- "Daily" follows the user's local timezone so the policy is not Egypt-specific; timezone-source and anti-abuse mechanics for timezone changes remain planning details while server authority is preserved.
 - Exact visual placement/styling is deferred to the required mockup approval workflow rather than treated as a specification ambiguity.
 - Subscription pricing, plan names, paid quotas, paywall behavior, and billing remain out of scope.
