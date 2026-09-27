@@ -821,6 +821,25 @@ Business rules:
 - Users review parsed transactions before saving.
 - Voice review uses the shared AI-parsed transaction review selection rule: only
   high-confidence rows with a resolved account match are pre-selected.
+- During the free-launch phase, server-authoritative voice usage is limited to
+  five provider-starting logical voice requests per authenticated user per local
+  calendar day, with at most two provider-starting logical requests per minute.
+- The local calendar day follows the user's local timezone rather than Egypt
+  time or UTC. The server owns the accepted allowance window; changing device
+  timezone must not create extra allowance inside an already-active window.
+- Requests refused before provider start consume no daily allowance. Once
+  provider execution actually starts, the logical request consumes exactly one
+  daily unit even if provider processing later fails, times out, or returns
+  invalid output.
+- Voice limits are server-authoritative. Client state is UX-only, reflects
+  server availability/remaining usage, and must not reset authoritative usage
+  after reinstall, local deletion, device switching, or client tampering.
+- Free-launch allowance and burst policy are operational configuration, not
+  permanent subscription rules. Voice consumes a provider-independent
+  entitlement decision so a future subscriptions module may provide
+  plan-specific allowances without changing voice parsing.
+- Subscription tier names, pricing, billing/paywall flows, and final paid-plan
+  voice quotas remain outside the voice-limit feature.
 
 ## 7. SMS Import And Live Detection
 
