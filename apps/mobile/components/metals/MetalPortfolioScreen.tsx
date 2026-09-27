@@ -20,11 +20,13 @@ import { useTranslation } from "react-i18next";
 import type {
   MetalPortfolioFilter,
   MetalPortfolioHoldingInput,
+  MetalPortfolioPurityPriceTile,
   MetalPortfolioReadModel,
 } from "@/services/metal-portfolio-read-model-service";
 import { HoldingSeparator, MetalHoldingRow } from "./MetalPortfolioHoldingRow";
 import {
   getPortfolioRateAccessibilityCopy,
+  getPortfolioRateCompactLabel,
   resolvePortfolioRateCopy,
 } from "./portfolio-rate-presentation";
 import {
@@ -43,7 +45,6 @@ interface MetalPortfolioScreenProps {
   readonly currency: CurrencyType;
   readonly error: Error | null;
   readonly isLoading: boolean;
-  readonly isOffline: boolean;
   readonly onFilterChange: (filter: MetalPortfolioFilter) => void;
   readonly onHistoryPress: () => void;
   readonly onHoldingPress: (holdingId: string) => void;
@@ -62,7 +63,6 @@ export function MetalPortfolioScreen({
   currency,
   error,
   isLoading,
-  isOffline,
   onFilterChange,
   onHistoryPress,
   onHoldingPress,
@@ -114,7 +114,6 @@ export function MetalPortfolioScreen({
           <PortfolioHeader
             currency={currency}
             error={error}
-            isOffline={isOffline}
             onFilterChange={onFilterChange}
             onRetry={onRetry}
             portfolio={portfolio}
@@ -185,21 +184,35 @@ function createLegacyReadiness({
 function SummarySkeleton(): React.JSX.Element {
   return (
     <View testID="metal-portfolio-summary-skeleton" className="pt-3">
-      <Skeleton width="58%" height={24} borderRadius={8} />
-      <View className="mt-5 flex-row justify-between gap-5">
-        <View className="flex-1 gap-3">
-          <Skeleton width="100%" height={48} borderRadius={12} />
-          <Skeleton width="70%" height={18} borderRadius={8} />
+      <Skeleton width="40%" height={20} borderRadius={6} />
+      <View className="mt-4 flex-row justify-between gap-5">
+        <View className="flex-1 gap-2">
+          <Skeleton width="80%" height={38} borderRadius={10} />
+          <Skeleton width="50%" height={16} borderRadius={6} />
         </View>
-        <View className="w-36 gap-3">
-          <Skeleton width="100%" height={34} borderRadius={10} />
-          <Skeleton width="90%" height={18} borderRadius={8} />
+        <View className="w-24 items-end gap-2">
+          <Skeleton width="60%" height={28} borderRadius={8} />
+          <Skeleton width="90%" height={16} borderRadius={6} />
         </View>
       </View>
-      <View className="mt-6 h-px bg-slate-200 dark:bg-slate-800" />
-      <View className="mt-6 gap-4">
-        <Skeleton width="100%" height={12} borderRadius={6} />
-        <Skeleton width="72%" height={20} borderRadius={8} />
+      <View className="mt-6">
+        <Skeleton width="100%" height={9} borderRadius={999} />
+        <View className="mt-3 flex-row justify-between">
+          <Skeleton width="30%" height={16} borderRadius={6} />
+          <Skeleton width="30%" height={16} borderRadius={6} />
+        </View>
+      </View>
+      <View className="mt-5 border-t border-slate-200 pt-4 dark:border-slate-800">
+        <View className="flex-row justify-between">
+          <Skeleton width="35%" height={18} borderRadius={6} />
+          <Skeleton width="40%" height={14} borderRadius={6} />
+        </View>
+        <View className="mt-3 flex-row flex-wrap justify-between gap-y-2">
+          <Skeleton width="48%" height={54} borderRadius={11} />
+          <Skeleton width="48%" height={54} borderRadius={11} />
+          <Skeleton width="48%" height={54} borderRadius={11} />
+          <Skeleton width="48%" height={54} borderRadius={11} />
+        </View>
       </View>
     </View>
   );
@@ -233,7 +246,6 @@ function RecentHistorySkeleton(): React.JSX.Element {
 function PortfolioHeader({
   currency,
   error,
-  isOffline,
   onFilterChange,
   onRetry,
   portfolio,
@@ -243,7 +255,6 @@ function PortfolioHeader({
 }: {
   readonly currency: CurrencyType;
   readonly error: Error | null;
-  readonly isOffline: boolean;
   readonly onFilterChange: (filter: MetalPortfolioFilter) => void;
   readonly onRetry: () => void;
   readonly portfolio: MetalPortfolioReadModel | null;
@@ -251,21 +262,24 @@ function PortfolioHeader({
   readonly readiness: MetalPortfolioSectionReadiness;
   readonly selectedFilter: MetalPortfolioFilter;
 }): React.JSX.Element {
-  const { t } = useTranslation("metals");
   const { t: tCommon } = useTranslation("common");
   return (
     <>
       {readiness.summary && portfolio !== null ? (
-        <PortfolioSummary
-          currency={currency}
-          portfolio={portfolio}
-          rateProviderObservedAt={rateProviderObservedAt}
-          realizedSaleReady={readiness.realizedSale}
-        />
+        portfolio.listState === "PORTFOLIO_EMPTY" ? null : (
+          <PortfolioSummary
+            currency={currency}
+            portfolio={portfolio}
+            rateProviderObservedAt={rateProviderObservedAt}
+            realizedSaleReady={readiness.realizedSale}
+          />
+        )
       ) : (
         <SummarySkeleton />
       )}
-      {readiness.holdings && portfolio !== null ? (
+      {readiness.holdings &&
+      portfolio !== null &&
+      portfolio.listState !== "PORTFOLIO_EMPTY" ? (
         <>
           <FilterBar
             activeHoldings={portfolio.activeHoldings}
@@ -274,11 +288,6 @@ function PortfolioHeader({
           />
           {portfolio.listState === "POPULATED" ? <HoldingsHeader /> : null}
         </>
-      ) : null}
-      {isOffline ? (
-        <Text className="mt-3 text-xs text-text-secondary dark:text-text-secondary-dark">
-          {t("offline_mode")}
-        </Text>
       ) : null}
       {error !== null &&
       (readiness.summary || readiness.holdings || readiness.recentHistory) ? (
@@ -316,14 +325,22 @@ function PortfolioSummary({
     t
   );
 
+  const rateUpdatedLabel = getPortfolioRateCompactLabel(
+    portfolio.rateStatus.state,
+    rateProviderObservedAt,
+    i18n?.resolvedLanguage,
+    new Date(),
+    t
+  );
+
   return (
     <View className="pt-3">
-      <Text className="text-base font-medium text-nileGreen-700 dark:text-nileGreen-400">
+      <Text className="text-[15px] font-semibold text-nileGreen-700 dark:text-nileGreen-400">
         {t("portfolio.active_portfolio")}
       </Text>
       <View
         testID="metal-portfolio-summary-layout"
-        className={`mt-4 items-start gap-5 ${
+        className={`mt-3 items-start gap-5 ${
           isCompact ? "flex-col" : "flex-row justify-between"
         }`}
       >
@@ -343,20 +360,20 @@ function PortfolioSummary({
             numberOfLines={1}
             adjustsFontSizeToFit
             minimumFontScale={0.72}
-            className="text-[36px] font-medium leading-[44px] text-text-primary dark:text-text-primary-dark"
+            className="text-[32px] font-bold leading-[38px] text-text-primary dark:text-text-primary-dark"
           >
             {formatCodeAmount(portfolio.activeTotalDecimal, currency, locale)}
           </Text>
-          <Text className="mt-1 text-base text-text-secondary dark:text-text-secondary-dark">
+          <Text className="mt-1 text-xs text-text-secondary dark:text-text-secondary-dark">
             {t("portfolio.active_portfolio_value")}
           </Text>
         </View>
         <View className={isCompact ? "w-full" : "w-[156px] pt-1"}>
-          <View className="flex-row items-baseline gap-2">
-            <Text className="text-[28px] font-medium text-text-primary dark:text-text-primary-dark">
+          <View className="flex-row items-baseline gap-1.5">
+            <Text className="text-[22px] font-bold text-text-primary dark:text-text-primary-dark">
               {holdingCount}
             </Text>
-            <Text className="min-w-0 flex-1 text-sm text-text-secondary dark:text-text-secondary-dark">
+            <Text className="min-w-0 flex-1 text-xs text-text-secondary dark:text-text-secondary-dark">
               {t("portfolio.active_holdings", { count: holdingCount })}
             </Text>
           </View>
@@ -372,19 +389,19 @@ function PortfolioSummary({
       {!realizedSaleReady ? (
         <View
           testID="metal-portfolio-realized-sale-skeleton"
-          className="mt-7 flex-row gap-2"
+          className="mt-6 flex-row gap-2"
         >
           <Skeleton width={120} height={20} borderRadius={8} />
           <Skeleton width="40%" height={16} borderRadius={8} />
         </View>
       ) : realizedProfitLoss === null ? (
         portfolio.soldResultUnavailable ? (
-          <Text className="mt-7 text-sm text-text-secondary dark:text-text-secondary-dark">
+          <Text className="mt-6 text-sm text-text-secondary dark:text-text-secondary-dark">
             {t("portfolio.sold_result_unavailable")}
           </Text>
         ) : null
       ) : (
-        <View className="mt-7 flex-row flex-wrap items-baseline gap-x-2 gap-y-1">
+        <View className="mt-6 flex-row flex-wrap items-baseline gap-x-2 gap-y-1">
           <Text className="text-base font-medium text-text-primary dark:text-text-primary-dark">
             {formatCodeAmount(realizedProfitLoss, currency, locale)}
           </Text>
@@ -393,11 +410,13 @@ function PortfolioSummary({
           </Text>
         </View>
       )}
-      <View className="mt-6 h-px bg-slate-200 dark:bg-slate-800" />
       <AllocationBar allocation={portfolio.allocation} />
-      {holdingCount === 0 ? null : (
-        <RateStatus label={rateAccessibilityLabel} />
-      )}
+      <PricesPerGramSection
+        currency={currency}
+        locale={locale}
+        purityPriceTiles={portfolio.purityPriceTiles}
+        rateUpdatedLabel={rateUpdatedLabel}
+      />
     </View>
   );
 }
@@ -432,7 +451,7 @@ function PerformanceMetric({
     <>
       <Text
         numberOfLines={1}
-        className={`mt-3 text-sm font-medium ${getPerformanceTextClass(
+        className={`mt-2 text-sm font-bold ${getPerformanceTextClass(
           parseOptionalNumber(portfolio.currentPerformanceDecimal)
         )}`}
       >
@@ -443,7 +462,7 @@ function PerformanceMetric({
           true
         )}
       </Text>
-      <Text className="mt-1 text-xs text-text-secondary dark:text-text-secondary-dark">
+      <Text className="mt-0.5 text-xs text-text-secondary dark:text-text-secondary-dark">
         {t("portfolio.since_purchase_label")}
       </Text>
     </>
@@ -458,34 +477,59 @@ function AllocationBar({
   const { t } = useTranslation("metals");
   const goldShare = parseShare(allocation.gold);
   const silverShare = parseShare(allocation.silver);
-  if (!(goldShare > 0 && silverShare > 0)) return null;
+  const hasValue = goldShare > 0 || silverShare > 0;
+  const goldShareLabel = allocation.gold !== null ? `${allocation.gold}%` : "—";
+  const silverShareLabel =
+    allocation.silver !== null ? `${allocation.silver}%` : "—";
+  const allocationA11y = t("portfolio.allocation_accessibility", {
+    goldShare: goldShareLabel,
+    silverShare: silverShareLabel,
+  });
+
   return (
-    <View testID="metal-portfolio-allocation" className="mt-6">
-      <View className="h-3 flex-row overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
-        <View
-          testID="metal-portfolio-allocation-gold"
-          className="h-full rounded-s-full bg-gold-600"
-          style={{ width: `${goldShare}%` }}
-        />
-        <View
-          testID="metal-portfolio-allocation-silver"
-          className="h-full rounded-e-full bg-silver-500"
-          style={{ width: `${silverShare}%` }}
-        />
+    <View
+      testID="metal-portfolio-allocation"
+      className="mt-4 border-b border-slate-200 pb-4 dark:border-slate-800"
+    >
+      <View
+        accessibilityRole="image"
+        accessibilityLabel={allocationA11y}
+        className="h-[9px] flex-row overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800"
+      >
+        {goldShare > 0 ? (
+          <View
+            testID="metal-portfolio-allocation-gold"
+            className="h-full bg-gold-600"
+            // eslint-disable-next-line react-native/no-inline-styles -- dynamic allocation width
+            style={{ width: silverShare > 0 ? `${goldShare}%` : "100%" }}
+          />
+        ) : null}
+        {silverShare > 0 ? (
+          <View
+            testID="metal-portfolio-allocation-silver"
+            className={`h-full bg-silver-500 ${
+              goldShare > 0
+                ? "border-s border-background dark:border-background-dark"
+                : ""
+            }`}
+            // eslint-disable-next-line react-native/no-inline-styles -- dynamic allocation width
+            style={{ width: goldShare > 0 ? `${silverShare}%` : "100%" }}
+          />
+        ) : null}
       </View>
       <View
         testID="metal-portfolio-allocation-legend"
-        className="mt-5 flex-row items-center justify-between"
+        className="mt-2.5 flex-row items-center justify-between"
       >
         <AllocationLegend
           dotClassName="bg-gold-600"
           label={t("gold")}
-          share={allocation.gold}
+          share={hasValue ? allocation.gold : null}
         />
         <AllocationLegend
           dotClassName="bg-silver-500"
           label={t("silver")}
-          share={allocation.silver}
+          share={hasValue ? allocation.silver : null}
         />
       </View>
     </View>
@@ -502,9 +546,9 @@ function AllocationLegend({
   readonly share: string | null;
 }): React.JSX.Element {
   return (
-    <View className="flex-row items-center gap-2">
-      <View className={`h-3 w-3 rounded-full ${dotClassName}`} />
-      <Text className="text-sm font-medium text-text-primary dark:text-text-primary-dark">
+    <View className="flex-row items-center gap-1.5">
+      <View className={`h-2.5 w-2.5 rounded-full ${dotClassName}`} />
+      <Text className="text-xs font-semibold text-text-primary dark:text-text-primary-dark">
         {label}{" "}
         <Text className="font-normal text-text-secondary dark:text-text-secondary-dark">
           {share === null ? "—" : `${share}%`}
@@ -514,16 +558,98 @@ function AllocationLegend({
   );
 }
 
-function RateStatus({ label }: { readonly label: string }): React.JSX.Element {
+function PricesPerGramSection({
+  currency,
+  locale,
+  purityPriceTiles = [],
+  rateUpdatedLabel,
+}: {
+  readonly currency: CurrencyType;
+  readonly locale: string;
+  readonly purityPriceTiles?: readonly MetalPortfolioPurityPriceTile[];
+  readonly rateUpdatedLabel: string;
+}): React.JSX.Element {
+  const { t } = useTranslation("metals");
+  const { width, fontScale } = useWindowDimensions();
+  const isCompact = shouldUseCompactLayout(width, fontScale);
+
   return (
-    <View className="mt-7 flex-row items-start gap-2">
-      <Ionicons name="time-outline" size={20} color={palette.nileGreen[600]} />
-      <Text
-        testID="metal-portfolio-rate-updated"
-        className="min-w-0 flex-1 text-sm leading-5 text-text-secondary dark:text-text-secondary-dark"
+    <View testID="metal-portfolio-rates-section" className="mt-4">
+      <View
+        testID="metal-portfolio-rates-header"
+        className={
+          isCompact
+            ? "flex-col items-start gap-1.5"
+            : "flex-row items-baseline justify-between gap-2.5"
+        }
       >
-        {label}
-      </Text>
+        <Text className="text-base font-semibold text-text-primary dark:text-text-primary-dark">
+          {t("portfolio.prices_per_gram")}
+        </Text>
+        <Text
+          testID="metal-portfolio-rate-updated"
+          className="text-[10px] text-text-secondary dark:text-text-secondary-dark"
+        >
+          ◷ {rateUpdatedLabel}
+        </Text>
+      </View>
+      <View
+        testID="metal-portfolio-rates-grid"
+        className="mt-2.5 flex-row flex-wrap justify-between gap-y-2"
+      >
+        {purityPriceTiles.map((tile) => {
+          const isGold = tile.metal === "GOLD";
+          const metalName = t(isGold ? "gold" : "silver");
+          const purityLabel = t(`portfolio.purity_tile.${tile.purityCode}`);
+          const formattedPrice =
+            tile.pricePerGramDecimal === null
+              ? "—"
+              : formatCodeAmount(tile.pricePerGramDecimal, currency, locale);
+          const unit = t("portfolio.per_gram");
+          const stateSuffix =
+            tile.state !== "fresh" ? ` ${t(`rate.short_${tile.state}`)}.` : "";
+
+          return (
+            <View
+              key={tile.id}
+              testID={`metal-rate-tile-${tile.id}`}
+              accessible
+              accessibilityRole="text"
+              accessibilityLabel={`${metalName} ${purityLabel}. ${formattedPrice} ${unit}.${stateSuffix}`}
+              className={`min-h-[54px] ${
+                isCompact ? "w-full" : "w-[48.5%]"
+              } rounded-[11px] border border-slate-200 bg-surface px-2.5 py-2 dark:border-slate-700 dark:bg-slate-800`}
+            >
+              <View className="flex-row items-center gap-1.5">
+                <View
+                  className={`h-2 w-2 rounded-full ${
+                    isGold ? "bg-gold-600" : "bg-silver-500"
+                  }`}
+                />
+                <Text
+                  numberOfLines={1}
+                  className="text-[11px] font-bold text-text-primary dark:text-text-primary-dark"
+                >
+                  {metalName} · {purityLabel}
+                </Text>
+              </View>
+              <View className="mt-1 flex-row items-baseline gap-1">
+                <Text
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.8}
+                  className="text-sm font-bold text-text-primary dark:text-text-primary-dark"
+                >
+                  {formattedPrice}
+                </Text>
+                <Text className="text-[10px] text-text-secondary dark:text-text-secondary-dark">
+                  {unit}
+                </Text>
+              </View>
+            </View>
+          );
+        })}
+      </View>
     </View>
   );
 }
@@ -594,8 +720,8 @@ function FilterBar({
 function HoldingsHeader(): React.JSX.Element {
   const { t } = useTranslation("metals");
   return (
-    <Text className="mb-3 mt-6 text-xl font-medium text-text-primary dark:text-text-primary-dark">
-      {t("portfolio.holdings")}
+    <Text className="mb-3 mt-6 text-lg font-semibold text-text-primary dark:text-text-primary-dark">
+      {t("portfolio.items_heading")}
     </Text>
   );
 }

@@ -49,7 +49,7 @@ jest.mock("@/hooks/useUiPolishCopy", () => ({
     metals_empty:
       mockLanguage === "ar"
         ? {
-            header: "ذهبك وفضتك",
+            header: "معادني",
             title: "ابدأ تتابع ذهبك وفضتك",
             body: "ضيف أول قطعة علشان تتابع قيمتها مع الوقت.",
             cta: "ضيف أول قطعة",
@@ -198,13 +198,13 @@ describe("MyMetalsRoute premium empty-state chrome", () => {
     mockEmptyHasHistory = false;
   });
 
-  it("uses the empty CTA as the only Add action and hides zero portfolio chrome", () => {
+  it("shows the icon-only header add action in empty state and hides zero portfolio chrome", () => {
     render(<MyMetalsRoute />);
 
     expect(screen.getByText("My Metals")).toBeTruthy();
     expect(screen.getByTestId("mock-premium-empty-state")).toBeTruthy();
     expect(screen.getAllByTestId("mock-empty-cta")).toHaveLength(1);
-    expect(screen.queryByTestId("mock-header-add")).toBeNull();
+    expect(screen.getByTestId("mock-header-add")).toBeTruthy();
     expect(screen.queryByTestId("metal-portfolio-summary-layout")).toBeNull();
     expect(screen.queryByTestId("metal-portfolio-filter-bar")).toBeNull();
     expect(screen.queryByText("Holdings")).toBeNull();
@@ -250,12 +250,12 @@ describe("MyMetalsRoute premium empty-state chrome", () => {
     expect(mockEmptyHasHistory).toBe(true);
   });
 
-  it("uses the approved Arabic empty-state header", () => {
+  it("uses the approved Arabic empty-state header with header add button", () => {
     mockLanguage = "ar";
     render(<MyMetalsRoute />);
 
-    expect(screen.getByText("ذهبك وفضتك")).toBeTruthy();
+    expect(screen.getByText("معادني")).toBeTruthy();
     expect(screen.queryByText("My Metals")).toBeNull();
-    expect(screen.queryByTestId("mock-header-add")).toBeNull();
+    expect(screen.getByTestId("mock-header-add")).toBeTruthy();
   });
 });

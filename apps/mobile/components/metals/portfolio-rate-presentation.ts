@@ -123,3 +123,34 @@ export function getPortfolioRateAccessibilityCopy(
       return { key: "rate.missing" };
   }
 }
+
+export function getPortfolioRateCompactLabel(
+  state: PortfolioRateTrustState,
+  providerObservedAt: Date | null,
+  language: string | undefined,
+  now: Date,
+  t: (key: string, values?: Record<string, string>) => string
+): string {
+  if (state === "missing") {
+    return t("rate.missing");
+  }
+  const parts = formatPortfolioRateUpdatedParts(providerObservedAt, language);
+  if (parts === null) {
+    return t(`rate.${state}`);
+  }
+  const observedAt = copyValidDate(providerObservedAt);
+  const timeUpdated =
+    observedAt !== null && isSameLocalDay(observedAt, now)
+      ? t("portfolio.rates_updated_today", { time: parts.time })
+      : t("portfolio.rates_updated_compact", {
+          date: parts.date,
+          time: parts.time,
+        });
+
+  if (state === "stale" || state === "unknown") {
+    const qualifier = t(`rate.short_${state}`);
+    return `${qualifier} · ${timeUpdated}`;
+  }
+
+  return timeUpdated;
+}
