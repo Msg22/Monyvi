@@ -12,7 +12,12 @@ let mockFontScale = 1;
 
 jest.mock("react-native/Libraries/Utilities/useWindowDimensions", () => ({
   __esModule: true,
-  default: (): { fontScale: number; height: number; scale: number; width: number } => ({
+  default: (): {
+    fontScale: number;
+    height: number;
+    scale: number;
+    width: number;
+  } => ({
     fontScale: mockFontScale,
     height: 844,
     scale: 1,
@@ -39,10 +44,14 @@ const mockTranslations: Record<string, string> = {
   "portfolio.filter.silver": "Silver",
   "portfolio.active_portfolio": "Your Metals",
   "portfolio.active_portfolio_value": "Your Metals Value",
+  "portfolio.active_holdings": "{{count}} items",
   "portfolio.active_holdings_one": "{{count}} item",
   "portfolio.active_holdings_other": "{{count}} items",
   "portfolio.since_purchase_label": "since purchase",
   "rate.missing": "Rates: current rate unavailable",
+  "rate.short_stale": "Last available",
+  "rate.short_unknown": "Age unknown",
+  "rate.short_missing": "Unavailable",
 };
 
 jest.mock("react-i18next", () => ({
@@ -186,21 +195,19 @@ describe("My Metals Refinement Interactions & Tokens", () => {
   it("provides subtle scale and active border feedback on item card", () => {
     renderTestPortfolio();
 
-    expect(
-      screen.getByTestId("metal-portfolio-holding-gold-bar-1")
-    ).toHaveProp("className", expect.stringContaining("dark:bg-slate-800"));
-    expect(
-      screen.getByTestId("metal-portfolio-holding-gold-bar-1")
-    ).toHaveProp("className", expect.stringContaining("dark:border-slate-700"));
-    expect(
-      screen.getByTestId("metal-portfolio-holding-gold-bar-1")
-    ).toHaveProp(
+    expect(screen.getByTestId("metal-portfolio-holding-gold-bar-1")).toHaveProp(
+      "className",
+      expect.stringContaining("dark:bg-slate-800")
+    );
+    expect(screen.getByTestId("metal-portfolio-holding-gold-bar-1")).toHaveProp(
+      "className",
+      expect.stringContaining("dark:border-slate-700")
+    );
+    expect(screen.getByTestId("metal-portfolio-holding-gold-bar-1")).toHaveProp(
       "className",
       expect.stringContaining("active:border-nileGreen-500")
     );
-    expect(
-      screen.getByTestId("metal-portfolio-holding-gold-bar-1")
-    ).toHaveProp(
+    expect(screen.getByTestId("metal-portfolio-holding-gold-bar-1")).toHaveProp(
       "className",
       expect.stringContaining("dark:active:border-nileGreen-400")
     );
@@ -238,5 +245,82 @@ describe("My Metals Refinement Interactions & Tokens", () => {
       "className",
       expect.stringContaining("w-[48.5%]")
     );
+  });
+
+  it("conforms item card to 110px min height, 12px padding, and 56x56 imagery", () => {
+    renderTestPortfolio();
+
+    expect(screen.getByTestId("metal-portfolio-holding-gold-bar-1")).toHaveProp(
+      "className",
+      expect.stringContaining("min-h-[110px]")
+    );
+    expect(screen.getByTestId("metal-portfolio-holding-gold-bar-1")).toHaveProp(
+      "className",
+      expect.stringContaining("p-3")
+    );
+
+    expect(screen.getByTestId("metal-portfolio-holding-image")).toHaveProp(
+      "className",
+      expect.stringContaining("h-14 w-14")
+    );
+  });
+
+  it("reflows prices-per-gram header to vertical stack on compact layout", () => {
+    mockScreenWidth = 320;
+    mockFontScale = 1.0;
+
+    const { unmount } = render(
+      <MetalPortfolioScreen
+        currency="EGP"
+        error={null}
+        isLoading={false}
+        onFilterChange={jest.fn()}
+        onHistoryPress={jest.fn()}
+        onHoldingPress={jest.fn()}
+        onRetry={jest.fn()}
+        portfolio={basePortfolio}
+        rateProviderObservedAt={new Date("2026-09-26T10:00:00.000Z")}
+        selectedFilter="ALL"
+      />
+    );
+
+    expect(screen.getByTestId("metal-portfolio-rates-header")).toHaveProp(
+      "className",
+      expect.stringContaining("flex-col items-start gap-1.5")
+    );
+    unmount();
+
+    mockScreenWidth = 390;
+    renderTestPortfolio();
+    expect(screen.getByTestId("metal-portfolio-rates-header")).toHaveProp(
+      "className",
+      expect.stringContaining("flex-row items-baseline justify-between gap-2.5")
+    );
+  });
+
+  it("includes trust state qualifier in tile accessibility label when rate is not fresh", () => {
+    renderTestPortfolio({
+      portfolio: {
+        ...basePortfolio,
+        purityPriceTiles: [
+          {
+            id: "silver-999",
+            metal: "SILVER",
+            purityCode: "silver-999",
+            pricePerGramDecimal: "45.00",
+            state: "stale",
+          },
+        ],
+      },
+    });
+
+    expect(
+      screen.getByLabelText("Silver 999. EGP 45.00 / g. Last available.")
+    ).toBeTruthy();
+  });
+
+  it("renders active holdings count with CLDR plural key", () => {
+    renderTestPortfolio();
+    expect(screen.getByText("1 items")).toBeTruthy();
   });
 });

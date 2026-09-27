@@ -139,12 +139,18 @@ export function getPortfolioRateCompactLabel(
     return t(`rate.${state}`);
   }
   const observedAt = copyValidDate(providerObservedAt);
-  if (observedAt !== null && isSameLocalDay(observedAt, now)) {
-    return t("portfolio.rates_updated_today", { time: parts.time });
-  }
-  return t("portfolio.rates_updated_compact", {
-    date: parts.date,
-    time: parts.time,
-  });
-}
+  const timeUpdated =
+    observedAt !== null && isSameLocalDay(observedAt, now)
+      ? t("portfolio.rates_updated_today", { time: parts.time })
+      : t("portfolio.rates_updated_compact", {
+          date: parts.date,
+          time: parts.time,
+        });
 
+  if (state === "stale" || state === "unknown") {
+    const qualifier = t(`rate.short_${state}`);
+    return `${qualifier} · ${timeUpdated}`;
+  }
+
+  return timeUpdated;
+}

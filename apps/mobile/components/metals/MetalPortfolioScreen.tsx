@@ -218,7 +218,6 @@ function SummarySkeleton(): React.JSX.Element {
   );
 }
 
-
 function HoldingsSectionSkeleton(): React.JSX.Element {
   return (
     <View testID="metal-portfolio-holdings-skeleton" className="mt-6 gap-3">
@@ -375,12 +374,7 @@ function PortfolioSummary({
               {holdingCount}
             </Text>
             <Text className="min-w-0 flex-1 text-xs text-text-secondary dark:text-text-secondary-dark">
-              {t(
-                holdingCount === 1
-                  ? "portfolio.active_holdings_one"
-                  : "portfolio.active_holdings_other",
-                { count: holdingCount }
-              )}
+              {t("portfolio.active_holdings", { count: holdingCount })}
             </Text>
           </View>
           {holdingCount === 0 ? null : (
@@ -581,7 +575,14 @@ function PricesPerGramSection({
 
   return (
     <View testID="metal-portfolio-rates-section" className="mt-4">
-      <View className="flex-row items-baseline justify-between gap-2.5">
+      <View
+        testID="metal-portfolio-rates-header"
+        className={
+          isCompact
+            ? "flex-col items-start gap-1.5"
+            : "flex-row items-baseline justify-between gap-2.5"
+        }
+      >
         <Text className="text-base font-semibold text-text-primary dark:text-text-primary-dark">
           {t("portfolio.prices_per_gram")}
         </Text>
@@ -605,6 +606,8 @@ function PricesPerGramSection({
               ? "—"
               : formatCodeAmount(tile.pricePerGramDecimal, currency, locale);
           const unit = t("portfolio.per_gram");
+          const stateSuffix =
+            tile.state !== "fresh" ? ` ${t(`rate.short_${tile.state}`)}.` : "";
 
           return (
             <View
@@ -612,7 +615,7 @@ function PricesPerGramSection({
               testID={`metal-rate-tile-${tile.id}`}
               accessible
               accessibilityRole="text"
-              accessibilityLabel={`${metalName} ${purityLabel}. ${formattedPrice} ${unit}.`}
+              accessibilityLabel={`${metalName} ${purityLabel}. ${formattedPrice} ${unit}.${stateSuffix}`}
               className={`min-h-[54px] ${
                 isCompact ? "w-full" : "w-[48.5%]"
               } rounded-[11px] border border-slate-200 bg-surface px-2.5 py-2 dark:border-slate-700 dark:bg-slate-800`}
@@ -650,7 +653,6 @@ function PricesPerGramSection({
     </View>
   );
 }
-
 
 function FilterBar({
   activeHoldings,

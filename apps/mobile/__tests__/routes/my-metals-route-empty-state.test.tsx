@@ -49,7 +49,7 @@ jest.mock("@/hooks/useUiPolishCopy", () => ({
     metals_empty:
       mockLanguage === "ar"
         ? {
-            header: "ذهبك وفضتك",
+            header: "معادني",
             title: "ابدأ تتابع ذهبك وفضتك",
             body: "ضيف أول قطعة علشان تتابع قيمتها مع الوقت.",
             cta: "ضيف أول قطعة",
@@ -254,9 +254,8 @@ describe("MyMetalsRoute premium empty-state chrome", () => {
     mockLanguage = "ar";
     render(<MyMetalsRoute />);
 
-    expect(screen.getByText("ذهبك وفضتك")).toBeTruthy();
+    expect(screen.getByText("معادني")).toBeTruthy();
     expect(screen.queryByText("My Metals")).toBeNull();
     expect(screen.getByTestId("mock-header-add")).toBeTruthy();
   });
 });
-

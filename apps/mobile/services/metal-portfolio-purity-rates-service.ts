@@ -20,6 +20,7 @@ export interface MetalPortfolioPurityPriceTile {
   readonly purityCode: string;
   readonly pricePerGramDecimal: string | null;
   readonly state: "fresh" | "stale" | "unknown" | "missing";
+  readonly providerObservedAt?: Date | null;
 }
 
 /**
@@ -37,18 +38,25 @@ export function buildFeaturedPurityPriceTiles(
       purityCode: def.purityCode,
       pricePerGramDecimal: null,
       state: "missing",
+      providerObservedAt: null,
     }));
   }
 
-  const currencyTrust = currentRates.currencies.get(preferredCurrency) ?? {
-    state: "missing",
-    ageMs: null,
-    providerObservedAt: null,
-  };
-  const currencyRateDecimal =
+  const currencyTrust =
     preferredCurrency === "USD"
-      ? "1"
-      : currencyTrust.valueDecimal ?? null;
+      ? {
+          state: "fresh" as const,
+          ageMs: 0,
+          providerObservedAt: null,
+          valueDecimal: "1",
+        }
+      : (currentRates.currencies.get(preferredCurrency) ?? {
+          state: "missing" as const,
+          ageMs: null,
+          providerObservedAt: null,
+        });
+  const currencyRateDecimal =
+    preferredCurrency === "USD" ? "1" : (currencyTrust.valueDecimal ?? null);
 
   return FEATURED_PURITY_CODES.map((def) => {
     const purityEntry = getPurityEntry(def.metal, def.purityCode);
@@ -76,6 +84,7 @@ export function buildFeaturedPurityPriceTiles(
       purityCode: def.purityCode,
       pricePerGramDecimal: state === "missing" ? null : pricePerGramDecimal,
       state,
+      providerObservedAt: metalTrust.providerObservedAt ?? null,
     };
   });
 }

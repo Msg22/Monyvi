@@ -831,6 +831,7 @@ describe("metal portfolio read model", () => {
           purityCode: "gold-999",
           pricePerGramDecimal: "3571.425", // 0.999 * 71.5 / 0.02
           state: "fresh",
+          providerObservedAt: new Date("2026-09-26T00:58:00Z"),
         },
         {
           id: "gold-875",
@@ -838,6 +839,7 @@ describe("metal portfolio read model", () => {
           purityCode: "gold-875",
           pricePerGramDecimal: "3128.125", // 0.875 * 71.5 / 0.02
           state: "fresh",
+          providerObservedAt: new Date("2026-09-26T00:58:00Z"),
         },
         {
           id: "gold-750",
@@ -845,6 +847,7 @@ describe("metal portfolio read model", () => {
           purityCode: "gold-750",
           pricePerGramDecimal: "2681.25", // 0.75 * 71.5 / 0.02
           state: "fresh",
+          providerObservedAt: new Date("2026-09-26T00:58:00Z"),
         },
         {
           id: "silver-999",
@@ -852,8 +855,45 @@ describe("metal portfolio read model", () => {
           purityCode: "silver-999",
           pricePerGramDecimal: "53.59635", // 0.999 * 1.073 / 0.02
           state: "fresh",
+          providerObservedAt: new Date("2026-09-26T00:58:00Z"),
         },
       ]);
+    });
+
+    it("treats USD as synthetic fresh trust even when currencies map lacks USD", () => {
+      const currentRates: LiveRatesTrustReadModel = {
+        gold: {
+          state: "fresh",
+          ageMs: 1000,
+          providerObservedAt: new Date("2026-09-26T00:58:00Z"),
+          valueDecimal: "71.5",
+        },
+        silver: {
+          state: "fresh",
+          ageMs: 1000,
+          providerObservedAt: new Date("2026-09-26T00:58:00Z"),
+          valueDecimal: "1.073",
+        },
+        currencies: new Map(), // No USD key
+      };
+
+      const model = buildMetalPortfolioReadModel({
+        currentRates,
+        filter: "ALL",
+        holdings: [],
+        preferredCurrency: "USD",
+        rateStatus: { state: "fresh", ageMs: 1000 },
+        userId: "user-1",
+      });
+
+      const gold24k = model.purityPriceTiles.find(
+        (t) => t.purityCode === "gold-999"
+      );
+      expect(gold24k?.state).toBe("fresh");
+      expect(gold24k?.pricePerGramDecimal).not.toBeNull();
+      expect(gold24k?.providerObservedAt).toEqual(
+        new Date("2026-09-26T00:58:00Z")
+      );
     });
 
     it("marks silver purity tile stale when silver rate is stale", () => {
@@ -937,4 +977,3 @@ describe("metal portfolio read model", () => {
     });
   });
 });
-
