@@ -37,13 +37,18 @@ appId: com.monyvi.app
 - inputText: "10.125"
 - tapOn:
     id: metal-holding-purity-trigger
+- assertVisible: "24K"
+- assertVisible: "21K"
+- assertVisible: "18K"
 - tapOn:
     id: metal-holding-purity-option-gold-999
 - tapOn:
     id: metal-holding-purchase-price-field
 - inputText: "47800.00"
-- tapOn: Purchase currency
-- tapOn: EGP
+- tapOn:
+    id: metal-holding-purchase-currency-trigger
+- tapOn:
+    id: currency-code-row-EGP
 - tapOn:
     id: metal-holding-purchase-date-field
 - tapOn:
@@ -57,7 +62,7 @@ appId: com.monyvi.app
     id: metal-holding-live-preview
 - assertVisible:
     id: metal-holding-item-render
-- assertVisible: "24K · 999"
+- assertVisible: "24K"
 - assertNotVisible:
     id: metal-holding-review-screen
 - tapOn:
@@ -92,8 +97,10 @@ appId: com.monyvi.app
 - tapOn:
     id: metal-holding-purchase-price-field
 - inputText: "1500.00"
-- tapOn: Purchase currency
-- tapOn: EGP
+- tapOn:
+    id: metal-holding-purchase-currency-trigger
+- tapOn:
+    id: currency-code-row-EGP
 - assertVisible:
     id: metal-holding-live-preview
 - runFlow:
@@ -120,7 +127,7 @@ appId: com.monyvi.app
     id: metal-holding-submit
 - assertVisible:
     id: metal-holding-name-field-error
-- assertVisible: Enter this field.
+- assertVisible: This field is required.
 - tapOn:
     id: metal-holding-name-field
 - inputText: Unsaved holding

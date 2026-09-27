@@ -9,6 +9,7 @@ import React, {
   useRef,
   useState,
 } from "react";
+import { useTranslation } from "react-i18next";
 import {
   KeyboardAvoidingView,
   Platform,
@@ -20,12 +21,13 @@ import {
 } from "react-native";
 
 import { PageHeader } from "@/components/navigation/PageHeader";
+import { CurrencyPicker } from "@/components/currency/CurrencyPicker";
 import { Dropdown, type DropdownItem } from "@/components/ui/Dropdown";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { TextField } from "@/components/ui/TextField";
 import { palette } from "@/constants/colors";
-import { useTheme } from "@/context/ThemeContext";
 import { shouldUseCompactLayout } from "@/constants/ui";
+import { isSupportedMetalsIsoCurrencyCode } from "@monyvi/logic";
 
 import { MetalHoldingLivePreview } from "./MetalHoldingLivePreview";
 import { MetalHoldingCorrectionState } from "./MetalHoldingCorrectionState";
@@ -33,6 +35,8 @@ import {
   MetalSelector,
   PhysicalFormSelector,
 } from "./MetalHoldingFormSelectors";
+import { getMetalHoldingFormPurityLabel } from "./metal-holding-purity-options";
+import { getPurityCatalogEntry } from "@/validation/metal-holding-form-validation";
 
 export type MetalHoldingFormField =
   | "name"
@@ -263,7 +267,7 @@ const DEFAULT_COPY: MetalHoldingFormCopy = {
 };
 
 const DEFAULT_PURITY_OPTIONS: ReadonlyArray<DropdownItem<string>> = [
-  { value: "gold-999", label: "24K · 999" },
+  { value: "gold-999", label: "24K" },
 ];
 const DEFAULT_CURRENCY_OPTIONS: ReadonlyArray<DropdownItem<string>> = [
   { value: "EGP", label: "EGP" },
@@ -278,7 +282,6 @@ const FIELD_ORDER = [
   "metal-holding-physical-form-field",
   "metal-holding-notes-field",
   "metal-holding-live-preview",
-  "metal-holding-local-first-status",
   "metal-holding-submit",
 ] as const;
 const FOCUSABLE_ERROR_ORDER = [
@@ -320,7 +323,7 @@ export function MetalHoldingForm({
   onAcknowledgeStaleRate,
   onCorrectionReasonChange,
 }: MetalHoldingFormProps): React.JSX.Element {
-  const { isDark } = useTheme();
+  const { t } = useTranslation("metals");
   const [isPurityOpen, setIsPurityOpen] = useState(false);
   const [isCurrencyOpen, setIsCurrencyOpen] = useState(false);
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
@@ -388,7 +391,7 @@ export function MetalHoldingForm({
 
   return (
     <KeyboardAvoidingView
-      className="flex-1 bg-slate-25 dark:bg-slate-950"
+      className="flex-1 bg-background dark:bg-background-dark"
       behavior={Platform.OS === "ios" ? "padding" : undefined}
       testID="metal-holding-form"
       accessibilityLanguage={locale}
@@ -402,8 +405,6 @@ export function MetalHoldingForm({
         }
       />
       <PageHeader
-        variant="review"
-        includeTopSafeAreaInset
         title={title}
         showDrawer={false}
         showBackButton
@@ -510,14 +511,24 @@ export function MetalHoldingForm({
                     variant="outlined"
                     testID="metal-holding-purity"
                     label={copy.purity}
-                    items={purityOptions}
+                    items={purityOptions.map((option) => ({
+                      ...option,
+                      label: getMetalHoldingFormPurityLabel(
+                        values.metal,
+                        option.value,
+                        t(getPurityCatalogEntry(option.value)?.labelKey ?? "")
+                      ),
+                    }))}
                     value={values.purityCode}
-                    onChange={(value) => {
-                      setIsPurityOpen(false);
-                      onChange("purityCode", value);
-                    }}
+                    placeholder={getMetalHoldingFormPurityLabel(
+                      values.metal,
+                      values.purityCode,
+                      t(getPurityCatalogEntry(values.purityCode)?.labelKey ?? "")
+                    )}
+                    onChange={(value) => onChange("purityCode", value)}
                     isOpen={isPurityOpen}
                     onToggle={() => setIsPurityOpen((open) => !open)}
+                    useModal
                     disabled={isSubmitting}
                     className="mb-0"
                   />
@@ -569,17 +580,27 @@ export function MetalHoldingForm({
             <View testID="metal-holding-purchase-currency-field">
               <Dropdown
                 variant="outlined"
+                testID="metal-holding-purchase-currency"
                 label={copy.purchaseCurrency}
                 items={currencyOptions}
                 value={values.purchaseCurrency}
-                onChange={(value) => {
-                  setIsCurrencyOpen(false);
-                  onChange("purchaseCurrency", value);
-                }}
-                isOpen={isCurrencyOpen}
-                onToggle={() => setIsCurrencyOpen((open) => !open)}
+                onChange={(value) => onChange("purchaseCurrency", value)}
+                isOpen={false}
+                onToggle={() => setIsCurrencyOpen(true)}
                 disabled={isSubmitting}
                 className="mb-0"
+              />
+              <CurrencyPicker
+                testID="metal-holding-currency-picker"
+                visible={isCurrencyOpen}
+                selectedCurrency={
+                  isSupportedMetalsIsoCurrencyCode(values.purchaseCurrency)
+                    ? values.purchaseCurrency
+                    : "EGP"
+                }
+                allowedCurrencies={currencyOptions.map((option) => option.value)}
+                onSelect={(currency) => onChange("purchaseCurrency", currency)}
+                onClose={() => setIsCurrencyOpen(false)}
               />
               <PreviousValueCue
                 change={findAffectedChange(editState, "purchaseCurrency")}
@@ -748,25 +769,12 @@ export function MetalHoldingForm({
             </Text>
           ) : null}
 
-          <View
-            testID="metal-holding-local-first-status"
-            className="flex-row items-start gap-2 px-1"
-          >
-            <Ionicons
-              name="lock-closed-outline"
-              size={18}
-              color={isDark ? palette.nileGreen[400] : palette.nileGreen[700]}
-            />
-            <Text className="flex-1 text-xs leading-5 text-text-secondary dark:text-text-secondary-dark">
-              {copy.savedLocally}
-            </Text>
-          </View>
         </ScrollView>
       )}
 
       <View
         testID="metal-holding-submit-area"
-        className="w-full max-w-2xl self-center bg-slate-25 px-5 pt-2 dark:bg-slate-950"
+        className="w-full max-w-2xl self-center bg-background px-5 pt-2 dark:bg-background-dark"
         style={{ paddingBottom: bottomInset + 12 }}
         {...submitAreaMetadata}
       >

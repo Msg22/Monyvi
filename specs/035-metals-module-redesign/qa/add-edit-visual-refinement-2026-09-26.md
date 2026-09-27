@@ -35,6 +35,12 @@ The approved image includes an iPhone frame and no exact logical viewport. This 
 
 ## Manual QA plan / remaining checks
 
+### Follow-up requested 2026-09-27
+
+Both forms now use the standard PageHeader and page background. Check the connected Gold/Silver control on Add and the locked metal display on Edit. Open Purity on each form: the selection sheet must scroll independently without moving Total purchase price; Gold must offer only 24K, 21K, and 18K with no fineness number in the form or preview. Existing holdings with older purity codes must retain their recorded purity until explicitly changed. Silver keeps its catalog grades. Open Purchase currency and search using the shared currency picker; only currencies accepted by Metals can be selected. Empty required fields must show “This field is required.” in English and its Arabic equivalent. The price hint starts “Total amount paid”; no device-save note appears above Add or Save.
+
+Automated coverage: `metals-add.test.tsx`, `metals-edit.test.tsx`, `metal-holding-purity-options.test.ts`, and `CurrencyPicker.test.tsx` cover the form controls and selection rules. `e2e/maestro/metals/add-holding.yaml` and `edit-holding.yaml` cover the visible journey but need an emulator run. Light/dark, ordinary/compact, RTL, enlarged text, and physical-device visual comparisons remain manual until captured against the approved reference.
+
 1. In light and dark themes, open My Metals → Add holding. Compare against the approved reference: labels, outlines, spacing, selected gold/silver, Weight/Purity row, currency suffix/prefix, date, form cards, notes, estimate and CTA. Screenshot comparison remains manual; layout branches have unit coverage.
 2. Repeat on compact phone, tablet, landscape, Arabic RTL and enlarged text. Compact/200% text smoke completed; remaining device/theme combinations and TalkBack are manual pending. Do not conflate the separate English/RTL bug with this change.
 3. Enter a valid holding and save, reopen detail, select Edit details, change notes, save, and verify updated detail. Cancel a second edit and confirm nothing changes. Existing Add/Edit automated tests cover deterministic branches; updated Maestro journey awaits execution. This smoke checked opening Edit, not persistence.

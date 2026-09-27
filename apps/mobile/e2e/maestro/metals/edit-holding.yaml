@@ -85,5 +85,5 @@ appId: com.monyvi.app
     id: metal-holding-correction-reason
 - assertNotVisible:
     id: metal-holding-what-will-change
-- assertVisible:
+- assertNotVisible:
     id: metal-holding-local-first-status

@@ -30,6 +30,7 @@ import {
 import { useEditMetalHolding } from "@/hooks/useEditMetalHolding";
 import { useMetalAddPreviewRates } from "@/hooks/useAddMetalHolding";
 import { getPurityCatalogEntry } from "@/validation/metal-holding-form-validation";
+import { getMetalHoldingFormPurityLabel } from "@/components/metals/metal-holding-purity-options";
 
 const SAFE_RANGE = {
   maximumWeightGramsDecimal: "999999999.999",
@@ -123,7 +124,7 @@ export default function EditMetalHoldingRoute(): React.JSX.Element {
   }, [form]);
   if (!form.isLoading && (form.error || !form.model)) {
     return (
-      <View className="flex-1 bg-slate-25 dark:bg-slate-950">
+      <View className="flex-1 bg-background dark:bg-background-dark">
         <PageHeader
           title={copy.editTitle ?? t("edit.title")}
           showBackButton
@@ -155,7 +156,7 @@ export default function EditMetalHoldingRoute(): React.JSX.Element {
   }
 
   return (
-    <View className="flex-1 bg-slate-25 dark:bg-slate-950">
+    <View className="flex-1 bg-background dark:bg-background-dark">
       <MetalHoldingForm
         mode="edit"
         holdingStatus={form.model?.status ?? "active"}
@@ -378,6 +379,13 @@ export function readAffectedValue(
     if (!facts.purityCode) return t("edit.not_recorded");
     const entry = getPurityCatalogEntry(facts.purityCode);
     if (!entry) return facts.purityCode;
+    if (entry.metal === "GOLD") {
+      return getMetalHoldingFormPurityLabel(
+        "GOLD",
+        entry.code,
+        t(entry.labelKey)
+      );
+    }
     const translated = t(entry.labelKey);
     return translated && translated !== entry.labelKey
       ? translated

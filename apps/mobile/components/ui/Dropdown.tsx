@@ -190,6 +190,7 @@ function DropdownModalView<T extends string | number>({
 
               {/* Items */}
               <ScrollView
+                testID={testID ? `${testID}-options-scroll` : undefined}
                 className="max-h-80"
                 showsVerticalScrollIndicator={false}
               >

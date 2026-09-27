@@ -311,7 +311,6 @@ describe("Edit metal holding form", () => {
       "metal-holding-physical-form-field",
       "metal-holding-notes-field",
       "metal-holding-live-preview",
-      "metal-holding-local-first-status",
       "metal-holding-submit",
     ]);
     expect(screen.getByTestId("metal-holding-metal-field")).toHaveProp(
@@ -326,7 +325,7 @@ describe("Edit metal holding form", () => {
       "className",
       expect.stringContaining("dark:text-text-primary-dark")
     );
-    expect(screen.getAllByText("24K · 999").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("24K").length).toBeGreaterThan(0);
     expect(screen.getByDisplayValue("14 Mar 2024")).toBeOnTheScreen();
     fireEvent.press(screen.getByTestId("metal-holding-purchase-date-field"));
     expect(
@@ -800,7 +799,7 @@ describe("Edit metal holding form", () => {
       "purity",
       mockT as never
     );
-    expect(valueWithTranslation).toBe("عيار 24 · 999");
+    expect(valueWithTranslation).toBe("عيار 24");
 
     const fallbackT = ((key: string): string => key) as ReturnType<
       typeof jest.fn
@@ -810,8 +809,7 @@ describe("Edit metal holding form", () => {
       "purity",
       fallbackT as never
     );
-    expect(valueWithoutTranslation).toBe("24K · 999");
+    expect(valueWithoutTranslation).toBe("24K");
     expect(valueWithoutTranslation).not.toBe("gold-999");
   });
 });
-

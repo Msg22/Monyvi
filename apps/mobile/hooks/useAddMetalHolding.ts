@@ -6,6 +6,10 @@ import {
 } from "@monyvi/logic";
 
 import type { DropdownItem } from "@/components/ui/Dropdown";
+import {
+  getMetalHoldingFormPurityLabel,
+  getMetalHoldingPurityOptions,
+} from "@/components/metals/metal-holding-purity-options";
 import type {
   MetalHoldingFormField,
   MetalHoldingFormPreview,
@@ -131,9 +135,9 @@ function asValidationData(
 }
 
 function firstPurityCode(metal: SupportedMetalType): string {
-  const first = getSupportedMetalPurities(metal).at(0);
+  const first = getMetalHoldingPurityOptions(metal).at(0);
   if (!first) throw new Error("metal_purity_catalog_empty");
-  return first.code;
+  return first.value;
 }
 
 function fallbackPreview(
@@ -145,7 +149,9 @@ function fallbackPreview(
   return {
     metal: values.metal,
     purityCode: purity?.code ?? values.purityCode,
-    purityLabel: purity?.displayLabel ?? "—",
+    purityLabel: purity
+      ? getMetalHoldingFormPurityLabel(values.metal, purity.code)
+      : "—",
     purityFactorDecimal: purity?.factorDecimal ?? "0",
     physicalForm: values.physicalForm,
     name: values.name.trim() || undefined,
@@ -243,10 +249,10 @@ export function useAddMetalHoldingForm(
     return {
       metal: normalized.metal,
       purityCode: normalized.purity.code,
-      purityLabel:
-        getSupportedMetalPurities(normalized.metal).find(
-          (entry) => entry.code === normalized.purity.code
-        )?.displayLabel ?? normalized.purity.code,
+      purityLabel: getMetalHoldingFormPurityLabel(
+        normalized.metal,
+        normalized.purity.code
+      ),
       purityFactorDecimal: normalized.purity.factorDecimal,
       physicalForm: normalized.physicalForm,
       name: normalized.name,
@@ -263,11 +269,7 @@ export function useAddMetalHoldingForm(
     };
   }, [input, validation.normalized, values]);
   const purityOptions = useMemo(
-    () =>
-      getSupportedMetalPurities(values.metal).map((entry) => ({
-        value: entry.code,
-        label: entry.displayLabel,
-      })),
+    () => getMetalHoldingPurityOptions(values.metal),
     [values.metal]
   );
   const requiresStaleRateAcknowledgment =

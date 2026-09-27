@@ -195,15 +195,42 @@ describe("Add metal holding form", () => {
 
   it("uses sentence-case form labels and a supported dark preview surface", () => {
     renderForm();
-    expect(screen.getByText("Holding name").props.className).not.toContain(
-      "input-label"
+    expect(screen.getByText("Holding name")).not.toHaveProp(
+      "className",
+      expect.stringContaining("input-label")
     );
-    expect(
-      screen.getByTestId("metal-holding-live-preview").props.className
-    ).toContain("dark:bg-slate-900");
+    expect(screen.getByTestId("metal-holding-live-preview")).toHaveProp(
+      "className",
+      expect.stringContaining("dark:bg-slate-900")
+    );
     expect(screen.getByTestId("metal-holding-submit-area")).toHaveStyle({
       paddingBottom: 46,
     });
+  });
+
+  it("uses the app background and linked metal choices without a device-save note", () => {
+    renderForm();
+    expect(screen.getByTestId("metal-holding-form")).toHaveProp(
+      "className",
+      expect.stringContaining("bg-background")
+    );
+    expect(screen.getByTestId("metal-holding-metal-options")).not.toHaveProp(
+      "className",
+      expect.stringContaining("gap-")
+    );
+    expect(screen.queryByTestId("metal-holding-local-first-status")).toBeNull();
+  });
+
+  it("opens purity choices without expanding the form and uses the shared currency picker", () => {
+    renderForm();
+    expect(screen.getByTestId("metal-holding-purity-trigger")).toBeOnTheScreen();
+    fireEvent.press(screen.getByTestId("metal-holding-purity-trigger"));
+    expect(screen.getByTestId("metal-holding-purity-options-scroll")).toBeOnTheScreen();
+    expect(screen.getByTestId("metal-holding-purchase-price-field")).toBeOnTheScreen();
+    fireEvent.press(screen.getByTestId("metal-holding-purity-trigger"));
+    fireEvent.press(screen.getByTestId("metal-holding-purchase-currency-trigger"));
+    expect(screen.getByTestId("metal-holding-purchase-currency-trigger")).toBeOnTheScreen();
+    expect(screen.getByTestId("metal-holding-currency-picker")).toBeOnTheScreen();
   });
 
   it("renders V1's direct-Add fields in canonical order with the ordinary-phone Weight/Purity row", () => {
@@ -219,7 +246,6 @@ describe("Add metal holding form", () => {
       "metal-holding-physical-form-field",
       "metal-holding-notes-field",
       "metal-holding-live-preview",
-      "metal-holding-local-first-status",
       "metal-holding-submit",
     ];
 
@@ -270,12 +296,12 @@ describe("Add metal holding form", () => {
       "purityCode",
       "gold-999"
     );
-    expect(screen.getAllByText("24K · 999").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("24K").length).toBeGreaterThan(0);
     expect(screen.getByText("Gold · Coin")).toBeOnTheScreen();
-    expect(screen.getByText("10 g · 24K · 999")).toBeOnTheScreen();
+    expect(screen.getByText("10 g · 24K")).toBeOnTheScreen();
     expect(screen.getByText("EGP 52,150.32")).toBeOnTheScreen();
     expect(screen.getByText("+ EGP 4,350.32")).toBeOnTheScreen();
-    expect(screen.getByText("24K · 999 · 99.9% pure")).toBeOnTheScreen();
+    expect(screen.queryByText("24K · 999 · 99.9% pure")).toBeNull();
     expect(
       screen.getByText("Gold · USD 104.51 per pure gram")
     ).toBeOnTheScreen();
@@ -285,10 +311,6 @@ describe("Add metal holding form", () => {
     expect(screen.getByTestId("metal-holding-item-render")).toHaveProp(
       "metal",
       "GOLD"
-    );
-    expect(screen.getByText("24K · 999 · 99.9% pure")).toHaveProp(
-      "className",
-      expect.stringContaining("dark:text-text-secondary-dark")
     );
     expect(screen.queryByTestId("metal-holding-review-screen")).toBeNull();
   });

@@ -9,6 +9,8 @@ import { isSupportedMetalsIsoCurrencyCode } from "@monyvi/logic";
 import { formatLocalizedMoneyAmount } from "@/utils/localized-money-display";
 
 import { MetalHoldingRender } from "./MetalHoldingRender";
+import { getMetalHoldingFormPurityLabel } from "./metal-holding-purity-options";
+import { getPurityCatalogEntry } from "@/validation/metal-holding-form-validation";
 import type {
   MetalHoldingFormCopy,
   MetalHoldingFormPreview,
@@ -46,9 +48,17 @@ export function MetalHoldingLivePreview({
   const metalLabel = preview.metal === "GOLD" ? copy.gold : copy.silver;
   const formLabel = getPhysicalFormLabel(preview.physicalForm, copy);
   const identity = formLabel ? `${metalLabel} · ${formLabel}` : metalLabel;
+  const purityLabel = getMetalHoldingFormPurityLabel(
+    preview.metal,
+    preview.purityCode,
+    t(
+      `metals:${getPurityCatalogEntry(preview.purityCode)?.labelKey ?? ""}`,
+      { defaultValue: preview.purityLabel }
+    )
+  );
   const facts = [
     preview.weightGramsDecimal ? `${preview.weightGramsDecimal} g` : null,
-    preview.purityLabel,
+    purityLabel,
   ]
     .filter((value): value is string => value !== null)
     .join(" · ");
@@ -122,10 +132,10 @@ export function MetalHoldingLivePreview({
         )}
       </View>
       <View className="mt-3 gap-2">
-        {preview.purityPercentDecimal ? (
+        {preview.metal === "SILVER" && preview.purityPercentDecimal ? (
           <DisclosureRow
             icon="shield-checkmark-outline"
-            text={`${preview.purityLabel} · ${preview.purityPercentDecimal}% ${copy.pure}`}
+            text={`${purityLabel} · ${preview.purityPercentDecimal}% ${copy.pure}`}
           />
         ) : null}
         {preview.metalUsdPerPureGramDecimal ? (

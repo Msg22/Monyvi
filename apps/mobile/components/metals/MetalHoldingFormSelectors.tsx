@@ -56,7 +56,7 @@ export function MetalSelector({
           </Text>
         </>
       ) : (
-        <View className="flex-row gap-2">
+        <View testID="metal-holding-metal-options" className="flex-row">
           {(["GOLD", "SILVER"] as const).map((metal) => {
             const isSelected = value === metal;
             return (
@@ -67,7 +67,9 @@ export function MetalSelector({
                 accessibilityState={{ checked: isSelected }}
                 disabled={isDisabled}
                 onPress={() => onChange("metal", metal)}
-                className={`min-h-11 flex-1 flex-row items-center justify-center gap-2 rounded-lg border ${
+                className={`min-h-11 flex-1 flex-row items-center justify-center gap-2 border ${
+                  metal === "GOLD" ? "rounded-s-lg" : "-ms-px rounded-e-lg"
+                } ${
                   isSelected
                     ? "border-nileGreen-700 bg-slate-25 dark:border-nileGreen-400 dark:bg-slate-900"
                     : "border-slate-300 bg-slate-25 dark:border-slate-700 dark:bg-slate-900"

@@ -5,6 +5,10 @@ import {
 } from "@monyvi/logic";
 
 import type { DropdownItem } from "@/components/ui/Dropdown";
+import {
+  getMetalHoldingFormPurityLabel,
+  getMetalHoldingPurityOptions,
+} from "@/components/metals/metal-holding-purity-options";
 import type { MetalHoldingPreviewRatesWithTrust } from "./useAddMetalHolding";
 import type {
   MetalHoldingFormField,
@@ -240,7 +244,10 @@ export function useEditMetalHolding(
     return {
       metal: normalized.metal,
       purityCode: normalized.purity.code,
-      purityLabel: purity?.displayLabel ?? normalized.purity.code,
+      purityLabel: getMetalHoldingFormPurityLabel(
+        normalized.metal,
+        purity?.code ?? normalized.purity.code
+      ),
       purityFactorDecimal: normalized.purity.factorDecimal,
       physicalForm: normalized.physicalForm,
       name: normalized.name,
@@ -261,11 +268,7 @@ export function useEditMetalHolding(
     };
   }, [input, validation.normalized, values]);
   const purityOptions = useMemo(
-    () =>
-      getSupportedMetalPurities(values.metal).map((entry) => ({
-        value: entry.code,
-        label: entry.displayLabel,
-      })),
+    () => getMetalHoldingPurityOptions(values.metal),
     [values.metal]
   );
   const isDirty =

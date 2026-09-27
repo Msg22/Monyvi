@@ -162,4 +162,23 @@ describe("CurrencyPicker", () => {
 
     expect(onSelect).toHaveBeenCalledWith("EGP");
   });
+
+  it("limits the shared picker to currencies accepted by the holding form", async () => {
+    await prepareI18n("en");
+    render(
+      <CurrencyPicker
+        visible
+        selectedCurrency="EGP"
+        allowedCurrencies={["EGP", "USD"]}
+        onSelect={jest.fn()}
+        onClose={jest.fn()}
+      />
+    );
+
+    expect(screen.getByTestId("currency-code-EGP")).toBeOnTheScreen();
+    search("AED");
+    expect(screen.queryByTestId("currency-code-AED")).toBeNull();
+    search("USD");
+    expect(screen.getByTestId("currency-code-USD")).toBeOnTheScreen();
+  });
 });

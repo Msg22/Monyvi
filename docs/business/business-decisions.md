@@ -512,12 +512,19 @@ Business rules:
   accepted material correction may replace that tuple. Immutable before/after
   tuples and their catalog snapshots remain in append-only action evidence, and
   later catalog changes never rewrite current or historical recorded facts.
+- The Add/Edit Gold purity picker offers 24K (`gold-999`), 21K (`gold-875`), and
+  18K (`gold-750`) once each, with karat-only labels. Silver retains its catalog
+  choices. Historical holdings keep their exact recorded code and factor, even
+  when their Gold grade is no longer an offered choice; a material correction
+  changes it only after explicit selection. Other read surfaces may still show
+  exact fineness when needed for historical identification.
 - Metal type is locked after creation. Correcting a wrong metal uses Delete
   holding, then Add holding with the correct metal.
 - Add holding uses one focused full-screen form in this order: Name, Metal,
   Weight and Purity on one row when space permits, total purchase price,
   purchase currency, purchase date, Physical form, Notes, compact live preview,
-  local-first status, then direct `Add holding`. Submission stays in the same
+  then direct `Add holding`. The form omits the passive device-save note while
+  retaining local-first persistence. Submission stays in the same
   form with no intermediate step or route.
 - Every other Active holding field is correctable. Name and notes are ordinary
   metadata edits. Weight, purity, physical form, total purchase price, purchase

@@ -124,7 +124,7 @@ export default function AddMetalHoldingRoute(): React.JSX.Element {
   return (
     <View
       testID="metal-holding-add-screen"
-      className="flex-1 bg-slate-25 dark:bg-slate-950"
+      className="flex-1 bg-background dark:bg-background-dark"
     >
       <MetalHoldingForm
         locale={locale}
