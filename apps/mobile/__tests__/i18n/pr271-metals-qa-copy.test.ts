@@ -3,8 +3,8 @@ import ar from "../../locales/ar/metals.json";
 
 describe("PR #271 Metals QA copy", () => {
   it("replaces Active Portfolio in both visible and accessibility copy", () => {
-    expect(en.portfolio.active_portfolio).toBe("Your gold and silver");
-    expect(ar.portfolio.active_portfolio).toBe("تابع قيمة ذهبك وفضتك");
+    expect(en.portfolio.active_portfolio).toBe("Your Metals");
+    expect(ar.portfolio.active_portfolio).toBe("معادنك");
     expect(JSON.stringify(en)).not.toMatch(/Active portfolio/i);
   });
 
