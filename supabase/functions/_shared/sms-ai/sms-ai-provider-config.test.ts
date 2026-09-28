@@ -28,7 +28,7 @@ test("parses explicit DeepInfra provider configuration", () => {
 });
 
 test("accepts every supported service tier explicitly", () => {
-  for (const serviceTier of ["default", "priority", "flex"] as const) {
+  for (const serviceTier of ["default", "priority"] as const) {
     assert.equal(
       readSmsAiProviderConfig(
         getEnvironment({ SMS_AI_SERVICE_TIER: serviceTier })
@@ -36,6 +36,14 @@ test("accepts every supported service tier explicitly", () => {
       serviceTier
     );
   }
+});
+
+test("rejects flex service tier before request admission", () => {
+  assert.throws(
+    () =>
+      readSmsAiProviderConfig(getEnvironment({ SMS_AI_SERVICE_TIER: "flex" })),
+    /Unsupported SMS AI service tier/
+  );
 });
 
 test("fails closed when any required configuration value is missing", () => {

@@ -164,7 +164,7 @@ function buildRequestBody(
 function isSupportedServiceTier(
   value: SmsAiServiceTier
 ): value is SmsAiServiceTier {
-  return value === "default" || value === "priority" || value === "flex";
+  return value === "default" || value === "priority";
 }
 
 export class DeepInfraSmsProvider implements SmsAiProvider {

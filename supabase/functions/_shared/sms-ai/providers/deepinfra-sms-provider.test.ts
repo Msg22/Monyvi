@@ -113,8 +113,8 @@ test("serializes the strict DeepInfra request without explicit cache controls", 
   });
 });
 
-test("maps explicit priority and flex tiers while default omits service_tier", async () => {
-  for (const tier of ["default", "priority", "flex"] as const) {
+test("maps explicit priority tier while default omits service_tier", async () => {
+  for (const tier of ["default", "priority"] as const) {
     let body: Record<string, unknown> = {};
     const provider = new DeepInfraSmsProvider(
       { ...CONFIG, serviceTier: tier },
@@ -136,6 +136,24 @@ test("maps explicit priority and flex tiers while default omits service_tier", a
       assert.equal(body.service_tier, tier);
     }
   }
+});
+
+test("rejects flex service tier before request admission", () => {
+  assert.throws(
+    () =>
+      new DeepInfraSmsProvider(
+        {
+          ...CONFIG,
+          serviceTier: "flex" as unknown as typeof CONFIG.serviceTier,
+        },
+        {
+          fetch: async () => successResponse(),
+          sleep: async () => undefined,
+          createTimeoutSignal: () => new AbortController().signal,
+        }
+      ),
+    /Unsupported DeepInfra SMS service tier/
+  );
 });
 
 test("retries transient HTTP failures with 2s/4s backoff", async () => {

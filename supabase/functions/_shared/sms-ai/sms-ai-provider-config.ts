@@ -1,5 +1,5 @@
 export type SmsAiProviderName = "deepinfra";
-export type SmsAiServiceTier = "default" | "priority" | "flex";
+export type SmsAiServiceTier = "default" | "priority";
 
 export interface SmsAiProviderConfig {
   readonly provider: SmsAiProviderName;
@@ -44,11 +44,7 @@ export function readSmsAiProviderConfig(
   if (!parseApprovedModelList(approvedModelsValue).has(model)) {
     throw new Error(`Unsupported SMS AI model: ${model}`);
   }
-  if (
-    serviceTier !== "default" &&
-    serviceTier !== "priority" &&
-    serviceTier !== "flex"
-  ) {
+  if (serviceTier !== "default" && serviceTier !== "priority") {
     throw new Error(`Unsupported SMS AI service tier: ${serviceTier}`);
   }
 
