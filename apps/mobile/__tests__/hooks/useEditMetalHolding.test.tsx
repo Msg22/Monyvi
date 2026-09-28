@@ -509,5 +509,111 @@ describe("useEditMetalHolding correctness tests", () => {
       expect(result.current.validationErrors.correctionReason).toBeUndefined();
       expect(result.current.correctionReason).toBe("Correction of weight error");
     });
+
+    it("computes per-gram in preferred EGP while keeping purchase CAD valuation", async () => {
+      const base = activeModel();
+      mockLoadEditableMetalHolding.mockResolvedValue({
+        ...base,
+        facts: {
+          ...base.facts,
+          weightGramsDecimal: "8",
+          purchasePriceDecimal: "750",
+          purchaseCurrency: "CAD",
+        },
+        persistedMaterialFacts: {
+          ...base.persistedMaterialFacts,
+          weightGramsDecimal: "8",
+          purchasePriceDecimal: "750",
+          purchaseCurrency: "CAD",
+        },
+      });
+
+      const { result } = renderHook(() =>
+        useEditMetalHolding(
+          testInput({
+            getPreviewRates: (() => ({
+              metalUsdPerPureGramDecimal: "100",
+              currencyUsdPerUnitDecimal: "0.75",
+              egpUsdPerUnitDecimal: "0.02",
+              currencyMinorUnits: 2,
+              rateFreshness: "fresh",
+              preferredCurrency: "EGP",
+              preferredCurrencyUsdPerUnitDecimal: "0.02",
+            })) as unknown as UseEditMetalHoldingInput["getPreviewRates"],
+            preferredCurrency: "EGP",
+          } as unknown as Partial<UseEditMetalHoldingInput>)
+        )
+      );
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(result.current.preview.displayCurrency).toBe("CAD");
+      expect(result.current.preview.valuation).toEqual({
+        available: true,
+        valueDecimal: "1065.6",
+      });
+      const editPreferred = result.current.preview as unknown as {
+        readonly preferredCurrency?: string;
+        readonly metalPerPureGramInPreferredCurrencyDecimal?: string | null;
+      };
+      expect(editPreferred.preferredCurrency).toBe("EGP");
+      expect(editPreferred.metalPerPureGramInPreferredCurrencyDecimal).toBe(
+        "5000"
+      );
+    });
+
+    it("hides preferred per-gram when preferred FX is missing without touching purchase valuation", async () => {
+      const base = activeModel();
+      mockLoadEditableMetalHolding.mockResolvedValue({
+        ...base,
+        facts: {
+          ...base.facts,
+          weightGramsDecimal: "8",
+          purchasePriceDecimal: "750",
+          purchaseCurrency: "CAD",
+        },
+        persistedMaterialFacts: {
+          ...base.persistedMaterialFacts,
+          weightGramsDecimal: "8",
+          purchasePriceDecimal: "750",
+          purchaseCurrency: "CAD",
+        },
+      });
+
+      const { result } = renderHook(() =>
+        useEditMetalHolding(
+          testInput({
+            getPreviewRates: (() => ({
+              metalUsdPerPureGramDecimal: "100",
+              currencyUsdPerUnitDecimal: "0.75",
+              egpUsdPerUnitDecimal: "0.02",
+              currencyMinorUnits: 2,
+              rateFreshness: "fresh",
+              preferredCurrency: "EGP",
+              preferredCurrencyUsdPerUnitDecimal: null,
+            })) as unknown as UseEditMetalHoldingInput["getPreviewRates"],
+            preferredCurrency: "EGP",
+          } as unknown as Partial<UseEditMetalHoldingInput>)
+        )
+      );
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(result.current.preview.displayCurrency).toBe("CAD");
+      expect(result.current.preview.valuation).toEqual({
+        available: true,
+        valueDecimal: "1065.6",
+      });
+      const editMissingPreferred = result.current.preview as unknown as {
+        readonly metalPerPureGramInPreferredCurrencyDecimal?: string | null;
+      };
+      expect(
+        editMissingPreferred.metalPerPureGramInPreferredCurrencyDecimal
+      ).toBeNull();
+    });
   });
 });

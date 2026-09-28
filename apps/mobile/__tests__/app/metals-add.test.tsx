@@ -119,6 +119,7 @@ interface MetalHoldingPreview {
   readonly weightGramsDecimal?: string;
   readonly displayCurrency?: string;
   readonly metalUsdPerPureGramDecimal?: string | null;
+  readonly metalPerPureGramInDisplayCurrencyDecimal?: string | null;
   readonly rateSources?: readonly string[];
   readonly providerObservedAt?: Date | null;
   readonly resultSincePurchaseDecimal?: string | null;
@@ -150,6 +151,7 @@ const goldPreview: MetalHoldingPreview = {
   weightGramsDecimal: "10",
   displayCurrency: "EGP",
   metalUsdPerPureGramDecimal: "104.51",
+  metalPerPureGramInDisplayCurrencyDecimal: "5225.5",
   rateSources: ["Monyvi market provider"],
   providerObservedAt: new Date("2026-08-26T10:30:00.000Z"),
   resultSincePurchaseDecimal: "4350.32",
@@ -303,7 +305,7 @@ describe("Add metal holding form", () => {
     expect(screen.getByText("+ EGP 4,350.32")).toBeOnTheScreen();
     expect(screen.queryByText("24K · 999 · 99.9% pure")).toBeNull();
     expect(
-      screen.getByText("Gold · USD 104.51 per pure gram")
+      screen.getByText("Gold · EGP 5,225.50 per pure gram")
     ).toBeOnTheScreen();
     expect(screen.getByTestId("metal-holding-item-render")).toHaveProp(
       "metal",

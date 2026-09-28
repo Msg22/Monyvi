@@ -348,6 +348,14 @@ the true domain model.
   state internally).
 - Use `TextField` for text inputs, `Dropdown` for selections, `OptionalSection`
   for expandable optional fields.
+- Use `GroupedMoneyInput` (`components/ui/GroupedMoneyInput.tsx`) for ALL
+  monetary amount entry. It centralizes comma-grouped display
+  (`formatAmountInput`) with dot-decimal canonical state
+  (`resolveAmountInputChange`), preserves invalid pasted text for form-specific
+  inline validation, and never formats weight/quantity fields. Validation stays
+  form-specific; the component only shapes text. New monetary fields MUST use
+  it; existing surfaces migrate through focused follow-ups without weakening
+  the shared grammar.
 
 ## Database Migrations
 

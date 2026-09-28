@@ -8,6 +8,7 @@ import {
   resolvePuritySelection,
 } from "../purity-catalog";
 import {
+  calculateDisplayPerPureGramPrice,
   calculateMetalReferenceValue,
   calculatePureGrams,
   calculatePurityGramPriceDecimal,
@@ -32,11 +33,13 @@ function loadPurityCatalogApi(): {
 }
 
 function loadValuationApi(): {
+  readonly calculateDisplayPerPureGramPrice: typeof calculateDisplayPerPureGramPrice;
   readonly calculateMetalReferenceValue: typeof calculateMetalReferenceValue;
   readonly calculatePureGrams: typeof calculatePureGrams;
   readonly calculatePurityGramPriceDecimal: typeof calculatePurityGramPriceDecimal;
 } {
   return {
+    calculateDisplayPerPureGramPrice,
     calculateMetalReferenceValue,
     calculatePureGrams,
     calculatePurityGramPriceDecimal,
@@ -486,6 +489,58 @@ describe("exact purity and valuation", () => {
           purityFactorDecimal: "0.875",
           metalUsdPerPureGramDecimal: "0",
           currencyUsdPerUnitDecimal: "0.02",
+        })
+      ).toBeNull();
+    });
+
+    it("converts a USD metal rate to display per-pure-gram without fabricating FX", () => {
+      const { calculateDisplayPerPureGramPrice } = loadValuationApi();
+
+      // 100 USD/g in EGP at 0.02 USD per EGP = 5000 EGP/g.
+      expect(
+        calculateDisplayPerPureGramPrice({
+          metalUsdPerPureGramDecimal: "100",
+          currencyUsdPerUnitDecimal: "0.02",
+          displayCurrency: "EGP",
+        })
+      ).toBe("5000");
+
+      // USD display needs no FX lookup: USD is the exact identity rate.
+      expect(
+        calculateDisplayPerPureGramPrice({
+          metalUsdPerPureGramDecimal: "100",
+          currencyUsdPerUnitDecimal: null,
+          displayCurrency: "USD",
+        })
+      ).toBe("100");
+
+      // Missing inputs never fabricate a rate.
+      expect(
+        calculateDisplayPerPureGramPrice({
+          metalUsdPerPureGramDecimal: null,
+          currencyUsdPerUnitDecimal: "0.02",
+          displayCurrency: "EGP",
+        })
+      ).toBeNull();
+      expect(
+        calculateDisplayPerPureGramPrice({
+          metalUsdPerPureGramDecimal: "100",
+          currencyUsdPerUnitDecimal: null,
+          displayCurrency: "EGP",
+        })
+      ).toBeNull();
+      expect(
+        calculateDisplayPerPureGramPrice({
+          metalUsdPerPureGramDecimal: "100",
+          currencyUsdPerUnitDecimal: "0.02",
+          displayCurrency: undefined,
+        })
+      ).toBeNull();
+      expect(
+        calculateDisplayPerPureGramPrice({
+          metalUsdPerPureGramDecimal: "not-a-number",
+          currencyUsdPerUnitDecimal: "0.02",
+          displayCurrency: "EGP",
         })
       ).toBeNull();
     });

@@ -29,6 +29,7 @@ import {
 } from "@/components/metals/MetalHoldingForm";
 import { useEditMetalHolding } from "@/hooks/useEditMetalHolding";
 import { useMetalAddPreviewRates } from "@/hooks/useAddMetalHolding";
+import { usePreferredCurrency } from "@/hooks/usePreferredCurrency";
 import { getPurityCatalogEntry } from "@/validation/metal-holding-form-validation";
 import { getMetalHoldingFormPurityLabel } from "@/components/metals/metal-holding-purity-options";
 
@@ -43,6 +44,7 @@ export default function EditMetalHoldingRoute(): React.JSX.Element {
   const { width, fontScale } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const { getPreviewRates } = useMetalAddPreviewRates();
+  const { preferredCurrency } = usePreferredCurrency();
   const [isExitGuardVisible, setIsExitGuardVisible] = useState(false);
   const locale = (i18n.resolvedLanguage ?? i18n.language ?? "en").startsWith(
     "ar"
@@ -56,6 +58,9 @@ export default function EditMetalHoldingRoute(): React.JSX.Element {
     today,
     safeRange: SAFE_RANGE,
     getPreviewRates,
+    preferredCurrency: isSupportedMetalsIsoCurrencyCode(preferredCurrency)
+      ? preferredCurrency
+      : "EGP",
     createId: Crypto.randomUUID,
   });
   const copy = useMemo(() => createCopy(t), [t]);
@@ -286,7 +291,7 @@ function createCopy(
     gold: t("gold"),
     silver: t("silver"),
     weight: t("add.weight"),
-    purity: t("purity"),
+    purity: t("add.karat"),
     purchasePrice: t("add.total_purchase_price"),
     purchasePriceHint: t("add.purchase_price_hint"),
     purchaseCurrency: t("add.purchase_currency"),

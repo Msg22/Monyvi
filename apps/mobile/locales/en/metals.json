@@ -113,6 +113,7 @@
     "holding_name_placeholder": "e.g. Wedding ring",
     "metal": "Metal",
     "weight": "Weight",
+    "karat": "Karat",
     "total_purchase_price": "Total purchase price",
     "purchase_price_hint": "Total amount paid, including workmanship, dealer premium, and other purchase costs.",
     "purchase_currency": "Purchase currency",

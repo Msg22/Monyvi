@@ -96,6 +96,34 @@ export function calculatePurityGramPriceDecimal(input: {
   return result.available ? result.valueDecimal : null;
 }
 
+/**
+ * Converts a USD-per-pure-gram metal rate into a per-pure-gram price in the
+ * display currency. Returns null when conversion would require fabricating an
+ * FX input: missing metal rate, missing/unsupported display currency, or a
+ * missing non-USD currency rate. USD display needs no FX lookup because USD is
+ * the exact identity rate.
+ */
+export function calculateDisplayPerPureGramPrice(input: {
+  readonly metalUsdPerPureGramDecimal: string | null;
+  readonly currencyUsdPerUnitDecimal: string | null;
+  readonly displayCurrency: string | undefined;
+}): string | null {
+  const metalRate = input.metalUsdPerPureGramDecimal;
+  const displayCurrency = input.displayCurrency;
+  if (metalRate === null || displayCurrency === undefined) return null;
+  if (positiveDecimal(metalRate) === null) return null;
+  if (displayCurrency === "USD") return metalRate;
+  const currencyRate = input.currencyUsdPerUnitDecimal;
+  if (currencyRate === null) return null;
+  const result = calculateMetalReferenceValue({
+    weightGramsDecimal: "1",
+    purityFactorDecimal: "1",
+    metalUsdPerPureGramDecimal: metalRate,
+    currencyUsdPerUnitDecimal: currencyRate,
+  });
+  return result.available ? result.valueDecimal : null;
+}
+
 export function normalizeUsdPerUnitRate(
   reference: ExactRateReference
 ): Availability<string, RateNormalizationUnavailableReason> {

@@ -354,4 +354,147 @@ describe("useAddMetalHoldingForm", () => {
     expect(rates.rateFreshness).toBe("fresh");
     expect(rates.egpUsdPerUnitDecimal).toBe("0.02");
   });
+
+  it("computes per-gram in preferred EGP while keeping purchase CAD valuation", () => {
+    const { result } = renderHook(() =>
+      useAddMetalHoldingForm(
+        input({
+          preferredCurrency: "EGP",
+          previewRates: (() => ({
+            metalUsdPerPureGramDecimal: "100",
+            currencyUsdPerUnitDecimal: "0.75",
+            egpUsdPerUnitDecimal: "0.02",
+            currencyMinorUnits: 2,
+            rateFreshness: "fresh",
+            preferredCurrency: "EGP",
+            preferredCurrencyUsdPerUnitDecimal: "0.02",
+          })) as UseAddMetalHoldingFormInput["previewRates"],
+        })
+      )
+    );
+
+    act(() => {
+      result.current.updateField("name", "Maple coin");
+      result.current.updateField("weightGrams", "8");
+      result.current.updateField("purchasePrice", "750");
+      result.current.updateField("purchaseCurrency", "CAD");
+      result.current.updateField("purchaseDate", "2024-03-14");
+      result.current.updateField("physicalForm", "COIN");
+    });
+
+    expect(result.current.preview.displayCurrency).toBe("CAD");
+    expect(result.current.preview.valuation).toEqual({
+      available: true,
+      valueDecimal: "1065.6",
+    });
+    const preferredPreview = result.current.preview as unknown as {
+      readonly preferredCurrency?: string;
+      readonly metalPerPureGramInPreferredCurrencyDecimal?: string | null;
+    };
+    expect(preferredPreview.preferredCurrency).toBe("EGP");
+    expect(preferredPreview.metalPerPureGramInPreferredCurrencyDecimal).toBe(
+      "5000"
+    );
+  });
+
+  it("resolves preferred EGP FX alongside purchase CAD FX without changing freshness", () => {
+    const useMarketRates = (jest.requireMock("../../hooks/useMarketRates") as { useMarketRates: jest.Mock }).useMarketRates;
+    useMarketRates.mockReturnValue({ selectedSnapshot: { trust: {
+      gold: { valueDecimal: "100", state: "fresh", ageMs: 60_000, source: "Metal feed", quality: "verified", providerObservedAt: new Date("2026-09-01T10:00:00Z") },
+      silver: { valueDecimal: "1", state: "fresh", ageMs: 60_000, source: "Metal feed", quality: "verified", providerObservedAt: new Date("2026-09-01T10:00:00Z") },
+      currencies: new Map([
+        ["CAD", { valueDecimal: "0.75", state: "fresh", ageMs: 60_000, source: "FX feed", quality: "verified", providerObservedAt: new Date("2026-09-01T10:00:00Z") }],
+        ["EGP", { valueDecimal: "0.02", state: "fresh", ageMs: 60_000, source: "FX feed", quality: "verified", providerObservedAt: new Date("2026-09-01T10:00:00Z") }],
+        ["USD", { valueDecimal: "1", state: "fresh", ageMs: 60_000, source: "FX feed", quality: "verified", providerObservedAt: new Date("2026-09-01T10:00:00Z") }],
+      ]),
+    } } });
+    const { result } = renderHook(() => useMetalAddPreviewRates());
+    const rates = result.current.getPreviewRates(
+      {
+        name: "Maple coin",
+        metal: "GOLD",
+        weightGramsDecimal: "8",
+        purity: {
+          code: "gold-999",
+          catalogVersion: "1",
+          factorDecimal: "0.999",
+          labelKey: "purity_gold_999",
+        },
+        purchasePriceDecimal: "750",
+        purchaseCurrency: "CAD",
+        purchaseDate: "2024-03-14",
+        physicalForm: "COIN",
+        notes: null,
+      },
+      "EGP"
+    );
+    expect(rates.currencyUsdPerUnitDecimal).toBe("0.75");
+    const preferredRates = rates as unknown as {
+      readonly preferredCurrency?: string;
+      readonly preferredCurrencyUsdPerUnitDecimal?: string | null;
+    };
+    expect(preferredRates.preferredCurrency).toBe("EGP");
+    expect(preferredRates.preferredCurrencyUsdPerUnitDecimal).toBe("0.02");
+    expect(rates.rateFreshness).toBe("fresh");
+    const usdRates = result.current.getPreviewRates(
+      {
+        name: "Maple coin",
+        metal: "GOLD",
+        weightGramsDecimal: "8",
+        purity: {
+          code: "gold-999",
+          catalogVersion: "1",
+          factorDecimal: "0.999",
+          labelKey: "purity_gold_999",
+        },
+        purchasePriceDecimal: "750",
+        purchaseCurrency: "CAD",
+        purchaseDate: "2024-03-14",
+        physicalForm: "COIN",
+        notes: null,
+      },
+      "USD"
+    ) as unknown as {
+      readonly preferredCurrencyUsdPerUnitDecimal?: string | null;
+    };
+    expect(usdRates.preferredCurrencyUsdPerUnitDecimal).toBe("1");
+  });
+
+  it("returns null preferred FX instead of fabricating when preferred is missing", () => {
+    const useMarketRates = (jest.requireMock("../../hooks/useMarketRates") as { useMarketRates: jest.Mock }).useMarketRates;
+    useMarketRates.mockReturnValue({ selectedSnapshot: { trust: {
+      gold: { valueDecimal: "100", state: "fresh", ageMs: 60_000, source: "Metal feed", quality: "verified", providerObservedAt: new Date("2026-09-01T10:00:00Z") },
+      silver: { valueDecimal: "1", state: "fresh", ageMs: 60_000, source: "Metal feed", quality: "verified", providerObservedAt: new Date("2026-09-01T10:00:00Z") },
+      currencies: new Map([
+        ["CAD", { valueDecimal: "0.75", state: "fresh", ageMs: 60_000, source: "FX feed", quality: "verified", providerObservedAt: new Date("2026-09-01T10:00:00Z") }],
+      ]),
+    } } });
+    const { result } = renderHook(() => useMetalAddPreviewRates());
+    const rates = result.current.getPreviewRates(
+      {
+        name: "Maple coin",
+        metal: "GOLD",
+        weightGramsDecimal: "8",
+        purity: {
+          code: "gold-999",
+          catalogVersion: "1",
+          factorDecimal: "0.999",
+          labelKey: "purity_gold_999",
+        },
+        purchasePriceDecimal: "750",
+        purchaseCurrency: "CAD",
+        purchaseDate: "2024-03-14",
+        physicalForm: "COIN",
+        notes: null,
+      },
+      "EGP"
+    );
+    expect(rates.currencyUsdPerUnitDecimal).toBe("0.75");
+    const missingPreferred = rates as unknown as {
+      readonly preferredCurrency?: string;
+      readonly preferredCurrencyUsdPerUnitDecimal?: string | null;
+    };
+    expect(missingPreferred.preferredCurrency).toBe("EGP");
+    expect(missingPreferred.preferredCurrencyUsdPerUnitDecimal).toBeNull();
+  });
 });

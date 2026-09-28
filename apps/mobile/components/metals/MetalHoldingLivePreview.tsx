@@ -5,7 +5,10 @@ import { Text, View } from "react-native";
 
 import { palette } from "@/constants/colors";
 import { useTheme } from "@/context/ThemeContext";
-import { isSupportedMetalsIsoCurrencyCode } from "@monyvi/logic";
+import {
+  calculateDisplayPerPureGramPrice,
+  isSupportedMetalsIsoCurrencyCode,
+} from "@monyvi/logic";
 import { formatLocalizedMoneyAmount } from "@/utils/localized-money-display";
 
 import { MetalHoldingRender } from "./MetalHoldingRender";
@@ -64,6 +67,27 @@ export function MetalHoldingLivePreview({
   const currency = preview.displayCurrency ?? "";
   const result = formatResult(preview, locale);
   const renderForm = toRenderPhysicalForm(preview.physicalForm);
+  // Preferred currency owns the per-gram row: purchase valuation stays
+  // canonical, while the estimated gram price follows the user's preferred
+  // display currency. Legacy previews without preferred shape fall back to
+  // the purchase-currency derivation; a null preferred value hides the row
+  // instead of fabricating FX.
+  const usePreferredPerGram =
+    preview.preferredCurrency !== undefined ||
+    preview.metalPerPureGramInPreferredCurrencyDecimal !== undefined;
+  const perGramCurrency = usePreferredPerGram
+    ? (preview.preferredCurrency ?? "")
+    : currency;
+  const perGramInDisplayCurrency = usePreferredPerGram
+    ? preview.metalPerPureGramInPreferredCurrencyDecimal ?? null
+    : preview.metalPerPureGramInDisplayCurrencyDecimal !== undefined
+      ? preview.metalPerPureGramInDisplayCurrencyDecimal
+      : calculateDisplayPerPureGramPrice({
+          metalUsdPerPureGramDecimal: preview.metalUsdPerPureGramDecimal ?? null,
+          currencyUsdPerUnitDecimal:
+            preview.fxRateTrust?.valueDecimal ?? null,
+          displayCurrency: preview.displayCurrency,
+        });
 
   return (
     <View
@@ -137,11 +161,13 @@ export function MetalHoldingLivePreview({
           </Text>
         )}
       </View>
-      {preview.metalUsdPerPureGramDecimal ? (
+      {perGramInDisplayCurrency !== null &&
+      perGramInDisplayCurrency !== undefined &&
+      isSupportedMetalsIsoCurrencyCode(perGramCurrency) ? (
         <View className="mt-3 gap-2">
           <DisclosureRow
             icon="trending-up-outline"
-            text={`${metalLabel} · ${formatRateAmount("USD", preview.metalUsdPerPureGramDecimal, locale)} ${copy.perPureGram}`}
+            text={`${metalLabel} · ${formatRateAmount(perGramCurrency, perGramInDisplayCurrency, locale)} ${copy.perPureGram}`}
           />
         </View>
       ) : null}

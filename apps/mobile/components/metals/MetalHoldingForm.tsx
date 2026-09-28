@@ -23,6 +23,7 @@ import {
 import { PageHeader } from "@/components/navigation/PageHeader";
 import { CurrencyPicker } from "@/components/currency/CurrencyPicker";
 import { Dropdown, type DropdownItem } from "@/components/ui/Dropdown";
+import { GroupedMoneyInput } from "@/components/ui/GroupedMoneyInput";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { TextField } from "@/components/ui/TextField";
 import { palette } from "@/constants/colors";
@@ -70,6 +71,9 @@ export interface MetalHoldingFormPreview {
   readonly name?: string;
   readonly weightGramsDecimal?: string;
   readonly displayCurrency?: string;
+  readonly preferredCurrency?: string;
+  readonly metalPerPureGramInDisplayCurrencyDecimal?: string | null;
+  readonly metalPerPureGramInPreferredCurrencyDecimal?: string | null;
   readonly rateFreshness?: "fresh" | "stale" | "unknown" | "unavailable";
   readonly metalUsdPerPureGramDecimal?: string | null;
   readonly rateSources?: readonly string[];
@@ -326,6 +330,10 @@ export function MetalHoldingForm({
   const [isPurityOpen, setIsPurityOpen] = useState(false);
   const [isCurrencyOpen, setIsCurrencyOpen] = useState(false);
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
+  // Purity defaults to a catalog code, so a bare value check cannot tell an
+  // explicit Karat choice from the untouched default. Track the interaction
+  // itself so Add reveals its estimate after Karat selection alone.
+  const [hasUserSelectedPurity, setHasUserSelectedPurity] = useState(false);
   const shouldStackDenseFields = shouldUseCompactLayout(width, fontScale);
   const nameInputRef = useRef<TextInput>(null);
   const weightInputRef = useRef<TextInput>(null);
@@ -379,6 +387,11 @@ export function MetalHoldingForm({
     mode === "edit" && reconciliationState === "reconciliation_incomplete";
   const isMaterialEditDisabled = isTerminalEdit || isReconciliationIncomplete;
   const hasMaterialChanges = Boolean(editState?.affectedChanges.length);
+  const hasUserEstimateInput =
+    values.weightGrams.trim().length > 0 ||
+    values.purchasePrice.trim().length > 0 ||
+    values.physicalForm !== null ||
+    hasUserSelectedPurity;
   const title =
     mode === "edit" ? (copy.editTitle ?? "Edit holding") : copy.title;
   const submitLabel =
@@ -524,7 +537,10 @@ export function MetalHoldingForm({
                       values.purityCode,
                       t(getPurityCatalogEntry(values.purityCode)?.labelKey ?? "")
                     )}
-                    onChange={(value) => onChange("purityCode", value)}
+                    onChange={(value) => {
+                      setHasUserSelectedPurity(true);
+                      onChange("purityCode", value);
+                    }}
                     isOpen={isPurityOpen}
                     onToggle={() => setIsPurityOpen((open) => !open)}
                     useModal
@@ -546,18 +562,15 @@ export function MetalHoldingForm({
 
           {!isMaterialEditDisabled ? (
             <View>
-              <TextField
-                variant="outlined"
+              <GroupedMoneyInput
                 testID="metal-holding-purchase-price-field"
                 inputRef={purchasePriceInputRef}
                 label={copy.purchasePrice}
                 value={values.purchasePrice}
                 editable={!isSubmitting}
-                onChangeText={(value) => onChange("purchasePrice", value)}
+                onCanonicalChange={(value) => onChange("purchasePrice", value)}
                 error={validationErrors.purchasePrice}
                 autoFocus={firstError === "metal-holding-purchase-price-field"}
-                keyboardType="decimal-pad"
-                inputMode="decimal"
                 leadingAdornment={
                   <Text className="text-sm font-semibold text-text-secondary dark:text-text-secondary-dark">
                     {values.purchaseCurrency}
@@ -708,7 +721,9 @@ export function MetalHoldingForm({
           ) : null}
 
           {!isMaterialEditDisabled &&
-          (mode === "edit" || preview.valuation.available) ? (
+          (mode === "edit" ||
+            preview.valuation.available ||
+            hasUserEstimateInput) ? (
             <MetalHoldingLivePreview
               copy={copy}
               preview={preview}

@@ -160,9 +160,11 @@ function DetailHeader({
   const canExplainCalculation =
     (model.isActiveOwnership &&
       model.currentValueDecimal !== null &&
-      (model.attribution !== null || model.totalGainDecimal !== null)) ||
+      model.attribution?.breakdown.available === true) ||
     (model.terminalFacts?.kind === "sold" &&
-      model.terminalFacts.realizedResultDecimal !== null);
+      model.terminalFacts.realizedResultDecimal !== null &&
+      model.terminalFacts.displayAttribution !== null &&
+      model.terminalFacts.displayAttribution !== undefined);
 
   return (
     <View className="px-5">

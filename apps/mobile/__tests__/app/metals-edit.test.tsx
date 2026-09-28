@@ -38,6 +38,10 @@ jest.mock("@/hooks/useAddMetalHolding", () => ({
   useAddMetalHoldingForm: jest.fn(),
 }));
 
+jest.mock("@/hooks/usePreferredCurrency", () => ({
+  usePreferredCurrency: () => ({ preferredCurrency: "EGP", isLoading: false }),
+}));
+
 jest.mock("@/components/navigation/PageHeader", () => {
   const { Pressable, Text, View } =
     jest.requireActual<typeof import("react-native")>("react-native");

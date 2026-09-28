@@ -117,6 +117,7 @@
     "holding_name_placeholder": "مثال: خاتم الزواج",
     "metal": "المعدن",
     "weight": "الوزن",
+    "karat": "العيار",
     "total_purchase_price": "إجمالي سعر الشراء",
     "purchase_price_hint": "إجمالي المبلغ المدفوع، بما في ذلك المصنعية، وهامش التاجر، وأي تكاليف شراء أخرى.",
     "purchase_currency": "عملة الشراء",

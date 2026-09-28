@@ -417,7 +417,7 @@ describe("approved active holding-detail fidelity", () => {
     expect(screen.queryByText(/Breakdown unavailable/)).toBeNull();
   });
 
-  it("renders the friendly fallback only when historical acquisition evidence is absent", () => {
+  it("hides the disclosure when historical acquisition breakdown is absent", () => {
     render(
       <MetalHoldingDetailScreen
         actions={[]}
@@ -429,12 +429,8 @@ describe("approved active holding-detail fidelity", () => {
       />
     );
 
-    fireEvent.press(screen.getByText("How this value was calculated"));
-    expect(
-      screen.getByText(
-        "Breakdown unavailable. The total is based on your recorded details."
-      )
-    ).toBeTruthy();
+    expect(screen.queryByText("How this value was calculated")).toBeNull();
+    expect(screen.queryByTestId("metal-detail-calculation-disclosure")).toBeNull();
   });
 
   it("hides the calculation disclosure when no since-purchase total is available", () => {
@@ -768,9 +764,8 @@ describe("approved active holding-detail fidelity", () => {
 
     expect(screen.getByText("EGP 650.00 loss from this sale")).toBeTruthy();
     expect(screen.queryByText("Current value")).toBeNull();
-    fireEvent.press(screen.getByText("How this value was calculated"));
-    expect(screen.getByTestId("metal-sold-calculation-breakdown")).toBeTruthy();
-    expect(screen.getByText("EGP 650.00 loss from this sale")).toBeTruthy();
+    expect(screen.queryByText("How this value was calculated")).toBeNull();
+    expect(screen.queryByTestId("metal-detail-calculation-disclosure")).toBeNull();
   });
 
   it("keeps exact sold proceeds visible when realized result evidence is unavailable", () => {

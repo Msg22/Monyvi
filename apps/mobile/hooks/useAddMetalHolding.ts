@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CurrencyType } from "@monyvi/db";
 import {
+  calculateDisplayPerPureGramPrice,
   isSupportedMetalsIsoCurrencyCode,
   resolveMetalsCurrencyMinorUnits,
 } from "@monyvi/logic";
@@ -47,7 +48,8 @@ export interface UseAddMetalHoldingFormInput {
   readonly currencyMinorUnits: number;
   readonly safeRange: MetalHoldingFormValidationContext["safeRange"];
   readonly previewRates: (
-    holding: NormalizedMetalHoldingFormData
+    holding: NormalizedMetalHoldingFormData,
+    preferredCurrency?: string
   ) => MetalHoldingPreviewRatesWithTrust;
   readonly isUnusualValue: MetalHoldingFormValidationContext["isUnusualValue"];
   readonly createId: () => string;
@@ -79,13 +81,16 @@ export interface UseAddMetalHoldingFormResult {
 
 export interface UseMetalAddPreviewRatesResult {
   readonly getPreviewRates: (
-    holding: NormalizedMetalHoldingFormData
+    holding: NormalizedMetalHoldingFormData,
+    preferredCurrency?: string
   ) => MetalHoldingPreviewRatesWithTrust;
 }
 
 export interface MetalHoldingPreviewRatesWithTrust extends MetalHoldingPreviewRates {
   readonly metalRateTrust?: MetalHoldingPreviewRateTrust;
   readonly fxRateTrust?: MetalHoldingPreviewRateTrust;
+  readonly preferredCurrency?: string;
+  readonly preferredCurrencyUsdPerUnitDecimal?: string | null;
 }
 
 function initialValues(
@@ -141,7 +146,8 @@ function firstPurityCode(metal: SupportedMetalType): string {
 }
 
 function fallbackPreview(
-  values: MetalHoldingFormValues
+  values: MetalHoldingFormValues,
+  preferredCurrency?: string
 ): MetalHoldingFormPreview {
   const purity = getSupportedMetalPurities(values.metal).find(
     (entry) => entry.code === values.purityCode
@@ -157,6 +163,8 @@ function fallbackPreview(
     name: values.name.trim() || undefined,
     weightGramsDecimal: values.weightGrams || undefined,
     displayCurrency: values.purchaseCurrency,
+    preferredCurrency,
+    metalPerPureGramInPreferredCurrencyDecimal: null,
     valuation: { available: false, reason: "missing_rate" },
   };
 }
@@ -234,9 +242,13 @@ export function useAddMetalHoldingForm(
     [unusualValueAcknowledged, validationContext, values]
   );
   const preview = useMemo<MetalHoldingFormPreview>(() => {
-    if (!validation.normalized) return fallbackPreview(values);
+    if (!validation.normalized)
+      return fallbackPreview(values, input.preferredCurrency);
     const normalized = validation.normalized;
-    const previewRates = input.previewRates(normalized);
+    const previewRates = input.previewRates(
+      normalized,
+      input.preferredCurrency
+    );
     const valuation = calculateMetalHoldingPreviewValuation(
       normalized,
       previewRates
@@ -258,6 +270,20 @@ export function useAddMetalHoldingForm(
       name: normalized.name,
       weightGramsDecimal: normalized.weightGramsDecimal,
       displayCurrency: normalized.purchaseCurrency,
+      preferredCurrency: previewRates.preferredCurrency,
+      metalPerPureGramInDisplayCurrencyDecimal:
+        calculateDisplayPerPureGramPrice({
+          metalUsdPerPureGramDecimal: previewRates.metalUsdPerPureGramDecimal,
+          currencyUsdPerUnitDecimal: previewRates.currencyUsdPerUnitDecimal,
+          displayCurrency: normalized.purchaseCurrency,
+        }),
+      metalPerPureGramInPreferredCurrencyDecimal:
+        calculateDisplayPerPureGramPrice({
+          metalUsdPerPureGramDecimal: previewRates.metalUsdPerPureGramDecimal,
+          currencyUsdPerUnitDecimal:
+            previewRates.preferredCurrencyUsdPerUnitDecimal ?? null,
+          displayCurrency: previewRates.preferredCurrency,
+        }),
       valuation,
       rateFreshness: previewRates.rateFreshness,
       metalUsdPerPureGramDecimal: previewRates.metalUsdPerPureGramDecimal,
@@ -411,7 +437,8 @@ export function useMetalAddPreviewRates(): UseMetalAddPreviewRatesResult {
 
   const getPreviewRates = useCallback(
     (
-      holding: NormalizedMetalHoldingFormData
+      holding: NormalizedMetalHoldingFormData,
+      preferredCurrency?: string
     ): MetalHoldingPreviewRatesWithTrust => {
       if (!isSupportedMetalsIsoCurrencyCode(holding.purchaseCurrency)) {
         return {
@@ -422,6 +449,8 @@ export function useMetalAddPreviewRates(): UseMetalAddPreviewRatesResult {
           rateFreshness: "unavailable",
           metalRateTrust: toPreviewRateTrust(undefined),
           fxRateTrust: toPreviewRateTrust(undefined),
+          preferredCurrency,
+          preferredCurrencyUsdPerUnitDecimal: null,
         };
       }
       const currencyMinorUnits = resolveMetalsCurrencyMinorUnits(
@@ -434,7 +463,17 @@ export function useMetalAddPreviewRates(): UseMetalAddPreviewRatesResult {
       // egpRate feeds only the unusual-value policy. Preview freshness
       // must mirror the acquisition facade (metal + purchase-currency
       // snapshots), so a stale EGP reference must not mark the preview stale.
+      // Preferred-currency conversion for the per-gram row never affects
+      // freshness either: purchase valuation stays canonical.
       const egpRate = rates.currencies.get("EGP");
+      const preferredRate =
+        preferredCurrency === undefined
+          ? undefined
+          : preferredCurrency === "USD"
+            ? "1"
+            : availableRateValue(
+                rates.currencies.get(preferredCurrency as CurrencyType)
+              );
       return {
         metalUsdPerPureGramDecimal: availableRateValue(metalRate),
         currencyUsdPerUnitDecimal: availableRateValue(currencyRate),
@@ -448,6 +487,8 @@ export function useMetalAddPreviewRates(): UseMetalAddPreviewRatesResult {
         ]),
         metalRateTrust: toPreviewRateTrust(metalRate),
         fxRateTrust: toPreviewRateTrust(currencyRate),
+        preferredCurrency,
+        preferredCurrencyUsdPerUnitDecimal: preferredRate ?? null,
       };
     },
     [rates]

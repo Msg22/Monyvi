@@ -94,6 +94,7 @@ export const metalsTranslationSchema = NamespaceSchema.and(
       holding_name_placeholder: z.string(),
       metal: z.string(),
       weight: z.string(),
+      karat: z.string(),
       total_purchase_price: z.string(),
       purchase_price_hint: z.string(),
       purchase_currency: z.string(),

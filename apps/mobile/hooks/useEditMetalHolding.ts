@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  calculateDisplayPerPureGramPrice,
   isSupportedMetalsIsoCurrencyCode,
   resolveMetalsCurrencyMinorUnits,
 } from "@monyvi/logic";
@@ -44,8 +45,10 @@ export interface UseEditMetalHoldingInput {
   readonly today: string;
   readonly safeRange: MetalHoldingFormValidationContext["safeRange"];
   readonly getPreviewRates: (
-    holding: NormalizedMetalHoldingFormData
+    holding: NormalizedMetalHoldingFormData,
+    preferredCurrency?: string
   ) => MetalHoldingPreviewRatesWithTrust;
+  readonly preferredCurrency?: string;
   readonly createId: () => string;
 }
 export interface UseEditMetalHoldingResult {
@@ -228,8 +231,8 @@ export function useEditMetalHolding(
       };
     }
     const normalized = validation.normalized;
-    if (!normalized) return fallbackPreview(values);
-    const rates = input.getPreviewRates(normalized);
+    if (!normalized) return fallbackPreview(values, input.preferredCurrency);
+    const rates = input.getPreviewRates(normalized, input.preferredCurrency);
     const valuation = calculateMetalHoldingPreviewValuation(normalized, rates);
     const purity = getSupportedMetalPurities(normalized.metal).find(
       (entry) => entry.code === normalized.purity.code
@@ -253,6 +256,21 @@ export function useEditMetalHolding(
       name: normalized.name,
       weightGramsDecimal: normalized.weightGramsDecimal,
       displayCurrency: normalized.purchaseCurrency,
+      preferredCurrency: rates.preferredCurrency ?? input.preferredCurrency,
+      metalPerPureGramInDisplayCurrencyDecimal:
+        calculateDisplayPerPureGramPrice({
+          metalUsdPerPureGramDecimal: rates.metalUsdPerPureGramDecimal,
+          currencyUsdPerUnitDecimal: rates.currencyUsdPerUnitDecimal,
+          displayCurrency: normalized.purchaseCurrency,
+        }),
+      metalPerPureGramInPreferredCurrencyDecimal:
+        calculateDisplayPerPureGramPrice({
+          metalUsdPerPureGramDecimal: rates.metalUsdPerPureGramDecimal,
+          currencyUsdPerUnitDecimal:
+            rates.preferredCurrencyUsdPerUnitDecimal ?? null,
+          displayCurrency:
+            rates.preferredCurrency ?? input.preferredCurrency,
+        }),
       valuation,
       rateFreshness: rates.rateFreshness,
       metalUsdPerPureGramDecimal: rates.metalUsdPerPureGramDecimal,
@@ -494,7 +512,8 @@ function toRawFacts(
   };
 }
 function fallbackPreview(
-  values: MetalHoldingFormValues
+  values: MetalHoldingFormValues,
+  preferredCurrency?: string
 ): MetalHoldingFormPreview {
   const purity = getSupportedMetalPurities(values.metal).find(
     (entry) => entry.code === values.purityCode
@@ -508,6 +527,8 @@ function fallbackPreview(
     name: values.name || undefined,
     weightGramsDecimal: values.weightGrams || undefined,
     displayCurrency: values.purchaseCurrency,
+    preferredCurrency,
+    metalPerPureGramInPreferredCurrencyDecimal: null,
     valuation: { available: false, reason: "missing_rate" },
   };
 }

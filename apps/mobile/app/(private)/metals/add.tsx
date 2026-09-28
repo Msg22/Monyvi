@@ -252,7 +252,7 @@ function createCopy(
     gold: t("gold"),
     silver: t("silver"),
     weight: t("add.weight"),
-    purity: t("purity"),
+    purity: t("add.karat"),
     purchasePrice: t("add.total_purchase_price"),
     purchasePriceHint: t("add.purchase_price_hint"),
     purchaseCurrency: t("add.purchase_currency"),
