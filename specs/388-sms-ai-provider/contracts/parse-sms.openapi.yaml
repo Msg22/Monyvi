@@ -210,6 +210,12 @@ components:
           type: array
           items:
             type: string
+        retryRequestMode:
+          type: string
+          enum: [fresh]
+          description: >
+            Optional. Present on partial successful responses when unresolved
+            candidates must be retried with a fresh request identity.
     Refusal:
       type: object
       additionalProperties: true
