@@ -6,7 +6,7 @@ This document describes the planned developer/QA setup. Commands that depend on 
 
 ## 1. Local configuration
 
-Keep real secrets in the ignored local Edge Function environment file.
+Create `supabase/functions/.env` for local Edge Function values. The repository-wide `.env*` ignore rule keeps this file out of Git, and Supabase CLI automatically loads it when `supabase start` starts the local stack. The repository root `.env` is a separate input used by the local launcher/`config.toml`; it does not replace `supabase/functions/.env` for function-only values.
 
 ~~~text
 DEEPINFRA_API_KEY=<local development token>
@@ -16,7 +16,21 @@ SMS_AI_APPROVED_MODELS=deepseek-ai/DeepSeek-V4-Flash-0731
 SMS_AI_SERVICE_TIER=default
 ~~~
 
-All five values above are required; missing `SMS_AI_SERVICE_TIER` does not silently default. `SMS_AI_APPROVED_MODELS` is the hosted allowlist: an explicit comma-separated list of approved model IDs, distinct from the `SMS_AI_MODEL` selection. The selected model must exactly match one allowlist entry; missing, blank, malformed (empty entries, wildcards, whitespace inside an ID), or unapproved selections fail closed during config composition. Approving a future model is a config change only: append its ID to the allowlist (and select it via `SMS_AI_MODEL`) with no code change. Provider configuration is resolved before the per-request handler can reserve or mark provider usage.
+Restart the local stack after changing `supabase/functions/.env`:
+
+~~~powershell
+npm run supabase:start:local
+~~~
+
+If you serve this function directly instead of starting the full local stack, pass the same file explicitly:
+
+~~~powershell
+npx supabase functions serve parse-sms --env-file supabase/functions/.env
+~~~
+
+Supabase local-secret reference: https://supabase.com/docs/guides/functions/secrets
+
+All five values above are required; missing `SMS_AI_SERVICE_TIER` does not silently default. `SMS_AI_SERVICE_TIER` supports only `default` and `priority` in this synchronous flow. `flex` is intentionally unsupported and must fail closed before request admission, provider fetch, or provider-start accounting because its spare-capacity queueing semantics are incompatible with the bounded 25-second attempt timeout. `SMS_AI_APPROVED_MODELS` is the hosted allowlist: an explicit comma-separated list of approved model IDs, distinct from the `SMS_AI_MODEL` selection. The selected model must exactly match one allowlist entry; missing, blank, malformed (empty entries, wildcards, whitespace inside an ID), or unapproved selections fail closed during config composition. Approving a future model is a config change only: append its ID to the allowlist (and select it via `SMS_AI_MODEL`) with no code change. Provider configuration is resolved before the per-request handler can reserve or mark provider usage.
 
 Do not configure a provider endpoint URL. The approved DeepInfra endpoint is fixed by the adapter.
 
@@ -24,7 +38,7 @@ Do not remove `GEMINI_API_KEY` globally: voice and SMS category enrichment still
 
 ## 2. Hosted Supabase configuration
 
-Hosted Edge Functions do not automatically receive values from the local `.env`.
+Hosted Edge Functions do not automatically receive values from the local `supabase/functions/.env`; configure hosted values separately.
 
 Set the SMS provider values in the target Supabase project's hosted secrets/environment before deploying `parse-sms`.
 
@@ -87,7 +101,7 @@ Focused provider tests must cover:
 4. `reasoning_effort: "none"`;
 5. configured model propagation;
 6. default tier omits `service_tier`;
-7. priority/flex configuration maps correctly when explicitly selected;
+7. priority configuration maps correctly when explicitly selected, while flex is rejected before request admission/fetch/provider-start accounting;
 8. HTTP 408/429/5xx/network/timeout retry;
 9. HTTP 400/401/403/404 no retry;
 10. retry exhaustion;
