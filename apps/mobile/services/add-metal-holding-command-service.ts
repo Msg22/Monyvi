@@ -141,15 +141,14 @@ function prepareAddPlan(
     throw new Error("metal_add_invalid_purchase_currency");
   }
   const purchaseCurrency = input.holding.purchaseCurrency;
-  const acquisitionActionId =
-    input.rateSnapshots.length === 0 ? null : input.actionId;
+  const acquisitionActionId = input.actionId;
 
   const asset = database.get<Asset>("assets").prepareCreate((record): void => {
     setPreparedId(record, input.holdingId);
     record.acquisitionActionId = acquisitionActionId;
     record.currency = purchaseCurrency;
     record.deleted = false;
-    record.isLiquid = true;
+    record.isLiquid = false;
     record.name = input.holding.name;
     record.notes = input.holding.notes ?? null;
     record.purchaseCurrency = input.holding.purchaseCurrency;
@@ -164,6 +163,7 @@ function prepareAddPlan(
   const metal = database
     .get<AssetMetal>("asset_metals")
     .prepareCreate((record): void => {
+      setPreparedId(record, input.holdingId);
       record.assetId = input.holdingId;
       record.deleted = false;
       record.itemForm = input.holding.physicalForm ?? undefined;
@@ -180,14 +180,14 @@ function prepareAddPlan(
   const holdingState = database
     .get<MetalHoldingState>("metal_holding_states")
     .prepareCreate((record): void => {
-      setPreparedId(record, input.holdingStateId);
+      setPreparedId(record, input.holdingId);
       record.deleted = false;
       record.effectiveActionId = input.actionId;
-      record.effectiveEventId = input.lifecycleEventId;
+      record.effectiveEventId = input.actionId;
       record.financialRevision = "0";
       record.holdingId = input.holdingId;
       record.isVisible = true;
-      record.reconciliationState = "sync_pending";
+      record.reconciliationState = "local_complete";
       record.status = "active";
       record.updatedAt = occurredAt;
       record.userId = input.userId;
@@ -196,9 +196,9 @@ function prepareAddPlan(
   const evidence = database
     .get<MetalActionEvidence>("metal_action_evidence")
     .prepareCreate((record): void => {
-      setPreparedId(record, input.actionEvidenceId);
+      setPreparedId(record, input.actionId);
       record.actionId = input.actionId;
-      record.canonicalHoldingRevision = "0";
+      record.canonicalHoldingRevision = null;
       record.deleted = false;
       record.domainPayloadJson = domainPayloadJson;
       record.expectedHoldingRevision = null;
@@ -211,13 +211,13 @@ function prepareAddPlan(
   const lifecycleEvent = database
     .get<MetalLifecycleEvent>("metal_lifecycle_events")
     .prepareCreate((record): void => {
-      setPreparedId(record, input.lifecycleEventId);
+      setPreparedId(record, input.actionId);
       record.actionId = input.actionId;
       record.deleted = false;
       record.holdingId = input.holdingId;
       record.isEffective = true;
       record.isHistoryVisible = true;
-      record.kind = "created";
+      record.kind = "add";
       record.occurredAt = occurredAt;
       record.payloadJson = domainPayloadJson;
       record.predecessorEventId = null;

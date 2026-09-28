@@ -130,14 +130,25 @@ export function toDetailLifecycleEventInput(
   event: MetalLifecycleEvent,
   evidence: readonly MetalActionEvidence[]
 ): MetalDetailLifecycleEventInput | null {
-  if (!isSupportedLifecycleKind(event.kind)) return null;
+  const isLegacyAdd =
+    event.kind === "created" &&
+    evidence.some(
+      (candidate) =>
+        candidate.actionId === event.actionId &&
+        candidate.holdingId === event.holdingId &&
+        candidate.userId === event.userId &&
+        candidate.kind === "add" &&
+        !candidate.deleted
+    );
+  const kind = isLegacyAdd ? "add" : event.kind;
+  if (!isSupportedLifecycleKind(kind)) return null;
   const occurredAt = copyValidDate(event.occurredAt);
   if (occurredAt === null) return null;
   const hasBoundEvidence = evidence.some(
     (candidate) =>
       candidate.actionId === event.actionId &&
       candidate.holdingId === event.holdingId &&
-      candidate.kind === event.kind &&
+      candidate.kind === kind &&
       candidate.userId === event.userId &&
       !candidate.deleted
   );
@@ -151,12 +162,43 @@ export function toDetailLifecycleEventInput(
     id: event.id,
     isEffective: event.isEffective,
     isHistoryVisible: event.isHistoryVisible,
-    kind: event.kind,
+    kind,
     occurredAt,
     payloadJson: event.payloadJson,
     predecessorEventId: event.predecessorEventId,
     reversesEventId: event.reversesEventId,
   };
+}
+
+export function shapeMetalDetailLifecycleEvents(
+  events: readonly MetalLifecycleEvent[],
+  evidence: readonly MetalActionEvidence[]
+): readonly MetalDetailLifecycleEventInput[] {
+  const canonicalAddActionIds = new Set(
+    events
+      .filter((event) => event.id === event.actionId && event.kind === "add")
+      .map((event) => event.actionId)
+  );
+  return Object.freeze(
+    events
+      .filter(
+        (event) =>
+          event.kind !== "created" || !canonicalAddActionIds.has(event.actionId)
+      )
+      .map((event) => toDetailLifecycleEventInput(event, evidence))
+      .filter(
+        (event): event is MetalDetailLifecycleEventInput => event !== null
+      )
+  );
+}
+
+export function selectCanonicalOrOnly<T extends { readonly id: string }>(
+  records: readonly T[],
+  canonicalId: string
+): T | null {
+  if (records.length === 1) return records[0];
+  if (records.length !== 2) return null;
+  return records.find((record) => record.id === canonicalId) ?? null;
 }
 
 export function toRateReferenceInput(

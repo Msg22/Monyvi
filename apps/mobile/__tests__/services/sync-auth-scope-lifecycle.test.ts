@@ -173,3 +173,6 @@ describe("sync auth scope lifecycle", () => {
     );
   });
 });
+jest.mock("../../services/legacy-metal-add-repair-service", () => ({
+  repairLegacyMetalAdds: jest.fn().mockResolvedValue(undefined),
+}));

@@ -35,6 +35,7 @@ import type {
 import { Skeleton } from "@/components/ui/Skeleton";
 import { palette } from "@/constants/colors";
 import { shouldUseCompactLayout } from "@/constants/ui";
+import { ANDROID_SAFE_LIST_PROPS } from "@/constants/virtualized-list-policy";
 import { useTheme } from "@/context/ThemeContext";
 import type {
   MetalDetailReadModel,
@@ -71,6 +72,7 @@ export function MetalHoldingDetailScreen(
 
   return (
     <FlatList
+      {...ANDROID_SAFE_LIST_PROPS}
       testID="metal-holding-detail-root"
       className="flex-1 bg-background dark:bg-background-dark"
       data={visibleHistory}
@@ -371,7 +373,6 @@ function ValueSummary({
     model.totalGainDecimal === null
       ? null
       : getCurrencyDisplaySign(model.totalGainDecimal, currency);
-  const rateStatus = model.currentValueRateStatus;
   return (
     <View className="border-t border-slate-200 pt-6 dark:border-slate-800">
       <Text className="text-base text-text-secondary dark:text-text-secondary-dark">

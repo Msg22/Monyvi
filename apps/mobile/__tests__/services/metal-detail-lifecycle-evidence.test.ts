@@ -14,7 +14,11 @@ import {
   buildMetalDetailReadModel,
   type BuildMetalDetailReadModelInput,
 } from "@/services/metal-detail-read-model-service";
-import { toDetailLifecycleEventInput } from "@/services/metal-detail-read-model-shaping";
+import {
+  selectCanonicalOrOnly,
+  shapeMetalDetailLifecycleEvents,
+  toDetailLifecycleEventInput,
+} from "@/services/metal-detail-read-model-shaping";
 import type { MetalActionEvidence, MetalLifecycleEvent } from "@monyvi/db";
 
 interface EventInput {
@@ -81,6 +85,87 @@ function detailInput(
 }
 
 describe("metal detail lifecycle evidence binding", () => {
+  it("reads a legacy Add event as creation only when matching Add evidence exists", () => {
+    const legacyEvent = {
+      actionId: "action-add",
+      deleted: false,
+      holdingId: "holding-1",
+      id: "legacy-event",
+      isEffective: true,
+      isHistoryVisible: true,
+      kind: "created",
+      occurredAt: new Date("2026-08-20T10:00:00.000Z"),
+      payloadJson: "{}",
+      predecessorEventId: null,
+      reversesEventId: null,
+      userId: "user-1",
+    } as unknown as MetalLifecycleEvent;
+    const boundEvidence = [
+      {
+        actionId: "action-add",
+        deleted: false,
+        holdingId: "holding-1",
+        kind: "add",
+        userId: "user-1",
+      },
+    ] as unknown as readonly MetalActionEvidence[];
+    expect(
+      toDetailLifecycleEventInput(legacyEvent, boundEvidence)
+    ).toMatchObject({
+      actionState: "accepted",
+      kind: "add",
+    });
+    expect(toDetailLifecycleEventInput(legacyEvent, [])).toBeNull();
+  });
+
+  it("prefers canonical rows and excludes a superseded legacy creation event", () => {
+    expect(
+      selectCanonicalOrOnly(
+        [{ id: "legacy" }, { id: "holding-1" }],
+        "holding-1"
+      )
+    ).toEqual({ id: "holding-1" });
+    expect(
+      selectCanonicalOrOnly(
+        [{ id: "legacy-a" }, { id: "legacy-b" }],
+        "holding-1"
+      )
+    ).toBeNull();
+    const boundEvidence = [
+      {
+        actionId: "action-add",
+        deleted: false,
+        holdingId: "holding-1",
+        kind: "add",
+        userId: "user-1",
+      },
+    ] as unknown as readonly MetalActionEvidence[];
+    const legacyEvent = {
+      actionId: "action-add",
+      deleted: false,
+      holdingId: "holding-1",
+      id: "legacy-event",
+      isEffective: true,
+      isHistoryVisible: true,
+      kind: "created",
+      occurredAt: new Date("2026-08-20T10:00:00.000Z"),
+      payloadJson: "{}",
+      predecessorEventId: null,
+      reversesEventId: null,
+      userId: "user-1",
+    } as unknown as MetalLifecycleEvent;
+    const canonicalEvent = {
+      ...legacyEvent,
+      id: "action-add",
+      kind: "add",
+    } as unknown as MetalLifecycleEvent;
+    expect(
+      shapeMetalDetailLifecycleEvents(
+        [legacyEvent, canonicalEvent],
+        boundEvidence
+      ).map((item) => item.id)
+    ).toEqual(["action-add"]);
+  });
   it("keeps an effective lifecycle event recovery-only until its action evidence arrives", () => {
     const model = buildMetalDetailReadModel(
       detailInput({

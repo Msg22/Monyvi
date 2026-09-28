@@ -283,3 +283,6 @@ describe("sync owner watermark lifecycle", () => {
     expect(harness.getOwner()).toBe(USER_B);
   });
 });
+jest.mock("../../services/legacy-metal-add-repair-service", () => ({
+  repairLegacyMetalAdds: jest.fn().mockResolvedValue(undefined),
+}));

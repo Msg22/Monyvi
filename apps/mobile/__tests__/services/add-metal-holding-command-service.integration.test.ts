@@ -200,9 +200,7 @@ const sha256Provider: Sha256Provider = {
 };
 
 function loadCommandModule(): AddMetalHoldingCommandModule {
-  return jest.requireActual(
-    "../../services/add-metal-holding-command-service"
-  ) as AddMetalHoldingCommandModule;
+  return jest.requireActual("../../services/add-metal-holding-command-service");
 }
 
 function rateSnapshots(): readonly AddRateSnapshot[] {
@@ -421,6 +419,7 @@ describe("Add metal holding command SQLite atomicity", () => {
       userId: IDS.user,
     });
     expect(metal).toMatchObject({
+      id: IDS.holding,
       assetId: IDS.holding,
       metalType: "GOLD",
       weightGramsDecimal: "10.125",
@@ -430,30 +429,30 @@ describe("Add metal holding command SQLite atomicity", () => {
       itemForm: "COIN",
     });
     expect(state).toMatchObject({
-      id: IDS.state,
+      id: IDS.holding,
       holdingId: IDS.holding,
       status: "active",
       financialRevision: "0",
       effectiveActionId: IDS.action,
-      effectiveEventId: IDS.event,
+      effectiveEventId: IDS.action,
       isVisible: true,
-      reconciliationState: "sync_pending",
+      reconciliationState: "local_complete",
       userId: IDS.user,
     });
     expect(evidence).toMatchObject({
-      id: IDS.evidence,
+      id: IDS.action,
       actionId: IDS.action,
       holdingId: IDS.holding,
       kind: "add",
       expectedHoldingRevision: null,
-      canonicalHoldingRevision: "0",
+      canonicalHoldingRevision: null,
       userId: IDS.user,
     });
     expect(event).toMatchObject({
-      id: IDS.event,
+      id: IDS.action,
       actionId: IDS.action,
       holdingId: IDS.holding,
-      kind: "created",
+      kind: "add",
       isEffective: true,
       isHistoryVisible: true,
       userId: IDS.user,
@@ -535,11 +534,11 @@ describe("Add metal holding command SQLite atomicity", () => {
 
     expect(asset).toMatchObject({
       id: IDS.holding,
-      acquisitionActionId: null,
+      acquisitionActionId: IDS.action,
       purchasePriceDecimal: "47800",
     });
     expect(state).toMatchObject({
-      reconciliationState: "sync_pending",
+      reconciliationState: "local_complete",
       status: "active",
     });
     expect(await fetchAll(reopened, "metal_rate_references")).toHaveLength(0);

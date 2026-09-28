@@ -93,3 +93,6 @@ describe("syncDatabase dedicated rejection passthrough", () => {
     );
   });
 });
+jest.mock("../../services/legacy-metal-add-repair-service", () => ({
+  repairLegacyMetalAdds: jest.fn().mockResolvedValue(undefined),
+}));

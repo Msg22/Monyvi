@@ -48,13 +48,15 @@ import {
   copyValidDate,
   getUnavailableExactFacts,
   normalizePhysicalForm,
+  selectCanonicalOrOnly,
+  shapeMetalDetailLifecycleEvents,
   toDetailAssetInput,
   toDetailHoldingStateInput,
-  toDetailLifecycleEventInput,
   toDetailMetalInput,
   toRateReferenceInput,
   toRenderKey,
 } from "@/services/metal-detail-read-model-shaping";
+export { shapeMetalDetailLifecycleEvents } from "@/services/metal-detail-read-model-shaping";
 import {
   shapeMetalTerminalFacts,
   type MetalTerminalFacts,
@@ -355,12 +357,13 @@ async function readDetailDependencies(
       .fetch(),
     readDetailEvidenceAndEvents(scope, asset.id),
   ]);
-  if (metals.length !== 1 || holdingStates.length !== 1) return null;
-  const metal = metals[0];
+  const metal = selectCanonicalOrOnly(metals, asset.id);
+  const holdingState = selectCanonicalOrOnly(holdingStates, asset.id);
+  if (metal === null || holdingState === null) return null;
   if (!isSupportedMetal(metal.metalType)) return null;
   return {
     ...evidenceAndEvents,
-    holdingState: holdingStates[0],
+    holdingState,
     metal,
     metalType: metal.metalType,
   };
@@ -409,19 +412,6 @@ async function readDetailEvidenceAndEvents(
       .fetch(),
   ]);
   return { evidence, events, groups, rateReferences };
-}
-
-export function shapeMetalDetailLifecycleEvents(
-  events: readonly MetalLifecycleEvent[],
-  evidence: readonly MetalActionEvidence[]
-): readonly MetalDetailLifecycleEventInput[] {
-  return Object.freeze(
-    events
-      .map((event) => toDetailLifecycleEventInput(event, evidence))
-      .filter(
-        (event): event is MetalDetailLifecycleEventInput => event !== null
-      )
-  );
 }
 
 export function buildMetalDetailReadModel(

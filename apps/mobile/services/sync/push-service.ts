@@ -26,6 +26,10 @@ import {
 } from "./config";
 import { createSyncTableError } from "./errors";
 import {
+  collectRpcHandledMetalHoldingIds,
+  collectUnacknowledgedMetalRows,
+} from "./metal-row-routing";
+import {
   collectAccountFinancialActionPushBundles,
   collectProtectedFinancialActionRowIds,
   isProtectedFinancialActionRow,
@@ -283,7 +287,8 @@ function isCompleteMetalActionGroup(
       evidence.length === 1 &&
       evidence[0]?.kind === envelope.kind &&
       events.length === 1 &&
-      events[0]?.kind === envelope.kind &&
+      (events[0]?.kind === envelope.kind ||
+        (envelope.kind === "add" && events[0]?.kind === "created")) &&
       states.length === 1 &&
       rates.length === expectedRateIds.size &&
       rates.every(
@@ -737,12 +742,19 @@ export async function pushChanges(
       pushArgs.changes,
       financialActionPushCoordinator
     );
+  const handledMetalHoldingIds = collectRpcHandledMetalHoldingIds(
+    pushArgs.changes,
+    dedicatedPush.acknowledgeAllDedicatedRows
+  );
   const returnedRejectedIds = mergeRejectedIds(
-    subtractRejectedIds(
-      protectedFinancialActionIds,
-      accountActionAcknowledgements.handledIds
+    mergeRejectedIds(
+      subtractRejectedIds(
+        protectedFinancialActionIds,
+        accountActionAcknowledgements.handledIds
+      ),
+      accountActionAcknowledgements.rejectedIds
     ),
-    accountActionAcknowledgements.rejectedIds
+    collectUnacknowledgedMetalRows(pushArgs.changes, handledMetalHoldingIds)
   );
   const metadataOnlyAccountIds = collectAcknowledgedAccountIdsWithMetadata(
     pushArgs.changes,
@@ -762,6 +774,9 @@ export async function pushChanges(
       continue;
     }
     const tableChanges = rawTableChanges as SyncTableChangeSet;
+
+    // Metal child rows are committed by the action/metadata RPC, never by table upsert.
+    if (table === "asset_metals") continue;
 
     if (!isWritableTable(table)) {
       continue;
@@ -798,6 +813,7 @@ export async function pushChanges(
         records: ReadonlyArray<Record<string, unknown>>
       ): Promise<void> => {
         const pushableRecords = records.filter((record) => {
+          if (table === "assets" && record.type === "METAL") return false;
           if (!isPushableRecord(table, record)) return false;
           if (
             !isProtectedFinancialActionRow(
@@ -855,6 +871,10 @@ export async function pushChanges(
 
       const genericDeletedIds = tableChanges.deleted.filter(
         (recordId) =>
+          !(
+            table === "assets" &&
+            handledMetalHoldingIds.has(parseChangeId(recordId))
+          ) &&
           !isProtectedFinancialActionRow(
             protectedFinancialActionIds,
             table,

@@ -13,6 +13,7 @@ import { logger } from "@/utils/logger";
 import { pullChanges } from "./sync/atomic-pull-strategies";
 import { pushChanges } from "./sync/push-service";
 import { getCurrentUserId } from "./supabase";
+import { repairLegacyMetalAdds } from "./legacy-metal-add-repair-service";
 
 export const SYNC_ERROR_CODES = {
   AUTH_SCOPE_LOST: "sync_auth_scope_lost",
@@ -72,6 +73,7 @@ export async function syncDatabase(
 
     const doSync = async (): Promise<void> => {
       try {
+        await repairLegacyMetalAdds(database, userId);
         await synchronize({
           database,
           pullChanges: async ({ lastPulledAt }): Promise<SyncPullResult> => {
