@@ -62,7 +62,7 @@
 
 ## R-004: Runtime configuration
 
-**Decision**: Read and validate these hosted/local values centrally, with all four required:
+**Decision**: Read and validate these hosted/local values centrally, with all five required:
 
 - `SMS_AI_PROVIDER=deepinfra`
 - `SMS_AI_MODEL=deepseek-ai/DeepSeek-V4-Flash-0731`
@@ -86,19 +86,19 @@ Missing, blank, incomplete, malformed, or unsupported configuration fails during
 
 ## R-005: Service tier
 
-**Decision**: Use Standard scheduling initially. Represent `default | priority | flex` in configuration, but omit `service_tier` from the DeepInfra request when configured as `default`.
+**Decision**: Use Standard scheduling initially. Support only `default | priority` in this synchronous SMS parsing flow, omit `service_tier` from the DeepInfra request when configured as `default`, and reject `flex` during configuration before request admission/provider-start accounting.
 
 **Rationale**:
 
 - DeepInfra documents omission as Standard scheduling/pricing.
-- Priority adds a 50% surcharge and is not justified for background-ish SMS chunk parsing.
-- Flex is 20% cheaper but may wait up to 10 minutes under capacity pressure, which does not fit the existing user-driven SMS import flow.
-- Keeping the tier typed/configurable preserves an operational switch without a code rewrite.
+- Priority adds a 50% surcharge and remains available as an explicit operational switch when lower latency is worth the extra cost.
+- Flex is lower-cost spare-capacity scheduling and may be retried or timed out under load; those queueing semantics do not fit the current bounded synchronous SMS import flow.
+- Rejecting Flex now keeps the configured tier consistent with the 25-second per-attempt timeout. Enabling Flex later requires a separately approved tier-specific execution/timeout strategy.
 
 **Alternatives considered**:
 
 - Priority by default: unnecessary cost.
-- Flex by default: unacceptable worst-case queue latency for this flow.
+- Flex as a selectable synchronous tier: rejected for this release because its spare-capacity queueing semantics are incompatible with the current bounded request lifecycle.
 
 **Source**: https://deepinfra.com/docs/chat/overview
 
@@ -173,7 +173,7 @@ Supported currencies remain enforced through the response schema and application
 
 ## R-009: Retry and timeout policy
 
-**Decision**: Preserve the existing four-attempt shape (initial attempt + 3 retries) and 2s/4s/8s exponential delays. Each provider attempt is bounded by a 25-second timeout. Retry only transient transport/provider failures.
+**Decision**: For the supported synchronous tiers (`default` and `priority`), preserve the existing four-attempt shape (initial attempt + 3 retries) and 2s/4s/8s exponential delays. Each provider attempt is bounded by a 25-second timeout. Retry only transient transport/provider failures. `flex` is unsupported and must fail configuration before entering this retry/timeout loop.
 
 **Retryable**:
 
@@ -189,11 +189,11 @@ Supported currencies remain enforced through the response schema and application
 - HTTP 401
 - HTTP 403
 - HTTP 404
-- missing/invalid configuration
+- missing/invalid/unsupported configuration, including `flex`
 
 **Rationale**:
 
-- Four 25-second attempts plus 14 seconds of backoff remain comfortably below the existing approximate Supabase Edge Function wall-time budget.
+- For `default` and `priority`, four 25-second attempts plus 14 seconds of backoff remain comfortably below the existing approximate Supabase Edge Function wall-time budget.
 - Current retry semantics already consume provider-start capacity only once at the safeguard boundary; this change must not alter accounting.
 - There is no automatic alternate provider, so DeepInfra `fail_fast` is not useful by default; bounded timeout is the latency guard.
 
