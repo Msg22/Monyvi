@@ -22,6 +22,7 @@ interface MockMarketRatesState {
   readonly currentError: Error | null;
   readonly isConnected: boolean;
   readonly isCurrentLoading: boolean;
+  readonly lastUpdated: Date | null;
   readonly refreshSelectedSnapshot: () => void;
   readonly selectedSnapshot: {
     readonly snapshotId: string;
@@ -37,13 +38,17 @@ function resetMockMarketRates(): void {
     currentError: null,
     isConnected: true,
     isCurrentLoading: true,
+    lastUpdated: null,
     refreshSelectedSnapshot: mockRefreshSelectedSnapshot,
     selectedSnapshot: null,
   };
 }
 
 function emitMarketRates(
-  next: Omit<MockMarketRatesState, "isConnected" | "refreshSelectedSnapshot">
+  next: Omit<
+    MockMarketRatesState,
+    "isConnected" | "refreshSelectedSnapshot" | "lastUpdated"
+  > & { readonly lastUpdated?: Date | null }
 ): void {
   mockMarketRatesState = {
     ...mockMarketRatesState,
@@ -291,6 +296,67 @@ describe("useMetalPortfolio conservative provider timestamp", () => {
     mockSaleRefObservers.length = 0;
   });
 
+  it("exposes the market rates provider timestamp matching Dashboard Live Rates even when active holdings are empty", async () => {
+    mockActiveHoldings = [];
+    const providerTime = new Date("2026-09-08T09:30:00.000Z");
+    const { result } = renderHook(() => useMetalPortfolio());
+    await waitFor(() => expect(result.current.readiness.holdings).toBe(true));
+
+    act(() => {
+      emitMarketRates({
+        currentError: null,
+        isCurrentLoading: false,
+        lastUpdated: providerTime,
+        selectedSnapshot: selectedSnapshot(mockEmptyTrustReadModel),
+      });
+    });
+
+    await waitFor(() =>
+      expect(result.current.readiness.rateCurrency).toBe(true)
+    );
+    expect(result.current.rateProviderObservedAt).toEqual(providerTime);
+  });
+
+  it("returns null when the Dashboard provider timestamp is missing", async () => {
+    mockActiveHoldings = [];
+    const { result } = renderHook(() => useMetalPortfolio());
+    await waitFor(() => expect(result.current.readiness.holdings).toBe(true));
+
+    act(() => {
+      emitMarketRates({
+        currentError: null,
+        isCurrentLoading: false,
+        lastUpdated: null,
+        selectedSnapshot: selectedSnapshot(mockEmptyTrustReadModel),
+      });
+    });
+
+    await waitFor(() =>
+      expect(result.current.readiness.rateCurrency).toBe(true)
+    );
+    expect(result.current.rateProviderObservedAt).toBeNull();
+  });
+
+  it("returns null when the Dashboard provider timestamp is invalid", async () => {
+    mockActiveHoldings = [];
+    const { result } = renderHook(() => useMetalPortfolio());
+    await waitFor(() => expect(result.current.readiness.holdings).toBe(true));
+
+    act(() => {
+      emitMarketRates({
+        currentError: null,
+        isCurrentLoading: false,
+        lastUpdated: new Date(Number.NaN),
+        selectedSnapshot: selectedSnapshot(mockEmptyTrustReadModel),
+      });
+    });
+
+    await waitFor(() =>
+      expect(result.current.readiness.rateCurrency).toBe(true)
+    );
+    expect(result.current.rateProviderObservedAt).toBeNull();
+  });
+
   it("returns null when a consumed rate lacks a timestamp even though another has one", async () => {
     mockActiveHoldings = [
       {
@@ -353,6 +419,7 @@ describe("useMetalPortfolio conservative provider timestamp", () => {
       emitMarketRates({
         currentError: null,
         isCurrentLoading: false,
+        lastUpdated: new Date("2026-09-08T09:00:00.000Z"),
         selectedSnapshot: selectedSnapshot({
           gold: {
             state: "fresh",
