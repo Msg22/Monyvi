@@ -27,6 +27,7 @@ import { HoldingSeparator, MetalHoldingRow } from "./MetalPortfolioHoldingRow";
 import {
   getPortfolioRateAccessibilityCopy,
   getPortfolioRateCompactLabel,
+  getPurityTilesRateState,
   resolvePortfolioRateCopy,
 } from "./portfolio-rate-presentation";
 import {
@@ -325,8 +326,12 @@ function PortfolioSummary({
     t
   );
 
+  // The Prices-per-gram header describes the four displayed tiles, not the
+  // holdings-derived total: adding or removing a holding must not requalify
+  // tile prices whose inputs did not change. The provider observation
+  // timestamp still comes from the shared Dashboard provider time.
   const rateUpdatedLabel = getPortfolioRateCompactLabel(
-    portfolio.rateStatus.state,
+    getPurityTilesRateState(portfolio.purityPriceTiles),
     rateProviderObservedAt,
     i18n?.resolvedLanguage,
     new Date(),

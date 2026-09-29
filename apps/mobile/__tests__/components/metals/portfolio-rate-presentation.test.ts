@@ -2,6 +2,7 @@ import {
   formatPortfolioRateUpdatedParts,
   getPortfolioRateAccessibilityCopy,
   getPortfolioRateCompactLabel,
+  getPurityTilesRateState,
   resolvePortfolioRateCopy,
 } from "@/components/metals/portfolio-rate-presentation";
 
@@ -23,6 +24,43 @@ describe("portfolio rate presentation", () => {
   it("does not manufacture a timestamp when provider observation time is absent", () => {
     expect(formatPortfolioRateUpdatedParts(null, "en")).toBeNull();
     expect(formatPortfolioRateUpdatedParts(null, "ar")).toBeNull();
+  });
+});
+
+describe("purity tile section state (holdings-independent)", () => {
+  it("stays fresh when every displayed tile is fresh", () => {
+    expect(
+      getPurityTilesRateState([
+        { state: "fresh" },
+        { state: "fresh" },
+        { state: "fresh" },
+        { state: "fresh" },
+      ])
+    ).toBe("fresh");
+  });
+
+  it("qualifies the section stale when a displayed gold tile is stale even with a fresh currency input", () => {
+    expect(
+      getPurityTilesRateState([
+        { state: "stale" },
+        { state: "stale" },
+        { state: "stale" },
+        { state: "fresh" },
+      ])
+    ).toBe("stale");
+  });
+
+  it("prefers unknown over stale and missing over every other tile state", () => {
+    expect(
+      getPurityTilesRateState([{ state: "stale" }, { state: "unknown" }])
+    ).toBe("unknown");
+    expect(
+      getPurityTilesRateState([{ state: "unknown" }, { state: "missing" }])
+    ).toBe("missing");
+  });
+
+  it("reports missing when no tile is displayed", () => {
+    expect(getPurityTilesRateState([])).toBe("missing");
   });
 });
 

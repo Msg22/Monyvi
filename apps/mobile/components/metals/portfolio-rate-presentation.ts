@@ -44,6 +44,34 @@ export function formatPortfolioRateUpdatedParts(
 
 export type PortfolioRateTrustState = "fresh" | "stale" | "unknown" | "missing";
 
+const TILE_STATE_SEVERITY: Readonly<Record<PortfolioRateTrustState, number>> =
+  {
+    fresh: 0,
+    stale: 1,
+    unknown: 2,
+    missing: 3,
+  };
+
+/**
+ * Derives the Prices-per-gram section trust from the displayed purity tiles
+ * alone, so adding or removing a holding can never requalify tile prices
+ * whose inputs did not change. Worst tile wins (missing > unknown > stale >
+ * fresh); an empty tile set is missing.
+ */
+export function getPurityTilesRateState(
+  tiles: readonly { readonly state: PortfolioRateTrustState }[]
+): PortfolioRateTrustState {
+  let state: PortfolioRateTrustState = "fresh";
+  let hasTile = false;
+  for (const tile of tiles) {
+    hasTile = true;
+    if (TILE_STATE_SEVERITY[tile.state] > TILE_STATE_SEVERITY[state]) {
+      state = tile.state;
+    }
+  }
+  return hasTile ? state : "missing";
+}
+
 export interface PortfolioRateAccessibilityCopy {
   readonly key: string;
   readonly values?: Readonly<Record<string, string>>;
