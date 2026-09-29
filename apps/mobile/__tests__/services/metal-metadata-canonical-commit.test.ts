@@ -191,6 +191,7 @@ describe("commitCanonicalMetalMetadataLocally clock guard", () => {
   });
 
   it("leaves dedicated rows unacknowledged when the local metadata commit fails", async () => {
+    const { database } = await createMetadataDatabase();
     const rpc = jest.fn().mockResolvedValueOnce({
       data: {
         status: "applied",
@@ -205,6 +206,7 @@ describe("commitCanonicalMetalMetadataLocally clock guard", () => {
 
     await expect(
       pushMetalDedicatedChanges(
+        database,
         {
           metal_holding_states: {
             created: [],
@@ -232,7 +234,10 @@ describe("commitCanonicalMetalMetadataLocally clock guard", () => {
         undefined,
         jest.fn(() => Promise.reject(new Error("metal_holding_not_owned")))
       )
-    ).resolves.toEqual({ acknowledgeAllDedicatedRows: false });
+    ).resolves.toEqual({
+      acknowledgeAllDedicatedRows: false,
+      acknowledgedActionIds: new Set<string>(),
+    });
     expect(rpc).toHaveBeenCalledTimes(1);
   });
 });

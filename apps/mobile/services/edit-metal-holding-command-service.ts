@@ -318,13 +318,13 @@ function prepareCorrectionPlan(
   const event = database
     .get<MetalLifecycleEvent>("metal_lifecycle_events")
     .prepareCreate((record): void => {
-      setPreparedId(record, input.lifecycleEventId);
+      setPreparedId(record, input.actionId);
       record.actionId = input.actionId;
       record.deleted = false;
       record.holdingId = input.holdingId;
       record.isEffective = true;
       record.isHistoryVisible = true;
-      record.kind = "corrected";
+      record.kind = "correct";
       record.occurredAt = occurredAt;
       record.payloadJson = payloadJson;
       record.predecessorEventId = input.predecessorEventId;
@@ -414,7 +414,7 @@ function prepareCorrectionPlan(
         update: (model): void => {
           const state = model as MetalHoldingState;
           state.effectiveActionId = input.actionId;
-          state.effectiveEventId = input.lifecycleEventId;
+          state.effectiveEventId = input.actionId;
           state.financialRevision = nextRevision;
           state.reconciliationState = "sync_pending";
           if (nameDecision === "apply") {
@@ -426,15 +426,6 @@ function prepareCorrectionPlan(
             state.notesWriterId = input.userId;
           }
           state.updatedAt = occurredAt;
-        },
-      },
-      {
-        kind: "update",
-        model: projection.predecessor,
-        update: (model): void => {
-          const predecessor = model as MetalLifecycleEvent;
-          predecessor.isEffective = false;
-          predecessor.updatedAt = occurredAt;
         },
       },
     ],

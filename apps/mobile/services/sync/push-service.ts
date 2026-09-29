@@ -26,9 +26,17 @@ import {
 } from "./config";
 import { createSyncTableError } from "./errors";
 import {
+  changedRecords,
+  collectAcknowledgedMetalHoldingIds,
+  collectBlockedDedicatedRejectedIds,
   collectRpcHandledMetalHoldingIds,
   collectUnacknowledgedMetalRows,
+  excludeHoldingActions,
 } from "./metal-row-routing";
+import {
+  expectedRevisionOrder,
+  isCompleteMetalActionGroup,
+} from "./metal-complete-group";
 import {
   collectAccountFinancialActionPushBundles,
   collectProtectedFinancialActionRowIds,
@@ -54,6 +62,7 @@ import {
 } from "./ownership-guards";
 import { getChildTableConfig, isWritableTable } from "./table-predicates";
 import { transformToSupabase } from "./transforms";
+import { collectLocalTerminalActionIds } from "./metal-local-terminal-lookup";
 import type { SupabaseWriteTable, WritableSupabaseTablesNames } from "./types";
 
 export const GENERIC_SYNC_ERROR_CODES = {
@@ -64,6 +73,12 @@ export const GENERIC_SYNC_ERROR_CODES = {
 
 const METAL_ACTION_RPC = "apply_metal_action_v1";
 const METAL_METADATA_RPC = "apply_metal_metadata_patch_v1";
+const METAL_LINKED_TABLES: ReadonlyArray<string> = [
+  "metal_action_evidence",
+  "metal_lifecycle_events",
+  "metal_rate_references",
+];
+const NO_ACKNOWLEDGED_ACTIONS: ReadonlySet<string> = new Set<string>();
 const metalOutcomeHashProvider = {
   digestUtf8: (value: string): Promise<string> =>
     Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, value),
@@ -81,6 +96,7 @@ export type MetalSyncRpc = (
 
 export interface MetalDedicatedPushResult {
   readonly acknowledgeAllDedicatedRows: boolean;
+  readonly acknowledgedActionIds: ReadonlySet<string>;
 }
 
 export type MetalOutcomeCommitter = (
@@ -90,16 +106,6 @@ export type MetalOutcomeCommitter = (
 export type MetalMetadataOutcomeCommitter = (
   outcome: MetalMetadataRpcOutcome
 ) => Promise<void>;
-
-function changedRecords(
-  changes: SyncPushArgs["changes"],
-  table: string
-): ReadonlyArray<Record<string, unknown>> {
-  const changeSet = (
-    changes as unknown as Record<string, SyncTableChangeSet | undefined>
-  )[table];
-  return changeSet ? [...changeSet.created, ...changeSet.updated] : [];
-}
 
 const ACCOUNT_FINANCIAL_COLUMNS: ReadonlySet<string> = new Set([
   "balance",
@@ -158,21 +164,6 @@ function hasDedicatedRows(changes: SyncPushArgs["changes"]): boolean {
   });
 }
 
-function expectedRevisionOrder(root: Record<string, unknown>): bigint {
-  try {
-    const envelope = JSON.parse(String(root.payload_json)) as {
-      readonly payload?: { readonly expectedHoldingRevision?: unknown };
-    };
-    const revision = envelope.payload?.expectedHoldingRevision;
-    if (revision === null) return -1n;
-    return typeof revision === "string"
-      ? BigInt(revision)
-      : 9223372036854775808n;
-  } catch {
-    return 9223372036854775808n;
-  }
-}
-
 function asRpcObject(value: unknown): Readonly<Record<string, unknown>> | null {
   return typeof value === "object" && value !== null && !Array.isArray(value)
     ? (value as Readonly<Record<string, unknown>>)
@@ -228,79 +219,6 @@ function parseMetalMetadataRpcOutcome(
   return outcome as unknown as MetalMetadataRpcOutcome;
 }
 
-function isCompleteMetalActionGroup(
-  changes: SyncPushArgs["changes"],
-  root: Record<string, unknown>
-): boolean {
-  try {
-    const envelope = JSON.parse(String(root.payload_json)) as {
-      readonly actionId: string;
-      readonly domainReferenceId: string;
-      readonly kind: string;
-      readonly payload: {
-        readonly holdingId: string;
-        readonly rateSnapshots?: ReadonlyArray<{
-          readonly referenceId: string;
-        }>;
-        readonly materialCorrection?: {
-          readonly rateSnapshots?: ReadonlyArray<{
-            readonly referenceId: string;
-          }>;
-        } | null;
-      };
-      readonly userId: string;
-    };
-    if (
-      envelope.actionId !== root.action_id ||
-      envelope.userId !== root.user_id ||
-      envelope.domainReferenceId !== envelope.payload.holdingId
-    ) {
-      return false;
-    }
-    const matchesActionRow = (record: Record<string, unknown>): boolean =>
-      record.action_id === envelope.actionId &&
-      record.user_id === envelope.userId &&
-      record.holding_id === envelope.payload.holdingId;
-    const evidence = changedRecords(changes, "metal_action_evidence").filter(
-      matchesActionRow
-    );
-    const events = changedRecords(changes, "metal_lifecycle_events").filter(
-      matchesActionRow
-    );
-    const states = changedRecords(changes, "metal_holding_states").filter(
-      (record) =>
-        record.user_id === envelope.userId &&
-        (record.holding_id === envelope.payload.holdingId ||
-          record.id === envelope.payload.holdingId)
-    );
-    const snapshots =
-      envelope.payload.materialCorrection?.rateSnapshots ??
-      envelope.payload.rateSnapshots ??
-      [];
-    const expectedRateIds = new Set(
-      snapshots.map((snapshot) => snapshot.referenceId)
-    );
-    const rates = changedRecords(changes, "metal_rate_references").filter(
-      matchesActionRow
-    );
-    return (
-      evidence.length === 1 &&
-      evidence[0]?.kind === envelope.kind &&
-      events.length === 1 &&
-      (events[0]?.kind === envelope.kind ||
-        (envelope.kind === "add" && events[0]?.kind === "created")) &&
-      states.length === 1 &&
-      rates.length === expectedRateIds.size &&
-      rates.every(
-        (record) =>
-          typeof record.id === "string" && expectedRateIds.has(record.id)
-      )
-    );
-  } catch {
-    return false;
-  }
-}
-
 function defaultMetalRpc(
   name: string,
   args: Readonly<Record<string, unknown>>
@@ -336,6 +254,7 @@ function metalMetadataField(
 }
 
 export async function pushMetalDedicatedChanges(
+  database: Database,
   changes: SyncPushArgs["changes"],
   userId: string,
   rpc: MetalSyncRpc = defaultMetalRpc,
@@ -343,10 +262,16 @@ export async function pushMetalDedicatedChanges(
   commitMetadataOutcome?: MetalMetadataOutcomeCommitter
 ): Promise<MetalDedicatedPushResult> {
   if (!hasDedicatedRows(changes)) {
-    return { acknowledgeAllDedicatedRows: true };
+    return {
+      acknowledgeAllDedicatedRows: true,
+      acknowledgedActionIds: NO_ACKNOWLEDGED_ACTIONS,
+    };
   }
   if (hasDedicatedDeletes(changes)) {
-    return { acknowledgeAllDedicatedRows: false };
+    return {
+      acknowledgeAllDedicatedRows: false,
+      acknowledgedActionIds: NO_ACKNOWLEDGED_ACTIONS,
+    };
   }
 
   const roots = [
@@ -364,41 +289,80 @@ export async function pushMetalDedicatedChanges(
   });
   const acceptedActionIds = new Set<string>();
   const handledActionIds = new Set<string>();
+  const blockedActionIds = new Set<string>();
   for (const root of roots) {
+    const actionId =
+      typeof root.action_id === "string" ? root.action_id : null;
     if (
       root.user_id !== userId ||
-      typeof root.action_id !== "string" ||
+      actionId === null ||
       typeof root.payload_json !== "string" ||
       typeof root.payload_hash !== "string" ||
       !isCompleteMetalActionGroup(changes, root)
     ) {
-      return { acknowledgeAllDedicatedRows: false };
+      if (actionId === null) {
+        return {
+          acknowledgeAllDedicatedRows: false,
+          acknowledgedActionIds: NO_ACKNOWLEDGED_ACTIONS,
+        };
+      }
+      blockedActionIds.add(actionId);
+      continue;
     }
     const { data, error } = await rpc(METAL_ACTION_RPC, {
       p_payload_hash: root.payload_hash,
       p_payload_json: root.payload_json,
     });
     if (error) throw new Error("metal_action_rpc_failed");
-    const outcome = parseMetalRpcOutcome(data, root.action_id, userId);
+    const outcome = parseMetalRpcOutcome(data, actionId, userId);
     if (!outcome) {
-      return { acknowledgeAllDedicatedRows: false };
+      blockedActionIds.add(actionId);
+      continue;
     }
     if (commitOutcome) {
       await commitOutcome(outcome);
-      handledActionIds.add(root.action_id);
+      handledActionIds.add(actionId);
       if (outcome.status === "accepted" || outcome.status === "idempotent") {
-        acceptedActionIds.add(root.action_id);
+        acceptedActionIds.add(actionId);
       }
     } else if (
       outcome.status === "accepted" ||
       outcome.status === "idempotent"
     ) {
-      acceptedActionIds.add(root.action_id);
-      handledActionIds.add(root.action_id);
+      acceptedActionIds.add(actionId);
+      handledActionIds.add(actionId);
     } else {
-      return { acknowledgeAllDedicatedRows: false };
+      blockedActionIds.add(actionId);
     }
   }
+
+  const holdingIdsFromLinkedRows = new Set<string>();
+  for (const table of METAL_LINKED_TABLES) {
+    for (const record of changedRecords(changes, table)) {
+      const holdingId = record.holding_id as string | undefined;
+      if (holdingId) {
+        holdingIdsFromLinkedRows.add(holdingId);
+      }
+    }
+  }
+  const states = changedRecords(changes, "metal_holding_states");
+  for (const state of states) {
+    const holdingId =
+      typeof state.holding_id === "string"
+        ? state.holding_id
+        : String(state.id);
+    holdingIdsFromLinkedRows.add(holdingId);
+  }
+
+  const localTerminalActionIds = await collectLocalTerminalActionIds(
+    database,
+    userId,
+    holdingIdsFromLinkedRows
+  );
+  const safeActionIds = new Set<string>([
+    ...handledActionIds,
+    ...localTerminalActionIds,
+  ]);
 
   const assets = new Map(
     changedRecords(changes, "assets").map((record) => [
@@ -407,7 +371,6 @@ export async function pushMetalDedicatedChanges(
     ])
   );
   const metadataHoldingIds = new Set<string>();
-  const states = changedRecords(changes, "metal_holding_states");
   for (const state of states) {
     const holdingId =
       typeof state.holding_id === "string"
@@ -425,7 +388,14 @@ export async function pushMetalDedicatedChanges(
     const name = asset ? metalMetadataField(state, asset, "name") : null;
     const notes = asset ? metalMetadataField(state, asset, "notes") : null;
     if (name === false || notes === false) {
-      return { acknowledgeAllDedicatedRows: false };
+      return {
+        acknowledgeAllDedicatedRows: false,
+        acknowledgedActionIds: excludeHoldingActions(
+          safeActionIds,
+          changes,
+          holdingId
+        ),
+      };
     }
     const fields = {
       ...(name ? { name } : {}),
@@ -439,7 +409,14 @@ export async function pushMetalDedicatedChanges(
     if (error) throw new Error("metal_metadata_rpc_failed");
     const outcome = parseMetalMetadataRpcOutcome(data, holdingId);
     if (!outcome || !commitMetadataOutcome) {
-      return { acknowledgeAllDedicatedRows: false };
+      return {
+        acknowledgeAllDedicatedRows: false,
+        acknowledgedActionIds: excludeHoldingActions(
+          safeActionIds,
+          changes,
+          holdingId
+        ),
+      };
     }
     try {
       await commitMetadataOutcome(outcome);
@@ -447,21 +424,23 @@ export async function pushMetalDedicatedChanges(
       logger.error("sync.push.metal.metadata.commit.failed", error, {
         holdingId,
       });
-      return { acknowledgeAllDedicatedRows: false };
+      return {
+        acknowledgeAllDedicatedRows: false,
+        acknowledgedActionIds: excludeHoldingActions(
+          safeActionIds,
+          changes,
+          holdingId
+        ),
+      };
     }
     metadataHoldingIds.add(holdingId);
   }
 
-  const linkedTables = [
-    "metal_action_evidence",
-    "metal_lifecycle_events",
-    "metal_rate_references",
-  ];
-  const hasUnacceptedLinkedRow = linkedTables.some((table) =>
+  const hasUnacceptedLinkedRow = METAL_LINKED_TABLES.some((table) =>
     changedRecords(changes, table).some(
       (record) =>
         typeof record.action_id !== "string" ||
-        !handledActionIds.has(record.action_id)
+        !safeActionIds.has(record.action_id)
     )
   );
   const hasUnacceptedState = states.some((state) => {
@@ -472,14 +451,16 @@ export async function pushMetalDedicatedChanges(
     return (
       !metadataHoldingIds.has(holdingId) &&
       (typeof state.effective_action_id !== "string" ||
-        !handledActionIds.has(state.effective_action_id))
+        !safeActionIds.has(state.effective_action_id))
     );
   });
   return {
     acknowledgeAllDedicatedRows:
       (roots.length > 0 || metadataHoldingIds.size > 0) &&
+      blockedActionIds.size === 0 &&
       !hasUnacceptedLinkedRow &&
       !hasUnacceptedState,
+    acknowledgedActionIds: new Set(safeActionIds),
   };
 }
 
@@ -554,33 +535,6 @@ function parseChangeId(value: unknown): string {
     throw new Error(GENERIC_SYNC_ERROR_CODES.INVALID_CHANGE_ID);
   }
   return candidate;
-}
-
-function collectDedicatedRejectedIds(
-  changes: SyncPushArgs["changes"]
-): SyncRejectedIds | undefined {
-  const rejectedIds: Record<string, string[]> = {};
-  for (const [table, changeSet] of Object.entries(changes)) {
-    if (!DEDICATED_SYNC_TABLES.has(table)) continue;
-
-    const tableChanges = changeSet as SyncTableChangeSet;
-    const tableRejectedIds = [
-      ...tableChanges.created.map((record: unknown): string =>
-        parseChangeId(record)
-      ),
-      ...tableChanges.updated.map((record: unknown): string =>
-        parseChangeId(record)
-      ),
-      ...tableChanges.deleted.map((recordId: unknown): string =>
-        parseChangeId(recordId)
-      ),
-    ];
-    if (tableRejectedIds.length > 0) {
-      rejectedIds[table] = [...new Set(tableRejectedIds)];
-    }
-  }
-
-  return Object.keys(rejectedIds).length > 0 ? rejectedIds : undefined;
 }
 
 function mergeRejectedIds(
@@ -716,6 +670,7 @@ export async function pushChanges(
 ): Promise<SyncPushResult | undefined | void> {
   const userId = await assertExpectedPushUser(expectedUserId);
   const dedicatedPush = await pushMetalDedicatedChanges(
+    database,
     pushArgs.changes,
     userId,
     defaultMetalRpc,
@@ -734,7 +689,10 @@ export async function pushChanges(
   const protectedFinancialActionIds = mergeRejectedIds(
     dedicatedPush.acknowledgeAllDedicatedRows
       ? undefined
-      : collectDedicatedRejectedIds(pushArgs.changes),
+      : collectBlockedDedicatedRejectedIds(
+          pushArgs.changes,
+          dedicatedPush.acknowledgedActionIds
+        ),
     collectProtectedFinancialActionRowIds(pushArgs.changes)
   );
   const accountActionAcknowledgements =
@@ -742,10 +700,12 @@ export async function pushChanges(
       pushArgs.changes,
       financialActionPushCoordinator
     );
-  const handledMetalHoldingIds = collectRpcHandledMetalHoldingIds(
-    pushArgs.changes,
-    dedicatedPush.acknowledgeAllDedicatedRows
-  );
+  const handledMetalHoldingIds = dedicatedPush.acknowledgeAllDedicatedRows
+    ? collectRpcHandledMetalHoldingIds(pushArgs.changes, true)
+    : collectAcknowledgedMetalHoldingIds(
+        pushArgs.changes,
+        dedicatedPush.acknowledgedActionIds
+      );
   const returnedRejectedIds = mergeRejectedIds(
     mergeRejectedIds(
       subtractRejectedIds(
@@ -917,12 +877,4 @@ export async function pushChanges(
   return returnedRejectedIds
     ? { experimentalRejectedIds: returnedRejectedIds }
     : undefined;
-}
-
-export async function runMetalPushStrategy(input: {
-  readonly push: () => Promise<void>;
-  readonly markSynced: () => Promise<void> | void;
-}): Promise<void> {
-  await input.push();
-  await input.markSynced();
 }

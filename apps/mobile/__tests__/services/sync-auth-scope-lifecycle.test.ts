@@ -174,5 +174,12 @@ describe("sync auth scope lifecycle", () => {
   });
 });
 jest.mock("../../services/legacy-metal-add-repair-service", () => ({
-  repairLegacyMetalAdds: jest.fn().mockResolvedValue(undefined),
+  repairLegacyMetalAdds: jest
+    .fn()
+    .mockResolvedValue({ repaired: 0, skipped: [] }),
+}));
+jest.mock("../../services/legacy-metal-edit-repair-service", () => ({
+  repairLegacyMetalEdits: jest
+    .fn()
+    .mockResolvedValue({ repaired: 0, skipped: [] }),
 }));

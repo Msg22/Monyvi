@@ -320,9 +320,12 @@ describe("Edit metal holding command SQLite atomicity", () => {
           .fetch()
       )[0].financialRevision
     ).toBe("1");
-    expect(
-      await database.get<Model>("metal_action_evidence").query().fetch()
-    ).toHaveLength(1);
+    const evidence = await database
+      .get<Model>("metal_action_evidence")
+      .query()
+      .fetch();
+    expect(evidence).toHaveLength(1);
+    expect(evidence[0].id).toBe(IDS.correctionEvidence);
     const history = await database
       .get<MetalLifecycleEvent>("metal_lifecycle_events")
       .query()
@@ -330,7 +333,21 @@ describe("Edit metal holding command SQLite atomicity", () => {
     expect(history).toHaveLength(2);
     expect(
       history.find((event) => event.id === IDS.createdEvent)?.isEffective
-    ).toBe(false);
+    ).toBe(true);
+    expect(history.find((event) => event.actionId === IDS.correctionAction)).toMatchObject({
+      id: IDS.correctionAction,
+      kind: "correct",
+      predecessorEventId: IDS.createdEvent,
+      isEffective: true,
+    });
+    expect(
+      (
+        await database
+          .get<MetalHoldingState>("metal_holding_states")
+          .query()
+          .fetch()
+      )[0].effectiveEventId
+    ).toBe(IDS.correctionAction);
   });
   it("uses metadata LWW without financial history and requires a reason for material changes", async (): Promise<void> => {
     await seedHolding();
@@ -416,7 +433,7 @@ describe("Edit metal holding command SQLite atomicity", () => {
       actionId: "018f0c7a-1234-7abc-8def-000000000091",
       actionEvidenceId: "018f0c7a-1234-7abc-8def-000000000092",
       lifecycleEventId: "018f0c7a-1234-7abc-8def-000000000093",
-      predecessorEventId: IDS.correctionEvent,
+      predecessorEventId: IDS.correctionAction,
       expectedFinancialRevision: "1",
       originalMetadata: { name: "Mixed Newer Name", notes: "Mixed Newer Note" },
       originalMaterialFacts: {

@@ -14,9 +14,11 @@ import { pullChanges } from "./sync/atomic-pull-strategies";
 import { pushChanges } from "./sync/push-service";
 import { getCurrentUserId } from "./supabase";
 import { repairLegacyMetalAdds } from "./legacy-metal-add-repair-service";
+import { repairLegacyMetalEdits } from "./legacy-metal-edit-repair-service";
 
 export const SYNC_ERROR_CODES = {
   AUTH_SCOPE_LOST: "sync_auth_scope_lost",
+  LEGACY_METAL_CHAIN_UNSAFE: "sync_legacy_metal_chain_unsafe",
 } as const;
 
 const SYNC_OWNER_LOCAL_KEY = "__monyvi_sync_owner_user_id";
@@ -73,7 +75,25 @@ export async function syncDatabase(
 
     const doSync = async (): Promise<void> => {
       try {
-        await repairLegacyMetalAdds(database, userId);
+        const addRepair = await repairLegacyMetalAdds(database, userId);
+        for (const skip of addRepair.skipped) {
+          logger.warn("sync.legacyMetalAddRepairSkipped", {
+            actionId: skip.actionId,
+            reason: skip.reason,
+          });
+        }
+        if (
+          addRepair.skipped.some((skip) => skip.reason === "superseded")
+        ) {
+          throw new Error(SYNC_ERROR_CODES.LEGACY_METAL_CHAIN_UNSAFE);
+        }
+        const editRepair = await repairLegacyMetalEdits(database, userId);
+        for (const skip of editRepair.skipped) {
+          logger.warn("sync.legacyMetalEditRepairSkipped", {
+            actionId: skip.actionId,
+            reason: skip.reason,
+          });
+        }
         await synchronize({
           database,
           pullChanges: async ({ lastPulledAt }): Promise<SyncPullResult> => {

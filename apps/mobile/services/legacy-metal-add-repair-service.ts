@@ -7,7 +7,22 @@ import type {
   MetalHoldingState,
   MetalLifecycleEvent,
 } from "@monyvi/db";
-import { getCurrentUserDataScope } from "./user-data-access";
+import {
+  getCurrentUserDataScope,
+  type CurrentUserDataScope,
+} from "./user-data-access";
+
+export type LegacyAddRepairSkipReason = "superseded" | "malformed";
+
+export interface LegacyAddRepairSkip {
+  readonly actionId: string;
+  readonly reason: LegacyAddRepairSkipReason;
+}
+
+export interface LegacyAddRepairResult {
+  readonly repaired: number;
+  readonly skipped: readonly LegacyAddRepairSkip[];
+}
 
 interface LegacyAddRows {
   readonly asset: Asset;
@@ -182,11 +197,39 @@ function prepareCanonicalEvent(
     });
 }
 
+function isAuthScopeError(error: unknown): boolean {
+  return (
+    error instanceof Error && error.message === "sync_push_auth_scope_lost"
+  );
+}
+
+async function classifyAddSkip(
+  database: Database,
+  scope: CurrentUserDataScope,
+  root: FinancialActionGroup
+): Promise<LegacyAddRepairSkipReason> {
+  try {
+    const states = await scope
+      .queryOwned(
+        database.get<MetalHoldingState>("metal_holding_states"),
+        Q.where("holding_id", root.domainReferenceId),
+        Q.where("deleted", false)
+      )
+      .fetch();
+    if (states.length === 1 && states[0].effectiveActionId !== root.actionId) {
+      return "superseded";
+    }
+  } catch {
+    // Fall through to malformed below.
+  }
+  return "malformed";
+}
+
 /** Repair only locally pending legacy Adds before sync captures their changes. */
 export async function repairLegacyMetalAdds(
   database: Database,
   userId: string
-): Promise<void> {
+): Promise<LegacyAddRepairResult> {
   const scope = await getCurrentUserDataScope();
   if (scope.userId !== userId) throw new Error("sync_push_auth_scope_lost");
   const roots = await scope
@@ -198,27 +241,40 @@ export async function repairLegacyMetalAdds(
       Q.where("deleted", false)
     )
     .fetch();
+  let repaired = 0;
+  const skipped: LegacyAddRepairSkip[] = [];
   for (const root of roots) {
     if (root.serverOutcome !== null) continue;
-    await database.write(async () => {
-      const rows = await readLegacyAddRows(database, root, userId);
-      if (rows === null) return;
-      const operations: Model[] = [
-        rows.metal.prepareDestroyPermanently(),
-        rows.state.prepareDestroyPermanently(),
-        rows.evidence.prepareDestroyPermanently(),
-        rows.event.prepareDestroyPermanently(),
-        rows.asset.prepareUpdate((asset) => {
-          asset.acquisitionActionId = root.actionId;
-          asset.isLiquid = false;
-          asset.updatedAt = new Date();
-        }),
-        prepareCanonicalMetal(database, rows),
-        prepareCanonicalState(database, rows, root.actionId),
-        prepareCanonicalEvidence(database, rows, root.actionId),
-        prepareCanonicalEvent(database, rows, root.actionId),
-      ];
-      await database.batch(...operations);
-    });
+    try {
+      const didRepair = await database.write(async (): Promise<boolean> => {
+        const rows = await readLegacyAddRows(database, root, userId);
+        if (rows === null) return false;
+        const operations: Model[] = [
+          rows.metal.prepareDestroyPermanently(),
+          rows.state.prepareDestroyPermanently(),
+          rows.evidence.prepareDestroyPermanently(),
+          rows.event.prepareDestroyPermanently(),
+          rows.asset.prepareUpdate((asset) => {
+            asset.acquisitionActionId = root.actionId;
+            asset.isLiquid = false;
+            asset.updatedAt = new Date();
+          }),
+          prepareCanonicalMetal(database, rows),
+          prepareCanonicalState(database, rows, root.actionId),
+          prepareCanonicalEvidence(database, rows, root.actionId),
+          prepareCanonicalEvent(database, rows, root.actionId),
+        ];
+        await database.batch(...operations);
+        return true;
+      });
+      if (didRepair) repaired += 1;
+    } catch (error) {
+      if (isAuthScopeError(error)) throw error;
+      skipped.push({
+        actionId: root.actionId,
+        reason: await classifyAddSkip(database, scope, root),
+      });
+    }
   }
+  return { repaired, skipped };
 }
