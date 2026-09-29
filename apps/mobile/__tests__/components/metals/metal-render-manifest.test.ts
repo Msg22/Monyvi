@@ -27,11 +27,13 @@ describe("FR-103 production Metal render manifest", () => {
         expect(first.formLabelKey).toBe(`form.${form}`);
       }
     }
-    expect(getMetalRenderEntry("silver", "jewelry")).toMatchObject({
+    const jewelryEntry = getMetalRenderEntry("silver", "jewelry");
+    expect(jewelryEntry).toMatchObject({
       kind: "object",
-      source: expect.anything(),
       accessibilityLabelKey: "render.objectAccessibility",
     });
+    expect(jewelryEntry.source).toBeDefined();
+    expect(jewelryEntry.source).not.toBeNull();
     expect(getMetalRenderEntry("gold", "Ring")).toMatchObject({
       kind: "neutral",
       metalLabelKey: "metal.gold",

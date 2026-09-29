@@ -14,11 +14,11 @@ import type {
 
 import { loadAcquisitionRateSnapshots } from "./add-metal-holding-facade-service";
 import { readStoredMetalActionReplay } from "./metal-action-replay-service";
-import type {
-  EditableMetalHoldingFacts,
-  MetalHoldingStatus,
+import {
+  normalizeEditPhysicalForm,
+  type EditableMetalHoldingFacts,
+  type MetalHoldingStatus,
 } from "./edit-metal-holding-preview-service";
-import { normalizeEditPhysicalForm } from "./edit-metal-holding-preview-service";
 import {
   createEditMetalHoldingCommandService,
   getPersistedMetalMaterialFacts,
