@@ -23,6 +23,15 @@ const translations: Readonly<Record<string, string>> = {
   "detail.history": "History",
   "detail.view_all": "View all",
   "detail.restored": "Restored to Active",
+  "timeline.correct": "Details updated",
+  "timeline.change": "{{field}}: {{before}} → {{after}}",
+  "timeline.change_unavailable": "Change details unavailable",
+  "edit.fields.weight": "Weight",
+  "edit.fields.physicalForm": "Physical form",
+  "edit.not_recorded": "Not recorded",
+  weight_unit: "g",
+  "form.coin": "Coin",
+  "form.bar": "Bar",
   "history.title": "History",
   "history.subtitle": "Sales and holdings no longer in your possession.",
   "history.all": "All",
@@ -44,8 +53,6 @@ const translations: Readonly<Record<string, string>> = {
   "status.disposed": "Disposed",
   "metal.gold": "Gold",
   "metal.silver": "Silver",
-  "form.coin": "Coin",
-  "form.bar": "Bar",
   "form.jewelry": "Jewelry",
   "form.unknown": "Other form",
   purity_gold_875: "21K · 875",
@@ -197,6 +204,51 @@ describe("US3 holding experience", () => {
     expect(screen.getByText("Sell holding")).toBeTruthy();
     fireEvent.press(screen.getByText("Sell holding"));
     expect(onAction).toHaveBeenCalledWith("sell");
+  });
+
+  it("renders every verified correction change and an honest unavailable fallback", () => {
+    const corrected = detail({
+      timeline: [
+        {
+          id: "correction",
+          kind: "correct",
+          occurredAt: new Date("2026-08-21T10:00:00.000Z"),
+          correctionChanges: [
+            { field: "weight", before: "10", after: "12" },
+            { field: "physicalForm", before: "COIN", after: "BAR" },
+          ],
+        },
+      ],
+    });
+    const props = {
+      model: corrected,
+      isLoading: false,
+      error: null,
+      isOffline: true,
+      actions: [],
+      onRetry: jest.fn(),
+    };
+    const { rerender } = render(<MetalHoldingDetailScreen {...props} />);
+    expect(screen.getByText("Weight: 10 g → 12 g")).toBeTruthy();
+    expect(screen.getByText("Physical form: Coin → Bar")).toBeTruthy();
+    expect(screen.getByLabelText(/Weight: 10 g → 12 g/)).toBeTruthy();
+    rerender(
+      <MetalHoldingDetailScreen
+        {...props}
+        model={detail({
+          timeline: [
+            {
+              id: "correction",
+              kind: "correct",
+              occurredAt: new Date("2026-08-21T10:00:00.000Z"),
+              correctionChanges: null,
+            },
+          ],
+        })}
+      />
+    );
+    expect(screen.getByText("Change details unavailable")).toBeTruthy();
+    expect(screen.queryByText("Weight: 10 g → 12 g")).toBeNull();
   });
 
   it("locks terminal financial actions while reconciliation is incomplete", () => {

@@ -3,6 +3,12 @@ import { useNavigation, usePreventRemove } from "@react-navigation/native";
 import { router } from "expo-router";
 import React from "react";
 
+import type {
+  MetalHoldingFormCopy,
+  MetalHoldingFormValues,
+} from "@/components/metals/MetalHoldingForm";
+import { DEFAULT_COPY } from "@/components/metals/metal-holding-form-copy";
+
 jest.mock("react-i18next", () => ({
   useTranslation: () => ({
     t: (key: string): string => key,
@@ -38,6 +44,11 @@ jest.mock("@/hooks/usePreferredCurrency", () => ({
   usePreferredCurrency: () => ({ preferredCurrency: "EGP", isLoading: false }),
 }));
 
+const mockShowToast = jest.fn();
+jest.mock("@/components/ui/Toast", () => ({
+  useToast: () => ({ showToast: mockShowToast }),
+}));
+
 const mockForm = {
   values: {
     name: "",
@@ -65,12 +76,9 @@ const mockForm = {
   submitError: null,
   requiresUnusualValueAcknowledgment: false,
   unusualValueAcknowledged: false,
-  requiresStaleRateAcknowledgment: false,
-  staleRateAcknowledged: false,
-  acknowledgeStaleRate: jest.fn(),
   updateField: jest.fn(),
   acknowledgeUnusualValue: jest.fn(),
-  submit: jest.fn(() => Promise.resolve(null)),
+  submit: jest.fn<Promise<string | null>, []>(() => Promise.resolve(null)),
 };
 
 jest.mock("@/hooks/useAddMetalHolding", () => ({
@@ -102,6 +110,8 @@ interface MetalHoldingFormProps {
   readonly bottomInset: number;
   readonly isLoading?: boolean;
   readonly isSubmitting?: boolean;
+  readonly values?: MetalHoldingFormValues;
+  readonly copy?: MetalHoldingFormCopy;
   readonly validationErrors?: Readonly<Record<string, string>>;
   readonly preview: MetalHoldingPreview;
   readonly onChange: (field: string, value: string | null) => void;
@@ -169,6 +179,23 @@ const silverPreview: MetalHoldingPreview = {
   valuation: { available: false, reason: "missing_rate" },
 };
 
+const goldFormValues: MetalHoldingFormValues = {
+  name: "Savings coin",
+  metal: "GOLD",
+  weightGrams: "10",
+  purityCode: "gold-999",
+  purchasePrice: "52150.32",
+  purchaseCurrency: "EGP",
+  purchaseDate: "2026-09-01",
+  physicalForm: "COIN",
+  notes: "",
+};
+
+const goldKaratCopy: MetalHoldingFormCopy = {
+  ...DEFAULT_COPY,
+  purity: "Karat",
+};
+
 function renderForm(
   overrides: Partial<MetalHoldingFormProps> = {}
 ): MetalHoldingFormProps {
@@ -197,7 +224,10 @@ describe("Add metal holding form", () => {
 
   it("uses sentence-case form labels and a supported dark preview surface", () => {
     renderForm();
-    expect(screen.getByText("Holding name")).not.toHaveProp(
+    expect(screen.getByText(/Holding name/)).toHaveTextContent(
+      "Holding name *"
+    );
+    expect(screen.getByText(/Holding name/)).not.toHaveProp(
       "className",
       expect.stringContaining("input-label")
     );
@@ -225,14 +255,26 @@ describe("Add metal holding form", () => {
 
   it("opens purity choices without expanding the form and uses the shared currency picker", () => {
     renderForm();
-    expect(screen.getByTestId("metal-holding-purity-trigger")).toBeOnTheScreen();
+    expect(
+      screen.getByTestId("metal-holding-purity-trigger")
+    ).toBeOnTheScreen();
     fireEvent.press(screen.getByTestId("metal-holding-purity-trigger"));
-    expect(screen.getByTestId("metal-holding-purity-options-scroll")).toBeOnTheScreen();
-    expect(screen.getByTestId("metal-holding-purchase-price-field")).toBeOnTheScreen();
+    expect(
+      screen.getByTestId("metal-holding-purity-options-scroll")
+    ).toBeOnTheScreen();
+    expect(
+      screen.getByTestId("metal-holding-purchase-price-field")
+    ).toBeOnTheScreen();
     fireEvent.press(screen.getByTestId("metal-holding-purity-trigger"));
-    fireEvent.press(screen.getByTestId("metal-holding-purchase-currency-trigger"));
-    expect(screen.getByTestId("metal-holding-purchase-currency-trigger")).toBeOnTheScreen();
-    expect(screen.getByTestId("metal-holding-currency-picker")).toBeOnTheScreen();
+    fireEvent.press(
+      screen.getByTestId("metal-holding-purchase-currency-trigger")
+    );
+    expect(
+      screen.getByTestId("metal-holding-purchase-currency-trigger")
+    ).toBeOnTheScreen();
+    expect(
+      screen.getByTestId("metal-holding-currency-picker")
+    ).toBeOnTheScreen();
   });
 
   it("renders V1's direct-Add fields in canonical order with the ordinary-phone Weight/Purity row", () => {
@@ -270,8 +312,13 @@ describe("Add metal holding form", () => {
     ).toBeOnTheScreen();
   });
 
-  it("stacks the dense Weight/Purity controls at compact width and 200% text while retaining accessible field labels", () => {
-    renderForm({ width: 320, fontScale: 2 });
+  it("stacks the dense Weight/Karat controls at compact width and 200% text while retaining accessible field labels", () => {
+    renderForm({
+      width: 320,
+      fontScale: 2,
+      values: goldFormValues,
+      copy: goldKaratCopy,
+    });
 
     expect(
       screen.getByTestId("metal-holding-weight-purity-stacked")
@@ -280,7 +327,8 @@ describe("Add metal holding form", () => {
     expect(
       screen.getByTestId("metal-holding-purity-trigger")
     ).toBeOnTheScreen();
-    expect(screen.getByText("Purity")).toBeOnTheScreen();
+    expect(screen.getByText(/Karat/)).toHaveTextContent("Karat *");
+    expect(screen.getByText(/Karat/)).toBeOnTheScreen();
     expect(screen.getByTestId("metal-holding-submit")).toHaveProp(
       "accessibilityRole",
       "button"
@@ -385,6 +433,14 @@ describe("Add metal holding form", () => {
 });
 
 describe("Add metal holding route", () => {
+  beforeEach((): void => {
+    jest.clearAllMocks();
+    mockForm.isDirty = false;
+    mockForm.isSubmitting = false;
+    mockForm.submit.mockReset();
+    mockForm.submit.mockResolvedValue(null);
+  });
+
   it("renders the full form directly instead of a modal or a review route", () => {
     mockForm.isDirty = false;
     const AddHoldingRoute = loadAddHoldingRoute();
@@ -456,5 +512,50 @@ describe("Add metal holding route", () => {
     );
 
     backSpy.mockRestore();
+  });
+
+  it("displays success toast and navigates to details when form submission succeeds", async () => {
+    mockShowToast.mockClear();
+    mockForm.submit.mockResolvedValueOnce("holding-new-123");
+    const replaceSpy = jest
+      .spyOn(router, "replace")
+      .mockImplementation(() => {});
+    const AddHoldingRoute = loadAddHoldingRoute();
+    render(<AddHoldingRoute />);
+
+    await act(async () => {
+      fireEvent.press(screen.getByTestId("metal-holding-submit"));
+      await Promise.resolve();
+    });
+
+    expect(mockForm.submit).toHaveBeenCalledTimes(1);
+    expect(mockShowToast).toHaveBeenCalledWith({
+      type: "success",
+      title: "holding_created",
+    });
+    expect(replaceSpy).toHaveBeenCalledWith("/metals/holding-new-123");
+
+    replaceSpy.mockRestore();
+  });
+
+  it("does not show toast or navigate when form submission fails or returns null", async () => {
+    mockShowToast.mockClear();
+    mockForm.submit.mockResolvedValueOnce(null);
+    const replaceSpy = jest
+      .spyOn(router, "replace")
+      .mockImplementation(() => {});
+    const AddHoldingRoute = loadAddHoldingRoute();
+    render(<AddHoldingRoute />);
+
+    await act(async () => {
+      fireEvent.press(screen.getByTestId("metal-holding-submit"));
+      await Promise.resolve();
+    });
+
+    expect(mockForm.submit).toHaveBeenCalledTimes(1);
+    expect(mockShowToast).not.toHaveBeenCalled();
+    expect(replaceSpy).not.toHaveBeenCalled();
+
+    replaceSpy.mockRestore();
   });
 });

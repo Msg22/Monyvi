@@ -23,15 +23,20 @@ import {
 import { PageHeader } from "@/components/navigation/PageHeader";
 import { CurrencyPicker } from "@/components/currency/CurrencyPicker";
 import { Dropdown, type DropdownItem } from "@/components/ui/Dropdown";
+import { GroupedDecimalInput } from "@/components/ui/GroupedDecimalInput";
 import { GroupedMoneyInput } from "@/components/ui/GroupedMoneyInput";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { TextField } from "@/components/ui/TextField";
 import { palette } from "@/constants/colors";
 import { shouldUseCompactLayout } from "@/constants/ui";
-import { isSupportedMetalsIsoCurrencyCode } from "@monyvi/logic";
+import {
+  formatAmountInput,
+  isSupportedMetalsIsoCurrencyCode,
+} from "@monyvi/logic";
 
 import { MetalHoldingLivePreview } from "./MetalHoldingLivePreview";
 import { MetalHoldingCorrectionState } from "./MetalHoldingCorrectionState";
+import { DEFAULT_COPY } from "./metal-holding-form-copy";
 import {
   MetalSelector,
   PhysicalFormSelector,
@@ -179,6 +184,8 @@ export interface MetalHoldingFormProps {
   readonly holdingStatus?: "active" | "sold" | "disposed";
   readonly reconciliationState?: string;
   readonly onRetryReconciliation?: () => void;
+  readonly isRetryingReconciliation?: boolean;
+  readonly reconciliationRetryError?: string | null;
   readonly editState?: MetalHoldingFormEditState;
   readonly locale: "en" | "ar";
   readonly isRtl: boolean;
@@ -195,8 +202,6 @@ export interface MetalHoldingFormProps {
   readonly submitError?: string | null;
   readonly requiresUnusualValueAcknowledgment?: boolean;
   readonly unusualValueAcknowledged?: boolean;
-  readonly requiresStaleRateAcknowledgment?: boolean;
-  readonly staleRateAcknowledged?: boolean;
   readonly preview: MetalHoldingFormPreview;
   readonly onChange: (
     field: MetalHoldingFormField,
@@ -205,7 +210,6 @@ export interface MetalHoldingFormProps {
   readonly onSubmit: () => void;
   readonly onRequestExit: () => void;
   readonly onAcknowledgeUnusualValue?: () => void;
-  readonly onAcknowledgeStaleRate?: () => void;
   readonly onCorrectionReasonChange?: (value: string) => void;
 }
 
@@ -219,54 +223,6 @@ const DEFAULT_VALUES: MetalHoldingFormValues = {
   purchaseDate: "",
   physicalForm: null,
   notes: "",
-};
-
-const DEFAULT_COPY: MetalHoldingFormCopy = {
-  title: "Add holding",
-  back: "Back",
-  name: "Holding name",
-  namePlaceholder: "e.g. Savings coin",
-  metal: "Metal",
-  gold: "Gold",
-  silver: "Silver",
-  weight: "Weight in grams",
-  purity: "Purity",
-  purchasePrice: "Total purchase price",
-  purchasePriceHint:
-    "Include workmanship, dealer premium, and other purchase costs.",
-  purchaseCurrency: "Purchase currency",
-  purchaseDate: "Purchase date",
-  physicalForm: "Physical form (optional)",
-  coin: "Coin",
-  bar: "Bar",
-  jewelry: "Jewelry",
-  notes: "Notes (optional)",
-  notesPlaceholder: "Add a note",
-  preview: "Estimated value",
-  valuationUnavailable: "Valuation unavailable",
-  savedLocally:
-    "Saved on this device first. It will sync when a connection is available.",
-  submit: "Add holding",
-  submitting: "Adding holding",
-  unusualValue: "This value is unusually large. Review it before continuing.",
-  acknowledge: "I reviewed it",
-  staleRateAcknowledgment:
-    "This estimate uses an older saved rate. Review it before continuing.",
-  submitFailed: "We couldn't add this holding. Try again.",
-  rateFresh: "Rates are current",
-  rateStale: "Using an older saved rate",
-  rateUnknown: "Rate age is unavailable",
-  rateUnavailable: "Some rate details are unavailable",
-  pure: "pure",
-  perPureGram: "per pure gram",
-  estimatedGainSincePurchase: "estimated gain since purchase",
-  estimatedLossSincePurchase: "estimated loss since purchase",
-  ratesUpdated: "Rates updated",
-  rateFreshnessUnknown: "Freshness unknown",
-  rateAgeUnavailable: "Rate age is unavailable",
-  rateObservationUnavailable: "Observation time unavailable",
-  rateJustNow: "just now",
-  unchangedResult: "Your result since purchase stays",
 };
 
 const DEFAULT_PURITY_OPTIONS: ReadonlyArray<DropdownItem<string>> = [
@@ -300,6 +256,8 @@ export function MetalHoldingForm({
   holdingStatus = "active",
   reconciliationState,
   onRetryReconciliation,
+  isRetryingReconciliation = false,
+  reconciliationRetryError = null,
   editState,
   locale,
   isRtl,
@@ -316,14 +274,11 @@ export function MetalHoldingForm({
   submitError = null,
   requiresUnusualValueAcknowledgment = false,
   unusualValueAcknowledged = false,
-  requiresStaleRateAcknowledgment = false,
-  staleRateAcknowledged = false,
   preview,
   onChange,
   onSubmit,
   onRequestExit,
   onAcknowledgeUnusualValue,
-  onAcknowledgeStaleRate,
   onCorrectionReasonChange,
 }: MetalHoldingFormProps): React.JSX.Element {
   const { t } = useTranslation("metals");
@@ -438,6 +393,7 @@ export function MetalHoldingForm({
             testID="metal-holding-name-field"
             inputRef={nameInputRef}
             label={copy.name}
+            required
             accessibilityLabel={copy.name}
             value={values.name}
             editable={!isSubmitting}
@@ -472,12 +428,26 @@ export function MetalHoldingForm({
                   accessibilityRole="button"
                   testID="metal-holding-reconciliation-retry"
                   className="min-h-11 justify-center"
+                  accessibilityState={{
+                    disabled: isRetryingReconciliation,
+                    busy: isRetryingReconciliation,
+                  }}
+                  disabled={isRetryingReconciliation}
                   onPress={onRetryReconciliation}
                 >
                   <Text className="font-semibold text-nileGreen-700 dark:text-nileGreen-400">
                     {copy.retry ?? "Retry"}
                   </Text>
                 </TouchableOpacity>
+              ) : null}
+              {reconciliationRetryError ? (
+                <Text
+                  testID="metal-holding-reconciliation-retry-error"
+                  accessibilityLiveRegion="polite"
+                  className="text-sm text-red-600 dark:text-red-400"
+                >
+                  {reconciliationRetryError}
+                </Text>
               ) : null}
             </View>
           ) : null}
@@ -496,33 +466,41 @@ export function MetalHoldingForm({
                 accessibilityRole="none"
                 className={shouldStackDenseFields ? "gap-5" : "flex-row gap-3"}
               >
-                <TextField
-                  variant="outlined"
-                  testID="metal-holding-weight-field"
-                  inputRef={weightInputRef}
-                  containerClassName="flex-1"
-                  label={copy.weight}
-                  accessibilityLabel={copy.weight}
-                  value={values.weightGrams}
-                  editable={!isSubmitting}
-                  onChangeText={(value) => onChange("weightGrams", value)}
-                  error={validationErrors.weightGrams}
-                  autoFocus={firstError === "metal-holding-weight-field"}
-                  keyboardType="decimal-pad"
-                  inputMode="decimal"
-                  trailingAdornment={
-                    <View className="h-full w-full items-center justify-center border-s border-slate-200 dark:border-slate-700">
-                      <Text className="text-base text-text-secondary dark:text-text-secondary-dark">
-                        g
-                      </Text>
-                    </View>
-                  }
-                />
+                <View className="flex-1">
+                  <GroupedDecimalInput
+                    testID="metal-holding-weight-field"
+                    inputRef={weightInputRef}
+                    label={copy.weight}
+                    required
+                    accessibilityLabel={copy.weight}
+                    value={values.weightGrams}
+                    editable={!isSubmitting}
+                    onCanonicalChange={(value) =>
+                      onChange("weightGrams", value)
+                    }
+                    error={validationErrors.weightGrams}
+                    autoFocus={firstError === "metal-holding-weight-field"}
+                    keyboardType="decimal-pad"
+                    inputMode="decimal"
+                    trailingAdornment={
+                      <View className="h-full w-full items-center justify-center border-s border-slate-200 dark:border-slate-700">
+                        <Text className="text-base text-text-secondary dark:text-text-secondary-dark">
+                          g
+                        </Text>
+                      </View>
+                    }
+                  />
+                  <PreviousValueCue
+                    change={findAffectedChange(editState, "weight")}
+                    copy={copy}
+                  />
+                </View>
                 <View className="flex-1">
                   <Dropdown
                     variant="outlined"
                     testID="metal-holding-purity"
                     label={copy.purity}
+                    required
                     items={purityOptions.map((option) => ({
                       ...option,
                       label: getMetalHoldingFormPurityLabel(
@@ -535,7 +513,9 @@ export function MetalHoldingForm({
                     placeholder={getMetalHoldingFormPurityLabel(
                       values.metal,
                       values.purityCode,
-                      t(getPurityCatalogEntry(values.purityCode)?.labelKey ?? "")
+                      t(
+                        getPurityCatalogEntry(values.purityCode)?.labelKey ?? ""
+                      )
                     )}
                     onChange={(value) => {
                       setHasUserSelectedPurity(true);
@@ -547,16 +527,12 @@ export function MetalHoldingForm({
                     disabled={isSubmitting}
                     className="mb-0"
                   />
+                  <PreviousValueCue
+                    change={findAffectedChange(editState, "purity")}
+                    copy={copy}
+                  />
                 </View>
               </View>
-              <PreviousValueCue
-                change={findAffectedChange(editState, "weight")}
-                copy={copy}
-              />
-              <PreviousValueCue
-                change={findAffectedChange(editState, "purity")}
-                copy={copy}
-              />
             </View>
           ) : null}
 
@@ -566,6 +542,7 @@ export function MetalHoldingForm({
                 testID="metal-holding-purchase-price-field"
                 inputRef={purchasePriceInputRef}
                 label={copy.purchasePrice}
+                required
                 value={values.purchasePrice}
                 editable={!isSubmitting}
                 onCanonicalChange={(value) => onChange("purchasePrice", value)}
@@ -578,7 +555,7 @@ export function MetalHoldingForm({
                 }
                 containerClassName=""
               />
-              <Text className="mt-1 text-xs text-text-muted dark:text-text-muted-dark">
+              <Text className="mt-1 text-xs text-text-secondary dark:text-text-secondary-dark">
                 {copy.purchasePriceHint}
               </Text>
               <PreviousValueCue
@@ -594,6 +571,7 @@ export function MetalHoldingForm({
                 variant="outlined"
                 testID="metal-holding-purchase-currency"
                 label={copy.purchaseCurrency}
+                required
                 items={currencyOptions}
                 value={values.purchaseCurrency}
                 onChange={(value) => onChange("purchaseCurrency", value)}
@@ -610,7 +588,9 @@ export function MetalHoldingForm({
                     ? values.purchaseCurrency
                     : "EGP"
                 }
-                allowedCurrencies={currencyOptions.map((option) => option.value)}
+                allowedCurrencies={currencyOptions.map(
+                  (option) => option.value
+                )}
                 onSelect={(currency) => onChange("purchaseCurrency", currency)}
                 onClose={() => setIsCurrencyOpen(false)}
               />
@@ -635,6 +615,7 @@ export function MetalHoldingForm({
                     variant="outlined"
                     testID="metal-holding-purchase-date-input"
                     label={copy.purchaseDate}
+                    required
                     value={formatPurchaseDate(values.purchaseDate, locale)}
                     editable={false}
                     error={validationErrors.purchaseDate}
@@ -752,29 +733,6 @@ export function MetalHoldingForm({
             </View>
           ) : null}
 
-          {requiresStaleRateAcknowledgment ? (
-            <View
-              testID="metal-holding-stale-rate-acknowledgment"
-              className="rounded-2xl border border-amber-300 bg-amber-50 p-4 dark:border-amber-700 dark:bg-amber-950"
-            >
-              <Text className="text-sm text-amber-900 dark:text-amber-100">
-                {copy.staleRateAcknowledgment}
-              </Text>
-              {!staleRateAcknowledged ? (
-                <TouchableOpacity
-                  accessibilityRole="button"
-                  disabled={isSubmitting}
-                  onPress={onAcknowledgeStaleRate}
-                  className="mt-3 min-h-11 items-center justify-center rounded-xl border border-amber-700 px-4"
-                >
-                  <Text className="font-semibold text-amber-900 dark:text-amber-100">
-                    {copy.acknowledge}
-                  </Text>
-                </TouchableOpacity>
-              ) : null}
-            </View>
-          ) : null}
-
           {submitError ? (
             <Text
               accessibilityRole="alert"
@@ -783,7 +741,6 @@ export function MetalHoldingForm({
               {copy.submitFailed}
             </Text>
           ) : null}
-
         </ScrollView>
       )}
 
@@ -834,8 +791,19 @@ function PreviousValueCue({
   readonly copy: MetalHoldingFormCopy;
 }): React.JSX.Element | null {
   if (change === null) return null;
+  const isNumericField =
+    change.field === "weight" ||
+    change.field === "purchasePrice" ||
+    change.field === "weightGrams";
+  const rawBefore = change.before?.trim();
+  const formattedBefore = !rawBefore
+    ? "—"
+    : isNumericField
+      ? formatAmountInput(rawBefore)
+      : rawBefore;
+
   return (
-    <View className="mt-1 flex-row items-center gap-2 self-start rounded-lg bg-nileGreen-50 px-2 py-1 dark:bg-slate-900">
+    <View className="mt-1 flex-row items-center gap-2 self-start rounded-lg bg-nileGreen-50 px-2 py-1 dark:bg-slate-800">
       <Ionicons
         name="information-circle-outline"
         size={16}
@@ -843,9 +811,9 @@ function PreviousValueCue({
       />
       <Text
         testID={`metal-holding-${change.field}-previous`}
-        className="text-xs text-text-muted dark:text-text-muted-dark"
+        className="text-xs text-text-secondary dark:text-text-secondary-dark"
       >
-        {`${copy.previous ?? "Previous"}: ${change.before}`}
+        {`${copy.previous ?? "Previous"}: ${formattedBefore}`}
       </Text>
     </View>
   );

@@ -1,11 +1,18 @@
 import {
   calculateMetalReferenceValue,
   compareDecimal,
+  isSupportedMetalsIsoCurrencyCode,
   parseCanonicalDecimal,
   roundDecimal,
+  serializeDecimal,
+  type ExactDecimalValue,
 } from "@monyvi/logic";
 
-import type { NormalizedMetalHoldingFormData } from "../validation/metal-holding-form-validation";
+import {
+  getPurityCatalogEntry,
+  type MetalPhysicalForm,
+  type NormalizedMetalHoldingFormData,
+} from "../validation/metal-holding-form-validation";
 
 export type MetalHoldingPreviewValuation =
   | { readonly available: true; readonly valueDecimal: string }
@@ -97,4 +104,115 @@ export function calculateMetalHoldingPreviewDetails(
       comparison > 0 ? "positive" : comparison < 0 ? "negative" : "zero",
     purityPercentDecimal,
   };
+}
+
+export interface ResolveMetalCalculationHoldingInput {
+  readonly metal: string | null;
+  readonly weightGrams: string;
+  readonly purityCode: string | null;
+  readonly purchasePrice?: string | null;
+  readonly purchaseCurrency?: string | null;
+  readonly preferredCurrency: string;
+  readonly physicalForm?: string | null;
+  readonly name?: string | null;
+  readonly safeRange?: {
+    readonly maximumWeightGramsDecimal: string;
+    readonly maximumPurchasePriceDecimal: string;
+  };
+  readonly currencyMinorUnits?: number;
+}
+
+export function resolveMetalCalculationHolding(
+  input: ResolveMetalCalculationHoldingInput
+): NormalizedMetalHoldingFormData | null {
+  const metal =
+    input.metal === "GOLD" || input.metal === "SILVER" ? input.metal : null;
+  if (!metal) return null;
+
+  const purityEntry = input.purityCode
+    ? getPurityCatalogEntry(input.purityCode)
+    : null;
+  if (!purityEntry || purityEntry.metal !== metal) return null;
+
+  const rawWeight = input.weightGrams.trim();
+  if (!rawWeight) return null;
+
+  let weightDecimal: ExactDecimalValue;
+  try {
+    weightDecimal = parseCanonicalDecimal(rawWeight);
+  } catch {
+    return null;
+  }
+  if (weightDecimal.isZero() || !weightDecimal.greaterThan("0")) {
+    return null;
+  }
+
+  const weightParts = rawWeight.split(".");
+  if (weightParts.length > 2 || (weightParts[1] && weightParts[1].length > 3)) {
+    return null;
+  }
+  const maxWeight = input.safeRange?.maximumWeightGramsDecimal ?? "100000";
+  if (weightDecimal.greaterThan(maxWeight)) {
+    return null;
+  }
+  const weightGramsDecimal = serializeDecimal(weightDecimal);
+
+  const rawCurrency =
+    input.purchaseCurrency?.trim() || input.preferredCurrency.trim();
+  if (!isSupportedMetalsIsoCurrencyCode(rawCurrency)) {
+    return null;
+  }
+  const purchaseCurrency = rawCurrency;
+
+  const rawPrice = input.purchasePrice?.trim();
+  let purchasePriceDecimal = "0";
+  if (rawPrice && rawPrice.length > 0) {
+    let priceDecimal: ExactDecimalValue;
+    try {
+      priceDecimal = parseCanonicalDecimal(rawPrice);
+    } catch {
+      return null;
+    }
+    if (!priceDecimal.greaterThanOrEqualTo("0")) {
+      return null;
+    }
+    const maxMinorUnits = input.currencyMinorUnits ?? 2;
+    const priceParts = rawPrice.split(".");
+    if (
+      priceParts.length > 2 ||
+      (priceParts[1] && priceParts[1].length > maxMinorUnits)
+    ) {
+      return null;
+    }
+    const maxPrice =
+      input.safeRange?.maximumPurchasePriceDecimal ?? "1000000000";
+    if (priceDecimal.greaterThan(maxPrice)) {
+      return null;
+    }
+    purchasePriceDecimal = serializeDecimal(priceDecimal);
+  }
+
+  const physicalForm: MetalPhysicalForm | null =
+    input.physicalForm === "COIN" ||
+    input.physicalForm === "BAR" ||
+    input.physicalForm === "JEWELRY"
+      ? input.physicalForm
+      : null;
+
+  return Object.freeze({
+    name: input.name?.trim() ?? "",
+    metal,
+    weightGramsDecimal,
+    purity: {
+      code: purityEntry.code,
+      catalogVersion: "1" as const,
+      factorDecimal: purityEntry.factorDecimal,
+      labelKey: purityEntry.labelKey,
+    },
+    purchasePriceDecimal,
+    purchaseCurrency,
+    purchaseDate: "",
+    physicalForm,
+    notes: null,
+  });
 }

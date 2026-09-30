@@ -28,6 +28,13 @@ jest.mock("@nozbe/watermelondb/adapters/sqlite/makeDispatcher", (): unknown => {
   );
 });
 
+// Local-first integration: the facade's remote sync boundary is stubbed so this
+// suite exercises the SQLite commit contract without loading the real sync
+// pipeline (which requires the full app schema module).
+jest.mock("../../services/sync", () => ({
+  syncDatabase: (): Promise<void> => Promise.resolve(),
+}));
+
 const IDS = {
   user: "018f0c7a-1234-7abc-8def-000000000101",
   holding: "018f0c7a-1234-7abc-8def-000000000110",
@@ -59,8 +66,7 @@ jest.mock("../../services/user-data-access", () => {
           id: string
         ) => {
           const record = await collection.find(id);
-          if (record.userId !== mockCurrentUserId)
-            throw new Error("not_owned");
+          if (record.userId !== mockCurrentUserId) throw new Error("not_owned");
           return record;
         },
         queryOwned: (
@@ -77,8 +83,7 @@ jest.mock("../../services/user-data-access", () => {
           foreignKeyColumn: string,
           ...extraClauses: unknown[]
         ) => {
-          if (parent.userId !== mockCurrentUserId)
-            throw new Error("not_owned");
+          if (parent.userId !== mockCurrentUserId) throw new Error("not_owned");
           return collection.query(
             WatermelonQuery.where(foreignKeyColumn, parent.id),
             ...extraClauses
@@ -322,7 +327,6 @@ describe("PR332 legacy null purityCatalogVersion edit classification", () => {
       },
       correctionReason: null,
       cairoTodayDate: today,
-      staleRateAcknowledged: false,
     });
 
     const metal = (
@@ -334,7 +338,10 @@ describe("PR332 legacy null purityCatalogVersion edit classification", () => {
     expect(metal.weightGramsDecimal).toBeNull();
 
     const state = (
-      await database.get<MetalHoldingState>("metal_holding_states").query().fetch()
+      await database
+        .get<MetalHoldingState>("metal_holding_states")
+        .query()
+        .fetch()
     )[0];
     expect(state.financialRevision).toBe("0");
 
@@ -378,7 +385,6 @@ describe("PR332 legacy null purityCatalogVersion edit classification", () => {
       },
       correctionReason: "Adding missing receipt facts",
       cairoTodayDate: today,
-      staleRateAcknowledged: false,
     });
 
     const events = await database
@@ -388,7 +394,10 @@ describe("PR332 legacy null purityCatalogVersion edit classification", () => {
     expect(events).toHaveLength(2);
 
     const state = (
-      await database.get<MetalHoldingState>("metal_holding_states").query().fetch()
+      await database
+        .get<MetalHoldingState>("metal_holding_states")
+        .query()
+        .fetch()
     )[0];
     expect(state.financialRevision).not.toBe("0");
   });

@@ -22,6 +22,17 @@ jest.mock("../../services/edit-metal-holding-facade-service", () => ({
   ): Promise<void> => mockSaveEditedMetalHolding(submission),
 }));
 
+const mockSyncDatabase = jest.fn<Promise<void>, [unknown]>();
+
+jest.mock("../../providers/DatabaseProvider", () => ({
+  useDatabase: (): unknown => ({ __stubDatabase: true }),
+}));
+
+jest.mock("../../services/sync", () => ({
+  syncDatabase: (database: unknown): Promise<void> =>
+    mockSyncDatabase(database),
+}));
+
 import {
   useEditMetalHolding,
   type UseEditMetalHoldingInput,
@@ -123,6 +134,7 @@ describe("useEditMetalHolding correctness tests", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockSaveEditedMetalHolding.mockResolvedValue(undefined);
+    mockSyncDatabase.mockResolvedValue(undefined);
   });
 
   describe("Gap 4: legacy holding metadata-only edits (FR-019, business-decisions 529-534)", () => {
@@ -250,7 +262,9 @@ describe("useEditMetalHolding correctness tests", () => {
     });
 
     it("captures load errors and allows retrying via retry()", async () => {
-      mockLoadEditableMetalHolding.mockRejectedValueOnce(new Error("load_failure"));
+      mockLoadEditableMetalHolding.mockRejectedValueOnce(
+        new Error("load_failure")
+      );
 
       const { result } = renderHook(() => useEditMetalHolding(testInput()));
       await act(async () => {
@@ -261,7 +275,7 @@ describe("useEditMetalHolding correctness tests", () => {
       expect(result.current.error?.message).toBe("load_failure");
       expect(result.current.model).toBeNull();
 
-      // Retry succeeds
+      // Local retry succeeds without any network sync (offline-first).
       mockLoadEditableMetalHolding.mockResolvedValueOnce(activeModel());
       act(() => {
         result.current.retry();
@@ -270,14 +284,16 @@ describe("useEditMetalHolding correctness tests", () => {
         await Promise.resolve();
       });
 
+      expect(mockSyncDatabase).not.toHaveBeenCalled();
+
       expect(result.current.isLoading).toBe(false);
       expect(result.current.error).toBeNull();
       expect(result.current.model?.facts.name).toBe("Active Gold Sovereign");
     });
   });
 
-  describe("Gap 5: explicit stale-rate acknowledgment in Edit (FR-020/073-075)", () => {
-    it("requires explicit acknowledgment when material changes are affected by stale rates", async () => {
+  describe("Stale-rate acknowledgment removal in Edit (extra ack step removed)", () => {
+    it("does NOT block submission when material changes are affected by stale rates", async () => {
       mockLoadEditableMetalHolding.mockResolvedValue(activeModel());
 
       const { result } = renderHook(() =>
@@ -305,29 +321,8 @@ describe("useEditMetalHolding correctness tests", () => {
       });
 
       expect(result.current.comparison.hasMaterialChanges).toBe(true);
-      expect(
-        (
-          result.current as unknown as {
-            requiresStaleRateAcknowledgment: boolean;
-          }
-        ).requiresStaleRateAcknowledgment
-      ).toBe(true);
 
-      // Submit before acknowledgment -> should fail
-      let success = true;
-      await act(async () => {
-        success = await result.current.submit();
-      });
-      expect(success).toBe(false);
-      expect(mockSaveEditedMetalHolding).not.toHaveBeenCalled();
-
-      // Acknowledge stale rate and submit -> should succeed
-      act(() => {
-        (
-          result.current as unknown as { acknowledgeStaleRate: () => void }
-        ).acknowledgeStaleRate();
-      });
-
+      let success = false;
       await act(async () => {
         success = await result.current.submit();
       });
@@ -362,13 +357,6 @@ describe("useEditMetalHolding correctness tests", () => {
       });
 
       expect(result.current.comparison.hasMaterialChanges).toBe(false);
-      expect(
-        (
-          result.current as unknown as {
-            requiresStaleRateAcknowledgment: boolean;
-          }
-        ).requiresStaleRateAcknowledgment
-      ).toBe(false);
 
       let success = false;
       await act(async () => {
@@ -378,7 +366,7 @@ describe("useEditMetalHolding correctness tests", () => {
       expect(mockSaveEditedMetalHolding).toHaveBeenCalledTimes(1);
     });
 
-    it("requires explicit acknowledgment when material changes are affected by unknown rate freshness", async () => {
+    it("does NOT block submission when material changes are affected by unknown rate freshness", async () => {
       mockLoadEditableMetalHolding.mockResolvedValue(activeModel());
 
       const { result } = renderHook(() =>
@@ -405,27 +393,8 @@ describe("useEditMetalHolding correctness tests", () => {
       });
 
       expect(result.current.comparison.hasMaterialChanges).toBe(true);
-      expect(
-        (
-          result.current as unknown as {
-            requiresStaleRateAcknowledgment: boolean;
-          }
-        ).requiresStaleRateAcknowledgment
-      ).toBe(true);
 
-      let success = true;
-      await act(async () => {
-        success = await result.current.submit();
-      });
-      expect(success).toBe(false);
-      expect(mockSaveEditedMetalHolding).not.toHaveBeenCalled();
-
-      act(() => {
-        (
-          result.current as unknown as { acknowledgeStaleRate: () => void }
-        ).acknowledgeStaleRate();
-      });
-
+      let success = false;
       await act(async () => {
         success = await result.current.submit();
       });
@@ -461,13 +430,6 @@ describe("useEditMetalHolding correctness tests", () => {
 
       expect(result.current.comparison.hasMaterialChanges).toBe(true);
       expect(result.current.comparison.hasFinancialConsequences).toBe(false);
-      expect(
-        (
-          result.current as unknown as {
-            requiresStaleRateAcknowledgment: boolean;
-          }
-        ).requiresStaleRateAcknowledgment
-      ).toBe(false);
 
       let success = false;
       await act(async () => {
@@ -477,37 +439,27 @@ describe("useEditMetalHolding correctness tests", () => {
       expect(mockSaveEditedMetalHolding).toHaveBeenCalledTimes(1);
     });
 
-    it("sets validation error for blank correction reason on material changes and clears it on input", async () => {
+    it("submits a material change with empty correction reason text", async () => {
       mockLoadEditableMetalHolding.mockResolvedValue(activeModel());
 
       const { result } = renderHook(() => useEditMetalHolding(testInput()));
-
       await act(async () => {
         await Promise.resolve();
       });
-
-      // Material change without reason
       act(() => {
         result.current.updateField("weightGrams", "10");
       });
-
       expect(result.current.comparison.hasMaterialChanges).toBe(true);
 
-      let success = true;
+      let success = false;
       await act(async () => {
         success = await result.current.submit();
       });
-
-      expect(success).toBe(false);
-      expect(result.current.validationErrors.correctionReason).toBe("required");
-
-      // Typing correction reason clears validation error
-      act(() => {
-        result.current.setCorrectionReason("Correction of weight error");
-      });
-
+      expect(success).toBe(true);
       expect(result.current.validationErrors.correctionReason).toBeUndefined();
-      expect(result.current.correctionReason).toBe("Correction of weight error");
+      expect(mockSaveEditedMetalHolding).toHaveBeenCalledWith(
+        expect.objectContaining({ correctionReason: "" })
+      );
     });
 
     it("computes per-gram in preferred EGP while keeping purchase CAD valuation", async () => {

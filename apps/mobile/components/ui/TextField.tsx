@@ -15,11 +15,13 @@ import {
   View,
   type ViewStyle,
 } from "react-native";
+import { useTranslation } from "react-i18next";
 
 import { palette } from "@/constants/colors";
 
 interface TextFieldProps extends TextInputProps {
   readonly label: string;
+  readonly required?: boolean;
   readonly variant?: "default" | "outlined";
   readonly error?: string;
   readonly containerStyle?: ViewStyle;
@@ -30,6 +32,7 @@ interface TextFieldProps extends TextInputProps {
   readonly leadingAdornment?: ReactNode;
   readonly trailingAdornment?: ReactNode;
   readonly inputRef?: Ref<TextInput>;
+  readonly syncWhileFocused?: boolean;
 }
 
 const LEADING_ADORNMENT_SPACE = 43;
@@ -37,6 +40,7 @@ const TRAILING_ADORNMENT_SPACE = 48;
 
 export function TextField({
   label,
+  required,
   variant = "default",
   error,
   containerStyle,
@@ -55,20 +59,23 @@ export function TextField({
   leadingAdornment,
   trailingAdornment,
   inputRef,
+  syncWhileFocused = false,
   ...props
 }: TextFieldProps): React.JSX.Element {
+  const { t } = useTranslation("common");
   const externalValue = value ?? "";
   const [draftValue, setDraftValue] = useState(externalValue);
   const isFocusedRef = useRef(false);
+  const displayValue = syncWhileFocused ? externalValue : draftValue;
   const [leadingWidth, setLeadingWidth] = useState(LEADING_ADORNMENT_SPACE);
   const leadingPadding =
     variant === "outlined" ? leadingWidth + 8 : LEADING_ADORNMENT_SPACE;
 
   useEffect(() => {
-    if (!isFocusedRef.current) {
+    if (!isFocusedRef.current || syncWhileFocused) {
       setDraftValue(externalValue);
     }
-  }, [externalValue]);
+  }, [externalValue, syncWhileFocused]);
 
   const handleChangeText = useCallback(
     (text: string): void => {
@@ -89,9 +96,10 @@ export function TextField({
   const handleBlur = useCallback<NonNullable<TextInputProps["onBlur"]>>(
     (event) => {
       isFocusedRef.current = false;
+      setDraftValue(externalValue);
       onBlur?.(event);
     },
-    [onBlur]
+    [externalValue, onBlur]
   );
 
   return (
@@ -109,6 +117,7 @@ export function TextField({
         style={labelStyle}
       >
         {label}
+        {required ? <Text className="text-red-500">{" *"}</Text> : null}
       </Text>
       <View className="relative">
         <TextInput
@@ -119,6 +128,10 @@ export function TextField({
           } ${className || ""}`}
           {...props}
           accessibilityLabel={accessibilityLabel ?? label}
+          accessibilityHint={
+            props.accessibilityHint ??
+            (required ? t("required_field") : undefined)
+          }
           testID={testID}
           aria-invalid={Boolean(error)}
           style={[
@@ -126,7 +139,7 @@ export function TextField({
             leadingAdornment ? { paddingStart: leadingPadding } : null,
             trailingAdornment ? { paddingEnd: TRAILING_ADORNMENT_SPACE } : null,
           ]}
-          value={draftValue}
+          value={displayValue}
           onChangeText={handleChangeText}
           onFocus={handleFocus}
           onBlur={handleBlur}

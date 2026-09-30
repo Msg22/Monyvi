@@ -1,7 +1,10 @@
+import { Ionicons } from "@expo/vector-icons";
 import React from "react";
 import { Text, type TextInput, View } from "react-native";
 
 import { TextField } from "@/components/ui/TextField";
+import { palette } from "@/constants/colors";
+import { useTheme } from "@/context/ThemeContext";
 import { formatAmount } from "./MetalHoldingLivePreview";
 import type {
   MetalHoldingFormCopy,
@@ -42,6 +45,9 @@ export function MetalHoldingCorrectionState({
   autoFocus,
   inputRef,
 }: MetalHoldingCorrectionStateProps): React.JSX.Element {
+  const { isDark } = useTheme();
+  const iconColor = isDark ? palette.nileGreen[400] : palette.nileGreen[700];
+
   const hasFinancialChange = state.affectedChanges.some(
     (change) => change.isFinancial
   );
@@ -67,7 +73,7 @@ export function MetalHoldingCorrectionState({
     <View className="gap-4">
       <TextField
         testID="metal-holding-correction-reason"
-        label={copy.correctionReason ?? "Why are you changing this?"}
+        label={copy.correctionReason ?? "Correction reason (optional)"}
         value={state.correctionReason}
         editable={!isDisabled}
         onChangeText={onReasonChange}
@@ -84,31 +90,73 @@ export function MetalHoldingCorrectionState({
           {copy.whatWillChange ?? "What will change"}
         </Text>
         {state.affectedChanges.map((change) => (
-          <Text
+          <ChangeRow
             key={change.field}
-            className="text-sm text-text-secondary dark:text-text-secondary-dark"
-          >
-            {`${change.label}: ${change.before} → ${change.after}`}
-          </Text>
+            testID={`change-icon-${change.field}`}
+            icon="swap-horizontal-outline"
+            iconColor={iconColor}
+            text={`${change.label}: ${change.before} → ${change.after}`}
+          />
         ))}
         {!hasFinancialChange ? (
           <>
             {formattedCurrentValue ? (
-              <Text className="text-sm text-text-secondary dark:text-text-secondary-dark">
-                {`${copy.noFinancialChange ?? "Current value stays"} ${formattedCurrentValue}`}
-              </Text>
+              <ChangeRow
+                testID="change-icon-current-value"
+                icon="trending-up-outline"
+                iconColor={iconColor}
+                text={`${copy.noFinancialChange ?? "Current value stays"} ${formattedCurrentValue}`}
+              />
             ) : null}
             {formattedResult ? (
-              <Text className="text-sm text-text-secondary dark:text-text-secondary-dark">
-                {`${resultLabel} ${formattedResult}`}
-              </Text>
+              <ChangeRow
+                testID="change-icon-result"
+                icon="person-outline"
+                iconColor={iconColor}
+                text={`${resultLabel} ${formattedResult}`}
+              />
             ) : null}
           </>
         ) : null}
-        <Text className="text-sm text-text-secondary dark:text-text-secondary-dark">
-          {copy.correctionHistory ?? "This correction will appear in History"}
-        </Text>
+        <ChangeRow
+          testID="change-icon-history"
+          icon="time-outline"
+          iconColor={iconColor}
+          text={
+            copy.correctionHistory ?? "This correction will appear in History"
+          }
+        />
       </View>
+    </View>
+  );
+}
+
+function ChangeRow({
+  icon,
+  iconColor,
+  text,
+  testID,
+}: {
+  readonly icon: keyof typeof Ionicons.glyphMap;
+  readonly iconColor: string;
+  readonly text: string;
+  readonly testID?: string;
+}): React.JSX.Element {
+  return (
+    <View className="flex-row items-start gap-2.5">
+      <View className="mt-0.5">
+        <Ionicons
+          testID={testID}
+          name={icon}
+          size={18}
+          color={iconColor}
+          accessible={false}
+          aria-hidden={true}
+        />
+      </View>
+      <Text className="min-w-0 flex-1 text-sm leading-5 text-text-secondary dark:text-text-secondary-dark">
+        {text}
+      </Text>
     </View>
   );
 }

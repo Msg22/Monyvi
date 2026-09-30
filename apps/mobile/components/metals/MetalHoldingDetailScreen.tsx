@@ -32,15 +32,13 @@ import type {
   HoldingActionDescriptor,
   HoldingActionId,
 } from "@/components/metals/holding-actions/registry";
+import { MetalHoldingTimelineItem } from "./MetalHoldingTimelineItem";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { palette } from "@/constants/colors";
 import { shouldUseCompactLayout } from "@/constants/ui";
 import { ANDROID_SAFE_LIST_PROPS } from "@/constants/virtualized-list-policy";
 import { useTheme } from "@/context/ThemeContext";
-import type {
-  MetalDetailReadModel,
-  MetalDetailTimelineItem,
-} from "@/services/metal-detail-read-model-service";
+import type { MetalDetailReadModel } from "@/services/metal-detail-read-model-service";
 import { formatLocalizedMoneyAmount } from "@/utils/localized-money-display";
 
 interface MetalHoldingDetailScreenProps {
@@ -97,7 +95,7 @@ export function MetalHoldingDetailScreen(
         />
       }
       renderItem={({ item, index }): React.JSX.Element => (
-        <HistoryEvent
+        <MetalHoldingTimelineItem
           item={item}
           isFirst={index === 0}
           isLast={index === visibleHistory.length - 1}
@@ -244,18 +242,22 @@ function ReconciliationStatus({
 }): React.JSX.Element | null {
   const { t } = useTranslation("metals");
   const state = model.reconciliationState;
-  if (state === "accepted" || state === "reconciled") return null;
+  if (
+    state === "accepted" ||
+    state === "reconciled" ||
+    state === "sync_pending"
+  ) {
+    return null;
+  }
 
   const key =
-    state === "sync_pending"
-      ? "reconciliation.sync_pending"
-      : state === "sync_failed"
-        ? "reconciliation.sync_failed"
-        : state === "reconciliation_incomplete"
-          ? "reconciliation.incomplete"
-          : state === "local_complete"
-            ? "reconciliation.local_complete"
-            : null;
+    state === "sync_failed"
+      ? "reconciliation.sync_failed"
+      : state === "reconciliation_incomplete"
+        ? "reconciliation.incomplete"
+        : state === "local_complete"
+          ? "reconciliation.local_complete"
+          : null;
   if (key === null) return null;
 
   return (
@@ -678,38 +680,6 @@ function FactRow({
       </View>
       <Text className="text-base text-text-primary dark:text-text-primary-dark">
         {value}
-      </Text>
-    </View>
-  );
-}
-
-function HistoryEvent({
-  isFirst,
-  isLast,
-  item,
-}: {
-  readonly isFirst: boolean;
-  readonly isLast: boolean;
-  readonly item: MetalDetailTimelineItem;
-}): React.JSX.Element {
-  const { t, i18n } = useTranslation("metals");
-  const locale = resolveLocale(i18n.resolvedLanguage);
-  return (
-    <View className="flex-row px-5">
-      <View className="relative w-8 items-center">
-        {isFirst ? null : (
-          <View className="absolute -top-1 h-4 w-px bg-nileGreen-600 dark:bg-nileGreen-400" />
-        )}
-        {isLast ? null : (
-          <View className="absolute top-4 h-8 w-px bg-nileGreen-600 dark:bg-nileGreen-400" />
-        )}
-        <View className="mt-2 h-3 w-3 rounded-full bg-nileGreen-700 dark:bg-nileGreen-400" />
-      </View>
-      <Text className="min-w-0 flex-1 py-1 text-sm text-text-primary dark:text-text-primary-dark">
-        {t(`timeline.${item.kind}`)}
-        <Text className="text-text-secondary dark:text-text-secondary-dark">
-          {` · ${formatShortDate(item.occurredAt, locale)}`}
-        </Text>
       </Text>
     </View>
   );

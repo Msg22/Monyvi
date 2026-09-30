@@ -16,6 +16,7 @@ import {
 } from "@/services/metal-detail-read-model-service";
 import {
   selectCanonicalOrOnly,
+  correctionChangesFromPayload,
   shapeMetalDetailLifecycleEvents,
   toDetailLifecycleEventInput,
 } from "@/services/metal-detail-read-model-shaping";
@@ -28,6 +29,7 @@ interface EventInput {
   readonly isHistoryVisible?: boolean;
   readonly kind: "add" | "correct" | "sell" | "dispose" | "delete" | "undo";
   readonly occurredAt: Date;
+  readonly payloadJson?: string;
   readonly predecessorEventId: string | null;
   readonly reversesEventId?: string | null;
 }
@@ -42,6 +44,7 @@ function event(overrides: Partial<EventInput> = {}): EventInput {
     occurredAt: new Date("2026-08-20T10:00:00.000Z"),
     predecessorEventId: null,
     reversesEventId: null,
+    payloadJson: "{}",
     ...overrides,
   };
 }
@@ -85,6 +88,80 @@ function detailInput(
 }
 
 describe("metal detail lifecycle evidence binding", () => {
+  it("shows exact correction facts from the event payload, not the current asset", () => {
+    const before = {
+      weightGramsDecimal: "10",
+      purityCode: "gold-9999",
+      purityCatalogVersion: "1",
+      purityFactorDecimal: "0.9999",
+      physicalForm: "COIN",
+      purchasePriceDecimal: "1000",
+      purchaseCurrency: "EGP",
+      purchaseDate: "2026-08-01",
+    };
+    const payloadJson = JSON.stringify({
+      materialCorrection: {
+        before,
+        after: {
+          ...before,
+          weightGramsDecimal: "12",
+          physicalForm: "BAR",
+          purchasePriceDecimal: "1200",
+          purchaseCurrency: "USD",
+        },
+        reason: "",
+      },
+    });
+    const model = buildMetalDetailReadModel(
+      detailInput({
+        metal: {
+          itemForm: "bar",
+          metalType: "GOLD",
+          purityCatalogVersion: "1",
+          purityCode: "gold-9999",
+          purityFactorDecimal: "0.9999",
+          weightGramsDecimal: "99",
+        },
+        lifecycleEvents: [
+          event(),
+          event({
+            id: "corrected",
+            kind: "correct",
+            predecessorEventId: "created",
+            occurredAt: new Date("2026-08-21T10:00:00.000Z"),
+            payloadJson,
+          }),
+        ],
+      })
+    );
+    expect(model?.timeline[0].correctionChanges).toEqual([
+      { field: "weight", before: "10", after: "12" },
+      { field: "physicalForm", before: "COIN", after: "BAR" },
+      {
+        field: "purchasePrice",
+        before: "1000",
+        after: "1200",
+        beforeCurrency: "EGP",
+        afterCurrency: "USD",
+      },
+      { field: "purchaseCurrency", before: "EGP", after: "USD" },
+    ]);
+  });
+
+  it("does not invent old facts for malformed or incomplete correction evidence", () => {
+    expect(correctionChangesFromPayload("{bad json")).toBeNull();
+    expect(
+      correctionChangesFromPayload(
+        JSON.stringify({
+          materialCorrection: {
+            before: { weightGramsDecimal: "10" },
+            after: { weightGramsDecimal: "12" },
+          },
+        })
+      )
+    ).toBeNull();
+  });
+
   it("reads a legacy Add event as creation only when matching Add evidence exists", () => {
     const legacyEvent = {
       actionId: "action-add",
@@ -214,5 +291,42 @@ describe("metal detail lifecycle evidence binding", () => {
         ] as unknown as readonly MetalActionEvidence[]
       )
     ).toBeNull();
+  });
+
+  it("successfully evaluates current observation value with trusted non-USD currency rates", () => {
+    const model = buildMetalDetailReadModel(
+      detailInput({
+        preferredCurrency: "EGP",
+        currentRates: {
+          gold: {
+            state: "fresh",
+            valueDecimal: "80.00",
+            ageMs: 500,
+            providerObservedAt: new Date("2026-08-20T10:00:00.000Z"),
+          },
+          silver: {
+            state: "fresh",
+            valueDecimal: "1.00",
+            ageMs: 500,
+            providerObservedAt: new Date("2026-08-20T10:00:00.000Z"),
+          },
+          currencies: new Map([
+            [
+              "EGP",
+              {
+                state: "fresh",
+                valueDecimal: "0.02",
+                ageMs: 500,
+                providerObservedAt: new Date("2026-08-20T10:00:00.000Z"),
+              },
+            ],
+          ]),
+        },
+      })
+    );
+
+    expect(model).not.toBeNull();
+    expect(model?.currentValueCurrency).toBe("EGP");
+    expect(model?.currentValueDecimal).not.toBeNull();
   });
 });

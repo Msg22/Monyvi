@@ -661,8 +661,7 @@ export function createMetalsActionPayloadRegistry(
               !boundedText(
                 value.materialCorrection.reason,
                 MAX_REASON_UTF8_BYTES
-              ) ||
-              (value.materialCorrection.reason as string).trim().length === 0
+              )
             )
               fail();
             const metalType = (after.purityCode as string).startsWith("gold-")

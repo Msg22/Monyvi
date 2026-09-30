@@ -40,7 +40,6 @@ export interface AddMetalHoldingFormSubmission {
   readonly ids: AddMetalHoldingRequestIds;
   readonly holding: NormalizedMetalHoldingFormData;
   readonly cairoTodayDate: string;
-  readonly staleRateAcknowledged?: boolean;
 }
 
 const sha256Provider: Sha256Provider = {
@@ -72,17 +71,6 @@ export async function addMetalHoldingFromForm(
         holding: submission.holding,
         ids: submission.ids,
       });
-  if (
-    !existingAction &&
-    !submission.staleRateAcknowledged &&
-    rateSnapshots.some(
-      (snapshot) =>
-        snapshot.capturedFreshness === "stale" ||
-        snapshot.capturedFreshness === "unknown"
-    )
-  ) {
-    throw new Error("stale_rate_acknowledgment_required");
-  }
   const commandInput: AddMetalHoldingCommandInput = {
     actionId: submission.ids.actionId,
     holdingId: submission.ids.holdingId,

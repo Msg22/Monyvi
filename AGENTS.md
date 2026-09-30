@@ -302,10 +302,10 @@ the true domain model.
   coding. The workflow's narrowly defined micro-UI exception may be used for
   small, unambiguous changes that preserve the existing layout, interaction,
   flow, and design-system pattern.
-- Before designing or implementing a screen header action, compare the equivalent
-  action on existing sibling screens. Reuse their `PageHeader` action pattern,
-  icon, placement, size, and accessibility behavior unless the approved mockup
-  explicitly calls for a difference. Check both visible and empty states.
+- Before designing or implementing a screen header action, compare the
+  equivalent action on existing sibling screens. Reuse their `PageHeader` action
+  pattern, icon, placement, size, and accessibility behavior unless the approved
+  mockup explicitly calls for a difference. Check both visible and empty states.
 
 - **Responsive mockup implementation**: Treat the approved mockup as the
   normal-width composition, then validate it at compact-phone, ordinary-phone,
@@ -350,13 +350,26 @@ the true domain model.
   for expandable optional fields.
 - Use `GroupedMoneyInput` (`components/ui/GroupedMoneyInput.tsx`) for ordinary
   text-field monetary amount entry. Specialized keypad/calculator controls
-  (issue #263) keep their visuals but MUST share the same comma-grouped
-  display (`formatAmountInput`) and dot-decimal canonical state
-  (`resolveAmountInputChange`), preserving invalid pasted text for
-  form-specific inline validation. Never format weight/quantity fields.
-  Validation stays form-specific. New monetary fields MUST follow this;
-  existing surfaces migrate through focused follow-ups without weakening the
-  shared grammar.
+  (issue #263) keep their visuals but MUST share the same comma-grouped display
+  (`formatAmountInput`) and dot-decimal canonical state
+  (`resolveAmountInputChange`), preserving invalid pasted text for form-specific
+  inline validation. Metals weight entry is the approved exception: it MUST use
+  `GroupedDecimalInput` (`components/ui/GroupedDecimalInput.tsx`) with the same
+  comma grouping and dot-decimal canonical state, MUST allow the permitted
+  decimal precision (up to 3 decimals for weight), and MUST NOT apply monetary
+  rounding to weight. Validation stays form-specific. New monetary fields MUST
+  follow this; existing surfaces migrate through focused follow-up issue #359
+  without weakening the shared grammar. This Metals weight exception does not
+  expand into an app-wide quantity-migration scope.
+- **Required field markers**: All required form fields MUST display a red
+  asterisk (` *`) via the shared `required` prop on `TextField`, `Dropdown`,
+  `GroupedMoneyInput`, and `GroupedDecimalInput`, or the standard label pattern
+  (`<Text className="text-red-500">{" *"}</Text>`), with consistent accessible
+  required semantics via supported localized accessibility labels/hints.
+  Optional fields remain unmarked (or explicitly labeled with `(optional)`),
+  never marked with an asterisk. Apply to new and touched forms; app-wide
+  adoption across existing surfaces migrates through focused follow-up issue
+  #360.
 
 ## Database Migrations
 

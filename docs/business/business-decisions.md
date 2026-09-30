@@ -524,14 +524,16 @@ Business rules:
   Weight and Purity on one row when space permits, total purchase price,
   purchase currency, purchase date, Physical form, Notes, compact live preview,
   then direct `Add holding`. The form omits the passive device-save note while
-  retaining local-first persistence. Submission stays in the same
-  form with no intermediate step or route.
+  retaining local-first persistence. Submission stays in the same form with no
+  intermediate step or route.
 - Every other Active holding field is correctable. Name and notes are ordinary
   metadata edits. Weight, purity, physical form, total purchase price, purchase
-  currency, and purchase date are material corrections that require a reason and
-  preserve immutable before/after evidence in History.
+  currency, and purchase date are material corrections with an optional reason
+  and preserve immutable before/after evidence in History. The correction
+  payload retains a string reason property; empty user text is stored as an
+  empty string, never a fabricated reason.
 - Edit holding is one form with one direct `Save changes` action. Material
-  differences reveal previous/current facts, required reason, and a live
+  differences reveal previous/current facts, optional reason, and a live
   consequence summary; there is no separate correction-review route.
 - Preserved legacy holdings with unavailable exact weight, purity tuple, or
   total purchase price remain visible and show those saved facts as not
@@ -1351,13 +1353,14 @@ Business rules:
 - Settings can change language after sign-in.
 - Theme preference is `LIGHT`, `DARK`, or `SYSTEM`.
 - Preferred currency affects display conversion and defaults.
-- User-visible monetary output follows the active language without changing stored
-  values or calculations. Arabic uses `ar-EG` Arabic-Indic digits, Arabic
-  grouping and decimal separators, then a fixed Arabic currency unit label
-  (for example `٤٤٤٬٩٥٦ جنيه مصري` and `٠٫٠٠١٠٠٠٠٠ بيتكوين`).
+- User-visible monetary output follows the active language without changing
+  stored values or calculations. Arabic uses `ar-EG` Arabic-Indic digits, Arabic
+  grouping and decimal separators, then a fixed Arabic currency unit label (for
+  example `٤٤٤٬٩٥٦ جنيه مصري` and `٠٫٠٠١٠٠٠٠٠ بيتكوين`).
 - English monetary presentation keeps its existing symbol/code placement.
   Editable financial inputs keep the Latin-digit, `.` decimal grammar defined
-  under Financial Amount Entry; display localization never changes input parsing.
+  under Financial Amount Entry; display localization never changes input
+  parsing.
 - Monetary amount labels cover every generated `CurrencyType` through an
   exhaustive catalogue. Standalone currency names, stored ISO codes, parser
   identifiers, rate instruments, and sync payloads remain code based.

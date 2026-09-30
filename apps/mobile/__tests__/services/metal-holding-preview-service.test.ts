@@ -1,6 +1,7 @@
 import {
   calculateMetalHoldingPreviewDetails,
   calculateMetalHoldingPreviewValuation,
+  resolveMetalCalculationHolding,
 } from "@/services/metal-holding-preview-service";
 import type { NormalizedMetalHoldingFormData } from "@/validation/metal-holding-form-validation";
 
@@ -66,6 +67,91 @@ describe("metal holding preview service", () => {
       resultSincePurchaseDecimal: null,
       resultDirection: "unavailable",
       purityPercentDecimal: "99.9",
+    });
+  });
+
+  describe("resolveMetalCalculationHolding regressions", () => {
+    it("resolves calculation holding with blank name and blank price in EGP without inventing fake values", () => {
+      const calculation = resolveMetalCalculationHolding({
+        metal: "GOLD",
+        weightGrams: "10.000",
+        purityCode: "gold-999",
+        purchasePrice: "",
+        purchaseCurrency: "EGP",
+        preferredCurrency: "EGP",
+        currencyMinorUnits: 2,
+      });
+
+      expect(calculation).not.toBeNull();
+      expect(calculation?.name).toBe("");
+      expect(calculation?.purchasePriceDecimal).toBe("0");
+      expect(calculation?.purchaseCurrency).toBe("EGP");
+      expect(calculation?.weightGramsDecimal).toBe("10");
+
+      if (calculation) {
+        const valuation = calculateMetalHoldingPreviewValuation(calculation, {
+          metalUsdPerPureGramDecimal: "80.00",
+          currencyUsdPerUnitDecimal: "0.02", // 1 USD = 50 EGP
+          currencyMinorUnits: 2,
+        });
+        expect(valuation).toEqual({ available: true, valueDecimal: "39960" });
+      }
+    });
+
+    it("resolves calculation holding with blank name and blank price in JPY without failing on zero minor units", () => {
+      const calculation = resolveMetalCalculationHolding({
+        metal: "GOLD",
+        weightGrams: "5.5",
+        purityCode: "gold-999",
+        purchasePrice: "",
+        purchaseCurrency: "JPY",
+        preferredCurrency: "JPY",
+        currencyMinorUnits: 0,
+      });
+
+      expect(calculation).not.toBeNull();
+      expect(calculation?.name).toBe("");
+      expect(calculation?.purchasePriceDecimal).toBe("0");
+      expect(calculation?.purchaseCurrency).toBe("JPY");
+      expect(calculation?.weightGramsDecimal).toBe("5.5");
+
+      if (calculation) {
+        const valuation = calculateMetalHoldingPreviewValuation(calculation, {
+          metalUsdPerPureGramDecimal: "80.00",
+          currencyUsdPerUnitDecimal: "0.00666667",
+          currencyMinorUnits: 0,
+        });
+        expect(valuation.available).toBe(true);
+      }
+    });
+
+    it("returns null (honest unavailable) for invalid weight or karat", () => {
+      expect(
+        resolveMetalCalculationHolding({
+          metal: "GOLD",
+          weightGrams: "invalid-weight",
+          purityCode: "gold-999",
+          preferredCurrency: "EGP",
+        })
+      ).toBeNull();
+
+      expect(
+        resolveMetalCalculationHolding({
+          metal: "GOLD",
+          weightGrams: "10",
+          purityCode: "nonexistent-karat",
+          preferredCurrency: "EGP",
+        })
+      ).toBeNull();
+
+      expect(
+        resolveMetalCalculationHolding({
+          metal: "GOLD",
+          weightGrams: "-1",
+          purityCode: "gold-999",
+          preferredCurrency: "EGP",
+        })
+      ).toBeNull();
     });
   });
 });

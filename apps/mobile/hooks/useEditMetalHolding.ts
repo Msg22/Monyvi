@@ -10,6 +10,7 @@ import {
   getMetalHoldingFormPurityLabel,
   getMetalHoldingPurityOptions,
 } from "@/components/metals/metal-holding-purity-options";
+import { useDatabase } from "@/providers/DatabaseProvider";
 import type { MetalHoldingPreviewRatesWithTrust } from "./useAddMetalHolding";
 import type {
   MetalHoldingFormField,
@@ -19,6 +20,7 @@ import type {
 import {
   calculateMetalHoldingPreviewDetails,
   calculateMetalHoldingPreviewValuation,
+  resolveMetalCalculationHolding,
 } from "@/services/metal-holding-preview-service";
 import {
   compareMetalHoldingEdit,
@@ -27,6 +29,7 @@ import {
 import { evaluateMetalUnusualValuePolicy } from "@/services/metal-unusual-value-policy";
 import {
   loadEditableMetalHolding,
+  retryMetalHoldingReconciliation,
   saveEditedMetalHolding,
   type EditMetalHoldingReadModel,
   type EditMetalHoldingRequestIds,
@@ -59,8 +62,6 @@ export interface UseEditMetalHoldingResult {
   readonly validationErrors: Readonly<Record<string, string>>;
   readonly correctionReason: string;
   readonly unusualValueAcknowledged: boolean;
-  readonly requiresStaleRateAcknowledgment: boolean;
-  readonly staleRateAcknowledged: boolean;
   readonly requiresUnusualValueAcknowledgment: boolean;
   readonly comparison: ReturnType<typeof compareMetalHoldingEdit>;
   readonly isLoading: boolean;
@@ -74,9 +75,11 @@ export interface UseEditMetalHoldingResult {
   ) => void;
   readonly setCorrectionReason: (value: string) => void;
   readonly acknowledgeUnusualValue: () => void;
-  readonly acknowledgeStaleRate: () => void;
   readonly submit: () => Promise<boolean>;
   readonly retry: () => void;
+  readonly retryReconciliation: () => Promise<void>;
+  readonly isRetryingReconciliation: boolean;
+  readonly reconciliationRetryError: Error | null;
 }
 
 const EMPTY_VALUES: MetalHoldingFormValues = {
@@ -107,12 +110,17 @@ const EMPTY_FACTS: EditableMetalHoldingFacts = {
 export function useEditMetalHolding(
   input: UseEditMetalHoldingInput
 ): UseEditMetalHoldingResult {
+  const database = useDatabase();
   const [reloadKey, setReloadKey] = useState(0);
   const [model, setModel] = useState<EditMetalHoldingReadModel | null>(null);
   const [values, setValues] = useState<MetalHoldingFormValues>(EMPTY_VALUES);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<Error | null>(null);
+  const [isRetryingReconciliation, setIsRetryingReconciliation] =
+    useState(false);
+  const [reconciliationRetryError, setReconciliationRetryError] =
+    useState<Error | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [validationErrors, setValidationErrors] = useState<
     Readonly<Record<string, string>>
@@ -120,9 +128,44 @@ export function useEditMetalHolding(
   const [correctionReason, setCorrectionReason] = useState("");
   const [unusualValueAcknowledged, setUnusualValueAcknowledged] =
     useState(false);
-  const [staleRateAcknowledged, setStaleRateAcknowledged] = useState(false);
   const idsRef = useRef<EditMetalHoldingRequestIds | null>(null);
   const inFlightRef = useRef(false);
+  const retryInFlightRef = useRef(false);
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return (): void => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  const retry = useCallback((): void => {
+    // Ordinary load / not-found retry: re-read local WatermelonDB only.
+    // Offline-first — it must never depend on or trigger a network sync.
+    setReconciliationRetryError(null);
+    setReloadKey((value) => value + 1);
+  }, []);
+
+  const retryReconciliation = useCallback(async (): Promise<void> => {
+    if (retryInFlightRef.current) return;
+    retryInFlightRef.current = true;
+    setIsRetryingReconciliation(true);
+    setReconciliationRetryError(null);
+    try {
+      await retryMetalHoldingReconciliation(database);
+    } catch (caught: unknown) {
+      if (isMountedRef.current) {
+        setReconciliationRetryError(
+          caught instanceof Error ? caught : new Error("metal_sync_unavailable")
+        );
+      }
+    } finally {
+      if (isMountedRef.current) setReloadKey((value) => value + 1);
+      if (isMountedRef.current) setIsRetryingReconciliation(false);
+      retryInFlightRef.current = false;
+    }
+  }, [database]);
 
   useEffect(() => {
     let isCancelled = false;
@@ -157,17 +200,17 @@ export function useEditMetalHolding(
     };
   }, [input.holdingId, reloadKey]);
 
+  const selectedCurrency =
+    values.purchaseCurrency || input.preferredCurrency || "EGP";
+  const currencyMinorUnits = isSupportedMetalsIsoCurrencyCode(selectedCurrency)
+    ? (resolveMetalsCurrencyMinorUnits(`currency:${selectedCurrency}`) ?? 2)
+    : 2;
+
   const validationContext = useMemo<MetalHoldingFormValidationContext>(
     () => ({
       locale: input.locale,
       today: input.today,
-      currencyMinorUnits: isSupportedMetalsIsoCurrencyCode(
-        values.purchaseCurrency
-      )
-        ? (resolveMetalsCurrencyMinorUnits(
-            `currency:${values.purchaseCurrency}`
-          ) ?? 2)
-        : 2,
+      currencyMinorUnits,
       safeRange: input.safeRange,
       isUnusualValue: (): boolean => false,
       isUnusualHolding: (holding): boolean => {
@@ -182,7 +225,7 @@ export function useEditMetalHolding(
         }).isUnusual;
       },
     }),
-    [input, values.purchaseCurrency]
+    [currencyMinorUnits, input, values.purchaseCurrency]
   );
   const validation = useMemo(
     () =>
@@ -204,6 +247,29 @@ export function useEditMetalHolding(
         holdingStatus: model?.status ?? "active",
       }),
     [currentFacts, model]
+  );
+  const calculationHolding = useMemo(
+    () =>
+      validation.normalized ??
+      resolveMetalCalculationHolding({
+        metal: values.metal,
+        weightGrams: values.weightGrams,
+        purityCode: values.purityCode,
+        purchasePrice: values.purchasePrice,
+        purchaseCurrency: values.purchaseCurrency,
+        preferredCurrency: input.preferredCurrency ?? "EGP",
+        physicalForm: values.physicalForm,
+        name: values.name,
+        safeRange: input.safeRange,
+        currencyMinorUnits,
+      }),
+    [
+      currencyMinorUnits,
+      input.preferredCurrency,
+      input.safeRange,
+      validation.normalized,
+      values,
+    ]
   );
   const preview = useMemo<MetalHoldingFormPreview>(() => {
     if (model && model.status !== "active") {
@@ -230,7 +296,7 @@ export function useEditMetalHolding(
         fxRateTrust: undefined,
       };
     }
-    const normalized = validation.normalized;
+    const normalized = calculationHolding;
     if (!normalized) return fallbackPreview(values, input.preferredCurrency);
     const rates = input.getPreviewRates(normalized, input.preferredCurrency);
     const valuation = calculateMetalHoldingPreviewValuation(normalized, rates);
@@ -244,6 +310,19 @@ export function useEditMetalHolding(
           `currency:${normalized.purchaseCurrency}`
         ) ?? 2)
       : 2;
+    const hasPurchasePrice = values.purchasePrice.trim().length > 0;
+    const rawDetails = calculateMetalHoldingPreviewDetails(
+      normalized,
+      valuation,
+      currencyMinorUnits
+    );
+    const details = hasPurchasePrice
+      ? rawDetails
+      : {
+          resultSincePurchaseDecimal: null,
+          resultDirection: "unavailable" as const,
+          purityPercentDecimal: rawDetails.purityPercentDecimal,
+        };
     return {
       metal: normalized.metal,
       purityCode: normalized.purity.code,
@@ -268,8 +347,7 @@ export function useEditMetalHolding(
           metalUsdPerPureGramDecimal: rates.metalUsdPerPureGramDecimal,
           currencyUsdPerUnitDecimal:
             rates.preferredCurrencyUsdPerUnitDecimal ?? null,
-          displayCurrency:
-            rates.preferredCurrency ?? input.preferredCurrency,
+          displayCurrency: rates.preferredCurrency ?? input.preferredCurrency,
         }),
       valuation,
       rateFreshness: rates.rateFreshness,
@@ -278,23 +356,15 @@ export function useEditMetalHolding(
       providerObservedAt: rates.providerObservedAt,
       metalRateTrust: rates.metalRateTrust,
       fxRateTrust: rates.fxRateTrust,
-      ...calculateMetalHoldingPreviewDetails(
-        normalized,
-        valuation,
-        currencyMinorUnits
-      ),
+      ...details,
     };
-  }, [input, validation.normalized, values]);
+  }, [calculationHolding, input, model, values]);
   const purityOptions = useMemo(
     () => getMetalHoldingPurityOptions(values.metal),
     [values.metal]
   );
   const isDirty =
     comparison.hasMetadataChanges || comparison.hasMaterialChanges;
-  const requiresStaleRateAcknowledgment =
-    comparison.hasFinancialConsequences &&
-    preview.valuation.available &&
-    (preview.rateFreshness === "stale" || preview.rateFreshness === "unknown");
 
   const updateField = useCallback(
     (field: MetalHoldingFormField, value: string | null): void => {
@@ -304,7 +374,6 @@ export function useEditMetalHolding(
       setSubmitError(null);
       setValidationErrors({});
       setUnusualValueAcknowledged(false);
-      setStaleRateAcknowledged(false);
       setValues((current) =>
         field === "physicalForm"
           ? {
@@ -343,8 +412,6 @@ export function useEditMetalHolding(
       )
     );
     if (!values.name.trim()) errors.name = "required";
-    if (comparison.hasMaterialChanges && !correctionReason.trim())
-      errors.correctionReason = "required";
     const normalizedCurrent: EditableMetalHoldingFacts =
       comparison.hasMaterialChanges &&
       comparison.hasFinancialConsequences &&
@@ -365,9 +432,7 @@ export function useEditMetalHolding(
       setValidationErrors(errors);
       return false;
     }
-    if (requiresStaleRateAcknowledgment && !staleRateAcknowledged) {
-      return false;
-    }
+
     inFlightRef.current = true;
     setIsSubmitting(true);
     setSubmitError(null);
@@ -387,7 +452,6 @@ export function useEditMetalHolding(
           ? correctionReason
           : null,
         cairoTodayDate: input.today,
-        staleRateAcknowledged,
       });
       idsRef.current = null;
       return true;
@@ -408,8 +472,6 @@ export function useEditMetalHolding(
     input,
     isDirty,
     model,
-    requiresStaleRateAcknowledgment,
-    staleRateAcknowledged,
     unusualValueAcknowledged,
     validationContext,
     values,
@@ -426,8 +488,6 @@ export function useEditMetalHolding(
     requiresUnusualValueAcknowledgment:
       comparison.hasMaterialChanges &&
       validation.requiresUnusualValueAcknowledgment,
-    requiresStaleRateAcknowledgment,
-    staleRateAcknowledged,
     comparison,
     isLoading,
     isSubmitting,
@@ -437,9 +497,11 @@ export function useEditMetalHolding(
     updateField,
     setCorrectionReason: handleCorrectionReasonChange,
     acknowledgeUnusualValue: (): void => setUnusualValueAcknowledged(true),
-    acknowledgeStaleRate: (): void => setStaleRateAcknowledged(true),
     submit,
-    retry: (): void => setReloadKey((value) => value + 1),
+    retry,
+    retryReconciliation,
+    isRetryingReconciliation,
+    reconciliationRetryError,
   };
 }
 

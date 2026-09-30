@@ -156,6 +156,7 @@ export const metalsTranslationSchema = NamespaceSchema.and(
       unchanged_gain: z.string(),
       unchanged_loss: z.string(),
       unchanged_result: z.string(),
+      holding_image_update: z.string(),
       not_recorded: z.string(),
       locked_metal_hint: z.string(),
       cancel: z.string(),
@@ -255,6 +256,7 @@ const REQUIRED_SCALAR_KEYS: Record<string, readonly string[]> = {
     "go",
     "next",
     "dismiss",
+    "required_field",
   ],
   settings: [
     "title",

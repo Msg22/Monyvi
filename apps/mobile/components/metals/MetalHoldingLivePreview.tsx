@@ -8,6 +8,7 @@ import { useTheme } from "@/context/ThemeContext";
 import {
   calculateDisplayPerPureGramPrice,
   isSupportedMetalsIsoCurrencyCode,
+  roundDecimal,
 } from "@monyvi/logic";
 import { formatLocalizedMoneyAmount } from "@/utils/localized-money-display";
 
@@ -53,10 +54,9 @@ export function MetalHoldingLivePreview({
   const purityLabel = getMetalHoldingFormPurityLabel(
     preview.metal,
     preview.purityCode,
-    t(
-      `metals:${getPurityCatalogEntry(preview.purityCode)?.labelKey ?? ""}`,
-      { defaultValue: preview.purityLabel }
-    )
+    t(`metals:${getPurityCatalogEntry(preview.purityCode)?.labelKey ?? ""}`, {
+      defaultValue: preview.purityLabel,
+    })
   );
   const facts = [
     preview.weightGramsDecimal ? `${preview.weightGramsDecimal} g` : null,
@@ -79,13 +79,13 @@ export function MetalHoldingLivePreview({
     ? (preview.preferredCurrency ?? "")
     : currency;
   const perGramInDisplayCurrency = usePreferredPerGram
-    ? preview.metalPerPureGramInPreferredCurrencyDecimal ?? null
+    ? (preview.metalPerPureGramInPreferredCurrencyDecimal ?? null)
     : preview.metalPerPureGramInDisplayCurrencyDecimal !== undefined
       ? preview.metalPerPureGramInDisplayCurrencyDecimal
       : calculateDisplayPerPureGramPrice({
-          metalUsdPerPureGramDecimal: preview.metalUsdPerPureGramDecimal ?? null,
-          currencyUsdPerUnitDecimal:
-            preview.fxRateTrust?.valueDecimal ?? null,
+          metalUsdPerPureGramDecimal:
+            preview.metalUsdPerPureGramDecimal ?? null,
+          currencyUsdPerUnitDecimal: preview.fxRateTrust?.valueDecimal ?? null,
           displayCurrency: preview.displayCurrency,
         });
 
@@ -255,21 +255,15 @@ export function formatRateAmount(
   value: string,
   locale: "en" | "ar"
 ): string {
-  const fractionDigits = value.includes(".")
-    ? (value.split(".")[1]?.length ?? 0)
-    : 0;
-  return formatAmount(
-    currency,
-    value,
-    locale,
-    "never",
-    fractionDigits > 2
-      ? {
-          minimumFractionDigits: fractionDigits,
-          maximumFractionDigits: fractionDigits,
-        }
-      : undefined
-  );
+  try {
+    const rounded = roundDecimal(value, 2);
+    return formatAmount(currency, rounded, locale, "never", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+  } catch {
+    return "—";
+  }
 }
 
 function formatDecimal(

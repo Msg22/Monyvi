@@ -18,6 +18,7 @@ import {
   type AddMetalHoldingFormSubmission,
 } from "../../services/add-metal-holding-facade-service";
 import {
+  retryMetalHoldingReconciliation,
   saveEditedMetalHolding,
   type EditMetalHoldingSubmission,
 } from "../../services/edit-metal-holding-facade-service";
@@ -40,6 +41,17 @@ jest.mock("@nozbe/watermelondb/adapters/sqlite/makeDispatcher", (): unknown => {
     "@nozbe/watermelondb/adapters/sqlite/makeDispatcher/index.js"
   );
 });
+
+// Local-first integration: the facade's remote sync boundary is stubbed so this
+// suite exercises the SQLite commit contract without loading the real sync
+// pipeline (which requires the full app schema module).
+const mockSyncDatabase = jest.fn<Promise<void>, [Database]>(() =>
+  Promise.resolve()
+);
+
+jest.mock("../../services/sync", () => ({
+  syncDatabase: (db: Database): Promise<void> => mockSyncDatabase(db),
+}));
 
 const IDS = {
   user: "018f0c7a-1234-7abc-8def-000000000001",
@@ -187,7 +199,6 @@ function validAddSubmission(
   const today = formatMetalLocalCalendarDate(new Date());
   return {
     cairoTodayDate: today,
-    staleRateAcknowledged: false,
     ids: {
       actionId: IDS.addAction,
       holdingId: IDS.addHolding,
@@ -337,7 +348,6 @@ function validEditSubmission(
   const today = formatMetalLocalCalendarDate(new Date());
   return {
     cairoTodayDate: today,
-    staleRateAcknowledged: false,
     correctionReason: "Correcting wrong purchase price",
     ids: {
       actionId: IDS.editAction,
@@ -396,6 +406,7 @@ function validEditSubmission(
 describe("Metal holding facades replay contract and rate provenance", () => {
   beforeEach(async () => {
     mockCurrentUserId = IDS.user;
+    mockSyncDatabase.mockClear();
     await resetDatabase();
   });
 
@@ -481,23 +492,23 @@ describe("Metal holding facades replay contract and rate provenance", () => {
       expect(assets).toHaveLength(1);
     });
 
-    it("requires acknowledgment when Add captures stale selected rates", async () => {
+    it("captures stale selected rates and freshness without requiring acknowledgment when Add captures stale rates", async () => {
       await seedHoldingForEdit({
         withMarketRates: true,
         staleMarketRates: true,
       });
       const submission = validAddSubmission();
-      await expect(addMetalHoldingFromForm(submission)).rejects.toThrow(
-        "stale_rate_acknowledgment_required"
-      );
       await expect(
-        addMetalHoldingFromForm({ ...submission, staleRateAcknowledged: true })
+        addMetalHoldingFromForm(submission)
       ).resolves.toBeUndefined();
       const references = await database
         .get<MetalRateReference>("metal_rate_references")
         .query(Q.where("action_id", IDS.addAction))
         .fetch();
       expect(references).toHaveLength(2);
+      expect(
+        references.every((reference) => reference.capturedFreshness === "stale")
+      ).toBe(true);
 
       await expect(
         addMetalHoldingFromForm(submission)
@@ -581,7 +592,7 @@ describe("Metal holding facades replay contract and rate provenance", () => {
       expect(asset.acquisitionActionId).toBe(IDS.editAction);
     });
 
-    it("requires acknowledgment if selected rates turn stale before saving", async () => {
+    it("captures stale selected rates and freshness without requiring acknowledgment if selected rates turn stale before saving", async () => {
       await seedHoldingForEdit({
         withMarketRates: true,
         staleMarketRates: true,
@@ -593,19 +604,7 @@ describe("Metal holding facades replay contract and rate provenance", () => {
           purchaseDate: today,
         },
       });
-      await expect(saveEditedMetalHolding(submission)).rejects.toThrow(
-        "stale_rate_acknowledgment_required"
-      );
-      expect(
-        await database
-          .get<FinancialActionGroup>("financial_action_groups")
-          .query()
-          .fetch()
-      ).toHaveLength(0);
-
-      await expect(
-        saveEditedMetalHolding({ ...submission, staleRateAcknowledged: true })
-      ).resolves.toBeUndefined();
+      await expect(saveEditedMetalHolding(submission)).resolves.toBeUndefined();
       const references = await database
         .get<MetalRateReference>("metal_rate_references")
         .query()
@@ -650,6 +649,33 @@ describe("Metal holding facades replay contract and rate provenance", () => {
         .query()
         .fetch();
       expect(rateRefs).toHaveLength(0);
+    });
+  });
+
+  describe("retryMetalHoldingReconciliation sync delegation", () => {
+    it("delegates the retry to the sync boundary with the local database by default", async () => {
+      await expect(retryMetalHoldingReconciliation()).resolves.toBeUndefined();
+
+      expect(mockSyncDatabase).toHaveBeenCalledTimes(1);
+      expect(mockSyncDatabase).toHaveBeenCalledWith(database);
+    });
+
+    it("forwards an explicitly supplied database to the sync boundary", async () => {
+      await expect(
+        retryMetalHoldingReconciliation(database)
+      ).resolves.toBeUndefined();
+
+      expect(mockSyncDatabase).toHaveBeenCalledTimes(1);
+      expect(mockSyncDatabase).toHaveBeenCalledWith(database);
+    });
+
+    it("propagates sync boundary failures instead of reporting a false success", async () => {
+      mockSyncDatabase.mockRejectedValueOnce(new Error("sync_auth_scope_lost"));
+
+      await expect(retryMetalHoldingReconciliation()).rejects.toThrow(
+        "sync_auth_scope_lost"
+      );
+      expect(mockSyncDatabase).toHaveBeenCalledTimes(1);
     });
   });
 

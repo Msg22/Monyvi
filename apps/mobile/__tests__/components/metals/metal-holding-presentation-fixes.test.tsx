@@ -8,7 +8,10 @@ import {
   MetalHoldingForm,
   type MetalHoldingFormPreview,
 } from "@/components/metals/MetalHoldingForm";
-import { MetalHoldingLivePreview } from "@/components/metals/MetalHoldingLivePreview";
+import {
+  formatRateAmount,
+  MetalHoldingLivePreview,
+} from "@/components/metals/MetalHoldingLivePreview";
 import type { MetalDetailReadModel } from "@/services/metal-detail-read-model-service";
 
 jest.mock("@/components/navigation/PageHeader", () => {
@@ -126,7 +129,13 @@ function activeModel(
     renderKey: "gold:coin",
     requiresCompleteMaterialCorrection: false,
     status: "active",
-    timeline: [{ id: "created", kind: "add", occurredAt: new Date("2024-03-14T00:00:00.000Z") }],
+    timeline: [
+      {
+        id: "created",
+        kind: "add",
+        occurredAt: new Date("2024-03-14T00:00:00.000Z"),
+      },
+    ],
     totalGainDecimal: "11039.67",
     unavailableExactFacts: [],
     weightGramsDecimal: "31.125",
@@ -161,7 +170,9 @@ describe("metal holding presentation fixes (PR 332)", () => {
       />
     );
 
-    expect(screen.queryByTestId("metal-detail-calculation-disclosure")).toBeNull();
+    expect(
+      screen.queryByTestId("metal-detail-calculation-disclosure")
+    ).toBeNull();
   });
 
   it("hides How this value was calculated when sold result has no display breakdown", (): void => {
@@ -193,7 +204,9 @@ describe("metal holding presentation fixes (PR 332)", () => {
       />
     );
 
-    expect(screen.queryByTestId("metal-detail-calculation-disclosure")).toBeNull();
+    expect(
+      screen.queryByTestId("metal-detail-calculation-disclosure")
+    ).toBeNull();
   });
 
   it("shows estimated per-gram in display currency, never USD, when FX is available", (): void => {
@@ -232,7 +245,9 @@ describe("metal holding presentation fixes (PR 332)", () => {
     );
 
     expect(screen.queryByText("Gold · USD 100 per pure gram")).toBeNull();
-    expect(screen.getByText("Gold · EGP 5,000 per pure gram")).toBeOnTheScreen();
+    expect(
+      screen.getByText("Gold · EGP 5,000.00 per pure gram")
+    ).toBeOnTheScreen();
   });
 
   it("hides the per-gram row when display FX is missing instead of fabricating", (): void => {
@@ -331,7 +346,9 @@ describe("metal holding presentation fixes (PR 332)", () => {
       />
     );
     expect(screen.getByTestId("metal-holding-live-preview")).toBeOnTheScreen();
-    expect(screen.getByTestId("metal-holding-valuation-unavailable")).toBeOnTheScreen();
+    expect(
+      screen.getByTestId("metal-holding-valuation-unavailable")
+    ).toBeOnTheScreen();
   });
 
   it("shows the Add estimate section after Karat selection alone with other fields untouched", (): void => {
@@ -382,7 +399,9 @@ describe("metal holding presentation fixes (PR 332)", () => {
 
     expect(onChange).toHaveBeenCalledWith("purityCode", "gold-875");
     expect(screen.getByTestId("metal-holding-live-preview")).toBeOnTheScreen();
-    expect(screen.getByTestId("metal-holding-valuation-unavailable")).toBeOnTheScreen();
+    expect(
+      screen.getByTestId("metal-holding-valuation-unavailable")
+    ).toBeOnTheScreen();
   });
 
   it("groups Edit Total Purchase Price with commas while keeping canonical dot-decimal state", (): void => {
@@ -427,19 +446,29 @@ describe("metal holding presentation fixes (PR 332)", () => {
     expect(screen.getByDisplayValue("47,800")).toBeOnTheScreen();
     expect(screen.getByDisplayValue("10.125")).toBeOnTheScreen();
 
-    fireEvent.changeText(screen.getByTestId("metal-holding-purchase-price-field"), "1,234.50");
+    fireEvent.changeText(
+      screen.getByTestId("metal-holding-purchase-price-field"),
+      "1,234.50"
+    );
     expect(onChange).toHaveBeenCalledWith("purchasePrice", "1234.50");
 
-    fireEvent.changeText(screen.getByTestId("metal-holding-purchase-price-field"), "12,5");
+    fireEvent.changeText(
+      screen.getByTestId("metal-holding-purchase-price-field"),
+      "12,5"
+    );
     expect(onChange).toHaveBeenCalledWith("purchasePrice", "12,5");
   });
 
   it("ships Karat copy for Add/Edit in EN and AR", (): void => {
     const root = resolve(__dirname, "../../../../..");
-    const en = JSON.parse(readFileSync(resolve(root, "apps/mobile/locales/en/metals.json"), "utf8")) as {
+    const en = JSON.parse(
+      readFileSync(resolve(root, "apps/mobile/locales/en/metals.json"), "utf8")
+    ) as {
       readonly add: Record<string, string>;
     };
-    const ar = JSON.parse(readFileSync(resolve(root, "apps/mobile/locales/ar/metals.json"), "utf8")) as {
+    const ar = JSON.parse(
+      readFileSync(resolve(root, "apps/mobile/locales/ar/metals.json"), "utf8")
+    ) as {
       readonly add: Record<string, string>;
     };
     expect(en.add.karat).toBe("Karat");
@@ -479,7 +508,9 @@ describe("metal holding presentation fixes (PR 332)", () => {
 
     expect(screen.queryByText("Gold · USD 100 per pure gram")).toBeNull();
     expect(screen.queryByText(/CAD.*per pure gram/)).toBeNull();
-    expect(screen.getByText("Gold · EGP 5,000 per pure gram")).toBeOnTheScreen();
+    expect(
+      screen.getByText("Gold · EGP 5,000.00 per pure gram")
+    ).toBeOnTheScreen();
   });
 
   it("hides the per-gram row when preferred FX is missing instead of falling back", (): void => {
@@ -515,5 +546,55 @@ describe("metal holding presentation fixes (PR 332)", () => {
 
     expect(screen.queryByText(/per pure gram/)).toBeNull();
     expect(screen.getByText("CAD 1,348.65")).toBeOnTheScreen();
+  });
+
+  it("formatRateAmount safely degrades to em dash on malformed legacy decimals without throwing", (): void => {
+    expect(formatRateAmount("EGP", "invalid_decimal", "en")).toBe("—");
+    expect(formatRateAmount("EGP", "", "en")).toBe("—");
+    expect(formatRateAmount("EGP", "NaN", "en")).toBe("—");
+    expect(formatRateAmount("EGP", "3125.50", "en")).toBe("EGP 3,125.50");
+  });
+
+  it("renders em dash for empty previous-value cue in edit form", (): void => {
+    render(
+      <MetalHoldingForm
+        mode="edit"
+        locale="en"
+        isRtl={false}
+        width={390}
+        fontScale={1}
+        bottomInset={24}
+        copy={FORM_COPY}
+        preview={
+          {
+            metal: "GOLD",
+            purityCode: "gold-999",
+            purityLabel: "24K",
+            purityFactorDecimal: "0.999",
+            physicalForm: "COIN",
+            valuation: { available: true, valueDecimal: "5000" },
+          } as unknown as MetalHoldingFormPreview
+        }
+        editState={{
+          correctionReason: "",
+          affectedChanges: [
+            {
+              field: "purchasePrice",
+              label: "Purchase price",
+              before: "",
+              after: "47800.00",
+              isFinancial: true,
+            },
+          ],
+        }}
+        onChange={jest.fn()}
+        onSubmit={jest.fn()}
+        onRequestExit={jest.fn()}
+      />
+    );
+
+    expect(
+      screen.getByTestId("metal-holding-purchasePrice-previous")
+    ).toHaveTextContent("Previous: —");
   });
 });

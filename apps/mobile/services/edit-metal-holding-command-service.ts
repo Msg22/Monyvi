@@ -138,7 +138,7 @@ function payloadFor(
       ? {
           before: input.originalMaterialFacts,
           after: input.materialFacts,
-          reason: input.correctionReason,
+          reason: input.correctionReason ?? "",
           rateSnapshots: input.rateSnapshots,
         }
       : null,
@@ -304,7 +304,12 @@ function prepareCorrectionPlan(
   const evidence = database
     .get<MetalActionEvidence>("metal_action_evidence")
     .prepareCreate((record): void => {
-      setPreparedId(record, input.actionEvidenceId);
+      // Server 068 (supabase/migrations/068_metals_domain.sql:1879-1884)
+      // inserts metal_action_evidence.id = action_id and enforces
+      // UNIQUE(user_id, action_id). The canonical local row MUST therefore use
+      // actionId so pull updates it in place instead of colliding. The legacy
+      // request field input.actionEvidenceId is intentionally ignored here.
+      setPreparedId(record, input.actionId);
       record.actionId = input.actionId;
       record.canonicalHoldingRevision = nextRevision;
       record.deleted = false;
@@ -368,8 +373,7 @@ function prepareCorrectionPlan(
           const originalPurchaseDate = formatMetalLocalCalendarDate(
             asset.purchaseDate
           );
-          const originalCurrency =
-            asset.purchaseCurrency ?? asset.currency;
+          const originalCurrency = asset.purchaseCurrency ?? asset.currency;
           const acquisitionBasisChanged =
             material.purchaseDate !== originalPurchaseDate ||
             material.purchaseCurrency !== originalCurrency;
@@ -484,8 +488,6 @@ export function createEditMetalHoldingCommandService(
         await saveMetadata(dependencies.database, input);
         return { kind: "metadata" };
       }
-      if (!input.correctionReason?.trim())
-        throw new Error("correction_reason_required");
       const payload = payloadFor(input);
       const envelope = dependencies.createEnvelope(input, payload);
       const projection = await loadProjection(dependencies.database, input);

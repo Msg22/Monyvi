@@ -1,6 +1,12 @@
 import * as Crypto from "expo-crypto";
 import { router, useLocalSearchParams } from "expo-router";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   useNavigation,
   usePreventRemove,
@@ -166,7 +172,11 @@ export default function EditMetalHoldingRoute(): React.JSX.Element {
         mode="edit"
         holdingStatus={form.model?.status ?? "active"}
         reconciliationState={form.model?.reconciliationState}
-        onRetryReconciliation={form.retry}
+        onRetryReconciliation={form.retryReconciliation}
+        isRetryingReconciliation={form.isRetryingReconciliation}
+        reconciliationRetryError={
+          form.reconciliationRetryError ? t("reconciliation.sync_failed") : null
+        }
         editState={editState}
         locale={locale}
         isRtl={I18nManager.isRTL}
@@ -187,9 +197,6 @@ export default function EditMetalHoldingRoute(): React.JSX.Element {
         }
         unusualValueAcknowledged={form.unusualValueAcknowledged}
         onAcknowledgeUnusualValue={form.acknowledgeUnusualValue}
-        requiresStaleRateAcknowledgment={form.requiresStaleRateAcknowledgment}
-        staleRateAcknowledged={form.staleRateAcknowledged}
-        onAcknowledgeStaleRate={form.acknowledgeStaleRate}
         onCorrectionReasonChange={form.setCorrectionReason}
         onChange={form.updateField}
         onSubmit={submit}

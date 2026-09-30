@@ -24,6 +24,7 @@ import type {
 import {
   calculateMetalHoldingPreviewDetails,
   calculateMetalHoldingPreviewValuation,
+  resolveMetalCalculationHolding,
   type MetalHoldingPreviewRates,
 } from "@/services/metal-holding-preview-service";
 import { evaluateMetalUnusualValuePolicy } from "@/services/metal-unusual-value-policy";
@@ -68,14 +69,11 @@ export interface UseAddMetalHoldingFormResult {
   readonly submitError: string | null;
   readonly requiresUnusualValueAcknowledgment: boolean;
   readonly unusualValueAcknowledged: boolean;
-  readonly requiresStaleRateAcknowledgment: boolean;
-  readonly staleRateAcknowledged: boolean;
   readonly updateField: (
     field: MetalHoldingFormField,
     value: string | null
   ) => void;
   readonly acknowledgeUnusualValue: () => void;
-  readonly acknowledgeStaleRate: () => void;
   readonly submit: () => Promise<string | null>;
 }
 
@@ -183,7 +181,6 @@ export function useAddMetalHoldingForm(
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [unusualValueAcknowledged, setUnusualValueAcknowledged] =
     useState(false);
-  const [staleRateAcknowledged, setStaleRateAcknowledged] = useState(false);
   const pendingIdsRef = useRef<AddMetalHoldingRequestIds | null>(null);
   const inFlightRef = useRef(false);
 
@@ -241,10 +238,33 @@ export function useAddMetalHoldingForm(
       ),
     [unusualValueAcknowledged, validationContext, values]
   );
+  const calculationHolding = useMemo(
+    () =>
+      validation.normalized ??
+      resolveMetalCalculationHolding({
+        metal: values.metal,
+        weightGrams: values.weightGrams,
+        purityCode: values.purityCode,
+        purchasePrice: values.purchasePrice,
+        purchaseCurrency: values.purchaseCurrency,
+        preferredCurrency: input.preferredCurrency,
+        physicalForm: values.physicalForm,
+        name: values.name,
+        safeRange: input.safeRange,
+        currencyMinorUnits: selectedCurrencyMinorUnits,
+      }),
+    [
+      input.preferredCurrency,
+      input.safeRange,
+      selectedCurrencyMinorUnits,
+      validation.normalized,
+      values,
+    ]
+  );
   const preview = useMemo<MetalHoldingFormPreview>(() => {
-    if (!validation.normalized)
+    if (!calculationHolding)
       return fallbackPreview(values, input.preferredCurrency);
-    const normalized = validation.normalized;
+    const normalized = calculationHolding;
     const previewRates = input.previewRates(
       normalized,
       input.preferredCurrency
@@ -253,11 +273,19 @@ export function useAddMetalHoldingForm(
       normalized,
       previewRates
     );
-    const details = calculateMetalHoldingPreviewDetails(
+    const hasPurchasePrice = values.purchasePrice.trim().length > 0;
+    const rawDetails = calculateMetalHoldingPreviewDetails(
       normalized,
       valuation,
       previewRates.currencyMinorUnits
     );
+    const details = hasPurchasePrice
+      ? rawDetails
+      : {
+          resultSincePurchaseDecimal: null,
+          resultDirection: "unavailable" as const,
+          purityPercentDecimal: rawDetails.purityPercentDecimal,
+        };
     return {
       metal: normalized.metal,
       purityCode: normalized.purity.code,
@@ -293,14 +321,11 @@ export function useAddMetalHoldingForm(
       fxRateTrust: previewRates.fxRateTrust,
       ...details,
     };
-  }, [input, validation.normalized, values]);
+  }, [calculationHolding, input, values]);
   const purityOptions = useMemo(
     () => getMetalHoldingPurityOptions(values.metal),
     [values.metal]
   );
-  const requiresStaleRateAcknowledgment =
-    preview.valuation.available &&
-    (preview.rateFreshness === "stale" || preview.rateFreshness === "unknown");
 
   const updateField = useCallback(
     (field: MetalHoldingFormField, value: string | null): void => {
@@ -308,7 +333,6 @@ export function useAddMetalHoldingForm(
       setIsDirty(true);
       setSubmitError(null);
       setUnusualValueAcknowledged(false);
-      setStaleRateAcknowledged(false);
       setValidationErrors({});
       setValues((current) => {
         if (field === "metal" && (value === "GOLD" || value === "SILVER")) {
@@ -349,9 +373,6 @@ export function useAddMetalHoldingForm(
       setValidationErrors(errors);
       return null;
     }
-    if (requiresStaleRateAcknowledgment && !staleRateAcknowledged) {
-      return null;
-    }
 
     inFlightRef.current = true;
     setIsSubmitting(true);
@@ -363,7 +384,6 @@ export function useAddMetalHoldingForm(
         ids: pendingIdsRef.current,
         holding: result.normalized,
         cairoTodayDate: input.today,
-        staleRateAcknowledged,
       });
       pendingIdsRef.current = null;
       setIsDirty(false);
@@ -377,14 +397,7 @@ export function useAddMetalHoldingForm(
       inFlightRef.current = false;
       setIsSubmitting(false);
     }
-  }, [
-    input,
-    requiresStaleRateAcknowledgment,
-    staleRateAcknowledged,
-    unusualValueAcknowledged,
-    validationContext,
-    values,
-  ]);
+  }, [input, unusualValueAcknowledged, validationContext, values]);
 
   return {
     values,
@@ -397,11 +410,8 @@ export function useAddMetalHoldingForm(
     requiresUnusualValueAcknowledgment:
       validation.requiresUnusualValueAcknowledgment,
     unusualValueAcknowledged,
-    requiresStaleRateAcknowledgment,
-    staleRateAcknowledged,
     updateField,
     acknowledgeUnusualValue: () => setUnusualValueAcknowledged(true),
-    acknowledgeStaleRate: () => setStaleRateAcknowledged(true),
     submit,
   };
 }

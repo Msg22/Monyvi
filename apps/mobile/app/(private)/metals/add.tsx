@@ -1,6 +1,12 @@
 import * as Crypto from "expo-crypto";
 import { router } from "expo-router";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   useNavigation,
   usePreventRemove,
@@ -31,6 +37,7 @@ import {
   useMetalAddPreviewRates,
 } from "@/hooks/useAddMetalHolding";
 import { usePreferredCurrency } from "@/hooks/usePreferredCurrency";
+import { useToast } from "@/components/ui/Toast";
 import { addMetalHoldingFromForm } from "@/services/add-metal-holding-facade-service";
 
 const SAFE_RANGE = {
@@ -42,6 +49,7 @@ export default function AddMetalHoldingRoute(): React.JSX.Element {
   const { t, i18n } = useTranslation("metals");
   const { width, fontScale } = useWindowDimensions();
   const insets = useSafeAreaInsets();
+  const { showToast } = useToast();
   const { preferredCurrency, isLoading } = usePreferredCurrency();
   const { getPreviewRates } = useMetalAddPreviewRates();
   const [isExitGuardVisible, setIsExitGuardVisible] = useState(false);
@@ -114,12 +122,16 @@ export default function AddMetalHoldingRoute(): React.JSX.Element {
   const submit = useCallback((): void => {
     void form.submit().then((holdingId) => {
       if (holdingId) {
+        showToast({
+          type: "success",
+          title: t("holding_created"),
+        });
         pendingExitActionRef.current = () =>
           router.replace(`/metals/${holdingId}`);
         setIsExitAllowed(true);
       }
     });
-  }, [form]);
+  }, [form, showToast, t]);
 
   return (
     <View
@@ -146,9 +158,6 @@ export default function AddMetalHoldingRoute(): React.JSX.Element {
         }
         unusualValueAcknowledged={form.unusualValueAcknowledged}
         onAcknowledgeUnusualValue={form.acknowledgeUnusualValue}
-        requiresStaleRateAcknowledgment={form.requiresStaleRateAcknowledgment}
-        staleRateAcknowledged={form.staleRateAcknowledged}
-        onAcknowledgeStaleRate={form.acknowledgeStaleRate}
         onChange={form.updateField}
         onSubmit={submit}
         onRequestExit={requestExit}

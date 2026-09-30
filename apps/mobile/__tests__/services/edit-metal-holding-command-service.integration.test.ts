@@ -296,6 +296,67 @@ async function seedHolding(
   });
 }
 
+interface MaterialCorrectionSide {
+  readonly weightGramsDecimal: string;
+}
+
+interface MaterialCorrectionPayload {
+  readonly materialCorrection: {
+    readonly reason: string;
+    readonly before: MaterialCorrectionSide;
+    readonly after: MaterialCorrectionSide;
+  };
+}
+
+function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
+  return value !== null && typeof value === "object";
+}
+
+function findCorrectionEvent(
+  events: readonly MetalLifecycleEvent[]
+): MetalLifecycleEvent {
+  const correction = events.find(
+    (event) => event.actionId === IDS.correctionAction
+  );
+  if (correction === undefined) {
+    throw new Error("correction_event_not_persisted");
+  }
+  return correction;
+}
+
+function readMaterialCorrectionPayload(
+  event: MetalLifecycleEvent
+): MaterialCorrectionPayload {
+  const parsed: unknown = JSON.parse(event.payloadJson);
+  if (!isRecord(parsed)) throw new Error("correction_payload_not_object");
+  const correction = parsed["materialCorrection"];
+  if (!isRecord(correction))
+    throw new Error("correction_payload_missing_material_correction");
+  const reason = correction["reason"];
+  if (typeof reason !== "string")
+    throw new Error("correction_payload_invalid_reason");
+  const before = readMaterialCorrectionSide(correction["before"], "before");
+  const after = readMaterialCorrectionSide(correction["after"], "after");
+  return {
+    materialCorrection: {
+      reason,
+      before,
+      after,
+    },
+  };
+}
+
+function readMaterialCorrectionSide(
+  value: unknown,
+  side: "before" | "after"
+): MaterialCorrectionSide {
+  if (!isRecord(value)) throw new Error(`correction_payload_missing_${side}`);
+  const weightGramsDecimal = value["weightGramsDecimal"];
+  if (typeof weightGramsDecimal !== "string")
+    throw new Error(`correction_payload_invalid_${side}_weight`);
+  return { weightGramsDecimal };
+}
+
 describe("Edit metal holding command SQLite atomicity", () => {
   beforeEach(async (): Promise<void> => {
     await adapter.initializingPromise;
@@ -325,7 +386,7 @@ describe("Edit metal holding command SQLite atomicity", () => {
       .query()
       .fetch();
     expect(evidence).toHaveLength(1);
-    expect(evidence[0].id).toBe(IDS.correctionEvidence);
+    expect(evidence[0].id).toBe(IDS.correctionAction);
     const history = await database
       .get<MetalLifecycleEvent>("metal_lifecycle_events")
       .query()
@@ -334,7 +395,9 @@ describe("Edit metal holding command SQLite atomicity", () => {
     expect(
       history.find((event) => event.id === IDS.createdEvent)?.isEffective
     ).toBe(true);
-    expect(history.find((event) => event.actionId === IDS.correctionAction)).toMatchObject({
+    expect(
+      history.find((event) => event.actionId === IDS.correctionAction)
+    ).toMatchObject({
       id: IDS.correctionAction,
       kind: "correct",
       predecessorEventId: IDS.createdEvent,
@@ -349,7 +412,7 @@ describe("Edit metal holding command SQLite atomicity", () => {
       )[0].effectiveEventId
     ).toBe(IDS.correctionAction);
   });
-  it("uses metadata LWW without financial history and requires a reason for material changes", async (): Promise<void> => {
+  it("uses metadata LWW without financial history", async (): Promise<void> => {
     await seedHolding();
     const service = createService();
     await expect(
@@ -372,9 +435,24 @@ describe("Edit metal holding command SQLite atomicity", () => {
     expect(
       await database.get<Model>("metal_action_evidence").query().fetch()
     ).toHaveLength(0);
+  });
+  it("keeps blank correction reason as an empty string and exact before/after evidence", async (): Promise<void> => {
+    await seedHolding();
     await expect(
-      service.save(command({ correctionReason: null }))
-    ).rejects.toThrow("correction_reason_required");
+      createService().save(
+        command({
+          correctionReason: "",
+        })
+      )
+    ).resolves.toEqual({ kind: "correction" });
+    const events = await database
+      .get<MetalLifecycleEvent>("metal_lifecycle_events")
+      .query()
+      .fetch();
+    const payload = readMaterialCorrectionPayload(findCorrectionEvent(events));
+    expect(payload.materialCorrection.reason).toBe("");
+    expect(payload.materialCorrection.before.weightGramsDecimal).toBe("10.125");
+    expect(payload.materialCorrection.after.weightGramsDecimal).toBe("11.125");
   });
   it("ignores older metadata edit and honors newer clock under LWW", async (): Promise<void> => {
     await seedHolding();

@@ -1,6 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
-import React from "react";
 import {
   Modal,
   ScrollView,
@@ -9,6 +8,7 @@ import {
   TouchableWithoutFeedback,
   View,
 } from "react-native";
+import { useTranslation } from "react-i18next";
 import { palette } from "@/constants/colors";
 import { useTheme } from "@/context/ThemeContext";
 import { useModalBottomInset } from "@/hooks/useModalBottomInset";
@@ -28,6 +28,8 @@ export interface DropdownItem<T> {
 interface DropdownBaseProps<T> {
   variant?: "default" | "outlined";
   label: string;
+  required?: boolean;
+  accessibilityHint?: string;
   items: ReadonlyArray<DropdownItem<T>>;
   value: T;
   onChange: (value: T) => void;
@@ -235,6 +237,7 @@ function DropdownModalView<T extends string | number>({
  */
 export function Dropdown<T extends string | number>({
   label,
+  required,
   items,
   value,
   onChange,
@@ -246,13 +249,16 @@ export function Dropdown<T extends string | number>({
   useModal = false,
   disabled = false,
   testID,
+  accessibilityHint,
 }: DropdownProps<T>): React.JSX.Element {
+  const { t } = useTranslation("common");
   const { isDark } = useTheme();
   const selectedItem = items.find((item) => item.value === value);
 
   return (
     <View
-      className={`${variant === "outlined" ? "" : "mb-3"} ${className} ${disabled ? "opacity-50" : ""}`}
+      collapsable={false}
+      className={`${variant === "outlined" ? "" : "mb-3"} ${className ?? ""} ${disabled ? "opacity-50" : ""}`.trim()}
     >
       <Text
         className={
@@ -262,6 +268,7 @@ export function Dropdown<T extends string | number>({
         }
       >
         {label}
+        {required ? <Text className="text-red-500">{" *"}</Text> : null}
       </Text>
 
       <View
@@ -276,6 +283,9 @@ export function Dropdown<T extends string | number>({
           onPress={onToggle}
           activeOpacity={0.7}
           disabled={disabled}
+          accessibilityHint={
+            accessibilityHint ?? (required ? t("required_field") : undefined)
+          }
           className={
             variant === "outlined" ? "min-h-11 justify-center px-3 py-2" : "p-4"
           }

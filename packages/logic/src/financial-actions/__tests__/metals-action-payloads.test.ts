@@ -262,6 +262,34 @@ describe("approved Metals financial action payload registry", () => {
     ).toEqual(payloadFor(kind, payloadVersion));
   });
 
+  it("accepts the exact empty reason string but rejects null, missing, and over-limit reasons", () => {
+    const correct = payloadFor("correct", "metals.correct/v1");
+    const material = correct.materialCorrection as Record<string, unknown>;
+    const validate = (reason: unknown, include = true): unknown =>
+      definition("correct", "metals.correct/v1").validatePayload(
+        {
+          ...correct,
+          materialCorrection: include
+            ? { ...material, reason }
+            : Object.fromEntries(
+                Object.entries(material).filter(([key]) => key !== "reason")
+              ),
+        },
+        VALIDATION_INPUT
+      );
+    expect(JSON.stringify(validate(""))).toContain('"reason":""');
+    expect(JSON.stringify(validate("Receipt correction"))).toContain(
+      '"reason":"Receipt correction"'
+    );
+    expect(() => validate(null)).toThrow("financial_action_invalid_payload");
+    expect(() => validate(undefined, false)).toThrow(
+      "financial_action_invalid_payload"
+    );
+    expect(() => validate("x".repeat(1025))).toThrow(
+      "financial_action_invalid_payload"
+    );
+  });
+
   it("rejects unknown tuples and every unapproved payload key", () => {
     expect(() =>
       DEFAULT_FINANCIAL_ACTION_REGISTRY.resolve(

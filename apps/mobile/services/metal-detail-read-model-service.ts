@@ -11,19 +11,15 @@ import {
 } from "@monyvi/db";
 import {
   calculateMetalReferenceValue,
-  calculatePureGrams,
   calculateUnrealizedAttribution,
   isSupportedMetal,
   isSupportedMetalsIsoCurrencyCode,
   parseCanonicalDecimal,
   reduceMetalLifecycle,
   resolveMetalsCurrencyMinorUnits,
-  roundDecimal,
   serializeDecimal,
   validateAndNormalizeRateReference,
-  type CurrencyInstrumentCode,
   type LifecycleEvent,
-  type MetalInstrumentCode,
   type NormalizedRateReference,
   type RateReferenceExpectation,
   type SupportedMetal,
@@ -45,14 +41,21 @@ import {
 } from "@/services/live-rates-trust-read-model-service";
 import {
   buildTimeline,
+  calculateRoundingDifference,
   copyValidDate,
+  findReference,
   getUnavailableExactFacts,
+  hasTrustedCurrentRate,
   normalizePhysicalForm,
+  readCurrentCurrencyRateDecimal,
   selectCanonicalOrOnly,
   shapeMetalDetailLifecycleEvents,
+  toCurrencyInstrumentCode,
   toDetailAssetInput,
   toDetailHoldingStateInput,
   toDetailMetalInput,
+  toMetalInstrumentCode,
+  toPureGramsDecimal,
   toRateReferenceInput,
   toRenderKey,
 } from "@/services/metal-detail-read-model-shaping";
@@ -117,10 +120,28 @@ export interface BuildMetalDetailReadModelInput {
   readonly userId: string;
 }
 
+export type MetalDetailCorrectionField =
+  | "weight"
+  | "purity"
+  | "physicalForm"
+  | "purchasePrice"
+  | "purchaseCurrency"
+  | "purchaseDate";
+
+export interface MetalDetailCorrectionChange {
+  readonly field: MetalDetailCorrectionField;
+  readonly before: string | null;
+  readonly after: string | null;
+  readonly beforeCurrency?: string | null;
+  readonly afterCurrency?: string | null;
+}
+
 export interface MetalDetailTimelineItem {
   readonly id: string;
   readonly kind: MetalDetailLifecycleEventInput["kind"];
   readonly occurredAt: Date;
+  // null means the event exists, but exact before/after changes cannot be read.
+  readonly correctionChanges?: readonly MetalDetailCorrectionChange[] | null;
 }
 
 export interface MetalDetailAttribution {
@@ -185,10 +206,6 @@ export interface ReadMetalDetailReadModelOptions {
   readonly latestAllowedCalendarDate?: string;
   readonly userId: string;
 }
-
-type DetailRateExpectation = RateReferenceExpectation & {
-  readonly actionId: string | null;
-};
 
 interface DetailCurrentValue {
   readonly currency: CurrencyType;
@@ -585,17 +602,6 @@ function getCurrentValueRates(
   return currency === undefined ? [] : [metal, currency];
 }
 
-function hasTrustedCurrentRate(
-  rate: LiveRatesTrustReadModel["gold"] | undefined
-): rate is LiveRatesTrustReadModel["gold"] & { readonly valueDecimal: string } {
-  return (
-    rate !== undefined &&
-    rate.state !== "invalid" &&
-    rate.state !== "missing" &&
-    typeof rate.valueDecimal === "string"
-  );
-}
-
 function conservativeObservedAt(
   rates: readonly LiveRatesTrustValue[]
 ): Date | null {
@@ -843,93 +849,6 @@ function buildCurrentReference(
     expectation
   );
   return normalized.available ? normalized.value : null;
-}
-
-function readCurrentCurrencyRateDecimal(
-  currentRates: LiveRatesTrustReadModel | undefined,
-  currency: CurrencyType
-): string | null {
-  if (currency === "USD") return "1";
-  const rate = currentRates?.currencies.get(currency);
-  return hasTrustedCurrentRate(rate) ? rate.valueDecimal : null;
-}
-
-function calculateRoundingDifference(
-  total: string,
-  components: readonly string[],
-  currency: CurrencyType
-): string | null {
-  if (!isSupportedMetalsIsoCurrencyCode(currency)) return null;
-  const decimalPlaces = resolveMetalsCurrencyMinorUnits(`currency:${currency}`);
-  if (decimalPlaces === null) return null;
-  try {
-    const roundedTotal = parseCanonicalDecimal(
-      roundDecimal(total, decimalPlaces)
-    );
-    const roundedComponents = components.reduce(
-      (sum, value) =>
-        sum.plus(parseCanonicalDecimal(roundDecimal(value, decimalPlaces))),
-      parseCanonicalDecimal("0")
-    );
-    const difference = roundedTotal.minus(roundedComponents);
-    return difference.isZero() ? null : serializeDecimal(difference);
-  } catch {
-    return null;
-  }
-}
-
-function toPureGramsDecimal(
-  input: BuildMetalDetailReadModelInput
-): string | null {
-  const weight = input.metal.weightGramsDecimal;
-  const purity = input.metal.purityFactorDecimal;
-  if (weight === null || purity === null) return null;
-  const result = calculatePureGrams({
-    purityFactorDecimal: purity,
-    weightGramsDecimal: weight,
-  });
-  return result.available ? result.valueDecimal : null;
-}
-
-function toCurrencyInstrumentCode(
-  value: string | null
-): CurrencyInstrumentCode | null {
-  return value !== null && isSupportedMetalsIsoCurrencyCode(value)
-    ? `currency:${value}`
-    : null;
-}
-
-function toMetalInstrumentCode(metalType: SupportedMetal): MetalInstrumentCode {
-  return metalType === "GOLD" ? "metal:GOLD" : "metal:SILVER";
-}
-
-function findReference(
-  references: readonly unknown[],
-  expectation: DetailRateExpectation
-): NormalizedRateReference | null {
-  const candidates = references.filter((candidate) =>
-    isRateCandidate(candidate, expectation)
-  );
-  if (candidates.length !== 1) return null;
-  const reference = candidates[0];
-  const normalized = validateAndNormalizeRateReference(reference, expectation);
-  return normalized.available ? normalized.value : null;
-}
-
-function isRateCandidate(
-  candidate: unknown,
-  expectation: DetailRateExpectation
-): candidate is Readonly<Record<string, unknown>> {
-  return (
-    typeof candidate === "object" &&
-    candidate !== null &&
-    "role" in candidate &&
-    candidate.role === expectation.role &&
-    "instrumentCode" in candidate &&
-    candidate.instrumentCode === expectation.instrumentCode &&
-    "actionId" in candidate &&
-    candidate.actionId === expectation.actionId
-  );
 }
 
 function assertRequestedUser(

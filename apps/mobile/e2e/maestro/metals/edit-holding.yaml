@@ -1,9 +1,55 @@
 appId: com.monyvi.app
 ---
-# T088 Red contract. Runner profiles must provide a single active Gold holding
-# with immutable persisted facts, plus offline and Arabic RTL variants.
+# E2E Edit Holding: complete Add fresh -> Details -> Weight Edit -> Save -> Details -> reload/reopen Details
+# Offline-first: offline is not a forced Save failure because WatermelonDB commits locally first.
 - runFlow: ../helpers/setup.yaml
-- openLink: monyvi://metals/holding-e2e-gold
+
+# 1. Add fresh: complete form and submit to create active Gold holding
+- openLink: monyvi://metals/add
+- extendedWaitUntil:
+    visible:
+      id: metal-holding-add-screen
+    timeout: 30000
+- assertVisible:
+    id: metal-holding-form
+- tapOn:
+    id: metal-holding-name-field
+- inputText: E2E Editable Gold Coin
+- tapOn:
+    id: metal-holding-metal-field
+- tapOn:
+    id: metal-holding-metal-option-GOLD
+- tapOn:
+    id: metal-holding-weight-field
+- inputText: "10.125"
+- tapOn:
+    id: metal-holding-purity-trigger
+- tapOn:
+    id: metal-holding-purity-option-gold-999
+- tapOn:
+    id: metal-holding-purchase-price-field
+- inputText: "47800.00"
+- tapOn:
+    id: metal-holding-purchase-currency-trigger
+- tapOn:
+    id: currency-code-row-EGP
+- tapOn:
+    id: metal-holding-physical-form-field
+- tapOn:
+    id: metal-holding-physical-form-option-COIN
+- tapOn:
+    id: metal-holding-submit
+
+# 2. Details: arrives at holding details screen, assert no error states
+- extendedWaitUntil:
+    visible:
+      id: metal-holding-detail-screen
+    timeout: 30000
+- assertVisible: E2E Editable Gold Coin
+- assertNotVisible:
+    id: metal-holding-edit-error
+
+# 3. Weight Edit: navigate into edit form and perform material weight correction
 - scrollUntilVisible:
     element:
       id: metal-holding-detail-edit
@@ -14,34 +60,6 @@ appId: com.monyvi.app
     visible:
       id: metal-holding-edit-screen
     timeout: 30000
-
-# Metadata only: no reason/review, direct local Save.
-- tapOn:
-    id: metal-holding-name-field
-- eraseText: 50
-- inputText: Corrected E2E Gold Coin
-- assertNotVisible:
-    id: metal-holding-correction-reason
-- assertNotVisible:
-    id: metal-holding-review-screen
-- tapOn:
-    id: metal-holding-submit
-- extendedWaitUntil:
-    visible:
-      id: metal-holding-detail-screen
-    timeout: 30000
-
-# Material correction: persisted/current cues, reason, only affected summary.
-# The weight "after" value is rendered only as text inside the What will
-# change summary (PreviousValueCue renders metal-holding-weight-previous for
-# the "before" cue); there is no metal-holding-weight-current testID.
-- openLink: monyvi://metals/holding-e2e-gold
-- scrollUntilVisible:
-    element:
-      id: metal-holding-detail-edit
-    direction: DOWN
-- tapOn:
-    id: metal-holding-detail-edit
 - tapOn:
     id: metal-holding-weight-field
 - eraseText: 20
@@ -56,21 +74,97 @@ appId: com.monyvi.app
 - tapOn:
     id: metal-holding-correction-reason
 - inputText: Corrected scale reading
+- hideKeyboard
+
+# 4. Save: direct local Save (offline is not a forced Save failure)
+- scrollUntilVisible:
+    element:
+      id: metal-holding-submit
+    direction: DOWN
 - tapOn:
     id: metal-holding-submit
+
+# 5. Details: returns to Details screen after Save, assert no error states and updated weight
 - extendedWaitUntil:
     visible:
       id: metal-holding-detail-screen
     timeout: 30000
+- assertVisible: "11.125"
+- assertNotVisible:
+    id: metal-holding-edit-error
+- assertNotVisible:
+    id: metal-holding-edit-screen
 
-# Reverted material delta restores ordinary direct-save state; offline cannot block it.
-- openLink: monyvi://metals/holding-e2e-gold
+# 6. Reload / reopen Details from restart: proves offline-first local persistence
+- stopApp
+- launchApp:
+    newInstance: false
+- openLink: monyvi://metals
+- extendedWaitUntil:
+    visible:
+      id: metal-portfolio-root
+    timeout: 30000
+- scrollUntilVisible:
+    element:
+      text: E2E Editable Gold Coin
+    direction: DOWN
+- tapOn: E2E Editable Gold Coin
+- extendedWaitUntil:
+    visible:
+      id: metal-holding-detail-screen
+    timeout: 30000
+- assertVisible: E2E Editable Gold Coin
+- assertVisible: "11.125"
+- assertNotVisible:
+    id: metal-holding-edit-error
+- assertNotVisible:
+    id: metal-holding-detail-loading
+
+# 7. Metadata only: direct local Save without correction reason
 - scrollUntilVisible:
     element:
       id: metal-holding-detail-edit
     direction: DOWN
 - tapOn:
     id: metal-holding-detail-edit
+- extendedWaitUntil:
+    visible:
+      id: metal-holding-edit-screen
+    timeout: 30000
+- tapOn:
+    id: metal-holding-name-field
+- eraseText: 50
+- inputText: Corrected E2E Gold Coin
+- hideKeyboard
+- assertNotVisible:
+    id: metal-holding-correction-reason
+- assertNotVisible:
+    id: metal-holding-review-screen
+- scrollUntilVisible:
+    element:
+      id: metal-holding-submit
+    direction: DOWN
+- tapOn:
+    id: metal-holding-submit
+- extendedWaitUntil:
+    visible:
+      id: metal-holding-detail-screen
+    timeout: 30000
+- assertVisible: Corrected E2E Gold Coin
+- assertNotVisible:
+    id: metal-holding-edit-error
+
+# 8. Reverted material delta restores ordinary direct-save state; offline cannot block it
+- scrollUntilVisible:
+    element:
+      id: metal-holding-detail-edit
+    direction: DOWN
+- tapOn:
+    id: metal-holding-detail-edit
+- extendedWaitUntil:
+    visible:
+      id: metal-holding-edit-screen
+    timeout: 30000
 - tapOn:
     id: metal-holding-physical-form-field
 - tapOn:
@@ -87,3 +181,5 @@ appId: com.monyvi.app
     id: metal-holding-what-will-change
 - assertNotVisible:
     id: metal-holding-local-first-status
+- assertNotVisible:
+    id: metal-holding-edit-error

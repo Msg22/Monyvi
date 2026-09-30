@@ -31,6 +31,7 @@ import {
 } from "./financial-action-foundation-repository";
 import { createMetalFinancialActionEnvelope } from "./metal-financial-action-adapter";
 import { formatMetalLocalCalendarDate } from "./metal-financial-action-repository";
+import { syncDatabase } from "./sync";
 import { getCurrentUserDataScope } from "./user-data-access";
 
 export interface EditMetalHoldingReadModel {
@@ -58,7 +59,6 @@ export interface EditMetalHoldingSubmission {
   readonly current: EditableMetalHoldingFacts;
   readonly correctionReason: string | null;
   readonly cairoTodayDate: string;
-  readonly staleRateAcknowledged: boolean;
 }
 
 const sha256Provider: Sha256Provider = {
@@ -165,17 +165,6 @@ export async function saveEditedMetalHolding(
           ids: submission.ids,
         })
     : [];
-  if (
-    !existing &&
-    !submission.staleRateAcknowledged &&
-    rateSnapshots.some(
-      (snapshot) =>
-        snapshot.capturedFreshness === "stale" ||
-        snapshot.capturedFreshness === "unknown"
-    )
-  ) {
-    throw new Error("stale_rate_acknowledgment_required");
-  }
   const input: EditMetalHoldingCommandInput = {
     actionId: submission.ids.actionId,
     actionEvidenceId: submission.ids.actionEvidenceId,
@@ -244,4 +233,10 @@ function toMaterial(
 function financialJson(facts: EditableMetalHoldingFacts): string {
   const { physicalForm: _ignored, ...financial } = toMaterial(facts);
   return JSON.stringify(financial);
+}
+
+export async function retryMetalHoldingReconciliation(
+  db = database
+): Promise<void> {
+  await syncDatabase(db);
 }

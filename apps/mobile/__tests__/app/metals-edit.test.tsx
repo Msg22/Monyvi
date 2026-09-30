@@ -81,6 +81,8 @@ interface EditMetalHoldingFormProps {
   readonly holdingStatus: "active" | "sold" | "disposed";
   readonly reconciliationState?: string;
   readonly onRetryReconciliation?: () => void;
+  readonly isRetryingReconciliation?: boolean;
+  readonly reconciliationRetryError?: string | null;
   readonly values: {
     readonly name: string;
     readonly metal: "GOLD" | "SILVER";
@@ -103,8 +105,22 @@ interface EditMetalHoldingFormProps {
     readonly displayCurrency?: string;
     readonly resultSincePurchaseDecimal?: string | null;
     readonly resultDirection?: "positive" | "negative" | "zero" | "unavailable";
-    readonly metalRateTrust?: { readonly valueDecimal: string | null; readonly state: "fresh" | "stale" | "unknown" | "missing" | "invalid"; readonly ageMs: number | null; readonly source: string | null; readonly quality: string | null; readonly providerObservedAt: Date | null };
-    readonly fxRateTrust?: { readonly valueDecimal: string | null; readonly state: "fresh" | "stale" | "unknown" | "missing" | "invalid"; readonly ageMs: number | null; readonly source: string | null; readonly quality: string | null; readonly providerObservedAt: Date | null };
+    readonly metalRateTrust?: {
+      readonly valueDecimal: string | null;
+      readonly state: "fresh" | "stale" | "unknown" | "missing" | "invalid";
+      readonly ageMs: number | null;
+      readonly source: string | null;
+      readonly quality: string | null;
+      readonly providerObservedAt: Date | null;
+    };
+    readonly fxRateTrust?: {
+      readonly valueDecimal: string | null;
+      readonly state: "fresh" | "stale" | "unknown" | "missing" | "invalid";
+      readonly ageMs: number | null;
+      readonly source: string | null;
+      readonly quality: string | null;
+      readonly providerObservedAt: Date | null;
+    };
     readonly valuation:
       | { readonly available: true; readonly valueDecimal: string }
       | { readonly available: false; readonly reason: "missing_rate" };
@@ -397,125 +413,6 @@ describe("Edit metal holding form", () => {
     expect(screen.queryByTestId("metal-holding-weight-previous")).toBeNull();
   });
 
-  it("describes physical-form-only correction without inventing a financial delta", (): void => {
-    renderEdit(
-      materialOverride(
-        { ...original, physicalForm: "BAR" },
-        "physicalForm",
-        "Physical form",
-        "Coin",
-        "Bar",
-        false
-      )
-    );
-
-    expect(screen.getByText("Physical form: Coin → Bar")).toBeOnTheScreen();
-    expect(screen.getByText("Current value stays EGP 51,200")).toBeOnTheScreen();
-    expect(screen.getByText("Your gain since purchase stays EGP 3,400")).toBeOnTheScreen();
-    expect(
-      screen.queryByText("The holding image and description will update.")
-    ).toBeNull();
-    expect(
-      screen.getByText("This correction will appear in History")
-    ).toBeOnTheScreen();
-  });
-
-  it("formats physical-form correction with negative and zero results in English", (): void => {
-    renderEdit({
-      ...materialOverride(
-        { ...original, physicalForm: "BAR", performanceDecimal: "-500" },
-        "physicalForm",
-        "Physical form",
-        "Coin",
-        "Bar",
-        false
-      ),
-      preview: {
-        ...toPreview({ ...original, physicalForm: "BAR", performanceDecimal: "-500" }),
-        resultDirection: "negative",
-      },
-    });
-
-    expect(screen.getByText("Current value stays EGP 51,200")).toBeOnTheScreen();
-    expect(screen.getByText("Your loss since purchase stays EGP 500")).toBeOnTheScreen();
-
-    renderEdit({
-      ...materialOverride(
-        { ...original, physicalForm: "BAR", performanceDecimal: "0" },
-        "physicalForm",
-        "Physical form",
-        "Coin",
-        "Bar",
-        false
-      ),
-      preview: {
-        ...toPreview({ ...original, physicalForm: "BAR", performanceDecimal: "0" }),
-        resultDirection: "zero",
-      },
-    });
-
-    expect(screen.getByText("Your result since purchase stays EGP 0")).toBeOnTheScreen();
-  });
-
-  it("formats physical-form correction with positive, negative, and zero results in Arabic", (): void => {
-    renderEdit({
-      locale: "ar",
-      isRtl: true,
-      copy: ARABIC_EDIT_COPY,
-      ...materialOverride(
-        { ...original, physicalForm: "BAR" },
-        "physicalForm",
-        "الشكل",
-        "عملة",
-        "سبيكة",
-        false
-      ),
-    });
-
-    expect(screen.getByText("تظل القيمة الحالية ٥١٬٢٠٠ جنيه مصري")).toBeOnTheScreen();
-    expect(screen.getByText("يبقى ربحك منذ الشراء ٣٬٤٠٠ جنيه مصري")).toBeOnTheScreen();
-
-    renderEdit({
-      locale: "ar",
-      isRtl: true,
-      copy: ARABIC_EDIT_COPY,
-      ...materialOverride(
-        { ...original, physicalForm: "BAR", performanceDecimal: "-500" },
-        "physicalForm",
-        "الشكل",
-        "عملة",
-        "سبيكة",
-        false
-      ),
-      preview: {
-        ...toPreview({ ...original, physicalForm: "BAR", performanceDecimal: "-500" }),
-        resultDirection: "negative",
-      },
-    });
-
-    expect(screen.getByText("تبقى خسارتك منذ الشراء ٥٠٠ جنيه مصري")).toBeOnTheScreen();
-
-    renderEdit({
-      locale: "ar",
-      isRtl: true,
-      copy: ARABIC_EDIT_COPY,
-      ...materialOverride(
-        { ...original, physicalForm: "BAR", performanceDecimal: "0" },
-        "physicalForm",
-        "الشكل",
-        "عملة",
-        "سبيكة",
-        false
-      ),
-      preview: {
-        ...toPreview({ ...original, physicalForm: "BAR", performanceDecimal: "0" }),
-        resultDirection: "zero",
-      },
-    });
-
-    expect(screen.getByText("تبقى نتيجتك منذ الشراء ٠ جنيه مصري")).toBeOnTheScreen();
-  });
-
   it("shows and focuses the missing correction reason error", (): void => {
     renderEdit({
       ...materialOverride(
@@ -526,14 +423,27 @@ describe("Edit metal holding form", () => {
         "11.125"
       ),
       editState: {
-        affectedChanges: [{ field: "weight", label: "Weight", before: "10.125", after: "11.125", isFinancial: true }],
+        affectedChanges: [
+          {
+            field: "weight",
+            label: "Weight",
+            before: "10.125",
+            after: "11.125",
+            isFinancial: true,
+          },
+        ],
         correctionReason: "",
       },
       validationErrors: { correctionReason: "Reason is required" },
     });
 
-    expect(screen.getByTestId("metal-holding-correction-reason")).toHaveProp("autoFocus", true);
-    expect(screen.getByTestId("metal-holding-correction-reason-error")).toHaveTextContent("Reason is required");
+    expect(screen.getByTestId("metal-holding-correction-reason")).toHaveProp(
+      "autoFocus",
+      true
+    );
+    expect(
+      screen.getByTestId("metal-holding-correction-reason-error")
+    ).toHaveTextContent("Reason is required");
     expect(screen.getByText("Reason is required")).toBeOnTheScreen();
   });
 
@@ -547,7 +457,15 @@ describe("Edit metal holding form", () => {
         "11.125"
       ),
       editState: {
-        affectedChanges: [{ field: "weight", label: "Weight", before: "10.125", after: "11.125", isFinancial: true }],
+        affectedChanges: [
+          {
+            field: "weight",
+            label: "Weight",
+            before: "10.125",
+            after: "11.125",
+            isFinancial: true,
+          },
+        ],
         correctionReason: "",
       },
       validationErrors: {
@@ -556,32 +474,14 @@ describe("Edit metal holding form", () => {
       },
     });
 
-    expect(screen.getByTestId("metal-holding-name-field")).toHaveProp("autoFocus", true);
-    expect(screen.getByTestId("metal-holding-correction-reason")).toHaveProp("autoFocus", false);
-  });
-
-  it("shows financial changes without image update claims or unchanged value claims", (): void => {
-    renderEdit({
-      values: toValues({ ...original, weightGramsDecimal: "11.125", physicalForm: "BAR" }),
-      preview: toPreview({ ...original, weightGramsDecimal: "11.125", physicalForm: "BAR", currentValueDecimal: "56000", performanceDecimal: "8200" }),
-      editState: {
-        affectedChanges: [
-          { field: "weight", label: "Weight", before: "10.125", after: "11.125", isFinancial: true },
-          { field: "physicalForm", label: "Physical form", before: "Coin", after: "Bar", isFinancial: false },
-        ],
-        correctionReason: "Updated weight and form",
-      },
-    });
-
-    expect(screen.getByText("Weight: 10.125 → 11.125")).toBeOnTheScreen();
-    expect(screen.getByText("Physical form: Coin → Bar")).toBeOnTheScreen();
-    expect(
-      screen.queryByText("The holding image and description will update.")
-    ).toBeNull();
-    expect(screen.queryByText(/Current value stays/)).toBeNull();
-    expect(screen.queryByText(/Your gain since purchase stays/)).toBeNull();
-    expect(screen.getByText("EGP 56,000")).toBeOnTheScreen();
-    expect(screen.getByText("+ EGP 8,200")).toBeOnTheScreen();
+    expect(screen.getByTestId("metal-holding-name-field")).toHaveProp(
+      "autoFocus",
+      true
+    );
+    expect(screen.getByTestId("metal-holding-correction-reason")).toHaveProp(
+      "autoFocus",
+      false
+    );
   });
 
   it("shows valuation unavailable during financial edit when market rates are missing without inventing values", (): void => {
@@ -594,13 +494,21 @@ describe("Edit metal holding form", () => {
       },
       editState: {
         affectedChanges: [
-          { field: "weight", label: "Weight", before: "10.125", after: "11.125", isFinancial: true },
+          {
+            field: "weight",
+            label: "Weight",
+            before: "10.125",
+            after: "11.125",
+            isFinancial: true,
+          },
         ],
         correctionReason: "Corrected weight",
       },
     });
 
-    expect(screen.getByTestId("metal-holding-valuation-unavailable")).toHaveTextContent("Valuation unavailable");
+    expect(
+      screen.getByTestId("metal-holding-valuation-unavailable")
+    ).toHaveTextContent("Valuation unavailable");
     expect(screen.queryByText(/Current value stays/)).toBeNull();
   });
 
@@ -747,7 +655,7 @@ describe("Edit metal holding form", () => {
     fireEvent.press(screen.getByTestId("header-back"));
     expect(props.onRequestExit).not.toHaveBeenCalled();
     fireEvent.press(screen.getByTestId("metal-holding-submit"));
-    expect(props.onSubmit).not.toHaveBeenCalled();    // The sold holding above hides the weight/purity section entirely, so it
+    expect(props.onSubmit).not.toHaveBeenCalled(); // The sold holding above hides the weight/purity section entirely, so it
     // cannot prove compact reflow. Render the same compact 320px RTL 200%
     // viewport against an active holding and assert the stacked row.
     renderEdit({
@@ -795,6 +703,229 @@ describe("Edit metal holding form", () => {
 
     fireEvent.press(screen.getByTestId("metal-holding-reconciliation-retry"));
     expect(onRetryReconciliation).toHaveBeenCalledTimes(1);
+  });
+
+  it("disables the reconciliation retry while syncing and announces sync failure", (): void => {
+    renderEdit({
+      holdingStatus: "active",
+      reconciliationState: "reconciliation_incomplete",
+      onRetryReconciliation: jest.fn(),
+      isRetryingReconciliation: true,
+      reconciliationRetryError:
+        "Sync failed. Your saved local state is still available.",
+    });
+
+    expect(screen.getByTestId("metal-holding-reconciliation-retry")).toHaveProp(
+      "accessibilityState",
+      expect.objectContaining({ disabled: true, busy: true })
+    );
+    expect(
+      screen.getByTestId("metal-holding-reconciliation-retry-error")
+    ).toHaveTextContent(
+      "Sync failed. Your saved local state is still available."
+    );
+  });
+
+  it("describes physical-form-only correction without inventing a financial delta", (): void => {
+    renderEdit(
+      materialOverride(
+        { ...original, physicalForm: "BAR" },
+        "physicalForm",
+        "Physical form",
+        "Coin",
+        "Bar",
+        false
+      )
+    );
+
+    expect(screen.getByText("Physical form: Coin → Bar")).toBeOnTheScreen();
+    expect(
+      screen.getByText("Current value stays EGP 51,200")
+    ).toBeOnTheScreen();
+    expect(
+      screen.getByText("Your gain since purchase stays EGP 3,400")
+    ).toBeOnTheScreen();
+    expect(
+      screen.queryByText("The holding image and description will update.")
+    ).toBeNull();
+    expect(
+      screen.getByText("This correction will appear in History")
+    ).toBeOnTheScreen();
+  });
+
+  it("formats physical-form correction with negative and zero results in English", (): void => {
+    renderEdit({
+      ...materialOverride(
+        { ...original, physicalForm: "BAR", performanceDecimal: "-500" },
+        "physicalForm",
+        "Physical form",
+        "Coin",
+        "Bar",
+        false
+      ),
+      preview: {
+        ...toPreview({
+          ...original,
+          physicalForm: "BAR",
+          performanceDecimal: "-500",
+        }),
+        resultDirection: "negative",
+      },
+    });
+
+    expect(
+      screen.getByText("Current value stays EGP 51,200")
+    ).toBeOnTheScreen();
+    expect(
+      screen.getByText("Your loss since purchase stays EGP 500")
+    ).toBeOnTheScreen();
+
+    renderEdit({
+      ...materialOverride(
+        { ...original, physicalForm: "BAR", performanceDecimal: "0" },
+        "physicalForm",
+        "Physical form",
+        "Coin",
+        "Bar",
+        false
+      ),
+      preview: {
+        ...toPreview({
+          ...original,
+          physicalForm: "BAR",
+          performanceDecimal: "0",
+        }),
+        resultDirection: "zero",
+      },
+    });
+
+    expect(
+      screen.getByText("Your result since purchase stays EGP 0")
+    ).toBeOnTheScreen();
+  });
+
+  it("formats physical-form correction with positive, negative, and zero results in Arabic", (): void => {
+    renderEdit({
+      locale: "ar",
+      isRtl: true,
+      copy: ARABIC_EDIT_COPY,
+      ...materialOverride(
+        { ...original, physicalForm: "BAR" },
+        "physicalForm",
+        "الشكل",
+        "عملة",
+        "سبيكة",
+        false
+      ),
+    });
+
+    expect(
+      screen.getByText("تظل القيمة الحالية ٥١٬٢٠٠ جنيه مصري")
+    ).toBeOnTheScreen();
+    expect(
+      screen.getByText("يبقى ربحك منذ الشراء ٣٬٤٠٠ جنيه مصري")
+    ).toBeOnTheScreen();
+    // Image-consequence row removed per explicit user direction
+    expect(screen.queryByText("سيتم تحديث صورة المقتنى ووصفه.")).toBeNull();
+    expect(screen.getByText("سيظهر هذا التصحيح في السجل.")).toBeOnTheScreen();
+
+    renderEdit({
+      locale: "ar",
+      isRtl: true,
+      copy: ARABIC_EDIT_COPY,
+      ...materialOverride(
+        { ...original, physicalForm: "BAR", performanceDecimal: "-500" },
+        "physicalForm",
+        "الشكل",
+        "عملة",
+        "سبيكة",
+        false
+      ),
+      preview: {
+        ...toPreview({
+          ...original,
+          physicalForm: "BAR",
+          performanceDecimal: "-500",
+        }),
+        resultDirection: "negative",
+      },
+    });
+
+    expect(
+      screen.getByText("تبقى خسارتك منذ الشراء ٥٠٠ جنيه مصري")
+    ).toBeOnTheScreen();
+
+    renderEdit({
+      locale: "ar",
+      isRtl: true,
+      copy: ARABIC_EDIT_COPY,
+      ...materialOverride(
+        { ...original, physicalForm: "BAR", performanceDecimal: "0" },
+        "physicalForm",
+        "الشكل",
+        "عملة",
+        "سبيكة",
+        false
+      ),
+      preview: {
+        ...toPreview({
+          ...original,
+          physicalForm: "BAR",
+          performanceDecimal: "0",
+        }),
+        resultDirection: "zero",
+      },
+    });
+
+    expect(
+      screen.getByText("تبقى نتيجتك منذ الشراء ٠ جنيه مصري")
+    ).toBeOnTheScreen();
+  });
+
+  it("shows financial changes without image update claims or unchanged value claims", (): void => {
+    renderEdit({
+      values: toValues({
+        ...original,
+        weightGramsDecimal: "11.125",
+        physicalForm: "BAR",
+      }),
+      preview: toPreview({
+        ...original,
+        weightGramsDecimal: "11.125",
+        physicalForm: "BAR",
+        currentValueDecimal: "56000",
+        performanceDecimal: "8200",
+      }),
+      editState: {
+        affectedChanges: [
+          {
+            field: "weight",
+            label: "Weight",
+            before: "10.125",
+            after: "11.125",
+            isFinancial: true,
+          },
+          {
+            field: "physicalForm",
+            label: "Physical form",
+            before: "Coin",
+            after: "Bar",
+            isFinancial: false,
+          },
+        ],
+        correctionReason: "Updated weight and form",
+      },
+    });
+
+    expect(screen.getByText("Weight: 10.125 → 11.125")).toBeOnTheScreen();
+    expect(screen.getByText("Physical form: Coin → Bar")).toBeOnTheScreen();
+    expect(
+      screen.queryByText("The holding image and description will update.")
+    ).toBeNull();
+    expect(screen.queryByText(/Current value stays/)).toBeNull();
+    expect(screen.queryByText(/Your gain since purchase stays/)).toBeNull();
+    expect(screen.getByText("EGP 56,000")).toBeOnTheScreen();
+    expect(screen.getByText("+ EGP 8,200")).toBeOnTheScreen();
   });
 
   it("resolves purityCode to catalog display label instead of raw code in affected changes", (): void => {

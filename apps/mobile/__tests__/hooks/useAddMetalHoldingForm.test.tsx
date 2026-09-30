@@ -54,17 +54,65 @@ function completeForm(result: { current: UseAddMetalHoldingFormResult }): void {
 
 describe("useAddMetalHoldingForm", () => {
   it("preserves separate metal and FX trust from the selected snapshot", () => {
-    const useMarketRates = (jest.requireMock("../../hooks/useMarketRates") as { useMarketRates: jest.Mock }).useMarketRates;
-    useMarketRates.mockReturnValue({ selectedSnapshot: { trust: {
-      gold: { valueDecimal: "100", state: "fresh", ageMs: 60_000, source: "Metal feed", quality: "verified", providerObservedAt: new Date("2026-09-01T10:00:00Z") },
-      silver: { valueDecimal: "1", state: "fresh", ageMs: 60_000, source: "Metal feed", quality: "verified", providerObservedAt: new Date("2026-09-01T10:00:00Z") },
-      currencies: new Map([["EGP", { valueDecimal: "0.02", state: "stale", ageMs: 3_600_000, source: "FX feed", quality: "indicative", providerObservedAt: new Date("2026-09-01T09:00:00Z") }]]),
-    } } });
+    const useMarketRates = (
+      jest.requireMock("../../hooks/useMarketRates") as {
+        useMarketRates: jest.Mock;
+      }
+    ).useMarketRates;
+    useMarketRates.mockReturnValue({
+      selectedSnapshot: {
+        trust: {
+          gold: {
+            valueDecimal: "100",
+            state: "fresh",
+            ageMs: 60_000,
+            source: "Metal feed",
+            quality: "verified",
+            providerObservedAt: new Date("2026-09-01T10:00:00Z"),
+          },
+          silver: {
+            valueDecimal: "1",
+            state: "fresh",
+            ageMs: 60_000,
+            source: "Metal feed",
+            quality: "verified",
+            providerObservedAt: new Date("2026-09-01T10:00:00Z"),
+          },
+          currencies: new Map([
+            [
+              "EGP",
+              {
+                valueDecimal: "0.02",
+                state: "stale",
+                ageMs: 3_600_000,
+                source: "FX feed",
+                quality: "indicative",
+                providerObservedAt: new Date("2026-09-01T09:00:00Z"),
+              },
+            ],
+          ]),
+        },
+      },
+    });
     const { result } = renderHook(() => useMetalAddPreviewRates());
-    const form = renderHook(() => useAddMetalHoldingForm(input({ previewRates: result.current.getPreviewRates })));
+    const form = renderHook(() =>
+      useAddMetalHoldingForm(
+        input({ previewRates: result.current.getPreviewRates })
+      )
+    );
     act(() => completeForm(form.result));
-    expect(form.result.current.preview.metalRateTrust).toMatchObject({ source: "Metal feed", state: "fresh", quality: "verified", ageMs: 60_000 });
-    expect(form.result.current.preview.fxRateTrust).toMatchObject({ source: "FX feed", state: "stale", quality: "indicative", ageMs: 3_600_000 });
+    expect(form.result.current.preview.metalRateTrust).toMatchObject({
+      source: "Metal feed",
+      state: "fresh",
+      quality: "verified",
+      ageMs: 60_000,
+    });
+    expect(form.result.current.preview.fxRateTrust).toMatchObject({
+      source: "FX feed",
+      state: "stale",
+      quality: "indicative",
+      ageMs: 3_600_000,
+    });
   });
   it("submits normalized facts directly with one stable seven-ID action bundle", async () => {
     const addHolding = jest.fn<Promise<void>, [AddMetalHoldingFormSubmission]>(
@@ -99,6 +147,50 @@ describe("useAddMetalHoldingForm", () => {
         currencyRateReferenceId: "018f0c7a-1234-7abc-8def-000000000007",
       },
     });
+  });
+
+  it("computes estimated value preview when holding name is blank and calculation inputs are valid, but blocks save with validation error", async () => {
+    const addHolding = jest.fn<Promise<void>, [AddMetalHoldingFormSubmission]>(
+      () => Promise.resolve()
+    );
+    const { result } = renderHook(() =>
+      useAddMetalHoldingForm(
+        input({
+          addHolding,
+          previewRates: () => ({
+            metalUsdPerPureGramDecimal: "100",
+            currencyUsdPerUnitDecimal: "0.02",
+            egpUsdPerUnitDecimal: "0.02",
+            currencyMinorUnits: 2,
+            rateFreshness: "fresh",
+          }),
+        })
+      )
+    );
+
+    // Leave name blank, set calculation-relevant inputs
+    act(() => {
+      result.current.updateField("metal", "GOLD");
+      result.current.updateField("weightGrams", "10");
+      result.current.updateField("purityCode", "gold-999");
+      result.current.updateField("purchasePrice", "50000");
+      result.current.updateField("purchaseCurrency", "EGP");
+    });
+
+    // Preview valuation MUST be computed and available despite blank name
+    expect(result.current.preview.valuation.available).toBe(true);
+    if (result.current.preview.valuation.available) {
+      expect(result.current.preview.valuation.valueDecimal).toBeTruthy();
+    }
+
+    // Attempting to submit must still enforce save validation for required name
+    let holdingId: string | null = null;
+    await act(async () => {
+      holdingId = await result.current.submit();
+    });
+    expect(holdingId).toBeNull();
+    expect(result.current.validationErrors.name).toBe("required");
+    expect(addHolding).not.toHaveBeenCalled();
   });
 
   it("blocks a duplicate tap synchronously and reuses IDs after an unchanged failure", async () => {
@@ -185,7 +277,7 @@ describe("useAddMetalHoldingForm", () => {
     });
   });
 
-  it("requires explicit acknowledgment when rates are stale before submitting", async () => {
+  it("does NOT block submission when rates are stale (extra ack step removed)", async () => {
     const addHolding = jest.fn<Promise<void>, [AddMetalHoldingFormSubmission]>(
       () => Promise.resolve()
     );
@@ -205,27 +297,7 @@ describe("useAddMetalHoldingForm", () => {
     );
     act(() => completeForm(result));
 
-    expect(
-      (
-        result.current as unknown as {
-          requiresStaleRateAcknowledgment: boolean;
-        }
-      ).requiresStaleRateAcknowledgment
-    ).toBe(true);
-
     let holdingId: string | null = null;
-    await act(async () => {
-      holdingId = await result.current.submit();
-    });
-    expect(holdingId).toBeNull();
-    expect(addHolding).not.toHaveBeenCalled();
-
-    act(() => {
-      (
-        result.current as unknown as { acknowledgeStaleRate: () => void }
-      ).acknowledgeStaleRate();
-    });
-
     await act(async () => {
       holdingId = await result.current.submit();
     });
@@ -233,7 +305,7 @@ describe("useAddMetalHoldingForm", () => {
     expect(addHolding).toHaveBeenCalledTimes(1);
   });
 
-  it("requires explicit acknowledgment when rates have unknown freshness before submitting", async () => {
+  it("submits directly when rates have unknown freshness without requiring UI gate acknowledgment", async () => {
     const addHolding = jest.fn<Promise<void>, [AddMetalHoldingFormSubmission]>(
       () => Promise.resolve()
     );
@@ -253,33 +325,14 @@ describe("useAddMetalHoldingForm", () => {
     );
     act(() => completeForm(result));
 
-    expect(
-      (
-        result.current as unknown as {
-          requiresStaleRateAcknowledgment: boolean;
-        }
-      ).requiresStaleRateAcknowledgment
-    ).toBe(true);
-
     let holdingId: string | null = null;
-    await act(async () => {
-      holdingId = await result.current.submit();
-    });
-    expect(holdingId).toBeNull();
-    expect(addHolding).not.toHaveBeenCalled();
-
-    act(() => {
-      (
-        result.current as unknown as { acknowledgeStaleRate: () => void }
-      ).acknowledgeStaleRate();
-    });
-
     await act(async () => {
       holdingId = await result.current.submit();
     });
     expect(holdingId).toBe("018f0c7a-1234-7abc-8def-000000000002");
     expect(addHolding).toHaveBeenCalledTimes(1);
-  });  it("stays fresh when only the EGP reference rate is stale for a non-EGP purchase", () => {
+  });
+  it("stays fresh when only the EGP reference rate is stale for a non-EGP purchase", () => {
     const useMarketRates = (
       jest.requireMock("../../hooks/useMarketRates") as {
         useMarketRates: jest.Mock;
@@ -398,16 +451,68 @@ describe("useAddMetalHoldingForm", () => {
   });
 
   it("resolves preferred EGP FX alongside purchase CAD FX without changing freshness", () => {
-    const useMarketRates = (jest.requireMock("../../hooks/useMarketRates") as { useMarketRates: jest.Mock }).useMarketRates;
-    useMarketRates.mockReturnValue({ selectedSnapshot: { trust: {
-      gold: { valueDecimal: "100", state: "fresh", ageMs: 60_000, source: "Metal feed", quality: "verified", providerObservedAt: new Date("2026-09-01T10:00:00Z") },
-      silver: { valueDecimal: "1", state: "fresh", ageMs: 60_000, source: "Metal feed", quality: "verified", providerObservedAt: new Date("2026-09-01T10:00:00Z") },
-      currencies: new Map([
-        ["CAD", { valueDecimal: "0.75", state: "fresh", ageMs: 60_000, source: "FX feed", quality: "verified", providerObservedAt: new Date("2026-09-01T10:00:00Z") }],
-        ["EGP", { valueDecimal: "0.02", state: "fresh", ageMs: 60_000, source: "FX feed", quality: "verified", providerObservedAt: new Date("2026-09-01T10:00:00Z") }],
-        ["USD", { valueDecimal: "1", state: "fresh", ageMs: 60_000, source: "FX feed", quality: "verified", providerObservedAt: new Date("2026-09-01T10:00:00Z") }],
-      ]),
-    } } });
+    const useMarketRates = (
+      jest.requireMock("../../hooks/useMarketRates") as {
+        useMarketRates: jest.Mock;
+      }
+    ).useMarketRates;
+    useMarketRates.mockReturnValue({
+      selectedSnapshot: {
+        trust: {
+          gold: {
+            valueDecimal: "100",
+            state: "fresh",
+            ageMs: 60_000,
+            source: "Metal feed",
+            quality: "verified",
+            providerObservedAt: new Date("2026-09-01T10:00:00Z"),
+          },
+          silver: {
+            valueDecimal: "1",
+            state: "fresh",
+            ageMs: 60_000,
+            source: "Metal feed",
+            quality: "verified",
+            providerObservedAt: new Date("2026-09-01T10:00:00Z"),
+          },
+          currencies: new Map([
+            [
+              "CAD",
+              {
+                valueDecimal: "0.75",
+                state: "fresh",
+                ageMs: 60_000,
+                source: "FX feed",
+                quality: "verified",
+                providerObservedAt: new Date("2026-09-01T10:00:00Z"),
+              },
+            ],
+            [
+              "EGP",
+              {
+                valueDecimal: "0.02",
+                state: "fresh",
+                ageMs: 60_000,
+                source: "FX feed",
+                quality: "verified",
+                providerObservedAt: new Date("2026-09-01T10:00:00Z"),
+              },
+            ],
+            [
+              "USD",
+              {
+                valueDecimal: "1",
+                state: "fresh",
+                ageMs: 60_000,
+                source: "FX feed",
+                quality: "verified",
+                providerObservedAt: new Date("2026-09-01T10:00:00Z"),
+              },
+            ],
+          ]),
+        },
+      },
+    });
     const { result } = renderHook(() => useMetalAddPreviewRates());
     const rates = result.current.getPreviewRates(
       {
@@ -461,14 +566,46 @@ describe("useAddMetalHoldingForm", () => {
   });
 
   it("returns null preferred FX instead of fabricating when preferred is missing", () => {
-    const useMarketRates = (jest.requireMock("../../hooks/useMarketRates") as { useMarketRates: jest.Mock }).useMarketRates;
-    useMarketRates.mockReturnValue({ selectedSnapshot: { trust: {
-      gold: { valueDecimal: "100", state: "fresh", ageMs: 60_000, source: "Metal feed", quality: "verified", providerObservedAt: new Date("2026-09-01T10:00:00Z") },
-      silver: { valueDecimal: "1", state: "fresh", ageMs: 60_000, source: "Metal feed", quality: "verified", providerObservedAt: new Date("2026-09-01T10:00:00Z") },
-      currencies: new Map([
-        ["CAD", { valueDecimal: "0.75", state: "fresh", ageMs: 60_000, source: "FX feed", quality: "verified", providerObservedAt: new Date("2026-09-01T10:00:00Z") }],
-      ]),
-    } } });
+    const useMarketRates = (
+      jest.requireMock("../../hooks/useMarketRates") as {
+        useMarketRates: jest.Mock;
+      }
+    ).useMarketRates;
+    useMarketRates.mockReturnValue({
+      selectedSnapshot: {
+        trust: {
+          gold: {
+            valueDecimal: "100",
+            state: "fresh",
+            ageMs: 60_000,
+            source: "Metal feed",
+            quality: "verified",
+            providerObservedAt: new Date("2026-09-01T10:00:00Z"),
+          },
+          silver: {
+            valueDecimal: "1",
+            state: "fresh",
+            ageMs: 60_000,
+            source: "Metal feed",
+            quality: "verified",
+            providerObservedAt: new Date("2026-09-01T10:00:00Z"),
+          },
+          currencies: new Map([
+            [
+              "CAD",
+              {
+                valueDecimal: "0.75",
+                state: "fresh",
+                ageMs: 60_000,
+                source: "FX feed",
+                quality: "verified",
+                providerObservedAt: new Date("2026-09-01T10:00:00Z"),
+              },
+            ],
+          ]),
+        },
+      },
+    });
     const { result } = renderHook(() => useMetalAddPreviewRates());
     const rates = result.current.getPreviewRates(
       {
