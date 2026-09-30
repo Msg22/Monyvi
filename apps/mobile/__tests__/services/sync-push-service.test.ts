@@ -14,6 +14,7 @@ jest.mock("@monyvi/db", () => ({
       assets: {},
       categories: {},
       financial_action_groups: {},
+      market_rate_observations: {},
       profiles: {},
       transactions: {},
     },
@@ -35,8 +36,9 @@ jest.mock("../../services/financial-action-foundation-repository", () => ({
     mockMarkSyncFailed(...args),
   markFinancialActionGroupSyncPending: (...args: readonly unknown[]): unknown =>
     mockMarkSyncPending(...args),
-  recordFinancialActionGroupServerOutcome: (...args: readonly unknown[]): unknown =>
-    mockRecordOutcome(...args),
+  recordFinancialActionGroupServerOutcome: (
+    ...args: readonly unknown[]
+  ): unknown => mockRecordOutcome(...args),
 }));
 
 jest.mock("@/utils/logger", () => ({
@@ -65,6 +67,152 @@ describe("pushChanges", () => {
     mockMarkSyncFailed.mockResolvedValue(undefined);
     mockMarkSyncPending.mockResolvedValue(undefined);
     mockRecordOutcome.mockResolvedValue(undefined);
+  });
+
+  it("never parses or dispatches foreign financial actions before syncing current-user data", async () => {
+    const pushArgs: PushChangesArgs = {
+      changes: {
+        financial_action_groups: {
+          created: [
+            {
+              id: "foreign-account-action",
+              user_id: "prior-user",
+              payload_json: "{invalid-json",
+            },
+          ],
+          updated: [
+            {
+              id: "foreign-metal-action",
+              user_id: "prior-user",
+              domain: "metals",
+              payload_json: "{invalid-json",
+            },
+          ],
+          deleted: [],
+        },
+        account_financial_effects: {
+          created: [
+            {
+              id: "foreign-effect",
+              user_id: "prior-user",
+              action_id: "foreign-account-action",
+            },
+          ],
+          updated: [],
+          deleted: [],
+        },
+        metal_holding_states: {
+          created: [
+            {
+              id: "foreign-state",
+              user_id: "prior-user",
+              holding_id: "foreign-asset",
+              name_written_at: 1,
+              name_writer_id: "writer-a",
+            },
+          ],
+          updated: [],
+          deleted: [],
+        },
+        assets: {
+          created: [
+            {
+              id: "foreign-asset",
+              user_id: "prior-user",
+              type: "METAL",
+              name: "Foreign name",
+            },
+          ],
+          updated: [],
+          deleted: [],
+        },
+        profiles: {
+          created: [{ id: "profile-1", user_id: "current-user" }],
+          updated: [],
+          deleted: [],
+        },
+      },
+      lastPulledAt: 0,
+    };
+    const coordinator = { coordinatePush: jest.fn() };
+    await expect(
+      pushChanges(
+        Object.create(null) as PushChangesDatabase,
+        pushArgs,
+        "current-user",
+        coordinator
+      )
+    ).resolves.toEqual({
+      experimentalRejectedIds: {
+        financial_action_groups: [
+          "foreign-account-action",
+          "foreign-metal-action",
+        ],
+        account_financial_effects: ["foreign-effect"],
+        metal_holding_states: ["foreign-state"],
+        assets: ["foreign-asset"],
+      },
+    });
+    expect(coordinator.coordinatePush).not.toHaveBeenCalled();
+    expect(mockRpc).not.toHaveBeenCalled();
+    expect(mockMarkSyncPending).not.toHaveBeenCalled();
+    expect(mockRecordOutcome).not.toHaveBeenCalled();
+    expect(mockUpsert).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([undefined, null, "", 12])(
+    "rejects invalid generic owner %s instead of assigning current user",
+    async (owner) => {
+      await expect(
+        pushChanges(Object.create(null) as PushChangesDatabase, {
+          changes: {
+            assets: {
+              created: [{ id: "asset-without-owner", user_id: owner }],
+              updated: [],
+              deleted: [],
+            },
+          },
+          lastPulledAt: 0,
+        })
+      ).rejects.toThrow("Refusing to sync foreign local changes for assets");
+      expect(mockUpsert).not.toHaveBeenCalled();
+    }
+  );
+
+  it("ignores dirty pull-only shared observations without requiring user ownership", async () => {
+    await expect(
+      pushChanges(Object.create(null) as PushChangesDatabase, {
+        changes: {
+          market_rate_observations: {
+            created: [{ id: "observation-1" }],
+            updated: [],
+            deleted: [],
+          },
+        },
+        lastPulledAt: 0,
+      })
+    ).resolves.toBeUndefined();
+    expect(mockUpsert).not.toHaveBeenCalled();
+  });
+
+  it("aborts before any write if auth changes during local ownership resolution", async () => {
+    mockGetCurrentUserId
+      .mockResolvedValueOnce("current-user")
+      .mockResolvedValueOnce("different-user");
+    await expect(
+      pushChanges(Object.create(null) as PushChangesDatabase, {
+        changes: {
+          profiles: {
+            created: [{ id: "profile-1", user_id: "current-user" }],
+            updated: [],
+            deleted: [],
+          },
+        },
+        lastPulledAt: 0,
+      })
+    ).rejects.toThrow(GENERIC_SYNC_ERROR_CODES.AUTH_SCOPE_LOST);
+    expect(mockRpc).not.toHaveBeenCalled();
+    expect(mockUpsert).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -104,7 +252,7 @@ describe("pushChanges", () => {
         },
       });
 
-      expect(mockGetCurrentUserId).toHaveBeenCalledTimes(2);
+      expect(mockGetCurrentUserId).toHaveBeenCalledTimes(3);
       expect(mockFrom).not.toHaveBeenCalledWith("financial_action_groups");
       expect(mockFrom).toHaveBeenCalledWith("profiles");
       expect(mockUpsert).toHaveBeenCalledTimes(1);
@@ -196,6 +344,10 @@ describe("pushChanges", () => {
           executionOrder.push("initial-auth");
           return Promise.resolve("current-user");
         })
+        .mockImplementationOnce((): Promise<string> => {
+          executionOrder.push("scoped-auth");
+          return Promise.resolve("current-user");
+        })
         .mockImplementationOnce((): Promise<string | null> => {
           executionOrder.push("final-auth");
           return Promise.resolve(finalUserId);
@@ -230,6 +382,7 @@ describe("pushChanges", () => {
 
       expect(executionOrder).toEqual([
         "initial-auth",
+        "scoped-auth",
         "upsert-start",
         "upsert-complete",
         "final-auth",
@@ -260,91 +413,111 @@ describe("pushChanges", () => {
     expect(mockFrom).toHaveBeenCalledWith("profiles");
   });
 
-  it("acknowledges an accepted account action and all linked local rows", async () => {
-    const actionId = "10000000-0000-4000-8000-000000000001";
-    const accountId = "20000000-0000-4000-8000-000000000002";
-    const transactionId = "30000000-0000-4000-8000-000000000003";
-    const effectId = "40000000-0000-4000-8000-000000000004";
-    const payloadJson = JSON.stringify({
-      accountGuards: [{ accountId, expectedRevision: "0" }],
-      payloadVersion: "account.balance-effects/v1",
-      payload: {
-        domainMutation: {
-          records: [
-            { entity: "account", after: { id: accountId } },
-            { entity: "transaction", after: { id: transactionId } },
-          ],
+  it.each([false, true])(
+    "acknowledges an owned account action with foreign pending rows present: %s",
+    async (hasForeignRows) => {
+      const actionId = "10000000-0000-4000-8000-000000000001";
+      const accountId = "20000000-0000-4000-8000-000000000002";
+      const transactionId = "30000000-0000-4000-8000-000000000003";
+      const effectId = "40000000-0000-4000-8000-000000000004";
+      const payloadJson = JSON.stringify({
+        accountGuards: [{ accountId, expectedRevision: "0" }],
+        payloadVersion: "account.balance-effects/v1",
+        payload: {
+          domainMutation: {
+            records: [
+              { entity: "account", after: { id: accountId } },
+              { entity: "transaction", after: { id: transactionId } },
+            ],
+          },
         },
-      },
-    });
-    const coordinator = {
-      coordinatePush: jest.fn().mockResolvedValue({
-        decisions: [
-          { actionId, disposition: "acknowledge", outcome: null },
-        ],
-      }),
-    };
-    const pushArgs: PushChangesArgs = {
-      changes: {
-        financial_action_groups: {
-          created: [
-            {
-              id: actionId,
-              action_id: actionId,
-              payload_hash: "a".repeat(64),
-              payload_json: payloadJson,
-              state: "accepted",
-            },
-          ],
-          updated: [],
-          deleted: [],
+      });
+      const coordinator = {
+        coordinatePush: jest.fn().mockResolvedValue({
+          decisions: [{ actionId, disposition: "acknowledge", outcome: null }],
+        }),
+      };
+      const pushArgs: PushChangesArgs = {
+        changes: {
+          financial_action_groups: {
+            created: [
+              {
+                id: actionId,
+                user_id: "current-user",
+                action_id: actionId,
+                payload_hash: "a".repeat(64),
+                payload_json: payloadJson,
+                state: "accepted",
+              },
+              ...(hasForeignRows
+                ? [
+                    {
+                      id: "foreign-action",
+                      user_id: "prior-user",
+                      payload_json: "{invalid-json",
+                    },
+                  ]
+                : []),
+            ],
+            updated: [],
+            deleted: [],
+          },
+          account_financial_effects: {
+            created: [
+              { id: effectId, user_id: "current-user", action_id: actionId },
+            ],
+            updated: [],
+            deleted: [],
+          },
+          accounts: {
+            created: [],
+            updated: [
+              {
+                id: accountId,
+                user_id: "current-user",
+                balance: 100,
+                financial_revision: "1",
+                deleted: false,
+              },
+            ],
+            deleted: [],
+          },
+          transactions: {
+            created: [
+              {
+                id: transactionId,
+                user_id: "current-user",
+                deleted: false,
+              },
+            ],
+            updated: [],
+            deleted: [],
+          },
         },
-        account_financial_effects: {
-          created: [{ id: effectId, action_id: actionId }],
-          updated: [],
-          deleted: [],
-        },
-        accounts: {
-          created: [],
-          updated: [
-            {
-              id: accountId,
-              user_id: "current-user",
-              balance: 100,
-              financial_revision: "1",
-              deleted: false,
-            },
-          ],
-          deleted: [],
-        },
-        transactions: {
-          created: [
-            {
-              id: transactionId,
-              user_id: "current-user",
-              deleted: false,
-            },
-          ],
-          updated: [],
-          deleted: [],
-        },
-      },
-      lastPulledAt: 0,
-    };
+        lastPulledAt: 0,
+      };
 
-    await expect(
-      pushChanges(
+      const result = await pushChanges(
         Object.create(null) as PushChangesDatabase,
         pushArgs,
         undefined,
         coordinator
-      )
-    ).resolves.toBeUndefined();
+      );
+      expect(result).toEqual(
+        hasForeignRows
+          ? {
+              experimentalRejectedIds: {
+                financial_action_groups: ["foreign-action"],
+              },
+            }
+          : undefined
+      );
 
-    expect(coordinator.coordinatePush).toHaveBeenCalledTimes(1);
-    expect(mockFrom).not.toHaveBeenCalledWith("accounts");
-    expect(mockFrom).not.toHaveBeenCalledWith("transactions");
-  });
+      expect(coordinator.coordinatePush).toHaveBeenCalledTimes(1);
+      expect(mockFrom).not.toHaveBeenCalledWith("accounts");
+      expect(mockFrom).not.toHaveBeenCalledWith("transactions");
+    }
+  );
 
   it("uses the production owner-scoped RPC before acknowledging an account action", async () => {
     const actionId = "10000000-0000-4000-8000-000000000011";
@@ -369,6 +542,7 @@ describe("pushChanges", () => {
           created: [
             {
               id: actionId,
+              user_id: "current-user",
               action_id: actionId,
               payload_hash: "c".repeat(64),
               payload_json: payloadJson,
@@ -379,13 +553,15 @@ describe("pushChanges", () => {
           deleted: [],
         },
         account_financial_effects: {
-          created: [{ id: effectId, action_id: actionId }],
+          created: [
+            { id: effectId, user_id: "current-user", action_id: actionId },
+          ],
           updated: [],
           deleted: [],
         },
         accounts: {
           created: [],
-          updated: [{ id: accountId }],
+          updated: [{ id: accountId, user_id: "current-user" }],
           deleted: [],
         },
       },
@@ -415,9 +591,7 @@ describe("pushChanges", () => {
     const effectId = "40000000-0000-4000-8000-000000000004";
     const coordinator = {
       coordinatePush: jest.fn().mockResolvedValue({
-        decisions: [
-          { actionId, disposition: "reject", outcome: null },
-        ],
+        decisions: [{ actionId, disposition: "reject", outcome: null }],
       }),
     };
     const pushArgs: PushChangesArgs = {
@@ -426,6 +600,7 @@ describe("pushChanges", () => {
           created: [
             {
               id: actionId,
+              user_id: "current-user",
               action_id: actionId,
               payload_hash: "a".repeat(64),
               payload_json: JSON.stringify({
@@ -444,13 +619,15 @@ describe("pushChanges", () => {
           deleted: [],
         },
         account_financial_effects: {
-          created: [{ id: effectId, action_id: actionId }],
+          created: [
+            { id: effectId, user_id: "current-user", action_id: actionId },
+          ],
           updated: [],
           deleted: [],
         },
         accounts: {
           created: [],
-          updated: [{ id: accountId }],
+          updated: [{ id: accountId, user_id: "current-user" }],
           deleted: [],
         },
       },

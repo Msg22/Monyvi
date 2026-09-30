@@ -354,6 +354,14 @@ describe("Settings live SMS permission recovery", () => {
     ).toBeNull();
   });
 
+  it("opens the cached-rate QA screen from Settings in a development build", async () => {
+    const screen = await renderReadySettings();
+
+    fireEvent.press(screen.getByTestId("startup-qa-rates-settings-link"));
+
+    expect(mockRouterPush).toHaveBeenCalledWith("/startup-qa");
+  });
+
   it("keeps history rescan available when only the ordinary AI allowance is limited", async () => {
     mockHasSynced = true;
     mockSmsAiAvailability = {

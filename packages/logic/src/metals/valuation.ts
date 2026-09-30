@@ -82,6 +82,20 @@ export function calculateMetalReferenceValue(
   return { available: true, valueDecimal: serializeDecimal(value) };
 }
 
+export function calculatePurityGramPriceDecimal(input: {
+  readonly purityFactorDecimal: string;
+  readonly metalUsdPerPureGramDecimal: string;
+  readonly currencyUsdPerUnitDecimal: string;
+}): string | null {
+  const result = calculateMetalReferenceValue({
+    weightGramsDecimal: "1",
+    purityFactorDecimal: input.purityFactorDecimal,
+    metalUsdPerPureGramDecimal: input.metalUsdPerPureGramDecimal,
+    currencyUsdPerUnitDecimal: input.currencyUsdPerUnitDecimal,
+  });
+  return result.available ? result.valueDecimal : null;
+}
+
 export function normalizeUsdPerUnitRate(
   reference: ExactRateReference
 ): Availability<string, RateNormalizationUnavailableReason> {
