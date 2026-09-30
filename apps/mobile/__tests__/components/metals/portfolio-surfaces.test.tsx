@@ -95,6 +95,8 @@ const mockTranslations: Record<string, string> = {
   "status.disposed": "Disposed",
   "rate.missing": "Rates: current rate unavailable",
   "rate.stale": "Last available price",
+  "rate.short_stale": "Last available",
+  "rate.short_unknown": "Age unknown",
   "portfolio.allocation_accessibility":
     "Portfolio allocation: {{goldShare}} gold, {{silverShare}} silver.",
   "portfolio.purity_tile.gold-999": "24K",
@@ -770,6 +772,34 @@ describe("US1 portfolio surfaces", () => {
     ).toHaveTextContent(/Updated today/);
   });
 
+  it("derives the Prices per gram header from the displayed tiles, not holdings", () => {
+    // No active holdings, so the holdings-derived rateStatus is fresh (fresh
+    // currency input only), while the displayed gold tiles are stale.
+    renderPortfolio({
+      portfolio: {
+        ...portfolio,
+        activeHoldings: [],
+        holdings: [],
+        activeTotalDecimal: null,
+        currentPerformanceDecimal: null,
+        allocation: { gold: "0", silver: "0" },
+        listState: "FILTER_EMPTY",
+        rateStatus: { state: "fresh", ageMs: 1_000 },
+        purityPriceTiles: portfolio.purityPriceTiles.map((tile) =>
+          tile.metal === "GOLD" ? { ...tile, state: "stale" as const } : tile
+        ),
+      },
+      selectedFilter: "GOLD",
+      rateProviderObservedAt: new Date(),
+    });
+
+    // The header must carry the stale qualifier from the gold tiles even
+    // though no holding consumes the stale gold input.
+    expect(screen.getByTestId("metal-portfolio-rate-updated")).toHaveTextContent(
+      /Last available/
+    );
+  });
+
   it("speaks last-updated info instead of a current rate for a stale trusted rate", () => {
     renderPortfolio({
       portfolio: {
@@ -815,6 +845,11 @@ describe("US1 portfolio surfaces", () => {
         ...portfolio,
         holdings: portfolio.activeHoldings,
         rateStatus: { state: "missing", ageMs: null },
+        purityPriceTiles: portfolio.purityPriceTiles.map((tile) => ({
+          ...tile,
+          pricePerGramDecimal: null,
+          state: "missing" as const,
+        })),
       },
       rateProviderObservedAt: new Date("2026-08-24T10:30:00.000Z"),
     });
@@ -924,6 +959,11 @@ describe("US1 portfolio surfaces", () => {
         ...portfolio,
         holdings: portfolio.activeHoldings,
         rateStatus: { state: "missing", ageMs: null },
+        purityPriceTiles: portfolio.purityPriceTiles.map((tile) => ({
+          ...tile,
+          pricePerGramDecimal: null,
+          state: "missing" as const,
+        })),
       },
       rateProviderObservedAt: null,
     });
