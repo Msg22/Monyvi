@@ -46,27 +46,17 @@ interface MetalHoldingFormValidationResult {
   readonly requiresUnusualValueAcknowledgment: boolean;
 }
 
-interface MetalHoldingLivePreviewInput {
-  readonly holding: NormalizedMetalHoldingFormData;
-  readonly valuation:
-    | { readonly available: true; readonly valueDecimal: string }
-    | { readonly available: false; readonly reason: "missing_rate" };
-}
-
 interface MetalHoldingFormValidationModule {
   validateMetalHoldingForm(
     data: MetalHoldingFormData,
     context: MetalHoldingFormValidationContext
   ): MetalHoldingFormValidationResult;
-  createMetalHoldingLivePreview(
-    input: MetalHoldingLivePreviewInput
-  ): MetalHoldingLivePreviewInput;
 }
 
 function loadValidationModule(): MetalHoldingFormValidationModule {
-  return jest.requireActual(
+  return jest.requireActual<MetalHoldingFormValidationModule>(
     "../../validation/metal-holding-form-validation"
-  ) as MetalHoldingFormValidationModule;
+  );
 }
 
 const baseForm: MetalHoldingFormData = {
@@ -268,41 +258,6 @@ describe("validateMetalHoldingForm", () => {
       errors: {},
       requiresUnusualValueAcknowledgment: true,
       normalized: { weightGramsDecimal: "900" },
-    });
-  });
-});
-
-describe("createMetalHoldingLivePreview", () => {
-  it("accepts only normalized validated facts and keeps an unavailable valuation explicit without blocking Add", () => {
-    const validation = validate();
-
-    expect(validation.isValid).toBe(true);
-    if (!validation.isValid || validation.normalized === null) {
-      throw new Error("Expected the base Add form to be valid");
-    }
-    const preview = loadValidationModule().createMetalHoldingLivePreview({
-      holding: validation.normalized,
-      valuation: { available: false, reason: "missing_rate" },
-    });
-
-    expect(preview).toEqual({
-      holding: {
-        name: "Wedding coin",
-        metal: "GOLD",
-        weightGramsDecimal: "10.125",
-        purity: {
-          code: "gold-999",
-          catalogVersion: "1",
-          factorDecimal: "0.999",
-          labelKey: "purity_gold_999",
-        },
-        purchasePriceDecimal: "47800",
-        purchaseCurrency: "EGP",
-        purchaseDate: "2024-03-14",
-        physicalForm: "COIN",
-        notes: "هدية 🎁",
-      },
-      valuation: { available: false, reason: "missing_rate" },
     });
   });
 });

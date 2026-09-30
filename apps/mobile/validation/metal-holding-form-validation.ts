@@ -1,5 +1,3 @@
-import { createMetalHoldingLivePreview } from "../services/metal-holding-preview-service";
-
 export type SupportedMetalType = "GOLD" | "SILVER";
 export type MetalPhysicalForm = "COIN" | "BAR" | "JEWELRY";
 
@@ -405,5 +403,3 @@ function compareCanonicalDecimals(left: string, right: string): number {
   if (leftScaled === rightScaled) return 0;
   return leftScaled > rightScaled ? 1 : -1;
 }
-
-export { createMetalHoldingLivePreview };
