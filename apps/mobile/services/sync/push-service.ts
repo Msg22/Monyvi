@@ -49,6 +49,7 @@ import {
   stripMetalActionFragments,
 } from "./ownership-guards";
 import { getChildTableConfig, isWritableTable } from "./table-predicates";
+import { scopePushChangesToUser } from "./push-ownership-service";
 import { transformToSupabase } from "./transforms";
 import type { SupabaseWriteTable, WritableSupabaseTablesNames } from "./types";
 
@@ -710,8 +711,15 @@ export async function pushChanges(
   financialActionPushCoordinator?: FinancialActionPushCoordinator
 ): Promise<SyncPushResult | undefined | void> {
   const userId = await assertExpectedPushUser(expectedUserId);
-  const dedicatedPush = await pushMetalDedicatedChanges(
+  const scoped = await scopePushChangesToUser(
+    database,
     pushArgs.changes,
+    userId
+  );
+  await assertExpectedPushUser(userId);
+  const { changes } = scoped;
+  const dedicatedPush = await pushMetalDedicatedChanges(
+    changes,
     userId,
     defaultMetalRpc,
     (outcome) =>
@@ -729,28 +737,31 @@ export async function pushChanges(
   const protectedFinancialActionIds = mergeRejectedIds(
     dedicatedPush.acknowledgeAllDedicatedRows
       ? undefined
-      : collectDedicatedRejectedIds(pushArgs.changes),
-    collectProtectedFinancialActionRowIds(pushArgs.changes)
+      : collectDedicatedRejectedIds(changes),
+    collectProtectedFinancialActionRowIds(changes)
   );
   const accountActionAcknowledgements =
     await resolveAccountActionAcknowledgements(
-      pushArgs.changes,
+      changes,
       financialActionPushCoordinator
     );
-  const returnedRejectedIds = mergeRejectedIds(
+  const actionRejectedIds = mergeRejectedIds(
     subtractRejectedIds(
       protectedFinancialActionIds,
       accountActionAcknowledgements.handledIds
     ),
     accountActionAcknowledgements.rejectedIds
   );
+  const returnedRejectedIds = mergeRejectedIds(
+    actionRejectedIds,
+    scoped.rejectedIds
+  );
   const metadataOnlyAccountIds = collectAcknowledgedAccountIdsWithMetadata(
-    pushArgs.changes,
+    changes,
     accountActionAcknowledgements.handledIds,
     accountActionAcknowledgements.rejectedIds
   );
 
-  const { changes } = pushArgs;
   for (const [tableName, rawTableChanges] of Object.entries(changes).sort(
     comparePushTableOrder
   )) {
@@ -773,17 +784,20 @@ export async function pushChanges(
     try {
       const hasActiveChildWrites =
         isChildTable &&
-        (tableChanges.created.length > 0 ||
+        (tableChanges.created.some((record) => !isDeletedRecord(record)) ||
           tableChanges.updated.some((record) => !isDeletedRecord(record)));
-      const hasDeletedChildUpdates =
-        isChildTable && tableChanges.updated.some(isDeletedRecord);
+      const hasDeletedChildWrites =
+        isChildTable &&
+        [...tableChanges.created, ...tableChanges.updated].some(
+          isDeletedRecord
+        );
       const hasChildDeletes = isChildTable && tableChanges.deleted.length > 0;
       const activeParentIds =
         childConfig && hasActiveChildWrites
           ? await fetchOwnedParentIds(database, childConfig.parentTable, userId)
           : null;
-      const deleteParentIds =
-        childConfig && (hasChildDeletes || hasDeletedChildUpdates)
+      const localDeleteParentIds =
+        childConfig && (hasChildDeletes || hasDeletedChildWrites)
           ? await fetchOwnedParentIds(
               database,
               childConfig.parentTable,
@@ -793,6 +807,14 @@ export async function pushChanges(
               }
             )
           : null;
+      const deleteParentIds = childConfig
+        ? [
+            ...new Set([
+              ...(localDeleteParentIds ?? []),
+              ...(scoped.tombstoneParentIds.get(table) ?? []),
+            ]),
+          ]
+        : null;
 
       const upsertRecords = async (
         records: ReadonlyArray<Record<string, unknown>>
