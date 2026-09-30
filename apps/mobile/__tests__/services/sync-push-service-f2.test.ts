@@ -223,12 +223,24 @@ interface ScopedDatabase {
 function makeScopedDatabase(
   fetchedRoots: readonly LocalActionRoot[]
 ): ScopedDatabase {
+  // Owned holdings are proven through the `assets` parent lookup, so that table
+  // must answer with holding ids derived from the action roots' domain
+  // reference. Returning the roots for every table would resolve the parent
+  // lookup to action ids and reject the owned `asset_metals` rows.
+  const ownedAssets = fetchedRoots.map((root) => ({
+    id: root.domainReferenceId,
+  }));
   const queryArgs: unknown[][] = [];
-  const queryMock = jest.fn((...args: readonly unknown[]) => {
-    queryArgs.push([...args]);
-    return { fetch: jest.fn().mockResolvedValue(fetchedRoots) };
-  });
-  const getMock = jest.fn(() => ({ query: queryMock }));
+  const getMock = jest.fn((table: string) => ({
+    query: jest.fn((...args: readonly unknown[]) => {
+      queryArgs.push([...args]);
+      return {
+        fetch: jest
+          .fn()
+          .mockResolvedValue(table === "assets" ? ownedAssets : fetchedRoots),
+      };
+    }),
+  }));
   const database = { get: getMock } as unknown as PushChangesDatabase;
   return { database, getMock, queryArgs };
 }
@@ -282,7 +294,11 @@ describe("pushChanges F2 - absent-predecessor terminal acknowledgment", () => {
       localRoot(ids, { state: "accepted", serverOutcome: "accepted" }),
     ]);
     mockRpc.mockResolvedValue({
-      data: { actionId: ids.actionIdA2, status: "accepted", holdingRevision: "0" },
+      data: {
+        actionId: ids.actionIdA2,
+        status: "accepted",
+        holdingRevision: "0",
+      },
       error: null,
     });
 
@@ -313,7 +329,11 @@ describe("pushChanges F2 - absent-predecessor terminal acknowledgment", () => {
       localRoot(ids, { state: "reconciled", serverOutcome: "stale" }),
     ]);
     mockRpc.mockResolvedValue({
-      data: { actionId: ids.actionIdA2, status: "accepted", holdingRevision: "0" },
+      data: {
+        actionId: ids.actionIdA2,
+        status: "accepted",
+        holdingRevision: "0",
+      },
       error: null,
     });
 
@@ -347,7 +367,11 @@ describe("pushChanges F2 - absent-predecessor terminal acknowledgment", () => {
       }),
     ]);
     mockRpc.mockResolvedValue({
-      data: { actionId: ids.actionIdA2, status: "accepted", holdingRevision: "0" },
+      data: {
+        actionId: ids.actionIdA2,
+        status: "accepted",
+        holdingRevision: "0",
+      },
       error: null,
     });
 
@@ -390,7 +414,11 @@ describe("pushChanges F2 - absent-predecessor terminal acknowledgment", () => {
       localRoot(ids, { state: "sync_pending", serverOutcome: null }),
     ]);
     mockRpc.mockResolvedValue({
-      data: { actionId: ids.actionIdA2, status: "accepted", holdingRevision: "0" },
+      data: {
+        actionId: ids.actionIdA2,
+        status: "accepted",
+        holdingRevision: "0",
+      },
       error: null,
     });
 
@@ -428,7 +456,11 @@ describe("pushChanges F2 - absent-predecessor terminal acknowledgment", () => {
       localRoot(ids, { state: "accepted", serverOutcome: "accepted" }),
     ]);
     mockRpc.mockResolvedValue({
-      data: { actionId: ids.actionIdA2, status: "accepted", holdingRevision: "0" },
+      data: {
+        actionId: ids.actionIdA2,
+        status: "accepted",
+        holdingRevision: "0",
+      },
       error: null,
     });
     const changes = buildExactA2Changes(ids);

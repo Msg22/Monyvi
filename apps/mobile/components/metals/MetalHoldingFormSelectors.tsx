@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import React from "react";
+import { useTranslation } from "react-i18next";
 import { Text, TouchableOpacity, View } from "react-native";
 
 import { palette } from "@/constants/colors";
@@ -24,6 +25,9 @@ export function MetalSelector({
   readonly isLocked: boolean;
   readonly isDisabled: boolean;
 }): React.JSX.Element {
+  const { t } = useTranslation("common");
+  const isRequired = !isLocked;
+
   return (
     <View
       testID="metal-holding-metal-field"
@@ -31,6 +35,7 @@ export function MetalSelector({
     >
       <Text className="mb-1 text-sm font-normal text-text-secondary dark:text-text-secondary-dark">
         {copy.metal}
+        {isRequired ? <Text className="text-red-500">{" *"}</Text> : null}
       </Text>
       {isLocked ? (
         <>
@@ -65,6 +70,10 @@ export function MetalSelector({
                 testID={`metal-holding-metal-option-${metal}`}
                 accessibilityRole="radio"
                 accessibilityState={{ checked: isSelected }}
+                accessibilityLabel={`${copy.metal}: ${
+                  metal === "GOLD" ? copy.gold : copy.silver
+                }`}
+                accessibilityHint={isRequired ? t("required_field") : undefined}
                 disabled={isDisabled}
                 onPress={() => onChange("metal", metal)}
                 className={`min-h-11 flex-1 flex-row items-center justify-center gap-2 border ${

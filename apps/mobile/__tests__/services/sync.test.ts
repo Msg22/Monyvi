@@ -23,6 +23,7 @@ const mockWatermelonWhere = jest.fn((column: string, value: unknown) => ({
 }));
 const mockWatermelonNotEq = jest.fn((value: unknown) => ({ notEq: value }));
 const mockForeignProfilesFetch = jest.fn();
+const mockOwnedTombstonesFetch = jest.fn();
 const mockProfileQuery = jest.fn();
 const mockDatabaseGet = jest.fn();
 const mockDatabaseWrite = jest.fn();
@@ -63,6 +64,10 @@ jest.mock("@nozbe/watermelondb/sync", () => ({
 
 jest.mock("@nozbe/watermelondb", () => ({
   Q: {
+    unsafeSqlQuery: (sql: string, values: unknown): unknown => ({
+      sql,
+      values,
+    }),
     notEq: (value: unknown): unknown => mockWatermelonNotEq(value),
     where: (column: string, value: unknown): unknown =>
       mockWatermelonWhere(column, value),
@@ -150,7 +155,11 @@ beforeEach(() => {
   });
   mockSupabaseTable();
   mockForeignProfilesFetch.mockResolvedValue([]);
-  mockProfileQuery.mockReturnValue({ fetch: mockForeignProfilesFetch });
+  mockProfileQuery.mockReturnValue({
+    fetch: mockForeignProfilesFetch,
+    unsafeFetchRaw: mockOwnedTombstonesFetch,
+  });
+  mockOwnedTombstonesFetch.mockResolvedValue([]);
   mockDatabaseGet.mockReturnValue({ query: mockProfileQuery });
   mockDatabaseWrite.mockImplementation(async (writer: () => Promise<void>) => {
     await writer();
@@ -449,6 +458,7 @@ describe("syncDatabase", () => {
   });
 
   it("rejects push soft-delete errors so WatermelonDB keeps the delete dirty", async () => {
+    mockOwnedTombstonesFetch.mockResolvedValue([{ id: "profile-1" }]);
     mockUpdateIn.mockResolvedValue({ error: { message: "delete failed" } });
     mockSynchronize.mockImplementation(
       async (args: {
@@ -473,7 +483,7 @@ describe("syncDatabase", () => {
     await expect(syncDatabase(mockDatabase)).rejects.toThrow("delete failed");
   });
 
-  it("rejects foreign dirty rows instead of pushing them as the authenticated user", async () => {
+  it("defers foreign dirty rows instead of pushing them as the authenticated user", async () => {
     mockSynchronize.mockImplementation(
       async (args: {
         pushChanges: (input: {
@@ -494,15 +504,13 @@ describe("syncDatabase", () => {
       }
     );
 
-    await expect(syncDatabase(mockDatabase)).rejects.toThrow(
-      "Refusing to sync foreign local changes"
-    );
+    await expect(syncDatabase(mockDatabase)).resolves.toBeUndefined();
     expect(mockUpsert).not.toHaveBeenCalled();
   });
 
   it("scopes child-table deletes through current-user parents even when the parent is soft-deleted", async () => {
-    mockForeignProfilesFetch.mockResolvedValue([
-      { id: "account-1", user_id: "current-user", deleted: true },
+    mockOwnedTombstonesFetch.mockResolvedValue([
+      { id: "sender-1", parent_id: "account-1" },
     ]);
     mockUpdateIn.mockResolvedValue({ error: null });
     mockSynchronize.mockImplementation(
@@ -527,16 +535,19 @@ describe("syncDatabase", () => {
 
     await expect(syncDatabase(mockDatabase)).resolves.toBeUndefined();
 
-    expect(mockDatabaseGet).toHaveBeenCalledWith("accounts");
-    expect(mockWatermelonWhere).toHaveBeenCalledWith("user_id", "current-user");
-    expect(mockWatermelonWhere).not.toHaveBeenCalledWith("deleted", false);
+    // Delete ownership is proven from the child tombstone itself, joined to its
+    // owned parent row, so the parent lookup never goes through `Q.where`.
+    expect(mockProfileQuery).toHaveBeenCalledWith({
+      sql: 'SELECT child.id, child."account_id" AS parent_id FROM "account_sms_senders" AS child JOIN "accounts" AS parent ON child."account_id" = parent.id WHERE child._status = ? AND parent.user_id = ?',
+      values: ["deleted", "current-user"],
+    });
     expect(mockUpdateScopedIn).toHaveBeenCalledWith("account_id", [
       "account-1",
     ]);
     expect(mockUpdateIn).toHaveBeenCalledWith("id", ["sender-1"]);
   });
 
-  it("rejects child-table inserts when the parent is foreign", async () => {
+  it("defers child-table inserts when the parent is foreign", async () => {
     mockForeignProfilesFetch.mockResolvedValue([
       { id: "account-current", user_id: "current-user", deleted: false },
     ]);
@@ -560,13 +571,11 @@ describe("syncDatabase", () => {
       }
     );
 
-    await expect(syncDatabase(mockDatabase)).rejects.toThrow(
-      "Refusing to sync foreign local changes"
-    );
+    await expect(syncDatabase(mockDatabase)).resolves.toBeUndefined();
     expect(mockInsert).not.toHaveBeenCalled();
   });
 
-  it("rejects child-table inserts when the parent is soft-deleted", async () => {
+  it("defers active child-table inserts when the parent is soft-deleted", async () => {
     mockForeignProfilesFetch.mockResolvedValue([]);
     mockSynchronize.mockImplementation(
       async (args: {
@@ -588,12 +597,39 @@ describe("syncDatabase", () => {
       }
     );
 
-    await expect(syncDatabase(mockDatabase)).rejects.toThrow(
-      "Refusing to sync foreign local changes"
-    );
+    await expect(syncDatabase(mockDatabase)).resolves.toBeUndefined();
     expect(mockWatermelonWhere).toHaveBeenCalledWith("deleted", false);
     expect(mockInsert).not.toHaveBeenCalled();
   });
+
+  it.each([null, "", 7])(
+    "rejects malformed child parent reference %s",
+    async (parentId) => {
+      mockSynchronize.mockImplementation(
+        async (args: {
+          pushChanges: (input: {
+            changes: Record<string, unknown>;
+            lastPulledAt: number;
+          }) => Promise<unknown>;
+        }): Promise<void> => {
+          await args.pushChanges({
+            changes: {
+              asset_metals: {
+                created: [{ id: "invalid-child", asset_id: parentId }],
+                updated: [],
+                deleted: [],
+              },
+            },
+            lastPulledAt: 0,
+          });
+        }
+      );
+      await expect(syncDatabase(mockDatabase)).rejects.toThrow(
+        "Refusing to sync foreign local changes for asset_metals"
+      );
+      expect(mockUpsert).not.toHaveBeenCalled();
+    }
+  );
 
   it("pushes parent account rows before new SMS sender child rows", async () => {
     mockForeignProfilesFetch.mockResolvedValue([
@@ -657,6 +693,9 @@ describe("syncDatabase", () => {
   });
 
   it("pushes same-table deletions before replacement creates", async () => {
+    mockOwnedTombstonesFetch.mockResolvedValue([
+      { id: "account-hard-deleted" },
+    ]);
     mockUpsert.mockResolvedValue({ error: null });
     mockUpdateIn.mockResolvedValue({ error: null });
     mockSynchronize.mockImplementation(

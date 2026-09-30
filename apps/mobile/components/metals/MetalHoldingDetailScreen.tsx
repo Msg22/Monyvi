@@ -245,7 +245,8 @@ function ReconciliationStatus({
   if (
     state === "accepted" ||
     state === "reconciled" ||
-    state === "sync_pending"
+    state === "sync_pending" ||
+    state === "local_complete"
   ) {
     return null;
   }
@@ -255,9 +256,7 @@ function ReconciliationStatus({
       ? "reconciliation.sync_failed"
       : state === "reconciliation_incomplete"
         ? "reconciliation.incomplete"
-        : state === "local_complete"
-          ? "reconciliation.local_complete"
-          : null;
+        : null;
   if (key === null) return null;
 
   return (

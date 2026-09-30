@@ -110,13 +110,15 @@ jobs:
     if: >-
       github.event_name == 'pull_request' && (github.event.pull_request.base.ref
       == 'main' || github.event.pull_request.base.ref ==
-      'codex/035-metals-module-redesign' || github.event.pull_request.base.ref ==
-      'codex/issue282-realized-metal-sale-results' || github.event.pull_request.base.ref ==
+      'codex/035-metals-module-redesign' || github.event.pull_request.base.ref
+      == 'codex/issue282-realized-metal-sale-results' ||
+      github.event.pull_request.base.ref ==
       'codex/035-metals-slice5-integration')
     runs-on: ubuntu-latest
     timeout-minutes: 65
     env:
       SENTRYCLI_SKIP_DOWNLOAD: "1"
+      SUPABASE_INTERNAL_IMAGE_REGISTRY: ghcr.io
     steps:
       - name: Checkout code
         uses: actions/checkout@v4

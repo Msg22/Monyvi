@@ -326,19 +326,71 @@ describe("MetalHoldingForm - Additional UI polish", () => {
       />
     );
 
-    // Required fields: name, weight, purity, purchasePrice, purchaseCurrency, purchaseDate
+    // Required fields: name, metal, weight, purity, purchasePrice,
+    // purchaseCurrency, purchaseDate
     expect(screen.getByText("Holding name *")).toBeTruthy();
+    expect(screen.getByText("Metal *")).toBeTruthy();
     expect(screen.getByText("Weight *")).toBeTruthy();
     expect(screen.getByText("Karat *")).toBeTruthy();
     expect(screen.getByText("Total purchase price *")).toBeTruthy();
     expect(screen.getByText("Purchase currency *")).toBeTruthy();
     expect(screen.getByText("Purchase date *")).toBeTruthy();
 
+    expect(screen.getByTestId("metal-holding-metal-option-GOLD")).toHaveProp(
+      "accessibilityLabel",
+      "Metal: Gold"
+    );
+    expect(screen.getByTestId("metal-holding-metal-option-GOLD")).toHaveProp(
+      "accessibilityHint",
+      "required_field"
+    );
+    expect(screen.getByTestId("metal-holding-metal-option-SILVER")).toHaveProp(
+      "accessibilityLabel",
+      "Metal: Silver"
+    );
+    expect(screen.getByTestId("metal-holding-metal-option-SILVER")).toHaveProp(
+      "accessibilityHint",
+      "required_field"
+    );
+
     // Optional fields should NOT have asterisk
     expect(screen.getByText("Physical form")).toBeTruthy();
     expect(screen.queryByText("Physical form *")).toBeNull();
     expect(screen.getByText("Notes (optional)")).toBeTruthy();
     expect(screen.queryByText("Notes (optional) *")).toBeNull();
+  });
+
+  it("keeps locked Edit Metal as a non-required display", () => {
+    render(
+      <MetalHoldingForm
+        mode="edit"
+        locale="en"
+        isRtl={false}
+        width={390}
+        fontScale={1}
+        bottomInset={24}
+        values={{
+          name: "Bar",
+          metal: "GOLD",
+          weightGrams: "10",
+          purityCode: "gold-999",
+          purchasePrice: "50000",
+          purchaseCurrency: "EGP",
+          purchaseDate: "2024-03-14",
+          physicalForm: "BAR",
+          notes: "",
+        }}
+        copy={COPY}
+        preview={DEFAULT_PREVIEW}
+        onChange={jest.fn()}
+        onSubmit={jest.fn()}
+        onRequestExit={jest.fn()}
+      />
+    );
+
+    expect(screen.getByTestId("metal-holding-metal-locked")).toBeTruthy();
+    expect(screen.getByText("Metal")).toBeTruthy();
+    expect(screen.queryByText("Metal *")).toBeNull();
   });
 
   it("uses brighter theme tokens in dark mode for helper copy", () => {
@@ -416,7 +468,7 @@ describe("MetalHoldingForm - Additional UI polish", () => {
   });
 });
 
-describe("MetalHoldingDetailScreen - sync_pending removal", () => {
+describe("MetalHoldingDetailScreen - passive sync status removal", () => {
   it("does NOT render reconciliation message banner when state is sync_pending", () => {
     render(
       <MetalHoldingDetailScreen
@@ -430,6 +482,21 @@ describe("MetalHoldingDetailScreen - sync_pending removal", () => {
     );
 
     expect(screen.queryByText("reconciliation.sync_pending")).toBeNull();
+  });
+
+  it("does NOT render an inline saved-on-device banner for local_complete", () => {
+    render(
+      <MetalHoldingDetailScreen
+        actions={[]}
+        error={null}
+        isLoading={false}
+        isOffline={false}
+        model={detailModel("local_complete")}
+        onRetry={jest.fn()}
+      />
+    );
+
+    expect(screen.queryByText("reconciliation.local_complete")).toBeNull();
   });
 
   it("renders incomplete banner with retry when reconciliation is incomplete", () => {
