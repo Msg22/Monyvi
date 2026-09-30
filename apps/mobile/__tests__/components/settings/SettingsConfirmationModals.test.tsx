@@ -5,7 +5,7 @@ import { SettingsConfirmationModals } from "@/components/settings/SettingsConfir
 
 jest.mock("@/components/modals/ConfirmationModal", () => {
   const { Text } =
-    require("react-native") as typeof import("react-native");
+    jest.requireActual<typeof import("react-native")>("react-native");
 
   return {
     ConfirmationModal: ({
@@ -63,8 +63,8 @@ describe("SettingsConfirmationModals", () => {
       );
 
       expect(
-        screen.getByTestId("confirmation-rescan_title").props.children
-      ).toBe(`rescan_message:${lookbackDays}`);
+        screen.getByText(`rescan_message:${lookbackDays}`)
+      ).toBeTruthy();
     }
   );
 });
