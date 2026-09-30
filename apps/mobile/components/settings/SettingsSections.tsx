@@ -186,6 +186,7 @@ export function SmsSyncSettingsSection({
   chevronColor,
   onIncrementalSync,
   onHistoryRescanPress,
+  lookbackDays,
   historyRescanAvailableAt,
   language = "en",
 }: {
@@ -194,6 +195,7 @@ export function SmsSyncSettingsSection({
   readonly chevronColor: string;
   readonly onIncrementalSync: () => void;
   readonly onHistoryRescanPress: () => void;
+  readonly lookbackDays: number;
   readonly historyRescanAvailableAt?: string | null;
   readonly language?: string;
 }): React.JSX.Element {
@@ -221,7 +223,7 @@ export function SmsSyncSettingsSection({
               {t("sync_new")}
             </Text>
             <Text className="text-xs text-slate-500 dark:text-slate-400">
-              {t("sync_new_description")}
+              {t("sync_new_description", { days: lookbackDays })}
             </Text>
           </View>
         </View>
@@ -255,7 +257,7 @@ export function SmsSyncSettingsSection({
               </Text>
               <Text className="text-xs text-slate-500 dark:text-slate-400">
                 {historyRescanAvailability === null
-                  ? t("rescan_recent_description")
+                  ? t("rescan_recent_description", { days: lookbackDays })
                   : t("rescan_recent_available_at", {
                       date: historyRescanAvailability,
                     })}

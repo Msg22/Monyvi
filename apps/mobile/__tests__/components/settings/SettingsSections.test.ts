@@ -15,10 +15,14 @@ const t = jest.fn((key: string, opts?: Record<string, unknown>): string => {
   return date ? `${key}:${date}` : key;
 });
 
+type SmsSyncSettingsSectionProps = React.ComponentProps<
+  typeof SmsSyncSettingsSection
+>;
+
 function createSmsSyncSectionProps(
   lookbackDays: number,
-  overrides: Readonly<Record<string, unknown>> = {}
-): Readonly<Record<string, unknown>> {
+  overrides: Readonly<Partial<SmsSyncSettingsSectionProps>> = {}
+): SmsSyncSettingsSectionProps {
   return {
     t,
     hasSynced: true,

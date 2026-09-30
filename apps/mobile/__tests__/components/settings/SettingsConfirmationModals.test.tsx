@@ -1,5 +1,4 @@
 import React, { type ReactNode } from "react";
-import { Text } from "react-native";
 import { render, screen } from "@testing-library/react-native";
 
 import { SettingsConfirmationModals } from "@/components/settings/SettingsConfirmationModals";
@@ -29,7 +28,11 @@ const t = (key: string, opts?: Record<string, unknown>): string => {
   return days === null ? key : `${key}:${days}`;
 };
 
-function createProps(lookbackDays: number): Readonly<Record<string, unknown>> {
+type SettingsConfirmationModalsProps = React.ComponentProps<
+  typeof SettingsConfirmationModals
+>;
+
+function createProps(lookbackDays: number): SettingsConfirmationModalsProps {
   return {
     dismissForceLogoutError: jest.fn(),
     dismissSyncWarning: jest.fn(),

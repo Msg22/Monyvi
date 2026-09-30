@@ -27,6 +27,7 @@ import {
   resolveSmsScanWindowStart,
 } from "../_shared/sms-ai-safeguard-service.ts";
 import { createConfiguredSmsAiProvider } from "../_shared/sms-ai/sms-ai-provider-factory.ts";
+import { isSmsAiProviderResponseOutputCaptureEnabled } from "../_shared/sms-ai/sms-ai-provider-config.ts";
 import { executeSmsAiProvider } from "../_shared/sms-ai/sms-ai-provider-executor.ts";
 import {
   buildSmsAiDynamicCategoryContext,
@@ -116,10 +117,22 @@ async function getProcessingOutcomes(
   );
 }
 
+const isProviderResponseOutputCaptureEnabled =
+  isSmsAiProviderResponseOutputCaptureEnabled(Deno.env.get);
+
 const smsAiProvider = createConfiguredSmsAiProvider(Deno.env.get, {
   log: (event, metadata) => {
     console.warn(`[parse-sms] ${event}`, metadata);
   },
+  ...(isProviderResponseOutputCaptureEnabled
+    ? {
+        onResponseOutput: (responseContent: string): void => {
+          console.warn("[parse-sms] smsAi.providerResponseOutput", {
+            responseContent,
+          });
+        },
+      }
+    : {}),
 });
 
 const parseSmsHandler = createParseSmsHandler({

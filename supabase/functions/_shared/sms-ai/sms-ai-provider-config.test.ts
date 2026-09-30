@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-import * as smsAiProviderConfigModule from "./sms-ai-provider-config.ts";
 import {
+  isSmsAiProviderResponseOutputCaptureEnabled,
   readSmsAiProviderConfig,
   type GetSmsAiEnvironmentValue,
 } from "./sms-ai-provider-config.ts";
@@ -175,17 +175,7 @@ test("fails closed on malformed approved-model lists", () => {
 function readResponseOutputCaptureFlag(
   getEnvironmentValue: GetSmsAiEnvironmentValue
 ): boolean {
-  const candidate = (
-    smsAiProviderConfigModule as unknown as Readonly<Record<string, unknown>>
-  ).isSmsAiProviderResponseOutputCaptureEnabled;
-  assert.equal(
-    typeof candidate,
-    "function",
-    "expected an exported response-output debug guard"
-  );
-  return (
-    candidate as (getValue: GetSmsAiEnvironmentValue) => boolean
-  )(getEnvironmentValue);
+  return isSmsAiProviderResponseOutputCaptureEnabled(getEnvironmentValue);
 }
 
 test("enables response-output capture only for exact development+true flags", () => {
@@ -261,8 +251,6 @@ test("parse-sms composes response-output capture as a separate opt-in event", ()
   );
 
   assert.match(source, /isSmsAiProviderResponseOutputCaptureEnabled/);
-  assert.match(source, /SMS_AI_RUNTIME_ENV/);
-  assert.match(source, /SMS_AI_DEBUG_RESPONSE_OUTPUT/);
   assert.match(source, /onResponseOutput/);
   assert.match(source, /smsAi\.providerResponseOutput/);
   assert.match(source, /responseContent/);

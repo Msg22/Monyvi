@@ -10,6 +10,15 @@ export interface SmsAiProviderConfig {
 
 export type GetSmsAiEnvironmentValue = (name: string) => string | undefined;
 
+export function isSmsAiProviderResponseOutputCaptureEnabled(
+  getEnvironmentValue: GetSmsAiEnvironmentValue
+): boolean {
+  return (
+    getEnvironmentValue("SMS_AI_RUNTIME_ENV") === "development" &&
+    getEnvironmentValue("SMS_AI_DEBUG_RESPONSE_OUTPUT") === "true"
+  );
+}
+
 function readRequiredValue(
   getEnvironmentValue: GetSmsAiEnvironmentValue,
   name: string

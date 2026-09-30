@@ -36,6 +36,21 @@ Do not configure a provider endpoint URL. The approved DeepInfra endpoint is fix
 
 Do not remove `GEMINI_API_KEY` globally: voice and SMS category enrichment still use Gemini.
 
+### Development-only provider response-output capture
+
+Provider response-content capture is a temporary development diagnostic exception and is **off by default**. Enable it only when both values match exactly:
+
+~~~text
+SMS_AI_RUNTIME_ENV=development
+SMS_AI_DEBUG_RESPONSE_OUTPUT=true
+~~~
+
+Any missing, blank, differently cased, whitespace-padded, or non-development value keeps capture disabled. When enabled, `parse-sms` writes a separate `smsAi.providerResponseOutput` Edge log event containing only `responseContent`, the validated DeepInfra assistant string from `choices[0].message.content`, before Monyvi semantic filtering. The captured output can contain transaction or other financial details, so use it only with approved development/test data and only for the shortest diagnostic window needed.
+
+The diagnostic event never includes the request prompt/messages, raw input SMS, API key, auth headers, user/account IDs, fingerprints, or the complete DeepInfra envelope. Existing `smsAi.providerUsage` logging remains aggregate-only. Failure of the diagnostic callback is isolated from provider execution and must not trigger provider retries or change parse results.
+
+To verify manually, enable both flags in development, run one explicit test parse, and search the Supabase `parse-sms` Logs for `smsAi.providerResponseOutput`. Confirm the event shows the returned JSON content while the aggregate usage event still contains no response or input content. Then disable capture by removing the debug flag or setting `SMS_AI_DEBUG_RESPONSE_OUTPUT=false`; production/runtime values other than exact `development` must deny capture even when the debug flag is `true`.
+
 ## 2. Hosted Supabase configuration
 
 Hosted Edge Functions do not automatically receive values from the local `supabase/functions/.env`; configure hosted values separately.
@@ -149,6 +164,8 @@ Use safe development/test SMS examples covering at least:
 | Provider transient failure | bounded retry, then existing retryable failure behavior |
 
 Also verify that voice entry still follows the existing Gemini path.
+
+For Settings SMS-window copy, verify English and Arabic with the effective client policy rather than a hardcoded number: normal policy renders 30 days; an approved development/QA policy override such as 60 renders 60 in `Sync new SMS` help, `Rescan recent messages` help, and the rescan confirmation. Confirm history-cooldown disabled/availability behavior is unchanged. This check observes the effective policy only; it does not change the repository default 30-day policy.
 
 ## 7. Cost check
 
