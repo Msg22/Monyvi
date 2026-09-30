@@ -47,7 +47,7 @@ SMS_AI_DEBUG_RESPONSE_OUTPUT=true
 
 Any missing, blank, differently cased, whitespace-padded, or non-development value keeps capture disabled. When enabled, `parse-sms` writes a separate `smsAi.providerResponseOutput` Edge log event containing only `responseContent`, the validated DeepInfra assistant string from `choices[0].message.content`, before Monyvi semantic filtering. The captured output can contain transaction or other financial details, so use it only with approved development/test data and only for the shortest diagnostic window needed.
 
-The diagnostic event never includes the request prompt/messages, raw input SMS, API key, auth headers, user/account IDs, fingerprints, or the complete DeepInfra envelope. Existing `smsAi.providerUsage` logging remains aggregate-only. Failure of the diagnostic callback is isolated from provider execution and must not trigger provider retries or change parse results.
+The callback does not read or add request messages/prompts, raw input SMS, API keys, auth headers, user/account IDs, fingerprints, or the complete DeepInfra envelope. However, the captured provider output is the model's returned assistant content and may itself quote or reproduce input SMS/prompt text or financial details. Existing `smsAi.providerUsage` logging remains aggregate-only. Failure of the diagnostic callback is isolated from provider execution and must not trigger provider retries or change parse results.
 
 To verify manually, enable both flags in development, run one explicit test parse, and search the Supabase `parse-sms` Logs for `smsAi.providerResponseOutput`. Confirm the event shows the returned JSON content while the aggregate usage event still contains no response or input content. Then disable capture by removing the debug flag or setting `SMS_AI_DEBUG_RESPONSE_OUTPUT=false`; production/runtime values other than exact `development` must deny capture even when the debug flag is `true`.
 
@@ -139,7 +139,7 @@ For an explicit development-only verification:
 1. send two requests whose stable prefix contains identical Monyvi rules, supported-currency context, and built-in category definitions;
 2. vary a future custom-category tail and/or SMS body only after that stable prefix;
 3. inspect provider usage metadata for `prompt_tokens_details.cached_tokens`;
-4. confirm no raw SMS/prompt text is logged;
+4. confirm ordinary operational logs remain free of raw SMS/prompt text; the explicitly enabled development response-output event described above may contain provider-returned echoes;
 5. confirm both cached and uncached responses pass the same provider-neutral Monyvi semantic validation.
 
 A cache miss is not a functional failure.
