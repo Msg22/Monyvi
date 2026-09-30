@@ -4,18 +4,25 @@ import { render, screen } from "@testing-library/react-native";
 
 import { SettingsConfirmationModals } from "@/components/settings/SettingsConfirmationModals";
 
-jest.mock("@/components/modals/ConfirmationModal", () => ({
-  ConfirmationModal: ({
-    visible,
-    title,
-    message,
-  }: {
-    readonly visible: boolean;
-    readonly title: string;
-    readonly message: string;
-  }): ReactNode =>
-    visible ? <Text testID={`confirmation-${title}`}>{message}</Text> : null,
-}));
+jest.mock("@/components/modals/ConfirmationModal", () => {
+  const { Text } =
+    require("react-native") as typeof import("react-native");
+
+  return {
+    ConfirmationModal: ({
+      visible,
+      title,
+      message,
+    }: {
+      readonly visible: boolean;
+      readonly title: string;
+      readonly message: string;
+    }): ReactNode =>
+      visible ? (
+        <Text testID={`confirmation-${title}`}>{message}</Text>
+      ) : null,
+  };
+});
 
 const t = (key: string, opts?: Record<string, unknown>): string => {
   const days = typeof opts?.days === "number" ? opts.days : null;
