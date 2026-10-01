@@ -31,12 +31,17 @@ function hasExplicitCardLastFourEvidence(body: string, lastFour: string): boolea
 
 function readProhibitedOtherParents(
   categoryTree: string
-): ReadonlyMap<string, string> {
-  const parents = new Map<string, string>();
+): ReadonlyMap<string, string | null> {
+  const parents = new Map<string, string | null>();
   let currentParent: string | null = null;
 
   for (const rawLine of categoryTree.split(/\r?\n/)) {
     const line = rawLine.trim();
+    if (/^(EXPENSE|INCOME)\b/i.test(line)) {
+      currentParent = null;
+      continue;
+    }
+
     const l1Match = line.match(/^L1:\s*(.+)$/);
     if (l1Match) {
       currentParent = l1Match[1].trim() || null;
@@ -44,7 +49,7 @@ function readProhibitedOtherParents(
     }
 
     const l2Match = line.match(/^L2:\s*(.+)$/);
-    if (!l2Match || currentParent === null) {
+    if (!l2Match) {
       continue;
     }
 
@@ -100,15 +105,20 @@ export function groundSmsAiProviderResponse(
       }
     }
 
-    if (typeof transaction.categorySystemName === "string") {
+    if (
+      typeof transaction.categorySystemName === "string" &&
+      prohibitedOtherParents.has(transaction.categorySystemName)
+    ) {
       const parent = prohibitedOtherParents.get(transaction.categorySystemName);
-      if (parent !== undefined) {
-        if (normalized === transaction) {
-          normalized = { ...normalized };
-        }
-        normalized.categorySystemName = parent;
-        hasChanges = true;
+      if (normalized === transaction) {
+        normalized = { ...normalized };
       }
+      if (parent === null) {
+        delete normalized.categorySystemName;
+      } else {
+        normalized.categorySystemName = parent;
+      }
+      hasChanges = true;
     }
 
     return normalized;
