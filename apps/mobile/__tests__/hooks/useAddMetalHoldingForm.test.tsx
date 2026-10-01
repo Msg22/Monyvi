@@ -408,7 +408,7 @@ describe("useAddMetalHoldingForm", () => {
     expect(rates.egpUsdPerUnitDecimal).toBe("0.02");
   });
 
-  it("computes per-gram in preferred EGP while keeping purchase CAD valuation", () => {
+  it("uses the quoted 24K Gold rate for CAD valuation while keeping preferred EGP per-gram price", () => {
     const { result } = renderHook(() =>
       useAddMetalHoldingForm(
         input({
@@ -436,9 +436,11 @@ describe("useAddMetalHoldingForm", () => {
     });
 
     expect(result.current.preview.displayCurrency).toBe("CAD");
+    expect(result.current.preview.purityFactorDecimal).toBe("0.999");
     expect(result.current.preview.valuation).toEqual({
       available: true,
-      valueDecimal: "1065.6",
+      valueDecimal:
+        "1066.6666666666666666666666666666666666666666666667",
     });
     const preferredPreview = result.current.preview as unknown as {
       readonly preferredCurrency?: string;
