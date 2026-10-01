@@ -36,20 +36,35 @@ Do not configure a provider endpoint URL. The approved DeepInfra endpoint is fix
 
 Do not remove `GEMINI_API_KEY` globally: voice and SMS category enrichment still use Gemini.
 
-### Development-only provider response-output capture
+### Development-only provider input/output capture
 
-Provider response-content capture is a temporary development diagnostic exception and is **off by default**. Enable it only when both values match exactly:
+Provider request-input and response-content capture are temporary development diagnostic exceptions and are **off by default**. Enable both only when these values match exactly:
 
 ~~~text
 SMS_AI_RUNTIME_ENV=development
 SMS_AI_DEBUG_RESPONSE_OUTPUT=true
 ~~~
 
-Any missing, blank, differently cased, whitespace-padded, or non-development value keeps capture disabled. When enabled, `parse-sms` writes a separate `smsAi.providerResponseOutput` Edge log event containing only `responseContent`, the validated DeepInfra assistant string from `choices[0].message.content`, before Monyvi semantic filtering. The captured output can contain transaction or other financial details, so use it only with approved development/test data and only for the shortest diagnostic window needed.
+Any missing, blank, differently cased, whitespace-padded, or non-development value keeps both captures disabled.
 
-The callback does not read or add request messages/prompts, raw input SMS, API keys, auth headers, user/account IDs, fingerprints, or the complete DeepInfra envelope. However, the captured provider output is the model's returned assistant content and may itself quote or reproduce input SMS/prompt text or financial details. Existing `smsAi.providerUsage` logging remains aggregate-only. Failure of the diagnostic callback is isolated from provider execution and must not trigger provider retries or change parse results.
+When enabled, `parse-sms` writes two separate Edge log events:
 
-To verify manually, enable both flags in development, run one explicit test parse, and search the Supabase `parse-sms` Logs for `smsAi.providerResponseOutput`. Confirm the event shows the returned JSON content while the aggregate usage event still contains no response or input content. Then disable capture by removing the debug flag or setting `SMS_AI_DEBUG_RESPONSE_OUTPUT=false`; production/runtime values other than exact `development` must deny capture even when the debug flag is `true`.
+- `smsAi.providerRequestInput`: one immutable snapshot per logical admitted provider invocation, emitted immediately before provider execution. It contains only the canonical submitted SMS list shaped as `{ sender, body, date }`. It excludes message IDs, fingerprints, system prompt, category context, response schema, headers, API keys, user/account IDs, and the full HTTP envelope. Internal DeepInfra retries reuse the same outbound request body, so they do not duplicate this input event. The event records invocation intent immediately before provider execution; it is not proof that DeepInfra accepted or processed the HTTP request.
+- `smsAi.providerResponseOutput`: the validated DeepInfra assistant string from `choices[0].message.content`, emitted before Monyvi semantic filtering.
+
+Both events are intentionally sensitive development diagnostics. The request-input event contains actual admitted SMS sender/body/date values, and the returned assistant content may quote or reproduce SMS/input/prompt text or financial details. Use only approved development/test data and keep the exception enabled only for the shortest diagnostic window needed. Existing `smsAi.providerUsage` logging remains aggregate-only. Diagnostic callback failures are isolated from provider execution and must not trigger retries or change parse results.
+
+### Manual diagnostic matrix
+
+| Flags / scenario | Expected request-input event | Expected response-output event |
+| --- | --- | --- |
+| Flags missing or debug flag `false` | none | none |
+| `SMS_AI_RUNTIME_ENV=production` + debug `true` | none | none |
+| Exact `development` + `true`, successful provider response | one logical `smsAi.providerRequestInput` before provider execution | one `smsAi.providerResponseOutput` with returned assistant content |
+| Exact `development` + `true`, internal transient retry then success | one input snapshot for the logical invocation | one output event for the validated successful response |
+| Exact `development` + `true`, provider fails before a valid response | one input snapshot showing invocation intent | no response-output event |
+
+To verify manually, enable both flags in development, run one explicit test parse, and search the Supabase `parse-sms` Logs for both event names. Confirm the input event contains only the admitted `sender`, `body`, and `date` values and that the output event shows the returned assistant JSON. Confirm the aggregate usage event remains free of request/response content. Then disable both captures by removing the debug flag or setting `SMS_AI_DEBUG_RESPONSE_OUTPUT=false`; any runtime value other than exact `development` must deny both captures even when the debug flag is `true`.
 
 ## 2. Hosted Supabase configuration
 
@@ -139,7 +154,7 @@ For an explicit development-only verification:
 1. send two requests whose stable prefix contains identical Monyvi rules, supported-currency context, and built-in category definitions;
 2. vary a future custom-category tail and/or SMS body only after that stable prefix;
 3. inspect provider usage metadata for `prompt_tokens_details.cached_tokens`;
-4. confirm ordinary operational logs remain free of raw SMS/prompt text; the explicitly enabled development response-output event described above may contain provider-returned echoes;
+4. confirm ordinary operational logs remain free of raw SMS/prompt text; the explicitly enabled development request-input/output events described above are the temporary exception and may contain actual SMS data or provider-returned echoes;
 5. confirm both cached and uncached responses pass the same provider-neutral Monyvi semantic validation.
 
 A cache miss is not a functional failure.

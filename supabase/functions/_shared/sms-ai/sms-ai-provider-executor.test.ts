@@ -6,32 +6,13 @@ import type {
   ExecuteSmsProviderInput,
   SmsAiProvider,
   SmsAiProviderRequest,
-  SmsProviderExecutionResult,
 } from "./sms-ai-provider.ts";
 import type { SmsAiProviderConfig } from "./sms-ai-provider-config.ts";
-import { executeSmsAiProvider } from "./sms-ai-provider-executor.ts";
+import {
+  executeSmsAiProvider,
+  type SmsAiProviderRequestInputMessage,
+} from "./sms-ai-provider-executor.ts";
 import { DeepInfraSmsProvider } from "./providers/deepinfra-sms-provider.ts";
-
-interface ProviderRequestSmsDiagnostic {
-  readonly sender: string;
-  readonly body: string;
-  readonly date: string;
-}
-
-interface ProviderRequestDiagnostics {
-  readonly onRequestInput?: (
-    smsMessages: readonly ProviderRequestSmsDiagnostic[]
-  ) => void;
-}
-
-type ExecuteSmsAiProviderWithDiagnostics = (
-  provider: SmsAiProvider,
-  input: ExecuteSmsProviderInput,
-  diagnostics?: ProviderRequestDiagnostics
-) => Promise<SmsProviderExecutionResult>;
-
-const executeWithDiagnostics =
-  executeSmsAiProvider as unknown as ExecuteSmsAiProviderWithDiagnostics;
 
 const INPUT: ExecuteSmsProviderInput = {
   messages: [
@@ -86,18 +67,18 @@ function deepInfraResponse(
 
 test("captures only admitted sender/body/date before the provider request", async () => {
   const order: string[] = [];
-  const diagnostics: Array<readonly ProviderRequestSmsDiagnostic[]> = [];
-  let outboundRequest: SmsAiProviderRequest | null = null;
+  const diagnostics: Array<readonly SmsAiProviderRequestInputMessage[]> = [];
+  const outboundRequests: SmsAiProviderRequest[] = [];
 
   const provider: SmsAiProvider = {
     execute: async (request) => {
       order.push("provider");
-      outboundRequest = request;
+      outboundRequests.push(request);
       return EMPTY_PROVIDER_RESULT;
     },
   };
 
-  const result = await executeWithDiagnostics(provider, INPUT, {
+  const result = await executeSmsAiProvider(provider, INPUT, {
     onRequestInput: (smsMessages) => {
       order.push("diagnostic");
       diagnostics.push(smsMessages);
@@ -126,10 +107,11 @@ test("captures only admitted sender/body/date before the provider request", asyn
   assert.equal(diagnosticJson.includes("fingerprint-secret"), false);
   assert.equal(diagnosticJson.includes("SECRET CATEGORY CONTEXT"), false);
 
-  const outboundChat = outboundRequest?.messages
+  const outboundRequest = outboundRequests[0];
+  assert.ok(outboundRequest);
+  const outboundChat = outboundRequest.messages
     .map((message) => message.content)
     .join("\n");
-  assert.ok(outboundChat);
   for (const message of diagnostics[0]) {
     assert.equal(outboundChat.includes(message.sender), true);
     assert.equal(outboundChat.includes(message.body), true);
@@ -137,6 +119,23 @@ test("captures only admitted sender/body/date before the provider request", asyn
   }
 
   assert.equal(result.completionStatus, "complete");
+  assert.deepEqual(result.transactions, []);
+});
+
+test("runs normally when request-input diagnostics are not configured", async () => {
+  let providerCalls = 0;
+  const provider: SmsAiProvider = {
+    execute: async () => {
+      providerCalls++;
+      return EMPTY_PROVIDER_RESULT;
+    },
+  };
+
+  const result = await executeSmsAiProvider(provider, INPUT);
+
+  assert.equal(providerCalls, 1);
+  assert.equal(result.completionStatus, "complete");
+  assert.equal(result.isResponseSchemaValid, true);
   assert.deepEqual(result.transactions, []);
 });
 
@@ -150,7 +149,7 @@ test("a throwing request-input diagnostic cannot prevent fetch or alter an empty
     },
   };
 
-  const result = await executeWithDiagnostics(provider, INPUT, {
+  const result = await executeSmsAiProvider(provider, INPUT, {
     onRequestInput: () => {
       callbackCalls++;
       throw new Error("diagnostic sink unavailable");
@@ -167,7 +166,7 @@ test("a throwing request-input diagnostic cannot prevent fetch or alter an empty
 test("internal DeepInfra retries reuse one logical request-input diagnostic snapshot", async () => {
   let fetchCalls = 0;
   const fetchBodies: string[] = [];
-  const diagnostics: Array<readonly ProviderRequestSmsDiagnostic[]> = [];
+  const diagnostics: Array<readonly SmsAiProviderRequestInputMessage[]> = [];
   const provider = new DeepInfraSmsProvider(CONFIG, {
     fetch: async (_input, init) => {
       fetchCalls++;
@@ -181,7 +180,7 @@ test("internal DeepInfra retries reuse one logical request-input diagnostic snap
     createTimeoutSignal: () => new AbortController().signal,
   });
 
-  const result = await executeWithDiagnostics(provider, INPUT, {
+  const result = await executeSmsAiProvider(provider, INPUT, {
     onRequestInput: (smsMessages) => {
       diagnostics.push(smsMessages);
     },
@@ -201,16 +200,14 @@ test("parse-sms wires request-input capture only through the existing debug guar
   );
 
   assert.match(source, /isSmsAiProviderResponseOutputCaptureEnabled/);
-  assert.match(source, /onRequestInput/);
-  assert.match(source, /smsAi\.providerRequestInput/);
+  assert.match(source, /smsAi\.providerResponseOutput/);
+  assert.match(
+    source,
+    /const providerRequestDiagnostics:[\s\S]*?isProviderResponseOutputCaptureEnabled[\s\S]*?onRequestInput[\s\S]*?smsAi\.providerRequestInput[\s\S]*?: undefined;/
+  );
   assert.match(source, /smsMessages/);
-
-  const guardedBlock = source.match(
-    /isProviderResponseOutputCaptureEnabled\s*\?\s*\{[\s\S]*?\}\s*:\s*\{\}/
-  )?.[0];
-  assert.ok(guardedBlock);
-  assert.match(guardedBlock, /onResponseOutput/);
-  assert.match(guardedBlock, /onRequestInput/);
-  assert.match(guardedBlock, /smsAi\.providerResponseOutput/);
-  assert.match(guardedBlock, /smsAi\.providerRequestInput/);
+  assert.match(
+    source,
+    /executeSmsAiProvider\(smsAiProvider, input, providerRequestDiagnostics\)/
+  );
 });

@@ -11,14 +11,52 @@ import {
   buildSmsAiResponseSchema,
 } from "./sms-ai-prompt.ts";
 
+export interface SmsAiProviderRequestInputMessage {
+  readonly sender: string;
+  readonly body: string;
+  readonly date: string;
+}
+
+export interface SmsAiProviderDiagnostics {
+  readonly onRequestInput?: (
+    smsMessages: readonly SmsAiProviderRequestInputMessage[]
+  ) => void;
+}
+
+function createRequestInputSnapshot(
+  messages: ExecuteSmsProviderInput["messages"]
+): readonly SmsAiProviderRequestInputMessage[] {
+  return Object.freeze(
+    messages.map((message) =>
+      Object.freeze({
+        sender: message.sender,
+        body: message.body,
+        date: message.date,
+      })
+    )
+  );
+}
+
 export async function executeSmsAiProvider(
   provider: SmsAiProvider,
-  input: ExecuteSmsProviderInput
+  input: ExecuteSmsProviderInput,
+  diagnostics: SmsAiProviderDiagnostics = {}
 ): Promise<SmsProviderExecutionResult> {
-  const raw = await provider.execute({
+  const providerRequest = {
     messages: buildSmsAiProviderMessages(input),
     responseSchema: buildSmsAiResponseSchema(input.supportedCurrencies),
-  });
+  };
+
+  if (diagnostics.onRequestInput !== undefined) {
+    const smsMessages = createRequestInputSnapshot(input.messages);
+    try {
+      diagnostics.onRequestInput(smsMessages);
+    } catch {
+      // Development-only diagnostics must never alter provider behavior.
+    }
+  }
+
+  const raw = await provider.execute(providerRequest);
 
   if (raw.completionStatus !== "complete") {
     return {
