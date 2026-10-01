@@ -71,10 +71,14 @@ describe("PR #271 validated Metals review regressions", () => {
     expect(service).toContain("input.accountsValueDecimal === null");
   });
 
-  it("does not publish inert detail action descriptors before action routes are integrated", () => {
+  it("publishes only the Delete detail action after its route is integrated", () => {
     const value = source("app/(private)/metals/[id].tsx");
-    expect(value).not.toContain("getHoldingActionDescriptors");
-    expect(value).toContain("actions={[]}");
+    expect(value).toContain("createDeleteHoldingActionDescriptor");
+    expect(value).toContain(
+      'available.some((action) => action.id === "delete")'
+    );
+    expect(value).toContain('if (action !== "delete" || !holdingId) return;');
+    expect(value).toContain("actions={actions}");
   });
 
   it("pages History holdings without globally truncating lifecycle chains", () => {
