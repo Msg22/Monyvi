@@ -124,6 +124,22 @@ test("removes cardLast4 derived only from account or transfer-reference digits",
   }
 });
 
+test("removes a model card suffix that conflicts with explicit card evidence in the same SMS", async () => {
+  const result = await executeSmsAiProvider(
+    providerFor([transaction({ cardLast4: "1234" })]),
+    input([
+      message(
+        "message-1",
+        "Purchase EGP 125 using Card **4321 from account 1234"
+      ),
+    ])
+  );
+
+  assert.equal(result.isResponseSchemaValid, true);
+  assert.equal(result.transactions.length, 1);
+  assert.equal("cardLast4" in result.transactions[0]!, false);
+});
+
 test("does not borrow card evidence from another SMS or an unknown messageId", async () => {
   const messages = [
     message("message-1", "Purchase EGP 50 using Card **1234 at Merchant A"),
