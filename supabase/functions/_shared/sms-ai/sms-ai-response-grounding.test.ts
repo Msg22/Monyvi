@@ -241,6 +241,82 @@ test("normalizes prohibited *_other categories to the actual accessible L1 paren
   assert.equal(derivedParent.transactions[0]?.categorySystemName, "custom_parent");
 });
 
+test("does not carry an EXPENSE parent into an orphan INCOME *_other child", async () => {
+  const categoryTree = `EXPENSE categories:
+  L1: shopping
+    L2: clothes
+INCOME categories:
+    L2: income_other`;
+
+  const result = await executeSmsAiProvider(
+    providerFor([
+      transaction({
+        type: "INCOME",
+        categorySystemName: "income_other",
+      }),
+    ]),
+    input(
+      [
+        message(
+          "message-1",
+          "Completed incoming transfer EGP 100"
+        ),
+      ],
+      categoryTree
+    )
+  );
+
+  assert.equal(result.isResponseSchemaValid, false);
+  assert.deepEqual(result.transactions, []);
+});
+
+test("rejects an orphan prohibited *_other child with no accessible L1 parent", async () => {
+  const categoryTree = `INCOME categories:
+    L2: income_other`;
+
+  const result = await executeSmsAiProvider(
+    providerFor([
+      transaction({
+        type: "INCOME",
+        categorySystemName: "income_other",
+      }),
+    ]),
+    input(
+      [
+        message(
+          "message-1",
+          "Completed incoming transfer EGP 100"
+        ),
+      ],
+      categoryTree
+    )
+  );
+
+  assert.equal(result.isResponseSchemaValid, false);
+  assert.deepEqual(result.transactions, []);
+});
+
+test("preserves an approved custom L1 whose name ends in _other", async () => {
+  const categoryTree = `EXPENSE categories:
+  L1: custom_other`;
+
+  const result = await executeSmsAiProvider(
+    providerFor([
+      transaction({
+        categorySystemName: "custom_other",
+      }),
+    ]),
+    input(
+      [message("message-1", "Completed purchase EGP 125")],
+      categoryTree
+    )
+  );
+
+  assert.equal(result.isResponseSchemaValid, true);
+  assert.equal(result.transactions.length, 1);
+  assert.equal(result.transactions[0]?.categorySystemName, "custom_other");
+});
+
 test("never invents an inaccessible *_other parent and preserves valid custom/L1/L2 categories", async () => {
   const restrictedTree = `EXPENSE categories:
   L1: other
