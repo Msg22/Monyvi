@@ -159,7 +159,13 @@ export function useSmsProviderEvaluation(
   }, [abortActiveRun, userId]);
 
   useEvaluationCleanup(userId, abortActiveRun, setState);
-  useRunElapsedTimer(state.status, userId, activeRunRef, setState);
+  useRunElapsedTimer(
+    state.status,
+    userId,
+    activeRunRef,
+    activeBatchTimingRef,
+    setState
+  );
   const start = useEvaluationStarter(
     input,
     activeRunRef,
@@ -253,6 +259,7 @@ function useRunElapsedTimer(
   status: SmsProviderEvaluationScreenStatus,
   userId: string | null,
   activeRunRef: React.MutableRefObject<ActiveEvaluationRun | null>,
+  activeBatchTimingRef: React.MutableRefObject<ActiveBatchTiming | null>,
   setState: React.Dispatch<React.SetStateAction<EvaluationState>>
 ): void {
   useEffect(() => {
@@ -261,13 +268,44 @@ function useRunElapsedTimer(
       const run = activeRunRef.current;
       if (run === null || run.userId !== userId) return;
       setState((current) =>
-        current.ownerUserId === userId && current.status === "running"
-          ? { ...current, runElapsedMs: elapsedSince(run.startedAtMs) }
-          : current
+        updateRunningElapsed(
+          current,
+          userId,
+          run,
+          activeBatchTimingRef.current
+        )
       );
     }, 1_000);
     return (): void => clearInterval(timer);
-  }, [activeRunRef, setState, status, userId]);
+  }, [activeBatchTimingRef, activeRunRef, setState, status, userId]);
+}
+
+function updateRunningElapsed(
+  current: EvaluationState,
+  userId: string | null,
+  run: ActiveEvaluationRun,
+  batchTiming: ActiveBatchTiming | null
+): EvaluationState {
+  if (current.ownerUserId !== userId || current.status !== "running") {
+    return current;
+  }
+  return {
+    ...current,
+    runElapsedMs: elapsedSince(run.startedAtMs),
+    batches: updateActiveBatchElapsed(current.batches, batchTiming),
+  };
+}
+
+function updateActiveBatchElapsed(
+  batches: readonly SmsProviderEvaluationBatchDetail[],
+  timing: ActiveBatchTiming | null
+): readonly SmsProviderEvaluationBatchDetail[] {
+  if (timing === null) return batches;
+  return batches.map((batch) =>
+    batch.batchNumber === timing.batchNumber && batch.status === "running"
+      ? { ...batch, elapsedMs: elapsedSince(timing.startedAtMs) }
+      : batch
+  );
 }
 
 function useEvaluationStarter(
