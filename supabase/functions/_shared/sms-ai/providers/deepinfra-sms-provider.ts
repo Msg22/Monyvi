@@ -278,18 +278,18 @@ export class DeepInfraSmsProvider implements SmsAiProvider {
         let payload: unknown;
         try {
           payload = await response.json();
-        } catch {
-          const error = new DeepInfraSmsInvalidResponseError();
+        } catch (error: unknown) {
           this.emitAttemptFailure({
             attempt: attempt + 1,
             totalAttempts: DEEPINFRA_SMS_MAX_RETRIES + 1,
             elapsedMs: Date.now() - attemptStartedAtMs,
             timeoutMs: DEEPINFRA_SMS_ATTEMPT_TIMEOUT_MS,
-            errorName: error.name,
+            errorName: getSafeErrorName(error),
+            upstreamStatus: response.status,
             willRetry: false,
             phase: "response_body",
           });
-          throw error;
+          throw new DeepInfraSmsInvalidResponseError();
         }
 
         const parsed = DeepInfraResponseSchema.safeParse(payload);
@@ -301,6 +301,7 @@ export class DeepInfraSmsProvider implements SmsAiProvider {
             elapsedMs: Date.now() - attemptStartedAtMs,
             timeoutMs: DEEPINFRA_SMS_ATTEMPT_TIMEOUT_MS,
             errorName: error.name,
+            upstreamStatus: response.status,
             willRetry: false,
             phase: "response_body",
           });
