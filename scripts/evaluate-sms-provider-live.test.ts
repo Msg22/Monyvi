@@ -34,12 +34,12 @@ function dependencies(): CliHarness {
         return Promise.resolve(
           new Response(
             JSON.stringify({
-            transactions: [],
-            completionStatus: "complete",
-            negativeFingerprints: [],
-            terminalFingerprints: [],
-            unresolvedFingerprints: [],
-          }),
+              transactions: [],
+              completionStatus: "complete",
+              negativeFingerprints: [],
+              terminalFingerprints: [],
+              unresolvedFingerprints: [],
+            }),
             { status: 200, headers: { "content-type": "application/json" } }
           )
         );
@@ -199,7 +199,9 @@ void test("CLI accepts provider-input evidence separately from raw response evid
   );
 });
 
-void test("standalone SIGINT and SIGTERM abort pending live fetch and persist partial JSON with remaining cases unattempted", async () => {
+void test(
+  "standalone SIGINT and SIGTERM abort pending live fetch and persist partial JSON with remaining cases unattempted",
+  async () => {
   for (const signal of ["SIGINT", "SIGTERM"] as const) {
     const handlers = new Map<
       SmsProviderEvaluationTerminationSignal,
@@ -292,5 +294,6 @@ void test("standalone SIGINT and SIGTERM abort pending live fetch and persist pa
     if (serialized === undefined) throw new Error("partial_report_not_saved");
     const savedReport = JSON.parse(serialized) as { cancelled?: unknown };
     assert.equal(savedReport.cancelled, true);
+    }
   }
-});
+);

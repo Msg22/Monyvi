@@ -260,7 +260,7 @@ void test("live calls are sequential five-message batches, bounded, non-retrying
       publicApiKey: "public-anon-key",
     }),
     {
-      fetch: async (input, init): Promise<Response> => {
+      fetch: (input, init): Promise<Response> => {
         active++;
         maxActive = Math.max(maxActive, active);
         const url =
@@ -270,9 +270,10 @@ void test("live calls are sequential five-message batches, bounded, non-retrying
               ? input.toString()
               : input.url;
         requests.push({ url, init });
-        await Promise.resolve();
-        active--;
-        return validFinalResponse();
+        return Promise.resolve().then(() => {
+          active--;
+          return validFinalResponse();
+        });
       },
       now: (): number => ANCHOR_MS,
     }
@@ -510,9 +511,9 @@ void test("refusal payloads cannot leak access token or public API key into repo
         Promise.resolve(
           new Response(
             JSON.stringify({
-            reason: `consent_required:${accessToken}`,
-            error: `upstream:${publicApiKey}`,
-          }),
+              reason: `consent_required:${accessToken}`,
+              error: `upstream:${publicApiKey}`,
+            }),
             { status: 403, headers: { "content-type": "application/json" } }
           )
         ),
@@ -573,10 +574,15 @@ void test("cancellation while fetch is pending forwards the AbortSignal and pres
       signal: controller.signal,
     }),
     {
-      fetch: async (_input, init): Promise<Response> => {
-        forwardedSignal = init?.signal ?? null;
+      fetch: (_input, init): Promise<Response> => {
+        const signalValue = init?.signal;
+        forwardedSignal =
+          signalValue instanceof AbortSignal ? signalValue : null;
         markStarted?.();
-        return await new Promise<Response>((_resolve, reject) => {
+        if (forwardedSignal === null) {
+          return Promise.reject(new Error("abort_signal_missing"));
+        }
+        return new Promise<Response>((_resolve, reject) => {
           forwardedSignal?.addEventListener(
             "abort",
             () => reject(new DOMException("aborted", "AbortError")),
@@ -631,7 +637,9 @@ void test("tokens and public keys never appear in specific staging-guard errors"
 });
 
 
-void test("batch summary exposes only sanitized status/reason and measures latency through response body completion", async () => {
+void test(
+  "batch summary exposes only sanitized status/reason and measures latency through response body completion",
+  async () => {
   let clockMs = 1_000;
   class DelayedBodyResponse extends Response {
     override async text(): Promise<string> {
@@ -654,14 +662,15 @@ void test("batch summary exposes only sanitized status/reason and measures laten
       fetch: (): Promise<Response> =>
         Promise.resolve(
           new DelayedBodyResponse(
-          JSON.stringify({
-            reason: "consent_required",
-            error: "do-not-expose-upstream-detail",
-          }),
-          {
-            status: 403,
-            headers: { "content-type": "application/json" },
-          }
+            JSON.stringify({
+              reason: "consent_required",
+              error: "do-not-expose-upstream-detail",
+            }),
+            {
+              status: 403,
+              headers: { "content-type": "application/json" },
+            }
+          )
         ),
       now: (): number => clockMs,
     }
@@ -672,7 +681,11 @@ void test("batch summary exposes only sanitized status/reason and measures laten
   assert.equal(summary.httpStatus, 403);
   assert.equal(summary.refusalReason, "consent_required");
   assert.equal(summary.latencyMs, 275);
-  assert.equal(JSON.stringify(summary).includes("do-not-expose-upstream-detail"), false);
-  assert.equal(JSON.stringify(summary).includes("secret-token"), false);
-  assert.equal(JSON.stringify(summary).includes("public-key"), false);
-});
+    assert.equal(
+      JSON.stringify(summary).includes("do-not-expose-upstream-detail"),
+      false
+    );
+    assert.equal(JSON.stringify(summary).includes("secret-token"), false);
+    assert.equal(JSON.stringify(summary).includes("public-key"), false);
+  }
+);

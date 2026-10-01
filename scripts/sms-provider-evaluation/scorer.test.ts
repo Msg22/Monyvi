@@ -299,6 +299,25 @@ void test("scores manually attributed raw output separately from final output wi
       observed("raw-3", ["p2"], [parsedTransaction("p2")]),
     ],
     rawObservations,
+    providerInputObservations: {
+      runId: "run-score",
+      batches: [
+        {
+          runId: "run-score",
+          batchId: "raw-1",
+          requestInputIdentity: "input-p1",
+          providerInputIdentity: "provider-input-p1",
+          caseIds: ["p1"],
+        },
+        {
+          runId: "run-score",
+          batchId: "raw-2",
+          requestInputIdentity: "input-n1",
+          providerInputIdentity: "provider-input-n1",
+          caseIds: ["n1"],
+        },
+      ],
+    },
   });
 
   assert.equal(report.aggregate.truePositive, 2);
