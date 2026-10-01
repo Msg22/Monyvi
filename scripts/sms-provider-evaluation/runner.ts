@@ -4,6 +4,7 @@ import {
 } from "../../supabase/functions/_shared/sms-ai/sms-ai-prompt.ts";
 import { computeRequestDigestAtEdge } from "../../supabase/functions/_shared/sms-fingerprint-at-edge.ts";
 import { buildSyntheticEvaluationCorpus } from "./corpus.ts";
+import { parseProviderInputObservationImport } from "./provider-input-observation.ts";
 import { parseRawObservationImport } from "./raw-observation.ts";
 import { scoreSmsProviderEvaluation } from "./scorer.ts";
 import {
@@ -35,16 +36,24 @@ interface PreparedBatch {
 }
 
 const SAFE_REFUSAL_REASONS = new Set([
-  "unauthorized",
+  "unauthenticated",
   "consent_required",
-  "rolling_window_exceeded",
-  "burst_limit_exceeded",
-  "scan_limit_exceeded",
+  "malformed_request",
+  "capability_disabled",
+  "terminal_outcome",
+  "candidate_too_large",
+  "request_limit",
+  "scan_limit",
+  "rolling_limit",
+  "burst_limit",
   "history_cooldown",
-  "provider_disabled",
-  "invalid_request",
-  "request_too_large",
   "dependency_unavailable",
+  "already_processed_result_unavailable",
+  "payload_limit",
+  "input_token_limit",
+  "response_invalid",
+  "provider_failed",
+  "method_not_allowed",
 ]);
 
 function isPositiveInteger(value: number): boolean {
@@ -222,7 +231,13 @@ function isAdmissionStatus(status: number): boolean {
 }
 
 function shouldStopAfterAdmission(status: number): boolean {
-  return status === 401 || status === 403 || status === 429 || status === 400;
+  return (
+    status === 400 ||
+    status === 401 ||
+    status === 403 ||
+    status === 413 ||
+    status === 429
+  );
 }
 
 async function readResponseValue(response: Response): Promise<unknown> {
@@ -312,8 +327,8 @@ async function executeBatch(
       batch.request.url,
       batch.request.init
     );
-    const latencyMs = Math.max(0, dependencies.now() - startedAt);
     const value = await readResponseValue(response);
+    const latencyMs = Math.max(0, dependencies.now() - startedAt);
 
     if (!response.ok) {
       const admission = isAdmissionStatus(response.status);
@@ -407,6 +422,15 @@ export async function runSmsProviderEvaluation(
           expectedBatchInputs,
           cases: selectedCases,
         });
+  const providerInputObservations =
+    options.providerInputObservationValue === undefined
+      ? undefined
+      : await parseProviderInputObservationImport({
+          value: options.providerInputObservationValue,
+          runId: options.runId,
+          expectedBatchInputs,
+          cases: selectedCases,
+        });
 
   const observations: FinalBatchObservation[] = [];
   let cancelled = options.signal?.aborted === true;
@@ -442,6 +466,9 @@ export async function runSmsProviderEvaluation(
     cases: selectedCases,
     finalObservations: observations,
     ...(rawObservations === undefined ? {} : { rawObservations }),
+    ...(providerInputObservations === undefined
+      ? {}
+      : { providerInputObservations }),
   });
 
   return {
