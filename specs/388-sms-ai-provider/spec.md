@@ -98,7 +98,7 @@ As the product owner, I want unchanged shared SMS parsing instructions to be reu
 - **FR-007**: Existing SMS transaction semantic validation MUST remain authoritative regardless of which provider produced the candidate response.
 - **FR-008**: A provider-side structured response constraint MUST NOT replace application-side validation of amounts, currencies, transaction direction, dates, categories, confidence, trust state, ATM flags, or card suffixes.
 - **FR-009**: A valid provider response containing zero transactions MUST be accepted as a completed parse and MUST NOT be retried solely because it is empty.
-- **FR-010**: Malformed, truncated, structurally invalid, or semantically invalid provider output MUST NOT create partial accepted financial suggestions.
+- **FR-010**: Malformed JSON/envelopes, truncated/incomplete provider completion, or request-level provider failures MUST NOT create accepted financial suggestions. Within a structurally valid complete response, semantic validation is per entry: invalid rows MUST be rejected without discarding independently valid uniquely identified submitted peers.
 - **FR-011**: Retry behavior MUST distinguish transient provider/network failures from non-retryable authentication, authorization, configuration, and malformed-request failures.
 - **FR-012**: Retries MUST remain bounded and MUST preserve the existing SMS usage-accounting and idempotency guarantees.
 - **FR-013**: The shared SMS parsing rules, supported currencies, and built-in category definitions MUST remain provider-independent.
@@ -115,6 +115,10 @@ As the product owner, I want unchanged shared SMS parsing instructions to be reu
 - **FR-024**: Existing provider-specific SMS QA documentation MUST be updated so routine deterministic SMS QA proves zero production-configured SMS AI calls and zero production allowance consumption without incorrectly naming a legacy provider as the current SMS provider.
 - **FR-025**: The product owner's already-approved initial SMS provider and model selection MUST be honored during planning; exact request formatting and integration mechanics are planning decisions.
 - **FR-026**: The migration does not require a comparative provider-quality benchmark before adoption because Monyvi is pre-production; representative SMS functional QA remains required before the feature is considered complete.
+- **FR-027**: Explicit OTP, verification-code, security-code, and PIN-only messages MUST be excluded before full-provider parsing with Edge/shared parity, without excluding a clear completed transaction merely because its text also contains a security warning.
+- **FR-028**: The stable SMS prompt MUST instruct the provider to omit non-transactions entirely, require emitted amounts to be strictly positive, and prohibit OTP/fake/zero-amount placeholder transaction objects.
+- **FR-029**: Candidate-level invalid, duplicate, or otherwise rejected returned entries MUST remain unresolved/retryable and MUST NOT create durable AI-negative outcomes. Independently valid unique submitted peer rows MUST remain accepted. Unknown/unattributable invalid returned identities MUST prevent omission-based negative inference for the remaining uncertain submitted candidates.
+- **FR-030**: The public mobile response contract remains backward compatible: validated transactions are returned in `transactions`; candidate-level rejected/uncertain work is represented through `unresolvedFingerprints` plus `retryRequestMode: fresh` when present; no invalid financial fields are exposed as accepted transactions.
 
 ### Key Entities
 
