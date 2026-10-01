@@ -3,8 +3,8 @@ import {
   getSyntheticEvaluationDatasetSummary,
   SUPPORTED_CURRENCIES,
 } from "@monyvi/logic";
-import { Redirect, router } from "expo-router";
-import React, { useEffect, useMemo, useRef } from "react";
+import { Redirect, router, useFocusEffect } from "expo-router";
+import React, { useCallback, useEffect, useMemo, useRef } from "react";
 import { AccessibilityInfo } from "react-native";
 import { useTranslation } from "react-i18next";
 
@@ -62,6 +62,15 @@ export default function SmsProviderEvaluationRoute(): React.JSX.Element {
         ? null
         : createSmsEvaluationSummaryViewModel(evaluation.report),
     [evaluation.report]
+  );
+
+  useFocusEffect(
+    useCallback(
+      () => (): void => {
+        evaluation.cancel();
+      },
+      [evaluation.cancel]
+    )
   );
 
   const previousStatusRef = useRef(evaluation.status);

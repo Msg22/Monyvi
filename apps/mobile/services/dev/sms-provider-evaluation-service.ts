@@ -98,6 +98,24 @@ interface EdgeFunctionResponse {
   readonly error: unknown;
 }
 
+interface EvaluationRunContext {
+  readonly runId: string;
+  readonly anchorMs: number;
+  readonly cases: readonly SyntheticEvaluationCase[];
+  readonly batches: readonly (readonly SyntheticEvaluationCase[])[];
+  readonly observations: FinalBatchObservation[];
+  completedBatchCount: number;
+  processedCaseCount: number;
+  attemptedRequestCount: number;
+  latest: SmsProviderEvaluationProgress | null;
+}
+
+interface BatchExecutionResult {
+  readonly observation?: FinalBatchObservation;
+  readonly cancelled: boolean;
+  readonly fatalReason?: string;
+}
+
 function createEvaluationError(code: string): Error {
   const error = new Error(code);
   error.name = "SmsProviderEvaluationError";
@@ -180,13 +198,7 @@ function isAdmissionStatus(status: number): boolean {
 }
 
 function shouldStopAfterAdmission(status: number): boolean {
-  return (
-    status === 400 ||
-    status === 401 ||
-    status === 403 ||
-    status === 413 ||
-    status === 429
-  );
+  return [400, 401, 403, 413, 429].includes(status);
 }
 
 async function errorResponseValue(error: unknown): Promise<unknown> {
@@ -214,60 +226,48 @@ function classifySuccessfulResponse(input: {
   readonly latencyMs: number;
 }): FinalBatchObservation {
   const parsed = ParseSmsEvaluationResponseSchema.safeParse(input.value);
-  if (!parsed.success) {
-    return {
-      runId: input.runId,
-      batchId: input.id,
-      caseIds: batchCaseIds(input.cases),
-      classification: "response_invalid",
-      latencyMs: input.latencyMs,
-      replayProvenance: "unknown",
-    };
-  }
-
-  if (parsed.data.completionStatus !== "complete") {
-    return {
-      runId: input.runId,
-      batchId: input.id,
-      caseIds: batchCaseIds(input.cases),
-      classification: "unresolved",
-      latencyMs: input.latencyMs,
-      completionStatus: parsed.data.completionStatus,
-      transactions: parsed.data.transactions,
-      negativeFingerprints: parsed.data.negativeFingerprints,
-      terminalFingerprints: parsed.data.terminalFingerprints,
-      unresolvedFingerprints: parsed.data.unresolvedFingerprints,
-      replayProvenance: "unknown",
-    };
-  }
-
-  return {
+  const common = {
     runId: input.runId,
     batchId: input.id,
     caseIds: batchCaseIds(input.cases),
-    classification: "observed",
     latencyMs: input.latencyMs,
-    completionStatus: parsed.data.completionStatus,
-    transactions: parsed.data.transactions,
-    negativeFingerprints: parsed.data.negativeFingerprints,
-    terminalFingerprints: parsed.data.terminalFingerprints,
-    unresolvedFingerprints: parsed.data.unresolvedFingerprints,
-    replayProvenance: "unknown",
+    replayProvenance: "unknown" as const,
+  };
+  if (!parsed.success) {
+    return { ...common, classification: "response_invalid" };
+  }
+  if (parsed.data.completionStatus !== "complete") {
+    return observationFromParsed(common, parsed.data, "unresolved");
+  }
+  return observationFromParsed(common, parsed.data, "observed");
+}
+
+function observationFromParsed(
+  common: Omit<FinalBatchObservation, "classification">,
+  parsed: ReturnType<typeof ParseSmsEvaluationResponseSchema.parse>,
+  classification: "observed" | "unresolved"
+): FinalBatchObservation {
+  return {
+    ...common,
+    classification,
+    completionStatus: parsed.completionStatus,
+    transactions: parsed.transactions,
+    negativeFingerprints: parsed.negativeFingerprints,
+    terminalFingerprints: parsed.terminalFingerprints,
+    unresolvedFingerprints: parsed.unresolvedFingerprints,
   };
 }
 
 function buildReport(
-  runId: string,
-  cases: readonly SyntheticEvaluationCase[],
-  observations: readonly FinalBatchObservation[],
+  context: EvaluationRunContext,
   cancelled: boolean
 ): EvaluationReport {
   return scoreSmsProviderEvaluation({
-    runId,
+    runId: context.runId,
     mode: "live",
     cancelled,
-    cases,
-    finalObservations: observations,
+    cases: context.cases,
+    finalObservations: context.observations,
   });
 }
 
@@ -291,49 +291,240 @@ function buildBatchDetails(
 }
 
 async function emitProgress(
-  input: {
-    readonly runId: string;
-    readonly cases: readonly SyntheticEvaluationCase[];
-    readonly observations: readonly FinalBatchObservation[];
-    readonly activeBatchNumber: number | null;
-    readonly completedBatchCount: number;
-    readonly processedCaseCount: number;
-    readonly attemptedRequestCount: number;
-    readonly totalBatchCount: number;
-  },
+  context: EvaluationRunContext,
+  activeBatchNumber: number | null,
   onProgress: StartSmsProviderEvaluationInput["onProgress"]
 ): Promise<SmsProviderEvaluationProgress> {
   const progress: SmsProviderEvaluationProgress = {
-    report: buildReport(input.runId, input.cases, input.observations, false),
-    batches: buildBatchDetails(input.observations),
-    activeBatchNumber: input.activeBatchNumber,
-    completedBatchCount: input.completedBatchCount,
-    processedCaseCount: input.processedCaseCount,
-    attemptedRequestCount: input.attemptedRequestCount,
-    totalBatchCount: input.totalBatchCount,
-    totalCaseCount: input.cases.length,
+    report: buildReport(context, false),
+    batches: buildBatchDetails(context.observations),
+    activeBatchNumber,
+    completedBatchCount: context.completedBatchCount,
+    processedCaseCount: context.processedCaseCount,
+    attemptedRequestCount: context.attemptedRequestCount,
+    totalBatchCount: context.batches.length,
+    totalCaseCount: context.cases.length,
   };
+  context.latest = progress;
   await onProgress?.(progress);
   return progress;
 }
 
-function cancelledResult(
-  latest: SmsProviderEvaluationProgress,
-  runId: string,
-  cases: readonly SyntheticEvaluationCase[],
-  observations: readonly FinalBatchObservation[]
+function resultFromContext(
+  context: EvaluationRunContext,
+  status: SmsProviderEvaluationTerminalStatus,
+  fatalReason?: string
 ): SmsProviderEvaluationRunResult {
+  const latest = context.latest;
+  if (latest === null) {
+    throw new Error("sms_provider_evaluation_progress_unavailable");
+  }
   return {
     ...latest,
-    report: buildReport(runId, cases, observations, true),
+    report: buildReport(context, status === "cancelled"),
     activeBatchNumber: null,
-    status: "cancelled",
+    status,
+    ...(fatalReason === undefined ? {} : { fatalReason }),
   };
 }
 
-export async function runSmsProviderEvaluationForCurrentUser(
-  input: StartSmsProviderEvaluationInput
-): Promise<SmsProviderEvaluationRunResult> {
+async function createRunContext(): Promise<EvaluationRunContext> {
+  const anchorMs = nextRunAnchorMs();
+  const runId = createRunId(anchorMs);
+  const cases = await buildSyntheticEvaluationCorpus(
+    { runId, anchorMs },
+    { computeFingerprint: computeSmsFingerprint }
+  );
+  return {
+    runId,
+    anchorMs,
+    cases,
+    batches: chunkCases(cases),
+    observations: [],
+    completedBatchCount: 0,
+    processedCaseCount: 0,
+    attemptedRequestCount: 0,
+    latest: null,
+  };
+}
+
+function createTransportObservation(input: {
+  readonly context: EvaluationRunContext;
+  readonly id: string;
+  readonly batch: readonly SyntheticEvaluationCase[];
+  readonly startedAt: number;
+}): FinalBatchObservation {
+  return {
+    runId: input.context.runId,
+    batchId: input.id,
+    caseIds: batchCaseIds(input.batch),
+    classification: "transport_failure",
+    latencyMs: Math.max(0, Date.now() - input.startedAt),
+    replayProvenance: "unknown",
+  };
+}
+
+function createAuthFailureObservation(input: {
+  readonly context: EvaluationRunContext;
+  readonly id: string;
+  readonly batch: readonly SyntheticEvaluationCase[];
+  readonly startedAt: number;
+}): FinalBatchObservation {
+  return {
+    ...createTransportObservation(input),
+    classification: "admission_failure",
+    httpStatus: 401,
+    refusalReason: "unauthenticated",
+  };
+}
+
+async function invokeBatch(
+  input: StartSmsProviderEvaluationInput,
+  context: EvaluationRunContext,
+  batch: readonly SyntheticEvaluationCase[],
+  id: string
+): Promise<EdgeFunctionResponse> {
+  return invokeAuthenticatedEdgeFunction<unknown>(
+    "parse-sms",
+    {
+      body: {
+        requestKey: requestKey(context.runId, id),
+        scanSessionId: scanSessionId(context.runId),
+        scanKind: "incremental",
+        scanStartedAt: new Date(context.anchorMs).toISOString(),
+        messages: batch.map(({ message }) => ({
+          id: message.id,
+          sender: message.sender,
+          body: message.body,
+          date: message.date,
+          smsFingerprint: message.smsFingerprint,
+        })),
+        categories: buildCategoryTree(input.categories),
+        supportedCurrencies: input.supportedCurrencies,
+      },
+      signal: input.signal,
+    },
+    { beforeRetry: () => assertPinnedUser(input.initiatingUserId) }
+  );
+}
+
+async function executeBatch(input: {
+  readonly runInput: StartSmsProviderEvaluationInput;
+  readonly context: EvaluationRunContext;
+  readonly batch: readonly SyntheticEvaluationCase[];
+  readonly id: string;
+}): Promise<BatchExecutionResult> {
+  const startedAt = Date.now();
+  try {
+    const response = await invokeBatch(
+      input.runInput,
+      input.context,
+      input.batch,
+      input.id
+    );
+    await assertPinnedUser(input.runInput.initiatingUserId);
+    return classifyBatchResponse(input, response, startedAt);
+  } catch (error: unknown) {
+    return classifyBatchError(input, error, startedAt);
+  }
+}
+
+async function classifyBatchResponse(
+  input: {
+    readonly runInput: StartSmsProviderEvaluationInput;
+    readonly context: EvaluationRunContext;
+    readonly batch: readonly SyntheticEvaluationCase[];
+    readonly id: string;
+  },
+  response: EdgeFunctionResponse,
+  startedAt: number
+): Promise<BatchExecutionResult> {
+  if (response.error === null) {
+    return {
+      cancelled: false,
+      observation: classifySuccessfulResponse({
+        runId: input.context.runId,
+        id: input.id,
+        cases: input.batch,
+        value: response.data,
+        latencyMs: Math.max(0, Date.now() - startedAt),
+      }),
+    };
+  }
+  return classifyHttpError(input, response.error, startedAt);
+}
+
+async function classifyHttpError(
+  input: {
+    readonly context: EvaluationRunContext;
+    readonly batch: readonly SyntheticEvaluationCase[];
+    readonly id: string;
+  },
+  error: unknown,
+  startedAt: number
+): Promise<BatchExecutionResult> {
+  const status = getEdgeFunctionErrorStatus(error);
+  const effectiveStatus = status ?? 503;
+  const admission = status !== undefined && isAdmissionStatus(status);
+  const reason = safeRefusalReason(
+    effectiveStatus,
+    await errorResponseValue(error)
+  );
+  return {
+    cancelled: false,
+    observation: {
+      runId: input.context.runId,
+      batchId: input.id,
+      caseIds: batchCaseIds(input.batch),
+      classification: admission ? "admission_failure" : "transport_failure",
+      ...(status === undefined ? {} : { httpStatus: status }),
+      refusalReason: reason,
+      latencyMs: Math.max(0, Date.now() - startedAt),
+      replayProvenance: "unknown",
+    },
+    ...(status !== undefined && admission && shouldStopAfterAdmission(status)
+      ? { fatalReason: reason }
+      : {}),
+  };
+}
+
+function classifyBatchError(
+  input: {
+    readonly runInput: StartSmsProviderEvaluationInput;
+    readonly context: EvaluationRunContext;
+    readonly batch: readonly SyntheticEvaluationCase[];
+    readonly id: string;
+  },
+  error: unknown,
+  startedAt: number
+): BatchExecutionResult {
+  if (isSmsProviderEvaluationOwnerChanged(error)) throw error;
+  if (input.runInput.signal.aborted) {
+    return { cancelled: true };
+  }
+  const observation = isEdgeFunctionAuthenticationError(error)
+    ? createAuthFailureObservation({ ...input, startedAt })
+    : createTransportObservation({ ...input, startedAt });
+  return {
+    cancelled: false,
+    observation,
+    ...(isEdgeFunctionAuthenticationError(error)
+      ? { fatalReason: "unauthenticated" }
+      : {}),
+  };
+}
+
+function recordBatch(
+  context: EvaluationRunContext,
+  batch: readonly SyntheticEvaluationCase[],
+  observation: FinalBatchObservation
+): void {
+  context.observations.push(observation);
+  context.completedBatchCount++;
+  context.processedCaseCount += batch.length;
+}
+
+function validateRunInput(input: StartSmsProviderEvaluationInput): void {
   if (!isSmsProviderEvaluationRuntimeAvailable()) {
     throw createEvaluationError(SMS_PROVIDER_EVALUATION_UNAVAILABLE);
   }
@@ -343,219 +534,46 @@ export async function runSmsProviderEvaluationForCurrentUser(
   if (!input.isAiConsented) {
     throw createEvaluationError("consent_required");
   }
-  await assertPinnedUser(input.initiatingUserId);
+}
 
-  const anchorMs = nextRunAnchorMs();
-  const runId = createRunId(anchorMs);
-  const corpus = await buildSyntheticEvaluationCorpus(
-    { runId, anchorMs },
-    { computeFingerprint: computeSmsFingerprint }
-  );
-  const batches = chunkCases(corpus);
-  const observations: FinalBatchObservation[] = [];
-  let completedBatchCount = 0;
-  let processedCaseCount = 0;
-  let attemptedRequestCount = 0;
-
-  let latest = await emitProgress(
-    {
-      runId,
-      cases: corpus,
-      observations,
-      activeBatchNumber: null,
-      completedBatchCount,
-      processedCaseCount,
-      attemptedRequestCount,
-      totalBatchCount: batches.length,
-    },
-    input.onProgress
-  );
-
-  for (let index = 0; index < batches.length; index += 1) {
+async function runPreparedEvaluation(
+  input: StartSmsProviderEvaluationInput,
+  context: EvaluationRunContext
+): Promise<SmsProviderEvaluationRunResult> {
+  await emitProgress(context, null, input.onProgress);
+  for (let index = 0; index < context.batches.length; index += 1) {
     if (input.signal.aborted) {
-      return cancelledResult(latest, runId, corpus, observations);
+      return resultFromContext(context, "cancelled");
     }
-
-    const batch = batches[index];
+    const batch = context.batches[index];
     if (batch === undefined) continue;
-    const id = batchId(index);
-
     await assertPinnedUser(input.initiatingUserId);
-    attemptedRequestCount++;
-    latest = await emitProgress(
-      {
-        runId,
-        cases: corpus,
-        observations,
-        activeBatchNumber: index + 1,
-        completedBatchCount,
-        processedCaseCount,
-        attemptedRequestCount,
-        totalBatchCount: batches.length,
-      },
-      input.onProgress
-    );
-
-    const startedAt = Date.now();
-    let response: EdgeFunctionResponse;
-
-    try {
-      response = await invokeAuthenticatedEdgeFunction<unknown>(
-        "parse-sms",
-        {
-          body: {
-            requestKey: requestKey(runId, id),
-            scanSessionId: scanSessionId(runId),
-            scanKind: "incremental",
-            scanStartedAt: new Date(anchorMs).toISOString(),
-            messages: batch.map(({ message }) => ({
-              id: message.id,
-              sender: message.sender,
-              body: message.body,
-              date: message.date,
-              smsFingerprint: message.smsFingerprint,
-            })),
-            categories: buildCategoryTree(input.categories),
-            supportedCurrencies: input.supportedCurrencies,
-          },
-          signal: input.signal,
-        },
-        {
-          beforeRetry: () => assertPinnedUser(input.initiatingUserId),
-        }
-      );
-    } catch (error: unknown) {
-      if (isSmsProviderEvaluationOwnerChanged(error)) throw error;
-      if (input.signal.aborted) {
-        return cancelledResult(latest, runId, corpus, observations);
-      }
-
-      if (isEdgeFunctionAuthenticationError(error)) {
-        observations.push({
-          runId,
-          batchId: id,
-          caseIds: batchCaseIds(batch),
-          classification: "admission_failure",
-          httpStatus: 401,
-          refusalReason: "unauthenticated",
-          latencyMs: Math.max(0, Date.now() - startedAt),
-          replayProvenance: "unknown",
-        });
-        completedBatchCount++;
-        processedCaseCount += batch.length;
-        const progress = await emitProgress(
-          {
-            runId,
-            cases: corpus,
-            observations,
-            activeBatchNumber: null,
-            completedBatchCount,
-            processedCaseCount,
-            attemptedRequestCount,
-            totalBatchCount: batches.length,
-          },
-          input.onProgress
-        );
-        return {
-          ...progress,
-          status: "fatal",
-          fatalReason: "unauthenticated",
-        };
-      }
-
-      observations.push({
-        runId,
-        batchId: id,
-        caseIds: batchCaseIds(batch),
-        classification: "transport_failure",
-        latencyMs: Math.max(0, Date.now() - startedAt),
-        replayProvenance: "unknown",
-      });
-      completedBatchCount++;
-      processedCaseCount += batch.length;
-      await assertPinnedUser(input.initiatingUserId);
-      latest = await emitProgress(
-        {
-          runId,
-          cases: corpus,
-          observations,
-          activeBatchNumber: null,
-          completedBatchCount,
-          processedCaseCount,
-          attemptedRequestCount,
-          totalBatchCount: batches.length,
-        },
-        input.onProgress
-      );
-      continue;
+    context.attemptedRequestCount++;
+    await emitProgress(context, index + 1, input.onProgress);
+    const result = await executeBatch({
+      runInput: input,
+      context,
+      batch,
+      id: batchId(index),
+    });
+    if (result.cancelled) return resultFromContext(context, "cancelled");
+    if (result.observation !== undefined) {
+      recordBatch(context, batch, result.observation);
     }
-
     await assertPinnedUser(input.initiatingUserId);
-
-    if (response.error !== null) {
-      const status = getEdgeFunctionErrorStatus(response.error);
-      const value = await errorResponseValue(response.error);
-      const effectiveStatus = status ?? 503;
-      const admission = status !== undefined && isAdmissionStatus(status);
-      const reason = safeRefusalReason(effectiveStatus, value);
-      observations.push({
-        runId,
-        batchId: id,
-        caseIds: batchCaseIds(batch),
-        classification: admission ? "admission_failure" : "transport_failure",
-        ...(status === undefined ? {} : { httpStatus: status }),
-        refusalReason: reason,
-        latencyMs: Math.max(0, Date.now() - startedAt),
-        replayProvenance: "unknown",
-      });
-      completedBatchCount++;
-      processedCaseCount += batch.length;
-      latest = await emitProgress(
-        {
-          runId,
-          cases: corpus,
-          observations,
-          activeBatchNumber: null,
-          completedBatchCount,
-          processedCaseCount,
-          attemptedRequestCount,
-          totalBatchCount: batches.length,
-        },
-        input.onProgress
-      );
-
-      if (status !== undefined && admission && shouldStopAfterAdmission(status)) {
-        return { ...latest, status: "fatal", fatalReason: reason };
-      }
-      continue;
+    await emitProgress(context, null, input.onProgress);
+    if (result.fatalReason !== undefined) {
+      return resultFromContext(context, "fatal", result.fatalReason);
     }
-
-    observations.push(
-      classifySuccessfulResponse({
-        runId,
-        id,
-        cases: batch,
-        value: response.data,
-        latencyMs: Math.max(0, Date.now() - startedAt),
-      })
-    );
-    completedBatchCount++;
-    processedCaseCount += batch.length;
-    latest = await emitProgress(
-      {
-        runId,
-        cases: corpus,
-        observations,
-        activeBatchNumber: null,
-        completedBatchCount,
-        processedCaseCount,
-        attemptedRequestCount,
-        totalBatchCount: batches.length,
-      },
-      input.onProgress
-    );
   }
+  return resultFromContext(context, "finished");
+}
 
+export async function runSmsProviderEvaluationForCurrentUser(
+  input: StartSmsProviderEvaluationInput
+): Promise<SmsProviderEvaluationRunResult> {
+  validateRunInput(input);
   await assertPinnedUser(input.initiatingUserId);
-  return { ...latest, status: "finished" };
+  const context = await createRunContext();
+  return runPreparedEvaluation(input, context);
 }
