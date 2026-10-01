@@ -1,5 +1,4 @@
 import {
-  DEFAULT_EVALUATION_BATCH_SIZE,
   getSyntheticEvaluationDatasetSummary,
   SUPPORTED_CURRENCIES,
 } from "@monyvi/logic";
@@ -9,7 +8,9 @@ import { AccessibilityInfo } from "react-native";
 import { useTranslation } from "react-i18next";
 
 import { SmsProviderEvaluationScreen } from "@/components/sms-provider-evaluation/SmsProviderEvaluationScreen";
+import { MOBILE_SMS_PROVIDER_EVALUATION_BATCH_SIZE } from "@/constants/sms-provider-evaluation";
 import {
+  createSmsEvaluationBatchTimingViewModels,
   createSmsEvaluationCaseViewModel,
   createSmsEvaluationSummaryViewModel,
 } from "@/services/dev/sms-provider-evaluation-read-model-service";
@@ -36,10 +37,15 @@ export default function SmsProviderEvaluationRoute(): React.JSX.Element {
     () => SUPPORTED_CURRENCIES.map(({ code }) => code),
     []
   );
-  const datasetSummary = useMemo(
-    () => getSyntheticEvaluationDatasetSummary(),
-    []
-  );
+  const datasetSummary = useMemo(() => {
+    const shared = getSyntheticEvaluationDatasetSummary();
+    return {
+      ...shared,
+      requestCount: Math.ceil(
+        shared.caseCount / MOBILE_SMS_PROVIDER_EVALUATION_BATCH_SIZE
+      ),
+    };
+  }, []);
 
   const evaluation = useSmsProviderEvaluation({
     userId,
@@ -62,6 +68,10 @@ export default function SmsProviderEvaluationRoute(): React.JSX.Element {
         ? null
         : createSmsEvaluationSummaryViewModel(evaluation.report),
     [evaluation.report]
+  );
+  const batchTimings = useMemo(
+    () => createSmsEvaluationBatchTimingViewModels(evaluation.batches),
+    [evaluation.batches]
   );
 
   useFocusEffect(
@@ -110,13 +120,15 @@ export default function SmsProviderEvaluationRoute(): React.JSX.Element {
       datasetSummary={datasetSummary}
       summary={summary}
       cases={cases}
+      batchTimings={batchTimings}
+      runElapsedMs={evaluation.runElapsedMs}
       activeBatchNumber={evaluation.activeBatchNumber}
       processedCaseCount={evaluation.processedCaseCount}
       attemptedRequestCount={evaluation.attemptedRequestCount}
       totalBatchCount={evaluation.totalBatchCount}
       totalCaseCount={evaluation.totalCaseCount}
       fatalReason={evaluation.fatalReason}
-      batchSize={DEFAULT_EVALUATION_BATCH_SIZE}
+      batchSize={MOBILE_SMS_PROVIDER_EVALUATION_BATCH_SIZE}
       startHelper={startHelper}
       isStartReady={isStartReady}
       onStart={() => {

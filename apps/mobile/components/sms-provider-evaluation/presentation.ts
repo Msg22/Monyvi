@@ -73,3 +73,18 @@ export interface SmsEvaluationSummaryViewModel {
   readonly providerCount: number;
   readonly caseCount: number;
 }
+
+export type SmsEvaluationBatchTimingStatus =
+  | "completed"
+  | "failed"
+  | "running"
+  | "cancelled"
+  | "not_run";
+
+export interface SmsEvaluationBatchTimingViewModel {
+  readonly batchId: string;
+  readonly batchNumber: number;
+  readonly messageCount: number;
+  readonly status: SmsEvaluationBatchTimingStatus;
+  readonly elapsedMs?: number;
+}

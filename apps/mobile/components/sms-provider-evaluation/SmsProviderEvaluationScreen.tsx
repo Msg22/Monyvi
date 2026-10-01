@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/navigation/PageHeader";
 import { shouldUseDenseRowCompactLayout } from "@/constants/ui";
 import { SmsProviderEvaluationCaseCard } from "./SmsProviderEvaluationCaseCard";
 import { SmsProviderEvaluationFooter } from "./SmsProviderEvaluationFooter";
+import { SmsProviderEvaluationTiming } from "./SmsProviderEvaluationTiming";
 import {
   SmsProviderEvaluationStatusPanel,
   SmsProviderEvaluationSummary,
@@ -14,6 +15,7 @@ import {
   type SmsProviderEvaluationStatus,
 } from "./SmsProviderEvaluationOverview";
 import type {
+  SmsEvaluationBatchTimingViewModel,
   SmsEvaluationCaseViewModel,
   SmsEvaluationSummaryViewModel,
 } from "./presentation";
@@ -27,6 +29,8 @@ interface ScreenProps {
   readonly datasetSummary: SmsProviderEvaluationDatasetSummary;
   readonly summary: SmsEvaluationSummaryViewModel | null;
   readonly cases: readonly SmsEvaluationCaseViewModel[];
+  readonly batchTimings: readonly SmsEvaluationBatchTimingViewModel[];
+  readonly runElapsedMs: number;
   readonly activeBatchNumber: number | null;
   readonly processedCaseCount: number;
   readonly attemptedRequestCount: number;
@@ -151,6 +155,12 @@ function ListHeader({
   return (
     <View className="mb-3 gap-4">
       <SmsProviderEvaluationStatusPanel {...props} />
+      <SmsProviderEvaluationTiming
+        status={props.status}
+        batches={props.batchTimings}
+        runElapsedMs={props.runElapsedMs}
+        t={props.t}
+      />
       {finalSummary ? (
         <SmsProviderEvaluationSummary summary={summary} isCompact={isCompact} t={props.t} />
       ) : (

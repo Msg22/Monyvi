@@ -194,6 +194,21 @@
       "sms_provider_evaluation_auth_required": "An authenticated staging user is required.",
       "sms_provider_evaluation_owner_changed": "The authenticated user changed, so this run was cleared.",
       "unknown": "The request could not be evaluated safely."
+    },
+    "timing": {
+      "title": "Run timing",
+      "total_elapsed": "Total {{seconds}} s",
+      "batch_label": "Batch {{batch}} · {{count}} messages",
+      "elapsed_seconds": "{{seconds}} s",
+      "no_duration": "—",
+      "note": "Batch times cover mobile request execution, including auth, network, server wait, retries, and response handling. Total time also includes preparation and between-batch work. Neither is pure provider compute time.",
+      "status": {
+        "completed": "Completed",
+        "failed": "Failed",
+        "running": "Running",
+        "cancelled": "Cancelled",
+        "not_run": "Not run"
+      }
     }
   }
 }

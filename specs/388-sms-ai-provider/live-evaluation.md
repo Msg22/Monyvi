@@ -276,7 +276,7 @@ not a raw-model benchmark and not a production feature.
 - Opening/focusing the page makes zero network requests. The user must tap
   **Start test**.
 - Each Start creates a fresh run anchor/ID. Messages are the canonical synthetic
-  corpus only, five per request, sequentially.
+  corpus only, **15 per request on mobile**, sequentially. The CLI evaluator remains at five per request.
 - The mobile service uses the canonical mobile sender/body/timestamp SHA-256
   fingerprint helper and the current in-memory authenticated Supabase session.
   No service-role token, dedicated-account credential or auth injection exists.
@@ -290,6 +290,43 @@ not a raw-model benchmark and not a production feature.
 - Edge hard exclusions and synchronized prior outcomes may prevent a case from
   reaching the provider. The page therefore reports **final parser behavior**,
   not fresh DeepSeek accuracy. Edge-request counts are not provider-call proof.
+
+### Mobile trial batching and timing
+
+For the current approved development trial, the mobile synthetic runner uses
+`MOBILE_SMS_PROVIDER_EVALUATION_BATCH_SIZE = 15`. This is deliberately
+mobile-only: `DEFAULT_EVALUATION_BATCH_SIZE` and the CLI evaluator remain at
+five. The mobile route derives the idle planned-request count from the dynamic
+corpus size and the mobile constant; the runner uses the same constant for
+actual sequential splitting, including a final partial batch when necessary.
+
+Timing shown on the page is operational elapsed time, not DeepSeek/provider
+compute latency:
+
+- completed/failed batch durations come from the existing
+  `FinalBatchObservation.latencyMs` captured around mobile request execution;
+  that interval includes authenticated transport work, network time, hosted
+  server wait, authentication refresh/retry when it occurs, and response
+  handling;
+- a currently running batch uses a client-side elapsed clock until a final
+  observation replaces it with the recorded batch duration;
+- explicit cancellation immediately freezes the active batch's elapsed clock as
+  **Cancelled** without creating a successful/scored observation;
+- pending/unattempted batches display **Not run** and have no fabricated
+  duration;
+- earlier completed/failed batch timings remain visible if a later batch fails
+  or is cancelled;
+- total run elapsed starts before corpus preparation, updates while the run is
+  active, includes preparation/request/retry/processing/between-batch overhead
+  and time spent in a subsequently cancelled active batch, then freezes on
+  finished/cancelled/fatal state;
+- a new run or authenticated-user change resets timing state;
+- the one-second display timer mutates only hook presentation timing state. It
+  does not rescore/rebuild the 135-case report, start requests, retry work, or
+  influence safeguards.
+
+Neither batch duration nor total duration is labelled or interpreted as raw
+provider/model compute time.
 
 ### Scoring/display contract
 
@@ -321,9 +358,13 @@ head and approved PNG:
 | Dev staging signed out | Row absent/private auth gate retained |
 | Dev staging signed in, consent off | Page may be entered only through allowed dev route but Start remains unavailable/stopped; no request |
 | Idle entry/focus/remount/theme/language | Zero HTTP until explicit Start |
-| Start | Fresh run identity, runtime corpus counts, batches of five sequentially |
-| Running | Progress/partial final-result cards appear; duplicate Start unavailable |
-| Cancel | Active request aborted where supported, no later batches, partial observations retained while mounted |
+| Start | Fresh run identity, runtime corpus/provider counts, mobile planned batch count derived from 15 messages/request (135 cases = 9 batches today), requests sequential |
+| Running | Progress/partial final-result cards appear; duplicate Start unavailable; total elapsed and active-batch elapsed advance without causing scorer/network work |
+| Batch timing | Ordered rows show batch number, actual message count, Completed/Failed/Running/Cancelled/Not run state, and seconds only when elapsed is known |
+| Failure after earlier batches | Earlier completed/failed timings remain; failed batch keeps its recorded elapsed; later batches remain Not run with no duration |
+| Cancel | Active request aborted where supported, no later batches, partial observations retained while mounted; active batch immediately freezes as Cancelled with elapsed time and total run time freezes |
+| Finished/fatal | Total elapsed freezes and remains stable; batch timings remain visible |
+| New run / account change | Run and batch clocks reset; prior-user timing/report is not exposed to the new user |
 | Back / Android back / gesture / navigation blur / unmount | Pending work stopped; no delayed update |
 | Logout/account switch during run | Old-user work/results cleared and never shown to new user |
 | Completed transaction case | Objective fields compare through canonical scorer |
@@ -338,5 +379,7 @@ head and approved PNG:
 | Visual comparison | Side-by-side/overlay against authoritative approved PNG after T046 import |
 
 No row above is marked passed in this document. During the current trial, tests,
-lint, typecheck, formatting, CI, device QA and visual comparison were explicitly
-postponed by Mohamed.
+lint, typecheck, formatting, CI, device/provider QA and visual comparison were
+explicitly postponed by Mohamed. SMS-EVAL-TIMING-001 is source-implemented only;
+its batch-size/timing behavior remains unverified until the deferred QA owner
+runs those gates.

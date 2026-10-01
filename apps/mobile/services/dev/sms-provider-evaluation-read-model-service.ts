@@ -10,6 +10,7 @@ import {
 import {
   SMS_EVALUATION_FIELD_KEYS,
   type SmsEvaluationBatchEvidence,
+  type SmsEvaluationBatchTimingViewModel,
   type SmsEvaluationCaseViewModel,
   type SmsEvaluationExpectedDisplay,
   type SmsEvaluationFieldKey,
@@ -17,6 +18,7 @@ import {
   type SmsEvaluationParsedDisplay,
   type SmsEvaluationSummaryViewModel,
 } from "@/components/sms-provider-evaluation/presentation";
+import type { SmsProviderEvaluationBatchDetail } from "./sms-provider-evaluation-service";
 
 function expectedField(
   expectation: EvaluationFieldExpectation<unknown>
@@ -191,4 +193,19 @@ export function createSmsEvaluationSummaryViewModel(
     providerCount: report.providerSummaries.length,
     caseCount: report.cases.length,
   };
+}
+
+
+export function createSmsEvaluationBatchTimingViewModels(
+  batches: readonly SmsProviderEvaluationBatchDetail[]
+): readonly SmsEvaluationBatchTimingViewModel[] {
+  return [...batches]
+    .sort((left, right) => left.batchNumber - right.batchNumber)
+    .map((batch) => ({
+      batchId: batch.batchId,
+      batchNumber: batch.batchNumber,
+      messageCount: batch.messageCount,
+      status: batch.status,
+      ...(batch.elapsedMs === undefined ? {} : { elapsedMs: batch.elapsedMs }),
+    }));
 }
