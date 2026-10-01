@@ -1,29 +1,29 @@
 import type { ParseSmsMessage } from "./sms-ai-provider.ts";
 
-const CARD_LAST_FOUR_PATTERN = /^\\d{4}$/;
+const CARD_LAST_FOUR_PATTERN = /^\d{4}$/;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function hasExplicitCardLastFourEvidence(body: string, lastFour: string): boolean {
-  const cardMarker = "(?:\\\\bcard\\\\b|بطاقة|البطاقة|كارت|الكارت)";
+  const cardMarker = "(?:\\bcard\\b|بطاقة|البطاقة|كارت|الكارت)";
   const maskedDigits =
-    "(?:\\\\s*[*xX•#]){1,12}\\\\s*" + lastFour + "(?!\\\\d)";
+    "(?:\\s*[*xX•#]){1,12}\\s*" + lastFour + "(?!\\d)";
   const englishEnding =
-    "(?:ending|ends)\\\\s*(?:in|with)?\\\\s*" + lastFour + "(?!\\\\d)";
+    "(?:ending|ends)\\s*(?:in|with)?\\s*" + lastFour + "(?!\\d)";
   const arabicEnding =
-    "تنتهي\\\\s*(?:ب|بـ)?\\\\s*" + lastFour + "(?!\\\\d)";
+    "تنتهي\\s*(?:ب|بـ)?\\s*" + lastFour + "(?!\\d)";
 
   return (
     new RegExp(
       cardMarker +
-        "\\\\s*(?:no\\\\.?\\\\s*|number\\\\s*)?" +
+        "\\s*(?:no\\.?\\s*|number\\s*)?" +
         maskedDigits,
       "iu"
     ).test(body) ||
     new RegExp(
-      cardMarker + "\\\\s*(?:" + englishEnding + "|" + arabicEnding + ")",
+      cardMarker + "\\s*(?:" + englishEnding + "|" + arabicEnding + ")",
       "iu"
     ).test(body)
   );
@@ -35,15 +35,15 @@ function readProhibitedOtherParents(
   const parents = new Map<string, string>();
   let currentParent: string | null = null;
 
-  for (const rawLine of categoryTree.split(/\\r?\\n/)) {
+  for (const rawLine of categoryTree.split(/\r?\n/)) {
     const line = rawLine.trim();
-    const l1Match = line.match(/^L1:\\s*(.+)$/);
+    const l1Match = line.match(/^L1:\s*(.+)$/);
     if (l1Match) {
       currentParent = l1Match[1].trim() || null;
       continue;
     }
 
-    const l2Match = line.match(/^L2:\\s*(.+)$/);
+    const l2Match = line.match(/^L2:\s*(.+)$/);
     if (!l2Match || currentParent === null) {
       continue;
     }
