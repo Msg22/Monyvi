@@ -20,6 +20,15 @@ const PRE_PARSER_SECURITY_CODE_PATTERNS = [
   /الرقم\s*(?:السري|الموقت|للتحقق)/u,
 ] as const;
 
+const COMPLETED_FINANCIAL_MOVEMENT_PATTERNS = [
+  /\b(?:payment|purchase|transaction|transfer|withdrawal|deposit|refund)\b[^.!?\n؟]{0,120}\b(?:completed|reversed|refunded)\b/i,
+  /\b(?:card|account)\b[^.!?\n؟]{0,120}\b(?:was|has\s+been)\s+(?:used|charged|debited|credited)\b/i,
+  /(?:^|\s)(?:تم|تمت)\s+(?:عملي[هة]\s+)?(?:خصم|دفع|تحويل|استلام|سحب|ايداع|شراء|استرداد)(?:\s|$)/u,
+] as const;
+
+const NON_TERMINAL_COMPLETION_PATTERN =
+  /\b(?:(?:will|can|could|may|might|must|should)\s+be|to\s+be|(?:is|are)\s+being)\s+(?:completed|reversed|refunded)\b/i;
+
 function normalizeArabicForFiltering(value: string): string {
   return value
     .normalize("NFKC")
@@ -29,6 +38,30 @@ function normalizeArabicForFiltering(value: string): string {
     .replace(/ى/g, "ي")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function findFirstSecurityCodeMarkerIndex(value: string): number {
+  let firstMarkerIndex = -1;
+
+  for (const pattern of PRE_PARSER_SECURITY_CODE_PATTERNS) {
+    const markerIndex = value.search(pattern);
+    if (
+      markerIndex >= 0 &&
+      (firstMarkerIndex < 0 || markerIndex < firstMarkerIndex)
+    ) {
+      firstMarkerIndex = markerIndex;
+    }
+  }
+
+  return firstMarkerIndex;
+}
+
+function hasClearCompletedFinancialMovement(value: string): boolean {
+  if (NON_TERMINAL_COMPLETION_PATTERN.test(value)) return false;
+
+  return COMPLETED_FINANCIAL_MOVEMENT_PATTERNS.some((pattern) =>
+    pattern.test(value)
+  );
 }
 
 /**
@@ -45,7 +78,11 @@ export function isExcludedBeforeSmsParsingAtEdge(body: string): boolean {
     return true;
   }
 
-  return PRE_PARSER_SECURITY_CODE_PATTERNS.some((pattern) =>
-    pattern.test(normalizedBody)
+  const securityCodeMarkerIndex =
+    findFirstSecurityCodeMarkerIndex(normalizedBody);
+  if (securityCodeMarkerIndex < 0) return false;
+
+  return !hasClearCompletedFinancialMovement(
+    normalizedBody.slice(0, securityCodeMarkerIndex)
   );
 }
