@@ -141,9 +141,13 @@ Focused provider tests must cover:
 14. malformed inner JSON;
 15. `length` -> truncated;
 16. unknown finish reason -> failed;
-17. semantically invalid transaction -> provider-neutral existing-validator rejection outside the DeepInfra adapter;
-18. missing/blank/unsupported provider, model, approved-model list, service tier, or API key fails before request admission/fetch/provider-start accounting;
-19. input-token estimation counts the stable prompt, category context, response schema, and SMS candidate content exactly once after prompt refactoring.
+17. mixed valid + semantically invalid rows in a structurally valid complete response -> preserve valid uniquely identified submitted peers and return rejected candidates as unresolved;
+18. all-invalid but structurally valid complete rows -> zero accepted transactions, unresolved candidates, fresh retry identity, and zero durable negatives from invalid data;
+19. duplicate known returned identity -> duplicated candidate unresolved while unrelated valid peers survive;
+20. unknown/unattributable returned identity -> discard unknown row, preserve independent valid peers, and keep uncertain omitted submitted candidates unresolved rather than inferring negatives;
+21. malformed inner JSON or invalid outer envelope -> request-level response_invalid behavior remains;
+22. missing/blank/unsupported provider, model, approved-model list, service tier, or API key fails before request admission/fetch/provider-start accounting;
+23. input-token estimation counts the stable prompt, category context, response schema, and SMS candidate content exactly once after prompt refactoring.
 
 ## 5. Prompt-cache verification
 
@@ -173,12 +177,29 @@ Use safe development/test SMS examples covering at least:
 | ATM withdrawal | EXPENSE + ATM flag |
 | Foreign-currency transaction | exact supported currency |
 | Promotion/offer with amount | no trusted transaction |
-| OTP/security message | excluded/no transaction |
+| OTP/security-only message | excluded before provider/no transaction |
+| Completed payment that also mentions OTP/security | remains eligible; completed transaction is not discarded because of the warning |
 | Valid non-transaction batch | successful empty result |
-| Invalid provider-shaped fixture | no partial financial result |
+| Mixed valid payment + zero-amount/invalid placeholder | valid peer survives; rejected candidate unresolved/retryable; no durable negative for invalid data |
+| All-invalid semantically invalid rows in a valid complete envelope | zero accepted transactions; affected candidates unresolved with fresh retry; no durable negatives |
+| Malformed JSON/envelope | request-level response-invalid failure; no accepted financial result |
 | Provider transient failure | bounded retry, then existing retryable failure behavior |
 
 Also verify that voice entry still follows the existing Gemini path.
+
+### Mixed-row validation coverage
+
+| Behavior | Automated coverage required before release-ready claim | Manual/live evidence |
+| --- | --- | --- |
+| OTP-only prefilter parity | Edge/shared filter regressions in English and Arabic plus completed-payment counterexamples | Synthetic-only observation is sufficient |
+| Prompt no-placeholder rule | Stable-prompt assertions for positive amounts and omission of OTP/fake rows | Provider compliance is advisory; validator remains authoritative |
+| Valid peer + invalid row | Validator/executor/handler regressions preserving peers and unresolved bad candidates | Offline replay of approved synthetic captured output |
+| Unknown/duplicate identity | Handler/reconciliation tests proving no uncertain omission negatives | No live call required |
+| All-invalid valid envelope | Handler test for complete response + unresolved + fresh retry | No live call required |
+| Malformed JSON/envelope | Existing request-level response-invalid regression | No live call required |
+| Negative-cache safety | Invalid attempts never increment/reset/clear/terminalize strikes | DB/device observation only after automation |
+| Mobile mixed 200 | Valid transactions preserved alongside retryable unresolved candidates | Device/manual review after implementation verification |
+
 
 For SMS response grounding, use synthetic messages to confirm:
 - explicit same-message card evidence such as `Card **1234` preserves `cardLast4: "1234"`, including leading zeroes and clear Arabic card markers;
