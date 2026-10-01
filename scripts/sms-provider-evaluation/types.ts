@@ -348,13 +348,9 @@ function fieldExpectationSchema<T extends z.ZodType>(
     z
       .object({
         kind: z.literal("exact"),
-        value: valueSchema.optional(),
+        value: valueSchema,
       })
-      .strict()
-      .transform((value) => ({
-        kind: "exact" as const,
-        value: value.value as z.output<T>,
-      })),
+      .strict(),
     z
       .object({
         kind: z.literal("one_of"),
@@ -364,6 +360,28 @@ function fieldExpectationSchema<T extends z.ZodType>(
     z.object({ kind: z.literal("unknown") }).strict(),
   ]);
 }
+
+const OptionalStringExpectationSchema: z.ZodType<
+  EvaluationFieldExpectation<string | undefined>
+> = z.union([
+  z
+    .object({
+      kind: z.literal("exact"),
+      value: z.string().optional(),
+    })
+    .strict()
+    .transform((value) => ({
+      kind: "exact" as const,
+      value: value.value,
+    })),
+  z
+    .object({
+      kind: z.literal("one_of"),
+      values: z.array(z.string().optional()).min(1),
+    })
+    .strict(),
+  z.object({ kind: z.literal("unknown") }).strict(),
+]);
 
 const ConfidenceExpectationSchema = z.union([
   z.object({ kind: z.literal("unknown") }).strict(),
@@ -387,7 +405,7 @@ const TransactionExpectationSchema = z
     date: fieldExpectationSchema(z.string()),
     counterparty: fieldExpectationSchema(z.string()),
     categorySystemName: fieldExpectationSchema(z.string()),
-    cardLast4: fieldExpectationSchema(z.string().or(z.undefined())),
+    cardLast4: OptionalStringExpectationSchema,
     isTrusted: fieldExpectationSchema(z.boolean()),
     isAtmWithdrawal: fieldExpectationSchema(z.boolean()),
     confidenceScore: ConfidenceExpectationSchema,
