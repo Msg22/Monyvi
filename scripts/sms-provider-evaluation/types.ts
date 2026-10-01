@@ -19,6 +19,7 @@ export type EvaluationConfidenceExpectation =
       readonly minimum: number;
       readonly maximum: number;
       readonly rationale: string;
+      readonly basis?: "policy_heuristic";
     };
 
 export interface EvaluationTransactionExpectation {
@@ -96,6 +97,53 @@ export interface RawObservationImport {
   readonly batches: readonly RawBatchObservation[];
 }
 
+export interface ProviderInputLogMessage {
+  readonly sender: string;
+  readonly body: string;
+  readonly date: string;
+}
+
+export interface ProviderInputBatchObservation {
+  readonly runId: string;
+  readonly batchId: string;
+  readonly requestInputIdentity: string;
+  readonly providerInputIdentity: string;
+  readonly caseIds: readonly string[];
+}
+
+export interface ProviderInputObservationImport {
+  readonly runId: string;
+  readonly batches: readonly ProviderInputBatchObservation[];
+}
+
+export const ProviderInputObservationWireSchema = z
+  .object({
+    runId: z.string().min(1),
+    batches: z.array(
+      z
+        .object({
+          runId: z.string().min(1),
+          batchId: z.string().min(1),
+          requestInputIdentity: z.string().min(1),
+          smsMessages: z.array(
+            z
+              .object({
+                sender: z.string(),
+                body: z.string(),
+                date: z.string().min(1),
+              })
+              .strict()
+          ),
+        })
+        .strict()
+    ),
+  })
+  .strict();
+
+export type ProviderInputObservationWire = z.infer<
+  typeof ProviderInputObservationWireSchema
+>;
+
 export interface RawAttributionManifestEntry {
   readonly batchId: string;
   readonly caseIds: readonly string[];
@@ -164,8 +212,15 @@ export type RawObservedTransaction = Readonly<Record<string, unknown>>;
 export interface EvaluationCaseReport {
   readonly caseId: string;
   readonly providerId: string;
+  readonly source?: "synthetic";
+  readonly templateGroup?: string;
+  readonly provenance?: string;
+  readonly holdout?: boolean;
+  readonly tags?: readonly string[];
   readonly sender: string;
   readonly body: string;
+  readonly receivedDate?: string;
+  readonly smsFingerprint?: string;
   readonly expected: SyntheticEvaluationCase["expected"];
   readonly finalClassification: FinalObservationClassification;
   readonly replayProvenance: "confirmed_provider_call" | "unknown";
@@ -206,6 +261,8 @@ export interface EvaluationBatchSummary {
   readonly batchId: string;
   readonly classification: FinalObservationClassification;
   readonly caseCount: number;
+  readonly httpStatus?: number;
+  readonly refusalReason?: string;
   readonly latencyMs?: number;
   readonly replayProvenance: "confirmed_provider_call" | "unknown";
   readonly completionStatus?: string;
@@ -264,6 +321,7 @@ export interface EvaluationRunnerDependencies {
 
 export interface ParsedCliOptions extends EvaluationRunOptions {
   readonly rawObservationPath?: string;
+  readonly providerInputObservationPath?: string;
   readonly finalReportPath?: string;
   readonly outputPath?: string;
 }
@@ -308,3 +366,8 @@ export const EvaluationReportImportSchema = z
     ),
   })
   .passthrough();
+
+
+export type EvaluationReportImport = z.infer<
+  typeof EvaluationReportImportSchema
+>;

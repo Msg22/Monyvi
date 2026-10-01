@@ -204,5 +204,9 @@ test("labels objectively knowable trust and ATM state while keeping confidence n
   if (genericGateway.expected.fields.confidenceScore.kind === "range") {
     assert.ok(genericGateway.expected.fields.confidenceScore.maximum <= 0.6);
     assert.ok(genericGateway.expected.fields.confidenceScore.rationale.length > 0);
+    assert.equal(
+      genericGateway.expected.fields.confidenceScore.basis,
+      "policy_heuristic"
+    );
   }
 });

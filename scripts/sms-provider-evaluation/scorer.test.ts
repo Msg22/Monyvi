@@ -6,6 +6,7 @@ import { scoreSmsProviderEvaluation } from "./scorer.ts";
 import type {
   EvaluationFieldExpectation,
   FinalBatchObservation,
+  ProviderInputObservationImport,
   RawObservationImport,
   SyntheticEvaluationCase,
 } from "./types.ts";
@@ -376,4 +377,245 @@ test("reports provider/scenario groups plus classification, batch, provenance, a
     maximumMs: 300,
     averageMs: 200,
   });
+});
+
+
+test("raw accuracy includes only cases proven present in actual provider input evidence", () => {
+  const cases = [
+    negativeCase("requested-1"),
+    negativeCase("requested-2"),
+    negativeCase("requested-3"),
+    negativeCase("prefiltered-4"),
+    negativeCase("prefiltered-5"),
+  ];
+  const rawObservations: RawObservationImport = {
+    runId: "run-score",
+    batches: [
+      {
+        runId: "run-score",
+        batchId: "batch-filtered",
+        caseIds: cases.map(({ caseId }) => caseId),
+        inputIdentity: "request-digest",
+        responseContent: JSON.stringify({ transactions: [] }),
+      },
+    ],
+  };
+  const providerInputObservations: ProviderInputObservationImport = {
+    runId: "run-score",
+    batches: [
+      {
+        runId: "run-score",
+        batchId: "batch-filtered",
+        requestInputIdentity: "request-digest",
+        providerInputIdentity: "provider-input-digest",
+        caseIds: ["requested-1", "requested-2", "requested-3"],
+      },
+    ],
+  };
+
+  const report = scoreSmsProviderEvaluation({
+    runId: "run-score",
+    mode: "live",
+    cases,
+    finalObservations: [
+      observed(
+        "batch-filtered",
+        cases.map(({ caseId }) => caseId),
+        []
+      ),
+    ],
+    rawObservations,
+    providerInputObservations,
+  });
+
+  assert.equal(report.aggregate.trueNegative, 5);
+  assert.equal(report.rawAggregate.trueNegative, 3);
+  for (const caseId of ["requested-1", "requested-2", "requested-3"]) {
+    assert.equal(
+      report.cases.find((item) => item.caseId === caseId)?.raw.status,
+      "observed"
+    );
+  }
+  for (const caseId of ["prefiltered-4", "prefiltered-5"]) {
+    assert.equal(
+      report.cases.find((item) => item.caseId === caseId)?.raw.status,
+      "not_observed"
+    );
+  }
+});
+
+test("raw output stays not_observed for a wholly prefiltered batch without provider-input evidence", () => {
+  const cases = [negativeCase("otp-filtered"), negativeCase("known-negative")];
+  const report = scoreSmsProviderEvaluation({
+    runId: "run-score",
+    mode: "live",
+    cases,
+    finalObservations: [
+      observed(
+        "batch-no-provider-input",
+        cases.map(({ caseId }) => caseId),
+        []
+      ),
+    ],
+    rawObservations: {
+      runId: "run-score",
+      batches: [
+        {
+          runId: "run-score",
+          batchId: "batch-no-provider-input",
+          caseIds: cases.map(({ caseId }) => caseId),
+          inputIdentity: "request-digest",
+          responseContent: JSON.stringify({ transactions: [] }),
+        },
+      ],
+    },
+    providerInputObservations: {
+      runId: "run-score",
+      batches: [],
+    },
+  });
+
+  assert.equal(report.rawCoverage.observedBatches, 0);
+  assert.equal(report.rawAggregate.trueNegative, 0);
+  assert.ok(report.cases.every(({ raw }) => raw.status === "not_observed"));
+});
+
+test("duplicate and unknown final outputs penalize precision without inflating TP or field denominators", () => {
+  const cases = [positiveCase("p1")];
+  const report = scoreSmsProviderEvaluation({
+    runId: "run-score",
+    mode: "live",
+    cases,
+    finalObservations: [
+      observed("batch-excess", ["p1"], [
+        parsedTransaction("p1"),
+        parsedTransaction("p1"),
+        parsedTransaction("unknown-id"),
+      ]),
+    ],
+  });
+
+  assert.equal(report.aggregate.truePositive, 1);
+  assert.equal(report.aggregate.falsePositive, 2);
+  assert.equal(report.aggregate.precision, 1 / 3);
+  assert.equal(report.aggregate.fieldDenominators.amount, 1);
+  assert.equal(report.aggregate.duplicateOutputs, 1);
+  assert.equal(report.aggregate.unknownMessageIds, 1);
+
+  const provider = report.providerSummaries.find(({ key }) => key === "qnb-egypt");
+  if (provider === undefined) throw new Error("provider_summary_missing");
+  assert.equal(provider.aggregate.truePositive, 1);
+  assert.equal(provider.aggregate.falsePositive, 2);
+  assert.equal(provider.aggregate.precision, 1 / 3);
+});
+
+test("duplicate and unknown raw outputs penalize raw precision without inflating raw TP or fields", () => {
+  const cases = [positiveCase("p1")];
+  const report = scoreSmsProviderEvaluation({
+    runId: "run-score",
+    mode: "live",
+    cases,
+    finalObservations: [observed("batch-raw-excess", ["p1"], [parsedTransaction("p1")])],
+    rawObservations: {
+      runId: "run-score",
+      batches: [
+        {
+          runId: "run-score",
+          batchId: "batch-raw-excess",
+          caseIds: ["p1"],
+          inputIdentity: "request-digest",
+          responseContent: JSON.stringify({
+            transactions: [
+              parsedTransaction("p1"),
+              parsedTransaction("p1"),
+              parsedTransaction("unknown-id"),
+            ],
+          }),
+        },
+      ],
+    },
+    providerInputObservations: {
+      runId: "run-score",
+      batches: [
+        {
+          runId: "run-score",
+          batchId: "batch-raw-excess",
+          requestInputIdentity: "request-digest",
+          providerInputIdentity: "provider-digest",
+          caseIds: ["p1"],
+        },
+      ],
+    },
+  });
+
+  assert.equal(report.rawAggregate.truePositive, 1);
+  assert.equal(report.rawAggregate.falsePositive, 2);
+  assert.equal(report.rawAggregate.precision, 1 / 3);
+  assert.equal(report.rawAggregate.fieldDenominators.amount, 1);
+});
+
+test("per-case report preserves synthetic provenance, holdout, tags, received date and fingerprint", () => {
+  const source = positiveCase("metadata-case", {
+    tags: ["holdout", "atm"],
+    isAtmWithdrawal: true,
+  });
+  const decorated: SyntheticEvaluationCase = {
+    ...source,
+    templateGroup: "holdout-independent-template",
+    provenance: "synthetic-reviewed-template-v2",
+    holdout: true,
+  };
+  const report = scoreSmsProviderEvaluation({
+    runId: "run-score",
+    mode: "dry-run",
+    cases: [decorated],
+    finalObservations: [],
+  });
+
+  const item = report.cases[0];
+  if (item === undefined) throw new Error("metadata_case_report_missing");
+  assert.equal(item.source, "synthetic");
+  assert.equal(item.templateGroup, decorated.templateGroup);
+  assert.equal(item.provenance, decorated.provenance);
+  assert.equal(item.holdout, true);
+  assert.deepEqual(item.tags, decorated.tags);
+  assert.equal(item.receivedDate, decorated.message.date);
+  assert.equal(item.smsFingerprint, decorated.message.smsFingerprint);
+});
+
+test("policy-heuristic confidence ranges are disclosed but excluded from objective field accuracy", () => {
+  const item = positiveCase("heuristic-confidence");
+  if (item.expected.kind !== "transaction") {
+    throw new Error("heuristic_positive_case_expected");
+  }
+  const heuristicCase: SyntheticEvaluationCase = {
+    ...item,
+    expected: {
+      kind: "transaction",
+      fields: {
+        ...item.expected.fields,
+        confidenceScore: {
+          kind: "range",
+          minimum: 0.3,
+          maximum: 0.6,
+          rationale: "Conservative product policy for ambiguous purpose.",
+          basis: "policy_heuristic",
+        },
+      },
+    },
+  };
+  const report = scoreSmsProviderEvaluation({
+    runId: "run-score",
+    mode: "live",
+    cases: [heuristicCase],
+    finalObservations: [
+      observed("batch-heuristic", ["heuristic-confidence"], [
+        parsedTransaction("heuristic-confidence", { confidenceScore: 0.95 }),
+      ]),
+    ],
+  });
+
+  assert.equal(report.aggregate.truePositive, 1);
+  assert.equal(report.aggregate.fieldDenominators.confidenceScore, 0);
+  assert.equal(report.aggregate.fieldCorrect.confidenceScore, 0);
 });

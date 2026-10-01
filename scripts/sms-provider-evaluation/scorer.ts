@@ -8,6 +8,7 @@ import {
   type EvaluationReport,
   type FinalBatchObservation,
   type FinalObservationClassification,
+  type ProviderInputObservationImport,
   type RawObservationImport,
   type RawObservedTransaction,
   type SyntheticEvaluationCase,
@@ -21,6 +22,7 @@ export interface ScoreEvaluationInput {
   readonly cases: readonly SyntheticEvaluationCase[];
   readonly finalObservations: readonly FinalBatchObservation[];
   readonly rawObservations?: RawObservationImport;
+  readonly providerInputObservations?: ProviderInputObservationImport;
 }
 
 const FIELD_NAMES = [

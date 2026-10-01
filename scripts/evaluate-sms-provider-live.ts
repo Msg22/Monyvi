@@ -21,6 +21,24 @@ export interface SmsProviderEvaluationCliDependencies
   readonly environment: Readonly<Record<string, string | undefined>>;
 }
 
+export type SmsProviderEvaluationTerminationSignal = "SIGINT" | "SIGTERM";
+
+export interface SmsProviderEvaluationProcessEntryDependencies
+  extends SmsProviderEvaluationCliDependencies {
+  readonly registerSignalHandler: (
+    signal: SmsProviderEvaluationTerminationSignal,
+    handler: () => void
+  ) => () => void;
+  readonly writeOutputFile: (path: string, value: string) => void;
+}
+
+export async function runSmsProviderEvaluationProcessEntry(
+  _args: readonly string[],
+  _dependencies: SmsProviderEvaluationProcessEntryDependencies
+): Promise<EvaluationReport> {
+  throw new Error("sms_provider_evaluation_process_entry_not_implemented");
+}
+
 const DEFAULT_DRY_MAX_CASES = Number.MAX_SAFE_INTEGER;
 const DEFAULT_DRY_MAX_REQUESTS = Number.MAX_SAFE_INTEGER;
 

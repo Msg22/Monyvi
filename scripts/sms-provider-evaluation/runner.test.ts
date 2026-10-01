@@ -611,3 +611,49 @@ test("tokens and public keys never appear in specific staging-guard errors", asy
     }
   );
 });
+
+
+test("batch summary exposes only sanitized status/reason and measures latency through response body completion", async () => {
+  let clockMs = 1_000;
+  class DelayedBodyResponse extends Response {
+    override async text(): Promise<string> {
+      clockMs += 275;
+      return await super.text();
+    }
+  }
+
+  const report = await runSmsProviderEvaluation(
+    options({
+      mode: "live",
+      maxCases: 2,
+      maxRequests: 1,
+      endpoint: STAGING_PARSE_SMS_ENDPOINT,
+      projectRef: STAGING_PROJECT_REF,
+      accessToken: "secret-token",
+      publicApiKey: "public-key",
+    }),
+    {
+      fetch: async (): Promise<Response> =>
+        new DelayedBodyResponse(
+          JSON.stringify({
+            reason: "consent_required",
+            error: "do-not-expose-upstream-detail",
+          }),
+          {
+            status: 403,
+            headers: { "content-type": "application/json" },
+          }
+        ),
+      now: (): number => clockMs,
+    }
+  );
+
+  const summary = report.batchSummaries[0];
+  if (summary === undefined) throw new Error("batch_summary_missing");
+  assert.equal(summary.httpStatus, 403);
+  assert.equal(summary.refusalReason, "consent_required");
+  assert.equal(summary.latencyMs, 275);
+  assert.equal(JSON.stringify(summary).includes("do-not-expose-upstream-detail"), false);
+  assert.equal(JSON.stringify(summary).includes("secret-token"), false);
+  assert.equal(JSON.stringify(summary).includes("public-key"), false);
+});

@@ -4,7 +4,10 @@ import test from "node:test";
 import {
   parseSmsProviderEvaluationCliArgs,
   runSmsProviderEvaluationCli,
+  runSmsProviderEvaluationProcessEntry,
   type SmsProviderEvaluationCliDependencies,
+  type SmsProviderEvaluationProcessEntryDependencies,
+  type SmsProviderEvaluationTerminationSignal,
 } from "./evaluate-sms-provider-live.ts";
 import {
   STAGING_PARSE_SMS_ENDPOINT,
@@ -167,4 +170,117 @@ test("CLI can accept an optional manual raw-observation file path without implyi
 
   assert.equal(parsed.rawObservationPath, "tmp/raw-observations.json");
   assert.equal(parsed.mode, "dry-run");
+});
+
+
+test("CLI accepts provider-input evidence separately from raw response evidence", () => {
+  const parsed = parseSmsProviderEvaluationCliArgs(
+    [
+      "--run-id",
+      "raw-run",
+      "--max-cases",
+      "10",
+      "--max-requests",
+      "2",
+      "--raw-observations",
+      "tmp/raw-output.json",
+      "--provider-input-observations",
+      "tmp/provider-input.json",
+    ],
+    {}
+  );
+
+  assert.equal(parsed.rawObservationPath, "tmp/raw-output.json");
+  assert.equal(
+    parsed.providerInputObservationPath,
+    "tmp/provider-input.json"
+  );
+});
+
+test("standalone SIGINT and SIGTERM abort pending live fetch and persist partial JSON with remaining cases unattempted", async () => {
+  for (const signal of ["SIGINT", "SIGTERM"] as const) {
+    const handlers = new Map<
+      SmsProviderEvaluationTerminationSignal,
+      () => void
+    >();
+    let forwardedSignal: AbortSignal | null = null;
+    let resolveStarted: (() => void) | undefined;
+    const started = new Promise<void>((resolve) => {
+      resolveStarted = resolve;
+    });
+    const saved = new Map<string, string>();
+
+    const dependencies: SmsProviderEvaluationProcessEntryDependencies = {
+      fetch: async (_input, init): Promise<Response> => {
+        forwardedSignal = init?.signal ?? null;
+        resolveStarted?.();
+        return await new Promise<Response>((_resolve, reject) => {
+          forwardedSignal?.addEventListener(
+            "abort",
+            () => reject(new DOMException("aborted", "AbortError")),
+            { once: true }
+          );
+        });
+      },
+      now: (): number => NOW,
+      writeStdout: (): void => undefined,
+      writeStderr: (): void => undefined,
+      environment: {
+        SMS_PROVIDER_EVAL_ACCESS_TOKEN: "secret-token",
+      },
+      registerSignalHandler: (
+        registeredSignal: SmsProviderEvaluationTerminationSignal,
+        handler: () => void
+      ): (() => void) => {
+        handlers.set(registeredSignal, handler);
+        return (): void => {
+          handlers.delete(registeredSignal);
+        };
+      },
+      writeOutputFile: (path: string, value: string): void => {
+        saved.set(path, value);
+      },
+    };
+
+    const runPromise = runSmsProviderEvaluationProcessEntry(
+      [
+        "--live",
+        "--run-id",
+        "signal-" + signal.toLowerCase(),
+        "--max-cases",
+        "10",
+        "--max-requests",
+        "2",
+        "--output",
+        "partial-" + signal + ".json",
+      ],
+      dependencies
+    );
+
+    await Promise.race([
+      started,
+      runPromise.then(
+        () => Promise.reject(new Error("process_entry_completed_before_fetch")),
+        (error: unknown) => Promise.reject(error)
+      ),
+    ]);
+
+    assert.equal(forwardedSignal instanceof AbortSignal, true);
+    const handler = handlers.get(signal);
+    if (handler === undefined) throw new Error("signal_handler_missing");
+    handler();
+
+    const report = await runPromise;
+    assert.equal(report.cancelled, true);
+    assert.ok(
+      report.cases.some(
+        ({ finalClassification }) => finalClassification === "unattempted"
+      )
+    );
+
+    const serialized = saved.get("partial-" + signal + ".json");
+    if (serialized === undefined) throw new Error("partial_report_not_saved");
+    const savedReport = JSON.parse(serialized) as { cancelled?: unknown };
+    assert.equal(savedReport.cancelled, true);
+  }
 });
