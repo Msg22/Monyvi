@@ -10,9 +10,12 @@
 - Binding metadata approval evidence/reference: Mohamed replied "approved" to the exact presented PNG and results-page proposal on 2026-10-02 Africa/Cairo (recorded 2026-10-01 21:14 UTC).
 - Legacy metadata migration: no
 
-> Remote-artifact note: the authoritative PNG is not committed by this UI lane.
-> T046 reserves local import/integration of that PNG. The exact approved SVG
-> rendering source is committed beside this binding as a portable derivative.
+> Remote-artifact note: the authoritative approved PNG is now imported at
+> `specs/388-sms-ai-provider/mockups/sms-results-page.png` (sha256
+> `b071fb29955520dbc0fc856d238ec144c482cebe36efe451596308555448beeb`) by the
+> integration lane under T046. The exact approved SVG rendering source remains
+> committed beside this binding as a portable derivative. Binding Facts,
+> revisions, and hashes above are unchanged.
 
 ## Binding Facts
 

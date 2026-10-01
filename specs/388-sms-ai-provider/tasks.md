@@ -149,10 +149,12 @@
 The product owner explicitly superseded whole-batch semantic rejection for a
 structurally valid complete provider response.
 
-- [ ] T035 SOURCE-REVIEW-BLOCKED: narrow English/Arabic OTP/security-only
-      pre-provider exclusions with shared/Edge parity and completed-payment
-      escape behavior require the separate backend writer's confirmed follow-up.
-      The UI lane does not reopen or integrate backend corrections.
+- [x] T035 Source accepted at `3ae6adfdf1e6f4ff40d14419342cdae9578b37fd`:
+      narrow English/Arabic OTP/security-only pre-provider exclusions with
+      shared/Edge parity, completed-payment escape behavior, and preservation of
+      decimal/verb-rich/IPN/whole-body completed movements. Source integrated
+      and accepted; runtime verification remains deferred to T040. This
+      integration lane does not reopen feature corrections.
 - [x] T036 Tighten the stable full-parser prompt so emitted rows represent only
       completed positive-amount transactions and never OTP/fake/zero-amount
       placeholders.
@@ -206,10 +208,12 @@ verification/integration owner supplies evidence.
       `mockups/sms-results-page.svg` + binding, record 2026-10-02 approval,
       update the former no-UI scope notes, and document the deferred QA/manual
       plan. Source documentation present; verification deferred.
-- [ ] T046 FUTURE LOCAL OWNER: import the authoritative approved PNG with
-      sha256 `b071fb29955520dbc0fc856d238ec144c482cebe36efe451596308555448beeb`,
-      reconcile later backend integration without overwriting either lane, and
-      preserve the approved SVG/binding. Not owned by this remote UI worker.
+- [ ] T046 Source integrated/unverified: the authoritative approved PNG was
+      imported to `specs/388-sms-ai-provider/mockups/sms-results-page.png`
+      (sha256 `b071fb29955520dbc0fc856d238ec144c482cebe36efe451596308555448beeb`)
+      by the integration lane, reconciling the earlier UI and backend lanes
+      without overwriting either. Approved SVG/binding preserved. All runtime
+      checks remain unverified and stay under T047.
 - [ ] T047 DEFERRED BY PRODUCT OWNER FOR CURRENT TRIAL: add/run the UI
       unit/integration/E2E coverage, focused existing evaluator regression,
       TypeScript, lint, format, CI, physical/emulator device QA, EN/AR/RTL,
