@@ -12,6 +12,15 @@ export type EvaluationFieldExpectation<T> =
   | { readonly kind: "one_of"; readonly values: readonly T[] }
   | { readonly kind: "unknown" };
 
+export type EvaluationConfidenceExpectation =
+  | { readonly kind: "unknown" }
+  | {
+      readonly kind: "range";
+      readonly minimum: number;
+      readonly maximum: number;
+      readonly rationale: string;
+    };
+
 export interface EvaluationTransactionExpectation {
   readonly amount: EvaluationFieldExpectation<number>;
   readonly currency: EvaluationFieldExpectation<string>;
@@ -20,7 +29,9 @@ export interface EvaluationTransactionExpectation {
   readonly counterparty: EvaluationFieldExpectation<string>;
   readonly categorySystemName: EvaluationFieldExpectation<string>;
   readonly cardLast4: EvaluationFieldExpectation<string | undefined>;
-  readonly confidenceScore: EvaluationFieldExpectation<number>;
+  readonly isTrusted: EvaluationFieldExpectation<boolean>;
+  readonly isAtmWithdrawal: EvaluationFieldExpectation<boolean>;
+  readonly confidenceScore: EvaluationConfidenceExpectation;
 }
 
 export interface SyntheticEvaluationCase {
@@ -48,6 +59,7 @@ export interface SyntheticEvaluationCase {
 
 export type FinalObservationClassification =
   | "observed"
+  | "response_invalid"
   | "transport_failure"
   | "admission_failure"
   | "unresolved"
@@ -64,6 +76,9 @@ export interface FinalBatchObservation {
   readonly latencyMs?: number;
   readonly transactions?: readonly ParseSmsProviderTransaction[];
   readonly completionStatus?: string;
+  readonly negativeFingerprints?: readonly string[];
+  readonly terminalFingerprints?: readonly string[];
+  readonly unresolvedFingerprints?: readonly string[];
   readonly usage?: Readonly<Record<string, unknown>>;
   readonly replayProvenance?: "confirmed_provider_call" | "unknown";
 }
@@ -81,18 +96,49 @@ export interface RawObservationImport {
   readonly batches: readonly RawBatchObservation[];
 }
 
-export const RawObservationImportSchema = z.object({
-  runId: z.string().min(1),
-  batches: z.array(
-    z.object({
-      runId: z.string().min(1),
-      batchId: z.string().min(1),
-      caseIds: z.array(z.string().min(1)),
-      inputIdentity: z.string().min(1),
-      responseContent: z.string(),
-    })
-  ),
-});
+export const RawObservationImportSchema = z
+  .object({
+    runId: z.string().min(1),
+    batches: z.array(
+      z
+        .object({
+          runId: z.string().min(1),
+          batchId: z.string().min(1),
+          caseIds: z.array(z.string().min(1)),
+          inputIdentity: z.string().min(1),
+          responseContent: z.string(),
+        })
+        .strict()
+    ),
+  })
+  .strict();
+
+export const ParseSmsEvaluationTransactionSchema = z
+  .object({
+    messageId: z.string().min(1),
+    amount: z.number().finite().positive(),
+    currency: z.string().min(1),
+    type: z.enum(["EXPENSE", "INCOME"]),
+    counterparty: z.string(),
+    date: z.string().min(1),
+    categorySystemName: z.string().min(1),
+    isAtmWithdrawal: z.boolean().optional(),
+    cardLast4: z.string().optional(),
+    confidenceScore: z.number().finite().min(0).max(1),
+    isTrusted: z.boolean(),
+  })
+  .strict();
+
+export const ParseSmsEvaluationResponseSchema = z
+  .object({
+    transactions: z.array(ParseSmsEvaluationTransactionSchema),
+    completionStatus: z.string().min(1),
+    negativeFingerprints: z.array(z.string()),
+    terminalFingerprints: z.array(z.string()),
+    unresolvedFingerprints: z.array(z.string()),
+    reason: z.string().optional(),
+  })
+  .passthrough();
 
 export interface CaseFieldMismatch {
   readonly field: string;
@@ -107,6 +153,7 @@ export interface EvaluationCaseReport {
   readonly body: string;
   readonly expected: SyntheticEvaluationCase["expected"];
   readonly finalClassification: FinalObservationClassification;
+  readonly replayProvenance: "confirmed_provider_call" | "unknown";
   readonly actual: readonly ParseSmsProviderTransaction[];
   readonly mismatches: readonly CaseFieldMismatch[];
   readonly raw:
@@ -131,16 +178,52 @@ export interface EvaluationAggregate {
   readonly unknownMessageIds: number;
 }
 
+export interface EvaluationGroupSummary {
+  readonly key: string;
+  readonly aggregate: EvaluationAggregate;
+  readonly classifications: Readonly<
+    Partial<Record<FinalObservationClassification, number>>
+  >;
+}
+
+export interface EvaluationBatchSummary {
+  readonly batchId: string;
+  readonly classification: FinalObservationClassification;
+  readonly caseCount: number;
+  readonly latencyMs?: number;
+  readonly replayProvenance: "confirmed_provider_call" | "unknown";
+  readonly completionStatus?: string;
+}
+
+export interface EvaluationLatencySummary {
+  readonly observedCount: number;
+  readonly minimumMs: number | null;
+  readonly maximumMs: number | null;
+  readonly averageMs: number | null;
+}
+
 export interface EvaluationReport {
   readonly runId: string;
   readonly mode: "dry-run" | "live";
   readonly cancelled: boolean;
   readonly cases: readonly EvaluationCaseReport[];
   readonly aggregate: EvaluationAggregate;
+  readonly rawAggregate: EvaluationAggregate;
   readonly rawCoverage: {
     readonly observedBatches: number;
     readonly totalBatches: number;
   };
+  readonly providerSummaries: readonly EvaluationGroupSummary[];
+  readonly scenarioSummaries: readonly EvaluationGroupSummary[];
+  readonly classificationSummary: Readonly<
+    Partial<Record<FinalObservationClassification, number>>
+  >;
+  readonly batchSummaries: readonly EvaluationBatchSummary[];
+  readonly provenanceSummary: {
+    readonly confirmedProviderCall: number;
+    readonly unknown: number;
+  };
+  readonly latencySummary: EvaluationLatencySummary;
 }
 
 export interface EvaluationRunOptions {

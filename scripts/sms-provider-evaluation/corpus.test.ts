@@ -162,3 +162,47 @@ test("a fresh run anchor changes fingerprint identity while keeping the labeled 
     second[0]?.message.smsFingerprint
   );
 });
+
+
+test("labels objectively knowable trust and ATM state while keeping confidence non-arbitrary", async () => {
+  const corpus = await buildSyntheticEvaluationCorpus({
+    runId: RUN_ID,
+    anchorMs: ANCHOR_MS,
+  });
+  const positives = corpus.filter(
+    (item): item is typeof item & {
+      readonly expected: Extract<typeof item.expected, { readonly kind: "transaction" }>;
+    } => item.expected.kind === "transaction"
+  );
+
+  assert.ok(positives.length > 0);
+  for (const item of positives) {
+    assert.notEqual(item.expected.fields.isTrusted.kind, "unknown", item.caseId);
+    assert.notEqual(
+      item.expected.fields.isAtmWithdrawal.kind,
+      "unknown",
+      item.caseId
+    );
+    assert.notEqual(item.expected.fields.confidenceScore.kind, "exact", item.caseId);
+  }
+
+  const atm = positives.find(({ tags }) => tags.includes("atm"));
+  if (atm === undefined) throw new Error("expected_atm_fixture_missing");
+  assert.deepEqual(atm.expected.fields.isAtmWithdrawal, {
+    kind: "exact",
+    value: true,
+  });
+
+  const genericGateway = positives.find(({ tags }) =>
+    tags.includes("generic_gateway_ambiguous_category")
+  );
+  if (genericGateway === undefined) {
+    throw new Error("expected_generic_gateway_fixture_missing");
+  }
+  assert.equal(genericGateway.expected.fields.categorySystemName.kind, "unknown");
+  assert.equal(genericGateway.expected.fields.confidenceScore.kind, "range");
+  if (genericGateway.expected.fields.confidenceScore.kind === "range") {
+    assert.ok(genericGateway.expected.fields.confidenceScore.maximum <= 0.6);
+    assert.ok(genericGateway.expected.fields.confidenceScore.rationale.length > 0);
+  }
+});

@@ -59,6 +59,11 @@ test("accepts only raw observations attributed to the same run, batch, case list
 
 test("rejects malformed imports and never attaches another run or ambiguous batch identity", () => {
   for (const value of [
+    null,
+    true,
+    42,
+    "malformed",
+    [],
     {},
     {
       runId: "other-run",

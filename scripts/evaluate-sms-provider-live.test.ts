@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   parseSmsProviderEvaluationCliArgs,
   runSmsProviderEvaluationCli,
+  type SmsProviderEvaluationCliDependencies,
 } from "./evaluate-sms-provider-live.ts";
 import {
   STAGING_PARSE_SMS_ENDPOINT,
@@ -12,13 +13,20 @@ import {
 
 const NOW = Date.parse("2026-10-01T17:00:00.000Z");
 
-function dependencies() {
+interface CliHarness {
+  readonly dependency: SmsProviderEvaluationCliDependencies;
+  readonly getFetchCalls: () => number;
+  readonly stdout: string[];
+  readonly stderr: string[];
+}
+
+function dependencies(): CliHarness {
   let fetchCalls = 0;
   const stdout: string[] = [];
   const stderr: string[] = [];
   return {
     dependency: {
-      fetch: async () => {
+      fetch: async (): Promise<Response> => {
         fetchCalls++;
         return new Response(
           JSON.stringify({
@@ -31,15 +39,19 @@ function dependencies() {
           { status: 200, headers: { "content-type": "application/json" } }
         );
       },
-      now: () => NOW,
-      writeStdout: (value: string) => stdout.push(value),
-      writeStderr: (value: string) => stderr.push(value),
+      now: (): number => NOW,
+      writeStdout: (value: string): void => {
+        stdout.push(value);
+      },
+      writeStderr: (value: string): void => {
+        stderr.push(value);
+      },
       environment: {
         SMS_PROVIDER_EVAL_ACCESS_TOKEN: "secret-token",
         SMS_PROVIDER_EVAL_PUBLIC_API_KEY: "public-key",
       },
     },
-    getFetchCalls: () => fetchCalls,
+    getFetchCalls: (): number => fetchCalls,
     stdout,
     stderr,
   };
@@ -81,31 +93,56 @@ test("CLI live mode pins staging and reads credentials only from injected enviro
   assert.equal(parsed.publicApiKey, "public-key");
 });
 
-test("CLI refuses credential flags and does not echo environment credentials in output", async () => {
+test("CLI rejects non-finite, fractional, zero, and negative limits with the evaluator limit error", () => {
+  for (const badValue of ["NaN", "Infinity", "1.5", "0", "-1"]) {
+    assert.throws(
+      () =>
+        parseSmsProviderEvaluationCliArgs(
+          ["--max-cases", badValue, "--max-requests", "2"],
+          {}
+        ),
+      /sms_provider_evaluation_invalid_limit/
+    );
+    assert.throws(
+      () =>
+        parseSmsProviderEvaluationCliArgs(
+          ["--max-cases", "2", "--max-requests", badValue],
+          {}
+        ),
+      /sms_provider_evaluation_invalid_limit/
+    );
+  }
+});
+
+test("CLI refuses credential flags with a specific argument error and does not echo environment credentials", async () => {
   const h = dependencies();
 
-  assert.throws(() =>
-    parseSmsProviderEvaluationCliArgs(
-      ["--access-token", "do-not-accept-cli-secret"],
-      h.dependency.environment
-    )
+  assert.throws(
+    () =>
+      parseSmsProviderEvaluationCliArgs(
+        ["--access-token", "do-not-accept-cli-secret"],
+        h.dependency.environment
+      ),
+    /sms_provider_evaluation_unknown_or_forbidden_argument/
   );
 
-  await assert.rejects(() =>
-    runSmsProviderEvaluationCli(
-      [
-        "--live",
-        "--run-id",
-        "bad-live",
-        "--max-cases",
-        "10",
-        "--max-requests",
-        "2",
-        "--endpoint",
-        "https://evil.example/functions/v1/parse-sms",
-      ],
-      h.dependency
-    )
+  await assert.rejects(
+    () =>
+      runSmsProviderEvaluationCli(
+        [
+          "--live",
+          "--run-id",
+          "bad-live",
+          "--max-cases",
+          "10",
+          "--max-requests",
+          "2",
+          "--endpoint",
+          "https://evil.example/functions/v1/parse-sms",
+        ],
+        h.dependency
+      ),
+    /sms_provider_evaluation_invalid_staging_target/
   );
 
   const output = h.stdout.join("") + h.stderr.join("");
