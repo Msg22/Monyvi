@@ -100,7 +100,8 @@
     "test": "npm test -w @monyvi/mobile",
     "prepare": "node -e \"if (process.env.CI !== 'true') { process.exit(1) }\" || husky",
     "postinstall": "node scripts/postinstall.js",
-    "test:sms-ai-provider": "tsx --test supabase/functions/_shared/sms-ai/sms-ai-provider-config.test.ts supabase/functions/_shared/sms-ai/sms-ai-prompt.test.ts supabase/functions/_shared/sms-ai/providers/deepinfra-sms-provider.test.ts supabase/functions/_shared/sms-ai/parse-sms-deepinfra.integration.test.ts supabase/functions/_shared/sms-ai/sms-ai-provider-factory.test.ts supabase/functions/_shared/sms-ai/parse-sms-openapi-contract.test.ts"
+    "test:sms-ai-provider": "tsx --test supabase/functions/_shared/sms-ai/sms-ai-provider-config.test.ts supabase/functions/_shared/sms-ai/sms-ai-prompt.test.ts supabase/functions/_shared/sms-ai/providers/deepinfra-sms-provider.test.ts supabase/functions/_shared/sms-ai/parse-sms-deepinfra.integration.test.ts supabase/functions/_shared/sms-ai/sms-ai-provider-factory.test.ts supabase/functions/_shared/sms-ai/parse-sms-openapi-contract.test.ts",
+    "test:sms-provider-live-evaluator": "tsx --test scripts/sms-provider-evaluation/*.test.ts scripts/evaluate-sms-provider-live.test.ts"
   },
   "dependencies": {
     "@nozbe/watermelondb": "^0.28.0"
