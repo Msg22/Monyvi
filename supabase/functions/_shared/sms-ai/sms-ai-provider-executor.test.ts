@@ -13,6 +13,7 @@ import {
   type SmsAiProviderRequestInputMessage,
 } from "./sms-ai-provider-executor.ts";
 import { DeepInfraSmsProvider } from "./providers/deepinfra-sms-provider.ts";
+import { BUILT_IN_SMS_CATEGORY_TREE } from "./sms-ai-prompt.ts";
 
 const INPUT: ExecuteSmsProviderInput = {
   messages: [
@@ -31,7 +32,7 @@ const INPUT: ExecuteSmsProviderInput = {
       smsFingerprint: "fingerprint-secret-2",
     },
   ],
-  categories: "SECRET CATEGORY CONTEXT",
+  categories: BUILT_IN_SMS_CATEGORY_TREE,
   supportedCurrencies: ["EGP"],
 };
 
@@ -105,7 +106,7 @@ test("captures only admitted sender/body/date before the provider request", asyn
   const diagnosticJson = JSON.stringify(diagnostics[0]);
   assert.equal(diagnosticJson.includes("message-1"), false);
   assert.equal(diagnosticJson.includes("fingerprint-secret"), false);
-  assert.equal(diagnosticJson.includes("SECRET CATEGORY CONTEXT"), false);
+  assert.equal(diagnosticJson.includes(INPUT.categories), false);
 
   const outboundRequest = outboundRequests[0];
   assert.ok(outboundRequest);
