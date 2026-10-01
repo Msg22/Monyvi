@@ -23,6 +23,7 @@ const PRE_PARSER_SECURITY_CODE_PATTERNS = [
 
 const COMPLETED_FINANCIAL_MOVEMENT_PATTERNS = [
   /\b(?:payment|purchase|transaction|transfer|withdrawal|deposit|refund)\b[\s\S]{0,80}\b(?:completed|successful|successfully)\b/i,
+  /\b(?:completed|successful)\s+(?:payment|purchase|transaction|transfer|withdrawal|deposit|refund)\b/i,
   /\b(?:debited|credited|paid|received|withdrew|withdrawn|transferred)\b[\s\S]{0,80}\b(?:EGP|USD|EUR|GBP|SAR|AED|KWD|LE|L\.E)\b/i,
   /\b(?:EGP|USD|EUR|GBP|SAR|AED|KWD|LE|L\.E)\b[\s\S]{0,80}\b(?:debited|credited|paid|received|withdrew|withdrawn|transferred)\b/i,
   /تم\s*(?:خصم|دفع|تحويل|استلام|سحب|ايداع)/u,
