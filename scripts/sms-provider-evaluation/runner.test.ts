@@ -72,7 +72,10 @@ function parsedTransaction(messageId: string): ParseSmsProviderTransaction {
 }
 
 function readSentMessages(init: RequestInit | undefined): readonly SentMessage[] {
-  const parsed = JSON.parse(String(init?.body)) as unknown;
+  if (typeof init?.body !== "string") {
+    throw new Error("request_body_not_string");
+  }
+  const parsed = JSON.parse(init.body) as unknown;
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
     throw new Error("request_body_not_object");
   }
@@ -127,12 +130,12 @@ function assertAllCasesClassified(
   );
 }
 
-test("dry-run is the default network-safe path and performs zero fetches", async () => {
+void test("dry-run is the default network-safe path and performs zero fetches", async () => {
   let fetchCalls = 0;
   const report = await runSmsProviderEvaluation(options(), {
-    fetch: async (): Promise<Response> => {
+    fetch: (): Promise<Response> => {
       fetchCalls++;
-      throw new Error("network must not run in dry mode");
+      return Promise.reject(new Error("network must not run in dry mode"));
     },
     now: (): number => ANCHOR_MS,
   });
@@ -142,7 +145,7 @@ test("dry-run is the default network-safe path and performs zero fetches", async
   assert.ok(report.cases.length > 0);
 });
 
-test("pins live execution to the one approved staging parse-sms HTTPS endpoint with specific guard failures", () => {
+void test("pins live execution to the one approved staging parse-sms HTTPS endpoint with specific guard failures", () => {
   assert.equal(STAGING_PROJECT_REF, "yulbcndyssdjicbpmlrk");
   assert.equal(
     STAGING_PARSE_SMS_ENDPOINT,
@@ -181,7 +184,7 @@ test("pins live execution to the one approved staging parse-sms HTTPS endpoint w
   }
 });
 
-test("live mode requires finite positive integer bounds and a staging user token before fetch", async () => {
+void test("live mode requires finite positive integer bounds and a staging user token before fetch", async () => {
   for (const invalidLimit of [0, -1, Number.NaN, Number.POSITIVE_INFINITY, 1.5]) {
     expectRunOptionError(
       options({
@@ -229,9 +232,9 @@ test("live mode requires finite positive integer bounds and a staging user token
           accessToken: "token",
         }),
         {
-          fetch: async (): Promise<Response> => {
+          fetch: (): Promise<Response> => {
             fetchCalls++;
-            return validFinalResponse();
+            return Promise.resolve(validFinalResponse());
           },
           now: (): number => ANCHOR_MS,
         }
@@ -241,7 +244,7 @@ test("live mode requires finite positive integer bounds and a staging user token
   assert.equal(fetchCalls, 0);
 });
 
-test("live calls are sequential five-message batches, bounded, non-retrying, and refuse redirects", async () => {
+void test("live calls are sequential five-message batches, bounded, non-retrying, and refuse redirects", async () => {
   let active = 0;
   let maxActive = 0;
   const requests: Array<{ readonly url: string; readonly init?: RequestInit }> = [];
@@ -260,7 +263,13 @@ test("live calls are sequential five-message batches, bounded, non-retrying, and
       fetch: async (input, init): Promise<Response> => {
         active++;
         maxActive = Math.max(maxActive, active);
-        requests.push({ url: String(input), init });
+        const url =
+          typeof input === "string"
+            ? input
+            : input instanceof URL
+              ? input.toString()
+              : input.url;
+        requests.push({ url, init });
         await Promise.resolve();
         active--;
         return validFinalResponse();
@@ -281,7 +290,10 @@ test("live calls are sequential five-message batches, bounded, non-retrying, and
     assert.equal(headers.get("apikey"), "public-anon-key");
     const messages = readSentMessages(request.init);
     assert.ok(messages.length <= DEFAULT_EVALUATION_BATCH_SIZE);
-    const serialized = String(request.init?.body);
+    if (typeof request.init?.body !== "string") {
+      throw new Error("request_body_not_string");
+    }
+    const serialized = request.init.body;
     assert.equal(serialized.includes("expected"), false);
     assert.equal(serialized.includes("holdout"), false);
     assert.equal(serialized.includes("provenance"), false);
@@ -289,7 +301,7 @@ test("live calls are sequential five-message batches, bounded, non-retrying, and
   }
 });
 
-test("outbound messages use the canonical fingerprint helper output", async () => {
+void test("outbound messages use the canonical fingerprint helper output", async () => {
   const corpus = await buildSyntheticEvaluationCorpus({
     runId: "run-live-red",
     anchorMs: ANCHOR_MS,
@@ -308,9 +320,9 @@ test("outbound messages use the canonical fingerprint helper output", async () =
       accessToken: "token",
     }),
     {
-      fetch: async (_input, init): Promise<Response> => {
+      fetch: (_input, init): Promise<Response> => {
         sentMessages = readSentMessages(init);
-        return validFinalResponse();
+        return Promise.resolve(validFinalResponse());
       },
       now: (): number => ANCHOR_MS,
     }
@@ -321,7 +333,7 @@ test("outbound messages use the canonical fingerprint helper output", async () =
   assert.equal(sent.smsFingerprint, expectedFirst.message.smsFingerprint);
 });
 
-test("malformed or non-JSON HTTP 200 responses are response-invalid, never semantic empty observations", async () => {
+void test("malformed or non-JSON HTTP 200 responses are response-invalid, never semantic empty observations", async () => {
   const responses = [
     new Response("not-json", {
       status: 200,
@@ -359,7 +371,7 @@ test("malformed or non-JSON HTTP 200 responses are response-invalid, never seman
         accessToken: "token",
       }),
       {
-        fetch: async (): Promise<Response> => response.clone(),
+        fetch: (): Promise<Response> => Promise.resolve(response.clone()),
         now: (): number => ANCHOR_MS,
       }
     );
@@ -372,7 +384,7 @@ test("malformed or non-JSON HTTP 200 responses are response-invalid, never seman
   }
 });
 
-test("mixed accepted, unresolved, and terminal candidates stay separately represented", async () => {
+void test("mixed accepted, unresolved, and terminal candidates stay separately represented", async () => {
   const report = await runSmsProviderEvaluation(
     options({
       mode: "live",
@@ -383,7 +395,7 @@ test("mixed accepted, unresolved, and terminal candidates stay separately repres
       accessToken: "token",
     }),
     {
-      fetch: async (_input, init): Promise<Response> => {
+      fetch: (_input, init): Promise<Response> => {
         const messages = readSentMessages(init);
         const first = messages[0];
         const second = messages[1];
@@ -391,11 +403,13 @@ test("mixed accepted, unresolved, and terminal candidates stay separately repres
         if (first === undefined || second === undefined || third === undefined) {
           throw new Error("expected_three_messages");
         }
-        return validFinalResponse({
-          transactions: [parsedTransaction(first.id)],
-          unresolvedFingerprints: [second.smsFingerprint],
-          terminalFingerprints: [third.smsFingerprint],
-        });
+        return Promise.resolve(
+          validFinalResponse({
+            transactions: [parsedTransaction(first.id)],
+            unresolvedFingerprints: [second.smsFingerprint],
+            terminalFingerprints: [third.smsFingerprint],
+          })
+        );
       },
       now: (): number => ANCHOR_MS,
     }
@@ -408,7 +422,7 @@ test("mixed accepted, unresolved, and terminal candidates stay separately repres
   );
 });
 
-test("truncated completion remains unresolved rather than becoming a semantic omission or true negative", async () => {
+void test("truncated completion remains unresolved rather than becoming a semantic omission or true negative", async () => {
   const report = await runSmsProviderEvaluation(
     options({
       mode: "live",
@@ -419,10 +433,12 @@ test("truncated completion remains unresolved rather than becoming a semantic om
       accessToken: "token",
     }),
     {
-      fetch: async (): Promise<Response> =>
-        validFinalResponse({
-          completionStatus: "truncated",
-        }),
+      fetch: (): Promise<Response> =>
+        Promise.resolve(
+          validFinalResponse({
+            completionStatus: "truncated",
+          })
+        ),
       now: (): number => ANCHOR_MS,
     }
   );
@@ -434,7 +450,7 @@ test("truncated completion remains unresolved rather than becoming a semantic om
   assert.equal(report.aggregate.falseNegative, 0);
 });
 
-test("auth, consent, and capacity refusal stop later batches while preserving the partial report", async () => {
+void test("auth, consent, and capacity refusal stop later batches while preserving the partial report", async () => {
   const refusalCases = [
     { response: new Response(JSON.stringify({ reason: "unauthorized" }), { status: 401 }) },
     { response: new Response(JSON.stringify({ reason: "consent_required" }), { status: 403 }) },
@@ -458,9 +474,9 @@ test("auth, consent, and capacity refusal stop later batches while preserving th
         accessToken: "token",
       }),
       {
-        fetch: async (): Promise<Response> => {
+        fetch: (): Promise<Response> => {
           fetchCalls++;
-          return response.clone();
+          return Promise.resolve(response.clone());
         },
         now: (): number => ANCHOR_MS,
       }
@@ -475,7 +491,7 @@ test("auth, consent, and capacity refusal stop later batches while preserving th
   }
 });
 
-test("refusal payloads cannot leak access token or public API key into reports", async () => {
+void test("refusal payloads cannot leak access token or public API key into reports", async () => {
   const accessToken = "secret-refusal-token";
   const publicApiKey = "public-refusal-key";
 
@@ -490,13 +506,15 @@ test("refusal payloads cannot leak access token or public API key into reports",
       publicApiKey,
     }),
     {
-      fetch: async (): Promise<Response> =>
-        new Response(
-          JSON.stringify({
+      fetch: (): Promise<Response> =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify({
             reason: `consent_required:${accessToken}`,
             error: `upstream:${publicApiKey}`,
           }),
-          { status: 403, headers: { "content-type": "application/json" } }
+            { status: 403, headers: { "content-type": "application/json" } }
+          )
         ),
       now: (): number => ANCHOR_MS,
     }
@@ -512,7 +530,7 @@ test("refusal payloads cannot leak access token or public API key into reports",
   );
 });
 
-test("ordinary transport failure is not automatically retried against live allowance", async () => {
+void test("ordinary transport failure is not automatically retried against live allowance", async () => {
   let fetchCalls = 0;
   const report = await runSmsProviderEvaluation(
     options({
@@ -524,9 +542,9 @@ test("ordinary transport failure is not automatically retried against live allow
       accessToken: "token",
     }),
     {
-      fetch: async (): Promise<Response> => {
+      fetch: (): Promise<Response> => {
         fetchCalls++;
-        throw new TypeError("synthetic network failure");
+        return Promise.reject(new TypeError("synthetic network failure"));
       },
       now: (): number => ANCHOR_MS,
     }
@@ -536,7 +554,7 @@ test("ordinary transport failure is not automatically retried against live allow
   assertAllCasesClassified(report, "transport_failure");
 });
 
-test("cancellation while fetch is pending forwards the AbortSignal and preserves a partial report", async () => {
+void test("cancellation while fetch is pending forwards the AbortSignal and preserves a partial report", async () => {
   const controller = new AbortController();
   let forwardedSignal: AbortSignal | null = null;
   let markStarted: (() => void) | undefined;
@@ -583,7 +601,7 @@ test("cancellation while fetch is pending forwards the AbortSignal and preserves
   );
 });
 
-test("tokens and public keys never appear in specific staging-guard errors", async () => {
+void test("tokens and public keys never appear in specific staging-guard errors", async () => {
   const token = "super-secret-user-token";
   const publicKey = "public-test-key";
 
@@ -598,7 +616,7 @@ test("tokens and public keys never appear in specific staging-guard errors", asy
           publicApiKey: publicKey,
         }),
         {
-          fetch: async (): Promise<Response> => new Response(),
+          fetch: (): Promise<Response> => Promise.resolve(new Response()),
           now: (): number => ANCHOR_MS,
         }
       ),
@@ -613,7 +631,7 @@ test("tokens and public keys never appear in specific staging-guard errors", asy
 });
 
 
-test("batch summary exposes only sanitized status/reason and measures latency through response body completion", async () => {
+void test("batch summary exposes only sanitized status/reason and measures latency through response body completion", async () => {
   let clockMs = 1_000;
   class DelayedBodyResponse extends Response {
     override async text(): Promise<string> {
@@ -633,8 +651,9 @@ test("batch summary exposes only sanitized status/reason and measures latency th
       publicApiKey: "public-key",
     }),
     {
-      fetch: async (): Promise<Response> =>
-        new DelayedBodyResponse(
+      fetch: (): Promise<Response> =>
+        Promise.resolve(
+          new DelayedBodyResponse(
           JSON.stringify({
             reason: "consent_required",
             error: "do-not-expose-upstream-detail",

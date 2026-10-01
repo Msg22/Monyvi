@@ -29,17 +29,19 @@ function dependencies(): CliHarness {
   const stderr: string[] = [];
   return {
     dependency: {
-      fetch: async (): Promise<Response> => {
+      fetch: (): Promise<Response> => {
         fetchCalls++;
-        return new Response(
-          JSON.stringify({
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
             transactions: [],
             completionStatus: "complete",
             negativeFingerprints: [],
             terminalFingerprints: [],
             unresolvedFingerprints: [],
           }),
-          { status: 200, headers: { "content-type": "application/json" } }
+            { status: 200, headers: { "content-type": "application/json" } }
+          )
         );
       },
       now: (): number => NOW,
@@ -60,7 +62,7 @@ function dependencies(): CliHarness {
   };
 }
 
-test("CLI defaults to dry-run and requires an explicit --live opt-in for network use", async () => {
+void test("CLI defaults to dry-run and requires an explicit --live opt-in for network use", async () => {
   const h = dependencies();
   const report = await runSmsProviderEvaluationCli(
     ["--run-id", "cli-dry", "--max-cases", "10", "--max-requests", "2"],
@@ -72,7 +74,7 @@ test("CLI defaults to dry-run and requires an explicit --live opt-in for network
   assert.ok(h.stdout.join("").includes("cli-dry"));
 });
 
-test("CLI live mode pins staging and reads credentials only from injected environment", () => {
+void test("CLI live mode pins staging and reads credentials only from injected environment", () => {
   const parsed = parseSmsProviderEvaluationCliArgs(
     [
       "--live",
@@ -96,7 +98,7 @@ test("CLI live mode pins staging and reads credentials only from injected enviro
   assert.equal(parsed.publicApiKey, "public-key");
 });
 
-test("CLI rejects non-finite, fractional, zero, and negative limits with the evaluator limit error", () => {
+void test("CLI rejects non-finite, fractional, zero, and negative limits with the evaluator limit error", () => {
   for (const badValue of ["NaN", "Infinity", "1.5", "0", "-1"]) {
     assert.throws(
       () =>
@@ -117,7 +119,7 @@ test("CLI rejects non-finite, fractional, zero, and negative limits with the eva
   }
 });
 
-test("CLI refuses credential flags with a specific argument error and does not echo environment credentials", async () => {
+void test("CLI refuses credential flags with a specific argument error and does not echo environment credentials", async () => {
   const h = dependencies();
 
   assert.throws(
@@ -153,7 +155,7 @@ test("CLI refuses credential flags with a specific argument error and does not e
   assert.equal(output.includes("public-key"), false);
 });
 
-test("CLI can accept an optional manual raw-observation file path without implying raw coverage", () => {
+void test("CLI can accept an optional manual raw-observation file path without implying raw coverage", () => {
   const parsed = parseSmsProviderEvaluationCliArgs(
     [
       "--run-id",
@@ -173,7 +175,7 @@ test("CLI can accept an optional manual raw-observation file path without implyi
 });
 
 
-test("CLI accepts provider-input evidence separately from raw response evidence", () => {
+void test("CLI accepts provider-input evidence separately from raw response evidence", () => {
   const parsed = parseSmsProviderEvaluationCliArgs(
     [
       "--run-id",
@@ -197,13 +199,13 @@ test("CLI accepts provider-input evidence separately from raw response evidence"
   );
 });
 
-test("standalone SIGINT and SIGTERM abort pending live fetch and persist partial JSON with remaining cases unattempted", async () => {
+void test("standalone SIGINT and SIGTERM abort pending live fetch and persist partial JSON with remaining cases unattempted", async () => {
   for (const signal of ["SIGINT", "SIGTERM"] as const) {
     const handlers = new Map<
       SmsProviderEvaluationTerminationSignal,
       () => void
     >();
-    let forwardedSignal: AbortSignal | null = null;
+    const forwardedSignals: AbortSignal[] = [];
     let resolveStarted: (() => void) | undefined;
     const started = new Promise<void>((resolve) => {
       resolveStarted = resolve;
@@ -211,11 +213,15 @@ test("standalone SIGINT and SIGTERM abort pending live fetch and persist partial
     const saved = new Map<string, string>();
 
     const dependencies: SmsProviderEvaluationProcessEntryDependencies = {
-      fetch: async (_input, init): Promise<Response> => {
-        forwardedSignal = init?.signal ?? null;
+      fetch: (_input, init): Promise<Response> => {
+        const signalValue = init?.signal;
+        if (!(signalValue instanceof AbortSignal)) {
+          return Promise.reject(new Error("abort_signal_missing"));
+        }
+        forwardedSignals.push(signalValue);
         resolveStarted?.();
-        return await new Promise<Response>((_resolve, reject) => {
-          forwardedSignal?.addEventListener(
+        return new Promise<Response>((_resolve, reject) => {
+          signalValue.addEventListener(
             "abort",
             () => reject(new DOMException("aborted", "AbortError")),
             { once: true }
@@ -261,10 +267,14 @@ test("standalone SIGINT and SIGTERM abort pending live fetch and persist partial
       started,
       runPromise.then(
         () => Promise.reject(new Error("process_entry_completed_before_fetch")),
-        (error: unknown) => Promise.reject(error)
+        (error: unknown) =>
+          Promise.reject(
+            error instanceof Error ? error : new Error(String(error))
+          )
       ),
     ]);
 
+    const forwardedSignal = forwardedSignals[0] ?? null;
     assert.equal(forwardedSignal instanceof AbortSignal, true);
     const handler = handlers.get(signal);
     if (handler === undefined) throw new Error("signal_handler_missing");

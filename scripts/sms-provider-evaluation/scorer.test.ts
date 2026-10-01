@@ -113,7 +113,7 @@ function requireCase(
   return value;
 }
 
-test("scores observed positives and negatives by messageId with objective trust/ATM fields and partial denominators", () => {
+void test("scores observed positives and negatives by messageId with objective trust/ATM fields and partial denominators", () => {
   const cases = [positiveCase("p1"), negativeCase("n1")];
   const report = scoreSmsProviderEvaluation({
     runId: "run-score",
@@ -145,7 +145,7 @@ test("scores observed positives and negatives by messageId with objective trust/
   assert.equal(firstReport.mismatches.length, 0);
 });
 
-test("counts legitimate observed empty output separately from malformed or unobserved output", () => {
+void test("counts legitimate observed empty output separately from malformed or unobserved output", () => {
   const report = scoreSmsProviderEvaluation({
     runId: "run-score",
     mode: "live",
@@ -158,7 +158,7 @@ test("counts legitimate observed empty output separately from malformed or unobs
   assert.equal(report.classificationSummary.observed, 2);
 });
 
-test("does not convert transport, admission, response-invalid, unresolved, suppressed, or unattempted cases into semantic passes or misses", () => {
+void test("does not convert transport, admission, response-invalid, unresolved, suppressed, or unattempted cases into semantic passes or misses", () => {
   const classifications = [
     "transport_failure",
     "admission_failure",
@@ -196,7 +196,7 @@ test("does not convert transport, admission, response-invalid, unresolved, suppr
   );
 });
 
-test("unknown and duplicate output identities never inflate true positives, recall, or field denominators", () => {
+void test("unknown and duplicate output identities never inflate true positives, recall, or field denominators", () => {
   const report = scoreSmsProviderEvaluation({
     runId: "run-score",
     mode: "live",
@@ -217,7 +217,7 @@ test("unknown and duplicate output identities never inflate true positives, reca
   assert.ok(report.aggregate.recall === null || report.aggregate.recall <= 1);
 });
 
-test("accepts explicit category alternatives without treating unknown category purpose as exact truth", () => {
+void test("accepts explicit category alternatives without treating unknown category purpose as exact truth", () => {
   const report = scoreSmsProviderEvaluation({
     runId: "run-score",
     mode: "live",
@@ -241,7 +241,7 @@ test("accepts explicit category alternatives without treating unknown category p
   assert.equal(report.aggregate.fieldCorrect.categorySystemName, 1);
 });
 
-test("keeps replay provider-call provenance visible instead of treating a response as proof of a fresh call", () => {
+void test("keeps replay provider-call provenance visible instead of treating a response as proof of a fresh call", () => {
   const report = scoreSmsProviderEvaluation({
     runId: "run-score",
     mode: "live",
@@ -261,7 +261,7 @@ test("keeps replay provider-call provenance visible instead of treating a respon
   assert.equal(report.aggregate.falseNegative, 1);
 });
 
-test("scores manually attributed raw output separately from final output with partial raw coverage including raw empty batches", () => {
+void test("scores manually attributed raw output separately from final output with partial raw coverage including raw empty batches", () => {
   const cases = [
     positiveCase("p1"),
     negativeCase("n1"),
@@ -323,7 +323,7 @@ test("scores manually attributed raw output separately from final output with pa
   assert.equal(p2.raw.status, "not_observed");
 });
 
-test("reports provider/scenario groups plus classification, batch, provenance, and latency summaries", () => {
+void test("reports provider/scenario groups plus classification, batch, provenance, and latency summaries", () => {
   const cases = [
     positiveCase("qnb-purchase", {
       providerId: "qnb-egypt",
@@ -380,7 +380,7 @@ test("reports provider/scenario groups plus classification, batch, provenance, a
 });
 
 
-test("raw accuracy includes only cases proven present in actual provider input evidence", () => {
+void test("raw accuracy includes only cases proven present in actual provider input evidence", () => {
   const cases = [
     negativeCase("requested-1"),
     negativeCase("requested-2"),
@@ -444,7 +444,7 @@ test("raw accuracy includes only cases proven present in actual provider input e
   }
 });
 
-test("raw output stays not_observed for a wholly prefiltered batch without provider-input evidence", () => {
+void test("raw output stays not_observed for a wholly prefiltered batch without provider-input evidence", () => {
   const cases = [negativeCase("otp-filtered"), negativeCase("known-negative")];
   const report = scoreSmsProviderEvaluation({
     runId: "run-score",
@@ -480,7 +480,7 @@ test("raw output stays not_observed for a wholly prefiltered batch without provi
   assert.ok(report.cases.every(({ raw }) => raw.status === "not_observed"));
 });
 
-test("duplicate and unknown final outputs penalize precision without inflating TP or field denominators", () => {
+void test("duplicate and unknown final outputs penalize precision without inflating TP or field denominators", () => {
   const cases = [positiveCase("p1")];
   const report = scoreSmsProviderEvaluation({
     runId: "run-score",
@@ -509,7 +509,7 @@ test("duplicate and unknown final outputs penalize precision without inflating T
   assert.equal(provider.aggregate.precision, 1 / 3);
 });
 
-test("duplicate and unknown raw outputs penalize raw precision without inflating raw TP or fields", () => {
+void test("duplicate and unknown raw outputs penalize raw precision without inflating raw TP or fields", () => {
   const cases = [positiveCase("p1")];
   const report = scoreSmsProviderEvaluation({
     runId: "run-score",
@@ -554,7 +554,7 @@ test("duplicate and unknown raw outputs penalize raw precision without inflating
   assert.equal(report.rawAggregate.fieldDenominators.amount, 1);
 });
 
-test("per-case report preserves synthetic provenance, holdout, tags, received date and fingerprint", () => {
+void test("per-case report preserves synthetic provenance, holdout, tags, received date and fingerprint", () => {
   const source = positiveCase("metadata-case", {
     tags: ["holdout", "atm"],
     isAtmWithdrawal: true,
@@ -583,7 +583,7 @@ test("per-case report preserves synthetic provenance, holdout, tags, received da
   assert.equal(item.smsFingerprint, decorated.message.smsFingerprint);
 });
 
-test("policy-heuristic confidence ranges are disclosed but excluded from objective field accuracy", () => {
+void test("policy-heuristic confidence ranges are disclosed but excluded from objective field accuracy", () => {
   const item = positiveCase("heuristic-confidence");
   if (item.expected.kind !== "transaction") {
     throw new Error("heuristic_positive_case_expected");

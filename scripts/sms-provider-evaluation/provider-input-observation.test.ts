@@ -34,7 +34,7 @@ async function syntheticCase(
   };
 }
 
-test("correlates provider input sender/body/date to exact source case IDs without reusing the request digest", async () => {
+void test("correlates provider input sender/body/date to exact source case IDs without reusing the request digest", async () => {
   const cases = [
     await syntheticCase(
       "case-1",
@@ -87,7 +87,7 @@ test("correlates provider input sender/body/date to exact source case IDs withou
   assert.notEqual(batch.providerInputIdentity, batch.requestInputIdentity);
 });
 
-test("rejects unknown or duplicate actual provider inputs after fingerprint correlation", async () => {
+void test("rejects unknown or duplicate actual provider inputs after fingerprint correlation", async () => {
   const known = await syntheticCase(
     "case-1",
     "qnb",

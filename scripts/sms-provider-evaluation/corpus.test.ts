@@ -11,7 +11,7 @@ import { buildSyntheticEvaluationCorpus } from "./corpus.ts";
 const RUN_ID = "eval-red-corpus";
 const ANCHOR_MS = Date.parse("2026-10-01T17:00:00.000Z");
 
-test("derives positive and negative coverage from every currently selectable registry provider", async () => {
+void test("derives positive and negative coverage from every currently selectable registry provider", async () => {
   const corpus = await buildSyntheticEvaluationCorpus({
     runId: RUN_ID,
     anchorMs: ANCHOR_MS,
@@ -42,7 +42,7 @@ test("derives positive and negative coverage from every currently selectable reg
   );
 });
 
-test("labels every committed message as synthetic with visible provenance and no answer-signalling body text", async () => {
+void test("labels every committed message as synthetic with visible provenance and no answer-signalling body text", async () => {
   const corpus = await buildSyntheticEvaluationCorpus({
     runId: RUN_ID,
     anchorMs: ANCHOR_MS,
@@ -59,7 +59,7 @@ test("labels every committed message as synthetic with visible provenance and no
   }
 });
 
-test("uses independent holdout template groups rather than renamed development templates", async () => {
+void test("uses independent holdout template groups rather than renamed development templates", async () => {
   const corpus = await buildSyntheticEvaluationCorpus({
     runId: RUN_ID,
     anchorMs: ANCHOR_MS,
@@ -75,7 +75,7 @@ test("uses independent holdout template groups rather than renamed development t
   }
 });
 
-test("covers independent edge scenarios and registry aliases without claiming authentic wording", async () => {
+void test("covers independent edge scenarios and registry aliases without claiming authentic wording", async () => {
   const corpus = await buildSyntheticEvaluationCorpus({
     runId: RUN_ID,
     anchorMs: ANCHOR_MS,
@@ -116,7 +116,7 @@ test("covers independent edge scenarios and registry aliases without claiming au
   }
 });
 
-test("anchors dates and canonical fingerprints deterministically within a run", async () => {
+void test("anchors dates and canonical fingerprints deterministically within a run", async () => {
   const first = await buildSyntheticEvaluationCorpus({
     runId: RUN_ID,
     anchorMs: ANCHOR_MS,
@@ -143,7 +143,7 @@ test("anchors dates and canonical fingerprints deterministically within a run", 
   }
 });
 
-test("a fresh run anchor changes fingerprint identity while keeping the labeled scenario stable", async () => {
+void test("a fresh run anchor changes fingerprint identity while keeping the labeled scenario stable", async () => {
   const first = await buildSyntheticEvaluationCorpus({
     runId: "run-a",
     anchorMs: ANCHOR_MS,
@@ -164,7 +164,7 @@ test("a fresh run anchor changes fingerprint identity while keeping the labeled 
 });
 
 
-test("labels objectively knowable trust and ATM state while keeping confidence non-arbitrary", async () => {
+void test("labels objectively knowable trust and ATM state while keeping confidence non-arbitrary", async () => {
   const corpus = await buildSyntheticEvaluationCorpus({
     runId: RUN_ID,
     anchorMs: ANCHOR_MS,

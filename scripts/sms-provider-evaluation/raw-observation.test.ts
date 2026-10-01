@@ -34,7 +34,7 @@ const EXPECTED = new Map([
   ],
 ]);
 
-test("accepts only raw observations attributed to the same run, batch, case list, and input identity", () => {
+void test("accepts only raw observations attributed to the same run, batch, case list, and input identity", () => {
   const parsed = parseRawObservationImport({
     runId: "run-1",
     cases: CASES,
@@ -57,7 +57,7 @@ test("accepts only raw observations attributed to the same run, batch, case list
   assert.equal(parsed.batches[0]?.responseContent, '{"transactions":[]}');
 });
 
-test("rejects malformed imports and never attaches another run or ambiguous batch identity", () => {
+void test("rejects malformed imports and never attaches another run or ambiguous batch identity", () => {
   for (const value of [
     null,
     true,

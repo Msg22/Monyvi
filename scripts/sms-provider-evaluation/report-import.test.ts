@@ -20,9 +20,8 @@ async function createDryReport(): Promise<EvaluationReport> {
       maxRequests: 2,
     },
     {
-      fetch: async (): Promise<Response> => {
-        throw new Error("dry_report_must_not_fetch");
-      },
+      fetch: (): Promise<Response> =>
+        Promise.reject(new Error("dry_report_must_not_fetch")),
       now: (): number => ANCHOR_MS,
     }
   );
@@ -32,7 +31,7 @@ function cloneJson(value: unknown): unknown {
   return JSON.parse(JSON.stringify(value)) as unknown;
 }
 
-test("saved report roundtrip preserves case metadata and explicit absent card expectation without rerun", async () => {
+void test("saved report roundtrip preserves case metadata and explicit absent card expectation without rerun", async () => {
   const report = await createDryReport();
   const parsed = parseStoredEvaluationReport(cloneJson(report));
 
@@ -71,7 +70,7 @@ test("saved report roundtrip preserves case metadata and explicit absent card ex
   }
 });
 
-test("external saved-report schema rejects malformed expected/case/manifest/aggregate structures", async () => {
+void test("external saved-report schema rejects malformed expected/case/manifest/aggregate structures", async () => {
   const report = await createDryReport();
 
   const malformedExpected = cloneJson(report) as Record<string, unknown>;
