@@ -1230,6 +1230,29 @@ Business rules:
   identity-invalid responses add no strike. An exact active trusted local
   template may still produce a local review result without clearing the terminal
   AI block.
+- **2026-10-01 — SMS provider mixed-row validation**: A structurally valid,
+  complete provider response is validated per returned transaction entry.
+  Independently valid, uniquely identified submitted transactions are preserved
+  even when peer entries are fake, placeholder-shaped, duplicated, or
+  semantically invalid. Invalid entries are never coerced into financial data
+  and never cause independently valid peers to be discarded.
+- A correlated invalid or duplicate candidate remains unresolved and retryable
+  with a fresh request identity. If an invalid returned entry cannot be
+  correlated to a submitted identity, submitted candidates omitted from the
+  independently valid returned set remain unresolved because omission is no
+  longer trustworthy for negative classification.
+- Invalid or uncertain candidates never create, increment, reset, clear, or
+  terminalize an `ai_no_transaction` outcome. Ordinary validated omissions and
+  otherwise valid `isTrusted: false` entries retain the existing negative
+  lifecycle. Malformed JSON/envelopes, incomplete provider completion,
+  transport/provider failures, and auth/consent/safeguard refusals remain
+  request-level failures. Provider-started allowance remains consumed.
+- Explicit OTP, verification-code, security-code, and PIN-only messages are
+  excluded before the full AI provider with Edge/shared parity. A message that
+  independently contains clear completed money movement is not excluded merely
+  because it also includes a security warning. The stable provider prompt also
+  forbids OTP/fake/zero-amount placeholder transaction rows; strict server-side
+  financial validation remains authoritative.
 - Capacity, cooldown, or oversized-input failures preserve all accepted local
   and earlier AI suggestions and keep Save available. Guidance is aggregate,
   friendly, and may show one localized absolute availability time. It does not
