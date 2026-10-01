@@ -12,7 +12,7 @@ import { SmsProviderEvaluationScreen } from "@/components/sms-provider-evaluatio
 import {
   createSmsEvaluationCaseViewModel,
   createSmsEvaluationSummaryViewModel,
-} from "@/components/sms-provider-evaluation/presentation";
+} from "@/services/dev/sms-provider-evaluation-read-model-service";
 import { useAllCategories } from "@/context/CategoriesContext";
 import { useAuth } from "@/context/AuthContext";
 import { useAiProcessingConsent } from "@/hooks/useAiProcessingConsent";
