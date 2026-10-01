@@ -3,7 +3,6 @@ import {
   buildCategoryTree,
   buildSyntheticEvaluationCorpus,
   computeSmsFingerprint,
-  DEFAULT_EVALUATION_BATCH_SIZE,
   ParseSmsEvaluationResponseSchema,
   scoreSmsProviderEvaluation,
   STAGING_SUPABASE_URL,
@@ -19,6 +18,7 @@ import {
   invokeAuthenticatedEdgeFunction,
   isEdgeFunctionAuthenticationError,
 } from "@/services/authenticated-edge-function-service";
+import { MOBILE_SMS_PROVIDER_EVALUATION_BATCH_SIZE } from "@/constants/sms-provider-evaluation";
 import { assertExpectedCurrentUser } from "@/services/user-data-access";
 
 export const SMS_PROVIDER_EVALUATION_OWNER_CHANGED =
@@ -56,10 +56,21 @@ export type SmsProviderEvaluationTerminalStatus =
   | "cancelled"
   | "fatal";
 
+export type SmsProviderEvaluationBatchStatus =
+  | "completed"
+  | "failed"
+  | "running"
+  | "cancelled"
+  | "not_run";
+
 export interface SmsProviderEvaluationBatchDetail {
   readonly batchId: string;
+  readonly batchNumber: number;
   readonly caseIds: readonly string[];
+  readonly messageCount: number;
+  readonly status: SmsProviderEvaluationBatchStatus;
   readonly classification: FinalObservationClassification;
+  readonly elapsedMs?: number;
   readonly httpStatus?: number;
   readonly refusalReason?: string;
   readonly completionStatus?: string;
@@ -108,6 +119,10 @@ interface EvaluationRunContext {
   readonly processedCaseCount: number;
   readonly attemptedRequestCount: number;
   readonly latest: SmsProviderEvaluationProgress | null;
+  readonly cancelledBatch: {
+    readonly batchNumber: number;
+    readonly elapsedMs: number;
+  } | null;
 }
 
 interface ProgressEmission {
@@ -118,6 +133,7 @@ interface ProgressEmission {
 interface BatchExecutionResult {
   readonly observation?: FinalBatchObservation;
   readonly cancelled: boolean;
+  readonly cancelledElapsedMs?: number;
   readonly fatalReason?: string;
 }
 
@@ -178,9 +194,9 @@ function chunkCases(
   for (
     let index = 0;
     index < cases.length;
-    index += DEFAULT_EVALUATION_BATCH_SIZE
+    index += MOBILE_SMS_PROVIDER_EVALUATION_BATCH_SIZE
   ) {
-    batches.push(cases.slice(index, index + DEFAULT_EVALUATION_BATCH_SIZE));
+    batches.push(cases.slice(index, index + MOBILE_SMS_PROVIDER_EVALUATION_BATCH_SIZE));
   }
   return batches;
 }
@@ -276,23 +292,70 @@ function buildReport(
   });
 }
 
+function batchStatusFor(
+  observation: FinalBatchObservation | undefined,
+  isActive: boolean,
+  isCancelled: boolean
+): SmsProviderEvaluationBatchStatus {
+  if (isCancelled) return "cancelled";
+  if (isActive) return "running";
+  if (observation === undefined || observation.classification === "unattempted") {
+    return "not_run";
+  }
+  return observation.classification === "observed" ? "completed" : "failed";
+}
+
 function buildBatchDetails(
-  observations: readonly FinalBatchObservation[]
+  context: EvaluationRunContext,
+  activeBatchNumber: number | null
 ): readonly SmsProviderEvaluationBatchDetail[] {
-  return observations.map((observation) => ({
-    batchId: observation.batchId,
-    caseIds: observation.caseIds,
-    classification: observation.classification,
-    ...(observation.httpStatus === undefined
+  const observations = new Map(
+    context.observations.map((observation) => [
+      observation.batchId,
+      observation,
+    ])
+  );
+  return context.batches.map((batch, index) =>
+    buildBatchDetail(context, batch, index, observations, activeBatchNumber)
+  );
+}
+
+function buildBatchDetail(
+  context: EvaluationRunContext,
+  batch: readonly SyntheticEvaluationCase[],
+  index: number,
+  observations: ReadonlyMap<string, FinalBatchObservation>,
+  activeBatchNumber: number | null
+): SmsProviderEvaluationBatchDetail {
+  const batchNumber = index + 1;
+  const id = batchId(index);
+  const observation = observations.get(id);
+  const cancelled = context.cancelledBatch?.batchNumber === batchNumber;
+  const elapsedMs = cancelled
+    ? context.cancelledBatch?.elapsedMs
+    : observation?.latencyMs;
+  return {
+    batchId: id,
+    batchNumber,
+    caseIds: batchCaseIds(batch),
+    messageCount: batch.length,
+    status: batchStatusFor(
+      observation,
+      activeBatchNumber === batchNumber,
+      cancelled
+    ),
+    classification: observation?.classification ?? "unattempted",
+    ...(elapsedMs === undefined ? {} : { elapsedMs }),
+    ...(observation?.httpStatus === undefined
       ? {}
       : { httpStatus: observation.httpStatus }),
-    ...(observation.refusalReason === undefined
+    ...(observation?.refusalReason === undefined
       ? {}
       : { refusalReason: observation.refusalReason }),
-    ...(observation.completionStatus === undefined
+    ...(observation?.completionStatus === undefined
       ? {}
       : { completionStatus: observation.completionStatus }),
-  }));
+  };
 }
 
 async function emitProgress(
@@ -302,7 +365,7 @@ async function emitProgress(
 ): Promise<ProgressEmission> {
   const progress: SmsProviderEvaluationProgress = {
     report: buildReport(context, false),
-    batches: buildBatchDetails(context.observations),
+    batches: buildBatchDetails(context, activeBatchNumber),
     activeBatchNumber,
     completedBatchCount: context.completedBatchCount,
     processedCaseCount: context.processedCaseCount,
@@ -329,6 +392,7 @@ function resultFromContext(
   return {
     ...latest,
     report: buildReport(context, status === "cancelled"),
+    batches: buildBatchDetails(context, null),
     activeBatchNumber: null,
     status,
     ...(fatalReason === undefined ? {} : { fatalReason }),
@@ -352,6 +416,7 @@ async function createRunContext(): Promise<EvaluationRunContext> {
     processedCaseCount: 0,
     attemptedRequestCount: 0,
     latest: null,
+    cancelledBatch: null,
   };
 }
 
@@ -528,7 +593,10 @@ function classifyBatchError(
 ): BatchExecutionResult {
   if (isSmsProviderEvaluationOwnerChanged(error)) throw error;
   if (input.runInput.signal.aborted) {
-    return { cancelled: true };
+    return {
+      cancelled: true,
+      cancelledElapsedMs: Math.max(0, Date.now() - startedAt),
+    };
   }
   const observation = isEdgeFunctionAuthenticationError(error)
     ? createAuthFailureObservation({ ...input, startedAt })
@@ -552,6 +620,20 @@ function recordBatch(
     observations: [...context.observations, observation],
     completedBatchCount: context.completedBatchCount + 1,
     processedCaseCount: context.processedCaseCount + batch.length,
+  };
+}
+
+function recordCancelledBatch(
+  context: EvaluationRunContext,
+  batchNumber: number,
+  elapsedMs: number | undefined
+): EvaluationRunContext {
+  return {
+    ...context,
+    cancelledBatch: {
+      batchNumber,
+      elapsedMs: elapsedMs ?? 0,
+    },
   };
 }
 
@@ -591,7 +673,14 @@ async function runPreparedEvaluation(
       batch,
       id: batchId(index),
     });
-    if (result.cancelled) return resultFromContext(context, "cancelled");
+    if (result.cancelled) {
+      context = recordCancelledBatch(
+        context,
+        index + 1,
+        result.cancelledElapsedMs
+      );
+      return resultFromContext(context, "cancelled");
+    }
     if (result.observation !== undefined) {
       context = recordBatch(context, batch, result.observation);
     }
