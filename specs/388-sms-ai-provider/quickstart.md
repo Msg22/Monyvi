@@ -180,6 +180,12 @@ Use safe development/test SMS examples covering at least:
 
 Also verify that voice entry still follows the existing Gemini path.
 
+For SMS response grounding, use synthetic messages to confirm:
+- explicit same-message card evidence such as `Card **1234` preserves `cardLast4: "1234"`, including leading zeroes and clear Arabic card markers;
+- account suffixes, transfer references, hotlines, unknown message IDs, cross-message digits, and a conflicting account suffix beside a different explicit card suffix do not survive as `cardLast4`;
+- prohibited `*_other` L2 values normalize to the actual accessible L1 parent derived from the supplied category hierarchy, while inaccessible parents remain invalid and valid custom/L1/L2 categories remain unchanged;
+- a clearly completed generic-gateway purchase is retained with a conservative accessible fallback category when purpose is unclear; gateway names alone must not force utilities, food, or another merchant-category mapping.
+
 For Settings SMS-window copy, verify English and Arabic with the effective client policy rather than a hardcoded number: normal policy renders 30 days; an approved development/QA policy override such as 60 renders 60 in `Sync new SMS` help, `Rescan recent messages` help, and the rescan confirmation. Confirm history-cooldown disabled/availability behavior is unchanged. This check observes the effective policy only; it does not change the repository default 30-day policy.
 
 ## 7. Cost check

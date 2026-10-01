@@ -113,9 +113,10 @@ DO NOT INCLUDE:
 - App download links
 - Cashback offers / incentive messages
 - Account activation requests
-- Any message where you are uncertain
+- Any message where you are uncertain whether money actually moved
 
-WHEN IN DOUBT, SKIP. Precision > recall.
+WHEN IN DOUBT WHETHER A TRANSACTION ACTUALLY HAPPENED, SKIP. Precision > recall.
+If a completed transaction is clear but only its category or purpose is uncertain, KEEP the transaction and use the safest accessible category fallback with lower confidence.
 
 isTrusted FIELD:
 - Set isTrusted to true ONLY when you are highly confident this is a real, completed transaction with actual money movement.
@@ -133,16 +134,25 @@ PARSING RULES:
 5. Date: from SMS body or use provided date.
 6. Category: return EXACTLY ONE system_name from the category context.
    You MUST NOT invent, combine, or modify category names.
-   Use a specific L2 when confident (e.g. groceries, restaurant).
-   If uncertain which L2 fits, use the L1 parent (e.g. food_drinks, shopping).
-   NEVER use *_other L2 categories (food_other, shopping_other, etc.) — always prefer the L1 parent.
-   Only use 'other' as an absolute last resort.
+   Use a specific L2 only when the SMS or clearly recognizable merchant purpose supports it.
+   If uncertain which L2 fits, use an accessible L1 parent.
+   NEVER use *_other L2 categories (food_other, shopping_other, income_other, etc.) — use that category's accessible L1 parent from the supplied hierarchy.
+   A generic payment gateway name such as myfawry, Sahl, or FAWRY does not prove utilities, food, or another specific category by itself.
+   If the transaction is clearly completed but its purpose is unclear, keep it and use an accessible fallback such as 'other' for EXPENSE or 'income' for INCOME when available.
 7. isAtmWithdrawal: true only for ATM withdrawals.
-8. cardLast4: last 4 card digits if mentioned.
+8. cardLast4: include only when the SAME SOURCE SMS explicitly identifies those exact four digits as card digits.
+   Account digits and account suffixes, transfer references, hotlines, amounts, dates, and digits from another SMS are never card evidence.
 9. confidenceScore: your confidence in the accuracy of this extraction (0.0 to 1.0).
     1.0 = all fields are perfectly clear in the SMS.
     0.5 = some fields required guessing (e.g., category, counterparty).
+    Lower confidence when the category is guessed or inferred from a generic gateway; do not lower isTrusted solely because category is uncertain when completed money movement itself is clear.
     Below 0.3 = most fields are uncertain — consider skipping instead.
+
+GROUNDING EXAMPLES:
+- "Card **1234 purchase EGP 50" -> cardLast4: "1234".
+- "IPN transfer sent EGP 100 from 1234" -> completed transaction with uncertain category; omit cardLast4 and use accessible 'other'.
+- "IPN transfer received EGP 100 on 1234" -> completed transaction with uncertain category; omit cardLast4 and use accessible 'income'.
+- "Successful purchase EGP 125 @myfawry" -> completed transaction; the payment gateway does not prove utilities or food. Keep it, use an accessible fallback when purpose is unclear, and lower category confidence.
 
 SUPPORTED CURRENCIES:
 ${supportedCurrencies}
@@ -365,7 +375,7 @@ export function buildSmsAiResponseSchema(
             categorySystemName: {
               type: "string",
               description:
-                "Exactly one allowed category system_name from the supplied category context.",
+                "Exactly one accessible category system_name from the supplied category context. Never return a *_other L2 category; use its accessible L1 parent from the supplied hierarchy. Keep a clearly completed transaction with an accessible fallback when category purpose is uncertain.",
             },
             isAtmWithdrawal: {
               type: "boolean",
@@ -373,7 +383,8 @@ export function buildSmsAiResponseSchema(
             },
             cardLast4: {
               type: "string",
-              description: "Last 4 digits of card if mentioned.",
+              description:
+                "Last 4 digits only when the same source SMS explicitly identifies those exact digits as card digits. Omit account suffixes, transfer references, hotlines, amounts, dates, and digits from other SMS messages.",
             },
             confidenceScore: {
               type: "number",

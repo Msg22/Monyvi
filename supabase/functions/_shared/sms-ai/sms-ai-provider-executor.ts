@@ -10,6 +10,7 @@ import {
   buildSmsAiProviderMessages,
   buildSmsAiResponseSchema,
 } from "./sms-ai-prompt.ts";
+import { groundSmsAiProviderResponse } from "./sms-ai-response-grounding.ts";
 
 export interface SmsAiProviderRequestInputMessage {
   readonly sender: string;
@@ -86,7 +87,12 @@ export async function executeSmsAiProvider(
       ? input.categories
       : BUILT_IN_SMS_CATEGORY_TREE;
 
-  const validated = parseSmsProviderTransactions(parsed, {
+  const groundedResponse = groundSmsAiProviderResponse(
+    parsed,
+    input.messages,
+    categoryTree
+  );
+  const validated = parseSmsProviderTransactions(groundedResponse, {
     supportedCurrencies,
     categoryTree,
   });
