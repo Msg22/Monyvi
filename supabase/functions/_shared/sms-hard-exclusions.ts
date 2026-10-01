@@ -10,6 +10,24 @@ const PRE_PARSER_EXCLUDED_ARABIC_PHRASES = [
   "مياه",
 ] as const;
 
+const PRE_PARSER_SECURITY_CODE_PATTERNS = [
+  /\botp\b/i,
+  /\bone[-\s]?time\s+password\b/i,
+  /\bverification\s+code\b/i,
+  /\bsecurity\s+code\b/i,
+  /\bpin\b/i,
+  /كلمه\s*(?:المرور|السر)\s*لمره\s*واحده/u,
+  /رمز\s*(?:التحقق|التاكيد|الامان)/u,
+  /الرقم\s*(?:السري|الموقت|للتحقق)/u,
+] as const;
+
+const COMPLETED_FINANCIAL_MOVEMENT_PATTERNS = [
+  /\b(?:payment|purchase|transaction|transfer|withdrawal|deposit|refund)\b[\s\S]{0,80}\b(?:completed|successful|successfully)\b/i,
+  /\b(?:debited|credited|paid|received|withdrew|withdrawn|transferred|sent)\b/i,
+  /تم\s*(?:خصم|دفع|تحويل|استلام|سحب|ايداع)/u,
+  /تمت\s*(?:عمليه)\s*(?:خصم|دفع|تحويل|استلام|سحب|ايداع|شراء)/u,
+] as const;
+
 function normalizeArabicForFiltering(value: string): string {
   return value
     .normalize("NFKC")
@@ -27,7 +45,20 @@ function normalizeArabicForFiltering(value: string): string {
  */
 export function isExcludedBeforeSmsParsingAtEdge(body: string): boolean {
   const normalizedBody = normalizeArabicForFiltering(body);
-  return PRE_PARSER_EXCLUDED_ARABIC_PHRASES.some((phrase) =>
-    normalizedBody.includes(phrase)
+  if (
+    PRE_PARSER_EXCLUDED_ARABIC_PHRASES.some((phrase) =>
+      normalizedBody.includes(phrase)
+    )
+  ) {
+    return true;
+  }
+
+  const hasSecurityCodeMarker = PRE_PARSER_SECURITY_CODE_PATTERNS.some(
+    (pattern) => pattern.test(normalizedBody)
+  );
+  if (!hasSecurityCodeMarker) return false;
+
+  return !COMPLETED_FINANCIAL_MOVEMENT_PATTERNS.some((pattern) =>
+    pattern.test(normalizedBody)
   );
 }

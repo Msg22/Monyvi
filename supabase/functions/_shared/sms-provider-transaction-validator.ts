@@ -8,11 +8,14 @@ const CARD_LAST_FOUR_PATTERN = /^\d{4}$/;
 export interface SmsProviderTransactionValidationContext {
   readonly supportedCurrencies: readonly string[];
   readonly categoryTree: string;
+  readonly submittedMessageIds?: readonly string[];
 }
 
 export interface SmsProviderTransactionsValidationResult {
   readonly isValid: boolean;
   readonly transactions: readonly ParseSmsProviderTransaction[];
+  readonly invalidMessageIds: readonly string[];
+  readonly hasUncorrelatedInvalidEntries: boolean;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -84,33 +87,93 @@ function isValidProviderTransaction(
   );
 }
 
+function readMessageId(value: unknown): string | null {
+  if (!isRecord(value) || typeof value.messageId !== "string") return null;
+  return value.messageId.trim().length > 0 ? value.messageId : null;
+}
+
 export function parseSmsProviderTransactions(
   value: unknown,
   context: SmsProviderTransactionValidationContext
 ): SmsProviderTransactionsValidationResult {
   if (!isRecord(value) || !Array.isArray(value.transactions)) {
-    return { isValid: false, transactions: [] };
+    return {
+      isValid: false,
+      transactions: [],
+      invalidMessageIds: [],
+      hasUncorrelatedInvalidEntries: false,
+    };
   }
+
   const allowedCategories = readAllowedCategories(context.categoryTree);
   if (
     allowedCategories.size === 0 ||
     context.supportedCurrencies.length === 0
   ) {
-    return { isValid: false, transactions: [] };
+    return {
+      isValid: false,
+      transactions: [],
+      invalidMessageIds: [],
+      hasUncorrelatedInvalidEntries: false,
+    };
   }
+
+  const submittedMessageIds =
+    context.submittedMessageIds === undefined
+      ? null
+      : new Set(context.submittedMessageIds);
   const normalizedTransactions = value.transactions.map(
     normalizeProviderTransaction
   );
-  if (
-    normalizedTransactions.some(
-      (transaction) =>
-        !isValidProviderTransaction(transaction, context, allowedCategories)
-    )
-  ) {
-    return { isValid: false, transactions: [] };
+  const identityCounts = new Map<string, number>();
+  for (const transaction of normalizedTransactions) {
+    const messageId = readMessageId(transaction);
+    if (messageId === null) continue;
+    identityCounts.set(messageId, (identityCounts.get(messageId) ?? 0) + 1);
   }
+
+  const transactions: ParseSmsProviderTransaction[] = [];
+  const invalidMessageIds = new Set<string>();
+  let hasUncorrelatedInvalidEntries = false;
+
+  for (const transaction of normalizedTransactions) {
+    const messageId = readMessageId(transaction);
+    const isKnownIdentity =
+      messageId !== null &&
+      (submittedMessageIds === null || submittedMessageIds.has(messageId));
+    const isDuplicateIdentity =
+      messageId !== null && (identityCounts.get(messageId) ?? 0) > 1;
+
+    if (
+      isKnownIdentity &&
+      !isDuplicateIdentity &&
+      isValidProviderTransaction(transaction, context, allowedCategories)
+    ) {
+      transactions.push(transaction);
+      continue;
+    }
+
+    if (
+      messageId !== null &&
+      submittedMessageIds !== null &&
+      submittedMessageIds.has(messageId)
+    ) {
+      invalidMessageIds.add(messageId);
+    } else if (
+      messageId !== null &&
+      submittedMessageIds === null &&
+      isDuplicateIdentity
+    ) {
+      invalidMessageIds.add(messageId);
+    } else {
+      hasUncorrelatedInvalidEntries = true;
+    }
+  }
+
   return {
     isValid: true,
-    transactions: normalizedTransactions as ParseSmsProviderTransaction[],
+    transactions,
+    invalidMessageIds: [...invalidMessageIds],
+    hasUncorrelatedInvalidEntries,
   };
 }

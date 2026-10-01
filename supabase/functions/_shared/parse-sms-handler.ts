@@ -324,6 +324,38 @@ function toNegativeCandidates(
   }));
 }
 
+function partitionProviderReconciliationInput(
+  messages: readonly ParseSmsMessage[],
+  providerResult: SmsProviderExecutionResult
+): {
+  readonly reconciliationMessages: readonly ParseSmsMessage[];
+  readonly unresolvedFingerprints: readonly string[];
+} {
+  const invalidMessageIds = new Set(providerResult.invalidMessageIds ?? []);
+  const validReturnedMessageIds = new Set(
+    providerResult.transactions.map((transaction) => transaction.messageId)
+  );
+  const hasUncorrelatedInvalidEntries =
+    providerResult.hasUncorrelatedInvalidEntries === true;
+
+  const unresolvedFingerprints = messages
+    .filter(
+      (message) =>
+        invalidMessageIds.has(message.id) ||
+        (hasUncorrelatedInvalidEntries &&
+          !validReturnedMessageIds.has(message.id))
+    )
+    .map((message) => message.smsFingerprint);
+  const unresolvedSet = new Set(unresolvedFingerprints);
+
+  return {
+    reconciliationMessages: messages.filter(
+      (message) => !unresolvedSet.has(message.smsFingerprint)
+    ),
+    unresolvedFingerprints: [...unresolvedSet],
+  };
+}
+
 function completedWithoutProvider(
   terminalFingerprints: readonly string[],
   negativeFingerprints: readonly string[] = []
@@ -472,33 +504,55 @@ async function executeAdmittedWork(input: {
     });
   }
 
-  let reconciliation: SmsNegativeOutcomeReconciliation;
-  try {
-    reconciliation = await input.dependencies.reconcileOutcomes({
-      userId: input.userId,
-      submittedCandidates,
-      requestId: input.admission.requestId,
-      completionStatus: providerResult.completionStatus,
-      transactions: providerResult.transactions.map((transaction) => ({
-        messageId: transaction.messageId,
-        isTrusted: transaction.isTrusted,
-      })),
-    });
-  } catch {
-    await completeSmsAiWorkWithRetry(input.dependencies.completeWork, {
-      requestId: input.admission.requestId,
-      completedWithProviderError: true,
-      decisionCode: "outcome_reconciliation_failed",
-    });
-    return refusal("dependency_unavailable", 503);
-  }
-  if (reconciliation.status === "ignored") {
-    await completeSmsAiWorkWithRetry(input.dependencies.completeWork, {
-      requestId: input.admission.requestId,
-      completedWithProviderError: true,
-      decisionCode: reconciliation.reason,
-    });
-    return refusal("response_invalid", 502);
+  const partition = partitionProviderReconciliationInput(
+    input.messages,
+    providerResult
+  );
+  const reconciliationCandidates = toNegativeCandidates(
+    partition.reconciliationMessages
+  );
+  const reconciliationTransactionIds = new Set(
+    reconciliationCandidates.map((candidate) => candidate.messageId)
+  );
+  const reconciliationTransactions = providerResult.transactions
+    .filter((transaction) =>
+      reconciliationTransactionIds.has(transaction.messageId)
+    )
+    .map((transaction) => ({
+      messageId: transaction.messageId,
+      isTrusted: transaction.isTrusted,
+    }));
+
+  let reconciliation: SmsNegativeOutcomeReconciliation = {
+    status: "reconciled",
+    positiveFingerprints: [],
+    negativeFingerprints: [],
+  };
+  if (reconciliationCandidates.length > 0) {
+    try {
+      reconciliation = await input.dependencies.reconcileOutcomes({
+        userId: input.userId,
+        submittedCandidates: reconciliationCandidates,
+        requestId: input.admission.requestId,
+        completionStatus: providerResult.completionStatus,
+        transactions: reconciliationTransactions,
+      });
+    } catch {
+      await completeSmsAiWorkWithRetry(input.dependencies.completeWork, {
+        requestId: input.admission.requestId,
+        completedWithProviderError: true,
+        decisionCode: "outcome_reconciliation_failed",
+      });
+      return refusal("dependency_unavailable", 503);
+    }
+    if (reconciliation.status === "ignored") {
+      await completeSmsAiWorkWithRetry(input.dependencies.completeWork, {
+        requestId: input.admission.requestId,
+        completedWithProviderError: true,
+        decisionCode: reconciliation.reason,
+      });
+      return refusal("response_invalid", 502);
+    }
   }
 
   const didComplete = await completeSmsAiWorkWithRetry(
@@ -521,7 +575,10 @@ async function executeAdmittedWork(input: {
       ]),
     ],
     terminalFingerprints: input.terminalFingerprints,
-    unresolvedFingerprints: [],
+    unresolvedFingerprints: partition.unresolvedFingerprints,
+    ...(partition.unresolvedFingerprints.length > 0
+      ? { retryRequestMode: "fresh" as const }
+      : {}),
   });
 }
 

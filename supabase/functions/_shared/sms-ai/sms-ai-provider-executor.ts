@@ -95,11 +95,15 @@ export async function executeSmsAiProvider(
   const validated = parseSmsProviderTransactions(groundedResponse, {
     supportedCurrencies,
     categoryTree,
+    submittedMessageIds: input.messages.map((message) => message.id),
   });
 
   return {
     completionStatus: "complete",
     isResponseSchemaValid: validated.isValid,
     transactions: validated.transactions,
+    invalidMessageIds: validated.invalidMessageIds,
+    hasUncorrelatedInvalidEntries:
+      validated.hasUncorrelatedInvalidEntries,
   };
 }

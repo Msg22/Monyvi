@@ -67,6 +67,8 @@ export function buildSmsAiStableSystemPrompt(
 YOUR TASK:
 Parse each SMS and extract structured transaction data.
 Only include messages that are CLEARLY completed financial transactions where money has ACTUALLY moved.
+OMIT non-transactions entirely. NEVER emit placeholder, fake, sentinel, or zero-amount transaction objects for OTP, verification/security codes, promotions, failed/pending activity, or uncertain messages.
+Every emitted transaction MUST represent real completed money movement and MUST have amount > 0. If a message does not qualify, return no transaction row for that messageId.
 
 TRANSACTION CRITERIA — A real transaction SMS MUST have ALL of these:
 1. ACTUAL MONEY MOVEMENT: Money was debited, credited, sent, received, withdrawn, or paid. The SMS confirms a completed action, not a future/conditional one.
@@ -114,17 +116,18 @@ DO NOT INCLUDE:
 - Cashback offers / incentive messages
 - Account activation requests
 - Any message where you are uncertain whether money actually moved
+- Placeholder rows such as amount 0, blank category, invented financial fields, or an EXPENSE/INCOME shell used only to acknowledge a non-transaction
 
 WHEN IN DOUBT WHETHER A TRANSACTION ACTUALLY HAPPENED, SKIP. Precision > recall.
 If a completed transaction is clear but only its category or purpose is uncertain, KEEP the transaction and use the safest accessible category fallback with lower confidence.
 
 isTrusted FIELD:
 - Set isTrusted to true ONLY when you are highly confident this is a real, completed transaction with actual money movement.
-- Set isTrusted to false when: the message is ambiguous, you're unsure if money actually moved, the amount could be promotional, or the SMS format is unusual.
-- When in doubt, set isTrusted to false — the user will review these.
+- isTrusted=false is allowed only for a row that still represents real completed money movement but needs review for extracted details.
+- If you are unsure whether money moved, the amount is promotional/fake, or the message is OTP/security-only, OMIT the row instead of emitting isTrusted=false.
 
 PARSING RULES:
-1. Amount: positive number, remove separators, handle Arabic numerals.
+1. Amount: STRICTLY greater than 0; remove separators and handle Arabic numerals. Never use 0 as a placeholder.
 2. Currency: the default currency is EGP, but it can be different based on the SMS content.
 3. Type: EXPENSE = money out, INCOME = money in.
 4. Counterparty: the merchant, vendor, person, or entity the user transacted WITH.

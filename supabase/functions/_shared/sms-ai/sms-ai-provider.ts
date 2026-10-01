@@ -26,6 +26,8 @@ export interface SmsProviderExecutionResult {
   readonly completionStatus: SmsProviderCompletionStatusAtEdge;
   readonly isResponseSchemaValid: boolean;
   readonly transactions: readonly ParseSmsProviderTransaction[];
+  readonly invalidMessageIds?: readonly string[];
+  readonly hasUncorrelatedInvalidEntries?: boolean;
 }
 
 export interface ExecuteSmsProviderInput {
