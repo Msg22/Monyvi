@@ -353,7 +353,22 @@ const FinalObservationClassificationSchema = z.enum([
 
 function fieldExpectationSchema<T extends z.ZodType>(
   valueSchema: T
-) {
+): z.ZodUnion<
+  readonly [
+    z.ZodObject<
+      { kind: z.ZodLiteral<"exact">; value: T },
+      z.core.$strict
+    >,
+    z.ZodObject<
+      { kind: z.ZodLiteral<"one_of">; values: z.ZodArray<T> },
+      z.core.$strict
+    >,
+    z.ZodObject<
+      { kind: z.ZodLiteral<"unknown"> },
+      z.core.$strict
+    >,
+  ]
+> {
   const exactSchema = z
     .object({
       kind: z.literal("exact"),
