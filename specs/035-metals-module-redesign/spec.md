@@ -990,7 +990,13 @@ explicit outcome, retained facts, and one resulting action.
   a normalized purity factor `p` in `(0, 1]`; for pure grams `q = weight × p`,
   metal rate `m_t`, and currency factor `x_{C,t}`, the metal reference value in
   currency `C` at time `t` MUST equal `q × m_t ÷ x_{C,t}`. Missing or invalid
-  purity and rate inputs MUST NOT be inferred or treated as zero.
+  purity and rate inputs MUST NOT be inferred or treated as zero. For **current
+  selected-quote presentation and current holding valuation only**, exact Gold
+  `gold-999` / `0.999` MUST use the selected Gold 24K gram quote directly:
+  `weight × m_t ÷ x_{C,t}`, with no additional `0.999` multiplication. The
+  stored purity tuple remains `0.999`; Gold 21K/18K and Silver retain their
+  catalog-factor basis, and immutable historical acquisition/terminal
+  calculations remain unchanged.
 - **FR-047**: Active holdings MUST contribute to current value and unrealized
   P/L; Sold and Disposed holdings MUST NOT.
 - **FR-048**: Trustworthy unrealized P/L MUST compare current market value with
@@ -1105,7 +1111,11 @@ explicit outcome, retained facts, and one resulting action.
   and orientation, provider observation time, source identity, source-reported
   quality or validity, and resulting freshness. Each unavailable provenance fact
   MUST remain explicitly Unknown; observation, receipt, storage, refresh, and
-  synchronization times MUST remain distinct.
+  synchronization times MUST remain distinct. An accepted material correction
+  that consumes no complete new acquisition Metal + purchase-currency reference
+  set MUST preserve the prior `acquisition_action_id`. A correction consuming a
+  complete new acquisition reference set MUST replace it. A legacy null link
+  remains null when no new acquisition evidence is consumed.
 - **FR-074**: The product MUST preserve and evaluate metal-input and FX-input
   freshness separately; an unknown or unparseable provider observation timestamp
   MUST produce Unknown freshness and MUST never be presented as Fresh.
@@ -1220,7 +1230,9 @@ explicit outcome, retained facts, and one resulting action.
   valuation, review, correction, history, and P/L calculation. Exact catalog
   maintenance and authoritative mapping-source selection belong to planning, but
   V1 MUST never accept ambiguous free-text purity or calculate from a label
-  without its declared factor.
+  without its declared factor. FR-046's current selected-quote exception for
+  exact `gold-999` changes only the current quote basis; it does not replace or
+  mutate the recorded `0.999` purity factor.
 - **FR-094**: Every balance-changing domain MUST use one generic owner-scoped
   financial-action root/outbox containing stable action_id, immutable payload
   hash, domain/type, an owner-scoped expected/server revision for every affected

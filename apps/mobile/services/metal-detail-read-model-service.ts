@@ -10,7 +10,7 @@ import {
   type MetalRateReference,
 } from "@monyvi/db";
 import {
-  calculateMetalReferenceValue,
+  calculateCurrentQuotedMetalReferenceValue,
   calculateUnrealizedAttribution,
   isSupportedMetal,
   isSupportedMetalsIsoCurrencyCode,
@@ -528,7 +528,10 @@ function buildCurrentObservationValue(
     input.preferredCurrency === undefined ||
     !isSupportedMetalsIsoCurrencyCode(input.preferredCurrency) ||
     unavailableExactFacts.includes("weight") ||
-    unavailableExactFacts.includes("purity")
+    unavailableExactFacts.includes("purity") ||
+    input.metal.purityCode === null ||
+    input.metal.purityFactorDecimal === null ||
+    input.metal.weightGramsDecimal === null
   ) {
     return null;
   }
@@ -542,11 +545,13 @@ function buildCurrentObservationValue(
   );
   if (!hasTrustedCurrentRate(metalRate) || currencyRateDecimal === null)
     return null;
-  const value = calculateMetalReferenceValue({
+  const value = calculateCurrentQuotedMetalReferenceValue({
+    metal: input.metal.metalType,
+    purityCode: input.metal.purityCode,
     currencyUsdPerUnitDecimal: currencyRateDecimal,
     metalUsdPerPureGramDecimal: metalRate.valueDecimal,
-    purityFactorDecimal: input.metal.purityFactorDecimal ?? "0",
-    weightGramsDecimal: input.metal.weightGramsDecimal ?? "0",
+    purityFactorDecimal: input.metal.purityFactorDecimal,
+    weightGramsDecimal: input.metal.weightGramsDecimal,
   });
   if (!value.available) return null;
   return {

@@ -1,5 +1,5 @@
 import {
-  calculateMetalReferenceValue,
+  calculateCurrentQuotedMetalReferenceValue,
   compareDecimal,
   isSupportedMetalsIsoCurrencyCode,
   parseCanonicalDecimal,
@@ -59,7 +59,9 @@ export function calculateMetalHoldingPreviewValuation(
     return { available: false, reason: "missing_rate" };
   }
 
-  const valuation = calculateMetalReferenceValue({
+  const valuation = calculateCurrentQuotedMetalReferenceValue({
+    metal: holding.metal,
+    purityCode: holding.purity.code,
     weightGramsDecimal: holding.weightGramsDecimal,
     purityFactorDecimal: holding.purity.factorDecimal,
     metalUsdPerPureGramDecimal: rates.metalUsdPerPureGramDecimal,

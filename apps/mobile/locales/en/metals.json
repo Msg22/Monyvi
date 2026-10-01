@@ -158,7 +158,8 @@
       "out_of_range": "Enter a smaller value.",
       "unsupported_metal": "Choose Gold or Silver.",
       "unknown_purity": "Choose a listed purity.",
-      "future_date": "Choose a purchase date that is not in the future."
+      "future_date": "Choose a purchase date that is not in the future.",
+      "correction_reason_too_long": "This reason is too long. Shorten it and try again."
     }
   },
   "edit": {

@@ -5,6 +5,10 @@ import {
   type ExactDecimalValue,
 } from "./decimal";
 import {
+  resolvePuritySelection,
+  type SupportedMetal,
+} from "./purity-catalog";
+import {
   validateAndNormalizeRateReference,
   type ExactRateReference,
 } from "./rate-reference";
@@ -38,6 +42,12 @@ export interface PureGramInput {
 export interface MetalReferenceValueInput extends PureGramInput {
   readonly metalUsdPerPureGramDecimal: string;
   readonly currencyUsdPerUnitDecimal: string;
+}
+
+export interface CurrentQuotedMetalReferenceValueInput
+  extends MetalReferenceValueInput {
+  readonly metal: SupportedMetal;
+  readonly purityCode: string;
 }
 
 export function calculatePureGrams(
@@ -82,12 +92,57 @@ export function calculateMetalReferenceValue(
   return { available: true, valueDecimal: serializeDecimal(value) };
 }
 
+/**
+ * Applies the approved current selected-quote basis without changing persisted
+ * purity evidence. Gold `gold-999` keeps its recorded 0.999 factor, but the
+ * selected quoted 24K gram rate is not multiplied by 0.999 a second time.
+ */
+export function calculateCurrentQuotedMetalReferenceValue(
+  input: CurrentQuotedMetalReferenceValueInput
+): ExactValueAvailability {
+  const purity = resolvePuritySelection(input.metal, input.purityCode);
+  if (
+    !purity.available ||
+    purity.entry.factorDecimal !== input.purityFactorDecimal
+  ) {
+    return { available: false, reason: "invalid_purity" };
+  }
+
+  return calculateMetalReferenceValue({
+    weightGramsDecimal: input.weightGramsDecimal,
+    purityFactorDecimal:
+      input.metal === "GOLD" && input.purityCode === "gold-999"
+        ? "1"
+        : input.purityFactorDecimal,
+    metalUsdPerPureGramDecimal: input.metalUsdPerPureGramDecimal,
+    currencyUsdPerUnitDecimal: input.currencyUsdPerUnitDecimal,
+  });
+}
+
 export function calculatePurityGramPriceDecimal(input: {
   readonly purityFactorDecimal: string;
   readonly metalUsdPerPureGramDecimal: string;
   readonly currencyUsdPerUnitDecimal: string;
 }): string | null {
   const result = calculateMetalReferenceValue({
+    weightGramsDecimal: "1",
+    purityFactorDecimal: input.purityFactorDecimal,
+    metalUsdPerPureGramDecimal: input.metalUsdPerPureGramDecimal,
+    currencyUsdPerUnitDecimal: input.currencyUsdPerUnitDecimal,
+  });
+  return result.available ? result.valueDecimal : null;
+}
+
+export function calculateCurrentQuotedPurityGramPriceDecimal(input: {
+  readonly metal: SupportedMetal;
+  readonly purityCode: string;
+  readonly purityFactorDecimal: string;
+  readonly metalUsdPerPureGramDecimal: string;
+  readonly currencyUsdPerUnitDecimal: string;
+}): string | null {
+  const result = calculateCurrentQuotedMetalReferenceValue({
+    metal: input.metal,
+    purityCode: input.purityCode,
     weightGramsDecimal: "1",
     purityFactorDecimal: input.purityFactorDecimal,
     metalUsdPerPureGramDecimal: input.metalUsdPerPureGramDecimal,

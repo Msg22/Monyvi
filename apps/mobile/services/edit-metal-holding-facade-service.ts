@@ -6,10 +6,11 @@ import {
   type AssetMetal,
   type MetalHoldingState,
 } from "@monyvi/db";
-import type {
-  FinancialActionEnvelopeV1,
-  RegisteredActionPayload,
-  Sha256Provider,
+import {
+  isSupportedMetal,
+  type FinancialActionEnvelopeV1,
+  type RegisteredActionPayload,
+  type Sha256Provider,
 } from "@monyvi/logic";
 
 import { loadAcquisitionRateSnapshots } from "./add-metal-holding-facade-service";
@@ -30,6 +31,7 @@ import {
   getFinancialActionGroup,
 } from "./financial-action-foundation-repository";
 import { createMetalFinancialActionEnvelope } from "./metal-financial-action-adapter";
+import { selectCanonicalOrOnly } from "./metal-detail-read-model-shaping";
 import { formatMetalLocalCalendarDate } from "./metal-financial-action-repository";
 import { syncDatabase } from "./sync";
 import { getCurrentUserDataScope } from "./user-data-access";
@@ -78,7 +80,7 @@ export async function loadEditableMetalHolding(
         asset,
         "asset_id",
         Q.where("deleted", false),
-        Q.take(1)
+        Q.take(2)
       )
       .fetch(),
     scope
@@ -90,11 +92,13 @@ export async function loadEditableMetalHolding(
       )
       .fetch(),
   ]);
-  const metal = metals[0];
+  const metal = selectCanonicalOrOnly(metals, holdingId);
   const state = states[0];
   if (!metal || !state || !state.effectiveEventId || !state.isVisible)
     throw new Error("metal_holding_not_found");
-  const metalType = metal.metalType === "SILVER" ? "SILVER" : "GOLD";
+  if (!isSupportedMetal(metal.metalType))
+    throw new Error("metal_holding_unsupported_metal");
+  const metalType = metal.metalType;
   const purityCode = metal.purityCode;
   const purityFactorDecimal = metal.purityFactorDecimal;
   const purchasePriceDecimal = asset.purchasePriceDecimal;

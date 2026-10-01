@@ -467,6 +467,28 @@ describe("metal portfolio read model", () => {
     );
   });
 
+  it("uses the quoted 24K basis for a gold-999 holding current value without rewriting purity metadata", () => {
+    const input = shapeInput();
+    const [holding] = shapeMetalPortfolioHoldings({
+      ...input,
+      assetMetals: [
+        {
+          ...input.assetMetals[0],
+          purityCode: "gold-999",
+          purityFactorDecimal: "0.999",
+          weightGramsDecimal: "10",
+        },
+      ],
+    });
+
+    expect(holding).toMatchObject({
+      purityCode: "gold-999",
+      purityFactorDecimal: "0.999",
+      currentValueDecimal: "50000",
+      currentPerformanceDecimal: "30000",
+    });
+  });
+
   it("keeps holdings visible but never falls back to compatibility weight or purity", () => {
     const input = shapeInput();
     const legacyOnlyMetal = {
@@ -829,7 +851,7 @@ describe("metal portfolio read model", () => {
           id: "gold-999",
           metal: "GOLD",
           purityCode: "gold-999",
-          pricePerGramDecimal: "3571.425", // 0.999 * 71.5 / 0.02
+          pricePerGramDecimal: "3575", // quoted 24K: 71.5 / 0.02
           state: "fresh",
           providerObservedAt: new Date("2026-09-26T00:58:00Z"),
         },

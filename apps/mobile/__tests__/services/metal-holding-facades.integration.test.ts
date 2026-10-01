@@ -18,6 +18,7 @@ import {
   type AddMetalHoldingFormSubmission,
 } from "../../services/add-metal-holding-facade-service";
 import {
+  loadEditableMetalHolding,
   retryMetalHoldingReconciliation,
   saveEditedMetalHolding,
   type EditMetalHoldingSubmission,
@@ -82,11 +83,33 @@ jest.mock("../../services/user-data-access", () => {
     getCurrentUserDataScope: jest.fn(() =>
       Promise.resolve({
         userId: mockCurrentUserId,
+        findOwned: async (
+          collection: { find: (id: string) => Promise<{ userId: string }> },
+          id: string
+        ) => {
+          const record = await collection.find(id);
+          if (record.userId !== mockCurrentUserId)
+            throw new Error("ownership_failed");
+          return record;
+        },
         queryOwned: (
           collection: { query: (...clauses: unknown[]) => unknown },
           ...clauses: unknown[]
         ) =>
           collection.query(Q.where("user_id", mockCurrentUserId), ...clauses),
+        queryChildrenOfOwnedParent: (
+          collection: { query: (...clauses: unknown[]) => unknown },
+          parent: { id: string; userId: string },
+          foreignKeyColumn: string,
+          ...extraClauses: unknown[]
+        ) => {
+          if (parent.userId !== mockCurrentUserId)
+            throw new Error("ownership_failed");
+          return collection.query(
+            Q.where(foreignKeyColumn, parent.id),
+            ...extraClauses
+          );
+        },
         assertOwned: <T extends { userId: string }>(record: T): T => {
           if (record.userId !== mockCurrentUserId)
             throw new Error("ownership_failed");
@@ -408,6 +431,58 @@ describe("Metal holding facades replay contract and rate provenance", () => {
     mockCurrentUserId = IDS.user;
     mockSyncDatabase.mockClear();
     await resetDatabase();
+  });
+
+  describe("loadEditableMetalHolding canonical child selection", () => {
+    it("prefers the canonical asset_metals row when legacy and canonical rows coexist", async () => {
+      await seedHoldingForEdit();
+      await database.write(async () => {
+        await database.get<AssetMetal>("asset_metals").create((record) => {
+          record._raw.id = IDS.editHolding;
+          record.assetId = IDS.editHolding;
+          record.metalType = "GOLD";
+          record.weightGrams = 9;
+          record.weightGramsDecimal = "9";
+          record.purityCode = "gold-875";
+          record.purityCatalogVersion = "1";
+          record.purityFraction = 0.875;
+          record.purityFactorDecimal = "0.875";
+          record.itemForm = "BAR";
+          record.deleted = false;
+          record.updatedAt = new Date("2026-09-01T11:00:00.000Z");
+        });
+      });
+
+      await expect(
+        loadEditableMetalHolding(IDS.editHolding)
+      ).resolves.toMatchObject({
+        facts: {
+          metal: "GOLD",
+          weightGramsDecimal: "9",
+          purityCode: "gold-875",
+          purityFactorDecimal: "0.875",
+          physicalForm: "BAR",
+        },
+      });
+    });
+
+    it("rejects unsupported legacy metal types instead of presenting them as Gold", async () => {
+      await seedHoldingForEdit();
+      const [metal] = await database
+        .get<AssetMetal>("asset_metals")
+        .query(Q.where("asset_id", IDS.editHolding))
+        .fetch();
+
+      await database.write(async () => {
+        await metal.update((record) => {
+          record.metalType = "PLATINUM";
+        });
+      });
+
+      await expect(loadEditableMetalHolding(IDS.editHolding)).rejects.toThrow(
+        "metal_holding_unsupported_metal"
+      );
+    });
   });
 
   describe("addMetalHoldingFromForm foundation replay contract (FR-077/080)", () => {

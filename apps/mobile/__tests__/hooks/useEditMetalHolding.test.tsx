@@ -462,6 +462,56 @@ describe("useEditMetalHolding correctness tests", () => {
       );
     });
 
+    it("accepts a correction reason at exactly the 1024-byte contract limit", async () => {
+      mockLoadEditableMetalHolding.mockResolvedValue(activeModel());
+      const { result } = renderHook(() => useEditMetalHolding(testInput()));
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      act(() => {
+        result.current.updateField("weightGrams", "10");
+        result.current.setCorrectionReason("x".repeat(1024));
+      });
+
+      expect(result.current.validationErrors.correctionReason).toBeUndefined();
+
+      let success = false;
+      await act(async () => {
+        success = await result.current.submit();
+      });
+
+      expect(success).toBe(true);
+      expect(mockSaveEditedMetalHolding).toHaveBeenCalledWith(
+        expect.objectContaining({ correctionReason: "x".repeat(1024) })
+      );
+    });
+
+    it("shows inline validation and blocks save when a multibyte reason exceeds 1024 UTF-8 bytes", async () => {
+      mockLoadEditableMetalHolding.mockResolvedValue(activeModel());
+      const { result } = renderHook(() => useEditMetalHolding(testInput()));
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      act(() => {
+        result.current.updateField("weightGrams", "10");
+        result.current.setCorrectionReason("ع".repeat(513));
+      });
+
+      expect(result.current.validationErrors.correctionReason).toBe(
+        "correction_reason_too_long"
+      );
+
+      let success = true;
+      await act(async () => {
+        success = await result.current.submit();
+      });
+
+      expect(success).toBe(false);
+      expect(mockSaveEditedMetalHolding).not.toHaveBeenCalled();
+    });
+
     it("computes per-gram in preferred EGP while keeping purchase CAD valuation", async () => {
       const base = activeModel();
       mockLoadEditableMetalHolding.mockResolvedValue({
@@ -504,7 +554,8 @@ describe("useEditMetalHolding correctness tests", () => {
       expect(result.current.preview.displayCurrency).toBe("CAD");
       expect(result.current.preview.valuation).toEqual({
         available: true,
-        valueDecimal: "1065.6",
+        valueDecimal:
+          "1066.6666666666666666666666666666666666666666666667",
       });
       const editPreferred = result.current.preview as unknown as {
         readonly preferredCurrency?: string;
@@ -558,7 +609,8 @@ describe("useEditMetalHolding correctness tests", () => {
       expect(result.current.preview.displayCurrency).toBe("CAD");
       expect(result.current.preview.valuation).toEqual({
         available: true,
-        valueDecimal: "1065.6",
+        valueDecimal:
+          "1066.6666666666666666666666666666666666666666666667",
       });
       const editMissingPreferred = result.current.preview as unknown as {
         readonly metalPerPureGramInPreferredCurrencyDecimal?: string | null;

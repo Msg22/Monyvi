@@ -27,11 +27,16 @@ describe("metal holding preview service", () => {
     const holding: NormalizedMetalHoldingFormData = {
       ...HOLDING,
       weightGramsDecimal: "1",
-      purity: { ...HOLDING.purity, factorDecimal: "1" },
+      purity: {
+        code: "gold-500",
+        catalogVersion: "1",
+        factorDecimal: "0.5",
+        labelKey: "purity_gold_500",
+      },
       purchasePriceDecimal: "0.01",
     };
     const valuation = calculateMetalHoldingPreviewValuation(holding, {
-      metalUsdPerPureGramDecimal: "1.005",
+      metalUsdPerPureGramDecimal: "2.01",
       currencyUsdPerUnitDecimal: "1",
       currencyMinorUnits: 2,
     });
@@ -40,7 +45,7 @@ describe("metal holding preview service", () => {
     expect(calculateMetalHoldingPreviewDetails(holding, valuation, 2)).toEqual({
       resultSincePurchaseDecimal: "1.00",
       resultDirection: "positive",
-      purityPercentDecimal: "100.0",
+      purityPercentDecimal: "50.0",
     });
   });
 
@@ -94,8 +99,31 @@ describe("metal holding preview service", () => {
           currencyUsdPerUnitDecimal: "0.02", // 1 USD = 50 EGP
           currencyMinorUnits: 2,
         });
-        expect(valuation).toEqual({ available: true, valueDecimal: "39960" });
+        expect(valuation).toEqual({ available: true, valueDecimal: "40000" });
       }
+    });
+
+    it("uses the quoted 24K rate directly while preserving the recorded 0.999 purity tuple", () => {
+      const calculation = resolveMetalCalculationHolding({
+        metal: "GOLD",
+        weightGrams: "10",
+        purityCode: "gold-999",
+        purchasePrice: "60000",
+        purchaseCurrency: "EGP",
+        preferredCurrency: "EGP",
+        currencyMinorUnits: 2,
+      });
+
+      expect(calculation?.purity.factorDecimal).toBe("0.999");
+      if (!calculation) throw new Error("Expected canonical Gold holding");
+
+      expect(
+        calculateMetalHoldingPreviewValuation(calculation, {
+          metalUsdPerPureGramDecimal: "139.9466",
+          currencyUsdPerUnitDecimal: "0.02",
+          currencyMinorUnits: 2,
+        })
+      ).toEqual({ available: true, valueDecimal: "69973.3" });
     });
 
     it("resolves calculation holding with blank name and blank price in JPY without failing on zero minor units", () => {

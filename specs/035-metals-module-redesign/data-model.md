@@ -43,6 +43,11 @@ consumed. A locally complete optimistic action may install its link, but stale/r
 reconciliation restores the verified prior link and only an accepted action remains
 canonical. The link is null for migrated facts with no historical action and may also
 remain null when no acquisition reference was consumed; migration never invents one.
+An accepted reference-less material correction preserves the pre-correction
+`acquisition_action_id`. Only an accepted correction with the complete new
+acquisition Metal + purchase-currency reference set may replace that link.
+An idempotent replay of an older correction MUST NOT restore its older link over
+a newer accepted acquisition link.
 
 ### `asset_metals`
 
@@ -65,6 +70,10 @@ exact weight, purity, and acquisition fact, so the accepted current projection i
 complete. Immutable before/after fact sets, including null legacy facts and the complete
 replacement purity tuple/catalog snapshot, remain in append-only lifecycle/action evidence.
 Later catalog edits never rewrite either current or historical snapshots.
+For current selected-quote valuation only, exact Gold `gold-999` / `0.999`
+uses the selected quoted 24K gram rate directly. The persisted tuple remains
+`0.999`; Gold 21K/18K and Silver retain their existing catalog-factor basis,
+and historical evidence/calculations remain unchanged.
 `purity_factor_decimal` is the authoritative exact persisted factor; legacy numeric
 `purity_fraction` is compatibility-only after backfill. `metal_type` is limited to
 Gold and Silver for V1. Existing numeric weight fields remain compatibility-only.

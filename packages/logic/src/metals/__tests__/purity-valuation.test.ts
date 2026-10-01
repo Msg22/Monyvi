@@ -8,6 +8,8 @@ import {
   resolvePuritySelection,
 } from "../purity-catalog";
 import {
+  calculateCurrentQuotedMetalReferenceValue,
+  calculateCurrentQuotedPurityGramPriceDecimal,
   calculateDisplayPerPureGramPrice,
   calculateMetalReferenceValue,
   calculatePureGrams,
@@ -33,12 +35,16 @@ function loadPurityCatalogApi(): {
 }
 
 function loadValuationApi(): {
+  readonly calculateCurrentQuotedMetalReferenceValue: typeof calculateCurrentQuotedMetalReferenceValue;
+  readonly calculateCurrentQuotedPurityGramPriceDecimal: typeof calculateCurrentQuotedPurityGramPriceDecimal;
   readonly calculateDisplayPerPureGramPrice: typeof calculateDisplayPerPureGramPrice;
   readonly calculateMetalReferenceValue: typeof calculateMetalReferenceValue;
   readonly calculatePureGrams: typeof calculatePureGrams;
   readonly calculatePurityGramPriceDecimal: typeof calculatePurityGramPriceDecimal;
 } {
   return {
+    calculateCurrentQuotedMetalReferenceValue,
+    calculateCurrentQuotedPurityGramPriceDecimal,
     calculateDisplayPerPureGramPrice,
     calculateMetalReferenceValue,
     calculatePureGrams,
@@ -388,6 +394,97 @@ describe("exact purity and valuation", () => {
         currencyUsdPerUnitDecimal: "0.02",
       })
     ).toEqual({ available: true, valueDecimal: "49950" });
+  });
+
+  it("uses the selected quoted 24K Gold rate directly for current gold-999 gram price and holding value", () => {
+    const {
+      calculateCurrentQuotedMetalReferenceValue,
+      calculateCurrentQuotedPurityGramPriceDecimal,
+    } = loadValuationApi();
+
+    expect(
+      calculateCurrentQuotedPurityGramPriceDecimal({
+        metal: "GOLD",
+        purityCode: "gold-999",
+        purityFactorDecimal: "0.999",
+        metalUsdPerPureGramDecimal: "139.9466",
+        currencyUsdPerUnitDecimal: "0.02",
+      })
+    ).toBe("6997.33");
+    expect(
+      calculateCurrentQuotedMetalReferenceValue({
+        metal: "GOLD",
+        purityCode: "gold-999",
+        weightGramsDecimal: "10",
+        purityFactorDecimal: "0.999",
+        metalUsdPerPureGramDecimal: "139.9466",
+        currencyUsdPerUnitDecimal: "0.02",
+      })
+    ).toEqual({ available: true, valueDecimal: "69973.3" });
+    expect(
+      calculatePureGrams({
+        weightGramsDecimal: "10",
+        purityFactorDecimal: "0.999",
+      })
+    ).toEqual({ available: true, valueDecimal: "9.99" });
+  });
+
+  it("keeps 21K, 18K, and Silver on their existing catalog-factor current quote basis", () => {
+    const { calculateCurrentQuotedPurityGramPriceDecimal } =
+      loadValuationApi();
+
+    expect(
+      calculateCurrentQuotedPurityGramPriceDecimal({
+        metal: "GOLD",
+        purityCode: "gold-875",
+        purityFactorDecimal: "0.875",
+        metalUsdPerPureGramDecimal: "100",
+        currencyUsdPerUnitDecimal: "0.02",
+      })
+    ).toBe("4375");
+    expect(
+      calculateCurrentQuotedPurityGramPriceDecimal({
+        metal: "GOLD",
+        purityCode: "gold-750",
+        purityFactorDecimal: "0.75",
+        metalUsdPerPureGramDecimal: "100",
+        currencyUsdPerUnitDecimal: "0.02",
+      })
+    ).toBe("3750");
+    expect(
+      calculateCurrentQuotedPurityGramPriceDecimal({
+        metal: "SILVER",
+        purityCode: "silver-999",
+        purityFactorDecimal: "0.999",
+        metalUsdPerPureGramDecimal: "100",
+        currencyUsdPerUnitDecimal: "0.02",
+      })
+    ).toBe("4995");
+  });
+
+  it("fails closed when the current quoted purity tuple is not canonical", () => {
+    const { calculateCurrentQuotedMetalReferenceValue } = loadValuationApi();
+
+    expect(
+      calculateCurrentQuotedMetalReferenceValue({
+        metal: "GOLD",
+        purityCode: "gold-999",
+        weightGramsDecimal: "10",
+        purityFactorDecimal: "1",
+        metalUsdPerPureGramDecimal: "100",
+        currencyUsdPerUnitDecimal: "0.02",
+      })
+    ).toEqual({ available: false, reason: "invalid_purity" });
+    expect(
+      calculateCurrentQuotedMetalReferenceValue({
+        metal: "GOLD",
+        purityCode: "gold-999",
+        weightGramsDecimal: "10",
+        purityFactorDecimal: "0.999",
+        metalUsdPerPureGramDecimal: "100",
+        currencyUsdPerUnitDecimal: "0",
+      })
+    ).toEqual({ available: false, reason: "invalid_currency_rate" });
   });
 
   it("does not round pure grams before valuation", () => {

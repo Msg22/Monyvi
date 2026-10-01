@@ -172,4 +172,39 @@ describe("MetalHoldingCorrectionState", () => {
     expect(screen.getByText("Correction reason (optional)")).toBeTruthy();
     expect(screen.queryByText("Correction reason (optional) *")).toBeNull();
   });
+
+  it("renders the correction-reason byte-limit error inline", () => {
+    const editState: MetalHoldingFormEditState = {
+      correctionReason: "ع".repeat(513),
+      affectedChanges: [
+        {
+          field: "weight",
+          label: "Weight",
+          before: "10 g",
+          after: "11 g",
+          isFinancial: true,
+        },
+      ],
+    };
+
+    render(
+      <MetalHoldingCorrectionState
+        copy={mockCopy}
+        state={editState}
+        currency="EGP"
+        locale="en"
+        currentValue="162317.87"
+        resultSincePurchase="11039.67"
+        resultDirection="positive"
+        reasonError="This reason is too long. Shorten it and try again."
+        isDisabled={false}
+        onReasonChange={jest.fn()}
+      />
+    );
+
+    expect(
+      screen.getByText("This reason is too long. Shorten it and try again.")
+    ).toBeTruthy();
+  });
+
 });

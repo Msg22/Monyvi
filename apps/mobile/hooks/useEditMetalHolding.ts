@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   calculateDisplayPerPureGramPrice,
+  getFinancialActionUtf8ByteLength,
   isSupportedMetalsIsoCurrencyCode,
+  MAX_ACTION_REASON_UTF8_BYTES,
   resolveMetalsCurrencyMinorUnits,
 } from "@monyvi/logic";
 
@@ -391,6 +393,12 @@ export function useEditMetalHolding(
   const handleCorrectionReasonChange = useCallback((value: string): void => {
     setCorrectionReason(value);
     setValidationErrors((current) => {
+      if (isCorrectionReasonTooLong(value)) {
+        return {
+          ...current,
+          correctionReason: "correction_reason_too_long",
+        };
+      }
       if (!current.correctionReason) return current;
       const { correctionReason: _, ...rest } = current;
       return rest;
@@ -411,6 +419,12 @@ export function useEditMetalHolding(
             entry[0] === "notes")
       )
     );
+    if (
+      comparison.hasMaterialChanges &&
+      isCorrectionReasonTooLong(correctionReason)
+    ) {
+      errors.correctionReason = "correction_reason_too_long";
+    }
     if (!values.name.trim()) errors.name = "required";
     const normalizedCurrent: EditableMetalHoldingFacts =
       comparison.hasMaterialChanges &&
@@ -573,6 +587,12 @@ function toRawFacts(
     physicalForm: values.physicalForm,
   };
 }
+function isCorrectionReasonTooLong(value: string): boolean {
+  return (
+    getFinancialActionUtf8ByteLength(value) > MAX_ACTION_REASON_UTF8_BYTES
+  );
+}
+
 function fallbackPreview(
   values: MetalHoldingFormValues,
   preferredCurrency?: string
