@@ -595,7 +595,7 @@ test("tokens and public keys never appear in specific staging-guard errors", asy
           endpoint: "https://evil.example/functions/v1/parse-sms",
           projectRef: STAGING_PROJECT_REF,
           accessToken: token,
-          publicApiKey,
+          publicApiKey: publicKey,
         }),
         {
           fetch: async (): Promise<Response> => new Response(),
