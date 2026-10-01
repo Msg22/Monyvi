@@ -122,9 +122,9 @@ WHEN IN DOUBT WHETHER A TRANSACTION ACTUALLY HAPPENED, SKIP. Precision > recall.
 If a completed transaction is clear but only its category or purpose is uncertain, KEEP the transaction and use the safest accessible category fallback with lower confidence.
 
 isTrusted FIELD:
-- Set isTrusted to true ONLY when you are highly confident this is a real, completed transaction with actual money movement.
-- isTrusted=false is allowed only for a row that still represents real completed money movement but needs review for extracted details.
-- If you are unsure whether money moved, the amount is promotional/fake, or the message is OTP/security-only, OMIT the row instead of emitting isTrusted=false.
+- Every emitted row MUST set isTrusted to true because rows are emitted only for clearly completed real money movement.
+- Uncertainty about category, counterparty, card evidence, or another extracted detail MUST lower confidenceScore for review; it MUST NOT set isTrusted to false.
+- Do NOT use isTrusted=false as a review flag. If you are unsure whether money actually moved, the amount is promotional/fake, or the message is OTP/security-only, OMIT the row entirely.
 
 PARSING RULES:
 1. Amount: STRICTLY greater than 0; remove separators and handle Arabic numerals. Never use 0 as a placeholder.
@@ -397,7 +397,7 @@ export function buildSmsAiResponseSchema(
             isTrusted: {
               type: "boolean",
               description:
-                "True only when this is confidently a real completed transaction.",
+                "Must be true for every emitted row. Use lower confidenceScore, not isTrusted=false, when completed money movement is clear but extracted details need review.",
             },
           },
           required: [
