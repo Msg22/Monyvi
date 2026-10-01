@@ -96,6 +96,12 @@ export interface RawObservationImport {
   readonly batches: readonly RawBatchObservation[];
 }
 
+export interface RawAttributionManifestEntry {
+  readonly batchId: string;
+  readonly caseIds: readonly string[];
+  readonly inputIdentity: string;
+}
+
 export const RawObservationImportSchema = z
   .object({
     runId: z.string().min(1),
@@ -120,10 +126,13 @@ export const ParseSmsEvaluationTransactionSchema = z
     currency: z.string().min(1),
     type: z.enum(["EXPENSE", "INCOME"]),
     counterparty: z.string(),
-    date: z.string().min(1),
+    date: z
+      .string()
+      .min(1)
+      .refine((value) => Number.isFinite(Date.parse(value)), "invalid_date"),
     categorySystemName: z.string().min(1),
     isAtmWithdrawal: z.boolean().optional(),
-    cardLast4: z.string().optional(),
+    cardLast4: z.string().regex(/^\d{4}$/).optional(),
     confidenceScore: z.number().finite().min(0).max(1),
     isTrusted: z.boolean(),
   })
@@ -140,11 +149,17 @@ export const ParseSmsEvaluationResponseSchema = z
   })
   .passthrough();
 
+export type ParseSmsEvaluationResponse = z.infer<
+  typeof ParseSmsEvaluationResponseSchema
+>;
+
 export interface CaseFieldMismatch {
   readonly field: string;
   readonly expected: unknown;
   readonly actual: unknown;
 }
+
+export type RawObservedTransaction = Readonly<Record<string, unknown>>;
 
 export interface EvaluationCaseReport {
   readonly caseId: string;
@@ -160,7 +175,8 @@ export interface EvaluationCaseReport {
     | { readonly status: "not_observed" }
     | {
         readonly status: "observed";
-        readonly transactions: readonly ParseSmsProviderTransaction[];
+        readonly validity: "valid" | "invalid";
+        readonly transactions: readonly RawObservedTransaction[];
         readonly mismatches: readonly CaseFieldMismatch[];
       };
 }
@@ -213,6 +229,7 @@ export interface EvaluationReport {
     readonly observedBatches: number;
     readonly totalBatches: number;
   };
+  readonly rawAttributionManifest: readonly RawAttributionManifestEntry[];
   readonly providerSummaries: readonly EvaluationGroupSummary[];
   readonly scenarioSummaries: readonly EvaluationGroupSummary[];
   readonly classificationSummary: Readonly<
@@ -237,6 +254,7 @@ export interface EvaluationRunOptions {
   readonly accessToken?: string;
   readonly publicApiKey?: string;
   readonly signal?: AbortSignal;
+  readonly rawObservationValue?: unknown;
 }
 
 export interface EvaluationRunnerDependencies {
@@ -246,4 +264,47 @@ export interface EvaluationRunnerDependencies {
 
 export interface ParsedCliOptions extends EvaluationRunOptions {
   readonly rawObservationPath?: string;
+  readonly finalReportPath?: string;
+  readonly outputPath?: string;
 }
+
+const FinalObservationClassificationSchema = z.enum([
+  "observed",
+  "response_invalid",
+  "transport_failure",
+  "admission_failure",
+  "unresolved",
+  "suppressed",
+  "unattempted",
+]);
+
+const CaseReportImportSchema = z
+  .object({
+    caseId: z.string().min(1),
+    providerId: z.string().min(1),
+    sender: z.string(),
+    body: z.string(),
+    expected: z.unknown(),
+    finalClassification: FinalObservationClassificationSchema,
+    replayProvenance: z.enum(["confirmed_provider_call", "unknown"]),
+    actual: z.array(ParseSmsEvaluationTransactionSchema),
+    mismatches: z.array(z.unknown()),
+    raw: z.unknown(),
+  })
+  .passthrough();
+
+export const EvaluationReportImportSchema = z
+  .object({
+    runId: z.string().min(1),
+    mode: z.enum(["dry-run", "live"]),
+    cancelled: z.boolean(),
+    cases: z.array(CaseReportImportSchema),
+    rawAttributionManifest: z.array(
+      z.object({
+        batchId: z.string().min(1),
+        caseIds: z.array(z.string().min(1)),
+        inputIdentity: z.string().min(1),
+      })
+    ),
+  })
+  .passthrough();
