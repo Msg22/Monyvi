@@ -103,11 +103,16 @@ interface EvaluationRunContext {
   readonly anchorMs: number;
   readonly cases: readonly SyntheticEvaluationCase[];
   readonly batches: readonly (readonly SyntheticEvaluationCase[])[];
-  readonly observations: FinalBatchObservation[];
-  completedBatchCount: number;
-  processedCaseCount: number;
-  attemptedRequestCount: number;
-  latest: SmsProviderEvaluationProgress | null;
+  readonly observations: readonly FinalBatchObservation[];
+  readonly completedBatchCount: number;
+  readonly processedCaseCount: number;
+  readonly attemptedRequestCount: number;
+  readonly latest: SmsProviderEvaluationProgress | null;
+}
+
+interface ProgressEmission {
+  readonly context: EvaluationRunContext;
+  readonly progress: SmsProviderEvaluationProgress;
 }
 
 interface BatchExecutionResult {
@@ -294,7 +299,7 @@ async function emitProgress(
   context: EvaluationRunContext,
   activeBatchNumber: number | null,
   onProgress: StartSmsProviderEvaluationInput["onProgress"]
-): Promise<SmsProviderEvaluationProgress> {
+): Promise<ProgressEmission> {
   const progress: SmsProviderEvaluationProgress = {
     report: buildReport(context, false),
     batches: buildBatchDetails(context.observations),
@@ -305,9 +310,11 @@ async function emitProgress(
     totalBatchCount: context.batches.length,
     totalCaseCount: context.cases.length,
   };
-  context.latest = progress;
   await onProgress?.(progress);
-  return progress;
+  return {
+    context: { ...context, latest: progress },
+    progress,
+  };
 }
 
 function resultFromContext(
@@ -378,12 +385,27 @@ function createAuthFailureObservation(input: {
   };
 }
 
+function throwIfRunCancelled(signal: AbortSignal): void {
+  if (signal.aborted) {
+    throw new Error("sms_provider_evaluation_cancelled");
+  }
+}
+
+async function assertPinnedUserAndActive(
+  expectedUserId: string,
+  signal: AbortSignal
+): Promise<void> {
+  await assertPinnedUser(expectedUserId);
+  throwIfRunCancelled(signal);
+}
+
 async function invokeBatch(
   input: StartSmsProviderEvaluationInput,
   context: EvaluationRunContext,
   batch: readonly SyntheticEvaluationCase[],
   id: string
 ): Promise<EdgeFunctionResponse> {
+  await assertPinnedUserAndActive(input.initiatingUserId, input.signal);
   return invokeAuthenticatedEdgeFunction<unknown>(
     "parse-sms",
     {
@@ -404,7 +426,10 @@ async function invokeBatch(
       },
       signal: input.signal,
     },
-    { beforeRetry: () => assertPinnedUser(input.initiatingUserId) }
+    {
+      beforeRetry: () =>
+        assertPinnedUserAndActive(input.initiatingUserId, input.signal),
+    }
   );
 }
 
@@ -422,7 +447,10 @@ async function executeBatch(input: {
       input.batch,
       input.id
     );
-    await assertPinnedUser(input.runInput.initiatingUserId);
+    await assertPinnedUserAndActive(
+      input.runInput.initiatingUserId,
+      input.runInput.signal
+    );
     return classifyBatchResponse(input, response, startedAt);
   } catch (error: unknown) {
     return classifyBatchError(input, error, startedAt);
@@ -518,10 +546,13 @@ function recordBatch(
   context: EvaluationRunContext,
   batch: readonly SyntheticEvaluationCase[],
   observation: FinalBatchObservation
-): void {
-  context.observations.push(observation);
-  context.completedBatchCount++;
-  context.processedCaseCount += batch.length;
+): EvaluationRunContext {
+  return {
+    ...context,
+    observations: [...context.observations, observation],
+    completedBatchCount: context.completedBatchCount + 1,
+    processedCaseCount: context.processedCaseCount + batch.length,
+  };
 }
 
 function validateRunInput(input: StartSmsProviderEvaluationInput): void {
@@ -538,18 +569,22 @@ function validateRunInput(input: StartSmsProviderEvaluationInput): void {
 
 async function runPreparedEvaluation(
   input: StartSmsProviderEvaluationInput,
-  context: EvaluationRunContext
+  initialContext: EvaluationRunContext
 ): Promise<SmsProviderEvaluationRunResult> {
-  await emitProgress(context, null, input.onProgress);
+  let context = (
+    await emitProgress(initialContext, null, input.onProgress)
+  ).context;
   for (let index = 0; index < context.batches.length; index += 1) {
-    if (input.signal.aborted) {
-      return resultFromContext(context, "cancelled");
-    }
+    if (input.signal.aborted) return resultFromContext(context, "cancelled");
     const batch = context.batches[index];
     if (batch === undefined) continue;
-    await assertPinnedUser(input.initiatingUserId);
-    context.attemptedRequestCount++;
-    await emitProgress(context, index + 1, input.onProgress);
+    context = {
+      ...context,
+      attemptedRequestCount: context.attemptedRequestCount + 1,
+    };
+    context = (
+      await emitProgress(context, index + 1, input.onProgress)
+    ).context;
     const result = await executeBatch({
       runInput: input,
       context,
@@ -558,10 +593,10 @@ async function runPreparedEvaluation(
     });
     if (result.cancelled) return resultFromContext(context, "cancelled");
     if (result.observation !== undefined) {
-      recordBatch(context, batch, result.observation);
+      context = recordBatch(context, batch, result.observation);
     }
-    await assertPinnedUser(input.initiatingUserId);
-    await emitProgress(context, null, input.onProgress);
+    await assertPinnedUserAndActive(input.initiatingUserId, input.signal);
+    context = (await emitProgress(context, null, input.onProgress)).context;
     if (result.fatalReason !== undefined) {
       return resultFromContext(context, "fatal", result.fatalReason);
     }
