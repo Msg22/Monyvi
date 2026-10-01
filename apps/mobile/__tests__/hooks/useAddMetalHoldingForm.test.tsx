@@ -54,11 +54,9 @@ function completeForm(result: { current: UseAddMetalHoldingFormResult }): void {
 
 describe("useAddMetalHoldingForm", () => {
   it("preserves separate metal and FX trust from the selected snapshot", () => {
-    const useMarketRates = (
-      jest.requireMock("../../hooks/useMarketRates") as {
-        useMarketRates: jest.Mock;
-      }
-    ).useMarketRates;
+    const useMarketRates = jest.requireMock<{
+      useMarketRates: jest.Mock;
+    }>("../../hooks/useMarketRates").useMarketRates;
     useMarketRates.mockReturnValue({
       selectedSnapshot: {
         trust: {
@@ -333,11 +331,9 @@ describe("useAddMetalHoldingForm", () => {
     expect(addHolding).toHaveBeenCalledTimes(1);
   });
   it("stays fresh when only the EGP reference rate is stale for a non-EGP purchase", () => {
-    const useMarketRates = (
-      jest.requireMock("../../hooks/useMarketRates") as {
-        useMarketRates: jest.Mock;
-      }
-    ).useMarketRates;
+    const useMarketRates = jest.requireMock<{
+      useMarketRates: jest.Mock;
+    }>("../../hooks/useMarketRates").useMarketRates;
     useMarketRates.mockReturnValue({
       selectedSnapshot: {
         trust: {
@@ -413,7 +409,7 @@ describe("useAddMetalHoldingForm", () => {
       useAddMetalHoldingForm(
         input({
           preferredCurrency: "EGP",
-          previewRates: (() => ({
+          previewRates: () => ({
             metalUsdPerPureGramDecimal: "100",
             currencyUsdPerUnitDecimal: "0.75",
             egpUsdPerUnitDecimal: "0.02",
@@ -421,7 +417,7 @@ describe("useAddMetalHoldingForm", () => {
             rateFreshness: "fresh",
             preferredCurrency: "EGP",
             preferredCurrencyUsdPerUnitDecimal: "0.02",
-          })) as UseAddMetalHoldingFormInput["previewRates"],
+          }),
         })
       )
     );
@@ -439,8 +435,7 @@ describe("useAddMetalHoldingForm", () => {
     expect(result.current.preview.purityFactorDecimal).toBe("0.999");
     expect(result.current.preview.valuation).toEqual({
       available: true,
-      valueDecimal:
-        "1066.6666666666666666666666666666666666666666666667",
+      valueDecimal: "1066.6666666666666666666666666666666666666666666667",
     });
     const preferredPreview = result.current.preview as unknown as {
       readonly preferredCurrency?: string;
@@ -453,11 +448,9 @@ describe("useAddMetalHoldingForm", () => {
   });
 
   it("resolves preferred EGP FX alongside purchase CAD FX without changing freshness", () => {
-    const useMarketRates = (
-      jest.requireMock("../../hooks/useMarketRates") as {
-        useMarketRates: jest.Mock;
-      }
-    ).useMarketRates;
+    const useMarketRates = jest.requireMock<{
+      useMarketRates: jest.Mock;
+    }>("../../hooks/useMarketRates").useMarketRates;
     useMarketRates.mockReturnValue({
       selectedSnapshot: {
         trust: {
@@ -568,11 +561,9 @@ describe("useAddMetalHoldingForm", () => {
   });
 
   it("returns null preferred FX instead of fabricating when preferred is missing", () => {
-    const useMarketRates = (
-      jest.requireMock("../../hooks/useMarketRates") as {
-        useMarketRates: jest.Mock;
-      }
-    ).useMarketRates;
+    const useMarketRates = jest.requireMock<{
+      useMarketRates: jest.Mock;
+    }>("../../hooks/useMarketRates").useMarketRates;
     useMarketRates.mockReturnValue({
       selectedSnapshot: {
         trust: {
