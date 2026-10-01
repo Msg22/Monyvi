@@ -40,6 +40,14 @@ function readAllowedCategories(categoryTree: string): ReadonlySet<string> {
   return categories;
 }
 
+function normalizeProviderTransaction(value: unknown): unknown {
+  if (!isRecord(value) || value.cardLast4 !== "") return value;
+
+  const normalized = { ...value };
+  delete normalized.cardLast4;
+  return normalized;
+}
+
 function isValidProviderTransaction(
   value: unknown,
   context: SmsProviderTransactionValidationContext,
@@ -90,8 +98,11 @@ export function parseSmsProviderTransactions(
   ) {
     return { isValid: false, transactions: [] };
   }
+  const normalizedTransactions = value.transactions.map(
+    normalizeProviderTransaction
+  );
   if (
-    value.transactions.some(
+    normalizedTransactions.some(
       (transaction) =>
         !isValidProviderTransaction(transaction, context, allowedCategories)
     )
@@ -100,6 +111,6 @@ export function parseSmsProviderTransactions(
   }
   return {
     isValid: true,
-    transactions: value.transactions as ParseSmsProviderTransaction[],
+    transactions: normalizedTransactions as ParseSmsProviderTransaction[],
   };
 }
