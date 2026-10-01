@@ -165,7 +165,12 @@ function compareExpectedFields(
   for (const field of FIELD_NAMES) {
     if (field === "confidenceScore") {
       const expectation = expected.confidenceScore;
-      if (expectation.kind === "unknown") continue;
+      if (
+        expectation.kind === "unknown" ||
+        expectation.basis === "policy_heuristic"
+      ) {
+        continue;
+      }
       aggregate.fieldDenominators.confidenceScore++;
       const actualValue = actual.confidenceScore;
       const isCorrect =
@@ -371,6 +376,10 @@ function rawTransactionsForCase(
 function countRawIdentityIssues(
   rawBatches: readonly RawObservationImport["batches"][number][],
   parsedByBatch: ReadonlyMap<string, RawParsedBatch>,
+  providerInputsByBatch: ReadonlyMap<
+    string,
+    ProviderInputObservationImport["batches"][number]
+  >,
   knownCases: ReadonlySet<string>
 ): Pick<MutableAggregate, "duplicateOutputs" | "unknownMessageIds"> {
   let duplicateOutputs = 0;
@@ -378,8 +387,18 @@ function countRawIdentityIssues(
 
   for (const batch of rawBatches) {
     const parsed = parsedByBatch.get(batch.batchId);
-    if (parsed === undefined || !parsed.structurallyObserved) continue;
-    const batchCases = new Set(batch.caseIds);
+    const providerInput = providerInputsByBatch.get(batch.batchId);
+    if (
+      parsed === undefined ||
+      !parsed.structurallyObserved ||
+      providerInput === undefined ||
+      providerInput.caseIds.length === 0 ||
+      providerInput.requestInputIdentity !== batch.inputIdentity
+    ) {
+      continue;
+    }
+
+    const batchCases = new Set(providerInput.caseIds);
     const seen = new Set<string>();
     for (const transaction of parsed.transactions) {
       const messageId = transaction.messageId;
@@ -405,6 +424,7 @@ function countRawIdentityIssues(
 function buildRawLayer(
   cases: readonly SyntheticEvaluationCase[],
   rawObservations: RawObservationImport | undefined,
+  providerInputObservations: ProviderInputObservationImport | undefined,
   totalBatchIds: ReadonlySet<string>
 ): {
   readonly rawByCase: ReadonlyMap<
@@ -420,7 +440,10 @@ function buildRawLayer(
   >();
   const aggregate = createMutableAggregate();
 
-  if (rawObservations === undefined) {
+  if (
+    rawObservations === undefined ||
+    providerInputObservations === undefined
+  ) {
     return {
       rawByCase,
       aggregate: finalizeAggregate(aggregate),
@@ -430,17 +453,29 @@ function buildRawLayer(
 
   const knownCases = new Set(cases.map(({ caseId }) => caseId));
   const parsedByBatch = new Map<string, RawParsedBatch>();
+  const providerInputsByBatch = new Map(
+    providerInputObservations.batches.map((batch) => [batch.batchId, batch])
+  );
   let observedBatches = 0;
 
   for (const batch of rawObservations.batches) {
-    if (batch.runId !== rawObservations.runId || !totalBatchIds.has(batch.batchId)) {
+    const providerInput = providerInputsByBatch.get(batch.batchId);
+    if (
+      batch.runId !== rawObservations.runId ||
+      providerInputObservations.runId !== rawObservations.runId ||
+      !totalBatchIds.has(batch.batchId) ||
+      providerInput === undefined ||
+      providerInput.caseIds.length === 0 ||
+      providerInput.requestInputIdentity !== batch.inputIdentity
+    ) {
       continue;
     }
+
     const parsed = parseRawBatch(batch.responseContent);
     parsedByBatch.set(batch.batchId, parsed);
     observedBatches++;
 
-    for (const caseId of batch.caseIds) {
+    for (const caseId of providerInput.caseIds) {
       const item = cases.find((candidate) => candidate.caseId === caseId);
       if (item === undefined) continue;
       const actual = rawTransactionsForCase(parsed, caseId);
@@ -460,18 +495,36 @@ function buildRawLayer(
   const identity = countRawIdentityIssues(
     rawObservations.batches,
     parsedByBatch,
+    providerInputsByBatch,
     knownCases
   );
   aggregate.duplicateOutputs = identity.duplicateOutputs;
   aggregate.unknownMessageIds = identity.unknownMessageIds;
+  aggregate.falsePositive +=
+    identity.duplicateOutputs + identity.unknownMessageIds;
 
   for (const batch of rawObservations.batches) {
     const parsed = parsedByBatch.get(batch.batchId);
-    if (parsed === undefined || !parsed.structurallyObserved) continue;
-    for (const caseId of batch.caseIds) {
+    const providerInput = providerInputsByBatch.get(batch.batchId);
+    if (
+      parsed === undefined ||
+      !parsed.structurallyObserved ||
+      providerInput === undefined ||
+      providerInput.caseIds.length === 0 ||
+      providerInput.requestInputIdentity !== batch.inputIdentity
+    ) {
+      continue;
+    }
+
+    for (const caseId of providerInput.caseIds) {
       const item = cases.find((candidate) => candidate.caseId === caseId);
       if (item === undefined) continue;
-      scoreCase(item, "observed", rawTransactionsForCase(parsed, caseId), aggregate);
+      scoreCase(
+        item,
+        "observed",
+        rawTransactionsForCase(parsed, caseId),
+        aggregate
+      );
     }
   }
 
@@ -493,9 +546,51 @@ function classificationCounts(
   return output;
 }
 
+function groupIdentityIssues(
+  observations: readonly FinalBatchObservation[],
+  groupCaseIds: ReadonlySet<string>,
+  allKnownCaseIds: ReadonlySet<string>
+): Pick<MutableAggregate, "duplicateOutputs" | "unknownMessageIds"> {
+  let duplicateOutputs = 0;
+  let unknownMessageIds = 0;
+
+  for (const observation of observations) {
+    const requestedKnown = observation.caseIds.filter((caseId) =>
+      allKnownCaseIds.has(caseId)
+    );
+    const groupOwnsWholeBatch =
+      requestedKnown.length > 0 &&
+      requestedKnown.every((caseId) => groupCaseIds.has(caseId));
+    const seen = new Set<string>();
+
+    for (const transaction of observation.transactions ?? []) {
+      if (groupCaseIds.has(transaction.messageId)) {
+        if (seen.has(transaction.messageId)) {
+          duplicateOutputs++;
+        } else {
+          seen.add(transaction.messageId);
+        }
+        continue;
+      }
+
+      if (
+        groupOwnsWholeBatch &&
+        (!allKnownCaseIds.has(transaction.messageId) ||
+          !observation.caseIds.includes(transaction.messageId))
+      ) {
+        unknownMessageIds++;
+      }
+    }
+  }
+
+  return { duplicateOutputs, unknownMessageIds };
+}
+
 function aggregateReports(
   cases: readonly SyntheticEvaluationCase[],
-  reports: readonly EvaluationCaseReport[]
+  reports: readonly EvaluationCaseReport[],
+  observations: readonly FinalBatchObservation[] = [],
+  allCases: readonly SyntheticEvaluationCase[] = cases
 ): EvaluationAggregate {
   const aggregate = createMutableAggregate();
   const reportsById = new Map(reports.map((report) => [report.caseId, report]));
@@ -504,12 +599,28 @@ function aggregateReports(
     if (report === undefined) continue;
     scoreCase(item, report.finalClassification, report.actual, aggregate);
   }
+
+  if (observations.length > 0) {
+    const groupIds = new Set(cases.map(({ caseId }) => caseId));
+    const allKnownIds = new Set(allCases.map(({ caseId }) => caseId));
+    const identity = groupIdentityIssues(
+      observations,
+      groupIds,
+      allKnownIds
+    );
+    aggregate.duplicateOutputs = identity.duplicateOutputs;
+    aggregate.unknownMessageIds = identity.unknownMessageIds;
+    aggregate.falsePositive +=
+      identity.duplicateOutputs + identity.unknownMessageIds;
+  }
+
   return finalizeAggregate(aggregate);
 }
 
 function groupSummaries(
   cases: readonly SyntheticEvaluationCase[],
   reports: readonly EvaluationCaseReport[],
+  observations: readonly FinalBatchObservation[],
   keysFor: (item: SyntheticEvaluationCase) => readonly string[]
 ): readonly EvaluationGroupSummary[] {
   const keys = new Set<string>();
@@ -525,7 +636,12 @@ function groupSummaries(
       const groupReports = reports.filter(({ caseId }) => ids.has(caseId));
       return {
         key,
-        aggregate: aggregateReports(groupCases, groupReports),
+        aggregate: aggregateReports(
+          groupCases,
+          groupReports,
+          observations,
+          cases
+        ),
         classifications: classificationCounts(groupReports),
       };
     });
@@ -589,12 +705,15 @@ export function scoreSmsProviderEvaluation(
   const identity = countOutputIdentityIssues(input.finalObservations, knownCases);
   aggregate.duplicateOutputs = identity.duplicateOutputs;
   aggregate.unknownMessageIds = identity.unknownMessageIds;
+  aggregate.falsePositive +=
+    identity.duplicateOutputs + identity.unknownMessageIds;
 
   const uniqueBatches = uniqueBatchObservations(input.finalObservations);
   const totalBatchIds = new Set(uniqueBatches.map(({ batchId }) => batchId));
   const rawLayer = buildRawLayer(
     input.cases,
     input.rawObservations,
+    input.providerInputObservations,
     totalBatchIds
   );
 
@@ -606,8 +725,15 @@ export function scoreSmsProviderEvaluation(
     return {
       caseId: item.caseId,
       providerId: item.providerId,
+      source: item.source,
+      templateGroup: item.templateGroup,
+      provenance: item.provenance,
+      holdout: item.holdout,
+      tags: item.tags,
       sender: item.message.sender,
       body: item.message.body,
+      receivedDate: item.message.date,
+      smsFingerprint: item.message.smsFingerprint,
       expected: item.expected,
       finalClassification: classification,
       replayProvenance: observation?.replayProvenance ?? "unknown",
@@ -641,15 +767,29 @@ export function scoreSmsProviderEvaluation(
       totalBatches: totalBatchIds.size,
     },
     rawAttributionManifest: [],
-    providerSummaries: groupSummaries(input.cases, reports, (item) => [
-      item.providerId,
-    ]),
-    scenarioSummaries: groupSummaries(input.cases, reports, (item) => item.tags),
+    providerSummaries: groupSummaries(
+      input.cases,
+      reports,
+      input.finalObservations,
+      (item) => [item.providerId]
+    ),
+    scenarioSummaries: groupSummaries(
+      input.cases,
+      reports,
+      input.finalObservations,
+      (item) => item.tags
+    ),
     classificationSummary: classificationCounts(reports),
     batchSummaries: uniqueBatches.map((observation) => ({
       batchId: observation.batchId,
       classification: batchClassification(observation),
       caseCount: observation.caseIds.length,
+      ...(observation.httpStatus === undefined
+        ? {}
+        : { httpStatus: observation.httpStatus }),
+      ...(observation.refusalReason === undefined
+        ? {}
+        : { refusalReason: observation.refusalReason }),
       ...(observation.latencyMs === undefined
         ? {}
         : { latencyMs: observation.latencyMs }),
@@ -672,17 +812,17 @@ function pseudoCasesFromReport(
   return report.cases.map((item) => ({
     caseId: item.caseId,
     providerId: item.providerId,
-    templateGroup: "stored-report",
-    source: "synthetic",
-    provenance: "stored-evaluation-report",
-    holdout: false,
-    tags: [],
+    templateGroup: item.templateGroup,
+    source: item.source,
+    provenance: item.provenance,
+    holdout: item.holdout,
+    tags: item.tags,
     message: {
       id: item.caseId,
       sender: item.sender,
       body: item.body,
-      date: "",
-      smsFingerprint: "",
+      date: item.receivedDate,
+      smsFingerprint: item.smsFingerprint,
     },
     expected: item.expected,
   }));
@@ -690,7 +830,8 @@ function pseudoCasesFromReport(
 
 export function attachRawObservationsToEvaluationReport(
   report: EvaluationReport,
-  rawObservations: RawObservationImport
+  rawObservations: RawObservationImport,
+  providerInputObservations?: ProviderInputObservationImport
 ): EvaluationReport {
   if (rawObservations.runId !== report.runId) {
     throw new Error("sms_provider_evaluation_raw_run_mismatch");
@@ -700,7 +841,12 @@ export function attachRawObservationsToEvaluationReport(
   const batchIds = new Set(
     report.rawAttributionManifest.map(({ batchId }) => batchId)
   );
-  const rawLayer = buildRawLayer(cases, rawObservations, batchIds);
+  const rawLayer = buildRawLayer(
+    cases,
+    rawObservations,
+    providerInputObservations,
+    batchIds
+  );
 
   const casesById = new Map(cases.map((item) => [item.caseId, item]));
   const nextCases = report.cases.map((item) => {
