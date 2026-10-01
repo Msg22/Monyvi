@@ -134,6 +134,9 @@ const smsAiProvider = createConfiguredSmsAiProvider(Deno.env.get, {
             responseContent,
           });
         },
+        onAttemptFailure: (metadata): void => {
+          console.warn("[parse-sms] smsAi.providerAttemptFailed", metadata);
+        },
       }
     : {}),
 });

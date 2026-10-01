@@ -26,6 +26,23 @@ type FetchLike = (
 type Sleep = (milliseconds: number) => Promise<void>;
 type CreateTimeoutSignal = (milliseconds: number) => AbortSignal;
 type ResponseOutputCapture = (content: string) => void;
+
+export type DeepInfraSmsAttemptFailurePhase = "fetch" | "response_body";
+
+export interface DeepInfraSmsAttemptFailureMetadata {
+  readonly attempt: number;
+  readonly totalAttempts: number;
+  readonly elapsedMs: number;
+  readonly timeoutMs: number;
+  readonly errorName: string;
+  readonly upstreamStatus?: number;
+  readonly willRetry: boolean;
+  readonly phase: DeepInfraSmsAttemptFailurePhase;
+}
+
+type AttemptFailureCapture = (
+  metadata: DeepInfraSmsAttemptFailureMetadata
+) => void;
 type ProviderLogger = (
   event: string,
   metadata: SmsAiProviderOperationalMetadata
@@ -37,6 +54,7 @@ export interface DeepInfraSmsProviderDependencies {
   readonly createTimeoutSignal?: CreateTimeoutSignal;
   readonly log?: ProviderLogger;
   readonly onResponseOutput?: ResponseOutputCapture;
+  readonly onAttemptFailure?: AttemptFailureCapture;
 }
 
 const DeepInfraResponseSchema = z.object({
@@ -97,6 +115,11 @@ function defaultTimeoutSignal(milliseconds: number): AbortSignal {
 
 function isRetryableHttpStatus(status: number): boolean {
   return status === 408 || status === 429 || status >= 500;
+}
+
+function getSafeErrorName(error: unknown): string {
+  if (error instanceof Error) return error.name || "Error";
+  return typeof error;
 }
 
 function mapCompletionStatus(
@@ -175,6 +198,7 @@ export class DeepInfraSmsProvider implements SmsAiProvider {
   private readonly createTimeoutSignal: CreateTimeoutSignal;
   private readonly log?: ProviderLogger;
   private readonly onResponseOutput?: ResponseOutputCapture;
+  private readonly onAttemptFailure?: AttemptFailureCapture;
 
   constructor(
     private readonly config: SmsAiProviderConfig,
@@ -189,6 +213,17 @@ export class DeepInfraSmsProvider implements SmsAiProvider {
       dependencies.createTimeoutSignal ?? defaultTimeoutSignal;
     this.log = dependencies.log;
     this.onResponseOutput = dependencies.onResponseOutput;
+    this.onAttemptFailure = dependencies.onAttemptFailure;
+  }
+
+  private emitAttemptFailure(
+    metadata: DeepInfraSmsAttemptFailureMetadata
+  ): void {
+    try {
+      this.onAttemptFailure?.(metadata);
+    } catch {
+      // Development-only diagnostics must never alter provider behavior.
+    }
   }
 
   async execute(
@@ -203,6 +238,8 @@ export class DeepInfraSmsProvider implements SmsAiProvider {
           DEEPINFRA_SMS_BASE_RETRY_DELAY_MS * Math.pow(2, attempt - 1)
         );
       }
+
+      const attemptStartedAtMs = Date.now();
 
       try {
         const response = await this.fetchImpl(DEEPINFRA_SMS_ENDPOINT, {
@@ -220,22 +257,54 @@ export class DeepInfraSmsProvider implements SmsAiProvider {
             response.status,
             isRetryableHttpStatus(response.status)
           );
+          const willRetry =
+            error.isRetryable && attempt < DEEPINFRA_SMS_MAX_RETRIES;
+          this.emitAttemptFailure({
+            attempt: attempt + 1,
+            totalAttempts: DEEPINFRA_SMS_MAX_RETRIES + 1,
+            elapsedMs: Date.now() - attemptStartedAtMs,
+            timeoutMs: DEEPINFRA_SMS_ATTEMPT_TIMEOUT_MS,
+            errorName: error.name,
+            upstreamStatus: response.status,
+            willRetry,
+            phase: "fetch",
+          });
           if (!error.isRetryable) throw error;
           lastError = error;
-          if (attempt < DEEPINFRA_SMS_MAX_RETRIES) continue;
-          throw error;
+          if (willRetry) continue;
+          break;
         }
 
         let payload: unknown;
         try {
           payload = await response.json();
         } catch {
-          throw new DeepInfraSmsInvalidResponseError();
+          const error = new DeepInfraSmsInvalidResponseError();
+          this.emitAttemptFailure({
+            attempt: attempt + 1,
+            totalAttempts: DEEPINFRA_SMS_MAX_RETRIES + 1,
+            elapsedMs: Date.now() - attemptStartedAtMs,
+            timeoutMs: DEEPINFRA_SMS_ATTEMPT_TIMEOUT_MS,
+            errorName: error.name,
+            willRetry: false,
+            phase: "response_body",
+          });
+          throw error;
         }
 
         const parsed = DeepInfraResponseSchema.safeParse(payload);
         if (!parsed.success) {
-          throw new DeepInfraSmsInvalidResponseError();
+          const error = new DeepInfraSmsInvalidResponseError();
+          this.emitAttemptFailure({
+            attempt: attempt + 1,
+            totalAttempts: DEEPINFRA_SMS_MAX_RETRIES + 1,
+            elapsedMs: Date.now() - attemptStartedAtMs,
+            timeoutMs: DEEPINFRA_SMS_ATTEMPT_TIMEOUT_MS,
+            errorName: error.name,
+            willRetry: false,
+            phase: "response_body",
+          });
+          throw error;
         }
 
         const choice = parsed.data.choices[0];
@@ -263,8 +332,18 @@ export class DeepInfraSmsProvider implements SmsAiProvider {
           throw error;
         }
 
+        const willRetry = attempt < DEEPINFRA_SMS_MAX_RETRIES;
+        this.emitAttemptFailure({
+          attempt: attempt + 1,
+          totalAttempts: DEEPINFRA_SMS_MAX_RETRIES + 1,
+          elapsedMs: Date.now() - attemptStartedAtMs,
+          timeoutMs: DEEPINFRA_SMS_ATTEMPT_TIMEOUT_MS,
+          errorName: getSafeErrorName(error),
+          willRetry,
+          phase: "fetch",
+        });
         lastError = error;
-        if (attempt >= DEEPINFRA_SMS_MAX_RETRIES) {
+        if (!willRetry) {
           break;
         }
       }
