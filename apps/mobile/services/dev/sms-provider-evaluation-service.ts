@@ -121,7 +121,7 @@ interface EvaluationRunContext {
   readonly latest: SmsProviderEvaluationProgress | null;
   readonly cancelledBatch: {
     readonly batchNumber: number;
-    readonly elapsedMs: number;
+    readonly elapsedMs?: number;
   } | null;
 }
 
@@ -632,7 +632,7 @@ function recordCancelledBatch(
     ...context,
     cancelledBatch: {
       batchNumber,
-      elapsedMs: elapsedMs ?? 0,
+      ...(elapsedMs === undefined ? {} : { elapsedMs }),
     },
   };
 }

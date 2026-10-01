@@ -36,6 +36,7 @@ export interface UseSmsProviderEvaluationResult {
   readonly totalBatchCount: number;
   readonly totalCaseCount: number;
   readonly fatalReason: string | null;
+  readonly runElapsedMs: number;
   readonly start: () => Promise<void>;
   readonly cancel: () => void;
   readonly clear: () => void;
@@ -53,12 +54,14 @@ interface EvaluationState {
   readonly totalBatchCount: number;
   readonly totalCaseCount: number;
   readonly fatalReason: string | null;
+  readonly runElapsedMs: number;
 }
 
 interface ActiveEvaluationRun {
   readonly generation: number;
   readonly userId: string;
   readonly controller: AbortController;
+  readonly startedAtMs: number;
 }
 
 function emptyState(ownerUserId: string | null): EvaluationState {
@@ -74,12 +77,14 @@ function emptyState(ownerUserId: string | null): EvaluationState {
     totalBatchCount: 0,
     totalCaseCount: 0,
     fatalReason: null,
+    runElapsedMs: 0,
   };
 }
 
 function runningState(
   ownerUserId: string,
-  progress: SmsProviderEvaluationProgress
+  progress: SmsProviderEvaluationProgress,
+  runElapsedMs: number
 ): EvaluationState {
   return {
     ownerUserId,
@@ -93,12 +98,14 @@ function runningState(
     totalBatchCount: progress.totalBatchCount,
     totalCaseCount: progress.totalCaseCount,
     fatalReason: null,
+    runElapsedMs,
   };
 }
 
 function terminalState(
   userId: string,
-  result: Awaited<ReturnType<typeof runSmsProviderEvaluationForCurrentUser>>
+  result: Awaited<ReturnType<typeof runSmsProviderEvaluationForCurrentUser>>,
+  runElapsedMs: number
 ): EvaluationState {
   return {
     ownerUserId: userId,
@@ -112,6 +119,7 @@ function terminalState(
     totalBatchCount: result.totalBatchCount,
     totalCaseCount: result.totalCaseCount,
     fatalReason: result.fatalReason ?? null,
+    runElapsedMs,
   };
 }
 
@@ -128,10 +136,19 @@ export function useSmsProviderEvaluation(
     activeRunRef.current = null;
   }, []);
   const cancel = useCallback((): void => {
+    const activeRun = activeRunRef.current;
     abortActiveRun();
     setState((current) =>
       current.ownerUserId === userId && current.status === "running"
-        ? { ...current, status: "cancelled", activeBatchNumber: null }
+        ? {
+            ...current,
+            status: "cancelled",
+            activeBatchNumber: null,
+            runElapsedMs:
+              activeRun === null
+                ? current.runElapsedMs
+                : elapsedSince(activeRun.startedAtMs),
+          }
         : current
     );
   }, [abortActiveRun, userId]);
@@ -141,6 +158,7 @@ export function useSmsProviderEvaluation(
   }, [abortActiveRun, userId]);
 
   useEvaluationCleanup(userId, abortActiveRun, setState);
+  useRunElapsedTimer(state.status, userId, activeRunRef, setState);
   const start = useEvaluationStarter(
     input,
     activeRunRef,
@@ -167,6 +185,31 @@ function useEvaluationCleanup(
   useEffect(() => (): void => abortActiveRun(), [abortActiveRun]);
 }
 
+function elapsedSince(startedAtMs: number): number {
+  return Math.max(0, Date.now() - startedAtMs);
+}
+
+function useRunElapsedTimer(
+  status: SmsProviderEvaluationScreenStatus,
+  userId: string | null,
+  activeRunRef: React.MutableRefObject<ActiveEvaluationRun | null>,
+  setState: React.Dispatch<React.SetStateAction<EvaluationState>>
+): void {
+  useEffect(() => {
+    if (status !== "running") return;
+    const timer = setInterval(() => {
+      const run = activeRunRef.current;
+      if (run === null || run.userId !== userId) return;
+      setState((current) =>
+        current.ownerUserId === userId && current.status === "running"
+          ? { ...current, runElapsedMs: elapsedSince(run.startedAtMs) }
+          : current
+      );
+    }, 1_000);
+    return (): void => clearInterval(timer);
+  }, [activeRunRef, setState, status, userId]);
+}
+
 function useEvaluationStarter(
   input: UseSmsProviderEvaluationInput,
   activeRunRef: React.MutableRefObject<ActiveEvaluationRun | null>,
@@ -177,7 +220,12 @@ function useEvaluationStarter(
     if (activeRunRef.current !== null || !prepareStart(input, setState)) return;
     const generation = ++generationRef.current;
     const controller = new AbortController();
-    const run = { generation, userId: input.userId, controller };
+    const run = {
+      generation,
+      userId: input.userId,
+      controller,
+      startedAtMs: Date.now(),
+    };
     activeRunRef.current = run;
     setState({ ...emptyState(run.userId), status: "running" });
     try {
@@ -228,12 +276,16 @@ async function executeHookRun(
       signal: run.controller.signal,
       onProgress: (progress): void => {
         if (isCurrentRun(run, generationRef, activeRunRef)) {
-          setState(runningState(input.userId, progress));
+          setState((current) =>
+            runningState(input.userId, progress, current.runElapsedMs)
+          );
         }
       },
     });
     if (isCurrentRun(run, generationRef, activeRunRef)) {
-      setState(terminalState(input.userId, result));
+      setState(
+        terminalState(input.userId, result, elapsedSince(run.startedAtMs))
+      );
     }
   } catch (error: unknown) {
     handleHookRunError(
@@ -281,5 +333,6 @@ function handleHookRunError(
     status: run.controller.signal.aborted ? "cancelled" : "fatal",
     activeBatchNumber: null,
     fatalReason: run.controller.signal.aborted ? null : fatalReason,
+    runElapsedMs: elapsedSince(run.startedAtMs),
   }));
 }
