@@ -1,12 +1,11 @@
 import { readFileSync, writeFileSync } from "node:fs";
 
+import { parseProviderInputObservationImport } from "./sms-provider-evaluation/provider-input-observation.ts";
 import { parseRawObservationImport } from "./sms-provider-evaluation/raw-observation.ts";
-import {
-  attachRawObservationsToEvaluationReport,
-} from "./sms-provider-evaluation/scorer.ts";
+import { parseStoredEvaluationReport } from "./sms-provider-evaluation/report-import.ts";
+import { attachRawObservationsToEvaluationReport } from "./sms-provider-evaluation/scorer.ts";
 import { runSmsProviderEvaluation } from "./sms-provider-evaluation/runner.ts";
 import {
-  EvaluationReportImportSchema,
   STAGING_PARSE_SMS_ENDPOINT,
   STAGING_PROJECT_REF,
   type EvaluationReport,
@@ -19,6 +18,8 @@ export interface SmsProviderEvaluationCliDependencies
   readonly writeStdout: (value: string) => void;
   readonly writeStderr: (value: string) => void;
   readonly environment: Readonly<Record<string, string | undefined>>;
+  readonly signal?: AbortSignal;
+  readonly writeOutputFile?: (path: string, value: string) => void;
 }
 
 export type SmsProviderEvaluationTerminationSignal = "SIGINT" | "SIGTERM";
@@ -30,13 +31,6 @@ export interface SmsProviderEvaluationProcessEntryDependencies
     handler: () => void
   ) => () => void;
   readonly writeOutputFile: (path: string, value: string) => void;
-}
-
-export async function runSmsProviderEvaluationProcessEntry(
-  _args: readonly string[],
-  _dependencies: SmsProviderEvaluationProcessEntryDependencies
-): Promise<EvaluationReport> {
-  throw new Error("sms_provider_evaluation_process_entry_not_implemented");
 }
 
 const DEFAULT_DRY_MAX_CASES = Number.MAX_SAFE_INTEGER;
@@ -64,23 +58,19 @@ function defaultRunId(anchorMs: number): string {
 }
 
 function readJsonFile(path: string): unknown {
-  const text = readFileSync(path, "utf8").replace(/^\uFEFF/, "");
-  return JSON.parse(text) as unknown;
-}
-
-function parseStoredEvaluationReport(value: unknown): EvaluationReport {
-  EvaluationReportImportSchema.parse(value);
-  return value as EvaluationReport;
+  const value = readFileSync(path, "utf8").replace(/^\uFEFF/, "");
+  return JSON.parse(value) as unknown;
 }
 
 function writeReport(
   report: EvaluationReport,
   outputPath: string | undefined,
-  writeStdout: (value: string) => void
+  writeStdout: (value: string) => void,
+  writeOutputFile: (path: string, value: string) => void
 ): void {
   const serialized = JSON.stringify(report, null, 2) + "\n";
   if (outputPath !== undefined) {
-    writeFileSync(outputPath, serialized, "utf8");
+    writeOutputFile(outputPath, serialized);
   }
   writeStdout(serialized);
 }
@@ -97,6 +87,7 @@ export function parseSmsProviderEvaluationCliArgs(
   let endpoint: string | undefined;
   let projectRef: string | undefined;
   let rawObservationPath: string | undefined;
+  let providerInputObservationPath: string | undefined;
   let finalReportPath: string | undefined;
   let outputPath: string | undefined;
   let sawMaxCases = false;
@@ -135,6 +126,11 @@ export function parseSmsProviderEvaluationCliArgs(
       projectRef = next;
     } else if (argument === "--raw-observations" && next !== undefined) {
       rawObservationPath = next;
+    } else if (
+      argument === "--provider-input-observations" &&
+      next !== undefined
+    ) {
+      providerInputObservationPath = next;
     } else if (argument === "--final-report" && next !== undefined) {
       finalReportPath = next;
     } else if (argument === "--output" && next !== undefined) {
@@ -179,24 +175,26 @@ export function parseSmsProviderEvaluationCliArgs(
         ? environment.SMS_PROVIDER_EVAL_PUBLIC_API_KEY
         : undefined,
     ...(rawObservationPath === undefined ? {} : { rawObservationPath }),
+    ...(providerInputObservationPath === undefined
+      ? {}
+      : { providerInputObservationPath }),
     ...(finalReportPath === undefined ? {} : { finalReportPath }),
     ...(outputPath === undefined ? {} : { outputPath }),
   };
 }
 
-function attachRawEvidenceOffline(
+async function attachRawEvidenceOffline(
   options: ParsedCliOptions
-): EvaluationReport {
+): Promise<EvaluationReport> {
   if (
     options.finalReportPath === undefined ||
-    options.rawObservationPath === undefined
+    options.rawObservationPath === undefined ||
+    options.providerInputObservationPath === undefined
   ) {
     throw new Error("sms_provider_evaluation_raw_offline_inputs_required");
   }
 
-  const report = parseStoredEvaluationReport(
-    readJsonFile(options.finalReportPath)
-  );
+  const report = parseStoredEvaluationReport(readJsonFile(options.finalReportPath));
   const expectedBatchInputs = new Map(
     report.rawAttributionManifest.map((entry) => [
       entry.batchId,
@@ -206,13 +204,34 @@ function attachRawEvidenceOffline(
       },
     ])
   );
+  const sourceCases = report.cases.map((item) => ({
+    caseId: item.caseId,
+    message: {
+      id: item.caseId,
+      sender: item.sender,
+      body: item.body,
+      date: item.receivedDate,
+      smsFingerprint: item.smsFingerprint,
+    },
+  }));
   const rawObservations = parseRawObservationImport({
     value: readJsonFile(options.rawObservationPath),
     runId: report.runId,
     expectedBatchInputs,
-    cases: report.cases.map(({ caseId }) => ({ caseId })),
+    cases: sourceCases,
   });
-  return attachRawObservationsToEvaluationReport(report, rawObservations);
+  const providerInputObservations = await parseProviderInputObservationImport({
+    value: readJsonFile(options.providerInputObservationPath),
+    runId: report.runId,
+    expectedBatchInputs,
+    cases: sourceCases,
+  });
+
+  return attachRawObservationsToEvaluationReport(
+    report,
+    rawObservations,
+    providerInputObservations
+  );
 }
 
 export async function runSmsProviderEvaluationCli(
@@ -226,12 +245,17 @@ export async function runSmsProviderEvaluationCli(
 
   let report: EvaluationReport;
   if (options.finalReportPath !== undefined) {
-    report = attachRawEvidenceOffline(options);
+    report = await attachRawEvidenceOffline(options);
   } else {
     const rawObservationValue =
       options.rawObservationPath === undefined
         ? undefined
         : readJsonFile(options.rawObservationPath);
+    const providerInputObservationValue =
+      options.providerInputObservationPath === undefined
+        ? undefined
+        : readJsonFile(options.providerInputObservationPath);
+
     report = await runSmsProviderEvaluation(
       {
         mode: options.mode,
@@ -243,21 +267,58 @@ export async function runSmsProviderEvaluationCli(
         projectRef: options.projectRef,
         accessToken: options.accessToken,
         publicApiKey: options.publicApiKey,
-        signal: options.signal,
+        signal: dependencies.signal,
         ...(rawObservationValue === undefined
           ? {}
           : { rawObservationValue }),
+        ...(providerInputObservationValue === undefined
+          ? {}
+          : { providerInputObservationValue }),
       },
       dependencies
     );
   }
 
-  writeReport(report, options.outputPath, dependencies.writeStdout);
+  writeReport(
+    report,
+    options.outputPath,
+    dependencies.writeStdout,
+    dependencies.writeOutputFile ??
+      ((path, value): void => {
+        writeFileSync(path, value, "utf8");
+      })
+  );
   return report;
 }
 
+export async function runSmsProviderEvaluationProcessEntry(
+  args: readonly string[],
+  dependencies: SmsProviderEvaluationProcessEntryDependencies
+): Promise<EvaluationReport> {
+  const controller = new AbortController();
+  const unregister = (
+    ["SIGINT", "SIGTERM"] as const
+  ).map((signal) =>
+    dependencies.registerSignalHandler(signal, () => {
+      controller.abort();
+    })
+  );
+
+  try {
+    return await runSmsProviderEvaluationCli(args, {
+      ...dependencies,
+      signal: controller.signal,
+      writeOutputFile: dependencies.writeOutputFile,
+    });
+  } finally {
+    for (const unregisterHandler of unregister) {
+      unregisterHandler();
+    }
+  }
+}
+
 async function main(): Promise<void> {
-  await runSmsProviderEvaluationCli(process.argv.slice(2), {
+  await runSmsProviderEvaluationProcessEntry(process.argv.slice(2), {
     fetch,
     now: Date.now,
     writeStdout: (value: string): void => {
@@ -267,6 +328,15 @@ async function main(): Promise<void> {
       process.stderr.write(value);
     },
     environment: process.env,
+    registerSignalHandler: (signal, handler): (() => void) => {
+      process.on(signal, handler);
+      return (): void => {
+        process.off(signal, handler);
+      };
+    },
+    writeOutputFile: (path, value): void => {
+      writeFileSync(path, value, "utf8");
+    },
   });
 }
 
