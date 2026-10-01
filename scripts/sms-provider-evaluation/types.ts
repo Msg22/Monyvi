@@ -339,26 +339,22 @@ const FinalObservationClassificationSchema = z.enum([
 
 function fieldExpectationSchema<T extends z.ZodType>(
   valueSchema: T
-): z.ZodType<
-  | { readonly kind: "exact"; readonly value: z.output<T> }
-  | { readonly kind: "one_of"; readonly values: readonly z.output<T>[] }
-  | { readonly kind: "unknown" }
-> {
-  return z.union([
-    z
-      .object({
-        kind: z.literal("exact"),
-        value: valueSchema,
-      })
-      .strict(),
-    z
-      .object({
-        kind: z.literal("one_of"),
-        values: z.array(valueSchema).min(1),
-      })
-      .strict(),
-    z.object({ kind: z.literal("unknown") }).strict(),
-  ]);
+) {
+  const exactSchema = z
+    .object({
+      kind: z.literal("exact"),
+      value: valueSchema,
+    })
+    .strict();
+  const alternativesSchema = z
+    .object({
+      kind: z.literal("one_of"),
+      values: z.array(valueSchema).min(1),
+    })
+    .strict();
+  const unknownSchema = z.object({ kind: z.literal("unknown") }).strict();
+
+  return z.union([exactSchema, alternativesSchema, unknownSchema]);
 }
 
 const OptionalStringExpectationSchema: z.ZodType<
@@ -547,7 +543,59 @@ export const EvaluationReportImportSchema = z
       })
       .strict(),
   })
-  .strict();
+  .strict()
+  .superRefine((report, context) => {
+    const caseIds = new Set<string>();
+    for (const item of report.cases) {
+      if (caseIds.has(item.caseId)) {
+        context.addIssue({
+          code: "custom",
+          message: "duplicate_case_id",
+          path: ["cases"],
+        });
+      }
+      caseIds.add(item.caseId);
+    }
+
+    const summaryBatchIds = new Set<string>();
+    for (const summary of report.batchSummaries) {
+      if (summaryBatchIds.has(summary.batchId)) {
+        context.addIssue({
+          code: "custom",
+          message: "duplicate_batch_summary_id",
+          path: ["batchSummaries"],
+        });
+      }
+      summaryBatchIds.add(summary.batchId);
+    }
+
+    const manifestBatchIds = new Set<string>();
+    for (const entry of report.rawAttributionManifest) {
+      if (
+        manifestBatchIds.has(entry.batchId) ||
+        !summaryBatchIds.has(entry.batchId)
+      ) {
+        context.addIssue({
+          code: "custom",
+          message: "invalid_manifest_batch_id",
+          path: ["rawAttributionManifest"],
+        });
+      }
+      manifestBatchIds.add(entry.batchId);
+
+      const entryCaseIds = new Set(entry.caseIds);
+      if (
+        entryCaseIds.size !== entry.caseIds.length ||
+        entry.caseIds.some((caseId) => !caseIds.has(caseId))
+      ) {
+        context.addIssue({
+          code: "custom",
+          message: "invalid_manifest_case_id",
+          path: ["rawAttributionManifest"],
+        });
+      }
+    }
+  });
 
 export type EvaluationReportImport = z.infer<
   typeof EvaluationReportImportSchema
