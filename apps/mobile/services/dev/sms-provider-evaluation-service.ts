@@ -86,6 +86,7 @@ export interface StartSmsProviderEvaluationInput {
   readonly initiatingUserId: string;
   readonly categories: readonly CategoryTreeSource[];
   readonly supportedCurrencies: readonly string[];
+  readonly isAiConsented: boolean;
   readonly signal: AbortSignal;
   readonly onProgress?: (
     progress: SmsProviderEvaluationProgress
@@ -338,6 +339,9 @@ export async function runSmsProviderEvaluationForCurrentUser(
   }
   if (!input.initiatingUserId.trim()) {
     throw createEvaluationError(SMS_PROVIDER_EVALUATION_AUTH_REQUIRED);
+  }
+  if (!input.isAiConsented) {
+    throw createEvaluationError("consent_required");
   }
   await assertPinnedUser(input.initiatingUserId);
 

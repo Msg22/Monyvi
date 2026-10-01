@@ -163,6 +163,7 @@ export function useSmsProviderEvaluation({
         initiatingUserId: userId,
         categories,
         supportedCurrencies,
+        isAiConsented,
         signal: controller.signal,
         onProgress: (progress): void => {
           if (

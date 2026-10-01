@@ -274,6 +274,13 @@ function deriveCaseClassification(
   ) {
     return "suppressed";
   }
+  if (
+    observation.negativeFingerprints?.includes(item.message.smsFingerprint) ===
+      true &&
+    observation.replayProvenance !== "confirmed_provider_call"
+  ) {
+    return "suppressed";
+  }
   return "observed";
 }
 
