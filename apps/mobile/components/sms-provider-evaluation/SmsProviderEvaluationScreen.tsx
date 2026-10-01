@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   FlatList,
   Text,
@@ -39,6 +39,8 @@ interface SmsProviderEvaluationScreenProps {
   readonly totalBatchCount: number;
   readonly totalCaseCount: number;
   readonly fatalReason: string | null;
+  readonly batchSize: number;
+  readonly startHelper: string | null;
   readonly isStartReady: boolean;
   readonly onStart: () => void;
   readonly onCancel: () => void;
@@ -54,10 +56,11 @@ function StatusCard({
   totalBatchCount,
   attemptedRequestCount,
   fatalReason,
+  batchSize,
   t,
 }: Omit<
   SmsProviderEvaluationScreenProps,
-  "summary" | "cases" | "completedBatchCount" | "isStartReady" | "onStart" | "onCancel" | "onBack"
+  "summary" | "cases" | "completedBatchCount" | "startHelper" | "isStartReady" | "onStart" | "onCancel" | "onBack"
 >): React.JSX.Element {
   if (status === "running") {
     const progress =
@@ -86,7 +89,9 @@ function StatusCard({
           />
         </View>
         <Text className="mt-4 text-xs text-slate-500 dark:text-slate-400">
-          {t("sms_provider_evaluation.sequential_note")}
+          {t("sms_provider_evaluation.sequential_note", {
+            batchSize,
+          })}
         </Text>
       </View>
     );
@@ -106,9 +111,9 @@ function StatusCard({
       <Text
         className={
           status === "fatal"
-            ? "text-xs font-semibold text-red-600 dark:text-red-400"
+            ? "text-xs font-semibold text-red-600 dark:text-red-500"
             : status === "cancelled"
-              ? "text-xs font-semibold text-gold-700 dark:text-gold-400"
+              ? "text-xs font-semibold text-gold-600 dark:text-gold-400"
               : "text-xs font-semibold text-nileGreen-600 dark:text-nileGreen-400"
         }
         accessibilityLiveRegion="polite"
@@ -116,14 +121,20 @@ function StatusCard({
         {t(`sms_provider_evaluation.status.${statusKey}`)}
       </Text>
       <Text className="mt-3 text-sm text-slate-600 dark:text-slate-300">
-        {t("sms_provider_evaluation.dataset_counts", {
-          cases: datasetSummary.caseCount,
-          providers: datasetSummary.providerCount,
-          requests: datasetSummary.requestCount,
-        })}
+        {status === "idle"
+          ? t("sms_provider_evaluation.dataset_counts", {
+              cases: datasetSummary.caseCount,
+              providers: datasetSummary.providerCount,
+              requests: datasetSummary.requestCount,
+            })
+          : t("sms_provider_evaluation.run_counts", {
+              current: processedCaseCount,
+              total: totalCaseCount,
+              requests: attemptedRequestCount,
+            })}
       </Text>
       {status === "fatal" && fatalReason ? (
-        <Text className="mt-3 text-xs text-red-600 dark:text-red-400">
+        <Text className="mt-3 text-xs text-red-600 dark:text-red-500">
           {t("sms_provider_evaluation.test_stopped")}:{" "}
           {t(`sms_provider_evaluation.reasons.${fatalReason}`, {
             defaultValue: t("sms_provider_evaluation.reasons.unknown"),
@@ -155,16 +166,16 @@ function SummaryTiles({
           {t("sms_provider_evaluation.outcome.matched")}
         </Text>
       </View>
-      <View className={`${tileClass} bg-red-100 dark:bg-red-900/30`}>
-        <Text className="text-2xl font-bold text-red-600 dark:text-red-400">
+      <View className={`${tileClass} bg-red-100 dark:bg-slate-800`}>
+        <Text className="text-2xl font-bold text-red-600 dark:text-red-500">
           {summary.mismatched}
         </Text>
         <Text className="mt-1 text-xs text-slate-600 dark:text-slate-300">
           {t("sms_provider_evaluation.outcome.mismatched")}
         </Text>
       </View>
-      <View className={`${tileClass} bg-gold-100 dark:bg-gold-900/30`}>
-        <Text className="text-2xl font-bold text-gold-700 dark:text-gold-400">
+      <View className={`${tileClass} bg-gold-100 dark:bg-gold-800/30`}>
+        <Text className="text-2xl font-bold text-gold-600 dark:text-gold-400">
           {summary.notEvaluated}
         </Text>
         <Text className="mt-1 text-xs text-slate-600 dark:text-slate-300">
@@ -221,6 +232,8 @@ export function SmsProviderEvaluationScreen({
   totalBatchCount,
   totalCaseCount,
   fatalReason,
+  batchSize,
+  startHelper,
   isStartReady,
   onStart,
   onCancel,
@@ -244,6 +257,12 @@ export function SmsProviderEvaluationScreen({
       : progressed.filter(({ outcome }) => outcome !== "matched");
   }, [cases, status, tab]);
 
+  useEffect(() => {
+    if (status !== "running") return;
+    setTab("all");
+    setExpandedIds(new Set());
+  }, [status]);
+
   const actionLabel =
     status === "running"
       ? t("sms_provider_evaluation.cancel_test")
@@ -253,6 +272,9 @@ export function SmsProviderEvaluationScreen({
   const actionDisabled = status !== "running" && !isStartReady;
 
   const listBottomClearance = 52 + 40 + insets.bottom + 24;
+
+  const shouldShowFinalSummary = summary !== null && status !== "running";
+  const hasRunningCases = status === "running" && visibleCases.length > 0;
 
   return (
     <View className="flex-1 bg-slate-50 dark:bg-slate-900">
@@ -281,16 +303,16 @@ export function SmsProviderEvaluationScreen({
               status={status}
               datasetSummary={datasetSummary}
               activeBatchNumber={activeBatchNumber}
-              completedBatchCount={completedBatchCount}
               processedCaseCount={processedCaseCount}
               attemptedRequestCount={attemptedRequestCount}
               totalBatchCount={totalBatchCount}
               totalCaseCount={totalCaseCount}
               fatalReason={fatalReason}
+              batchSize={batchSize}
               t={t}
             />
 
-            {summary ? (
+            {shouldShowFinalSummary && summary ? (
               <>
                 <SummaryTiles summary={summary} isCompact={isCompact} t={t} />
                 <Text className="text-xs text-slate-600 dark:text-slate-300">
@@ -314,7 +336,7 @@ export function SmsProviderEvaluationScreen({
               </View>
             )}
 
-            {summary ? (
+            {shouldShowFinalSummary && summary ? (
               <View className="flex-row items-center justify-between gap-3">
                 <Text className="flex-1 text-base font-semibold text-slate-900 dark:text-slate-25">
                   {t("sms_provider_evaluation.messages")}
@@ -339,14 +361,27 @@ export function SmsProviderEvaluationScreen({
             ) : null}
 
             {status === "running" ? (
+              <>
+                <Text className="text-xs text-slate-500 dark:text-slate-400">
+                  {t("sms_provider_evaluation.running_helper")}
+                </Text>
+                {hasRunningCases ? (
+                  <Text className="text-base font-semibold text-slate-900 dark:text-slate-25">
+                    {t("sms_provider_evaluation.messages")}
+                  </Text>
+                ) : null}
+              </>
+            ) : null}
+
+            {status === "idle" && startHelper ? (
               <Text className="text-xs text-slate-500 dark:text-slate-400">
-                {t("sms_provider_evaluation.running_helper")}
+                {startHelper}
               </Text>
             ) : null}
           </View>
         }
         ListEmptyComponent={
-          summary && tab === "issues" ? (
+          shouldShowFinalSummary && summary && tab === "issues" ? (
             <View className="rounded-2xl bg-white p-4 dark:bg-slate-800">
               <Text className="text-sm text-slate-600 dark:text-slate-300">
                 {t("sms_provider_evaluation.no_issues")}

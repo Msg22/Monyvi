@@ -70,6 +70,7 @@ import { logger } from "@/utils/logger";
 import type { PendingAiAction } from "@/components/settings/settings-types";
 import { getQaSmsPatternIntakeAvailability } from "@/config/qa-sms-pattern-intake-config";
 import { getEffectiveSmsScanPolicy } from "@/services/sms-scan-policy-service";
+import { isSmsProviderEvaluationRuntimeAvailable } from "@/services/dev/sms-provider-evaluation-service";
 
 const SETTINGS_SCROLL_BOTTOM_GAP = 32;
 
@@ -82,6 +83,8 @@ export default function SettingsScreen(): React.JSX.Element {
   const { t: tCommon } = useTranslation("common");
   const { language } = useLocale();
   const qaSmsPatternIntakeAvailability = getQaSmsPatternIntakeAvailability();
+  const isSmsProviderEvaluationVisible =
+    user !== null && isSmsProviderEvaluationRuntimeAvailable();
   const smsScanLookbackDays = getEffectiveSmsScanPolicy().lookbackDays;
   const aiConsent = useAiProcessingConsent();
   const [isCurrencyPickerVisible, setIsCurrencyPickerVisible] = useState(false);
@@ -875,11 +878,15 @@ export default function SettingsScreen(): React.JSX.Element {
           t={t}
           isVisible={qaSmsPatternIntakeAvailability.isAvailable}
           isStartupQaVisible={__DEV__}
+          isSmsProviderEvaluationVisible={isSmsProviderEvaluationVisible}
           chevronColor={theme.text.secondary}
           onQaSmsPatternIntakePress={() =>
             router.push("/qa-sms-pattern-intake")
           }
           onStartupQaPress={() => router.push("/startup-qa")}
+          onSmsProviderEvaluationPress={() =>
+            router.push("/sms-provider-evaluation")
+          }
         />
 
         <ProfileNotificationsSection

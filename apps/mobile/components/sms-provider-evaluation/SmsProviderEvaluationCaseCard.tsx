@@ -62,13 +62,13 @@ function OutcomeBadge({
     outcome === "matched"
       ? "bg-nileGreen-50 dark:bg-nileGreen-900/30"
       : outcome === "mismatched"
-        ? "bg-red-100 dark:bg-red-900/30"
-        : "bg-gold-100 dark:bg-gold-900/30";
+        ? "bg-red-100 dark:bg-slate-800"
+        : "bg-gold-100 dark:bg-gold-800/30";
   const textStyles =
     outcome === "matched"
       ? "text-nileGreen-600 dark:text-nileGreen-400"
       : outcome === "mismatched"
-        ? "text-red-600 dark:text-red-400"
+        ? "text-red-600 dark:text-red-500"
         : "text-gold-600 dark:text-gold-400";
 
   return (
@@ -99,7 +99,7 @@ function ComparisonValue({
       <Text
         className={
           isIssue
-            ? "mt-1 text-xs text-red-600 dark:text-red-400"
+            ? "mt-1 text-xs text-red-600 dark:text-red-500"
             : "mt-1 text-xs text-slate-900 dark:text-slate-25"
         }
       >
@@ -277,14 +277,14 @@ export function SmsProviderEvaluationCaseCard({
           ) : null}
 
           {item.mismatchFields.length > 0 ? (
-            <View className="mt-4 rounded-xl bg-red-100 p-3 dark:bg-red-900/30">
-              <Text className="text-xs font-semibold text-red-600 dark:text-red-400">
+            <View className="mt-4 rounded-xl bg-red-100 p-3 dark:bg-slate-800">
+              <Text className="text-xs font-semibold text-red-600 dark:text-red-500">
                 {t("sms_provider_evaluation.mismatch_reasons")}
               </Text>
               {item.mismatchFields.map((field) => (
                 <Text
                   key={field}
-                  className="mt-1 text-xs text-red-600 dark:text-red-400"
+                  className="mt-1 text-xs text-red-600 dark:text-red-500"
                 >
                   • {t(`sms_provider_evaluation.mismatch.${field}`, {
                     defaultValue: field,
@@ -295,25 +295,25 @@ export function SmsProviderEvaluationCaseCard({
           ) : null}
 
           {item.outcome === "not_evaluated" ? (
-            <View className="mt-4 rounded-xl bg-gold-100 p-3 dark:bg-gold-900/30">
-              <Text className="text-xs font-semibold text-gold-700 dark:text-gold-400">
+            <View className="mt-4 rounded-xl bg-gold-100 p-3 dark:bg-gold-800/30">
+              <Text className="text-xs font-semibold text-gold-600 dark:text-gold-400">
                 {t("sms_provider_evaluation.not_evaluated_detail")}
               </Text>
-              <Text className="mt-1 text-xs text-gold-700 dark:text-gold-400">
+              <Text className="mt-1 text-xs text-gold-600 dark:text-gold-400">
                 {t(`sms_provider_evaluation.classification.${item.finalClassification}`, {
                   defaultValue: item.finalClassification,
                 })}
               </Text>
               {item.batch ? (
                 <>
-                  <Text className="mt-1 text-xs text-gold-700 dark:text-gold-400">
+                  <Text className="mt-1 text-xs text-gold-600 dark:text-gold-400">
                     {t("sms_provider_evaluation.batch")}: {item.batch.batchId}
                     {item.batch.httpStatus
                       ? ` · HTTP ${item.batch.httpStatus}`
                       : ""}
                   </Text>
                   {item.batch.refusalReason ? (
-                    <Text className="mt-1 text-xs text-gold-700 dark:text-gold-400">
+                    <Text className="mt-1 text-xs text-gold-600 dark:text-gold-400">
                       {t("sms_provider_evaluation.reason")}:{" "}
                       {t(
                         `sms_provider_evaluation.reasons.${item.batch.refusalReason}`,
