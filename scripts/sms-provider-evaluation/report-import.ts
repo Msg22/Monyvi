@@ -19,13 +19,29 @@ export function parseStoredEvaluationReport(
     caseIds.add(item.caseId);
   }
 
-  const batchIds = new Set<string>();
-  for (const entry of parsed.data.rawAttributionManifest) {
-    if (batchIds.has(entry.batchId)) {
+  const summaryBatchIds = new Set<string>();
+  for (const summary of parsed.data.batchSummaries) {
+    if (summaryBatchIds.has(summary.batchId)) {
       throw new Error("sms_provider_evaluation_saved_report_invalid");
     }
-    batchIds.add(entry.batchId);
-    if (entry.caseIds.some((caseId) => !caseIds.has(caseId))) {
+    summaryBatchIds.add(summary.batchId);
+  }
+
+  const manifestBatchIds = new Set<string>();
+  for (const entry of parsed.data.rawAttributionManifest) {
+    if (
+      manifestBatchIds.has(entry.batchId) ||
+      !summaryBatchIds.has(entry.batchId)
+    ) {
+      throw new Error("sms_provider_evaluation_saved_report_invalid");
+    }
+    manifestBatchIds.add(entry.batchId);
+
+    const entryCaseIds = new Set(entry.caseIds);
+    if (
+      entryCaseIds.size !== entry.caseIds.length ||
+      entry.caseIds.some((caseId) => !caseIds.has(caseId))
+    ) {
       throw new Error("sms_provider_evaluation_saved_report_invalid");
     }
   }
