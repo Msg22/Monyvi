@@ -111,7 +111,6 @@ export default function SmsProviderEvaluationRoute(): React.JSX.Element {
       summary={summary}
       cases={cases}
       activeBatchNumber={evaluation.activeBatchNumber}
-      completedBatchCount={evaluation.completedBatchCount}
       processedCaseCount={evaluation.processedCaseCount}
       attemptedRequestCount={evaluation.attemptedRequestCount}
       totalBatchCount={evaluation.totalBatchCount}

@@ -122,13 +122,11 @@ export function useSmsProviderEvaluation(
   const [state, setState] = useState<EvaluationState>(() => emptyState(userId));
   const activeRunRef = useRef<ActiveEvaluationRun | null>(null);
   const generationRef = useRef(0);
-
   const abortActiveRun = useCallback((): void => {
     generationRef.current += 1;
     activeRunRef.current?.controller.abort();
     activeRunRef.current = null;
   }, []);
-
   const cancel = useCallback((): void => {
     abortActiveRun();
     setState((current) =>
@@ -137,45 +135,57 @@ export function useSmsProviderEvaluation(
         : current
     );
   }, [abortActiveRun, userId]);
-
   const clear = useCallback((): void => {
     abortActiveRun();
     setState(emptyState(userId));
   }, [abortActiveRun, userId]);
 
-  useEffect(() => {
-    abortActiveRun();
-    setState(emptyState(userId));
-  }, [abortActiveRun, userId]);
-
-  useEffect(() => (): void => abortActiveRun(), [abortActiveRun]);
-
-  const start = useCallback(async (): Promise<void> => {
-    if (activeRunRef.current !== null) return;
-    if (!prepareStart(input, setState)) return;
-
-    const generation = ++generationRef.current;
-    const controller = new AbortController();
-    const run = { generation, userId: input.userId as string, controller };
-    activeRunRef.current = run;
-    setState({ ...emptyState(run.userId), status: "running" });
-
-    try {
-      await executeHookRun(input, run, generationRef, activeRunRef, setState);
-    } finally {
-      if (activeRunRef.current === run) {
-        activeRunRef.current = null;
-      }
-    }
-  }, [input]);
-
+  useEvaluationCleanup(userId, abortActiveRun, setState);
+  const start = useEvaluationStarter(
+    input,
+    activeRunRef,
+    generationRef,
+    setState
+  );
   const visibleState =
     state.ownerUserId === userId ? state : emptyState(userId);
-
   return useMemo(
     () => ({ ...visibleState, start, cancel, clear }),
     [cancel, clear, start, visibleState]
   );
+}
+
+function useEvaluationCleanup(
+  userId: string | null,
+  abortActiveRun: () => void,
+  setState: React.Dispatch<React.SetStateAction<EvaluationState>>
+): void {
+  useEffect(() => {
+    abortActiveRun();
+    setState(emptyState(userId));
+  }, [abortActiveRun, setState, userId]);
+  useEffect(() => (): void => abortActiveRun(), [abortActiveRun]);
+}
+
+function useEvaluationStarter(
+  input: UseSmsProviderEvaluationInput,
+  activeRunRef: React.MutableRefObject<ActiveEvaluationRun | null>,
+  generationRef: React.MutableRefObject<number>,
+  setState: React.Dispatch<React.SetStateAction<EvaluationState>>
+): () => Promise<void> {
+  return useCallback(async (): Promise<void> => {
+    if (activeRunRef.current !== null || !prepareStart(input, setState)) return;
+    const generation = ++generationRef.current;
+    const controller = new AbortController();
+    const run = { generation, userId: input.userId, controller };
+    activeRunRef.current = run;
+    setState({ ...emptyState(run.userId), status: "running" });
+    try {
+      await executeHookRun(input, run, generationRef, activeRunRef, setState);
+    } finally {
+      if (activeRunRef.current === run) activeRunRef.current = null;
+    }
+  }, [activeRunRef, generationRef, input, setState]);
 }
 
 function prepareStart(

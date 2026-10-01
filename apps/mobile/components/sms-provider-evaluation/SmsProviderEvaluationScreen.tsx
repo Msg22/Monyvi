@@ -223,15 +223,7 @@ function EvaluationList(input: {
   const summary = input.props.summary;
   return (
     <>
-      <PageHeader
-        title={input.props.t("sms_provider_evaluation.title")}
-        subtitle={input.props.t("sms_provider_evaluation.development_only")}
-        variant="review"
-        includeTopSafeAreaInset
-        showBackButton
-        onBack={input.props.onBack}
-        backAccessibilityLabel={input.props.t("sms_provider_evaluation.back")}
-      />
+      <EvaluationHeader props={input.props} />
       <FlatList
         data={input.visibleCases}
         keyExtractor={(item) => item.caseId}
@@ -251,15 +243,7 @@ function EvaluationList(input: {
             isCompact={input.isCompact}
           />
         }
-        ListEmptyComponent={
-          summary !== null &&
-          input.props.status !== "running" &&
-          input.tab === "issues" ? (
-            <Text className="rounded-2xl bg-white p-4 text-sm text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-              {input.props.t("sms_provider_evaluation.no_issues")}
-            </Text>
-          ) : null
-        }
+        ListEmptyComponent={<IssuesEmptyState input={input} />}
         renderItem={({ item }) => (
           <SmsProviderEvaluationCaseCard
             item={item}
@@ -271,6 +255,46 @@ function EvaluationList(input: {
         )}
       />
     </>
+  );
+}
+
+function EvaluationHeader({
+  props,
+}: {
+  readonly props: ScreenProps;
+}): React.JSX.Element {
+  return (
+    <PageHeader
+      title={props.t("sms_provider_evaluation.title")}
+      subtitle={props.t("sms_provider_evaluation.development_only")}
+      variant="review"
+      includeTopSafeAreaInset
+      showBackButton
+      onBack={props.onBack}
+      backAccessibilityLabel={props.t("sms_provider_evaluation.back")}
+    />
+  );
+}
+
+function IssuesEmptyState({
+  input,
+}: {
+  readonly input: {
+    readonly props: ScreenProps;
+    readonly tab: ResultsTab;
+  };
+}): React.JSX.Element | null {
+  if (
+    input.props.summary === null ||
+    input.props.status === "running" ||
+    input.tab !== "issues"
+  ) {
+    return null;
+  }
+  return (
+    <Text className="rounded-2xl bg-white p-4 text-sm text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+      {input.props.t("sms_provider_evaluation.no_issues")}
+    </Text>
   );
 }
 
