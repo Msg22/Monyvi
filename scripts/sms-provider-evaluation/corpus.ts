@@ -247,7 +247,8 @@ function createEdgeSpecs(
           minimum: 0.3,
           maximum: 0.6,
           rationale:
-            "Transaction completion is clear, but a generic payment gateway does not prove purchase purpose.",
+            "Product-policy heuristic for ambiguous gateway purpose; not a calibrated model probability.",
+          basis: "policy_heuristic",
         },
       },
     },
