@@ -342,3 +342,41 @@ Do not add during feature 388:
 - Not witnessed: T032 (no adb device); T033 (no dev DeepInfra credential/live cache check); T034 (no deployment approval). Device E2E remains CI-skipped/manual-only — no device E2E claimed.
 - T010 Red→Green: Red witnessed in separate same-drive historical checkout — config suite at 66339fb3 exits 1 (missing `./sms-ai-provider-config.ts`); prompt suite at 821da860 exits 1 (missing `./sms-ai-prompt.ts`); handler regression at 6e3cf8b0 was Green at test addition (39/39), not Red. Green at head 36b5b902: `npx tsx --test` config + prompt + handler suites together passes 59/59.
 - T012 follow-up (PR #349, start 61f6e324): explicit mocked HTTP 408 retry + thrown timeout AbortError retry added to `deepinfra-sms-provider.test.ts` with deterministic injected fake sleep (no real timers/provider calls); production `deepinfra-sms-provider.ts` unchanged — new cases pass against existing retry classification and would fail on 408/timeout-retry regression. T021 follow-up: Gemini-specific comments at `ai-sms-parser-service.ts` ~131/~676 replaced with provider-neutral wording, no runtime change. T013 honest state: reopened ([ ]) — mocked full-path provider exhaustion deferred to GitHub issue #352.
+
+
+## 2026-10-02 Mobile Synthetic Batch Timing Trial
+
+- [ ] T049 SMS-EVAL-TIMING-001 — source implementation present, verification
+      deferred: keep the shared/CLI evaluator batch size at 5 while using one
+      mobile-only batch-size constant of 15 for actual synthetic splitting,
+      displayed batch size and runtime planned-batch counts; expose ordered
+      per-batch operational elapsed timing/status using existing final
+      observation latency where available plus an explicit in-flight/cancelled
+      client clock; expose total whole-run elapsed time that starts before corpus
+      preparation, updates only while running, freezes on finished/cancelled/
+      fatal, and resets on rerun/account change. Preserve sequential execution,
+      scoring semantics, auth/consent/exact-staging/user pinning/cancellation,
+      no-auto-start/no-inbox/no-financial-write boundaries, and EN/AR responsive
+      presentation. Do not describe either timer as provider/DeepSeek compute
+      latency. Automated tests, lint, typecheck, formatting, CI, device/provider
+      QA and visual verification remain explicitly deferred for the current
+      trial.
+
+### T049 manual evidence still required
+
+- Confirm the current dynamic 135-case corpus displays 9 planned mobile batches
+  at 15 messages per sequential request while CLI/dry-run behavior remains at 5.
+- Confirm a final partial batch displays its actual message count.
+- Confirm active batch and total clocks advance while running without triggering
+  extra requests, retries or report rescoring.
+- Confirm completed and failed batch durations remain after later failure or
+  cancellation; Not run rows have no invented duration.
+- Confirm explicit Cancel immediately freezes the active row as Cancelled with
+  elapsed time and freezes total run elapsed, while normal scorer state remains
+  unattempted/unresolved as applicable.
+- Confirm finished/fatal totals freeze, rerun resets clocks, and logout/account
+  switch cannot expose or receive prior-user timing/results.
+- Confirm EN/AR, RTL, dark mode, compact/ordinary/tablet/enlarged-text layout and
+  accessibility presentation during the later deferred device/visual pass.
+
+No T049 item above is verified by this source-only implementation wave.
