@@ -588,9 +588,7 @@ function toRawFacts(
   };
 }
 function isCorrectionReasonTooLong(value: string): boolean {
-  return (
-    getFinancialActionUtf8ByteLength(value) > MAX_ACTION_REASON_UTF8_BYTES
-  );
+  return getFinancialActionUtf8ByteLength(value) > MAX_ACTION_REASON_UTF8_BYTES;
 }
 
 function fallbackPreview(

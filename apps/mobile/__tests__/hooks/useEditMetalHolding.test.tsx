@@ -543,7 +543,7 @@ describe("useEditMetalHolding correctness tests", () => {
               preferredCurrencyUsdPerUnitDecimal: "0.02",
             })) as unknown as UseEditMetalHoldingInput["getPreviewRates"],
             preferredCurrency: "EGP",
-          } as unknown as Partial<UseEditMetalHoldingInput>)
+          })
         )
       );
 
@@ -554,8 +554,7 @@ describe("useEditMetalHolding correctness tests", () => {
       expect(result.current.preview.displayCurrency).toBe("CAD");
       expect(result.current.preview.valuation).toEqual({
         available: true,
-        valueDecimal:
-          "1066.6666666666666666666666666666666666666666666667",
+        valueDecimal: "1066.6666666666666666666666666666666666666666666667",
       });
       const editPreferred = result.current.preview as unknown as {
         readonly preferredCurrency?: string;
@@ -598,7 +597,7 @@ describe("useEditMetalHolding correctness tests", () => {
               preferredCurrencyUsdPerUnitDecimal: null,
             })) as unknown as UseEditMetalHoldingInput["getPreviewRates"],
             preferredCurrency: "EGP",
-          } as unknown as Partial<UseEditMetalHoldingInput>)
+          })
         )
       );
 
@@ -609,8 +608,7 @@ describe("useEditMetalHolding correctness tests", () => {
       expect(result.current.preview.displayCurrency).toBe("CAD");
       expect(result.current.preview.valuation).toEqual({
         available: true,
-        valueDecimal:
-          "1066.6666666666666666666666666666666666666666666667",
+        valueDecimal: "1066.6666666666666666666666666666666666666666666667",
       });
       const editMissingPreferred = result.current.preview as unknown as {
         readonly metalPerPureGramInPreferredCurrencyDecimal?: string | null;

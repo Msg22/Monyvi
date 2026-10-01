@@ -514,11 +514,11 @@ Business rules:
   later catalog changes never rewrite current or historical recorded facts.
 - `acquisition_action_id` identifies the accepted action whose acquisition-rate
   evidence supports the current acquisition projection. A material correction
-  that consumes no new `acquisition_metal` plus
-  `acquisition_purchase_currency` reference set MUST preserve the prior link.
-  A correction that consumes a complete new acquisition reference set replaces
-  the link with that correction action. A legacy null link remains null when no
-  new acquisition evidence is consumed; no correction fabricates a link.
+  that consumes no new `acquisition_metal` plus `acquisition_purchase_currency`
+  reference set MUST preserve the prior link. A correction that consumes a
+  complete new acquisition reference set replaces the link with that correction
+  action. A legacy null link remains null when no new acquisition evidence is
+  consumed; no correction fabricates a link.
 - The Add/Edit Gold purity picker offers 24K (`gold-999`), 21K (`gold-875`), and
   18K (`gold-750`) once each, with karat-only labels. Silver retains its catalog
   choices. Historical holdings keep their exact recorded code and factor, even
@@ -657,10 +657,9 @@ introduce a new calculation or product decision.
   inputs are unavailable, never zero.
 - Current selected-quote exception: for exact Gold `gold-999` / `0.999`, current
   quoted gram price and current holding value use the selected Gold 24K quote
-  directly: `weight × m_current ÷ x_current`. This does not mutate
-  `p = 0.999`, does not change Gold 21K/18K or Silver factor semantics, and does
-  not rewrite immutable acquisition, terminal, History, or attribution
-  calculations.
+  directly: `weight × m_current ÷ x_current`. This does not mutate `p = 0.999`,
+  does not change Gold 21K/18K or Silver factor semantics, and does not rewrite
+  immutable acquisition, terminal, History, or attribution calculations.
 - Purchase currency `P` is the canonical calculation and reporting basis. With
   acquisition time `a`, current or terminal valuation time `v`, and positive
   known all-in purchase cost `K`: acquisition reference `A = q × m_a ÷ x_{P,a}`;

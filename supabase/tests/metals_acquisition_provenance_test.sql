@@ -122,7 +122,7 @@ $function$;
 grant execute on function pg_temp.provenance_action(uuid, text, text, jsonb)
   to authenticated;
 
-do $
+do $$
 begin
   perform set_config(
     'request.jwt.claims',

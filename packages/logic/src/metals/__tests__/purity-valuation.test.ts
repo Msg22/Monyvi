@@ -430,8 +430,7 @@ describe("exact purity and valuation", () => {
   });
 
   it("keeps 21K, 18K, and Silver on their existing catalog-factor current quote basis", () => {
-    const { calculateCurrentQuotedPurityGramPriceDecimal } =
-      loadValuationApi();
+    const { calculateCurrentQuotedPurityGramPriceDecimal } = loadValuationApi();
 
     expect(
       calculateCurrentQuotedPurityGramPriceDecimal({
@@ -564,7 +563,9 @@ describe("exact purity and valuation", () => {
       expect(getPurityEntry("GOLD", "gold-999").factorDecimal).toBe("0.999");
       expect(getPurityEntry("GOLD", "gold-875").factorDecimal).toBe("0.875");
       expect(getPurityEntry("GOLD", "gold-750").factorDecimal).toBe("0.75");
-      expect(getPurityEntry("SILVER", "silver-999").factorDecimal).toBe("0.999");
+      expect(getPurityEntry("SILVER", "silver-999").factorDecimal).toBe(
+        "0.999"
+      );
     });
 
     it("calculates exact per-gram price using calculatePurityGramPriceDecimal", () => {

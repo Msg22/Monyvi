@@ -4,10 +4,7 @@ import {
   serializeDecimal,
   type ExactDecimalValue,
 } from "./decimal";
-import {
-  resolvePuritySelection,
-  type SupportedMetal,
-} from "./purity-catalog";
+import { resolvePuritySelection, type SupportedMetal } from "./purity-catalog";
 import {
   validateAndNormalizeRateReference,
   type ExactRateReference,
@@ -44,8 +41,7 @@ export interface MetalReferenceValueInput extends PureGramInput {
   readonly currencyUsdPerUnitDecimal: string;
 }
 
-export interface CurrentQuotedMetalReferenceValueInput
-  extends MetalReferenceValueInput {
+export interface CurrentQuotedMetalReferenceValueInput extends MetalReferenceValueInput {
   readonly metal: SupportedMetal;
   readonly purityCode: string;
 }
@@ -182,15 +178,16 @@ export function calculateDisplayPerPureGramPrice(input: {
 export function normalizeUsdPerUnitRate(
   reference: ExactRateReference
 ): Availability<string, RateNormalizationUnavailableReason> {
-  const normalized = reference.kind === "metal"
-    ? validateAndNormalizeRateReference(reference, {
-        role: reference.role,
-        instrumentCode: reference.instrumentCode,
-      })
-    : validateAndNormalizeRateReference(reference, {
-        role: reference.role,
-        instrumentCode: reference.instrumentCode,
-      });
+  const normalized =
+    reference.kind === "metal"
+      ? validateAndNormalizeRateReference(reference, {
+          role: reference.role,
+          instrumentCode: reference.instrumentCode,
+        })
+      : validateAndNormalizeRateReference(reference, {
+          role: reference.role,
+          instrumentCode: reference.instrumentCode,
+        });
   if (!normalized.available) {
     return { available: false, reason: "invalid_rate" };
   }
@@ -219,9 +216,7 @@ function positiveDecimal(
 }
 
 function weightDecimal(value: string): ExactDecimalValue | null {
-  return hasCanonicalDecimalPrecision(value)
-    ? positiveDecimal(value, 3)
-    : null;
+  return hasCanonicalDecimalPrecision(value) ? positiveDecimal(value, 3) : null;
 }
 
 function normalizedPurity(value: string): ExactDecimalValue | null {

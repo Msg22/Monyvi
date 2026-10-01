@@ -199,7 +199,6 @@ export interface MetalPortfolioReadModel {
   readonly soldResultUnavailable: boolean;
 }
 
-
 export interface ObservePortfolioAssetMetalsInput {
   readonly assets: readonly Asset[];
   readonly userId: string;

@@ -256,9 +256,6 @@ describe("selected current market snapshot calculations", () => {
     });
 
     expect(result).not.toBeNull();
-    expect(result?.metals).toBeCloseTo(
-      3738.74 * 0.875 + 43.73874 * 0.999,
-      8
-    );
+    expect(result?.metals).toBeCloseTo(3738.74 * 0.875 + 43.73874 * 0.999, 8);
   });
 });

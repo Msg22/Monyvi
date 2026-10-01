@@ -206,5 +206,4 @@ describe("MetalHoldingCorrectionState", () => {
       screen.getByText("This reason is too long. Shorten it and try again.")
     ).toBeTruthy();
   });
-
 });
