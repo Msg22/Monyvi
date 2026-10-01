@@ -41,7 +41,7 @@ _GATE: Must pass before Phase 0 research. Re-checked after Phase 1 design._
 | II. Documented Business Logic | PASS WITH REQUIRED DOC SYNC | The provider change introduces no new financial rule, but existing SMS safeguard QA text names Gemini. The plan updates that wording to "configured SMS AI provider" before production implementation; the Voice Entry business decision remains Gemini-specific. |
 | III. Type Safety | PASS | Provider config uses explicit readonly types; DeepInfra envelopes are runtime-validated with Zod 4.4.3; inner financial payload still passes the existing semantic validator; no `any` or non-null assertions are required. |
 | IV. Service-Layer Separation | PASS | Strategy/Adapter/Factory keeps provider mechanics out of the handler. Existing handler owns orchestration; existing validators own financial response validation. |
-| V. Premium UI / Theming | PASS / NOT TOUCHED | No user-facing UI or mockup changes are in scope. |
+| V. Premium UI / Theming | PASS WITH APPROVED DEV-ONLY EXCEPTION | Mohamed approved one development-only synthetic SMS evaluation Settings entry/results page on 2026-10-02. It reuses PageHeader, NativeWind palette/tokens, EN/AR/RTL/dark/responsive rules, has no production visibility, and is bound to the approved mockup. |
 | VI. Monorepo Package Boundaries | PASS | Work remains in `supabase/functions`, existing mobile service comments, docs, and tests. No new reverse package dependencies. |
 | VII. Local-First Migrations | PASS / NOT APPLICABLE | No schema/DDL change. |
 | VIII. Authenticated Scope & Sync Correctness | PASS | Existing auth, consent, canonical fingerprints, user-scoped safeguards, reservations, negative outcomes, and reconciliation remain unchanged and execute before/after provider execution as today. |
@@ -54,7 +54,7 @@ _GATE: Must pass before Phase 0 research. Re-checked after Phase 1 design._
 
 ### Post-design re-check
 
-Phase 1 introduces no persistent schema, new mobile API, user-flow, or UI surface. The runtime objects in [data-model.md](./data-model.md) remain server-side/provider-boundary types, and [contracts/parse-sms.openapi.yaml](./contracts/parse-sms.openapi.yaml) explicitly preserves the current public request/response contract. Constitution gate remains PASS.
+Phase 1 introduced no persistent schema or mobile API change. A later explicitly approved development-only QA exception adds one guarded Settings entry/results route without changing the production SMS flow or public mobile API. The runtime objects in [data-model.md](./data-model.md) remain server-side/provider-boundary types, and [contracts/parse-sms.openapi.yaml](./contracts/parse-sms.openapi.yaml) explicitly preserves the current public request/response contract. Constitution gate remains PASS.
 
 ## Phase 0: Research Decisions
 
@@ -267,6 +267,19 @@ supabase/functions/
 │   └── deno.json                                # zod mapping; remove parse-sms Google SDK dependency
 └── deno.json                                    # exact zod mapping for shared/IDE resolution
 
+apps/mobile/
+├── app/(private)/
+│   └── sms-provider-evaluation.tsx              # guarded development-only results route
+├── components/sms-provider-evaluation/          # presentational states/cards/tabs/footer only
+├── hooks/
+│   └── use-sms-provider-evaluation.ts           # run lifecycle/cancel/user ownership
+└── services/dev/
+    ├── sms-provider-evaluation-service.ts       # exact staging/auth/transport runtime
+    └── sms-provider-evaluation-read-model-service.ts # scorer/domain -> shaped UI models
+
+packages/logic/src/sms-provider-evaluation/       # canonical portable corpus/scorer
+scripts/sms-provider-evaluation/                  # CLI wrappers over shared corpus/scorer
+
 apps/mobile/services/
 └── ai-sms-parser-service.ts                     # provider-neutral stale comment cleanup only
 
@@ -293,6 +306,7 @@ This is sequencing guidance for later `speckit.tasks`; no implementation occurs 
 9. Run focused provider tests, existing handler/safeguard/parser tests, `deno check`, lint/format/diff checks.
 10. Perform representative manual QA using the quickstart matrix.
 11. Configure hosted Supabase provider variables and deploy `parse-sms` only after verification.
+12. For the separately approved development-only evaluation UI exception: share the canonical evaluator corpus/scorer with mobile, add the exact-staging authenticated runner/hook, wire the existing-style Settings entry and one results route, then bind the approved mockup/spec/manual QA. Do not infer completion from source alone; T046/T047 remain local/verification follow-up.
 
 ## Verification Gates
 
@@ -308,8 +322,52 @@ Implementation is not complete until all are true:
 - automatic-cache hit and miss produce equivalent functional results;
 - projected Standard-tier cost remains >=30% below Gemini text baseline at equal token counts;
 - voice files and voice behavior are unchanged;
-- `docs/business/business-decisions.md` no longer falsely identifies Gemini as the SMS full-parser provider in routine QA wording.
+- `docs/business/business-decisions.md` no longer falsely identifies Gemini as the SMS full-parser provider in routine QA wording;
+- the development evaluation entry/route is absent outside `__DEV__`, exact staging and authenticated scope;
+- entering/focusing the route performs no request; explicit Start is required;
+- cancel/back/blur/unmount/logout/account change prevent later requests and stale-user results;
+- UI scoring/display distinguishes matched, mismatched and not evaluated without treating HTTP 200/suppression as fresh-provider proof;
+- responsive/dark/RTL/accessibility rendering matches the approved mockup after T047 visual/device verification.
 
 ## Complexity Tracking
 
 No constitutional violations or exceptional complexity are required.
+
+
+## 2026-10-02 Development-Only Evaluation UI Slice
+
+This plan now records the explicit product-owner exception to the earlier
+"no UI" boundary. It does not add ordinary product UI. The architecture is:
+
+```text
+packages/logic/src/sms-provider-evaluation/
+  canonical dynamic corpus + final-result scorer
+             |
+             +---- scripts/sms-provider-evaluation/* thin CLI wrappers
+             |
+             +---- apps/mobile/services/dev/
+                     runtime fingerprint adapter
+                     exact staging/auth/consent transport
+                     sequential batches of five
+                     user/cancel pinning
+                     final-result read-model shaping
+                              |
+                              v
+                    use-sms-provider-evaluation
+                              |
+                              v
+            one private development-only results route
+                    + existing Settings dev row
+```
+
+The shared package remains portable and imports no app, Edge, script, Node/Deno,
+WatermelonDB runtime or server-prompt module. The service owns runtime APIs; the
+hook owns lifecycle; presentational components consume shaped props only.
+
+### Deferred verification
+
+During the current DeepSeek trial Mohamed explicitly deferred authoring/running
+new automated UI tests, lint, typecheck, formatting, CI, device checks and
+visual comparison. T047 owns those gates later. T046 owns local import of the
+authoritative PNG and integration with later backend work. This remote slice is
+therefore implementation-only and must be reported **UNVERIFIED**.
