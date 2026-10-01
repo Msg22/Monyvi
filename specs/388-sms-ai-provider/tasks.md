@@ -149,8 +149,10 @@
 The product owner explicitly superseded whole-batch semantic rejection for a
 structurally valid complete provider response.
 
-- [x] T035 Add narrow English/Arabic OTP/security-only pre-provider exclusions
-      with shared/Edge parity and completed-payment escape behavior.
+- [ ] T035 SOURCE-REVIEW-BLOCKED: narrow English/Arabic OTP/security-only
+      pre-provider exclusions with shared/Edge parity and completed-payment
+      escape behavior require the separate backend writer's confirmed follow-up.
+      The UI lane does not reopen or integrate backend corrections.
 - [x] T036 Tighten the stable full-parser prompt so emitted rows represent only
       completed positive-amount transactions and never OTP/fake/zero-amount
       placeholders.
@@ -171,6 +173,52 @@ structurally valid complete provider response.
       filtering, and mobile mixed-200 preservation; then run focused tests,
       strict TypeScript, lint, formatting, and device/manual verification before
       release readiness is claimed.
+
+## 2026-10-02 Approved Development-Only Synthetic Evaluation UI
+
+The lead maps SMS-EVAL-UI-001 as T041–T047. Source implementation does not mark
+these tasks verified/completed; checkbox state remains open until the mapped
+verification/integration owner supplies evidence.
+
+- [ ] T041 Shared runtime-safe corpus/scorer reuse: canonical synthetic templates,
+      expectations and final scorer live under
+      `packages/logic/src/sms-provider-evaluation/`; CLI production wrappers
+      consume that source and mobile injects the canonical runtime fingerprint.
+      Source implementation present; verification deferred.
+- [ ] T042 Guarded mobile evaluation service + hook: exact staging
+      `yulbcndyssdjicbpmlrk`, current authenticated user, normal AI consent and
+      safeguards, sequential batches of five, fresh run/batch identities,
+      synchronous duplicate-start lock, user pinning before every request/retry,
+      cancel/back/blur/unmount/logout/account-change cancellation, partial result
+      preservation while mounted, and no automatic retry/resume. Source
+      implementation present; verification deferred.
+- [ ] T043 Development Settings entry + private results route: existing-style
+      Development tools row, `__DEV__` + exact-staging + authenticated
+      visibility, independent route/service refusal, and no network on
+      entry/focus. Source implementation present; verification deferred.
+- [ ] T044 Results overview/inline comparisons/running/cancelled/fatal/i18n/
+      responsive states: one PageHeader route, All/Issues, FlatList, runtime
+      counts, canonical matched/mismatched/not-evaluated summary, expandable full
+      synthetic message/expected/final fields, no raw-output accuracy claim,
+      dark/RTL/enlarged-text/safe-area/accessibility behavior. Source
+      implementation present; verification deferred.
+- [ ] T045 Approved mockup/spec/manual-QA documentation: preserve
+      `mockups/sms-results-page.svg` + binding, record 2026-10-02 approval,
+      update the former no-UI scope notes, and document the deferred QA/manual
+      plan. Source documentation present; verification deferred.
+- [ ] T046 FUTURE LOCAL OWNER: import the authoritative approved PNG with
+      sha256 `b071fb29955520dbc0fc856d238ec144c482cebe36efe451596308555448beeb`,
+      reconcile later backend integration without overwriting either lane, and
+      preserve the approved SVG/binding. Not owned by this remote UI worker.
+- [ ] T047 DEFERRED BY PRODUCT OWNER FOR CURRENT TRIAL: add/run the UI
+      unit/integration/E2E coverage, focused existing evaluator regression,
+      TypeScript, lint, format, CI, physical/emulator device QA, EN/AR/RTL,
+      compact/tablet/orientation/enlarged-text checks, and side-by-side/overlay
+      visual comparison against the approved PNG. Do not claim these checks from
+      source inspection.
+
+**Dependencies**: T041 -> T042 -> T043/T044; T045 accompanies final source.
+T046 and T047 are successor work and must not be marked satisfied by this lane.
 
 ---
 
@@ -270,15 +318,18 @@ Do not add during feature 388:
 - database schema changes;
 - mobile API contract changes;
 - generic all-capability AI provider abstractions;
-- UI/mockup changes.
+- Unrelated production UI/mockup changes. The explicitly approved
+  development-only synthetic evaluation Settings/results surface is the sole
+  exception.
 
 ---
 
 ## Notes
 
 - [P] tasks operate on different files or independent test surfaces and have no incomplete dependency.
-- No mockup-backed UI is in scope, so no visual-fidelity evidence tasks are required.
-- No accessibility/UI semantics change is in scope, so no separate accessibility-evidence task is required.
+- One mockup-backed development-only UI exception is now in scope under T043–T045.
+  Visual/device/accessibility verification is explicitly deferred to T047 and
+  must not be inferred from source implementation.
 - The canonical public API remains `specs/388-sms-ai-provider/contracts/parse-sms.openapi.yaml`.
 - The authoritative implementation/QA guidance remains `specs/388-sms-ai-provider/quickstart.md`.
 - Stop on any new product/financial/schema/sync decision instead of inventing behavior.

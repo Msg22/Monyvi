@@ -119,6 +119,14 @@ As the product owner, I want unchanged shared SMS parsing instructions to be reu
 - **FR-028**: The stable SMS prompt MUST instruct the provider to omit non-transactions entirely, require emitted amounts to be strictly positive, and prohibit OTP/fake/zero-amount placeholder transaction objects.
 - **FR-029**: Candidate-level invalid, duplicate, or otherwise rejected returned entries MUST remain unresolved/retryable and MUST NOT create durable AI-negative outcomes. Independently valid unique submitted peer rows MUST remain accepted. Unknown/unattributable invalid returned identities MUST prevent omission-based negative inference for the remaining uncertain submitted candidates.
 - **FR-030**: The public mobile response contract remains backward compatible: validated transactions are returned in `transactions`; candidate-level rejected/uncertain work is represented through `unresolvedFingerprints` plus `retryRequestMode: fresh` when present; no invalid financial fields are exposed as accepted transactions.
+- **FR-031**: A development-only synthetic SMS evaluation entry MAY appear under existing Settings Development tools only when `__DEV__` is true, the current user is authenticated, and the configured Supabase URL is exactly the approved staging project `https://yulbcndyssdjicbpmlrk.supabase.co`. The route and service MUST independently enforce the same boundary; direct-link production access MUST be refused.
+- **FR-032**: Opening, focusing, remounting, changing language/theme, or navigating to the evaluation route MUST NOT start network work. Only an explicit user Start action may begin a run. Back, navigation blur, unmount, logout, account change, or Cancel MUST stop pending work and prohibit later batches/retries.
+- **FR-033**: The mobile evaluator MUST use the same canonical synthetic corpus and final-result scorer as the CLI. Portable corpus/scoring code belongs in `packages/logic` with injected runtime hashing/request dependencies; mobile MUST NOT import scripts, Supabase Edge modules, Node/Deno runtimes, server prompt modules, or WatermelonDB runtime through that shared evaluator.
+- **FR-034**: Each explicit run MUST create a fresh run identity/anchor and stable per-batch request identity, send at most five synthetic messages per request sequentially, reuse the canonical mobile SMS fingerprint algorithm, pin the initiating authenticated user, recheck user/cancellation immediately before every request and authentication retry, and use the normal authenticated `parse-sms` path with normal consent, allowance, cooldown, reservation, fingerprint, and replay safeguards. No automatic retry/resume or safeguard reset is permitted.
+- **FR-035**: The evaluation surface MUST read no device inbox, request no SMS permission, persist no transaction/transfer, inject no dedicated credentials, log no token/service-role secret, and operate only on the canonical synthetic corpus.
+- **FR-036**: The results page MUST present only final parser behavior. HTTP 200, Edge request count, a correct empty result, or synchronized suppression MUST NOT be described as proof of a fresh DeepSeek/provider call. Transport/admission failures, invalid responses, unresolved cases, suppression without trustworthy fresh-provider evidence, cancellation, and not-run cases MUST remain not evaluated rather than successful empty results.
+- **FR-037**: The canonical scorer MUST distinguish matched, mismatched, and not-evaluated cases; matched includes both correct transactions and correct no-transaction classifications. Exact and `one_of` expectations remain objective scoring inputs, unknown expectations render as Not asserted, and policy-heuristic confidence ranges remain diagnostic rather than model-accuracy claims.
+- **FR-038**: The approved single results route MUST support idle, running, finished, cancelled, and fatal states; All/Issues tabs; runtime-computed corpus/provider/request counts; inline expandable cards with full synthetic body, sender/provider/case ID, expected and final parsed fields/absence/unavailable state, and mismatch reasons; EN/AR, RTL, dark mode, accessibility announcements, responsive stacking, `FlatList`, standard `PageHeader`, safe-area-aware fixed CTA, and minimum 44-point targets. The three approved mockup panels are states/scroll positions of one route, not separate routes.
 
 ### Key Entities
 
@@ -141,6 +149,7 @@ As the product owner, I want unchanged shared SMS parsing instructions to be reu
 - Hosted deployment configuration and secret requirements for the SMS provider.
 - Provider-neutral SMS QA/business documentation updates required by the migration.
 - Representative SMS functional QA after integration.
+- One explicitly approved development-only synthetic SMS evaluation surface in authenticated Settings, backed by the canonical evaluator corpus/scorer and pinned to the approved staging project. This is a narrow QA exception, not ordinary product UI.
 
 ### Out of Scope
 
@@ -151,7 +160,7 @@ As the product owner, I want unchanged shared SMS parsing instructions to be reu
 - Changing the built-in category taxonomy or supported-currency product scope.
 - Database schema changes.
 - Mobile SMS API contract changes.
-- New user-facing SMS screens or redesigns.
+- New production/user-facing SMS screens or redesigns. The approved development-only synthetic evaluation Settings entry/results route is the sole UI exception for this feature.
 - A generic AI-provider abstraction shared across voice, SMS, rates, OCR, or other capabilities.
 
 ## Dependencies
@@ -187,3 +196,19 @@ As the product owner, I want unchanged shared SMS parsing instructions to be reu
 - The selected provider's reusable-input feature may miss or be unavailable at times; a miss must affect cost only, never parsing correctness.
 - Provider credentials and operational configuration are available to the hosted SMS parsing environment through the project's existing secure deployment configuration mechanism.
 - The existing SMS client contract and database schema are sufficient for this provider migration.
+
+
+## 2026-10-02 Approved Development-Only Evaluation UI Exception
+
+Mohamed explicitly approved the lead-created `sms-results-page` mockup and
+binding on 2026-10-02 Africa/Cairo. The canonical portable references are
+`mockups/sms-results-page.svg` and `mockups/sms-results-page.binding.md`.
+The approved PNG remains a local integration artifact and is reserved for T046;
+its absence from this remote branch is not a design gap.
+
+This exception is development-only and does not expand feature 388 into
+production product UI. It exists only to run the canonical synthetic evaluation
+against the normal staging parser and inspect final parser behavior. Automated,
+device and visual-comparison verification are explicitly deferred during the
+current DeepSeek trial and tracked by T047; source implementation alone does not
+satisfy those verification gates.

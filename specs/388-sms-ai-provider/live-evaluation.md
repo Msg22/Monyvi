@@ -236,7 +236,10 @@ The repository CI already executes `npm run test:scripts`; `test:scripts`
 now chains `npm run test:sms-provider-live-evaluator`, so the evaluator's
 mocked suite runs in CI without changing the workflow file.
 
-No app UI is changed, so Maestro app E2E is not applicable.
+A development-only mobile results surface was later explicitly approved on
+2026-10-02. Its automated/E2E/device/visual verification is deliberately
+deferred to T047 for the current DeepSeek trial; no execution claim is made by
+the source-only UI implementation.
 
 ## Coverage matrix
 
@@ -256,3 +259,84 @@ No app UI is changed, so Maestro app E2E is not applicable.
 | Cancellation/failures | Signal abort forwarded to pending fetch; partial report persisted | Manual cancellation if needed |
 | Cache/usage | Report fields only when evidence is actually available | Existing hosted telemetry/log inspection; no invented cache claim |
 | Persistence | No financial transaction save path in evaluator | Normal Edge accounting metadata may still be written |
+
+
+## Development-only mobile evaluation surface (approved 2026-10-02)
+
+The approved mobile entry is a convenience surface over the same canonical
+synthetic corpus and final scorer used by this CLI. It is not a second corpus,
+not a raw-model benchmark and not a production feature.
+
+### Runtime boundary
+
+- Settings shows the row only in `__DEV__`, for an authenticated user, when
+  `EXPO_PUBLIC_SUPABASE_URL` exactly equals
+  `https://yulbcndyssdjicbpmlrk.supabase.co`.
+- The private route and mobile service independently enforce that boundary.
+- Opening/focusing the page makes zero network requests. The user must tap
+  **Start test**.
+- Each Start creates a fresh run anchor/ID. Messages are the canonical synthetic
+  corpus only, five per request, sequentially.
+- The mobile service uses the canonical mobile sender/body/timestamp SHA-256
+  fingerprint helper and the current in-memory authenticated Supabase session.
+  No service-role token, dedicated-account credential or auth injection exists.
+- The initiating user is pinned across the run. User ownership and cancellation
+  are rechecked immediately before each request and any authentication refresh
+  retry. Cancel, Back, navigation blur/gesture, unmount, logout or account
+  change stop pending work and prohibit later batches.
+- Normal consent, allowance, cooldown, reservation, terminal-negative and replay
+  safeguards remain authoritative. No allowance reset, retry bypass, inbox read
+  or transaction/transfer save is performed.
+- Edge hard exclusions and synchronized prior outcomes may prevent a case from
+  reaching the provider. The page therefore reports **final parser behavior**,
+  not fresh DeepSeek accuracy. Edge-request counts are not provider-call proof.
+
+### Scoring/display contract
+
+- **Matched** = an observed final result with no canonical scorer mismatch,
+  including a correct no-transaction result.
+- **Mismatched** = an observed final result that conflicts with an objective
+  expected classification/field.
+- **Not evaluated** = response-invalid, transport/admission failure, unresolved,
+  terminal/suppressed without trustworthy fresh-provider evidence, cancelled
+  pending work, or not-run work.
+- Exact and `one_of` field expectations retain their existing semantics.
+  Unknown expectations render **Not asserted** and do not enter field accuracy.
+  Policy-heuristic confidence ranges render diagnostic context only.
+- HTTP 200 alone never means every case passed. An unavailable result is never
+  displayed as a verified empty/no-transaction result.
+- Full synthetic body, sender/provider/case ID, expected result, final parsed
+  fields/absence/unavailable state and mismatch reasons are expandable inline.
+  No raw provider response is displayed.
+
+### Manual QA plan — deferred, not executed in this source slice
+
+T047 must eventually record all of the following against the exact integrated
+head and approved PNG:
+
+| Scenario | Required observation |
+| --- | --- |
+| Production/release build | Settings row absent; direct route refused |
+| Dev on non-approved Supabase URL | Row absent; route/service refuse |
+| Dev staging signed out | Row absent/private auth gate retained |
+| Dev staging signed in, consent off | Page may be entered only through allowed dev route but Start remains unavailable/stopped; no request |
+| Idle entry/focus/remount/theme/language | Zero HTTP until explicit Start |
+| Start | Fresh run identity, runtime corpus counts, batches of five sequentially |
+| Running | Progress/partial final-result cards appear; duplicate Start unavailable |
+| Cancel | Active request aborted where supported, no later batches, partial observations retained while mounted |
+| Back / Android back / gesture / navigation blur / unmount | Pending work stopped; no delayed update |
+| Logout/account switch during run | Old-user work/results cleared and never shown to new user |
+| Completed transaction case | Objective fields compare through canonical scorer |
+| Correct no-transaction case | Counted separately as correct non-transaction and Matched only with trustworthy observed evidence |
+| Prior negative/terminal/hard exclusion | Honest final classification; no claim that DeepSeek freshly processed it |
+| Batch transport/admission/invalid/unresolved | Case is Not evaluated; Expected vs Parsed unavailable plus safe batch/status/reason |
+| All / Issues | All preserves corpus order; Issues contains mismatched + not evaluated |
+| EN/AR + RTL | Labels translate/mirror; synthetic bodies/IDs preserve natural direction |
+| Dark mode | Existing dark tokens only |
+| 320/360/390/tablet/orientation/enlarged text | No horizontal page scroll; summary/comparison stacks when needed; CTA remains above safe area |
+| Accessibility | 44-point targets, header/action labels, state announcements, expandable-card state |
+| Visual comparison | Side-by-side/overlay against authoritative approved PNG after T046 import |
+
+No row above is marked passed in this document. During the current trial, tests,
+lint, typecheck, formatting, CI, device QA and visual comparison were explicitly
+postponed by Mohamed.
