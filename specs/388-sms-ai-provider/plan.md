@@ -271,8 +271,10 @@ apps/mobile/
 ├── app/(private)/
 │   └── sms-provider-evaluation.tsx              # guarded development-only results route
 ├── components/sms-provider-evaluation/          # presentational states/cards/tabs/footer only
+├── constants/
+│   └── sms-provider-evaluation.ts               # mobile-only batch size (15; CLI remains 5)
 ├── hooks/
-│   └── use-sms-provider-evaluation.ts           # run lifecycle/cancel/user ownership
+│   └── use-sms-provider-evaluation.ts           # run lifecycle/cancel/user ownership/timing
 └── services/dev/
     ├── sms-provider-evaluation-service.ts       # exact staging/auth/transport runtime
     └── sms-provider-evaluation-read-model-service.ts # scorer/domain -> shaped UI models
@@ -326,6 +328,9 @@ Implementation is not complete until all are true:
 - the development evaluation entry/route is absent outside `__DEV__`, exact staging and authenticated scope;
 - entering/focusing the route performs no request; explicit Start is required;
 - cancel/back/blur/unmount/logout/account change prevent later requests and stale-user results;
+- the mobile synthetic runner uses the single mobile batch-size constant 15 for splitting, display and planned-request counts while the CLI evaluator remains at 5;
+- ordered batch timing preserves completed/failed/cancelled/not-run states and omits fabricated durations when elapsed time is unknown;
+- total run elapsed updates while running without rescoring/rebuilding the canonical report, freezes on terminal state, resets on rerun/account change, and is described as operational app/request elapsed rather than provider compute time;
 - UI scoring/display distinguishes matched, mismatched and not evaluated without treating HTTP 200/suppression as fresh-provider proof;
 - responsive/dark/RTL/accessibility rendering matches the approved mockup after T047 visual/device verification.
 
@@ -348,7 +353,7 @@ packages/logic/src/sms-provider-evaluation/
              +---- apps/mobile/services/dev/
                      runtime fingerprint adapter
                      exact staging/auth/consent transport
-                     sequential batches of five
+                     sequential mobile batches of 15 (CLI remains 5)
                      user/cancel pinning
                      final-result read-model shaping
                               |
@@ -371,3 +376,31 @@ new automated UI tests, lint, typecheck, formatting, CI, device checks and
 visual comparison. T047 owns those gates later. T046 owns local import of the
 authoritative PNG and integration with later backend work. This remote slice is
 therefore implementation-only and must be reported **UNVERIFIED**.
+
+
+### 2026-10-02 SMS-EVAL-TIMING-001 mobile trial
+
+This approved follow-up keeps the existing results-page composition and changes
+only the mobile synthetic execution size and compact timing telemetry:
+
+- `MOBILE_SMS_PROVIDER_EVALUATION_BATCH_SIZE = 15` is the single mobile source
+  for actual sequential splitting, displayed batch size and planned-request
+  counts. A final partial batch remains valid.
+- `DEFAULT_EVALUATION_BATCH_SIZE = 5` remains the shared/CLI default and is not
+  modified by this task.
+- Existing `FinalBatchObservation.latencyMs` remains authoritative for final
+  completed/failed request duration. In-flight/cancelled display timing is a
+  mobile hook clock and never changes scorer input.
+- Total elapsed begins before corpus construction and includes preparation plus
+  request/auth-refresh/network/server wait/response handling and inter-batch app
+  overhead. It freezes on finished/cancelled/fatal and resets on rerun/account
+  change.
+- Timer ticks update presentation timing only; they do not rebuild or rescore
+  the 135-case report and cannot trigger requests/retries.
+- The approved mockup binding/artifact hashes remain unchanged. The later human
+  instruction supersedes only the older mobile batch-size-five execution fact
+  and adds timing labels/rows using sibling styling.
+
+T049 owns this source slice. Its automated checks, lint/type/format/CI,
+device/provider QA and visual verification remain deferred and must not be
+inferred from source review.

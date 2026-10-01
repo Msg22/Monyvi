@@ -122,11 +122,12 @@ As the product owner, I want unchanged shared SMS parsing instructions to be reu
 - **FR-031**: A development-only synthetic SMS evaluation entry MAY appear under existing Settings Development tools only when `__DEV__` is true, the current user is authenticated, and the configured Supabase URL is exactly the approved staging project `https://yulbcndyssdjicbpmlrk.supabase.co`. The route and service MUST independently enforce the same boundary; direct-link production access MUST be refused.
 - **FR-032**: Opening, focusing, remounting, changing language/theme, or navigating to the evaluation route MUST NOT start network work. Only an explicit user Start action may begin a run. Back, navigation blur, unmount, logout, account change, or Cancel MUST stop pending work and prohibit later batches/retries.
 - **FR-033**: The mobile evaluator MUST use the same canonical synthetic corpus and final-result scorer as the CLI. Portable corpus/scoring code belongs in `packages/logic` with injected runtime hashing/request dependencies; mobile MUST NOT import scripts, Supabase Edge modules, Node/Deno runtimes, server prompt modules, or WatermelonDB runtime through that shared evaluator.
-- **FR-034**: Each explicit run MUST create a fresh run identity/anchor and stable per-batch request identity, send at most five synthetic messages per request sequentially, reuse the canonical mobile SMS fingerprint algorithm, pin the initiating authenticated user, recheck user/cancellation immediately before every request and authentication retry, and use the normal authenticated `parse-sms` path with normal consent, allowance, cooldown, reservation, fingerprint, and replay safeguards. No automatic retry/resume or safeguard reset is permitted.
+- **FR-034**: Each explicit **mobile development evaluation** run MUST create a fresh run identity/anchor and stable per-batch request identity, send at most **15 synthetic messages per request sequentially**, reuse the canonical mobile SMS fingerprint algorithm, pin the initiating authenticated user, recheck user/cancellation immediately before every request and authentication retry, and use the normal authenticated `parse-sms` path with normal consent, allowance, cooldown, reservation, fingerprint, and replay safeguards. The shared/CLI evaluator keeps its independent `DEFAULT_EVALUATION_BATCH_SIZE = 5`; this mobile trial override MUST NOT change CLI batching. No automatic retry/resume or safeguard reset is permitted.
 - **FR-035**: The evaluation surface MUST read no device inbox, request no SMS permission, persist no transaction/transfer, inject no dedicated credentials, log no token/service-role secret, and operate only on the canonical synthetic corpus.
 - **FR-036**: The results page MUST present only final parser behavior. HTTP 200, Edge request count, a correct empty result, or synchronized suppression MUST NOT be described as proof of a fresh DeepSeek/provider call. Transport/admission failures, invalid responses, unresolved cases, suppression without trustworthy fresh-provider evidence, cancellation, and not-run cases MUST remain not evaluated rather than successful empty results.
 - **FR-037**: The canonical scorer MUST distinguish matched, mismatched, and not-evaluated cases; matched includes both correct transactions and correct no-transaction classifications. Exact and `one_of` expectations remain objective scoring inputs, unknown expectations render as Not asserted, and policy-heuristic confidence ranges remain diagnostic rather than model-accuracy claims.
 - **FR-038**: The approved single results route MUST support idle, running, finished, cancelled, and fatal states; All/Issues tabs; runtime-computed corpus/provider/request counts; inline expandable cards with full synthetic body, sender/provider/case ID, expected and final parsed fields/absence/unavailable state, and mismatch reasons; EN/AR, RTL, dark mode, accessibility announcements, responsive stacking, `FlatList`, standard `PageHeader`, safe-area-aware fixed CTA, and minimum 44-point targets. The three approved mockup panels are states/scroll positions of one route, not separate routes.
+- **FR-039**: The approved mobile development evaluation MUST expose operational elapsed timing without changing scoring or parser semantics. Each batch row MUST retain ordered batch number, actual message count, state, and elapsed time only when known; completed/failed durations use the existing final observation `latencyMs`, active/cancelled duration uses the mobile in-flight clock, and not-run/unattempted batches MUST NOT receive a fabricated zero duration. Total run elapsed MUST start before corpus preparation, update while running without rebuilding/rescoring the corpus, include preparation/request/auth-refresh/network/server-wait/response-handling/between-batch overhead and time spent in a cancelled active batch, freeze on finished/cancelled/fatal, and reset on a new run or authenticated-user change. Neither batch nor total elapsed MAY be described as pure DeepSeek/provider compute time.
 
 ### Key Entities
 
@@ -212,3 +213,18 @@ against the normal staging parser and inspect final parser behavior. Automated,
 device and visual-comparison verification are explicitly deferred during the
 current DeepSeek trial and tracked by T047; source implementation alone does not
 satisfy those verification gates.
+
+
+### 2026-10-02 Mobile Batch/Timing Trial Override
+
+Mohamed's later SMS-EVAL-TIMING-001 instruction narrowly supersedes the older
+approved mockup/binding execution fact of five messages per mobile request.
+The visual composition, binding hashes and approved reference artifacts remain
+unchanged/read-only for this timing slice. Mobile synthetic evaluation uses one
+mobile-only batch-size constant of 15; the shared/CLI evaluator remains at five.
+
+The same approval adds compact operational timing telemetry to the existing
+page: total whole-run elapsed plus ordered per-batch elapsed/status. This is
+diagnostic app/request timing only and is not a raw-provider or DeepSeek compute
+latency claim. Automated, type/lint/format/CI, device/provider and visual checks
+remain explicitly deferred for the current trial.
