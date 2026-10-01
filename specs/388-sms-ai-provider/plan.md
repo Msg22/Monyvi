@@ -164,8 +164,17 @@ provider finish reason
 
 complete envelope/content
   -> JSON parse
-  -> Monyvi semantic validator
-  -> existing handler completion/reconciliation
+  -> per-entry Monyvi semantic validation
+  -> keep independently valid unique submitted rows
+  -> correlate rejected/duplicate rows to unresolved candidates
+  -> exclude unresolved/uncertain candidates from omission-based negative reconciliation
+  -> existing handler completion/accounting
+
+Malformed JSON/envelopes and incomplete provider completion remain request-level
+failures. Candidate-level invalidity is not a whole-batch failure. An
+unknown/unattributable returned identity makes otherwise omitted submitted
+candidates unresolved rather than inferred negatives. Provider-started allowance
+remains consumed, and unresolved candidate retries use a fresh request identity.
 ```
 
 ### Caching
