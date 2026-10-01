@@ -144,6 +144,36 @@
 
 ---
 
+## 2026-10-01 Approved Mixed-Row Follow-up
+
+The product owner explicitly superseded whole-batch semantic rejection for a
+structurally valid complete provider response.
+
+- [x] T035 Add narrow English/Arabic OTP/security-only pre-provider exclusions
+      with shared/Edge parity and completed-payment escape behavior.
+- [x] T036 Tighten the stable full-parser prompt so emitted rows represent only
+      completed positive-amount transactions and never OTP/fake/zero-amount
+      placeholders.
+- [x] T037 Partition provider transaction validation per entry, preserving valid
+      unique submitted peers while carrying rejected identity evidence internally.
+- [x] T038 Keep rejected/duplicate/uncertain candidates unresolved with fresh
+      retry identity and exclude them from durable negative-outcome
+      reconciliation; unknown returned identity disables omission-negative
+      inference for uncertain submitted candidates. Provider-started usage
+      accounting remains consumed.
+- [x] T039 Preserve the public parse-sms response fields; represent candidate-
+      level rejected work through `unresolvedFingerprints` and optional
+      `retryRequestMode: fresh`.
+- [ ] T040 Deferred by explicit product-owner trial instruction: add deterministic
+      regression tests for mixed valid+zero-amount OTP output, all-invalid rows,
+      duplicate/unknown/missing identities, invalid category/currency/date,
+      negative-cache pollution, valid prior-negative clearing, prompt/OTP
+      filtering, and mobile mixed-200 preservation; then run focused tests,
+      strict TypeScript, lint, formatting, and device/manual verification before
+      release readiness is claimed.
+
+---
+
 ## Parallel Opportunities
 
 ### Setup
