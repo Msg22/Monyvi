@@ -37,6 +37,9 @@ const FIELD_NAMES = [
 ] as const;
 
 type FieldName = (typeof FIELD_NAMES)[number];
+type ScorableTransaction =
+  | ParseSmsProviderTransaction
+  | RawObservedTransaction;
 
 interface MutableAggregate {
   truePositive: number;
@@ -109,17 +112,35 @@ function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
 }
 
 function actualField(
-  transaction: Readonly<Record<string, unknown>>,
+  transaction: ScorableTransaction,
   field: FieldName
 ): unknown {
-  if (field === "isAtmWithdrawal") {
-    return transaction.isAtmWithdrawal ?? false;
+  switch (field) {
+    case "amount":
+      return transaction.amount;
+    case "currency":
+      return transaction.currency;
+    case "type":
+      return transaction.type;
+    case "date":
+      return transaction.date;
+    case "counterparty":
+      return transaction.counterparty;
+    case "categorySystemName":
+      return transaction.categorySystemName;
+    case "cardLast4":
+      return transaction.cardLast4;
+    case "isTrusted":
+      return transaction.isTrusted;
+    case "isAtmWithdrawal":
+      return transaction.isAtmWithdrawal ?? false;
+    case "confidenceScore":
+      return transaction.confidenceScore;
   }
-  return transaction[field];
 }
 
-function matchesExpectation<T>(
-  expectation: EvaluationFieldExpectation<T>,
+function matchesExpectation(
+  expectation: EvaluationFieldExpectation<unknown>,
   actual: unknown
 ): boolean | null {
   if (expectation.kind === "unknown") return null;
@@ -134,7 +155,7 @@ function compareExpectedFields(
     SyntheticEvaluationCase["expected"],
     { readonly kind: "transaction" }
   >["fields"],
-  actual: Readonly<Record<string, unknown>>,
+  actual: ScorableTransaction,
   aggregate: MutableAggregate
 ): readonly CaseFieldMismatch[] {
   const mismatches: CaseFieldMismatch[] = [];
@@ -184,7 +205,7 @@ function compareExpectedFields(
 function scoreCase(
   item: SyntheticEvaluationCase,
   classification: FinalObservationClassification,
-  actual: readonly Readonly<Record<string, unknown>>[],
+  actual: readonly ScorableTransaction[],
   aggregate: MutableAggregate
 ): readonly CaseFieldMismatch[] {
   if (classification !== "observed") return [];
