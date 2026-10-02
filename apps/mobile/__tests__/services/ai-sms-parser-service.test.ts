@@ -75,6 +75,7 @@ import { MAX_TRANSACTION_AMOUNT, type CategoryTreeSource } from "@monyvi/logic";
 import {
   isAiConsentRequiredError,
   parseSmsWithAi,
+  type SmsAiRetryRequest,
   type SmsCandidate,
 } from "@/services/ai-sms-parser-service";
 import { getFixtureById } from "@/services/dev/sms-fixtures";
@@ -123,6 +124,20 @@ function candidate(fixtureId: string): SmsCandidate {
     },
     smsFingerprint: `fingerprint-${fixture.id}`,
   };
+}
+
+function expectRetryRequest(
+  retryRequest: SmsAiRetryRequest | undefined,
+  expectedCandidates: readonly SmsCandidate[]
+): void {
+  expect(retryRequest).toBeDefined();
+  if (retryRequest === undefined) {
+    throw new Error("Expected retry request");
+  }
+  expect(typeof retryRequest.requestKey).toBe("string");
+  expect(retryRequest.requestKey.length).toBeGreaterThan(0);
+  expect(retryRequest.candidates).toEqual(expectedCandidates);
+  expect(retryRequest.requestContext.scanKind).toBe("incremental");
 }
 
 describe("ai-sms-parser-service parser strategy", () => {
@@ -711,20 +726,15 @@ describe("ai-sms-parser-service parser strategy", () => {
 
     expect(mockInvoke).toHaveBeenCalledTimes(2);
     expect(result.transactions).toHaveLength(1);
-    expect(result.unresolvedCandidates).toEqual([
-      expect.objectContaining({
-        candidate: failedCandidates[0],
-        reason: "chunk_failed",
-        isRetryable: true,
-        retryRequest: expect.objectContaining({
-          requestKey: expect.any(String),
-          candidates: failedCandidates,
-          requestContext: expect.objectContaining({
-            scanKind: "incremental",
-          }),
-        }),
-      }),
-    ]);
+    const unresolvedCandidates = result.unresolvedCandidates ?? [];
+    expect(unresolvedCandidates).toHaveLength(1);
+    expect(unresolvedCandidates[0]?.candidate).toEqual(failedCandidates[0]);
+    expect(unresolvedCandidates[0]?.reason).toBe("chunk_failed");
+    expect(unresolvedCandidates[0]?.isRetryable).toBe(true);
+    expectRetryRequest(
+      unresolvedCandidates[0]?.retryRequest,
+      failedCandidates
+    );
     const loggedError = mockLoggerError.mock.calls.find(
       ([message]) => message === "[ai-sms-parser] parse-sms chunk failed"
     )?.[1] as { readonly context?: unknown } | undefined;
@@ -789,20 +799,15 @@ describe("ai-sms-parser-service parser strategy", () => {
     expect(mockInvoke).toHaveBeenCalledTimes(2);
     expect(result.transactions).toHaveLength(1);
     expect(result.transactions[0]?.smsFingerprint).toBe("enum-fingerprint-0");
-    expect(result.unresolvedCandidates).toEqual([
-      expect.objectContaining({
-        candidate: failedCandidate,
-        reason: "response_invalid",
-        isRetryable: true,
-        retryRequest: expect.objectContaining({
-          requestKey: expect.any(String),
-          candidates: [failedCandidate],
-          requestContext: expect.objectContaining({
-            scanKind: "incremental",
-          }),
-        }),
-      }),
-    ]);
+    const unresolvedCandidates = result.unresolvedCandidates ?? [];
+    expect(unresolvedCandidates).toHaveLength(1);
+    expect(unresolvedCandidates[0]?.candidate).toEqual(failedCandidate);
+    expect(unresolvedCandidates[0]?.reason).toBe("response_invalid");
+    expect(unresolvedCandidates[0]?.isRetryable).toBe(true);
+    expectRetryRequest(
+      unresolvedCandidates[0]?.retryRequest,
+      [failedCandidate]
+    );
   });
 
   it("preserves usable rows instead of retry-splitting a partially malformed chunk", async () => {
@@ -899,20 +904,15 @@ describe("ai-sms-parser-service parser strategy", () => {
     expect(result.transactions).toEqual([
       expect.objectContaining({ smsFingerprint: "thrown-fingerprint-0" }),
     ]);
-    expect(result.unresolvedCandidates).toEqual([
-      expect.objectContaining({
-        candidate: failedCandidate,
-        reason: "unexpected_failure",
-        isRetryable: true,
-        retryRequest: expect.objectContaining({
-          requestKey: expect.any(String),
-          candidates: [failedCandidate],
-          requestContext: expect.objectContaining({
-            scanKind: "incremental",
-          }),
-        }),
-      }),
-    ]);
+    const unresolvedCandidates = result.unresolvedCandidates ?? [];
+    expect(unresolvedCandidates).toHaveLength(1);
+    expect(unresolvedCandidates[0]?.candidate).toEqual(failedCandidate);
+    expect(unresolvedCandidates[0]?.reason).toBe("unexpected_failure");
+    expect(unresolvedCandidates[0]?.isRetryable).toBe(true);
+    expectRetryRequest(
+      unresolvedCandidates[0]?.retryRequest,
+      [failedCandidate]
+    );
   });
 
 });
