@@ -20,6 +20,7 @@ import {
 import {
   createSyntheticEvaluationLifecycle,
   parseCanonicalSyntheticEvaluationRequest,
+  parseSyntheticEvaluationPreflight,
   reconcileSyntheticEvaluationOutcomes,
   toParseSmsCompatibleBody,
   type SyntheticEvaluationRequestBody,
@@ -77,13 +78,20 @@ async function verifyAuth(
   return error || !data.user ? null : data.user.id;
 }
 
-function createSyntheticParseHandler(userId: string) {
+function createSyntheticParseHandler(input: {
+  readonly userId: string;
+  readonly authorization: string;
+  readonly policy: ReturnType<typeof readSmsSafeguardPolicyFromEnvironment>;
+}): ReturnType<typeof createParseSmsHandler> {
   const lifecycle = createSyntheticEvaluationLifecycle();
   const provider = createConfiguredSmsAiProvider(Deno.env.get);
   return createParseSmsHandler({
-    authenticate: async () => userId,
-    hasConsent: hasActiveAiProcessingConsent,
-    getPolicy: () => readSmsSafeguardPolicyFromEnvironment(Deno.env.get),
+    authenticate: async (request) =>
+      request.headers.get("authorization") === input.authorization
+        ? input.userId
+        : null,
+    hasConsent: async (userId) => userId === input.userId,
+    getPolicy: () => input.policy,
     buildFixedPrompt: buildSmsAiStableSystemPrompt,
     buildCategoryContext: buildSmsAiDynamicCategoryContext,
     buildResponseSchema: (currencies) =>
@@ -111,16 +119,43 @@ function createSyntheticParseHandler(userId: string) {
   });
 }
 
-async function readCanonicalSyntheticBody(
-  request: Request
-): Promise<SyntheticEvaluationRequestBody | null> {
-  let value: unknown;
-  try {
-    value = await request.clone().json();
-  } catch {
-    return null;
+type BoundedJsonRead =
+  | { readonly status: "ok"; readonly value: unknown }
+  | { readonly status: "too_large" }
+  | { readonly status: "invalid" };
+
+async function readBoundedJsonBody(
+  request: Request,
+  maxBytes: number
+): Promise<BoundedJsonRead> {
+  if (request.body === null) return { status: "invalid" };
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let byteLength = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    byteLength += value.byteLength;
+    if (byteLength > maxBytes) {
+      await reader.cancel();
+      return { status: "too_large" };
+    }
+    chunks.push(value);
   }
-  return parseCanonicalSyntheticEvaluationRequest(value);
+  const bytes = new Uint8Array(byteLength);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  try {
+    return {
+      status: "ok",
+      value: JSON.parse(new TextDecoder().decode(bytes)) as unknown,
+    };
+  } catch {
+    return { status: "invalid" };
+  }
 }
 
 function createInternalParseRequest(
@@ -144,20 +179,53 @@ async function handleRequest(request: Request): Promise<Response> {
   }
   if (request.method !== "POST") return refusal("method_not_allowed", 405);
 
-  const userId = await verifyAuth(request.headers.get("authorization"));
-  if (userId === null) return refusal("unauthenticated", 401);
+  const policy = readSmsSafeguardPolicyFromEnvironment(Deno.env.get);
+  const rawBody = await readBoundedJsonBody(
+    request,
+    policy.fullParser.maxPayloadBytes
+  );
+  if (rawBody.status === "too_large") return refusal("payload_limit", 413);
+  if (rawBody.status === "invalid") return refusal("malformed_request", 400);
 
-  const body = await readCanonicalSyntheticBody(request);
+  const preflight = parseSyntheticEvaluationPreflight(rawBody.value);
+  if (
+    preflight === null ||
+    preflight.messageCount > policy.fullParser.maxUnitsPerRequest
+  ) {
+    return refusal("malformed_request", 400);
+  }
+
+  const authorization = request.headers.get("authorization");
+  const userId = await verifyAuth(authorization);
+  if (userId === null || authorization === null) {
+    return refusal("unauthenticated", 401);
+  }
+  if (!(await hasActiveAiProcessingConsent(userId))) {
+    return refusal("consent_required", 403);
+  }
+
+  const body = await parseCanonicalSyntheticEvaluationRequest(rawBody.value);
   if (body === null) return refusal("malformed_request", 400);
 
   const internalRequest = createInternalParseRequest(request, body);
-  return createSyntheticParseHandler(userId)(internalRequest);
+  return createSyntheticParseHandler({
+    userId,
+    authorization,
+    policy,
+  })(internalRequest);
+}
+
+function getSafeErrorName(error: unknown): string {
+  return error instanceof Error ? error.name || "Error" : typeof error;
 }
 
 Deno.serve(async (request: Request): Promise<Response> => {
   try {
     return await handleRequest(request);
-  } catch {
+  } catch (error: unknown) {
+    console.error("[sms-provider-evaluation] requestFailed", {
+      errorName: getSafeErrorName(error),
+    });
     return refusal("dependency_unavailable", 503);
   }
 });

@@ -36,6 +36,15 @@ const SyntheticEvaluationMetadataSchema = z
   })
   .strict();
 
+const SyntheticEvaluationPreflightSchema = z
+  .object({
+    scanKind: z.literal("incremental"),
+    scanStartedAt: z.string().min(1).max(100),
+    messages: z.array(z.unknown()).min(1).max(MAX_STRUCTURAL_MESSAGES),
+    syntheticEvaluation: SyntheticEvaluationMetadataSchema,
+  })
+  .passthrough();
+
 const SyntheticEvaluationRequestBodySchema = z
   .object({
     requestKey: z.string().min(1).max(160),
@@ -63,6 +72,12 @@ export type ParseSmsCompatibleBody = Omit<
   SyntheticEvaluationRequestBody,
   "syntheticEvaluation"
 >;
+
+export interface SyntheticEvaluationPreflight {
+  readonly runId: string;
+  readonly anchorMs: number;
+  readonly messageCount: number;
+}
 
 type ReconcileInput = Parameters<
   ParseSmsHandlerDependencies["reconcileOutcomes"]
@@ -92,6 +107,20 @@ function matchesCanonicalMessage(
     submitted.date === canonical.date &&
     submitted.smsFingerprint === canonical.smsFingerprint
   );
+}
+
+export function parseSyntheticEvaluationPreflight(
+  value: unknown
+): SyntheticEvaluationPreflight | null {
+  const parsed = SyntheticEvaluationPreflightSchema.safeParse(value);
+  if (!parsed.success) return null;
+  const { runId, anchorMs } = parsed.data.syntheticEvaluation;
+  if (parsed.data.scanStartedAt !== new Date(anchorMs).toISOString()) return null;
+  return {
+    runId,
+    anchorMs,
+    messageCount: parsed.data.messages.length,
+  };
 }
 
 export async function parseCanonicalSyntheticEvaluationRequest(
