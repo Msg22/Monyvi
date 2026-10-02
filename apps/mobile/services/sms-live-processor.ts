@@ -253,7 +253,7 @@ export async function processLiveSmsEvent(
     });
     candidate = {
       message: {
-        id: `live-${event.deliveryMode}-${event.timestamp}`,
+        id: `live-${smsFingerprint}`,
         address: event.sender,
         body: event.body,
         date: event.timestamp,
@@ -348,7 +348,12 @@ export async function processLiveSmsEvent(
         {
           expectedUserId: initiatingUserId,
           terminalFingerprints,
-          requestContext: { scanSessionId: null, scanKind: "live" },
+          requestContext: {
+            scanSessionId: null,
+            scanKind: "live",
+            scanStartedAtMs: event.timestamp,
+          },
+          requestKey: `live:${confirmedSmsFingerprint}`,
         }
       );
     } catch (error: unknown) {

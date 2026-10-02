@@ -380,7 +380,7 @@ class SmsHeadlessTaskService : HeadlessJsTaskService() {
 
     companion object {
         private const val TASK_NAME = "SmsDetectionTask"
-        private const val TASK_TIMEOUT_MS = 60000L
+        private const val TASK_TIMEOUT_MS = 120000L
         private const val TASK_RETRY_ATTEMPTS = 3
         private const val TASK_RETRY_DELAY_MS = 10000
     }
