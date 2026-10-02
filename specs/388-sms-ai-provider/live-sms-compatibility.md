@@ -1,128 +1,198 @@
 # Live SMS Compatibility Manual QA
 
 This document covers the live Android SMS delivery path only: foreground,
-background, and killed-app HeadlessJS delivery. It is intentionally separate
-from the synthetic provider evaluation workflow in `live-evaluation.md`.
+background native delivery, and killed-app HeadlessJS delivery. It is separate
+from the synthetic provider evaluation workflow in `live-evaluation.md` and
+does not cover production batch-concurrency work.
 
-## Scope
+## Current source status
 
-T054 aligns two existing live-SMS contracts:
+The source work is split across coordinated lanes and must not be described as
+fully integrated or runtime-verified yet:
 
-- Android HeadlessJS receives a bounded 120-second task budget. The configured
-  DeepInfra SMS provider still owns its independent 60-second single-attempt
-  deadline with zero automatic provider retries.
-- An ambiguous retry of the same live SMS reuses its current deterministic
-  request identity so the server ledger cannot start duplicate provider work.
-  The live parser also pins `scanStartedAtMs` to the original SMS event
-  timestamp and uses a fingerprint-derived candidate ID, so a
-  foreground-to-headless ambiguous replay does not change those serialized
-  identity fields.
-- A server-confirmed retryable provider error may authorize one fresh request
-  identity through `retryRequestMode: fresh` only after provider-error ledger
-  completion is confirmed. A fresh native retry may consume another normal
-  allowance unit/provider call. The paired mobile persistence/rotation handoff
-  is approved but is **not implemented by this backend correction wave**.
+- **Backend accepted at source level**: the `parse-sms` handler grants
+  `retryRequestMode: fresh` only for explicitly approved provider-error
+  outcomes after their provider-error ledger completion is confirmed. If that
+  completion cannot be confirmed, the handler fails closed with HTTP 503
+  `dependency_unavailable` and no fresh directive.
+- **Paired client fresh classification implemented in the independent
+  T053/T054CLIENT lane and source-accepted**: only the explicit HTTP 502
+  provider-error shapes with known reasons plus `retryRequestMode: fresh` are
+  eligible to become fresh paid retry requests. Arbitrary HTTP 5xx responses do
+  not authorize fresh identity.
+- **Durable live retry-key source implemented on the T054 mobile lane**:
+  `30a1fd311cb27d8f6a4e46e8277626ccccb7a132` adds per-user durable request-key
+  state and live-processor integration. Independent review found one confirmed
+  store correction: a failure while persisting TTL-pruned valid state must
+  propagate/fail closed rather than deleting and rebuilding the whole user
+  store. That source correction is assigned to the original author and remains
+  pending acceptance.
+- Cross-lane integration, test execution, Android runtime validation, and
+  device/network timing remain **UNVERIFIED** and are deferred to the later
+  pre-push/manual phase.
+
+No source lane should be called Green solely from this document.
+
+## Technical contract
+
+Android HeadlessJS has a bounded 120-second task budget. The configured
+DeepInfra SMS provider keeps its independent 60-second single-attempt deadline
+with zero automatic provider retries. The native Android retry policy remains
+configured with a retry count of **3** and a **10-second delay**; this document
+does not reinterpret that platform setting as a claim about a specific total
+number of attempts.
 
 The 120-second native budget is not an end-to-end deadline guarantee. It
-provides headroom around the server-side provider deadline for Android/JS
-startup, authentication, consent checks, safeguard admission, response
-processing, and notification handling.
+provides headroom around the server provider deadline for Android/JS startup,
+authentication, consent checks, admission/accounting, response processing,
+retry-key persistence, and notification handling.
 
-## Android build requirement
+For request identity:
 
-`withSmsBroadcastReceiver.js` generates native Kotlin source. A Metro reload or
-ordinary JavaScript refresh does **not** apply the HeadlessJS timeout change.
-Manual validation of the 120-second task budget requires rebuilding and
-installing the Android application so the generated
+- An **ambiguous transport/result-loss retry** reuses the current request key so
+  the server ledger cannot start duplicate provider work.
+- A **server-confirmed retryable provider failure** may authorize
+  `retryRequestMode: fresh` only after the corresponding
+  `completed_with_provider_error` ledger transition is confirmed. That fresh
+  retry uses a new request identity and may consume another normal allowance
+  unit/provider call.
+- If the provider-error completion write cannot be confirmed, the server
+  returns HTTP 503 `dependency_unavailable` with **no** fresh directive.
+- Caller cancellation, ambiguous provider-start state, reconciliation failure,
+  and generic/unknown failures do not authorize a fresh paid retry.
+
+## Durable mobile retry metadata
+
+The approved mobile store persists only bounded retry identity metadata:
+
+- authenticated user ID;
+- canonical SMS fingerprint;
+- current request key;
+- expiry/update timestamps needed for bounded cleanup.
+
+It does **not** persist raw SMS body, categories, provider output, parsed
+transactions, or other financial payload merely to enable retry.
+
+The current source design uses:
+
+- **24-hour TTL**;
+- at most **64 active entries per user**;
+- per-user storage isolation;
+- owner checks before/after persistence awaits;
+- serialized read/modify/write access for the user store;
+- malformed-state cleanup and expired-entry pruning;
+- process-restart reuse of the surviving current request key.
+
+The pending store P2 correction must preserve valid active entries when a prune
+write itself fails: that storage failure must propagate and stop before another
+paid parser/provider call rather than deleting/rebuilding the store.
+
+## Source paths
+
+Backend source contract on this T054 branch:
+
+- `supabase/functions/_shared/parse-sms-handler.ts`
+- `supabase/functions/_shared/parse-sms-handler.test.ts`
+- `docs/business/business-decisions.md`
+- this file, `specs/388-sms-ai-provider/live-sms-compatibility.md`
+
+T054 mobile retry source on the independent mobile branch:
+
+- `apps/mobile/services/sms-live-processor.ts`
+- `apps/mobile/services/sms-live-retry-request-store.ts`
+- `apps/mobile/__tests__/services/sms-live-request-identity.test.ts`
+- `apps/mobile/__tests__/services/sms-live-retry-request-store.test.ts`
+
+The paired shared-parser/client classification is owned by the independent
+T053/T054CLIENT lane and must be integrated without broadening fresh retry from
+the explicit server-authorized shapes above.
+
+## Android rebuild requirement
+
+`apps/mobile/plugins/withSmsBroadcastReceiver.js` generates native Kotlin
+source. A Metro reload or ordinary JavaScript refresh does **not** apply the
+HeadlessJS timeout change. Manual validation of the 120-second task budget
+requires rebuilding and installing the Android application so generated
 `SmsHeadlessTaskService.kt` contains the new timeout.
 
-## Manual scenarios
+Killed-app validation must use the existing supported release/preview
+embedded-JS harness. Background the app, kill its process without Android
+force-stop, then inject/receive the real SMS as used by the existing live-SMS
+journey. Android force-stop is not a valid killed-app test because a
+force-stopped package will not receive normal SMS broadcasts until the app is
+opened again.
 
-| Scenario | Setup / action | Expected observation |
+## Manual scenario matrix
+
+| Scenario | Setup / action | Required observation |
 | --- | --- | --- |
-| Foreground receive | Keep the app foregrounded with live detection and AI consent enabled, then receive a supported financial SMS | SMS is processed once through the live parser path and any valid result is handled normally |
-| Background receive | Put the app in the background without killing the process, then receive a supported financial SMS | Background/native delivery reaches the shared live processor without duplicate financial handling |
-| Killed-app receive | Use the existing supported killed-app harness: background the rebuilt release/preview app, kill its process without force-stopping the package, then inject/receive the real SMS as documented by the live-SMS Maestro journey | Android starts the HeadlessJS service and the SMS reaches the shared live processor within the rebuilt app; Android force-stop is unsupported for this scenario because a force-stopped package will not receive normal SMS broadcasts until the app is opened again |
-| Ambiguous transport retry | Interrupt or lose the client response without a server-confirmed provider-error response, then allow the native HeadlessJS retry | The same current request key is replayed so the server ledger cannot start duplicate provider work; candidate ID, fingerprint, and original `scanStartedAtMs` remain stable |
-| Confirmed provider-failure retry | Receive an explicit retryable provider-error response, then exercise the paired native retry flow after the mobile successor lands | Backend grants `retryRequestMode: fresh` only after durable provider-error completion; the successor must persist/rotate the current request key before native retry. This end-to-end behavior is not yet implemented or verified in this backend-only wave |
-| Foreground to headless retry | First attempt in foreground, then deliver the same SMS through HeadlessJS | Ambiguous replay keeps the current identity across the delivery-mode switch. A confirmed provider failure requires the pending fresh-key mobile handoff rather than blindly replaying the completed key |
-| Duplicate delivery | Deliver the same already-saved/locally-deduplicated SMS again | No second transaction/transfer or duplicate live notification workflow is created |
-| Consent revoked | Revoke AI consent before or during live processing | Parsing stops through the existing consent controls; live detection is disabled according to the existing flow |
-| Account switch/sign-out | Switch account or sign out while live processing is in flight | Work from the initiating account is discarded and is not surfaced or saved under the new/current account |
-| Distinct SMS | Deliver a different SMS with a different canonical fingerprint | It receives a different live request key and candidate ID |
-
-## Stable-request boundary
-
-For an ambiguous replay of the same SMS, T054 stabilizes the fields owned by
-the live path: `requestKey`, candidate `message.id`, and `scanStartedAtMs`.
-
-The parser request body also contains current category context and supported
-currencies loaded at retry time. If those values change between attempts, the
-serialized request digest can still change even though the live identity fields
-remain stable. T054 does not broaden scope into parser/orchestrator/context
-snapshotting; such a case should be reported rather than treated as arbitrary
-retry-body identity.
+| Foreground receive | Keep the rebuilt app foregrounded with live detection and AI consent enabled, then receive a supported financial SMS | SMS reaches the shared live processor once; valid handling preserves fingerprint deduplication |
+| Background receive | Background the rebuilt app without killing its process, then receive a supported financial SMS | Background/native delivery reaches the same live processor without duplicate financial handling |
+| Killed-app receive | Use the release/preview embedded-JS harness; background the app, kill the process without force-stopping the package, then inject/receive the real SMS | HeadlessJS starts from the native receiver path and processes the SMS; Android force-stop is explicitly unsupported |
+| Ambiguous transport retry | Lose/interrupt the client response so there is no explicit server-confirmed fresh directive | The next retry reuses the same persisted current request key, candidate fingerprint/ID, and original `scanStartedAtMs`; it must not create a second provider start for the same ledger identity |
+| Confirmed provider failure | Receive one of the explicitly classified server provider-error responses with `retryRequestMode: fresh` after confirmed ledger completion | Client rotates to the explicit canonical fresh request key and persists it before the next paid dispatch; another normally-accounted provider call is allowed |
+| Completion cannot be confirmed | Force the provider-error ledger completion dependency to remain unconfirmed | Server returns HTTP 503 `dependency_unavailable`, no fresh directive is consumed, and client must not rotate to a new paid request identity |
+| Same-mode Headless retry | Trigger a retryable attempt and let the subsequent retry also arrive via HeadlessJS | Current durable key survives JS/runtime restart and is reused unless an explicit fresh authorization rotated it |
+| Foreground → Headless retry | First attempt arrives foreground, subsequent retry arrives through HeadlessJS | Delivery mode change alone does not change ambiguous retry identity; confirmed fresh authorization rotates only through the paired explicit contract |
+| Malformed durable store | Seed malformed retry-store metadata for the current user | Malformed state is rejected/cleaned without exposing foreign state or raw SMS payload; next safe identity creation follows the normal guarded path |
+| Expired durable key | Seed an entry older than the 24-hour TTL | Expired key is not reused and bounded cleanup removes it |
+| Multiple active SMS | Keep valid retry identities for multiple SMS fingerprints for the same user | Each fingerprint retains its own current key; per-user updates are serialized and the store remains bounded to 64 entries |
+| Prune-write storage failure | Have multiple active SMS entries plus an expired entry, then make persistence of the pruned valid store fail | Operation fails closed before paid parser/provider dispatch; still-valid sibling retry identities must not be deleted or silently rebuilt away. This is the currently assigned P2 source correction |
+| Account switch/sign-out | Switch account or sign out while load/save/rotation is in flight | Old-user work returns stale-user behavior and cannot load, rotate, clear, or dispatch using the new user's retry state |
+| Consent revoked | Revoke AI consent before or during live processing | Existing consent controls stop parsing and clear the applicable retry state without starting fresh provider work |
+| Duplicate delivery / notification | Deliver the same already-saved or already-processed SMS again and repeat notification confirmation where applicable | Fingerprint deduplication prevents duplicate transaction/transfer effects and repeated notification action remains idempotent |
+| Distinct SMS | Deliver another SMS with a different canonical fingerprint | It uses an independent request identity and does not overwrite the first SMS's active retry key |
 
 ## Backend fresh-retry response contract
 
-The backend directive is an explicit allowlist, not a generic HTTP retry rule:
+The fresh directive is an explicit server allowlist, never a generic
+status-code retry rule:
 
 | Server outcome | Response contract |
 | --- | --- |
-| Provider request throws after provider start and ledger completion is confirmed | HTTP 502, `reason: provider_failed`, `retryRequestMode: fresh` |
-| Provider output fails normalized response-schema validation and ledger completion is confirmed | HTTP 502, `reason: response_invalid`, `retryRequestMode: fresh` |
-| Provider returns `truncated`, `safety_stopped`, or `failed` and ledger completion is confirmed | Preserve the existing HTTP 200 completion envelope and fingerprint arrays, plus `retryRequestMode: fresh` |
-| Any of those provider-error completion writes cannot be confirmed after the bounded completion retry | HTTP 503, `reason: dependency_unavailable`, with **no** fresh directive |
-| Caller cancellation after provider start | Existing cancellation response, with **no** fresh directive |
-| Ambiguous provider-start result | Existing dependency-unavailable response/replay protection, with **no** fresh directive |
-| Outcome reconciliation failure | Existing dependency-unavailable response, with **no** fresh directive |
+| Provider request throws after provider start and provider-error ledger completion is confirmed | HTTP 502, `reason: provider_failed`, `retryRequestMode: fresh` |
+| Provider output fails normalized response-schema validation and provider-error ledger completion is confirmed | HTTP 502, `reason: response_invalid`, `retryRequestMode: fresh` |
+| Provider returns `truncated`, `safety_stopped`, or `failed` and provider-error ledger completion is confirmed | Preserve existing HTTP 200 completion/fingerprint envelope and add `retryRequestMode: fresh` |
+| Any approved provider-error completion cannot be confirmed after the bounded completion retries | HTTP 503, `reason: dependency_unavailable`, **no** fresh directive |
+| Caller cancellation after provider start | Existing cancellation response, **no** fresh directive |
+| Ambiguous provider-start result | Existing dependency-unavailable/replay-protection response, **no** fresh directive |
+| Outcome reconciliation failure | Existing dependency-unavailable response, **no** fresh directive |
+| Arbitrary/unknown HTTP 5xx | Not sufficient to authorize a fresh request identity |
 
-The mobile successor must classify fresh authorization from these exact
-server-owned outcome shapes. It must not turn arbitrary HTTP 5xx responses into
-fresh paid retries.
+The paired client must consume only those explicit canonical fresh shapes.
+Ambiguous requests retain the current durable key.
 
-## Paired mobile successor status
+## Coverage and remaining manual-only gaps
 
-The user approved persisting only the current user-scoped
-SMS-fingerprint/request-key retry identity with bounded expiry across JS
-restarts. That persistence and request-key rotation belong to the coordinated
-mobile/shared-parser successor and are **not present in this backend wave**.
-
-Until that successor is integrated, a native retry following a
-server-confirmed provider failure still risks replaying the completed stable
-request key and receiving `already_processed_result_unavailable` without a new
-provider call. Therefore the confirmed-failure native retry journey must remain
-**UNVERIFIED / integration-pending** rather than being reported as working.
-Ambiguous transport retries continue to require reuse of the same current key.
-
-## Coverage matrix
-
-| Area | Source/unit coverage | Manual/runtime requirement |
+| Area | Current source coverage/status | Why manual/runtime evidence is still required |
 | --- | --- | --- |
-| Native task budget | Config-plugin test asserts generated `TASK_TIMEOUT_MS = 120000L` while retaining 3 attempts / 10-second native retry delay | Rebuilt Android app required |
-| Same-mode ambiguous retry identity | Focused live-request-identity test covers repeated HeadlessJS delivery with changed wall-clock time | Device delivery timing still manual |
-| Confirmed provider-error fresh directive | Backend handler source/tests define the exact confirmed-completion response contract | Mobile persisted-key rotation is integration-pending; end-to-end native retry remains **UNVERIFIED** |
-| Delivery-mode switch | Focused test covers foreground first attempt followed by HeadlessJS retry using the current stable identity | Confirmed-failure fresh rotation awaits the mobile successor; foreground/background/killed transition remains manual and uses the release/preview embedded-JS harness rather than force-stop |
-| Distinct identities | Focused test covers different fingerprints producing different request keys/candidate IDs | Optional device confirmation |
-| Duplicate protection | Existing live-processor regression coverage | Confirm no duplicate save/notification on device |
-| Consent controls | Existing live-processor regression coverage | Confirm revoke/disable behavior on device |
-| Account ownership | Existing live-processor regression coverage | Confirm switch/sign-out behavior on device |
-| Provider timeout/network timing | No fixture can reproduce actual Android service lifetime plus hosted network/provider timing | Must remain **UNVERIFIED** until pre-push/manual runtime validation |
+| Native task budget | Config-plugin source/test pins generated `TASK_TIMEOUT_MS = 120000L` and preserves retry count 3 / 10-second delay | Native Kotlin must be regenerated by rebuilding the Android app; Metro cannot validate it |
+| Backend confirmed-fresh gating | Backend source/tests define confirmed completion vs 503/no-fresh behavior | Hosted Edge/network behavior was not executed in this wave |
+| Client 502/fresh classification | Independent paired client source is implemented and source-accepted | Cross-lane integration plus actual Edge response handling has not been executed here |
+| Durable key across restart | Store/live-processor source is implemented; one prune-write P2 correction is pending source acceptance | Jest/source cannot prove Android process death/restart persistence or HeadlessJS lifecycle |
+| Malformed/expired/bounded store | Source/tests cover malformed cleanup, 24-hour expiry, 64-entry bound, and owner isolation | Actual device AsyncStorage behavior remains unverified |
+| Multi-SMS serialized persistence | Source uses per-user serialized storage mutation | The prune-write failure correction must be accepted, then runtime concurrency still needs confirmation |
+| Foreground/background/killed delivery | Existing live receiver/HeadlessJS paths and manual journeys exist | OS lifecycle and SMS broadcast delivery cannot be honestly reproduced by ordinary fixture tests |
+| Provider/network timeout timing | Source has native 120s budget and provider 60s/zero automatic retries | Fixture tests cannot measure real mobile→Supabase→provider timing or hosted cancellation |
+| Notification dedup/idempotence | Existing fingerprint and notification-action protections remain in scope | Real Android notification delivery/action behavior still requires manual device evidence |
+| Account/consent races | Existing source guards plus new store owner guards cover source behavior | Real auth changes during native/background delivery remain runtime-unverified |
 
 ## Verification status
 
-The repository's fixture/Jest journeys can validate generated source constants,
-request-shaping contracts, and control-flow regressions. They cannot honestly
-measure:
+No test execution, lint, TypeScript, formatter, build, provider request, DB
+exercise, deployment, or device verification is claimed by this document
+update.
 
-- actual HeadlessJS service lifetime on Android;
-- killed-app startup latency;
+In particular, the following remain **UNVERIFIED** until the coordinated source
+integration is accepted and the deferred pre-push/manual phase is performed:
+
+- actual 120-second HeadlessJS service lifetime;
+- foreground/background/killed-app OS delivery transitions;
+- killed-app process-restart retry-key persistence;
 - real mobile-to-Supabase network timing;
 - hosted Edge cancellation/timing behavior;
-- DeepInfra compute/billing termination after transport abort; or
-- the combined native + hosted timing budget; and
-- confirmed-provider-failure request-key persistence/rotation across a JS
-  restart until the paired mobile successor is integrated.
-
-Until the paired mobile handoff and deferred pre-push/manual device phase are
-performed, those runtime properties remain **UNVERIFIED**.
+- DeepInfra compute/billing termination after transport abort;
+- end-to-end confirmed-provider-failure fresh-key rotation;
+- the multi-active-SMS prune-write failure path until its assigned P2 source
+  correction is accepted; and
+- notification/action deduplication on a rebuilt Android runtime.
