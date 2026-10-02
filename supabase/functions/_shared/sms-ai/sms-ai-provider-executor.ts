@@ -3,6 +3,7 @@ import type {
   ExecuteSmsProviderInput,
   SmsAiProvider,
   SmsProviderExecutionResult,
+  throwIfSmsAiProviderCallerAborted,
 } from "./sms-ai-provider.ts";
 import {
   BUILT_IN_SMS_CATEGORY_TREE,
@@ -43,9 +44,11 @@ export async function executeSmsAiProvider(
   input: ExecuteSmsProviderInput,
   diagnostics: SmsAiProviderDiagnostics = {}
 ): Promise<SmsProviderExecutionResult> {
+  throwIfSmsAiProviderCallerAborted(input.signal);
   const providerRequest = {
     messages: buildSmsAiProviderMessages(input),
     responseSchema: buildSmsAiResponseSchema(input.supportedCurrencies),
+    ...(input.signal === undefined ? {} : { signal: input.signal }),
   };
 
   if (diagnostics.onRequestInput !== undefined) {
@@ -57,7 +60,9 @@ export async function executeSmsAiProvider(
     }
   }
 
+  throwIfSmsAiProviderCallerAborted(input.signal);
   const raw = await provider.execute(providerRequest);
+  throwIfSmsAiProviderCallerAborted(input.signal);
 
   if (raw.completionStatus !== "complete") {
     return {
