@@ -19,6 +19,7 @@ import {
   parseSmsWithOrchestrator,
   toSmsParserDiagnosticsLogContext,
 } from "./sms-parser-orchestrator";
+import type { SmsParserOrchestratorOptions } from "./sms-parser-result-contract";
 import {
   reconcileLiveDetectionPreference,
   setAutoConfirm,
@@ -207,8 +208,25 @@ function selectCanonicalRetryRequest(
       : []
   );
   const keys = new Set(matching.map((request) => request.requestKey));
-  if (keys.size !== 1) return null;
-  return matching.find((request) => keys.has(request.requestKey)) ?? null;
+  return keys.size === 1 ? (matching[0] ?? null) : null;
+}
+
+function createLiveParserOptions(input: {
+  readonly userId: string;
+  readonly terminalFingerprints: ReadonlySet<string>;
+  readonly timestamp: number;
+  readonly requestKey: string;
+}): SmsParserOrchestratorOptions {
+  return {
+    expectedUserId: input.userId,
+    terminalFingerprints: input.terminalFingerprints,
+    requestContext: {
+      scanSessionId: null,
+      scanKind: "live",
+      scanStartedAtMs: input.timestamp,
+    },
+    requestKey: input.requestKey,
+  };
 }
 
 async function loadAiContext(
@@ -465,10 +483,15 @@ export async function processLiveSmsEvent(
     }
 
     let aiResult: Awaited<ReturnType<typeof parseSmsWithOrchestrator>>;
+    let activeRequestKey: string | null = null;
+    let wasTerminalBeforeDispatch = false;
     try {
       const terminalFingerprints = await getTerminalSmsFingerprints(
         [confirmedSmsFingerprint],
         initiatingUserId
+      );
+      wasTerminalBeforeDispatch = terminalFingerprints.has(
+        confirmedSmsFingerprint
       );
       const retryIdentity = await prepareRetryRequestKey(
         initiatingUserId,
@@ -483,21 +506,19 @@ export async function processLiveSmsEvent(
       if (!(await isInitiatingUserCurrent(initiatingUserId))) {
         return createResult("stale_user", confirmedSmsFingerprint);
       }
+      activeRequestKey = retryIdentity.requestKey;
+      const parserOptions = createLiveParserOptions({
+        userId: initiatingUserId,
+        terminalFingerprints,
+        timestamp: event.timestamp,
+        requestKey: activeRequestKey,
+      });
       aiResult = await parseSmsWithOrchestrator(
         [candidate],
         context,
         undefined,
         undefined,
-        {
-          expectedUserId: initiatingUserId,
-          terminalFingerprints,
-          requestContext: {
-            scanSessionId: null,
-            scanKind: "live",
-            scanStartedAtMs: event.timestamp,
-          },
-          requestKey: retryIdentity.requestKey,
-        }
+        parserOptions
       );
       if (!(await isInitiatingUserCurrent(initiatingUserId))) {
         return createResult("stale_user", confirmedSmsFingerprint);
@@ -536,6 +557,16 @@ export async function processLiveSmsEvent(
       deliveryMode: event.deliveryMode,
       ...toSmsParserDiagnosticsLogContext(aiResult.diagnostics),
     });
+
+    if (wasTerminalBeforeDispatch) {
+      const cleared = await clearRetryRequestKey(
+        initiatingUserId,
+        confirmedSmsFingerprint
+      );
+      if (cleared === "stale_user") {
+        return createResult("stale_user", confirmedSmsFingerprint);
+      }
+    }
 
     if (aiResult.isConsentRequired === true) {
       await clearRetryRequestKey(
@@ -579,37 +610,35 @@ export async function processLiveSmsEvent(
     if (hasUnresolvedFailure) {
       const isRetryable = aiResult.isRetryable !== false;
       if (!isRetryable) {
-        await clearRetryRequestKey(
+        const cleared = await clearRetryRequestKey(
           initiatingUserId,
           confirmedSmsFingerprint
         );
+        if (cleared === "stale_user") {
+          return createResult("stale_user", confirmedSmsFingerprint);
+        }
       } else {
         const retryRequest = selectCanonicalRetryRequest(
           aiResult.unresolvedCandidates,
           confirmedSmsFingerprint
         );
-        if (retryRequest !== null) {
-          const currentKey = await loadLiveSmsRetryRequestKey({
-            expectedUserId: initiatingUserId,
-            smsFingerprint: confirmedSmsFingerprint,
-          });
-          if (
-            currentKey !== null &&
-            retryRequest.requestKey !== currentKey
-          ) {
-            try {
-              await saveLiveSmsRetryRequestKey({
-                expectedUserId: initiatingUserId,
-                smsFingerprint: confirmedSmsFingerprint,
-                requestKey: retryRequest.requestKey,
-              });
-            } catch (error: unknown) {
-              if (isUserScopeError(error)) {
-                return createResult("stale_user", confirmedSmsFingerprint);
-              }
-              logger.error("liveSms.retryIdentity.rotateFailed", error);
-              return retryStorageFailure(confirmedSmsFingerprint);
+        if (
+          retryRequest !== null &&
+          activeRequestKey !== null &&
+          retryRequest.requestKey !== activeRequestKey
+        ) {
+          try {
+            await saveLiveSmsRetryRequestKey({
+              expectedUserId: initiatingUserId,
+              smsFingerprint: confirmedSmsFingerprint,
+              requestKey: retryRequest.requestKey,
+            });
+          } catch (error: unknown) {
+            if (isUserScopeError(error)) {
+              return createResult("stale_user", confirmedSmsFingerprint);
             }
+            logger.error("liveSms.retryIdentity.rotateFailed", error);
+            return retryStorageFailure(confirmedSmsFingerprint);
           }
         }
       }
@@ -621,10 +650,13 @@ export async function processLiveSmsEvent(
       );
     }
 
-    await clearRetryRequestKey(
+    const cleared = await clearRetryRequestKey(
       initiatingUserId,
       confirmedSmsFingerprint
     );
+    if (cleared === "stale_user") {
+      return createResult("stale_user", confirmedSmsFingerprint);
+    }
     options.markRecentlyProcessed?.(confirmedSmsFingerprint);
 
     if (aiResult.transactions.length === 0) {
