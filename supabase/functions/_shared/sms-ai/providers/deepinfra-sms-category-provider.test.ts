@@ -347,75 +347,20 @@ test("fails safely on empty or malformed provider output without exposing partia
     );
 
     assert.equal(result, null);
-    assert.equal(calls, 2);
+    assert.equal(calls, 1);
   }
 });
 
-test("preserves one retry with 1s backoff for transient provider failures", async () => {
+test("does not automatically retry transient provider failures", async () => {
   let calls = 0;
-  const delays: number[] = [];
-  const provider = new DeepInfraSmsCategoryProvider(CONFIG, {
-    fetch: async () => {
-      calls += 1;
-      if (calls === 1) return new Response(null, { status: 503 });
-      return providerResponse(validCategoryContent());
-    },
-    sleep: async (milliseconds) => {
-      delays.push(milliseconds);
-    },
-    withTimeout: async (operation) => operation(new AbortController().signal),
-  });
-
-  const result = await provider.classify(
-    CATEGORY_REQUEST,
-    new AbortController().signal
-  );
-
-  assert.equal(calls, 2);
-  assert.deepEqual(delays, [1000]);
-  assert.equal(result?.categories.length, 1);
-});
-
-test("preserves the 8s attempt timeout and retries one timeout before succeeding", async () => {
-  let timeoutCalls = 0;
-  const delays: number[] = [];
-  const provider = new DeepInfraSmsCategoryProvider(CONFIG, {
-    fetch: async () => providerResponse(validCategoryContent()),
-    sleep: async (milliseconds) => {
-      delays.push(milliseconds);
-    },
-    withTimeout: async (operation, timeoutMs) => {
-      assert.equal(timeoutMs, DEEPINFRA_SMS_CATEGORY_ATTEMPT_TIMEOUT_MS);
-      timeoutCalls += 1;
-      if (timeoutCalls === 1) {
-        const error = new Error("Operation timed out");
-        error.name = "TimeoutError";
-        throw error;
-      }
-      return operation(new AbortController().signal);
-    },
-  });
-
-  const result = await provider.classify(
-    CATEGORY_REQUEST,
-    new AbortController().signal
-  );
-
-  assert.equal(timeoutCalls, 2);
-  assert.deepEqual(delays, [1000]);
-  assert.equal(result?.categories.length, 1);
-});
-
-test("returns null after exactly two failed provider attempts", async () => {
-  let calls = 0;
-  const delays: number[] = [];
+  let sleeps = 0;
   const provider = new DeepInfraSmsCategoryProvider(CONFIG, {
     fetch: async () => {
       calls += 1;
       return new Response(null, { status: 503 });
     },
-    sleep: async (milliseconds) => {
-      delays.push(milliseconds);
+    sleep: async () => {
+      sleeps += 1;
     },
     withTimeout: async (operation) => operation(new AbortController().signal),
   });
@@ -426,8 +371,59 @@ test("returns null after exactly two failed provider attempts", async () => {
   );
 
   assert.equal(result, null);
-  assert.equal(calls, 2);
-  assert.deepEqual(delays, [1000]);
+  assert.equal(calls, 1);
+  assert.equal(sleeps, 0);
+});
+
+test("uses one 60-second attempt timeout without retrying a timeout", async () => {
+  let timeoutCalls = 0;
+  let sleeps = 0;
+  const provider = new DeepInfraSmsCategoryProvider(CONFIG, {
+    fetch: async () => providerResponse(validCategoryContent()),
+    sleep: async () => {
+      sleeps += 1;
+    },
+    withTimeout: async (_operation, timeoutMs) => {
+      assert.equal(timeoutMs, 60_000);
+      timeoutCalls += 1;
+      const error = new Error("Operation timed out");
+      error.name = "TimeoutError";
+      throw error;
+    },
+  });
+
+  const result = await provider.classify(
+    CATEGORY_REQUEST,
+    new AbortController().signal
+  );
+
+  assert.equal(result, null);
+  assert.equal(timeoutCalls, 1);
+  assert.equal(sleeps, 0);
+});
+
+test("returns null after exactly one failed provider attempt", async () => {
+  let calls = 0;
+  let sleeps = 0;
+  const provider = new DeepInfraSmsCategoryProvider(CONFIG, {
+    fetch: async () => {
+      calls += 1;
+      return new Response(null, { status: 503 });
+    },
+    sleep: async () => {
+      sleeps += 1;
+    },
+    withTimeout: async (operation) => operation(new AbortController().signal),
+  });
+
+  const result = await provider.classify(
+    CATEGORY_REQUEST,
+    new AbortController().signal
+  );
+
+  assert.equal(result, null);
+  assert.equal(calls, 1);
+  assert.equal(sleeps, 0);
 });
 
 test("propagates request cancellation without retrying the provider", async () => {
@@ -480,10 +476,10 @@ test("never logs provider bodies, merchant text, or credentials on exhaustion", 
   assert.equal(serialized.includes("ECHOED"), false);
 });
 
-test("keeps response-body consumption inside the 8s attempt deadline and retries after body timeout", async () => {
+test("keeps response-body consumption inside the 60s attempt deadline without retrying", async () => {
   const scope: TimeoutScopeState = { isActive: false, invocationCount: 0 };
   const warnings: unknown[][] = [];
-  const delays: number[] = [];
+  let sleeps = 0;
   let calls = 0;
   let firstBodyReadStarted = false;
   let firstBodyReadInsideTimeout = false;
@@ -492,10 +488,6 @@ test("keeps response-body consumption inside the 8s attempt deadline and retries
   const provider = new DeepInfraSmsCategoryProvider(CONFIG, {
     fetch: async (_input, init) => {
       calls += 1;
-      if (calls !== 1) {
-        return providerResponse(validCategoryContent());
-      }
-
       const signal = init?.signal;
       return responseWithJson(() => {
         firstBodyReadStarted = true;
@@ -522,8 +514,8 @@ test("keeps response-body consumption inside the 8s attempt deadline and retries
         });
       });
     },
-    sleep: async (milliseconds) => {
-      delays.push(milliseconds);
+    sleep: async () => {
+      sleeps += 1;
     },
     withTimeout: createFirstBodyDeadlineWithTimeout(
       scope,
@@ -539,16 +531,16 @@ test("keeps response-body consumption inside the 8s attempt deadline and retries
     new AbortController().signal
   );
 
-  assert.equal(calls, 2);
-  assert.equal(scope.invocationCount, 2);
-  assert.deepEqual(delays, [1000]);
+  assert.equal(calls, 1);
+  assert.equal(scope.invocationCount, 1);
+  assert.equal(sleeps, 0);
   assert.equal(firstBodyReadInsideTimeout, true);
   assert.equal(firstBodySignalAborted, true);
   const firstWarningMetadata = warnings[0]?.[1] as
     | { readonly phase?: unknown }
     | undefined;
   assert.equal(firstWarningMetadata?.phase, "timeout");
-  assert.equal(result?.categories.length, 1);
+  assert.equal(result, null);
 });
 
 test("propagates cancellation during response-body consumption without retrying", async () => {
@@ -655,9 +647,9 @@ test("keeps malformed category validation inside the attempt budget", async () =
   );
 
   assert.equal(result, null);
-  assert.equal(calls, 2);
-  assert.equal(scope.invocationCount, 2);
-  assert.deepEqual(delays, [1000]);
-  assert.deepEqual(bodyScopes, [true, true]);
-  assert.deepEqual(validationScopes, [true, true]);
+  assert.equal(calls, 1);
+  assert.equal(scope.invocationCount, 1);
+  assert.deepEqual(delays, []);
+  assert.deepEqual(bodyScopes, [true]);
+  assert.deepEqual(validationScopes, [true]);
 });

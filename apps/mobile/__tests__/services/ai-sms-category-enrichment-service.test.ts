@@ -749,41 +749,56 @@ describe("ai-sms-category-enrichment-service", () => {
     );
   });
 
-  it("uses one 20-second total deadline across bounded concurrent chunks", async () => {
+  it("gives each concurrency wave its own 70-second deadline", async () => {
     jest.useFakeTimers();
     const candidates = Array.from({ length: 41 }, (_, index) =>
       candidate(`candidate-${index + 1}`, `Shop ${index + 1}`)
     );
     mockInvoke.mockImplementation(
       (_functionName, options) =>
-        new Promise((_resolve, reject) => {
+        new Promise((resolve, reject) => {
+          const timeoutId = setTimeout(
+            () => resolve({ data: { categories: [] }, error: null }),
+            60_000
+          );
           options.signal?.addEventListener(
             "abort",
-            () =>
+            () => {
+              clearTimeout(timeoutId);
               reject(
                 Object.assign(new Error("aborted"), { name: "AbortError" })
-              ),
+              );
+            },
             { once: true }
           );
         })
     );
 
     const pending = enrichTrustedSmsCategories(candidates, categories);
-    await jest.advanceTimersByTimeAsync(20000);
 
+    await jest.advanceTimersByTimeAsync(60_000);
+    expect(mockInvoke).toHaveBeenCalledTimes(3);
+    const thirdSignal = mockInvoke.mock.calls[2]?.[1].signal;
+    expect(thirdSignal?.aborted).toBe(false);
+
+    await jest.advanceTimersByTimeAsync(10_000);
+    expect(thirdSignal?.aborted).toBe(false);
+
+    await jest.advanceTimersByTimeAsync(50_000);
     await expect(pending).resolves.toMatchObject({
-      hasError: true,
-      isTimedOut: true,
-      attemptedMerchantCount: 40,
+      hasError: false,
+      isTimedOut: false,
+      attemptedMerchantCount: 41,
+      missingResultCount: 41,
     });
-    expect(mockInvoke).toHaveBeenCalledTimes(2);
+    expect(mockInvoke).toHaveBeenCalledTimes(3);
     jest.useRealTimers();
   });
 
-  it("does not invoke a category chunk after the shared deadline expires", async () => {
+  it("allows user-scope validation through the 60-second Edge attempt plus 10-second margin", async () => {
     jest.useFakeTimers();
     mockAssertExpectedCurrentUser.mockImplementationOnce(
-      () => new Promise((resolve) => setTimeout(resolve, 20001))
+      () => new Promise((resolve) => setTimeout(resolve, 70_001))
     );
 
     const pending = enrichTrustedSmsCategories(
@@ -792,7 +807,7 @@ describe("ai-sms-category-enrichment-service", () => {
       undefined,
       "user-1"
     );
-    await jest.advanceTimersByTimeAsync(20001);
+    await jest.advanceTimersByTimeAsync(70_000);
 
     await expect(pending).resolves.toMatchObject({
       hasError: true,
@@ -802,22 +817,29 @@ describe("ai-sms-category-enrichment-service", () => {
     jest.useRealTimers();
   });
 
-  it("honors the 20-second total deadline when the transport ignores abort signals", async () => {
+  it("honors the 70-second per-wave deadline when the transport ignores abort signals", async () => {
     jest.useFakeTimers();
-    mockInvoke.mockImplementationOnce(() => new Promise(() => undefined));
+    let capturedSignal: AbortSignal | undefined;
+    mockInvoke.mockImplementationOnce((_functionName, options) => {
+      capturedSignal = options.signal;
+      return new Promise(() => undefined);
+    });
 
     const pending = enrichTrustedSmsCategories(
       [candidate("candidate-1", "Shop")],
       categories
     );
-    await jest.advanceTimersByTimeAsync(20000);
+    await jest.advanceTimersByTimeAsync(69_999);
+    expect(capturedSignal?.aborted).toBe(false);
 
+    await jest.advanceTimersByTimeAsync(1);
     await expect(pending).resolves.toMatchObject({
       attemptedMerchantCount: 1,
       hasError: true,
       isTimedOut: true,
       missingResultCount: 1,
     });
+    expect(capturedSignal?.aborted).toBe(true);
     jest.useRealTimers();
   });
 
