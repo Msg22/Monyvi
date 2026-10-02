@@ -187,3 +187,45 @@ As the product owner, I want unchanged shared SMS parsing instructions to be reu
 - The selected provider's reusable-input feature may miss or be unavailable at times; a miss must affect cost only, never parsing correctness.
 - Provider credentials and operational configuration are available to the hosted SMS parsing environment through the project's existing secure deployment configuration mechanism.
 - The existing SMS client contract and database schema are sufficient for this provider migration.
+
+
+## 2026-10-02 SMS-CANCEL-060 Backend Cancellation/Timeout Override
+
+This narrow product-owner decision applies to the synchronous DeepInfra SMS
+full-parser path and supersedes any older assumption that transient failures
+should be retried automatically during the current trial:
+
+- DeepInfra gets one provider attempt only, with a 60,000 ms attempt deadline
+  and zero automatic provider retries or retry sleeps.
+- The incoming request cancellation signal is runtime-only metadata. It may
+  flow through the admitted handler, provider executor and provider request to
+  the outgoing fetch, but MUST NOT enter the prompt, serialized request body,
+  request digest, logs, database state, or a shared/global controller.
+- Caller cancellation and the 60-second provider deadline are distinct. A
+  caller abort MUST NOT be converted into a timeout/provider failure, a
+  successful empty result, or a negative/terminal SMS outcome.
+- If cancellation is observed after reservation but before a provider start is
+  committed, the existing reservation-release mechanism is used. If
+  `markProviderStarted` has committed, usage remains consumed and cancellation
+  is finalized through the existing provider-error completion mechanism; there
+  is no refund/schema/RPC/accounting-policy change.
+- A start-success race is authoritative: if the caller aborts while
+  `markProviderStarted` is awaited and that call returns `started: true`,
+  provider execution may be skipped but the already-started accounting MUST be
+  completed as existing error accounting rather than released.
+- After a raw provider response, caller cancellation MUST be checked before
+  negative-outcome reconciliation. Once outcome reconciliation or another
+  authoritative completion commit has begun, finish that normal accounting path
+  and do not retroactively reinterpret handler completion as cancellation.
+- No abort event listener may perform database mutations asynchronously after
+  the handler returns. Cancellation-driven accounting remains synchronous in the
+  handler control flow.
+- Deno's request signal may represent a client disconnect, but hosted Supabase
+  gateway propagation is not proven by source implementation. Aborting the
+  outgoing fetch also does not prove that DeepInfra stopped already-accepted
+  compute or billing.
+
+This backend source branch does not change evaluator batching. Integration must
+retain the separately approved mobile synthetic batch size of 15 from
+`76fbd782a2a5951261653184621db4c89ea0c962`; the shared/CLI evaluator remains
+at its existing batch size of 5.
