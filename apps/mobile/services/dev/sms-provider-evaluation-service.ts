@@ -27,6 +27,8 @@ export const SMS_PROVIDER_EVALUATION_UNAVAILABLE =
   "sms_provider_evaluation_unavailable";
 export const SMS_PROVIDER_EVALUATION_AUTH_REQUIRED =
   "sms_provider_evaluation_auth_required";
+export const SMS_PROVIDER_EVALUATION_FUNCTION_NAME =
+  "sms-provider-evaluation";
 
 const SAFE_REFUSAL_REASONS = new Set([
   "unauthenticated",
@@ -472,7 +474,7 @@ async function invokeBatch(
 ): Promise<EdgeFunctionResponse> {
   await assertPinnedUserAndActive(input.initiatingUserId, input.signal);
   return invokeAuthenticatedEdgeFunction<unknown>(
-    "parse-sms",
+    SMS_PROVIDER_EVALUATION_FUNCTION_NAME,
     {
       body: {
         requestKey: requestKey(context.runId, id),
@@ -488,6 +490,10 @@ async function invokeBatch(
         })),
         categories: buildCategoryTree(input.categories),
         supportedCurrencies: input.supportedCurrencies,
+        syntheticEvaluation: {
+          runId: context.runId,
+          anchorMs: context.anchorMs,
+        },
       },
       signal: input.signal,
     },
