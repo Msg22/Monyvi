@@ -1,9 +1,9 @@
 import { parseSmsProviderTransactions } from "../sms-provider-transaction-validator.ts";
+import { throwIfSmsAiProviderCallerAborted } from "./sms-ai-provider.ts";
 import type {
   ExecuteSmsProviderInput,
   SmsAiProvider,
   SmsProviderExecutionResult,
-  throwIfSmsAiProviderCallerAborted,
 } from "./sms-ai-provider.ts";
 import {
   BUILT_IN_SMS_CATEGORY_TREE,

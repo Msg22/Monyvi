@@ -3,6 +3,7 @@ import type {
   SmsAiAdmissionInput,
   SmsAiProviderStartDecision,
 } from "./sms-ai-safeguard-contract.ts";
+import { isSmsAiProviderCallerAbortError } from "./sms-ai/sms-ai-provider.ts";
 import type {
   ExecuteSmsProviderInput,
   ParseSmsMessage,
@@ -154,6 +155,14 @@ function refusal(
     },
     status
   );
+}
+
+function callerCancelledResponse(): Response {
+  return refusal("request_cancelled", 499);
+}
+
+function isCallerCancelled(signal: AbortSignal | undefined): boolean {
+  return signal?.aborted === true;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -417,6 +426,26 @@ async function reconcileAmbiguousProviderStart(
   }
 }
 
+async function completeStartedCancellation(
+  dependencies: ParseSmsHandlerDependencies,
+  requestId: string
+): Promise<Response> {
+  await completeSmsAiWorkWithRetry(dependencies.completeWork, {
+    requestId,
+    completedWithProviderError: true,
+    decisionCode: "request_cancelled",
+  });
+  return callerCancelledResponse();
+}
+
+async function releaseCancelledReservation(
+  dependencies: ParseSmsHandlerDependencies,
+  requestId: string
+): Promise<Response> {
+  await safelyReleaseReservation(dependencies, requestId, "request_cancelled");
+  return callerCancelledResponse();
+}
+
 async function executeAdmittedWork(input: {
   readonly body: ParseSmsRequestBody;
   readonly userId: string;
@@ -425,7 +454,15 @@ async function executeAdmittedWork(input: {
   readonly suppressedNegativeFingerprints: readonly string[];
   readonly admission: SmsAiAdmissionDecision;
   readonly dependencies: ParseSmsHandlerDependencies;
+  readonly signal?: AbortSignal;
 }): Promise<Response> {
+  if (isCallerCancelled(input.signal)) {
+    return releaseCancelledReservation(
+      input.dependencies,
+      input.admission.requestId
+    );
+  }
+
   let startDecision: SmsAiProviderStartDecision;
   try {
     startDecision = await input.dependencies.markProviderStarted(
@@ -437,9 +474,17 @@ async function executeAdmittedWork(input: {
       input.dependencies,
       input.admission.requestId
     );
-    return refusal("dependency_unavailable", 503);
+    return isCallerCancelled(input.signal)
+      ? callerCancelledResponse()
+      : refusal("dependency_unavailable", 503);
   }
   if (!startDecision.started) {
+    if (isCallerCancelled(input.signal)) {
+      return releaseCancelledReservation(
+        input.dependencies,
+        input.admission.requestId
+      );
+    }
     if (
       startDecision.decisionCode === "terminal_outcome" &&
       startDecision.terminalFingerprints.length > 0
@@ -461,20 +506,41 @@ async function executeAdmittedWork(input: {
     return refusal(startDecision.decisionCode, 429, startDecision.availableAt);
   }
 
+  if (isCallerCancelled(input.signal)) {
+    return completeStartedCancellation(
+      input.dependencies,
+      input.admission.requestId
+    );
+  }
+
   let providerResult: SmsProviderExecutionResult;
   try {
     providerResult = await input.dependencies.executeProvider({
       messages: input.messages,
       categories: input.body.categories,
       supportedCurrencies: input.body.supportedCurrencies,
+      ...(input.signal === undefined ? {} : { signal: input.signal }),
     });
-  } catch {
+  } catch (error: unknown) {
+    if (isSmsAiProviderCallerAbortError(error)) {
+      return completeStartedCancellation(
+        input.dependencies,
+        input.admission.requestId
+      );
+    }
     await completeSmsAiWorkWithRetry(input.dependencies.completeWork, {
       requestId: input.admission.requestId,
       completedWithProviderError: true,
       decisionCode: "provider_failed",
     });
     return refusal("provider_failed", 502);
+  }
+
+  if (isCallerCancelled(input.signal)) {
+    return completeStartedCancellation(
+      input.dependencies,
+      input.admission.requestId
+    );
   }
 
   if (!providerResult.isResponseSchemaValid) {
@@ -528,6 +594,12 @@ async function executeAdmittedWork(input: {
     positiveFingerprints: [],
     negativeFingerprints: [],
   };
+  if (isCallerCancelled(input.signal)) {
+    return completeStartedCancellation(
+      input.dependencies,
+      input.admission.requestId
+    );
+  }
   if (reconciliationCandidates.length > 0) {
     try {
       reconciliation = await input.dependencies.reconcileOutcomes({
@@ -720,6 +792,8 @@ async function handlePost(
     return completedWithoutProvider(terminal, suppressedNegativeFingerprints);
   }
 
+  if (isCallerCancelled(request.signal)) return callerCancelledResponse();
+
   let admission: SmsAiAdmissionDecision;
   try {
     const requestDigest = await dependencies.computeRequestDigest(rawBody);
@@ -751,6 +825,7 @@ async function handlePost(
     suppressedNegativeFingerprints,
     admission,
     dependencies,
+    signal: request.signal,
   });
 }
 

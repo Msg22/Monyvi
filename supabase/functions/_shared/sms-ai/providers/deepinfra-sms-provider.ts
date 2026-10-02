@@ -1,8 +1,8 @@
 import { z } from "zod";
 
+import { SmsAiProviderCallerAbortError } from "../sms-ai-provider.ts";
 import type {
   SmsAiProvider,
-  SmsAiProviderCallerAbortError,
   SmsAiProviderOperationalMetadata,
   SmsAiProviderRawResult,
   SmsAiProviderRequest,
@@ -103,8 +103,32 @@ class DeepInfraSmsInvalidResponseError extends Error {
   }
 }
 
-function defaultTimeoutSignal(milliseconds: number): AbortSignal {
-  return AbortSignal.timeout(milliseconds);
+interface AttemptTimeout {
+  readonly signal: AbortSignal;
+  readonly cleanup: () => void;
+}
+
+function createAttemptTimeout(
+  injectedFactory: CreateTimeoutSignal | undefined
+): AttemptTimeout {
+  if (injectedFactory !== undefined) {
+    return {
+      signal: injectedFactory(DEEPINFRA_SMS_ATTEMPT_TIMEOUT_MS),
+      cleanup: () => undefined,
+    };
+  }
+  const controller = new AbortController();
+  const timer = setTimeout(
+    () =>
+      controller.abort(
+        new DOMException("DeepInfra SMS request timed out", "TimeoutError")
+      ),
+    DEEPINFRA_SMS_ATTEMPT_TIMEOUT_MS
+  );
+  return {
+    signal: controller.signal,
+    cleanup: () => clearTimeout(timer),
+  };
 }
 
 interface AttemptAbortContext {
@@ -225,7 +249,7 @@ function isSupportedServiceTier(
 
 export class DeepInfraSmsProvider implements SmsAiProvider {
   private readonly fetchImpl: FetchLike;
-  private readonly createTimeoutSignal: CreateTimeoutSignal;
+  private readonly createTimeoutSignal?: CreateTimeoutSignal;
   private readonly log?: ProviderLogger;
   private readonly onResponseOutput?: ResponseOutputCapture;
   private readonly onAttemptFailure?: AttemptFailureCapture;
@@ -238,8 +262,7 @@ export class DeepInfraSmsProvider implements SmsAiProvider {
       throw new Error("Unsupported DeepInfra SMS service tier");
     }
     this.fetchImpl = dependencies.fetch ?? fetch;
-    this.createTimeoutSignal =
-      dependencies.createTimeoutSignal ?? defaultTimeoutSignal;
+    this.createTimeoutSignal = dependencies.createTimeoutSignal;
     this.log = dependencies.log;
     this.onResponseOutput = dependencies.onResponseOutput;
     this.onAttemptFailure = dependencies.onAttemptFailure;
@@ -262,10 +285,8 @@ export class DeepInfraSmsProvider implements SmsAiProvider {
       throw new SmsAiProviderCallerAbortError();
     }
     const body = buildRequestBody(this.config, request);
-    const timeoutSignal = this.createTimeoutSignal(
-      DEEPINFRA_SMS_ATTEMPT_TIMEOUT_MS
-    );
-    const attempt = createAttemptAbortContext(request.signal, timeoutSignal);
+    const timeout = createAttemptTimeout(this.createTimeoutSignal);
+    const attempt = createAttemptAbortContext(request.signal, timeout.signal);
     const attemptStartedAtMs = Date.now();
 
     try {
@@ -370,6 +391,7 @@ export class DeepInfraSmsProvider implements SmsAiProvider {
         throw new Error("DeepInfra SMS request failed", { cause: error });
       } finally {
         attempt.cleanup();
+        timeout.cleanup();
       }
   }
 }
