@@ -3,6 +3,7 @@ import SQLiteAdapter from "@nozbe/watermelondb/adapters/sqlite";
 
 import { schema } from "../../../../packages/db/src/schema";
 import { Asset } from "../../../../packages/db/src/models/Asset";
+import { FinancialActionGroup } from "../../../../packages/db/src/models/FinancialActionGroup";
 import { MetalHoldingState } from "../../../../packages/db/src/models/MetalHoldingState";
 
 export interface MetalMetadataFixtureIds {
@@ -23,7 +24,7 @@ export async function createMetalMetadataFixtureDatabase(
   await adapter.initializingPromise;
   const database = new Database({
     adapter,
-    modelClasses: [Asset, MetalHoldingState] as Array<typeof Model>,
+    modelClasses: [Asset, MetalHoldingState, FinancialActionGroup] as Array<typeof Model>,
   });
   await database.write(async (): Promise<void> => {
     const asset = database.get<Asset>("assets").prepareCreate((row) => {
@@ -61,7 +62,31 @@ export async function createMetalMetadataFixtureDatabase(
         row.updatedAt = new Date();
         row.userId = ids.userId;
       });
-    await database.batch(asset, state);
+    const fag = database
+      .get<FinancialActionGroup>("financial_action_groups")
+      .prepareCreate((row) => {
+        row._raw.id = ids.acquisitionActionId;
+        row.actionId = ids.acquisitionActionId;
+        row.domain = "metals";
+        row.domainReferenceId = ids.holdingId;
+        row.kind = "add";
+        row.userId = ids.userId;
+        row.state = "accepted";
+        row.serverOutcome = "accepted";
+        row.payloadHash = "a".repeat(64);
+        row.payloadJson = JSON.stringify({
+          actionId: ids.acquisitionActionId,
+          domainReferenceId: ids.holdingId,
+          kind: "add",
+          payload: { holdingId: ids.holdingId, rateSnapshots: [] },
+          userId: ids.userId,
+        });
+        row.outcomeJson = "{}";
+        row.rejectionCode = null;
+        row.deleted = false;
+        row.updatedAt = new Date();
+      });
+    await database.batch(asset, state, fag);
   });
   return { adapter, database };
 }

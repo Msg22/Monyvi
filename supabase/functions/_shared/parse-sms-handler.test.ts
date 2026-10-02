@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   createParseSmsHandler,
+  type ExecuteSmsProviderInput,
   type ParseSmsHandlerDependencies,
   type SmsProviderExecutionResult,
 } from "./parse-sms-handler.ts";
@@ -11,6 +12,8 @@ import {
   estimateSmsRequestInputTokensAtEdge,
 } from "./sms-input-estimator.ts";
 import { DEFAULT_SMS_SAFEGUARD_POLICY } from "./sms-safeguard-policy.ts";
+import { executeSmsAiProvider } from "./sms-ai/sms-ai-provider-executor.ts";
+import type { SmsAiProvider } from "./sms-ai/sms-ai-provider.ts";
 
 interface CallState {
   auth: number;
@@ -110,7 +113,8 @@ function createDependencies(
       return true;
     },
     getPolicy: () => DEFAULT_SMS_SAFEGUARD_POLICY,
-    fixedPrompt: "prompt",
+    buildFixedPrompt: () => "prompt",
+    buildCategoryContext: (categories) => categories,
     buildResponseSchema: (supportedCurrencies) =>
       JSON.stringify({ supportedCurrencies }),
     shouldExclude: () => false,
@@ -1085,4 +1089,202 @@ test("releases a reservation when provider start definitely did not complete", a
   assert.equal(state.complete, 3);
   assert.equal(state.release, 1);
   assert.equal(state.provider, 0);
+});
+
+
+test("accepts a complete provider result with zero transactions", async () => {
+  const state = createState();
+  const handler = createParseSmsHandler(
+    createDependencies(state, {
+      executeProvider: async () => {
+        state.provider++;
+        return providerResult({ transactions: [] });
+      },
+      reconcileOutcomes: async () => {
+        state.reconcile++;
+        return {
+          status: "reconciled",
+          positiveFingerprints: [],
+          negativeFingerprints: ["fingerprint-1"],
+        };
+      },
+    })
+  );
+
+  const response = await handler(post(requestBody()));
+  const data = await readJson(response);
+
+  assert.equal(response.status, 200);
+  assert.equal(data.completionStatus, "complete");
+  assert.deepEqual(data.transactions, []);
+  assert.equal(state.start, 1);
+  assert.equal(state.provider, 1);
+  assert.equal(state.reconcile, 1);
+  assert.equal(state.complete, 1);
+});
+
+test("rejects a schema-invalid normalized provider result without reconciliation", async () => {
+  const state = createState();
+  const handler = createParseSmsHandler(
+    createDependencies(state, {
+      executeProvider: async () => {
+        state.provider++;
+        return providerResult({
+          isResponseSchemaValid: false,
+          transactions: [],
+        });
+      },
+    })
+  );
+
+  const response = await handler(post(requestBody()));
+  const data = await readJson(response);
+
+  assert.equal(response.status, 502);
+  assert.equal(data.reason, "response_invalid");
+  assert.equal(state.start, 1);
+  assert.equal(state.provider, 1);
+  assert.equal(state.reconcile, 0);
+  assert.equal(state.complete, 1);
+});
+
+test("keeps provider implementation metadata out of the public success response", async () => {
+  const state = createState();
+  const handler = createParseSmsHandler(createDependencies(state));
+
+  const response = await handler(post(requestBody()));
+  const data = await readJson(response);
+
+  assert.equal(response.status, 200);
+  assert.equal("provider" in data, false);
+  assert.equal("model" in data, false);
+  assert.equal("serviceTier" in data, false);
+  assert.equal("usage" in data, false);
+});
+
+
+test("supports a future raw SMS adapter without changing handler safeguards or public shape", async () => {
+  const state = createState();
+  const futureAdapter: SmsAiProvider = {
+    execute: async () => ({
+      completionStatus: "complete",
+      content: JSON.stringify({ transactions: [] }),
+    }),
+  };
+  const handler = createParseSmsHandler(
+    createDependencies(state, {
+      executeProvider: (input) => executeSmsAiProvider(futureAdapter, input),
+    })
+  );
+
+  const response = await handler(
+    post({
+      ...requestBody(),
+      categories:
+        "EXPENSE categories (return the system_name value):\n  L1: shopping",
+    })
+  );
+  const data = await readJson(response);
+
+  assert.equal(response.status, 200);
+  assert.equal(state.reserve, 1);
+  assert.equal(state.start, 1);
+  assert.equal(state.provider, 0);
+  assert.equal("provider" in data, false);
+  assert.equal("model" in data, false);
+  assert.deepEqual(data.transactions, []);
+});
+
+
+test("propagates provider-independent category and currency context unchanged", async () => {
+  const state = createState();
+  const fixedPromptCurrencies: string[][] = [];
+  const responseSchemaCurrencies: string[][] = [];
+  const categoryInputs: string[] = [];
+  let providerInput: ExecuteSmsProviderInput | undefined;
+  const categories =
+    "EXPENSE categories (return the system_name value):\n  L1: shopping";
+  const supportedCurrencies = ["EGP", "USD"];
+
+  const handler = createParseSmsHandler(
+    createDependencies(state, {
+      buildFixedPrompt: (currencies) => {
+        fixedPromptCurrencies.push([...currencies]);
+        return "stable prompt";
+      },
+      buildCategoryContext: (value) => {
+        categoryInputs.push(value);
+        return `dynamic:${value}`;
+      },
+      buildResponseSchema: (currencies) => {
+        responseSchemaCurrencies.push([...currencies]);
+        return JSON.stringify({ currencies });
+      },
+      executeProvider: async (input) => {
+        state.provider++;
+        providerInput = input;
+        return providerResult({ transactions: [] });
+      },
+    })
+  );
+
+  const response = await handler(
+    post({
+      ...requestBody(),
+      categories,
+      supportedCurrencies,
+    })
+  );
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(fixedPromptCurrencies, [["EGP", "USD"]]);
+  assert.deepEqual(responseSchemaCurrencies, [["EGP", "USD"]]);
+  assert.deepEqual(categoryInputs, [categories]);
+  assert.deepEqual(providerInput?.supportedCurrencies, ["EGP", "USD"]);
+  assert.equal(providerInput?.categories, categories);
+  assert.deepEqual(
+    providerInput?.messages.map((value) => value.id),
+    ["message-1"]
+  );
+});
+
+test("provider-independent prompt builders affect admission estimation but not provider input", async () => {
+  const state = createState();
+  let estimatedInputTokens = 0;
+  let providerInput: ExecuteSmsProviderInput | undefined;
+  const handler = createParseSmsHandler(
+    createDependencies(state, {
+      buildFixedPrompt: () => "stable prompt sentinel",
+      buildCategoryContext: () => "dynamic category sentinel",
+      buildResponseSchema: () => "schema sentinel",
+      reserveWork: async (input) => {
+        state.reserve++;
+        estimatedInputTokens = input.estimatedInputTokens;
+        return {
+          requestId: "work-request-id",
+          accepted: true,
+          decisionCode: "accepted",
+          availableAt: null,
+          isReplay: false,
+        };
+      },
+      executeProvider: async (input) => {
+        state.provider++;
+        providerInput = input;
+        return providerResult({ transactions: [] });
+      },
+    })
+  );
+
+  const body = {
+    ...requestBody(),
+    categories: "original category context",
+    supportedCurrencies: ["EGP"],
+  };
+  const response = await handler(post(body));
+
+  assert.equal(response.status, 200);
+  assert.ok(estimatedInputTokens > 0);
+  assert.equal(providerInput?.categories, "original category context");
+  assert.deepEqual(providerInput?.supportedCurrencies, ["EGP"]);
 });

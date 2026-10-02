@@ -136,6 +136,15 @@ current branch and any stacked base branch.
 
 Use the `codex/` branch prefix by default.
 
+When creating a secondary or isolated worktree:
+
+- MUST create it on the exact same disk and within the same parent folder as the
+  main checkout (`E:\Work\My Projects\Monyvi-<issue-or-feature-name>`).
+- NEVER create worktrees on `C:`, user profile folders (`~/.codex/worktrees/`,
+  `~/.claude/worktrees/`), or other disks.
+- Do not run `npm install`. Link dependencies immediately:
+  `powershell -ExecutionPolicy Bypass -File scripts/link-worktree-node-modules.ps1 -RootWorkspace "E:\Work\My Projects\Monyvi"`.
+
 ## 5. Implementation Rules
 
 1. Follow TDD for production changes: write a focused failing test first, prove

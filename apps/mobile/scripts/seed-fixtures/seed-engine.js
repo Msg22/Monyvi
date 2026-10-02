@@ -1137,7 +1137,12 @@ function buildSeedRows(userId, seedIds, fixture = BASE_SEED_FIXTURE) {
   };
 }
 
-async function seedFixtureData(client, config, fixtureOverrides = {}) {
+async function seedFixtureData(
+  client,
+  config,
+  fixtureOverrides = {},
+  options = {}
+) {
   const fixture = resolveSeedFixture(fixtureOverrides);
   const userId =
     config.userId ?? (await ensureSeedUser(client, config, fixture));
@@ -1178,7 +1183,11 @@ async function seedFixtureData(client, config, fixtureOverrides = {}) {
   await upsertRows(client, "profiles", rows.profile, {
     onConflict: "user_id",
   });
-  await upsertRows(client, "accounts", rows.accounts, { onConflict: "id" });
+  if (options.accountWriter) {
+    await options.accountWriter.upsert(rows.accounts);
+  } else {
+    await upsertRows(client, "accounts", rows.accounts, { onConflict: "id" });
+  }
   await upsertRows(client, "bank_details", rows.bankDetails, {
     onConflict: "id",
   });
@@ -1244,7 +1253,11 @@ async function seedFixtureData(client, config, fixtureOverrides = {}) {
   });
   await upsertRows(client, "transfers", rows.transfers, { onConflict: "id" });
   if (fixture.restoreAccountBalancesAfterLedgerSeed) {
-    await restoreSeededAccountBalances(client, rows.accounts);
+    if (options.accountWriter) {
+      await options.accountWriter.restore(rows.accounts);
+    } else {
+      await restoreSeededAccountBalances(client, rows.accounts);
+    }
   }
   if (config.mode === "local" && fixture.includeLocalMarketRate) {
     await upsertRows(client, "market_rates", rows.marketRate, {

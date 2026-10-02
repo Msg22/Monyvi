@@ -64,13 +64,18 @@ function account(
   return { balance, currency };
 }
 
-function goldHolding(weightGramsDecimal: string): NetWorthAssetMetalInput {
+function goldHolding(
+  weightGramsDecimal: string,
+  purityCode = "gold-999",
+  purityFactorDecimal = "0.999"
+): NetWorthAssetMetalInput {
   return {
     metalType: "GOLD",
+    purityCode,
     weightGrams: Number(weightGramsDecimal),
     weightGramsDecimal,
-    purityFraction: 1,
-    purityFactorDecimal: "1",
+    purityFraction: Number(purityFactorDecimal),
+    purityFactorDecimal,
   };
 }
 
@@ -145,7 +150,7 @@ describe("net-worth current rates consume the exact selected snapshot", () => {
     ).toBe(1e-7);
   });
 
-  it("values metal holdings from exact metal USD-per-gram decimals", () => {
+  it("uses the selected quoted 24K rate directly for gold-999 net worth", () => {
     const snapshot = snapshotFor(completeFixtureA());
     const result = buildNetWorthReadModel({
       accounts: [],
@@ -155,7 +160,21 @@ describe("net-worth current rates consume the exact selected snapshot", () => {
     });
 
     expect(result?.totalAssets).toBeCloseTo(
-      Number(new Decimal("3738.74000000").times("10").times("1")),
+      Number(new Decimal("3738.74000000").times("10")),
+      8
+    );
+  });
+
+  it("retains the catalog-factor basis for Gold 21K current net worth", () => {
+    const result = buildNetWorthReadModel({
+      accounts: [],
+      assetMetals: [goldHolding("10", "gold-875", "0.875")],
+      currentSnapshot: snapshotFor(completeFixtureA()),
+      preferredCurrency: "USD",
+    });
+
+    expect(result?.totalAssets).toBeCloseTo(
+      Number(new Decimal("3738.74000000").times("10").times("0.875")),
       8
     );
   });
@@ -209,6 +228,7 @@ describe("net-worth current rates consume the exact selected snapshot", () => {
   it("does not recover missing exact holding facts from legacy number fields", () => {
     const missingExactFacts: NetWorthAssetMetalInput = {
       metalType: "GOLD",
+      purityCode: null,
       weightGrams: 2,
       weightGramsDecimal: null,
       purityFraction: 1,

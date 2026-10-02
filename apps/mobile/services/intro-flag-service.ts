@@ -27,6 +27,19 @@ import {
   INTRO_SEEN_KEY,
 } from "@/constants/storage-keys";
 import { logger } from "@/utils/logger";
+import type { SupportedLanguage } from "@/i18n/translation-schema";
+
+/** Required durability before a language transition can restart the app. */
+export async function persistIntroLocaleOverride(
+  language: SupportedLanguage
+): Promise<void> {
+  try {
+    await AsyncStorage.setItem(INTRO_LOCALE_OVERRIDE_KEY, language);
+  } catch (error: unknown) {
+    logger.warn("language.override.persist.failed", errorPayload(error));
+    throw error;
+  }
+}
 
 // =============================================================================
 // Types

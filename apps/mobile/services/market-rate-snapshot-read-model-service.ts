@@ -91,6 +91,7 @@ export interface MarketRateSnapshotStream {
 }
 
 export const MAX_SNAPSHOT_CANDIDATES = 30;
+const MANUAL_QA_RATE_SOURCE_PREFIX = "manual_qa_fixture:";
 
 const OBSERVATION_OBSERVED_COLUMNS = [
   "batch_id",
@@ -130,17 +131,33 @@ export function selectMarketRateSnapshot(
       return byCreated !== 0 ? byCreated : right.id.localeCompare(left.id);
     });
 
+  let fixtureFallback: SelectedMarketRateSnapshot | null = null;
   for (const root of ordered.slice(0, MAX_SNAPSHOT_CANDIDATES)) {
     const children = observations.filter(
       (observation) => observation.batchId === root.id
     );
     const selected = evaluateCandidate(root, children, nowMs);
-    if (selected !== null) {
-      return selected;
+    if (selected === null) {
+      continue;
     }
+    if (isManualQaFixtureSnapshot(selected)) {
+      fixtureFallback ??= selected;
+      continue;
+    }
+    return selected;
   }
 
-  return null;
+  return fixtureFallback;
+}
+
+function isManualQaFixtureSnapshot(
+  snapshot: SelectedMarketRateSnapshot
+): boolean {
+  const rates = [...snapshot.ratesByInstrument.values()];
+  return (
+    rates.length > 0 &&
+    rates.every((rate) => rate.source.startsWith(MANUAL_QA_RATE_SOURCE_PREFIX))
+  );
 }
 
 function evaluateCandidate(

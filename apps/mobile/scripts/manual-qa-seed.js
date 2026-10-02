@@ -9,6 +9,10 @@ const { MANUAL_QA_SEED_FIXTURE } = require("./seed-fixtures/manual-qa-fixture");
 const {
   seedManualQaMetalRateReferences,
 } = require("./seed-fixtures/manual-qa-metal-rate-reference-seed");
+const {
+  upsertLocalAccountRows,
+  restoreLocalAccountBalances,
+} = require("./seed-fixtures/local-account-seed");
 
 const DEFAULT_MANUAL_QA_EMAIL = "manual-qa@monyvi.test";
 const DEFAULT_MANUAL_QA_PASSWORD = "123456";
@@ -44,7 +48,8 @@ async function seedManualQaData(client, config, options = {}) {
   const primaryResult = await seedFixtureData(
     client,
     config,
-    MANUAL_QA_SEED_FIXTURE
+    MANUAL_QA_SEED_FIXTURE,
+    { accountWriter: options.accountWriter }
   );
   await seedManualQaMetalRateReferences(
     client,
@@ -64,7 +69,8 @@ async function seedManualQaData(client, config, options = {}) {
       preserveExistingPassword: false,
       userId: undefined,
     },
-    ACCOUNT_SWITCH_QA_SEED_FIXTURE
+    ACCOUNT_SWITCH_QA_SEED_FIXTURE,
+    { accountWriter: options.accountWriter }
   );
   await seedManualQaMetalRateReferences(
     client,
@@ -104,6 +110,10 @@ async function main() {
     process.env.SMS_SAFEGUARD_QA_PROFILE === ACCOUNT_SWITCH_QA_PROFILE;
   const result = await seedManualQaData(client, config, {
     includeAccountSwitchUser: shouldSeedAccountSwitchUser,
+    accountWriter: {
+      upsert: upsertLocalAccountRows,
+      restore: restoreLocalAccountBalances,
+    },
   });
   console.log(
     `Seeded manual QA data for ${config.email} (${result.userId}) on local Supabase`

@@ -1,0 +1,746 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Monyvi partial-save batch warning</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --page: #e9eef0;
+        --ink: #0f172a;
+        --muted: #64748b;
+        --line: #dce4e7;
+        --surface: #ffffff;
+        --surface-soft: #f8fafc;
+        --green: #13795b;
+        --green-soft: #e6f5ef;
+        --gold: #b7791f;
+        --gold-soft: #fff7db;
+        --backdrop: rgba(3, 12, 18, 0.66);
+        --shadow:
+          0 28px 80px rgba(2, 12, 18, 0.24), 0 2px 12px rgba(2, 12, 18, 0.12);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background:
+          radial-gradient(
+            circle at 12% 4%,
+            rgba(19, 121, 91, 0.12),
+            transparent 28rem
+          ),
+          linear-gradient(160deg, #f8fbfa 0%, var(--page) 100%);
+        color: var(--ink);
+        font-family: Inter, "Noto Sans Arabic", "Segoe UI", Arial, sans-serif;
+        min-height: 100vh;
+      }
+
+      .board {
+        max-width: 1540px;
+        margin: 0 auto;
+        padding: 36px 24px 64px;
+      }
+      .board-head {
+        max-width: 760px;
+        margin-bottom: 28px;
+      }
+      .kicker {
+        color: var(--green);
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+      h1 {
+        margin: 8px 0 10px;
+        font-size: clamp(28px, 4vw, 46px);
+        line-height: 1.06;
+        letter-spacing: -0.04em;
+      }
+      .intro {
+        margin: 0;
+        color: var(--muted);
+        font-size: 15px;
+        line-height: 1.65;
+      }
+      .draft {
+        display: inline-flex;
+        margin-top: 14px;
+        border: 1px solid #e0b34b;
+        color: #7a5310;
+        background: #fff8df;
+        border-radius: 999px;
+        padding: 6px 10px;
+        font-size: 11px;
+        font-weight: 800;
+      }
+
+      .frames {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(260px, 1fr));
+        gap: 22px;
+        align-items: start;
+      }
+      .figure {
+        margin: 0;
+      }
+      figcaption {
+        margin-top: 10px;
+        color: #52626b;
+        font-size: 12px;
+        line-height: 1.45;
+      }
+      .phone {
+        position: relative;
+        width: 100%;
+        max-width: 390px;
+        aspect-ratio: 390 / 844;
+        overflow: hidden;
+        border: 8px solid #17242a;
+        border-radius: 38px;
+        background: #f7faf9;
+        box-shadow: 0 22px 55px rgba(13, 31, 39, 0.18);
+      }
+      .phone.compact {
+        max-width: 320px;
+        aspect-ratio: 320 / 693;
+        border-radius: 32px;
+      }
+      .phone.dark {
+        background: #091218;
+        border-color: #02070a;
+      }
+      .notch {
+        position: absolute;
+        z-index: 9;
+        top: 8px;
+        left: 50%;
+        width: 92px;
+        height: 24px;
+        transform: translateX(-50%);
+        background: #17242a;
+        border-radius: 14px;
+      }
+      .dark .notch {
+        background: #02070a;
+      }
+      .status {
+        position: absolute;
+        z-index: 8;
+        inset: 0 0 auto;
+        height: 46px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 22px;
+        font-size: 10px;
+        font-weight: 800;
+      }
+      .screen {
+        position: absolute;
+        inset: 0;
+        padding: 54px 18px 26px;
+      }
+      .screen-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin: 6px 0 22px;
+      }
+      .screen-head strong {
+        font-size: 20px;
+        letter-spacing: -0.03em;
+      }
+      .screen-head span {
+        color: var(--green);
+        font-size: 12px;
+        font-weight: 800;
+      }
+      .dark .screen-head strong {
+        color: #f1f5f9;
+      }
+      .draft-row {
+        height: 76px;
+        margin-bottom: 12px;
+        border: 1px solid #dde6e7;
+        border-radius: 16px;
+        background: white;
+        padding: 14px;
+        display: grid;
+        grid-template-columns: 34px 1fr 50px;
+        gap: 10px;
+        align-items: center;
+      }
+      .dark .draft-row {
+        background: #101c23;
+        border-color: #24343d;
+      }
+      .draft-check {
+        width: 28px;
+        height: 28px;
+        border-radius: 9px;
+        background: #d9efe7;
+        border: 1px solid #83c4ae;
+      }
+      .draft-lines i {
+        display: block;
+        height: 7px;
+        border-radius: 6px;
+        background: #d6dee1;
+        margin: 7px 0;
+      }
+      .dark .draft-lines i {
+        background: #31434c;
+      }
+      .draft-lines i:last-child {
+        width: 62%;
+      }
+      .amount {
+        height: 9px;
+        border-radius: 6px;
+        background: #b7c6cb;
+      }
+      .dark .amount {
+        background: #435760;
+      }
+      .review-bar {
+        position: absolute;
+        inset: auto 18px 22px;
+        height: 54px;
+        border-radius: 16px;
+        background: var(--green);
+      }
+
+      .veil {
+        position: absolute;
+        inset: 0;
+        background: var(--backdrop);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 56px 20px 34px;
+      }
+      .modal {
+        width: min(100%, 346px);
+        background: var(--surface);
+        border: 1px solid rgba(255, 255, 255, 0.35);
+        border-radius: 24px;
+        box-shadow: var(--shadow);
+        padding: 22px;
+      }
+      .dark .modal {
+        --surface: #111d24;
+        --surface-soft: #16252e;
+        --ink: #f1f5f9;
+        --muted: #a9bac2;
+        --line: #2c3d46;
+        --green-soft: #143a31;
+        --gold-soft: #3e3014;
+        background: var(--surface);
+        border-color: #31434c;
+      }
+      .icon {
+        width: 50px;
+        height: 50px;
+        margin: 0 auto 14px;
+        border-radius: 16px;
+        background: var(--gold-soft);
+        color: var(--gold);
+        display: grid;
+        place-items: center;
+      }
+      .icon svg {
+        width: 25px;
+        height: 25px;
+      }
+      .modal h2 {
+        margin: 0;
+        text-align: center;
+        color: var(--ink);
+        font-size: 21px;
+        line-height: 1.2;
+        letter-spacing: -0.025em;
+      }
+      .lead {
+        margin: 9px auto 16px;
+        max-width: 280px;
+        color: var(--muted);
+        text-align: center;
+        font-size: 13px;
+        line-height: 1.5;
+      }
+      .summary {
+        display: grid;
+        gap: 8px;
+        margin: 0 0 16px;
+      }
+      .summary-row {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        min-height: 44px;
+        padding: 10px 12px;
+        border: 1px solid var(--line);
+        border-radius: 13px;
+        background: var(--surface-soft);
+      }
+      .state-mark {
+        flex: 0 0 24px;
+        width: 24px;
+        height: 24px;
+        border-radius: 8px;
+        display: grid;
+        place-items: center;
+        font-size: 13px;
+        font-weight: 900;
+      }
+      .ready .state-mark {
+        color: var(--green);
+        background: var(--green-soft);
+      }
+      .skipped .state-mark {
+        color: var(--gold);
+        background: var(--gold-soft);
+      }
+      .summary-row strong {
+        display: block;
+        color: var(--ink);
+        font-size: 13px;
+        line-height: 1.2;
+      }
+      .summary-row small {
+        display: block;
+        color: var(--muted);
+        font-size: 11px;
+        margin-top: 3px;
+      }
+      .balance-note {
+        margin: 0 2px 18px;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.5;
+        text-align: center;
+      }
+      .actions {
+        display: grid;
+        grid-template-columns: 1fr 1.18fr;
+        gap: 10px;
+      }
+      button {
+        min-height: 46px;
+        border: 0;
+        border-radius: 14px;
+        padding: 10px 12px;
+        font: inherit;
+        font-size: 12px;
+        font-weight: 800;
+        cursor: default;
+      }
+      .secondary {
+        color: var(--ink);
+        background: #eef2f3;
+        border: 1px solid var(--line);
+      }
+      .dark .secondary {
+        background: #1b2b34;
+      }
+      .primary {
+        color: #fff;
+        background: var(--green);
+        box-shadow: 0 7px 16px rgba(19, 121, 91, 0.22);
+      }
+      .home {
+        position: absolute;
+        z-index: 10;
+        bottom: 8px;
+        left: 50%;
+        width: 112px;
+        height: 4px;
+        transform: translateX(-50%);
+        border-radius: 9px;
+        background: #17242a;
+      }
+      .dark .home {
+        background: #c5d2d6;
+      }
+
+      .compact .veil {
+        padding-inline: 14px;
+      }
+      .compact .modal {
+        padding: 18px;
+        border-radius: 21px;
+      }
+      .compact .actions {
+        grid-template-columns: 1fr;
+      }
+      .compact .primary {
+        order: -1;
+      }
+      .large-text .modal {
+        padding: 18px;
+      }
+      .large-text .modal h2 {
+        font-size: 28px;
+        line-height: 1.15;
+      }
+      .large-text .lead {
+        font-size: 18px;
+        line-height: 1.45;
+      }
+      .large-text .summary-row strong {
+        font-size: 17px;
+      }
+      .large-text .summary-row small {
+        font-size: 14px;
+        line-height: 1.35;
+      }
+      .large-text .balance-note {
+        font-size: 16px;
+      }
+      .large-text .actions {
+        grid-template-columns: 1fr;
+      }
+      .large-text button {
+        min-height: 54px;
+        font-size: 17px;
+      }
+      .large-text .primary {
+        order: -1;
+      }
+      [dir="rtl"] .summary-row {
+        text-align: right;
+      }
+
+      @media (max-width: 1200px) {
+        .frames {
+          grid-template-columns: repeat(2, minmax(280px, 1fr));
+        }
+      }
+      @media (max-width: 650px) {
+        .frames {
+          grid-template-columns: 1fr;
+        }
+        .board {
+          padding-inline: 14px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="board">
+      <header class="board-head">
+        <div class="kicker">Monyvi · Transaction review</div>
+        <h1>Save the valid work. Explain what gets skipped.</h1>
+        <p class="intro">
+          Pre-save warning shared by SMS and voice review. Invalid rows never
+          reach persistence or account balances.
+        </p>
+        <span class="draft">UNAPPROVED · LEAD-CREATED DRAFT</span>
+      </header>
+
+      <section class="frames">
+        <figure class="figure">
+          <div class="phone">
+            <div class="notch"></div>
+            <div class="status">
+              <span>9:41</span><span>5G&nbsp;&nbsp;92%</span>
+            </div>
+            <div class="screen">
+              <div class="screen-head">
+                <strong>Review transactions</strong><span>3 selected</span>
+              </div>
+              <div class="draft-row">
+                <i class="draft-check"></i
+                ><span class="draft-lines"><i></i><i></i></span
+                ><i class="amount"></i>
+              </div>
+              <div class="draft-row">
+                <i class="draft-check"></i
+                ><span class="draft-lines"><i></i><i></i></span
+                ><i class="amount"></i>
+              </div>
+              <div class="draft-row">
+                <i class="draft-check"></i
+                ><span class="draft-lines"><i></i><i></i></span
+                ><i class="amount"></i>
+              </div>
+              <div class="review-bar"></div>
+            </div>
+            <div class="veil">
+              <section class="modal" aria-labelledby="en-title">
+                <div class="icon">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.2"
+                    stroke-linecap="round"
+                  >
+                    <path d="M12 3 2.7 19h18.6L12 3Z" />
+                    <path d="M12 9v4.5" />
+                    <path d="M12 17h.01" />
+                  </svg>
+                </div>
+                <h2 id="en-title">Some transactions need attention</h2>
+                <p class="lead">
+                  You can still save the transactions that are ready.
+                </p>
+                <div class="summary">
+                  <div class="summary-row ready">
+                    <span class="state-mark">✓</span
+                    ><span
+                      ><strong>2 ready to save</strong
+                      ><small>These will update your balance</small></span
+                    >
+                  </div>
+                  <div class="summary-row skipped">
+                    <span class="state-mark">!</span
+                    ><span
+                      ><strong>1 will be skipped</strong
+                      ><small>This transaction will not be saved</small></span
+                    >
+                  </div>
+                </div>
+                <p class="balance-note">
+                  Invalid transactions won’t affect your balance. Review them
+                  now if you want to fix them before saving.
+                </p>
+                <div class="actions">
+                  <button class="secondary">Review transactions</button
+                  ><button class="primary">Save 2 valid</button>
+                </div>
+              </section>
+            </div>
+            <div class="home"></div>
+          </div>
+          <figcaption>A · Ordinary phone · English · Light</figcaption>
+        </figure>
+
+        <figure class="figure">
+          <div class="phone compact">
+            <div class="notch"></div>
+            <div class="status">
+              <span>9:41</span><span>5G&nbsp;&nbsp;92%</span>
+            </div>
+            <div class="screen">
+              <div class="screen-head">
+                <strong>Review</strong><span>3 selected</span>
+              </div>
+              <div class="draft-row">
+                <i class="draft-check"></i
+                ><span class="draft-lines"><i></i><i></i></span
+                ><i class="amount"></i>
+              </div>
+              <div class="draft-row">
+                <i class="draft-check"></i
+                ><span class="draft-lines"><i></i><i></i></span
+                ><i class="amount"></i>
+              </div>
+              <div class="draft-row">
+                <i class="draft-check"></i
+                ><span class="draft-lines"><i></i><i></i></span
+                ><i class="amount"></i>
+              </div>
+            </div>
+            <div class="veil">
+              <section class="modal">
+                <div class="icon">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.2"
+                    stroke-linecap="round"
+                  >
+                    <path d="M12 3 2.7 19h18.6L12 3Z" />
+                    <path d="M12 9v4.5" />
+                    <path d="M12 17h.01" />
+                  </svg>
+                </div>
+                <h2>Some transactions need attention</h2>
+                <p class="lead">
+                  You can still save the transactions that are ready.
+                </p>
+                <div class="summary">
+                  <div class="summary-row ready">
+                    <span class="state-mark">✓</span
+                    ><span
+                      ><strong>2 ready to save</strong
+                      ><small>These will update your balance</small></span
+                    >
+                  </div>
+                  <div class="summary-row skipped">
+                    <span class="state-mark">!</span
+                    ><span
+                      ><strong>1 will be skipped</strong
+                      ><small>This transaction will not be saved</small></span
+                    >
+                  </div>
+                </div>
+                <p class="balance-note">
+                  Invalid transactions won’t affect your balance.
+                </p>
+                <div class="actions">
+                  <button class="secondary">Review transactions</button
+                  ><button class="primary">Save 2 valid</button>
+                </div>
+              </section>
+            </div>
+            <div class="home"></div>
+          </div>
+          <figcaption>B · Compact phone · English · Stacked actions</figcaption>
+        </figure>
+
+        <figure class="figure">
+          <div class="phone dark" dir="rtl" lang="ar">
+            <div class="notch"></div>
+            <div class="status">
+              <span>92%&nbsp;&nbsp;5G</span><span>٩:٤١</span>
+            </div>
+            <div class="screen">
+              <div class="screen-head">
+                <strong>مراجعة المعاملات</strong><span>٣ محددة</span>
+              </div>
+              <div class="draft-row">
+                <i class="draft-check"></i
+                ><span class="draft-lines"><i></i><i></i></span
+                ><i class="amount"></i>
+              </div>
+              <div class="draft-row">
+                <i class="draft-check"></i
+                ><span class="draft-lines"><i></i><i></i></span
+                ><i class="amount"></i>
+              </div>
+              <div class="draft-row">
+                <i class="draft-check"></i
+                ><span class="draft-lines"><i></i><i></i></span
+                ><i class="amount"></i>
+              </div>
+              <div class="review-bar"></div>
+            </div>
+            <div class="veil">
+              <section class="modal" aria-labelledby="ar-title">
+                <div class="icon">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.2"
+                    stroke-linecap="round"
+                  >
+                    <path d="M12 3 2.7 19h18.6L12 3Z" />
+                    <path d="M12 9v4.5" />
+                    <path d="M12 17h.01" />
+                  </svg>
+                </div>
+                <h2 id="ar-title">بعض المعاملات تحتاج إلى مراجعة</h2>
+                <p class="lead">يمكنك حفظ المعاملات الجاهزة الآن.</p>
+                <div class="summary">
+                  <div class="summary-row ready">
+                    <span class="state-mark">✓</span
+                    ><span
+                      ><strong>معاملتان جاهزتان للحفظ</strong
+                      ><small>سيتم تحديث رصيدك بهما</small></span
+                    >
+                  </div>
+                  <div class="summary-row skipped">
+                    <span class="state-mark">!</span
+                    ><span
+                      ><strong>سيتم تخطي معاملة واحدة</strong
+                      ><small>لن يتم حفظ هذه المعاملة</small></span
+                    >
+                  </div>
+                </div>
+                <p class="balance-note">
+                  لن تؤثر المعاملة غير الصالحة في رصيدك. راجعها الآن إذا أردت
+                  تعديلها قبل الحفظ.
+                </p>
+                <div class="actions">
+                  <button class="secondary">مراجعة المعاملات</button
+                  ><button class="primary">حفظ المعاملتين</button>
+                </div>
+              </section>
+            </div>
+            <div class="home"></div>
+          </div>
+          <figcaption>C · Ordinary phone · Arabic RTL · Dark</figcaption>
+        </figure>
+
+        <figure class="figure">
+          <div class="phone dark large-text" dir="rtl" lang="ar">
+            <div class="notch"></div>
+            <div class="status">
+              <span>92%&nbsp;&nbsp;5G</span><span>٩:٤١</span>
+            </div>
+            <div class="screen">
+              <div class="screen-head">
+                <strong>مراجعة المعاملات</strong><span>٣ محددة</span>
+              </div>
+              <div class="draft-row">
+                <i class="draft-check"></i
+                ><span class="draft-lines"><i></i><i></i></span
+                ><i class="amount"></i>
+              </div>
+              <div class="draft-row">
+                <i class="draft-check"></i
+                ><span class="draft-lines"><i></i><i></i></span
+                ><i class="amount"></i>
+              </div>
+            </div>
+            <div class="veil">
+              <section class="modal">
+                <div class="icon">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.2"
+                    stroke-linecap="round"
+                  >
+                    <path d="M12 3 2.7 19h18.6L12 3Z" />
+                    <path d="M12 9v4.5" />
+                    <path d="M12 17h.01" />
+                  </svg>
+                </div>
+                <h2>بعض المعاملات تحتاج إلى مراجعة</h2>
+                <p class="lead">يمكنك حفظ المعاملات الجاهزة الآن.</p>
+                <div class="summary">
+                  <div class="summary-row ready">
+                    <span class="state-mark">✓</span
+                    ><span
+                      ><strong>معاملتان جاهزتان للحفظ</strong
+                      ><small>سيتم تحديث رصيدك بهما</small></span
+                    >
+                  </div>
+                  <div class="summary-row skipped">
+                    <span class="state-mark">!</span
+                    ><span
+                      ><strong>سيتم تخطي معاملة واحدة</strong
+                      ><small>لن يتم حفظ هذه المعاملة</small></span
+                    >
+                  </div>
+                </div>
+                <p class="balance-note">
+                  لن تؤثر المعاملة غير الصالحة في رصيدك.
+                </p>
+                <div class="actions">
+                  <button class="secondary">مراجعة المعاملات</button
+                  ><button class="primary">حفظ المعاملتين</button>
+                </div>
+              </section>
+            </div>
+            <div class="home"></div>
+          </div>
+          <figcaption>
+            D · Arabic RTL · Simulated 200% text · Stacked actions
+          </figcaption>
+        </figure>
+      </section>
+    </main>
+  </body>
+</html>

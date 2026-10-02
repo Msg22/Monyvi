@@ -68,6 +68,7 @@ interface PulledRow extends Record<string, unknown> {
 }
 
 const METAL_DEDICATED_PULL_TABLES = [
+  "account_financial_effects",
   "financial_action_groups",
   "metal_action_evidence",
   "metal_lifecycle_events",
@@ -151,6 +152,9 @@ export interface MetalObservationPullResult {
 }
 
 const EXACT_TEXT_SELECTS = {
+  accounts: "*,financial_revision_text:financial_revision::text",
+  account_financial_effects:
+    "*,accepted_account_revision_text:accepted_account_revision::text,amount_minor_units_text:amount_minor_units::text",
   assets: "*,purchase_price_decimal_text:purchase_price_decimal::text",
   asset_metals:
     "*,weight_grams_decimal_text:weight_grams_decimal::text,purity_factor_decimal_text:purity_factor_decimal::text",
@@ -161,6 +165,7 @@ const EXACT_TEXT_SELECTS = {
   metal_holding_states: "*,financial_revision_text:financial_revision::text",
   metal_lifecycle_events: "*,payload_json_text:payload_json::text",
   metal_rate_references: "*,value_decimal_text:value_decimal::text",
+  recurring_payments: "*,financial_revision_text:financial_revision::text",
 } as const;
 
 function failInvalidObservationPage(): never {
@@ -301,10 +306,40 @@ function validateSerializedJson(value: string): void {
   JSON.parse(value);
 }
 
+function validateCanonicalAccountRevision(value: string): void {
+  if (!/^(0|[1-9]\d*)$/.test(value) || BigInt(value) > 9223372036854775807n) {
+    throw new Error(SYNC_PULL_ERROR_CODES.INVALID_EXACT_TEXT);
+  }
+}
+
+function validateSignedMinorUnits(value: string): void {
+  if (!/^-?(0|[1-9]\d*)$/.test(value)) {
+    throw new Error(SYNC_PULL_ERROR_CODES.INVALID_EXACT_TEXT);
+  }
+  const parsed = BigInt(value);
+  if (parsed < -9223372036854775807n || parsed > 9223372036854775807n) {
+    throw new Error(SYNC_PULL_ERROR_CODES.INVALID_EXACT_TEXT);
+  }
+}
+
 function normalizeDedicatedPullRecord(
   table: MetalDedicatedPullTable,
   record: Record<string, unknown>
 ): Record<string, unknown> {
+  if (table === "account_financial_effects") {
+    const revision = normalizeExactTextColumn(
+      record,
+      "accepted_account_revision_text",
+      "accepted_account_revision",
+      validateCanonicalAccountRevision
+    );
+    return normalizeExactTextColumn(
+      revision,
+      "amount_minor_units_text",
+      "amount_minor_units",
+      validateSignedMinorUnits
+    );
+  }
   if (table === "financial_action_groups") {
     const accountGuards = normalizeExactTextColumn(
       record,
@@ -399,6 +434,14 @@ function normalizePulledExactText(
       "financial_revision_text",
       "financial_revision",
       assertCanonicalMetalRevision
+    );
+  }
+  if (table === "accounts" || table === "recurring_payments") {
+    return normalizeExactTextColumn(
+      record,
+      "financial_revision_text",
+      "financial_revision",
+      validateCanonicalAccountRevision
     );
   }
   return { ...record };
@@ -498,10 +541,16 @@ export async function pullMarketRateObservations(
 
   while (shouldPullNextPage) {
     const { data, error } = await supabase.rpc(METAL_OBSERVATION_RPC, {
-      p_after_created_at: cursor?.createdAt ?? null,
-      p_after_id: cursor?.id ?? null,
+      // pull_metal_observations_page_v1 declares p_upper_watermark,
+      // p_after_created_at, and p_after_id as DEFAULT NULL, so omitting a
+      // cursor arg is equivalent to sending NULL. The SQL rejects a cursor
+      // where only one of p_after_created_at/p_after_id is present, so they are
+      // always omitted or sent together.
+      ...(cursor === null
+        ? {}
+        : { p_after_created_at: cursor.createdAt, p_after_id: cursor.id }),
       p_limit: METAL_OBSERVATION_PAGE_SIZE,
-      p_upper_watermark: upperWatermark,
+      ...(upperWatermark === null ? {} : { p_upper_watermark: upperWatermark }),
     });
     if (error) {
       throw createSyncTableError("pull", "market_rate_observations", error);

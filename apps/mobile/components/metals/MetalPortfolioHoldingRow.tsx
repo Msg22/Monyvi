@@ -3,7 +3,14 @@ import { palette } from "@/constants/colors";
 import { Ionicons } from "@expo/vector-icons";
 import type { CurrencyType } from "@monyvi/db";
 import React from "react";
-import { Image, Pressable, Text, View } from "react-native";
+import {
+  Image,
+  Pressable,
+  type StyleProp,
+  Text,
+  View,
+  type ViewStyle,
+} from "react-native";
 import { useTranslation } from "react-i18next";
 
 import type { MetalPortfolioHoldingInput } from "@/services/metal-portfolio-read-model-service";
@@ -90,7 +97,11 @@ export function MetalHoldingRow({
       accessibilityRole="button"
       onPress={onPress}
       testID={`metal-portfolio-holding-${holding.id}`}
-      className="flex-row items-start gap-2 rounded-2xl border border-slate-200 bg-surface px-3 py-3.5 dark:border-slate-800 dark:bg-slate-900"
+      className="min-h-[110px] flex-row items-start gap-2 rounded-2xl border border-slate-200 bg-surface p-3 active:border-nileGreen-500 dark:border-slate-700 dark:bg-slate-800 dark:active:border-nileGreen-400"
+      // eslint-disable-next-line react-native/no-inline-styles -- dynamic scale feedback on press
+      style={({ pressed }): StyleProp<ViewStyle> =>
+        pressed ? { transform: [{ scale: 0.99 }] } : undefined
+      }
     >
       <HoldingImage form={form} metal={metal} presentation={presentation} />
       <View className="min-w-0 flex-1">
@@ -204,6 +215,7 @@ function HoldingImage({
   if (presentation.render.kind === "object") {
     return (
       <Image
+        testID="metal-portfolio-holding-image"
         accessible
         accessibilityLabel={t(presentation.render.accessibilityLabelKey, {
           metal,
@@ -211,15 +223,16 @@ function HoldingImage({
         })}
         source={presentation.render.source}
         resizeMode="contain"
-        className="h-16 w-16"
+        className="h-14 w-14"
       />
     );
   }
   return (
     <View
+      testID="metal-portfolio-holding-image"
       accessible
       accessibilityLabel={t(presentation.render.accessibilityLabelKey)}
-      className="h-16 w-16 items-center justify-center rounded-2xl bg-slate-100 dark:bg-slate-800"
+      className="h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 dark:bg-slate-800"
     >
       <Text className="text-xs font-semibold text-text-secondary dark:text-text-secondary-dark">
         {metal}

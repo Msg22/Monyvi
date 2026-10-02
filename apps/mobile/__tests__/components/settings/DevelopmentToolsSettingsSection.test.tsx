@@ -13,8 +13,10 @@ describe("DevelopmentToolsSettingsSection", () => {
       <DevelopmentToolsSettingsSection
         t={t}
         isVisible
+        isStartupQaVisible={false}
         chevronColor="#64748b"
         onQaSmsPatternIntakePress={onQaSmsPatternIntakePress}
+        onStartupQaPress={jest.fn()}
       />
     );
 
@@ -27,13 +29,35 @@ describe("DevelopmentToolsSettingsSection", () => {
     expect(onQaSmsPatternIntakePress).toHaveBeenCalledTimes(1);
   });
 
+  it("opens startup QA from development tools without exposing SMS intake", () => {
+    const onStartupQaPress = jest.fn();
+    render(
+      <DevelopmentToolsSettingsSection
+        t={t}
+        isVisible={false}
+        isStartupQaVisible
+        chevronColor="#64748b"
+        onQaSmsPatternIntakePress={jest.fn()}
+        onStartupQaPress={onStartupQaPress}
+      />
+    );
+
+    expect(screen.getByText("development_tools")).toBeTruthy();
+    expect(screen.getByText("startup_qa_rates")).toBeTruthy();
+    expect(screen.queryByText("qa_sms_pattern_intake")).toBeNull();
+    fireEvent.press(screen.getByTestId("startup-qa-rates-settings-link"));
+    expect(onStartupQaPress).toHaveBeenCalledTimes(1);
+  });
+
   it("does not expose the development entry when unavailable", () => {
     render(
       <DevelopmentToolsSettingsSection
         t={t}
         isVisible={false}
+        isStartupQaVisible={false}
         chevronColor="#64748b"
         onQaSmsPatternIntakePress={jest.fn()}
+        onStartupQaPress={jest.fn()}
       />
     );
 

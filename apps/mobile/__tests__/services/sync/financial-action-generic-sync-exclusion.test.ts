@@ -24,6 +24,7 @@ describe("financial action generic sync exclusion", () => {
     expect(DEDICATED_SYNC_TABLES).toContain("financial_action_groups");
     expect(EXCLUDED_TABLES).not.toContain("financial_action_groups");
     expect(SYNCABLE_TABLES).not.toContain("financial_action_groups");
+    expect(DEDICATED_SYNC_TABLES).toContain("account_financial_effects");
   });
 
   it("returns dedicated ids to Watermelon for rejection without blocking generic writes", () => {
@@ -64,7 +65,10 @@ describe("financial action generic sync exclusion", () => {
       "changes[tableName].deleted.filter((id) => !rejectedIds.has(id))"
     );
     expect(contract).toMatch(
-      /Generic push returns every captured dedicated-table row ID through\s+WatermelonDB's rejected-ID result/
+      /Accepted or idempotent roots, effects, and linked domain rows\s+are omitted from the rejected-ID result/
+    );
+    expect(contract).toMatch(
+      /Stale, rejected, incomplete, malformed, foreign, deleted, and unsupported\s+dedicated groups remain in the rejected-ID result/
     );
   });
 

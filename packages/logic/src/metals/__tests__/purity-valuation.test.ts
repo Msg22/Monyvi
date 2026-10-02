@@ -1,15 +1,24 @@
 import {
   createPuritySnapshot,
+  FEATURED_PURITY_CODES,
   getPurityCatalog,
   getPurityEntry,
   isSupportedMetal,
   PURITY_CATALOG_VERSION,
   resolvePuritySelection,
 } from "../purity-catalog";
-import { calculateMetalReferenceValue, calculatePureGrams } from "../valuation";
+import {
+  calculateCurrentQuotedMetalReferenceValue,
+  calculateCurrentQuotedPurityGramPriceDecimal,
+  calculateDisplayPerPureGramPrice,
+  calculateMetalReferenceValue,
+  calculatePureGrams,
+  calculatePurityGramPriceDecimal,
+} from "../valuation";
 
 function loadPurityCatalogApi(): {
   readonly createPuritySnapshot: typeof createPuritySnapshot;
+  readonly FEATURED_PURITY_CODES: typeof FEATURED_PURITY_CODES;
   readonly getPurityCatalog: typeof getPurityCatalog;
   readonly getPurityEntry: typeof getPurityEntry;
   readonly PURITY_CATALOG_VERSION: typeof PURITY_CATALOG_VERSION;
@@ -17,6 +26,7 @@ function loadPurityCatalogApi(): {
 } {
   return {
     createPuritySnapshot,
+    FEATURED_PURITY_CODES,
     getPurityCatalog,
     getPurityEntry,
     PURITY_CATALOG_VERSION,
@@ -25,10 +35,21 @@ function loadPurityCatalogApi(): {
 }
 
 function loadValuationApi(): {
+  readonly calculateCurrentQuotedMetalReferenceValue: typeof calculateCurrentQuotedMetalReferenceValue;
+  readonly calculateCurrentQuotedPurityGramPriceDecimal: typeof calculateCurrentQuotedPurityGramPriceDecimal;
+  readonly calculateDisplayPerPureGramPrice: typeof calculateDisplayPerPureGramPrice;
   readonly calculateMetalReferenceValue: typeof calculateMetalReferenceValue;
   readonly calculatePureGrams: typeof calculatePureGrams;
+  readonly calculatePurityGramPriceDecimal: typeof calculatePurityGramPriceDecimal;
 } {
-  return { calculateMetalReferenceValue, calculatePureGrams };
+  return {
+    calculateCurrentQuotedMetalReferenceValue,
+    calculateCurrentQuotedPurityGramPriceDecimal,
+    calculateDisplayPerPureGramPrice,
+    calculateMetalReferenceValue,
+    calculatePureGrams,
+    calculatePurityGramPriceDecimal,
+  };
 }
 
 const EXPECTED_CATALOG_V1 = [
@@ -375,6 +396,96 @@ describe("exact purity and valuation", () => {
     ).toEqual({ available: true, valueDecimal: "49950" });
   });
 
+  it("uses the selected quoted 24K Gold rate directly for current gold-999 gram price and holding value", () => {
+    const {
+      calculateCurrentQuotedMetalReferenceValue,
+      calculateCurrentQuotedPurityGramPriceDecimal,
+    } = loadValuationApi();
+
+    expect(
+      calculateCurrentQuotedPurityGramPriceDecimal({
+        metal: "GOLD",
+        purityCode: "gold-999",
+        purityFactorDecimal: "0.999",
+        metalUsdPerPureGramDecimal: "139.9466",
+        currencyUsdPerUnitDecimal: "0.02",
+      })
+    ).toBe("6997.33");
+    expect(
+      calculateCurrentQuotedMetalReferenceValue({
+        metal: "GOLD",
+        purityCode: "gold-999",
+        weightGramsDecimal: "10",
+        purityFactorDecimal: "0.999",
+        metalUsdPerPureGramDecimal: "139.9466",
+        currencyUsdPerUnitDecimal: "0.02",
+      })
+    ).toEqual({ available: true, valueDecimal: "69973.3" });
+    expect(
+      calculatePureGrams({
+        weightGramsDecimal: "10",
+        purityFactorDecimal: "0.999",
+      })
+    ).toEqual({ available: true, valueDecimal: "9.99" });
+  });
+
+  it("keeps 21K, 18K, and Silver on their existing catalog-factor current quote basis", () => {
+    const { calculateCurrentQuotedPurityGramPriceDecimal } = loadValuationApi();
+
+    expect(
+      calculateCurrentQuotedPurityGramPriceDecimal({
+        metal: "GOLD",
+        purityCode: "gold-875",
+        purityFactorDecimal: "0.875",
+        metalUsdPerPureGramDecimal: "100",
+        currencyUsdPerUnitDecimal: "0.02",
+      })
+    ).toBe("4375");
+    expect(
+      calculateCurrentQuotedPurityGramPriceDecimal({
+        metal: "GOLD",
+        purityCode: "gold-750",
+        purityFactorDecimal: "0.75",
+        metalUsdPerPureGramDecimal: "100",
+        currencyUsdPerUnitDecimal: "0.02",
+      })
+    ).toBe("3750");
+    expect(
+      calculateCurrentQuotedPurityGramPriceDecimal({
+        metal: "SILVER",
+        purityCode: "silver-999",
+        purityFactorDecimal: "0.999",
+        metalUsdPerPureGramDecimal: "100",
+        currencyUsdPerUnitDecimal: "0.02",
+      })
+    ).toBe("4995");
+  });
+
+  it("fails closed when the current quoted purity tuple is not canonical", () => {
+    const { calculateCurrentQuotedMetalReferenceValue } = loadValuationApi();
+
+    expect(
+      calculateCurrentQuotedMetalReferenceValue({
+        metal: "GOLD",
+        purityCode: "gold-999",
+        weightGramsDecimal: "10",
+        purityFactorDecimal: "1",
+        metalUsdPerPureGramDecimal: "100",
+        currencyUsdPerUnitDecimal: "0.02",
+      })
+    ).toEqual({ available: false, reason: "invalid_purity" });
+    expect(
+      calculateCurrentQuotedMetalReferenceValue({
+        metal: "GOLD",
+        purityCode: "gold-999",
+        weightGramsDecimal: "10",
+        purityFactorDecimal: "0.999",
+        metalUsdPerPureGramDecimal: "100",
+        currencyUsdPerUnitDecimal: "0",
+      })
+    ).toEqual({ available: false, reason: "invalid_currency_rate" });
+  });
+
   it("does not round pure grams before valuation", () => {
     const { calculateMetalReferenceValue } = loadValuationApi();
 
@@ -436,4 +547,100 @@ describe("exact purity and valuation", () => {
       });
     }
   );
+
+  describe("FEATURED_PURITY_CODES and per-gram calculations", () => {
+    it("defines exactly the four approved purity codes and derives factors from getPurityEntry", () => {
+      const { FEATURED_PURITY_CODES, getPurityEntry } = loadPurityCatalogApi();
+
+      expect(FEATURED_PURITY_CODES).toEqual([
+        { metal: "GOLD", purityCode: "gold-999" },
+        { metal: "GOLD", purityCode: "gold-875" },
+        { metal: "GOLD", purityCode: "gold-750" },
+        { metal: "SILVER", purityCode: "silver-999" },
+      ]);
+
+      // Factors must be derived directly from the canonical purity catalog, not duplicated.
+      expect(getPurityEntry("GOLD", "gold-999").factorDecimal).toBe("0.999");
+      expect(getPurityEntry("GOLD", "gold-875").factorDecimal).toBe("0.875");
+      expect(getPurityEntry("GOLD", "gold-750").factorDecimal).toBe("0.75");
+      expect(getPurityEntry("SILVER", "silver-999").factorDecimal).toBe(
+        "0.999"
+      );
+    });
+
+    it("calculates exact per-gram price using calculatePurityGramPriceDecimal", () => {
+      const { calculatePurityGramPriceDecimal } = loadValuationApi();
+
+      // e.g. Gold pure USD rate = 71.50, USD/EGP rate = 0.02 (50 EGP per USD)
+      // 1 gram of 21K (0.875 factor) = 0.875 * 71.50 / 0.02 = 3128.125
+      const price21k = calculatePurityGramPriceDecimal({
+        purityFactorDecimal: "0.875",
+        metalUsdPerPureGramDecimal: "71.5",
+        currencyUsdPerUnitDecimal: "0.02",
+      });
+
+      expect(price21k).toBe("3128.125");
+
+      // Invalid or unavailable rate returns null
+      expect(
+        calculatePurityGramPriceDecimal({
+          purityFactorDecimal: "0.875",
+          metalUsdPerPureGramDecimal: "0",
+          currencyUsdPerUnitDecimal: "0.02",
+        })
+      ).toBeNull();
+    });
+
+    it("converts a USD metal rate to display per-pure-gram without fabricating FX", () => {
+      const { calculateDisplayPerPureGramPrice } = loadValuationApi();
+
+      // 100 USD/g in EGP at 0.02 USD per EGP = 5000 EGP/g.
+      expect(
+        calculateDisplayPerPureGramPrice({
+          metalUsdPerPureGramDecimal: "100",
+          currencyUsdPerUnitDecimal: "0.02",
+          displayCurrency: "EGP",
+        })
+      ).toBe("5000");
+
+      // USD display needs no FX lookup: USD is the exact identity rate.
+      expect(
+        calculateDisplayPerPureGramPrice({
+          metalUsdPerPureGramDecimal: "100",
+          currencyUsdPerUnitDecimal: null,
+          displayCurrency: "USD",
+        })
+      ).toBe("100");
+
+      // Missing inputs never fabricate a rate.
+      expect(
+        calculateDisplayPerPureGramPrice({
+          metalUsdPerPureGramDecimal: null,
+          currencyUsdPerUnitDecimal: "0.02",
+          displayCurrency: "EGP",
+        })
+      ).toBeNull();
+      expect(
+        calculateDisplayPerPureGramPrice({
+          metalUsdPerPureGramDecimal: "100",
+          currencyUsdPerUnitDecimal: null,
+          displayCurrency: "EGP",
+        })
+      ).toBeNull();
+      expect(
+        calculateDisplayPerPureGramPrice({
+          metalUsdPerPureGramDecimal: "100",
+          currencyUsdPerUnitDecimal: "0.02",
+          displayCurrency: undefined,
+        })
+      ).toBeNull();
+      expect(
+        calculateDisplayPerPureGramPrice({
+          metalUsdPerPureGramDecimal: "not-a-number",
+          currencyUsdPerUnitDecimal: "0.02",
+          displayCurrency: "EGP",
+        })
+      ).toBeNull();
+    });
+  });
 });

@@ -89,8 +89,9 @@ function createAssetMetal(
 ): NetWorthAssetMetalInput {
   return {
     metalType,
-    purityFactorDecimal: "1",
-    purityFraction: 1,
+    purityCode: metalType === "GOLD" ? "gold-999" : "silver-999",
+    purityFactorDecimal: "0.999",
+    purityFraction: 0.999,
     weightGrams: Number(weightGramsDecimal),
     weightGramsDecimal,
   };
@@ -187,7 +188,7 @@ describe("net-worth-read-model-service", () => {
     });
 
     const accountsUsd = new Decimal("1000").times("0.0210523309").plus(10);
-    const assetsUsd = new Decimal("10").times("3738.74000000").times("1");
+    const assetsUsd = new Decimal("10").times("3738.74000000");
     const totalUsd = accountsUsd.plus(assetsUsd);
 
     expect(model).not.toBeNull();
