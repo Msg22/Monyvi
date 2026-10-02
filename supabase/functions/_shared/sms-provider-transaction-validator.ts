@@ -1,4 +1,4 @@
-import type { ParseSmsProviderTransaction } from "./parse-sms-handler.ts";
+import type { ParseSmsProviderTransaction } from "./sms-ai/sms-ai-provider.ts";
 
 const MAX_TRANSACTION_AMOUNT = 1_000_000_000;
 const MAX_MESSAGE_ID_LENGTH = 160;

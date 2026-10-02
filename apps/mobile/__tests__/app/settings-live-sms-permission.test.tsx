@@ -43,6 +43,7 @@ let mockHasRevokedAiConsentRecord = false;
 let mockIsAiConsentLoading = false;
 let mockHasSynced = false;
 let mockQaSmsPatternIntakeAvailable = false;
+let mockSmsScanLookbackDays = 30;
 let mockSmsAiAvailability: {
   readonly reason: "rolling_limit" | "history_cooldown";
   readonly availableAt: string;
@@ -77,7 +78,10 @@ jest.mock("expo-router", () => ({
 
 jest.mock("react-i18next", () => ({
   useTranslation: () => ({
-    t: (key: string) => key,
+    t: (key: string, opts?: Record<string, unknown>): string => {
+      const days = typeof opts?.days === "number" ? opts.days : null;
+      return days === null ? key : `${key}:${days}`;
+    },
   }),
 }));
 
@@ -211,6 +215,12 @@ jest.mock("@/config/qa-sms-pattern-intake-config", () => ({
       : { isAvailable: false, reason: "release_build" },
 }));
 
+jest.mock("@/services/sms-scan-policy-service", () => ({
+  getEffectiveSmsScanPolicy: () => ({
+    lookbackDays: mockSmsScanLookbackDays,
+  }),
+}));
+
 jest.mock("@/components/ui/GradientBackground", () => {
   return {
     GradientBackground: ({
@@ -332,6 +342,7 @@ describe("Settings live SMS permission recovery", () => {
     mockIsAiConsentLoading = false;
     mockHasSynced = false;
     mockQaSmsPatternIntakeAvailable = false;
+    mockSmsScanLookbackDays = 30;
     mockSmsAiAvailability = null;
     mockGrantAiConsent.mockResolvedValue();
     mockRevokeAiConsent.mockResolvedValue();
@@ -360,6 +371,19 @@ describe("Settings live SMS permission recovery", () => {
     fireEvent.press(screen.getByTestId("startup-qa-rates-settings-link"));
 
     expect(mockRouterPush).toHaveBeenCalledWith("/startup-qa");
+  });
+
+  it("shapes the effective scan-policy day count into SMS help and rescan confirmation", async () => {
+    mockHasSynced = true;
+    mockSmsPermissionStatus = "granted";
+    mockSmsScanLookbackDays = 60;
+    const screen = await renderReadySettings();
+
+    expect(screen.getByText("sync_new_description:60")).toBeTruthy();
+    expect(screen.getByText("rescan_recent_description:60")).toBeTruthy();
+
+    fireEvent.press(screen.getByText("rescan_recent"));
+    expect(await screen.findByText("rescan_message:60")).toBeTruthy();
   });
 
   it("keeps history rescan available when only the ordinary AI allowance is limited", async () => {

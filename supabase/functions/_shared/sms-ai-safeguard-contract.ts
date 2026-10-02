@@ -1,4 +1,5 @@
 import type { SmsSafeguardPolicy } from "./sms-safeguard-policy.ts";
+import type { Database } from "../../../packages/db/src/supabase-types.ts";
 
 export type SmsAiCapability = "sms_full_parse" | "sms_category_enrichment";
 export type SmsAiScanKind = "initial" | "incremental" | "history" | "live";
@@ -43,9 +44,14 @@ export interface ReconcileSmsAiOutcomesInput {
   readonly negativeOutcomes: readonly SmsAiNegativeOutcomeInput[];
 }
 
+export type SmsSafeguardFunctionName = Extract<
+  keyof Database["public"]["Functions"],
+  string
+>;
+
 export interface SmsSafeguardRpcClient {
   readonly rpc: (
-    name: string,
+    name: SmsSafeguardFunctionName,
     params: Readonly<Record<string, unknown>>
   ) => PromiseLike<{ readonly data: unknown; readonly error: unknown }>;
 }

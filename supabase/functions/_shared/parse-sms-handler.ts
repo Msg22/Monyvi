@@ -3,6 +3,17 @@ import type {
   SmsAiAdmissionInput,
   SmsAiProviderStartDecision,
 } from "./sms-ai-safeguard-contract.ts";
+import type {
+  ExecuteSmsProviderInput,
+  ParseSmsMessage,
+  SmsProviderExecutionResult,
+} from "./sms-ai/sms-ai-provider.ts";
+export type {
+  ExecuteSmsProviderInput,
+  ParseSmsMessage,
+  ParseSmsProviderTransaction,
+  SmsProviderExecutionResult,
+} from "./sms-ai/sms-ai-provider.ts";
 import {
   buildSmsProviderUserPromptAtEdge,
   estimateSmsRequestInputTokensAtEdge,
@@ -37,40 +48,6 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const MAX_SUPPORTED_CURRENCIES = 64;
 const MAX_MESSAGES_BEFORE_POLICY_EVALUATION = 50;
 
-export interface ParseSmsMessage {
-  readonly id: string;
-  readonly body: string;
-  readonly sender: string;
-  readonly date: string;
-  readonly smsFingerprint: string;
-}
-
-export interface ParseSmsProviderTransaction {
-  readonly messageId: string;
-  readonly amount: number;
-  readonly currency: string;
-  readonly type: string;
-  readonly counterparty: string;
-  readonly date: string;
-  readonly categorySystemName: string;
-  readonly isAtmWithdrawal?: boolean;
-  readonly cardLast4?: string;
-  readonly confidenceScore: number;
-  readonly isTrusted: boolean;
-}
-
-export interface SmsProviderExecutionResult {
-  readonly completionStatus: SmsProviderCompletionStatusAtEdge;
-  readonly isResponseSchemaValid: boolean;
-  readonly transactions: readonly ParseSmsProviderTransaction[];
-}
-
-export interface ExecuteSmsProviderInput {
-  readonly messages: readonly ParseSmsMessage[];
-  readonly categories: string;
-  readonly supportedCurrencies: readonly string[];
-}
-
 export interface SmsAiProcessingOutcomeAtEdge {
   readonly smsFingerprint: string;
   readonly isTerminal: boolean;
@@ -100,7 +77,10 @@ export interface ParseSmsHandlerDependencies {
   readonly authenticate: (request: Request) => Promise<string | null>;
   readonly hasConsent: (userId: string) => Promise<boolean>;
   readonly getPolicy: () => unknown;
-  readonly fixedPrompt: string;
+  readonly buildFixedPrompt: (
+    supportedCurrencies: readonly string[]
+  ) => string;
+  readonly buildCategoryContext: (categories: string) => string;
   readonly buildResponseSchema: (
     supportedCurrencies: readonly string[]
   ) => string;
@@ -278,8 +258,8 @@ function calculateRequestMetrics(
 ): { readonly payloadBytes: number; readonly estimatedInputTokens: number } {
   const payloadBytes = getUtf8ByteLengthAtEdge(JSON.stringify(rawBody));
   const estimate = estimateSmsRequestInputTokensAtEdge({
-    prompt: dependencies.fixedPrompt,
-    categories: body.categories,
+    prompt: dependencies.buildFixedPrompt(body.supportedCurrencies),
+    categories: dependencies.buildCategoryContext(body.categories),
     schema: dependencies.buildResponseSchema(body.supportedCurrencies),
     messages: [buildSmsProviderUserPromptAtEdge(body.messages)],
   });
