@@ -797,6 +797,7 @@ async function handlePost(
   let admission: SmsAiAdmissionDecision;
   try {
     const requestDigest = await dependencies.computeRequestDigest(rawBody);
+    if (isCallerCancelled(request.signal)) return callerCancelledResponse();
     admission = await dependencies.reserveWork({
       userId,
       requestKey: body.requestKey,

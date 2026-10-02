@@ -308,6 +308,10 @@ Do not add during feature 388:
       authoritative accounting without asynchronous abort-driven DB mutations.
       No schema/RPC/refund/auth/accounting-rule change. Preserve mobile synthetic
       15 at later integration and current shared/CLI 5.
+      Source-review correction incorporated: recheck caller cancellation
+      immediately after awaited request-digest computation and before
+      `reserveWork`, so cancellation during digest work cannot create a new
+      reservation. Verification remains deferred.
 
 ### T050 manual/source-review matrix still required
 
@@ -315,6 +319,7 @@ Do not add during feature 388:
 | --- | --- |
 | 60-second provider deadline | Exactly one DeepInfra attempt; no retry and no retry sleep; timeout remains provider failure rather than caller cancellation |
 | Already aborted before provider start | No provider fetch; accepted reservation is released through the existing pre-start release mechanism |
+| Abort during request-digest computation | Recheck immediately after digest returns; do not call `reserveWork` and do not create a reservation |
 | Abort while `markProviderStarted` waits, result not started | No provider fetch; remaining reservation is released without creating negative/terminal outcomes |
 | Abort while `markProviderStarted` waits, result started | Provider send may be skipped; started usage is not refunded/released and existing error completion finalizes the request |
 | Abort during provider fetch | Outgoing fetch receives cancellation; no retry; started accounting completes as provider-error/cancelled work; no negative/terminal outcome is written |
