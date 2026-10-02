@@ -158,7 +158,8 @@ function CaseMetadata({
         {t("sms_provider_evaluation.sender")}: {item.sender}
       </Text>
       <Text className="text-xs text-slate-500 dark:text-slate-400">
-        {t("sms_provider_evaluation.provider")}: {item.providerName} ({item.providerId})
+        {t("sms_provider_evaluation.provider")}: {item.providerName} (
+        {item.providerId})
       </Text>
       <Text className="text-xs text-slate-500 dark:text-slate-400">
         {t("sms_provider_evaluation.case_id")}: {item.caseId}
@@ -224,7 +225,10 @@ function MismatchReasons({
         {t("sms_provider_evaluation.mismatch_reasons")}
       </Text>
       {item.mismatchFields.map((field) => (
-        <Text key={field} className="mt-1 text-xs text-red-600 dark:text-red-500">
+        <Text
+          key={field}
+          className="mt-1 text-xs text-red-600 dark:text-red-500"
+        >
           • {t(`sms_provider_evaluation.mismatch.${field}`, {
             defaultValue: field,
           })}
@@ -248,9 +252,12 @@ function NotEvaluatedEvidence({
         {t("sms_provider_evaluation.not_evaluated_detail")}
       </Text>
       <Text className="mt-1 text-xs text-gold-600 dark:text-gold-400">
-        {t(`sms_provider_evaluation.classification.${item.finalClassification}`, {
-          defaultValue: item.finalClassification,
-        })}
+        {t(
+          `sms_provider_evaluation.classification.${item.finalClassification}`,
+          {
+            defaultValue: item.finalClassification,
+          }
+        )}
       </Text>
       <BatchEvidence item={item} t={t} />
     </View>
@@ -366,7 +373,11 @@ function CaseSummary({
           <Text className="flex-1 text-xs text-slate-500 dark:text-slate-400">
             {t("sms_provider_evaluation.tap_to_compare")}
           </Text>
-          <Ionicons name="chevron-forward" size={18} color={palette.slate[500]} />
+          <Ionicons
+            name="chevron-forward"
+            size={18}
+            color={palette.slate[500]}
+          />
         </View>
       ) : null}
     </TouchableOpacity>
