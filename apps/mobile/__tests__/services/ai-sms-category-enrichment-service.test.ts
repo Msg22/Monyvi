@@ -934,7 +934,7 @@ describe("ai-sms-category-enrichment-service", () => {
       [candidate("candidate-1", "Slow Shop")],
       categories
     );
-    await jest.runOnlyPendingTimersAsync();
+    await jest.advanceTimersByTimeAsync(70_000);
 
     await expect(pending).resolves.toMatchObject({
       hasError: true,

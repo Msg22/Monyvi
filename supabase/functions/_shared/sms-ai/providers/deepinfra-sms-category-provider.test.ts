@@ -147,11 +147,10 @@ function createScopedWithTimeout(
   };
 }
 
-function createFirstBodyDeadlineWithTimeout(
+function createBodyDeadlineWithTimeout(
   state: TimeoutScopeState,
   isBodyReadStarted: () => boolean
 ): WithTimeoutDependency {
-  let invocation = 0;
   return async function runWithTimeout<T>(
     operation: (signal: AbortSignal) => Promise<T>,
     timeoutMs: number,
@@ -172,19 +171,16 @@ function createFirstBodyDeadlineWithTimeout(
     externalSignal?.addEventListener("abort", abortFromExternalSignal, {
       once: true,
     });
-    invocation += 1;
     state.invocationCount += 1;
     state.isActive = true;
     const operationPromise = operation(controller.signal);
     try {
-      if (invocation === 1) {
-        await Promise.resolve();
-        await Promise.resolve();
-        if (isBodyReadStarted()) {
-          const timeoutError = new Error("Operation timed out");
-          timeoutError.name = "TimeoutError";
-          controller.abort(timeoutError);
-        }
+      await Promise.resolve();
+      await Promise.resolve();
+      if (isBodyReadStarted()) {
+        const timeoutError = new Error("Operation timed out");
+        timeoutError.name = "TimeoutError";
+        controller.abort(timeoutError);
       }
       return await operationPromise;
     } finally {
@@ -517,7 +513,7 @@ test("keeps response-body consumption inside the 60s attempt deadline without re
     sleep: async () => {
       sleeps += 1;
     },
-    withTimeout: createFirstBodyDeadlineWithTimeout(
+    withTimeout: createBodyDeadlineWithTimeout(
       scope,
       () => firstBodyReadStarted
     ),
