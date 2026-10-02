@@ -784,12 +784,17 @@ appearing in an ordinary development or release build.
   extraction, category selection, trust assessment, and confidence behavior.
   Instructions MUST NOT be removed solely to meet a token target.
 - **FR-051**: After a structurally valid, complete, successful full-parser
-  response, every submitted candidate absent from the returned transactions
-  array and every known uniquely identified result with `isTrusted: false` MUST
-  receive one `ai_no_transaction` strike. A valid `isTrusted: true` result MUST
-  remain reviewable regardless of low confidence and MUST NOT receive a negative
-  strike. Completion MUST be established from the provider response state as
-  well as schema validation; truncated, safety-blocked, or otherwise incomplete
+  response, every trustworthy submitted omission and every otherwise valid known
+  uniquely identified result with `isTrusted: false` MUST receive one
+  `ai_no_transaction` strike. A candidate correlated to a semantically invalid
+  or duplicate returned entry remains unresolved and MUST NOT receive a strike.
+  If an invalid returned entry has unknown/unattributable identity, submitted
+  candidates omitted from the independently valid returned identity set remain
+  unresolved because omission is not trustworthy for negative classification.
+  A valid `isTrusted: true` result MUST remain reviewable regardless of low
+  confidence and MUST NOT receive a negative strike. Completion MUST be
+  established from provider response state plus request-level envelope
+  validation; truncated, safety-blocked, malformed, or otherwise incomplete
   provider output MUST NOT be treated as a complete omission decision.
 - **FR-052**: AI non-transaction outcomes MUST be keyed by authenticated user
   and SMS fingerprint, synchronized through Supabase under user-scoped access
@@ -810,10 +815,13 @@ appearing in an ordinary development or release build.
   MUST prevent every batch or live path, device, app reinstall, and idempotent
   retry from submitting that fingerprint to the full parser again.
 - **FR-054**: A transport failure, timeout, cancellation before a complete valid
-  response, malformed or incomplete response, invalid response envelope,
-  duplicate returned identity, or unknown returned identity MUST create no
-  `ai_no_transaction` strike for the affected candidate. Such outcomes MUST NOT
-  increment, reset, or fabricate an existing strike count.
+  response, malformed or incomplete response, invalid response envelope, or a
+  candidate-level semantic/identity rejection MUST create no
+  `ai_no_transaction` strike for the affected or omission-uncertain candidate.
+  Duplicate known returned identity makes that duplicated candidate unresolved;
+  unknown/unattributable returned identity also makes otherwise omitted
+  submitted candidates unresolved. Such outcomes MUST NOT increment, reset,
+  clear, terminalize, or fabricate an existing strike count.
 - **FR-055**: The server MUST check synchronized terminal AI-negative
   fingerprints before provider execution and MUST update non-terminal strike
   counts atomically so concurrent devices cannot exceed the three-strike rule.
@@ -966,10 +974,13 @@ appearing in an ordinary development or release build.
 - **SC-019**: In 100% of allowance-boundary tests, the same candidate set and
   allowance select the same newest candidates regardless of input order,
   provider concurrency, or chunk completion order.
-- **SC-020**: In 100% of response-reconciliation tests, a valid partial
-  transaction array produces one durable `ai_no_transaction` outcome for each
-  omitted submitted identity, while malformed, failed, duplicate-identity, and
-  unknown-identity responses produce zero durable negative outcomes.
+- **SC-020**: In 100% of response-reconciliation tests, trustworthy omissions
+  from a structurally valid complete response produce the established durable
+  `ai_no_transaction` outcome, while candidate-level invalid/duplicate rows
+  remain unresolved without poisoning independently valid peers. An
+  unknown/unattributable returned identity produces zero inferred negative
+  outcomes for uncertain omitted candidates. Malformed or failed request-level
+  responses produce zero durable negative outcomes.
 - **SC-021**: In 100% of AI non-transaction lifecycle tests, ordinary scans
   suppress a fingerprint after its first or second valid negative strike,
   permitted deliberate history rescans may re-evaluate it, a third valid strike

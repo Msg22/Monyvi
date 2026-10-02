@@ -8,6 +8,7 @@ export * from "./parsers/notification-parser";
 export * from "./parsers";
 export * from "./sms-safeguards";
 export * from "./sms-review-drafts";
+export * from "./sms-provider-evaluation";
 export * from "./transactions";
 export * from "./types";
 export * from "./utils/currency";
