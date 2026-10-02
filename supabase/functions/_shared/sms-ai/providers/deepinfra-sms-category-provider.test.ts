@@ -55,9 +55,7 @@ function providerResponse(
   );
 }
 
-function validCategoryContent(
-  categorySystemName = "shopping"
-): string {
+function validCategoryContent(categorySystemName = "shopping"): string {
   return JSON.stringify({
     categories: [
       {
@@ -103,9 +101,7 @@ function createProviderPayload(
   };
 }
 
-function responseWithJson(
-  readJson: () => Promise<unknown>
-): Response {
+function responseWithJson(readJson: () => Promise<unknown>): Response {
   const response = new Response(null, {
     status: 200,
     headers: { "content-type": "application/json" },
@@ -225,7 +221,10 @@ test("serializes category-only DeepInfra requests with the configured model and 
     (capturedInit?.headers as Record<string, string>).Authorization,
     "Bearer test-category-key"
   );
-  const body = JSON.parse(String(capturedInit?.body)) as Record<string, unknown>;
+  const body = JSON.parse(String(capturedInit?.body)) as Record<
+    string,
+    unknown
+  >;
   assert.equal(body.model, CONFIG.model);
   assert.equal(body.temperature, 0);
   assert.equal(body.reasoning_effort, "none");
@@ -254,7 +253,10 @@ test("serializes category-only DeepInfra requests with the configured model and 
     };
   };
   assert.equal(responseFormat.type, "json_schema");
-  assert.equal(responseFormat.json_schema.name, "monyvi_sms_category_enrichment");
+  assert.equal(
+    responseFormat.json_schema.name,
+    "monyvi_sms_category_enrichment"
+  );
   assert.equal(responseFormat.json_schema.strict, true);
   assert.equal(responseFormat.json_schema.schema.additionalProperties, false);
   assert.deepEqual(result, {
@@ -290,18 +292,19 @@ test("sends configured non-default service tiers without changing the category c
     );
 
     assert.equal(body.service_tier, serviceTier);
-    assert.deepEqual(result?.categories.map((item) => item.categorySystemName), [
-      "shopping",
-    ]);
+    assert.deepEqual(
+      result?.categories.map((item) => item.categorySystemName),
+      ["shopping"]
+    );
   }
 });
 
 test("filters unsupported categories through the existing immutable allow-list", async () => {
   const provider = new DeepInfraSmsCategoryProvider(CONFIG, {
-    fetch: async () => providerResponse(validCategoryContent("invented_category")),
+    fetch: async () =>
+      providerResponse(validCategoryContent("invented_category")),
     sleep: async () => undefined,
-    withTimeout: async (operation) =>
-      operation(new AbortController().signal),
+    withTimeout: async (operation) => operation(new AbortController().signal),
   });
 
   const result = await provider.classify(
@@ -335,8 +338,7 @@ test("fails safely on empty or malformed provider output without exposing partia
         return response();
       },
       sleep: async () => undefined,
-      withTimeout: async (operation) =>
-        operation(new AbortController().signal),
+      withTimeout: async (operation) => operation(new AbortController().signal),
     });
 
     const result = await provider.classify(
@@ -361,8 +363,7 @@ test("preserves one retry with 1s backoff for transient provider failures", asyn
     sleep: async (milliseconds) => {
       delays.push(milliseconds);
     },
-    withTimeout: async (operation) =>
-      operation(new AbortController().signal),
+    withTimeout: async (operation) => operation(new AbortController().signal),
   });
 
   const result = await provider.classify(
@@ -416,8 +417,7 @@ test("returns null after exactly two failed provider attempts", async () => {
     sleep: async (milliseconds) => {
       delays.push(milliseconds);
     },
-    withTimeout: async (operation) =>
-      operation(new AbortController().signal),
+    withTimeout: async (operation) => operation(new AbortController().signal),
   });
 
   const result = await provider.classify(
@@ -459,8 +459,7 @@ test("never logs provider bodies, merchant text, or credentials on exhaustion", 
     fetch: async () =>
       new Response("ECHOED Test Market test-category-key", { status: 503 }),
     sleep: async () => undefined,
-    withTimeout: async (operation) =>
-      operation(new AbortController().signal),
+    withTimeout: async (operation) => operation(new AbortController().signal),
     logWarn: (...values) => {
       logs.push(values);
     },
@@ -480,7 +479,6 @@ test("never logs provider bodies, merchant text, or credentials on exhaustion", 
   assert.equal(serialized.includes("test-category-key"), false);
   assert.equal(serialized.includes("ECHOED"), false);
 });
-
 
 test("keeps response-body consumption inside the 8s attempt deadline and retries after body timeout", async () => {
   const scope: TimeoutScopeState = { isActive: false, invocationCount: 0 };
