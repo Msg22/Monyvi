@@ -296,8 +296,109 @@ describe("sms-live-processor", () => {
       {
         expectedUserId: "user-a",
         terminalFingerprints: new Set(["hash-live"]),
-        requestContext: { scanSessionId: null, scanKind: "live" },
+        requestContext: {
+          scanSessionId: null,
+          scanKind: "live",
+          scanStartedAtMs: 1778414400000,
+        },
+        requestKey: "live:hash-live",
       }
+    );
+  });
+
+  it("keeps the same live request identity across foreground-to-headless retry", async () => {
+    mockParseSmsWithOrchestrator.mockResolvedValueOnce({
+      transactions: [],
+      hasError: true,
+      isRetryable: true,
+      unresolvedCandidates: [],
+    });
+    const nowSpy = jest.spyOn(Date, "now");
+    nowSpy.mockReturnValue(1778414405000);
+
+    const first = await processLiveSmsEvent({
+      sender: "QNB",
+      body: "Purchase EGP 850 at Hyper Market using card ending 1234",
+      timestamp: 1778414400000,
+      deliveryMode: "foreground",
+    });
+
+    nowSpy.mockReturnValue(1778414490000);
+    const retry = await processLiveSmsEvent({
+      sender: "QNB",
+      body: "Purchase EGP 850 at Hyper Market using card ending 1234",
+      timestamp: 1778414400000,
+      deliveryMode: "headless",
+    });
+    nowSpy.mockRestore();
+
+    expect(first.status).toBe("ai_failed");
+    expect(retry.status).toBe("parsed");
+    expect(mockParseSmsWithOrchestrator).toHaveBeenCalledTimes(2);
+
+    const firstCall = mockParseSmsWithOrchestrator.mock.calls[0];
+    const retryCall = mockParseSmsWithOrchestrator.mock.calls[1];
+    expect(firstCall?.[0][0]?.message.id).toBe("live-hash-live");
+    expect(retryCall?.[0][0]?.message.id).toBe("live-hash-live");
+    expect(firstCall?.[4]).toEqual(
+      expect.objectContaining({
+        requestKey: "live:hash-live",
+        requestContext: {
+          scanSessionId: null,
+          scanKind: "live",
+          scanStartedAtMs: 1778414400000,
+        },
+      })
+    );
+    expect(retryCall?.[4]).toEqual(
+      expect.objectContaining({
+        requestKey: "live:hash-live",
+        requestContext: {
+          scanSessionId: null,
+          scanKind: "live",
+          scanStartedAtMs: 1778414400000,
+        },
+      })
+    );
+  });
+
+  it("uses distinct deterministic live identities for distinct fingerprints", async () => {
+    mockComputeSmsFingerprint
+      .mockResolvedValueOnce("hash-live-a")
+      .mockResolvedValueOnce("hash-live-b");
+
+    await processLiveSmsEvent({
+      sender: "QNB",
+      body: "Purchase EGP 850 at Hyper Market using card ending 1234",
+      timestamp: 1778414400000,
+      deliveryMode: "headless",
+    });
+    await processLiveSmsEvent({
+      sender: "QNB",
+      body: "Purchase EGP 900 at Hyper Market using card ending 1234",
+      timestamp: 1778414460000,
+      deliveryMode: "headless",
+    });
+
+    const firstCall = mockParseSmsWithOrchestrator.mock.calls[0];
+    const secondCall = mockParseSmsWithOrchestrator.mock.calls[1];
+    expect(firstCall?.[0][0]?.message.id).toBe("live-hash-live-a");
+    expect(secondCall?.[0][0]?.message.id).toBe("live-hash-live-b");
+    expect(firstCall?.[4]).toEqual(
+      expect.objectContaining({
+        requestKey: "live:hash-live-a",
+        requestContext: expect.objectContaining({
+          scanStartedAtMs: 1778414400000,
+        }),
+      })
+    );
+    expect(secondCall?.[4]).toEqual(
+      expect.objectContaining({
+        requestKey: "live:hash-live-b",
+        requestContext: expect.objectContaining({
+          scanStartedAtMs: 1778414460000,
+        }),
+      })
     );
   });
 
