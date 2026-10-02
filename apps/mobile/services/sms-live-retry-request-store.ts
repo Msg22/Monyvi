@@ -117,21 +117,25 @@ async function readStoreUnlocked(
   const serialized = await guardedGetItem(userId, key);
   if (serialized === null) return emptyStore(userId);
 
+  let decoded: unknown;
   try {
-    const parsed = retryStoreSchema.safeParse(JSON.parse(serialized));
-    if (!parsed.success || parsed.data.userId !== userId) {
-      await guardedRemoveItem(userId, key);
-      return emptyStore(userId);
-    }
-    const entries = pruneEntries(parsed.data.entries, nowMs);
-    if (entries.length !== parsed.data.entries.length) {
-      await writeStoreUnlocked({ ...parsed.data, entries });
-    }
-    return { ...parsed.data, entries };
+    decoded = JSON.parse(serialized);
   } catch {
     await guardedRemoveItem(userId, key);
     return emptyStore(userId);
   }
+
+  const parsed = retryStoreSchema.safeParse(decoded);
+  if (!parsed.success || parsed.data.userId !== userId) {
+    await guardedRemoveItem(userId, key);
+    return emptyStore(userId);
+  }
+
+  const entries = pruneEntries(parsed.data.entries, nowMs);
+  if (entries.length !== parsed.data.entries.length) {
+    await writeStoreUnlocked({ ...parsed.data, entries });
+  }
+  return { ...parsed.data, entries };
 }
 
 async function writeStoreUnlocked(store: LiveSmsRetryStore): Promise<void> {
