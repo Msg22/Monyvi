@@ -352,6 +352,10 @@ export class DeepInfraSmsProvider implements SmsAiProvider {
           throw error;
         }
 
+        if (attempt.callerAborted()) {
+          throw new SmsAiProviderCallerAbortError();
+        }
+
         const choice = parsed.data.choices[0];
         const responseContent = choice.message.content ?? "";
         try {
