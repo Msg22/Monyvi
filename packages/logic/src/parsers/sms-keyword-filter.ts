@@ -236,7 +236,5 @@ export function isExcludedBeforeSmsParsing(body: string): boolean {
     findFirstSecurityCodeMarkerIndex(normalizedBody);
   if (securityCodeMarkerIndex < 0) return false;
 
-  return !hasClearCompletedFinancialMovement(
-    normalizedBody
-  );
+  return !hasClearCompletedFinancialMovement(normalizedBody);
 }

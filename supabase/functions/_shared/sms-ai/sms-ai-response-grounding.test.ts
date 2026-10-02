@@ -55,11 +55,7 @@ function input(
   };
 }
 
-function message(
-  id: string,
-  body: string,
-  sender = "BANK"
-): ParseSmsMessage {
+function message(id: string, body: string, sender = "BANK"): ParseSmsMessage {
   return {
     id,
     body,
@@ -110,7 +106,11 @@ test("keeps cardLast4 only when the same source SMS explicitly identifies card d
 
     assert.equal(result.isResponseSchemaValid, true, scenario.name);
     assert.equal(result.transactions.length, 1, scenario.name);
-    assert.equal(result.transactions[0]?.cardLast4, scenario.cardLast4, scenario.name);
+    assert.equal(
+      result.transactions[0]?.cardLast4,
+      scenario.cardLast4,
+      scenario.name
+    );
   }
 });
 
@@ -264,7 +264,10 @@ test("normalizes prohibited *_other categories to the actual accessible L1 paren
     input([message("message-1", "Completed purchase EGP 125")], customTree)
   );
   assert.equal(derivedParent.isResponseSchemaValid, true);
-  assert.equal(derivedParent.transactions[0]?.categorySystemName, "custom_parent");
+  assert.equal(
+    derivedParent.transactions[0]?.categorySystemName,
+    "custom_parent"
+  );
 });
 
 test("does not carry an EXPENSE parent into an orphan INCOME *_other child", async () => {
@@ -282,12 +285,7 @@ INCOME categories:
       }),
     ]),
     input(
-      [
-        message(
-          "message-1",
-          "Completed incoming transfer EGP 100"
-        ),
-      ],
+      [message("message-1", "Completed incoming transfer EGP 100")],
       categoryTree
     )
   );
@@ -310,12 +308,7 @@ test("rejects an orphan prohibited *_other child with no accessible L1 parent", 
       }),
     ]),
     input(
-      [
-        message(
-          "message-1",
-          "Completed incoming transfer EGP 100"
-        ),
-      ],
+      [message("message-1", "Completed incoming transfer EGP 100")],
       categoryTree
     )
   );
@@ -336,10 +329,7 @@ test("preserves an approved custom L1 whose name ends in _other", async () => {
         categorySystemName: "custom_other",
       }),
     ]),
-    input(
-      [message("message-1", "Completed purchase EGP 125")],
-      categoryTree
-    )
+    input([message("message-1", "Completed purchase EGP 125")], categoryTree)
   );
 
   assert.equal(result.isResponseSchemaValid, true);
@@ -366,7 +356,10 @@ test("never invents an inaccessible *_other parent and preserves valid custom/L1
   for (const categorySystemName of ["other", "custom_parent", "custom_child"]) {
     const result = await executeSmsAiProvider(
       providerFor([transaction({ categorySystemName })]),
-      input([message("message-1", "Completed purchase EGP 125")], restrictedTree)
+      input(
+        [message("message-1", "Completed purchase EGP 125")],
+        restrictedTree
+      )
     );
     assert.equal(result.isResponseSchemaValid, true);
     assert.equal(
@@ -411,10 +404,19 @@ test("stable prompt explicitly separates card evidence from account digits and k
 
   assert.match(prompt, /same (?:source )?SMS/i);
   assert.match(prompt, /Card \*\*1234[\s\S]*cardLast4[\s\S]*1234/i);
-  assert.match(prompt, /IPN[\s\S]*(?:from|on) 1234[\s\S]*omit[\s\S]*cardLast4/i);
+  assert.match(
+    prompt,
+    /IPN[\s\S]*(?:from|on) 1234[\s\S]*omit[\s\S]*cardLast4/i
+  );
   assert.match(prompt, /account[\s\S]*digits[\s\S]*(?:not|never)[\s\S]*card/i);
-  assert.match(prompt, /payment gateway[\s\S]*(?:does not|doesn't)[\s\S]*prove/i);
-  assert.match(prompt, /completed transaction[\s\S]*uncertain category[\s\S]*(?:other|income)/i);
+  assert.match(
+    prompt,
+    /payment gateway[\s\S]*(?:does not|doesn't)[\s\S]*prove/i
+  );
+  assert.match(
+    prompt,
+    /completed transaction[\s\S]*uncertain category[\s\S]*(?:other|income)/i
+  );
   assert.match(prompt, /category[\s\S]*(?:guess|uncertain)[\s\S]*confidence/i);
 
   const messages = buildSmsAiProviderMessages({
@@ -433,8 +435,10 @@ test("response schema descriptions encode the card-source and *_other parent rul
   const items = transactions.items as Record<string, unknown>;
   const transactionProperties = items.properties as Record<string, unknown>;
   const cardLast4 = transactionProperties.cardLast4 as Record<string, unknown>;
-  const category =
-    transactionProperties.categorySystemName as Record<string, unknown>;
+  const category = transactionProperties.categorySystemName as Record<
+    string,
+    unknown
+  >;
 
   assert.match(String(cardLast4.description), /same (?:source )?SMS/i);
   assert.match(String(cardLast4.description), /card/i);

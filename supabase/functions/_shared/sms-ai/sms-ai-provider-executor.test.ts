@@ -48,10 +48,7 @@ const CONFIG: SmsAiProviderConfig = {
   apiKey: "test-key",
 };
 
-function deepInfraResponse(
-  content: string,
-  status = 200
-): Response {
+function deepInfraResponse(content: string, status = 200): Response {
   if (status !== 200) return new Response(null, { status });
   return new Response(
     JSON.stringify({
@@ -101,7 +98,10 @@ test("captures only admitted sender/body/date before the provider request", asyn
     },
   ]);
   assert.equal(Object.isFrozen(diagnostics[0]), true);
-  assert.equal(diagnostics[0].every((message) => Object.isFrozen(message)), true);
+  assert.equal(
+    diagnostics[0].every((message) => Object.isFrozen(message)),
+    true
+  );
 
   const diagnosticJson = JSON.stringify(diagnostics[0]);
   assert.equal(diagnosticJson.includes("message-1"), false);

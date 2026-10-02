@@ -6,22 +6,19 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function hasExplicitCardLastFourEvidence(body: string, lastFour: string): boolean {
+function hasExplicitCardLastFourEvidence(
+  body: string,
+  lastFour: string
+): boolean {
   const cardMarker = "(?:\\bcard\\b|بطاقة|البطاقة|كارت|الكارت)";
-  const maskedDigits =
-    "(?:\\s*[*xX•#]){1,12}\\s*" + lastFour + "(?!\\d)";
-  const endingDigits =
-    "(?:(?:\\s*[*xX•#]){1,12}\\s*)?" + lastFour + "(?!\\d)";
-  const englishEnding =
-    "(?:ending|ends)\\s*(?:in|with)?\\s*" + endingDigits;
-  const arabicEnding =
-    "تنتهي\\s*(?:ب|بـ)?\\s*" + endingDigits;
+  const maskedDigits = "(?:\\s*[*xX•#]){1,12}\\s*" + lastFour + "(?!\\d)";
+  const endingDigits = "(?:(?:\\s*[*xX•#]){1,12}\\s*)?" + lastFour + "(?!\\d)";
+  const englishEnding = "(?:ending|ends)\\s*(?:in|with)?\\s*" + endingDigits;
+  const arabicEnding = "تنتهي\\s*(?:ب|بـ)?\\s*" + endingDigits;
 
   return (
     new RegExp(
-      cardMarker +
-        "\\s*(?:no\\.?\\s*|number\\s*)?" +
-        maskedDigits,
+      cardMarker + "\\s*(?:no\\.?\\s*|number\\s*)?" + maskedDigits,
       "iu"
     ).test(body) ||
     new RegExp(
@@ -75,7 +72,9 @@ export function groundSmsAiProviderResponse(
     return value;
   }
 
-  const messagesById = new Map(messages.map((message) => [message.id, message]));
+  const messagesById = new Map(
+    messages.map((message) => [message.id, message])
+  );
   const prohibitedOtherParents = readProhibitedOtherParents(categoryTree);
   let hasChanges = false;
 
