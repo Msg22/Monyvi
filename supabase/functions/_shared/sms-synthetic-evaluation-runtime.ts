@@ -59,6 +59,11 @@ export type SyntheticEvaluationRequestBody = z.infer<
   typeof SyntheticEvaluationRequestBodySchema
 >;
 
+export type ParseSmsCompatibleBody = Omit<
+  SyntheticEvaluationRequestBody,
+  "syntheticEvaluation"
+>;
+
 type ReconcileInput = Parameters<
   ParseSmsHandlerDependencies["reconcileOutcomes"]
 >[0];
@@ -112,6 +117,13 @@ export async function parseCanonicalSyntheticEvaluationRequest(
     }
   }
   return parsed.data;
+}
+
+export function toParseSmsCompatibleBody(
+  body: SyntheticEvaluationRequestBody
+): ParseSmsCompatibleBody {
+  const { syntheticEvaluation: _metadata, ...parseSmsBody } = body;
+  return parseSmsBody;
 }
 
 export function createSyntheticEvaluationLifecycle(): Pick<

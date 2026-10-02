@@ -21,6 +21,8 @@ import {
   createSyntheticEvaluationLifecycle,
   parseCanonicalSyntheticEvaluationRequest,
   reconcileSyntheticEvaluationOutcomes,
+  toParseSmsCompatibleBody,
+  type SyntheticEvaluationRequestBody,
 } from "../_shared/sms-synthetic-evaluation-runtime.ts";
 import { isLikelyCorruptedSmsText } from "../_shared/sms-text-quality.ts";
 
@@ -109,14 +111,28 @@ function createSyntheticParseHandler(userId: string) {
   });
 }
 
-async function validateSyntheticBody(request: Request): Promise<boolean> {
+async function readCanonicalSyntheticBody(
+  request: Request
+): Promise<SyntheticEvaluationRequestBody | null> {
   let value: unknown;
   try {
     value = await request.clone().json();
   } catch {
-    return false;
+    return null;
   }
-  return (await parseCanonicalSyntheticEvaluationRequest(value)) !== null;
+  return parseCanonicalSyntheticEvaluationRequest(value);
+}
+
+function createInternalParseRequest(
+  request: Request,
+  body: SyntheticEvaluationRequestBody
+): Request {
+  return new Request(request.url, {
+    method: "POST",
+    headers: request.headers,
+    body: JSON.stringify(toParseSmsCompatibleBody(body)),
+    signal: request.signal,
+  });
 }
 
 async function handleRequest(request: Request): Promise<Response> {
@@ -130,11 +146,12 @@ async function handleRequest(request: Request): Promise<Response> {
 
   const userId = await verifyAuth(request.headers.get("authorization"));
   if (userId === null) return refusal("unauthenticated", 401);
-  if (!(await validateSyntheticBody(request))) {
-    return refusal("malformed_request", 400);
-  }
 
-  return createSyntheticParseHandler(userId)(request);
+  const body = await readCanonicalSyntheticBody(request);
+  if (body === null) return refusal("malformed_request", 400);
+
+  const internalRequest = createInternalParseRequest(request, body);
+  return createSyntheticParseHandler(userId)(internalRequest);
 }
 
 Deno.serve(async (request: Request): Promise<Response> => {
