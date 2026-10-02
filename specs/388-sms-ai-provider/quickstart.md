@@ -230,6 +230,37 @@ npm run fn:deploy:parse-sms
 
 No `parse-voice` deployment is required for this feature.
 
+### Staging migration-history repair for availability restore
+
+The canonical repository filename for the availability restore is now
+`supabase/migrations/080_restore_sms_ai_get_availability.sql`. Its SQL bytes
+are exactly the same as the historical availability restore that staging
+previously recorded as version `078`.
+
+Before repairing migration history, confirm the linked staging project
+(`yulbcndyssdjicbpmlrk`) still records version `078` with the exact name
+`restore_sms_ai_get_availability`, version `079` as
+`restore_sms_ai_request_metadata`, and no version `080`. If that historical
+record no longer matches, stop and investigate rather than applying this repair.
+
+For the confirmed historical state, repair history only, in this order:
+
+~~~powershell
+npx supabase migration repair 080 --status applied
+npx supabase migration repair 078 --status reverted
+~~~
+
+Mark `080` applied **before** removing the historical `078` record. Supabase
+`migration repair` updates the migration-history table only; this repair must
+not rerun the availability SQL or mutate application/financial data. The
+repository's distinct metals migration remains
+`078_preserve_metal_acquisition_provenance.sql`, and
+`079_restore_sms_ai_request_metadata.sql` remains unchanged.
+
+Historical references that describe the availability restore as staging version
+`078` remain historically correct; current operator references must use
+canonical version `080`.
+
 ## 9. Rollback
 
 This feature intentionally has no runtime automatic fallback provider.
