@@ -187,9 +187,9 @@ export class DeepInfraSmsCategoryProvider {
     body: Readonly<Record<string, unknown>>,
     requestSignal: AbortSignal
   ): Promise<SmsCategoryResponse> {
-    const response = await this.withTimeoutImpl(
-      (signal) =>
-        this.fetchImpl(DEEPINFRA_SMS_ENDPOINT, {
+    return this.withTimeoutImpl(
+      async (signal) => {
+        const response = await this.fetchImpl(DEEPINFRA_SMS_ENDPOINT, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -197,18 +197,19 @@ export class DeepInfraSmsCategoryProvider {
           },
           body: JSON.stringify(body),
           signal,
-        }),
+        });
+
+        if (!response.ok) {
+          throw new Error(
+            `DeepInfra category request failed with HTTP ${response.status}`
+          );
+        }
+
+        return this.parseResponse(await response.json(), request);
+      },
       DEEPINFRA_SMS_CATEGORY_ATTEMPT_TIMEOUT_MS,
       requestSignal
     );
-
-    if (!response.ok) {
-      throw new Error(
-        `DeepInfra category request failed with HTTP ${response.status}`
-      );
-    }
-
-    return this.parseResponse(await response.json(), request);
   }
 
   private parseResponse(
