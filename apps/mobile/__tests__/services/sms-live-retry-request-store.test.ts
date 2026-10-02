@@ -148,6 +148,96 @@ describe("sms live retry request store", () => {
     ).resolves.toBeNull();
   });
 
+  it("propagates prune persistence failure on load without deleting active retry keys", async () => {
+    const key = storageKey("user-a");
+    const original = JSON.stringify({
+      schemaVersion: 1,
+      userId: "user-a",
+      entries: [
+        {
+          smsFingerprint: "active-a",
+          requestKey: "request-a",
+          expiresAtMs: 20_000,
+          updatedAtMs: 100,
+        },
+        {
+          smsFingerprint: "active-b",
+          requestKey: "request-b",
+          expiresAtMs: 20_000,
+          updatedAtMs: 200,
+        },
+        {
+          smsFingerprint: "expired",
+          requestKey: "request-expired",
+          expiresAtMs: 500,
+          updatedAtMs: 50,
+        },
+      ],
+    });
+    await AsyncStorage.setItem(key, original);
+    jest.clearAllMocks();
+    jest
+      .spyOn(AsyncStorage, "setItem")
+      .mockRejectedValueOnce(new Error("prune write unavailable"));
+
+    await expect(
+      loadLiveSmsRetryRequestKey({
+        expectedUserId: "user-a",
+        smsFingerprint: "active-a",
+        nowMs: 1_000,
+      })
+    ).rejects.toThrow("prune write unavailable");
+
+    expect(AsyncStorage.removeItem).not.toHaveBeenCalled();
+    await expect(AsyncStorage.getItem(key)).resolves.toBe(original);
+  });
+
+  it("propagates prune persistence failure on save without rebuilding or deleting active retry keys", async () => {
+    const key = storageKey("user-a");
+    const original = JSON.stringify({
+      schemaVersion: 1,
+      userId: "user-a",
+      entries: [
+        {
+          smsFingerprint: "active-a",
+          requestKey: "request-a",
+          expiresAtMs: 20_000,
+          updatedAtMs: 100,
+        },
+        {
+          smsFingerprint: "active-b",
+          requestKey: "request-b",
+          expiresAtMs: 20_000,
+          updatedAtMs: 200,
+        },
+        {
+          smsFingerprint: "expired",
+          requestKey: "request-expired",
+          expiresAtMs: 500,
+          updatedAtMs: 50,
+        },
+      ],
+    });
+    await AsyncStorage.setItem(key, original);
+    jest.clearAllMocks();
+    jest
+      .spyOn(AsyncStorage, "setItem")
+      .mockRejectedValueOnce(new Error("prune write unavailable"));
+
+    await expect(
+      saveLiveSmsRetryRequestKey({
+        expectedUserId: "user-a",
+        smsFingerprint: "new-c",
+        requestKey: "request-c",
+        nowMs: 1_000,
+      })
+    ).rejects.toThrow("prune write unavailable");
+
+    expect(AsyncStorage.removeItem).not.toHaveBeenCalled();
+    expect(AsyncStorage.setItem).toHaveBeenCalledTimes(1);
+    await expect(AsyncStorage.getItem(key)).resolves.toBe(original);
+  });
+
   it("propagates persistence failure so callers can fail closed", async () => {
     jest
       .spyOn(AsyncStorage, "setItem")
