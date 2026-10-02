@@ -371,6 +371,16 @@ describe("live SMS request identity", () => {
         }),
       }),
     });
+    expect(identityAt(1)).toEqual({
+      candidateId: "live-hash-live-b",
+      options: expect.objectContaining({
+        requestKey: "live:hash-live-b",
+        requestContext: expect.objectContaining({
+          scanStartedAtMs: 1778414460000,
+        }),
+      }),
+    });
+  });
 
   it("persists the initial request key before provider dispatch", async () => {
     await processLiveSmsEvent(liveEvent("headless"));
@@ -388,7 +398,9 @@ describe("live SMS request identity", () => {
   });
 
   it("keeps the persisted key after an ambiguous retryable failure", async () => {
-    mockParseSmsWithOrchestrator.mockResolvedValueOnce(retryResult("live:hash-live"));
+    mockParseSmsWithOrchestrator.mockResolvedValueOnce(
+      retryResult("live:hash-live")
+    );
 
     const first = await processLiveSmsEvent(liveEvent("headless"));
     expect(first.status).toBe("ai_failed");
@@ -435,14 +447,25 @@ describe("live SMS request identity", () => {
     expect(mockParseSmsWithOrchestrator).not.toHaveBeenCalled();
   });
 
+  it("clears retry identity after a successful terminal parser result", async () => {
+    retryRequestKeys.set("user-a:hash-live", "persisted-success");
+
+    const output = await processLiveSmsEvent(liveEvent("headless"));
+
+    expect(output.status).toBe("ignored");
+    expect(retryRequestKeys.has("user-a:hash-live")).toBe(false);
+  });
+
   it("clears retry identity for terminal, nonretryable, and consent outcomes", async () => {
     retryRequestKeys.set("user-a:hash-live", "persisted-terminal");
     mockGetTerminalSmsFingerprints.mockResolvedValueOnce(new Set(["hash-live"]));
     await processLiveSmsEvent(liveEvent("headless"));
-    expect(mockClearLiveSmsRetryRequestKey).toHaveBeenCalledWith({
-      expectedUserId: "user-a",
-      smsFingerprint: "hash-live",
-    });
+    expect(mockClearLiveSmsRetryRequestKey).toHaveBeenCalledWith(
+      expect.objectContaining({
+        expectedUserId: "user-a",
+        smsFingerprint: "hash-live",
+      })
+    );
 
     retryRequestKeys.set("user-a:hash-live", "persisted-nonretryable");
     mockGetTerminalSmsFingerprints.mockResolvedValueOnce(new Set());
@@ -479,17 +502,5 @@ describe("live SMS request identity", () => {
 
     expect(output.status).toBe("stale_user");
     expect(retryRequestKeys.get("user-a:hash-live")).toBe("user-a-key");
-  });
-
-});
-    expect(identityAt(1)).toEqual({
-      candidateId: "live-hash-live-b",
-      options: expect.objectContaining({
-        requestKey: "live:hash-live-b",
-        requestContext: expect.objectContaining({
-          scanStartedAtMs: 1778414460000,
-        }),
-      }),
-    });
   });
 });

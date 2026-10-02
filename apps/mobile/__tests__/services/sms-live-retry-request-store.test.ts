@@ -23,10 +23,6 @@ import {
   saveLiveSmsRetryRequestKey,
 } from "@/services/sms-live-retry-request-store";
 
-const asyncStore = AsyncStorage as typeof AsyncStorage & {
-  readonly __store?: Map<string, string>;
-};
-
 function storageKey(userId: string): string {
   return `@monyvi/sms-live/retry-request/v1/${encodeURIComponent(userId)}`;
 }
@@ -210,5 +206,24 @@ describe("sms live retry request store", () => {
 
     expect(mockAssertExpectedCurrentUser).toHaveBeenCalledWith("user-a");
     expect(mockAssertExpectedCurrentUser.mock.calls.length).toBeGreaterThan(2);
+  });
+
+  it("rejects persistence when the current authenticated owner changes", async () => {
+    mockAssertExpectedCurrentUser.mockRejectedValueOnce(
+      new Error("AUTH_SCOPE_CHANGED")
+    );
+
+    await expect(
+      saveLiveSmsRetryRequestKey({
+        expectedUserId: "user-a",
+        smsFingerprint: "fingerprint-a",
+        requestKey: "request-a",
+        nowMs: 1_000,
+      })
+    ).rejects.toThrow("AUTH_SCOPE_CHANGED");
+
+    await expect(
+      AsyncStorage.getItem(storageKey("user-a"))
+    ).resolves.toBeNull();
   });
 });
