@@ -53,8 +53,8 @@ installing the Android application so the generated
 
 ## Stable-request boundary
 
-For the same SMS, T054 stabilizes the fields owned by the live path:
-`requestKey`, candidate `message.id`, and `scanStartedAtMs`.
+For an ambiguous replay of the same SMS, T054 stabilizes the fields owned by
+the live path: `requestKey`, candidate `message.id`, and `scanStartedAtMs`.
 
 The parser request body also contains current category context and supported
 currencies loaded at retry time. If those values change between attempts, the
@@ -120,7 +120,7 @@ measure:
 - real mobile-to-Supabase network timing;
 - hosted Edge cancellation/timing behavior;
 - DeepInfra compute/billing termination after transport abort; or
-- the combined native + hosted timing budget; or
+- the combined native + hosted timing budget; and
 - confirmed-provider-failure request-key persistence/rotation across a JS
   restart until the paired mobile successor is integrated.
 
