@@ -11,6 +11,7 @@ import { Q } from "@nozbe/watermelondb";
 import {
   isAiConsentRequiredError,
   type ParseSmsContext,
+  type SmsAiRetryRequest,
   type SmsCandidate,
 } from "./ai-sms-parser-service";
 import {
@@ -25,6 +26,12 @@ import {
 } from "./sms-live-detection-handler";
 import { hasExistingSmsFingerprint } from "./sms-dedup-service";
 import { getTerminalSmsFingerprints } from "./sms-processing-outcome-service";
+import {
+  clearLiveSmsRetryRequestKey,
+  clearLiveSmsRetryRequestsForUser,
+  loadLiveSmsRetryRequestKey,
+  saveLiveSmsRetryRequestKey,
+} from "./sms-live-retry-request-store";
 import {
   getAiProcessingConsentStatus,
   revokeAiProcessingConsent,
@@ -99,6 +106,109 @@ async function isInitiatingUserCurrent(userId: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+function isUserScopeError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    [
+      USER_DATA_ACCESS_ERROR_CODES.AUTH_SCOPE_CHANGED,
+      USER_DATA_ACCESS_ERROR_CODES.USER_REQUIRED,
+    ].includes(error.message)
+  );
+}
+
+type RetryStoreResult =
+  | { readonly status: "ready"; readonly requestKey: string }
+  | { readonly status: "stale_user" }
+  | { readonly status: "failed" };
+
+async function prepareRetryRequestKey(
+  userId: string,
+  smsFingerprint: string
+): Promise<RetryStoreResult> {
+  try {
+    const persisted = await loadLiveSmsRetryRequestKey({
+      expectedUserId: userId,
+      smsFingerprint,
+    });
+    const requestKey = persisted ?? `live:${smsFingerprint}`;
+    await saveLiveSmsRetryRequestKey({
+      expectedUserId: userId,
+      smsFingerprint,
+      requestKey,
+    });
+    if (!(await isInitiatingUserCurrent(userId))) {
+      return { status: "stale_user" };
+    }
+    return { status: "ready", requestKey };
+  } catch (error: unknown) {
+    if (isUserScopeError(error)) return { status: "stale_user" };
+    logger.error("liveSms.retryIdentity.persistFailed", error);
+    return { status: "failed" };
+  }
+}
+
+async function clearRetryRequestKey(
+  userId: string,
+  smsFingerprint: string
+): Promise<"cleared" | "stale_user" | "failed"> {
+  try {
+    await clearLiveSmsRetryRequestKey({
+      expectedUserId: userId,
+      smsFingerprint,
+    });
+    return "cleared";
+  } catch (error: unknown) {
+    if (isUserScopeError(error)) return "stale_user";
+    logger.error("liveSms.retryIdentity.clearFailed", error);
+    return "failed";
+  }
+}
+
+async function clearRetryRequestsForUser(
+  userId: string
+): Promise<"cleared" | "stale_user" | "failed"> {
+  try {
+    await clearLiveSmsRetryRequestsForUser({ expectedUserId: userId });
+    return "cleared";
+  } catch (error: unknown) {
+    if (isUserScopeError(error)) return "stale_user";
+    logger.error("liveSms.retryIdentity.clearUserFailed", error);
+    return "failed";
+  }
+}
+
+function retryStorageFailure(
+  smsFingerprint?: string
+): LiveSmsProcessingResult {
+  return createResult(
+    "ai_failed",
+    smsFingerprint,
+    EMPTY_TRANSACTIONS,
+    true
+  );
+}
+
+function selectCanonicalRetryRequest(
+  unresolved: Awaited<
+    ReturnType<typeof parseSmsWithOrchestrator>
+  >["unresolvedCandidates"],
+  smsFingerprint: string
+): SmsAiRetryRequest | null {
+  const matching = unresolved.flatMap((item) =>
+    item.isRetryable &&
+    item.candidate.smsFingerprint === smsFingerprint &&
+    item.retryRequest !== undefined &&
+    item.retryRequest.candidates.some(
+      (candidate) => candidate.smsFingerprint === smsFingerprint
+    )
+      ? [item.retryRequest]
+      : []
+  );
+  const keys = new Set(matching.map((request) => request.requestKey));
+  if (keys.size !== 1) return null;
+  return matching.find((request) => keys.has(request.requestKey)) ?? null;
 }
 
 async function loadAiContext(
@@ -225,7 +335,14 @@ export async function processLiveSmsEvent(
       deliveryMode: event.deliveryMode,
       expectedUserId: initiatingUserId,
     });
-    if (!consentCheck.canProcess) return consentCheck.result;
+    if (!consentCheck.canProcess) {
+      if (consentCheck.result.status === "disabled") {
+        const cleared = await clearRetryRequestsForUser(initiatingUserId);
+        if (cleared === "stale_user") return createResult("stale_user");
+        if (cleared === "failed") return retryStorageFailure();
+      }
+      return consentCheck.result;
+    }
     if (!(await isInitiatingUserCurrent(initiatingUserId))) {
       return createResult("stale_user");
     }
@@ -284,6 +401,7 @@ export async function processLiveSmsEvent(
     inFlightSmsFingerprints.add(smsFingerprint);
 
     if (await hasExistingSmsFingerprint(smsFingerprint, initiatingUserId)) {
+      await clearRetryRequestKey(initiatingUserId, smsFingerprint);
       inFlightSmsFingerprints.delete(smsFingerprint);
       return createResult("duplicate", smsFingerprint);
     }
@@ -331,6 +449,18 @@ export async function processLiveSmsEvent(
       expectedUserId: initiatingUserId,
     });
     if (!preParseConsentCheck.canProcess) {
+      if (preParseConsentCheck.result.status === "disabled") {
+        const cleared = await clearRetryRequestKey(
+          initiatingUserId,
+          confirmedSmsFingerprint
+        );
+        if (cleared === "stale_user") {
+          return createResult("stale_user", confirmedSmsFingerprint);
+        }
+        if (cleared === "failed") {
+          return retryStorageFailure(confirmedSmsFingerprint);
+        }
+      }
       return preParseConsentCheck.result;
     }
 
@@ -340,6 +470,19 @@ export async function processLiveSmsEvent(
         [confirmedSmsFingerprint],
         initiatingUserId
       );
+      const retryIdentity = await prepareRetryRequestKey(
+        initiatingUserId,
+        confirmedSmsFingerprint
+      );
+      if (retryIdentity.status === "stale_user") {
+        return createResult("stale_user", confirmedSmsFingerprint);
+      }
+      if (retryIdentity.status === "failed") {
+        return retryStorageFailure(confirmedSmsFingerprint);
+      }
+      if (!(await isInitiatingUserCurrent(initiatingUserId))) {
+        return createResult("stale_user", confirmedSmsFingerprint);
+      }
       aiResult = await parseSmsWithOrchestrator(
         [candidate],
         context,
@@ -353,9 +496,12 @@ export async function processLiveSmsEvent(
             scanKind: "live",
             scanStartedAtMs: event.timestamp,
           },
-          requestKey: `live:${confirmedSmsFingerprint}`,
+          requestKey: retryIdentity.requestKey,
         }
       );
+      if (!(await isInitiatingUserCurrent(initiatingUserId))) {
+        return createResult("stale_user", confirmedSmsFingerprint);
+      }
     } catch (error: unknown) {
       if (
         error instanceof Error &&
@@ -364,6 +510,10 @@ export async function processLiveSmsEvent(
         return createResult("stale_user", confirmedSmsFingerprint);
       }
       if (isAiConsentRequiredError(error)) {
+        await clearRetryRequestKey(
+          initiatingUserId,
+          confirmedSmsFingerprint
+        );
         return disableLiveSmsAfterConsentRequired({
           deliveryMode: event.deliveryMode,
           smsFingerprint: confirmedSmsFingerprint,
@@ -388,6 +538,10 @@ export async function processLiveSmsEvent(
     });
 
     if (aiResult.isConsentRequired === true) {
+      await clearRetryRequestKey(
+        initiatingUserId,
+        confirmedSmsFingerprint
+      );
       return disableLiveSmsAfterConsentRequired({
         deliveryMode: event.deliveryMode,
         smsFingerprint: confirmedSmsFingerprint,
@@ -402,6 +556,12 @@ export async function processLiveSmsEvent(
       expectedUserId: initiatingUserId,
     });
     if (!consentRecheck.canProcess) {
+      if (consentRecheck.result.status === "disabled") {
+        await clearRetryRequestKey(
+          initiatingUserId,
+          confirmedSmsFingerprint
+        );
+      }
       return consentRecheck.result;
     }
 
@@ -417,14 +577,54 @@ export async function processLiveSmsEvent(
       (aiResult.transactions.length === 0 ||
         aiResult.unresolvedCandidates.length > 0);
     if (hasUnresolvedFailure) {
+      const isRetryable = aiResult.isRetryable !== false;
+      if (!isRetryable) {
+        await clearRetryRequestKey(
+          initiatingUserId,
+          confirmedSmsFingerprint
+        );
+      } else {
+        const retryRequest = selectCanonicalRetryRequest(
+          aiResult.unresolvedCandidates,
+          confirmedSmsFingerprint
+        );
+        if (retryRequest !== null) {
+          const currentKey = await loadLiveSmsRetryRequestKey({
+            expectedUserId: initiatingUserId,
+            smsFingerprint: confirmedSmsFingerprint,
+          });
+          if (
+            currentKey !== null &&
+            retryRequest.requestKey !== currentKey
+          ) {
+            try {
+              await saveLiveSmsRetryRequestKey({
+                expectedUserId: initiatingUserId,
+                smsFingerprint: confirmedSmsFingerprint,
+                requestKey: retryRequest.requestKey,
+              });
+            } catch (error: unknown) {
+              if (isUserScopeError(error)) {
+                return createResult("stale_user", confirmedSmsFingerprint);
+              }
+              logger.error("liveSms.retryIdentity.rotateFailed", error);
+              return retryStorageFailure(confirmedSmsFingerprint);
+            }
+          }
+        }
+      }
       return createResult(
         "ai_failed",
         confirmedSmsFingerprint,
         EMPTY_TRANSACTIONS,
-        aiResult.isRetryable !== false
+        isRetryable
       );
     }
 
+    await clearRetryRequestKey(
+      initiatingUserId,
+      confirmedSmsFingerprint
+    );
     options.markRecentlyProcessed?.(confirmedSmsFingerprint);
 
     if (aiResult.transactions.length === 0) {
