@@ -11,9 +11,7 @@ import {
 import type { SmsAiProviderConfig } from "../sms-ai-provider-config.ts";
 import { DEEPINFRA_SMS_ENDPOINT } from "./deepinfra-sms-provider.ts";
 
-export const DEEPINFRA_SMS_CATEGORY_ATTEMPT_TIMEOUT_MS = 8_000;
-const DEEPINFRA_SMS_CATEGORY_MAX_RETRIES = 1;
-const DEEPINFRA_SMS_CATEGORY_BASE_RETRY_DELAY_MS = 1_000;
+export const DEEPINFRA_SMS_CATEGORY_ATTEMPT_TIMEOUT_MS = 60_000;
 const CATEGORY_SYSTEM_INSTRUCTION =
   "Classify each supplied merchant into one supplied system category. Return only the requested JSON fields. Do not invent categories.";
 
@@ -68,28 +66,6 @@ function getProviderFailurePhase(error: unknown): string {
   return "provider_request";
 }
 
-function defaultSleep(
-  milliseconds: number,
-  signal: AbortSignal
-): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (signal.aborted) {
-      reject(signal.reason);
-      return;
-    }
-
-    const timeoutId = setTimeout(resolve, milliseconds);
-    signal.addEventListener(
-      "abort",
-      () => {
-        clearTimeout(timeoutId);
-        reject(signal.reason);
-      },
-      { once: true }
-    );
-  });
-}
-
 function buildRequestBody(
   config: SmsAiProviderConfig,
   request: SmsCategoryRequest
@@ -124,7 +100,6 @@ function buildRequestBody(
 
 export class DeepInfraSmsCategoryProvider {
   private readonly fetchImpl: FetchLike;
-  private readonly sleepImpl: Sleep;
   private readonly withTimeoutImpl: WithTimeout;
   private readonly logWarn: ProviderLog;
   private readonly logError: ProviderLog;
@@ -134,7 +109,6 @@ export class DeepInfraSmsCategoryProvider {
     dependencies: DeepInfraSmsCategoryProviderDependencies = {}
   ) {
     this.fetchImpl = dependencies.fetch ?? fetch;
-    this.sleepImpl = dependencies.sleep ?? defaultSleep;
     this.withTimeoutImpl = dependencies.withTimeout ?? defaultWithTimeout;
     this.logWarn = dependencies.logWarn ?? (() => undefined);
     this.logError = dependencies.logError ?? (() => undefined);
@@ -145,40 +119,18 @@ export class DeepInfraSmsCategoryProvider {
     requestSignal: AbortSignal
   ): Promise<SmsCategoryResponse | null> {
     const body = buildRequestBody(this.config, request);
-    let lastError: unknown;
 
-    for (
-      let attempt = 0;
-      attempt <= DEEPINFRA_SMS_CATEGORY_MAX_RETRIES;
-      attempt++
-    ) {
-      try {
-        await this.waitForRetry(attempt, requestSignal);
-        return await this.executeAttempt(request, body, requestSignal);
-      } catch (error: unknown) {
-        if (requestSignal.aborted) throw error;
-        lastError = error;
-        this.logAttemptFailure(attempt, error);
-      }
+    try {
+      return await this.executeAttempt(request, body, requestSignal);
+    } catch (error: unknown) {
+      if (requestSignal.aborted) throw error;
+      this.logAttemptFailure(0, error);
+      this.logError("[enrich-sms-categories] Provider attempt failed", {
+        errorType: getSafeErrorType(error),
+        phase: getProviderFailurePhase(error),
+      });
+      return null;
     }
-
-    this.logError("[enrich-sms-categories] Provider retries exhausted", {
-      errorType: getSafeErrorType(lastError),
-      phase: getProviderFailurePhase(lastError),
-    });
-    return null;
-  }
-
-  private async waitForRetry(
-    attempt: number,
-    requestSignal: AbortSignal
-  ): Promise<void> {
-    if (attempt === 0) return;
-
-    await this.sleepImpl(
-      DEEPINFRA_SMS_CATEGORY_BASE_RETRY_DELAY_MS * Math.pow(2, attempt - 1),
-      requestSignal
-    );
   }
 
   private async executeAttempt(

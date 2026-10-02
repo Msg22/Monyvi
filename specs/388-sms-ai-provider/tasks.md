@@ -584,6 +584,25 @@ Do not add during feature 388:
 - Stop on any new product/financial/schema/sync decision instead of inventing
   behavior.
 
+### CAT-TIMEOUT-060 approved trial (2026-10-03)
+
+- [x] Category enrichment uses one 60-second DeepInfra provider attempt with
+      zero automatic provider retries; fetch, response-body consumption, and
+      category validation remain inside that attempt deadline, while incoming
+      request cancellation still aborts immediately.
+- [x] Mobile category enrichment keeps the 20-merchant request size and
+      concurrency limit 2, but replaces the shared 20-second operation deadline
+      with a fresh 70-second deadline per concurrency wave (60-second Edge
+      attempt plus 10 seconds for user-scope/auth, network, and response
+      completion). Sequential later waves receive their own full budget.
+- [ ] Lead/local verification: run the focused Edge/mobile suites, then manually
+      verify a slow successful enrichment before 60 seconds, a provider timeout
+      with exactly one provider call and preserved trusted fallback, a
+      41-merchant three-chunk/two-wave run whose later wave is not cancelled by
+      earlier elapsed time, and caller cancellation during an active wave.
+      Device/staging deployment remains lead-owned and must not be inferred from
+      source.
+
 ## Evidence (HEAD 920a65f2, `codex/pr349-edge`, clean tree, verified 2026-09-27)
 
 - T015/T027/T030: `test:sms-ai-provider` 35/35 Green (incl. cache-hit/cache-miss
