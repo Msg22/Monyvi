@@ -65,7 +65,7 @@ function requestBody(
   };
 }
 
-function post(body: unknown): Request {
+function post(body: unknown, signal?: AbortSignal): Request {
   return new Request("http://localhost/parse-sms", {
     method: "POST",
     headers: {
@@ -73,6 +73,7 @@ function post(body: unknown): Request {
       "content-type": "application/json",
     },
     body: JSON.stringify(body),
+    ...(signal === undefined ? {} : { signal }),
   });
 }
 
@@ -975,6 +976,7 @@ test("finalizes provider-started work when outcome reconciliation fails", async 
 
   assert.equal(response.status, 503);
   assert.equal(data.reason, "dependency_unavailable");
+  assert.equal("retryRequestMode" in data, false);
   assert.equal(state.provider, 1);
   assert.equal(state.reconcile, 1);
   assert.deepEqual(completions, [
@@ -1012,10 +1014,37 @@ test("incomplete provider output creates no negative strike and remains unresolv
     assert.deepEqual(data.transactions, []);
     assert.deepEqual(data.negativeFingerprints, []);
     assert.deepEqual(data.unresolvedFingerprints, ["fingerprint-1"]);
+    assert.equal(data.retryRequestMode, "fresh");
   }
 });
 
-test("provider failure is consumed and never reported as an empty success", async () => {
+test("incomplete provider output fails closed when completion is unconfirmed", async () => {
+  const state = createState();
+  const handler = createParseSmsHandler(
+    createDependencies(state, {
+      executeProvider: async () => {
+        state.provider++;
+        return providerResult({ completionStatus: "failed" });
+      },
+      completeWork: async () => {
+        state.complete++;
+        return false;
+      },
+    })
+  );
+
+  const response = await handler(post(requestBody()));
+  const data = await readJson(response);
+
+  assert.equal(response.status, 503);
+  assert.equal(data.reason, "dependency_unavailable");
+  assert.equal("retryRequestMode" in data, false);
+  assert.equal(state.provider, 1);
+  assert.equal(state.complete, 3);
+  assert.equal(state.reconcile, 0);
+});
+
+test("provider failure is consumed and grants fresh retry after confirmed completion", async () => {
   const state = createState();
   const handler = createParseSmsHandler(
     createDependencies(state, {
@@ -1031,7 +1060,35 @@ test("provider failure is consumed and never reported as an empty success", asyn
 
   assert.equal(response.status, 502);
   assert.equal(data.reason, "provider_failed");
+  assert.equal(data.retryRequestMode, "fresh");
   assert.equal(state.complete, 1);
+  assert.equal(state.release, 0);
+  assert.equal(state.reconcile, 0);
+});
+
+test("provider failure does not grant fresh retry when completion is unconfirmed", async () => {
+  const state = createState();
+  const handler = createParseSmsHandler(
+    createDependencies(state, {
+      executeProvider: async () => {
+        state.provider++;
+        throw new Error("provider failed");
+      },
+      completeWork: async () => {
+        state.complete++;
+        return false;
+      },
+    })
+  );
+
+  const response = await handler(post(requestBody()));
+  const data = await readJson(response);
+
+  assert.equal(response.status, 503);
+  assert.equal(data.reason, "dependency_unavailable");
+  assert.equal("retryRequestMode" in data, false);
+  assert.equal(state.provider, 1);
+  assert.equal(state.complete, 3);
   assert.equal(state.release, 0);
   assert.equal(state.reconcile, 0);
 });
@@ -1054,8 +1111,11 @@ test("reconciles an ambiguous provider-start response as consumed work", async (
   );
 
   const response = await handler(post(requestBody()));
+  const data = await readJson(response);
 
   assert.equal(response.status, 503);
+  assert.equal(data.reason, "dependency_unavailable");
+  assert.equal("retryRequestMode" in data, false);
   assert.equal(state.complete, 1);
   assert.equal(state.release, 0);
   assert.equal(state.provider, 0);
@@ -1066,6 +1126,35 @@ test("reconciles an ambiguous provider-start response as consumed work", async (
       decisionCode: "provider_start_response_unknown",
     },
   ]);
+});
+
+test("caller cancellation after provider start never grants fresh retry", async () => {
+  const state = createState();
+  const controller = new AbortController();
+  const handler = createParseSmsHandler(
+    createDependencies(state, {
+      markProviderStarted: async () => {
+        state.start++;
+        controller.abort();
+        return {
+          started: true,
+          decisionCode: "provider_started",
+          terminalFingerprints: [],
+          availableAt: null,
+        };
+      },
+    })
+  );
+
+  const response = await handler(post(requestBody(), controller.signal));
+  const data = await readJson(response);
+
+  assert.equal(response.status, 499);
+  assert.equal(data.reason, "request_cancelled");
+  assert.equal("retryRequestMode" in data, false);
+  assert.equal(state.provider, 0);
+  assert.equal(state.complete, 1);
+  assert.equal(state.release, 0);
 });
 
 test("releases a reservation when provider start definitely did not complete", async () => {
@@ -1142,10 +1231,41 @@ test("rejects a schema-invalid normalized provider result without reconciliation
 
   assert.equal(response.status, 502);
   assert.equal(data.reason, "response_invalid");
+  assert.equal(data.retryRequestMode, "fresh");
   assert.equal(state.start, 1);
   assert.equal(state.provider, 1);
   assert.equal(state.reconcile, 0);
   assert.equal(state.complete, 1);
+});
+
+test("schema-invalid provider output does not grant fresh retry when completion is unconfirmed", async () => {
+  const state = createState();
+  const handler = createParseSmsHandler(
+    createDependencies(state, {
+      executeProvider: async () => {
+        state.provider++;
+        return providerResult({
+          isResponseSchemaValid: false,
+          transactions: [],
+        });
+      },
+      completeWork: async () => {
+        state.complete++;
+        return false;
+      },
+    })
+  );
+
+  const response = await handler(post(requestBody()));
+  const data = await readJson(response);
+
+  assert.equal(response.status, 503);
+  assert.equal(data.reason, "dependency_unavailable");
+  assert.equal("retryRequestMode" in data, false);
+  assert.equal(state.start, 1);
+  assert.equal(state.provider, 1);
+  assert.equal(state.reconcile, 0);
+  assert.equal(state.complete, 3);
 });
 
 test("keeps provider implementation metadata out of the public success response", async () => {
