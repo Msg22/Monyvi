@@ -458,7 +458,9 @@ Verification for this slice is explicitly deferred by the product owner: no
 tests, lint, typecheck, format, CI, device, provider or visual checks are run or
 claimed here.
 
-Deployment status (T050 integration note): staging `yulbcndyssdjicbpmlrk`
-`parse-sms` version 36 ACTIVE, verifyJWT true - deployed/source-reviewed only.
-Runtime UNVERIFIED; no tests written/run in this task per source-only trial
-waiver.
+Historical deployment record (T050 integration checkpoint): staging
+`yulbcndyssdjicbpmlrk` `parse-sms` version 36 was observed ACTIVE with
+verifyJWT true at that source-only checkpoint. This note is historical only and
+does not assert the currently deployed version or runtime status. Runtime at
+that checkpoint remained UNVERIFIED; no tests were written/run in that task per
+the source-only trial waiver.

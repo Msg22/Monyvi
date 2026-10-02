@@ -179,19 +179,35 @@ test("does not borrow card evidence from another SMS or an unknown messageId", a
     input(messages)
   );
   assert.equal(unknownMessage.isResponseSchemaValid, true);
-  assert.equal(unknownMessage.transactions.length, 1);
-  assert.equal("cardLast4" in unknownMessage.transactions[0]!, false);
+  assert.deepEqual(unknownMessage.transactions, []);
+  assert.deepEqual(unknownMessage.invalidMessageIds, []);
+  assert.equal(unknownMessage.hasUncorrelatedInvalidEntries, true);
 });
 
-test("preserves rejection of malformed nonempty cardLast4 values", async () => {
+test("rejects malformed cardLast4 per entry while preserving a valid sibling", async () => {
+  const messages = [
+    message("message-1", "Purchase EGP 125.50 at Merchant"),
+    message("message-2", "Purchase EGP 50.00 at Merchant Two"),
+  ];
+
   for (const cardLast4 of ["12", "abcd", 1234, null]) {
     const result = await executeSmsAiProvider(
-      providerFor([transaction({ cardLast4 })]),
-      input([message("message-1", "Purchase EGP 125.50 at Merchant")])
+      providerFor([
+        transaction({ cardLast4 }),
+        transaction({
+          messageId: "message-2",
+          amount: 50,
+          counterparty: "Merchant Two",
+        }),
+      ]),
+      input(messages)
     );
 
-    assert.equal(result.isResponseSchemaValid, false);
-    assert.deepEqual(result.transactions, []);
+    assert.equal(result.isResponseSchemaValid, true);
+    assert.equal(result.transactions.length, 1);
+    assert.equal(result.transactions[0]?.messageId, "message-2");
+    assert.deepEqual(result.invalidMessageIds, ["message-1"]);
+    assert.equal(result.hasUncorrelatedInvalidEntries, false);
   }
 });
 
@@ -276,8 +292,10 @@ INCOME categories:
     )
   );
 
-  assert.equal(result.isResponseSchemaValid, false);
+  assert.equal(result.isResponseSchemaValid, true);
   assert.deepEqual(result.transactions, []);
+  assert.deepEqual(result.invalidMessageIds, ["message-1"]);
+  assert.equal(result.hasUncorrelatedInvalidEntries, false);
 });
 
 test("rejects an orphan prohibited *_other child with no accessible L1 parent", async () => {
@@ -302,8 +320,10 @@ test("rejects an orphan prohibited *_other child with no accessible L1 parent", 
     )
   );
 
-  assert.equal(result.isResponseSchemaValid, false);
+  assert.equal(result.isResponseSchemaValid, true);
   assert.deepEqual(result.transactions, []);
+  assert.deepEqual(result.invalidMessageIds, ["message-1"]);
+  assert.equal(result.hasUncorrelatedInvalidEntries, false);
 });
 
 test("preserves an approved custom L1 whose name ends in _other", async () => {
@@ -338,8 +358,10 @@ test("never invents an inaccessible *_other parent and preserves valid custom/L1
     providerFor([transaction({ categorySystemName: "food_other" })]),
     input([message("message-1", "Completed purchase EGP 125")], restrictedTree)
   );
-  assert.equal(inaccessibleParent.isResponseSchemaValid, false);
+  assert.equal(inaccessibleParent.isResponseSchemaValid, true);
   assert.deepEqual(inaccessibleParent.transactions, []);
+  assert.deepEqual(inaccessibleParent.invalidMessageIds, ["message-1"]);
+  assert.equal(inaccessibleParent.hasUncorrelatedInvalidEntries, false);
 
   for (const categorySystemName of ["other", "custom_parent", "custom_child"]) {
     const result = await executeSmsAiProvider(

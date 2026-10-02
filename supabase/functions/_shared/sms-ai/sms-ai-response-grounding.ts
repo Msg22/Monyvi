@@ -10,10 +10,12 @@ function hasExplicitCardLastFourEvidence(body: string, lastFour: string): boolea
   const cardMarker = "(?:\\bcard\\b|بطاقة|البطاقة|كارت|الكارت)";
   const maskedDigits =
     "(?:\\s*[*xX•#]){1,12}\\s*" + lastFour + "(?!\\d)";
+  const endingDigits =
+    "(?:(?:\\s*[*xX•#]){1,12}\\s*)?" + lastFour + "(?!\\d)";
   const englishEnding =
-    "(?:ending|ends)\\s*(?:in|with)?\\s*" + lastFour + "(?!\\d)";
+    "(?:ending|ends)\\s*(?:in|with)?\\s*" + endingDigits;
   const arabicEnding =
-    "تنتهي\\s*(?:ب|بـ)?\\s*" + lastFour + "(?!\\d)";
+    "تنتهي\\s*(?:ب|بـ)?\\s*" + endingDigits;
 
   return (
     new RegExp(
