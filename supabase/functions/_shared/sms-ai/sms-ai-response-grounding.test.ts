@@ -86,6 +86,16 @@ test("keeps cardLast4 only when the same source SMS explicitly identifies card d
       body: "تم خصم 125.50 جنيه من البطاقة ****4321 لدى Merchant",
       cardLast4: "4321",
     },
+    {
+      name: "masked English ending suffix",
+      body: "Purchase EGP 125.50 using Card ending with ****1234 at Merchant",
+      cardLast4: "1234",
+    },
+    {
+      name: "masked Arabic ending suffix",
+      body: "تم خصم 125.50 جنيه من البطاقة تنتهي بـ ****4321 لدى Merchant",
+      cardLast4: "4321",
+    },
   ] as const;
 
   for (const scenario of cases) {

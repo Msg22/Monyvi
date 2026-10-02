@@ -164,34 +164,32 @@ test("a throwing request-input diagnostic cannot prevent fetch or alter an empty
   assert.deepEqual(result.transactions, []);
 });
 
-test("internal DeepInfra retries reuse one logical request-input diagnostic snapshot", async () => {
+test("a failed single DeepInfra attempt emits exactly one request-input diagnostic snapshot", async () => {
   let fetchCalls = 0;
-  const fetchBodies: string[] = [];
   const diagnostics: Array<readonly SmsAiProviderRequestInputMessage[]> = [];
   const provider = new DeepInfraSmsProvider(CONFIG, {
-    fetch: async (_input, init) => {
+    fetch: async () => {
       fetchCalls++;
-      fetchBodies.push(String(init?.body));
-      if (fetchCalls === 1) {
-        return deepInfraResponse("", 503);
-      }
-      return deepInfraResponse('{"transactions":[]}');
+      return deepInfraResponse("", 503);
     },
     sleep: async () => undefined,
     createTimeoutSignal: () => new AbortController().signal,
   });
 
-  const result = await executeSmsAiProvider(provider, INPUT, {
-    onRequestInput: (smsMessages) => {
-      diagnostics.push(smsMessages);
-    },
-  });
+  await assert.rejects(() =>
+    executeSmsAiProvider(provider, INPUT, {
+      onRequestInput: (smsMessages) => {
+        diagnostics.push(smsMessages);
+      },
+    })
+  );
 
-  assert.equal(fetchCalls, 2);
+  assert.equal(fetchCalls, 1);
   assert.equal(diagnostics.length, 1);
-  assert.deepEqual(fetchBodies[0], fetchBodies[1]);
-  assert.equal(result.completionStatus, "complete");
-  assert.deepEqual(result.transactions, []);
+  assert.equal(diagnostics[0]?.length, INPUT.messages.length);
+  assert.equal(diagnostics[0]?.[0]?.sender, INPUT.messages[0]?.sender);
+  assert.equal(diagnostics[0]?.[0]?.body, INPUT.messages[0]?.body);
+  assert.equal(diagnostics[0]?.[0]?.date, INPUT.messages[0]?.date);
 });
 
 test("parse-sms wires request-input capture only through the existing debug guard", () => {
