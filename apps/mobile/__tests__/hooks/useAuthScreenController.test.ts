@@ -195,6 +195,32 @@ describe("useAuthScreenController", () => {
     expect(result.current.emailError).toBeNull();
   });
 
+
+  it("routes an unverified returning user to verification pending without raw provider error", async () => {
+    mockSignInWithEmail.mockResolvedValue({
+      success: false,
+      needsVerification: true,
+      error: createAuthError("Email not confirmed"),
+    });
+    const { result } = renderHook(() => useAuthScreenController());
+
+    await act(async () => {
+      await result.current.handleEmailSubmit(
+        "  unverified@example.com  ",
+        "secret",
+        "signIn"
+      );
+    });
+
+    expect(mockSignInWithEmail).toHaveBeenCalledWith(
+      "unverified@example.com",
+      "secret"
+    );
+    expect(result.current.pendingEmail).toBe("unverified@example.com");
+    expect(result.current.screenState).toBe("verificationPending");
+    expect(result.current.emailError).toBeNull();
+  });
+
   it("shows email authentication errors inline", async () => {
     mockSignInWithEmail.mockResolvedValue({
       success: false,
@@ -213,7 +239,7 @@ describe("useAuthScreenController", () => {
     expect(result.current.emailError).toBe("Invalid credentials");
   });
 
-  it("moves successful sign-up requiring verification to pending state", async () => {
+  it("moves successful sign-up requiring verification to pending state with normalized email", async () => {
     mockSignUpWithEmail.mockResolvedValue({
       success: true,
       needsVerification: true,
@@ -222,12 +248,16 @@ describe("useAuthScreenController", () => {
 
     await act(async () => {
       await result.current.handleEmailSubmit(
-        "new@example.com",
+        "  new@example.com  ",
         "secret",
         "signUp"
       );
     });
 
+    expect(mockSignUpWithEmail).toHaveBeenCalledWith(
+      "new@example.com",
+      "secret"
+    );
     expect(result.current.pendingEmail).toBe("new@example.com");
     expect(result.current.screenState).toBe("verificationPending");
   });
@@ -335,6 +365,50 @@ describe("useAuthScreenController", () => {
       type: "success",
       title: "auth.verification_email_sent",
     });
+    expect(result.current.pendingAction).toBeNull();
+  });
+
+
+  it("ignores a duplicate resend while verification resend remains pending", async () => {
+    mockSignUpWithEmail.mockResolvedValue({
+      success: true,
+      needsVerification: true,
+    });
+
+    let resolveResend:
+      | ((value: { success: true }) => void)
+      | undefined;
+    mockResendVerificationEmail.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveResend = resolve;
+        })
+    );
+
+    const { result } = renderHook(() => useAuthScreenController());
+
+    await act(async () => {
+      await result.current.handleEmailSubmit(
+        "new@example.com",
+        "secret",
+        "signUp"
+      );
+    });
+
+    let firstResend: Promise<void> | undefined;
+    act(() => {
+      firstResend = result.current.handleResendVerification();
+      void result.current.handleResendVerification();
+    });
+
+    expect(mockResendVerificationEmail).toHaveBeenCalledTimes(1);
+    expect(result.current.pendingAction).toBe("verificationResend");
+
+    await act(async () => {
+      resolveResend?.({ success: true });
+      await firstResend;
+    });
+
     expect(result.current.pendingAction).toBeNull();
   });
 

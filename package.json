@@ -75,6 +75,8 @@
     "db:migrations": "npx supabase migration list",
     "supabase:runtime:setup-local": "node scripts/setup-local-supabase-runtime.js",
     "supabase:market-rates:import-local": "node scripts/import-market-rates-to-local.js",
+    "auth:smtp:check": "node scripts/configure-hosted-auth-smtp.js --check",
+    "auth:smtp:configure": "node scripts/configure-hosted-auth-smtp.js --apply",
     "fn:deploy:rates": "npx supabase functions deploy fetch-metal-rates --project-ref yulbcndyssdjicbpmlrk",
     "fn:deploy:parse-sms": "npx supabase functions deploy parse-sms --project-ref yulbcndyssdjicbpmlrk",
     "fn:deploy:enrich-sms-categories": "npx supabase functions deploy enrich-sms-categories --project-ref yulbcndyssdjicbpmlrk",
@@ -100,6 +102,7 @@
     "test": "npm test -w @monyvi/mobile",
     "prepare": "node -e \"if (process.env.CI !== 'true') { process.exit(1) }\" || husky",
     "postinstall": "node scripts/postinstall.js",
+    "e2e:email-verification:local": "npm run e2e:email-verification:local -w @monyvi/mobile",
     "test:sms-ai-provider": "tsx --test supabase/functions/_shared/sms-ai/sms-ai-provider-config.test.ts supabase/functions/_shared/sms-ai/sms-ai-prompt.test.ts supabase/functions/_shared/sms-ai/providers/deepinfra-sms-provider.test.ts supabase/functions/_shared/sms-ai/parse-sms-deepinfra.integration.test.ts supabase/functions/_shared/sms-ai/sms-ai-provider-factory.test.ts supabase/functions/_shared/sms-ai/parse-sms-openapi-contract.test.ts"
   },
   "dependencies": {

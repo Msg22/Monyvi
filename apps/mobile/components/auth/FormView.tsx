@@ -30,8 +30,6 @@ export interface FormViewProps {
   readonly onForgotPassword: (email: string) => Promise<void>;
   readonly onClearError: () => void;
   readonly onClearNetworkError: () => void;
-  readonly onPrivacyPress: () => void;
-  readonly onTermsPress: () => void;
   readonly onEmailFocus?: () => void;
   readonly onPasswordFocus?: () => void;
 }
@@ -49,8 +47,6 @@ export function FormView({
   onForgotPassword,
   onClearError,
   onClearNetworkError,
-  onPrivacyPress,
-  onTermsPress,
   onEmailFocus,
   onPasswordFocus,
 }: FormViewProps): React.JSX.Element {
@@ -316,33 +312,19 @@ export function FormView({
             className="flex-row items-center"
             style={{ gap: 14 }}
           >
-            <Pressable
-              accessibilityRole="link"
-              accessibilityLabel={t("privacy")}
-              hitSlop={8}
-              onPress={onPrivacyPress}
+            <Text
+              className="text-nileGreen-700 dark:text-nileGreen-300"
+              style={{ fontFamily: fontFamily.semiBold, fontSize: 11.5 }}
             >
-              <Text
-                className="text-nileGreen-700 dark:text-nileGreen-300"
-                style={{ fontFamily: fontFamily.semiBold, fontSize: 11.5 }}
-              >
-                {t("privacy")}
-              </Text>
-            </Pressable>
+              {t("privacy")}
+            </Text>
             <View className="h-3 w-px bg-slate-200 dark:bg-slate-700" />
-            <Pressable
-              accessibilityRole="link"
-              accessibilityLabel={t("terms")}
-              hitSlop={8}
-              onPress={onTermsPress}
+            <Text
+              className="text-nileGreen-700 dark:text-nileGreen-300"
+              style={{ fontFamily: fontFamily.semiBold, fontSize: 11.5 }}
             >
-              <Text
-                className="text-nileGreen-700 dark:text-nileGreen-300"
-                style={{ fontFamily: fontFamily.semiBold, fontSize: 11.5 }}
-              >
-                {t("terms")}
-              </Text>
-            </Pressable>
+              {t("terms")}
+            </Text>
           </View>
         </View>
       ) : null}

@@ -64,7 +64,7 @@ describe("EmailPasswordForm RTL", () => {
     mockForgot.mockResolvedValue(undefined);
   });
 
-  it("keeps email LTR while password starts from RTL side", () => {
+  it("aligns email and password to RTL side in RTL mode", () => {
     render(
       <EmailPasswordForm
         mode="signIn"
@@ -76,8 +76,8 @@ describe("EmailPasswordForm RTL", () => {
     );
 
     expect(screen.getByLabelText("البريد الإلكتروني")).toHaveStyle({
-      writingDirection: "ltr",
-      textAlign: "left",
+      writingDirection: "rtl",
+      textAlign: "right",
     });
     expect(screen.getByLabelText("كلمة المرور")).toHaveStyle({
       writingDirection: "rtl",

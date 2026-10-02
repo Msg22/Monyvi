@@ -1,0 +1,31 @@
+appId: com.monyvi.app
+---
+# #321: open the callback produced by resolving the captured local Supabase
+# confirmation URL, then prove the existing authenticated startup flow takes over.
+
+- openLink: "${MAESTRO_E2E_VERIFICATION_CALLBACK}"
+
+- extendedWaitUntil:
+    visible:
+      "Choose your primary currency|Auto-Track Transactions|Transactions|Accounts|Open menu|Good Morning|Good Afternoon|Good Evening"
+    timeout: 120000
+
+- runFlow:
+    when:
+      visible: "Choose your primary currency"
+    commands:
+      - tapOn: "Confirm"
+
+- runFlow:
+    when:
+      visible: "Auto-Track Transactions"
+    commands:
+      - tapOn: "Not Now"
+
+- extendedWaitUntil:
+    visible:
+      "Transactions|Accounts|Open menu|Good Morning|Good Afternoon|Good Evening"
+    timeout: 120000
+
+- assertNotVisible:
+    id: "auth-email-input"

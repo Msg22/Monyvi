@@ -37,6 +37,20 @@ describe("resolve-ci-e2e-scope", () => {
     });
   });
 
+
+  it("selects auth E2E for verification Maestro, auth-service, and supabase-service changes", () => {
+    expect(
+      scopeResolver.resolveCiE2eScope([
+        "apps/mobile/e2e/maestro/auth/email-verification-pending.yaml",
+        "apps/mobile/services/auth-service.ts",
+        "apps/mobile/services/supabase.ts",
+      ])
+    ).toEqual({
+      shouldRun: true,
+      suites: ["auth"],
+    });
+  });
+
   it("selects live SMS E2E for live detection changes", () => {
     expect(
       scopeResolver.resolveCiE2eScope([
@@ -206,6 +220,7 @@ describe("resolve-ci-e2e-scope", () => {
     ).toEqual({
       shouldRun: true,
       suites: [
+        "auth",
         "accounts",
         "transactions",
         "recurring-payments",
@@ -300,6 +315,7 @@ describe("resolve-ci-e2e-scope", () => {
     ).toEqual({
       shouldRun: true,
       suites: [
+        "auth",
         "accounts",
         "transactions",
         "recurring-payments",
@@ -317,6 +333,7 @@ describe("resolve-ci-e2e-scope", () => {
     ).toEqual({
       shouldRun: true,
       suites: [
+        "auth",
         "accounts",
         "transactions",
         "recurring-payments",
@@ -334,6 +351,7 @@ describe("resolve-ci-e2e-scope", () => {
     ).toEqual({
       shouldRun: true,
       suites: [
+        "auth",
         "accounts",
         "transactions",
         "recurring-payments",
@@ -389,6 +407,7 @@ describe("resolve-ci-e2e-scope", () => {
     ).toEqual({
       shouldRun: true,
       suites: [
+        "auth",
         "accounts",
         "transactions",
         "recurring-payments",
@@ -415,6 +434,7 @@ describe("resolve-ci-e2e-scope", () => {
     ).toEqual({
       shouldRun: true,
       suites: [
+        "auth",
         "accounts",
         "transactions",
         "recurring-payments",
@@ -435,6 +455,7 @@ describe("resolve-ci-e2e-scope", () => {
     ).toEqual({
       shouldRun: true,
       suites: [
+        "auth",
         "accounts",
         "transactions",
         "recurring-payments",
