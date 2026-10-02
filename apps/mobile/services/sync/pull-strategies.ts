@@ -541,10 +541,16 @@ export async function pullMarketRateObservations(
 
   while (shouldPullNextPage) {
     const { data, error } = await supabase.rpc(METAL_OBSERVATION_RPC, {
-      p_after_created_at: cursor?.createdAt ?? null,
-      p_after_id: cursor?.id ?? null,
+      // pull_metal_observations_page_v1 declares p_upper_watermark,
+      // p_after_created_at, and p_after_id as DEFAULT NULL, so omitting a
+      // cursor arg is equivalent to sending NULL. The SQL rejects a cursor
+      // where only one of p_after_created_at/p_after_id is present, so they are
+      // always omitted or sent together.
+      ...(cursor === null
+        ? {}
+        : { p_after_created_at: cursor.createdAt, p_after_id: cursor.id }),
       p_limit: METAL_OBSERVATION_PAGE_SIZE,
-      p_upper_watermark: upperWatermark,
+      ...(upperWatermark === null ? {} : { p_upper_watermark: upperWatermark }),
     });
     if (error) {
       throw createSyncTableError("pull", "market_rate_observations", error);

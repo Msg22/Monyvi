@@ -704,9 +704,9 @@ describe("US1 portfolio surfaces", () => {
     });
     expect(screen.getByText("No Silver holdings yet")).toBeTruthy();
     expect(screen.queryByText(/older than 24 hours/i)).toBeNull();
-    expect(screen.getByTestId("metal-portfolio-rate-updated")).toHaveTextContent(
-      /Updated /
-    );
+    expect(
+      screen.getByTestId("metal-portfolio-rate-updated")
+    ).toHaveTextContent(/Updated /);
     expect(screen.queryByText("Offline mode")).toBeNull();
 
     const onRetry = jest.fn();
@@ -721,6 +721,10 @@ describe("US1 portfolio surfaces", () => {
   it("keeps both surfaces mounted with compact, accessible test roots", () => {
     renderPortfolio();
     expect(screen.getByTestId("metal-portfolio-root")).toBeTruthy();
+    expect(screen.getByTestId("metal-portfolio-list")).toHaveProp(
+      "removeClippedSubviews",
+      false
+    );
     expect(
       screen.getByTestId("metal-portfolio-holding-gold-coin")
     ).toBeTruthy();
@@ -795,9 +799,9 @@ describe("US1 portfolio surfaces", () => {
 
     // The header must carry the stale qualifier from the gold tiles even
     // though no holding consumes the stale gold input.
-    expect(screen.getByTestId("metal-portfolio-rate-updated")).toHaveTextContent(
-      /Last available/
-    );
+    expect(
+      screen.getByTestId("metal-portfolio-rate-updated")
+    ).toHaveTextContent(/Last available/);
   });
 
   it("speaks last-updated info instead of a current rate for a stale trusted rate", () => {
@@ -871,9 +875,9 @@ describe("US1 portfolio surfaces", () => {
       rateProviderObservedAt: new Date("2026-08-24T10:30:00.000Z"),
     });
 
-    expect(screen.getByTestId("metal-portfolio-rate-updated")).toHaveTextContent(
-      /Updated 24 Aug 2026/
-    );
+    expect(
+      screen.getByTestId("metal-portfolio-rate-updated")
+    ).toHaveTextContent(/Updated 24 Aug 2026/);
   });
 
   it("renders exactly four compact purity price tiles and Your items section header", () => {

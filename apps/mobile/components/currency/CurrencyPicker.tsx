@@ -33,6 +33,8 @@ import { useModalBottomInset } from "@/hooks/useModalBottomInset";
 interface CurrencyPickerProps {
   readonly visible: boolean;
   readonly selectedCurrency: CurrencyType;
+  readonly allowedCurrencies?: readonly string[];
+  readonly testID?: string;
   readonly onSelect: (currency: CurrencyType) => void;
   readonly onClose: () => void;
 }
@@ -124,6 +126,8 @@ function CurrencyListSeparator(): React.JSX.Element {
 export function CurrencyPicker({
   visible,
   selectedCurrency,
+  allowedCurrencies,
+  testID,
   onSelect,
   onClose,
 }: CurrencyPickerProps): React.JSX.Element {
@@ -132,11 +136,16 @@ export function CurrencyPicker({
   const { t, i18n } = useTranslation("common");
 
   const filteredCurrencies = useMemo(() => {
-    if (!searchQuery.trim()) return [...SORTED_SUPPORTED_CURRENCIES];
-    return SORTED_SUPPORTED_CURRENCIES.filter((c) =>
+    const availableCurrencies = allowedCurrencies
+      ? SORTED_SUPPORTED_CURRENCIES.filter((currency) =>
+          allowedCurrencies.includes(currency.code)
+        )
+      : SORTED_SUPPORTED_CURRENCIES;
+    if (!searchQuery.trim()) return [...availableCurrencies];
+    return availableCurrencies.filter((c) =>
       currencyMatchesQuery(c.code, searchQuery)
     );
-  }, [searchQuery, i18n.language]);
+  }, [allowedCurrencies, searchQuery, i18n.language]);
 
   const handleSelect = useCallback(
     (currency: CurrencyType) => {
@@ -167,6 +176,7 @@ export function CurrencyPicker({
 
   return (
     <Modal
+      testID={testID}
       animationType="slide"
       transparent={true}
       visible={visible}

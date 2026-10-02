@@ -151,4 +151,3 @@ describe("locale startup integration", (): void => {
     expect(screen.getByText("Account gate")).toBeOnTheScreen();
   });
 });
-

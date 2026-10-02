@@ -512,19 +512,35 @@ Business rules:
   accepted material correction may replace that tuple. Immutable before/after
   tuples and their catalog snapshots remain in append-only action evidence, and
   later catalog changes never rewrite current or historical recorded facts.
+- `acquisition_action_id` identifies the accepted action whose acquisition-rate
+  evidence supports the current acquisition projection. A material correction
+  that consumes no new `acquisition_metal` plus `acquisition_purchase_currency`
+  reference set MUST preserve the prior link. A correction that consumes a
+  complete new acquisition reference set replaces the link with that correction
+  action. A legacy null link remains null when no new acquisition evidence is
+  consumed; no correction fabricates a link.
+- The Add/Edit Gold purity picker offers 24K (`gold-999`), 21K (`gold-875`), and
+  18K (`gold-750`) once each, with karat-only labels. Silver retains its catalog
+  choices. Historical holdings keep their exact recorded code and factor, even
+  when their Gold grade is no longer an offered choice; a material correction
+  changes it only after explicit selection. Other read surfaces may still show
+  exact fineness when needed for historical identification.
 - Metal type is locked after creation. Correcting a wrong metal uses Delete
   holding, then Add holding with the correct metal.
 - Add holding uses one focused full-screen form in this order: Name, Metal,
   Weight and Purity on one row when space permits, total purchase price,
   purchase currency, purchase date, Physical form, Notes, compact live preview,
-  local-first status, then direct `Add holding`. Submission stays in the same
-  form with no intermediate step or route.
+  then direct `Add holding`. The form omits the passive device-save note while
+  retaining local-first persistence. Submission stays in the same form with no
+  intermediate step or route.
 - Every other Active holding field is correctable. Name and notes are ordinary
   metadata edits. Weight, purity, physical form, total purchase price, purchase
-  currency, and purchase date are material corrections that require a reason and
-  preserve immutable before/after evidence in History.
+  currency, and purchase date are material corrections with an optional reason
+  and preserve immutable before/after evidence in History. The correction
+  payload retains a string reason property; empty user text is stored as an
+  empty string, never a fabricated reason.
 - Edit holding is one form with one direct `Save changes` action. Material
-  differences reveal previous/current facts, required reason, and a live
+  differences reveal previous/current facts, optional reason, and a live
   consequence summary; there is no separate correction-review route.
 - Preserved legacy holdings with unavailable exact weight, purity tuple, or
   total purchase price remain visible and show those saved facts as not
@@ -599,9 +615,15 @@ Approved purity catalog version 1:
 | Silver | 600                | `0.6`                 |
 
 A bare `24K = 1.0` option is forbidden. The user selects the actual stamped
-fineness. Current pure grams equal exact weight multiplied by the stored factor
-snapshot; current value is calculated from pure grams and the trusted local
-metal/FX references.
+fineness. Recorded pure grams and immutable historical calculations continue to
+use exact weight multiplied by the stored factor snapshot.
+
+For **current selected-quote presentation and current holding valuation only**,
+the selected `metal:GOLD` quote is the quoted 24K gram price. An exact
+`gold-999` / `0.999` holding therefore uses that quoted gram rate directly and
+MUST NOT multiply the quote by `0.999` again. The persisted/catalog purity tuple
+remains `gold-999` / `0.999`. Gold 21K/18K and Silver retain their existing
+catalog-factor basis.
 
 ### Financial Arithmetic
 
@@ -633,6 +655,11 @@ introduce a new calculation or product decision.
   USD value of one unit of currency `C`; USD is `1`. The reference value in
   currency `C` at time `t` is `q × m_t ÷ x_{C,t}`. Missing or invalid rate
   inputs are unavailable, never zero.
+- Current selected-quote exception: for exact Gold `gold-999` / `0.999`, current
+  quoted gram price and current holding value use the selected Gold 24K quote
+  directly: `weight × m_current ÷ x_current`. This does not mutate `p = 0.999`,
+  does not change Gold 21K/18K or Silver factor semantics, and does not rewrite
+  immutable acquisition, terminal, History, or attribution calculations.
 - Purchase currency `P` is the canonical calculation and reporting basis. With
   acquisition time `a`, current or terminal valuation time `v`, and positive
   known all-in purchase cost `K`: acquisition reference `A = q × m_a ÷ x_{P,a}`;

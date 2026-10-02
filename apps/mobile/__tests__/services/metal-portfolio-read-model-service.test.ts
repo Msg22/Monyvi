@@ -829,7 +829,7 @@ describe("metal portfolio read model", () => {
           id: "gold-999",
           metal: "GOLD",
           purityCode: "gold-999",
-          pricePerGramDecimal: "3571.425", // 0.999 * 71.5 / 0.02
+          pricePerGramDecimal: "3575", // quoted 24K: 71.5 / 0.02
           state: "fresh",
           providerObservedAt: new Date("2026-09-26T00:58:00Z"),
         },

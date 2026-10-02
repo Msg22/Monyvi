@@ -510,10 +510,7 @@ describe("syncDatabase", () => {
 
   it("scopes child-table deletes through current-user parents even when the parent is soft-deleted", async () => {
     mockOwnedTombstonesFetch.mockResolvedValue([
-      { id: "metal-1", parent_id: "asset-1" },
-    ]);
-    mockForeignProfilesFetch.mockResolvedValue([
-      { id: "asset-1", user_id: "current-user", deleted: true },
+      { id: "sender-1", parent_id: "account-1" },
     ]);
     mockUpdateIn.mockResolvedValue({ error: null });
     mockSynchronize.mockImplementation(
@@ -525,10 +522,10 @@ describe("syncDatabase", () => {
       }) => {
         await args.pushChanges({
           changes: {
-            asset_metals: {
+            account_sms_senders: {
               created: [],
               updated: [],
-              deleted: ["metal-1"],
+              deleted: ["sender-1"],
             },
           },
           lastPulledAt: null,
@@ -538,16 +535,21 @@ describe("syncDatabase", () => {
 
     await expect(syncDatabase(mockDatabase)).resolves.toBeUndefined();
 
-    expect(mockDatabaseGet).toHaveBeenCalledWith("assets");
-    expect(mockWatermelonWhere).toHaveBeenCalledWith("user_id", "current-user");
-    expect(mockWatermelonWhere).not.toHaveBeenCalledWith("deleted", false);
-    expect(mockUpdateScopedIn).toHaveBeenCalledWith("asset_id", ["asset-1"]);
-    expect(mockUpdateIn).toHaveBeenCalledWith("id", ["metal-1"]);
+    // Delete ownership is proven from the child tombstone itself, joined to its
+    // owned parent row, so the parent lookup never goes through `Q.where`.
+    expect(mockProfileQuery).toHaveBeenCalledWith({
+      sql: 'SELECT child.id, child."account_id" AS parent_id FROM "account_sms_senders" AS child JOIN "accounts" AS parent ON child."account_id" = parent.id WHERE child._status = ? AND parent.user_id = ?',
+      values: ["deleted", "current-user"],
+    });
+    expect(mockUpdateScopedIn).toHaveBeenCalledWith("account_id", [
+      "account-1",
+    ]);
+    expect(mockUpdateIn).toHaveBeenCalledWith("id", ["sender-1"]);
   });
 
   it("defers child-table inserts when the parent is foreign", async () => {
     mockForeignProfilesFetch.mockResolvedValue([
-      { id: "asset-current", user_id: "current-user", deleted: false },
+      { id: "account-current", user_id: "current-user", deleted: false },
     ]);
     mockSynchronize.mockImplementation(
       async (args: {
@@ -558,8 +560,8 @@ describe("syncDatabase", () => {
       }) => {
         await args.pushChanges({
           changes: {
-            asset_metals: {
-              created: [{ id: "metal-1", asset_id: "asset-foreign" }],
+            account_sms_senders: {
+              created: [{ id: "sender-1", account_id: "account-foreign" }],
               updated: [],
               deleted: [],
             },
@@ -584,8 +586,8 @@ describe("syncDatabase", () => {
       }) => {
         await args.pushChanges({
           changes: {
-            asset_metals: {
-              created: [{ id: "metal-1", asset_id: "asset-deleted" }],
+            account_sms_senders: {
+              created: [{ id: "sender-1", account_id: "account-deleted" }],
               updated: [],
               deleted: [],
             },
@@ -828,9 +830,9 @@ describe("syncDatabase", () => {
       }) => {
         await args.pushChanges({
           changes: {
-            asset_metals: {
+            account_sms_senders: {
               created: [],
-              updated: [{ id: "metal-1", asset_id: "asset-1" }],
+              updated: [{ id: "sender-1", account_id: "account-1" }],
               deleted: [],
             },
           },
@@ -964,3 +966,13 @@ describe("syncDatabase", () => {
     expect(insertedRow).not.toHaveProperty("sms_body_hash");
   });
 });
+jest.mock("../../services/legacy-metal-add-repair-service", () => ({
+  repairLegacyMetalAdds: jest
+    .fn()
+    .mockResolvedValue({ repaired: 0, skipped: [] }),
+}));
+jest.mock("../../services/legacy-metal-edit-repair-service", () => ({
+  repairLegacyMetalEdits: jest
+    .fn()
+    .mockResolvedValue({ repaired: 0, skipped: [] }),
+}));

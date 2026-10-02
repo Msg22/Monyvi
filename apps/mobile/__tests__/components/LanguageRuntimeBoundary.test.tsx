@@ -143,4 +143,3 @@ describe("language content boundaries", (): void => {
     expect(screen.getByText("Dashboard")).toBeOnTheScreen();
   });
 });
-

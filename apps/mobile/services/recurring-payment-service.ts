@@ -599,4 +599,3 @@ export async function submitRecurringPayment(params: {
     paymentId: payment.id,
   });
 }
-
