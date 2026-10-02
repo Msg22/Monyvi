@@ -21,7 +21,9 @@ function formatPrimitive(value: unknown, t: TranslateFn): string {
       ? t("sms_provider_evaluation.yes")
       : t("sms_provider_evaluation.no");
   }
-  return String(value);
+  if (typeof value === "string") return value;
+  if (typeof value === "number") return value.toString();
+  return Object.prototype.toString.call(value);
 }
 
 function formatExpected(
