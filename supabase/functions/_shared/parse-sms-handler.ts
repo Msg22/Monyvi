@@ -528,12 +528,18 @@ async function executeAdmittedWork(input: {
         input.admission.requestId
       );
     }
-    await completeSmsAiWorkWithRetry(input.dependencies.completeWork, {
-      requestId: input.admission.requestId,
-      completedWithProviderError: true,
-      decisionCode: "provider_failed",
+    const didComplete = await completeSmsAiWorkWithRetry(
+      input.dependencies.completeWork,
+      {
+        requestId: input.admission.requestId,
+        completedWithProviderError: true,
+        decisionCode: "provider_failed",
+      }
+    );
+    if (!didComplete) return refusal("dependency_unavailable", 503);
+    return refusal("provider_failed", 502, undefined, {
+      retryRequestMode: "fresh",
     });
-    return refusal("provider_failed", 502);
   }
 
   if (isCallerCancelled(input.signal)) {
@@ -544,21 +550,31 @@ async function executeAdmittedWork(input: {
   }
 
   if (!providerResult.isResponseSchemaValid) {
-    await completeSmsAiWorkWithRetry(input.dependencies.completeWork, {
-      requestId: input.admission.requestId,
-      completedWithProviderError: true,
-      decisionCode: "response_invalid",
+    const didComplete = await completeSmsAiWorkWithRetry(
+      input.dependencies.completeWork,
+      {
+        requestId: input.admission.requestId,
+        completedWithProviderError: true,
+        decisionCode: "response_invalid",
+      }
+    );
+    if (!didComplete) return refusal("dependency_unavailable", 503);
+    return refusal("response_invalid", 502, undefined, {
+      retryRequestMode: "fresh",
     });
-    return refusal("response_invalid", 502);
   }
 
   const submittedCandidates = toNegativeCandidates(input.messages);
   if (providerResult.completionStatus !== "complete") {
-    await completeSmsAiWorkWithRetry(input.dependencies.completeWork, {
-      requestId: input.admission.requestId,
-      completedWithProviderError: true,
-      decisionCode: providerResult.completionStatus,
-    });
+    const didComplete = await completeSmsAiWorkWithRetry(
+      input.dependencies.completeWork,
+      {
+        requestId: input.admission.requestId,
+        completedWithProviderError: true,
+        decisionCode: providerResult.completionStatus,
+      }
+    );
+    if (!didComplete) return refusal("dependency_unavailable", 503);
     return jsonResponse({
       transactions: [],
       completionStatus: providerResult.completionStatus,
@@ -567,6 +583,7 @@ async function executeAdmittedWork(input: {
       unresolvedFingerprints: submittedCandidates.map(
         (candidate) => candidate.smsFingerprint
       ),
+      retryRequestMode: "fresh",
     });
   }
 
