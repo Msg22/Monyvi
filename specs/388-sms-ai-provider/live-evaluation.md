@@ -383,3 +383,62 @@ lint, typecheck, formatting, CI, device/provider QA and visual comparison were
 explicitly postponed by Mohamed. SMS-EVAL-TIMING-001 is source-implemented only;
 its batch-size/timing behavior remains unverified until the deferred QA owner
 runs those gates.
+
+## SMS-CANCEL-060 source contract — 2026-10-02
+
+The backend full-parser now has a source-level cancellation path intended to
+honor a request abort when the hosted runtime supplies one. This does not change
+the CLI evaluator's existing five-message batches. Later integration must keep
+the separately approved mobile synthetic batch size of 15 from
+`76fbd782a2a5951261653184621db4c89ea0c962`.
+
+For the current DeepInfra trial:
+
+- provider attempt deadline is 60 seconds;
+- automatic DeepInfra retries are 0, so a logical provider start performs at
+  most one outbound DeepInfra fetch and no retry sleep;
+- the optional incoming `Request.signal` is forwarded through handler ->
+  executor -> provider request -> fetch without entering serialized SMS data;
+- caller cancellation and timeout are different paths;
+- cancellation before committed provider start uses existing reservation
+  release; cancellation after committed provider start keeps usage consumed and
+  uses existing provider-error completion;
+- cancellation after raw response is honored before outcome reconciliation, so
+  it cannot manufacture successful-empty, omission-negative or terminal
+  evidence;
+- after outcome reconciliation/completion has begun, normal accounting is
+  allowed to finish and no late abort listener mutates database state.
+
+Deno documents `Request.signal` disconnect behavior as runtime-dependent and
+also documents a legacy abort-on-successful-handler-return behavior. Therefore
+the implementation does not treat a late signal after authoritative commit
+start as proof the client cancelled the in-flight work. Supabase gateway
+disconnect propagation remains unverified. Likewise, aborting the outgoing
+fetch does not prove that DeepInfra stopped work/billing already accepted
+upstream.
+
+### T050 manual/source-review matrix — deferred
+
+| Scenario | Expected evidence |
+| --- | --- |
+| 60s timeout | One outbound provider attempt, no retry/sleep; timeout reported through normal provider-failure accounting |
+| Abort before provider start | Reservation release only; zero provider fetch |
+| Abort during provider-start RPC, start=false | Release reserved work; no provider fetch/outcomes |
+| Abort during provider-start RPC, start=true | No refund/release; started work finalized through existing error completion |
+| Abort during fetch | Fetch signal aborts if runtime propagation reaches Edge; no retry; no negative/terminal outcomes |
+| Abort during response body | Cancellation remains distinct from invalid/empty response |
+| Abort after raw response | Cancellation check wins before negative-outcome reconciliation |
+| Abort after reconciliation begins | Finish normal reconciliation/completion; no asynchronous abort DB mutation |
+| Concurrent requests | Per-request signal isolation; one cancellation cannot affect the other |
+| Timeout vs caller abort | 60s deadline is provider failure; caller abort uses cancellation path |
+| Hosted propagation | Observe actual Supabase gateway -> Edge `Request.signal` behavior; do not assume it |
+| Upstream stop/billing | Do not infer DeepInfra compute/billing cancellation from local fetch abort |
+
+All T050 runtime/manual evidence is intentionally **UNVERIFIED** in this source
+slice. The product owner explicitly deferred tests, lint, typecheck, formatting,
+CI, device, provider and visual checks.
+
+Deployment status (T050 integration note): staging `yulbcndyssdjicbpmlrk`
+`parse-sms` version 36 ACTIVE, verifyJWT true - deployed/source-reviewed only.
+Runtime UNVERIFIED; no tests written/run in this task per source-only trial
+waiver.

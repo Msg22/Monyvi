@@ -384,3 +384,52 @@ Do not add during feature 388:
   accessibility presentation during the later deferred device/visual pass.
 
 No T049 item above is verified by this source-only implementation wave.
+
+## 2026-10-02 SMS-CANCEL-060 — Provider Cancellation / 60s Single Attempt
+
+- [ ] T050 Source implementation present; verification explicitly deferred.
+      Carry the optional incoming request signal through the admitted SMS handler,
+      provider executor and provider request to DeepInfra fetch without
+      serialization; set DeepInfra to one 60-second attempt with zero automatic
+      retries/sleeps; distinguish caller cancellation from timeout/provider
+      failure; release an existing reservation only when provider start has not
+      committed; once provider start commits, preserve consumed accounting and
+      finalize cancellation through the existing provider-error completion path;
+      check cancellation after raw provider response and before negative-outcome
+      reconciliation; once reconciliation/completion starts, finish normal
+      authoritative accounting without asynchronous abort-driven DB mutations.
+      No schema/RPC/refund/auth/accounting-rule change. Preserve mobile synthetic
+      15 at later integration and current shared/CLI 5.
+      Source-review correction incorporated: recheck caller cancellation
+      immediately after awaited request-digest computation and before
+      `reserveWork`, so cancellation during digest work cannot create a new
+      reservation. Verification remains deferred.
+
+### T050 manual/source-review matrix still required
+
+| Scenario | Required observation |
+| --- | --- |
+| 60-second provider deadline | Exactly one DeepInfra attempt; no retry and no retry sleep; timeout remains provider failure rather than caller cancellation |
+| Already aborted before provider start | No provider fetch; accepted reservation is released through the existing pre-start release mechanism |
+| Abort during request-digest computation | Recheck immediately after digest returns; do not call `reserveWork` and do not create a reservation |
+| Abort while `markProviderStarted` waits, result not started | No provider fetch; remaining reservation is released without creating negative/terminal outcomes |
+| Abort while `markProviderStarted` waits, result started | Provider send may be skipped; started usage is not refunded/released and existing error completion finalizes the request |
+| Abort during provider fetch | Outgoing fetch receives cancellation; no retry; started accounting completes as provider-error/cancelled work; no negative/terminal outcome is written |
+| Abort during response body read | Caller abort remains cancellation, not malformed/empty success; no retry and no negative reconciliation |
+| Abort after raw response but before reconciliation | No negative/terminal reconciliation; started accounting completes through the cancellation error path |
+| Abort after reconciliation/completion begins | Finish the already-authoritative normal accounting path; do not retroactively relabel completion as cancellation |
+| Provider timeout / HTTP / network failure | Caller-cancel typed path is not used; one attempt only and normal provider-failure accounting applies |
+| Two competing requests | Each request has its own signal/controller state; cancelling one cannot abort or mutate the other |
+| False empty/negative protection | Cancellation never returns a successful empty parse and never creates omission-based negative/terminal outcomes |
+| Admission/finalization | Pre-start cancellation releases; post-start cancellation completes existing started/error accounting once through current helpers |
+| Hosted cancellation observability | Observe whether Supabase forwards client disconnect to Edge `Request.signal`; source implementation MUST NOT claim this is guaranteed |
+| Upstream compute/billing | Aborting fetch MUST NOT be reported as proof DeepInfra stopped already-accepted provider compute or billing |
+
+No T050 row above is verified by this source-only implementation wave. Per the
+current trial waiver, do not write or run automated tests, lint, typecheck,
+formatting, CI, device/provider checks or visual verification in this task.
+
+Deployment status (T050 integration note): staging `yulbcndyssdjicbpmlrk`
+`parse-sms` version 36 ACTIVE, verifyJWT true - deployed/source-reviewed only.
+Runtime UNVERIFIED; no tests written/run in this task per source-only trial
+waiver.

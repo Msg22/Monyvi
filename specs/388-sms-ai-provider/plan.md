@@ -404,3 +404,61 @@ only the mobile synthetic execution size and compact timing telemetry:
 T049 owns this source slice. Its automated checks, lint/type/format/CI,
 device/provider QA and visual verification remain deferred and must not be
 inferred from source review.
+
+## 2026-10-02 SMS-CANCEL-060 Service Wiring
+
+The current trial uses a single 60-second DeepInfra attempt with no automatic
+retry. Cancellation remains a request-scoped service concern:
+
+```text
+incoming Request.signal (optional)
+        |
+        v
+parse-sms admitted handler
+        |
+        +-- reserved + cancelled before provider start -> existing releaseWork
+        |
+        v
+markProviderStarted
+        |
+        +-- started + cancelled -> existing error completion, no refund
+        |
+        v
+ExecuteSmsProviderInput.signal
+        |
+        v
+SmsAiProviderRequest.signal
+        |
+        v
+DeepInfra fetch: caller signal + 60s deadline
+```
+
+The provider adapter owns only network cancellation/deadline composition and
+cleans its attempt-scoped listener/timer resources. It performs exactly one
+attempt and no retry sleep. The provider executor keeps the signal outside
+prompt/schema/body construction.
+
+The handler distinguishes cancellation by lifecycle phase. It releases only a
+still-reserved pre-provider-start request. Once provider start succeeds,
+cancellation uses the existing completed-with-provider-error path. A valid raw
+response is cancellation-checked before negative-outcome reconciliation; after
+reconciliation/completion starts, the handler finishes the authoritative
+accounting path without later abort listeners mutating database state.
+
+No database/schema/RPC/auth/refund/accounting-rule change is introduced.
+Supabase hosted disconnect propagation remains an integration observation, not
+a source guarantee, and aborting local fetch is not evidence that the upstream
+provider stopped accepted compute.
+
+This branch intentionally leaves evaluator batching untouched. Later integration
+must preserve mobile synthetic 15 from `76fbd782a2a5951261653184621db4c89ea0c962`
+and the existing shared/CLI batch size 5.
+
+Verification for this slice is explicitly deferred by the product owner: no
+tests, lint, typecheck, format, CI, device, provider or visual checks are run or
+claimed here.
+
+Deployment status (T050 integration note): staging `yulbcndyssdjicbpmlrk`
+`parse-sms` version 36 ACTIVE, verifyJWT true - deployed/source-reviewed only.
+Runtime UNVERIFIED; no tests written/run in this task per source-only trial
+waiver.
