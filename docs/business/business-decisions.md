@@ -1247,6 +1247,24 @@ Business rules:
   lifecycle. Malformed JSON/envelopes, incomplete provider completion,
   transport/provider failures, and auth/consent/safeguard refusals remain
   request-level failures. Provider-started allowance remains consumed.
+- **2026-10-02 — Live SMS confirmed-failure retry identity**: A live SMS
+  retry must distinguish an ambiguous transport/result-loss replay from a
+  server-confirmed provider failure. If the client cannot know whether provider
+  work started or completed, it reuses the same request identity so the server
+  ledger prevents duplicate provider execution. Only after the server has
+  durably completed the request as a retryable provider error may the response
+  authorize `retryRequestMode: fresh`; that fresh retry uses a new request
+  identity, starts new normally-accounted provider work, and may consume another
+  allowance unit/provider call. Provider failure, schema-invalid response, and
+  incomplete provider statuses (`truncated`, `safety_stopped`, `failed`)
+  may grant that directive only when ledger completion is confirmed. Caller
+  cancellation, ambiguous provider-start state, reconciliation failure, or
+  unconfirmed completion never grants a fresh retry. Android's existing bounded
+  native retry policy remains three attempts with a 10-second delay; the
+  provider remains one 60-second attempt with zero automatic provider retries.
+  The approved mobile successor may persist only the current user-scoped
+  fingerprint/request-key retry identity with bounded expiry across JS restarts;
+  it must not persist SMS/provider output merely to enable retries.
 - Explicit OTP, verification-code, security-code, and PIN-only messages are
   excluded before the full AI provider with Edge/shared parity. A message that
   independently contains clear completed money movement is not excluded merely
