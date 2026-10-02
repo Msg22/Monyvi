@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
-import { readSmsAiProviderConfig } from "./sms-ai-provider-config.ts";
+import {
+  isSmsAiProviderResponseOutputCaptureEnabled,
+  readSmsAiProviderConfig,
+  type GetSmsAiEnvironmentValue,
+} from "./sms-ai-provider-config.ts";
 
 const VALID_ENV: Readonly<Record<string, string>> = {
   SMS_AI_PROVIDER: "deepinfra",
@@ -28,7 +33,7 @@ test("parses explicit DeepInfra provider configuration", () => {
 });
 
 test("accepts every supported service tier explicitly", () => {
-  for (const serviceTier of ["default", "priority", "flex"] as const) {
+  for (const serviceTier of ["default", "priority"] as const) {
     assert.equal(
       readSmsAiProviderConfig(
         getEnvironment({ SMS_AI_SERVICE_TIER: serviceTier })
@@ -36,6 +41,14 @@ test("accepts every supported service tier explicitly", () => {
       serviceTier
     );
   }
+});
+
+test("rejects flex service tier before request admission", () => {
+  assert.throws(
+    () =>
+      readSmsAiProviderConfig(getEnvironment({ SMS_AI_SERVICE_TIER: "flex" })),
+    /Unsupported SMS AI service tier/
+  );
 });
 
 test("fails closed when any required configuration value is missing", () => {
@@ -156,4 +169,89 @@ test("fails closed on malformed approved-model lists", () => {
       /SMS AI provider configuration/
     );
   }
+});
+
+
+function readResponseOutputCaptureFlag(
+  getEnvironmentValue: GetSmsAiEnvironmentValue
+): boolean {
+  return isSmsAiProviderResponseOutputCaptureEnabled(getEnvironmentValue);
+}
+
+test("enables response-output capture only for exact development+true flags", () => {
+  const cases: ReadonlyArray<{
+    readonly overrides: Readonly<Record<string, string | undefined>>;
+    readonly expected: boolean;
+  }> = [
+    { overrides: {}, expected: false },
+    {
+      overrides: { SMS_AI_RUNTIME_ENV: "development" },
+      expected: false,
+    },
+    {
+      overrides: { SMS_AI_DEBUG_RESPONSE_OUTPUT: "true" },
+      expected: false,
+    },
+    {
+      overrides: {
+        SMS_AI_RUNTIME_ENV: "production",
+        SMS_AI_DEBUG_RESPONSE_OUTPUT: "true",
+      },
+      expected: false,
+    },
+    {
+      overrides: {
+        SMS_AI_RUNTIME_ENV: "Development",
+        SMS_AI_DEBUG_RESPONSE_OUTPUT: "true",
+      },
+      expected: false,
+    },
+    {
+      overrides: {
+        SMS_AI_RUNTIME_ENV: "development ",
+        SMS_AI_DEBUG_RESPONSE_OUTPUT: "true",
+      },
+      expected: false,
+    },
+    {
+      overrides: {
+        SMS_AI_RUNTIME_ENV: "development",
+        SMS_AI_DEBUG_RESPONSE_OUTPUT: "TRUE",
+      },
+      expected: false,
+    },
+    {
+      overrides: {
+        SMS_AI_RUNTIME_ENV: "development",
+        SMS_AI_DEBUG_RESPONSE_OUTPUT: " true ",
+      },
+      expected: false,
+    },
+    {
+      overrides: {
+        SMS_AI_RUNTIME_ENV: "development",
+        SMS_AI_DEBUG_RESPONSE_OUTPUT: "true",
+      },
+      expected: true,
+    },
+  ];
+
+  for (const scenario of cases) {
+    assert.equal(
+      readResponseOutputCaptureFlag(getEnvironment(scenario.overrides)),
+      scenario.expected
+    );
+  }
+});
+
+test("parse-sms composes response-output capture as a separate opt-in event", () => {
+  const source = readFileSync(
+    new URL("../../parse-sms/index.ts", import.meta.url),
+    "utf8"
+  );
+
+  assert.match(source, /isSmsAiProviderResponseOutputCaptureEnabled/);
+  assert.match(source, /onResponseOutput/);
+  assert.match(source, /smsAi\.providerResponseOutput/);
+  assert.match(source, /responseContent/);
 });

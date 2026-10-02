@@ -278,12 +278,18 @@ describe("pullChanges", () => {
     expectCompletedPullResult(result);
 
     expect(result.timestamp).toBe(Date.UTC(2026, 4, 18, 8, 5));
-    expect(mockRpc).toHaveBeenCalledWith("pull_metal_observations_page_v1", {
-      p_after_created_at: "2026-05-18T08:00:00.000Z",
-      p_after_id: "ffffffff-ffff-ffff-ffff-ffffffffffff",
-      p_limit: 500,
-      p_upper_watermark: null,
-    });
+    // First page: only the cursor and page size are sent. p_upper_watermark is
+    // omitted because the RPC declares it DEFAULT NULL, so the exact-match
+    // expectation below also proves the key is absent rather than null.
+    expect(mockRpc).toHaveBeenNthCalledWith(
+      1,
+      "pull_metal_observations_page_v1",
+      {
+        p_after_created_at: "2026-05-18T08:00:00.000Z",
+        p_after_id: "ffffffff-ffff-ffff-ffff-ffffffffffff",
+        p_limit: 500,
+      }
+    );
 
     expect(getFirstChain("market_rates").select).toHaveBeenCalledWith("*");
     expect(getFirstChain("market_rates").gt).toHaveBeenCalledWith(

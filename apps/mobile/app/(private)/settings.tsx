@@ -69,6 +69,7 @@ import {
 import { logger } from "@/utils/logger";
 import type { PendingAiAction } from "@/components/settings/settings-types";
 import { getQaSmsPatternIntakeAvailability } from "@/config/qa-sms-pattern-intake-config";
+import { getEffectiveSmsScanPolicy } from "@/services/sms-scan-policy-service";
 
 const SETTINGS_SCROLL_BOTTOM_GAP = 32;
 
@@ -81,6 +82,7 @@ export default function SettingsScreen(): React.JSX.Element {
   const { t: tCommon } = useTranslation("common");
   const { language } = useLocale();
   const qaSmsPatternIntakeAvailability = getQaSmsPatternIntakeAvailability();
+  const smsScanLookbackDays = getEffectiveSmsScanPolicy().lookbackDays;
   const aiConsent = useAiProcessingConsent();
   const [isCurrencyPickerVisible, setIsCurrencyPickerVisible] = useState(false);
   const [isLanguageDropdownOpen, setIsLanguageDropdownOpen] = useState(false);
@@ -840,6 +842,7 @@ export default function SettingsScreen(): React.JSX.Element {
             chevronColor={theme.text.secondary}
             onIncrementalSync={handleIncrementalSync}
             onHistoryRescanPress={() => setIsFullRescanModalOpen(true)}
+            lookbackDays={smsScanLookbackDays}
             historyRescanAvailableAt={
               smsAiAvailability?.historyCooldownAvailableAt ?? null
             }
@@ -871,10 +874,12 @@ export default function SettingsScreen(): React.JSX.Element {
         <DevelopmentToolsSettingsSection
           t={t}
           isVisible={qaSmsPatternIntakeAvailability.isAvailable}
+          isStartupQaVisible={__DEV__}
           chevronColor={theme.text.secondary}
           onQaSmsPatternIntakePress={() =>
             router.push("/qa-sms-pattern-intake")
           }
+          onStartupQaPress={() => router.push("/startup-qa")}
         />
 
         <ProfileNotificationsSection
@@ -900,6 +905,7 @@ export default function SettingsScreen(): React.JSX.Element {
         forceLogout={forceLogout}
         isAiDisableConfirmOpen={isAiDisableConfirmOpen}
         isFullRescanModalOpen={isFullRescanModalOpen}
+        lookbackDays={smsScanLookbackDays}
         onCancelAiDisableConfirm={() => setIsAiDisableConfirmOpen(false)}
         onCancelFullRescan={() => setIsFullRescanModalOpen(false)}
         onConfirmAiDisable={() => {

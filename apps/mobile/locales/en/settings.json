@@ -12,9 +12,9 @@
   "logout": "Logout",
   "sms_sync": "SMS Sync",
   "sync_new": "Sync new SMS",
-  "sync_new_description": "Checks new messages from the last 30 days.",
+  "sync_new_description": "Checks new messages from the last {{days}} days.",
   "rescan_recent": "Rescan recent messages",
-  "rescan_recent_description": "Scans the last 30 days again.",
+  "rescan_recent_description": "Scans the last {{days}} days again.",
   "rescan_recent_available_at": "Available again {{date}}",
   "full_rescan": "Full Rescan",
   "live_detection": "Live SMS Detection",
@@ -52,7 +52,7 @@
   "notification_permission_blocked_message": "To use live SMS detection, open Settings and allow notifications for Monyvi.",
   "auto_confirm_description": "Skip review and auto-add detected transactions",
   "rescan_title": "Rescan recent messages?",
-  "rescan_message": "Monyvi will scan messages from the last 30 days again. Previously saved transactions will be skipped.",
+  "rescan_message": "Monyvi will scan messages from the last {{days}} days again. Previously saved transactions will be skipped.",
   "rescan_confirm": "Rescan",
   "sync_failed_title": "Sync Failed",
   "sync_failed_message": "Some data may not have been saved to the cloud. If you proceed, any unsynced data will be lost.",
@@ -70,5 +70,7 @@
   "ai_privacy_details": "AI privacy details",
   "development_tools": "Development tools",
   "qa_sms_pattern_intake": "QA SMS pattern intake",
-  "qa_sms_pattern_intake_description": "Review and sanitize verified SMS samples"
+  "qa_sms_pattern_intake_description": "Review and sanitize verified SMS samples",
+  "startup_qa_rates": "Cached market rates",
+  "startup_qa_rates_description": "Clear rates saved on this device"
 }

@@ -98,7 +98,7 @@ SmsAiProvider raw adapter
                 +-- fixed DeepInfra endpoint
                 +-- provider request-envelope serialization
                 +-- reasoning disabled
-                +-- Standard/priority/flex mapping
+                +-- Standard/priority mapping; Flex rejected during config
                 +-- timeout/retry classification
                 +-- Zod external-envelope validation
                 +-- completion normalization
@@ -184,7 +184,7 @@ SMS_AI_APPROVED_MODELS=deepseek-ai/DeepSeek-V4-Flash-0731
 SMS_AI_SERVICE_TIER=default
 ```
 
-All five values are required and validated during module/provider composition before the per-request SMS handler can reserve or mark provider usage. Missing, blank, malformed, or unsupported configuration fails closed before request admission. `SMS_AI_APPROVED_MODELS` is the explicit comma-separated allowlist the `SMS_AI_MODEL` selection must exactly match; future models are approved by config change only. `default` means omit DeepInfra's `service_tier` request field. Priority and Flex remain valid typed operational choices but are not the initial setting.
+All five values are required and validated during module/provider composition before the per-request SMS handler can reserve or mark provider usage. Missing, blank, malformed, or unsupported configuration fails closed before request admission. `SMS_AI_APPROVED_MODELS` is the explicit comma-separated allowlist the `SMS_AI_MODEL` selection must exactly match; future models are approved by config change only. `default` means omit DeepInfra's `service_tier` request field. `priority` remains a valid typed operational choice. `flex` is unsupported for this synchronous SMS parsing flow and fails configuration before request admission/provider-start accounting.
 
 ### Dependency resolution
 

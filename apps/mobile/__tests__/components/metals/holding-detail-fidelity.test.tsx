@@ -417,7 +417,7 @@ describe("approved active holding-detail fidelity", () => {
     expect(screen.queryByText(/Breakdown unavailable/)).toBeNull();
   });
 
-  it("renders the friendly fallback only when historical acquisition evidence is absent", () => {
+  it("hides the disclosure when historical acquisition breakdown is absent", () => {
     render(
       <MetalHoldingDetailScreen
         actions={[]}
@@ -429,12 +429,8 @@ describe("approved active holding-detail fidelity", () => {
       />
     );
 
-    fireEvent.press(screen.getByText("How this value was calculated"));
-    expect(
-      screen.getByText(
-        "Breakdown unavailable. The total is based on your recorded details."
-      )
-    ).toBeTruthy();
+    expect(screen.queryByText("How this value was calculated")).toBeNull();
+    expect(screen.queryByTestId("metal-detail-calculation-disclosure")).toBeNull();
   });
 
   it("hides the calculation disclosure when no since-purchase total is available", () => {
@@ -716,8 +712,8 @@ describe("approved active holding-detail fidelity", () => {
     expect(screen.getAllByText("Net proceeds")).toHaveLength(2);
     expect(screen.getAllByText("EGP 10,450.00")).toHaveLength(2);
     expect(screen.getByText("EGP 1,550.00 profit from this sale")).toBeTruthy();
-    expect(screen.getByText("USD · Last available · 2 days ago")).toBeTruthy();
-    expect(screen.getByText(/Prices last updated 01 Aug 2026/)).toBeTruthy();
+    expect(screen.queryByTestId("metal-sold-display-rate-trust")).toBeNull();
+    expect(screen.queryByText(/Last available/)).toBeNull();
     expect(screen.getByText("Holding story")).toBeTruthy();
     expect(screen.getAllByText("Sold").length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText("22 Aug 2026")).toBeTruthy();
@@ -768,9 +764,8 @@ describe("approved active holding-detail fidelity", () => {
 
     expect(screen.getByText("EGP 650.00 loss from this sale")).toBeTruthy();
     expect(screen.queryByText("Current value")).toBeNull();
-    fireEvent.press(screen.getByText("How this value was calculated"));
-    expect(screen.getByTestId("metal-sold-calculation-breakdown")).toBeTruthy();
-    expect(screen.getByText("EGP 650.00 loss from this sale")).toBeTruthy();
+    expect(screen.queryByText("How this value was calculated")).toBeNull();
+    expect(screen.queryByTestId("metal-detail-calculation-disclosure")).toBeNull();
   });
 
   it("keeps exact sold proceeds visible when realized result evidence is unavailable", () => {

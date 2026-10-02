@@ -68,4 +68,3 @@ it("handles profile present with null language and observation error", (): void 
   expect(result.current.hasError).toBe(true);
   expect(result.current.profileExists).toBe(false);
 });
-

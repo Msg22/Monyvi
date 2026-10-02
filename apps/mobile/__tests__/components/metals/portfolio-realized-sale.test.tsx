@@ -115,6 +115,7 @@ const portfolio: MetalPortfolioReadModel = {
   hasTerminalHistory: false,
   holdings: [activeHolding],
   listState: "POPULATED",
+  purityPriceTiles: [],
   rateStatus: { state: "fresh", ageMs: 1_000 },
   recentHistory: [],
   soldResultDecimal: null,
@@ -128,7 +129,6 @@ function renderPortfolio(
     <MetalPortfolioScreen
       currency={currency}
       isLoading={false}
-      isOffline={false}
       error={null}
       portfolio={{ ...portfolio, holdings: portfolio.activeHoldings }}
       rateProviderObservedAt={new Date("2026-08-25T10:30:00.000Z")}

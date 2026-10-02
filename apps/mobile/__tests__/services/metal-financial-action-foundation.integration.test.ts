@@ -5,6 +5,7 @@ import {
   hashFinancialActionEnvelope,
 } from "@monyvi/logic";
 import { schema } from "../../../../packages/db/src/schema";
+import { database as appDatabase } from "@monyvi/db";
 import { Asset } from "../../../../packages/db/src/models/Asset";
 import { AssetMetal } from "../../../../packages/db/src/models/AssetMetal";
 import { FinancialActionGroup } from "../../../../packages/db/src/models/FinancialActionGroup";
@@ -24,6 +25,17 @@ import {
   formatMetalLocalCalendarDate,
 } from "../../services/metal-financial-action-repository";
 import { commitMetalRpcOutcomeLocally } from "../../services/metal-reconciliation-service";
+import {
+  buildMetalDetailReadModel,
+  readMetalDetailReadModel,
+  shapeMetalDetailLifecycleEvents,
+} from "../../services/metal-detail-read-model-service";
+import {
+  toDetailAssetInput,
+  toDetailHoldingStateInput,
+  toDetailMetalInput,
+} from "../../services/metal-detail-read-model-shaping";
+import { getCurrentUserId } from "../../services/supabase";
 import {
   FOREIGN_USER_ID,
   HOLDING_ID,
@@ -109,6 +121,51 @@ async function acceptAction(
 }
 
 describe("Metals financial action foundation", () => {
+  it("builds Details from a newly added local holding before and after RPC acceptance", async () => {
+    const { database } = await createDatabase();
+    const service = createService(database);
+    await service.execute(commandInput("add", actionId(1), null, null));
+    const [asset] = await database.get<Asset>("assets").query().fetch();
+    const [metal] = await database
+      .get<AssetMetal>("asset_metals")
+      .query()
+      .fetch();
+    const [state] = await database
+      .get<MetalHoldingState>("metal_holding_states")
+      .query()
+      .fetch();
+    const events = await database
+      .get<MetalLifecycleEvent>("metal_lifecycle_events")
+      .query()
+      .fetch();
+    const evidence = await database
+      .get<MetalActionEvidence>("metal_action_evidence")
+      .query()
+      .fetch();
+    const buildDetail = (): ReturnType<typeof buildMetalDetailReadModel> =>
+      buildMetalDetailReadModel({
+        asset: toDetailAssetInput(asset),
+        holdingState: toDetailHoldingStateInput(state),
+        lifecycleEvents: shapeMetalDetailLifecycleEvents(events, evidence),
+        metal: toDetailMetalInput(metal, "GOLD"),
+        rateReferences: [],
+        userId: USER_ID,
+      });
+    expect(buildDetail()).toMatchObject({ id: HOLDING_ID, status: "active" });
+    jest.mocked(getCurrentUserId).mockResolvedValue(USER_ID);
+    const getSpy = jest
+      .spyOn(appDatabase, "get")
+      .mockImplementation(database.get.bind(database));
+    try {
+      await expect(
+        readMetalDetailReadModel({ holdingId: HOLDING_ID, userId: USER_ID })
+      ).resolves.toMatchObject({ id: HOLDING_ID, status: "active" });
+    } finally {
+      getSpy.mockRestore();
+    }
+    await acceptAction(database, actionId(1), "0");
+    expect(buildDetail()).toMatchObject({ id: HOLDING_ID, status: "active" });
+  });
   it.each(METAL_ACTION_KINDS)(
     "builds the approved canonical %s envelope with no account effect",
     (kind) => {

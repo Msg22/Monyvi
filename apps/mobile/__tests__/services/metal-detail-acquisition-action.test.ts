@@ -120,6 +120,24 @@ describe("metal detail acquisition-action binding", () => {
     });
   });
 
+  it("uses the quoted 24K rate directly for current gold-999 value without rewriting recorded purity", () => {
+    const input = detailInput();
+    const model = buildMetalDetailReadModel({
+      ...input,
+      metal: {
+        ...input.metal,
+        purityCode: "gold-999",
+        purityFactorDecimal: "0.999",
+      },
+    });
+
+    expect(model).toMatchObject({
+      currentValueDecimal: "120",
+      purityCode: "gold-999",
+      purityFactorDecimal: "0.999",
+    });
+  });
+
   it("uses exact USD identity for current detail value without fabricating a USD observation", () => {
     const input = detailInput();
     const model = buildMetalDetailReadModel({

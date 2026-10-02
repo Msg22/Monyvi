@@ -151,6 +151,7 @@ export function useAssetBreakdown(): UseAssetBreakdownResult {
       })),
       metals: assetMetals.map((metal) => ({
         metalType: metal.metalType,
+        purityCode: metal.purityCode,
         purityFactorDecimal: metal.purityFactorDecimal,
         weightGramsDecimal: metal.weightGramsDecimal,
       })),

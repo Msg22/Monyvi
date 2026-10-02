@@ -1,0 +1,561 @@
+import { act, fireEvent, render, screen } from "@testing-library/react-native";
+import { useNavigation, usePreventRemove } from "@react-navigation/native";
+import { router } from "expo-router";
+import React from "react";
+
+import type {
+  MetalHoldingFormCopy,
+  MetalHoldingFormValues,
+} from "@/components/metals/MetalHoldingForm";
+import { DEFAULT_COPY } from "@/components/metals/metal-holding-form-copy";
+
+jest.mock("react-i18next", () => ({
+  useTranslation: () => ({
+    t: (key: string): string => key,
+    i18n: { language: "en", dir: (): "ltr" => "ltr" },
+  }),
+}));
+
+jest.mock("@/components/navigation/PageHeader", () => {
+  const { TouchableOpacity } =
+    jest.requireActual<typeof import("react-native")>("react-native");
+  return {
+    PageHeader: ({
+      onBack,
+      backAccessibilityLabel,
+    }: {
+      readonly onBack?: () => void;
+      readonly backAccessibilityLabel?: string;
+    }): React.JSX.Element => (
+      <TouchableOpacity
+        testID="header-back"
+        accessibilityLabel={backAccessibilityLabel}
+        onPress={onBack}
+      />
+    ),
+  };
+});
+
+jest.mock("@/context/ThemeContext", () => ({
+  useTheme: (): { readonly isDark: boolean } => ({ isDark: false }),
+}));
+
+jest.mock("@/hooks/usePreferredCurrency", () => ({
+  usePreferredCurrency: () => ({ preferredCurrency: "EGP", isLoading: false }),
+}));
+
+const mockShowToast = jest.fn();
+jest.mock("@/components/ui/Toast", () => ({
+  useToast: () => ({ showToast: mockShowToast }),
+}));
+
+const mockForm = {
+  values: {
+    name: "",
+    metal: "GOLD" as const,
+    weightGrams: "",
+    purityCode: "gold-999",
+    purchasePrice: "",
+    purchaseCurrency: "EGP",
+    purchaseDate: "2026-09-01",
+    physicalForm: null,
+    notes: "",
+  },
+  validationErrors: {},
+  preview: {
+    metal: "GOLD" as const,
+    purityCode: "gold-999",
+    purityLabel: "24K · 999",
+    purityFactorDecimal: "0.999",
+    physicalForm: null,
+    valuation: { available: false, reason: "missing_rate" } as const,
+  },
+  purityOptions: [{ value: "gold-999", label: "24K · 999" }],
+  isDirty: false,
+  isSubmitting: false,
+  submitError: null,
+  requiresUnusualValueAcknowledgment: false,
+  unusualValueAcknowledged: false,
+  updateField: jest.fn(),
+  acknowledgeUnusualValue: jest.fn(),
+  submit: jest.fn<Promise<string | null>, []>(() => Promise.resolve(null)),
+};
+
+jest.mock("@/hooks/useAddMetalHolding", () => ({
+  useMetalAddPreviewRates: () => ({ getPreviewRates: jest.fn() }),
+  useAddMetalHoldingForm: () => mockForm,
+}));
+
+jest.mock("@/services/add-metal-holding-facade-service", () => ({
+  addMetalHoldingFromForm: jest.fn(),
+}));
+
+jest.mock("react-native-safe-area-context", () => ({
+  useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 34, left: 0 }),
+}));
+
+interface AddHoldingRouteModule {
+  readonly default: React.ComponentType;
+}
+
+interface MetalHoldingFormModule {
+  readonly MetalHoldingForm: React.ComponentType<MetalHoldingFormProps>;
+}
+
+interface MetalHoldingFormProps {
+  readonly locale: "en" | "ar";
+  readonly isRtl: boolean;
+  readonly width: number;
+  readonly fontScale: number;
+  readonly bottomInset: number;
+  readonly isLoading?: boolean;
+  readonly isSubmitting?: boolean;
+  readonly values?: MetalHoldingFormValues;
+  readonly copy?: MetalHoldingFormCopy;
+  readonly validationErrors?: Readonly<Record<string, string>>;
+  readonly preview: MetalHoldingPreview;
+  readonly onChange: (field: string, value: string | null) => void;
+  readonly onSubmit: () => void;
+  readonly onRequestExit: () => void;
+}
+
+interface MetalHoldingPreview {
+  readonly metal: "GOLD" | "SILVER";
+  readonly purityCode: string;
+  readonly purityLabel: string;
+  readonly purityFactorDecimal: string;
+  readonly physicalForm: "COIN" | "BAR" | "JEWELRY" | null;
+  readonly name?: string;
+  readonly weightGramsDecimal?: string;
+  readonly displayCurrency?: string;
+  readonly metalUsdPerPureGramDecimal?: string | null;
+  readonly metalPerPureGramInDisplayCurrencyDecimal?: string | null;
+  readonly rateSources?: readonly string[];
+  readonly providerObservedAt?: Date | null;
+  readonly resultSincePurchaseDecimal?: string | null;
+  readonly resultDirection?: "positive" | "negative" | "zero" | "unavailable";
+  readonly purityPercentDecimal?: string;
+  readonly valuation:
+    | { readonly available: true; readonly valueDecimal: string }
+    | { readonly available: false; readonly reason: "missing_rate" };
+}
+
+function loadAddHoldingRoute(): React.ComponentType {
+  return jest.requireActual<AddHoldingRouteModule>("@/app/(private)/metals/add")
+    .default;
+}
+
+function loadMetalHoldingForm(): React.ComponentType<MetalHoldingFormProps> {
+  return jest.requireActual<MetalHoldingFormModule>(
+    "@/components/metals/MetalHoldingForm"
+  ).MetalHoldingForm;
+}
+
+const goldPreview: MetalHoldingPreview = {
+  metal: "GOLD",
+  purityCode: "gold-999",
+  purityLabel: "24K · 999",
+  purityFactorDecimal: "0.999",
+  physicalForm: "COIN",
+  name: "Savings coin",
+  weightGramsDecimal: "10",
+  displayCurrency: "EGP",
+  metalUsdPerPureGramDecimal: "104.51",
+  metalPerPureGramInDisplayCurrencyDecimal: "5225.5",
+  rateSources: ["Monyvi market provider"],
+  providerObservedAt: new Date("2026-08-26T10:30:00.000Z"),
+  resultSincePurchaseDecimal: "4350.32",
+  resultDirection: "positive",
+  purityPercentDecimal: "99.9",
+  valuation: { available: true, valueDecimal: "52150.32" },
+};
+
+const silverPreview: MetalHoldingPreview = {
+  metal: "SILVER",
+  purityCode: "silver-925",
+  purityLabel: "925",
+  purityFactorDecimal: "0.925",
+  physicalForm: "BAR",
+  valuation: { available: false, reason: "missing_rate" },
+};
+
+const goldFormValues: MetalHoldingFormValues = {
+  name: "Savings coin",
+  metal: "GOLD",
+  weightGrams: "10",
+  purityCode: "gold-999",
+  purchasePrice: "52150.32",
+  purchaseCurrency: "EGP",
+  purchaseDate: "2026-09-01",
+  physicalForm: "COIN",
+  notes: "",
+};
+
+const goldKaratCopy: MetalHoldingFormCopy = {
+  ...DEFAULT_COPY,
+  purity: "Karat",
+};
+
+function renderForm(
+  overrides: Partial<MetalHoldingFormProps> = {}
+): MetalHoldingFormProps {
+  const props: MetalHoldingFormProps = {
+    locale: "en",
+    isRtl: false,
+    width: 390,
+    fontScale: 1,
+    bottomInset: 34,
+    preview: goldPreview,
+    onChange: jest.fn(),
+    onSubmit: jest.fn(),
+    onRequestExit: jest.fn(),
+    ...overrides,
+  };
+
+  const MetalHoldingForm = loadMetalHoldingForm();
+  render(<MetalHoldingForm {...props} />);
+  return props;
+}
+
+describe("Add metal holding form", () => {
+  beforeEach((): void => {
+    jest.clearAllMocks();
+  });
+
+  it("uses sentence-case form labels and a supported dark preview surface", () => {
+    renderForm();
+    expect(screen.getByText(/Holding name/)).toHaveTextContent(
+      "Holding name *"
+    );
+    expect(screen.getByText(/Holding name/)).not.toHaveProp(
+      "className",
+      expect.stringContaining("input-label")
+    );
+    expect(screen.getByTestId("metal-holding-live-preview")).toHaveProp(
+      "className",
+      expect.stringContaining("dark:bg-slate-900")
+    );
+    expect(screen.getByTestId("metal-holding-submit-area")).toHaveStyle({
+      paddingBottom: 46,
+    });
+  });
+
+  it("uses the app background and linked metal choices without a device-save note", () => {
+    renderForm();
+    expect(screen.getByTestId("metal-holding-form")).toHaveProp(
+      "className",
+      expect.stringContaining("bg-background")
+    );
+    expect(screen.getByTestId("metal-holding-metal-options")).not.toHaveProp(
+      "className",
+      expect.stringContaining("gap-")
+    );
+    expect(screen.queryByTestId("metal-holding-local-first-status")).toBeNull();
+  });
+
+  it("opens purity choices without expanding the form and uses the shared currency picker", () => {
+    renderForm();
+    expect(
+      screen.getByTestId("metal-holding-purity-trigger")
+    ).toBeOnTheScreen();
+    fireEvent.press(screen.getByTestId("metal-holding-purity-trigger"));
+    expect(
+      screen.getByTestId("metal-holding-purity-options-scroll")
+    ).toBeOnTheScreen();
+    expect(
+      screen.getByTestId("metal-holding-purchase-price-field")
+    ).toBeOnTheScreen();
+    fireEvent.press(screen.getByTestId("metal-holding-purity-trigger"));
+    fireEvent.press(
+      screen.getByTestId("metal-holding-purchase-currency-trigger")
+    );
+    expect(
+      screen.getByTestId("metal-holding-purchase-currency-trigger")
+    ).toBeOnTheScreen();
+    expect(
+      screen.getByTestId("metal-holding-currency-picker")
+    ).toBeOnTheScreen();
+  });
+
+  it("renders V1's direct-Add fields in canonical order with the ordinary-phone Weight/Purity row", () => {
+    renderForm();
+
+    const expectedOrder = [
+      "metal-holding-name-field",
+      "metal-holding-metal-field",
+      "metal-holding-weight-purity-row",
+      "metal-holding-purchase-price-field",
+      "metal-holding-purchase-currency-field",
+      "metal-holding-purchase-date-field",
+      "metal-holding-physical-form-field",
+      "metal-holding-notes-field",
+      "metal-holding-live-preview",
+      "metal-holding-submit",
+    ];
+
+    expect(screen.getByTestId("metal-holding-form")).toHaveProp(
+      "fieldOrder",
+      expectedOrder
+    );
+    expectedOrder.forEach((testID) => {
+      expect(screen.getByTestId(testID)).toBeOnTheScreen();
+    });
+    expect(screen.getByTestId("metal-holding-weight-purity-row")).toHaveProp(
+      "accessibilityRole",
+      "none"
+    );
+    expect(
+      screen.getByTestId("metal-holding-weight-field-trailing-adornment")
+    ).toHaveTextContent("g");
+    expect(
+      screen.getByTestId("metal-holding-physical-form-radio-COIN")
+    ).toBeOnTheScreen();
+  });
+
+  it("stacks the dense Weight/Karat controls at compact width and 200% text while retaining accessible field labels", () => {
+    renderForm({
+      width: 320,
+      fontScale: 2,
+      values: goldFormValues,
+      copy: goldKaratCopy,
+    });
+
+    expect(
+      screen.getByTestId("metal-holding-weight-purity-stacked")
+    ).toBeOnTheScreen();
+    expect(screen.getByLabelText("Weight in grams")).toBeOnTheScreen();
+    expect(
+      screen.getByTestId("metal-holding-purity-trigger")
+    ).toBeOnTheScreen();
+    expect(screen.getByText(/Karat/)).toHaveTextContent("Karat *");
+    expect(screen.getByText(/Karat/)).toBeOnTheScreen();
+    expect(screen.getByTestId("metal-holding-submit")).toHaveProp(
+      "accessibilityRole",
+      "button"
+    );
+  });
+
+  it("uses Monyvi's supplied Gold/Silver render and exact purity identity in a live preview, not a separate review screen", () => {
+    renderForm();
+
+    expect(screen.getByTestId("metal-holding-live-preview")).toHaveProp(
+      "metal",
+      "GOLD"
+    );
+    expect(screen.getByTestId("metal-holding-live-preview")).toHaveProp(
+      "purityCode",
+      "gold-999"
+    );
+    expect(screen.getAllByText("24K").length).toBeGreaterThan(0);
+    expect(screen.getByText("Gold · Coin")).toBeOnTheScreen();
+    expect(screen.getByText("10 g · 24K")).toBeOnTheScreen();
+    expect(screen.getByText("EGP 52,150.32")).toBeOnTheScreen();
+    expect(screen.getByText("+ EGP 4,350.32")).toBeOnTheScreen();
+    expect(screen.queryByText("24K · 999 · 99.9% pure")).toBeNull();
+    expect(
+      screen.getByText("Gold · EGP 5,225.50 per pure gram")
+    ).toBeOnTheScreen();
+    expect(screen.getByTestId("metal-holding-item-render")).toHaveProp(
+      "metal",
+      "GOLD"
+    );
+    expect(screen.queryByTestId("metal-holding-review-screen")).toBeNull();
+  });
+
+  it("hides the Estimated Value section when valuation is unavailable and keeps its direct Add action enabled", () => {
+    const props = renderForm({ preview: silverPreview });
+
+    expect(screen.queryByTestId("metal-holding-live-preview")).toBeNull();
+    expect(screen.queryByText("Valuation unavailable")).toBeNull();
+    fireEvent.press(screen.getByTestId("metal-holding-submit"));
+    expect(props.onSubmit).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the bottom Add action above the safe area, focuses the first validation error, guards dirty exit, and locks a pending submission", () => {
+    const props = renderForm({
+      bottomInset: 34,
+      isSubmitting: true,
+      validationErrors: { name: "required", purchasePrice: "required" },
+    });
+
+    expect(screen.getByTestId("metal-holding-submit-area")).toHaveProp(
+      "bottomInset",
+      34
+    );
+    expect(screen.getByTestId("metal-holding-name-field")).toHaveProp(
+      "aria-invalid",
+      true
+    );
+    expect(screen.getByTestId("metal-holding-name-field")).toHaveProp(
+      "autoFocus",
+      true
+    );
+    fireEvent.press(screen.getByTestId("header-back"));
+    expect(props.onRequestExit).not.toHaveBeenCalled();
+    fireEvent.press(screen.getByTestId("metal-holding-submit"));
+    fireEvent.press(screen.getByTestId("metal-holding-submit"));
+    expect(props.onSubmit).not.toHaveBeenCalled();
+    expect(screen.getByTestId("metal-holding-submit")).toHaveProp(
+      "accessibilityState",
+      expect.objectContaining({ disabled: true, busy: true })
+    );
+    expect(screen.getByTestId("metal-holding-name-field")).toHaveProp(
+      "editable",
+      false
+    );
+    expect(
+      screen.getByTestId("metal-holding-physical-form-option-COIN")
+    ).toBeDisabled();
+    expect(
+      screen.getByTestId("metal-holding-purchase-date-field")
+    ).toBeDisabled();
+  });
+
+  it("uses Skeleton while form content is loading and passes Arabic RTL state through without numeric-layout regressions", () => {
+    renderForm({
+      isLoading: true,
+      locale: "ar",
+      isRtl: true,
+      width: 390,
+      fontScale: 2,
+    });
+
+    expect(screen.getByTestId("metal-holding-form-skeleton")).toBeOnTheScreen();
+    expect(screen.getByTestId("metal-holding-form")).toHaveProp(
+      "accessibilityLanguage",
+      "ar"
+    );
+    expect(screen.getByTestId("metal-holding-form")).toHaveProp(
+      "writingDirection",
+      "rtl"
+    );
+  });
+});
+
+describe("Add metal holding route", () => {
+  beforeEach((): void => {
+    jest.clearAllMocks();
+    mockForm.isDirty = false;
+    mockForm.isSubmitting = false;
+    mockForm.submit.mockReset();
+    mockForm.submit.mockResolvedValue(null);
+  });
+
+  it("renders the full form directly instead of a modal or a review route", () => {
+    mockForm.isDirty = false;
+    const AddHoldingRoute = loadAddHoldingRoute();
+    render(<AddHoldingRoute />);
+
+    expect(screen.getByTestId("metal-holding-add-screen")).toBeOnTheScreen();
+    expect(screen.getByTestId("metal-holding-form")).toBeOnTheScreen();
+    expect(screen.queryByTestId("metal-holding-review-screen")).toBeNull();
+  });
+
+  it("registers navigation removal prevention when dirty and handles discard", () => {
+    mockForm.isDirty = true;
+    const AddHoldingRoute = loadAddHoldingRoute();
+    render(<AddHoldingRoute />);
+
+    expect(usePreventRemove).toHaveBeenCalledWith(true, expect.any(Function));
+
+    // Simulate navigation removal attempt (hardware back / gesture)
+    const preventCalls = jest.mocked(usePreventRemove).mock.calls;
+    const lastCall = preventCalls[preventCalls.length - 1];
+    const preventCallback = lastCall?.[1];
+    const mockAction = { type: "GO_BACK" };
+    if (typeof preventCallback === "function") {
+      act(() => {
+        preventCallback({ data: { action: mockAction } });
+      });
+    }
+
+    expect(
+      screen.getByTestId("metal-holding-dirty-exit-guard")
+    ).toBeOnTheScreen();
+
+    // Discard dismisses guard and dispatches the blocked action
+    fireEvent.press(screen.getByText("add.discard"));
+    const nav = jest.mocked(useNavigation)() as {
+      readonly dispatch: jest.Mock;
+    };
+    expect(nav.dispatch).toHaveBeenCalledWith(mockAction);
+  });
+
+  it("disables prevent remove and calls router.back on discard from header back", () => {
+    mockForm.isDirty = true;
+    let trapped = false;
+    const backSpy = jest.spyOn(router, "back").mockImplementation(() => {
+      const preventCalls = jest.mocked(usePreventRemove).mock.calls;
+      const lastCall = preventCalls[preventCalls.length - 1];
+      if (lastCall?.[0] === true) {
+        trapped = true;
+      }
+    });
+    const AddHoldingRoute = loadAddHoldingRoute();
+    render(<AddHoldingRoute />);
+
+    expect(usePreventRemove).toHaveBeenCalledWith(true, expect.any(Function));
+
+    fireEvent.press(screen.getByTestId("header-back"));
+
+    expect(
+      screen.getByTestId("metal-holding-dirty-exit-guard")
+    ).toBeOnTheScreen();
+
+    fireEvent.press(screen.getByText("add.discard"));
+
+    expect(trapped).toBe(false);
+    expect(backSpy).toHaveBeenCalledTimes(1);
+    expect(usePreventRemove).toHaveBeenLastCalledWith(
+      false,
+      expect.any(Function)
+    );
+
+    backSpy.mockRestore();
+  });
+
+  it("displays success toast and navigates to details when form submission succeeds", async () => {
+    mockShowToast.mockClear();
+    mockForm.submit.mockResolvedValueOnce("holding-new-123");
+    const replaceSpy = jest
+      .spyOn(router, "replace")
+      .mockImplementation(() => {});
+    const AddHoldingRoute = loadAddHoldingRoute();
+    render(<AddHoldingRoute />);
+
+    await act(async () => {
+      fireEvent.press(screen.getByTestId("metal-holding-submit"));
+      await Promise.resolve();
+    });
+
+    expect(mockForm.submit).toHaveBeenCalledTimes(1);
+    expect(mockShowToast).toHaveBeenCalledWith({
+      type: "success",
+      title: "holding_created",
+    });
+    expect(replaceSpy).toHaveBeenCalledWith("/metals/holding-new-123");
+
+    replaceSpy.mockRestore();
+  });
+
+  it("does not show toast or navigate when form submission fails or returns null", async () => {
+    mockShowToast.mockClear();
+    mockForm.submit.mockResolvedValueOnce(null);
+    const replaceSpy = jest
+      .spyOn(router, "replace")
+      .mockImplementation(() => {});
+    const AddHoldingRoute = loadAddHoldingRoute();
+    render(<AddHoldingRoute />);
+
+    await act(async () => {
+      fireEvent.press(screen.getByTestId("metal-holding-submit"));
+      await Promise.resolve();
+    });
+
+    expect(mockForm.submit).toHaveBeenCalledTimes(1);
+    expect(mockShowToast).not.toHaveBeenCalled();
+    expect(replaceSpy).not.toHaveBeenCalled();
+
+    replaceSpy.mockRestore();
+  });
+});

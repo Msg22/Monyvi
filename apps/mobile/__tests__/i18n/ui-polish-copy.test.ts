@@ -34,11 +34,9 @@ describe("approved UI-polish localization", () => {
     );
     expect(enUiPolish.metals_empty.cta).toBe("Add your first holding");
 
-    expect(arUiPolish.wealth_breakdown.show).toBe(
-      "شوف فلوسك موزّعة فين"
-    );
+    expect(arUiPolish.wealth_breakdown.show).toBe("شوف فلوسك موزّعة فين");
     expect(arUiPolish.wealth_breakdown.hide).toBe("إخفاء التفاصيل");
-    expect(arUiPolish.metals_empty.header).toBe("ذهبك وفضتك");
+    expect(arUiPolish.metals_empty.header).toBe("معادني");
     expect(arUiPolish.metals_empty.title).toBe("ابدأ تتابع ذهبك وفضتك");
     expect(arUiPolish.metals_empty.body).toBe(
       "ضيف أول قطعة علشان تتابع قيمتها مع الوقت."
@@ -70,8 +68,6 @@ describe("approved UI-polish localization", () => {
     );
     expect(i18nSource).toContain('"ui-polish": enUiPolish');
     expect(i18nSource).toContain('"ui-polish": arUiPolish');
-    expect(typeSource).toContain(
-      'readonly "ui-polish": UiPolishTranslations;'
-    );
+    expect(typeSource).toContain('readonly "ui-polish": UiPolishTranslations;');
   });
 });

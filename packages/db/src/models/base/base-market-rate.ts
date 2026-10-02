@@ -6,11 +6,20 @@
  * Extend this class in ../MarketRate.ts to add custom methods
  */
 
-import { Model } from "@nozbe/watermelondb";
-import { date, field, readonly } from "@nozbe/watermelondb/decorators";
+import { Model, Query } from "@nozbe/watermelondb";
+import {
+  children,
+  date,
+  field,
+  readonly,
+} from "@nozbe/watermelondb/decorators";
+import type { Associations } from "@nozbe/watermelondb/Model";
 
 export abstract class BaseMarketRate extends Model {
   static table = "market_rates";
+  static associations: Associations = {
+    market_rate_observations: { type: "has_many", foreignKey: "batch_id" },
+  };
 
   @field("aed_usd") aedUsd!: number;
   @field("aud_usd") audUsd!: number;
@@ -55,4 +64,6 @@ export abstract class BaseMarketRate extends Model {
   @field("try_usd") tryUsd!: number;
   @date("updated_at") updatedAt!: Date;
   @field("zar_usd") zarUsd!: number;
+
+  @children("market_rate_observations") marketRateObservations!: Query<Model>;
 }

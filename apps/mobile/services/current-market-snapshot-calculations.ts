@@ -1,6 +1,7 @@
 import type { Account, CurrencyType, MetalType } from "@monyvi/db";
 import Decimal from "decimal.js";
 import {
+  calculateCurrentQuotedMetalReferenceValue,
   convertCurrentAmountExact,
   getMetalUsdPerPureGramDecimal,
   parseCanonicalDecimal,
@@ -49,6 +50,7 @@ export interface CurrentAssetBreakdownAccount {
 
 export interface CurrentAssetBreakdownMetal {
   readonly metalType: MetalType;
+  readonly purityCode: string | null;
   readonly purityFactorDecimal: string | null;
   readonly weightGramsDecimal: string | null;
 }
@@ -188,6 +190,7 @@ export function calculateSelectedCurrentAssetBreakdown(
       input.currentSnapshot === null ||
       (metal.metalType !== "GOLD" && metal.metalType !== "SILVER") ||
       metal.weightGramsDecimal === null ||
+      metal.purityCode === null ||
       metal.purityFactorDecimal === null
     ) {
       return null;
@@ -199,15 +202,18 @@ export function calculateSelectedCurrentAssetBreakdown(
     if (usdPerPureGram === null) {
       return null;
     }
-    try {
-      metals = metals.plus(
-        parseCanonicalDecimal(metal.weightGramsDecimal)
-          .times(metal.purityFactorDecimal)
-          .times(usdPerPureGram)
-      );
-    } catch {
+    const currentValue = calculateCurrentQuotedMetalReferenceValue({
+      metal: metal.metalType,
+      purityCode: metal.purityCode,
+      weightGramsDecimal: metal.weightGramsDecimal,
+      purityFactorDecimal: metal.purityFactorDecimal,
+      metalUsdPerPureGramDecimal: usdPerPureGram,
+      currencyUsdPerUnitDecimal: "1",
+    });
+    if (!currentValue.available) {
       return null;
     }
+    metals = metals.plus(currentValue.valueDecimal);
   }
 
   const total = bank.plus(cash).plus(wallet).plus(metals);

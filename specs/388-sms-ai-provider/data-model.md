@@ -15,7 +15,7 @@ Represents validated server-side runtime configuration.
 | --- | --- | --- |
 | `provider` | `"deepinfra"` initially | Required; unsupported values fail closed |
 | `model` | non-empty string | Required; must exactly match one hosted allowlist entry |
-| `serviceTier` | `"default" \| "priority" \| "flex"` | Explicitly required; no missing-value default. `default` omits provider request field |
+| `serviceTier` | `"default" \| "priority"` | Explicitly required; no missing-value default. `default` omits provider request field; `flex` is unsupported and rejected before request admission |
 | `apiKey` | secret string | Required for DeepInfra; never logged/serialized to clients |
 
 `SMS_AI_APPROVED_MODELS` is hosted environment input only (explicit comma-separated allowlist). It is validated during composition but is not part of the returned provider configuration.
@@ -30,7 +30,7 @@ Represents validated server-side runtime configuration.
 
 ### Validation
 
-Configuration is parsed once during module/provider composition before the per-request handler can reserve or mark provider usage. Missing, blank, incomplete, malformed, or unsupported values prevent provider execution and request admission. A future model is approved by hosted config change only (append its ID to the allowlist); no code change is required.
+Configuration is parsed once during module/provider composition before the per-request handler can reserve or mark provider usage. Missing, blank, incomplete, malformed, or unsupported values prevent provider execution and request admission. Only `default` and `priority` are supported service tiers; `flex` fails configuration before admission/provider-start accounting. A future model is approved by hosted config change only (append its ID to the allowlist); no code change is required.
 
 ## 2. Raw SMS AI Provider Strategy
 

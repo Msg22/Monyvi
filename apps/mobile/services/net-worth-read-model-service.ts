@@ -9,6 +9,7 @@ import {
 import { Q, type Query } from "@nozbe/watermelondb";
 import Decimal from "decimal.js";
 import {
+  calculateCurrentQuotedMetalReferenceValue,
   convertCurrentAmountExact,
   getMetalUsdPerPureGramDecimal,
   getSameDayLastMonth,
@@ -42,6 +43,7 @@ export interface NetWorthAccountInput {
 
 export interface NetWorthAssetMetalInput {
   readonly metalType: string;
+  readonly purityCode: string | null;
   readonly purityFactorDecimal: string | null;
   readonly purityFraction?: number;
   readonly weightGrams?: number;
@@ -182,19 +184,23 @@ export function buildNetWorthReadModel(
     if (
       metalUsdPerGram === null ||
       metal.weightGramsDecimal === null ||
+      metal.purityCode === null ||
       metal.purityFactorDecimal === null
     ) {
       return null;
     }
-    try {
-      totalAssetsUsd = totalAssetsUsd.plus(
-        parseCanonicalDecimal(metal.weightGramsDecimal)
-          .times(metal.purityFactorDecimal)
-          .times(metalUsdPerGram)
-      );
-    } catch {
+    const currentValue = calculateCurrentQuotedMetalReferenceValue({
+      metal: metal.metalType,
+      purityCode: metal.purityCode,
+      weightGramsDecimal: metal.weightGramsDecimal,
+      purityFactorDecimal: metal.purityFactorDecimal,
+      metalUsdPerPureGramDecimal: metalUsdPerGram,
+      currencyUsdPerUnitDecimal: "1",
+    });
+    if (!currentValue.available) {
       return null;
     }
+    totalAssetsUsd = totalAssetsUsd.plus(currentValue.valueDecimal);
   }
 
   const totalAccountsUsdString = serializeDecimal(totalAccountsUsd);

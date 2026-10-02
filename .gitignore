@@ -75,7 +75,21 @@ temp/
 .claude/scheduled_tasks.lock
 .claude/skills
 
-.codex
+# Keep Codex session artifacts local; track only audited project agent adapters.
+.codex/
+!.codex/
+.codex/*
+!.codex/agents/
+.codex/agents/*
+!.codex/agents/frontend-developer.toml
+!.codex/agents/senior-graphic-designer.toml
+!.codex/agents/database-reviewer.toml
+!.codex/agents/code-logic-reviewer.toml
+!.codex/agents/code-style-reviewer.toml
+!.codex/agents/typescript-reviewer.toml
+!.codex/agents/security-reviewer.toml
+!.codex/agents/devops-engineer.toml
+!.codex/agents/visual-reviewer.toml
 
 # Codex generated/local skills, ignored by default
 

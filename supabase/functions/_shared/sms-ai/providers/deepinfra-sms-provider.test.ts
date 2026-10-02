@@ -113,8 +113,8 @@ test("serializes the strict DeepInfra request without explicit cache controls", 
   });
 });
 
-test("maps explicit priority and flex tiers while default omits service_tier", async () => {
-  for (const tier of ["default", "priority", "flex"] as const) {
+test("maps explicit priority tier while default omits service_tier", async () => {
+  for (const tier of ["default", "priority"] as const) {
     let body: Record<string, unknown> = {};
     const provider = new DeepInfraSmsProvider(
       { ...CONFIG, serviceTier: tier },
@@ -136,6 +136,24 @@ test("maps explicit priority and flex tiers while default omits service_tier", a
       assert.equal(body.service_tier, tier);
     }
   }
+});
+
+test("rejects flex service tier before request admission", () => {
+  assert.throws(
+    () =>
+      new DeepInfraSmsProvider(
+        {
+          ...CONFIG,
+          serviceTier: "flex" as unknown as typeof CONFIG.serviceTier,
+        },
+        {
+          fetch: async () => successResponse(),
+          sleep: async () => undefined,
+          createTimeoutSignal: () => new AbortController().signal,
+        }
+      ),
+    /Unsupported DeepInfra SMS service tier/
+  );
 });
 
 test("retries transient HTTP failures with 2s/4s backoff", async () => {
@@ -361,4 +379,111 @@ test("never logs an upstream error body that may echo SMS content", async () => 
   );
   assert.equal(calls, 4);
   assert.equal(JSON.stringify(logs).includes("ECHOED SECRET SMS BODY"), false);
+});
+
+
+test("captures validated assistant output separately from aggregate usage logging", async () => {
+  const usageLogs: Array<{
+    readonly event: string;
+    readonly metadata: Readonly<Record<string, unknown>>;
+  }> = [];
+  const responseOutputs: string[] = [];
+  const returnedContent =
+    '{"transactions":[{"amount":100,"currency":"EGP","merchant":"Cafe"}]}';
+  const dependencies = {
+    fetch: async (): Promise<Response> => successResponse(returnedContent),
+    sleep: async (): Promise<void> => undefined,
+    createTimeoutSignal: (): AbortSignal => new AbortController().signal,
+    log: (
+      event: string,
+      metadata: Readonly<Record<string, unknown>>
+    ): void => {
+      usageLogs.push({ event, metadata });
+    },
+    onResponseOutput: (content: string): void => {
+      responseOutputs.push(content);
+    },
+  };
+  const provider = new DeepInfraSmsProvider(CONFIG, dependencies);
+
+  await provider.execute({
+    messages: [
+      {
+        role: "user",
+        content: "SECRET INPUT SMS BODY EGP 100 at Cafe",
+      },
+    ],
+    responseSchema: REQUEST.responseSchema,
+  });
+
+  assert.deepEqual(responseOutputs, [returnedContent]);
+  assert.deepEqual(
+    usageLogs.map(({ event }) => event),
+    ["smsAi.providerUsage"]
+  );
+  const serializedUsage = JSON.stringify(usageLogs);
+  assert.equal(serializedUsage.includes(returnedContent), false);
+  assert.equal(serializedUsage.includes("SECRET INPUT SMS BODY"), false);
+  assert.equal(serializedUsage.includes(CONFIG.apiKey), false);
+});
+
+test("a throwing response-output diagnostic callback never disrupts parsing", async () => {
+  let callbackCalls = 0;
+  const dependencies = {
+    fetch: async (): Promise<Response> =>
+      successResponse('{"transactions":[]}'),
+    sleep: async (): Promise<void> => undefined,
+    createTimeoutSignal: (): AbortSignal => new AbortController().signal,
+    onResponseOutput: (_content: string): void => {
+      callbackCalls++;
+      throw new Error("diagnostic sink unavailable");
+    },
+  };
+  const provider = new DeepInfraSmsProvider(CONFIG, dependencies);
+
+  const result = await provider.execute(REQUEST);
+
+  assert.equal(callbackCalls, 1);
+  assert.equal(result.completionStatus, "complete");
+  assert.equal(result.content, '{"transactions":[]}');
+});
+
+test("never captures response output for invalid envelopes or provider errors", async () => {
+  let callbackCalls = 0;
+  const onResponseOutput = (_content: string): void => {
+    callbackCalls++;
+  };
+
+  const invalidEnvelopeDependencies = {
+    fetch: async (): Promise<Response> =>
+      new Response(JSON.stringify({ choices: "invalid" }), { status: 200 }),
+    sleep: async (): Promise<void> => undefined,
+    createTimeoutSignal: (): AbortSignal => new AbortController().signal,
+    onResponseOutput,
+  };
+  const invalidEnvelopeProvider = new DeepInfraSmsProvider(
+    CONFIG,
+    invalidEnvelopeDependencies
+  );
+  await assert.rejects(
+    () => invalidEnvelopeProvider.execute(REQUEST),
+    /Invalid DeepInfra SMS response/
+  );
+
+  const providerErrorDependencies = {
+    fetch: async (): Promise<Response> => new Response(null, { status: 400 }),
+    sleep: async (): Promise<void> => undefined,
+    createTimeoutSignal: (): AbortSignal => new AbortController().signal,
+    onResponseOutput,
+  };
+  const providerErrorProvider = new DeepInfraSmsProvider(
+    CONFIG,
+    providerErrorDependencies
+  );
+  await assert.rejects(
+    () => providerErrorProvider.execute(REQUEST),
+    /DeepInfra SMS request failed/
+  );
+
+  assert.equal(callbackCalls, 0);
 });

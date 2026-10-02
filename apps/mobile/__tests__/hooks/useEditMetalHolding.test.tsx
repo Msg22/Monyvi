@@ -1,0 +1,621 @@
+import { act, renderHook } from "@testing-library/react-native";
+
+import type {
+  EditMetalHoldingReadModel,
+  EditMetalHoldingSubmission,
+} from "../../services/edit-metal-holding-facade-service";
+
+const mockLoadEditableMetalHolding = jest.fn<
+  Promise<EditMetalHoldingReadModel>,
+  [string]
+>();
+const mockSaveEditedMetalHolding = jest.fn<
+  Promise<void>,
+  [EditMetalHoldingSubmission]
+>();
+
+jest.mock("../../services/edit-metal-holding-facade-service", () => ({
+  loadEditableMetalHolding: (id: string): Promise<EditMetalHoldingReadModel> =>
+    mockLoadEditableMetalHolding(id),
+  saveEditedMetalHolding: (
+    submission: EditMetalHoldingSubmission
+  ): Promise<void> => mockSaveEditedMetalHolding(submission),
+}));
+
+const mockSyncDatabase = jest.fn<Promise<void>, [unknown]>();
+
+jest.mock("../../providers/DatabaseProvider", () => ({
+  useDatabase: (): unknown => ({ __stubDatabase: true }),
+}));
+
+jest.mock("../../services/sync", () => ({
+  syncDatabase: (database: unknown): Promise<void> =>
+    mockSyncDatabase(database),
+}));
+
+import {
+  useEditMetalHolding,
+  type UseEditMetalHoldingInput,
+} from "../../hooks/useEditMetalHolding";
+
+function legacyModel(): EditMetalHoldingReadModel {
+  return {
+    holdingId: "018f0c7a-1234-7abc-8def-000000000010",
+    financialRevision: "0",
+    predecessorEventId: "018f0c7a-1234-7abc-8def-000000000011",
+    status: "active",
+    reconciliationState: "reconciled",
+    hasCompleteMaterialFacts: false,
+    facts: {
+      name: "Old Legacy Gold",
+      notes: null,
+      metal: "GOLD",
+      weightGramsDecimal: "", // unrecorded legacy fact
+      purityCode: "gold-999",
+      purityCatalogVersion: "1",
+      purityFactorDecimal: "0.999",
+      purchasePriceDecimal: "", // unrecorded legacy fact
+      purchaseCurrency: "EGP",
+      purchaseDate: "2020-01-01",
+      physicalForm: null,
+    },
+    persistedMaterialFacts: {
+      weightGramsDecimal: null,
+      purityCode: "gold-999",
+      purityCatalogVersion: "1",
+      purityFactorDecimal: "0.999",
+      purchasePriceDecimal: null,
+      purchaseCurrency: "EGP",
+      purchaseDate: "2020-01-01",
+      physicalForm: null,
+    },
+  };
+}
+
+function activeModel(): EditMetalHoldingReadModel {
+  return {
+    holdingId: "018f0c7a-1234-7abc-8def-000000000010",
+    financialRevision: "0",
+    predecessorEventId: "018f0c7a-1234-7abc-8def-000000000011",
+    status: "active",
+    reconciliationState: "reconciled",
+    hasCompleteMaterialFacts: true,
+    facts: {
+      name: "Active Gold Sovereign",
+      notes: "Initial note",
+      metal: "GOLD",
+      weightGramsDecimal: "8",
+      purityCode: "gold-999",
+      purityCatalogVersion: "1",
+      purityFactorDecimal: "0.999",
+      purchasePriceDecimal: "32000",
+      purchaseCurrency: "EGP",
+      purchaseDate: "2026-08-01",
+      physicalForm: "COIN",
+    },
+    persistedMaterialFacts: {
+      weightGramsDecimal: "8",
+      purityCode: "gold-999",
+      purityCatalogVersion: "1",
+      purityFactorDecimal: "0.999",
+      purchasePriceDecimal: "32000",
+      purchaseCurrency: "EGP",
+      purchaseDate: "2026-08-01",
+      physicalForm: "COIN",
+    },
+  };
+}
+
+function testInput(
+  overrides: Partial<UseEditMetalHoldingInput> = {}
+): UseEditMetalHoldingInput {
+  let id = 0;
+  return {
+    holdingId: "018f0c7a-1234-7abc-8def-000000000010",
+    locale: "en",
+    today: "2026-09-01",
+    safeRange: {
+      maximumWeightGramsDecimal: "999999999.999",
+      maximumPurchasePriceDecimal: "999999999999999.99",
+    },
+    getPreviewRates: () => ({
+      metalUsdPerPureGramDecimal: "100",
+      currencyUsdPerUnitDecimal: "0.02",
+      egpUsdPerUnitDecimal: "0.02",
+      currencyMinorUnits: 2,
+      rateFreshness: "fresh",
+    }),
+    createId: () => `018f0c7a-1234-7abc-8def-${String(++id).padStart(12, "0")}`,
+    ...overrides,
+  };
+}
+
+describe("useEditMetalHolding correctness tests", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockSaveEditedMetalHolding.mockResolvedValue(undefined);
+    mockSyncDatabase.mockResolvedValue(undefined);
+  });
+
+  describe("Gap 4: legacy holding metadata-only edits (FR-019, business-decisions 529-534)", () => {
+    it("allows saving name/notes on legacy holdings with unrecorded purchase facts without validating missing material fields", async () => {
+      mockLoadEditableMetalHolding.mockResolvedValue(legacyModel());
+
+      const { result } = renderHook(() => useEditMetalHolding(testInput()));
+
+      // Wait for model load
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(result.current.isLoading).toBe(false);
+      expect(result.current.model?.hasCompleteMaterialFacts).toBe(false);
+
+      // Edit metadata only
+      act(() => {
+        result.current.updateField("name", "Updated Legacy Name");
+        result.current.updateField("notes", "New note added");
+      });
+
+      expect(result.current.comparison.hasMaterialChanges).toBe(false);
+      expect(result.current.comparison.hasMetadataChanges).toBe(true);
+
+      let success = false;
+      await act(async () => {
+        success = await result.current.submit();
+      });
+
+      expect(success).toBe(true);
+      expect(mockSaveEditedMetalHolding).toHaveBeenCalledTimes(1);
+      const call = mockSaveEditedMetalHolding.mock.calls[0]?.[0];
+      expect(call.current).toMatchObject({
+        name: "Updated Legacy Name",
+        notes: "New note added",
+        weightGramsDecimal: "",
+        purchasePriceDecimal: "",
+      });
+      expect(call.correctionReason).toBeNull();
+    });
+
+    it("preserves exact persisted material facts with trailing zeros on metadata-only edits", async () => {
+      const base = activeModel();
+      const model: EditMetalHoldingReadModel = {
+        ...base,
+        facts: {
+          ...base.facts,
+          purchasePriceDecimal: "47800.00",
+          weightGramsDecimal: "10.000",
+        },
+        persistedMaterialFacts: {
+          ...base.persistedMaterialFacts,
+          purchasePriceDecimal: "47800.00",
+          weightGramsDecimal: "10.000",
+        },
+      };
+      mockLoadEditableMetalHolding.mockResolvedValue(model);
+
+      const { result } = renderHook(() => useEditMetalHolding(testInput()));
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      act(() => {
+        result.current.updateField("name", "Renamed Holding");
+      });
+
+      expect(result.current.comparison.hasMaterialChanges).toBe(false);
+
+      let success = false;
+      await act(async () => {
+        success = await result.current.submit();
+      });
+
+      expect(success).toBe(true);
+      const call = mockSaveEditedMetalHolding.mock.calls[0]?.[0];
+      expect(call.current.purchasePriceDecimal).toBe("47800.00");
+      expect(call.current.weightGramsDecimal).toBe("10.000");
+      expect(call.correctionReason).toBeNull();
+    });
+    it("preserves exact persisted decimal strings on physical-form-only edits", async () => {
+      const base = activeModel();
+      const model: EditMetalHoldingReadModel = {
+        ...base,
+        facts: {
+          ...base.facts,
+          purchasePriceDecimal: "47800.00",
+          weightGramsDecimal: "10.000",
+        },
+        persistedMaterialFacts: {
+          ...base.persistedMaterialFacts,
+          purchasePriceDecimal: "47800.00",
+          weightGramsDecimal: "10.000",
+        },
+      };
+      mockLoadEditableMetalHolding.mockResolvedValue(model);
+
+      const { result } = renderHook(() => useEditMetalHolding(testInput()));
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      act(() => {
+        result.current.updateField("physicalForm", "BAR");
+        result.current.setCorrectionReason("Corrected form");
+      });
+
+      expect(result.current.comparison.hasMaterialChanges).toBe(true);
+      expect(result.current.comparison.hasFinancialConsequences).toBe(false);
+
+      let success = false;
+      await act(async () => {
+        success = await result.current.submit();
+      });
+
+      expect(success).toBe(true);
+      const call = mockSaveEditedMetalHolding.mock.calls[0]?.[0];
+      // Normalized validation output would strip trailing zeros ("10",
+      // "47800"); sending those would read as a false financial change
+      // downstream. The raw facts must be preserved instead.
+      expect(call.current.weightGramsDecimal).toBe("10.000");
+      expect(call.current.purchasePriceDecimal).toBe("47800.00");
+      expect(call.current.physicalForm).toBe("BAR");
+    });
+
+    it("captures load errors and allows retrying via retry()", async () => {
+      mockLoadEditableMetalHolding.mockRejectedValueOnce(
+        new Error("load_failure")
+      );
+
+      const { result } = renderHook(() => useEditMetalHolding(testInput()));
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(result.current.isLoading).toBe(false);
+      expect(result.current.error?.message).toBe("load_failure");
+      expect(result.current.model).toBeNull();
+
+      // Local retry succeeds without any network sync (offline-first).
+      mockLoadEditableMetalHolding.mockResolvedValueOnce(activeModel());
+      act(() => {
+        result.current.retry();
+      });
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(mockSyncDatabase).not.toHaveBeenCalled();
+
+      expect(result.current.isLoading).toBe(false);
+      expect(result.current.error).toBeNull();
+      expect(result.current.model?.facts.name).toBe("Active Gold Sovereign");
+    });
+  });
+
+  describe("Stale-rate acknowledgment removal in Edit (extra ack step removed)", () => {
+    it("does NOT block submission when material changes are affected by stale rates", async () => {
+      mockLoadEditableMetalHolding.mockResolvedValue(activeModel());
+
+      const { result } = renderHook(() =>
+        useEditMetalHolding(
+          testInput({
+            getPreviewRates: () => ({
+              metalUsdPerPureGramDecimal: "100",
+              currencyUsdPerUnitDecimal: "0.02",
+              egpUsdPerUnitDecimal: "0.02",
+              currencyMinorUnits: 2,
+              rateFreshness: "stale", // Stale rate!
+            }),
+          })
+        )
+      );
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      // Material change
+      act(() => {
+        result.current.updateField("weightGrams", "10");
+        result.current.setCorrectionReason("Correction of weight");
+      });
+
+      expect(result.current.comparison.hasMaterialChanges).toBe(true);
+
+      let success = false;
+      await act(async () => {
+        success = await result.current.submit();
+      });
+      expect(success).toBe(true);
+      expect(mockSaveEditedMetalHolding).toHaveBeenCalledTimes(1);
+    });
+
+    it("does NOT require stale rate acknowledgment for metadata-only edits even when rates are stale", async () => {
+      mockLoadEditableMetalHolding.mockResolvedValue(activeModel());
+
+      const { result } = renderHook(() =>
+        useEditMetalHolding(
+          testInput({
+            getPreviewRates: () => ({
+              metalUsdPerPureGramDecimal: "100",
+              currencyUsdPerUnitDecimal: "0.02",
+              egpUsdPerUnitDecimal: "0.02",
+              currencyMinorUnits: 2,
+              rateFreshness: "stale",
+            }),
+          })
+        )
+      );
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      // Only metadata edit
+      act(() => {
+        result.current.updateField("name", "Just Renamed");
+      });
+
+      expect(result.current.comparison.hasMaterialChanges).toBe(false);
+
+      let success = false;
+      await act(async () => {
+        success = await result.current.submit();
+      });
+      expect(success).toBe(true);
+      expect(mockSaveEditedMetalHolding).toHaveBeenCalledTimes(1);
+    });
+
+    it("does NOT block submission when material changes are affected by unknown rate freshness", async () => {
+      mockLoadEditableMetalHolding.mockResolvedValue(activeModel());
+
+      const { result } = renderHook(() =>
+        useEditMetalHolding(
+          testInput({
+            getPreviewRates: () => ({
+              metalUsdPerPureGramDecimal: "100",
+              currencyUsdPerUnitDecimal: "0.02",
+              egpUsdPerUnitDecimal: "0.02",
+              currencyMinorUnits: 2,
+              rateFreshness: "unknown",
+            }),
+          })
+        )
+      );
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      act(() => {
+        result.current.updateField("weightGrams", "10");
+        result.current.setCorrectionReason("Correction of weight");
+      });
+
+      expect(result.current.comparison.hasMaterialChanges).toBe(true);
+
+      let success = false;
+      await act(async () => {
+        success = await result.current.submit();
+      });
+      expect(success).toBe(true);
+      expect(mockSaveEditedMetalHolding).toHaveBeenCalledTimes(1);
+    });
+
+    it("does NOT require stale rate acknowledgment for physical-form-only edits even when rates are stale", async () => {
+      mockLoadEditableMetalHolding.mockResolvedValue(activeModel());
+
+      const { result } = renderHook(() =>
+        useEditMetalHolding(
+          testInput({
+            getPreviewRates: () => ({
+              metalUsdPerPureGramDecimal: "100",
+              currencyUsdPerUnitDecimal: "0.02",
+              egpUsdPerUnitDecimal: "0.02",
+              currencyMinorUnits: 2,
+              rateFreshness: "stale",
+            }),
+          })
+        )
+      );
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      act(() => {
+        result.current.updateField("physicalForm", "BAR");
+        result.current.setCorrectionReason("Correction of physical form");
+      });
+
+      expect(result.current.comparison.hasMaterialChanges).toBe(true);
+      expect(result.current.comparison.hasFinancialConsequences).toBe(false);
+
+      let success = false;
+      await act(async () => {
+        success = await result.current.submit();
+      });
+      expect(success).toBe(true);
+      expect(mockSaveEditedMetalHolding).toHaveBeenCalledTimes(1);
+    });
+
+    it("submits a material change with empty correction reason text", async () => {
+      mockLoadEditableMetalHolding.mockResolvedValue(activeModel());
+
+      const { result } = renderHook(() => useEditMetalHolding(testInput()));
+      await act(async () => {
+        await Promise.resolve();
+      });
+      act(() => {
+        result.current.updateField("weightGrams", "10");
+      });
+      expect(result.current.comparison.hasMaterialChanges).toBe(true);
+
+      let success = false;
+      await act(async () => {
+        success = await result.current.submit();
+      });
+      expect(success).toBe(true);
+      expect(result.current.validationErrors.correctionReason).toBeUndefined();
+      expect(mockSaveEditedMetalHolding).toHaveBeenCalledWith(
+        expect.objectContaining({ correctionReason: "" })
+      );
+    });
+
+    it("accepts a correction reason at exactly the 1024-byte contract limit", async () => {
+      mockLoadEditableMetalHolding.mockResolvedValue(activeModel());
+      const { result } = renderHook(() => useEditMetalHolding(testInput()));
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      act(() => {
+        result.current.updateField("weightGrams", "10");
+        result.current.setCorrectionReason("x".repeat(1024));
+      });
+
+      expect(result.current.validationErrors.correctionReason).toBeUndefined();
+
+      let success = false;
+      await act(async () => {
+        success = await result.current.submit();
+      });
+
+      expect(success).toBe(true);
+      expect(mockSaveEditedMetalHolding).toHaveBeenCalledWith(
+        expect.objectContaining({ correctionReason: "x".repeat(1024) })
+      );
+    });
+
+    it("shows inline validation and blocks save when a multibyte reason exceeds 1024 UTF-8 bytes", async () => {
+      mockLoadEditableMetalHolding.mockResolvedValue(activeModel());
+      const { result } = renderHook(() => useEditMetalHolding(testInput()));
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      act(() => {
+        result.current.updateField("weightGrams", "10");
+        result.current.setCorrectionReason("ع".repeat(513));
+      });
+
+      expect(result.current.validationErrors.correctionReason).toBe(
+        "correction_reason_too_long"
+      );
+
+      let success = true;
+      await act(async () => {
+        success = await result.current.submit();
+      });
+
+      expect(success).toBe(false);
+      expect(mockSaveEditedMetalHolding).not.toHaveBeenCalled();
+    });
+
+    it("computes per-gram in preferred EGP while keeping purchase CAD valuation", async () => {
+      const base = activeModel();
+      mockLoadEditableMetalHolding.mockResolvedValue({
+        ...base,
+        facts: {
+          ...base.facts,
+          weightGramsDecimal: "8",
+          purchasePriceDecimal: "750",
+          purchaseCurrency: "CAD",
+        },
+        persistedMaterialFacts: {
+          ...base.persistedMaterialFacts,
+          weightGramsDecimal: "8",
+          purchasePriceDecimal: "750",
+          purchaseCurrency: "CAD",
+        },
+      });
+
+      const { result } = renderHook(() =>
+        useEditMetalHolding(
+          testInput({
+            getPreviewRates: (() => ({
+              metalUsdPerPureGramDecimal: "100",
+              currencyUsdPerUnitDecimal: "0.75",
+              egpUsdPerUnitDecimal: "0.02",
+              currencyMinorUnits: 2,
+              rateFreshness: "fresh",
+              preferredCurrency: "EGP",
+              preferredCurrencyUsdPerUnitDecimal: "0.02",
+            })) as unknown as UseEditMetalHoldingInput["getPreviewRates"],
+            preferredCurrency: "EGP",
+          })
+        )
+      );
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(result.current.preview.displayCurrency).toBe("CAD");
+      expect(result.current.preview.valuation).toEqual({
+        available: true,
+        valueDecimal: "1066.6666666666666666666666666666666666666666666667",
+      });
+      const editPreferred = result.current.preview as unknown as {
+        readonly preferredCurrency?: string;
+        readonly metalPerPureGramInPreferredCurrencyDecimal?: string | null;
+      };
+      expect(editPreferred.preferredCurrency).toBe("EGP");
+      expect(editPreferred.metalPerPureGramInPreferredCurrencyDecimal).toBe(
+        "5000"
+      );
+    });
+
+    it("hides preferred per-gram when preferred FX is missing without touching purchase valuation", async () => {
+      const base = activeModel();
+      mockLoadEditableMetalHolding.mockResolvedValue({
+        ...base,
+        facts: {
+          ...base.facts,
+          weightGramsDecimal: "8",
+          purchasePriceDecimal: "750",
+          purchaseCurrency: "CAD",
+        },
+        persistedMaterialFacts: {
+          ...base.persistedMaterialFacts,
+          weightGramsDecimal: "8",
+          purchasePriceDecimal: "750",
+          purchaseCurrency: "CAD",
+        },
+      });
+
+      const { result } = renderHook(() =>
+        useEditMetalHolding(
+          testInput({
+            getPreviewRates: (() => ({
+              metalUsdPerPureGramDecimal: "100",
+              currencyUsdPerUnitDecimal: "0.75",
+              egpUsdPerUnitDecimal: "0.02",
+              currencyMinorUnits: 2,
+              rateFreshness: "fresh",
+              preferredCurrency: "EGP",
+              preferredCurrencyUsdPerUnitDecimal: null,
+            })) as unknown as UseEditMetalHoldingInput["getPreviewRates"],
+            preferredCurrency: "EGP",
+          })
+        )
+      );
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(result.current.preview.displayCurrency).toBe("CAD");
+      expect(result.current.preview.valuation).toEqual({
+        available: true,
+        valueDecimal: "1066.6666666666666666666666666666666666666666666667",
+      });
+      const editMissingPreferred = result.current.preview as unknown as {
+        readonly metalPerPureGramInPreferredCurrencyDecimal?: string | null;
+      };
+      expect(
+        editMissingPreferred.metalPerPureGramInPreferredCurrencyDecimal
+      ).toBeNull();
+    });
+  });
+});

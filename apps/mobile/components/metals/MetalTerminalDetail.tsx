@@ -13,7 +13,6 @@ import { shouldUseCompactLayout } from "@/constants/ui";
 import { useTheme } from "@/context/ThemeContext";
 import type { MetalDetailReadModel } from "@/services/metal-detail-read-model-service";
 import { formatLocalizedMoneyAmount } from "@/utils/localized-money-display";
-import { MetalSoldRateTrust } from "./MetalSoldRateTrust";
 
 interface MetalTerminalDetailProps {
   readonly model: MetalDetailReadModel;
@@ -112,7 +111,6 @@ export function MetalTerminalDetail({
               )}
             </Text>
           )}
-          <MetalSoldRateTrust rates={terminalFacts.displayRateTrust ?? []} />
         </View>
         <TerminalStory
           model={model}

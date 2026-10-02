@@ -25,6 +25,7 @@ type FetchLike = (
 
 type Sleep = (milliseconds: number) => Promise<void>;
 type CreateTimeoutSignal = (milliseconds: number) => AbortSignal;
+type ResponseOutputCapture = (content: string) => void;
 type ProviderLogger = (
   event: string,
   metadata: SmsAiProviderOperationalMetadata
@@ -35,6 +36,7 @@ export interface DeepInfraSmsProviderDependencies {
   readonly sleep?: Sleep;
   readonly createTimeoutSignal?: CreateTimeoutSignal;
   readonly log?: ProviderLogger;
+  readonly onResponseOutput?: ResponseOutputCapture;
 }
 
 const DeepInfraResponseSchema = z.object({
@@ -164,7 +166,7 @@ function buildRequestBody(
 function isSupportedServiceTier(
   value: SmsAiServiceTier
 ): value is SmsAiServiceTier {
-  return value === "default" || value === "priority" || value === "flex";
+  return value === "default" || value === "priority";
 }
 
 export class DeepInfraSmsProvider implements SmsAiProvider {
@@ -172,6 +174,7 @@ export class DeepInfraSmsProvider implements SmsAiProvider {
   private readonly sleep: Sleep;
   private readonly createTimeoutSignal: CreateTimeoutSignal;
   private readonly log?: ProviderLogger;
+  private readonly onResponseOutput?: ResponseOutputCapture;
 
   constructor(
     private readonly config: SmsAiProviderConfig,
@@ -185,6 +188,7 @@ export class DeepInfraSmsProvider implements SmsAiProvider {
     this.createTimeoutSignal =
       dependencies.createTimeoutSignal ?? defaultTimeoutSignal;
     this.log = dependencies.log;
+    this.onResponseOutput = dependencies.onResponseOutput;
   }
 
   async execute(
@@ -235,6 +239,12 @@ export class DeepInfraSmsProvider implements SmsAiProvider {
         }
 
         const choice = parsed.data.choices[0];
+        const responseContent = choice.message.content ?? "";
+        try {
+          this.onResponseOutput?.(responseContent);
+        } catch {
+          // Development-only diagnostics must never alter provider behavior.
+        }
         const operationalMetadata = buildOperationalMetadata(parsed.data);
         if (operationalMetadata !== undefined) {
           this.log?.("smsAi.providerUsage", operationalMetadata);
@@ -242,7 +252,7 @@ export class DeepInfraSmsProvider implements SmsAiProvider {
 
         return {
           completionStatus: mapCompletionStatus(choice.finish_reason),
-          content: choice.message.content ?? "",
+          content: responseContent,
           ...(operationalMetadata === undefined ? {} : { operationalMetadata }),
         };
       } catch (error: unknown) {

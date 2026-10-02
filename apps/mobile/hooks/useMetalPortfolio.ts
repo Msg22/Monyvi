@@ -139,6 +139,7 @@ export function useMetalPortfolio(
     currentError: marketRatesError,
     isConnected,
     isCurrentLoading,
+    lastUpdated,
     refreshSelectedSnapshot,
     selectedSnapshot,
   } = useMarketRates();
@@ -684,8 +685,10 @@ export function useMetalPortfolio(
     );
 
     return buildMetalPortfolioReadModel({
+      currentRates,
       filter: selectedFilter,
       holdings: portfolioShapedHoldings,
+      preferredCurrency,
       rateStatus: getPortfolioRateStatus(
         currentRates,
         preferredCurrency,
@@ -705,15 +708,8 @@ export function useMetalPortfolio(
   ]);
 
   const rateProviderObservedAt = useMemo(
-    () =>
-      readiness.rateCurrency
-        ? getPortfolioProviderObservedAt(
-            currentRates,
-            portfolio?.activeHoldings ?? [],
-            preferredCurrency
-          )
-        : null,
-    [currentRates, portfolio, preferredCurrency, readiness.rateCurrency]
+    () => (readiness.rateCurrency ? copyValidProviderDate(lastUpdated) : null),
+    [lastUpdated, readiness.rateCurrency]
   );
 
   const wealthBreakdown = useMemo((): WealthBreakdownReadModel | null => {
@@ -906,40 +902,9 @@ function missingTrustValue(): LiveRatesTrustValue {
   };
 }
 
-function getPortfolioProviderObservedAt(
-  currentRates: LiveRatesTrustReadModel,
-  activeHoldings: MetalPortfolioReadModel["activeHoldings"],
-  preferredCurrency: CurrencyType
-): Date | null {
-  if (activeHoldings.length === 0) return null;
-  const activeMetalTypes = Array.from(
-    new Set<SupportedMetal>(activeHoldings.map((holding) => holding.metalType))
-  );
-  const activePurchaseCurrencies = Array.from(
-    new Set<MetalsIsoCurrencyCode>(
-      activeHoldings.flatMap((holding) =>
-        holding.purchasePriceDecimal !== null &&
-        holding.purchaseCurrency !== null
-          ? [holding.purchaseCurrency]
-          : []
-      )
-    )
-  );
-  const values = getPortfolioRateValues(
-    currentRates,
-    preferredCurrency,
-    activeMetalTypes,
-    activePurchaseCurrencies
-  );
-  const timestamps = values.flatMap((value) =>
-    value.providerObservedAt === null ||
-    !Number.isFinite(value.providerObservedAt.getTime())
-      ? []
-      : [value.providerObservedAt.getTime()]
-  );
-  return timestamps.length > 0 && timestamps.length === values.length
-    ? new Date(Math.min(...timestamps))
-    : null;
+function copyValidProviderDate(value: Date | null): Date | null {
+  if (value === null || !Number.isFinite(value.getTime())) return null;
+  return new Date(value.getTime());
 }
 
 function toPortfolioRateState(
