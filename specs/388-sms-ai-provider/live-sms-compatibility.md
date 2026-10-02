@@ -36,7 +36,7 @@ installing the Android application so the generated
 | --- | --- | --- |
 | Foreground receive | Keep the app foregrounded with live detection and AI consent enabled, then receive a supported financial SMS | SMS is processed once through the live parser path and any valid result is handled normally |
 | Background receive | Put the app in the background without killing the process, then receive a supported financial SMS | Background/native delivery reaches the shared live processor without duplicate financial handling |
-| Killed-app receive | Force-stop/remove the app process as appropriate for the supported HeadlessJS test setup, then receive a supported financial SMS | Android starts the HeadlessJS service and the SMS reaches the shared live processor within the rebuilt app |
+| Killed-app receive | Use the existing supported killed-app harness: background the rebuilt release/preview app, kill its process without force-stopping the package, then inject/receive the real SMS as documented by the live-SMS Maestro journey | Android starts the HeadlessJS service and the SMS reaches the shared live processor within the rebuilt app; Android force-stop is unsupported for this scenario because a force-stopped package will not receive normal SMS broadcasts until the app is opened again |
 | Retry after provider failure | Cause a retryable provider/network failure for a live SMS, then allow the native HeadlessJS retry | The same SMS keeps the same fingerprint-derived request key, candidate ID, and original scan-start timestamp |
 | Foreground to headless retry | First process a retryable attempt in foreground, then let the retry arrive through HeadlessJS for the same SMS | Delivery mode changes, but request key, candidate ID, SMS fingerprint, and `scanStartedAtMs` remain stable |
 | Duplicate delivery | Deliver the same already-saved/locally-deduplicated SMS again | No second transaction/transfer or duplicate live notification workflow is created |
@@ -62,7 +62,7 @@ retry-body identity.
 | --- | --- | --- |
 | Native task budget | Config-plugin test asserts generated `TASK_TIMEOUT_MS = 120000L` while retaining 3 attempts / 10-second native retry delay | Rebuilt Android app required |
 | Same-mode retry identity | Focused live-request-identity test covers repeated HeadlessJS delivery with changed wall-clock time | Device delivery timing still manual |
-| Delivery-mode switch | Focused test covers foreground first attempt followed by HeadlessJS retry | Foreground/background/killed transition still manual |
+| Delivery-mode switch | Focused test covers foreground first attempt followed by HeadlessJS retry | Foreground/background/killed transition still manual; use the release/preview embedded-JS killed-app harness rather than force-stop |
 | Distinct identities | Focused test covers different fingerprints producing different request keys/candidate IDs | Optional device confirmation |
 | Duplicate protection | Existing live-processor regression coverage | Confirm no duplicate save/notification on device |
 | Consent controls | Existing live-processor regression coverage | Confirm revoke/disable behavior on device |

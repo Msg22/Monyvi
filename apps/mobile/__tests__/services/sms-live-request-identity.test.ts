@@ -1,5 +1,7 @@
 import type { ParseSmsContext, SmsCandidate } from "@/services/ai-sms-parser-service";
+import type { SmsParserOrchestratorOptions } from "@/services/sms-parser-result-contract";
 import type { SmsParserOrchestratorResult } from "@/services/sms-parser-orchestrator";
+import type { LiveSmsEvent } from "@/services/sms-live-processor";
 
 const mockComputeSmsFingerprint = jest.fn<Promise<string>, [unknown]>();
 const mockParseSmsWithOrchestrator = jest.fn<
@@ -9,7 +11,7 @@ const mockParseSmsWithOrchestrator = jest.fn<
     ParseSmsContext,
     unknown?,
     unknown?,
-    Readonly<Record<string, unknown>>?,
+    SmsParserOrchestratorOptions?,
   ]
 >();
 const mockGetRequiredCurrentUserId = jest.fn<Promise<string>, []>();
@@ -17,7 +19,19 @@ const mockGetAiProcessingConsentStatus = jest.fn<
   Promise<{ isConsented: boolean; userId: string }>,
   []
 >();
-const mockGetCurrentUserDataScope = jest.fn();
+interface MockUserScope {
+  readonly userId: string;
+  readonly queryAccessibleCategories: () => {
+    readonly fetch: () => Promise<readonly never[]>;
+  };
+}
+
+interface LiveRequestIdentitySnapshot {
+  readonly candidateId: string | undefined;
+  readonly options: SmsParserOrchestratorOptions | undefined;
+}
+
+const mockGetCurrentUserDataScope = jest.fn<Promise<MockUserScope>, []>();
 const mockHasExistingSmsFingerprint = jest.fn<
   Promise<boolean>,
   [string, string?]
@@ -86,7 +100,7 @@ jest.mock("@/services/sms-parser-orchestrator", () => ({
       ParseSmsContext,
       unknown?,
       unknown?,
-      Readonly<Record<string, unknown>>?,
+      SmsParserOrchestratorOptions?,
     ]
   ): Promise<SmsParserOrchestratorResult> =>
     mockParseSmsWithOrchestrator(...args),
@@ -95,7 +109,8 @@ jest.mock("@/services/sms-parser-orchestrator", () => ({
 }));
 
 jest.mock("@/services/user-data-access", () => ({
-  getCurrentUserDataScope: () => mockGetCurrentUserDataScope(),
+  getCurrentUserDataScope: (): Promise<MockUserScope> =>
+    mockGetCurrentUserDataScope(),
   getRequiredCurrentUserId: (): Promise<string> =>
     mockGetRequiredCurrentUserId(),
 }));
@@ -135,16 +150,19 @@ function result(hasError = false): SmsParserOrchestratorResult {
   };
 }
 
-function liveEvent(deliveryMode: "foreground" | "headless", timestamp = 1778414400000) {
+function liveEvent(
+  deliveryMode: LiveSmsEvent["deliveryMode"],
+  timestamp = 1778414400000
+): LiveSmsEvent {
   return {
     sender: "QNB",
     body: "Purchase EGP 850 at Hyper Market using card ending 1234",
     timestamp,
     deliveryMode,
-  } as const;
+  };
 }
 
-function identityAt(callIndex: number) {
+function identityAt(callIndex: number): LiveRequestIdentitySnapshot {
   const call = mockParseSmsWithOrchestrator.mock.calls[callIndex];
   return {
     candidateId: call?.[0][0]?.message.id,
@@ -162,8 +180,10 @@ describe("live SMS request identity", () => {
     });
     mockGetCurrentUserDataScope.mockResolvedValue({
       userId: "user-a",
-      queryAccessibleCategories: () => ({
-        fetch: jest.fn(() => Promise.resolve([])),
+      queryAccessibleCategories: (): {
+        readonly fetch: () => Promise<readonly never[]>;
+      } => ({
+        fetch: (): Promise<readonly never[]> => Promise.resolve([]),
       }),
     });
     mockHasExistingSmsFingerprint.mockResolvedValue(false);
