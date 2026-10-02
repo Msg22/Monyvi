@@ -176,8 +176,7 @@ export class DeepInfraSmsCategoryProvider {
     if (attempt === 0) return;
 
     await this.sleepImpl(
-      DEEPINFRA_SMS_CATEGORY_BASE_RETRY_DELAY_MS *
-        Math.pow(2, attempt - 1),
+      DEEPINFRA_SMS_CATEGORY_BASE_RETRY_DELAY_MS * Math.pow(2, attempt - 1),
       requestSignal
     );
   }
