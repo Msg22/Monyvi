@@ -56,6 +56,7 @@ interface MockUserScope {
 }
 
 const mockGetCurrentUserDataScope = jest.fn<Promise<MockUserScope>, []>();
+const mockAssertExpectedCurrentUser = jest.fn<Promise<void>, [string]>();
 const mockGetTrustedPrefilterDisposition = jest.fn<string, [SmsCandidate]>(
   () => "not_trusted_candidate"
 );
@@ -180,6 +181,8 @@ jest.mock("@/services/user-data-access", () => ({
     mockGetCurrentUserDataScope(),
   getRequiredCurrentUserId: (): Promise<string> =>
     mockGetRequiredCurrentUserId(),
+  assertExpectedCurrentUser: (expectedUserId: string): Promise<void> =>
+    mockAssertExpectedCurrentUser(expectedUserId),
 }));
 
 function createMockUserScope(userId = "user-a"): MockUserScope {
@@ -232,6 +235,7 @@ describe("sms-live-processor", () => {
     mockIsExcludedBeforeSmsParsing.mockReturnValue(false);
     mockGetCurrentUserDataScope.mockResolvedValue(createMockUserScope());
     mockGetRequiredCurrentUserId.mockResolvedValue("user-a");
+    mockAssertExpectedCurrentUser.mockResolvedValue(undefined);
     mockGetTrustedPrefilterDisposition.mockReturnValue("not_trusted_candidate");
     mockParseSmsWithOrchestrator.mockResolvedValue({
       transactions: [createParsedTransaction()],
@@ -296,7 +300,12 @@ describe("sms-live-processor", () => {
       {
         expectedUserId: "user-a",
         terminalFingerprints: new Set(["hash-live"]),
-        requestContext: { scanSessionId: null, scanKind: "live" },
+        requestContext: {
+          scanSessionId: null,
+          scanKind: "live",
+          scanStartedAtMs: 1778414400000,
+        },
+        requestKey: "live:hash-live",
       }
     );
   });

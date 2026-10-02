@@ -64,11 +64,7 @@ interface ActiveEvaluationRun {
   readonly startedAtMs: number;
 }
 
-interface ActiveBatchTiming {
-  readonly generation: number;
-  readonly batchNumber: number;
-  readonly startedAtMs: number;
-}
+type ActiveBatchTimings = ReadonlyMap<number, number>;
 
 function emptyState(ownerUserId: string | null): EvaluationState {
   return {
@@ -135,21 +131,21 @@ export function useSmsProviderEvaluation(
   const { userId } = input;
   const [state, setState] = useState<EvaluationState>(() => emptyState(userId));
   const activeRunRef = useRef<ActiveEvaluationRun | null>(null);
-  const activeBatchTimingRef = useRef<ActiveBatchTiming | null>(null);
+  const activeBatchTimingsRef = useRef<ActiveBatchTimings>(new Map());
   const generationRef = useRef(0);
   const abortActiveRun = useCallback((): void => {
     generationRef.current += 1;
     activeRunRef.current?.controller.abort();
     activeRunRef.current = null;
-    activeBatchTimingRef.current = null;
+    activeBatchTimingsRef.current = new Map();
   }, []);
   const cancel = useCallback((): void => {
     const activeRun = activeRunRef.current;
-    const activeBatchTiming = activeBatchTimingRef.current;
+    const activeBatchTimings = activeBatchTimingsRef.current;
     abortActiveRun();
     setState((current) =>
       current.ownerUserId === userId && current.status === "running"
-        ? cancelRunningState(current, activeRun, activeBatchTiming)
+        ? cancelRunningState(current, activeRun, activeBatchTimings)
         : current
     );
   }, [abortActiveRun, userId]);
@@ -163,13 +159,13 @@ export function useSmsProviderEvaluation(
     state.status,
     userId,
     activeRunRef,
-    activeBatchTimingRef,
+    activeBatchTimingsRef,
     setState
   );
   const start = useEvaluationStarter(
     input,
     activeRunRef,
-    activeBatchTimingRef,
+    activeBatchTimingsRef,
     generationRef,
     setState
   );
@@ -200,13 +196,13 @@ function elapsedSince(startedAtMs: number): number {
 function cancelRunningState(
   current: EvaluationState,
   activeRun: ActiveEvaluationRun | null,
-  activeBatchTiming: ActiveBatchTiming | null
+  activeBatchTimings: ActiveBatchTimings
 ): EvaluationState {
   return {
     ...current,
     status: "cancelled",
     activeBatchNumber: null,
-    batches: markActiveBatchCancelled(current, activeBatchTiming),
+    batches: markRunningBatchesCancelled(current.batches, activeBatchTimings),
     runElapsedMs:
       activeRun === null
         ? current.runElapsedMs
@@ -214,52 +210,49 @@ function cancelRunningState(
   };
 }
 
-function markActiveBatchCancelled(
-  current: EvaluationState,
-  timing: ActiveBatchTiming | null
+function markRunningBatchesCancelled(
+  batches: readonly SmsProviderEvaluationBatchDetail[],
+  timings: ActiveBatchTimings
 ): readonly SmsProviderEvaluationBatchDetail[] {
-  if (current.activeBatchNumber === null) return current.batches;
-  return current.batches.map((batch) =>
-    batch.batchNumber === current.activeBatchNumber
-      ? {
-          ...batch,
-          status: "cancelled",
-          ...(timing?.batchNumber === batch.batchNumber
-            ? { elapsedMs: elapsedSince(timing.startedAtMs) }
-            : {}),
-        }
-      : batch
-  );
+  return batches.map((batch) => {
+    if (batch.status !== "running") return batch;
+    const startedAtMs = timings.get(batch.batchNumber);
+    return {
+      ...batch,
+      status: "cancelled",
+      ...(startedAtMs === undefined
+        ? {}
+        : { elapsedMs: elapsedSince(startedAtMs) }),
+    };
+  });
 }
 
-function updateActiveBatchTiming(
-  run: ActiveEvaluationRun,
-  batchNumber: number | null,
-  timingRef: React.MutableRefObject<ActiveBatchTiming | null>
+function updateActiveBatchTimings(
+  progress: SmsProviderEvaluationProgress,
+  timingsRef: React.MutableRefObject<ActiveBatchTimings>
 ): void {
-  if (batchNumber === null) {
-    timingRef.current = null;
-    return;
+  const running = new Set(
+    progress.batches
+      .filter((batch) => batch.status === "running")
+      .map((batch) => batch.batchNumber)
+  );
+  if (running.size === 0 && timingsRef.current.size === 0) return;
+  const next = new Map<number, number>();
+  for (const [batchNumber, startedAtMs] of timingsRef.current) {
+    if (running.has(batchNumber)) next.set(batchNumber, startedAtMs);
   }
-  const current = timingRef.current;
-  if (
-    current?.generation === run.generation &&
-    current.batchNumber === batchNumber
-  ) {
-    return;
+  const now = Date.now();
+  for (const batchNumber of running) {
+    if (!next.has(batchNumber)) next.set(batchNumber, now);
   }
-  timingRef.current = {
-    generation: run.generation,
-    batchNumber,
-    startedAtMs: Date.now(),
-  };
+  timingsRef.current = next;
 }
 
 function useRunElapsedTimer(
   status: SmsProviderEvaluationScreenStatus,
   userId: string | null,
   activeRunRef: React.MutableRefObject<ActiveEvaluationRun | null>,
-  activeBatchTimingRef: React.MutableRefObject<ActiveBatchTiming | null>,
+  activeBatchTimingsRef: React.MutableRefObject<ActiveBatchTimings>,
   setState: React.Dispatch<React.SetStateAction<EvaluationState>>
 ): void {
   useEffect(() => {
@@ -272,19 +265,19 @@ function useRunElapsedTimer(
           current,
           userId,
           run,
-          activeBatchTimingRef.current
+          activeBatchTimingsRef.current
         )
       );
     }, 1_000);
     return (): void => clearInterval(timer);
-  }, [activeBatchTimingRef, activeRunRef, setState, status, userId]);
+  }, [activeBatchTimingsRef, activeRunRef, setState, status, userId]);
 }
 
 function updateRunningElapsed(
   current: EvaluationState,
   userId: string | null,
   run: ActiveEvaluationRun,
-  batchTiming: ActiveBatchTiming | null
+  activeBatchTimings: ActiveBatchTimings
 ): EvaluationState {
   if (current.ownerUserId !== userId || current.status !== "running") {
     return current;
@@ -292,26 +285,29 @@ function updateRunningElapsed(
   return {
     ...current,
     runElapsedMs: elapsedSince(run.startedAtMs),
-    batches: updateActiveBatchElapsed(current.batches, batchTiming),
+    batches: updateActiveBatchesElapsed(current.batches, activeBatchTimings),
   };
 }
 
-function updateActiveBatchElapsed(
+function updateActiveBatchesElapsed(
   batches: readonly SmsProviderEvaluationBatchDetail[],
-  timing: ActiveBatchTiming | null
+  timings: ActiveBatchTimings
 ): readonly SmsProviderEvaluationBatchDetail[] {
-  if (timing === null) return batches;
-  return batches.map((batch) =>
-    batch.batchNumber === timing.batchNumber && batch.status === "running"
-      ? { ...batch, elapsedMs: elapsedSince(timing.startedAtMs) }
-      : batch
-  );
+  let changed = false;
+  const next = batches.map((batch) => {
+    if (batch.status !== "running") return batch;
+    const startedAtMs = timings.get(batch.batchNumber);
+    if (startedAtMs === undefined) return batch;
+    changed = true;
+    return { ...batch, elapsedMs: elapsedSince(startedAtMs) };
+  });
+  return changed ? next : batches;
 }
 
 function useEvaluationStarter(
   input: UseSmsProviderEvaluationInput,
   activeRunRef: React.MutableRefObject<ActiveEvaluationRun | null>,
-  activeBatchTimingRef: React.MutableRefObject<ActiveBatchTiming | null>,
+  activeBatchTimingsRef: React.MutableRefObject<ActiveBatchTimings>,
   generationRef: React.MutableRefObject<number>,
   setState: React.Dispatch<React.SetStateAction<EvaluationState>>
 ): () => Promise<void> {
@@ -333,7 +329,7 @@ function useEvaluationStarter(
         run,
         generationRef,
         activeRunRef,
-        activeBatchTimingRef,
+        activeBatchTimingsRef,
         setState
       );
     } finally {
@@ -371,7 +367,7 @@ async function executeHookRun(
   run: ActiveEvaluationRun,
   generationRef: React.MutableRefObject<number>,
   activeRunRef: React.MutableRefObject<ActiveEvaluationRun | null>,
-  activeBatchTimingRef: React.MutableRefObject<ActiveBatchTiming | null>,
+  activeBatchTimingsRef: React.MutableRefObject<ActiveBatchTimings>,
   setState: React.Dispatch<React.SetStateAction<EvaluationState>>
 ): Promise<void> {
   try {
@@ -383,17 +379,14 @@ async function executeHookRun(
       signal: run.controller.signal,
       onProgress: (progress): void => {
         if (!isCurrentRun(run, generationRef, activeRunRef)) return;
-        updateActiveBatchTiming(
-          run,
-          progress.activeBatchNumber,
-          activeBatchTimingRef
-        );
+        updateActiveBatchTimings(progress, activeBatchTimingsRef);
         setState((current) =>
           runningState(input.userId, progress, current.runElapsedMs)
         );
       },
     });
     if (isCurrentRun(run, generationRef, activeRunRef)) {
+      activeBatchTimingsRef.current = new Map();
       setState(
         terminalState(input.userId, result, elapsedSince(run.startedAtMs))
       );
@@ -405,6 +398,7 @@ async function executeHookRun(
       error,
       generationRef,
       activeRunRef,
+      activeBatchTimingsRef,
       setState
     );
   }
@@ -416,8 +410,7 @@ function isCurrentRun(
   activeRunRef: React.MutableRefObject<ActiveEvaluationRun | null>
 ): boolean {
   return (
-    generationRef.current === run.generation &&
-    activeRunRef.current === run
+    generationRef.current === run.generation && activeRunRef.current === run
   );
 }
 
@@ -427,9 +420,12 @@ function handleHookRunError(
   error: unknown,
   generationRef: React.MutableRefObject<number>,
   activeRunRef: React.MutableRefObject<ActiveEvaluationRun | null>,
+  activeBatchTimingsRef: React.MutableRefObject<ActiveBatchTimings>,
   setState: React.Dispatch<React.SetStateAction<EvaluationState>>
 ): void {
   if (!isCurrentRun(run, generationRef, activeRunRef)) return;
+  const activeBatchTimings = activeBatchTimingsRef.current;
+  activeBatchTimingsRef.current = new Map();
   if (isSmsProviderEvaluationOwnerChanged(error)) {
     setState(emptyState(null));
     return;
@@ -443,6 +439,7 @@ function handleHookRunError(
     ownerUserId: userId,
     status: run.controller.signal.aborted ? "cancelled" : "fatal",
     activeBatchNumber: null,
+    batches: markRunningBatchesCancelled(current.batches, activeBatchTimings),
     fatalReason: run.controller.signal.aborted ? null : fatalReason,
     runElapsedMs: elapsedSince(run.startedAtMs),
   }));

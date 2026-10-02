@@ -156,62 +156,37 @@ test("rejects flex service tier before request admission", () => {
   );
 });
 
-test("retries transient HTTP failures with 2s/4s backoff", async () => {
-  const statuses = [429, 500, 200];
-  const delays: number[] = [];
-  let calls = 0;
-  const provider = new DeepInfraSmsProvider(CONFIG, {
-    fetch: async () => {
-      const status = statuses[calls++] ?? 200;
-      return status === 200
-        ? successResponse()
-        : new Response(null, { status });
-    },
-    sleep: async (milliseconds) => {
-      delays.push(milliseconds);
-    },
-    createTimeoutSignal: () => new AbortController().signal,
-  });
+test("fails fast on transient HTTP failures without automatic retry", async () => {
+  for (const status of [429, 500, 503]) {
+    const delays: number[] = [];
+    let calls = 0;
+    const provider = new DeepInfraSmsProvider(CONFIG, {
+      fetch: async () => {
+        calls++;
+        return new Response(null, { status });
+      },
+      sleep: async (milliseconds) => {
+        delays.push(milliseconds);
+      },
+      createTimeoutSignal: () => new AbortController().signal,
+    });
 
-  const result = await provider.execute(REQUEST);
-
-  assert.equal(result.completionStatus, "complete");
-  assert.equal(calls, 3);
-  assert.deepEqual(delays, [2000, 4000]);
+    await assert.rejects(
+      () => provider.execute(REQUEST),
+      /DeepInfra SMS request failed/
+    );
+    assert.equal(calls, 1);
+    assert.deepEqual(delays, []);
+  }
 });
 
-test("retries HTTP 408 explicitly with 2s backoff", async () => {
-  const delays: number[] = [];
-  let calls = 0;
-  const provider = new DeepInfraSmsProvider(CONFIG, {
-    fetch: async () => {
-      calls++;
-      if (calls === 1) return new Response(null, { status: 408 });
-      return successResponse();
-    },
-    sleep: async (milliseconds) => {
-      delays.push(milliseconds);
-    },
-    createTimeoutSignal: () => new AbortController().signal,
-  });
-
-  const result = await provider.execute(REQUEST);
-
-  assert.equal(result.completionStatus, "complete");
-  assert.equal(calls, 2);
-  assert.deepEqual(delays, [2000]);
-});
-
-test("retries a thrown timeout AbortError with bounded backoff", async () => {
+test("does not retry HTTP 408 and never sleeps", async () => {
   const delays: number[] = [];
   let calls = 0;
   const provider = new DeepInfraSmsProvider(CONFIG, {
     fetch: async () => {
       calls++;
-      if (calls === 1) {
-        throw new DOMException("The operation was aborted", "AbortError");
-      }
-      return successResponse();
+      return new Response(null, { status: 408 });
     },
     sleep: async (milliseconds) => {
       delays.push(milliseconds);
@@ -219,29 +194,51 @@ test("retries a thrown timeout AbortError with bounded backoff", async () => {
     createTimeoutSignal: () => new AbortController().signal,
   });
 
-  const result = await provider.execute(REQUEST);
-
-  assert.equal(result.completionStatus, "complete");
-  assert.equal(calls, 2);
-  assert.deepEqual(delays, [2000]);
+  await assert.rejects(
+    () => provider.execute(REQUEST),
+    /DeepInfra SMS request failed/
+  );
+  assert.equal(calls, 1);
+  assert.deepEqual(delays, []);
 });
 
-test("retries a network error but does not retry auth or malformed-request statuses", async () => {
+test("does not retry a thrown timeout AbortError", async () => {
+  const delays: number[] = [];
+  let calls = 0;
+  const provider = new DeepInfraSmsProvider(CONFIG, {
+    fetch: async () => {
+      calls++;
+      throw new DOMException("The operation was aborted", "AbortError");
+    },
+    sleep: async (milliseconds) => {
+      delays.push(milliseconds);
+    },
+    createTimeoutSignal: () => new AbortController().signal,
+  });
+
+  await assert.rejects(
+    () => provider.execute(REQUEST),
+    /DeepInfra SMS request failed/
+  );
+  assert.equal(calls, 1);
+  assert.deepEqual(delays, []);
+});
+
+test("does not retry network errors and still fails fast on auth or malformed-request statuses", async () => {
   let networkCalls = 0;
   const networkProvider = new DeepInfraSmsProvider(CONFIG, {
     fetch: async () => {
       networkCalls++;
-      if (networkCalls === 1) throw new TypeError("network unavailable");
-      return successResponse();
+      throw new TypeError("network unavailable");
     },
     sleep: async () => undefined,
     createTimeoutSignal: () => new AbortController().signal,
   });
-  assert.equal(
-    (await networkProvider.execute(REQUEST)).completionStatus,
-    "complete"
+  await assert.rejects(
+    () => networkProvider.execute(REQUEST),
+    /DeepInfra SMS request failed/
   );
-  assert.equal(networkCalls, 2);
+  assert.equal(networkCalls, 1);
 
   for (const status of [400, 401, 403, 404]) {
     let calls = 0;
@@ -262,7 +259,7 @@ test("retries a network error but does not retry auth or malformed-request statu
   }
 });
 
-test("exhausts bounded retries after four transient attempts", async () => {
+test("fails after a single transient attempt without sleeping", async () => {
   const delays: number[] = [];
   let calls = 0;
   const provider = new DeepInfraSmsProvider(CONFIG, {
@@ -280,8 +277,8 @@ test("exhausts bounded retries after four transient attempts", async () => {
     () => provider.execute(REQUEST),
     /DeepInfra SMS request failed/
   );
-  assert.equal(calls, 4);
-  assert.deepEqual(delays, [2000, 4000, 8000]);
+  assert.equal(calls, 1);
+  assert.deepEqual(delays, []);
 });
 
 test("fails closed on a malformed successful provider envelope", async () => {
@@ -377,10 +374,9 @@ test("never logs an upstream error body that may echo SMS content", async () => 
     () => provider.execute(REQUEST),
     /DeepInfra SMS request failed/
   );
-  assert.equal(calls, 4);
+  assert.equal(calls, 1);
   assert.equal(JSON.stringify(logs).includes("ECHOED SECRET SMS BODY"), false);
 });
-
 
 test("captures validated assistant output separately from aggregate usage logging", async () => {
   const usageLogs: Array<{
@@ -394,10 +390,7 @@ test("captures validated assistant output separately from aggregate usage loggin
     fetch: async (): Promise<Response> => successResponse(returnedContent),
     sleep: async (): Promise<void> => undefined,
     createTimeoutSignal: (): AbortSignal => new AbortController().signal,
-    log: (
-      event: string,
-      metadata: Readonly<Record<string, unknown>>
-    ): void => {
+    log: (event: string, metadata: Readonly<Record<string, unknown>>): void => {
       usageLogs.push({ event, metadata });
     },
     onResponseOutput: (content: string): void => {

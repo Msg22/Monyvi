@@ -12,11 +12,10 @@ uses a separate staging-only endpoint, `sms-provider-evaluation`, so synthetic
 trial traffic does not consume or mutate production SMS allowance/history/
 negative-outcome records.
 
-This is not a client-controlled quota bypass and does not alter `parse-sms`.
-The dedicated endpoint independently requires:
+This is not a client-controlled quota bypass and does not alter `parse-sms`. The
+dedicated endpoint independently requires:
 
-- exact server `SUPABASE_URL` =
-  `https://yulbcndyssdjicbpmlrk.supabase.co`;
+- exact server `SUPABASE_URL` = `https://yulbcndyssdjicbpmlrk.supabase.co`;
 - POST plus a valid authenticated JWT;
 - active server-side AI-processing consent;
 - a bounded request body and normal full-parser per-request unit/payload/token
@@ -58,7 +57,7 @@ with no fallback to production `parse-sms`.
 
 The request JSON is the existing parse-sms body plus one required strict object:
 
-~~~json
+```json
 {
   "requestKey": "sms-eval:<runId>:batch-001",
   "scanSessionId": "sms-eval:<runId>",
@@ -80,7 +79,7 @@ The request JSON is the existing parse-sms body plus one required strict object:
     "anchorMs": 0
   }
 }
-~~~
+```
 
 `anchorMs` above is a JSON number containing the exact run anchor in epoch
 milliseconds; `0` is illustrative only. `scanStartedAt` must equal
@@ -92,11 +91,10 @@ request abort signal.
 
 ## Runtime boundaries
 
-The endpoint reads actual body bytes with
-`policy.fullParser.maxPayloadBytes` as the hard cap; it does not trust
-`Content-Length`. Cheap metadata/message-count validation runs before JWT
-lookup, consent lookup and corpus construction. Full canonical-corpus validation
-runs before provider execution.
+The endpoint reads actual body bytes with `policy.fullParser.maxPayloadBytes` as
+the hard cap; it does not trust `Content-Length`. Cheap metadata/message-count
+validation runs before JWT lookup, consent lookup and corpus construction. Full
+canonical-corpus validation runs before provider execution.
 
 The existing `createParseSmsHandler` remains authoritative for the normal
 per-request parser boundaries: capability enablement, unit cap, payload/token
@@ -116,39 +114,40 @@ Lifecycle adapters are request-local:
   reconciliation in memory but persists no positive/negative outcomes.
 
 Consequently this endpoint does not mutate `sms_ai_usage_events`,
-`sms_ai_requests`, `sms_ai_negative_outcomes`, transaction/transfer records,
-or other financial records. Authentication and consent reads remain required.
+`sms_ai_requests`, `sms_ai_negative_outcomes`, transaction/transfer records, or
+other financial records. Authentication and consent reads remain required.
 
 ## Preserved batching decisions
 
 T051 does not change evaluator batching. Integration must preserve:
 
-- mobile synthetic evaluation: **15 messages per sequential batch**;
-- shared/CLI evaluator: **5 messages per batch**.
+- mobile synthetic evaluation: **15 messages per batch**, up to 10 concurrent
+  batches (T053; CLI/safeguard-QA sequential behavior unchanged);
+- shared/CLI evaluator: **5 messages per batch**, sequential.
 
 ## Deferred verification / manual review
 
 No item below is verified in this source-only wave:
 
-| Scenario | Required evidence |
-| --- | --- |
-| Non-staging runtime | Endpoint fails closed before auth/corpus/provider work |
-| Oversized raw body | Actual streamed bytes exceed max payload -> rejected without trusting Content-Length |
-| Cheap malformed metadata/count | Rejected before JWT/consent/corpus construction |
-| Signed out / invalid JWT | Rejected; no provider execution |
-| Consent revoked | Rejected; no provider execution |
-| Unknown/arbitrary SMS | Exact canonical validation rejects it |
-| Tampered ID/sender/body/date/fingerprint | Rejected |
-| Duplicate ID/fingerprint | Rejected |
-| Canonical partial batch | Accepted when each submitted case belongs to the rebuilt corpus |
-| Per-request caps | Existing handler unit/payload/token validation still applies |
-| Allowance exemption | No production usage/request/history/negative-outcome mutation |
-| Cancellation | Original request signal reaches T050 handler/provider path |
-| Provider policy | One 60-second attempt; zero automatic retry |
-| Normal response | Existing parse-sms response envelope remains consumable by current scorer |
-| Production parser | `parse-sms` source and behavior remain unchanged |
-| Mobile/CLI sizes | 15 mobile and 5 CLI remain unchanged |
-| Hosted staging | Deployment/gateway behavior independently observed by lead |
+| Scenario                                 | Required evidence                                                                    |
+| ---------------------------------------- | ------------------------------------------------------------------------------------ |
+| Non-staging runtime                      | Endpoint fails closed before auth/corpus/provider work                               |
+| Oversized raw body                       | Actual streamed bytes exceed max payload -> rejected without trusting Content-Length |
+| Cheap malformed metadata/count           | Rejected before JWT/consent/corpus construction                                      |
+| Signed out / invalid JWT                 | Rejected; no provider execution                                                      |
+| Consent revoked                          | Rejected; no provider execution                                                      |
+| Unknown/arbitrary SMS                    | Exact canonical validation rejects it                                                |
+| Tampered ID/sender/body/date/fingerprint | Rejected                                                                             |
+| Duplicate ID/fingerprint                 | Rejected                                                                             |
+| Canonical partial batch                  | Accepted when each submitted case belongs to the rebuilt corpus                      |
+| Per-request caps                         | Existing handler unit/payload/token validation still applies                         |
+| Allowance exemption                      | No production usage/request/history/negative-outcome mutation                        |
+| Cancellation                             | Original request signal reaches T050 handler/provider path                           |
+| Provider policy                          | One 60-second attempt; zero automatic retry                                          |
+| Normal response                          | Existing parse-sms response envelope remains consumable by current scorer            |
+| Production parser                        | `parse-sms` source and behavior remain unchanged                                     |
+| Mobile/CLI sizes                         | 15 mobile and 5 CLI remain unchanged                                                 |
+| Hosted staging                           | Deployment/gateway behavior independently observed by lead                           |
 
-Per the approved trial waiver, no tests, lint, typecheck, formatting, CI, device,
-provider calls, deployment or runtime checks were written or run here.
+Per the approved trial waiver, no tests, lint, typecheck, formatting, CI,
+device, provider calls, deployment or runtime checks were written or run here.
