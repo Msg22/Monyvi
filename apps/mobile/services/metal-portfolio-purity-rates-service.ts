@@ -1,6 +1,6 @@
 import type { CurrencyType } from "@monyvi/db";
 import {
-  calculatePurityGramPriceDecimal,
+  calculateCurrentQuotedPurityGramPriceDecimal,
   FEATURED_PURITY_CODES,
   getPurityEntry,
   parseCanonicalDecimal,
@@ -68,7 +68,9 @@ export function buildFeaturedPurityPriceTiles(
 
     let pricePerGramDecimal: string | null = null;
     if (metalRateDecimal !== null && currencyRateDecimal !== null) {
-      pricePerGramDecimal = calculatePurityGramPriceDecimal({
+      pricePerGramDecimal = calculateCurrentQuotedPurityGramPriceDecimal({
+        metal: def.metal,
+        purityCode: def.purityCode,
         purityFactorDecimal: purityEntry.factorDecimal,
         metalUsdPerPureGramDecimal: metalRateDecimal,
         currencyUsdPerUnitDecimal: currencyRateDecimal,

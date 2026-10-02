@@ -44,13 +44,12 @@ export function formatPortfolioRateUpdatedParts(
 
 export type PortfolioRateTrustState = "fresh" | "stale" | "unknown" | "missing";
 
-const TILE_STATE_SEVERITY: Readonly<Record<PortfolioRateTrustState, number>> =
-  {
-    fresh: 0,
-    stale: 1,
-    unknown: 2,
-    missing: 3,
-  };
+const TILE_STATE_SEVERITY: Readonly<Record<PortfolioRateTrustState, number>> = {
+  fresh: 0,
+  stale: 1,
+  unknown: 2,
+  missing: 3,
+};
 
 /**
  * Derives the Prices-per-gram section trust from the displayed purity tiles
@@ -59,7 +58,7 @@ const TILE_STATE_SEVERITY: Readonly<Record<PortfolioRateTrustState, number>> =
  * fresh); an empty tile set is missing.
  */
 export function getPurityTilesRateState(
-  tiles: readonly { readonly state: PortfolioRateTrustState }[]
+  tiles: ReadonlyArray<{ readonly state: PortfolioRateTrustState }>
 ): PortfolioRateTrustState {
   let state: PortfolioRateTrustState = "fresh";
   let hasTile = false;

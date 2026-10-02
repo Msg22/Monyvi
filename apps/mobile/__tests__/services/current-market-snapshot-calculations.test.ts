@@ -95,8 +95,9 @@ describe("selected current market snapshot calculations", () => {
         metals: [
           {
             metalType: "GOLD",
+            purityCode: "gold-999",
             weightGramsDecimal: "1",
-            purityFactorDecimal: "1",
+            purityFactorDecimal: "0.999",
           },
         ],
         currentSnapshot: null,
@@ -219,6 +220,7 @@ describe("selected current market snapshot calculations", () => {
       metals: [
         {
           metalType: "GOLD",
+          purityCode: "gold-999",
           weightGramsDecimal: "1",
           purityFactorDecimal: "0.999",
         },
@@ -229,7 +231,31 @@ describe("selected current market snapshot calculations", () => {
     expect(result).not.toBeNull();
     expect(result?.bank).toBeCloseTo(2.10523309, 8);
     expect(result?.cash).toBeCloseTo(2.342469135780247, 12);
-    expect(result?.metals).toBeCloseTo(3735.00126, 8);
-    expect(result?.total).toBeCloseTo(Number("3739.4489622257804"), 8);
+    expect(result?.metals).toBeCloseTo(3738.74, 8);
+    expect(result?.total).toBeCloseTo(Number("3743.187702225780247"), 8);
+  });
+
+  it("keeps 21K and Silver 999 on their existing catalog-factor basis", () => {
+    const result = calculateSelectedCurrentAssetBreakdown({
+      accounts: [],
+      metals: [
+        {
+          metalType: "GOLD",
+          purityCode: "gold-875",
+          weightGramsDecimal: "1",
+          purityFactorDecimal: "0.875",
+        },
+        {
+          metalType: "SILVER",
+          purityCode: "silver-999",
+          weightGramsDecimal: "1",
+          purityFactorDecimal: "0.999",
+        },
+      ],
+      currentSnapshot,
+    });
+
+    expect(result).not.toBeNull();
+    expect(result?.metals).toBeCloseTo(3738.74 * 0.875 + 43.73874 * 0.999, 8);
   });
 });

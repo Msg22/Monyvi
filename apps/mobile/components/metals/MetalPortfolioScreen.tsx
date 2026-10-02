@@ -1,5 +1,6 @@
 import { Skeleton } from "@/components/ui/Skeleton";
 import { palette } from "@/constants/colors";
+import { ANDROID_SAFE_LIST_PROPS } from "@/constants/virtualized-list-policy";
 import {
   getTabContentBottomClearance,
   shouldUseCompactLayout,
@@ -95,6 +96,7 @@ export function MetalPortfolioScreen({
       className="flex-1 bg-background dark:bg-background-dark"
     >
       <FlatList
+        {...ANDROID_SAFE_LIST_PROPS}
         testID="metal-portfolio-list"
         data={displayedHoldings}
         keyExtractor={(holding): string => holding.id}

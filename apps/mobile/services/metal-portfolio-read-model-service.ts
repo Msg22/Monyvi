@@ -10,7 +10,7 @@ import {
   type MetalRateReference,
 } from "@monyvi/db";
 import {
-  calculateMetalReferenceValue,
+  calculateCurrentQuotedMetalReferenceValue,
   hasCanonicalDecimalPrecision,
   isSupportedMetal,
   isSupportedMetalsIsoCurrencyCode,
@@ -198,7 +198,6 @@ export interface MetalPortfolioReadModel {
   readonly soldResultDecimal: string | null;
   readonly soldResultUnavailable: boolean;
 }
-
 
 export interface ObservePortfolioAssetMetalsInput {
   readonly assets: readonly Asset[];
@@ -767,6 +766,7 @@ function calculateHoldingCardValues(input: {
 }): HoldingCardValues {
   if (
     input.facts.weightGramsDecimal === null ||
+    input.facts.purityCode === null ||
     input.facts.purityFactorDecimal === null ||
     !isSupportedMetalsIsoCurrencyCode(input.preferredCurrency)
   ) {
@@ -784,7 +784,9 @@ function calculateHoldingCardValues(input: {
   if (metalRate === null || preferredRate === null) {
     return unavailableHoldingCardValues();
   }
-  const currentValue = calculateMetalReferenceValue({
+  const currentValue = calculateCurrentQuotedMetalReferenceValue({
+    metal: input.metalType,
+    purityCode: input.facts.purityCode,
     currencyUsdPerUnitDecimal: preferredRate,
     metalUsdPerPureGramDecimal: metalRate,
     purityFactorDecimal: input.facts.purityFactorDecimal,
@@ -952,6 +954,3 @@ function sumAvailableDecimals(
 
   return serializeDecimal(total);
 }
-
-
-

@@ -97,6 +97,44 @@ async function createRow(
   });
 }
 
+/**
+ * Minimal valid `accounts` row. `balance` and `financial_revision` must stay at
+ * their initial values so the account is not classified as a financially dirty
+ * financial-action row and gets blocked from the generic push path.
+ */
+function accountRaw(
+  id: string,
+  userId: string,
+  overrides: Record<string, unknown> = {}
+): Record<string, unknown> {
+  return {
+    balance: 0,
+    currency: "EGP",
+    financial_revision: "0",
+    id,
+    is_default: false,
+    name: `${userId} bank`,
+    type: "BANK",
+    user_id: userId,
+    ...overrides,
+  };
+}
+
+function smsSenderRaw(
+  id: string,
+  accountId: string,
+  overrides: Record<string, unknown> = {}
+): Record<string, unknown> {
+  return {
+    account_id: accountId,
+    deleted: false,
+    id,
+    normalized_sender_name: `sender-${id}`,
+    sender_name: `Sender ${id}`,
+    ...overrides,
+  };
+}
+
 async function sync(database: Database): Promise<void> {
   await synchronize({
     database,
@@ -233,63 +271,53 @@ describe("multi-user pending sync with real SQLite and Watermelon acknowledgemen
   });
 
   it("scopes child creates and soft deletes through owned parents", async () => {
-    await createRow(database, "assets", {
-      id: "asset-a",
-      user_id: "user-a",
-      type: "OTHER",
-    });
-    await createRow(database, "assets", {
-      id: "asset-b",
-      user_id: "user-b",
-      type: "OTHER",
-      deleted: true,
-    });
-    const foreign = await createRow(database, "asset_metals", {
-      id: "metal-a",
-      asset_id: "asset-a",
-    });
-    const owned = await createRow(database, "asset_metals", {
-      id: "metal-b",
-      asset_id: "asset-b",
-      deleted: true,
-    });
+    await createRow(database, "accounts", accountRaw("account-a", "user-a"));
+    await createRow(
+      database,
+      "accounts",
+      accountRaw("account-b", "user-b", { deleted: true })
+    );
+    const foreign = await createRow(
+      database,
+      "account_sms_senders",
+      smsSenderRaw("sender-a", "account-a")
+    );
+    const owned = await createRow(
+      database,
+      "account_sms_senders",
+      smsSenderRaw("sender-b", "account-b", { deleted: true })
+    );
     await sync(database);
     expect(foreign._raw._status).toBe("created");
     expect(owned._raw._status).toBe("synced");
-    expect(mockUpsert).toHaveBeenCalledWith("asset_metals", [
+    expect(mockUpsert).toHaveBeenCalledWith("account_sms_senders", [
       expect.objectContaining({
-        id: "metal-b",
-        asset_id: "asset-b",
+        id: "sender-b",
+        account_id: "account-b",
         deleted: true,
       }),
     ]);
     expect(mockUpsert.mock.calls.flatMap(([, rows]) => rows)).not.toEqual(
-      expect.arrayContaining([expect.objectContaining({ id: "metal-a" })])
+      expect.arrayContaining([expect.objectContaining({ id: "sender-a" })])
     );
   });
 
   it("scopes child tombstones through retained tombstoned parents", async () => {
     const parents = [
-      await createRow(database, "assets", {
-        id: "asset-a",
-        user_id: "user-a",
-        type: "OTHER",
-      }),
-      await createRow(database, "assets", {
-        id: "asset-b",
-        user_id: "user-b",
-        type: "OTHER",
-      }),
+      await createRow(database, "accounts", accountRaw("account-a", "user-a")),
+      await createRow(database, "accounts", accountRaw("account-b", "user-b")),
     ];
     const children = [
-      await createRow(database, "asset_metals", {
-        id: "metal-a",
-        asset_id: "asset-a",
-      }),
-      await createRow(database, "asset_metals", {
-        id: "metal-b",
-        asset_id: "asset-b",
-      }),
+      await createRow(
+        database,
+        "account_sms_senders",
+        smsSenderRaw("sender-a", "account-a")
+      ),
+      await createRow(
+        database,
+        "account_sms_senders",
+        smsSenderRaw("sender-b", "account-b")
+      ),
     ];
     await database.write(async () => {
       await database.batch(
@@ -297,18 +325,18 @@ describe("multi-user pending sync with real SQLite and Watermelon acknowledgemen
       );
     });
     await sync(database);
-    expect(await database.adapter.getDeletedRecords("asset_metals")).toEqual([
-      "metal-a",
-    ]);
-    expect(mockDelete).toHaveBeenCalledWith("asset_metals", {
-      asset_id: ["asset-b"],
-      id: ["metal-b"],
+    expect(
+      await database.adapter.getDeletedRecords("account_sms_senders")
+    ).toEqual(["sender-a"]);
+    expect(mockDelete).toHaveBeenCalledWith("account_sms_senders", {
+      account_id: ["account-b"],
+      id: ["sender-b"],
     });
     mockSyncUser = "user-a";
     await sync(database);
-    expect(await database.adapter.getDeletedRecords("asset_metals")).toEqual(
-      []
-    );
+    expect(
+      await database.adapter.getDeletedRecords("account_sms_senders")
+    ).toEqual([]);
   });
 
   it("preserves every pending row when an owned upload fails", async () => {

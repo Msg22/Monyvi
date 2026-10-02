@@ -32,14 +32,13 @@ import type {
   HoldingActionDescriptor,
   HoldingActionId,
 } from "@/components/metals/holding-actions/registry";
+import { MetalHoldingTimelineItem } from "./MetalHoldingTimelineItem";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { palette } from "@/constants/colors";
 import { shouldUseCompactLayout } from "@/constants/ui";
+import { ANDROID_SAFE_LIST_PROPS } from "@/constants/virtualized-list-policy";
 import { useTheme } from "@/context/ThemeContext";
-import type {
-  MetalDetailReadModel,
-  MetalDetailTimelineItem,
-} from "@/services/metal-detail-read-model-service";
+import type { MetalDetailReadModel } from "@/services/metal-detail-read-model-service";
 import { formatLocalizedMoneyAmount } from "@/utils/localized-money-display";
 
 interface MetalHoldingDetailScreenProps {
@@ -71,6 +70,7 @@ export function MetalHoldingDetailScreen(
 
   return (
     <FlatList
+      {...ANDROID_SAFE_LIST_PROPS}
       testID="metal-holding-detail-root"
       className="flex-1 bg-background dark:bg-background-dark"
       data={visibleHistory}
@@ -86,7 +86,6 @@ export function MetalHoldingDetailScreen(
         <DetailHeader
           error={props.error}
           hasMoreHistory={model.timeline.length > 2}
-          isOffline={props.isOffline}
           model={model}
           onRetry={props.onRetry}
           onToggleCalculation={() => setShowCalculation((value) => !value)}
@@ -96,7 +95,7 @@ export function MetalHoldingDetailScreen(
         />
       }
       renderItem={({ item, index }): React.JSX.Element => (
-        <HistoryEvent
+        <MetalHoldingTimelineItem
           item={item}
           isFirst={index === 0}
           isLast={index === visibleHistory.length - 1}
@@ -136,7 +135,6 @@ function DetailSkeleton(): React.JSX.Element {
 function DetailHeader({
   error,
   hasMoreHistory,
-  isOffline,
   model,
   onRetry,
   onToggleCalculation,
@@ -146,7 +144,6 @@ function DetailHeader({
 }: {
   readonly error: Error | null;
   readonly hasMoreHistory: boolean;
-  readonly isOffline: boolean;
   readonly model: MetalDetailReadModel;
   readonly onRetry: () => void;
   readonly onToggleCalculation: () => void;
@@ -161,9 +158,11 @@ function DetailHeader({
   const canExplainCalculation =
     (model.isActiveOwnership &&
       model.currentValueDecimal !== null &&
-      (model.attribution !== null || model.totalGainDecimal !== null)) ||
+      model.attribution?.breakdown.available === true) ||
     (model.terminalFacts?.kind === "sold" &&
-      model.terminalFacts.realizedResultDecimal !== null);
+      model.terminalFacts.realizedResultDecimal !== null &&
+      model.terminalFacts.displayAttribution !== null &&
+      model.terminalFacts.displayAttribution !== undefined);
 
   return (
     <View className="px-5">
@@ -179,11 +178,6 @@ function DetailHeader({
       ) : (
         <MetalTerminalDetail model={model} />
       )}
-      {isOffline ? (
-        <Text className="mt-3 text-sm text-text-muted dark:text-text-muted-dark">
-          {t("detail.offline")}
-        </Text>
-      ) : null}
       {error === null ? null : <Retry onRetry={onRetry} />}
       {model.isActiveOwnership ? <ValueJourney model={model} /> : null}
       {canExplainCalculation ? (
@@ -248,18 +242,21 @@ function ReconciliationStatus({
 }): React.JSX.Element | null {
   const { t } = useTranslation("metals");
   const state = model.reconciliationState;
-  if (state === "accepted" || state === "reconciled") return null;
+  if (
+    state === "accepted" ||
+    state === "reconciled" ||
+    state === "sync_pending" ||
+    state === "local_complete"
+  ) {
+    return null;
+  }
 
   const key =
-    state === "sync_pending"
-      ? "reconciliation.sync_pending"
-      : state === "sync_failed"
-        ? "reconciliation.sync_failed"
-        : state === "reconciliation_incomplete"
-          ? "reconciliation.incomplete"
-          : state === "local_complete"
-            ? "reconciliation.local_complete"
-            : null;
+    state === "sync_failed"
+      ? "reconciliation.sync_failed"
+      : state === "reconciliation_incomplete"
+        ? "reconciliation.incomplete"
+        : null;
   if (key === null) return null;
 
   return (
@@ -379,7 +376,6 @@ function ValueSummary({
     model.totalGainDecimal === null
       ? null
       : getCurrencyDisplaySign(model.totalGainDecimal, currency);
-  const rateStatus = model.currentValueRateStatus;
   return (
     <View className="border-t border-slate-200 pt-6 dark:border-slate-800">
       <Text className="text-base text-text-secondary dark:text-text-secondary-dark">
@@ -393,23 +389,7 @@ function ValueSummary({
       >
         {displayAmount(model.currentValueDecimal, currency, locale)}
       </Text>
-      {rateStatus === null ? null : (
-        <View testID="metal-holding-detail-rate-trust" className="mt-2 gap-1">
-          <Text className="text-xs font-medium text-text-secondary dark:text-text-secondary-dark">
-            {t(`rate.short_${rateStatus.state}`)}
-          </Text>
-          {rateStatus.source === null ? null : (
-            <Text className="text-xs text-text-muted dark:text-text-muted-dark">
-              {t("rate.source", { source: rateStatus.source })}
-            </Text>
-          )}
-          {rateStatus.quality === null ? null : (
-            <Text className="text-xs text-text-muted dark:text-text-muted-dark">
-              {t("rate.quality", { quality: rateStatus.quality })}
-            </Text>
-          )}
-        </View>
-      )}
+
       {model.totalGainDecimal === null ? (
         <Text className="mt-1 text-sm text-text-secondary dark:text-text-secondary-dark">
           {model.unavailableExactFacts.includes("purchase_cost")
@@ -699,38 +679,6 @@ function FactRow({
       </View>
       <Text className="text-base text-text-primary dark:text-text-primary-dark">
         {value}
-      </Text>
-    </View>
-  );
-}
-
-function HistoryEvent({
-  isFirst,
-  isLast,
-  item,
-}: {
-  readonly isFirst: boolean;
-  readonly isLast: boolean;
-  readonly item: MetalDetailTimelineItem;
-}): React.JSX.Element {
-  const { t, i18n } = useTranslation("metals");
-  const locale = resolveLocale(i18n.resolvedLanguage);
-  return (
-    <View className="flex-row px-5">
-      <View className="relative w-8 items-center">
-        {isFirst ? null : (
-          <View className="absolute -top-1 h-4 w-px bg-nileGreen-600 dark:bg-nileGreen-400" />
-        )}
-        {isLast ? null : (
-          <View className="absolute top-4 h-8 w-px bg-nileGreen-600 dark:bg-nileGreen-400" />
-        )}
-        <View className="mt-2 h-3 w-3 rounded-full bg-nileGreen-700 dark:bg-nileGreen-400" />
-      </View>
-      <Text className="min-w-0 flex-1 py-1 text-sm text-text-primary dark:text-text-primary-dark">
-        {t(`timeline.${item.kind}`)}
-        <Text className="text-text-secondary dark:text-text-secondary-dark">
-          {` · ${formatShortDate(item.occurredAt, locale)}`}
-        </Text>
       </Text>
     </View>
   );

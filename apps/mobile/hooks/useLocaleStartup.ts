@@ -99,4 +99,3 @@ export function usePrivateLocaleStartup(): {
       !isLoading && !preference.isLoading && !preference.profileExists,
   };
 }
-

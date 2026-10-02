@@ -1,10 +1,9 @@
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { router } from "expo-router";
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useMemo } from "react";
 import { View } from "react-native";
 import { useTranslation } from "react-i18next";
 
-import { AddHoldingModal } from "@/components/metals/AddHoldingModal";
 import { MetalPortfolioEmptyState } from "@/components/metals/MetalPortfolioEmptyState";
 import { MetalPortfolioScreen } from "@/components/metals/MetalPortfolioScreen";
 import { PageHeader } from "@/components/navigation/PageHeader";
@@ -30,7 +29,6 @@ export default function MyMetalsRoute(): React.JSX.Element {
     refresh,
     selectedFilter,
   } = useMetalPortfolio();
-  const [isAddHoldingVisible, setIsAddHoldingVisible] = useState(false);
 
   const isPortfolioEmpty =
     error === null && isTrueMetalPortfolioEmpty(portfolio, readiness);
@@ -44,10 +42,7 @@ export default function MyMetalsRoute(): React.JSX.Element {
   useSuppressQuickActionFabWhenFocused(isPortfolioEmpty);
 
   const openAddHolding = useCallback((): void => {
-    setIsAddHoldingVisible(true);
-  }, []);
-  const closeAddHolding = useCallback((): void => {
-    setIsAddHoldingVisible(false);
+    router.push("/metals/add");
   }, []);
   const openHolding = useCallback((holdingId: string): void => {
     router.push({ pathname: "/metals/[id]", params: { id: holdingId } });
@@ -91,10 +86,6 @@ export default function MyMetalsRoute(): React.JSX.Element {
           selectedFilter={selectedFilter}
         />
       )}
-      <AddHoldingModal
-        visible={isAddHoldingVisible}
-        onClose={closeAddHolding}
-      />
     </View>
   );
 }
