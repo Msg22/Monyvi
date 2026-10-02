@@ -1257,6 +1257,47 @@ Business rules:
   identity-invalid responses add no strike. An exact active trusted local
   template may still produce a local review result without clearing the terminal
   AI block.
+- **2026-10-01 — SMS provider mixed-row validation**: A structurally valid,
+  complete provider response is validated per returned transaction entry.
+  Independently valid, uniquely identified submitted transactions are preserved
+  even when peer entries are fake, placeholder-shaped, duplicated, or
+  semantically invalid. Invalid entries are never coerced into financial data
+  and never cause independently valid peers to be discarded.
+- A correlated invalid or duplicate candidate remains unresolved and retryable
+  with a fresh request identity. If an invalid returned entry cannot be
+  correlated to a submitted identity, submitted candidates omitted from the
+  independently valid returned set remain unresolved because omission is no
+  longer trustworthy for negative classification.
+- Invalid or uncertain candidates never create, increment, reset, clear, or
+  terminalize an `ai_no_transaction` outcome. Ordinary validated omissions and
+  otherwise valid `isTrusted: false` entries retain the existing negative
+  lifecycle. Malformed JSON/envelopes, incomplete provider completion,
+  transport/provider failures, and auth/consent/safeguard refusals remain
+  request-level failures. Provider-started allowance remains consumed.
+- **2026-10-02 — Live SMS confirmed-failure retry identity**: A live SMS retry
+  must distinguish an ambiguous transport/result-loss replay from a
+  server-confirmed provider failure. If the client cannot know whether provider
+  work started or completed, it reuses the same request identity so the server
+  ledger prevents duplicate provider execution. Only after the server has
+  durably completed the request as a retryable provider error may the response
+  authorize `retryRequestMode: fresh`; that fresh retry uses a new request
+  identity, starts new normally-accounted provider work, and may consume another
+  allowance unit/provider call. Provider failure, schema-invalid response, and
+  incomplete provider statuses (`truncated`, `safety_stopped`, `failed`) may
+  grant that directive only when ledger completion is confirmed. Caller
+  cancellation, ambiguous provider-start state, reconciliation failure, or
+  unconfirmed completion never grants a fresh retry. Android's existing bounded
+  native retry policy remains three attempts with a 10-second delay; the
+  provider remains one 60-second attempt with zero automatic provider retries.
+  The approved mobile successor may persist only the current user-scoped
+  fingerprint/request-key retry identity with bounded expiry across JS restarts;
+  it must not persist SMS/provider output merely to enable retries.
+- Explicit OTP, verification-code, security-code, and PIN-only messages are
+  excluded before the full AI provider with Edge/shared parity. A message that
+  independently contains clear completed money movement is not excluded merely
+  because it also includes a security warning. The stable provider prompt also
+  forbids OTP/fake/zero-amount placeholder transaction rows; strict server-side
+  financial validation remains authoritative.
 - Capacity, cooldown, or oversized-input failures preserve all accepted local
   and earlier AI suggestions and keep Save available. Guidance is aggregate,
   friendly, and may show one localized absolute availability time. It does not

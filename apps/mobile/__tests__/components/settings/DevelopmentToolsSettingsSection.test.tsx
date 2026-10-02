@@ -14,9 +14,11 @@ describe("DevelopmentToolsSettingsSection", () => {
         t={t}
         isVisible
         isStartupQaVisible={false}
+        isSmsProviderEvaluationVisible={false}
         chevronColor="#64748b"
         onQaSmsPatternIntakePress={onQaSmsPatternIntakePress}
         onStartupQaPress={jest.fn()}
+        onSmsProviderEvaluationPress={jest.fn()}
       />
     );
 
@@ -36,9 +38,11 @@ describe("DevelopmentToolsSettingsSection", () => {
         t={t}
         isVisible={false}
         isStartupQaVisible
+        isSmsProviderEvaluationVisible={false}
         chevronColor="#64748b"
         onQaSmsPatternIntakePress={jest.fn()}
         onStartupQaPress={onStartupQaPress}
+        onSmsProviderEvaluationPress={jest.fn()}
       />
     );
 
@@ -55,9 +59,11 @@ describe("DevelopmentToolsSettingsSection", () => {
         t={t}
         isVisible={false}
         isStartupQaVisible={false}
+        isSmsProviderEvaluationVisible={false}
         chevronColor="#64748b"
         onQaSmsPatternIntakePress={jest.fn()}
         onStartupQaPress={jest.fn()}
+        onSmsProviderEvaluationPress={jest.fn()}
       />
     );
 

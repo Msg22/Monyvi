@@ -158,6 +158,10 @@ describe("withSmsBroadcastReceiver", () => {
       path.join(sourceDir, "MonyviAppForegroundTracker.kt"),
       "utf8"
     );
+    const headlessService = fs.readFileSync(
+      path.join(sourceDir, "SmsHeadlessTaskService.kt"),
+      "utf8"
+    );
     const mainApplication = fs.readFileSync(mainApplicationPath, "utf8");
 
     expect(receiverSource).toContain("package com.monyvi.app");
@@ -167,6 +171,15 @@ describe("withSmsBroadcastReceiver", () => {
     expect(receiverSource).not.toContain("ActivityManager");
     expect(foregroundTracker).toContain(
       "Application.ActivityLifecycleCallbacks"
+    );
+    expect(headlessService).toContain(
+      "private const val TASK_TIMEOUT_MS = 120000L"
+    );
+    expect(headlessService).toContain(
+      "private const val TASK_RETRY_ATTEMPTS = 3"
+    );
+    expect(headlessService).toContain(
+      "private const val TASK_RETRY_DELAY_MS = 10000"
     );
     expect(mainApplication).toContain("add(com.monyvi.app.SmsEventPackage())");
     expect(mainApplication).toContain(

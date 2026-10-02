@@ -36,20 +36,35 @@ Do not configure a provider endpoint URL. The approved DeepInfra endpoint is fix
 
 Do not remove `GEMINI_API_KEY` globally: voice and other remaining Gemini consumers still use it. SMS category enrichment now uses the same DeepInfra configuration above as `parse-sms`.
 
-### Development-only provider response-output capture
+### Development-only provider input/output capture
 
-Provider response-content capture is a temporary development diagnostic exception and is **off by default**. Enable it only when both values match exactly:
+Provider request-input and response-content capture are temporary development diagnostic exceptions and are **off by default**. Enable both only when these values match exactly:
 
 ~~~text
 SMS_AI_RUNTIME_ENV=development
 SMS_AI_DEBUG_RESPONSE_OUTPUT=true
 ~~~
 
-Any missing, blank, differently cased, whitespace-padded, or non-development value keeps capture disabled. When enabled, `parse-sms` writes a separate `smsAi.providerResponseOutput` Edge log event containing only `responseContent`, the validated DeepInfra assistant string from `choices[0].message.content`, before Monyvi semantic filtering. The captured output can contain transaction or other financial details, so use it only with approved development/test data and only for the shortest diagnostic window needed.
+Any missing, blank, differently cased, whitespace-padded, or non-development value keeps both captures disabled.
 
-The callback does not read or add request messages/prompts, raw input SMS, API keys, auth headers, user/account IDs, fingerprints, or the complete DeepInfra envelope. However, the captured provider output is the model's returned assistant content and may itself quote or reproduce input SMS/prompt text or financial details. Existing `smsAi.providerUsage` logging remains aggregate-only. Failure of the diagnostic callback is isolated from provider execution and must not trigger provider retries or change parse results.
+When enabled, `parse-sms` writes two separate Edge log events:
 
-To verify manually, enable both flags in development, run one explicit test parse, and search the Supabase `parse-sms` Logs for `smsAi.providerResponseOutput`. Confirm the event shows the returned JSON content while the aggregate usage event still contains no response or input content. Then disable capture by removing the debug flag or setting `SMS_AI_DEBUG_RESPONSE_OUTPUT=false`; production/runtime values other than exact `development` must deny capture even when the debug flag is `true`.
+- `smsAi.providerRequestInput`: one immutable snapshot per logical admitted provider invocation, emitted immediately before provider execution. It contains only the canonical submitted SMS list shaped as `{ sender, body, date }`. It excludes message IDs, fingerprints, system prompt, category context, response schema, headers, API keys, user/account IDs, and the full HTTP envelope. Internal DeepInfra retries reuse the same outbound request body, so they do not duplicate this input event. The event records invocation intent immediately before provider execution; it is not proof that DeepInfra accepted or processed the HTTP request.
+- `smsAi.providerResponseOutput`: the validated DeepInfra assistant string from `choices[0].message.content`, emitted before Monyvi semantic filtering.
+
+Both events are intentionally sensitive development diagnostics. The request-input event contains actual admitted SMS sender/body/date values, and the returned assistant content may quote or reproduce SMS/input/prompt text or financial details. Use only approved development/test data and keep the exception enabled only for the shortest diagnostic window needed. Existing `smsAi.providerUsage` logging remains aggregate-only. Diagnostic callback failures are isolated from provider execution and must not trigger retries or change parse results.
+
+### Manual diagnostic matrix
+
+| Flags / scenario | Expected request-input event | Expected response-output event |
+| --- | --- | --- |
+| Flags missing or debug flag `false` | none | none |
+| `SMS_AI_RUNTIME_ENV=production` + debug `true` | none | none |
+| Exact `development` + `true`, successful provider response | one logical `smsAi.providerRequestInput` before provider execution | one `smsAi.providerResponseOutput` with returned assistant content |
+| Exact `development` + `true`, internal transient retry then success | one input snapshot for the logical invocation | one output event for the validated successful response |
+| Exact `development` + `true`, provider fails before a valid response | one input snapshot showing invocation intent | no response-output event |
+
+To verify manually, enable both flags in development, run one explicit test parse, and search the Supabase `parse-sms` Logs for both event names. Confirm the input event contains only the admitted `sender`, `body`, and `date` values and that the output event shows the returned assistant JSON. Confirm the aggregate usage event remains free of request/response content. Then disable both captures by removing the debug flag or setting `SMS_AI_DEBUG_RESPONSE_OUTPUT=false`; any runtime value other than exact `development` must deny both captures even when the debug flag is `true`.
 
 ## 2. Hosted Supabase configuration
 
@@ -126,9 +141,13 @@ Focused provider tests must cover:
 14. malformed inner JSON;
 15. `length` -> truncated;
 16. unknown finish reason -> failed;
-17. semantically invalid transaction -> provider-neutral existing-validator rejection outside the DeepInfra adapter;
-18. missing/blank/unsupported provider, model, approved-model list, service tier, or API key fails before request admission/fetch/provider-start accounting;
-19. input-token estimation counts the stable prompt, category context, response schema, and SMS candidate content exactly once after prompt refactoring.
+17. mixed valid + semantically invalid rows in a structurally valid complete response -> preserve valid uniquely identified submitted peers and return rejected candidates as unresolved;
+18. all-invalid but structurally valid complete rows -> zero accepted transactions, unresolved candidates, fresh retry identity, and zero durable negatives from invalid data;
+19. duplicate known returned identity -> duplicated candidate unresolved while unrelated valid peers survive;
+20. unknown/unattributable returned identity -> discard unknown row, preserve independent valid peers, and keep uncertain omitted submitted candidates unresolved rather than inferring negatives;
+21. malformed inner JSON or invalid outer envelope -> request-level response_invalid behavior remains;
+22. missing/blank/unsupported provider, model, approved-model list, service tier, or API key fails before request admission/fetch/provider-start accounting;
+23. input-token estimation counts the stable prompt, category context, response schema, and SMS candidate content exactly once after prompt refactoring.
 
 ## 5. Prompt-cache verification
 
@@ -139,7 +158,7 @@ For an explicit development-only verification:
 1. send two requests whose stable prefix contains identical Monyvi rules, supported-currency context, and built-in category definitions;
 2. vary a future custom-category tail and/or SMS body only after that stable prefix;
 3. inspect provider usage metadata for `prompt_tokens_details.cached_tokens`;
-4. confirm ordinary operational logs remain free of raw SMS/prompt text; the explicitly enabled development response-output event described above may contain provider-returned echoes;
+4. confirm ordinary operational logs remain free of raw SMS/prompt text; the explicitly enabled development request-input/output events described above are the temporary exception and may contain actual SMS data or provider-returned echoes;
 5. confirm both cached and uncached responses pass the same provider-neutral Monyvi semantic validation.
 
 A cache miss is not a functional failure.
@@ -158,12 +177,35 @@ Use safe development/test SMS examples covering at least:
 | ATM withdrawal | EXPENSE + ATM flag |
 | Foreign-currency transaction | exact supported currency |
 | Promotion/offer with amount | no trusted transaction |
-| OTP/security message | excluded/no transaction |
+| OTP/security-only message | excluded before provider/no transaction |
+| Completed payment that also mentions OTP/security | remains eligible; completed transaction is not discarded because of the warning |
 | Valid non-transaction batch | successful empty result |
-| Invalid provider-shaped fixture | no partial financial result |
+| Mixed valid payment + zero-amount/invalid placeholder | valid peer survives; rejected candidate unresolved/retryable; no durable negative for invalid data |
+| All-invalid semantically invalid rows in a valid complete envelope | zero accepted transactions; affected candidates unresolved with fresh retry; no durable negatives |
+| Malformed JSON/envelope | request-level response-invalid failure; no accepted financial result |
 | Provider transient failure | bounded retry, then existing retryable failure behavior |
 
 Also verify that voice entry still follows the existing Gemini path.
+
+### Mixed-row validation coverage
+
+| Behavior | Automated coverage required before release-ready claim | Manual/live evidence |
+| --- | --- | --- |
+| OTP-only prefilter parity | Edge/shared filter regressions in English and Arabic plus completed-payment counterexamples | Synthetic-only observation is sufficient |
+| Prompt no-placeholder rule | Stable-prompt assertions for positive amounts and omission of OTP/fake rows | Provider compliance is advisory; validator remains authoritative |
+| Valid peer + invalid row | Validator/executor/handler regressions preserving peers and unresolved bad candidates | Offline replay of approved synthetic captured output |
+| Unknown/duplicate identity | Handler/reconciliation tests proving no uncertain omission negatives | No live call required |
+| All-invalid valid envelope | Handler test for complete response + unresolved + fresh retry | No live call required |
+| Malformed JSON/envelope | Existing request-level response-invalid regression | No live call required |
+| Negative-cache safety | Invalid attempts never increment/reset/clear/terminalize strikes | DB/device observation only after automation |
+| Mobile mixed 200 | Valid transactions preserved alongside retryable unresolved candidates | Device/manual review after implementation verification |
+
+
+For SMS response grounding, use synthetic messages to confirm:
+- explicit same-message card evidence such as `Card **1234` preserves `cardLast4: "1234"`, including leading zeroes and clear Arabic card markers;
+- account suffixes, transfer references, hotlines, unknown message IDs, cross-message digits, and a conflicting account suffix beside a different explicit card suffix do not survive as `cardLast4`;
+- prohibited `*_other` L2 values normalize to the actual accessible L1 parent derived from the supplied category hierarchy, while inaccessible parents remain invalid and valid custom/L1/L2 categories remain unchanged;
+- a clearly completed generic-gateway purchase is retained with a conservative accessible fallback category when purpose is unclear; gateway names alone must not force utilities, food, or another merchant-category mapping.
 
 For Settings SMS-window copy, verify English and Arabic with the effective client policy rather than a hardcoded number: normal policy renders 30 days; an approved development/QA policy override such as 60 renders 60 in `Sync new SMS` help, `Rescan recent messages` help, and the rescan confirmation. Confirm history-cooldown disabled/availability behavior is unchanged. This check observes the effective policy only; it does not change the repository default 30-day policy.
 
@@ -187,6 +229,37 @@ npm run fn:deploy:parse-sms
 ~~~
 
 No `parse-voice` deployment is required for this feature.
+
+### Staging migration-history repair for availability restore
+
+The canonical repository filename for the availability restore is now
+`supabase/migrations/080_restore_sms_ai_get_availability.sql`. Its SQL bytes
+are exactly the same as the historical availability restore that staging
+previously recorded as version `078`.
+
+Before repairing migration history, confirm the linked staging project
+(`yulbcndyssdjicbpmlrk`) still records version `078` with the exact name
+`restore_sms_ai_get_availability`, version `079` as
+`restore_sms_ai_request_metadata`, and no version `080`. If that historical
+record no longer matches, stop and investigate rather than applying this repair.
+
+For the confirmed historical state, repair history only, in this order:
+
+~~~powershell
+npx supabase migration repair 080 --status applied
+npx supabase migration repair 078 --status reverted
+~~~
+
+Mark `080` applied **before** removing the historical `078` record. Supabase
+`migration repair` updates the migration-history table only; this repair must
+not rerun the availability SQL or mutate application/financial data. The
+repository's distinct metals migration remains
+`078_preserve_metal_acquisition_provenance.sql`, and
+`079_restore_sms_ai_request_metadata.sql` remains unchanged.
+
+Historical references that describe the availability restore as staging version
+`078` remain historically correct; current operator references must use
+canonical version `080`.
 
 ## 9. Rollback
 

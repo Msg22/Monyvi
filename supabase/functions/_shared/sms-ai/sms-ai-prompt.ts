@@ -67,6 +67,8 @@ export function buildSmsAiStableSystemPrompt(
 YOUR TASK:
 Parse each SMS and extract structured transaction data.
 Only include messages that are CLEARLY completed financial transactions where money has ACTUALLY moved.
+OMIT non-transactions entirely. NEVER emit placeholder, fake, sentinel, or zero-amount transaction objects for OTP, verification/security codes, promotions, failed/pending activity, or uncertain messages.
+Every emitted transaction MUST represent real completed money movement and MUST have amount > 0. If a message does not qualify, return no transaction row for that messageId.
 
 TRANSACTION CRITERIA — A real transaction SMS MUST have ALL of these:
 1. ACTUAL MONEY MOVEMENT: Money was debited, credited, sent, received, withdrawn, or paid. The SMS confirms a completed action, not a future/conditional one.
@@ -113,17 +115,19 @@ DO NOT INCLUDE:
 - App download links
 - Cashback offers / incentive messages
 - Account activation requests
-- Any message where you are uncertain
+- Any message where you are uncertain whether money actually moved
+- Placeholder rows such as amount 0, blank category, invented financial fields, or an EXPENSE/INCOME shell used only to acknowledge a non-transaction
 
-WHEN IN DOUBT, SKIP. Precision > recall.
+WHEN IN DOUBT WHETHER A TRANSACTION ACTUALLY HAPPENED, SKIP. Precision > recall.
+If a completed transaction is clear but only its category or purpose is uncertain, KEEP the transaction and use the safest accessible category fallback with lower confidence.
 
 isTrusted FIELD:
-- Set isTrusted to true ONLY when you are highly confident this is a real, completed transaction with actual money movement.
-- Set isTrusted to false when: the message is ambiguous, you're unsure if money actually moved, the amount could be promotional, or the SMS format is unusual.
-- When in doubt, set isTrusted to false — the user will review these.
+- Every emitted row MUST set isTrusted to true because rows are emitted only for clearly completed real money movement.
+- Uncertainty about category, counterparty, card evidence, or another extracted detail MUST lower confidenceScore for review; it MUST NOT set isTrusted to false.
+- Do NOT use isTrusted=false as a review flag. If you are unsure whether money actually moved, the amount is promotional/fake, or the message is OTP/security-only, OMIT the row entirely.
 
 PARSING RULES:
-1. Amount: positive number, remove separators, handle Arabic numerals.
+1. Amount: STRICTLY greater than 0; remove separators and handle Arabic numerals. Never use 0 as a placeholder.
 2. Currency: the default currency is EGP, but it can be different based on the SMS content.
 3. Type: EXPENSE = money out, INCOME = money in.
 4. Counterparty: the merchant, vendor, person, or entity the user transacted WITH.
@@ -133,16 +137,25 @@ PARSING RULES:
 5. Date: from SMS body or use provided date.
 6. Category: return EXACTLY ONE system_name from the category context.
    You MUST NOT invent, combine, or modify category names.
-   Use a specific L2 when confident (e.g. groceries, restaurant).
-   If uncertain which L2 fits, use the L1 parent (e.g. food_drinks, shopping).
-   NEVER use *_other L2 categories (food_other, shopping_other, etc.) — always prefer the L1 parent.
-   Only use 'other' as an absolute last resort.
+   Use a specific L2 only when the SMS or clearly recognizable merchant purpose supports it.
+   If uncertain which L2 fits, use an accessible L1 parent.
+   NEVER use *_other L2 categories (food_other, shopping_other, income_other, etc.) — use that category's accessible L1 parent from the supplied hierarchy.
+   A generic payment gateway name such as myfawry, Sahl, or FAWRY does not prove utilities, food, or another specific category by itself.
+   If the transaction is clearly completed but its purpose is unclear, keep it and use an accessible fallback such as 'other' for EXPENSE or 'income' for INCOME when available.
 7. isAtmWithdrawal: true only for ATM withdrawals.
-8. cardLast4: last 4 card digits if mentioned.
+8. cardLast4: include only when the SAME SOURCE SMS explicitly identifies those exact four digits as card digits.
+   Account digits and account suffixes, transfer references, hotlines, amounts, dates, and digits from another SMS are never card evidence.
 9. confidenceScore: your confidence in the accuracy of this extraction (0.0 to 1.0).
     1.0 = all fields are perfectly clear in the SMS.
     0.5 = some fields required guessing (e.g., category, counterparty).
+    Lower confidence when the category is guessed or inferred from a generic gateway; do not lower isTrusted solely because category is uncertain when completed money movement itself is clear.
     Below 0.3 = most fields are uncertain — consider skipping instead.
+
+GROUNDING EXAMPLES:
+- "Card **1234 purchase EGP 50" -> cardLast4: "1234".
+- "IPN transfer sent EGP 100 from 1234" -> completed transaction with uncertain category; omit cardLast4 and use accessible 'other'.
+- "IPN transfer received EGP 100 on 1234" -> completed transaction with uncertain category; omit cardLast4 and use accessible 'income'.
+- "Successful purchase EGP 125 @myfawry" -> completed transaction; the payment gateway does not prove utilities or food. Keep it, use an accessible fallback when purpose is unclear, and lower category confidence.
 
 SUPPORTED CURRENCIES:
 ${supportedCurrencies}
@@ -365,7 +378,7 @@ export function buildSmsAiResponseSchema(
             categorySystemName: {
               type: "string",
               description:
-                "Exactly one allowed category system_name from the supplied category context.",
+                "Exactly one accessible category system_name from the supplied category context. Never return a *_other L2 category; use its accessible L1 parent from the supplied hierarchy. Keep a clearly completed transaction with an accessible fallback when category purpose is uncertain.",
             },
             isAtmWithdrawal: {
               type: "boolean",
@@ -373,7 +386,8 @@ export function buildSmsAiResponseSchema(
             },
             cardLast4: {
               type: "string",
-              description: "Last 4 digits of card if mentioned.",
+              description:
+                "Last 4 digits only when the same source SMS explicitly identifies those exact digits as card digits. Omit account suffixes, transfer references, hotlines, amounts, dates, and digits from other SMS messages.",
             },
             confidenceScore: {
               type: "number",
@@ -383,7 +397,7 @@ export function buildSmsAiResponseSchema(
             isTrusted: {
               type: "boolean",
               description:
-                "True only when this is confidently a real completed transaction.",
+                "Must be true for every emitted row. Use lower confidenceScore, not isTrusted=false, when completed money movement is clear but extracted details need review.",
             },
           },
           required: [

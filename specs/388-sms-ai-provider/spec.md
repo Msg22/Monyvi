@@ -98,7 +98,7 @@ As the product owner, I want unchanged shared SMS parsing instructions to be reu
 - **FR-007**: Existing SMS transaction semantic validation MUST remain authoritative regardless of which provider produced the candidate response.
 - **FR-008**: A provider-side structured response constraint MUST NOT replace application-side validation of amounts, currencies, transaction direction, dates, categories, confidence, trust state, ATM flags, or card suffixes.
 - **FR-009**: A valid provider response containing zero transactions MUST be accepted as a completed parse and MUST NOT be retried solely because it is empty.
-- **FR-010**: Malformed, truncated, structurally invalid, or semantically invalid provider output MUST NOT create partial accepted financial suggestions.
+- **FR-010**: Malformed JSON/envelopes, truncated/incomplete provider completion, or request-level provider failures MUST NOT create accepted financial suggestions. Within a structurally valid complete response, semantic validation is per entry: invalid rows MUST be rejected without discarding independently valid uniquely identified submitted peers.
 - **FR-011**: Retry behavior MUST distinguish transient provider/network failures from non-retryable authentication, authorization, configuration, and malformed-request failures.
 - **FR-012**: Retries MUST remain bounded and MUST preserve the existing SMS usage-accounting and idempotency guarantees.
 - **FR-013**: The shared SMS parsing rules, supported currencies, and built-in category definitions MUST remain provider-independent.
@@ -115,6 +115,19 @@ As the product owner, I want unchanged shared SMS parsing instructions to be reu
 - **FR-024**: Existing provider-specific SMS QA documentation MUST be updated so routine deterministic SMS QA proves zero production-configured SMS AI calls and zero production allowance consumption without incorrectly naming a legacy provider as the current SMS provider.
 - **FR-025**: The product owner's already-approved initial SMS provider and model selection MUST be honored during planning; exact request formatting and integration mechanics are planning decisions.
 - **FR-026**: The migration does not require a comparative provider-quality benchmark before adoption because Monyvi is pre-production; representative SMS functional QA remains required before the feature is considered complete.
+- **FR-027**: Explicit OTP, verification-code, security-code, and PIN-only messages MUST be excluded before full-provider parsing with Edge/shared parity, without excluding a clear completed transaction merely because its text also contains a security warning.
+- **FR-028**: The stable SMS prompt MUST instruct the provider to omit non-transactions entirely, require emitted amounts to be strictly positive, and prohibit OTP/fake/zero-amount placeholder transaction objects.
+- **FR-029**: Candidate-level invalid, duplicate, or otherwise rejected returned entries MUST remain unresolved/retryable and MUST NOT create durable AI-negative outcomes. Independently valid unique submitted peer rows MUST remain accepted. Unknown/unattributable invalid returned identities MUST prevent omission-based negative inference for the remaining uncertain submitted candidates.
+- **FR-030**: The public mobile response contract remains backward compatible: validated transactions are returned in `transactions`; candidate-level rejected/uncertain work is represented through `unresolvedFingerprints` plus `retryRequestMode: fresh` when present; no invalid financial fields are exposed as accepted transactions.
+- **FR-031**: A development-only synthetic SMS evaluation entry MAY appear under existing Settings Development tools only when `__DEV__` is true, the current user is authenticated, and the configured Supabase URL is exactly the approved staging project `https://yulbcndyssdjicbpmlrk.supabase.co`. The route and service MUST independently enforce the same boundary; direct-link production access MUST be refused.
+- **FR-032**: Opening, focusing, remounting, changing language/theme, or navigating to the evaluation route MUST NOT start network work. Only an explicit user Start action may begin a run. Back, navigation blur, unmount, logout, account change, or Cancel MUST stop pending work and prohibit later batches/retries.
+- **FR-033**: The mobile evaluator MUST use the same canonical synthetic corpus and final-result scorer as the CLI. Portable corpus/scoring code belongs in `packages/logic` with injected runtime hashing/request dependencies; mobile MUST NOT import scripts, Supabase Edge modules, Node/Deno runtimes, server prompt modules, or WatermelonDB runtime through that shared evaluator.
+- **FR-034**: Each explicit **mobile development evaluation** run MUST create a fresh run identity/anchor and stable per-batch request identity, send at most **15 synthetic messages per request sequentially**, reuse the canonical mobile SMS fingerprint algorithm, pin the initiating authenticated user, recheck user/cancellation immediately before every request and authentication retry, and use the normal authenticated `parse-sms` path with normal consent, allowance, cooldown, reservation, fingerprint, and replay safeguards. The shared/CLI evaluator keeps its independent `DEFAULT_EVALUATION_BATCH_SIZE = 5`; this mobile trial override MUST NOT change CLI batching. No automatic retry/resume or safeguard reset is permitted.
+- **FR-035**: The evaluation surface MUST read no device inbox, request no SMS permission, persist no transaction/transfer, inject no dedicated credentials, log no token/service-role secret, and operate only on the canonical synthetic corpus.
+- **FR-036**: The results page MUST present only final parser behavior. HTTP 200, Edge request count, a correct empty result, or synchronized suppression MUST NOT be described as proof of a fresh DeepSeek/provider call. Transport/admission failures, invalid responses, unresolved cases, suppression without trustworthy fresh-provider evidence, cancellation, and not-run cases MUST remain not evaluated rather than successful empty results.
+- **FR-037**: The canonical scorer MUST distinguish matched, mismatched, and not-evaluated cases; matched includes both correct transactions and correct no-transaction classifications. Exact and `one_of` expectations remain objective scoring inputs, unknown expectations render as Not asserted, and policy-heuristic confidence ranges remain diagnostic rather than model-accuracy claims.
+- **FR-038**: The approved single results route MUST support idle, running, finished, cancelled, and fatal states; All/Issues tabs; runtime-computed corpus/provider/request counts; inline expandable cards with full synthetic body, sender/provider/case ID, expected and final parsed fields/absence/unavailable state, and mismatch reasons; EN/AR, RTL, dark mode, accessibility announcements, responsive stacking, `FlatList`, standard `PageHeader`, safe-area-aware fixed CTA, and minimum 44-point targets. The three approved mockup panels are states/scroll positions of one route, not separate routes.
+- **FR-039**: The approved mobile development evaluation MUST expose operational elapsed timing without changing scoring or parser semantics. Each batch row MUST retain ordered batch number, actual message count, state, and elapsed time only when known; completed/failed durations use the existing final observation `latencyMs`, active/cancelled duration uses the mobile in-flight clock, and not-run/unattempted batches MUST NOT receive a fabricated zero duration. Total run elapsed MUST start before corpus preparation, update while running without rebuilding/rescoring the corpus, include preparation/request/auth-refresh/network/server-wait/response-handling/between-batch overhead and time spent in a cancelled active batch, freeze on finished/cancelled/fatal, and reset on a new run or authenticated-user change. Neither batch nor total elapsed MAY be described as pure DeepSeek/provider compute time.
 
 ### Key Entities
 
@@ -137,6 +150,7 @@ As the product owner, I want unchanged shared SMS parsing instructions to be reu
 - Hosted deployment configuration and secret requirements for the SMS provider.
 - Provider-neutral SMS QA/business documentation updates required by the migration.
 - Representative SMS functional QA after integration.
+- One explicitly approved development-only synthetic SMS evaluation surface in authenticated Settings, backed by the canonical evaluator corpus/scorer and pinned to the approved staging project. This is a narrow QA exception, not ordinary product UI.
 
 ### Out of Scope
 
@@ -147,7 +161,7 @@ As the product owner, I want unchanged shared SMS parsing instructions to be reu
 - Changing the built-in category taxonomy or supported-currency product scope.
 - Database schema changes.
 - Mobile SMS API contract changes.
-- New user-facing SMS screens or redesigns.
+- New production/user-facing SMS screens or redesigns. The approved development-only synthetic evaluation Settings entry/results route is the sole UI exception for this feature.
 - A generic AI-provider abstraction shared across voice, SMS, rates, OCR, or other capabilities.
 
 ## Dependencies
@@ -183,3 +197,82 @@ As the product owner, I want unchanged shared SMS parsing instructions to be reu
 - The selected provider's reusable-input feature may miss or be unavailable at times; a miss must affect cost only, never parsing correctness.
 - Provider credentials and operational configuration are available to the hosted SMS parsing environment through the project's existing secure deployment configuration mechanism.
 - The existing SMS client contract and database schema are sufficient for this provider migration.
+
+
+## 2026-10-02 Approved Development-Only Evaluation UI Exception
+
+Mohamed explicitly approved the lead-created `sms-results-page` mockup and
+binding on 2026-10-02 Africa/Cairo. The canonical portable references are
+`mockups/sms-results-page.svg` and `mockups/sms-results-page.binding.md`.
+The approved PNG remains a local integration artifact and is reserved for T046;
+its absence from this remote branch is not a design gap.
+
+This exception is development-only and does not expand feature 388 into
+production product UI. It exists only to run the canonical synthetic evaluation
+against the normal staging parser and inspect final parser behavior. Automated,
+device and visual-comparison verification are explicitly deferred during the
+current DeepSeek trial and tracked by T047; source implementation alone does not
+satisfy those verification gates.
+
+
+### 2026-10-02 Mobile Batch/Timing Trial Override
+
+Mohamed's later SMS-EVAL-TIMING-001 instruction narrowly supersedes the older
+approved mockup/binding execution fact of five messages per mobile request.
+The visual composition, binding hashes and approved reference artifacts remain
+unchanged/read-only for this timing slice. Mobile synthetic evaluation uses one
+mobile-only batch-size constant of 15; the shared/CLI evaluator remains at five.
+
+The same approval adds compact operational timing telemetry to the existing
+page: total whole-run elapsed plus ordered per-batch elapsed/status. This is
+diagnostic app/request timing only and is not a raw-provider or DeepSeek compute
+latency claim. Automated, type/lint/format/CI, device/provider and visual checks
+remain explicitly deferred for the current trial.
+
+## 2026-10-02 SMS-CANCEL-060 Backend Cancellation/Timeout Override
+
+This narrow product-owner decision applies to the synchronous DeepInfra SMS
+full-parser path and supersedes any older assumption that transient failures
+should be retried automatically during the current trial:
+
+- DeepInfra gets one provider attempt only, with a 60,000 ms attempt deadline
+  and zero automatic provider retries or retry sleeps.
+- The incoming request cancellation signal is runtime-only metadata. It may
+  flow through the admitted handler, provider executor and provider request to
+  the outgoing fetch, but MUST NOT enter the prompt, serialized request body,
+  request digest, logs, database state, or a shared/global controller.
+- Caller cancellation and the 60-second provider deadline are distinct. A
+  caller abort MUST NOT be converted into a timeout/provider failure, a
+  successful empty result, or a negative/terminal SMS outcome.
+- If cancellation is observed after reservation but before a provider start is
+  committed, the existing reservation-release mechanism is used. If
+  `markProviderStarted` has committed, usage remains consumed and cancellation
+  is finalized through the existing provider-error completion mechanism; there
+  is no refund/schema/RPC/accounting-policy change.
+- A start-success race is authoritative: if the caller aborts while
+  `markProviderStarted` is awaited and that call returns `started: true`,
+  provider execution may be skipped but the already-started accounting MUST be
+  completed as existing error accounting rather than released.
+- After a raw provider response, caller cancellation MUST be checked before
+  negative-outcome reconciliation. Once outcome reconciliation or another
+  authoritative completion commit has begun, finish that normal accounting path
+  and do not retroactively reinterpret handler completion as cancellation.
+- No abort event listener may perform database mutations asynchronously after
+  the handler returns. Cancellation-driven accounting remains synchronous in the
+  handler control flow.
+- Deno's request signal may represent a client disconnect, but hosted Supabase
+  gateway propagation is not proven by source implementation. Aborting the
+  outgoing fetch also does not prove that DeepInfra stopped already-accepted
+  compute or billing.
+
+This backend source branch does not change evaluator batching. Integration must
+retain the separately approved mobile synthetic batch size of 15 from
+`76fbd782a2a5951261653184621db4c89ea0c962`; the shared/CLI evaluator remains
+at its existing batch size of 5.
+
+Historical deployment record (T050 integration checkpoint): staging
+`yulbcndyssdjicbpmlrk` `parse-sms` version 36 was observed ACTIVE with
+verifyJWT true at that source-only checkpoint. This note is historical only and
+does not assert the currently deployed version or runtime status. Runtime at
+that checkpoint remained UNVERIFIED; no tests were written/run in that task per
+the source-only trial waiver.

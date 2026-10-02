@@ -224,7 +224,7 @@ test("accepts a complete empty provider result", async () => {
   assert.equal(data.completionStatus, "complete");
 });
 
-test("rejects unsupported currency/category and malformed provider JSON", async () => {
+test("rejects semantically invalid rows with partial 200 and unresolved identity", async () => {
   for (const content of [
     JSON.stringify({
       transactions: [
@@ -256,16 +256,30 @@ test("rejects unsupported currency/category and malformed provider JSON", async 
         },
       ],
     }),
-    "{not-json",
   ]) {
     const { handler } = createHandler([providerResponse(content)]);
     const response = await handler(post());
     const data = await readJson(response);
 
-    assert.equal(response.status, 502);
-    assert.equal(data.reason, "response_invalid");
+    assert.equal(response.status, 200);
+    assert.equal(data.completionStatus, "complete");
     assert.deepEqual(data.transactions, []);
+    assert.deepEqual(data.unresolvedFingerprints, ["fingerprint-1"]);
+    assert.equal(data.retryRequestMode, "fresh");
+    assert.deepEqual(data.negativeFingerprints, []);
   }
+});
+
+test("rejects malformed provider JSON with 502 response_invalid", async () => {
+  const { handler } = createHandler([providerResponse("{not-json")]);
+  const response = await handler(post());
+  const data = await readJson(response);
+
+  assert.equal(response.status, 502);
+  assert.equal(data.reason, "response_invalid");
+  assert.deepEqual(data.transactions, []);
+  assert.deepEqual(data.unresolvedFingerprints, []);
+  assert.deepEqual(data.negativeFingerprints, []);
 });
 
 test("preserves truncated completion without accepting partial financial data", async () => {
@@ -281,15 +295,17 @@ test("preserves truncated completion without accepting partial financial data", 
   assert.deepEqual(data.transactions, []);
 });
 
-test("internal provider retries record exactly one provider start", async () => {
+test("single provider attempt records exactly one provider start without retry", async () => {
   const { handler, getStartCount, getFetchCount } = createHandler([
     providerResponse("", "stop", 503),
-    providerResponse(JSON.stringify({ transactions: [] })),
   ]);
 
   const response = await handler(post());
+  const data = await readJson(response);
 
-  assert.equal(response.status, 200);
-  assert.equal(getFetchCount(), 2);
+  assert.equal(response.status, 502);
+  assert.equal(data.reason, "provider_failed");
+  assert.deepEqual(data.transactions, []);
+  assert.equal(getFetchCount(), 1);
   assert.equal(getStartCount(), 1);
 });
