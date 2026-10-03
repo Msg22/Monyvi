@@ -6,7 +6,7 @@ This document describes the planned developer/QA setup. Commands that depend on 
 
 ## 1. Local configuration
 
-Create `supabase/functions/.env` for local Edge Function values. The repository-wide `.env*` ignore rule keeps this file out of Git, and Supabase CLI automatically loads it when `supabase start` starts the local stack. The repository root `.env` is a separate input used by the local launcher/`config.toml`; it does not replace `supabase/functions/.env` for function-only values.
+Create `supabase/functions/.env` for local Edge Function values. The repository-wide `.env*` ignore rule keeps this file out of Git, and Supabase CLI automatically loads it when `supabase start` starts the local stack. The repository root `.env` is a separate input used by the local launcher/`config.toml`; it does not replace `supabase/functions/.env` for function-only values. This file is server-side; do not copy `DEEPINFRA_API_KEY` into a mobile environment file or any `EXPO_PUBLIC_*` variable. Both `parse-sms` and `enrich-sms-categories` read the same five values through `Deno.env.get`.
 
 ~~~text
 DEEPINFRA_API_KEY=<local development token>
@@ -34,7 +34,7 @@ All five values above are required; missing `SMS_AI_SERVICE_TIER` does not silen
 
 Do not configure a provider endpoint URL. The approved DeepInfra endpoint is fixed by the adapter.
 
-Do not remove `GEMINI_API_KEY` globally: voice and SMS category enrichment still use Gemini.
+Do not remove `GEMINI_API_KEY` globally: voice and other remaining Gemini consumers still use it. SMS category enrichment now uses the same DeepInfra configuration above as `parse-sms`.
 
 ### Development-only provider input/output capture
 
@@ -70,7 +70,7 @@ To verify manually, enable both flags in development, run one explicit test pars
 
 Hosted Edge Functions do not automatically receive values from the local `supabase/functions/.env`; configure hosted values separately.
 
-Set the SMS provider values in the target Supabase project's hosted secrets/environment before deploying `parse-sms`.
+Set the five SMS provider values in the target Supabase project's hosted secrets/environment before deploying either `parse-sms` or `enrich-sms-categories`. Hosted Edge Functions read these values through `Deno.env.get`; they do not receive the local `supabase/functions/.env` automatically.
 
 Rollout precondition: set hosted `SMS_AI_APPROVED_MODELS` before deploying the new function code. The new code fails closed when the allowlist is missing, so deploying code first would refuse all parses until the value exists. No hosted secret is mutated by development; apply the value with the project owner before release.
 

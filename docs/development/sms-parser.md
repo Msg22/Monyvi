@@ -102,10 +102,17 @@ including through the wireless ngrok tunnel; those requests appear in local
 container logs, not in the hosted Supabase dashboard. Use a hosted-Supabase
 mobile configuration when remote invocation logs are the intended evidence.
 
-The function requires the same `GEMINI_API_KEY`, Supabase environment, JWT, and
-active AI transaction consent as the full SMS parser. A deployment or provider
-failure leaves trusted local suggestions available with their fallback category;
-it never sends those trusted messages to `parse-sms`.
+The function uses the same fail-closed DeepInfra SMS provider configuration as
+`parse-sms`: `DEEPINFRA_API_KEY`, `SMS_AI_PROVIDER`, `SMS_AI_MODEL`,
+`SMS_AI_APPROVED_MODELS`, and `SMS_AI_SERVICE_TIER`. Local development values
+belong only in the ignored server-side `supabase/functions/.env`; never place the
+provider key in a mobile or `EXPO_PUBLIC_*` environment variable. Hosted Supabase
+Edge Functions read the corresponding project secrets through `Deno.env.get`.
+`GEMINI_API_KEY` remains required only by voice/Gemini consumers. Category
+enrichment still requires the existing Supabase environment, JWT, and active AI
+transaction consent. A deployment or provider failure leaves trusted local
+suggestions available with their fallback category; it never sends those trusted
+messages to `parse-sms`.
 
 ## Future remote activation
 
