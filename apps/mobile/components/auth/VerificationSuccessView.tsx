@@ -36,13 +36,13 @@ export function VerificationSuccessView({
             name="sparkles"
             size={18}
             color={accentColor}
-            style={{ position: "absolute", top: 5, right: 6 }}
+            className="absolute right-[6px] top-[5px]"
           />
           <Ionicons
             name="sparkles"
             size={15}
             color={accentColor}
-            style={{ position: "absolute", bottom: 10, left: 0 }}
+            className="absolute bottom-[10px] left-0"
           />
         </View>
 
