@@ -290,6 +290,11 @@ interface EmailAuthResult {
   readonly needsVerification?: boolean;
 }
 
+interface EmailVerificationCodeResult {
+  readonly success: boolean;
+  readonly errorCode?: string;
+}
+
 /**
  * Sign up a new user with email and password.
  *
@@ -361,6 +366,36 @@ export async function signInWithEmail(
  * @param email - The email address to send the reset link to
  * @returns Result indicating success or error
  */
+export async function verifyEmailVerificationCode(
+  email: string,
+  token: string
+): Promise<EmailVerificationCodeResult> {
+  const { data, error } = await supabase.auth.verifyOtp({
+    email,
+    token,
+    type: "email",
+  });
+
+  if (error) {
+    return {
+      success: false,
+      errorCode: error.code ?? "unknown",
+    };
+  }
+
+  if (!data.session) {
+    return {
+      success: false,
+      errorCode: "unexpected_failure",
+    };
+  }
+
+  return { success: true };
+}
+
+/**
+ * Send a password reset email to the specified address.
+ */
 export async function resetPasswordForEmail(
   email: string
 ): Promise<EmailAuthResult> {
@@ -399,4 +434,8 @@ export async function resendVerificationEmail(
   return { success: true };
 }
 
-export type { OAuthProvider, EmailAuthResult };
+export type {
+  OAuthProvider,
+  EmailAuthResult,
+  EmailVerificationCodeResult,
+};
