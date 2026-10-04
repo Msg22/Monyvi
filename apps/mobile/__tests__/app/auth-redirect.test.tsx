@@ -168,17 +168,6 @@ jest.mock("@/services/auth-service", () => ({
   requestPasswordReset: jest.fn(),
 }));
 
-jest.mock("@/components/ui/Skeleton", () => ({
-  Skeleton: (props: unknown): React.ReactElement => {
-    const ReactMod = require("react") as typeof React;
-    const RN = require("react-native") as typeof import("react-native");
-    return ReactMod.createElement(RN.View, {
-      testID: "skeleton",
-      ...(props as object),
-    });
-  },
-}));
-
 const AuthModule = require("../../app/auth") as {
   default: () => React.JSX.Element;
   getAuthBottomPadding: (
@@ -310,7 +299,7 @@ describe("AuthCallbackScreen verification lifecycle", () => {
     jest.useRealTimers();
   });
 
-  it("renders a skeleton placeholder while processing callback completion", async () => {
+  it("renders the approved bounded progress UI while processing callback completion", async () => {
     let resolveSession: ((value: { success: boolean }) => void) | undefined;
     mockCompleteAuthSessionFromUrl.mockImplementation(
       () =>
@@ -322,7 +311,7 @@ describe("AuthCallbackScreen verification lifecycle", () => {
     render(<AuthCallbackScreen />);
 
     expect(
-      screen.getByTestId("auth-callback-loading-skeleton")
+      screen.getByTestId("auth-callback-processing-view")
     ).toBeOnTheScreen();
 
     await act(async () => {
