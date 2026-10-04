@@ -127,6 +127,26 @@ describe("auth-service - completeAuthSessionFromUrl", () => {
     expect(result).toEqual({ success: true });
   });
 
+  it("returns the verified email from the established callback session", async () => {
+    mockSetSession.mockResolvedValue({
+      data: {
+        session: {
+          user: { email: "verified@example.com" },
+        },
+      },
+      error: null,
+    });
+
+    await expect(
+      completeAuthSessionFromUrl(
+        "monyvi://auth-callback#access_token=verification-access&refresh_token=verification-refresh&type=signup"
+      )
+    ).resolves.toEqual({
+      success: true,
+      email: "verified@example.com",
+    });
+  });
+
   it("establishes a session from a PKCE authorization code", async () => {
     mockExchangeCodeForSession.mockResolvedValue({
       data: { session: {} },
@@ -142,6 +162,23 @@ describe("auth-service - completeAuthSessionFromUrl", () => {
     );
     expect(mockSetSession).not.toHaveBeenCalled();
     expect(result).toEqual({ success: true });
+  });
+
+  it("fails closed when Supabase reports no callback session", async () => {
+    mockSetSession.mockResolvedValue({
+      data: { session: null },
+      error: null,
+    });
+
+    await expect(
+      completeAuthSessionFromUrl(
+        "monyvi://auth-callback#access_token=verification-access&refresh_token=verification-refresh"
+      )
+    ).resolves.toEqual({
+      success: false,
+      error: "Could not establish an authenticated session.",
+      errorCode: "invalid_callback",
+    });
   });
 
   it("rejects callbacks when no URL was provided", async () => {
