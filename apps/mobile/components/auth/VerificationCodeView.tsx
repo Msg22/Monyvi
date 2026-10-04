@@ -180,15 +180,8 @@ export function VerificationCodeView({
             autoComplete="one-time-code"
             accessibilityLabel={t("verification_code_input")}
             accessibilityHint={t("verification_code_input_hint")}
-            style={{
-              position: "absolute",
-              inset: 0,
-              color: "transparent",
-              backgroundColor: "transparent",
-              opacity: 0.02,
-              writingDirection: "ltr",
-              textAlign: "left",
-            }}
+            className="absolute inset-0 bg-transparent text-left text-transparent opacity-[0.02]"
+            style={{ writingDirection: "ltr" }}
             selectionColor="transparent"
             caretHidden
           />
