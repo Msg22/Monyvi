@@ -11,7 +11,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { FormView } from "@/components/auth/FormView";
 import { ResetSentView } from "@/components/auth/ResetSentView";
-import { VerificationPendingView } from "@/components/auth/VerificationPendingView";
+import { VerificationCodeView } from "@/components/auth/VerificationCodeView";
+import { VerificationSuccessView } from "@/components/auth/VerificationSuccessView";
 import { LanguageSwitcherPill } from "@/components/onboarding/LanguageSwitcherPill";
 import { MonyviLogo } from "@/components/ui/MonyviLogo";
 import { palette } from "@/constants/colors";
@@ -138,12 +139,23 @@ export default function AuthScreen(): React.JSX.Element {
                 onEmailFocus={() => scrollToField("email")}
                 onPasswordFocus={() => scrollToField("password")}
               />
-            ) : controller.screenState === "verificationPending" ? (
-              <VerificationPendingView
+            ) : controller.screenState === "verificationCode" ? (
+              <VerificationCodeView
                 email={controller.pendingEmail}
+                code={controller.verificationCode}
+                verificationError={controller.verificationError}
+                verificationExpiresAtMs={controller.verificationExpiresAtMs}
+                resendAvailableAtMs={controller.resendAvailableAtMs}
+                isVerifying={controller.pendingAction === "verificationCode"}
                 isResending={controller.pendingAction === "verificationResend"}
+                onCodeChange={controller.handleVerificationCodeChange}
                 onResend={controller.handleResendVerification}
                 onBack={controller.handleBackToForm}
+              />
+            ) : controller.screenState === "verificationSuccess" ? (
+              <VerificationSuccessView
+                email={controller.pendingEmail}
+                onContinue={controller.handleContinueAfterVerification}
               />
             ) : (
               <ResetSentView
