@@ -138,12 +138,12 @@ function getLimiterPepper(): string {
     return configured;
   }
 
-  const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
-  if (supabaseUrl.startsWith("http://")) {
-    // Local-only deterministic fallback so Supabase CLI/manual QA works without
-    // committing a secret. Hosted deployments use HTTPS and therefore require
-    // EMAIL_VERIFICATION_LIMITER_PEPPER.
-    return "monyvi-local-email-verification-limiter-v1";
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")?.trim();
+  if (serviceRoleKey) {
+    // Derive a purpose-specific in-memory HMAC key from an existing server-only
+    // secret so hosted/local deployments work without committing another
+    // credential. Rotating the service-role key safely resets limiter identity.
+    return `monyvi-email-verification-limiter-v1:${serviceRoleKey}`;
   }
 
   return "";
