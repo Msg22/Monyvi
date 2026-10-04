@@ -27,6 +27,18 @@ interface VerificationCodeViewProps {
   readonly onBack: () => void;
 }
 
+function formatVerificationDigit(
+  digit: string | undefined,
+  language: string
+): string {
+  if (!digit || language !== "ar") {
+    return digit ?? "";
+  }
+
+  const index = "0123456789".indexOf(digit);
+  return index >= 0 ? "٠١٢٣٤٥٦٧٨٩"[index] ?? digit : digit;
+}
+
 function formatCountdown(remainingMs: number): string {
   const totalSeconds = Math.max(0, Math.ceil(remainingMs / 1000));
   const minutes = Math.floor(totalSeconds / 60);
@@ -48,7 +60,7 @@ export function VerificationCodeView({
   onBack,
 }: VerificationCodeViewProps): React.JSX.Element {
   const { t } = useTranslation("auth");
-  const { fontFamily, isRTL } = useLocale();
+  const { fontFamily, isRTL, language } = useLocale();
   const { isDark } = useTheme();
   const inputRef = useRef<TextInputType>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -149,7 +161,7 @@ export function VerificationCodeView({
                   className="text-[25px] text-text-primary dark:text-text-primary-dark"
                   style={{ fontFamily: fontFamily.semiBold }}
                 >
-                  {code[index] ?? ""}
+                  {formatVerificationDigit(code[index], language)}
                 </Text>
               </View>
             ))}
@@ -276,4 +288,5 @@ export function VerificationCodeView({
   );
 }
 
+export { formatVerificationDigit };
 export type { VerificationCodeViewProps };
