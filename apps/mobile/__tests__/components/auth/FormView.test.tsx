@@ -75,8 +75,6 @@ const mockEmailSubmit = jest.fn<
 const mockForgotPassword = jest.fn<Promise<void>, [string]>();
 const mockClearError = jest.fn();
 const mockClearNetworkError = jest.fn();
-const mockPrivacyPress = jest.fn();
-const mockTermsPress = jest.fn();
 
 function renderForm(
   overrides: Partial<React.ComponentProps<typeof FormView>> = {}
@@ -93,8 +91,6 @@ function renderForm(
       onForgotPassword={mockForgotPassword}
       onClearError={mockClearError}
       onClearNetworkError={mockClearNetworkError}
-      onPrivacyPress={mockPrivacyPress}
-      onTermsPress={mockTermsPress}
       {...overrides}
     />
   );
@@ -107,8 +103,6 @@ describe("FormView", () => {
     mockOAuth.mockResolvedValue(undefined);
     mockEmailSubmit.mockResolvedValue(undefined);
     mockForgotPassword.mockResolvedValue(undefined);
-    mockPrivacyPress.mockClear();
-    mockTermsPress.mockClear();
   });
 
   it("renders approved sign-in composition by default", () => {
@@ -132,15 +126,14 @@ describe("FormView", () => {
     expect(screen.getByTestId("auth-email-input")).toBeOnTheScreen();
     expect(screen.getByTestId("auth-password-input")).toBeOnTheScreen();
     expect(screen.getByTestId("auth-submit-button")).toBeOnTheScreen();
+    expect(screen.getByText("Privacy")).toBeOnTheScreen();
+    expect(screen.getByText("Terms")).toBeOnTheScreen();
     expect(
-      screen.getByRole("link", { name: "Privacy" })
-    ).toBeOnTheScreen();
-    expect(screen.getByRole("link", { name: "Terms" })).toBeOnTheScreen();
-
-    fireEvent.press(screen.getByRole("link", { name: "Privacy" }));
-    fireEvent.press(screen.getByRole("link", { name: "Terms" }));
-    expect(mockPrivacyPress).toHaveBeenCalledTimes(1);
-    expect(mockTermsPress).toHaveBeenCalledTimes(1);
+      screen.queryByRole("link", { name: "Privacy" })
+    ).not.toBeOnTheScreen();
+    expect(
+      screen.queryByRole("link", { name: "Terms" })
+    ).not.toBeOnTheScreen();
   });
 
   it("matches the approved standard hero and legal-footer layout", () => {
