@@ -184,6 +184,7 @@ export default function AuthCallbackScreen(): React.JSX.Element {
   const [failureType, setFailureType] =
     useState<AuthCallbackFailureType>("verification");
   const [retryNonce, setRetryNonce] = useState(0);
+  const [verifiedEmail, setVerifiedEmail] = useState<string | undefined>();
 
   useEffect(() => {
     if (!callbackUrl || processedUrlRef.current === callbackUrl) {
@@ -224,6 +225,7 @@ export default function AuthCallbackScreen(): React.JSX.Element {
 
         if (result.success) {
           if (isSignupVerificationLink(params, callbackUrl)) {
+            setVerifiedEmail(result.email);
             setCallbackState("verificationSuccess");
           } else {
             setCallbackState("completed");
@@ -288,7 +290,7 @@ export default function AuthCallbackScreen(): React.JSX.Element {
   if (callbackState === "verificationSuccess") {
     return (
       <AuthCallbackVerificationSuccess
-        email={user?.email}
+        email={verifiedEmail ?? user?.email}
         onContinue={() => {
           router.replace("/");
         }}
