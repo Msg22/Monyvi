@@ -1,4 +1,5 @@
 import { LinearGradient } from "expo-linear-gradient";
+import { useRouter } from "expo-router";
 import {
   KeyboardAvoidingView,
   Platform,
@@ -49,6 +50,7 @@ export function shouldEnableAuthScroll(
 
 export default function AuthScreen(): React.JSX.Element {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const { isDark } = useTheme();
   const isKeyboardVisible = useKeyboardVisibility();
   const {
@@ -137,6 +139,8 @@ export default function AuthScreen(): React.JSX.Element {
                 onForgotPassword={controller.handleForgotPassword}
                 onClearError={controller.clearEmailError}
                 onClearNetworkError={controller.clearNetworkError}
+                onPrivacyPress={() => router.push("/privacy-policy")}
+                onTermsPress={() => router.push("/terms")}
                 onEmailFocus={() => scrollToField("email")}
                 onPasswordFocus={() => scrollToField("password")}
               />
@@ -156,11 +160,15 @@ export default function AuthScreen(): React.JSX.Element {
                 onCodeChange={controller.handleVerificationCodeChange}
                 onResend={controller.handleResendVerification}
                 onBack={controller.handleBackToForm}
+                onPrivacyPress={() => router.push("/privacy-policy")}
+                onTermsPress={() => router.push("/terms")}
               />
             ) : controller.screenState === "verificationSuccess" ? (
               <VerificationSuccessView
                 email={controller.pendingEmail}
                 onContinue={controller.handleContinueAfterVerification}
+                onPrivacyPress={() => router.push("/privacy-policy")}
+                onTermsPress={() => router.push("/terms")}
               />
             ) : (
               <ResetSentView
