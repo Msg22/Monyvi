@@ -3,7 +3,7 @@ const { spawnSync } = require("node:child_process");
 const { join } = require("node:path");
 const test = require("node:test");
 
-test("issue 321 approved verification mockup bindings remain authoritative", () => {
+test("issue 321 historical link-first bindings remain internally valid", () => {
   const repoRoot = join(__dirname, "..");
   const verifier = join(repoRoot, "scripts", "verify-mockup-binding.js");
   const sidecars = [
@@ -40,7 +40,7 @@ test("issue 321 approved verification mockup bindings remain authoritative", () 
     result.status,
     0,
     [
-      "Mockup binding verifier failed for issue 321.",
+      "Historical #321 link-first binding integrity failed.",
       result.stdout,
       result.stderr,
     ]
