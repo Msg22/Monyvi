@@ -17,11 +17,19 @@ interface SupabaseServiceModule {
     readonly error?: { readonly code?: string };
   }>;
   readonly resendVerificationEmail: (email: string) => Promise<unknown>;
+  readonly verifyEmailVerificationCode: (
+    email: string,
+    token: string
+  ) => Promise<{
+    readonly success: boolean;
+    readonly errorCode?: string;
+  }>;
   readonly supabase: {
     readonly auth: {
       signUp: (...args: unknown[]) => Promise<unknown>;
       signInWithPassword: (...args: unknown[]) => Promise<unknown>;
       resend: (...args: unknown[]) => Promise<unknown>;
+      verifyOtp: (...args: unknown[]) => Promise<unknown>;
     };
   };
 }
@@ -35,6 +43,7 @@ const {
   signUpWithEmail,
   signInWithEmail,
   resendVerificationEmail,
+  verifyEmailVerificationCode,
   supabase,
 } = jest.requireActual<SupabaseServiceModule>("@/services/supabase");
 
@@ -130,5 +139,51 @@ describe("supabase email verification redirect contract", () => {
         emailRedirectTo: "monyvi://auth-callback",
       },
     });
+  });
+});
+
+
+describe("supabase email verification code contract", () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it("verifies a six-digit signup code with the email OTP contract", async () => {
+    const verifySpy = jest.spyOn(supabase.auth, "verifyOtp").mockResolvedValue({
+      data: { user: { id: "user-1" }, session: { access_token: "session" } },
+      error: null,
+    });
+
+    const result = await verifyEmailVerificationCode(
+      "new@example.com",
+      "123456"
+    );
+
+    expect(verifySpy).toHaveBeenCalledWith({
+      email: "new@example.com",
+      token: "123456",
+      type: "email",
+    });
+    expect(result).toEqual({ success: true });
+  });
+
+  it("classifies otp_expired without returning provider copy", async () => {
+    const providerError = Object.assign(
+      new Error("Token has expired: private provider wording"),
+      { code: "otp_expired" }
+    );
+    jest.spyOn(supabase.auth, "verifyOtp").mockResolvedValue({
+      data: { user: null, session: null },
+      error: providerError,
+    });
+
+    const result = await verifyEmailVerificationCode(
+      "new@example.com",
+      "654321"
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.errorCode).toBe("otp_expired");
+    expect(result).not.toHaveProperty("error");
   });
 });
