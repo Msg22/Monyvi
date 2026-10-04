@@ -53,7 +53,7 @@ type AuthCallbackErrorCode =
 
 /** Result of completing a native Supabase auth callback. */
 type AuthCallbackResult =
-  | { success: true }
+  | { success: true; email?: string }
   | {
       success: false;
       error: string;
@@ -320,7 +320,7 @@ export async function completeAuthSessionFromUrl(
     }
 
     try {
-      const { error } = await supabase.auth.setSession({
+      const { data, error } = await supabase.auth.setSession({
         access_token: accessToken,
         refresh_token: refreshToken,
       });
@@ -328,26 +328,32 @@ export async function completeAuthSessionFromUrl(
       if (error) {
         return createAuthCallbackFailure(error);
       }
+      if (!data.session) {
+        return createMissingCallbackSessionFailure();
+      }
+
+      return createAuthCallbackSuccess(data.session.user?.email);
     } catch (error: unknown) {
       return createAuthCallbackFailure(error);
     }
-
-    return { success: true };
   }
 
   const code = queryParams?.get("code");
   if (code) {
     try {
-      const { error } = await supabase.auth.exchangeCodeForSession(code);
+      const { data, error } = await supabase.auth.exchangeCodeForSession(code);
 
       if (error) {
         return createAuthCallbackFailure(error);
       }
+      if (!data.session) {
+        return createMissingCallbackSessionFailure();
+      }
+
+      return createAuthCallbackSuccess(data.session.user?.email);
     } catch (error: unknown) {
       return createAuthCallbackFailure(error);
     }
-
-    return { success: true };
   }
 
   return {
@@ -391,6 +397,20 @@ function toAuthCallbackErrorCode(
   }
 
   return "unknown";
+}
+
+function createAuthCallbackSuccess(
+  email: string | undefined
+): AuthCallbackResult {
+  return email ? { success: true, email } : { success: true };
+}
+
+function createMissingCallbackSessionFailure(): AuthCallbackResult {
+  return {
+    success: false,
+    error: "Could not establish an authenticated session.",
+    errorCode: "invalid_callback",
+  };
 }
 
 function createAuthCallbackFailure(error: unknown): AuthCallbackResult {
