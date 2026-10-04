@@ -13,10 +13,10 @@ import {
   AuthCallbackFailureView,
   type AuthCallbackFailureType,
 } from "@/components/auth/AuthCallbackFailureView";
+import { AuthCallbackProcessingView } from "@/components/auth/AuthCallbackProcessingView";
 import { VerificationSuccessView } from "@/components/auth/VerificationSuccessView";
 import { LanguageSwitcherPill } from "@/components/onboarding/LanguageSwitcherPill";
 import { MonyviLogo } from "@/components/ui/MonyviLogo";
-import { Skeleton } from "@/components/ui/Skeleton";
 import { palette } from "@/constants/colors";
 import { useTheme } from "@/context/ThemeContext";
 import { useAuth } from "@/context/AuthContext";
@@ -98,35 +98,6 @@ function isPasswordRecoveryLink(
     return true;
   }
   return readCallbackType(params, callbackUrl) === "recovery";
-}
-
-function AuthCallbackSkeleton(): React.JSX.Element {
-  const insets = useSafeAreaInsets();
-
-  return (
-    <View
-      testID="auth-callback-loading-skeleton"
-      className="flex-1 items-center justify-between bg-background px-6 dark:bg-background-dark"
-      style={{
-        paddingTop: insets.top + 24,
-        paddingBottom: insets.bottom + 24,
-      }}
-    >
-      <View className="flex-1 items-center justify-center">
-        <Skeleton width={92} height={92} borderRadius={46} />
-        <View className="mt-6">
-          <Skeleton width={220} height={32} borderRadius={8} />
-        </View>
-        <View className="mt-3 items-center">
-          <Skeleton width={260} height={16} borderRadius={6} />
-          <View className="mt-2">
-            <Skeleton width={180} height={16} borderRadius={6} />
-          </View>
-        </View>
-      </View>
-      <Skeleton width="100%" height={48} borderRadius={13} />
-    </View>
-  );
 }
 
 function AuthCallbackVerificationSuccess({
@@ -310,5 +281,5 @@ export default function AuthCallbackScreen(): React.JSX.Element {
     );
   }
 
-  return <AuthCallbackSkeleton />;
+  return <AuthCallbackProcessingView />;
 }
