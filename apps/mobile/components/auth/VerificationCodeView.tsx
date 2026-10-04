@@ -137,6 +137,7 @@ export function VerificationCodeView({
             accessibilityElementsHidden
             importantForAccessibility="no-hide-descendants"
             className="flex-row justify-center gap-2"
+            style={{ direction: "ltr" }}
           >
             {Array.from({ length: 6 }, (_, index) => (
               <View
