@@ -109,7 +109,10 @@ export function VerificationCodeView({
           {t("verification_code_sent_message")}
         </Text>
 
-        <View className="mt-2 rounded-[8px] bg-slate-100 px-3 py-1.5 dark:bg-slate-800">
+        <View
+          testID="verification-email-chip"
+          className="mt-2 rounded-[8px] bg-slate-100 px-3 py-1.5 dark:bg-slate-800"
+        >
           <Text
             className="text-[14px] text-text-primary dark:text-text-primary-dark"
             style={{ fontFamily: fontFamily.semiBold, writingDirection: "ltr" }}
