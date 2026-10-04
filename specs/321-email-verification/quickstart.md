@@ -168,6 +168,36 @@ Before implementation resumes, approve remaining:
 After implementation, capture baseline/variants and keep functional,
 visual-fidelity, and accessibility statuses separate.
 
+## Hosted deployment sequence
+
+After the PR code is approved and before hosted device QA:
+
+```bash
+# Apply tracked database migrations, including 081.
+npm run db:push -- --include-all
+
+# Deploy the public pre-auth resend limiter. Its own SQL/HMAC/rate-limit
+# contract protects the endpoint; pending users do not have an authenticated
+# JWT yet.
+npm run fn:deploy:email-verification-resend
+
+# Inspect hosted Auth policy without printing template contents.
+npm run auth:verification:status
+
+# If the status is not Confirm-email=true, OTP=600s, length=6,
+# minimum send frequency=120s, apply the approved policy.
+npm run auth:verification:configure
+```
+
+The hosted function derives a purpose-specific limiter HMAC key from server-only
+credentials unless `EMAIL_VERIFICATION_LIMITER_PEPPER` is explicitly set.
+No limiter secret belongs in the mobile bundle or Git.
+
+**Important limitation:** the Monyvi resend path is server-enforced, but the
+underlying public Supabase Auth endpoints still retain their own built-in rate
+limits. Do not describe the product limiter as replacing Supabase's platform
+rate limiting.
+
 ## Production delivery QA
 
 Required before release:
