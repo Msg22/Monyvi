@@ -2,7 +2,7 @@
 
 **Revision**: Code-first plan approved 2026-10-04  
 **Branch**: `codex/issue321-email-verification`  
-**Implementation status**: PAUSED pending remaining mockup approval/binding
+**Implementation status**: IN PROGRESS — all revised mockups approved; binding refresh/final evidence still pending
 
 ## Historical work retained
 
@@ -30,17 +30,17 @@ evidence.
 ## Phase R0 — Mockup approval gate
 
 - [x] R001 Approve revised English-light verification code screen
-- [ ] R002 Approve English-dark verification code screen
-- [ ] R003 Approve Arabic-light verification code screen
-- [ ] R004 Approve Arabic-dark verification code screen
-- [ ] R005 Approve English-light Email verified screen
-- [ ] R006 Approve English-dark Email verified screen
-- [ ] R007 Approve Arabic-light Email verified screen
-- [ ] R008 Approve Arabic-dark Email verified screen
+- [x] R002 Approve English-dark verification code screen
+- [x] R003 Approve Arabic-light verification code screen
+- [x] R004 Approve Arabic-dark verification code screen
+- [x] R005 Approve English-light Email verified screen
+- [x] R006 Approve English-dark Email verified screen
+- [x] R007 Approve Arabic-light Email verified screen
+- [x] R008 Approve Arabic-dark Email verified screen
 - [ ] R009 Persist approved image bytes and update/create binding sidecars
 - [ ] R010 Obtain required binding-metadata approval and run canonical binding verifier
 
-**STOP**: no new production UI/auth mutations for the revised flow before R002-R010.
+**Approval gate**: R002-R008 passed by explicit user approval. R009-R010 remain required before final visual-completion sign-off, but implementation is authorized.
 
 ---
 
@@ -179,8 +179,8 @@ evidence.
 
 - **Product plan**: APPROVED 2026-10-04
 - **English-light code-entry visual**: APPROVED
-- **Remaining visual approval**: PENDING
+- **Remaining visual approval**: COMPLETE — user approved the revised code-entry and Email verified EN/AR light/dark set
 - **Confirm Signup template installation**: COMPLETE by user
 - **Template 10-minute copy verification**: PENDING
 - **Custom SMTP configured / real signup email received**: COMPLETE by user report
-- **Revised implementation**: PAUSED pending mockup gate
+- **Revised implementation**: IN PROGRESS
