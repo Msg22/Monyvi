@@ -7,7 +7,10 @@ import {
   signInWithOAuth,
   signUpWithEmail,
 } from "@/services/auth-service";
-import { resendVerificationEmail } from "@/services/supabase";
+import {
+  resendVerificationEmail,
+  verifyEmailVerificationCode,
+} from "@/services/supabase";
 
 const mockShowToast = jest.fn();
 const mockUseDeferredRouterReplace = jest.fn();
@@ -46,6 +49,7 @@ jest.mock("@/services/auth-service", () => ({
 
 jest.mock("@/services/supabase", () => ({
   resendVerificationEmail: jest.fn(),
+  verifyEmailVerificationCode: jest.fn(),
 }));
 
 const mockRequestPasswordReset = jest.mocked(requestPasswordReset);
@@ -53,6 +57,9 @@ const mockSignInWithEmail = jest.mocked(signInWithEmail);
 const mockSignInWithOAuth = jest.mocked(signInWithOAuth);
 const mockSignUpWithEmail = jest.mocked(signUpWithEmail);
 const mockResendVerificationEmail = jest.mocked(resendVerificationEmail);
+const mockVerifyEmailVerificationCode = jest.mocked(
+  verifyEmailVerificationCode
+);
 
 function createAuthError(message: string): never {
   return new Error(message) as never;
@@ -217,7 +224,7 @@ describe("useAuthScreenController", () => {
       "secret"
     );
     expect(result.current.pendingEmail).toBe("unverified@example.com");
-    expect(result.current.screenState).toBe("verificationPending");
+    expect(result.current.screenState).toBe("verificationCode");
     expect(result.current.emailError).toBeNull();
   });
 
@@ -259,7 +266,7 @@ describe("useAuthScreenController", () => {
       "secret"
     );
     expect(result.current.pendingEmail).toBe("new@example.com");
-    expect(result.current.screenState).toBe("verificationPending");
+    expect(result.current.screenState).toBe("verificationCode");
   });
 
   it("shows sign-up failures inline without changing state", async () => {
@@ -462,5 +469,150 @@ describe("useAuthScreenController", () => {
     expect(result.current.screenState).toBe("form");
     expect(result.current.emailError).toBeNull();
     expect(result.current.networkError).toBeNull();
+  });
+});
+
+
+describe("useAuthScreenController code-first verification", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date("2026-10-04T10:00:00.000Z"));
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it("starts ten-minute expiry and two-minute resend cooldown after signup", async () => {
+    mockSignUpWithEmail.mockResolvedValue({
+      success: true,
+      needsVerification: true,
+    });
+    const { result } = renderHook(() => useAuthScreenController());
+
+    await act(async () => {
+      await result.current.handleEmailSubmit(
+        "new@example.com",
+        "secret",
+        "signUp"
+      );
+    });
+
+    expect(result.current.screenState).toBe("verificationCode");
+    expect(result.current.verificationExpiresAtMs).toBe(
+      Date.parse("2026-10-04T10:10:00.000Z")
+    );
+    expect(result.current.resendAvailableAtMs).toBe(
+      Date.parse("2026-10-04T10:02:00.000Z")
+    );
+  });
+
+  it("sanitizes pasted input and auto-submits exactly once at six digits", async () => {
+    mockSignUpWithEmail.mockResolvedValue({
+      success: true,
+      needsVerification: true,
+    });
+    mockVerifyEmailVerificationCode.mockResolvedValue({ success: true });
+    const { result } = renderHook(() => useAuthScreenController());
+
+    await act(async () => {
+      await result.current.handleEmailSubmit(
+        "new@example.com",
+        "secret",
+        "signUp"
+      );
+    });
+
+    await act(async () => {
+      result.current.handleVerificationCodeChange("12 3-456");
+      await Promise.resolve();
+    });
+
+    expect(result.current.verificationCode).toBe("123456");
+    expect(mockVerifyEmailVerificationCode).toHaveBeenCalledTimes(1);
+    expect(mockVerifyEmailVerificationCode).toHaveBeenCalledWith(
+      "new@example.com",
+      "123456"
+    );
+    expect(result.current.screenState).toBe("verificationSuccess");
+
+    await act(async () => {
+      result.current.handleVerificationCodeChange("123456");
+      await Promise.resolve();
+    });
+    expect(mockVerifyEmailVerificationCode).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps authenticated redirects suppressed through the success state", async () => {
+    mockSignUpWithEmail.mockResolvedValue({
+      success: true,
+      needsVerification: true,
+    });
+    mockVerifyEmailVerificationCode.mockResolvedValue({ success: true });
+    const { result } = renderHook(() => useAuthScreenController());
+
+    await act(async () => {
+      await result.current.handleEmailSubmit(
+        "new@example.com",
+        "secret",
+        "signUp"
+      );
+    });
+    await act(async () => {
+      result.current.handleVerificationCodeChange("123456");
+      await Promise.resolve();
+    });
+
+    expect(mockUseDeferredRouterReplace).toHaveBeenLastCalledWith({
+      enabled: false,
+      href: "/",
+    });
+
+    act(() => {
+      result.current.handleContinueAfterVerification();
+    });
+
+    expect(result.current.screenState).toBe("verificationSuccess");
+  });
+
+  it("shows invalid-code copy and permits retry after verification fails", async () => {
+    mockSignUpWithEmail.mockResolvedValue({
+      success: true,
+      needsVerification: true,
+    });
+    mockVerifyEmailVerificationCode
+      .mockResolvedValueOnce({ success: false, errorCode: "otp_expired" })
+      .mockResolvedValueOnce({ success: true });
+    const { result } = renderHook(() => useAuthScreenController());
+
+    await act(async () => {
+      await result.current.handleEmailSubmit(
+        "new@example.com",
+        "secret",
+        "signUp"
+      );
+    });
+
+    await act(async () => {
+      result.current.handleVerificationCodeChange("111111");
+      await Promise.resolve();
+    });
+
+    expect(result.current.verificationError).toBe(
+      "auth.verification_code_invalid"
+    );
+    expect(result.current.screenState).toBe("verificationCode");
+
+    act(() => {
+      result.current.handleVerificationCodeChange("");
+    });
+    await act(async () => {
+      result.current.handleVerificationCodeChange("111111");
+      await Promise.resolve();
+    });
+
+    expect(mockVerifyEmailVerificationCode).toHaveBeenCalledTimes(2);
+    expect(result.current.screenState).toBe("verificationSuccess");
   });
 });
