@@ -2,6 +2,7 @@
 -- Runs inside a transaction and rolls back all fixtures.
 
 BEGIN;
+SELECT no_plan();
 
 DO $schema$
 BEGIN
@@ -20,6 +21,7 @@ BEGIN
   END IF;
 END
 $schema$;
+SELECT pass('limiter schema stores no raw email');
 
 DO $privileges$
 DECLARE
@@ -49,6 +51,7 @@ BEGIN
   END IF;
 END
 $privileges$;
+SELECT pass('limiter table/functions are service-role only');
 
 CREATE TEMP TABLE issue321_fixture(
   user_id uuid PRIMARY KEY,
@@ -115,6 +118,7 @@ BEGIN
   END IF;
 END
 $initial$;
+SELECT pass('initial signup send registers without consuming a resend');
 
 DO $cooldown$
 DECLARE
@@ -138,6 +142,7 @@ BEGIN
   END IF;
 END
 $cooldown$;
+SELECT pass('original send enforces the two-minute cooldown');
 
 UPDATE public.email_verification_resend_limits
 SET last_sent_at = clock_timestamp() - interval '121 seconds'
@@ -209,6 +214,7 @@ BEGIN
   END IF;
 END
 $three_resends$;
+SELECT pass('three resends succeed and the fourth is denied');
 
 DO $window_reset$
 DECLARE
@@ -252,6 +258,7 @@ BEGIN
   END IF;
 END
 $window_reset$;
+SELECT pass('24-hour window resets and explicit release does not consume a resend');
 
 DO $concurrency$
 DECLARE
@@ -293,6 +300,7 @@ BEGIN
   ) INTO v_released;
 END
 $concurrency$;
+SELECT pass('concurrent resend reservation is denied');
 
 DO $stale_reservation$
 DECLARE
@@ -325,8 +333,10 @@ BEGIN
   END IF;
 END
 $stale_reservation$;
+SELECT pass('ambiguous stale reservation fails closed and consumes one slot');
 
 RESET ROLE;
 RESET request.jwt.claim.role;
 
+SELECT * FROM finish();
 ROLLBACK;
