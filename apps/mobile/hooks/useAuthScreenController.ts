@@ -17,8 +17,12 @@ import {
 } from "@/services/auth-service";
 import {
   resendVerificationEmail,
+  verifyEmailVerificationCode,
   type OAuthProvider,
 } from "@/services/supabase";
+
+const VERIFICATION_CODE_TTL_MS = 10 * 60 * 1000;
+const VERIFICATION_RESEND_COOLDOWN_MS = 2 * 60 * 1000;
 
 interface AuthScreenController {
   readonly screenState: AuthScreenState;
@@ -26,6 +30,10 @@ interface AuthScreenController {
   readonly pendingAction: AuthPendingAction;
   readonly emailError: string | null;
   readonly networkError: string | null;
+  readonly verificationCode: string;
+  readonly verificationError: string | null;
+  readonly verificationExpiresAtMs: number | null;
+  readonly resendAvailableAtMs: number | null;
   readonly handleOAuth: (provider: OAuthProvider) => Promise<void>;
   readonly handleEmailSubmit: (
     email: string,
@@ -33,10 +41,24 @@ interface AuthScreenController {
     mode: AuthMode
   ) => Promise<void>;
   readonly handleForgotPassword: (email: string) => Promise<void>;
+  readonly handleVerificationCodeChange: (value: string) => void;
   readonly handleResendVerification: () => Promise<void>;
+  readonly handleContinueAfterVerification: () => void;
   readonly handleBackToForm: () => void;
   readonly clearEmailError: () => void;
   readonly clearNetworkError: () => void;
+}
+
+function normalizeVerificationCode(value: string): string {
+  return value
+    .replace(/[٠-٩]/g, (digit) =>
+      String("٠١٢٣٤٥٦٧٨٩".indexOf(digit))
+    )
+    .replace(/[۰-۹]/g, (digit) =>
+      String("۰۱۲۳۴۵۶۷۸۹".indexOf(digit))
+    )
+    .replace(/\D/g, "")
+    .slice(0, 6);
 }
 
 export function useAuthScreenController(): AuthScreenController {
@@ -45,14 +67,27 @@ export function useAuthScreenController(): AuthScreenController {
   const { t } = useTranslation("auth");
   const { t: tCommon } = useTranslation("common");
   const isRequestPendingRef = useRef(false);
+  const lastSubmittedCodeRef = useRef<string | null>(null);
   const [screenState, setScreenState] = useState<AuthScreenState>("form");
   const [pendingEmail, setPendingEmail] = useState("");
   const [pendingAction, setPendingAction] = useState<AuthPendingAction>(null);
   const [emailError, setEmailError] = useState<string | null>(null);
   const [networkError, setNetworkError] = useState<string | null>(null);
+  const [verificationCode, setVerificationCode] = useState("");
+  const [verificationError, setVerificationError] = useState<string | null>(
+    null
+  );
+  const [verificationExpiresAtMs, setVerificationExpiresAtMs] = useState<
+    number | null
+  >(null);
+  const [resendAvailableAtMs, setResendAvailableAtMs] = useState<number | null>(
+    null
+  );
+  const [verificationFlowActive, setVerificationFlowActive] = useState(false);
 
   useDeferredRouterReplace({
-    enabled: !isAuthLoading && isAuthenticated,
+    enabled:
+      !verificationFlowActive && !isAuthLoading && isAuthenticated,
     href: "/",
   });
 
@@ -75,6 +110,29 @@ export function useAuthScreenController(): AuthScreenController {
     setEmailError(null);
     setNetworkError(null);
   }, []);
+
+  const clearVerificationState = useCallback((): void => {
+    lastSubmittedCodeRef.current = null;
+    setVerificationCode("");
+    setVerificationError(null);
+    setVerificationExpiresAtMs(null);
+    setResendAvailableAtMs(null);
+  }, []);
+
+  const enterVerificationCodeState = useCallback(
+    (email: string, sentNow: boolean): void => {
+      const now = Date.now();
+      setPendingEmail(email);
+      clearVerificationState();
+      if (sentNow) {
+        setVerificationExpiresAtMs(now + VERIFICATION_CODE_TTL_MS);
+        setResendAvailableAtMs(now + VERIFICATION_RESEND_COOLDOWN_MS);
+      }
+      setVerificationFlowActive(true);
+      setScreenState("verificationCode");
+    },
+    [clearVerificationState]
+  );
 
   const handleOAuth = useCallback(
     async (provider: OAuthProvider): Promise<void> => {
@@ -119,8 +177,7 @@ export function useAuthScreenController(): AuthScreenController {
             : await signInWithEmail(normalizedEmail, password);
 
         if (result.needsVerification) {
-          setPendingEmail(normalizedEmail);
-          setScreenState("verificationPending");
+          enterVerificationCodeState(normalizedEmail, mode === "signUp");
           return;
         }
 
@@ -138,7 +195,15 @@ export function useAuthScreenController(): AuthScreenController {
         finishRequest();
       }
     },
-    [beginRequest, clearTransientErrors, finishRequest, showToast, t, tCommon]
+    [
+      beginRequest,
+      clearTransientErrors,
+      enterVerificationCodeState,
+      finishRequest,
+      showToast,
+      t,
+      tCommon,
+    ]
   );
 
   const handleForgotPassword = useCallback(
@@ -172,6 +237,74 @@ export function useAuthScreenController(): AuthScreenController {
     [beginRequest, clearTransientErrors, finishRequest, showToast, t]
   );
 
+  const submitVerificationCode = useCallback(
+    async (token: string): Promise<void> => {
+      if (
+        !pendingEmail ||
+        token.length !== 6 ||
+        token === lastSubmittedCodeRef.current ||
+        !beginRequest("verificationCode")
+      ) {
+        return;
+      }
+
+      lastSubmittedCodeRef.current = token;
+      setVerificationError(null);
+      try {
+        const result = await verifyEmailVerificationCode(pendingEmail, token);
+        if (result.success) {
+          setScreenState("verificationSuccess");
+          return;
+        }
+
+        lastSubmittedCodeRef.current = null;
+        if (result.errorCode === "otp_expired") {
+          const locallyExpired =
+            verificationExpiresAtMs !== null &&
+            Date.now() >= verificationExpiresAtMs;
+          setVerificationError(
+            t(
+              locallyExpired
+                ? "verification_code_expired"
+                : "verification_code_invalid"
+            )
+          );
+          return;
+        }
+
+        setVerificationError(t("verification_code_failed"));
+      } catch {
+        lastSubmittedCodeRef.current = null;
+        setVerificationError(t("verification_code_failed"));
+      } finally {
+        finishRequest();
+      }
+    },
+    [
+      beginRequest,
+      finishRequest,
+      pendingEmail,
+      t,
+      verificationExpiresAtMs,
+    ]
+  );
+
+  const handleVerificationCodeChange = useCallback(
+    (value: string): void => {
+      const normalizedCode = normalizeVerificationCode(value);
+      setVerificationCode(normalizedCode);
+
+      if (normalizedCode.length < 6) {
+        lastSubmittedCodeRef.current = null;
+        setVerificationError(null);
+        return;
+      }
+
+      void submitVerificationCode(normalizedCode);
+    },
+    [submitVerificationCode]
+  );
+
   const handleResendVerification = useCallback(async (): Promise<void> => {
     if (!pendingEmail || !beginRequest("verificationResend")) {
       return;
@@ -184,6 +317,12 @@ export function useAuthScreenController(): AuthScreenController {
         return;
       }
 
+      const now = Date.now();
+      lastSubmittedCodeRef.current = null;
+      setVerificationCode("");
+      setVerificationError(null);
+      setVerificationExpiresAtMs(now + VERIFICATION_CODE_TTL_MS);
+      setResendAvailableAtMs(now + VERIFICATION_RESEND_COOLDOWN_MS);
       showToast({ type: "success", title: t("verification_email_sent") });
     } catch {
       showToast({ type: "error", title: t("resend_verification_failed") });
@@ -192,10 +331,16 @@ export function useAuthScreenController(): AuthScreenController {
     }
   }, [beginRequest, finishRequest, pendingEmail, showToast, t]);
 
+  const handleContinueAfterVerification = useCallback((): void => {
+    setVerificationFlowActive(false);
+  }, []);
+
   const handleBackToForm = useCallback((): void => {
+    setVerificationFlowActive(false);
     setScreenState("form");
+    clearVerificationState();
     clearTransientErrors();
-  }, [clearTransientErrors]);
+  }, [clearTransientErrors, clearVerificationState]);
 
   const clearEmailError = useCallback((): void => {
     setEmailError(null);
@@ -211,12 +356,24 @@ export function useAuthScreenController(): AuthScreenController {
     pendingAction,
     emailError,
     networkError,
+    verificationCode,
+    verificationError,
+    verificationExpiresAtMs,
+    resendAvailableAtMs,
     handleOAuth,
     handleEmailSubmit,
     handleForgotPassword,
+    handleVerificationCodeChange,
     handleResendVerification,
+    handleContinueAfterVerification,
     handleBackToForm,
     clearEmailError,
     clearNetworkError,
   };
 }
+
+export {
+  VERIFICATION_CODE_TTL_MS,
+  VERIFICATION_RESEND_COOLDOWN_MS,
+  normalizeVerificationCode,
+};
