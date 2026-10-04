@@ -62,8 +62,6 @@ CREATE TEMP TABLE issue321_fixture(
 INSERT INTO issue321_fixture
 VALUES (gen_random_uuid(), 'verify-321@example.com', repeat('a', 64));
 
-GRANT SELECT ON issue321_fixture TO service_role;
-
 INSERT INTO auth.users (
   id,
   aud,
