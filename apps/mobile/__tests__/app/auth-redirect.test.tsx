@@ -114,13 +114,37 @@ jest.mock("@/components/onboarding/LanguageSwitcherPill", () => ({
   },
 }));
 
-jest.mock("@/components/auth/VerificationPendingView", () => ({
-  VerificationPendingView: (): React.ReactElement => {
+jest.mock("@/components/auth/VerificationCodeView", () => ({
+  VerificationCodeView: (): React.ReactElement => {
     const ReactMod = require("react") as typeof React;
     const RN = require("react-native") as typeof import("react-native");
     return ReactMod.createElement(RN.View, {
-      testID: "verification-pending",
+      testID: "verification-code",
     });
+  },
+}));
+
+jest.mock("@/components/auth/VerificationSuccessView", () => ({
+  VerificationSuccessView: ({
+    onContinue,
+  }: {
+    readonly onContinue: () => void;
+  }): React.ReactElement => {
+    const ReactMod = require("react") as typeof React;
+    const RN = require("react-native") as typeof import("react-native");
+    return ReactMod.createElement(
+      RN.View,
+      { testID: "verification-success" },
+      ReactMod.createElement(
+        RN.Pressable,
+        {
+          accessibilityRole: "button",
+          accessibilityLabel: "continue_to_dashboard",
+          onPress: onContinue,
+        },
+        ReactMod.createElement(RN.Text, null, "continue_to_dashboard")
+      )
+    );
   },
 }));
 
@@ -305,8 +329,8 @@ describe("AuthCallbackScreen verification lifecycle", () => {
     });
   });
 
-  it("completes a cold-start verification callback before authenticated routing", async () => {
-    const { rerender } = render(<AuthCallbackScreen />);
+  it("shows explicit verification success after a signup callback instead of waiting on AuthContext", async () => {
+    render(<AuthCallbackScreen />);
 
     await act(async () => {
       await Promise.resolve();
@@ -315,19 +339,16 @@ describe("AuthCallbackScreen verification lifecycle", () => {
     expect(mockCompleteAuthSessionFromUrl).toHaveBeenCalledWith(
       mockCallbackUrl
     );
-    expect(mockReplace).not.toHaveBeenCalledWith("/auth");
+    expect(screen.getByTestId("verification-success")).toBeOnTheScreen();
     expect(mockReplace).not.toHaveBeenCalledWith("/");
 
-    mockAuthState = {
-      isAuthenticated: true,
-      isLoading: false,
-    };
-    rerender(<AuthCallbackScreen />);
-
+    fireEvent.press(
+      screen.getByRole("button", { name: "continue_to_dashboard" })
+    );
     expect(mockReplace).toHaveBeenCalledWith("/");
   });
 
-  it("still processes the callback when the app is already authenticated on warm start", async () => {
+  it("does not auto-skip verification success on an already-authenticated warm start", async () => {
     mockAuthState = {
       isAuthenticated: true,
       isLoading: false,
@@ -342,7 +363,8 @@ describe("AuthCallbackScreen verification lifecycle", () => {
     expect(mockCompleteAuthSessionFromUrl).toHaveBeenCalledWith(
       mockCallbackUrl
     );
-    expect(mockReplace).toHaveBeenCalledWith("/");
+    expect(screen.getByTestId("verification-success")).toBeOnTheScreen();
+    expect(mockReplace).not.toHaveBeenCalledWith("/");
   });
 });
 
