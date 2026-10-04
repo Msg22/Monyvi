@@ -160,7 +160,7 @@ export function VerificationCodeView({
             testID="verification-code-input"
             value={code}
             onChangeText={onCodeChange}
-            editable={!isVerifying}
+            editable={!actionsDisabled}
             maxLength={6}
             keyboardType="number-pad"
             inputMode="numeric"
