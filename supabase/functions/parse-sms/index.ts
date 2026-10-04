@@ -28,7 +28,10 @@ import {
 } from "../_shared/sms-ai-safeguard-service.ts";
 import { createConfiguredSmsAiProvider } from "../_shared/sms-ai/sms-ai-provider-factory.ts";
 import { isSmsAiProviderResponseOutputCaptureEnabled } from "../_shared/sms-ai/sms-ai-provider-config.ts";
-import { executeSmsAiProvider } from "../_shared/sms-ai/sms-ai-provider-executor.ts";
+import {
+  executeSmsAiProvider,
+  type SmsAiProviderDiagnostics,
+} from "../_shared/sms-ai/sms-ai-provider-executor.ts";
 import {
   buildSmsAiDynamicCategoryContext,
   buildSmsAiResponseSchema,
@@ -131,9 +134,23 @@ const smsAiProvider = createConfiguredSmsAiProvider(Deno.env.get, {
             responseContent,
           });
         },
+        onAttemptFailure: (metadata): void => {
+          console.warn("[parse-sms] smsAi.providerAttemptFailed", metadata);
+        },
       }
     : {}),
 });
+
+const providerRequestDiagnostics: SmsAiProviderDiagnostics | undefined =
+  isProviderResponseOutputCaptureEnabled
+    ? {
+        onRequestInput: (smsMessages): void => {
+          console.warn("[parse-sms] smsAi.providerRequestInput", {
+            smsMessages,
+          });
+        },
+      }
+    : undefined;
 
 const parseSmsHandler = createParseSmsHandler({
   authenticate: async (request) => {
@@ -167,7 +184,8 @@ const parseSmsHandler = createParseSmsHandler({
       requestId,
       candidateFingerprints
     ),
-  executeProvider: (input) => executeSmsAiProvider(smsAiProvider, input),
+  executeProvider: (input) =>
+    executeSmsAiProvider(smsAiProvider, input, providerRequestDiagnostics),
   completeWork: (input) => completeSmsAiWork(createServiceClient(), input),
   releaseWork: (requestId, decisionCode) =>
     releaseSmsAiWork(createServiceClient(), requestId, decisionCode),

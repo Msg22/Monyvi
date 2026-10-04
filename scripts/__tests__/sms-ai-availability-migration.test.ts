@@ -1,15 +1,15 @@
 /**
- * MIG-078 RED-phase contract test (database-reviewer).
+ * MIG-080 RED-phase contract test (database-reviewer).
  *
  * Asserts the additive staging repair migration
- * `supabase/migrations/078_restore_sms_ai_get_availability.sql`
+ * `supabase/migrations/080_restore_sms_ai_get_availability.sql`
  * restores exactly the authoritative `sms_ai_get_availability`
  * definition from immutable `061_sms_ai_safeguards.sql`
  * (function lines 542-713 plus revoke/grant lines 918-923)
  * with no unrelated DDL or data changes, keeping the
  * service_role-only guard, locked search_path, and privileges.
  *
- * TDD RED: this test MUST fail while 078 is absent, then pass
+ * TDD RED: this test MUST fail while 080 is absent, then pass
  * unchanged once the GREEN-phase migration is added.
  *
  * Run: npx --no-install tsx --test scripts/__tests__/sms-ai-availability-migration.test.ts
@@ -23,9 +23,9 @@ import { fileURLToPath } from "node:url";
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const MIGRATIONS_DIR = join(repoRoot, "supabase", "migrations");
 const SOURCE_061 = join(MIGRATIONS_DIR, "061_sms_ai_safeguards.sql");
-const REPAIR_078 = join(
+const REPAIR_080 = join(
   MIGRATIONS_DIR,
-  "078_restore_sms_ai_get_availability.sql"
+  "080_restore_sms_ai_get_availability.sql"
 );
 
 // Immutable authoritative line ranges in 061 (1-indexed, inclusive).
@@ -68,12 +68,12 @@ function readAuthoritativeBlocks(): {
   };
 }
 
-describe("MIG-078 sms_ai_get_availability repair contract", (): void => {
-  it("repair migration 078 exists", (): void => {
+describe("MIG-080 sms_ai_get_availability repair contract", (): void => {
+  it("repair migration 080 exists", (): void => {
     assert.equal(
-      existsSync(REPAIR_078),
+      existsSync(REPAIR_080),
       true,
-      `missing additive repair migration: ${REPAIR_078}`
+      `missing additive repair migration: ${REPAIR_080}`
     );
   });
 
@@ -89,27 +89,27 @@ describe("MIG-078 sms_ai_get_availability repair contract", (): void => {
     assert.match(grantsBlock, /TO service_role;/);
   });
 
-  it("078 contains exactly the authoritative function plus revoke/grant", (): void => {
+  it("080 contains exactly the authoritative function plus revoke/grant", (): void => {
     const { functionBlock, grantsBlock } = readAuthoritativeBlocks();
     const expected = canonical(`${functionBlock}\n${grantsBlock}`);
-    const actual = canonical(readFileSync(REPAIR_078, "utf8"));
+    const actual = canonical(readFileSync(REPAIR_080, "utf8"));
     assert.equal(
       actual,
       expected,
-      "078 must restore exactly 061 lines 542-713 plus 918-923, nothing else"
+      "080 must restore exactly 061 lines 542-713 plus 918-923, nothing else"
     );
   });
 
-  it("078 keeps the service_role guard, locked search_path, and definer", (): void => {
-    const actual = readFileSync(REPAIR_078, "utf8");
+  it("080 keeps the service_role guard, locked search_path, and definer", (): void => {
+    const actual = readFileSync(REPAIR_080, "utf8");
     assert.match(actual, /SECURITY DEFINER/);
     assert.match(actual, /SET search_path TO 'public', 'pg_temp'/);
     assert.match(actual, /sms_ai_get_availability is service-role only/);
     assert.match(actual, /RAISE EXCEPTION 'Invalid SMS AI availability input'/);
   });
 
-  it("078 denies PUBLIC/anon/authenticated and grants service_role only", (): void => {
-    const actual = readFileSync(REPAIR_078, "utf8");
+  it("080 denies PUBLIC/anon/authenticated and grants service_role only", (): void => {
+    const actual = readFileSync(REPAIR_080, "utf8");
     assert.ok(
       actual.includes("REVOKE ALL ON FUNCTION public.sms_ai_get_availability(")
     );
@@ -126,8 +126,8 @@ describe("MIG-078 sms_ai_get_availability repair contract", (): void => {
     assert.equal(revokeCount, 1);
   });
 
-  it("078 carries no unrelated DDL or data changes", (): void => {
-    const code = readFileSync(REPAIR_078, "utf8")
+  it("080 carries no unrelated DDL or data changes", (): void => {
+    const code = readFileSync(REPAIR_080, "utf8")
       .split("\n")
       .filter((line) => !line.trimStart().startsWith("--"))
       .join("\n");

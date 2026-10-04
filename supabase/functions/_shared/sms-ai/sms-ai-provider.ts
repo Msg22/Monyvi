@@ -26,12 +26,15 @@ export interface SmsProviderExecutionResult {
   readonly completionStatus: SmsProviderCompletionStatusAtEdge;
   readonly isResponseSchemaValid: boolean;
   readonly transactions: readonly ParseSmsProviderTransaction[];
+  readonly invalidMessageIds?: readonly string[];
+  readonly hasUncorrelatedInvalidEntries?: boolean;
 }
 
 export interface ExecuteSmsProviderInput {
   readonly messages: readonly ParseSmsMessage[];
   readonly categories: string;
   readonly supportedCurrencies: readonly string[];
+  readonly signal?: AbortSignal;
 }
 
 export type SmsAiProviderMessageRole = "system" | "user";
@@ -44,6 +47,28 @@ export interface SmsAiProviderMessage {
 export interface SmsAiProviderRequest {
   readonly messages: readonly SmsAiProviderMessage[];
   readonly responseSchema: Readonly<Record<string, unknown>>;
+  readonly signal?: AbortSignal;
+}
+
+export class SmsAiProviderCallerAbortError extends Error {
+  constructor() {
+    super("SMS AI provider request cancelled by caller");
+    this.name = "SmsAiProviderCallerAbortError";
+  }
+}
+
+export function isSmsAiProviderCallerAbortError(
+  error: unknown
+): error is SmsAiProviderCallerAbortError {
+  return error instanceof SmsAiProviderCallerAbortError;
+}
+
+export function throwIfSmsAiProviderCallerAborted(
+  signal: AbortSignal | undefined
+): void {
+  if (signal?.aborted) {
+    throw new SmsAiProviderCallerAbortError();
+  }
 }
 
 export interface SmsAiProviderOperationalMetadata {

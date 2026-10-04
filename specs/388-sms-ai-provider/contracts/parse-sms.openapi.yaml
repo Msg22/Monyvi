@@ -193,6 +193,10 @@ components:
       properties:
         transactions:
           type: array
+          description: >-
+            Independently validated transaction rows only. A semantically invalid
+            peer row in an otherwise valid complete provider response does not
+            discard valid uniquely identified submitted peers.
           items:
             $ref: "#/components/schemas/ParsedTransaction"
         completionStatus:
@@ -208,14 +212,20 @@ components:
             type: string
         unresolvedFingerprints:
           type: array
+          description: >-
+            Submitted candidate fingerprints that remain unresolved, including
+            candidates correlated to rejected/duplicate provider rows and
+            omission-uncertain candidates after an unknown returned identity.
+            These are not durable verified-negative outcomes.
           items:
             type: string
         retryRequestMode:
           type: string
           enum: [fresh]
           description: >
-            Optional. Present on partial successful responses when unresolved
-            candidates must be retried with a fresh request identity.
+            Optional. Present on successful responses when unresolved candidates
+            must be retried with a fresh request identity, including candidate-
+            level semantic rejection in an otherwise complete provider response.
     Refusal:
       type: object
       additionalProperties: true

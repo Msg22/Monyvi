@@ -525,3 +525,23 @@ test("Edge entry point uses the service-role safeguard adapter", () => {
   assert.match(source, /completeSmsAiWork\(createServiceClient\(\),/);
   assert.match(source, /releaseSmsAiWork\(createServiceClient\(\),/);
 });
+
+test("Edge entry point resolves the shared fail-closed DeepInfra config without Gemini", () => {
+  const source = readFileSync(
+    new URL("../enrich-sms-categories/index.ts", import.meta.url),
+    "utf8"
+  );
+  const denoConfig = JSON.parse(
+    readFileSync(
+      new URL("../enrich-sms-categories/deno.json", import.meta.url),
+      "utf8"
+    )
+  ) as { readonly imports: Readonly<Record<string, string>> };
+
+  assert.match(source, /readSmsAiProviderConfig\(Deno\.env\.get\)/);
+  assert.match(source, /DeepInfraSmsCategoryProvider/);
+  assert.match(source, /isProviderConfigured:\s*smsCategoryProvider !== null/);
+  assert.doesNotMatch(source, /GoogleGenAI|GEMINI_API_KEY|gemini-2\.5-flash-lite/);
+  assert.equal(denoConfig.imports.zod, "npm:zod@4.4.3");
+  assert.equal("@google/genai" in denoConfig.imports, false);
+});
