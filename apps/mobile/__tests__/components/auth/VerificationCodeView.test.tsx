@@ -43,6 +43,28 @@ jest.mock("react-i18next", () => ({
 }));
 
 describe("VerificationCodeView", () => {
+  it("uses generic ten-minute expiry copy when the device has no known send timestamp", () => {
+    render(
+      <VerificationCodeView
+        email="mohamed@example.com"
+        code=""
+        verificationError={null}
+        verificationExpiresAtMs={null}
+        resendAvailableAtMs={null}
+        resendLimitUntilMs={null}
+        isVerifying={false}
+        isResending={false}
+        onCodeChange={jest.fn()}
+        onResend={jest.fn()}
+        onBack={jest.fn()}
+      />
+    );
+
+    expect(
+      screen.getByText("verification_code_expires_generic")
+    ).toBeOnTheScreen();
+  });
+
   it("renders six visual cells backed by one paste-capable OTP input", () => {
     const onCodeChange = jest.fn();
 
