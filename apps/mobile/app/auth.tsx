@@ -12,6 +12,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { FormView } from "@/components/auth/FormView";
 import { ResetSentView } from "@/components/auth/ResetSentView";
 import { VerificationCodeView } from "@/components/auth/VerificationCodeView";
+import { VerificationProcessingView } from "@/components/auth/VerificationProcessingView";
 import { VerificationSuccessView } from "@/components/auth/VerificationSuccessView";
 import { LanguageSwitcherPill } from "@/components/onboarding/LanguageSwitcherPill";
 import { MonyviLogo } from "@/components/ui/MonyviLogo";
@@ -139,6 +140,9 @@ export default function AuthScreen(): React.JSX.Element {
                 onEmailFocus={() => scrollToField("email")}
                 onPasswordFocus={() => scrollToField("password")}
               />
+            ) : controller.screenState === "verificationCode" &&
+              controller.pendingAction === "verificationCode" ? (
+              <VerificationProcessingView />
             ) : controller.screenState === "verificationCode" ? (
               <VerificationCodeView
                 email={controller.pendingEmail}
