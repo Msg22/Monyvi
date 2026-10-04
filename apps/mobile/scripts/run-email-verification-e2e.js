@@ -3,7 +3,6 @@ const { join } = require("node:path");
 const { getE2eSeedConfig } = require("./e2e-seed");
 
 const mobileRoot = join(__dirname, "..");
-const authRedirectUrl = "monyvi://auth-callback";
 const defaultMailpitBaseUrl = "http://127.0.0.1:54324";
 const defaultEmailTimeoutMs = 30_000;
 const defaultPollIntervalMs = 500;
@@ -23,14 +22,14 @@ function buildVerificationEmail(baseEmail, suffix = "local") {
   return `verification-${safeSuffix}-${localPart}@${domain}`;
 }
 
+function ensureTrailingSlash(value) {
+  return value.endsWith("/") ? value : `${value}/`;
+}
+
 function getMailpitLatestMessageUrl(mailpitBaseUrl, email) {
   const url = new URL("/view/latest.html", ensureTrailingSlash(mailpitBaseUrl));
   url.searchParams.set("query", `to:${email}`);
   return url.toString();
-}
-
-function ensureTrailingSlash(value) {
-  return value.endsWith("/") ? value : `${value}/`;
 }
 
 function decodeHtmlAttribute(value) {
@@ -42,18 +41,16 @@ function decodeHtmlAttribute(value) {
     .replace(/&gt;/gi, ">");
 }
 
-function extractConfirmationUrl(html) {
-  const hrefMatch = html.match(
-    /href\s*=\s*["']([^"']*\/auth\/v1\/verify\?[^"']+)["']/i
+function extractVerificationCode(html) {
+  const attributeMatch = html.match(
+    /data-verification-code\s*=\s*["'](\d{6})["']/i
   );
-  if (hrefMatch?.[1]) {
-    return decodeHtmlAttribute(hrefMatch[1]);
+  if (attributeMatch?.[1]) {
+    return attributeMatch[1];
   }
 
-  const plainMatch = html.match(
-    /(https?:\/\/[^\s"'<>]+\/auth\/v1\/verify\?[^\s"'<>]+)/i
-  );
-  return plainMatch?.[1] ? decodeHtmlAttribute(plainMatch[1]) : null;
+  const visibleMatch = decodeHtmlAttribute(html).match(/>\s*(\d{6})\s*</);
+  return visibleMatch?.[1] ?? null;
 }
 
 function getPositiveInteger(value, fallback) {
@@ -65,7 +62,7 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function waitForConfirmationUrl(
+async function waitForVerificationCode(
   email,
   env = process.env,
   fetchImpl = fetch
@@ -87,9 +84,9 @@ async function waitForConfirmationUrl(
       const response = await fetchImpl(latestMessageUrl);
       if (response.ok) {
         const html = await response.text();
-        const confirmationUrl = extractConfirmationUrl(html);
-        if (confirmationUrl) {
-          return confirmationUrl;
+        const code = extractVerificationCode(html);
+        if (code) {
+          return code;
         }
       }
     } catch {
@@ -100,29 +97,8 @@ async function waitForConfirmationUrl(
   }
 
   throw new Error(
-    `Timed out waiting for a local verification email for ${email}.`
+    `Timed out waiting for a local verification code for ${email}.`
   );
-}
-
-async function resolveConfirmationRedirect(
-  confirmationUrl,
-  fetchImpl = fetch
-) {
-  const response = await fetchImpl(confirmationUrl, { redirect: "manual" });
-  const location = response.headers.get("location");
-
-  if (
-    response.status < 300 ||
-    response.status >= 400 ||
-    !location ||
-    location.split(/[?#]/, 1)[0] !== authRedirectUrl
-  ) {
-    throw new Error(
-      "Local confirmation did not redirect to the canonical Monyvi auth callback."
-    );
-  }
-
-  return location;
 }
 
 function runMaestroFlow(flow, extraEnv = {}) {
@@ -155,10 +131,7 @@ function getVerificationCredentials(env = process.env) {
     env.MAESTRO_E2E_VERIFICATION_PASSWORD ??
     env.MAESTRO_E2E_PASSWORD ??
     config.password;
-  const generatedSuffix = [
-    env.GITHUB_RUN_ID,
-    Date.now().toString(36),
-  ]
+  const generatedSuffix = [env.GITHUB_RUN_ID, Date.now().toString(36)]
     .filter(Boolean)
     .join("-");
   const email =
@@ -173,7 +146,9 @@ function getVerificationCredentials(env = process.env) {
 
 async function main() {
   if ((process.env.E2E_SUPABASE_MODE ?? "local") !== "local") {
-    throw new Error("Email verification E2E is supported only with local Supabase.");
+    throw new Error(
+      "Email verification E2E is supported only with local Supabase."
+    );
   }
 
   const { email, password } = getVerificationCredentials();
@@ -192,13 +167,12 @@ async function main() {
     E2E_CLEAR_APP_STATE: "1",
   });
 
-  const confirmationUrl = await waitForConfirmationUrl(email);
-  const callbackUrl = await resolveConfirmationRedirect(confirmationUrl);
+  const verificationCode = await waitForVerificationCode(email);
 
   runMaestroFlow("auth/email-verification-confirm.yaml", {
     ...sharedEnv,
     E2E_CLEAR_APP_STATE: "0",
-    MAESTRO_E2E_VERIFICATION_CALLBACK: callbackUrl,
+    MAESTRO_E2E_VERIFICATION_CODE: verificationCode,
   });
 
   runMaestroFlow("auth/email-verification-invalid.yaml", {
@@ -220,8 +194,7 @@ if (require.main === module) {
 
 module.exports = {
   buildVerificationEmail,
-  extractConfirmationUrl,
+  extractVerificationCode,
   getMailpitLatestMessageUrl,
-  resolveConfirmationRedirect,
-  waitForConfirmationUrl,
+  waitForVerificationCode,
 };
