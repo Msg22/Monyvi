@@ -269,6 +269,7 @@ export function useAuthScreenController(): AuthScreenController {
         }
 
         lastSubmittedCodeRef.current = null;
+        setVerificationCode("");
         if (result.errorCode === "otp_expired") {
           const locallyExpired =
             verificationExpiresAtMs !== null &&
@@ -286,6 +287,7 @@ export function useAuthScreenController(): AuthScreenController {
         setVerificationError(t("verification_code_failed"));
       } catch {
         lastSubmittedCodeRef.current = null;
+        setVerificationCode("");
         setVerificationError(t("verification_code_failed"));
       } finally {
         finishRequest();
