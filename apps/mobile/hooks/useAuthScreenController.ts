@@ -37,6 +37,7 @@ interface AuthScreenController {
   readonly verificationError: string | null;
   readonly verificationExpiresAtMs: number | null;
   readonly resendAvailableAtMs: number | null;
+  readonly resendLimitUntilMs: number | null;
   readonly handleOAuth: (provider: OAuthProvider) => Promise<void>;
   readonly handleEmailSubmit: (
     email: string,
@@ -86,6 +87,9 @@ export function useAuthScreenController(): AuthScreenController {
   const [resendAvailableAtMs, setResendAvailableAtMs] = useState<number | null>(
     null
   );
+  const [resendLimitUntilMs, setResendLimitUntilMs] = useState<number | null>(
+    null
+  );
   const [verificationFlowActive, setVerificationFlowActive] = useState(false);
 
   useDeferredRouterReplace({
@@ -120,6 +124,7 @@ export function useAuthScreenController(): AuthScreenController {
     setVerificationError(null);
     setVerificationExpiresAtMs(null);
     setResendAvailableAtMs(null);
+    setResendLimitUntilMs(null);
   }, []);
 
   const enterVerificationCodeState = useCallback(
@@ -325,6 +330,7 @@ export function useAuthScreenController(): AuthScreenController {
         setVerificationError(null);
         setVerificationExpiresAtMs(result.verificationExpiresAtMs);
         setResendAvailableAtMs(result.resendAvailableAtMs);
+        setResendLimitUntilMs(null);
         showToast({ type: "success", title: t("verification_email_sent") });
         return;
       }
@@ -338,9 +344,8 @@ export function useAuthScreenController(): AuthScreenController {
       }
 
       if (result.status === "limit") {
-        if (result.retryAtMs !== null) {
-          setResendAvailableAtMs(result.retryAtMs);
-        }
+        setResendAvailableAtMs(null);
+        setResendLimitUntilMs(result.retryAtMs);
         showToast({ type: "info", title: t("resend_limit_reached") });
         return;
       }
@@ -382,6 +387,7 @@ export function useAuthScreenController(): AuthScreenController {
     verificationError,
     verificationExpiresAtMs,
     resendAvailableAtMs,
+    resendLimitUntilMs,
     handleOAuth,
     handleEmailSubmit,
     handleForgotPassword,
