@@ -50,6 +50,9 @@ function buildHostedAuthSmtpPayload(config) {
   return {
     external_email_enabled: true,
     mailer_autoconfirm: false,
+    mailer_otp_exp: 600,
+    mailer_otp_length: 6,
+    smtp_max_frequency: 120,
     smtp_admin_email: config.senderEmail,
     smtp_host: config.smtpHost,
     smtp_port: config.smtpPort,
