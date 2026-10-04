@@ -108,7 +108,8 @@
     "e2e:email-verification:local": "npm run e2e:email-verification:local -w @monyvi/mobile",
     "test:sms-ai-provider": "tsx --test supabase/functions/_shared/sms-ai/sms-ai-provider-config.test.ts supabase/functions/_shared/sms-ai/sms-ai-prompt.test.ts supabase/functions/_shared/sms-ai/providers/deepinfra-sms-provider.test.ts supabase/functions/_shared/sms-ai/sms-ai-provider-executor.test.ts supabase/functions/_shared/sms-ai/parse-sms-deepinfra.integration.test.ts supabase/functions/_shared/sms-ai/sms-ai-provider-factory.test.ts supabase/functions/_shared/sms-ai/parse-sms-openapi-contract.test.ts",
     "test:sms-provider-live-evaluator": "tsx --test scripts/sms-provider-evaluation/*.test.ts scripts/evaluate-sms-provider-live.test.ts",
-    "sms:provider:evaluate": "tsx scripts/evaluate-sms-provider-live.ts"
+    "sms:provider:evaluate": "tsx scripts/evaluate-sms-provider-live.ts",
+    "fn:deploy:email-verification-resend": "npx supabase functions deploy email-verification-resend --no-verify-jwt --project-ref yulbcndyssdjicbpmlrk"
   },
   "dependencies": {
     "@nozbe/watermelondb": "^0.28.0"
