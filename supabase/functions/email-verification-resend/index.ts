@@ -132,9 +132,26 @@ async function releaseResend(input: {
   return data === true;
 }
 
+function getLimiterPepper(): string {
+  const configured = Deno.env.get("EMAIL_VERIFICATION_LIMITER_PEPPER")?.trim();
+  if (configured) {
+    return configured;
+  }
+
+  const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+  if (supabaseUrl.startsWith("http://")) {
+    // Local-only deterministic fallback so Supabase CLI/manual QA works without
+    // committing a secret. Hosted deployments use HTTPS and therefore require
+    // EMAIL_VERIFICATION_LIMITER_PEPPER.
+    return "monyvi-local-email-verification-limiter-v1";
+  }
+
+  return "";
+}
+
 Deno.serve(async (request: Request): Promise<Response> => {
   try {
-    const pepper = Deno.env.get("EMAIL_VERIFICATION_LIMITER_PEPPER") ?? "";
+    const pepper = getLimiterPepper();
     return await handleEmailVerificationResendRequest(request, {
       pepper,
       now: () => new Date(),
