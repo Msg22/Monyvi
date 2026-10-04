@@ -9,15 +9,11 @@ import { useTheme } from "@/context/ThemeContext";
 interface VerificationSuccessViewProps {
   readonly email?: string;
   readonly onContinue: () => void;
-  readonly onPrivacyPress?: () => void;
-  readonly onTermsPress?: () => void;
 }
 
 export function VerificationSuccessView({
   email,
   onContinue,
-  onPrivacyPress,
-  onTermsPress,
 }: VerificationSuccessViewProps): React.JSX.Element {
   const { t } = useTranslation("auth");
   const { fontFamily } = useLocale();
@@ -106,35 +102,19 @@ export function VerificationSuccessView({
           </Text>
         </View>
         <View className="flex-row items-center gap-3.5">
-          <Pressable
-            accessibilityRole="link"
-            accessibilityLabel={t("privacy")}
-            hitSlop={8}
-            onPress={onPrivacyPress}
-            disabled={!onPrivacyPress}
+          <Text
+            className="text-[11.5px] text-nileGreen-700 dark:text-nileGreen-300"
+            style={{ fontFamily: fontFamily.semiBold }}
           >
-            <Text
-              className="text-[11.5px] text-nileGreen-700 dark:text-nileGreen-300"
-              style={{ fontFamily: fontFamily.semiBold }}
-            >
-              {t("privacy")}
-            </Text>
-          </Pressable>
+            {t("privacy")}
+          </Text>
           <View className="h-3 w-px bg-slate-200 dark:bg-slate-700" />
-          <Pressable
-            accessibilityRole="link"
-            accessibilityLabel={t("terms")}
-            hitSlop={8}
-            onPress={onTermsPress}
-            disabled={!onTermsPress}
+          <Text
+            className="text-[11.5px] text-nileGreen-700 dark:text-nileGreen-300"
+            style={{ fontFamily: fontFamily.semiBold }}
           >
-            <Text
-              className="text-[11.5px] text-nileGreen-700 dark:text-nileGreen-300"
-              style={{ fontFamily: fontFamily.semiBold }}
-            >
-              {t("terms")}
-            </Text>
-          </Pressable>
+            {t("terms")}
+          </Text>
         </View>
       </View>
     </View>
