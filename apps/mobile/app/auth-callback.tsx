@@ -103,9 +103,13 @@ function isPasswordRecoveryLink(
 function AuthCallbackVerificationSuccess({
   email,
   onContinue,
+  onPrivacyPress,
+  onTermsPress,
 }: {
   readonly email?: string;
   readonly onContinue: () => void;
+  readonly onPrivacyPress: () => void;
+  readonly onTermsPress: () => void;
 }): React.JSX.Element {
   const insets = useSafeAreaInsets();
   const { isDark } = useTheme();
@@ -139,7 +143,12 @@ function AuthCallbackVerificationSuccess({
           <LanguageSwitcherPill />
           <MonyviLogo width={114} height={34} />
         </View>
-        <VerificationSuccessView email={email} onContinue={onContinue} />
+        <VerificationSuccessView
+          email={email}
+          onContinue={onContinue}
+          onPrivacyPress={onPrivacyPress}
+          onTermsPress={onTermsPress}
+        />
       </ScrollView>
     </View>
   );
@@ -278,6 +287,8 @@ export default function AuthCallbackScreen(): React.JSX.Element {
         onContinue={() => {
           router.replace("/");
         }}
+        onPrivacyPress={() => router.push("/privacy-policy")}
+        onTermsPress={() => router.push("/terms")}
       />
     );
   }
