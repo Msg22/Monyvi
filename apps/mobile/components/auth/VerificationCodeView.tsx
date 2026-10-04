@@ -19,6 +19,7 @@ interface VerificationCodeViewProps {
   readonly verificationError: string | null;
   readonly verificationExpiresAtMs: number | null;
   readonly resendAvailableAtMs: number | null;
+  readonly resendLimitUntilMs: number | null;
   readonly isVerifying: boolean;
   readonly isResending: boolean;
   readonly onCodeChange: (value: string) => void;
@@ -39,6 +40,7 @@ export function VerificationCodeView({
   verificationError,
   verificationExpiresAtMs,
   resendAvailableAtMs,
+  resendLimitUntilMs,
   isVerifying,
   isResending,
   onCodeChange,
@@ -70,13 +72,17 @@ export function VerificationCodeView({
   const cooldownRemaining =
     resendAvailableAtMs === null ? 0 : resendAvailableAtMs - nowMs;
   const isCoolingDown = cooldownRemaining > 0;
+  const isLimitActive =
+    resendLimitUntilMs !== null && resendLimitUntilMs > nowMs;
   const resendLabel = isResending
     ? t("resending_email")
-    : isCoolingDown
-      ? t("resend_in", { time: formatCountdown(cooldownRemaining) })
-      : t("resend_email");
+    : isLimitActive
+      ? t("resend_try_later")
+      : isCoolingDown
+        ? t("resend_in", { time: formatCountdown(cooldownRemaining) })
+        : t("resend_email");
   const actionsDisabled = isVerifying || isResending;
-  const resendDisabled = actionsDisabled || isCoolingDown;
+  const resendDisabled = actionsDisabled || isCoolingDown || isLimitActive;
   const accentColor = isDark ? palette.nileGreen[400] : palette.nileGreen[600];
   const secondaryTextColor = isDark ? palette.slate[400] : palette.slate[500];
 
