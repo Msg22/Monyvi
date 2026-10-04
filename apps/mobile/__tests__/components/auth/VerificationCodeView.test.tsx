@@ -53,6 +53,7 @@ describe("VerificationCodeView", () => {
         verificationError={null}
         verificationExpiresAtMs={Date.now() + 10 * 60_000}
         resendAvailableAtMs={Date.now() + 2 * 60_000}
+        resendLimitUntilMs={null}
         isVerifying={false}
         isResending={false}
         onCodeChange={onCodeChange}
