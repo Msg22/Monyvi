@@ -16,7 +16,10 @@ import {
   signUpWithEmail,
 } from "@/services/auth-service";
 import {
-  resendVerificationEmail,
+  registerInitialVerificationSend,
+  resendVerificationCode,
+} from "@/services/email-verification-resend-service";
+import {
   verifyEmailVerificationCode,
   type OAuthProvider,
 } from "@/services/supabase";
@@ -178,6 +181,9 @@ export function useAuthScreenController(): AuthScreenController {
 
         if (result.needsVerification) {
           enterVerificationCodeState(normalizedEmail, mode === "signUp");
+          if (mode === "signUp") {
+            void registerInitialVerificationSend(normalizedEmail);
+          }
           return;
         }
 
@@ -311,19 +317,35 @@ export function useAuthScreenController(): AuthScreenController {
     }
 
     try {
-      const result = await resendVerificationEmail(pendingEmail);
-      if (result.error) {
-        showToast({ type: "error", title: result.error.message });
+      const result = await resendVerificationCode(pendingEmail);
+
+      if (result.status === "sent") {
+        lastSubmittedCodeRef.current = null;
+        setVerificationCode("");
+        setVerificationError(null);
+        setVerificationExpiresAtMs(result.verificationExpiresAtMs);
+        setResendAvailableAtMs(result.resendAvailableAtMs);
+        showToast({ type: "success", title: t("verification_email_sent") });
         return;
       }
 
-      const now = Date.now();
-      lastSubmittedCodeRef.current = null;
-      setVerificationCode("");
-      setVerificationError(null);
-      setVerificationExpiresAtMs(now + VERIFICATION_CODE_TTL_MS);
-      setResendAvailableAtMs(now + VERIFICATION_RESEND_COOLDOWN_MS);
-      showToast({ type: "success", title: t("verification_email_sent") });
+      if (result.status === "cooldown") {
+        if (result.retryAtMs !== null) {
+          setResendAvailableAtMs(result.retryAtMs);
+        }
+        showToast({ type: "info", title: t("resend_cooldown") });
+        return;
+      }
+
+      if (result.status === "limit") {
+        if (result.retryAtMs !== null) {
+          setResendAvailableAtMs(result.retryAtMs);
+        }
+        showToast({ type: "info", title: t("resend_limit_reached") });
+        return;
+      }
+
+      showToast({ type: "error", title: t("resend_verification_failed") });
     } catch {
       showToast({ type: "error", title: t("resend_verification_failed") });
     } finally {
