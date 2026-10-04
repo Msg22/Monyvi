@@ -527,7 +527,8 @@ describe("useAuthScreenController", () => {
       await result.current.handleResendVerification();
     });
 
-    expect(result.current.resendAvailableAtMs).toBe(
+    expect(result.current.resendAvailableAtMs).toBeNull();
+    expect(result.current.resendLimitUntilMs).toBe(
       Date.parse("2026-10-05T10:00:00.000Z")
     );
     expect(mockShowToast).toHaveBeenCalledWith({
