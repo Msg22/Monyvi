@@ -1,7 +1,10 @@
 import { fireEvent, render, screen } from "@testing-library/react-native";
 import React from "react";
 
-import { VerificationCodeView } from "@/components/auth/VerificationCodeView";
+import {
+  VerificationCodeView,
+  formatVerificationDigit,
+} from "@/components/auth/VerificationCodeView";
 
 jest.mock("@/context/ThemeContext", () => ({
   useTheme: (): { isDark: boolean } => ({ isDark: false }),
@@ -43,6 +46,14 @@ jest.mock("react-i18next", () => ({
 }));
 
 describe("VerificationCodeView", () => {
+  it("renders Arabic-Indic display digits without changing the canonical OTP", () => {
+    expect(formatVerificationDigit("1", "ar")).toBe("١");
+    expect(formatVerificationDigit("6", "ar")).toBe("٦");
+    expect(formatVerificationDigit("1", "en")).toBe("1");
+    expect(formatVerificationDigit(undefined, "ar")).toBe("");
+  });
+
+
   it("uses generic ten-minute expiry copy when the device has no known send timestamp", () => {
     render(
       <VerificationCodeView
