@@ -62,13 +62,7 @@ describe("VerificationCodeView", () => {
       />
     );
 
-    for (let index = 0; index < 6; index += 1) {
-      expect(
-        screen.getByTestId(`verification-code-cell-${index}`, {
-          includeHiddenElements: true,
-        })
-      ).toBeOnTheScreen();
-    }
+    expect(screen.getByTestId("verification-code-cells")).toBeOnTheScreen();
     expect(screen.getByTestId("verification-code-input")).toHaveProp(
       "maxLength",
       6
