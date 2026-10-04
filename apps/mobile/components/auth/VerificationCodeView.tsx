@@ -25,6 +25,8 @@ interface VerificationCodeViewProps {
   readonly onCodeChange: (value: string) => void;
   readonly onResend: () => Promise<void>;
   readonly onBack: () => void;
+  readonly onPrivacyPress: () => void;
+  readonly onTermsPress: () => void;
 }
 
 function formatCountdown(remainingMs: number): string {
@@ -46,6 +48,8 @@ export function VerificationCodeView({
   onCodeChange,
   onResend,
   onBack,
+  onPrivacyPress,
+  onTermsPress,
 }: VerificationCodeViewProps): React.JSX.Element {
   const { t } = useTranslation("auth");
   const { fontFamily, isRTL } = useLocale();
@@ -257,21 +261,33 @@ export function VerificationCodeView({
           </Text>
         </View>
         <View className="flex-row items-center gap-3.5">
-          <Text
+          <Pressable
             accessibilityRole="link"
-            className="text-[11.5px] text-nileGreen-700 dark:text-nileGreen-300"
-            style={{ fontFamily: fontFamily.semiBold }}
+            accessibilityLabel={t("privacy")}
+            hitSlop={8}
+            onPress={onPrivacyPress}
           >
-            {t("privacy")}
-          </Text>
+            <Text
+              className="text-[11.5px] text-nileGreen-700 dark:text-nileGreen-300"
+              style={{ fontFamily: fontFamily.semiBold }}
+            >
+              {t("privacy")}
+            </Text>
+          </Pressable>
           <View className="h-3 w-px bg-slate-200 dark:bg-slate-700" />
-          <Text
+          <Pressable
             accessibilityRole="link"
-            className="text-[11.5px] text-nileGreen-700 dark:text-nileGreen-300"
-            style={{ fontFamily: fontFamily.semiBold }}
+            accessibilityLabel={t("terms")}
+            hitSlop={8}
+            onPress={onTermsPress}
           >
-            {t("terms")}
-          </Text>
+            <Text
+              className="text-[11.5px] text-nileGreen-700 dark:text-nileGreen-300"
+              style={{ fontFamily: fontFamily.semiBold }}
+            >
+              {t("terms")}
+            </Text>
+          </Pressable>
         </View>
       </View>
     </View>
