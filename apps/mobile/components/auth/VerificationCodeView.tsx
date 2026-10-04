@@ -174,6 +174,8 @@ export function VerificationCodeView({
               color: "transparent",
               backgroundColor: "transparent",
               opacity: 0.02,
+              writingDirection: "ltr",
+              textAlign: "left",
             }}
             selectionColor="transparent"
             caretHidden
