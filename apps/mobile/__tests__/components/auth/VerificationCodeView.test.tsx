@@ -57,8 +57,6 @@ describe("VerificationCodeView", () => {
         onCodeChange={jest.fn()}
         onResend={jest.fn()}
         onBack={jest.fn()}
-        onPrivacyPress={jest.fn()}
-        onTermsPress={jest.fn()}
       />
     );
 
@@ -83,8 +81,6 @@ describe("VerificationCodeView", () => {
         onCodeChange={onCodeChange}
         onResend={jest.fn()}
         onBack={jest.fn()}
-        onPrivacyPress={jest.fn()}
-        onTermsPress={jest.fn()}
       />
     );
 
