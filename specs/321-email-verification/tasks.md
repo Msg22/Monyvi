@@ -1,234 +1,186 @@
 # Tasks: Complete Email Verification
 
-**Input**: Design documents from `/specs/321-email-verification/`  
-**Prerequisites**: `spec.md`, `plan.md`, `research.md`, `data-model.md`,
-`contracts/email-verification-contract.md`, approved mockup bindings
+**Revision**: Code-first plan approved 2026-10-04  
+**Branch**: `codex/issue321-email-verification`  
+**Implementation status**: PAUSED pending remaining mockup approval/binding
 
-**Tests**: Required. #321 follows strict TDD for production-code changes.
+## Historical work retained
 
-**Organization**: Tasks are grouped by user story. Shared auth-callback and
-configuration work that blocks more than one story is foundational.
+The earlier #321 implementation produced valid foundations that remain in PR
+#322:
 
-## Format: `[ID] [P?] [Story] Description`
+- [x] H001 Shared callback/session completion
+- [x] H002 Canonical callback validation and secret-safe failures
+- [x] H003 Signup/resend redirect contract
+- [x] H004 Local confirmation enabled
+- [x] H005 Returning `email_not_confirmed` recovery
+- [x] H006 OAuth/password-reset regression coverage
+- [x] H007 Invalid callback hardening
+- [x] H008 Local email verification E2E infrastructure
+- [x] H009 Hosted custom SMTP configuration tooling/runbook
+- [x] H010 User reported hosted custom SMTP configured and a real signup email received
+- [x] H011 User installed the Monyvi Confirm Signup subject/template in hosted Supabase
 
-- **[P]**: Safe to run in parallel because it touches independent files and has
-  no dependency on an incomplete task.
-- **[Story]**: User story from `spec.md`.
-- Every implementation task names the exact repository path.
-
----
-
-## Phase 1: Planning/Setup Gate
-
-**Purpose**: Reconfirm immutable planning authority immediately before coding.
-
-- [x] T001 Re-fetch issue #321, current branch head, issue #20/active auth PR overlap, and approved mockup-binding state before the first production mutation; record any conflict/blocker in `specs/321-email-verification/tasks.md` — PASS at `77e2982f936f85d5bdb5cda14e3f7753a309442f`: main unchanged at `aa32edf748da89e8b16d584e3e78f61c5313d191`, issue #20 open with no active implementation PR, no overlapping open auth/signup PR, approved bindings unchanged
-- [x] T002 Verify `specs/321-email-verification/mockups/verification-en-light.binding.md`, `verification-en-dark.binding.md`, and `verification-ar-light.binding.md` with `scripts/verify-mockup-binding.js` and record the exact verifier result/head in `specs/321-email-verification/tasks.md` — PASS at `77e2982f936f85d5bdb5cda14e3f7753a309442f`: exact branch image/metadata/combined SHA-256 values and approval fields satisfy the canonical verifier logic for all three sidecars; the GitHub-only execution environment has no repository command runner, so the Node CLI is re-required by T041 in the implementation runner before completion
-
-**Checkpoint**: Implementation may start only when T001-T002 remain Green.
+The old link-first verification screen/E2E assumptions are superseded by the
+tasks below. Do not mark old visual/link-first completion as final #321
+evidence.
 
 ---
 
-## Phase 2: Foundational Auth Callback + Redirect Contract
+## Phase R0 — Mockup approval gate
 
-**Purpose**: Establish one secure callback/session primitive and the canonical
-verification redirect used by signup/resend.
+- [x] R001 Approve revised English-light verification code screen
+- [ ] R002 Approve English-dark verification code screen
+- [ ] R003 Approve Arabic-light verification code screen
+- [ ] R004 Approve Arabic-dark verification code screen
+- [ ] R005 Approve English-light Email verified screen
+- [ ] R006 Approve English-dark Email verified screen
+- [ ] R007 Approve Arabic-light Email verified screen
+- [ ] R008 Approve Arabic-dark Email verified screen
+- [ ] R009 Persist approved image bytes and update/create binding sidecars
+- [ ] R010 Obtain required binding-metadata approval and run canonical binding verifier
 
-### Tests first
-
-- [x] T003 [P] Add Red coverage for callback completion from valid access/refresh-token fragments and PKCE authorization codes in `apps/mobile/__tests__/services/auth-service.test.ts`
-- [x] T004 [P] Add Red coverage that email signup and signup-verification resend both pass `AUTH_REDIRECT_URL` through `emailRedirectTo` in `apps/mobile/__tests__/services/supabase.test.ts`
-- [x] T005 [P] Add Red regression coverage that the existing Google OAuth callback path still supports the same token/code session-establishment shapes in `apps/mobile/__tests__/services/auth-service.test.ts`
-
-### Implementation
-
-- [x] T006 Implement a single reusable callback/session-completion primitive, including stable typed result classification and secret-safe failures, in `apps/mobile/services/auth-service.ts`
-- [x] T007 Refactor the existing Google OAuth completion path to delegate to the shared callback/session primitive without duplicating token parsing in `apps/mobile/services/auth-service.ts`
-- [x] T008 Add `options.emailRedirectTo = AUTH_REDIRECT_URL` to email signup and verification resend without overwriting any future signup metadata options in `apps/mobile/services/supabase.ts`
-- [x] T009 Enable local email confirmation parity by setting `[auth.email].enable_confirmations = true` and preserving local email capture in `supabase/config.toml`
-
-**Checkpoint**: PASS at exact head `83bdea3941b50a5ee5a0ece9dea01bb57e971d49` — shared callback tests, signup/resend redirect tests, OAuth regression coverage, typecheck, lint, i18n, mobile tests, repository checks, and Android build are Green.
+**STOP**: no new production UI/auth mutations for the revised flow before R002-R010.
 
 ---
 
-## Phase 3: User Story 1 - New User Verifies Email Before App Access (Priority: P1) 🎯 MVP
+## Phase R1 — Supabase OTP configuration and service contract
 
-**Goal**: Fresh email/password registration enters the approved verification
-state, a valid email callback establishes the session, and private routing
-remains unavailable until that succeeds.
+### Red tests
 
-**Independent Test**: Fresh signup → verification pending → local captured email
-→ callback open → session establishment → existing authenticated startup flow.
+- [ ] R011 Add Red Supabase service tests for six-digit `verifyOtp({ email, token, type: "email" })`
+- [ ] R012 Add Red tests for stable wrong/expired-code classification and secret-safe errors
+- [ ] R013 Add Red config tests/guards for local OTP length 6 and expiry 600
 
-### Tests first
+### Green
 
-- [x] T010 [P] [US1] Add Red route tests proving a valid verification callback must complete the auth session before authenticated routing for cold-start and warm-start semantics in `apps/mobile/__tests__/app/auth-redirect.test.tsx`
-- [x] T011 [P] [US1] Add Red component tests for the approved full-page/no-card verification hierarchy, separate LTR email chip, resend/back actions, and privacy/legal content in `apps/mobile/__tests__/components/auth/AuthStatusViews.test.tsx`
-- [x] T012 [P] [US1] Add Red controller coverage that successful signup requiring verification retains the normalized pending email and exposes the verification-pending screen without granting authenticated state in `apps/mobile/__tests__/hooks/useAuthScreenController.test.ts`
-
-### Implementation
-
-- [x] T013 [US1] Update `apps/mobile/app/auth-callback.tsx` to consume the incoming native auth URL, invoke shared session completion, wait for resolved auth state, and hand off to existing root/startup routing only after success
-- [x] T014 [US1] Update `apps/mobile/components/auth/VerificationPendingView.tsx` to match the approved binding: full-page/no-card content, 92px mail treatment, centered copy, separate LTR email chip, outlined resend action, separate bottom back action, and footer-compatible structure
-- [x] T015 [US1] Wire verification-state Privacy/Terms navigation and any layout ownership needed for the approved footer through `apps/mobile/app/auth.tsx` without duplicating auth/business logic
-- [x] T016 [US1] Preserve/adjust localized verification copy only as required for the approved structure in `apps/mobile/locales/en/auth.json` and `apps/mobile/locales/ar/auth.json`
-
-### End-to-end and evidence
-
-- [x] T017 [US1] Add a deterministic local verification E2E journey covering fresh signup, pending state, captured confirmation email/link, callback opening, and authenticated routing in focused Maestro/helper files — implemented by `run-email-verification-e2e.js` plus pending/confirm/invalid auth flows; helper contract and CI registration are Green at `81ece656eb5269e7b9b39948d4184a43d155d330`; emulator execution remains part of T039 because PR CI skips Android E2E by repository policy
-- [ ] T018 [US1] Capture rendered baseline side-by-side/overlay evidence against `specs/321-email-verification/mockups/verification-en-light.png` at the declared ordinary-phone context and record evidence reference plus **functional status** and **visual-fidelity status** separately in `specs/321-email-verification/tasks.md`
-- [ ] T019 [US1] Capture rendered scoped-variant evidence for English dark, Arabic RTL light/dark, compact phone, tablet/landscape where supported, and enlarged text; compare against approved bindings and record evidence/status in `specs/321-email-verification/tasks.md`
-- [x] T020 [US1] Verify accessibility tree/screen-reader or appropriate automated evidence for verification heading, email presentation, resend button disabled/busy state, back action, language control, Privacy, and Terms — PASS via `AuthStatusViews.test.tsx` role/state assertions and existing `LanguageSwitcherPill.test.tsx` expanded/selected button semantics; full mobile Jest Green at `81ece656eb5269e7b9b39948d4184a43d155d330`
-
-**Checkpoint**: Functional implementation/tests T010-T016 PASS at exact head `3c310feae93c1f0e75b578f722e61891337afd6d`; T017-T020 remain required before US1 visual/E2E completion.
+- [ ] R014 Add focused `verifyEmailVerificationCode` service wrapper
+- [ ] R015 Set local `otp_expiry = 600` and align minimum resend frequency with two minutes
+- [ ] R016 Verify hosted Email OTP expiration is 600 seconds without exposing credentials
+- [ ] R017 Verify installed hosted Confirm Signup template text says **10 minutes** (template itself already installed)
 
 ---
 
-## Phase 4: User Story 2 - Unverified Returning User Can Recover (Priority: P1)
+## Phase R2 — Verification code UI and controller state machine
 
-**Goal**: A valid but unverified account returns to the same pending state and
-can resend verification instead of seeing raw provider wording.
+### Red tests
 
-**Independent Test**: Valid unverified credentials → verification pending with
-the submitted email → resend → new captured verification email.
+- [ ] R018 Add controller Red tests for signup -> `verificationCode`
+- [ ] R019 Add Red OTP input tests for numeric normalization, paste, max six digits, and accessibility
+- [ ] R020 Add Red exactly-once auto-submit tests when length becomes six
+- [ ] R021 Add Red duplicate-submit protection while verify request is pending
+- [ ] R022 Add Red wrong/expired-code recovery tests
+- [ ] R023 Add Red tests proving AuthContext authenticated events cannot skip verification success
+- [ ] R024 Add Red returning-unverified sign-in -> code screen tests
+- [ ] R025 Add Red unknown-last-send timestamp fallback-copy tests
 
-### Tests first
+### Green
 
-- [x] T021 [P] [US2] Add Red service/controller coverage that stable Supabase `email_not_confirmed` is preserved/classified without relying on provider message text in `apps/mobile/__tests__/services/supabase.test.ts` and `apps/mobile/__tests__/hooks/useAuthScreenController.test.ts`
-- [x] T022 [P] [US2] Add Red coverage for resend success, resend failure, duplicate in-flight protection, pending-email retention, and back-to-sign-in recovery in `apps/mobile/__tests__/hooks/useAuthScreenController.test.ts`
-- [x] T023 [P] [US2] Extend component tests for the resending label plus disabled/busy accessibility state without changing the approved resting composition in `apps/mobile/__tests__/components/auth/AuthStatusViews.test.tsx`
-
-### Implementation
-
-- [x] T024 [US2] Expose the stable unverified-email auth classification needed by the controller without leaking raw provider copy in `apps/mobile/services/supabase.ts`
-- [x] T025 [US2] Route `email_not_confirmed` sign-in into `verificationPending`, retain the submitted normalized email, preserve resend/back behavior, and keep ordinary invalid credentials inline in `apps/mobile/hooks/useAuthScreenController.ts`
-- [x] T026 [US2] Add/extend the local E2E recovery path for returning unverified sign-in and resend — covered in `apps/mobile/e2e/maestro/auth/email-verification-pending.yaml`; harness/unit registration Green at `81ece656eb5269e7b9b39948d4184a43d155d330`; emulator execution remains T039
-
-**Checkpoint**: Functional US2 T021-T025 PASS at exact head `f711d0e27e748f2bc15fcef196fdd62e7766b940` — typecheck, lint, repository checks, full mobile Jest, pgTAP, and Android build are Green; T026 local E2E remains pending.
-
----
-
-## Phase 5: User Story 3 - Invalid Verification Link Fails Safely (Priority: P2)
-
-**Goal**: Expired, malformed, reused, missing-material, and provider-error
-callbacks fail closed and return to auth recovery without exposing secrets.
-
-**Independent Test**: Exercise the invalid-link matrix and confirm no private
-runtime mounts, no token appears in UI/log output, and recovery remains possible.
-
-### Tests first
-
-- [x] T027 [P] [US3] Add Red callback-service cases for provider-declared error parameters, malformed URLs, missing auth material, failed token session establishment, and failed PKCE exchange in `apps/mobile/__tests__/services/auth-service.test.ts`
-- [x] T028 [P] [US3] Add Red route tests proving failed callbacks never navigate into private/authenticated routing and provide a safe recovery path in `apps/mobile/__tests__/app/auth-redirect.test.tsx`
-- [x] T029 [P] [US3] Add a regression assertion that surfaced callback failures/logging never contain raw access token, refresh token, verification token, or complete credential-bearing callback URL in `apps/mobile/__tests__/services/auth-service.test.ts`
-
-### Implementation
-
-- [x] T030 [US3] Complete fail-closed callback error classification/sanitization in `apps/mobile/services/auth-service.ts` while preserving only stable user-safe error information
-- [x] T031 [US3] Implement safe invalid/expired callback recovery behavior in `apps/mobile/app/auth-callback.tsx` without introducing a second auth-state or onboarding-routing authority
-- [x] T032 [US3] Add deterministic local/manual invalid-link coverage — provider-error + missing-material Maestro flow added in `email-verification-invalid.yaml`; expired/reused/offline server-state cases documented in `quickstart.md`; helper/CI registration Green at `81ece656eb5269e7b9b39948d4184a43d155d330`
-
-**Checkpoint**: Functional US3 T027-T031 PASS at exact head `6e828813a64825bbfbed29f11e14b92c2f679d1d` — non-canonical token callbacks are rejected before session mutation; provider-declared failures recover to auth; callback secrets are not surfaced; full mobile Jest, typecheck/lint, Android build, and pgTAP are Green. T032 E2E/manual invalid-link evidence remains pending.
+- [ ] R026 Expand auth screen state with `verificationCode` and `verificationSuccess`
+- [ ] R027 Implement one logical OTP input rendered as six visual cells with paste/autofill semantics
+- [ ] R028 Implement exactly-once auto-submit at six digits
+- [ ] R029 Implement code verification controller path and localized error mapping
+- [ ] R030 Implement verification-flow authenticated-navigation suppression before calling `verifyOtp`
+- [ ] R031 Add known-send 10-minute countdown and unknown-timestamp fallback copy
+- [ ] R032 Update EN/AR localization for code, expiry, wrong/expired code, cooldown, limit, and success states
 
 ---
 
-## Phase 6: Cross-Cutting Regression, Production Configuration, and Release Evidence
+## Phase R3 — Server-enforced resend limiter
 
-**Purpose**: Prove #321 does not regress other auth flows and complete external
-release configuration without putting secrets in Git.
+### Migration / pgTAP Red
 
-- [x] T033 [P] Run and, only if needed, extend Google OAuth regression coverage — existing implicit/PKCE/cancel/network/exception OAuth tests remained Green in full mobile Jest at exact head `81ece656eb5269e7b9b39948d4184a43d155d330`; no extra production change required
-- [x] T034 [P] Run and, only if needed, extend password-reset regression coverage — `requestPasswordReset` delegation and existing auth tests remained Green at exact head `81ece656eb5269e7b9b39948d4184a43d155d330`; password-reset UX scope unchanged
-- [x] T035 Audit #321-touched auth code for raw token/callback/SMTP logging and repository/mobile-bundle secret exposure — PASS: production auth service/route/controller contain no console/logger emission of callback/token material; callback errors are sanitized; SMTP/Resend credentials are not present in production/mobile code; E2E helper only passes token-bearing callbacks in process env to Maestro and never prints them
-- [ ] T036 Configure the hosted Monyvi Supabase project with approved Resend custom SMTP, Confirm email enabled, and the exact `monyvi://auth-callback` redirect allow-list; record non-secret configuration evidence/status in `specs/321-email-verification/quickstart.md` — partial 2026-09-22 verification: Confirm email and the exact native redirect are configured, and the environment-only Resend configuration script/runbook is ready; live custom SMTP remains outstanding pending a Monyvi-controlled domain and scoped credential
-- [ ] T037 Verify Resend sending-domain DNS/authentication and delivery/bounce/suppression behavior without committing credentials; record non-secret evidence in `specs/321-email-verification/quickstart.md`
-- [ ] T038 Perform real verification-email delivery QA to Gmail, Outlook/Hotmail, and one additional common mailbox provider and record delivery/spam observations in `specs/321-email-verification/quickstart.md`
-- [ ] T039 Perform release-build device QA for valid-link cold start, valid-link warm start, resend, expired/reused link, offline callback, English/Arabic, and light/dark on Android and iOS when available; record device/build evidence in `specs/321-email-verification/quickstart.md`
-- [ ] T040 Run focused auth Jest suites, mobile TypeScript/lint gates, all repository-required verification, then obtain exact-head Green GitHub Actions for the implementation branch; record immutable Green SHA in `specs/321-email-verification/tasks.md`
-- [ ] T041 Perform final exact-head mockup-binding re-verification for all three sidecars and confirm current approved image/metadata/combined revisions remain unchanged in `specs/321-email-verification/tasks.md`
-- [ ] T042 Update implementation completion evidence and mark each task accurately in `specs/321-email-verification/tasks.md`, keeping **functional readiness**, **visual fidelity**, **accessibility evidence**, and **external production configuration** as separate statuses
+- [ ] R033 Add Red pgTAP for limiter table privacy/direct-access denial
+- [ ] R034 Add Red tests for initial-send registration
+- [ ] R035 Add Red tests for 120-second cooldown
+- [ ] R036 Add Red tests for exactly three successful resends and fourth denial
+- [ ] R037 Add Red 24-hour reset test
+- [ ] R038 Add Red concurrent-reservation test
+- [ ] R039 Add Red finalize-idempotency/release-without-increment tests
+- [ ] R040 Add Red stale-reservation recovery test
 
----
+### Green migration
 
-## Dependencies & Execution Order
+- [ ] R041 Add `email_verification_resend_limits` table with HMAC email key and no raw email
+- [ ] R042 Add service-role-only register/reserve/finalize/release SQL routines
+- [ ] R043 Revoke direct anon/authenticated table/function access
 
-### Phase dependencies
+### Edge Function tests
 
-1. **Phase 1** blocks every production mutation.
-2. **Phase 2** is foundational and blocks US1-US3 because signup, resend, OAuth,
-   and email verification must share one callback contract.
-3. **US1** can begin after Phase 2 and delivers the core MVP.
-4. **US2** can begin after Phase 2; it reuses the same pending UI and redirect
-   contract.
-5. **US3** can begin after the shared callback primitive exists; it may proceed
-   in parallel with US2 if file ownership is coordinated.
-6. **Phase 6** follows the desired user stories and blocks release readiness.
+- [ ] R044 Add Red tests for normalization + HMAC with server-only pepper
+- [ ] R045 Add Red reserve -> resend -> finalize behavior
+- [ ] R046 Add Red downstream-send failure -> release behavior
+- [ ] R047 Add Red safe cooldown/limit response tests without account-enumeration detail
+- [ ] R048 Add Red no-raw-email/no-secret logging tests
 
-### User-story dependencies
+### Green Edge Function/client
 
-- **US1 (P1)**: depends only on Phase 2.
-- **US2 (P1)**: depends on Phase 2; does not require US1 route implementation,
-  but shares `useAuthScreenController.ts` and verification UI.
-- **US3 (P2)**: depends on the Phase 2 callback primitive and shares
-  `auth-service.ts`/`auth-callback.tsx` with US1.
-- Because several stories touch the same auth files, prefer one sequential owner
-  even where test-writing tasks are independently parallelizable.
-
-### TDD order
-
-For every production behavior change:
-
-1. Write the focused Red test.
-2. Run it and confirm it fails for the intended missing behavior.
-3. Implement the smallest Green change.
-4. Refactor only while Green.
-5. Run affected regressions before proceeding.
-
-Mockup evidence and accessibility evidence are separate completion gates and are
-not substitutes for automated tests.
+- [ ] R049 Implement original-send registration operation
+- [ ] R050 Implement resend operation using atomic reservation
+- [ ] R051 Add client wrapper and product-safe result classification
+- [ ] R052 Call original-send registration after successful signup; conservative fallback if registration fails
+- [ ] R053 Apply 2-minute button cooldown after original and each successful resend
+- [ ] R054 Keep resend disabled while request is in flight; do not display remaining resend count
+- [ ] R055 Returning unverified sign-in does not automatically resend
 
 ---
 
-## Parallel Opportunities
+## Phase R4 — Email verified success screen and callback fix
 
-- T003-T005 can be authored in parallel before shared callback implementation.
-- T010-T012 can be authored in parallel after Phase 2.
-- T021-T023 can be authored in parallel.
-- T027-T029 can be authored in parallel.
-- T033-T034 can run in parallel after feature implementation.
-- External production preparation (T036-T038) can proceed in parallel with late
-  code QA once the sending domain is available, but release readiness still
-  requires the final code/device checks.
+### Red tests
+
+- [ ] R056 Add component tests for approved Email verified composition
+- [ ] R057 Add controller tests for successful code verification -> success state
+- [ ] R058 Add Continue-to-dashboard explicit handoff tests
+- [ ] R059 Add callback tests reproducing "verification succeeded but AuthContext stayed stale/loading"
+- [ ] R060 Add callback bounded-timeout tests
+- [ ] R061 Add callback signup-success -> Email verified tests
+- [ ] R062 Preserve OAuth/password-recovery route regression tests
+
+### Green
+
+- [ ] R063 Implement Email verified presentational view
+- [ ] R064 Wire Continue to root/startup flow
+- [ ] R065 Change signup-confirmation callback success to validate session directly and render success state
+- [ ] R066 Add bounded callback processing timeout/recovery so skeleton cannot be infinite
+- [ ] R067 Preserve OAuth and password-recovery destinations
 
 ---
 
-## Implementation Strategy
+## Phase R5 — E2E, visual, accessibility, production QA
 
-### MVP first
+- [ ] R068 Update local Mailpit E2E to extract six-digit code instead of relying on signup magic link
+- [ ] R069 E2E signup -> code paste/type -> auto-submit -> success -> Continue
+- [ ] R070 E2E returning unverified sign-in path
+- [ ] R071 Automated deterministic limiter tests cover cooldown/count/window/concurrency; do not make device E2E sleep through all policy windows
+- [ ] R072 Manual device QA real 2-minute cooldown and fourth-resend denial
+- [ ] R073 Manual Android callback legacy-link regression: cold + warm start, no skeleton hang
+- [ ] R074 iOS device QA when build available
+- [ ] R075 Capture EN/AR light/dark visual evidence against approved bindings
+- [ ] R076 Verify compact/enlarged-text/RTL accessibility evidence
+- [ ] R077 Verify Gmail delivery
+- [ ] R078 Verify Outlook/Hotmail delivery
+- [ ] R079 Verify one additional mailbox provider
+- [ ] R080 Inspect SMTP/provider bounce/suppression/domain-authentication health
 
-1. Complete T001-T009.
-2. Complete US1 T010-T020.
-3. Validate fresh signup → confirmation → authenticated startup end-to-end.
-4. Then add US2 recovery and US3 invalid-link hardening.
+---
 
-### Scope controls
+## Phase R6 — Final gates
 
-- No custom verification-token table or Edge Function.
-- No database/WatermelonDB migration.
-- No Universal/App Link migration.
-- No new auth method.
-- No MFA/session-management work from #240.
-- No password-reset UX expansion.
-- No signup profile-name work from #20; if #20 becomes active, compose
-  `signUp` options safely.
+- [ ] R081 Security audit: no OTP, raw limiter email, HMAC pepper, auth token, callback secret, SMTP/service-role logging
+- [ ] R082 Final mockup-binding verifier exact-head PASS
+- [ ] R083 Focused auth/Edge/pgTAP tests Green
+- [ ] R084 Mobile TypeScript/lint/i18n/repository checks Green
+- [ ] R085 Exact-head GitHub Actions Green
+- [ ] R086 Refresh PR #322 description with code-first architecture, QA matrix, known external evidence
+- [ ] R087 Record functional, visual, accessibility, SMTP/delivery, device, and immutable Green SHA statuses separately
 
-## Completion Evidence
+## Completion status
 
-Populate during implementation:
-
-- **Functional status**: PENDING
-- **Visual fidelity status**: PENDING
-- **Accessibility evidence status**: PASS — automated role/state/link/language-control semantics Green at `81ece656eb5269e7b9b39948d4184a43d155d330`
-- **External production configuration status**: PENDING
-- **Exact-head Green SHA**: PENDING
-- **Mockup binding verifier result at completion**: PENDING
+- **Product plan**: APPROVED 2026-10-04
+- **English-light code-entry visual**: APPROVED
+- **Remaining visual approval**: PENDING
+- **Confirm Signup template installation**: COMPLETE by user
+- **Template 10-minute copy verification**: PENDING
+- **Custom SMTP configured / real signup email received**: COMPLETE by user report
+- **Revised implementation**: PAUSED pending mockup gate
