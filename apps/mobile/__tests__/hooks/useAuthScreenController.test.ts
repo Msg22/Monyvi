@@ -665,6 +665,47 @@ describe("useAuthScreenController code-first verification", () => {
     expect(result.current.screenState).toBe("verificationSuccess");
   });
 
+  it("blocks duplicate auto-submit while the six-digit verification request is pending", async () => {
+    mockSignUpWithEmail.mockResolvedValue({
+      success: true,
+      needsVerification: true,
+    });
+
+    let resolveVerification:
+      | ((value: { success: true }) => void)
+      | undefined;
+    mockVerifyEmailVerificationCode.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveVerification = resolve;
+        })
+    );
+    const { result } = renderHook(() => useAuthScreenController());
+
+    await act(async () => {
+      await result.current.handleEmailSubmit(
+        "new@example.com",
+        "secret",
+        "signUp"
+      );
+    });
+
+    act(() => {
+      result.current.handleVerificationCodeChange("123456");
+      result.current.handleVerificationCodeChange("123456");
+    });
+
+    expect(mockVerifyEmailVerificationCode).toHaveBeenCalledTimes(1);
+    expect(result.current.pendingAction).toBe("verificationCode");
+
+    await act(async () => {
+      resolveVerification?.({ success: true });
+      await Promise.resolve();
+    });
+
+    expect(result.current.screenState).toBe("verificationSuccess");
+  });
+
   it("shows invalid-code copy and permits retry after verification fails", async () => {
     mockSignUpWithEmail.mockResolvedValue({
       success: true,
