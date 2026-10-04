@@ -1,9 +1,18 @@
 appId: com.monyvi.app
 ---
-# #321: open the callback produced by resolving the captured local Supabase
-# confirmation URL, then prove the existing authenticated startup flow takes over.
+# #321: enter the captured Mailpit code. Six digits auto-submit, then the user
+# explicitly continues from Email verified into the existing authenticated flow.
 
-- openLink: "${MAESTRO_E2E_VERIFICATION_CALLBACK}"
+- tapOn:
+    id: "verification-code-input"
+- inputText: ${MAESTRO_E2E_VERIFICATION_CODE}
+
+- extendedWaitUntil:
+    visible: "Email verified"
+    timeout: 30000
+- assertVisible: "Continue to dashboard"
+- takeScreenshot: issue321-email-verified-en-light
+- tapOn: "Continue to dashboard"
 
 - extendedWaitUntil:
     visible:
