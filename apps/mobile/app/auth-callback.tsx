@@ -146,7 +146,7 @@ function AuthCallbackVerificationSuccess({
 }
 
 export default function AuthCallbackScreen(): React.JSX.Element {
-  const { isAuthenticated, isLoading, user } = useAuth();
+  const { user } = useAuth();
   const router = useRouter();
   const params = useLocalSearchParams<Record<string, string | string[]>>();
   const callbackUrl = useURL();
@@ -241,12 +241,12 @@ export default function AuthCallbackScreen(): React.JSX.Element {
     };
   }, [callbackUrl, retryNonce, params]);
 
-  let redirectHref: Href | null = null;
-  if (callbackState === "completed" && !isLoading && isAuthenticated) {
-    redirectHref = isPasswordRecoveryLink(params, callbackUrl)
-      ? "/settings"
-      : "/";
-  }
+  const redirectHref: Href | null =
+    callbackState === "completed"
+      ? isPasswordRecoveryLink(params, callbackUrl)
+        ? "/settings"
+        : "/"
+      : null;
 
   useDeferredRouterReplace({
     enabled: redirectHref !== null,
