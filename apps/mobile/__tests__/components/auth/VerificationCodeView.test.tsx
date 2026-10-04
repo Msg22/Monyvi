@@ -65,6 +65,29 @@ describe("VerificationCodeView", () => {
     ).toBeOnTheScreen();
   });
 
+  it("locks code editing while a resend request is in flight", () => {
+    render(
+      <VerificationCodeView
+        email="mohamed@example.com"
+        code=""
+        verificationError={null}
+        verificationExpiresAtMs={Date.now() + 10 * 60_000}
+        resendAvailableAtMs={null}
+        resendLimitUntilMs={null}
+        isVerifying={false}
+        isResending
+        onCodeChange={jest.fn()}
+        onResend={jest.fn()}
+        onBack={jest.fn()}
+      />
+    );
+
+    expect(screen.getByTestId("verification-code-input")).toHaveProp(
+      "editable",
+      false
+    );
+  });
+
   it("renders six visual cells backed by one paste-capable OTP input", () => {
     const onCodeChange = jest.fn();
 
