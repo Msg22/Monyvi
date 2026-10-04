@@ -129,12 +129,15 @@ export function VerificationCodeView({
 
         <Pressable
           testID="verification-code-cells"
-          accessibilityElementsHidden
-          importantForAccessibility="no-hide-descendants"
+          accessible={false}
           onPress={() => inputRef.current?.focus()}
           className="relative mt-7 w-full max-w-[360px]"
         >
-          <View className="flex-row justify-center gap-2">
+          <View
+            accessibilityElementsHidden
+            importantForAccessibility="no-hide-descendants"
+            className="flex-row justify-center gap-2"
+          >
             {Array.from({ length: 6 }, (_, index) => (
               <View
                 key={index}
