@@ -1,17 +1,10 @@
 interface EmailVerificationE2eModule {
-  buildVerificationEmail(
-    baseEmail: string,
-    suffix?: string
-  ): string;
-  extractConfirmationUrl(html: string): string | null;
+  buildVerificationEmail(baseEmail: string, suffix?: string): string;
+  extractVerificationCode(html: string): string | null;
   getMailpitLatestMessageUrl(
     mailpitBaseUrl: string,
     email: string
   ): string;
-  resolveConfirmationRedirect(
-    confirmationUrl: string,
-    fetchImpl?: typeof fetch
-  ): Promise<string>;
 }
 
 const helper = jest.requireActual(
@@ -36,55 +29,27 @@ describe("email verification E2E helper", () => {
     );
   });
 
-  it("extracts and HTML-decodes the Supabase confirmation URL", () => {
+  it("extracts the six-digit code from the deterministic local template", () => {
     expect(
-      helper.extractConfirmationUrl(
-        '<p><a href="http://127.0.0.1:54321/auth/v1/verify?token=abc&amp;type=signup&amp;redirect_to=monyvi%3A%2F%2Fauth-callback">Confirm</a></p>'
+      helper.extractVerificationCode(
+        '<div data-verification-code="123456">123456</div>'
       )
-    ).toBe(
-      "http://127.0.0.1:54321/auth/v1/verify?token=abc&type=signup&redirect_to=monyvi%3A%2F%2Fauth-callback"
-    );
+    ).toBe("123456");
   });
 
-  it("resolves the host confirmation request to the canonical native callback without following it", async () => {
-    const fetchImpl = jest.fn().mockResolvedValue({
-      status: 302,
-      headers: {
-        get: (name: string): string | null =>
-          name.toLowerCase() === "location"
-            ? "monyvi://auth-callback#access_token=a&refresh_token=b"
-            : null,
-      },
-    });
-
-    await expect(
-      helper.resolveConfirmationRedirect(
-        "http://127.0.0.1:54321/auth/v1/verify?token=abc",
-        fetchImpl as unknown as typeof fetch
+  it("falls back to a visible six-digit token when the marker is unavailable", () => {
+    expect(
+      helper.extractVerificationCode(
+        "<p>Your Monyvi code:</p><strong>654321</strong>"
       )
-    ).resolves.toBe(
-      "monyvi://auth-callback#access_token=a&refresh_token=b"
-    );
-
-    expect(fetchImpl).toHaveBeenCalledWith(
-      "http://127.0.0.1:54321/auth/v1/verify?token=abc",
-      { redirect: "manual" }
-    );
+    ).toBe("654321");
   });
 
-  it("rejects any confirmation redirect that does not return to Monyvi", async () => {
-    const fetchImpl = jest.fn().mockResolvedValue({
-      status: 302,
-      headers: {
-        get: (): string => "https://evil.example/callback",
-      },
-    });
-
-    await expect(
-      helper.resolveConfirmationRedirect(
-        "http://127.0.0.1:54321/auth/v1/verify?token=abc",
-        fetchImpl as unknown as typeof fetch
+  it("does not accept non-six-digit values as verification codes", () => {
+    expect(
+      helper.extractVerificationCode(
+        '<div data-verification-code="12345">12345</div>'
       )
-    ).rejects.toThrow("canonical Monyvi auth callback");
+    ).toBeNull();
   });
 });
