@@ -1,5 +1,4 @@
 import { LinearGradient } from "expo-linear-gradient";
-import { useRouter } from "expo-router";
 import {
   KeyboardAvoidingView,
   Platform,
@@ -50,7 +49,6 @@ export function shouldEnableAuthScroll(
 
 export default function AuthScreen(): React.JSX.Element {
   const insets = useSafeAreaInsets();
-  const router = useRouter();
   const { isDark } = useTheme();
   const isKeyboardVisible = useKeyboardVisibility();
   const {
