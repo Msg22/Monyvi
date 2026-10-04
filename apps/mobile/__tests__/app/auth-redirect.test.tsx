@@ -320,6 +320,29 @@ describe("AuthCallbackScreen verification lifecycle", () => {
     });
   });
 
+  it("bounds the waiting state when the native callback URL never arrives", async () => {
+    jest.useFakeTimers();
+    mockCallbackUrl = null;
+
+    render(<AuthCallbackScreen />);
+
+    expect(
+      screen.getByTestId("auth-callback-processing-view")
+    ).toBeOnTheScreen();
+
+    await act(async () => {
+      jest.advanceTimersByTime(10_001);
+      await Promise.resolve();
+    });
+
+    expect(
+      screen.getByRole("header", { name: "verification_link_failed_title" })
+    ).toBeOnTheScreen();
+    expect(
+      screen.queryByTestId("auth-callback-processing-view")
+    ).not.toBeOnTheScreen();
+  });
+
   it("bounds callback processing and exposes recovery instead of an infinite skeleton", async () => {
     jest.useFakeTimers();
     mockCompleteAuthSessionFromUrl.mockImplementation(
