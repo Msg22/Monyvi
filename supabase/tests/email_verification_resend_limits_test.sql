@@ -57,7 +57,7 @@ CREATE TEMP TABLE issue321_fixture(
 ) ON COMMIT DROP;
 
 INSERT INTO issue321_fixture
-VALUES (gen_random_uuid(), 'verify-321@example.com', 'issue321-test-key');
+VALUES (gen_random_uuid(), 'verify-321@example.com', repeat('a', 64));
 
 INSERT INTO auth.users (
   id,
@@ -122,7 +122,7 @@ DECLARE
 BEGIN
   SELECT * INTO v_result
   FROM public.email_verification_reserve_resend(
-    'issue321-test-key',
+    repeat('a', 64),
     'verify-321@example.com',
     120,
     86400,
@@ -141,7 +141,7 @@ $cooldown$;
 
 UPDATE public.email_verification_resend_limits
 SET last_sent_at = clock_timestamp() - interval '121 seconds'
-WHERE email_key = 'issue321-test-key';
+WHERE email_key = repeat('a', 64);
 
 DO $three_resends$
 DECLARE
@@ -153,7 +153,7 @@ BEGIN
   FOR i IN 1..3 LOOP
     SELECT * INTO v_result
     FROM public.email_verification_reserve_resend(
-      'issue321-test-key',
+      repeat('a', 64),
       'verify-321@example.com',
       120,
       86400,
@@ -166,7 +166,7 @@ BEGIN
     END IF;
 
     SELECT public.email_verification_finalize_resend(
-      'issue321-test-key',
+      repeat('a', 64),
       v_result.reservation_id
     ) INTO v_finalized;
 
@@ -175,7 +175,7 @@ BEGIN
     END IF;
 
     IF public.email_verification_finalize_resend(
-      'issue321-test-key',
+      repeat('a', 64),
       v_result.reservation_id
     ) THEN
       RAISE EXCEPTION 'finalize must be idempotent';
@@ -183,12 +183,12 @@ BEGIN
 
     UPDATE public.email_verification_resend_limits
     SET last_sent_at = clock_timestamp() - interval '121 seconds'
-    WHERE email_key = 'issue321-test-key';
+    WHERE email_key = repeat('a', 64);
   END LOOP;
 
   SELECT resend_count INTO v_count
   FROM public.email_verification_resend_limits
-  WHERE email_key = 'issue321-test-key';
+  WHERE email_key = repeat('a', 64);
 
   IF v_count <> 3 THEN
     RAISE EXCEPTION 'expected exactly three finalized resends, got %', v_count;
@@ -196,7 +196,7 @@ BEGIN
 
   SELECT * INTO v_result
   FROM public.email_verification_reserve_resend(
-    'issue321-test-key',
+    repeat('a', 64),
     'verify-321@example.com',
     120,
     86400,
@@ -221,11 +221,11 @@ BEGIN
       resend_count = 3,
       reservation_id = NULL,
       reserved_at = NULL
-  WHERE email_key = 'issue321-test-key';
+  WHERE email_key = repeat('a', 64);
 
   SELECT * INTO v_result
   FROM public.email_verification_reserve_resend(
-    'issue321-test-key',
+    repeat('a', 64),
     'verify-321@example.com',
     120,
     86400,
@@ -238,7 +238,7 @@ BEGIN
   END IF;
 
   SELECT public.email_verification_release_resend(
-    'issue321-test-key',
+    repeat('a', 64),
     v_result.reservation_id
   ) INTO v_released;
 
@@ -247,7 +247,7 @@ BEGIN
   END IF;
 
   IF (SELECT resend_count FROM public.email_verification_resend_limits
-      WHERE email_key = 'issue321-test-key') <> 0 THEN
+      WHERE email_key = repeat('a', 64)) <> 0 THEN
     RAISE EXCEPTION 'release must not consume a resend';
   END IF;
 END
@@ -261,7 +261,7 @@ DECLARE
 BEGIN
   SELECT * INTO v_first
   FROM public.email_verification_reserve_resend(
-    'issue321-test-key',
+    repeat('a', 64),
     'verify-321@example.com',
     120,
     86400,
@@ -275,7 +275,7 @@ BEGIN
 
   SELECT * INTO v_second
   FROM public.email_verification_reserve_resend(
-    'issue321-test-key',
+    repeat('a', 64),
     'verify-321@example.com',
     120,
     86400,
@@ -288,7 +288,7 @@ BEGIN
   END IF;
 
   SELECT public.email_verification_release_resend(
-    'issue321-test-key',
+    repeat('a', 64),
     v_first.reservation_id
   ) INTO v_released;
 END
@@ -302,11 +302,11 @@ BEGIN
   SET reservation_id = gen_random_uuid(),
       reserved_at = clock_timestamp() - interval '31 seconds',
       last_sent_at = NULL
-  WHERE email_key = 'issue321-test-key';
+  WHERE email_key = repeat('a', 64);
 
   SELECT * INTO v_result
   FROM public.email_verification_reserve_resend(
-    'issue321-test-key',
+    repeat('a', 64),
     'verify-321@example.com',
     120,
     86400,
@@ -314,14 +314,15 @@ BEGIN
     30
   );
 
-  IF NOT v_result.accepted THEN
-    RAISE EXCEPTION 'stale reservation must be reclaimed';
+  IF v_result.accepted OR v_result.decision_code <> 'cooldown' THEN
+    RAISE EXCEPTION
+      'stale ambiguous reservation must consume a slot and enforce cooldown';
   END IF;
 
-  PERFORM public.email_verification_release_resend(
-    'issue321-test-key',
-    v_result.reservation_id
-  );
+  IF (SELECT resend_count FROM public.email_verification_resend_limits
+      WHERE email_key = repeat('a', 64)) <> 1 THEN
+    RAISE EXCEPTION 'stale ambiguous reservation must consume exactly one slot';
+  END IF;
 END
 $stale_reservation$;
 
