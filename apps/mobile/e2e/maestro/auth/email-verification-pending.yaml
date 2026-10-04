@@ -1,7 +1,7 @@
 appId: com.monyvi.app
 ---
-# #321 local email verification: fresh signup, returning unverified sign-in,
-# and resend recovery. The orchestrator uses a unique Mailpit recipient.
+# #321 local verification code flow: fresh signup and returning unverified
+# sign-in both land on the same code-entry state.
 
 - waitForAnimationToEnd
 
@@ -48,15 +48,17 @@ appId: com.monyvi.app
     id: "auth-submit-button"
 
 - extendedWaitUntil:
-    visible: "Check your inbox"
+    visible: "Verify your email"
     timeout: 30000
 - assertVisible:
     id: "verification-email-chip"
-- assertVisible: "Resend email"
+- assertVisible:
+    id: "verification-code-input"
 - assertVisible: "Back to sign in"
-- takeScreenshot: issue321-verification-en-light
+- takeScreenshot: issue321-verification-code-en-light
 
-# Returning unverified users must land on the same pending/resend state.
+# Returning unverified users must land on the same code-entry state without
+# automatically consuming another resend.
 - tapOn: "Back to sign in"
 - extendedWaitUntil:
     visible:
@@ -78,11 +80,9 @@ appId: com.monyvi.app
     id: "auth-submit-button"
 
 - extendedWaitUntil:
-    visible: "Check your inbox"
+    visible: "Verify your email"
     timeout: 30000
-- tapOn: "Resend email"
-- extendedWaitUntil:
-    visible: "Verification email sent. Please check your inbox."
-    timeout: 15000
+- assertVisible:
+    id: "verification-code-input"
 - assertVisible:
     id: "verification-email-chip"
