@@ -25,7 +25,7 @@ export function VerificationSuccessView({
       <View className="flex-1 items-center justify-center px-3 pb-8">
         <View className="mb-7 h-[108px] w-[108px] items-center justify-center rounded-full bg-nileGreen-500/10">
           <View className="h-[72px] w-[72px] items-center justify-center rounded-full bg-nileGreen-500">
-            <Ionicons name="checkmark" size={44} color={palette.white} />
+            <Ionicons name="checkmark" size={44} color={palette.slate[25]} />
           </View>
         </View>
 
