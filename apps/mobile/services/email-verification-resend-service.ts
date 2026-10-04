@@ -45,7 +45,7 @@ export async function resendVerificationCode(
   email: string
 ): Promise<VerificationResendResult> {
   try {
-    const { data, error } = await supabase.functions.invoke<unknown>(
+    const response = await supabase.functions.invoke<unknown>(
       "email-verification-resend",
       {
         body: {
@@ -54,8 +54,9 @@ export async function resendVerificationCode(
         },
       }
     );
+    const data: unknown = response.data;
 
-    if (error || !isRecord(data)) {
+    if (response.error !== null || !isRecord(data)) {
       return { status: "temporary_failure" };
     }
 
