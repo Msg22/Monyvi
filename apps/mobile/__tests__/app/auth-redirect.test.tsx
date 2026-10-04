@@ -387,6 +387,47 @@ describe("AuthCallbackScreen verification lifecycle", () => {
   });
 });
 
+describe("AuthCallbackScreen completed non-signup routing", () => {
+  beforeEach(() => {
+    mockReplace.mockClear();
+    mockCompleteAuthSessionFromUrl.mockReset();
+    mockIsNavigationReady = true;
+    mockAuthState = {
+      isAuthenticated: false,
+      isLoading: true,
+    };
+    mockCompleteAuthSessionFromUrl.mockResolvedValue({ success: true });
+  });
+
+  it("routes a validated OAuth callback without waiting indefinitely on AuthContext", async () => {
+    mockLocalSearchParams = { provider: "google" };
+    mockCallbackUrl =
+      "monyvi://auth-callback#access_token=oauth-access&refresh_token=oauth-refresh";
+
+    render(<AuthCallbackScreen />);
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(mockReplace).toHaveBeenCalledWith("/");
+  });
+
+  it("routes a validated password-recovery callback to settings without waiting on AuthContext", async () => {
+    mockLocalSearchParams = { type: "recovery" };
+    mockCallbackUrl =
+      "monyvi://auth-callback#access_token=recovery-access&refresh_token=recovery-refresh&type=recovery";
+
+    render(<AuthCallbackScreen />);
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(mockReplace).toHaveBeenCalledWith("/settings");
+  });
+});
+
 describe("AuthCallbackScreen failed verification recovery", () => {
   beforeEach(() => {
     jest.useFakeTimers();
