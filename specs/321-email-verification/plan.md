@@ -1,222 +1,289 @@
 # Implementation Plan: Complete Email Verification
 
-**Branch**: `codex/issue321-email-verification` | **Date**: 2026-09-21 | **Spec**: [spec.md](./spec.md)  
-**Input**: Feature specification from `/specs/321-email-verification/spec.md`
+**Branch**: `codex/issue321-email-verification`  
+**Revised**: 2026-10-04  
+**Spec**: [spec.md](./spec.md)  
+**Status**: Approved technical/product plan; paused at remaining mockup approval gate
 
 ## Summary
 
-Complete Monyvi's already-approved email/password verification lifecycle without
-adding a second verification backend. Supabase Auth remains the verification
-authority; Resend supplies production SMTP delivery. Mobile work consolidates
-auth callback session completion, explicitly directs signup/resend links to the
-existing Monyvi callback, recovers unverified sign-in into the existing
-verification-pending state, enables local confirmation testing, and brings the
-verification UI into fidelity with the approved references.
+Revise PR #322 from the already-implemented link-first pending flow to the
+approved code-first confirmation flow.
 
-No database migration, WatermelonDB model change, sync-contract change, or new
-Edge Function is required.
+Supabase Auth remains the verification authority. New work adds:
 
-## Technical Context
+- six-digit signup code verification;
+- 10-minute Auth expiry;
+- auto-submit + paste-capable OTP input;
+- Email verified success state;
+- explicit navigation suppression until Continue;
+- two-minute resend cooldown;
+- server-enforced three-resends-per-24-hours limiter;
+- callback success fix for the real-device skeleton hang;
+- revised E2E/visual/accessibility evidence.
 
-**Language/Version**: TypeScript ~5.9.2  
-**Primary Dependencies**: React Native 0.83.6, Expo ~55.0.27, Expo Router ~55.0.16, `@supabase/supabase-js` 2.106.0, Expo SecureStore, Expo WebBrowser/Linking  
-**Storage**: No new application storage; Supabase Auth owns verification state; existing SecureStore owns sessions  
-**Testing**: Jest/Jest Expo + React Native Testing Library; Maestro E2E; local Supabase auth email capture; manual release mailbox/device QA  
-**Target Platform**: Android and iOS mobile app  
-**Project Type**: React Native/Expo mobile application in npm/Nx monorepo  
-**Performance Goals**: Callback processing adds only the auth-provider exchange/session work required to establish a session; no duplicate network round trip or blocking cloud sync beyond existing safe startup requirements  
-**Constraints**: Fail closed before email confirmation; never log auth material; preserve Google OAuth; production SMTP secrets stay outside repo/mobile bundle; verification requires network connectivity; no schema/sync changes  
-**Scale/Scope**: Initial v1 email/password cohort; Resend free-tier launch allowance is an operational constraint, not a product hard limit
+The user has already configured custom SMTP and installed the Monyvi Confirm
+Signup subject/template in hosted Supabase. Do not recreate that template in
+code. Release QA only verifies its final 10-minute wording and delivery health.
 
-## Constitution Check
+## Current Proven Foundation To Preserve
 
-### Pre-design gate
+Already implemented/Green work from the earlier #321 wave remains useful:
 
-- **Business authority**: PASS — `docs/business/business-decisions.md` §3
-  states email verification is required before sign-in succeeds.
-- **Prior product approval**: PASS — feature 016 FR-015/SC-008 already requires
-  the verification flow.
-- **Service-layer separation**: PASS — auth protocol/session completion belongs
-  in mobile services; route/controller remain orchestration/UI.
-- **Authenticated routing safety**: PASS — no private route is allowed before
-  session establishment and existing startup gates remain authoritative.
-- **Offline-first**: PASS — no financial/local-first domain behavior changes;
-  verification is an intentionally online pre-auth action.
-- **Security/secrets**: PASS — no custom token persistence, no service-role or
-  SMTP secret in mobile code, no raw callback/token logging.
-- **Schema/sync**: PASS — no migration, data backfill, WatermelonDB, RLS, or
-  sync-contract change.
-- **Premium UI / approved mockup**: PASS — all three approved verification
-  references have approved, fingerprinted binding sidecars with matching image,
-  metadata, combined revisions, and explicit approval evidence.
-- **TDD**: PASS — production code changes are planned test-first.
-- **Localization/accessibility**: PASS — English/Arabic, RTL, themes, responsive
-  variants, enlarged text, and separate accessibility evidence are in scope.
+- shared native auth callback/session completion;
+- exact `monyvi://auth-callback` validation;
+- signup/resend redirect configuration;
+- local confirmation enabled;
+- returning `email_not_confirmed` classification;
+- invalid callback hardening/sanitization;
+- OAuth/password-reset regressions;
+- local email-verification E2E harness;
+- custom SMTP configuration tooling/runbook.
 
-No constitutional violation requires a Complexity Tracking exception.
+Do not delete these protections merely because code entry becomes primary.
 
-## Phase 0: Research Decisions
+## Architecture
 
-See [research.md](./research.md).
+### Mobile auth service
 
-Resolved decisions:
+Add focused APIs:
 
-1. Supabase Auth remains the confirmation authority.
-2. Resend is the initial production custom SMTP provider.
-3. `monyvi://auth-callback` remains the v1 mobile redirect.
-4. Browser OAuth and email confirmation share callback session-completion logic.
-5. Unverified sign-in is detected by stable `email_not_confirmed` code.
-6. Local Supabase enables confirmations and captures mail locally.
-7. No database/schema/sync changes.
-8. The approved verification state is full-page, not card-based.
+- `verifyEmailVerificationCode(email, token)`;
+- limiter Edge Function client wrapper for original-send registration / resend.
 
-No technical `NEEDS CLARIFICATION` remains.
+Keep raw Supabase protocol calls out of presentational components.
 
-## Phase 1: Design
+### Auth controller state machine
 
-### Callback/session completion
-
-Create or extract one focused service-layer primitive that accepts the full auth
-callback URL, validates provider error/material shape, establishes a session
-from supported fragment tokens or a PKCE authorization code, and returns a
-stable result classification without leaking auth material.
-
-The existing OAuth flow delegates to this primitive rather than retaining a
-second parser.
-
-### Signup and resend
-
-The existing Supabase wrappers keep their public responsibilities and add the
-canonical auth callback option for:
-
-- email/password signup;
-- signup verification resend.
-
-Issue #20 may later add signup metadata to the same options object. If that work
-becomes active, compose the options rather than overwriting metadata or
-redirects.
-
-### Unverified sign-in recovery
-
-Keep `EmailAuthResult` structured enough for the controller/service layer to
-distinguish `email_not_confirmed` from ordinary invalid credentials. The
-controller retains the submitted normalized email and enters
-`verificationPending`.
-
-### Native callback route
-
-`auth-callback.tsx` becomes an orchestrator:
-
-1. receive/read the full native callback URL;
-2. invoke callback session completion;
-3. wait for/observe the existing auth state;
-4. hand routing to the root/startup flow;
-5. return failed callbacks to auth recovery.
-
-It does not own onboarding/profile decisions.
-
-### Verification UI fidelity
-
-Use the approved #321 references. The current rounded card is removed in favor
-of the approved full-page state composition while reusing:
-
-- existing auth top bar;
-- existing Monyvi logo;
-- existing language control;
-- design-system colors/typefaces;
-- existing privacy/terms routes;
-- existing resend/back behaviors.
-
-No new visual state is invented for loading; preserve current disabled/busy
-semantics.
-
-### Local auth parity
-
-Set local email confirmation on. Update test/e2e fixtures that previously
-depended on local auto-confirm. Local email confirmation link retrieval stays
-inside local Supabase test tooling.
-
-### Production configuration
-
-Production DNS, Resend credential entry, Supabase SMTP/Confirm-email settings,
-and mailbox delivery verification are manual release configuration steps. They
-must be documented/evidenced but secrets are not represented in Git.
-
-## Project Structure
-
-### Documentation
+Expand auth screen states:
 
 ```text
-specs/321-email-verification/
-├── spec.md
-├── plan.md
-├── research.md
-├── data-model.md
-├── quickstart.md
-├── checklists/
-│   └── requirements.md
-├── contracts/
-│   └── email-verification-contract.md
-├── mockups/
-│   ├── verification-en-light.png
-│   ├── verification-en-light.binding.md
-│   ├── verification-en-dark.png
-│   ├── verification-en-dark.binding.md
-│   ├── verification-ar-light.png
-│   └── verification-ar-light.binding.md
-└── tasks.md
+form
+  -> verificationCode
+      -> verificationSuccess
+          -> Continue -> /
+  -> resetSent
 ```
 
-### Expected source/test touch points
+Add explicit `suppressAuthenticatedRedirect` ownership for the verification
+flow. It becomes true before code verification starts and stays true through
+success. Only Continue releases/hands off routing.
+
+This avoids the race where `verifyOtp` creates a session and AuthContext
+redirects before the success state commits.
+
+### OTP UI
+
+One native text input is the source of truth; six cells are visual projections.
+
+Required semantics:
+
+- digits only;
+- maxLength 6;
+- paste;
+- OTP/autofill-compatible platform hints where supported;
+- one accessible input;
+- exactly-once auto-submit at six digits;
+- disabled/edit handling while verification request is pending.
+
+No permanent helper text for paste or auto-submit in the approved composition.
+
+### Expiry timer
+
+Set Auth OTP expiry to 600 seconds.
+
+Controller stores only the known send timestamp needed to render a countdown.
+Do not store the OTP.
+
+A returning/cross-device unverified user without a known timestamp sees generic
+ten-minute expiry wording until a new successful resend establishes a known
+timestamp.
+
+### Resend limiter
+
+Add migration:
+
+- `email_verification_resend_limits`;
+- service-role-only atomic SQL routines.
+
+Add Edge Function:
+
+- register original successful send;
+- resend with atomic reserve -> Supabase send -> finalize/release.
+
+Digest:
 
 ```text
-apps/mobile/
-├── app/
-│   └── auth-callback.tsx
-├── components/auth/
-│   └── VerificationPendingView.tsx
-├── hooks/
-│   └── useAuthScreenController.ts
-├── services/
-│   ├── auth-service.ts
-│   └── supabase.ts
-├── __tests__/
-│   ├── app/
-│   │   └── auth-redirect.test.tsx
-│   ├── components/auth/
-│   │   └── AuthStatusViews.test.tsx
-│   ├── hooks/
-│   │   └── useAuthScreenController.test.ts
-│   └── services/
-│       ├── auth-service.test.ts
-│       └── supabase.test.ts
-└── e2e/maestro/auth/
-    └── ...
-
-supabase/
-└── config.toml
+HMAC-SHA256(server_pepper, normalized_email)
 ```
 
-A focused sibling callback service/test may be introduced if extracting the
-existing private helper from `auth-service.ts` would otherwise leave that file
-with mixed responsibilities. The implementation should choose the smallest
-SOLID boundary proven by the Red tests.
+No raw email persistence.
 
-**Structure Decision**: Keep all auth protocol work in `apps/mobile/services`,
-UI lifecycle in the auth controller hook, rendering in auth components, and
-navigation orchestration in the Expo Router callback route.
+Use stale reservation recovery with a short bounded age so function crashes do
+not permanently block the user.
 
-## Post-design Constitution Re-check
+### Supabase Auth config
 
-- No schema, sync, or financial correctness gate introduced.
-- Service/hook/component/route boundaries remain compliant.
-- Authenticated runtime remains fail-closed.
-- Secrets stay external.
-- TDD and E2E coverage are explicit.
-- Mockup-governed UI is authorized by the approved binding sidecars; any later
-  reference-image or Binding Facts byte change requires renewed approval.
-- Required visual and accessibility evidence is included in the implementation
-  completion contract.
+Local:
 
-**Result**: PASS for technical planning; one explicit mockup-binding approval
-gate remains before UI implementation/tasks can be finalized as executable.
+- confirmation required;
+- OTP length 6;
+- OTP expiry 600;
+- minimum resend frequency aligned with 120 seconds for realistic QA where
+  practical.
+
+Hosted:
+
+- verify OTP expiry 600;
+- verify the template says 10 minutes;
+- keep Confirm email enabled;
+- keep custom SMTP enabled.
+
+Do not use the project-wide email-sent rate limit as the per-user product rule;
+it serves only as defense-in-depth / provider protection.
+
+### Callback fix
+
+Current real-device evidence shows verification succeeded but
+`auth-callback.tsx` stayed on its skeleton.
+
+Change signup-confirmation success behavior:
+
+1. complete callback;
+2. explicitly verify a resulting session rather than waiting indefinitely for
+   AuthContext;
+3. render Email verified;
+4. Continue -> existing root flow.
+
+Add a bounded processing timeout.
+
+OAuth/password-recovery callback destinations stay unchanged.
+
+## Visual Plan
+
+### Approved
+
+- latest English-light code-entry mockup with three helper/count texts removed.
+
+### Awaiting approval before UI production mutations
+
+- English dark code-entry;
+- Arabic light code-entry;
+- Arabic dark code-entry;
+- English light Email verified;
+- English dark Email verified;
+- Arabic light Email verified;
+- Arabic dark Email verified.
+
+After approval:
+
+- persist exact image bytes;
+- create/update binding sidecars;
+- compute image/metadata/combined revisions;
+- obtain binding metadata approval if required by repository workflow;
+- run canonical mockup-binding verifier.
+
+## Test Strategy
+
+Strict Red -> Green -> Refactor.
+
+### Service tests
+
+- verifyOtp correct args;
+- success session;
+- wrong/expired stable error mapping;
+- OTP never appears in returned product-safe errors/logs.
+
+### Controller tests
+
+- signup -> verificationCode;
+- unverified sign-in -> verificationCode;
+- digits/paste normalization;
+- exactly-once six-digit auto-submit;
+- duplicate submit blocked;
+- verification success -> verificationSuccess;
+- AuthContext authenticated event cannot redirect while suppressed;
+- Continue performs handoff;
+- wrong/expired code recovery;
+- unknown send timestamp fallback.
+
+### Resend database tests
+
+- register original;
+- cooldown <120s;
+- three success reservations;
+- fourth denied;
+- 24h reset;
+- concurrent reservations;
+- stale reservation recovery;
+- finalize exactly once;
+- release does not increment;
+- no direct anon/authenticated access.
+
+### Edge Function tests
+
+- normalization/HMAC;
+- safe generic responses;
+- reserve/send/finalize;
+- reserve/send failure/release;
+- no raw email/token logs;
+- provider error mapping.
+
+### Callback tests
+
+- signup callback success -> success screen;
+- stale AuthContext cannot hang success;
+- bounded timeout;
+- OAuth regression;
+- password recovery regression;
+- invalid/reused/noncanonical failure.
+
+### E2E
+
+Local Mailpit flow becomes:
+
+```text
+signup
+ -> receive 6-digit code
+ -> paste/type code
+ -> auto-submit
+ -> Email verified
+ -> Continue
+ -> authenticated app
+```
+
+Add resend policy coverage where practical without making device E2E wait
+minutes; exact timing/concurrency belongs primarily in deterministic unit/DB
+tests.
+
+Manual device QA validates the real 2-minute cooldown.
+
+## Production Configuration / QA
+
+Already reported complete:
+
+- custom SMTP configured;
+- real Confirm Signup email received;
+- Confirm Signup Monyvi subject/template installed.
+
+Still verify:
+
+- template says 10 minutes;
+- hosted OTP expiry = 600;
+- Gmail + Outlook/Hotmail + one additional mailbox;
+- bounce/suppression/provider logs;
+- Android/iOS device journeys;
+- callback old-link fallback no longer hangs.
+
+## Constitution / Scope Check
+
+Approved exception to previous #321 "no Edge Function/table" assumption:
+
+- server-side limiter is now explicitly product-approved;
+- it stores anti-abuse state only;
+- it does not replace Supabase verification.
+
+No financial schema, WatermelonDB, sync, or financial-action change.
+
+**Result**: Technical/product plan approved. UI implementation remains blocked
+only on the remaining mockup approval/binding gate.
