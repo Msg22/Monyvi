@@ -8,9 +8,10 @@ import {
   signUpWithEmail,
 } from "@/services/auth-service";
 import {
-  resendVerificationEmail,
-  verifyEmailVerificationCode,
-} from "@/services/supabase";
+  registerInitialVerificationSend,
+  resendVerificationCode,
+} from "@/services/email-verification-resend-service";
+import { verifyEmailVerificationCode } from "@/services/supabase";
 
 const mockShowToast = jest.fn();
 const mockUseDeferredRouterReplace = jest.fn();
@@ -47,8 +48,12 @@ jest.mock("@/services/auth-service", () => ({
   signUpWithEmail: jest.fn(),
 }));
 
+jest.mock("@/services/email-verification-resend-service", () => ({
+  registerInitialVerificationSend: jest.fn(),
+  resendVerificationCode: jest.fn(),
+}));
+
 jest.mock("@/services/supabase", () => ({
-  resendVerificationEmail: jest.fn(),
   verifyEmailVerificationCode: jest.fn(),
 }));
 
@@ -56,7 +61,10 @@ const mockRequestPasswordReset = jest.mocked(requestPasswordReset);
 const mockSignInWithEmail = jest.mocked(signInWithEmail);
 const mockSignInWithOAuth = jest.mocked(signInWithOAuth);
 const mockSignUpWithEmail = jest.mocked(signUpWithEmail);
-const mockResendVerificationEmail = jest.mocked(resendVerificationEmail);
+const mockRegisterInitialVerificationSend = jest.mocked(
+  registerInitialVerificationSend
+);
+const mockResendVerificationCode = jest.mocked(resendVerificationCode);
 const mockVerifyEmailVerificationCode = jest.mocked(
   verifyEmailVerificationCode
 );
@@ -353,7 +361,12 @@ describe("useAuthScreenController", () => {
       success: true,
       needsVerification: true,
     });
-    mockResendVerificationEmail.mockResolvedValue({ success: true });
+    mockResendVerificationCode.mockResolvedValue({
+      status: "sent" as const,
+      sentAtMs: Date.parse("2026-10-04T10:02:01.000Z"),
+      resendAvailableAtMs: Date.parse("2026-10-04T10:04:01.000Z"),
+      verificationExpiresAtMs: Date.parse("2026-10-04T10:12:01.000Z"),
+    });
     const { result } = renderHook(() => useAuthScreenController());
 
     await act(async () => {
@@ -367,7 +380,10 @@ describe("useAuthScreenController", () => {
       await result.current.handleResendVerification();
     });
 
-    expect(mockResendVerificationEmail).toHaveBeenCalledWith("new@example.com");
+    expect(mockRegisterInitialVerificationSend).toHaveBeenCalledWith(
+      "new@example.com"
+    );
+    expect(mockResendVerificationCode).toHaveBeenCalledWith("new@example.com");
     expect(mockShowToast).toHaveBeenCalledWith({
       type: "success",
       title: "auth.verification_email_sent",
@@ -383,9 +399,14 @@ describe("useAuthScreenController", () => {
     });
 
     let resolveResend:
-      | ((value: { success: true }) => void)
+      | ((value: {
+          status: "sent";
+          sentAtMs: number;
+          resendAvailableAtMs: number;
+          verificationExpiresAtMs: number;
+        }) => void)
       | undefined;
-    mockResendVerificationEmail.mockImplementation(
+    mockResendVerificationCode.mockImplementation(
       () =>
         new Promise((resolve) => {
           resolveResend = resolve;
@@ -408,11 +429,16 @@ describe("useAuthScreenController", () => {
       void result.current.handleResendVerification();
     });
 
-    expect(mockResendVerificationEmail).toHaveBeenCalledTimes(1);
+    expect(mockResendVerificationCode).toHaveBeenCalledTimes(1);
     expect(result.current.pendingAction).toBe("verificationResend");
 
     await act(async () => {
-      resolveResend?.({ success: true });
+      resolveResend?.({
+      status: "sent" as const,
+      sentAtMs: Date.parse("2026-10-04T10:02:01.000Z"),
+      resendAvailableAtMs: Date.parse("2026-10-04T10:04:01.000Z"),
+      verificationExpiresAtMs: Date.parse("2026-10-04T10:12:01.000Z"),
+    });
       await firstResend;
     });
 
@@ -424,9 +450,8 @@ describe("useAuthScreenController", () => {
       success: true,
       needsVerification: true,
     });
-    mockResendVerificationEmail.mockResolvedValue({
-      success: false,
-      error: createAuthError("Resend unavailable"),
+    mockResendVerificationCode.mockResolvedValue({
+      status: "temporary_failure",
     });
     const { result } = renderHook(() => useAuthScreenController());
 
@@ -443,9 +468,72 @@ describe("useAuthScreenController", () => {
 
     expect(mockShowToast).toHaveBeenCalledWith({
       type: "error",
-      title: "Resend unavailable",
+      title: "auth.resend_verification_failed",
     });
     expect(result.current.pendingAction).toBeNull();
+  });
+
+
+  it("honors server cooldown without sending provider details to the UI", async () => {
+    mockSignUpWithEmail.mockResolvedValue({
+      success: true,
+      needsVerification: true,
+    });
+    mockResendVerificationCode.mockResolvedValue({
+      status: "cooldown",
+      retryAtMs: Date.parse("2026-10-04T10:03:30.000Z"),
+    });
+    const { result } = renderHook(() => useAuthScreenController());
+
+    await act(async () => {
+      await result.current.handleEmailSubmit(
+        "new@example.com",
+        "secret",
+        "signUp"
+      );
+    });
+    await act(async () => {
+      await result.current.handleResendVerification();
+    });
+
+    expect(result.current.resendAvailableAtMs).toBe(
+      Date.parse("2026-10-04T10:03:30.000Z")
+    );
+    expect(mockShowToast).toHaveBeenCalledWith({
+      type: "info",
+      title: "auth.resend_cooldown",
+    });
+  });
+
+  it("honors the server 24-hour resend limit", async () => {
+    mockSignUpWithEmail.mockResolvedValue({
+      success: true,
+      needsVerification: true,
+    });
+    mockResendVerificationCode.mockResolvedValue({
+      status: "limit",
+      retryAtMs: Date.parse("2026-10-05T10:00:00.000Z"),
+    });
+    const { result } = renderHook(() => useAuthScreenController());
+
+    await act(async () => {
+      await result.current.handleEmailSubmit(
+        "new@example.com",
+        "secret",
+        "signUp"
+      );
+    });
+    await act(async () => {
+      await result.current.handleResendVerification();
+    });
+
+    expect(result.current.resendAvailableAtMs).toBe(
+      Date.parse("2026-10-05T10:00:00.000Z")
+    );
+    expect(mockShowToast).toHaveBeenCalledWith({
+      type: "info",
+      title: "auth.resend_limit_reached",
+    });
   });
 
   it("returns to form and clears transient errors", async () => {
