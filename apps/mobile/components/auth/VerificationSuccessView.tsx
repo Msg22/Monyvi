@@ -23,10 +23,27 @@ export function VerificationSuccessView({
   return (
     <View testID="verification-success-view" className="flex-1">
       <View className="flex-1 items-center justify-center px-3 pb-8">
-        <View className="mb-7 h-[108px] w-[108px] items-center justify-center rounded-full bg-nileGreen-500/10">
-          <View className="h-[72px] w-[72px] items-center justify-center rounded-full bg-nileGreen-500">
-            <Ionicons name="checkmark" size={44} color={palette.slate[25]} />
+        <View
+          testID="verification-success-illustration"
+          className="relative mb-7 h-[124px] w-[124px] items-center justify-center"
+        >
+          <View className="h-[108px] w-[108px] items-center justify-center rounded-full bg-nileGreen-500/10">
+            <View className="h-[72px] w-[72px] items-center justify-center rounded-full bg-nileGreen-500">
+              <Ionicons name="checkmark" size={44} color={palette.slate[25]} />
+            </View>
           </View>
+          <Ionicons
+            name="sparkles"
+            size={18}
+            color={accentColor}
+            style={{ position: "absolute", top: 5, right: 6 }}
+          />
+          <Ionicons
+            name="sparkles"
+            size={15}
+            color={accentColor}
+            style={{ position: "absolute", bottom: 10, left: 0 }}
+          />
         </View>
 
         <Text
