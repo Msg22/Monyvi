@@ -16,7 +16,6 @@ interface SupabaseServiceModule {
     readonly needsVerification?: boolean;
     readonly error?: { readonly code?: string };
   }>;
-  readonly resendVerificationEmail: (email: string) => Promise<unknown>;
   readonly verifyEmailVerificationCode: (
     email: string,
     token: string
@@ -28,7 +27,6 @@ interface SupabaseServiceModule {
     readonly auth: {
       signUp: (...args: unknown[]) => Promise<unknown>;
       signInWithPassword: (...args: unknown[]) => Promise<unknown>;
-      resend: (...args: unknown[]) => Promise<unknown>;
       verifyOtp: (...args: unknown[]) => Promise<unknown>;
     };
   };
@@ -42,7 +40,6 @@ const {
   resolveSupabaseStorageKey,
   signUpWithEmail,
   signInWithEmail,
-  resendVerificationEmail,
   verifyEmailVerificationCode,
   supabase,
 } = jest.requireActual<SupabaseServiceModule>("@/services/supabase");
@@ -122,24 +119,7 @@ describe("supabase email verification redirect contract", () => {
     expect(result.error?.code).toBe("email_not_confirmed");
   });
 
-  it("passes the canonical app callback when resending signup verification", async () => {
-    const sentinel = new Error("stop-after-resend-arguments");
-    const resendSpy = jest
-      .spyOn(supabase.auth, "resend")
-      .mockRejectedValue(sentinel);
 
-    await expect(
-      resendVerificationEmail("new@example.com")
-    ).rejects.toThrow(sentinel);
-
-    expect(resendSpy).toHaveBeenCalledWith({
-      type: "signup",
-      email: "new@example.com",
-      options: {
-        emailRedirectTo: "monyvi://auth-callback",
-      },
-    });
-  });
 });
 
 
