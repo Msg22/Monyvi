@@ -126,8 +126,10 @@ jest.mock("@/components/auth/VerificationCodeView", () => ({
 
 jest.mock("@/components/auth/VerificationSuccessView", () => ({
   VerificationSuccessView: ({
+    email,
     onContinue,
   }: {
+    readonly email?: string;
     readonly onContinue: () => void;
   }): React.ReactElement => {
     const ReactMod = require("react") as typeof React;
@@ -135,6 +137,7 @@ jest.mock("@/components/auth/VerificationSuccessView", () => ({
     return ReactMod.createElement(
       RN.View,
       { testID: "verification-success" },
+      ReactMod.createElement(RN.Text, { testID: "verification-success-email" }, email ?? ""),
       ReactMod.createElement(
         RN.Pressable,
         {
@@ -296,7 +299,10 @@ describe("AuthCallbackScreen verification lifecycle", () => {
       isAuthenticated: false,
       isLoading: false,
     };
-    mockCompleteAuthSessionFromUrl.mockResolvedValue({ success: true });
+    mockCompleteAuthSessionFromUrl.mockResolvedValue({
+      success: true,
+      email: "verified@example.com",
+    });
   });
 
   afterEach(() => {
@@ -325,6 +331,31 @@ describe("AuthCallbackScreen verification lifecycle", () => {
     });
   });
 
+  it("bounds callback processing and exposes recovery instead of an infinite skeleton", async () => {
+    jest.useFakeTimers();
+    mockCompleteAuthSessionFromUrl.mockImplementation(
+      () => new Promise(() => undefined)
+    );
+
+    render(<AuthCallbackScreen />);
+
+    expect(
+      screen.getByTestId("auth-callback-loading-skeleton")
+    ).toBeOnTheScreen();
+
+    await act(async () => {
+      jest.advanceTimersByTime(10_001);
+      await Promise.resolve();
+    });
+
+    expect(
+      screen.getByRole("header", { name: "callback_network_failed_title" })
+    ).toBeOnTheScreen();
+    expect(
+      screen.queryByTestId("auth-callback-loading-skeleton")
+    ).not.toBeOnTheScreen();
+  });
+
   it("shows explicit verification success after a signup callback instead of waiting on AuthContext", async () => {
     render(<AuthCallbackScreen />);
 
@@ -336,6 +367,9 @@ describe("AuthCallbackScreen verification lifecycle", () => {
       mockCallbackUrl
     );
     expect(screen.getByTestId("verification-success")).toBeOnTheScreen();
+    expect(screen.getByTestId("verification-success-email")).toHaveTextContent(
+      "verified@example.com"
+    );
     expect(mockReplace).not.toHaveBeenCalledWith("/");
 
     fireEvent.press(
