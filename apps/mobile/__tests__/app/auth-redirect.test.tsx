@@ -329,7 +329,7 @@ describe("AuthCallbackScreen verification lifecycle", () => {
     render(<AuthCallbackScreen />);
 
     expect(
-      screen.getByTestId("auth-callback-loading-skeleton")
+      screen.getByTestId("auth-callback-processing-view")
     ).toBeOnTheScreen();
 
     await act(async () => {
@@ -341,7 +341,7 @@ describe("AuthCallbackScreen verification lifecycle", () => {
       screen.getByRole("header", { name: "callback_network_failed_title" })
     ).toBeOnTheScreen();
     expect(
-      screen.queryByTestId("auth-callback-loading-skeleton")
+      screen.queryByTestId("auth-callback-processing-view")
     ).not.toBeOnTheScreen();
   });
 
