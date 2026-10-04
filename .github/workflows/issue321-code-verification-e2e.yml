@@ -1,6 +1,8 @@
 name: Issue 321 Code Verification E2E Evidence
 
 on:
+  push:
+    branches: [codex/issue321-email-verification]
   pull_request:
     branches: [main]
 
@@ -10,7 +12,9 @@ permissions:
 jobs:
   auth-e2e-evidence:
     name: Issue 321 Code Verification E2E
-    if: github.head_ref == 'codex/issue321-email-verification'
+    if: >-
+      github.ref == 'refs/heads/codex/issue321-email-verification' ||
+      github.head_ref == 'codex/issue321-email-verification'
     runs-on: ubuntu-latest
     timeout-minutes: 180
     env:
