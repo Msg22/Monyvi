@@ -2,195 +2,238 @@
 
 **Feature Branch**: `codex/issue321-email-verification`  
 **Created**: 2026-09-21  
-**Status**: Ready for implementation  
-**Issue**: #321 — Complete production email verification for email/password sign-up  
-**Input**: Complete the already-approved email-verification requirement from feature 016 and make email/password registration release-ready.
+**Revised**: 2026-10-04  
+**Status**: Approved plan; implementation paused at mockup approval gate  
+**Issue**: #321 — Complete production email verification with code-first signup flow
 
-## User Scenarios & Testing
+## Product Direction
 
-### User Story 1 - New User Verifies Email Before App Access (Priority: P1)
+Email/password registration MUST prove ownership of the address before private
+Monyvi access. Supabase Auth remains the verification authority.
 
-A new user creates an account with an email address and password. Monyvi tells the
-user to check that inbox. The user follows the verification link and returns to
-Monyvi as an authenticated user. Private financial features never become
-available before verification succeeds.
+The approved primary verification UX is now **code-first**:
 
-**Why this priority**: Email ownership is a release requirement and the main
-security property of this feature.
+```text
+sign up
+  -> 6-digit code email
+  -> code-entry screen
+  -> auto-submit at six digits
+  -> Supabase verifies code + creates session
+  -> Email verified success screen
+  -> explicit Continue to dashboard
+```
 
-**Independent Test**: Register a fresh email account, verify that private routes
-remain unavailable, follow the delivered verification link, and confirm the app
-continues through the existing authenticated startup flow without requiring the
-credentials to be entered again.
+Legacy/signup confirmation links remain supported defensively and for already
+sent emails, but they are not the primary signup UX.
 
-**Acceptance Scenarios**:
+## User Stories
 
-1. **Given** a new email/password registration, **When** account creation
-   succeeds but the email is not yet verified, **Then** the approved
-   verification-pending state is shown and private app features remain
-   inaccessible.
-2. **Given** an unverified account, **When** the user follows a valid
-   verification link, **Then** Monyvi establishes an authenticated session and
-   hands routing to the existing authenticated startup flow.
-3. **Given** a user who has not verified the email, **When** the device is
-   offline, **Then** Monyvi does not grant private access merely because a local
-   registration attempt exists.
+### User Story 1 — Verify a new signup with a 6-digit code (P1)
 
----
+A new user registers with email/password, receives a six-digit confirmation code,
+enters or pastes it in Monyvi, and sees a clear success state before choosing to
+continue into the authenticated app.
 
-### User Story 2 - Unverified Returning User Can Recover (Priority: P1)
+**Acceptance scenarios**
 
-A user who already registered but did not finish verification tries to sign in.
-Instead of seeing a raw authentication-provider error, the user returns to the
-same verification-pending experience and can request another email.
+1. New signup requiring confirmation opens the verification-code screen.
+2. The code contains exactly six digits and expires after ten minutes.
+3. Typing or pasting the sixth valid digit triggers exactly one verification
+   attempt automatically.
+4. Correct verification creates/accepts the Supabase session and opens the
+   Email verified success state.
+5. AuthContext becoming authenticated MUST NOT skip the success state.
+6. The user enters the authenticated startup flow only after choosing
+   **Continue to dashboard**.
 
-**Why this priority**: Users commonly close the app or miss the first email.
-Recovery must be obvious and must not strand a valid account.
+### User Story 2 — Resend safely without inbox abuse (P1)
 
-**Independent Test**: Attempt to sign in with valid credentials for an
-unverified account, verify the pending screen is shown with the submitted email,
-request a resend, then complete verification from the new message.
+A user may request another signup confirmation code, but Monyvi prevents rapid
+or excessive sends.
 
-**Acceptance Scenarios**:
+**Approved rule**
 
-1. **Given** valid credentials for an unverified account, **When** the user
-   attempts to sign in, **Then** the approved verification-pending state is
-   shown with the correct email address.
-2. **Given** the verification-pending state, **When** the user requests a resend,
-   **Then** another verification message is requested and conflicting repeated
-   actions remain blocked while that request is pending.
-3. **Given** the verification-pending state, **When** the user returns to sign
-   in, **Then** the existing sign-in form is restored without granting access.
+- original signup email: 1
+- resends: maximum 3
+- total emails in the active window: maximum 4
+- cooldown after original send and each successful resend: 2 minutes
+- reset: 24 hours after the original verification send
 
----
+**Acceptance scenarios**
 
-### User Story 3 - Invalid Verification Link Fails Safely (Priority: P2)
+1. Resend is unavailable during the two-minute cooldown.
+2. A successful resend restarts the two-minute cooldown and code-expiry timer.
+3. The fourth resend in the active 24-hour window is rejected.
+4. The resend allowance resets after the active window expires.
+5. Concurrent resend attempts cannot exceed the limit.
+6. A provider/send failure does not unfairly consume a resend slot.
+7. Server-side enforcement remains authoritative even if the client UI is
+   bypassed.
 
-A user opens an expired, malformed, already-used, or otherwise invalid
-verification link. Monyvi explains that authentication did not complete and
-returns the user to an appropriate auth recovery path without exposing secrets
-or mounting private content.
+### User Story 3 — Recover an unverified returning account (P1)
 
-**Why this priority**: Email links expire and are forwarded or reopened. Failure
-must be safe and understandable.
+A returning user with valid credentials but an unverified email is routed into
+the same code/resend flow instead of seeing raw provider wording.
 
-**Independent Test**: Open each supported invalid-link case and confirm no
-authenticated private route is visible, no secret data is displayed, and the
-user can return to the auth flow.
+If Monyvi knows the last successful send timestamp on that device, it shows the
+remaining ten-minute code timer. If it does not know the timestamp (for example,
+another device), it MUST NOT invent a false countdown; it may show localized
+copy explaining that codes expire ten minutes after they are sent.
 
-**Acceptance Scenarios**:
+### User Story 4 — Confirmation links complete without hanging (P1)
 
-1. **Given** an invalid or expired verification callback, **When** Monyvi opens
-   it, **Then** no authenticated session is accepted from that callback.
-2. **Given** a malformed callback without usable authentication material,
-   **When** it is processed, **Then** the app returns to auth recovery rather
-   than hanging or entering private routing.
-3. **Given** a callback that contains provider error information, **When** the
-   error is surfaced, **Then** user-visible copy remains friendly and no token,
-   raw callback URL, or provider secret is displayed.
+Already-sent/legacy signup confirmation links still work.
 
----
+Real-device QA on 2026-10-04 proved the link successfully verified the email,
+but the app stayed indefinitely on the auth-callback skeleton. A subsequent
+normal sign-in succeeded. Therefore the remaining defect is post-confirmation
+callback/session/navigation synchronization, not failed email verification.
 
-### Edge Cases
+A successful signup-confirmation callback MUST show the same Email verified
+success state and wait for explicit Continue to dashboard. It MUST NOT depend
+indefinitely on AuthContext settling.
 
-- Confirmation link opens while the app is fully closed.
-- Confirmation link opens while the app is already running.
-- The link was already used.
-- The verification token is expired.
-- The callback contains neither usable tokens nor an authorization code.
-- The callback contains an explicit authentication-provider error.
-- The user taps resend repeatedly or while a resend is already in flight.
-- The user changes language while on the verification state.
-- The app is offline when signup, resend, or verification is attempted.
-- A Google OAuth callback still completes after callback handling is shared.
-- Password-reset callback behavior does not regress.
+### User Story 5 — Verification failures are safe and recoverable (P2)
 
-## Requirements
+Wrong, expired, malformed, reused, provider-error, and network-failed
+verification attempts fail closed without leaking secrets or granting private
+routing.
 
-### Functional Requirements
+## Functional Requirements
 
-- **FR-001**: Email/password registration MUST require email verification before
-  the user can access private Monyvi functionality.
-- **FR-002**: An unverified registration MUST show the approved
-  verification-pending experience with the registered email address.
-- **FR-003**: A valid verification link MUST return the user to Monyvi and
-  establish the authenticated state needed by the existing startup flow.
-- **FR-004**: Authenticated profile/onboarding routing MUST remain owned by the
-  existing startup flow after verification; verification MUST NOT introduce a
-  competing routing authority.
-- **FR-005**: A valid email/password sign-in attempt for an unverified account
-  MUST enter the verification-pending recovery flow instead of exposing raw
-  provider error text.
-- **FR-006**: Users MUST be able to request another verification email from the
-  verification-pending state.
-- **FR-007**: Resend MUST prevent conflicting duplicate actions while a request
-  is active and MUST provide localized success/failure feedback.
-- **FR-008**: Invalid, expired, malformed, and already-used callbacks MUST fail
-  closed and MUST NOT expose private app content.
-- **FR-009**: The verification state MUST support English and Arabic, LTR/RTL,
-  light/dark themes, safe areas, compact phones, ordinary phones, tablets,
-  orientation changes, and enlarged text according to the approved composition
-  and repository responsive rules.
-- **FR-010**: Production verification email delivery MUST use a production-ready
-  transactional sender under Monyvi control rather than a demo-only sender.
-- **FR-011**: Development and automated verification MUST be possible without
-  consuming production email-delivery quota.
-- **FR-012**: Monyvi MUST continue to use the existing authentication provider's
-  verification state as the source of truth; no custom verification-token table
-  or competing account-verification system may be introduced.
-- **FR-013**: Verification handling MUST NOT log or display access tokens,
-  refresh tokens, verification tokens, SMTP credentials, or complete callback
-  URLs containing authentication material.
-- **FR-014**: Existing Google OAuth authentication MUST remain functional.
-- **FR-015**: Existing password-reset request/callback behavior MUST not regress;
-  completing the separate password-reset UX is outside this feature.
-- **FR-016**: The first-release mobile redirect remains the existing Monyvi
-  custom auth callback scheme. Universal/App Links require separate approval.
+- **FR-001**: Unverified email/password accounts MUST NOT access private Monyvi
+  functionality.
+- **FR-002**: Signup confirmation email MUST present a 6-digit verification code
+  using Supabase's native confirmation token.
+- **FR-003**: Hosted and local Auth configuration MUST use a 10-minute OTP
+  lifetime.
+- **FR-004**: The mobile code input MUST accept six numeric digits, support
+  standard paste, and auto-submit exactly once when six digits are present.
+- **FR-005**: Verification MUST use Supabase Auth `verifyOtp`; Monyvi MUST NOT
+  create a parallel verification token system.
+- **FR-006**: Successful code verification MUST enter an Email verified success
+  state before authenticated routing.
+- **FR-007**: Continue to dashboard MUST explicitly hand off to the existing
+  authenticated startup/root routing.
+- **FR-008**: Session/auth-state propagation MUST NOT auto-skip the verification
+  success state.
+- **FR-009**: Resend MUST have a 2-minute client cooldown after each successful
+  verification email send.
+- **FR-010**: Server-side policy MUST allow at most three resends within the
+  24-hour window beginning with the original signup send.
+- **FR-011**: Resend limiter state MUST NOT persist raw email addresses.
+- **FR-012**: Resend enforcement MUST be concurrency-safe and MUST compensate a
+  reserved resend when the downstream send fails.
+- **FR-013**: Returning `email_not_confirmed` sign-ins MUST enter the same
+  verification-code flow.
+- **FR-014**: Wrong and expired codes MUST produce localized, product-safe
+  errors and remain recoverable.
+- **FR-015**: Legacy/deep-link signup confirmation MUST remain supported.
+- **FR-016**: A successful signup confirmation callback MUST show Email verified
+  rather than an unbounded loading skeleton.
+- **FR-017**: Callback processing MUST have bounded timeout/failure states.
+- **FR-018**: Existing Google OAuth and password-recovery callback behavior MUST
+  not regress.
+- **FR-019**: English/Arabic, LTR/RTL, light/dark, responsive layouts, enlarged
+  text, and accessibility semantics remain required.
+- **FR-020**: No SMTP secret, service-role secret, OTP, access token, refresh
+  token, or credential-bearing callback URL may be exposed in app UI/logging.
+- **FR-021**: Production email continues through Supabase Auth custom SMTP.
+- **FR-022**: The currently installed Confirm Signup template is treated as
+  configured; release QA MUST verify its expiry copy says **10 minutes**.
 
-### Key Entities
+## Resend Limiter
 
-- **Email Verification State**: The authentication provider's authoritative
-  indication that the account email is unverified or verified.
-- **Verification Callback**: A one-time authentication callback that may contain
-  valid session material, an authorization code, or an error/invalid state.
-- **Verification Pending UI State**: Ephemeral pre-auth UI state containing the
-  email being verified and resend activity; it is not a new persisted business
-  entity.
+The approved expansion permits one focused server-side limiter:
+
+- one small Supabase Edge Function;
+- one minimal Postgres limiter table;
+- private SQL functions required for atomic reservation/finalization;
+- Supabase Auth remains the only email-verification authority.
+
+The limiter uses an HMAC/keyed digest of normalized email generated with a
+server-only pepper. Raw email MUST NOT be stored in the limiter table.
+
+The limiter is anti-abuse infrastructure only. It MUST NOT generate, store, or
+validate verification codes.
+
+## Visual Requirements
+
+### Verification code
+
+The English-light code-entry mockup revised and approved on 2026-10-04 is the
+baseline once its final binding sidecar is persisted.
+
+It intentionally does NOT display:
+
+- a paste instruction;
+- an auto-submit instruction;
+- remaining resend-count text.
+
+Those behaviors still exist but are not explained as permanent helper copy.
+
+### Email verified
+
+A new success state is required with:
+
+- existing auth top bar / language selector;
+- success/check illustration;
+- localized Email verified heading and body;
+- verified email pill;
+- Continue to dashboard;
+- existing privacy/legal footer.
+
+Production implementation of the revised/new visible states remains blocked
+until the remaining mockup variants receive explicit approval.
+
+## Data / Privacy Requirements
+
+- No new verification-token table.
+- No raw email in resend limiter persistence.
+- No financial-data or WatermelonDB schema change.
+- No sync-contract change.
+- The limiter table is inaccessible directly from anon/authenticated clients.
+- Edge Function responses MUST avoid useful account-enumeration differences.
 
 ## Success Criteria
 
-### Measurable Outcomes
+- **SC-001**: 100% of new email/password signups are blocked from private app
+  access until Supabase verifies the email.
+- **SC-002**: Correct six-digit code completes verification and reaches Email
+  verified before dashboard routing.
+- **SC-003**: Paste and digit-by-digit entry both auto-submit once at six digits.
+- **SC-004**: OTPs expire after 600 seconds in local and hosted config.
+- **SC-005**: No more than three resends succeed in an active 24-hour window,
+  including concurrent attempts.
+- **SC-006**: Successful resend failure compensation is proven by automated
+  tests.
+- **SC-007**: Returning unverified sign-in enters the same code flow.
+- **SC-008**: A valid legacy signup confirmation link no longer hangs on the
+  callback skeleton.
+- **SC-009**: Invalid/expired verification fails closed without secret leakage.
+- **SC-010**: Required EN/AR, dark/light, responsive, accessibility, E2E, and
+  device evidence passes.
+- **SC-011**: Gmail, Outlook/Hotmail, and one additional mailbox provider are
+  verified before release.
 
-- **SC-001**: 100% of new email/password accounts in release configuration are
-  denied private app access until email verification succeeds.
-- **SC-002**: The local end-to-end verification journey succeeds from fresh
-  signup through delivered test email, callback opening, session establishment,
-  and authenticated routing.
-- **SC-003**: 100% of tested unverified sign-in attempts enter the
-  verification-pending recovery state and retain the correct email for resend.
-- **SC-004**: 100% of the invalid-link test matrix fails closed with zero private
-  route exposure and zero authentication secrets in user-visible output or
-  logs.
-- **SC-005**: Before release, verification email delivery is successfully
-  exercised against Gmail, Outlook/Hotmail, and at least one additional common
-  mailbox provider, with any spam/suppression behavior documented.
-- **SC-006**: The implemented verification state matches the approved ordinary
-  portrait references and passes required dark, RTL/Arabic, responsive,
-  enlarged-text, and accessibility evidence gates.
-- **SC-007**: Existing Google OAuth and email/password sign-in regression tests
-  remain green after the callback path is consolidated.
+## External Configuration Already Completed
 
-## Assumptions
+Based on user QA on 2026-10-04:
 
-- The behavior is already approved by `specs/016-remove-anonymous-auth` and
-  `docs/business/business-decisions.md`; this feature completes that existing
-  requirement rather than introducing a new authentication method.
-- The verification-state renders approved on 2026-09-21 and their approved,
-  fingerprinted binding sidecars govern the visual implementation.
-- A Monyvi-controlled sending domain/subdomain will be available before hosted
-  SMTP configuration is finalized.
-- Verification inherently requires network access; Monyvi's offline-first
-  financial-data rules do not imply offline email confirmation.
-- No database schema migration or WatermelonDB model change is required.
-- Issue #20 may later add signup profile metadata; if it becomes active, both
-  features must compose their signup options rather than overwrite each other.
+- custom SMTP has been configured in the hosted Supabase project;
+- a real Confirm Signup email was successfully received;
+- the Confirm Signup subject/template has been manually installed using the
+  Monyvi code-first template.
+
+The template must still be checked for the revised **10-minute** expiry copy.
+
+## Out of Scope
+
+- Custom verification-code generation/storage.
+- Replacing Supabase Auth.
+- Passwordless OTP login as a separate feature.
+- SMS/phone verification.
+- Universal/App Links migration.
+- MFA/session-management work from #240.
+- Password-reset UX expansion.
+- Signup profile-name work from #20.
