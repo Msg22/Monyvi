@@ -2,182 +2,190 @@
 
 ## Planning authority
 
-- GitHub issue: #321
+- Issue: #321
 - Branch: `codex/issue321-email-verification`
-- Product authority: `docs/business/business-decisions.md` §3
-- Prior approved behavior: `specs/016-remove-anonymous-auth`
-- Visual authority: approved #321 verification images + their approved,
-  fingerprinted binding sidecars
+- Revised approved plan: 2026-10-04
+- Primary flow: six-digit signup verification code
+- Verification authority: Supabase Auth
+- Resend policy: 2-minute cooldown, 3 resends, 24-hour window
 
-## Implementation order
+## Hosted status reported by user
 
-1. Verify approved mockup binding sidecars.
-2. Write Red unit tests for callback completion.
-3. Implement the shared callback/session-completion service.
-4. Add Red tests for signup/resend redirect options.
-5. Add the canonical callback to signup and resend.
-6. Add Red controller tests for `email_not_confirmed`.
-7. Route unverified sign-in into verification-pending state.
-8. Add route tests, then make `auth-callback.tsx` complete the session before
-   routing.
-9. Enable confirmation in local Supabase and adjust local fixtures.
-10. Align `VerificationPendingView` to the approved references using TDD plus
-    rendered visual evidence.
-11. Add/extend local auth E2E verification journey.
-12. Run focused tests, mobile typecheck/lint, then full CI-required validation.
+On 2026-10-04:
 
-## Local verification
+- custom SMTP was configured in Supabase;
+- a real Confirm Signup email was received successfully;
+- the Monyvi Confirm Signup subject/template was pasted into the Supabase
+  template editor.
 
-Local Supabase must require confirmation.
+Treat template installation as complete.
 
-Expected journey:
+**Required correction check:** the earlier template draft said "expires in 1
+hour". The new product contract is **10 minutes**, so verify the hosted template
+now says 10 minutes before release.
+
+## Local Auth configuration target
+
+```toml
+[auth.email]
+enable_confirmations = true
+otp_length = 6
+otp_expiry = 600
+max_frequency = "2m"
+```
+
+The exact local project-wide email-sent rate limit should be high enough not to
+mask the product's per-email limiter tests.
+
+## Primary manual QA journey
+
+1. Start from a clean/unverified email.
+2. Sign up with email/password.
+3. Verify Monyvi shows the approved code-entry state.
+4. Confirm private dashboard access is unavailable.
+5. Confirm the email contains a six-digit code and says it expires in 10
+   minutes.
+6. Paste all six digits.
+7. Verify submission begins automatically without an extra Verify button.
+8. Confirm exactly one verification request occurs.
+9. Verify Email verified is shown.
+10. Verify the app does not automatically skip the success state.
+11. Tap Continue to dashboard.
+12. Verify the existing authenticated startup flow continues normally.
+
+## Wrong / expired code QA
+
+- wrong six digits -> localized error, remain on code screen;
+- expired code -> localized expiry error and resend recovery;
+- fewer than six digits -> no submit;
+- non-digit paste -> sanitize/reject safely;
+- repeated sixth-digit render/state update -> no duplicate verification call.
+
+## Resend QA
+
+### Initial send
+
+Immediately after signup:
+
+- resend disabled;
+- UI shows countdown such as `Resend in 1:59`.
+
+### Cooldown
+
+After two minutes:
+
+- resend becomes available.
+
+After successful resend:
+
+- resend disables for another two minutes;
+- code-expiry timer restarts from 10 minutes.
+
+### Daily/window limit
+
+Within one active window:
+
+- original send succeeds;
+- resend 1 succeeds;
+- resend 2 succeeds;
+- resend 3 succeeds;
+- resend 4 is denied with product-safe "try later" copy.
+
+After 24 hours from original-send window start:
+
+- allowance resets.
+
+Server enforcement must still hold if the mobile button is bypassed or requests
+arrive concurrently.
+
+## Returning unverified account
+
+1. Sign in with correct password before verification.
+2. Verify raw `email_not_confirmed` is not displayed.
+3. Verify code-entry state opens.
+4. Do not automatically send a new code merely because the user signed in.
+5. Resend remains subject to the same server policy.
+
+If this device does not know the real last-send timestamp, the UI must not show
+a fabricated countdown; generic ten-minute expiry copy is acceptable until a
+new send creates a known timestamp.
+
+## Legacy confirmation-link regression
+
+Real-device issue observed:
+
+- link verified email successfully;
+- app opened the auth-callback skeleton and stayed there;
+- backing out and signing in succeeded.
+
+After the callback fix:
+
+1. open an already-sent/legacy valid signup confirmation link;
+2. callback completes and validates a session;
+3. Email verified appears;
+4. no indefinite skeleton;
+5. Continue enters the app.
+
+Also retest:
+
+- cold start;
+- warm start;
+- invalid/malformed callback;
+- reused link;
+- offline/network callback;
+- OAuth;
+- password recovery.
+
+## Local automated E2E target
+
+Update `npm run e2e:email-verification:local` to use Mailpit code extraction,
+not link-first confirmation:
 
 ```text
-fresh email signup
-  -> verification pending
-  -> local auth email captured
-  -> open confirmation callback
-  -> Supabase session established
-  -> existing authenticated root/startup flow
+fresh signup
+ -> verification code state
+ -> Mailpit receives code email
+ -> extract six-digit token
+ -> enter/paste token
+ -> auto-submit
+ -> Email verified
+ -> Continue
+ -> authenticated app
 ```
 
-Do not send local/E2E mail through production Resend.
+Do not consume production SMTP in local E2E.
 
-### Implemented local E2E harness
+## Visual QA
 
-The branch includes:
+The revised English-light code screen is approved.
 
-- `apps/mobile/scripts/run-email-verification-e2e.js`
-- `apps/mobile/e2e/maestro/auth/email-verification-pending.yaml`
-- `apps/mobile/e2e/maestro/auth/email-verification-confirm.yaml`
-- `apps/mobile/e2e/maestro/auth/email-verification-invalid.yaml`
-- helper/unit coverage in `apps/mobile/__tests__/scripts/e2e-email-verification.test.ts`
+Before implementation resumes, approve remaining:
 
-Run locally with:
+- English dark code screen;
+- Arabic light/dark code screens;
+- Email verified EN/AR light/dark.
 
-```bash
-npm run e2e:email-verification:local
-```
+After implementation, capture baseline/variants and keep functional,
+visual-fidelity, and accessibility statuses separate.
 
-The harness uses Supabase CLI's local Mailpit capture service on port 54324,
-polls the recipient-specific latest message, resolves the Supabase verification
-request without following the native redirect, verifies that the redirect base
-is exactly `monyvi://auth-callback`, and then opens that callback through
-Maestro.
+## Production delivery QA
 
-The auth suite is registered with the repository E2E scope resolver and CI
-runner. Existing PR CI intentionally skips emulator E2E by repository policy;
-the executable journey is therefore also part of release/device QA below.
+Required before release:
 
-### Invalid-link manual cases
+- Gmail;
+- Outlook/Hotmail;
+- one additional common mailbox;
+- spam-folder observation;
+- provider delivery/bounce/suppression logs;
+- SPF/DKIM/DMARC health as applicable.
 
-The deterministic Maestro invalid flow covers a provider-declared callback
-error and a callback with missing auth material. Also verify these auth-server
-state-dependent cases manually against local Supabase and a release build:
+## Secrets
 
-1. Open a valid confirmation link once and complete verification.
-2. Open the same single-use link again. Expected: no private runtime access;
-   return to auth recovery.
-3. Generate a confirmation link, allow it to expire (or use a controlled local
-   expiry configuration), then open it. Expected: no authenticated session and
-   safe auth recovery.
-4. Disable connectivity before opening a still-valid callback. Expected: no
-   private runtime access; recovery/retry remains possible after connectivity
-   returns.
+Never commit or log:
 
-Never record raw token-bearing callback URLs in QA evidence.
-
-## Production configuration runbook
-
-Manual release configuration:
-
-1. Choose a Monyvi-controlled auth sending domain/subdomain.
-2. Add the DNS records required by Resend and verify domain ownership.
-3. Add DMARC as appropriate for the sending domain.
-4. Create a scoped Resend SMTP credential.
-5. Configure Supabase Auth custom SMTP using that credential.
-6. Enable hosted **Confirm email**.
-7. Confirm the hosted redirect allow-list includes exactly
-   `monyvi://auth-callback` for this v1 flow.
-8. Verify signup email template redirect behavior.
-9. Review hosted auth email rate limits.
-10. Test real delivery to Gmail, Outlook/Hotmail, and one additional provider.
-11. Inspect delivery/bounce/suppression logs for failures.
-
-No SMTP credential is committed to the repository or bundled in Expo.
-
-### Resend configuration skeleton
-
-When a Monyvi-controlled sending domain is ready, verify it in Resend and set
-these values only in the release operator's shell or secret manager:
-
-```text
-SUPABASE_ACCESS_TOKEN=<Supabase management token with Auth config write access>
-SUPABASE_PROJECT_REF=<hosted project reference>
-MONYVI_AUTH_SMTP_FROM=verify@<verified Monyvi domain>
-MONYVI_AUTH_SMTP_PASSWORD=<scoped Resend SMTP credential>
-```
-
-Optional overrides are `MONYVI_AUTH_SMTP_HOST` (default `smtp.resend.com`),
-`MONYVI_AUTH_SMTP_PORT` (default `465`), `MONYVI_AUTH_SMTP_USER` (default
-`resend`), and `MONYVI_AUTH_SMTP_SENDER_NAME` (default `Monyvi`). Then run:
-
-```bash
-npm run auth:smtp:check
-npm run auth:smtp:configure
-```
-
-The first command validates and prints a redacted preview. The second performs
-the explicit Supabase Management API update. The script rejects example sender
-domains, never prints the SMTP credential, enables external email, and keeps
-email confirmation required. Re-run the hosted checks and real-provider delivery
-matrix after applying it.
-
-### Hosted configuration status (verified 2026-09-22)
-
-- **Confirm email:** enabled in the hosted Monyvi Supabase project.
-- **Native redirect allow-list:** includes the exact
-  `monyvi://auth-callback` URL.
-- **Custom SMTP:** not configured. The project still uses Supabase's built-in
-  email service, so Resend domain verification, scoped SMTP credentials, and
-  real-provider delivery evidence remain release blockers.
-
-## Manual device QA matrix
-
-| Scenario | Android | iOS | Expected |
-| --- | --- | --- | --- |
-| New signup -> pending | Required | Required when build available | No private access |
-| Valid link, cold start | Required | Required | Session established |
-| Valid link, warm start | Required | Required | Session established |
-| Resend | Required | Required | New confirmation email |
-| Expired link | Required | Required | Safe auth recovery |
-| Reused link | Required | Required | Safe auth recovery |
-| Offline callback | Required | Required | No private access |
-| English light/dark | Required | Required | Approved composition |
-| Arabic RTL light/dark | Required | Required | Mirrored composition |
-| Enlarged text | Required | Required | Readable/reflow only as needed |
-
-## Visual completion
-
-At the declared ordinary-phone context:
-
-- capture implementation screenshot;
-- compare side-by-side or overlay against the approved reference;
-- record functional status separately from visual-fidelity status.
-
-Also capture/verify compact phone, dark mode, RTL/Arabic, tablet/orientation as
-required by the binding sidecars and constitution.
-
-Accessibility evidence is separate from screenshots and must verify roles,
-labels, disabled/busy states, and navigation semantics.
-
-## Release blockers
-
-Do not call #321 release-ready while any of these remain:
-
-- custom SMTP not configured;
-- callback E2E not proven;
-- binding verifier failing;
-- required visual/accessibility evidence missing;
-- Google OAuth regression;
-- known secret/token logging.
+- SMTP password;
+- service-role key;
+- limiter HMAC pepper;
+- OTP;
+- access/refresh token;
+- token-bearing callback URL.
