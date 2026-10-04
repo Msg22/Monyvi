@@ -13,6 +13,7 @@ import {
   AuthCallbackFailureView,
   type AuthCallbackFailureType,
 } from "@/components/auth/AuthCallbackFailureView";
+import { VerificationSuccessView } from "@/components/auth/VerificationSuccessView";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useAuth } from "@/context/AuthContext";
 import { useDeferredRouterReplace } from "@/hooks/useDeferredRouterReplace";
@@ -23,7 +24,60 @@ import { useEffect, useRef, useState } from "react";
 import { View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-type CallbackState = "waiting" | "processing" | "completed" | "failed";
+type CallbackState =
+  | "waiting"
+  | "processing"
+  | "completed"
+  | "verificationSuccess"
+  | "failed";
+
+const CALLBACK_PROCESSING_TIMEOUT_MS = 10_000;
+
+function readCallbackType(
+  params: Record<string, string | string[]>,
+  callbackUrl: string | null
+): string | null {
+  const paramType = Array.isArray(params.type) ? params.type[0] : params.type;
+  if (typeof paramType === "string" && paramType.length > 0) {
+    return paramType;
+  }
+
+  if (!callbackUrl) {
+    return null;
+  }
+
+  const queryStart = callbackUrl.indexOf("?");
+  if (queryStart !== -1) {
+    const hashStart = callbackUrl.indexOf("#", queryStart + 1);
+    const query = callbackUrl.slice(
+      queryStart + 1,
+      hashStart === -1 ? callbackUrl.length : hashStart
+    );
+    const queryType = new URLSearchParams(query).get("type");
+    if (queryType) {
+      return queryType;
+    }
+  }
+
+  const fragmentStart = callbackUrl.indexOf("#");
+  if (fragmentStart !== -1) {
+    const fragmentType = new URLSearchParams(
+      callbackUrl.slice(fragmentStart + 1)
+    ).get("type");
+    if (fragmentType) {
+      return fragmentType;
+    }
+  }
+
+  return null;
+}
+
+function isSignupVerificationLink(
+  params: Record<string, string | string[]>,
+  callbackUrl: string | null
+): boolean {
+  return readCallbackType(params, callbackUrl) === "signup";
+}
 
 /**
  * Detect whether the current deep link is a password-recovery callback.
@@ -35,35 +89,10 @@ function isPasswordRecoveryLink(
   params: Record<string, string | string[]>,
   callbackUrl: string | null
 ): boolean {
-  if (params.type === "recovery" || params.action === "reset") {
+  if (params.action === "reset") {
     return true;
   }
-
-  if (!callbackUrl) {
-    return false;
-  }
-
-  const queryStart = callbackUrl.indexOf("?");
-  if (queryStart !== -1) {
-    const hashStart = callbackUrl.indexOf("#", queryStart + 1);
-    const query = callbackUrl.slice(
-      queryStart + 1,
-      hashStart === -1 ? callbackUrl.length : hashStart
-    );
-    if (new URLSearchParams(query).get("type") === "recovery") {
-      return true;
-    }
-  }
-
-  const fragmentStart = callbackUrl.indexOf("#");
-  if (fragmentStart !== -1) {
-    const fragment = callbackUrl.slice(fragmentStart + 1);
-    if (new URLSearchParams(fragment).get("type") === "recovery") {
-      return true;
-    }
-  }
-
-  return false;
+  return readCallbackType(params, callbackUrl) === "recovery";
 }
 
 function AuthCallbackSkeleton(): React.JSX.Element {
@@ -116,14 +145,39 @@ export default function AuthCallbackScreen(): React.JSX.Element {
     let isMounted = true;
 
     const completeCallback = async (): Promise<void> => {
+      let timeoutId: ReturnType<typeof setTimeout> | null = null;
       try {
-        const result = await completeAuthSessionFromUrl(callbackUrl);
+        const timeoutResult = new Promise<{
+          success: false;
+          error: string;
+          errorCode: "timeout";
+        }>((resolve) => {
+          timeoutId = setTimeout(() => {
+            resolve({
+              success: false,
+              error: "Authentication took too long. Please try again.",
+              errorCode: "timeout",
+            });
+          }, CALLBACK_PROCESSING_TIMEOUT_MS);
+        });
+
+        const result = await Promise.race([
+          completeAuthSessionFromUrl(callbackUrl),
+          timeoutResult,
+        ]);
+        if (timeoutId !== null) {
+          clearTimeout(timeoutId);
+        }
         if (!isMounted) {
           return;
         }
 
         if (result.success) {
-          setCallbackState("completed");
+          if (isSignupVerificationLink(params, callbackUrl)) {
+            setCallbackState("verificationSuccess");
+          } else {
+            setCallbackState("completed");
+          }
         } else {
           setCallbackState("failed");
           if (
@@ -143,6 +197,9 @@ export default function AuthCallbackScreen(): React.JSX.Element {
           }
         }
       } catch {
+        if (timeoutId !== null) {
+          clearTimeout(timeoutId);
+        }
         if (isMounted) {
           setCallbackState("failed");
           if (isPasswordRecoveryLink(params, callbackUrl)) {
@@ -177,6 +234,16 @@ export default function AuthCallbackScreen(): React.JSX.Element {
     processedUrlRef.current = null;
     setRetryNonce((prev) => prev + 1);
   };
+
+  if (callbackState === "verificationSuccess") {
+    return (
+      <VerificationSuccessView
+        onContinue={() => {
+          router.replace("/");
+        }}
+      />
+    );
+  }
 
   if (callbackState === "failed") {
     return (
