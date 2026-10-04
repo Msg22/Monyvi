@@ -165,10 +165,6 @@ jest.mock("@/services/auth-service", () => ({
   requestPasswordReset: jest.fn(),
 }));
 
-jest.mock("@/services/supabase", () => ({
-  resendVerificationEmail: jest.fn(),
-}));
-
 jest.mock("@/components/ui/Skeleton", () => ({
   Skeleton: (props: unknown): React.ReactElement => {
     const ReactMod = require("react") as typeof React;
