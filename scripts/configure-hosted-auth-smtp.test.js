@@ -20,6 +20,9 @@ test("builds the Supabase Auth SMTP payload from environment configuration", () 
   assert.deepEqual(buildHostedAuthSmtpPayload(config), {
     external_email_enabled: true,
     mailer_autoconfirm: false,
+    mailer_otp_exp: 600,
+    mailer_otp_length: 6,
+    smtp_max_frequency: 120,
     smtp_admin_email: "verify@auth.monyvi.test",
     smtp_host: "smtp.resend.com",
     smtp_port: 465,
