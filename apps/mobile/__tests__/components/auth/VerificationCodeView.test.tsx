@@ -30,8 +30,13 @@ jest.mock("@/context/LocaleContext", () => ({
 jest.mock("react-i18next", () => ({
   useTranslation: (): { t: (key: string, options?: Record<string, unknown>) => string } => ({
     t: (key: string, options?: Record<string, unknown>): string => {
-      if (key === "verification_code_expires_in") return `Code expires in ${String(options?.time ?? "")}`;
-      if (key === "resend_in") return `Resend in ${String(options?.time ?? "")}`;
+      const time = typeof options?.time === "string" ? options.time : "";
+      if (key === "verification_code_expires_in") {
+        return `Code expires in ${time}`;
+      }
+      if (key === "resend_in") {
+        return `Resend in ${time}`;
+      }
       return key;
     },
   }),
@@ -57,11 +62,19 @@ describe("VerificationCodeView", () => {
     );
 
     expect(screen.getAllByTestId(/verification-code-cell-/)).toHaveLength(6);
-    const input = screen.getByTestId("verification-code-input");
-    expect(input).toHaveProp("maxLength", 6);
-    expect(input).toHaveProp("textContentType", "oneTimeCode");
+    expect(screen.getByTestId("verification-code-input")).toHaveProp(
+      "maxLength",
+      6
+    );
+    expect(screen.getByTestId("verification-code-input")).toHaveProp(
+      "textContentType",
+      "oneTimeCode"
+    );
 
-    fireEvent.changeText(input, "12 3-456");
+    fireEvent.changeText(
+      screen.getByTestId("verification-code-input"),
+      "12 3-456"
+    );
     expect(onCodeChange).toHaveBeenCalledWith("12 3-456");
 
     expect(screen.queryByText(/paste the code/i)).not.toBeOnTheScreen();
