@@ -2,85 +2,150 @@
 
 ## Summary
 
-#321 introduces **no new persisted Monyvi domain entity and no schema
-migration**. Verification remains owned by Supabase Auth. This document records
-the state boundaries that implementation must preserve.
+Supabase Auth remains the source of truth for whether the email is verified.
 
-## 1. Supabase Auth User Verification State
+The approved 2026-10-04 resend policy adds one persisted anti-abuse model. It
+does **not** store verification codes and does **not** duplicate Supabase Auth.
 
-**Owner**: Supabase Auth  
-**Persistence**: Auth system, not Monyvi application tables
+## 1. Supabase Auth User
+
+Owned by Supabase Auth.
 
 Relevant state:
 
-- user exists with an email identity;
-- email is unverified while the provider has no confirmation timestamp;
-- email is verified once the provider accepts a valid confirmation token.
+- email/password user exists;
+- email confirmation pending;
+- confirmation succeeds through a six-digit code or compatible legacy callback;
+- Supabase session is issued after successful verification.
 
-Monyvi must never create a parallel `is_email_verified` application column.
+Monyvi MUST NOT add an application-level `is_email_verified` column.
 
-### State transitions
+## 2. Verification Flow UI State
 
-```text
-NEW SIGNUP
-   |
-   v
-UNVERIFIED ---- valid confirmation ----> VERIFIED
-   |                                     |
-   | sign-in attempt                     | sign-in/session
-   v                                     v
-VERIFICATION PENDING                 AUTHENTICATED
-   |
-   +---- resend ----> UNVERIFIED (new confirmation message)
-```
+Ephemeral/client state:
 
-Invalid/expired callbacks do not advance the state.
+- pending normalized email;
+- screen state:
+  - form
+  - verificationCode
+  - verificationSuccess
+  - resetSent
+- six-digit input value;
+- verification request pending;
+- last locally known successful send timestamp;
+- resend cooldown deadline;
+- verification-flow navigation suppression.
 
-## 2. Verification Pending UI State
+The OTP itself is never persisted to app storage.
 
-**Owner**: auth screen controller  
-**Persistence**: ephemeral memory only
+If the current device does not know the last send timestamp, it may show generic
+ten-minute expiry copy rather than a fabricated countdown.
 
-Fields/concepts:
+## 3. Resend Limiter Table
 
-- pending email address;
-- screen state = verification pending;
-- resend request pending/not pending;
-- localized success/error feedback.
+Proposed table: `email_verification_resend_limits`
 
-The pending email exists only to render recovery UI and request resend. It is not
-authorization evidence.
+Suggested columns:
 
-## 3. Auth Callback Result
+| Column | Type | Contract |
+| --- | --- | --- |
+| `email_key` | text PK | HMAC-SHA256 of normalized email using server-only pepper |
+| `window_started_at` | timestamptz | original successful send time for active window |
+| `last_sent_at` | timestamptz | latest successful original/resend timestamp |
+| `resend_count` | smallint | successful resends in active window, 0..3 |
+| `reservation_id` | uuid nullable | in-flight atomic resend reservation |
+| `reserved_at` | timestamptz nullable | reservation recovery/timeout support |
+| `created_at` | timestamptz | audit/maintenance |
+| `updated_at` | timestamptz | audit/maintenance |
 
-**Owner**: mobile auth service layer  
-**Persistence**: none
+No raw email, password, OTP, token, callback URL, access token, or refresh token
+is stored.
 
-The callback-completion boundary should expose a stable result classification,
-for example:
+Direct anon/authenticated access is denied.
+
+## 4. Private Atomic Database Operations
+
+Migration-owned, service-role-only operations:
+
+### register initial send
+
+Input: keyed email digest and server timestamp.
+
+Behavior:
+
+- create active window if absent;
+- do not reset an existing active window;
+- set resend_count = 0 for a new window;
+- last_sent_at = original send timestamp.
+
+### reserve resend
+
+Transactionally lock/update the limiter row.
+
+Behavior:
+
+1. if window expired, start a new 24-hour window and reset resend_count;
+2. if last successful send is less than 120 seconds ago, return cooldown;
+3. if resend_count >= 3, return limit reached;
+4. if a live reservation exists, return busy/cooldown-safe denial;
+5. otherwise create reservation_id and return permission to send.
+
+### finalize resend
+
+For the matching reservation only:
+
+- increment resend_count exactly once;
+- set last_sent_at to successful send time;
+- clear reservation.
+
+### release resend
+
+For the matching reservation only:
+
+- clear reservation without incrementing count.
+
+Stale reservations need a bounded recovery rule so a crashed Edge Function does
+not lock resend forever.
+
+## 5. Edge Function Request/Response
+
+The Edge Function receives the raw email only transiently in the request body,
+normalizes it in memory, computes the keyed digest, and does not log it.
+
+Operations:
+
+- `register_initial`
+- `resend`
+
+The client does not require a public detailed status lookup.
+
+Safe response concepts:
 
 - success;
-- provider-declared callback error;
-- invalid/missing authentication material;
-- session-establishment failure.
+- cooldown / try later;
+- daily-window limit / try later;
+- temporary failure.
 
-Raw access tokens, refresh tokens, verification tokens, and complete callback
-URLs are never part of user-visible result payloads or logs.
+Responses must not disclose whether an arbitrary address corresponds to an
+account beyond what the existing Supabase auth flow already safely exposes.
 
-## 4. Routing State
+## 6. Verification Success State
 
-The callback route may coordinate:
+No persisted model.
 
-1. callback processing;
-2. authenticated session establishment;
-3. handoff to existing root/profile routing.
+The success screen exists after:
 
-It must not duplicate onboarding/profile business decisions.
+- successful `verifyOtp`; or
+- successful compatible signup-confirmation callback.
+
+The authenticated session exists, but dashboard routing is intentionally
+suppressed until Continue is pressed.
 
 ## Database / Sync Impact
 
-- PostgreSQL migrations: none.
+- New Postgres anti-abuse table: yes.
+- New private atomic SQL functions: yes.
 - WatermelonDB schema: none.
-- RLS: no new policy.
+- Financial actions: none.
 - Sync protocol: unchanged.
-- Financial actions: unchanged.
+- Verification token persistence: none.
