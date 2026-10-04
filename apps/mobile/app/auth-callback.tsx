@@ -158,6 +158,19 @@ export default function AuthCallbackScreen(): React.JSX.Element {
   const [verifiedEmail, setVerifiedEmail] = useState<string | undefined>();
 
   useEffect(() => {
+    if (callbackUrl || callbackState !== "waiting") {
+      return;
+    }
+
+    const waitingTimeout = setTimeout(() => {
+      setFailureType("verification");
+      setCallbackState("failed");
+    }, CALLBACK_PROCESSING_TIMEOUT_MS);
+
+    return () => clearTimeout(waitingTimeout);
+  }, [callbackState, callbackUrl]);
+
+  useEffect(() => {
     if (!callbackUrl || processedUrlRef.current === callbackUrl) {
       return;
     }
