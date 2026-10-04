@@ -91,6 +91,8 @@ SELECT
   clock_timestamp()
 FROM issue321_fixture;
 
+GRANT SELECT ON issue321_fixture TO service_role;
+
 SET LOCAL ROLE service_role;
 SET LOCAL request.jwt.claim.role = 'service_role';
 
