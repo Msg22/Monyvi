@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <body style="margin:0;padding:32px;background:#f8fafc;font-family:Arial,sans-serif;color:#1e293b">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:520px;background:#ffffff;border-radius:20px;padding:32px">
+            <tr>
+              <td align="center">
+                <div style="font-size:28px;font-weight:700;margin-bottom:24px">Monyvi</div>
+                <h1 style="font-size:24px;margin:0 0 12px">Verify your email</h1>
+                <p style="font-size:15px;line-height:22px;color:#475569;margin:0 0 24px">
+                  Enter this 6-digit code in Monyvi. It expires in 10 minutes.
+                </p>
+                <div
+                  data-verification-code="{{ .Token }}"
+                  style="display:inline-block;padding:18px 24px;border-radius:14px;background:#ecfdf5;border:1px solid #a7f3d0;font-size:34px;font-weight:800;letter-spacing:8px;color:#0f172a"
+                >{{ .Token }}</div>
+                <p style="font-size:13px;line-height:20px;color:#64748b;margin:24px 0 0">
+                  If you did not create a Monyvi account, you can ignore this email.
+                </p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>
