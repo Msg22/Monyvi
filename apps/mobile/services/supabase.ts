@@ -410,30 +410,6 @@ export async function resetPasswordForEmail(
   return { success: true };
 }
 
-/**
- * Resend the email verification link for a pending sign-up.
- *
- * @param email - The email address to resend verification to
- * @returns Result indicating success or error
- */
-export async function resendVerificationEmail(
-  email: string
-): Promise<EmailAuthResult> {
-  const { error } = await supabase.auth.resend({
-    type: "signup",
-    email,
-    options: {
-      emailRedirectTo: AUTH_REDIRECT_URL,
-    },
-  });
-
-  if (error) {
-    return { success: false, error };
-  }
-
-  return { success: true };
-}
-
 export type {
   OAuthProvider,
   EmailAuthResult,
