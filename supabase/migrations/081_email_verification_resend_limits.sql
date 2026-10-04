@@ -189,8 +189,14 @@ BEGIN
     AND v_row.reserved_at
         + make_interval(secs => p_reservation_lease_seconds) <= v_now
   THEN
+    -- The function crashed or lost its response after reserving. We cannot know
+    -- whether the downstream email was sent, so consume the ambiguous slot
+    -- conservatively. Explicit provider failures call release_resend and do not
+    -- consume a slot.
     UPDATE public.email_verification_resend_limits
-    SET reservation_id = NULL,
+    SET resend_count = LEAST(resend_count + 1, p_max_resends),
+        last_sent_at = COALESCE(reserved_at, v_now),
+        reservation_id = NULL,
         reserved_at = NULL,
         updated_at = v_now
     WHERE email_key = p_email_key
