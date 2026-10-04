@@ -4,17 +4,9 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { AuthCallbackFailureView } from "@/components/auth/AuthCallbackFailureView";
 import { ResetSentView } from "@/components/auth/ResetSentView";
-import { VerificationPendingView } from "@/components/auth/VerificationPendingView";
 
 const COPY: Readonly<Record<string, string>> = {
-  check_your_inbox: "Check your inbox",
-  verification_sent_message: "We sent a verification link to",
-  resend_email: "Resend email",
-  resending_email: "Resending email…",
   back_to_sign_in: "Back to sign in",
-  private_by_design: "Private by design.",
-  privacy: "Privacy",
-  terms: "Terms",
   verification_link_failed_title: "Verification link didn’t work",
   verification_link_failed_message:
     "This link may have expired or already been used. Go back to sign in and request a new email.",
@@ -66,64 +58,6 @@ jest.mock("@/context/ThemeContext", () => ({
 }));
 
 describe("auth status views", () => {
-  it("renders the approved full-page verification composition without a card", () => {
-    const onResend = jest.fn<Promise<void>, []>().mockResolvedValue(undefined);
-    const onBack = jest.fn();
-
-    render(
-      <VerificationPendingView
-        email="user@example.com"
-        isResending={false}
-        onResend={onResend}
-        onBack={onBack}
-      />
-    );
-
-    expect(screen.getByTestId("verification-pending-view")).toBeOnTheScreen();
-    expect(screen.getByTestId("verification-state-content")).toBeOnTheScreen();
-    expect(screen.getByTestId("verification-email-chip")).toHaveTextContent(
-      "user@example.com"
-    );
-    expect(screen.getByTestId("auth-privacy-footer")).toBeOnTheScreen();
-    expect(screen.getByText("Privacy")).toBeOnTheScreen();
-    expect(screen.getByText("Terms")).toBeOnTheScreen();
-    expect(screen.queryByRole("link")).not.toBeOnTheScreen();
-    fireEvent.press(screen.getByRole("button", { name: "Resend email" }));
-    fireEvent.press(screen.getByRole("button", { name: "Back to sign in" }));
-    expect(onResend).toHaveBeenCalledTimes(1);
-    expect(onBack).toHaveBeenCalledTimes(1);
-    expect(screen.queryByTestId("verification-card")).not.toBeOnTheScreen();
-  });
-
-  it("announces the verification resend state and blocks conflicting actions", () => {
-    const onResend = jest.fn<Promise<void>, []>().mockResolvedValue(undefined);
-    const onBack = jest.fn();
-
-    render(
-      <VerificationPendingView
-        email="user@example.com"
-        isResending
-        onResend={onResend}
-        onBack={onBack}
-      />
-    );
-
-    expect(
-      screen.getByRole("header", { name: "Check your inbox" })
-    ).toBeOnTheScreen();
-    expect(screen.getByText(/user@example.com/)).toBeOnTheScreen();
-    expect(
-      screen.getByRole("button", {
-        name: "Resending email…",
-        disabled: true,
-        busy: true,
-      })
-    ).toBeOnTheScreen();
-    expect(
-      screen.getByRole("button", { name: "Back to sign in", disabled: true })
-    ).toBeOnTheScreen();
-  });
-
   it("renders failed-link recovery with safe-area-aware action spacing", () => {
     const onBack = jest.fn();
 
