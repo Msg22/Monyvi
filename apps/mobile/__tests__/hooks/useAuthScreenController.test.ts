@@ -732,6 +732,7 @@ describe("useAuthScreenController code-first verification", () => {
     expect(result.current.verificationError).toBe(
       "auth.verification_code_invalid"
     );
+    expect(result.current.verificationCode).toBe("");
     expect(result.current.screenState).toBe("verificationCode");
 
     act(() => {
