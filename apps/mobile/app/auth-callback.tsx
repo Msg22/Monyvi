@@ -14,14 +14,19 @@ import {
   type AuthCallbackFailureType,
 } from "@/components/auth/AuthCallbackFailureView";
 import { VerificationSuccessView } from "@/components/auth/VerificationSuccessView";
+import { LanguageSwitcherPill } from "@/components/onboarding/LanguageSwitcherPill";
+import { MonyviLogo } from "@/components/ui/MonyviLogo";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { palette } from "@/constants/colors";
+import { useTheme } from "@/context/ThemeContext";
 import { useAuth } from "@/context/AuthContext";
 import { useDeferredRouterReplace } from "@/hooks/useDeferredRouterReplace";
 import { completeAuthSessionFromUrl } from "@/services/auth-service";
 import { useURL } from "expo-linking";
 import { type Href, useLocalSearchParams, useRouter } from "expo-router";
+import { LinearGradient } from "expo-linear-gradient";
 import { useEffect, useRef, useState } from "react";
-import { View } from "react-native";
+import { ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 type CallbackState =
@@ -124,8 +129,53 @@ function AuthCallbackSkeleton(): React.JSX.Element {
   );
 }
 
+function AuthCallbackVerificationSuccess({
+  email,
+  onContinue,
+}: {
+  readonly email?: string;
+  readonly onContinue: () => void;
+}): React.JSX.Element {
+  const insets = useSafeAreaInsets();
+  const { isDark } = useTheme();
+  const gradientColors: readonly [string, string] = isDark
+    ? [palette.slate[950], palette.slate[900]]
+    : [palette.nileGreen[50], palette.slate[25]];
+
+  return (
+    <View className="flex-1 bg-background dark:bg-background-dark">
+      <LinearGradient
+        colors={gradientColors}
+        className="absolute inset-0"
+        pointerEvents="none"
+      />
+      <ScrollView
+        bounces={false}
+        overScrollMode="never"
+        contentContainerStyle={{
+          flexGrow: 1,
+          paddingTop: insets.top + 6,
+          paddingBottom: insets.bottom + 22,
+          paddingHorizontal: 30,
+        }}
+        showsVerticalScrollIndicator={false}
+      >
+        <View
+          testID="auth-topbar"
+          className="flex-row items-center justify-between"
+          style={{ minHeight: 50 }}
+        >
+          <LanguageSwitcherPill />
+          <MonyviLogo width={114} height={34} />
+        </View>
+        <VerificationSuccessView email={email} onContinue={onContinue} />
+      </ScrollView>
+    </View>
+  );
+}
+
 export default function AuthCallbackScreen(): React.JSX.Element {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, user } = useAuth();
   const router = useRouter();
   const params = useLocalSearchParams<Record<string, string | string[]>>();
   const callbackUrl = useURL();
@@ -237,7 +287,8 @@ export default function AuthCallbackScreen(): React.JSX.Element {
 
   if (callbackState === "verificationSuccess") {
     return (
-      <VerificationSuccessView
+      <AuthCallbackVerificationSuccess
+        email={user?.email}
         onContinue={() => {
           router.replace("/");
         }}
