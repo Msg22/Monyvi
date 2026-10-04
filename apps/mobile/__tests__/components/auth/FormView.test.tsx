@@ -75,6 +75,8 @@ const mockEmailSubmit = jest.fn<
 const mockForgotPassword = jest.fn<Promise<void>, [string]>();
 const mockClearError = jest.fn();
 const mockClearNetworkError = jest.fn();
+const mockPrivacyPress = jest.fn();
+const mockTermsPress = jest.fn();
 
 function renderForm(
   overrides: Partial<React.ComponentProps<typeof FormView>> = {}
@@ -91,6 +93,8 @@ function renderForm(
       onForgotPassword={mockForgotPassword}
       onClearError={mockClearError}
       onClearNetworkError={mockClearNetworkError}
+      onPrivacyPress={mockPrivacyPress}
+      onTermsPress={mockTermsPress}
       {...overrides}
     />
   );
@@ -103,6 +107,8 @@ describe("FormView", () => {
     mockOAuth.mockResolvedValue(undefined);
     mockEmailSubmit.mockResolvedValue(undefined);
     mockForgotPassword.mockResolvedValue(undefined);
+    mockPrivacyPress.mockClear();
+    mockTermsPress.mockClear();
   });
 
   it("renders approved sign-in composition by default", () => {
