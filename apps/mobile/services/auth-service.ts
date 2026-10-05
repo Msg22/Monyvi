@@ -86,6 +86,14 @@ interface CancellableTimeout {
 /** Maximum time (ms) to wait for the browser to return a result. */
 const OAUTH_TIMEOUT_MS = 120_000;
 
+/**
+ * PKCE authorization codes are single-use. Supabase consumes/removes the
+ * verifier when an exchange settles, including provider errors, so retrying
+ * the same code can only produce a misleading second exchange. Keep the
+ * in-flight and terminal result process-local for duplicate callback delivery.
+ */
+const pkceCallbackResults = new Map<string, Promise<AuthCallbackResult>>();
+
 // =============================================================================
 // Public API — OAuth
 // =============================================================================
@@ -340,20 +348,14 @@ export async function completeAuthSessionFromUrl(
 
   const code = queryParams?.get("code");
   if (code) {
-    try {
-      const { data, error } = await supabase.auth.exchangeCodeForSession(code);
-
-      if (error) {
-        return createAuthCallbackFailure(error);
-      }
-      if (!data.session) {
-        return createMissingCallbackSessionFailure();
-      }
-
-      return createAuthCallbackSuccess(data.session.user?.email);
-    } catch (error: unknown) {
-      return createAuthCallbackFailure(error);
+    const existingResult = pkceCallbackResults.get(code);
+    if (existingResult) {
+      return existingResult;
     }
+
+    const exchangeResult = completePkceCallback(code);
+    pkceCallbackResults.set(code, exchangeResult);
+    return exchangeResult;
   }
 
   return {
@@ -361,6 +363,23 @@ export async function completeAuthSessionFromUrl(
     error: "Could not extract session from the sign-in response.",
     errorCode: "invalid_callback",
   };
+}
+
+async function completePkceCallback(code: string): Promise<AuthCallbackResult> {
+  try {
+    const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+
+    if (error) {
+      return createAuthCallbackFailure(error);
+    }
+    if (!data.session) {
+      return createMissingCallbackSessionFailure();
+    }
+
+    return createAuthCallbackSuccess(data.session.user?.email);
+  } catch (error: unknown) {
+    return createAuthCallbackFailure(error);
+  }
 }
 
 /**
