@@ -180,15 +180,22 @@ The sole approved revised visual reference is:
 - SHA-256:
   `d1a0778e9d0fe00385eeb3c59e27e7428671a96b2eee91e851b3ef7d109e5976`
 
-Its sidecar is intentionally **PENDING**. Do not implement board-governed UI
-details or claim visual fidelity until the combined image-and-metadata tuple is
-explicitly approved and the canonical binding verifier passes.
+Its sidecar is **APPROVED** at combined revision
+`sha256:6b8db88a6cec5cf73ef35e6c95ace82405da52e293b04300cfc538774ba9b6d6`,
+and the canonical repository binding verifier passes. This authorizes UI
+implementation against the binding facts.
 
 The older three repository PNGs/sidecars remain historical link-first evidence.
 
-After binding approval, capture ordinary/compact/tablet/orientation/font-scale
-and EN/AR light/dark evidence without stretching the reference board viewport.
+Rendered visual/device fidelity is still **unverified** and owned by Mohamed.
+When he performs it, capture ordinary/compact/tablet/orientation/font-scale and
+EN/AR light/dark evidence without stretching the reference board viewport.
 Unpictured states are compatibility evidence, not pixel-comparison targets.
+
+Do not launch PR/branch emulator E2E for #321. The temporary issue-specific E2E
+workflow was removed. Android E2E remains guarded to `refs/heads/main` by the
+existing `.github/workflows/ci.yml`; authored journeys are preserved for that
+future main-CI run.
 
 ## Hosted deployment sequence
 
@@ -222,6 +229,9 @@ No limiter secret belongs in the mobile bundle or Git.
 The tracked local Confirm Signup template now contains the primary six-digit
 code plus a secondary confirmation link. The earlier hosted manual template
 install predates that fallback; hosted template parity is therefore PENDING.
+Custom SMTP was previously reported configured, but hosted-template parity,
+live Gmail/Outlook/third-provider delivery, provider health, and current hosted
+limiter deployment remain external/manual evidence rather than CI Green.
 
 **Known limitations:** the Monyvi resend policy is server-enforced once its
 tracked database/function are deployed, while underlying Supabase Auth retains
