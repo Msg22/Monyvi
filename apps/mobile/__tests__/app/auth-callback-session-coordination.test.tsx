@@ -154,6 +154,18 @@ function sessionResponse(session: Session): Awaited<
   };
 }
 
+function authTokenResponse(session: Session): Awaited<
+  ReturnType<typeof supabase.auth.exchangeCodeForSession>
+> {
+  return {
+    data: {
+      user: session.user,
+      session,
+    },
+    error: null,
+  };
+}
+
 function sessionReadResponse(
   session: Session | null
 ): ReturnType<typeof supabase.auth.getSession> {
@@ -395,7 +407,7 @@ describe("auth callback session coordination integration", () => {
         return releaseExchange.promise.then(() => {
           persistedSession = sessionB;
           bridge.emit("SIGNED_IN", sessionB);
-          return sessionResponse(sessionB);
+          return authTokenResponse(sessionB);
         });
       });
 
@@ -447,7 +459,7 @@ describe("auth callback session coordination integration", () => {
       .mockImplementation(() => {
         persistedSession = sessionA;
         bridge.emit("SIGNED_IN", sessionA);
-        return Promise.resolve(sessionResponse(sessionA));
+        return Promise.resolve(authTokenResponse(sessionA));
       });
 
     render(
@@ -494,7 +506,7 @@ describe("auth callback session coordination integration", () => {
       .mockImplementation(() => {
         persistedSession = sessionA;
         bridge.emit("SIGNED_IN", sessionA);
-        return Promise.resolve(sessionResponse(sessionA));
+        return Promise.resolve(authTokenResponse(sessionA));
       });
     jest.spyOn(supabase.auth, "signInWithPassword").mockImplementation(() => {
       persistedSession = sessionB;

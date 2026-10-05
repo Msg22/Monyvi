@@ -171,10 +171,11 @@ describe("Supabase coordinated auth bridge", () => {
     });
 
     const subscription = coordinated.subscribeToCoordinatedAuthStateChange(
-      (_event: AuthChangeEvent, session: Session | null) => {
+      (_event: AuthChangeEvent, session: Session | null): Promise<void> => {
         if (session) {
           observed.push(session.access_token);
         }
+        return Promise.resolve();
       }
     );
 

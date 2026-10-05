@@ -324,10 +324,7 @@ describe("auth session mutation public-entrypoint integration", () => {
 
     jest.spyOn(supabase.auth, "getSession").mockImplementation(() => {
       events.push(`read:${sessionToken(persistedSession)}`);
-      return Promise.resolve({
-        data: { session: persistedSession },
-        error: null,
-      });
+      return sessionReadResponse(persistedSession);
     });
     jest.spyOn(supabase.auth, "setSession").mockImplementation((tokens) => {
       if (tokens.access_token === "session-a") {
