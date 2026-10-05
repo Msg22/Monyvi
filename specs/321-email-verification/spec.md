@@ -3,7 +3,7 @@
 **Feature Branch**: `codex/issue321-email-verification`  
 **Created**: 2026-09-21  
 **Revised**: 2026-10-04  
-**Status**: Approved plan; implementation paused at mockup approval gate  
+**Status**: Implementation in progress; code-first product scope approved; visual binding metadata approval and final release evidence pending  
 **Issue**: #321 — Complete production email verification with code-first signup flow
 
 ## Product Direction
@@ -23,8 +23,11 @@ sign up
   -> explicit Continue to dashboard
 ```
 
-Legacy/signup confirmation links remain supported defensively and for already
-sent emails, but they are not the primary signup UX.
+Signup confirmation links remain a **secondary fallback**. The local Confirm
+Signup template presents the six-digit code first and then a confirmation link.
+The code path is the primary signup UX; consuming the fallback link must still
+produce the same signup verification success contract. Hosted-template parity
+with the new secondary link is not yet proven.
 
 ## User Stories
 
@@ -43,8 +46,11 @@ continue into the authenticated app.
 4. Correct verification creates/accepts the Supabase session and opens the
    Email verified success state.
 5. AuthContext becoming authenticated MUST NOT skip the success state.
-6. The user enters the authenticated startup flow only after choosing
-   **Continue to dashboard**.
+6. While this verification-success flow remains mounted, the user enters the
+   authenticated startup flow only after choosing **Continue to dashboard**.
+7. If the app is fully closed/restarted after successful verification, the
+   already-verified persisted session may proceed through normal authenticated
+   startup; no durable Continue-acknowledgement marker is required.
 
 ### User Story 2 — Resend safely without inbox abuse (P1)
 
@@ -115,8 +121,9 @@ routing.
   state before authenticated routing.
 - **FR-007**: Continue to dashboard MUST explicitly hand off to the existing
   authenticated startup/root routing.
-- **FR-008**: Session/auth-state propagation MUST NOT auto-skip the verification
-  success state.
+- **FR-008**: During the active mounted verification flow, session/auth-state
+  propagation MUST NOT auto-skip the verification success state. A later cold
+  restart with an already verified persisted session may use normal startup.
 - **FR-009**: Resend MUST have a 2-minute client cooldown after each successful
   verification email send.
 - **FR-010**: Server-side policy MUST allow at most three resends within the
@@ -132,15 +139,19 @@ routing.
 - **FR-016**: A successful signup confirmation callback MUST show Email verified
   rather than an unbounded loading skeleton.
 - **FR-017**: Callback processing MUST have bounded timeout/failure states.
-- **FR-018**: Existing Google OAuth and password-recovery callback behavior MUST
-  not regress.
+- **FR-018**: Existing Google OAuth callback behavior MUST not regress.
+  Password-recovery routing/reset behavior is excluded from PR #322 and tracked
+  separately by #373; PR #322 MUST NOT claim password-recovery completion.
 - **FR-019**: English/Arabic, LTR/RTL, light/dark, responsive layouts, enlarged
   text, and accessibility semantics remain required.
 - **FR-020**: No SMTP secret, service-role secret, OTP, access token, refresh
   token, or credential-bearing callback URL may be exposed in app UI/logging.
 - **FR-021**: Production email continues through Supabase Auth custom SMTP.
-- **FR-022**: The currently installed Confirm Signup template is treated as
-  configured; release QA MUST verify its expiry copy says **10 minutes**.
+- **FR-022**: The local Confirm Signup template MUST keep the six-digit code
+  primary and include the secondary confirmation-link fallback. Release QA MUST
+  verify the hosted Confirm Signup template matches the current local template
+  and says **10 minutes**; the earlier hosted manual install predates the new
+  fallback link, so hosted parity is currently unproven.
 
 ## Resend Limiter
 
@@ -161,8 +172,12 @@ validate verification codes.
 
 ### Verification code
 
-The English-light code-entry mockup revised and approved on 2026-10-04 is the
-baseline once its final binding sidecar is persisted.
+The sole currently approved revised visual reference is the six-panel board at
+`mockups/verification-flow-approved.png` (SHA-256
+`d1a0778e9d0fe00385eeb3c59e27e7428671a96b2eee91e851b3ef7d109e5976`).
+Its adjacent binding sidecar is intentionally **PENDING**. The board therefore
+defines the approved visual direction, but it is not yet an authoritative
+code-binding tuple under the repository binding workflow.
 
 It intentionally does NOT display:
 
@@ -183,8 +198,10 @@ A new success state is required with:
 - Continue to dashboard;
 - existing privacy/legal footer.
 
-Production implementation of the revised/new visible states remains blocked
-until the remaining mockup variants receive explicit approval.
+Board-governed UI production changes remain blocked until the new sidecar's
+combined image-and-binding metadata receives explicit approval and the canonical
+binding verifier passes. The older three PNG/sidecar pairs remain historical
+link-first evidence only.
 
 ## Data / Privacy Requirements
 
@@ -193,7 +210,9 @@ until the remaining mockup variants receive explicit approval.
 - No financial-data or WatermelonDB schema change.
 - No sync-contract change.
 - The limiter table is inaccessible directly from anon/authenticated clients.
-- Edge Function responses MUST avoid useful account-enumeration differences.
+- The current resend endpoint has a known public account-state enumeration
+  limitation. That security redesign is explicitly deferred to #372 and MUST
+  remain disclosed; PR #322 MUST NOT claim the resend path is enumeration-safe.
 
 ## Success Criteria
 
@@ -225,7 +244,9 @@ Based on user QA on 2026-10-04:
 - the Confirm Signup subject/template has been manually installed using the
   Monyvi code-first template.
 
-The template must still be checked for the revised **10-minute** expiry copy.
+The hosted template must still be checked for the revised **10-minute** expiry
+copy **and** updated/verified for parity with the newly tracked secondary
+confirmation-link fallback. No hosted mutation is implied by this specification.
 
 ## Out of Scope
 
@@ -235,5 +256,6 @@ The template must still be checked for the revised **10-minute** expiry copy.
 - SMS/phone verification.
 - Universal/App Links migration.
 - MFA/session-management work from #240.
-- Password-reset UX expansion.
+- Password recovery/reset routing and private-access correction; tracked by #373.
+- Resend public account-state/oracle redesign; tracked by #372.
 - Signup profile-name work from #20.
