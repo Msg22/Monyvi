@@ -37,12 +37,13 @@ evidence.
 - [x] R006 Approve English-dark Email verified screen
 - [x] R007 Approve Arabic-light Email verified screen
 - [x] R008 Approve Arabic-dark Email verified screen
-- [x] R009 Persist the exact approved six-panel image and adjacent PENDING binding draft
-- [ ] R010 Obtain required binding-metadata approval and run canonical binding verifier
+- [x] R009 Persist the exact approved six-panel image and adjacent binding sidecar
+- [x] R010 Obtain combined binding-metadata approval and canonical binding-verifier PASS
 
-**Approval gate**: the six-panel revised board is the sole approved visual
-reference. R009 is complete as a reviewable PENDING binding draft. R010 remains
-required before any board-governed UI production mutation or visual sign-off.
+**Approval gate**: COMPLETE for the exact authoritative image+metadata tuple at
+combined revision `sha256:6b8db88a6cec5cf73ef35e6c95ace82405da52e293b04300cfc538774ba9b6d6`.
+This authorizes UI implementation; rendered visual/device fidelity remains
+separate, unexecuted evidence owned by Mohamed.
 
 ---
 
@@ -152,14 +153,14 @@ required before any board-governed UI production mutation or visual sign-off.
 ## Phase R5 — E2E, visual, accessibility, production QA
 
 - [x] R068 Update local Mailpit E2E to extract six-digit code instead of relying on signup magic link
-- [ ] R069 E2E signup -> code paste/type -> auto-submit -> success -> Continue
-- [ ] R070 E2E returning unverified sign-in path
+- [ ] R069 Main-only Android E2E signup -> code paste/type -> auto-submit -> success -> Continue; no PR/emulator run in this wave
+- [ ] R070 Main-only Android E2E returning unverified sign-in path; no PR/emulator run in this wave
 - [x] R071 Automated deterministic limiter tests cover cooldown/count/window/concurrency; do not make device E2E sleep through all policy windows
 - [ ] R072 Manual device QA real 2-minute cooldown and fourth-resend denial
 - [ ] R073 Manual Android callback legacy-link regression: cold + warm start, no skeleton hang
 - [ ] R074 iOS device QA when build available
-- [ ] R075 Capture EN/AR light/dark visual evidence against approved bindings
-- [ ] R076 Verify compact/enlarged-text/RTL accessibility evidence
+- [ ] R075 Mohamed captures EN/AR light/dark visual evidence against the approved binding; not executed by this PR worker
+- [ ] R076 Mohamed verifies compact/enlarged-text/RTL accessibility evidence; not executed by this PR worker
 - [ ] R077 Verify Gmail delivery
 - [ ] R078 Verify Outlook/Hotmail delivery
 - [ ] R079 Verify one additional mailbox provider
@@ -170,7 +171,7 @@ required before any board-governed UI production mutation or visual sign-off.
 ## Phase R6 — Final gates
 
 - [x] R081 Security audit: no OTP, raw limiter email, HMAC pepper, auth token, callback secret, SMTP/service-role logging
-- [ ] R082 Final mockup-binding verifier exact-head PASS
+- [x] R082 Canonical mockup-binding verifier PASS for the approved image+metadata tuple
 - [ ] R083 Exact-head focused auth/Edge/pgTAP tests Green after late-review F1 hardening
 - [ ] R084 Exact-head mobile TypeScript/lint/i18n/repository checks Green
 - [ ] R085 Exact-head GitHub Actions Green
@@ -202,7 +203,7 @@ required before any board-governed UI production mutation or visual sign-off.
 - **Product plan**: APPROVED 2026-10-04
 - **English-light code-entry visual**: APPROVED
 - **Revised six-panel visual direction**: APPROVED
-- **Binding metadata approval**: PENDING — no board-governed UI implementation/sign-off yet
+- **Binding metadata approval**: APPROVED — combined revision `sha256:6b8db88a6cec5cf73ef35e6c95ace82405da52e293b04300cfc538774ba9b6d6`; canonical verifier PASS
 - **Confirm Signup template installation**: COMPLETE by user
 - **Tracked local template code + secondary link**: COMPLETE
 - **Hosted template parity + 10-minute copy verification**: PENDING
@@ -226,14 +227,16 @@ required before any board-governed UI production mutation or visual sign-off.
   access/refresh token, raw limiter email, SMTP password, or HMAC key. Hosted
   helper output redacts SMTP password and summarizes template compliance rather
   than returning template body.
-- R069/R070 remain unchecked because the new code-first Maestro journeys exist
-  but still require an actual emulator/physical-device execution.
+- R069/R070 remain unchecked by policy: PR/branch emulator E2E is not run.
+  Android E2E remains guarded to `refs/heads/main` in the existing CI workflow.
 - R016/R017 remain unchecked until hosted Auth status proves 600s/6-digit/120s
   and the installed Confirm Signup template is verified to say 10 minutes.
-- R072-R080 remain manual/external release evidence.
-- R082 remains pending because the revised six-panel board is present with a
-  PENDING sidecar. The older three PNG/sidecars are historical link-first
-  references only.
+- R072-R080 remain manual/external release evidence owned by Mohamed; SMTP,
+  hosted-template parity, live mailbox/provider, device, visual, and accessibility
+  evidence are not claimed by CI.
+- R082 is complete for the authoritative binding tuple. Rendered visual/device
+  fidelity remains separate and unverified. The older three PNG/sidecars remain
+  historical link-first references only.
 - Historical Green checkpoints above remain useful evidence, but they are not
   final exact-head sign-off after the late-review F1/F3/F6/template changes.
 - Password recovery is excluded to #373. Resend enumeration hardening is
