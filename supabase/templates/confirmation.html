@@ -16,6 +16,13 @@
                   data-verification-code="{{ .Token }}"
                   style="display:inline-block;padding:18px 24px;border-radius:14px;background:#ecfdf5;border:1px solid #a7f3d0;font-size:34px;font-weight:800;letter-spacing:8px;color:#0f172a"
                 >{{ .Token }}</div>
+                <p style="font-size:13px;line-height:20px;color:#64748b;margin:24px 0 12px">
+                  Prefer entering the code above. If you cannot enter it, you can use the confirmation link instead.
+                </p>
+                <a
+                  href="{{ .ConfirmationURL }}"
+                  style="display:inline-block;font-size:13px;line-height:20px;color:#2563eb;text-decoration:underline"
+                >Verify with confirmation link</a>
                 <p style="font-size:13px;line-height:20px;color:#64748b;margin:24px 0 0">
                   If you did not create a Monyvi account, you can ignore this email.
                 </p>
