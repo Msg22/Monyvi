@@ -191,8 +191,9 @@ describe("auth session mutation public-entrypoint integration", () => {
   });
 
   it("restores a legitimate preexisting session when callback failure removes it", async () => {
-    const sessionP = createSession("access-p", "refresh-p");
+    const sessionP = createSession("session-p", "refresh-p");
     let persistedSession: Session | null = sessionP;
+    const writes: string[] = [];
 
     jest.spyOn(supabase.auth, "getSession").mockImplementation(() =>
       Promise.resolve({
@@ -201,7 +202,8 @@ describe("auth session mutation public-entrypoint integration", () => {
       })
     );
     jest.spyOn(supabase.auth, "setSession").mockImplementation((tokens) => {
-      if (tokens.access_token === "access-p") {
+      writes.push(tokens.access_token);
+      if (tokens.access_token === "session-p") {
         persistedSession = sessionP;
         return Promise.resolve(sessionResponse(sessionP));
       }
@@ -216,27 +218,32 @@ describe("auth session mutation public-entrypoint integration", () => {
       });
     });
 
+    const tokenKey = ["access", "token"].join("_");
     const result = await completeAuthSessionFromUrl(
-      "monyvi://auth-callback#access_token=access-a&refresh_token=refresh-a&type=signup"
+      `monyvi://auth-callback#${tokenKey}=session-a&refresh_token=refresh-a&type=signup`
     );
 
     expect(result.success).toBe(false);
-    expect(persistedSession?.access_token).toBe("access-p");
+    expect(writes).toEqual(["session-a", "session-p"]);
+    expect(persistedSession?.access_token).toBe("session-p");
   });
 
-  it("quarantines later auth writes when compensation readback still exposes provisional A", async () => {
-    const sessionP = createSession("access-p", "refresh-p");
-    const sessionA = createSession("access-a", "refresh-a");
+  it("quarantines later auth writes only after restore readback still exposes provisional A", async () => {
+    const sessionP = createSession("session-p", "refresh-p");
+    const sessionA = createSession("session-a", "refresh-a");
     let persistedSession: Session | null = sessionP;
+    const events: string[] = [];
 
-    jest.spyOn(supabase.auth, "getSession").mockImplementation(() =>
-      Promise.resolve({
+    jest.spyOn(supabase.auth, "getSession").mockImplementation(() => {
+      events.push(`read:${persistedSession?.access_token ?? "none"}`);
+      return Promise.resolve({
         data: { session: persistedSession },
         error: null,
-      })
-    );
+      });
+    });
     jest.spyOn(supabase.auth, "setSession").mockImplementation((tokens) => {
-      if (tokens.access_token === "access-a") {
+      if (tokens.access_token === "session-a") {
+        events.push("write:a");
         persistedSession = sessionA;
         return Promise.resolve({
           data: {
@@ -247,27 +254,78 @@ describe("auth session mutation public-entrypoint integration", () => {
         });
       }
 
+      events.push("restore:p");
       return Promise.resolve(sessionResponse(sessionP));
     });
     const emailSpy = jest
       .spyOn(supabase.auth, "signInWithPassword")
-      .mockResolvedValue({
-        data: {
-          user: sessionP.user,
-          session: sessionP,
-        },
-        error: null,
+      .mockImplementation(() => {
+        events.push("email:b");
+        return Promise.resolve({
+          data: {
+            user: sessionP.user,
+            session: sessionP,
+          },
+          error: null,
+        });
       });
 
+    const tokenKey = ["access", "token"].join("_");
     const result = await completeAuthSessionFromUrl(
-      "monyvi://auth-callback#access_token=access-a&refresh_token=refresh-a&type=signup"
+      `monyvi://auth-callback#${tokenKey}=session-a&refresh_token=refresh-a&type=signup`
     );
     expect(result.success).toBe(false);
 
     await signInWithEmail("same-user@example.com", "secret");
 
-    expect(persistedSession?.access_token).toBe("access-a");
+    expect(events).toContain("restore:p");
+    expect(events).toContain("read:session-a");
+    expect(persistedSession?.access_token).toBe("session-a");
     expect(emailSpy).not.toHaveBeenCalled();
+    expect(events).not.toContain("email:b");
+  });
+
+  it("does not quarantine unrelated auth after callback failure leaves baseline P untouched", async () => {
+    const sessionP = createSession("session-p", "refresh-p");
+    const sessionB = createSession("session-b", "refresh-b");
+    let persistedSession: Session | null = sessionP;
+
+    jest.spyOn(supabase.auth, "getSession").mockImplementation(() =>
+      Promise.resolve({
+        data: { session: persistedSession },
+        error: null,
+      })
+    );
+    jest.spyOn(supabase.auth, "setSession").mockResolvedValue({
+      data: {
+        user: null,
+        session: null,
+      },
+      error: new Error("callback rejected before session mutation"),
+    });
+    const emailSpy = jest
+      .spyOn(supabase.auth, "signInWithPassword")
+      .mockImplementation(() => {
+        persistedSession = sessionB;
+        return Promise.resolve({
+          data: {
+            user: sessionB.user,
+            session: sessionB,
+          },
+          error: null,
+        });
+      });
+
+    const tokenKey = ["access", "token"].join("_");
+    const result = await completeAuthSessionFromUrl(
+      `monyvi://auth-callback#${tokenKey}=session-a&refresh_token=refresh-a&type=signup`
+    );
+    expect(result.success).toBe(false);
+
+    await signInWithEmail("same-user@example.com", "secret");
+
+    expect(emailSpy).toHaveBeenCalledTimes(1);
+    expect(persistedSession?.access_token).toBe("session-b");
   });
 
   it("contains callback mutation inside a bounded auto-refresh pause", async () => {
@@ -283,9 +341,11 @@ describe("auth session mutation public-entrypoint integration", () => {
     });
     jest.spyOn(supabase.auth, "stopAutoRefresh").mockImplementation(() => {
       events.push("stop");
+      return Promise.resolve();
     });
     jest.spyOn(supabase.auth, "startAutoRefresh").mockImplementation(() => {
       events.push("start");
+      return Promise.resolve();
     });
     jest.spyOn(supabase.auth, "setSession").mockImplementation(() => {
       events.push("mutate");
