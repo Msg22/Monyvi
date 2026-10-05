@@ -70,11 +70,13 @@ another.
 The six-panel board and its binding metadata are **APPROVED** as the authoritative
 combined tuple at revision
 `sha256:6b8db88a6cec5cf73ef35e6c95ace82405da52e293b04300cfc538774ba9b6d6`;
-the canonical repository verifier has passed. This authorizes UI implementation
-against the binding facts, but does **not** establish rendered visual/device
-fidelity. Mohamed owns that manual evidence.
+the canonical repository verifier has passed. The approved binding is now
+implemented in the verification code/success presentation source and shells.
+Focused exact-head RNTL/TypeScript/lint verification is still pending, and this
+does **not** establish rendered visual/device fidelity. Mohamed owns that manual
+evidence.
 
-Verify without stretching the reference board:
+Verify manually without stretching the reference board:
 
 | Variant | Evidence |
 | --- | --- |
@@ -121,8 +123,8 @@ verification:
 - native OTP/autofill behavior;
 - clipboard paste;
 - Android signup-link callback cold + warm start;
-- visual evidence after binding approval;
-- screen-reader/accessibility device evidence.
+- visual evidence against the approved binding (pending, Mohamed-owned);
+- screen-reader/accessibility device evidence (pending, Mohamed-owned).
 
 ## Final immutable evidence record
 

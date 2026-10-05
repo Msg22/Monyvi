@@ -181,9 +181,10 @@ gate work belongs in this PR.
 ### Binding status
 
 The binding gate is complete for the exact approved tuple. No further design
-approval is required for that image+metadata revision. Rendered visual/device
-fidelity is separate evidence, remains unverified on this PR, and is owned by
-Mohamed. The older three PNG bindings remain historical link-first evidence.
+approval is required for that image+metadata revision. The approved
+verification presentation is implemented in source; exact-head automated
+verification remains pending. Rendered visual/device fidelity is separate
+evidence, remains unverified on this PR, and is owned by Mohamed. The older three PNG bindings remain historical link-first evidence.
 
 PR/branch emulator E2E is intentionally not run. The temporary issue-specific
 workflow has been removed; Android E2E remains main-only under the existing

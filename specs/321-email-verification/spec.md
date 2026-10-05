@@ -199,9 +199,11 @@ A new success state is required with:
 - Continue to dashboard;
 - existing privacy/legal footer.
 
-Board-governed UI production is authorized by the approved binding tuple. This
-does **not** establish rendered visual/device fidelity; that evidence is deferred
-to Mohamed and remains unverified on this PR. The older three PNG/sidecar pairs
+Board-governed UI production is authorized by the approved binding tuple. The
+approved verification code/success presentation is now implemented in source,
+with exact-head automated verification still pending. This does **not**
+establish rendered visual/device fidelity; that evidence is deferred to Mohamed
+and remains unverified on this PR. The older three PNG/sidecar pairs
 remain historical link-first evidence only.
 
 ## Data / Privacy Requirements

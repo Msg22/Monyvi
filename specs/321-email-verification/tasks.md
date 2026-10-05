@@ -197,6 +197,16 @@ separate, unexecuted evidence owned by Mohamed.
   preserve the known-risk disclosure and do not claim enumeration safety.
 - [x] R094 Exclude password-recovery reset/private-gate correction from #322;
   track it in #373 and do not claim recovery Green.
+- [x] R095 Apply the approved canonical verification binding to the code-entry,
+  success, verification-only auth shell, and signup-callback success shell;
+  remove the obsolete dedicated verification processing view. Exact-head RNTL,
+  TypeScript, lint, and CI verification remain pending.
+- [x] R096 Replace caller Authorization case-insensitively with the approved
+  stable-session bearer token for authenticated Edge calls; preserve unrelated
+  headers. Exact-head regression verification remains pending.
+- [x] R097 Update the seven ratified SMS service test fixtures to expose a
+  coherent stable authenticated session and coordinated refresh/sign-out mocks
+  where those suites already own them. No SMS production behavior changed.
 
 ## Completion status
 
@@ -208,7 +218,9 @@ separate, unexecuted evidence owned by Mohamed.
 - **Tracked local template code + secondary link**: COMPLETE
 - **Hosted template parity + 10-minute copy verification**: PENDING
 - **Custom SMTP configured / real signup email received**: COMPLETE by user report
-- **Revised implementation**: IN PROGRESS
+- **Approved verification UI source implementation**: COMPLETE in source; exact-head automated verification PENDING
+- **Rendered visual/device/accessibility fidelity**: PENDING — owned by Mohamed
+- **Revised implementation**: IN PROGRESS pending exact-head automated/external evidence
 
 
 ## 2026-10-04 implementation evidence checkpoint
