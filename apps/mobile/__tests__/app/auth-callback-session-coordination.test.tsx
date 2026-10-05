@@ -154,6 +154,22 @@ function sessionResponse(session: Session): Awaited<
   };
 }
 
+function sessionReadResponse(
+  session: Session | null
+): ReturnType<typeof supabase.auth.getSession> {
+  if (session) {
+    return Promise.resolve({
+      data: { session },
+      error: null,
+    });
+  }
+
+  return Promise.resolve({
+    data: { session: null },
+    error: null,
+  });
+}
+
 function installRawAuthBridge(
   readPersistedSession: () => Session | null,
   writePersistedSession: (session: Session | null) => void
@@ -164,10 +180,7 @@ function installRawAuthBridge(
   const listeners = new Set<RawAuthCallback>();
 
   jest.spyOn(supabase.auth, "getSession").mockImplementation(() =>
-    Promise.resolve({
-      data: { session: readPersistedSession() },
-      error: null,
-    })
+    sessionReadResponse(readPersistedSession())
   );
   jest.spyOn(supabase.auth, "onAuthStateChange").mockImplementation(
     (callback) => {
@@ -299,8 +312,9 @@ describe("auth callback session coordination integration", () => {
 
     expect(emailStartedBeforeARelease).toBe(false);
     expect(sessionSeenWhenBStarts).toBeNull();
-    expect(persistedSession?.access_token).toBe("session-b");
+    expect(persistedSession).toEqual(sessionB);
     expect(observedTokens).not.toContain("session-a");
+    expect(observedTokens.at(-1)).toBe("session-b");
   });
 
   it("records explicit logout immediately but waits for callback A before SDK logout and never restores P", async () => {
@@ -419,4 +433,94 @@ describe("auth callback session coordination integration", () => {
     expect(exchangeSpy).toHaveBeenCalledTimes(1);
     expect(bridge.signOutSpy).not.toHaveBeenCalled();
   });
+  it("does not reuse cached PKCE success after explicit logout", async () => {
+    const sessionA = createSession("pkce-a", "pkce-refresh-a");
+    let persistedSession: Session | null = null;
+    const bridge = installRawAuthBridge(
+      () => persistedSession,
+      (session) => {
+        persistedSession = session;
+      }
+    );
+    const exchangeSpy = jest
+      .spyOn(supabase.auth, "exchangeCodeForSession")
+      .mockImplementation(() => {
+        persistedSession = sessionA;
+        bridge.emit("SIGNED_IN", sessionA);
+        return Promise.resolve(sessionResponse(sessionA));
+      });
+
+    render(
+      <AuthProvider>
+        <AuthStateProbe />
+      </AuthProvider>
+    );
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const first = await authService.completeAuthSessionFromUrl(
+      "monyvi://auth-callback?code=logout-stale-cache-code"
+    );
+    expect(first.success).toBe(true);
+
+    if (!capturedSignOut) {
+      throw new Error("AuthContext signOut was not captured");
+    }
+    await capturedSignOut();
+
+    const replay = await authService.completeAuthSessionFromUrl(
+      "monyvi://auth-callback?code=logout-stale-cache-code"
+    );
+
+    expect(exchangeSpy).toHaveBeenCalledTimes(1);
+    expect(replay.success).toBe(false);
+    expect(persistedSession).toBeNull();
+    expect(observedTokens.at(-1)).toBe("none");
+  });
+
+  it("does not reuse cached PKCE success after a legitimate newer session B", async () => {
+    const sessionA = createSession("pkce-a", "pkce-refresh-a");
+    const sessionB = createSession("session-b", "refresh-b");
+    let persistedSession: Session | null = null;
+    const bridge = installRawAuthBridge(
+      () => persistedSession,
+      (session) => {
+        persistedSession = session;
+      }
+    );
+    const exchangeSpy = jest
+      .spyOn(supabase.auth, "exchangeCodeForSession")
+      .mockImplementation(() => {
+        persistedSession = sessionA;
+        bridge.emit("SIGNED_IN", sessionA);
+        return Promise.resolve(sessionResponse(sessionA));
+      });
+    jest.spyOn(supabase.auth, "signInWithPassword").mockImplementation(() => {
+      persistedSession = sessionB;
+      bridge.emit("SIGNED_IN", sessionB);
+      return Promise.resolve({
+        data: {
+          user: sessionB.user,
+          session: sessionB,
+        },
+        error: null,
+      });
+    });
+
+    const first = await authService.completeAuthSessionFromUrl(
+      "monyvi://auth-callback?code=newer-session-stale-cache-code"
+    );
+    expect(first.success).toBe(true);
+
+    await authService.signInWithEmail("same-user@example.com", "secret");
+    const replay = await authService.completeAuthSessionFromUrl(
+      "monyvi://auth-callback?code=newer-session-stale-cache-code"
+    );
+
+    expect(exchangeSpy).toHaveBeenCalledTimes(1);
+    expect(replay.success).toBe(false);
+    expect(persistedSession).toEqual(sessionB);
+  });
+
 });

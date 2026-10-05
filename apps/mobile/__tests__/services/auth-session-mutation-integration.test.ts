@@ -1,4 +1,4 @@
-import type { Session } from "@supabase/supabase-js";
+import { AuthApiError, type Session } from "@supabase/supabase-js";
 
 jest.mock("expo-web-browser", () => ({
   maybeCompleteAuthSession: jest.fn(),
@@ -71,6 +71,26 @@ function sessionResponse(session: Session): Awaited<
   };
 }
 
+function sessionReadResponse(
+  session: Session | null
+): ReturnType<typeof supabase.auth.getSession> {
+  if (session) {
+    return Promise.resolve({
+      data: { session },
+      error: null,
+    });
+  }
+
+  return Promise.resolve({
+    data: { session: null },
+    error: null,
+  });
+}
+
+function sessionToken(session: Session | null): string {
+  return session?.access_token ?? "none";
+}
+
 describe("auth session mutation public-entrypoint integration", () => {
   afterEach(() => {
     jest.restoreAllMocks();
@@ -85,10 +105,7 @@ describe("auth session mutation public-entrypoint integration", () => {
     const startedA = createDeferred<void>();
 
     jest.spyOn(supabase.auth, "getSession").mockImplementation(() =>
-      Promise.resolve({
-        data: { session: persistedSession },
-        error: null,
-      })
+      sessionReadResponse(persistedSession)
     );
     jest.spyOn(supabase.auth, "setSession").mockImplementation(() => {
       events.push("a:start");
@@ -137,7 +154,7 @@ describe("auth session mutation public-entrypoint integration", () => {
       "b:email:save",
       "b:email:notify",
     ]);
-    expect(persistedSession?.access_token).toBe("access-b");
+    expect(persistedSession).toEqual(sessionB);
   });
 
   it("queues OTP session B behind callback A before B can mutate storage", async () => {
@@ -148,10 +165,7 @@ describe("auth session mutation public-entrypoint integration", () => {
     const startedA = createDeferred<void>();
 
     jest.spyOn(supabase.auth, "getSession").mockImplementation(() =>
-      Promise.resolve({
-        data: { session: persistedSession },
-        error: null,
-      })
+      sessionReadResponse(persistedSession)
     );
     jest.spyOn(supabase.auth, "setSession").mockImplementation(() => {
       startedA.resolve();
@@ -187,7 +201,7 @@ describe("auth session mutation public-entrypoint integration", () => {
     await Promise.all([callbackPromise, otpPromise]);
 
     expect(otpStartedBeforeAReleased).toBe(false);
-    expect(persistedSession?.access_token).toBe("otp-access-b");
+    expect(persistedSession).toEqual(sessionB);
   });
 
   it("restores a legitimate preexisting session when callback failure removes it", async () => {
@@ -196,10 +210,7 @@ describe("auth session mutation public-entrypoint integration", () => {
     const writes: string[] = [];
 
     jest.spyOn(supabase.auth, "getSession").mockImplementation(() =>
-      Promise.resolve({
-        data: { session: persistedSession },
-        error: null,
-      })
+      sessionReadResponse(persistedSession)
     );
     jest.spyOn(supabase.auth, "setSession").mockImplementation((tokens) => {
       writes.push(tokens.access_token);
@@ -214,7 +225,7 @@ describe("auth session mutation public-entrypoint integration", () => {
           user: null,
           session: null,
         },
-        error: new Error("callback refresh failed"),
+        error: new AuthApiError("callback refresh failed", 400, "callback_refresh_failed"),
       });
     });
 
@@ -225,7 +236,7 @@ describe("auth session mutation public-entrypoint integration", () => {
 
     expect(result.success).toBe(false);
     expect(writes).toEqual(["session-a", "session-p"]);
-    expect(persistedSession?.access_token).toBe("session-p");
+    expect(persistedSession).toEqual(sessionP);
   });
 
   it("does not quarantine unrelated auth after callback failure leaves baseline P untouched", async () => {
@@ -234,17 +245,18 @@ describe("auth session mutation public-entrypoint integration", () => {
     let persistedSession: Session | null = sessionP;
 
     jest.spyOn(supabase.auth, "getSession").mockImplementation(() =>
-      Promise.resolve({
-        data: { session: persistedSession },
-        error: null,
-      })
+      sessionReadResponse(persistedSession)
     );
     jest.spyOn(supabase.auth, "setSession").mockResolvedValue({
       data: {
         user: null,
         session: null,
       },
-      error: new Error("callback rejected before session mutation"),
+      error: new AuthApiError(
+        "callback rejected before session mutation",
+        400,
+        "callback_rejected"
+      ),
     });
     const emailSpy = jest
       .spyOn(supabase.auth, "signInWithPassword")
@@ -268,7 +280,7 @@ describe("auth session mutation public-entrypoint integration", () => {
     await signInWithEmail("same-user@example.com", "secret");
 
     expect(emailSpy).toHaveBeenCalledTimes(1);
-    expect(persistedSession?.access_token).toBe("session-b");
+    expect(persistedSession).toEqual(sessionB);
   });
 
   it("contains callback mutation inside a bounded auto-refresh pause", async () => {
@@ -311,7 +323,7 @@ describe("auth session mutation public-entrypoint integration", () => {
     const events: string[] = [];
 
     jest.spyOn(supabase.auth, "getSession").mockImplementation(() => {
-      events.push(`read:${persistedSession?.access_token ?? "none"}`);
+      events.push(`read:${sessionToken(persistedSession)}`);
       return Promise.resolve({
         data: { session: persistedSession },
         error: null,
@@ -326,7 +338,11 @@ describe("auth session mutation public-entrypoint integration", () => {
             user: null,
             session: null,
           },
-          error: new Error("callback failed after provisional save"),
+          error: new AuthApiError(
+            "callback failed after provisional save",
+            400,
+            "callback_provisional_failure"
+          ),
         });
       }
 
@@ -354,9 +370,14 @@ describe("auth session mutation public-entrypoint integration", () => {
 
     await signInWithEmail("same-user@example.com", "secret");
 
-    expect(events).toContain("restore:p");
-    expect(events).toContain("read:session-a");
-    expect(persistedSession?.access_token).toBe("session-a");
+    const restoreIndex = events.indexOf("restore:p");
+    const failedReadbackIndex = events.indexOf(
+      "read:session-a",
+      restoreIndex + 1
+    );
+    expect(restoreIndex).toBeGreaterThanOrEqual(0);
+    expect(failedReadbackIndex).toBeGreaterThan(restoreIndex);
+    expect(persistedSession).toEqual(sessionA);
     expect(emailSpy).not.toHaveBeenCalled();
     expect(events).not.toContain("email:b");
   });
