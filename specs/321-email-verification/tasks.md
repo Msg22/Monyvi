@@ -14,7 +14,7 @@ The earlier #321 implementation produced valid foundations that remain in PR
 - [x] H003 Signup/resend redirect contract
 - [x] H004 Local confirmation enabled
 - [x] H005 Returning `email_not_confirmed` recovery
-- [x] H006 OAuth/password-reset regression coverage
+- [x] H006 Historical OAuth/password-reset callback coverage (password-recovery correctness is not a current #322 completion claim; see #373)
 - [x] H007 Invalid callback hardening
 - [x] H008 Local email verification E2E infrastructure
 - [x] H009 Hosted custom SMTP configuration tooling/runbook
@@ -37,10 +37,12 @@ evidence.
 - [x] R006 Approve English-dark Email verified screen
 - [x] R007 Approve Arabic-light Email verified screen
 - [x] R008 Approve Arabic-dark Email verified screen
-- [ ] R009 Persist approved image bytes and update/create binding sidecars
+- [x] R009 Persist the exact approved six-panel image and adjacent PENDING binding draft
 - [ ] R010 Obtain required binding-metadata approval and run canonical binding verifier
 
-**Approval gate**: R002-R008 passed by explicit user approval. R009-R010 remain required before final visual-completion sign-off, but implementation is authorized.
+**Approval gate**: the six-panel revised board is the sole approved visual
+reference. R009 is complete as a reviewable PENDING binding draft. R010 remains
+required before any board-governed UI production mutation or visual sign-off.
 
 ---
 
@@ -110,7 +112,7 @@ evidence.
 - [x] R044 Add Red tests for normalization + HMAC with server-only pepper
 - [x] R045 Add Red reserve -> resend -> finalize behavior
 - [x] R046 Add Red downstream-send failure -> release behavior
-- [x] R047 Add Red safe cooldown/limit response tests without account-enumeration detail
+- [x] R047 Add Red/product-safe cooldown and limit response tests (known public account-state oracle is deferred to #372; do not claim enumeration safety)
 - [x] R048 Add Red no-raw-email/no-secret logging tests
 
 ### Green Edge Function/client
@@ -135,7 +137,7 @@ evidence.
 - [x] R059 Add callback tests reproducing "verification succeeded but AuthContext stayed stale/loading"
 - [x] R060 Add callback bounded-timeout tests
 - [x] R061 Add callback signup-success -> Email verified tests
-- [x] R062 Preserve OAuth/password-recovery route regression tests
+- [x] R062 Preserve Google OAuth route regression tests; historical recovery tests do not establish recovery correctness (#373)
 
 ### Green
 
@@ -143,7 +145,7 @@ evidence.
 - [x] R064 Wire Continue to root/startup flow
 - [x] R065 Change signup-confirmation callback success to validate session directly and render success state
 - [x] R066 Add bounded callback processing timeout/recovery so skeleton cannot be infinite
-- [x] R067 Preserve OAuth and password-recovery destinations
+- [x] R067 Preserve Google OAuth destination. Password-recovery correction is excluded from #322 and tracked by #373
 
 ---
 
@@ -169,19 +171,41 @@ evidence.
 
 - [x] R081 Security audit: no OTP, raw limiter email, HMAC pepper, auth token, callback secret, SMTP/service-role logging
 - [ ] R082 Final mockup-binding verifier exact-head PASS
-- [x] R083 Focused auth/Edge/pgTAP tests Green
-- [x] R084 Mobile TypeScript/lint/i18n/repository checks Green
+- [ ] R083 Exact-head focused auth/Edge/pgTAP tests Green after late-review F1 hardening
+- [ ] R084 Exact-head mobile TypeScript/lint/i18n/repository checks Green
 - [ ] R085 Exact-head GitHub Actions Green
-- [x] R086 Refresh PR #322 description with code-first architecture, QA matrix, known external evidence
-- [ ] R087 Record functional, visual, accessibility, SMTP/delivery, device, and immutable Green SHA statuses separately
+- [ ] R086 Refresh PR #322 description with current code-first architecture, deferrals, QA matrix, and exact-head evidence
+- [ ] R087 Record functional, visual, accessibility, hosted, SMTP/delivery, provider, device, and immutable Green SHA statuses separately
+
+## Phase R7 — Late-review hardening and explicit deferrals
+
+- [ ] R088 F1: complete service-owned auth-session mutation coordination with
+  valid Red evidence, independent architecture/security review, and exact-head
+  Green tests before sign-off.
+- [x] R089 F2: prove a real authenticated event cannot bypass the active
+  verification-success screen before Continue; prove a fresh authenticated cold
+  restart may route normally without a durable acknowledgement marker.
+- [x] R090 F3: add boundary Red tests and reorder existing 081 limiter logic so
+  live/stale reservations and active cooldown are evaluated before expired
+  24-hour rollover. Executable pgTAP Green confirmed on the corrected branch.
+- [x] R091 F6: recognize the stable `verification-code-input` marker in E2E
+  preflight while still rejecting a bare mounted native root.
+- [x] R092 Keep code-first email primary and add the approved secondary
+  `ConfirmationURL` fallback to the tracked local Confirm Signup template.
+- [x] R093 Defer resend account-enumeration/public-response redesign to #372;
+  preserve the known-risk disclosure and do not claim enumeration safety.
+- [x] R094 Exclude password-recovery reset/private-gate correction from #322;
+  track it in #373 and do not claim recovery Green.
 
 ## Completion status
 
 - **Product plan**: APPROVED 2026-10-04
 - **English-light code-entry visual**: APPROVED
-- **Remaining visual approval**: COMPLETE — user approved the revised code-entry and Email verified EN/AR light/dark set
+- **Revised six-panel visual direction**: APPROVED
+- **Binding metadata approval**: PENDING — no board-governed UI implementation/sign-off yet
 - **Confirm Signup template installation**: COMPLETE by user
-- **Template 10-minute copy verification**: PENDING
+- **Tracked local template code + secondary link**: COMPLETE
+- **Hosted template parity + 10-minute copy verification**: PENDING
 - **Custom SMTP configured / real signup email received**: COMPLETE by user report
 - **Revised implementation**: IN PROGRESS
 
@@ -207,6 +231,10 @@ evidence.
 - R016/R017 remain unchecked until hosted Auth status proves 600s/6-digit/120s
   and the installed Confirm Signup template is verified to say 10 minutes.
 - R072-R080 remain manual/external release evidence.
-- R082 remains pending because the repository's existing binding PNGs/sidecars
-  are the historical link-first references; they must not be presented as
-  revised code-first visual evidence.
+- R082 remains pending because the revised six-panel board is present with a
+  PENDING sidecar. The older three PNG/sidecars are historical link-first
+  references only.
+- Historical Green checkpoints above remain useful evidence, but they are not
+  final exact-head sign-off after the late-review F1/F3/F6/template changes.
+- Password recovery is excluded to #373. Resend enumeration hardening is
+  excluded to #372. Neither may be presented as PR #322 completion.
