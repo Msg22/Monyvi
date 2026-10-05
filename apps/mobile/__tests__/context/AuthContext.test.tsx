@@ -10,22 +10,22 @@ import {
   writeBudgetDashboardFilterSession,
 } from "@/hooks/budget-dashboard-filter-session";
 
-type TestAuthSession = {
+interface TestAuthSession {
   readonly user: { readonly id: string };
-};
+}
 
-type AuthSessionReadResult = {
+interface AuthSessionReadResult {
   readonly data: { readonly session: TestAuthSession | null };
   readonly error?: unknown;
-};
+}
 
-type AuthSubscriptionResult = {
+interface AuthSubscriptionResult {
   readonly data: {
     readonly subscription: {
       readonly unsubscribe: () => void;
     };
   };
-};
+}
 
 type AuthStateChangeCallback = (
   event: string,

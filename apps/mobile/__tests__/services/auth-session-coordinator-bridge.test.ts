@@ -53,18 +53,6 @@ function createSession(accessToken: string, refreshToken: string): Session {
   };
 }
 
-function sessionResponse(session: Session): Awaited<
-  ReturnType<typeof supabase.auth.setSession>
-> {
-  return {
-    data: {
-      user: session.user,
-      session,
-    },
-    error: null,
-  };
-}
-
 function sessionReadResponse(
   session: Session | null
 ): ReturnType<typeof supabase.auth.getSession> {
