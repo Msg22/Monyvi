@@ -3,7 +3,7 @@
 **Feature Branch**: `codex/issue321-email-verification`  
 **Created**: 2026-09-21  
 **Revised**: 2026-10-04  
-**Status**: Implementation in progress; code-first product scope approved; visual binding metadata approval and final release evidence pending  
+**Status**: Implementation in progress; code-first product scope and combined visual binding approved; rendered visual/device and final release evidence pending  
 **Issue**: #321 — Complete production email verification with code-first signup flow
 
 ## Product Direction
@@ -175,9 +175,10 @@ validate verification codes.
 The sole currently approved revised visual reference is the six-panel board at
 `mockups/verification-flow-approved.png` (SHA-256
 `d1a0778e9d0fe00385eeb3c59e27e7428671a96b2eee91e851b3ef7d109e5976`).
-Its adjacent binding sidecar is intentionally **PENDING**. The board therefore
-defines the approved visual direction, but it is not yet an authoritative
-code-binding tuple under the repository binding workflow.
+Its adjacent binding sidecar is **APPROVED** at combined revision
+`sha256:6b8db88a6cec5cf73ef35e6c95ace82405da52e293b04300cfc538774ba9b6d6`,
+and the canonical repository binding verifier passes. The exact image+metadata
+tuple is therefore authoritative for UI implementation.
 
 It intentionally does NOT display:
 
@@ -198,10 +199,10 @@ A new success state is required with:
 - Continue to dashboard;
 - existing privacy/legal footer.
 
-Board-governed UI production changes remain blocked until the new sidecar's
-combined image-and-binding metadata receives explicit approval and the canonical
-binding verifier passes. The older three PNG/sidecar pairs remain historical
-link-first evidence only.
+Board-governed UI production is authorized by the approved binding tuple. This
+does **not** establish rendered visual/device fidelity; that evidence is deferred
+to Mohamed and remains unverified on this PR. The older three PNG/sidecar pairs
+remain historical link-first evidence only.
 
 ## Data / Privacy Requirements
 
