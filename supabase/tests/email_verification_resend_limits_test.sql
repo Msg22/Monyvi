@@ -337,6 +337,110 @@ END
 $stale_reservation$;
 SELECT pass('ambiguous stale reservation fails closed and consumes one slot');
 
+DO $active_reservation_window_boundary$
+DECLARE
+  v_result record;
+  v_reservation_id uuid := gen_random_uuid();
+BEGIN
+  UPDATE public.email_verification_resend_limits
+  SET window_started_at = clock_timestamp() - interval '25 hours',
+      last_sent_at = clock_timestamp() - interval '25 hours',
+      resend_count = 2,
+      reservation_id = v_reservation_id,
+      reserved_at = clock_timestamp() - interval '10 seconds'
+  WHERE email_key = repeat('a', 64);
+
+  SELECT * INTO v_result
+  FROM public.email_verification_reserve_resend(
+    repeat('a', 64),
+    'verify-321@example.com',
+    120,
+    86400,
+    3,
+    30
+  );
+
+  IF v_result.accepted OR v_result.decision_code <> 'busy' THEN
+    RAISE EXCEPTION
+      'a live reservation must remain busy even when its original window has expired';
+  END IF;
+  IF (SELECT reservation_id FROM public.email_verification_resend_limits
+      WHERE email_key = repeat('a', 64)) <> v_reservation_id THEN
+    RAISE EXCEPTION 'window rollover must not erase a live reservation';
+  END IF;
+END
+$active_reservation_window_boundary$;
+SELECT pass('live reservation wins over expired-window rollover');
+
+DO $stale_reservation_window_boundary$
+DECLARE
+  v_result record;
+BEGIN
+  UPDATE public.email_verification_resend_limits
+  SET window_started_at = clock_timestamp() - interval '25 hours',
+      last_sent_at = NULL,
+      resend_count = 0,
+      reservation_id = gen_random_uuid(),
+      reserved_at = clock_timestamp() - interval '31 seconds'
+  WHERE email_key = repeat('a', 64);
+
+  SELECT * INTO v_result
+  FROM public.email_verification_reserve_resend(
+    repeat('a', 64),
+    'verify-321@example.com',
+    120,
+    86400,
+    3,
+    30
+  );
+
+  IF v_result.accepted OR v_result.decision_code <> 'cooldown' THEN
+    RAISE EXCEPTION
+      'stale reservation crossing window expiry must fail closed into cooldown';
+  END IF;
+  IF (SELECT resend_count FROM public.email_verification_resend_limits
+      WHERE email_key = repeat('a', 64)) <> 1 THEN
+    RAISE EXCEPTION
+      'stale reservation crossing window expiry must consume exactly one slot';
+  END IF;
+  IF (SELECT reservation_id FROM public.email_verification_resend_limits
+      WHERE email_key = repeat('a', 64)) IS NOT NULL THEN
+    RAISE EXCEPTION 'stale reservation must be cleared after fail-closed consume';
+  END IF;
+END
+$stale_reservation_window_boundary$;
+SELECT pass('stale reservation is consumed exactly once before window rollover');
+
+DO $cooldown_window_boundary$
+DECLARE
+  v_result record;
+BEGIN
+  UPDATE public.email_verification_resend_limits
+  SET window_started_at = clock_timestamp() - interval '25 hours',
+      last_sent_at = clock_timestamp() - interval '30 seconds',
+      resend_count = 3,
+      reservation_id = NULL,
+      reserved_at = NULL
+  WHERE email_key = repeat('a', 64);
+
+  SELECT * INTO v_result
+  FROM public.email_verification_reserve_resend(
+    repeat('a', 64),
+    'verify-321@example.com',
+    120,
+    86400,
+    3,
+    30
+  );
+
+  IF v_result.accepted OR v_result.decision_code <> 'cooldown' THEN
+    RAISE EXCEPTION
+      'a recent successful send must enforce cooldown before expired-window reset';
+  END IF;
+END
+$cooldown_window_boundary$;
+SELECT pass('active cooldown wins over expired-window rollover');
+
 RESET ROLE;
 RESET request.jwt.claim.role;
 

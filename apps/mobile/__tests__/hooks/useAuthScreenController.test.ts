@@ -15,12 +15,14 @@ import { verifyEmailVerificationCode } from "@/services/supabase";
 
 const mockShowToast = jest.fn();
 const mockUseDeferredRouterReplace = jest.fn();
+let mockAuthState = {
+  isAuthenticated: false,
+  isLoading: false,
+};
 
 jest.mock("@/context/AuthContext", () => ({
-  useAuth: (): { isAuthenticated: boolean; isLoading: boolean } => ({
-    isAuthenticated: false,
-    isLoading: false,
-  }),
+  useAuth: (): { isAuthenticated: boolean; isLoading: boolean } =>
+    mockAuthState,
 }));
 
 jest.mock("@/components/ui/Toast", () => ({
@@ -76,6 +78,7 @@ function createAuthError(message: string): never {
 describe("useAuthScreenController", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockAuthState = { isAuthenticated: false, isLoading: false };
   });
 
   it("keeps authenticated redirect contract", () => {
@@ -565,6 +568,7 @@ describe("useAuthScreenController", () => {
 describe("useAuthScreenController code-first verification", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockAuthState = { isAuthenticated: false, isLoading: false };
     jest.useFakeTimers();
     jest.setSystemTime(new Date("2026-10-04T10:00:00.000Z"));
   });
@@ -633,13 +637,13 @@ describe("useAuthScreenController code-first verification", () => {
     expect(mockVerifyEmailVerificationCode).toHaveBeenCalledTimes(1);
   });
 
-  it("keeps authenticated redirects suppressed through the success state", async () => {
+  it("keeps authenticated redirects suppressed through the active success state until Continue", async () => {
     mockSignUpWithEmail.mockResolvedValue({
       success: true,
       needsVerification: true,
     });
     mockVerifyEmailVerificationCode.mockResolvedValue({ success: true });
-    const { result } = renderHook(() => useAuthScreenController());
+    const { result, rerender } = renderHook(() => useAuthScreenController());
 
     await act(async () => {
       await result.current.handleEmailSubmit(
@@ -653,6 +657,10 @@ describe("useAuthScreenController code-first verification", () => {
       await Promise.resolve();
     });
 
+    mockAuthState = { isAuthenticated: true, isLoading: false };
+    rerender();
+
+    expect(result.current.screenState).toBe("verificationSuccess");
     expect(mockUseDeferredRouterReplace).toHaveBeenLastCalledWith({
       enabled: false,
       href: "/",
@@ -661,8 +669,23 @@ describe("useAuthScreenController code-first verification", () => {
     act(() => {
       result.current.handleContinueAfterVerification();
     });
+    rerender();
 
-    expect(result.current.screenState).toBe("verificationSuccess");
+    expect(mockUseDeferredRouterReplace).toHaveBeenLastCalledWith({
+      enabled: true,
+      href: "/",
+    });
+  });
+
+  it("allows normal authenticated routing on a fresh mount after a verified cold restart", () => {
+    mockAuthState = { isAuthenticated: true, isLoading: false };
+
+    renderHook(() => useAuthScreenController());
+
+    expect(mockUseDeferredRouterReplace).toHaveBeenLastCalledWith({
+      enabled: true,
+      href: "/",
+    });
   });
 
   it("blocks duplicate auto-submit while the six-digit verification request is pending", async () => {

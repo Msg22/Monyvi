@@ -8,6 +8,13 @@ function readSupabaseConfig(): string {
   );
 }
 
+function readConfirmationTemplate(): string {
+  return fs.readFileSync(
+    path.resolve(__dirname, "../../../../supabase/templates/confirmation.html"),
+    "utf8"
+  );
+}
+
 describe("email verification local Auth configuration", () => {
   it("requires confirmation, six-digit codes, ten-minute expiry, and two-minute resend frequency", () => {
     const config = readSupabaseConfig();
@@ -28,5 +35,15 @@ describe("email verification local Auth configuration", () => {
     expect(config).toContain(
       'content_path = "./supabase/templates/confirmation.html"'
     );
+  });
+
+  it("keeps the six-digit code primary while providing a secondary confirmation-link fallback", () => {
+    const template = readConfirmationTemplate();
+    const tokenIndex = template.indexOf("{{ .Token }}");
+    const fallbackLinkIndex = template.indexOf("{{ .ConfirmationURL }}");
+
+    expect(tokenIndex).toBeGreaterThanOrEqual(0);
+    expect(fallbackLinkIndex).toBeGreaterThanOrEqual(0);
+    expect(tokenIndex).toBeLessThan(fallbackLinkIndex);
   });
 });
