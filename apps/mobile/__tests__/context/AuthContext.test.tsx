@@ -10,20 +10,43 @@ import {
   writeBudgetDashboardFilterSession,
 } from "@/hooks/budget-dashboard-filter-session";
 
-const mockGetSession = jest.fn();
-const mockOnAuthStateChange = jest.fn();
-const mockSignOut = jest.fn();
-const mockGetStableAuthSession = jest.fn();
-const mockSubscribeToCoordinatedAuthStateChange = jest.fn();
-const mockClearPersistedAuthSession = jest.fn();
-const mockUnsubscribe = jest.fn();
-const mockLoggerError = jest.fn();
-const mockLoggerInfo = jest.fn();
+type TestAuthSession = {
+  readonly user: { readonly id: string };
+};
+
+type AuthSessionReadResult = {
+  readonly data: { readonly session: TestAuthSession | null };
+  readonly error?: unknown;
+};
+
+type AuthSubscriptionResult = {
+  readonly data: {
+    readonly subscription: {
+      readonly unsubscribe: () => void;
+    };
+  };
+};
 
 type AuthStateChangeCallback = (
   event: string,
-  session: { readonly user: { readonly id: string } } | null
+  session: TestAuthSession | null
 ) => void;
+
+const mockGetSession = jest.fn<Promise<AuthSessionReadResult>, []>();
+const mockOnAuthStateChange = jest.fn<
+  AuthSubscriptionResult,
+  [AuthStateChangeCallback]
+>();
+const mockSignOut = jest.fn<Promise<unknown>, []>();
+const mockGetStableAuthSession = jest.fn<Promise<AuthSessionReadResult>, []>();
+const mockSubscribeToCoordinatedAuthStateChange = jest.fn<
+  AuthSubscriptionResult,
+  [AuthStateChangeCallback]
+>();
+const mockClearPersistedAuthSession = jest.fn<Promise<void>, []>();
+const mockUnsubscribe = jest.fn<void, []>();
+const mockLoggerError = jest.fn<void, unknown[]>();
+const mockLoggerInfo = jest.fn<void, unknown[]>();
 
 jest.mock("@/services/supabase", () => ({
   getStableAuthSession: (...args: unknown[]): Promise<unknown> =>
@@ -71,9 +94,12 @@ describe("AuthProvider", () => {
     jest.clearAllMocks();
     clearBudgetDashboardFilterSession();
     mockClearPersistedAuthSession.mockResolvedValue(undefined);
-    mockGetStableAuthSession.mockImplementation(() => mockGetSession());
+    mockGetStableAuthSession.mockImplementation(
+      (): Promise<AuthSessionReadResult> => mockGetSession()
+    );
     mockSubscribeToCoordinatedAuthStateChange.mockImplementation(
-      (callback: AuthStateChangeCallback) => mockOnAuthStateChange(callback)
+      (callback: AuthStateChangeCallback): AuthSubscriptionResult =>
+        mockOnAuthStateChange(callback)
     );
     mockOnAuthStateChange.mockReturnValue({
       data: {

@@ -119,8 +119,8 @@ jest.mock("@/services/sms-live-listener-service", () => {
 });
 
 interface SupabaseMocks {
-  signOut: jest.Mock;
-  coordinatedSignOut: jest.Mock;
+  signOut: jest.Mock<Promise<{ readonly error: Error | null }>, []>;
+  coordinatedSignOut: jest.Mock<Promise<{ readonly error: Error | null }>, []>;
 }
 
 function getSupabaseMocks(): SupabaseMocks {
@@ -192,7 +192,9 @@ describe("logout-service", () => {
     syncMocks.resetSyncState.mockResolvedValue(undefined);
     syncMocks.getActiveSyncPromise.mockReturnValue(null);
     supaMocks.signOut.mockResolvedValue({ error: null });
-    supaMocks.coordinatedSignOut.mockImplementation(() => supaMocks.signOut());
+    supaMocks.coordinatedSignOut.mockImplementation(
+      (): Promise<{ readonly error: Error | null }> => supaMocks.signOut()
+    );
     smsDetectionMocks.setLiveDetectionEnabled.mockResolvedValue(undefined);
     smsDetectionMocks.setAutoConfirm.mockResolvedValue(undefined);
     smsListenerMocks.stopSmsListener.mockReturnValue(undefined);

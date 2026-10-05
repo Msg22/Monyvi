@@ -206,10 +206,10 @@ describe("auth-service - completeAuthSessionFromUrl", () => {
           };
         })
     );
-    mockSignInWithEmailFn.mockImplementation(async () => {
+    mockSignInWithEmailFn.mockImplementation(() => {
       events.push("email-b:start");
       persistedSession = "email-b";
-      return { success: true };
+      return Promise.resolve({ success: true });
     });
 
     const callbackPromise = completeAuthSessionFromUrl(

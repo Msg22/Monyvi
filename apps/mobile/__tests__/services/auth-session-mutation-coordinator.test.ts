@@ -33,9 +33,9 @@ interface CoordinatorModule {
 }
 
 function loadCoordinatorModule(): CoordinatorModule {
-  return jest.requireActual(
+  return jest.requireActual<CoordinatorModule>(
     "@/services/auth-session-mutation-coordinator"
-  ) as CoordinatorModule;
+  );
 }
 
 describe("auth-session mutation coordinator", () => {
@@ -44,12 +44,14 @@ describe("auth-session mutation coordinator", () => {
     let persistedSession: TestSession | null = null;
     let resolveCallback: (() => void) | undefined;
     const coordinator = loadCoordinatorModule().createAuthSessionMutationCoordinator({
-      readSession: async () => persistedSession,
-      restoreSession: async (session) => {
+      readSession: () => Promise.resolve(persistedSession),
+      restoreSession: (session) => {
         persistedSession = session;
+        return Promise.resolve();
       },
-      clearSession: async () => {
+      clearSession: () => {
         persistedSession = null;
+        return Promise.resolve();
       },
       identifySession: (session) => session?.id ?? null,
     });
@@ -66,13 +68,15 @@ describe("auth-session mutation coordinator", () => {
           };
         })
     );
-    const email = coordinator.runMutation(async () => {
+    const email = coordinator.runMutation(() => {
       events.push("email:start");
       persistedSession = { id: "email-b" };
+      return Promise.resolve();
     });
-    const otp = coordinator.runMutation(async () => {
+    const otp = coordinator.runMutation(() => {
       events.push("otp:start");
       persistedSession = { id: "otp-b" };
+      return Promise.resolve();
     });
 
     await Promise.resolve();
@@ -95,12 +99,14 @@ describe("auth-session mutation coordinator", () => {
     let resolveCallback: (() => void) | undefined;
     const observed: string[] = [];
     const coordinator = loadCoordinatorModule().createAuthSessionMutationCoordinator({
-      readSession: async () => persistedSession,
-      restoreSession: async (session) => {
+      readSession: () => Promise.resolve(persistedSession),
+      restoreSession: (session) => {
         persistedSession = session;
+        return Promise.resolve();
       },
-      clearSession: async () => {
+      clearSession: () => {
         persistedSession = null;
+        return Promise.resolve();
       },
       identifySession: (session) => session?.id ?? null,
     });
@@ -130,12 +136,14 @@ describe("auth-session mutation coordinator", () => {
     let persistedSession: TestSession | null = { id: "preexisting-p" };
     let resolveCallback: (() => void) | undefined;
     const coordinator = loadCoordinatorModule().createAuthSessionMutationCoordinator({
-      readSession: async () => persistedSession,
-      restoreSession: async (session) => {
+      readSession: () => Promise.resolve(persistedSession),
+      restoreSession: (session) => {
         persistedSession = session;
+        return Promise.resolve();
       },
-      clearSession: async () => {
+      clearSession: () => {
         persistedSession = null;
+        return Promise.resolve();
       },
       identifySession: (session) => session?.id ?? null,
     });
@@ -164,12 +172,14 @@ describe("auth-session mutation coordinator", () => {
     let resolveCallback: (() => void) | undefined;
     const observed: Array<string | null> = [];
     const coordinator = loadCoordinatorModule().createAuthSessionMutationCoordinator({
-      readSession: async () => persistedSession,
-      restoreSession: async (session) => {
+      readSession: () => Promise.resolve(persistedSession),
+      restoreSession: (session) => {
         persistedSession = session;
+        return Promise.resolve();
       },
-      clearSession: async () => {
+      clearSession: () => {
         persistedSession = null;
+        return Promise.resolve();
       },
       identifySession: (session) => session?.id ?? null,
     });
@@ -189,9 +199,10 @@ describe("auth-session mutation coordinator", () => {
     );
     callback.cancel();
 
-    const logout = coordinator.runExplicitLogout(async () => {
+    const logout = coordinator.runExplicitLogout(() => {
       persistedSession = null;
       coordinator.publishAuthStateChange("SIGNED_OUT", null);
+      return Promise.resolve();
     });
 
     resolveCallback?.();
