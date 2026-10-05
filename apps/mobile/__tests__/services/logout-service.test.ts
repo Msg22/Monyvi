@@ -258,6 +258,8 @@ describe("logout-service", () => {
     expect(callOrder.indexOf("stopSmsListener")).toBeLessThan(
       callOrder.indexOf("signOut")
     );
+    expect(supaMocks.coordinatedSignOut).toHaveBeenCalledTimes(1);
+    expect(supaMocks.signOut).not.toHaveBeenCalled();
     expect(asyncMocks.setItem).not.toHaveBeenCalled();
     expect(asyncMocks.removeItem).not.toHaveBeenCalled();
   });
@@ -285,7 +287,6 @@ describe("logout-service", () => {
     expect(result).toEqual({ success: true });
     expect(supaMocks.coordinatedSignOut).toHaveBeenCalledTimes(1);
     expect(supaMocks.signOut).not.toHaveBeenCalled();
-    expect(supaMocks.coordinatedSignOut).not.toHaveBeenCalled();
   });
 
   // =========================================================================
@@ -327,7 +328,6 @@ describe("logout-service", () => {
     expect(syncMocks.syncDatabase).toHaveBeenCalledTimes(2);
     expect(supaMocks.coordinatedSignOut).toHaveBeenCalledTimes(1);
     expect(supaMocks.signOut).not.toHaveBeenCalled();
-    expect(supaMocks.coordinatedSignOut).not.toHaveBeenCalled();
   });
 
   // =========================================================================
@@ -364,7 +364,6 @@ describe("logout-service", () => {
     expect(syncMocks.resetSyncState).not.toHaveBeenCalled();
     expect(supaMocks.coordinatedSignOut).toHaveBeenCalledTimes(1);
     expect(supaMocks.signOut).not.toHaveBeenCalled();
-    expect(supaMocks.coordinatedSignOut).not.toHaveBeenCalled();
   });
 
   // =========================================================================
