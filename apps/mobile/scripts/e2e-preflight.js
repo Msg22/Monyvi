@@ -68,6 +68,7 @@ const privateTextFallbackMarkers = [
   ...Object.values(arabicPrivateTextFallbackMarkers),
 ];
 const authReadyMarkers = [
+  "verification-code-input",
   "emailAddress",
   "Welcome to Monyvi",
   "Email address",
