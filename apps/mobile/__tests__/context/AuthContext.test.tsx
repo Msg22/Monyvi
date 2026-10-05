@@ -79,6 +79,7 @@ function emitCoordinatedAuthState(
 }
 
 jest.mock("@/services/supabase", () => ({
+  coordinatedSignOut: (): Promise<unknown> => mockSignOut(),
   getStableAuthSession: (): Promise<AuthSessionReadResult> =>
     mockGetStableAuthSession(),
   subscribeToCoordinatedAuthStateChange: (

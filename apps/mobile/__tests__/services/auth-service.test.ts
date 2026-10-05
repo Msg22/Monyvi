@@ -27,8 +27,16 @@ const mockExchangeCodeForSession = jest.fn();
 const mockSignUpWithEmail = jest.fn();
 const mockSignInWithEmailFn = jest.fn();
 const mockResetPasswordForEmail = jest.fn();
+const mockAuthSessionGeneration = 0;
 
 jest.mock("@/services/supabase", () => ({
+  beginCoordinatedAuthCallbackMutation: <T,>(
+    operation: () => Promise<T>
+  ): { readonly promise: Promise<T>; readonly cancel: () => void } => ({
+    promise: operation(),
+    cancel: jest.fn(),
+  }),
+  getAuthSessionGeneration: (): number => mockAuthSessionGeneration,
   signInWithOAuthProvider: (...args: unknown[]): Promise<unknown> =>
     mockSignInWithOAuthProvider(...args) as Promise<unknown>,
   signUpWithEmail: (...args: unknown[]): Promise<unknown> =>

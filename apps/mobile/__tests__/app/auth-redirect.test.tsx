@@ -15,6 +15,7 @@ interface MockNavigationContainerRef {
 const mockReplace = jest.fn();
 const mockPush = jest.fn();
 const mockCompleteAuthSessionFromUrl = jest.fn();
+const mockCancelAuthSessionCompletion = jest.fn();
 let mockCallbackUrl: string | null;
 let mockIsNavigationReady: boolean;
 let mockAuthState: MockAuthState;
@@ -160,6 +161,8 @@ jest.mock("@/components/auth/ResetSentView", () => ({
 }));
 
 jest.mock("@/services/auth-service", () => ({
+  cancelAuthSessionCompletion: (...args: unknown[]): unknown =>
+    mockCancelAuthSessionCompletion(...args),
   completeAuthSessionFromUrl: (...args: unknown[]): Promise<unknown> =>
     mockCompleteAuthSessionFromUrl(...args) as Promise<unknown>,
   signInWithOAuth: jest.fn(),

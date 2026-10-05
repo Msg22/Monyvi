@@ -6,6 +6,10 @@ const mockClearPersistedAuthSession = jest.fn();
 jest.mock("@/services/supabase", () => ({
   clearPersistedAuthSession: (...args: readonly unknown[]): unknown =>
     mockClearPersistedAuthSession(...args),
+  coordinatedRefreshSession: (...args: readonly unknown[]): unknown =>
+    mockRefreshSession(...args),
+  coordinatedSignOut: (...args: readonly unknown[]): unknown =>
+    mockSignOut(...args),
   supabase: {
     auth: {
       refreshSession: (...args: readonly unknown[]): unknown =>
