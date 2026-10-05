@@ -414,18 +414,12 @@ describe("AuthCallbackScreen verification lifecycle", () => {
     });
 
     const header = screen.getByTestId("auth-topbar");
-    const children = Children.toArray(header.props.children);
-    const testIds = children.flatMap((child) => {
-      if (!React.isValidElement<{ readonly testID?: unknown }>(child)) {
-        return [];
-      }
-
-      const testID = child.props.testID;
-      return typeof testID === "string" ? [testID] : [];
-    });
+    const languageSlot = screen.getByTestId("auth-language-slot");
+    const logoSlot = screen.getByTestId("auth-logo-slot");
 
     // Native Yoga mirrors flex-row in RTL; JSX order must stay stable.
-    expect(testIds).toEqual(["auth-language-slot", "auth-logo-slot"]);
+    expect(header.children[0]).toBe(languageSlot);
+    expect(header.children[1]).toBe(logoSlot);
   });
 
   it("does not auto-skip verification success on an already-authenticated warm start", async () => {

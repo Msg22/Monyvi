@@ -1,5 +1,5 @@
 import { render, screen } from "@testing-library/react-native";
-import React, { Children } from "react";
+import React from "react";
 
 let mockViewportWidth = 390;
 let mockViewportHeight = 844;
@@ -66,15 +66,17 @@ function createControllerBase(): {
     verificationExpiresAtMs: Date.now() + 10 * 60_000,
     resendAvailableAtMs: Date.now() + 2 * 60_000,
     resendLimitUntilMs: null as number | null,
-    handleOAuth: jest.fn(() => Promise.resolve()),
-    handleEmailSubmit: jest.fn(() => Promise.resolve()),
-    handleForgotPassword: jest.fn(() => Promise.resolve()),
-    handleVerificationCodeChange: jest.fn(),
-    handleResendVerification: jest.fn(() => Promise.resolve()),
-    handleContinueAfterVerification: jest.fn(),
-    handleBackToForm: jest.fn(),
-    clearEmailError: jest.fn(),
-    clearNetworkError: jest.fn(),
+    handleOAuth: jest.fn<Promise<void>, []>(() => Promise.resolve()),
+    handleEmailSubmit: jest.fn<Promise<void>, []>(() => Promise.resolve()),
+    handleForgotPassword: jest.fn<Promise<void>, []>(() => Promise.resolve()),
+    handleVerificationCodeChange: jest.fn<void, []>(),
+    handleResendVerification: jest.fn<Promise<void>, []>(() =>
+      Promise.resolve()
+    ),
+    handleContinueAfterVerification: jest.fn<void, []>(),
+    handleBackToForm: jest.fn<void, []>(),
+    clearEmailError: jest.fn<void, []>(),
+    clearNetworkError: jest.fn<void, []>(),
   };
 }
 
@@ -188,18 +190,13 @@ const AuthScreen = jest.requireActual<typeof import("../../app/auth")>(
   "../../app/auth"
 ).default;
 
-function headerChildTestIds(): string[] {
+function expectLanguageThenLogoHeader(): void {
   const header = screen.getByTestId("auth-topbar");
-  const children = Children.toArray(header.props.children);
+  const languageSlot = screen.getByTestId("auth-language-slot");
+  const logoSlot = screen.getByTestId("auth-logo-slot");
 
-  return children.flatMap((child) => {
-    if (!React.isValidElement<{ readonly testID?: unknown }>(child)) {
-      return [];
-    }
-
-    const testID = child.props.testID;
-    return typeof testID === "string" ? [testID] : [];
-  });
+  expect(header.children[0]).toBe(languageSlot);
+  expect(header.children[1]).toBe(logoSlot);
 }
 
 describe("auth verification presentation shell", () => {
@@ -277,10 +274,7 @@ describe("auth verification presentation shell", () => {
 
   it("keeps stable language-then-logo JSX order and lets native RTL mirror it", () => {
     const english = render(<AuthScreen />);
-    expect(headerChildTestIds()).toEqual([
-      "auth-language-slot",
-      "auth-logo-slot",
-    ]);
+    expectLanguageThenLogoHeader();
 
     english.unmount();
     mockIsRTL = true;
@@ -288,9 +282,6 @@ describe("auth verification presentation shell", () => {
 
     // React Native/Yoga mirrors flex-row under forceRTL; reversing JSX would
     // double-mirror the approved Arabic header.
-    expect(headerChildTestIds()).toEqual([
-      "auth-language-slot",
-      "auth-logo-slot",
-    ]);
+    expectLanguageThenLogoHeader();
   });
 });
