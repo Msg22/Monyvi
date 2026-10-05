@@ -21,7 +21,10 @@ import { palette } from "@/constants/colors";
 import { useTheme } from "@/context/ThemeContext";
 import { useAuth } from "@/context/AuthContext";
 import { useDeferredRouterReplace } from "@/hooks/useDeferredRouterReplace";
-import { completeAuthSessionFromUrl } from "@/services/auth-service";
+import {
+  cancelAuthSessionCompletion,
+  completeAuthSessionFromUrl,
+} from "@/services/auth-service";
 import { useURL } from "expo-linking";
 import { type Href, useLocalSearchParams, useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
@@ -188,6 +191,7 @@ export default function AuthCallbackScreen(): React.JSX.Element {
           errorCode: "timeout";
         }>((resolve) => {
           timeoutId = setTimeout(() => {
+            cancelAuthSessionCompletion(callbackUrl);
             resolve({
               success: false,
               error: "Authentication took too long. Please try again.",

@@ -23,6 +23,8 @@ import {
 
 import { AUTH_REDIRECT_URL } from "@/constants/auth-constants";
 import {
+  beginCoordinatedAuthCallbackMutation,
+  getAuthSessionGeneration,
   signInWithOAuthProvider,
   supabase,
   resetPasswordForEmail as supabaseResetPassword,
@@ -32,6 +34,7 @@ import {
   type OAuthProvider,
 } from "@/services/supabase";
 import { isAuthError, isAuthRetryableFetchError } from "@supabase/supabase-js";
+import { isAuthSessionMutationCancelledError } from "@/services/auth-session-mutation-coordinator";
 
 // Ensure the browser auth session can complete on warm start
 WebBrowser.maybeCompleteAuthSession();
@@ -92,7 +95,19 @@ const OAUTH_TIMEOUT_MS = 120_000;
  * the same code can only produce a misleading second exchange. Keep the
  * in-flight and terminal result process-local for duplicate callback delivery.
  */
-const pkceCallbackResults = new Map<string, Promise<AuthCallbackResult>>();
+interface CallbackCompletion {
+  readonly promise: Promise<AuthCallbackResult>;
+  readonly cancel: () => void;
+}
+
+interface PkceCallbackCacheEntry {
+  readonly promise: Promise<AuthCallbackResult>;
+  terminalResult?: AuthCallbackResult;
+  successGeneration?: number;
+}
+
+const callbackCompletions = new Map<string, CallbackCompletion>();
+const pkceCallbackResults = new Map<string, PkceCallbackCacheEntry>();
 
 // =============================================================================
 // Public API — OAuth
@@ -327,35 +342,29 @@ export async function completeAuthSessionFromUrl(
       };
     }
 
-    try {
-      const { data, error } = await supabase.auth.setSession({
-        access_token: accessToken,
-        refresh_token: refreshToken,
-      });
-
-      if (error) {
-        return createAuthCallbackFailure(error);
+    return runCoordinatedCallback(
+      url,
+      () =>
+        supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+        }),
+      (result) => result.error === null && result.data.session !== null,
+      (result) => {
+        if (result.error) {
+          return createAuthCallbackFailure(result.error);
+        }
+        if (!result.data.session) {
+          return createMissingCallbackSessionFailure();
+        }
+        return createAuthCallbackSuccess(result.data.session.user?.email);
       }
-      if (!data.session) {
-        return createMissingCallbackSessionFailure();
-      }
-
-      return createAuthCallbackSuccess(data.session.user?.email);
-    } catch (error: unknown) {
-      return createAuthCallbackFailure(error);
-    }
+    );
   }
 
   const code = queryParams?.get("code");
   if (code) {
-    const existingResult = pkceCallbackResults.get(code);
-    if (existingResult) {
-      return existingResult;
-    }
-
-    const exchangeResult = completePkceCallback(code);
-    pkceCallbackResults.set(code, exchangeResult);
-    return exchangeResult;
+    return completePkceCallback(code, url);
   }
 
   return {
@@ -365,21 +374,98 @@ export async function completeAuthSessionFromUrl(
   };
 }
 
-async function completePkceCallback(code: string): Promise<AuthCallbackResult> {
-  try {
-    const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+export function cancelAuthSessionCompletion(url: string): void {
+  callbackCompletions.get(url)?.cancel();
+}
 
-    if (error) {
-      return createAuthCallbackFailure(error);
-    }
-    if (!data.session) {
-      return createMissingCallbackSessionFailure();
-    }
-
-    return createAuthCallbackSuccess(data.session.user?.email);
-  } catch (error: unknown) {
-    return createAuthCallbackFailure(error);
+function runCoordinatedCallback<T>(
+  url: string,
+  operation: () => Promise<T>,
+  isSuccessful: (result: T) => boolean,
+  mapResult: (result: T) => AuthCallbackResult
+): Promise<AuthCallbackResult> {
+  const existing = callbackCompletions.get(url);
+  if (existing) {
+    return existing.promise;
   }
+
+  const handle = beginCoordinatedAuthCallbackMutation(operation, isSuccessful);
+  const promise = handle.promise
+    .then(mapResult)
+    .catch((error: unknown) => {
+      if (isAuthSessionMutationCancelledError(error)) {
+        return {
+          success: false,
+          error: "Authentication took too long. Please try again.",
+          errorCode: "timeout",
+        } satisfies AuthCallbackResult;
+      }
+      return createAuthCallbackFailure(error);
+    });
+
+  const completion: CallbackCompletion = {
+    promise,
+    cancel: handle.cancel,
+  };
+  callbackCompletions.set(url, completion);
+
+  void promise.finally(() => {
+    if (callbackCompletions.get(url) === completion) {
+      callbackCompletions.delete(url);
+    }
+  });
+
+  return promise;
+}
+
+async function completePkceCallback(
+  code: string,
+  url: string
+): Promise<AuthCallbackResult> {
+  const existing = pkceCallbackResults.get(code);
+  if (existing) {
+    if (!existing.terminalResult) {
+      return existing.promise;
+    }
+    if (!existing.terminalResult.success) {
+      return existing.terminalResult;
+    }
+    if (existing.successGeneration === getAuthSessionGeneration()) {
+      return existing.terminalResult;
+    }
+
+    return {
+      success: false,
+      error: "This authentication callback has already been consumed.",
+      errorCode: "invalid_callback",
+    };
+  }
+
+  const promise = runCoordinatedCallback(
+    url,
+    () => supabase.auth.exchangeCodeForSession(code),
+    (result) => result.error === null && result.data.session !== null,
+    (result) => {
+      if (result.error) {
+        return createAuthCallbackFailure(result.error);
+      }
+      if (!result.data.session) {
+        return createMissingCallbackSessionFailure();
+      }
+      return createAuthCallbackSuccess(result.data.session.user?.email);
+    }
+  );
+  const entry: PkceCallbackCacheEntry = { promise };
+  pkceCallbackResults.set(code, entry);
+
+  void promise.then((result) => {
+    entry.terminalResult = result;
+    if (result.success) {
+      entry.successGeneration = getAuthSessionGeneration();
+    }
+  });
+
+  return promise;
 }
 
 /**

@@ -1,6 +1,11 @@
 import type { FunctionInvokeOptions } from "@supabase/supabase-js";
 
-import { clearPersistedAuthSession, supabase } from "./supabase";
+import {
+  clearPersistedAuthSession,
+  coordinatedRefreshSession,
+  coordinatedSignOut,
+  supabase,
+} from "./supabase";
 
 const EDGE_FUNCTION_AUTHENTICATION_ERROR_NAME =
   "EdgeFunctionAuthenticationRequiredError";
@@ -35,7 +40,7 @@ export function getEdgeFunctionErrorStatus(error: unknown): number | undefined {
 
 async function clearInvalidLocalSession(): Promise<void> {
   try {
-    await supabase.auth.signOut({ scope: "local" });
+    await coordinatedSignOut({ scope: "local" });
   } catch {
     await clearPersistedAuthSession();
   }
@@ -43,7 +48,7 @@ async function clearInvalidLocalSession(): Promise<void> {
 
 async function refreshAccessToken(): Promise<string | null> {
   try {
-    const { data, error } = await supabase.auth.refreshSession();
+    const { data, error } = await coordinatedRefreshSession();
     return error === null ? (data.session?.access_token ?? null) : null;
   } catch {
     return null;
