@@ -16,53 +16,74 @@ export function VerificationSuccessView({
   onContinue,
 }: VerificationSuccessViewProps): React.JSX.Element {
   const { t } = useTranslation("auth");
-  const { fontFamily } = useLocale();
+  const { fontFamily, isRTL } = useLocale();
   const { isDark } = useTheme();
   const accentColor = isDark ? palette.nileGreen[400] : palette.nileGreen[600];
 
   return (
-    <View testID="verification-success-view" className="flex-1">
-      <View className="flex-1 items-center justify-center px-3 pb-8">
+    <View
+      testID="verification-success-view"
+      className="flex-1 w-full max-w-[400px] self-center"
+    >
+      <View className="flex-1 items-center justify-center">
         <View
           testID="verification-success-illustration"
-          className="relative mb-7 h-[124px] w-[124px] items-center justify-center"
+          className="relative mb-6 h-28 w-28 items-center justify-center rounded-full bg-nileGreen-100 dark:bg-nileGreen-500/15"
         >
-          <View className="h-[108px] w-[108px] items-center justify-center rounded-full bg-nileGreen-500/10">
-            <View className="h-[72px] w-[72px] items-center justify-center rounded-full bg-nileGreen-500">
-              <Ionicons name="checkmark" size={44} color={palette.slate[25]} />
-            </View>
+          <View className="h-[72px] w-[72px] items-center justify-center rounded-full bg-nileGreen-600 dark:bg-nileGreen-500">
+            <Ionicons name="checkmark" size={44} color={palette.slate[25]} />
           </View>
           <Ionicons
             name="sparkles"
-            size={18}
+            size={16}
             color={accentColor}
-            className="absolute right-[6px] top-[5px]"
+            className="absolute right-1 top-2"
           />
           <Ionicons
             name="sparkles"
-            size={15}
+            size={13}
             color={accentColor}
-            className="absolute bottom-[10px] left-0"
+            className="absolute bottom-3 left-1"
+          />
+          <Ionicons
+            name="sparkles"
+            size={11}
+            color={accentColor}
+            className="absolute left-2 top-5"
+          />
+          <Ionicons
+            name="sparkles"
+            size={10}
+            color={accentColor}
+            className="absolute bottom-5 right-2"
           />
         </View>
 
         <Text
           accessibilityRole="header"
-          className="text-center text-[28px] leading-[34px] text-text-primary dark:text-text-primary-dark"
-          style={{ fontFamily: fontFamily.bold }}
+          className="text-center text-text-primary dark:text-text-primary-dark"
+          style={{
+            fontFamily: fontFamily.bold,
+            fontSize: isRTL ? 26 : 28,
+            lineHeight: isRTL ? 38 : 34,
+          }}
         >
           {t("email_verified_title")}
         </Text>
 
         <Text
-          className="mt-4 max-w-[315px] text-center text-[15px] leading-[23px] text-text-secondary dark:text-text-secondary-dark"
-          style={{ fontFamily: fontFamily.regular }}
+          className="mt-3 max-w-[315px] text-center text-text-secondary dark:text-text-secondary-dark"
+          style={{
+            fontFamily: fontFamily.regular,
+            fontSize: 15,
+            lineHeight: 23,
+          }}
         >
           {t("email_verified_message")}
         </Text>
 
         {email ? (
-          <View className="mt-6 rounded-[9px] bg-slate-100 px-4 py-2 dark:bg-slate-800">
+          <View className="mt-2 h-8 justify-center rounded-2xl bg-slate-100 px-4 dark:bg-slate-800">
             <Text
               className="text-[14px] text-text-primary dark:text-text-primary-dark"
               style={{ fontFamily: fontFamily.semiBold, writingDirection: "ltr" }}
@@ -76,7 +97,7 @@ export function VerificationSuccessView({
           onPress={onContinue}
           accessibilityRole="button"
           accessibilityLabel={t("continue_to_dashboard")}
-          className="mt-8 h-12 w-full max-w-[310px] items-center justify-center rounded-[13px] bg-nileGreen-600"
+          className="mt-7 h-[52px] w-full items-center justify-center rounded-[14px] bg-nileGreen-600 dark:bg-nileGreen-500"
         >
           <Text
             className="text-[15px] text-white"
@@ -87,7 +108,7 @@ export function VerificationSuccessView({
         </Pressable>
       </View>
 
-      <View className="items-center gap-[9px] border-t border-slate-200 pt-[14px] dark:border-slate-700">
+      <View className="mt-4 items-center gap-[9px] border-t border-slate-200 pt-4 dark:border-slate-700">
         <View className="flex-row items-center gap-[7px]">
           <Ionicons
             name="shield-checkmark-outline"

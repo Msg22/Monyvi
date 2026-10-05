@@ -60,10 +60,16 @@ function withAuthorization(
   options: FunctionInvokeOptions,
   accessToken: string
 ): FunctionInvokeOptions {
+  const headers = Object.fromEntries(
+    Object.entries(options.headers ?? {}).filter(
+      ([key]) => key.toLowerCase() !== "authorization"
+    )
+  );
+
   return {
     ...options,
     headers: {
-      ...options.headers,
+      ...headers,
       Authorization: `Bearer ${accessToken}`,
     },
   };

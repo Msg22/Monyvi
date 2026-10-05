@@ -18,6 +18,8 @@ import { VerificationSuccessView } from "@/components/auth/VerificationSuccessVi
 import { LanguageSwitcherPill } from "@/components/onboarding/LanguageSwitcherPill";
 import { MonyviLogo } from "@/components/ui/MonyviLogo";
 import { palette } from "@/constants/colors";
+import { RESPONSIVE_BREAKPOINTS } from "@/constants/ui";
+import { useLocale } from "@/context/LocaleContext";
 import { useTheme } from "@/context/ThemeContext";
 import { useAuth } from "@/context/AuthContext";
 import { useDeferredRouterReplace } from "@/hooks/useDeferredRouterReplace";
@@ -29,7 +31,7 @@ import { useURL } from "expo-linking";
 import { type Href, useLocalSearchParams, useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { useEffect, useRef, useState } from "react";
-import { ScrollView, View } from "react-native";
+import { ScrollView, useWindowDimensions, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 type CallbackState =
@@ -111,10 +113,24 @@ function AuthCallbackVerificationSuccess({
   readonly onContinue: () => void;
 }): React.JSX.Element {
   const insets = useSafeAreaInsets();
+  const { width: viewportWidth } = useWindowDimensions();
   const { isDark } = useTheme();
+  const { isRTL } = useLocale();
+  const isCompact = viewportWidth < RESPONSIVE_BREAKPOINTS.compactPhone;
   const gradientColors: readonly [string, string] = isDark
     ? [palette.slate[950], palette.slate[900]]
     : [palette.nileGreen[50], palette.slate[25]];
+
+  const languageSlot = (
+    <View testID="auth-language-slot">
+      <LanguageSwitcherPill />
+    </View>
+  );
+  const logoSlot = (
+    <View testID="auth-logo-slot">
+      <MonyviLogo width={114} height={34} />
+    </View>
+  );
 
   return (
     <View className="flex-1 bg-background dark:bg-background-dark">
@@ -124,25 +140,36 @@ function AuthCallbackVerificationSuccess({
         pointerEvents="none"
       />
       <ScrollView
+        testID="auth-callback-success-scroll"
         bounces={false}
         overScrollMode="never"
         contentContainerStyle={{
           flexGrow: 1,
           paddingTop: insets.top + 6,
-          paddingBottom: insets.bottom + 22,
-          paddingHorizontal: 30,
+          paddingBottom: insets.bottom + 16,
+          paddingHorizontal: isCompact ? 16 : 24,
         }}
         showsVerticalScrollIndicator={false}
       >
         <View
           testID="auth-topbar"
-          className="flex-row items-center justify-between"
-          style={{ minHeight: 50 }}
+          className="min-h-10 flex-row items-center justify-between"
         >
-          <LanguageSwitcherPill />
-          <MonyviLogo width={114} height={34} />
+          {isRTL ? (
+            <>
+              {logoSlot}
+              {languageSlot}
+            </>
+          ) : (
+            <>
+              {languageSlot}
+              {logoSlot}
+            </>
+          )}
         </View>
-        <VerificationSuccessView email={email} onContinue={onContinue} />
+        <View className="flex-1 w-full max-w-[400px] self-center">
+          <VerificationSuccessView email={email} onContinue={onContinue} />
+        </View>
       </ScrollView>
     </View>
   );

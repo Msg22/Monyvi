@@ -4,12 +4,15 @@ import {
   Pressable,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
   type TextInput as TextInputType,
 } from "react-native";
 import { useTranslation } from "react-i18next";
 
+import { Skeleton } from "@/components/ui/Skeleton";
 import { palette } from "@/constants/colors";
+import { RESPONSIVE_BREAKPOINTS } from "@/constants/ui";
 import { useLocale } from "@/context/LocaleContext";
 import { useTheme } from "@/context/ThemeContext";
 
@@ -29,14 +32,9 @@ interface VerificationCodeViewProps {
 
 function formatVerificationDigit(
   digit: string | undefined,
-  language: string
+  _language: string
 ): string {
-  if (!digit || language !== "ar") {
-    return digit ?? "";
-  }
-
-  const index = "0123456789".indexOf(digit);
-  return index >= 0 ? "٠١٢٣٤٥٦٧٨٩"[index] ?? digit : digit;
+  return digit ?? "";
 }
 
 function formatCountdown(remainingMs: number): string {
@@ -62,6 +60,7 @@ export function VerificationCodeView({
   const { t } = useTranslation("auth");
   const { fontFamily, isRTL, language } = useLocale();
   const { isDark } = useTheme();
+  const { width: viewportWidth } = useWindowDimensions();
   const inputRef = useRef<TextInputType>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
 
@@ -98,12 +97,23 @@ export function VerificationCodeView({
   const accentColor = isDark ? palette.nileGreen[400] : palette.nileGreen[600];
   const secondaryTextColor = isDark ? palette.slate[400] : palette.slate[500];
 
+  const isCompact =
+    viewportWidth < RESPONSIVE_BREAKPOINTS.compactPhone;
+  const horizontalPadding = isCompact ? 16 : 24;
+  const otpGap = isCompact ? 6 : 8;
+  const availableOtpWidth =
+    viewportWidth - horizontalPadding * 2 - otpGap * 5;
+  const otpCellSize = Math.min(48, Math.max(0, availableOtpWidth / 6));
+
   return (
-    <View testID="verification-code-view" className="flex-1">
-      <View className="flex-1 items-center justify-center px-1 pb-8">
-        <View className="mb-6 h-[92px] w-[92px] items-center justify-center rounded-full border border-nileGreen-500/25 bg-nileGreen-500/10">
-          <Ionicons name="mail-outline" size={42} color={accentColor} />
-          <View className="absolute bottom-[19px] right-[18px] h-6 w-6 items-center justify-center rounded-full bg-background dark:bg-background-dark">
+    <View
+      testID="verification-code-view"
+      className="flex-1 w-full max-w-[400px] self-center"
+    >
+      <View className="flex-1 items-center justify-center">
+        <View className="mb-6 h-20 w-20 items-center justify-center rounded-full border border-nileGreen-500/25 bg-nileGreen-500/10">
+          <Ionicons name="mail-outline" size={36} color={accentColor} />
+          <View className="absolute bottom-[14px] right-[13px] h-6 w-6 items-center justify-center rounded-full bg-background dark:bg-background-dark">
             <Ionicons
               name="checkmark-circle"
               size={24}
@@ -114,22 +124,31 @@ export function VerificationCodeView({
 
         <Text
           accessibilityRole="header"
-          className="text-center text-[27px] leading-[32px] text-text-primary dark:text-text-primary-dark"
-          style={{ fontFamily: fontFamily.bold, letterSpacing: isRTL ? 0 : -0.6 }}
+          className="text-center text-text-primary dark:text-text-primary-dark"
+          style={{
+            fontFamily: fontFamily.bold,
+            fontSize: isRTL ? 26 : 28,
+            lineHeight: isRTL ? 38 : 34,
+            letterSpacing: isRTL ? 0 : -0.6,
+          }}
         >
           {t("verify_your_email")}
         </Text>
 
         <Text
-          className="mt-3 max-w-[330px] text-center text-sm text-text-secondary dark:text-text-secondary-dark"
-          style={{ fontFamily: fontFamily.regular, lineHeight: isRTL ? 26 : 22 }}
+          className="mt-3 max-w-[330px] text-center text-text-secondary dark:text-text-secondary-dark"
+          style={{
+            fontFamily: fontFamily.regular,
+            fontSize: 15,
+            lineHeight: 23,
+          }}
         >
           {t("verification_code_sent_message")}
         </Text>
 
         <View
           testID="verification-email-chip"
-          className="mt-2 rounded-[8px] bg-slate-100 px-3 py-1.5 dark:bg-slate-800"
+          className="mt-2 h-8 justify-center rounded-2xl bg-slate-100 px-3 dark:bg-slate-800"
         >
           <Text
             className="text-[14px] text-text-primary dark:text-text-primary-dark"
@@ -143,19 +162,20 @@ export function VerificationCodeView({
           testID="verification-code-cells"
           accessible={false}
           onPress={() => inputRef.current?.focus()}
-          className="relative mt-7 w-full max-w-[360px]"
+          className="relative mt-7 w-full"
         >
           <View
             accessibilityElementsHidden
             importantForAccessibility="no-hide-descendants"
-            className="flex-row justify-center gap-2"
-            style={{ direction: "ltr" }}
+            className="flex-row justify-center"
+            style={{ direction: "ltr", columnGap: otpGap }}
           >
             {Array.from({ length: 6 }, (_, index) => (
               <View
                 key={index}
                 testID={`verification-code-cell-${index}`}
-                className="h-[58px] w-[48px] items-center justify-center rounded-[10px] border border-nileGreen-500 bg-white/70 dark:bg-slate-900/60"
+                className="items-center justify-center rounded-[10px] border border-nileGreen-500 bg-white/70 dark:bg-slate-900/60"
+                style={{ width: otpCellSize, height: otpCellSize }}
               >
                 <Text
                   className="text-[25px] text-text-primary dark:text-text-primary-dark"
@@ -180,6 +200,10 @@ export function VerificationCodeView({
             autoComplete="one-time-code"
             accessibilityLabel={t("verification_code_input")}
             accessibilityHint={t("verification_code_input_hint")}
+            accessibilityState={{
+              disabled: actionsDisabled,
+              busy: isVerifying,
+            }}
             className="absolute inset-0 bg-transparent text-left text-transparent opacity-[0.02]"
             style={{ writingDirection: "ltr" }}
             selectionColor="transparent"
@@ -198,12 +222,25 @@ export function VerificationCodeView({
           </Text>
         ) : null}
 
-        <Text
-          className="mt-5 text-center text-sm text-text-secondary dark:text-text-secondary-dark"
-          style={{ fontFamily: fontFamily.regular }}
-        >
-          {isVerifying ? t("verifying_code") : expiryLabel}
-        </Text>
+        {isVerifying ? (
+          <View
+            testID="verification-code-busy-feedback"
+            className="mt-5 h-[23px] items-center justify-center"
+          >
+            <Skeleton width={120} height={12} borderRadius={6} />
+          </View>
+        ) : (
+          <Text
+            className="mt-5 text-center text-text-secondary dark:text-text-secondary-dark"
+            style={{
+              fontFamily: fontFamily.regular,
+              fontSize: 15,
+              lineHeight: 23,
+            }}
+          >
+            {expiryLabel}
+          </Text>
+        )}
 
         <Pressable
           onPress={() => {
@@ -212,42 +249,45 @@ export function VerificationCodeView({
           disabled={resendDisabled}
           accessibilityRole="button"
           accessibilityLabel={resendLabel}
-          accessibilityState={{ disabled: resendDisabled, busy: isResending }}
-          className="mt-7 h-12 w-full max-w-[285px] items-center justify-center rounded-[13px] border border-slate-300 dark:border-slate-600"
+          accessibilityState={{
+            disabled: resendDisabled,
+            busy: isResending,
+          }}
+          className="mt-7 h-[52px] w-full items-center justify-center rounded-[14px] border border-slate-300 dark:border-slate-600"
           style={{ opacity: resendDisabled ? 0.6 : 1 }}
         >
           <Text
-            className="text-[14px] text-text-secondary dark:text-text-secondary-dark"
+            className="text-[15px] text-text-secondary dark:text-text-secondary-dark"
             style={{ fontFamily: fontFamily.semiBold }}
           >
             {resendLabel}
           </Text>
         </Pressable>
+
+        <Pressable
+          onPress={onBack}
+          disabled={actionsDisabled}
+          accessibilityRole="button"
+          accessibilityLabel={t("back_to_sign_in")}
+          accessibilityState={{ disabled: actionsDisabled }}
+          className="mt-6 h-11 flex-row items-center justify-center gap-[7px]"
+          style={{ opacity: actionsDisabled ? 0.55 : 1, direction: "ltr" }}
+        >
+          <Ionicons
+            name="arrow-back"
+            size={16}
+            color={secondaryTextColor}
+          />
+          <Text
+            className="text-xs text-text-secondary dark:text-text-secondary-dark"
+            style={{ fontFamily: fontFamily.medium }}
+          >
+            {t("back_to_sign_in")}
+          </Text>
+        </Pressable>
       </View>
 
-      <Pressable
-        onPress={onBack}
-        disabled={actionsDisabled}
-        accessibilityRole="button"
-        accessibilityLabel={t("back_to_sign_in")}
-        accessibilityState={{ disabled: actionsDisabled }}
-        className="h-[42px] flex-row items-center justify-center gap-[7px]"
-        style={{ opacity: actionsDisabled ? 0.55 : 1 }}
-      >
-        <Ionicons
-          name={isRTL ? "arrow-forward" : "arrow-back"}
-          size={16}
-          color={secondaryTextColor}
-        />
-        <Text
-          className="text-xs text-text-secondary dark:text-text-secondary-dark"
-          style={{ fontFamily: fontFamily.medium }}
-        >
-          {t("back_to_sign_in")}
-        </Text>
-      </Pressable>
-
-      <View className="items-center gap-[9px] border-t border-slate-200 pt-[14px] dark:border-slate-700">
+      <View className="mt-4 items-center gap-[9px] border-t border-slate-200 pt-4 dark:border-slate-700">
         <View className="flex-row items-center gap-[7px]">
           <Ionicons
             name="shield-checkmark-outline"
