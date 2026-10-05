@@ -458,8 +458,6 @@ export function createAuthSessionMutationCoordinator(
           throw new AuthSessionMutationQuarantinedError();
         }
 
-        commitStable(null);
-
         if (operationError !== undefined) {
           throw normalizeThrownError(
             operationError,
@@ -468,6 +466,10 @@ export function createAuthSessionMutationCoordinator(
         }
         if (!hasResult) {
           throw new Error("Authentication logout produced no result.");
+        }
+
+        if (isSuccessful(result as T)) {
+          commitStable(null);
         }
 
         return result as T;
