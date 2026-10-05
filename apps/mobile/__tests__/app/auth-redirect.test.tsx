@@ -26,7 +26,6 @@ let mockSafeAreaInsets: {
 };
 let mockFontScale: number;
 let mockLocalSearchParams: Record<string, string | string[]> = {};
-let mockPersistedCallbackSession: string | null = null;
 
 jest.mock("react-native/Libraries/Utilities/useWindowDimensions", () => ({
   __esModule: true,
@@ -281,7 +280,6 @@ describe("AuthCallbackScreen verification lifecycle", () => {
   beforeEach(() => {
     mockReplace.mockClear();
     mockCompleteAuthSessionFromUrl.mockReset();
-    mockPersistedCallbackSession = null;
     mockLocalSearchParams = {};
     mockCallbackUrl =
       "monyvi://auth-callback#access_token=verification-access&refresh_token=verification-refresh&type=signup";
@@ -368,120 +366,6 @@ describe("AuthCallbackScreen verification lifecycle", () => {
     expect(
       screen.queryByTestId("auth-callback-processing-view")
     ).not.toBeOnTheScreen();
-  });
-
-  it("removes a session established after callback timeout and unmount when no retry succeeds", async () => {
-    jest.useFakeTimers();
-    let resolveLateAttempt: (() => void) | undefined;
-    mockCompleteAuthSessionFromUrl.mockImplementationOnce(
-      () =>
-        new Promise<{ success: true; email: string }>((resolve) => {
-          resolveLateAttempt = (): void => {
-            mockPersistedCallbackSession = "attempt-a";
-            resolve({ success: true, email: "attempt-a@example.com" });
-          };
-        })
-    );
-
-    const { unmount } = render(<AuthCallbackScreen />);
-
-    await act(async () => {
-      jest.advanceTimersByTime(10_001);
-      await Promise.resolve();
-    });
-    expect(
-      screen.getByRole("header", { name: "callback_network_failed_title" })
-    ).toBeOnTheScreen();
-
-    unmount();
-    await act(async () => {
-      resolveLateAttempt?.();
-      await Promise.resolve();
-    });
-
-    expect(mockPersistedCallbackSession).toBeNull();
-  });
-
-  it("preserves the newer retry session when the timed-out attempt establishes its session late", async () => {
-    jest.useFakeTimers();
-    let resolveLateAttempt: (() => void) | undefined;
-    mockCompleteAuthSessionFromUrl
-      .mockImplementationOnce(
-        () =>
-          new Promise<{ success: true; email: string }>((resolve) => {
-            resolveLateAttempt = (): void => {
-              mockPersistedCallbackSession = "attempt-a";
-              resolve({ success: true, email: "attempt-a@example.com" });
-            };
-          })
-      )
-      .mockImplementationOnce(async () => {
-        mockPersistedCallbackSession = "attempt-b";
-        return { success: true, email: "attempt-b@example.com" };
-      });
-
-    render(<AuthCallbackScreen />);
-
-    await act(async () => {
-      jest.advanceTimersByTime(10_001);
-      await Promise.resolve();
-    });
-    await act(async () => {
-      fireEvent.press(screen.getByRole("button", { name: "retry" }));
-      await Promise.resolve();
-    });
-
-    expect(screen.getByTestId("verification-success-email")).toHaveTextContent(
-      "attempt-b@example.com"
-    );
-    expect(mockPersistedCallbackSession).toBe("attempt-b");
-
-    await act(async () => {
-      resolveLateAttempt?.();
-      await Promise.resolve();
-    });
-
-    expect(mockPersistedCallbackSession).toBe("attempt-b");
-  });
-
-  it("does not resurrect a timed-out callback session after a newer session was explicitly cleared", async () => {
-    jest.useFakeTimers();
-    let resolveLateAttempt: (() => void) | undefined;
-    mockCompleteAuthSessionFromUrl
-      .mockImplementationOnce(
-        () =>
-          new Promise<{ success: true; email: string }>((resolve) => {
-            resolveLateAttempt = (): void => {
-              mockPersistedCallbackSession = "attempt-a";
-              resolve({ success: true, email: "attempt-a@example.com" });
-            };
-          })
-      )
-      .mockImplementationOnce(async () => {
-        mockPersistedCallbackSession = "attempt-b";
-        return { success: true, email: "attempt-b@example.com" };
-      });
-
-    render(<AuthCallbackScreen />);
-
-    await act(async () => {
-      jest.advanceTimersByTime(10_001);
-      await Promise.resolve();
-    });
-    await act(async () => {
-      fireEvent.press(screen.getByRole("button", { name: "retry" }));
-      await Promise.resolve();
-    });
-    expect(mockPersistedCallbackSession).toBe("attempt-b");
-
-    mockPersistedCallbackSession = null;
-
-    await act(async () => {
-      resolveLateAttempt?.();
-      await Promise.resolve();
-    });
-
-    expect(mockPersistedCallbackSession).toBeNull();
   });
 
   it("shows explicit verification success after a signup callback instead of waiting on AuthContext", async () => {

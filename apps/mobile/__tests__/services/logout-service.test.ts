@@ -92,9 +92,11 @@ function getSyncMocks(): SyncMocks {
 
 jest.mock("@/services/supabase", () => {
   const signOut = jest.fn(() => Promise.resolve({ error: null }));
+  const coordinatedSignOut = jest.fn(() => signOut());
   return {
+    coordinatedSignOut,
     supabase: { auth: { signOut } },
-    __mocks: { signOut },
+    __mocks: { signOut, coordinatedSignOut },
   };
 });
 
@@ -118,6 +120,7 @@ jest.mock("@/services/sms-live-listener-service", () => {
 
 interface SupabaseMocks {
   signOut: jest.Mock;
+  coordinatedSignOut: jest.Mock;
 }
 
 function getSupabaseMocks(): SupabaseMocks {
@@ -189,6 +192,7 @@ describe("logout-service", () => {
     syncMocks.resetSyncState.mockResolvedValue(undefined);
     syncMocks.getActiveSyncPromise.mockReturnValue(null);
     supaMocks.signOut.mockResolvedValue({ error: null });
+    supaMocks.coordinatedSignOut.mockImplementation(() => supaMocks.signOut());
     smsDetectionMocks.setLiveDetectionEnabled.mockResolvedValue(undefined);
     smsDetectionMocks.setAutoConfirm.mockResolvedValue(undefined);
     smsListenerMocks.stopSmsListener.mockReturnValue(undefined);
@@ -250,6 +254,15 @@ describe("logout-service", () => {
     );
     expect(asyncMocks.setItem).not.toHaveBeenCalled();
     expect(asyncMocks.removeItem).not.toHaveBeenCalled();
+  });
+
+  it("routes explicit session destruction through coordinated sign-out", async () => {
+    const supaMocks = getSupabaseMocks();
+
+    const result = await performLogout(db, true);
+
+    expect(result).toEqual({ success: true });
+    expect(supaMocks.coordinatedSignOut).toHaveBeenCalledTimes(1);
   });
 
   it("should continue logout when disabling live SMS automation fails", async () => {

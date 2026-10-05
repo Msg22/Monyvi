@@ -643,7 +643,10 @@ describe("useAuthScreenController code-first verification", () => {
       needsVerification: true,
     });
     mockVerifyEmailVerificationCode.mockResolvedValue({ success: true });
-    const { result, rerender } = renderHook(() => useAuthScreenController());
+    const { result, rerender } = renderHook(
+      (_props: { readonly revision: number }) => useAuthScreenController(),
+      { initialProps: { revision: 0 } }
+    );
 
     await act(async () => {
       await result.current.handleEmailSubmit(
@@ -658,7 +661,7 @@ describe("useAuthScreenController code-first verification", () => {
     });
 
     mockAuthState = { isAuthenticated: true, isLoading: false };
-    rerender();
+    rerender({ revision: 1 });
 
     expect(result.current.screenState).toBe("verificationSuccess");
     expect(mockUseDeferredRouterReplace).toHaveBeenLastCalledWith({
@@ -669,7 +672,7 @@ describe("useAuthScreenController code-first verification", () => {
     act(() => {
       result.current.handleContinueAfterVerification();
     });
-    rerender();
+    rerender({ revision: 2 });
 
     expect(mockUseDeferredRouterReplace).toHaveBeenLastCalledWith({
       enabled: true,

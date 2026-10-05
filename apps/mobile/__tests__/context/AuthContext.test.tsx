@@ -13,6 +13,8 @@ import {
 const mockGetSession = jest.fn();
 const mockOnAuthStateChange = jest.fn();
 const mockSignOut = jest.fn();
+const mockGetStableAuthSession = jest.fn();
+const mockSubscribeToCoordinatedAuthStateChange = jest.fn();
 const mockClearPersistedAuthSession = jest.fn();
 const mockUnsubscribe = jest.fn();
 const mockLoggerError = jest.fn();
@@ -24,6 +26,10 @@ type AuthStateChangeCallback = (
 ) => void;
 
 jest.mock("@/services/supabase", () => ({
+  getStableAuthSession: (...args: unknown[]): Promise<unknown> =>
+    mockGetStableAuthSession(...args) as Promise<unknown>,
+  subscribeToCoordinatedAuthStateChange: (...args: unknown[]): unknown =>
+    mockSubscribeToCoordinatedAuthStateChange(...args),
   clearPersistedAuthSession: (): Promise<void> =>
     mockClearPersistedAuthSession() as Promise<void>,
   supabase: {
@@ -65,6 +71,10 @@ describe("AuthProvider", () => {
     jest.clearAllMocks();
     clearBudgetDashboardFilterSession();
     mockClearPersistedAuthSession.mockResolvedValue(undefined);
+    mockGetStableAuthSession.mockImplementation(() => mockGetSession());
+    mockSubscribeToCoordinatedAuthStateChange.mockImplementation(
+      (callback: AuthStateChangeCallback) => mockOnAuthStateChange(callback)
+    );
     mockOnAuthStateChange.mockReturnValue({
       data: {
         subscription: {
@@ -76,6 +86,26 @@ describe("AuthProvider", () => {
 
   afterEach(() => {
     jest.useRealTimers();
+  });
+
+  it("boots and subscribes through coordinated auth-session boundaries", async () => {
+    mockGetSession.mockResolvedValue({
+      data: { session: null },
+      error: null,
+    });
+
+    const screen = render(
+      <AuthProvider>
+        <AuthProbe />
+      </AuthProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("anonymous")).toBeTruthy();
+    });
+
+    expect(mockGetStableAuthSession).toHaveBeenCalledTimes(1);
+    expect(mockSubscribeToCoordinatedAuthStateChange).toHaveBeenCalledTimes(1);
   });
 
   it("releases auth loading when session bootstrap hangs", async () => {

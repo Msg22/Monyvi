@@ -181,6 +181,54 @@ describe("auth-service - completeAuthSessionFromUrl", () => {
     });
   });
 
+  it("serializes ordinary email sign-in behind an in-flight callback session mutation", async () => {
+    const events: string[] = [];
+    let persistedSession: "callback-a" | "email-b" | null = null;
+    let resolveCallback:
+      | (() => void)
+      | undefined;
+
+    mockSetSession.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveCallback = (): void => {
+            persistedSession = "callback-a";
+            events.push("callback-a:save");
+            events.push("callback-a:notify");
+            resolve({
+              data: {
+                session: {
+                  user: { email: "callback-a@example.com" },
+                },
+              },
+              error: null,
+            });
+          };
+        })
+    );
+    mockSignInWithEmailFn.mockImplementation(async () => {
+      events.push("email-b:start");
+      persistedSession = "email-b";
+      return { success: true };
+    });
+
+    const callbackPromise = completeAuthSessionFromUrl(
+      "monyvi://auth-callback#access_token=callback-a-access&refresh_token=callback-a-refresh&type=signup"
+    );
+    const emailPromise = signInWithEmail("email-b@example.com", "secret");
+
+    await Promise.resolve();
+    resolveCallback?.();
+    await Promise.all([callbackPromise, emailPromise]);
+
+    expect(events).toEqual([
+      "callback-a:save",
+      "callback-a:notify",
+      "email-b:start",
+    ]);
+    expect(persistedSession).toBe("email-b");
+  });
+
   it("rejects callbacks when no URL was provided", async () => {
     const result = await completeAuthSessionFromUrl(undefined);
 
