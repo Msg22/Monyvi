@@ -5,3 +5,5 @@ build
 coverage
 *.min.js
 *.bundle.js
+# Approved mockup binding bytes are hash-authoritative; do not reflow.
+specs/321-email-verification/mockups/verification-flow-approved.binding.md
