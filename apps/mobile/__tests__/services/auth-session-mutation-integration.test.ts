@@ -228,63 +228,6 @@ describe("auth session mutation public-entrypoint integration", () => {
     expect(persistedSession?.access_token).toBe("session-p");
   });
 
-  it("quarantines later auth writes only after restore readback still exposes provisional A", async () => {
-    const sessionP = createSession("session-p", "refresh-p");
-    const sessionA = createSession("session-a", "refresh-a");
-    let persistedSession: Session | null = sessionP;
-    const events: string[] = [];
-
-    jest.spyOn(supabase.auth, "getSession").mockImplementation(() => {
-      events.push(`read:${persistedSession?.access_token ?? "none"}`);
-      return Promise.resolve({
-        data: { session: persistedSession },
-        error: null,
-      });
-    });
-    jest.spyOn(supabase.auth, "setSession").mockImplementation((tokens) => {
-      if (tokens.access_token === "session-a") {
-        events.push("write:a");
-        persistedSession = sessionA;
-        return Promise.resolve({
-          data: {
-            user: null,
-            session: null,
-          },
-          error: new Error("callback failed after provisional save"),
-        });
-      }
-
-      events.push("restore:p");
-      return Promise.resolve(sessionResponse(sessionP));
-    });
-    const emailSpy = jest
-      .spyOn(supabase.auth, "signInWithPassword")
-      .mockImplementation(() => {
-        events.push("email:b");
-        return Promise.resolve({
-          data: {
-            user: sessionP.user,
-            session: sessionP,
-          },
-          error: null,
-        });
-      });
-
-    const tokenKey = ["access", "token"].join("_");
-    const result = await completeAuthSessionFromUrl(
-      `monyvi://auth-callback#${tokenKey}=session-a&refresh_token=refresh-a&type=signup`
-    );
-    expect(result.success).toBe(false);
-
-    await signInWithEmail("same-user@example.com", "secret");
-
-    expect(events).toContain("restore:p");
-    expect(events).toContain("read:session-a");
-    expect(persistedSession?.access_token).toBe("session-a");
-    expect(emailSpy).not.toHaveBeenCalled();
-    expect(events).not.toContain("email:b");
-  });
-
   it("does not quarantine unrelated auth after callback failure leaves baseline P untouched", async () => {
     const sessionP = createSession("session-p", "refresh-p");
     const sessionB = createSession("session-b", "refresh-b");
@@ -361,4 +304,62 @@ describe("auth session mutation public-entrypoint integration", () => {
     expect(events).toContain("read");
     expect(events).toContain("mutate");
   });
+  it("quarantines later auth writes only after restore readback still exposes provisional A", async () => {
+    const sessionP = createSession("session-p", "refresh-p");
+    const sessionA = createSession("session-a", "refresh-a");
+    let persistedSession: Session | null = sessionP;
+    const events: string[] = [];
+
+    jest.spyOn(supabase.auth, "getSession").mockImplementation(() => {
+      events.push(`read:${persistedSession?.access_token ?? "none"}`);
+      return Promise.resolve({
+        data: { session: persistedSession },
+        error: null,
+      });
+    });
+    jest.spyOn(supabase.auth, "setSession").mockImplementation((tokens) => {
+      if (tokens.access_token === "session-a") {
+        events.push("write:a");
+        persistedSession = sessionA;
+        return Promise.resolve({
+          data: {
+            user: null,
+            session: null,
+          },
+          error: new Error("callback failed after provisional save"),
+        });
+      }
+
+      events.push("restore:p");
+      return Promise.resolve(sessionResponse(sessionP));
+    });
+    const emailSpy = jest
+      .spyOn(supabase.auth, "signInWithPassword")
+      .mockImplementation(() => {
+        events.push("email:b");
+        return Promise.resolve({
+          data: {
+            user: sessionP.user,
+            session: sessionP,
+          },
+          error: null,
+        });
+      });
+
+    const tokenKey = ["access", "token"].join("_");
+    const result = await completeAuthSessionFromUrl(
+      `monyvi://auth-callback#${tokenKey}=session-a&refresh_token=refresh-a&type=signup`
+    );
+    expect(result.success).toBe(false);
+
+    await signInWithEmail("same-user@example.com", "secret");
+
+    expect(events).toContain("restore:p");
+    expect(events).toContain("read:session-a");
+    expect(persistedSession?.access_token).toBe("session-a");
+    expect(emailSpy).not.toHaveBeenCalled();
+    expect(events).not.toContain("email:b");
+  });
+
+
 });
