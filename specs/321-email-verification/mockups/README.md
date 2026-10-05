@@ -1,46 +1,54 @@
 # Issue #321 mockup status
 
-## Revised code-first flow
+## Sole approved revised visual reference
 
-Mohamed explicitly approved the revised code-entry and Email verified visual
-direction on 2026-10-04.
+The sole approved revised image is:
 
-That approved direction includes:
+- `verification-flow-approved.png`
+- Git blob: `5969d493395b2b3fb4b9cd27f975b381cbf396dc`
+- byte count: `1437770`
+- SHA-256:
+  `d1a0778e9d0fe00385eeb3c59e27e7428671a96b2eee91e851b3ef7d109e5976`
 
-- 6-digit code entry;
-- 10-minute expiry presentation;
-- 2-minute resend cooldown presentation;
-- no permanent paste helper copy;
-- no permanent auto-submit helper copy;
-- no "resends left today" copy;
-- Email verified success state with explicit Continue;
-- English/Arabic and light/dark variants.
+It is the approved six-panel board covering code-entry and success direction
+across the pictured EN/AR and light/dark variants.
+
+Its adjacent `verification-flow-approved.binding.md` is intentionally a
+**PENDING** binding draft. Image approval does **not** approve the proposed
+binding geometry/tokens/unknown-state rules. The board is therefore the sole
+approved visual reference, but it is not yet an authoritative repository
+image+metadata binding tuple.
+
+Do not perform board-governed UI production changes until:
+
+1. Mohamed explicitly approves the combined image-and-binding metadata tuple;
+2. the sidecar approval fields are updated to the exact approved revisions and
+   evidence reference;
+3. `node scripts/verify-mockup-binding.js
+   specs/321-email-verification/mockups/verification-flow-approved.binding.md`
+   passes on those exact bytes.
 
 ## Historical repository images
 
-The currently committed files:
+These existing files remain historical evidence from the earlier link-first /
+Check-your-inbox direction:
 
 - `verification-en-light.png`
 - `verification-en-dark.png`
 - `verification-ar-light.png`
 
-and their `.binding.md` sidecars are the earlier **link-first / Check your
-inbox** references approved on 2026-09-21.
+Their sidecars may remain internally valid for their own historical bytes, but
+they are **not** current #321 visual-fidelity authority.
 
-Their hashes and sidecars remain internally valid historical evidence, so the
-binding-integrity test continues to guard them. They are **not** the final
-visual-fidelity authority for the revised code-first implementation.
+Do not compare the revised implementation against those three files and do not
+claim final #321 visual fidelity from them.
 
-Do not claim final #321 visual fidelity from those historical PNGs.
+## Evidence rules after binding approval
 
-## Remaining binding work
-
-Before final visual sign-off:
-
-1. persist the exact approved revised code-entry/success image bytes;
-2. create/update binding sidecars for those exact files;
-3. record the revised Binding Facts and approval evidence;
-4. run `scripts/verify-mockup-binding.js` against the revised references;
-5. capture implementation evidence against the revised approved references.
-
-This is tracked as R009, R010, R075, and R082 in `../tasks.md`.
+- Do not stretch the board's phone panels to manufacture a pixel comparison.
+- Compare implementation at the approved/calibrated viewport defined by the
+  final binding metadata.
+- Treat unpictured states (focus, error, expired, active resend, in-flight
+  verification, dark success) as compatibility/semantic-token evidence unless
+  separately approved for pixel fidelity.
+- Record functional, visual, and accessibility evidence separately.
