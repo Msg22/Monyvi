@@ -268,12 +268,13 @@ describe("AuthScreen redirect", () => {
     expect(shouldEnableAuthScroll(1)).toBe(false);
     expect(shouldEnableAuthScroll(1.34)).toBe(false);
     expect(shouldEnableAuthScroll(1.35)).toBe(true);
+    expect(shouldEnableAuthScroll(2)).toBe(true);
     expect(shouldEnableAuthScroll(1, 800)).toBe(true);
     expect(shouldEnableAuthScroll(1, 850)).toBe(true);
     expect(shouldEnableAuthScroll(1, 900, 1000)).toBe(true);
     expect(shouldEnableAuthScroll(1, 900, 400)).toBe(false);
 
-    mockFontScale = 1.35;
+    mockFontScale = 2;
     render(<AuthScreen />);
     expect(screen.getByTestId("auth-scroll")).toHaveProp("scrollEnabled", true);
   });
@@ -384,6 +385,13 @@ describe("AuthCallbackScreen verification lifecycle", () => {
     expect(screen.getByTestId("verification-success")).toBeOnTheScreen();
     expect(screen.getByTestId("verification-success-email")).toHaveTextContent(
       "verified@example.com"
+    );
+    expect(screen.getByTestId("auth-callback-success-scroll")).toHaveProp(
+      "contentContainerStyle",
+      expect.objectContaining({
+        paddingBottom: 50,
+        paddingHorizontal: 24,
+      })
     );
     expect(mockReplace).not.toHaveBeenCalledWith("/");
 

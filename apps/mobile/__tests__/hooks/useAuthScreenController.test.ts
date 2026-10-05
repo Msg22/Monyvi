@@ -1,6 +1,9 @@
 import { act, renderHook } from "@testing-library/react-native";
 
-import { useAuthScreenController } from "@/hooks/useAuthScreenController";
+import {
+  normalizeVerificationCode,
+  useAuthScreenController,
+} from "@/hooks/useAuthScreenController";
 import {
   requestPasswordReset,
   signInWithEmail,
@@ -74,6 +77,13 @@ const mockVerifyEmailVerificationCode = jest.mocked(
 function createAuthError(message: string): never {
   return new Error(message) as never;
 }
+
+describe("verification code normalization", () => {
+  it("normalizes Arabic-Indic and Eastern Arabic/Persian digits to ASCII", () => {
+    expect(normalizeVerificationCode("١٢٣٤٥٦")).toBe("123456");
+    expect(normalizeVerificationCode("۱۲۳۴۵۶")).toBe("123456");
+  });
+});
 
 describe("useAuthScreenController", () => {
   beforeEach(() => {

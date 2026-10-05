@@ -1,10 +1,47 @@
-import { fireEvent, render, screen } from "@testing-library/react-native";
+import {
+  fireEvent,
+  render,
+  screen,
+  within,
+} from "@testing-library/react-native";
 import React from "react";
 
 import {
   VerificationCodeView,
   formatVerificationDigit,
 } from "@/components/auth/VerificationCodeView";
+
+let mockLanguage = "en";
+let mockIsRTL = false;
+let mockViewportWidth = 390;
+
+jest.mock("react-native/Libraries/Utilities/useWindowDimensions", () => ({
+  __esModule: true,
+  default: (): {
+    readonly width: number;
+    readonly height: number;
+    readonly scale: number;
+    readonly fontScale: number;
+  } => ({
+    width: mockViewportWidth,
+    height: 844,
+    scale: 1,
+    fontScale: 1,
+  }),
+}));
+
+jest.mock("@expo/vector-icons", () => {
+  const ReactMod = jest.requireActual<typeof import("react")>("react");
+  const RN = jest.requireActual<typeof import("react-native")>("react-native");
+  return {
+    Ionicons: ({ name }: { readonly name: string }): React.ReactElement =>
+      ReactMod.createElement(
+        RN.Text,
+        { testID: `verification-icon-${name}` },
+        name
+      ),
+  };
+});
 
 jest.mock("@/context/ThemeContext", () => ({
   useTheme: (): { isDark: boolean } => ({ isDark: false }),
@@ -13,6 +50,7 @@ jest.mock("@/context/ThemeContext", () => ({
 jest.mock("@/context/LocaleContext", () => ({
   useLocale: (): {
     isRTL: boolean;
+    language: string;
     fontFamily: {
       regular: string;
       medium: string;
@@ -20,7 +58,8 @@ jest.mock("@/context/LocaleContext", () => ({
       bold: string;
     };
   } => ({
-    isRTL: false,
+    isRTL: mockIsRTL,
+    language: mockLanguage,
     fontFamily: {
       regular: "Inter_400Regular",
       medium: "Inter_500Medium",
@@ -31,7 +70,9 @@ jest.mock("@/context/LocaleContext", () => ({
 }));
 
 jest.mock("react-i18next", () => ({
-  useTranslation: (): { t: (key: string, options?: Record<string, unknown>) => string } => ({
+  useTranslation: (): {
+    t: (key: string, options?: Record<string, unknown>) => string;
+  } => ({
     t: (key: string, options?: Record<string, unknown>): string => {
       const time = typeof options?.time === "string" ? options.time : "";
       if (key === "verification_code_expires_in") {
@@ -45,31 +86,131 @@ jest.mock("react-i18next", () => ({
   }),
 }));
 
+function renderCodeView(
+  overrides: Partial<React.ComponentProps<typeof VerificationCodeView>> = {}
+): ReturnType<typeof render> {
+  return render(
+    <VerificationCodeView
+      email="mohamed@example.com"
+      code=""
+      verificationError={null}
+      verificationExpiresAtMs={Date.now() + 10 * 60_000}
+      resendAvailableAtMs={null}
+      resendLimitUntilMs={null}
+      isVerifying={false}
+      isResending={false}
+      onCodeChange={jest.fn()}
+      onResend={jest.fn()}
+      onBack={jest.fn()}
+      {...overrides}
+    />
+  );
+}
+
 describe("VerificationCodeView", () => {
-  it("renders Arabic-Indic display digits without changing the canonical OTP", () => {
-    expect(formatVerificationDigit("1", "ar")).toBe("١");
-    expect(formatVerificationDigit("6", "ar")).toBe("٦");
+  beforeEach(() => {
+    mockLanguage = "en";
+    mockIsRTL = false;
+    mockViewportWidth = 390;
+  });
+
+  it("keeps canonical OTP digits Western for both English and Arabic display", () => {
+    expect(formatVerificationDigit("1", "ar")).toBe("1");
+    expect(formatVerificationDigit("6", "ar")).toBe("6");
     expect(formatVerificationDigit("1", "en")).toBe("1");
     expect(formatVerificationDigit(undefined, "ar")).toBe("");
   });
 
+  it("renders Arabic canonical 123456 as Western digits in LTR cell order", () => {
+    mockLanguage = "ar";
+    mockIsRTL = true;
+    renderCodeView({ code: "123456" });
+
+    for (const [index, digit] of ["1", "2", "3", "4", "5", "6"].entries()) {
+      expect(
+        within(screen.getByTestId(`verification-code-cell-${index}`)).getByText(
+          digit
+        )
+      ).toBeOnTheScreen();
+    }
+  });
+
+  it("uses a left-pointing Back icon in Arabic", () => {
+    mockLanguage = "ar";
+    mockIsRTL = true;
+    renderCodeView();
+
+    expect(
+      screen.getByTestId("verification-icon-arrow-back")
+    ).toBeOnTheScreen();
+    expect(
+      screen.queryByTestId("verification-icon-arrow-forward")
+    ).not.toBeOnTheScreen();
+  });
+
+  it("keeps code entry mounted and disables OTP, Resend, and Back while verifying", () => {
+    renderCodeView({ isVerifying: true });
+
+    expect(screen.getByTestId("verification-code-view")).toBeOnTheScreen();
+    expect(screen.getByTestId("verification-code-input")).toHaveProp(
+      "editable",
+      false
+    );
+    expect(
+      screen.getByRole("button", { name: "resend_email" })
+    ).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "back_to_sign_in" })
+    ).toBeDisabled();
+    expect(
+      screen.getByTestId("verification-code-busy-feedback")
+    ).toBeOnTheScreen();
+    expect(
+      screen.queryByTestId("verification-processing-indicator")
+    ).not.toBeOnTheScreen();
+  });
+
+  it("uses six square 48pt cells at the approved 390pt baseline", () => {
+    renderCodeView({ code: "123456" });
+
+    for (let index = 0; index < 6; index += 1) {
+      expect(
+        screen.getByTestId(`verification-code-cell-${index}`)
+      ).toHaveStyle({
+        width: 48,
+        height: 48,
+      });
+    }
+  });
+
+  it("shrinks six square cells to the measured compact available width", () => {
+    mockViewportWidth = 320;
+    renderCodeView({ code: "123456" });
+    const expectedCellSize = (320 - 2 * 16 - 5 * 6) / 6;
+
+    for (let index = 0; index < 6; index += 1) {
+      expect(
+        screen.getByTestId(`verification-code-cell-${index}`)
+      ).toHaveStyle({
+        width: expectedCellSize,
+        height: expectedCellSize,
+      });
+    }
+  });
+
+  it("centers the entry surface with the approved 400pt maximum width", () => {
+    mockViewportWidth = 768;
+    renderCodeView();
+
+    expect(screen.getByTestId("verification-code-view")).toHaveStyle({
+      width: "100%",
+      maxWidth: 400,
+      alignSelf: "center",
+    });
+  });
 
   it("uses generic ten-minute expiry copy when the device has no known send timestamp", () => {
-    render(
-      <VerificationCodeView
-        email="mohamed@example.com"
-        code=""
-        verificationError={null}
-        verificationExpiresAtMs={null}
-        resendAvailableAtMs={null}
-        resendLimitUntilMs={null}
-        isVerifying={false}
-        isResending={false}
-        onCodeChange={jest.fn()}
-        onResend={jest.fn()}
-        onBack={jest.fn()}
-      />
-    );
+    renderCodeView({ verificationExpiresAtMs: null });
 
     expect(
       screen.getByText("verification_code_expires_generic")
@@ -77,21 +218,7 @@ describe("VerificationCodeView", () => {
   });
 
   it("locks code editing while a resend request is in flight", () => {
-    render(
-      <VerificationCodeView
-        email="mohamed@example.com"
-        code=""
-        verificationError={null}
-        verificationExpiresAtMs={Date.now() + 10 * 60_000}
-        resendAvailableAtMs={null}
-        resendLimitUntilMs={null}
-        isVerifying={false}
-        isResending
-        onCodeChange={jest.fn()}
-        onResend={jest.fn()}
-        onBack={jest.fn()}
-      />
-    );
+    renderCodeView({ isResending: true });
 
     expect(screen.getByTestId("verification-code-input")).toHaveProp(
       "editable",
@@ -102,21 +229,11 @@ describe("VerificationCodeView", () => {
   it("renders six visual cells backed by one paste-capable OTP input", () => {
     const onCodeChange = jest.fn();
 
-    render(
-      <VerificationCodeView
-        email="mohamed@example.com"
-        code="123"
-        verificationError={null}
-        verificationExpiresAtMs={Date.now() + 10 * 60_000}
-        resendAvailableAtMs={Date.now() + 2 * 60_000}
-        resendLimitUntilMs={null}
-        isVerifying={false}
-        isResending={false}
-        onCodeChange={onCodeChange}
-        onResend={jest.fn()}
-        onBack={jest.fn()}
-      />
-    );
+    renderCodeView({
+      code: "123",
+      resendAvailableAtMs: Date.now() + 2 * 60_000,
+      onCodeChange,
+    });
 
     expect(screen.getByTestId("verification-code-cells")).toBeOnTheScreen();
     expect(screen.getByTestId("verification-code-input")).toHaveProp(
