@@ -160,8 +160,13 @@ const AuthScreen = jest.requireActual<typeof import("../../app/auth")>(
 
 function headerChildTestIds(): string[] {
   const header = screen.getByTestId("auth-topbar");
-  const children = Children.toArray(header.props.children) as React.ReactElement[];
-  return children.map((child) => String(child.props.testID));
+  /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access */
+  const children = Children.toArray(
+    header.props.children
+  ) as React.ReactElement[];
+  const testIds = children.map((child) => String(child.props.testID));
+  /* eslint-enable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access */
+  return testIds;
 }
 
 describe("auth verification presentation shell", () => {
