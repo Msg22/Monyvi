@@ -13,20 +13,15 @@ The sole approved revised image is:
 It is the approved six-panel board covering code-entry and success direction
 across the pictured EN/AR and light/dark variants.
 
-Its adjacent `verification-flow-approved.binding.md` is intentionally a
-**PENDING** binding draft. Image approval does **not** approve the proposed
-binding geometry/tokens/unknown-state rules. The board is therefore the sole
-approved visual reference, but it is not yet an authoritative repository
-image+metadata binding tuple.
+Its adjacent `verification-flow-approved.binding.md` is now **APPROVED**.
+Mohamed explicitly approved combined revision
+`sha256:6b8db88a6cec5cf73ef35e6c95ace82405da52e293b04300cfc538774ba9b6d6`,
+and the canonical repository binding verifier passes with the image, metadata,
+and combined revisions unchanged.
 
-Do not perform board-governed UI production changes until:
-
-1. Mohamed explicitly approves the combined image-and-binding metadata tuple;
-2. the sidecar approval fields are updated to the exact approved revisions and
-   evidence reference;
-3. `node scripts/verify-mockup-binding.js
-   specs/321-email-verification/mockups/verification-flow-approved.binding.md`
-   passes on those exact bytes.
+This makes the image+metadata tuple authoritative for UI implementation.
+It does **not** mean rendered visual/device fidelity has been executed or passed;
+that manual verification remains owned by Mohamed.
 
 ## Historical repository images
 
@@ -43,7 +38,7 @@ they are **not** current #321 visual-fidelity authority.
 Do not compare the revised implementation against those three files and do not
 claim final #321 visual fidelity from them.
 
-## Evidence rules after binding approval
+## Evidence rules for implementation and manual verification
 
 - Do not stretch the board's phone panels to manufacture a pixel comparison.
 - Compare implementation at the approved/calibrated viewport defined by the

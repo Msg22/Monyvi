@@ -43,7 +43,7 @@ another.
 | Stale reservation at boundary | Fail closed exactly once, clear reservation, cooldown applies | F3 pgTAP | no 24h manual wait |
 | Active cooldown + expired window | Cooldown wins before rollover | F3 pgTAP | no 24h manual wait |
 | Provider/send failure | Reservation released; no unfair slot consumption | Edge/pgTAP | provider failure drill if available |
-| Concurrent requests | Cannot exceed policy | pgTAP/concurrency | not a manual timing proof |
+| Concurrent requests | Cannot exceed policy | sequential reservation/busy pgTAP plus advisory-lock source contract; true parallel DB contention remains unexecuted | not a manual timing proof |
 | Public account-state privacy | Known limitation | #372 only | must remain disclosed; **not enumeration-safe** |
 
 ## Callback/session race matrix
@@ -67,10 +67,14 @@ another.
 
 ## Visual / responsive / accessibility matrix
 
-The six-panel board is visually approved but its binding metadata remains
-**PENDING**. Do not mark this section PASS until that gate is approved.
+The six-panel board and its binding metadata are **APPROVED** as the authoritative
+combined tuple at revision
+`sha256:6b8db88a6cec5cf73ef35e6c95ace82405da52e293b04300cfc538774ba9b6d6`;
+the canonical repository verifier has passed. This authorizes UI implementation
+against the binding facts, but does **not** establish rendered visual/device
+fidelity. Mohamed owns that manual evidence.
 
-After binding approval, verify without stretching the reference board:
+Verify without stretching the reference board:
 
 | Variant | Evidence |
 | --- | --- |
@@ -93,7 +97,10 @@ functional/theme/accessibility compatibility separately from pixel fidelity.
 
 ## Hosted / delivery / device evidence
 
-These are **manual/external** release checks, not CI:
+These are **manual/external** release checks, not CI. No emulator/device/visual
+runtime is executed on this PR. Android E2E is intentionally deferred to the
+existing main-only `.github/workflows/ci.yml` guard; Mohamed owns device/visual
+verification:
 
 - hosted confirm-email enabled;
 - hosted OTP length = 6;
@@ -101,10 +108,10 @@ These are **manual/external** release checks, not CI:
 - hosted minimum send frequency = 120 seconds;
 - tracked limiter migration/function actually deployed before hosted resend QA;
 - hosted Confirm Signup template matches current local code-first + secondary-link
-  template and says 10 minutes;
-- Gmail delivery;
-- Outlook/Hotmail delivery;
-- one additional mailbox provider;
+  template and says 10 minutes (hosted parity remains unproven);
+- Gmail delivery (pending);
+- Outlook/Hotmail delivery (pending);
+- one additional mailbox provider (pending);
 - spam-folder observation where applicable;
 - SMTP/provider delivery, bounce, suppression, SPF/DKIM/DMARC health;
 - Android physical/emulator end-to-end journey;
