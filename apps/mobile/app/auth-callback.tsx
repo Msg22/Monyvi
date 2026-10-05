@@ -19,7 +19,6 @@ import { LanguageSwitcherPill } from "@/components/onboarding/LanguageSwitcherPi
 import { MonyviLogo } from "@/components/ui/MonyviLogo";
 import { palette } from "@/constants/colors";
 import { RESPONSIVE_BREAKPOINTS } from "@/constants/ui";
-import { useLocale } from "@/context/LocaleContext";
 import { useTheme } from "@/context/ThemeContext";
 import { useAuth } from "@/context/AuthContext";
 import { useDeferredRouterReplace } from "@/hooks/useDeferredRouterReplace";
@@ -115,7 +114,6 @@ function AuthCallbackVerificationSuccess({
   const insets = useSafeAreaInsets();
   const { width: viewportWidth } = useWindowDimensions();
   const { isDark } = useTheme();
-  const { isRTL } = useLocale();
   const isCompact = viewportWidth < RESPONSIVE_BREAKPOINTS.compactPhone;
   const gradientColors: readonly [string, string] = isDark
     ? [palette.slate[950], palette.slate[900]]
@@ -155,17 +153,8 @@ function AuthCallbackVerificationSuccess({
           testID="auth-topbar"
           className="min-h-10 flex-row items-center justify-between"
         >
-          {isRTL ? (
-            <>
-              {logoSlot}
-              {languageSlot}
-            </>
-          ) : (
-            <>
-              {languageSlot}
-              {logoSlot}
-            </>
-          )}
+          {languageSlot}
+          {logoSlot}
         </View>
         <View className="flex-1 w-full max-w-[400px] self-center">
           <VerificationSuccessView email={email} onContinue={onContinue} />

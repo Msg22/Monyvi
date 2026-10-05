@@ -144,16 +144,6 @@ jest.mock("@/components/auth/VerificationCodeView", () => ({
   },
 }));
 
-jest.mock("@/components/auth/VerificationProcessingView", () => ({
-  VerificationProcessingView: () => {
-    const ReactMod = jest.requireActual<typeof import("react")>("react");
-    const RN = jest.requireActual<typeof import("react-native")>("react-native");
-    return ReactMod.createElement(RN.View, {
-      testID: "verification-processing-view",
-    });
-  },
-}));
-
 jest.mock("@/components/auth/VerificationSuccessView", () => ({
   VerificationSuccessView: () => {
     const ReactMod = jest.requireActual<typeof import("react")>("react");

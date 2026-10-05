@@ -20,7 +20,6 @@ import {
   RESPONSIVE_BREAKPOINTS,
   RESPONSIVE_FONT_SCALE,
 } from "@/constants/ui";
-import { useLocale } from "@/context/LocaleContext";
 import { useTheme } from "@/context/ThemeContext";
 import { useAuthScreenController } from "@/hooks/useAuthScreenController";
 import { useFormScroll } from "@/hooks/useFormScroll";
@@ -53,7 +52,6 @@ export function shouldEnableAuthScroll(
 export default function AuthScreen(): React.JSX.Element {
   const insets = useSafeAreaInsets();
   const { isDark } = useTheme();
-  const { isRTL } = useLocale();
   const isKeyboardVisible = useKeyboardVisibility();
   const {
     width: viewportWidth,
@@ -135,17 +133,8 @@ export default function AuthScreen(): React.JSX.Element {
               isVerificationSurface ? "min-h-10" : "min-h-[50px]"
             }`}
           >
-            {isVerificationSurface && isRTL ? (
-              <>
-                {logoSlot}
-                {languageSlot}
-              </>
-            ) : (
-              <>
-                {languageSlot}
-                {logoSlot}
-              </>
-            )}
+            {languageSlot}
+            {logoSlot}
           </View>
 
           <Animated.View
