@@ -35,5 +35,9 @@
   email verification is required before email/password sign-in succeeds.
 - The production SMTP sending-domain value is an external release configuration
   input, not an unresolved product requirement.
-- Mockup image approval exists; binding metadata approval remains a required
-  planning gate before mockup-governed UI implementation.
+- The revised six-panel image is approved and persisted, but its new binding
+  metadata remains PENDING. No board-governed UI implementation/fidelity claim
+  may consume that metadata until explicit combined approval + verifier PASS.
+- Password recovery is explicitly deferred to #373.
+- Resend public account-state/oracle hardening is explicitly deferred to #372;
+  current resend behavior must not be described as enumeration-safe.
