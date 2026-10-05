@@ -92,9 +92,7 @@ function getSyncMocks(): SyncMocks {
 
 jest.mock("@/services/supabase", () => {
   const signOut = jest.fn(() => Promise.resolve({ error: null }));
-  const coordinatedSignOut = jest.fn(() =>
-    Promise.resolve({ error: null })
-  );
+  const coordinatedSignOut = jest.fn(() => Promise.resolve({ error: null }));
   return {
     coordinatedSignOut,
     supabase: { auth: { signOut } },
@@ -385,7 +383,9 @@ describe("logout-service", () => {
     const syncMocks = getSyncMocks();
     const supaMocks = getSupabaseMocks();
 
-    supaMocks.coordinatedSignOut.mockRejectedValue(new Error("Sign out failed"));
+    supaMocks.coordinatedSignOut.mockRejectedValue(
+      new Error("Sign out failed")
+    );
 
     const result = await performLogout(db);
 

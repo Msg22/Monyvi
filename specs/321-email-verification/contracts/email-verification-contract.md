@@ -34,7 +34,7 @@ supabase.auth.verifyOtp({
   email,
   token,
   type: "email",
-})
+});
 ```
 
 Behavior:
@@ -126,7 +126,9 @@ Legacy/already-sent link flow:
 6. do not wait indefinitely on AuthContext;
 7. Continue hands routing to root.
 
-Google OAuth retains its existing route contract. Password-recovery correctness is explicitly excluded from PR #322 and tracked by #373; historical recovery routing coverage is not #322 Green evidence.
+Google OAuth retains its existing route contract. Password-recovery correctness
+is explicitly excluded from PR #322 and tracked by #373; historical recovery
+routing coverage is not #322 Green evidence.
 
 ## Callback Timeout / Failure
 

@@ -455,13 +455,21 @@ describe("AI SMS client safeguards", () => {
         expect.objectContaining({ smsFingerprint: newest.smsFingerprint }),
       ]);
       expect(result.unresolvedCandidates).toEqual([
-        expect.objectContaining({ candidate: next, reason: "capacity_limited" }),
-        expect.objectContaining({ candidate: oldest, reason: "capacity_limited" }),
+        expect.objectContaining({
+          candidate: next,
+          reason: "capacity_limited",
+        }),
+        expect.objectContaining({
+          candidate: oldest,
+          reason: "capacity_limited",
+        }),
       ]);
       const requestKeys = mockInvoke.mock.calls.map(([, options]) =>
         String((options.body as Record<string, unknown>).requestKey)
       );
-      expect(requestKeys.every((key) => key.startsWith("unit-test-run:"))).toBe(true);
+      expect(requestKeys.every((key) => key.startsWith("unit-test-run:"))).toBe(
+        true
+      );
     } finally {
       jest.clearAllTimers();
       jest.useRealTimers();

@@ -131,9 +131,7 @@ describe("FormView", () => {
     expect(
       screen.queryByRole("link", { name: "Privacy" })
     ).not.toBeOnTheScreen();
-    expect(
-      screen.queryByRole("link", { name: "Terms" })
-    ).not.toBeOnTheScreen();
+    expect(screen.queryByRole("link", { name: "Terms" })).not.toBeOnTheScreen();
   });
 
   it("matches the approved standard hero and legal-footer layout", () => {

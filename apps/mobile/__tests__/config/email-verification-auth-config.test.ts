@@ -19,8 +19,7 @@ describe("email verification local Auth configuration", () => {
   it("requires confirmation, six-digit codes, ten-minute expiry, and two-minute resend frequency", () => {
     const config = readSupabaseConfig();
     const emailSection =
-      config.match(/\[auth\.email\][\s\S]*?(?=\n\[[^\n]+\]|$)/)?.[0] ??
-      "";
+      config.match(/\[auth\.email\][\s\S]*?(?=\n\[[^\n]+\]|$)/)?.[0] ?? "";
 
     expect(emailSection).toContain("enable_confirmations = true");
     expect(emailSection).toContain('max_frequency = "2m"');

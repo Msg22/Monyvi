@@ -49,7 +49,6 @@ describe("authenticated-edge-function-service", () => {
     });
   });
 
-
   it("uses the approved stable session token on the first authenticated invoke", async () => {
     mockGetStableAuthSession.mockResolvedValue({
       data: {

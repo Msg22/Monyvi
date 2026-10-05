@@ -72,9 +72,9 @@ process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY = "test-publishable-key";
 const supabaseModule = jest.requireActual<typeof import("@/services/supabase")>(
   "@/services/supabase"
 );
-const authService = jest.requireActual<typeof import("@/services/auth-service")>(
-  "@/services/auth-service"
-);
+const authService = jest.requireActual<
+  typeof import("@/services/auth-service")
+>("@/services/auth-service");
 const authContext = jest.requireActual<typeof import("@/context/AuthContext")>(
   "@/context/AuthContext"
 );
@@ -142,9 +142,9 @@ function createDeferred<T>(): {
   };
 }
 
-function sessionResponse(session: Session): Awaited<
-  ReturnType<typeof supabase.auth.setSession>
-> {
+function sessionResponse(
+  session: Session
+): Awaited<ReturnType<typeof supabase.auth.setSession>> {
   return {
     data: {
       user: session.user,
@@ -154,9 +154,9 @@ function sessionResponse(session: Session): Awaited<
   };
 }
 
-function authTokenResponse(session: Session): Awaited<
-  ReturnType<typeof supabase.auth.exchangeCodeForSession>
-> {
+function authTokenResponse(
+  session: Session
+): Awaited<ReturnType<typeof supabase.auth.exchangeCodeForSession>> {
   return {
     data: {
       user: session.user,
@@ -191,11 +191,12 @@ function installRawAuthBridge(
 } {
   const listeners = new Set<RawAuthCallback>();
 
-  jest.spyOn(supabase.auth, "getSession").mockImplementation(() =>
-    sessionReadResponse(readPersistedSession())
-  );
-  jest.spyOn(supabase.auth, "onAuthStateChange").mockImplementation(
-    (callback) => {
+  jest
+    .spyOn(supabase.auth, "getSession")
+    .mockImplementation(() => sessionReadResponse(readPersistedSession()));
+  jest
+    .spyOn(supabase.auth, "onAuthStateChange")
+    .mockImplementation((callback) => {
       listeners.add(callback);
       const subscription: RawSubscription = {
         id: "test-auth-listener",
@@ -205,23 +206,22 @@ function installRawAuthBridge(
         },
       };
       return { data: { subscription } };
-    }
-  );
-  const signOutSpy = jest.spyOn(supabase.auth, "signOut").mockImplementation(
-    () => {
+    });
+  const signOutSpy = jest
+    .spyOn(supabase.auth, "signOut")
+    .mockImplementation(() => {
       writePersistedSession(null);
       for (const listener of listeners) {
         listener("SIGNED_OUT", null);
       }
       return Promise.resolve({ error: null });
-    }
-  );
-  jest.spyOn(supabase.auth, "stopAutoRefresh").mockImplementation(() =>
-    Promise.resolve()
-  );
-  jest.spyOn(supabase.auth, "startAutoRefresh").mockImplementation(() =>
-    Promise.resolve()
-  );
+    });
+  jest
+    .spyOn(supabase.auth, "stopAutoRefresh")
+    .mockImplementation(() => Promise.resolve());
+  jest
+    .spyOn(supabase.auth, "startAutoRefresh")
+    .mockImplementation(() => Promise.resolve());
 
   return {
     emit: (event, session): void => {
@@ -296,8 +296,7 @@ describe("auth callback session coordination integration", () => {
       });
 
     const tokenKey = ["access", "token"].join("_");
-    mockCallbackUrl =
-      `monyvi://auth-callback#${tokenKey}=session-a&refresh_token=refresh-a&type=signup`;
+    mockCallbackUrl = `monyvi://auth-callback#${tokenKey}=session-a&refresh_token=refresh-a&type=signup`;
     mockLocalSearchParams = { type: "signup" };
     renderCallbackHarness();
 
@@ -356,8 +355,7 @@ describe("auth callback session coordination integration", () => {
       });
 
     const tokenKey = ["access", "token"].join("_");
-    mockCallbackUrl =
-      `monyvi://auth-callback#${tokenKey}=session-a&refresh_token=refresh-a&type=signup`;
+    mockCallbackUrl = `monyvi://auth-callback#${tokenKey}=session-a&refresh_token=refresh-a&type=signup`;
     mockLocalSearchParams = { type: "signup" };
     renderCallbackHarness();
 
@@ -556,5 +554,4 @@ describe("auth callback session coordination integration", () => {
     expect(replay.success).toBe(false);
     expect(persistedSession).toEqual(sessionB);
   });
-
 });

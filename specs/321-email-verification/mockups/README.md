@@ -7,21 +7,20 @@ The sole approved revised image is:
 - `verification-flow-approved.png`
 - Git blob: `5969d493395b2b3fb4b9cd27f975b381cbf396dc`
 - byte count: `1437770`
-- SHA-256:
-  `d1a0778e9d0fe00385eeb3c59e27e7428671a96b2eee91e851b3ef7d109e5976`
+- SHA-256: `d1a0778e9d0fe00385eeb3c59e27e7428671a96b2eee91e851b3ef7d109e5976`
 
 It is the approved six-panel board covering code-entry and success direction
 across the pictured EN/AR and light/dark variants.
 
 Its adjacent `verification-flow-approved.binding.md` is now **APPROVED**.
 Mohamed explicitly approved combined revision
-`sha256:6b8db88a6cec5cf73ef35e6c95ace82405da52e293b04300cfc538774ba9b6d6`,
-and the canonical repository binding verifier passes with the image, metadata,
-and combined revisions unchanged.
+`sha256:6b8db88a6cec5cf73ef35e6c95ace82405da52e293b04300cfc538774ba9b6d6`, and
+the canonical repository binding verifier passes with the image, metadata, and
+combined revisions unchanged.
 
-This makes the image+metadata tuple authoritative for UI implementation.
-It does **not** mean rendered visual/device fidelity has been executed or passed;
-that manual verification remains owned by Mohamed.
+This makes the image+metadata tuple authoritative for UI implementation. It does
+**not** mean rendered visual/device fidelity has been executed or passed; that
+manual verification remains owned by Mohamed.
 
 ## Historical repository images
 

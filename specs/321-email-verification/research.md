@@ -16,7 +16,7 @@ supabase.auth.verifyOtp({
   email,
   token,
   type: "email",
-})
+});
 ```
 
 ## Decision 2 — Code-first signup confirmation
@@ -81,8 +81,8 @@ A migration provides private service-role-only SQL routines for:
 - finalizing a successful send;
 - releasing/compensating a reservation after downstream failure.
 
-The reservation routine resets an expired 24-hour window, enforces cooldown,
-and rejects the fourth resend.
+The reservation routine resets an expired 24-hour window, enforces cooldown, and
+rejects the fourth resend.
 
 This prevents two concurrent requests from both seeing the same available slot.
 
@@ -95,13 +95,12 @@ authoritative on resend attempts and may return only coarse safe outcomes such
 as cooldown / limit / success.
 
 Avoid exposing detailed per-email limiter state through an unauthenticated
-status endpoint because it can become an account/state-enumeration side
-channel.
+status endpoint because it can become an account/state-enumeration side channel.
 
 ## Decision 9 — Original-send registration is best-effort but conservative
 
-After successful `signUp`, Monyvi immediately calls the limiter Edge Function
-to register the original send.
+After successful `signUp`, Monyvi immediately calls the limiter Edge Function to
+register the original send.
 
 If that registration fails:
 
@@ -150,7 +149,8 @@ subject/template in hosted Supabase and received a real email through configured
 SMTP.
 
 One release QA correction remains: the earlier draft said one hour. The final
-installed template must say **10 minutes** to match the 600-second configuration.
+installed template must say **10 minutes** to match the 600-second
+configuration.
 
 ## Decision 13 — Existing deep-link security hardening remains
 

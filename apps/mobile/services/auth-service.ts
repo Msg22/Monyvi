@@ -390,18 +390,16 @@ function runCoordinatedCallback<T>(
   }
 
   const handle = beginCoordinatedAuthCallbackMutation(operation, isSuccessful);
-  const promise = handle.promise
-    .then(mapResult)
-    .catch((error: unknown) => {
-      if (isAuthSessionMutationCancelledError(error)) {
-        return {
-          success: false,
-          error: "Authentication took too long. Please try again.",
-          errorCode: "timeout",
-        } satisfies AuthCallbackResult;
-      }
-      return createAuthCallbackFailure(error);
-    });
+  const promise = handle.promise.then(mapResult).catch((error: unknown) => {
+    if (isAuthSessionMutationCancelledError(error)) {
+      return {
+        success: false,
+        error: "Authentication took too long. Please try again.",
+        errorCode: "timeout",
+      } satisfies AuthCallbackResult;
+    }
+    return createAuthCallbackFailure(error);
+  });
 
   const completion: CallbackCompletion = {
     promise,

@@ -40,7 +40,10 @@ async function json(response: Response): Promise<Record<string, unknown>> {
 }
 
 test("normalizes email without retaining whitespace/case", () => {
-  assert.equal(normalizeVerificationEmail("  USER@Example.COM "), NORMALIZED_EMAIL);
+  assert.equal(
+    normalizeVerificationEmail("  USER@Example.COM "),
+    NORMALIZED_EMAIL
+  );
 });
 
 test("HMAC key is deterministic and does not expose raw email", async () => {
@@ -111,11 +114,7 @@ test("successful resend reserves, sends, and finalizes once", async () => {
   );
 
   assert.equal(response.status, 200);
-  assert.deepEqual(calls, [
-    "reserve",
-    `send:${NORMALIZED_EMAIL}`,
-    "finalize",
-  ]);
+  assert.deepEqual(calls, ["reserve", `send:${NORMALIZED_EMAIL}`, "finalize"]);
   assert.deepEqual(await json(response), {
     status: "sent",
     sentAt: "2026-10-04T10:00:00.000Z",
@@ -194,7 +193,10 @@ test("not_pending response is enumeration-safe and provider-free", async () => {
   const response = await handleEmailVerificationResendRequest(
     new Request("https://example.test", {
       method: "POST",
-      body: JSON.stringify({ operation: "resend", email: "missing@example.com" }),
+      body: JSON.stringify({
+        operation: "resend",
+        email: "missing@example.com",
+      }),
     }),
     createDependencies({
       reserveResend: async () => ({

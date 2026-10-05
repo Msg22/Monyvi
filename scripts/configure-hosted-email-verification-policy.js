@@ -1,7 +1,4 @@
-const REQUIRED_VARIABLES = [
-  "SUPABASE_ACCESS_TOKEN",
-  "SUPABASE_PROJECT_REF",
-];
+const REQUIRED_VARIABLES = ["SUPABASE_ACCESS_TOKEN", "SUPABASE_PROJECT_REF"];
 
 function readManagementConfig(environment) {
   const missing = REQUIRED_VARIABLES.filter(
@@ -46,8 +43,9 @@ function summarizeHostedEmailVerificationConfig(config) {
     confirmationTemplateUsesToken:
       confirmationTemplate.includes("{{ .Token }}") ||
       confirmationTemplate.includes("{{.Token}}"),
-    confirmationTemplateMentionsTenMinutes:
-      /10\s*(minutes?|mins?)/i.test(confirmationTemplate),
+    confirmationTemplateMentionsTenMinutes: /10\s*(minutes?|mins?)/i.test(
+      confirmationTemplate
+    ),
     confirmationSubjectUsesToken:
       confirmationSubject.includes("{{ .Token }}") ||
       confirmationSubject.includes("{{.Token}}"),

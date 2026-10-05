@@ -3,8 +3,11 @@
 **Feature Branch**: `codex/issue321-email-verification`  
 **Created**: 2026-09-21  
 **Revised**: 2026-10-04  
-**Status**: Implementation in progress; code-first product scope and combined visual binding approved; rendered visual/device and final release evidence pending  
-**Issue**: #321 — Complete production email verification with code-first signup flow
+**Status**: Implementation in progress; code-first product scope and combined
+visual binding approved; rendered visual/device and final release evidence
+pending  
+**Issue**: #321 — Complete production email verification with code-first signup
+flow
 
 ## Product Direction
 
@@ -33,9 +36,9 @@ with the new secondary link is not yet proven.
 
 ### User Story 1 — Verify a new signup with a 6-digit code (P1)
 
-A new user registers with email/password, receives a six-digit confirmation code,
-enters or pastes it in Monyvi, and sees a clear success state before choosing to
-continue into the authenticated app.
+A new user registers with email/password, receives a six-digit confirmation
+code, enters or pastes it in Monyvi, and sees a clear success state before
+choosing to continue into the authenticated app.
 
 **Acceptance scenarios**
 
@@ -43,8 +46,8 @@ continue into the authenticated app.
 2. The code contains exactly six digits and expires after ten minutes.
 3. Typing or pasting the sixth valid digit triggers exactly one verification
    attempt automatically.
-4. Correct verification creates/accepts the Supabase session and opens the
-   Email verified success state.
+4. Correct verification creates/accepts the Supabase session and opens the Email
+   verified success state.
 5. AuthContext becoming authenticated MUST NOT skip the success state.
 6. While this verification-success flow remains mounted, the user enters the
    authenticated startup flow only after choosing **Continue to dashboard**.
@@ -174,11 +177,11 @@ validate verification codes.
 
 The sole currently approved revised visual reference is the six-panel board at
 `mockups/verification-flow-approved.png` (SHA-256
-`d1a0778e9d0fe00385eeb3c59e27e7428671a96b2eee91e851b3ef7d109e5976`).
-Its adjacent binding sidecar is **APPROVED** at combined revision
-`sha256:6b8db88a6cec5cf73ef35e6c95ace82405da52e293b04300cfc538774ba9b6d6`,
-and the canonical repository binding verifier passes. The exact image+metadata
-tuple is therefore authoritative for UI implementation.
+`d1a0778e9d0fe00385eeb3c59e27e7428671a96b2eee91e851b3ef7d109e5976`). Its
+adjacent binding sidecar is **APPROVED** at combined revision
+`sha256:6b8db88a6cec5cf73ef35e6c95ace82405da52e293b04300cfc538774ba9b6d6`, and
+the canonical repository binding verifier passes. The exact image+metadata tuple
+is therefore authoritative for UI implementation.
 
 It intentionally does NOT display:
 
@@ -203,8 +206,8 @@ Board-governed UI production is authorized by the approved binding tuple. The
 approved verification code/success presentation is now implemented in source,
 with exact-head automated verification still pending. This does **not**
 establish rendered visual/device fidelity; that evidence is deferred to Mohamed
-and remains unverified on this PR. The older three PNG/sidecar pairs
-remain historical link-first evidence only.
+and remains unverified on this PR. The older three PNG/sidecar pairs remain
+historical link-first evidence only.
 
 ## Data / Privacy Requirements
 
@@ -223,7 +226,8 @@ remain historical link-first evidence only.
   access until Supabase verifies the email.
 - **SC-002**: Correct six-digit code completes verification and reaches Email
   verified before dashboard routing.
-- **SC-003**: Paste and digit-by-digit entry both auto-submit once at six digits.
+- **SC-003**: Paste and digit-by-digit entry both auto-submit once at six
+  digits.
 - **SC-004**: OTPs expire after 600 seconds in local and hosted config.
 - **SC-005**: No more than three resends succeed in an active 24-hour window,
   including concurrent attempts.
@@ -259,6 +263,7 @@ confirmation-link fallback. No hosted mutation is implied by this specification.
 - SMS/phone verification.
 - Universal/App Links migration.
 - MFA/session-management work from #240.
-- Password recovery/reset routing and private-access correction; tracked by #373.
+- Password recovery/reset routing and private-access correction; tracked by
+  #373.
 - Resend public account-state/oracle redesign; tracked by #372.
 - Signup profile-name work from #20.

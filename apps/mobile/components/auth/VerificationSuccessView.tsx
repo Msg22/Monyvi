@@ -86,7 +86,10 @@ export function VerificationSuccessView({
           <View className="mt-2 h-8 justify-center rounded-2xl bg-slate-100 px-4 dark:bg-slate-800">
             <Text
               className="text-[14px] text-text-primary dark:text-text-primary-dark"
-              style={{ fontFamily: fontFamily.semiBold, writingDirection: "ltr" }}
+              style={{
+                fontFamily: fontFamily.semiBold,
+                writingDirection: "ltr",
+              }}
             >
               {email}
             </Text>

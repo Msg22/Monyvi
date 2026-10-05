@@ -55,12 +55,8 @@ interface AuthScreenController {
 
 function normalizeVerificationCode(value: string): string {
   return value
-    .replace(/[٠-٩]/g, (digit) =>
-      String("٠١٢٣٤٥٦٧٨٩".indexOf(digit))
-    )
-    .replace(/[۰-۹]/g, (digit) =>
-      String("۰۱۲۳۴۵۶۷۸۹".indexOf(digit))
-    )
+    .replace(/[٠-٩]/g, (digit) => String("٠١٢٣٤٥٦٧٨٩".indexOf(digit)))
+    .replace(/[۰-۹]/g, (digit) => String("۰۱۲۳۴۵۶۷۸۹".indexOf(digit)))
     .replace(/\D/g, "")
     .slice(0, 6);
 }
@@ -93,8 +89,7 @@ export function useAuthScreenController(): AuthScreenController {
   const [verificationFlowActive, setVerificationFlowActive] = useState(false);
 
   useDeferredRouterReplace({
-    enabled:
-      !verificationFlowActive && !isAuthLoading && isAuthenticated,
+    enabled: !verificationFlowActive && !isAuthLoading && isAuthenticated,
     href: "/",
   });
 
@@ -293,13 +288,7 @@ export function useAuthScreenController(): AuthScreenController {
         finishRequest();
       }
     },
-    [
-      beginRequest,
-      finishRequest,
-      pendingEmail,
-      t,
-      verificationExpiresAtMs,
-    ]
+    [beginRequest, finishRequest, pendingEmail, t, verificationExpiresAtMs]
   );
 
   const handleVerificationCodeChange = useCallback(

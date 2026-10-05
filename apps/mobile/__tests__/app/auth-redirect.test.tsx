@@ -139,7 +139,11 @@ jest.mock("@/components/auth/VerificationSuccessView", () => ({
     return ReactMod.createElement(
       RN.View,
       { testID: "verification-success" },
-      ReactMod.createElement(RN.Text, { testID: "verification-success-email" }, email ?? ""),
+      ReactMod.createElement(
+        RN.Text,
+        { testID: "verification-success-email" },
+        email ?? ""
+      ),
       ReactMod.createElement(
         RN.Pressable,
         {
@@ -218,7 +222,9 @@ function readHeaderChildTestIds(value: unknown): readonly [string, string] {
     !React.isValidElement<{ readonly testID?: unknown }>(firstChild) ||
     !React.isValidElement<{ readonly testID?: unknown }>(secondChild)
   ) {
-    throw new Error("Expected both direct header children to be React elements");
+    throw new Error(
+      "Expected both direct header children to be React elements"
+    );
   }
 
   const firstTestID: unknown = firstChild.props.testID;
@@ -576,9 +582,7 @@ describe("AuthCallbackScreen failed verification recovery", () => {
     expect(
       screen.getByRole("header", { name: "recovery_link_failed_title" })
     ).toBeOnTheScreen();
-    expect(
-      screen.getByText("recovery_link_failed_message")
-    ).toBeOnTheScreen();
+    expect(screen.getByText("recovery_link_failed_message")).toBeOnTheScreen();
   });
 
   it("shows connection error copy with a retry action for network failure", async () => {
@@ -597,9 +601,7 @@ describe("AuthCallbackScreen failed verification recovery", () => {
     expect(
       screen.getByRole("header", { name: "callback_network_failed_title" })
     ).toBeOnTheScreen();
-    expect(
-      screen.getByRole("button", { name: "retry" })
-    ).toBeOnTheScreen();
+    expect(screen.getByRole("button", { name: "retry" })).toBeOnTheScreen();
 
     fireEvent.press(screen.getByRole("button", { name: "retry" }));
 

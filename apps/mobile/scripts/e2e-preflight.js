@@ -711,7 +711,8 @@ function relaunchE2eFixtureIfRequired(settings, dependencies = {}) {
   waitForSync();
   if (settings.rateState === "invalid") {
     const materializeInvalidRate =
-      dependencies.materializeInvalidRate ?? materializeInvalidMetalsObservation;
+      dependencies.materializeInvalidRate ??
+      materializeInvalidMetalsObservation;
     materializeInvalidRate();
   }
 

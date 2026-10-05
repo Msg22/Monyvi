@@ -37,7 +37,6 @@ describe("resolve-ci-e2e-scope", () => {
     });
   });
 
-
   it("selects auth E2E for verification Maestro, auth-service, and supabase-service changes", () => {
     expect(
       scopeResolver.resolveCiE2eScope([

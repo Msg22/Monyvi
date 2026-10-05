@@ -93,11 +93,9 @@ function createDeferred(): Deferred {
 function sessionIdentity(session: Session | null): string | null {
   if (!session) return null;
 
-  return [
-    session.user.id,
-    session.access_token,
-    session.refresh_token,
-  ].join("\u0000");
+  return [session.user.id, session.access_token, session.refresh_token].join(
+    "\u0000"
+  );
 }
 
 function normalizeThrownError(error: unknown, fallbackMessage: string): Error {
@@ -117,10 +115,7 @@ export function createAuthSessionMutationCoordinator(
   let rawUnsubscribe: (() => void) | null = null;
   const listeners = new Set<CoordinatedAuthListener>();
 
-  const publish = (
-    event: AuthChangeEvent,
-    session: Session | null
-  ): void => {
+  const publish = (event: AuthChangeEvent, session: Session | null): void => {
     for (const listener of listeners) {
       void listener(event, session);
     }
@@ -219,9 +214,7 @@ export function createAuthSessionMutationCoordinator(
     return undefined;
   };
 
-  const restoreOrClear = async (
-    target: Session | null
-  ): Promise<void> => {
+  const restoreOrClear = async (target: Session | null): Promise<void> => {
     if (target) {
       try {
         await options.restoreRawSession(target);
@@ -243,8 +236,7 @@ export function createAuthSessionMutationCoordinator(
     active: ActiveMutation,
     current: Session | null
   ): Promise<void> => {
-    const logoutWon =
-      active.logoutGenerationAtStart !== logoutGeneration;
+    const logoutWon = active.logoutGenerationAtStart !== logoutGeneration;
     const target = logoutWon ? null : active.baseline;
 
     if (sessionIdentity(current) !== sessionIdentity(target)) {
@@ -392,8 +384,7 @@ export function createAuthSessionMutationCoordinator(
   const runMutation = <T>(
     operation: () => Promise<T>,
     isSuccessful: (result: T) => boolean
-  ): Promise<T> =>
-    beginCancellableMutation(operation, isSuccessful).promise;
+  ): Promise<T> => beginCancellableMutation(operation, isSuccessful).promise;
 
   const runExplicitLogout = <T>(
     operation: () => Promise<T>,

@@ -59,9 +59,9 @@ function createDeferred<T>(): {
   };
 }
 
-function sessionResponse(session: Session): Awaited<
-  ReturnType<typeof supabase.auth.setSession>
-> {
+function sessionResponse(
+  session: Session
+): Awaited<ReturnType<typeof supabase.auth.setSession>> {
   return {
     data: {
       user: session.user,
@@ -104,9 +104,9 @@ describe("auth session mutation public-entrypoint integration", () => {
     const releaseA = createDeferred<void>();
     const startedA = createDeferred<void>();
 
-    jest.spyOn(supabase.auth, "getSession").mockImplementation(() =>
-      sessionReadResponse(persistedSession)
-    );
+    jest
+      .spyOn(supabase.auth, "getSession")
+      .mockImplementation(() => sessionReadResponse(persistedSession));
     jest.spyOn(supabase.auth, "setSession").mockImplementation(() => {
       events.push("a:start");
       startedA.resolve();
@@ -164,9 +164,9 @@ describe("auth session mutation public-entrypoint integration", () => {
     const releaseA = createDeferred<void>();
     const startedA = createDeferred<void>();
 
-    jest.spyOn(supabase.auth, "getSession").mockImplementation(() =>
-      sessionReadResponse(persistedSession)
-    );
+    jest
+      .spyOn(supabase.auth, "getSession")
+      .mockImplementation(() => sessionReadResponse(persistedSession));
     jest.spyOn(supabase.auth, "setSession").mockImplementation(() => {
       startedA.resolve();
       return releaseA.promise.then(() => {
@@ -174,8 +174,9 @@ describe("auth session mutation public-entrypoint integration", () => {
         return sessionResponse(sessionA);
       });
     });
-    const verifySpy = jest.spyOn(supabase.auth, "verifyOtp").mockImplementation(
-      () => {
+    const verifySpy = jest
+      .spyOn(supabase.auth, "verifyOtp")
+      .mockImplementation(() => {
         persistedSession = sessionB;
         return Promise.resolve({
           data: {
@@ -184,8 +185,7 @@ describe("auth session mutation public-entrypoint integration", () => {
           },
           error: null,
         });
-      }
-    );
+      });
 
     const callbackPromise = completeAuthSessionFromUrl(
       "monyvi://auth-callback#access_token=access-a&refresh_token=refresh-a&type=signup"
@@ -209,9 +209,9 @@ describe("auth session mutation public-entrypoint integration", () => {
     let persistedSession: Session | null = sessionP;
     const writes: string[] = [];
 
-    jest.spyOn(supabase.auth, "getSession").mockImplementation(() =>
-      sessionReadResponse(persistedSession)
-    );
+    jest
+      .spyOn(supabase.auth, "getSession")
+      .mockImplementation(() => sessionReadResponse(persistedSession));
     jest.spyOn(supabase.auth, "setSession").mockImplementation((tokens) => {
       writes.push(tokens.access_token);
       if (tokens.access_token === "session-p") {
@@ -225,7 +225,11 @@ describe("auth session mutation public-entrypoint integration", () => {
           user: null,
           session: null,
         },
-        error: new AuthApiError("callback refresh failed", 400, "callback_refresh_failed"),
+        error: new AuthApiError(
+          "callback refresh failed",
+          400,
+          "callback_refresh_failed"
+        ),
       });
     });
 
@@ -244,9 +248,9 @@ describe("auth session mutation public-entrypoint integration", () => {
     const sessionB = createSession("session-b", "refresh-b");
     let persistedSession: Session | null = sessionP;
 
-    jest.spyOn(supabase.auth, "getSession").mockImplementation(() =>
-      sessionReadResponse(persistedSession)
-    );
+    jest
+      .spyOn(supabase.auth, "getSession")
+      .mockImplementation(() => sessionReadResponse(persistedSession));
     jest.spyOn(supabase.auth, "setSession").mockResolvedValue({
       data: {
         user: null,
@@ -378,6 +382,4 @@ describe("auth session mutation public-entrypoint integration", () => {
     expect(emailSpy).not.toHaveBeenCalled();
     expect(events).not.toContain("email:b");
   });
-
-
 });

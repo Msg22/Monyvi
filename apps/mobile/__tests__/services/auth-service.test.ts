@@ -30,7 +30,7 @@ const mockResetPasswordForEmail = jest.fn();
 const mockAuthSessionGeneration = 0;
 
 jest.mock("@/services/supabase", () => ({
-  beginCoordinatedAuthCallbackMutation: <T,>(
+  beginCoordinatedAuthCallbackMutation: <T>(
     operation: () => Promise<T>
   ): { readonly promise: Promise<T>; readonly cancel: () => void } => ({
     promise: operation(),
@@ -174,10 +174,7 @@ describe("auth-service - completeAuthSessionFromUrl", () => {
 
   it("deduplicates a second callback for the same PKCE code while the first exchange is pending", async () => {
     let resolveExchange:
-      | ((value: {
-          data: { session: object };
-          error: null;
-        }) => void)
+      | ((value: { data: { session: object }; error: null }) => void)
       | undefined;
     const pendingExchange = new Promise<{
       data: { session: object };

@@ -223,7 +223,6 @@ describe("useAuthScreenController", () => {
     expect(result.current.emailError).toBeNull();
   });
 
-
   it("routes an unverified returning user to verification pending without raw provider error", async () => {
     mockSignInWithEmail.mockResolvedValue({
       success: false,
@@ -404,7 +403,6 @@ describe("useAuthScreenController", () => {
     expect(result.current.pendingAction).toBeNull();
   });
 
-
   it("ignores a duplicate resend while verification resend remains pending", async () => {
     mockSignUpWithEmail.mockResolvedValue({
       success: true,
@@ -447,11 +445,11 @@ describe("useAuthScreenController", () => {
 
     await act(async () => {
       resolveResend?.({
-      status: "sent" as const,
-      sentAtMs: Date.parse("2026-10-04T10:02:01.000Z"),
-      resendAvailableAtMs: Date.parse("2026-10-04T10:04:01.000Z"),
-      verificationExpiresAtMs: Date.parse("2026-10-04T10:12:01.000Z"),
-    });
+        status: "sent" as const,
+        sentAtMs: Date.parse("2026-10-04T10:02:01.000Z"),
+        resendAvailableAtMs: Date.parse("2026-10-04T10:04:01.000Z"),
+        verificationExpiresAtMs: Date.parse("2026-10-04T10:12:01.000Z"),
+      });
       await firstResend;
     });
 
@@ -485,7 +483,6 @@ describe("useAuthScreenController", () => {
     });
     expect(result.current.pendingAction).toBeNull();
   });
-
 
   it("honors server cooldown without sending provider details to the UI", async () => {
     mockSignUpWithEmail.mockResolvedValue({
@@ -573,7 +570,6 @@ describe("useAuthScreenController", () => {
     expect(result.current.networkError).toBeNull();
   });
 });
-
 
 describe("useAuthScreenController code-first verification", () => {
   beforeEach(() => {
@@ -707,9 +703,7 @@ describe("useAuthScreenController code-first verification", () => {
       needsVerification: true,
     });
 
-    let resolveVerification:
-      | ((value: { success: true }) => void)
-      | undefined;
+    let resolveVerification: ((value: { success: true }) => void) | undefined;
     mockVerifyEmailVerificationCode.mockImplementation(
       () =>
         new Promise((resolve) => {

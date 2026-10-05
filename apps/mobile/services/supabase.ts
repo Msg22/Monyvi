@@ -587,8 +587,4 @@ export async function resetPasswordForEmail(
   return { success: true };
 }
 
-export type {
-  OAuthProvider,
-  EmailAuthResult,
-  EmailVerificationCodeResult,
-};
+export type { OAuthProvider, EmailAuthResult, EmailVerificationCodeResult };

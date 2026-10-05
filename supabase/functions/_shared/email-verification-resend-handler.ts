@@ -19,10 +19,7 @@ interface EmailVerificationReservation {
 interface EmailVerificationResendDependencies {
   readonly pepper: string;
   readonly now: () => Date;
-  readonly computeEmailKey?: (
-    email: string,
-    pepper: string
-  ) => Promise<string>;
+  readonly computeEmailKey?: (email: string, pepper: string) => Promise<string>;
   readonly registerInitial: (input: {
     readonly email: string;
     readonly emailKey: string;
@@ -44,10 +41,7 @@ interface EmailVerificationResendDependencies {
   }) => Promise<boolean>;
 }
 
-function jsonResponse(
-  body: Record<string, unknown>,
-  status = 200
-): Response {
+function jsonResponse(body: Record<string, unknown>, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
     headers: { "Content-Type": "application/json" },
@@ -159,8 +153,7 @@ async function handleEmailVerificationResendRequest(
       reservation.decisionCode === "limit"
     ) {
       return jsonResponse({
-        status:
-          reservation.decisionCode === "limit" ? "limit" : "cooldown",
+        status: reservation.decisionCode === "limit" ? "limit" : "cooldown",
         retryAt: reservation.availableAt,
       });
     }

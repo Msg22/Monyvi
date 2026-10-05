@@ -16,8 +16,9 @@ function buildVerificationEmail(baseEmail, suffix = "local") {
   const localPart = baseEmail.slice(0, atIndex);
   const domain = baseEmail.slice(atIndex + 1);
   const safeSuffix =
-    String(suffix).replace(/[^a-zA-Z0-9-]/g, "-").replace(/-+/g, "-") ||
-    "local";
+    String(suffix)
+      .replace(/[^a-zA-Z0-9-]/g, "-")
+      .replace(/-+/g, "-") || "local";
 
   return `verification-${safeSuffix}-${localPart}@${domain}`;
 }

@@ -158,9 +158,7 @@ describe("VerificationCodeView", () => {
       "editable",
       false
     );
-    expect(
-      screen.getByRole("button", { name: "resend_email" })
-    ).toBeDisabled();
+    expect(screen.getByRole("button", { name: "resend_email" })).toBeDisabled();
     expect(
       screen.getByRole("button", { name: "back_to_sign_in" })
     ).toBeDisabled();

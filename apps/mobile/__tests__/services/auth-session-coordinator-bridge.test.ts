@@ -21,9 +21,9 @@ process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY = "test-publishable-key";
 const supabaseModule = jest.requireActual<typeof import("@/services/supabase")>(
   "@/services/supabase"
 );
-const authService = jest.requireActual<typeof import("@/services/auth-service")>(
-  "@/services/auth-service"
-);
+const authService = jest.requireActual<
+  typeof import("@/services/auth-service")
+>("@/services/auth-service");
 const { supabase } = supabaseModule;
 
 type RawAuthCallback = Parameters<typeof supabase.auth.onAuthStateChange>[0];
@@ -53,9 +53,9 @@ function createSession(accessToken: string, refreshToken: string): Session {
   };
 }
 
-function sessionResponse(session: Session): Awaited<
-  ReturnType<typeof supabase.auth.setSession>
-> {
+function sessionResponse(
+  session: Session
+): Awaited<ReturnType<typeof supabase.auth.setSession>> {
   return {
     data: {
       user: session.user,
@@ -107,8 +107,9 @@ describe("Supabase coordinated auth bridge", () => {
   });
 
   it("keeps provisional A out of stable reads and admits normal refreshed P-prime after compensation", async () => {
-    const coordinated =
-      jest.requireActual<CoordinatedSupabaseModule>("@/services/supabase");
+    const coordinated = jest.requireActual<CoordinatedSupabaseModule>(
+      "@/services/supabase"
+    );
     expect(coordinated.getStableAuthSession).toEqual(expect.any(Function));
     expect(coordinated.subscribeToCoordinatedAuthStateChange).toEqual(
       expect.any(Function)
@@ -126,8 +127,9 @@ describe("Supabase coordinated auth bridge", () => {
     const getSessionSpy = jest
       .spyOn(supabase.auth, "getSession")
       .mockImplementation(() => sessionReadResponse(persistedSession));
-    jest.spyOn(supabase.auth, "onAuthStateChange").mockImplementation(
-      (callback) => {
+    jest
+      .spyOn(supabase.auth, "onAuthStateChange")
+      .mockImplementation((callback) => {
         rawListeners.add(callback);
         return {
           data: {
@@ -140,14 +142,13 @@ describe("Supabase coordinated auth bridge", () => {
             },
           },
         };
-      }
-    );
-    jest.spyOn(supabase.auth, "stopAutoRefresh").mockImplementation(() =>
-      Promise.resolve()
-    );
-    jest.spyOn(supabase.auth, "startAutoRefresh").mockImplementation(() =>
-      Promise.resolve()
-    );
+      });
+    jest
+      .spyOn(supabase.auth, "stopAutoRefresh")
+      .mockImplementation(() => Promise.resolve());
+    jest
+      .spyOn(supabase.auth, "startAutoRefresh")
+      .mockImplementation(() => Promise.resolve());
     jest.spyOn(supabase.auth, "setSession").mockImplementation((tokens) => {
       if (tokens.access_token === "session-p") {
         persistedSession = sessionP;

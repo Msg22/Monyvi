@@ -84,7 +84,8 @@ jest.mock("@/services/supabase", () => ({
     mockGetStableAuthSession(),
   subscribeToCoordinatedAuthStateChange: (
     callback: AuthStateChangeCallback
-  ): AuthSubscriptionResult => mockSubscribeToCoordinatedAuthStateChange(callback),
+  ): AuthSubscriptionResult =>
+    mockSubscribeToCoordinatedAuthStateChange(callback),
   clearPersistedAuthSession: (): Promise<void> =>
     mockClearPersistedAuthSession(),
   supabase: {

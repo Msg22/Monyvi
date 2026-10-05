@@ -3,7 +3,8 @@
 **Branch**: `codex/issue321-email-verification`  
 **Revised**: 2026-10-04  
 **Spec**: [spec.md](./spec.md)  
-**Status**: Implementation in progress; combined visual binding approved; rendered visual/device and final release evidence pending
+**Status**: Implementation in progress; combined visual binding approved;
+rendered visual/device and final release evidence pending
 
 ## Summary
 
@@ -94,8 +95,8 @@ No permanent helper text for paste or auto-submit in the approved composition.
 
 Set Auth OTP expiry to 600 seconds.
 
-Controller stores only the known send timestamp needed to render a countdown.
-Do not store the OTP.
+Controller stores only the known send timestamp needed to render a countdown. Do
+not store the OTP.
 
 A returning/cross-device unverified user without a known timestamp sees generic
 ten-minute expiry wording until a new successful resend establishes a known
@@ -172,8 +173,8 @@ gate work belongs in this PR.
 - The exact image SHA-256 is
   `d1a0778e9d0fe00385eeb3c59e27e7428671a96b2eee91e851b3ef7d109e5976`.
 - `verification-flow-approved.binding.md` is **APPROVED** at combined revision
-  `sha256:6b8db88a6cec5cf73ef35e6c95ace82405da52e293b04300cfc538774ba9b6d6`.
-  The canonical repository binding verifier passes, so the exact image+metadata
+  `sha256:6b8db88a6cec5cf73ef35e6c95ace82405da52e293b04300cfc538774ba9b6d6`. The
+  canonical repository binding verifier passes, so the exact image+metadata
   tuple is authoritative for UI implementation.
 - The earlier `verification-en-light.png`, `verification-en-dark.png`, and
   `verification-ar-light.png` bindings remain historical link-first evidence.
@@ -181,10 +182,11 @@ gate work belongs in this PR.
 ### Binding status
 
 The binding gate is complete for the exact approved tuple. No further design
-approval is required for that image+metadata revision. The approved
-verification presentation is implemented in source; exact-head automated
-verification remains pending. Rendered visual/device fidelity is separate
-evidence, remains unverified on this PR, and is owned by Mohamed. The older three PNG bindings remain historical link-first evidence.
+approval is required for that image+metadata revision. The approved verification
+presentation is implemented in source; exact-head automated verification remains
+pending. Rendered visual/device fidelity is separate evidence, remains
+unverified on this PR, and is owned by Mohamed. The older three PNG bindings
+remain historical link-first evidence.
 
 PR/branch emulator E2E is intentionally not run. The temporary issue-specific
 workflow has been removed; Android E2E remains main-only under the existing
@@ -244,7 +246,8 @@ Strict Red -> Green -> Refactor.
 - cold restart after verified signup may route normally;
 - bounded timeout without silent late callback authentication;
 - coordinated callback/session mutation ordering versus email sign-in and OTP;
-- safe cancellation/compensation, explicit logout precedence, and observer gating;
+- safe cancellation/compensation, explicit logout precedence, and observer
+  gating;
 - Google OAuth regression;
 - invalid/reused/noncanonical failure;
 - password recovery is excluded and tracked by #373.
@@ -275,8 +278,8 @@ fresh signup
  -> authenticated app
 ```
 
-Returning `email_not_confirmed` sign-in must enter the same code screen
-without automatically sending another email.
+Returning `email_not_confirmed` sign-in must enter the same code screen without
+automatically sending another email.
 
 Add resend policy coverage where practical without making device E2E wait
 minutes; exact timing/concurrency belongs primarily in deterministic unit/DB
@@ -318,4 +321,5 @@ No financial schema, WatermelonDB, sync, or financial-action change.
 **Result**: Technical/product plan and combined binding tuple are approved.
 Implementation is in progress. Rendered visual/device verification remains
 manual and user-owned; PR/branch emulator E2E is not executed. Password recovery
-(#373) and resend enumeration hardening (#372) remain explicitly outside PR #322.
+(#373) and resend enumeration hardening (#372) remain explicitly outside PR
+#322.

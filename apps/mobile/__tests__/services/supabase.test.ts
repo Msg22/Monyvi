@@ -67,7 +67,6 @@ describe("supabase service helpers", () => {
   });
 });
 
-
 describe("supabase email verification redirect contract", () => {
   afterEach(() => {
     jest.restoreAllMocks();
@@ -91,7 +90,6 @@ describe("supabase email verification redirect contract", () => {
       },
     });
   });
-
 
   it("classifies email_not_confirmed sign-in as verification required", async () => {
     const emailNotConfirmedError = Object.assign(
@@ -118,10 +116,7 @@ describe("supabase email verification redirect contract", () => {
     expect(result.needsVerification).toBe(true);
     expect(result.error?.code).toBe("email_not_confirmed");
   });
-
-
 });
-
 
 describe("supabase email verification code contract", () => {
   afterEach(() => {

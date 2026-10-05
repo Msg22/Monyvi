@@ -46,11 +46,7 @@ function createControllerBase(): {
   clearNetworkError: jest.Mock<void, []>;
 } {
   return {
-    screenState: "verificationCode" as
-      | "form"
-      | "verificationCode"
-      | "verificationSuccess"
-      | "resetSent",
+    screenState: "verificationCode",
     pendingEmail: "mohamed@example.com",
     pendingAction: null as
       | "email"
@@ -131,7 +127,8 @@ jest.mock("@/hooks/useAuthScreenController", () => ({
 jest.mock("@/components/auth/FormView", () => ({
   FormView: () => {
     const ReactMod = jest.requireActual<typeof import("react")>("react");
-    const RN = jest.requireActual<typeof import("react-native")>("react-native");
+    const RN =
+      jest.requireActual<typeof import("react-native")>("react-native");
     return ReactMod.createElement(RN.View, { testID: "auth-form" });
   },
 }));
@@ -139,7 +136,8 @@ jest.mock("@/components/auth/FormView", () => ({
 jest.mock("@/components/auth/VerificationCodeView", () => ({
   VerificationCodeView: () => {
     const ReactMod = jest.requireActual<typeof import("react")>("react");
-    const RN = jest.requireActual<typeof import("react-native")>("react-native");
+    const RN =
+      jest.requireActual<typeof import("react-native")>("react-native");
     return ReactMod.createElement(RN.View, { testID: "verification-code" });
   },
 }));
@@ -147,7 +145,8 @@ jest.mock("@/components/auth/VerificationCodeView", () => ({
 jest.mock("@/components/auth/VerificationSuccessView", () => ({
   VerificationSuccessView: () => {
     const ReactMod = jest.requireActual<typeof import("react")>("react");
-    const RN = jest.requireActual<typeof import("react-native")>("react-native");
+    const RN =
+      jest.requireActual<typeof import("react-native")>("react-native");
     return ReactMod.createElement(RN.View, { testID: "verification-success" });
   },
 }));
@@ -155,7 +154,8 @@ jest.mock("@/components/auth/VerificationSuccessView", () => ({
 jest.mock("@/components/auth/ResetSentView", () => ({
   ResetSentView: () => {
     const ReactMod = jest.requireActual<typeof import("react")>("react");
-    const RN = jest.requireActual<typeof import("react-native")>("react-native");
+    const RN =
+      jest.requireActual<typeof import("react-native")>("react-native");
     return ReactMod.createElement(RN.View, { testID: "reset-sent" });
   },
 }));
@@ -163,7 +163,8 @@ jest.mock("@/components/auth/ResetSentView", () => ({
 jest.mock("@/components/onboarding/LanguageSwitcherPill", () => ({
   LanguageSwitcherPill: () => {
     const ReactMod = jest.requireActual<typeof import("react")>("react");
-    const RN = jest.requireActual<typeof import("react-native")>("react-native");
+    const RN =
+      jest.requireActual<typeof import("react-native")>("react-native");
     return ReactMod.createElement(RN.View, { testID: "language-switcher" });
   },
 }));
@@ -171,14 +172,14 @@ jest.mock("@/components/onboarding/LanguageSwitcherPill", () => ({
 jest.mock("@/components/ui/MonyviLogo", () => ({
   MonyviLogo: () => {
     const ReactMod = jest.requireActual<typeof import("react")>("react");
-    const RN = jest.requireActual<typeof import("react-native")>("react-native");
+    const RN =
+      jest.requireActual<typeof import("react-native")>("react-native");
     return ReactMod.createElement(RN.View, { testID: "monyvi-logo" });
   },
 }));
 
-const AuthScreen = jest.requireActual<typeof import("../../app/auth")>(
-  "../../app/auth"
-).default;
+const AuthScreen =
+  jest.requireActual<typeof import("../../app/auth")>("../../app/auth").default;
 
 function isUnknownArray(value: unknown): value is readonly unknown[] {
   return Array.isArray(value);
@@ -205,7 +206,9 @@ function readHeaderChildTestIds(value: unknown): readonly [string, string] {
     !React.isValidElement<{ readonly testID?: unknown }>(firstChild) ||
     !React.isValidElement<{ readonly testID?: unknown }>(secondChild)
   ) {
-    throw new Error("Expected both direct header children to be React elements");
+    throw new Error(
+      "Expected both direct header children to be React elements"
+    );
   }
 
   const firstTestID: unknown = firstChild.props.testID;
@@ -260,9 +263,12 @@ describe("auth verification presentation shell", () => {
         paddingBottom: 50,
       })
     );
-    expect(screen.getByTestId("auth-topbar")).toHaveStyle({
-      minHeight: 40,
-    });
+    // NativeWind class contract is authoritative here; this Jest harness does
+    // not materialize min-h-10 into native style pixels.
+    expect(screen.getByTestId("auth-topbar")).toHaveProp(
+      "className",
+      expect.stringContaining("min-h-10")
+    );
   });
 
   it("uses 16pt horizontal padding on compact phones", () => {

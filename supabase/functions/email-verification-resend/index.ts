@@ -72,11 +72,11 @@ async function reserveResend(input: {
 
   return {
     accepted: row.accepted,
-    decisionCode: row.decision_code as EmailVerificationReservation["decisionCode"],
+    decisionCode:
+      row.decision_code as EmailVerificationReservation["decisionCode"],
     reservationId:
       typeof row.reservation_id === "string" ? row.reservation_id : null,
-    availableAt:
-      typeof row.available_at === "string" ? row.available_at : null,
+    availableAt: typeof row.available_at === "string" ? row.available_at : null,
   };
 }
 

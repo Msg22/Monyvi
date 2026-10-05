@@ -49,6 +49,9 @@ test("issue 321 historical link-first bindings remain internally valid", () => {
   );
 
   for (const sidecar of sidecars) {
-    assert.match(result.stdout, new RegExp(`PASS .*${sidecar.split(/[\\/]/).pop()}`));
+    assert.match(
+      result.stdout,
+      new RegExp(`PASS .*${sidecar.split(/[\\/]/).pop()}`)
+    );
   }
 });

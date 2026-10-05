@@ -97,12 +97,10 @@ export function VerificationCodeView({
   const accentColor = isDark ? palette.nileGreen[400] : palette.nileGreen[600];
   const secondaryTextColor = isDark ? palette.slate[400] : palette.slate[500];
 
-  const isCompact =
-    viewportWidth < RESPONSIVE_BREAKPOINTS.compactPhone;
+  const isCompact = viewportWidth < RESPONSIVE_BREAKPOINTS.compactPhone;
   const horizontalPadding = isCompact ? 16 : 24;
   const otpGap = isCompact ? 6 : 8;
-  const availableOtpWidth =
-    viewportWidth - horizontalPadding * 2 - otpGap * 5;
+  const availableOtpWidth = viewportWidth - horizontalPadding * 2 - otpGap * 5;
   const otpCellSize = Math.min(48, Math.max(0, availableOtpWidth / 6));
 
   return (
@@ -114,11 +112,7 @@ export function VerificationCodeView({
         <View className="mb-6 h-20 w-20 items-center justify-center rounded-full border border-nileGreen-500/25 bg-nileGreen-500/10">
           <Ionicons name="mail-outline" size={36} color={accentColor} />
           <View className="absolute bottom-[14px] right-[13px] h-6 w-6 items-center justify-center rounded-full bg-background dark:bg-background-dark">
-            <Ionicons
-              name="checkmark-circle"
-              size={24}
-              color={accentColor}
-            />
+            <Ionicons name="checkmark-circle" size={24} color={accentColor} />
           </View>
         </View>
 
@@ -273,11 +267,7 @@ export function VerificationCodeView({
           className="mt-6 h-11 flex-row items-center justify-center gap-[7px]"
           style={{ opacity: actionsDisabled ? 0.55 : 1, direction: "ltr" }}
         >
-          <Ionicons
-            name="arrow-back"
-            size={16}
-            color={secondaryTextColor}
-          />
+          <Ionicons name="arrow-back" size={16} color={secondaryTextColor} />
           <Text
             className="text-xs text-text-secondary dark:text-text-secondary-dark"
             style={{ fontFamily: fontFamily.medium }}

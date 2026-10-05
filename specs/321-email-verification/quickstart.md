@@ -107,8 +107,8 @@ arrive concurrently.
 5. Resend remains subject to the same server policy.
 
 If this device does not know the real last-send timestamp, the UI must not show
-a fabricated countdown; generic ten-minute expiry copy is acceptable until a
-new send creates a known timestamp.
+a fabricated countdown; generic ten-minute expiry copy is acceptable until a new
+send creates a known timestamp.
 
 ## Legacy confirmation-link regression
 
@@ -177,12 +177,11 @@ automatic resend.
 The sole approved revised visual reference is:
 
 - `mockups/verification-flow-approved.png`
-- SHA-256:
-  `d1a0778e9d0fe00385eeb3c59e27e7428671a96b2eee91e851b3ef7d109e5976`
+- SHA-256: `d1a0778e9d0fe00385eeb3c59e27e7428671a96b2eee91e851b3ef7d109e5976`
 
 Its sidecar is **APPROVED** at combined revision
-`sha256:6b8db88a6cec5cf73ef35e6c95ace82405da52e293b04300cfc538774ba9b6d6`,
-and the canonical repository binding verifier passes. This authorizes UI
+`sha256:6b8db88a6cec5cf73ef35e6c95ace82405da52e293b04300cfc538774ba9b6d6`, and
+the canonical repository binding verifier passes. This authorizes UI
 implementation against the binding facts.
 
 The older three repository PNGs/sidecars remain historical link-first evidence.
@@ -223,14 +222,14 @@ pending migrations. A previous read-only audit found migration/function
 deployment still pending; this quickstart does not authorize deployment.
 
 The hosted function derives a purpose-specific limiter HMAC key from server-only
-credentials unless `EMAIL_VERIFICATION_LIMITER_PEPPER` is explicitly set.
-No limiter secret belongs in the mobile bundle or Git.
+credentials unless `EMAIL_VERIFICATION_LIMITER_PEPPER` is explicitly set. No
+limiter secret belongs in the mobile bundle or Git.
 
 The tracked local Confirm Signup template now contains the primary six-digit
 code plus a secondary confirmation link. The earlier hosted manual template
 install predates that fallback; hosted template parity is therefore PENDING.
-Custom SMTP was previously reported configured, but hosted-template parity,
-live Gmail/Outlook/third-provider delivery, provider health, and current hosted
+Custom SMTP was previously reported configured, but hosted-template parity, live
+Gmail/Outlook/third-provider delivery, provider health, and current hosted
 limiter deployment remain external/manual evidence rather than CI Green.
 
 **Known limitations:** the Monyvi resend policy is server-enforced once its

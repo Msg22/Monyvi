@@ -47,16 +47,16 @@ Proposed table: `email_verification_resend_limits`
 
 Suggested columns:
 
-| Column | Type | Contract |
-| --- | --- | --- |
-| `email_key` | text PK | HMAC-SHA256 of normalized email using server-only pepper |
-| `window_started_at` | timestamptz | original successful send time for active window |
-| `last_sent_at` | timestamptz | latest successful original/resend timestamp |
-| `resend_count` | smallint | successful resends in active window, 0..3 |
-| `reservation_id` | uuid nullable | in-flight atomic resend reservation |
-| `reserved_at` | timestamptz nullable | reservation recovery/timeout support |
-| `created_at` | timestamptz | audit/maintenance |
-| `updated_at` | timestamptz | audit/maintenance |
+| Column              | Type                 | Contract                                                 |
+| ------------------- | -------------------- | -------------------------------------------------------- |
+| `email_key`         | text PK              | HMAC-SHA256 of normalized email using server-only pepper |
+| `window_started_at` | timestamptz          | original successful send time for active window          |
+| `last_sent_at`      | timestamptz          | latest successful original/resend timestamp              |
+| `resend_count`      | smallint             | successful resends in active window, 0..3                |
+| `reservation_id`    | uuid nullable        | in-flight atomic resend reservation                      |
+| `reserved_at`       | timestamptz nullable | reservation recovery/timeout support                     |
+| `created_at`        | timestamptz          | audit/maintenance                                        |
+| `updated_at`        | timestamptz          | audit/maintenance                                        |
 
 No raw email, password, OTP, token, callback URL, access token, or refresh token
 is stored.

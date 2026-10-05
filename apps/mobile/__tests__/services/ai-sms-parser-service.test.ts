@@ -758,10 +758,7 @@ describe("ai-sms-parser-service parser strategy", () => {
     expect(unresolvedCandidates[0]?.candidate).toEqual(failedCandidates[0]);
     expect(unresolvedCandidates[0]?.reason).toBe("chunk_failed");
     expect(unresolvedCandidates[0]?.isRetryable).toBe(true);
-    expectRetryRequest(
-      unresolvedCandidates[0]?.retryRequest,
-      failedCandidates
-    );
+    expectRetryRequest(unresolvedCandidates[0]?.retryRequest, failedCandidates);
     const loggedError = mockLoggerError.mock.calls.find(
       ([message]) => message === "[ai-sms-parser] parse-sms chunk failed"
     )?.[1] as { readonly context?: unknown } | undefined;
@@ -831,10 +828,9 @@ describe("ai-sms-parser-service parser strategy", () => {
     expect(unresolvedCandidates[0]?.candidate).toEqual(failedCandidate);
     expect(unresolvedCandidates[0]?.reason).toBe("response_invalid");
     expect(unresolvedCandidates[0]?.isRetryable).toBe(true);
-    expectRetryRequest(
-      unresolvedCandidates[0]?.retryRequest,
-      [failedCandidate]
-    );
+    expectRetryRequest(unresolvedCandidates[0]?.retryRequest, [
+      failedCandidate,
+    ]);
   });
 
   it("preserves usable rows instead of retry-splitting a partially malformed chunk", async () => {
@@ -936,10 +932,8 @@ describe("ai-sms-parser-service parser strategy", () => {
     expect(unresolvedCandidates[0]?.candidate).toEqual(failedCandidate);
     expect(unresolvedCandidates[0]?.reason).toBe("unexpected_failure");
     expect(unresolvedCandidates[0]?.isRetryable).toBe(true);
-    expectRetryRequest(
-      unresolvedCandidates[0]?.retryRequest,
-      [failedCandidate]
-    );
+    expectRetryRequest(unresolvedCandidates[0]?.retryRequest, [
+      failedCandidate,
+    ]);
   });
-
 });

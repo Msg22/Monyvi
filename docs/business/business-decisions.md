@@ -150,13 +150,13 @@ Business rules:
 - Entering/pasting the sixth valid digit auto-submits exactly once.
 - During the active verification-success flow, authenticated state must not skip
   the Email verified screen; the user explicitly chooses Continue. After a full
-  app restart, an already verified persisted session may use normal startup.
-  No durable Continue-acknowledgement marker is required.
+  app restart, an already verified persisted session may use normal startup. No
+  durable Continue-acknowledgement marker is required.
 - The confirmation email may also include a **secondary signup confirmation
   link**. The link is a fallback, not the primary product path, and successful
   signup-link completion reaches the same Email verified + Continue contract.
-- Returning `email_not_confirmed` sign-in enters the same verification flow
-  and does not automatically send another email.
+- Returning `email_not_confirmed` sign-in enters the same verification flow and
+  does not automatically send another email.
 - The original signup send is followed by at most three successful resends in
   the 24-hour window anchored to the original send. Each successful send has a
   120-second cooldown.

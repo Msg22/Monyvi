@@ -16,10 +16,7 @@ import { VerificationSuccessView } from "@/components/auth/VerificationSuccessVi
 import { LanguageSwitcherPill } from "@/components/onboarding/LanguageSwitcherPill";
 import { MonyviLogo } from "@/components/ui/MonyviLogo";
 import { palette } from "@/constants/colors";
-import {
-  RESPONSIVE_BREAKPOINTS,
-  RESPONSIVE_FONT_SCALE,
-} from "@/constants/ui";
+import { RESPONSIVE_BREAKPOINTS, RESPONSIVE_FONT_SCALE } from "@/constants/ui";
 import { useTheme } from "@/context/ThemeContext";
 import { useAuthScreenController } from "@/hooks/useAuthScreenController";
 import { useFormScroll } from "@/hooks/useFormScroll";
