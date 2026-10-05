@@ -53,6 +53,18 @@ function createSession(accessToken: string, refreshToken: string): Session {
   };
 }
 
+function sessionResponse(session: Session): Awaited<
+  ReturnType<typeof supabase.auth.setSession>
+> {
+  return {
+    data: {
+      user: session.user,
+      session,
+    },
+    error: null,
+  };
+}
+
 function sessionReadResponse(
   session: Session | null
 ): ReturnType<typeof supabase.auth.getSession> {
@@ -138,7 +150,15 @@ describe("Supabase coordinated auth bridge", () => {
     jest.spyOn(supabase.auth, "startAutoRefresh").mockImplementation(() =>
       Promise.resolve()
     );
-    jest.spyOn(supabase.auth, "setSession").mockImplementation(() => {
+    jest.spyOn(supabase.auth, "setSession").mockImplementation((tokens) => {
+      if (tokens.access_token === "session-p") {
+        persistedSession = sessionP;
+        for (const listener of rawListeners) {
+          listener("SIGNED_IN", sessionP);
+        }
+        return Promise.resolve(sessionResponse(sessionP));
+      }
+
       persistedSession = sessionA;
       for (const listener of rawListeners) {
         listener("SIGNED_IN", sessionA);
