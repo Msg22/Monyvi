@@ -3,7 +3,7 @@
 **Branch**: `codex/issue321-email-verification`  
 **Revised**: 2026-10-04  
 **Spec**: [spec.md](./spec.md)  
-**Status**: Approved technical/product plan; paused at remaining mockup approval gate
+**Status**: Implementation in progress; non-visual corrections authorized; new visual binding metadata and final release evidence pending
 
 ## Summary
 
@@ -22,9 +22,11 @@ Supabase Auth remains the verification authority. New work adds:
 - callback success fix for the real-device skeleton hang;
 - revised E2E/visual/accessibility evidence.
 
-The user has already configured custom SMTP and installed the Monyvi Confirm
-Signup subject/template in hosted Supabase. Do not recreate that template in
-code. Release QA only verifies its final 10-minute wording and delivery health.
+The user has already configured custom SMTP and previously installed a Monyvi
+Confirm Signup template in hosted Supabase. The tracked local template has since
+gained an approved **secondary confirmation-link fallback** beneath the primary
+six-digit code, so hosted parity is not proven. Release QA must compare/update
+the hosted template deliberately; this PR does not deploy hosted configuration.
 
 ## Current Proven Foundation To Preserve
 
@@ -157,31 +159,34 @@ Change signup-confirmation success behavior:
 
 Add a bounded processing timeout.
 
-OAuth/password-recovery callback destinations stay unchanged.
+Google OAuth routing remains an in-scope regression contract. Password recovery
+is excluded from PR #322 and tracked by #373; no recovery route/form/private
+gate work belongs in this PR.
 
 ## Visual Plan
 
-### Approved
+### Sole approved revised board
 
-- latest English-light code-entry mockup with three helper/count texts removed.
+- `mockups/verification-flow-approved.png` is the sole approved six-panel
+  revised visual reference.
+- The exact image SHA-256 is
+  `d1a0778e9d0fe00385eeb3c59e27e7428671a96b2eee91e851b3ef7d109e5976`.
+- `verification-flow-approved.binding.md` is a **PENDING** draft. Its proposed
+  comparison geometry/tokens/unknown-state treatment are not authoritative
+  until the combined image-and-metadata tuple receives explicit approval.
+- The earlier `verification-en-light.png`, `verification-en-dark.png`, and
+  `verification-ar-light.png` bindings remain historical link-first evidence.
 
-### Awaiting approval before UI production mutations
+### Binding gate
 
-- English dark code-entry;
-- Arabic light code-entry;
-- Arabic dark code-entry;
-- English light Email verified;
-- English dark Email verified;
-- Arabic light Email verified;
-- Arabic dark Email verified.
+No board-governed UI production mutation may consume the PENDING metadata as
+authority. Before visual implementation/sign-off:
 
-After approval:
-
-- persist exact image bytes;
-- create/update binding sidecars;
-- compute image/metadata/combined revisions;
-- obtain binding metadata approval if required by repository workflow;
-- run canonical mockup-binding verifier.
+1. obtain explicit combined image + binding metadata approval;
+2. set approval fields only to the exact approved revisions/evidence;
+3. run `node scripts/verify-mockup-binding.js` on the exact sidecar;
+4. implement only the approved binding facts;
+5. capture visual/accessibility evidence separately from functional evidence.
 
 ## Test Strategy
 
@@ -229,28 +234,46 @@ Strict Red -> Green -> Refactor.
 - no raw email/token logs;
 - provider error mapping.
 
-### Callback tests
+### Callback/session tests
 
 - signup callback success -> success screen;
-- stale AuthContext cannot hang success;
-- bounded timeout;
-- OAuth regression;
-- password recovery regression;
-- invalid/reused/noncanonical failure.
+- active-flow authenticated event cannot bypass explicit Continue;
+- cold restart after verified signup may route normally;
+- bounded timeout without silent late callback authentication;
+- coordinated callback/session mutation ordering versus email sign-in and OTP;
+- safe cancellation/compensation, explicit logout precedence, and observer gating;
+- Google OAuth regression;
+- invalid/reused/noncanonical failure;
+- password recovery is excluded and tracked by #373.
 
 ### E2E
 
-Local Mailpit flow becomes:
+Local Mailpit primary flow:
 
 ```text
 signup
- -> receive 6-digit code
+ -> receive code-first confirmation email
+ -> extract six-digit code
  -> paste/type code
  -> auto-submit
  -> Email verified
  -> Continue
  -> authenticated app
 ```
+
+Local Mailpit fallback-link flow:
+
+```text
+fresh signup
+ -> open the secondary confirmation link from the same local email
+ -> native signup callback completes
+ -> Email verified
+ -> explicit Continue
+ -> authenticated app
+```
+
+Returning `email_not_confirmed` sign-in must enter the same code screen
+without automatically sending another email.
 
 Add resend policy coverage where practical without making device E2E wait
 minutes; exact timing/concurrency belongs primarily in deterministic unit/DB
@@ -268,12 +291,16 @@ Already reported complete:
 
 Still verify:
 
-- template says 10 minutes;
-- hosted OTP expiry = 600;
+- hosted template matches the current code-first + secondary-link local template
+  and says 10 minutes;
+- hosted OTP expiry = 600 and minimum send frequency = 120 seconds;
+- hosted migration/function deployment status before resend device QA;
 - Gmail + Outlook/Hotmail + one additional mailbox;
 - bounce/suppression/provider logs;
 - Android/iOS device journeys;
-- callback old-link fallback no longer hangs.
+- local/hosted signup-link fallback no longer hangs;
+- #372 remains a disclosed known resend-oracle limitation rather than a PR #322
+  security-completion claim.
 
 ## Constitution / Scope Check
 
@@ -285,5 +312,7 @@ Approved exception to previous #321 "no Edge Function/table" assumption:
 
 No financial schema, WatermelonDB, sync, or financial-action change.
 
-**Result**: Technical/product plan approved. UI implementation remains blocked
-only on the remaining mockup approval/binding gate.
+**Result**: Technical/product plan approved. Non-visual implementation is in
+progress. Board-governed UI work remains blocked on the new binding-metadata
+approval/verifier gate. Password recovery (#373) and resend enumeration hardening
+(#372) are explicitly outside PR #322.
