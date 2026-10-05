@@ -14,7 +14,37 @@ function createController(
   return { ...createControllerBase(), ...overrides };
 }
 
-function createControllerBase() {
+function createControllerBase(): {
+  screenState:
+    | "form"
+    | "verificationCode"
+    | "verificationSuccess"
+    | "resetSent";
+  pendingEmail: string;
+  pendingAction:
+    | "email"
+    | "oauth"
+    | "passwordReset"
+    | "verificationCode"
+    | "verificationResend"
+    | null;
+  emailError: string | null;
+  networkError: string | null;
+  verificationCode: string;
+  verificationError: string | null;
+  verificationExpiresAtMs: number | null;
+  resendAvailableAtMs: number | null;
+  resendLimitUntilMs: number | null;
+  handleOAuth: jest.Mock<Promise<void>, []>;
+  handleEmailSubmit: jest.Mock<Promise<void>, []>;
+  handleForgotPassword: jest.Mock<Promise<void>, []>;
+  handleVerificationCodeChange: jest.Mock<void, []>;
+  handleResendVerification: jest.Mock<Promise<void>, []>;
+  handleContinueAfterVerification: jest.Mock<void, []>;
+  handleBackToForm: jest.Mock<void, []>;
+  clearEmailError: jest.Mock<void, []>;
+  clearNetworkError: jest.Mock<void, []>;
+} {
   return {
     screenState: "verificationCode" as
       | "form"
@@ -160,13 +190,16 @@ const AuthScreen = jest.requireActual<typeof import("../../app/auth")>(
 
 function headerChildTestIds(): string[] {
   const header = screen.getByTestId("auth-topbar");
-  /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access */
-  const children = Children.toArray(
-    header.props.children
-  ) as React.ReactElement[];
-  const testIds = children.map((child) => String(child.props.testID));
-  /* eslint-enable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access */
-  return testIds;
+  const children = Children.toArray(header.props.children);
+
+  return children.flatMap((child) => {
+    if (!React.isValidElement<{ readonly testID?: unknown }>(child)) {
+      return [];
+    }
+
+    const testID = child.props.testID;
+    return typeof testID === "string" ? [testID] : [];
+  });
 }
 
 describe("auth verification presentation shell", () => {
@@ -242,7 +275,7 @@ describe("auth verification presentation shell", () => {
     expect(screen.getByTestId("verification-success")).toBeOnTheScreen();
   });
 
-  it("mirrors header ordering for Arabic while preserving English ordering", () => {
+  it("keeps stable language-then-logo JSX order and lets native RTL mirror it", () => {
     const english = render(<AuthScreen />);
     expect(headerChildTestIds()).toEqual([
       "auth-language-slot",
@@ -253,9 +286,11 @@ describe("auth verification presentation shell", () => {
     mockIsRTL = true;
     render(<AuthScreen />);
 
+    // React Native/Yoga mirrors flex-row under forceRTL; reversing JSX would
+    // double-mirror the approved Arabic header.
     expect(headerChildTestIds()).toEqual([
-      "auth-logo-slot",
       "auth-language-slot",
+      "auth-logo-slot",
     ]);
   });
 });

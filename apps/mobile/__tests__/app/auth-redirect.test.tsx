@@ -26,6 +26,7 @@ let mockSafeAreaInsets: {
   left: number;
 };
 let mockFontScale: number;
+let mockIsRTL = false;
 let mockLocalSearchParams: Record<string, string | string[]> = {};
 
 jest.mock("react-native/Libraries/Utilities/useWindowDimensions", () => ({
@@ -71,7 +72,7 @@ jest.mock("@/context/LocaleContext", () => ({
       bold: string;
     };
   } => ({
-    isRTL: false,
+    isRTL: mockIsRTL,
     fontFamily: {
       regular: "Inter_400Regular",
       semiBold: "Inter_600SemiBold",
@@ -205,6 +206,7 @@ describe("AuthScreen redirect", () => {
     };
     mockSafeAreaInsets = { top: 24, right: 0, bottom: 34, left: 0 };
     mockFontScale = 1;
+    mockIsRTL = false;
   });
 
   it("waits for the navigation container ref before redirecting authenticated users", () => {
@@ -296,6 +298,7 @@ describe("AuthCallbackScreen verification lifecycle", () => {
       success: true,
       email: "verified@example.com",
     });
+    mockIsRTL = false;
   });
 
   afterEach(() => {
@@ -399,6 +402,30 @@ describe("AuthCallbackScreen verification lifecycle", () => {
       screen.getByRole("button", { name: "continue_to_dashboard" })
     );
     expect(mockReplace).toHaveBeenCalledWith("/");
+  });
+
+  it("keeps stable language-then-logo JSX order for signup success in RTL", async () => {
+    mockIsRTL = true;
+
+    render(<AuthCallbackScreen />);
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const header = screen.getByTestId("auth-topbar");
+    const children = Children.toArray(header.props.children);
+    const testIds = children.flatMap((child) => {
+      if (!React.isValidElement<{ readonly testID?: unknown }>(child)) {
+        return [];
+      }
+
+      const testID = child.props.testID;
+      return typeof testID === "string" ? [testID] : [];
+    });
+
+    // Native Yoga mirrors flex-row in RTL; JSX order must stay stable.
+    expect(testIds).toEqual(["auth-language-slot", "auth-logo-slot"]);
   });
 
   it("does not auto-skip verification success on an already-authenticated warm start", async () => {
