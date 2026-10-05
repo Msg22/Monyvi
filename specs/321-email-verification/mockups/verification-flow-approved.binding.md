@@ -2,12 +2,12 @@
 
 - Approved reference image: verification-flow-approved.png
 - Approved reference image revision: sha256:d1a0778e9d0fe00385eeb3c59e27e7428671a96b2eee91e851b3ef7d109e5976
-- Binding metadata approval: PENDING
+- Binding metadata approval: APPROVED
 - Binding metadata revision: sha256:0e3fc8632d9f0df219b36f2fce4cb57e826ea3fa6acb83bd0d9452838a11774e
-- Approved binding metadata revision: PENDING
+- Approved binding metadata revision: sha256:0e3fc8632d9f0df219b36f2fce4cb57e826ea3fa6acb83bd0d9452838a11774e
 - Binding approval revision: sha256:6b8db88a6cec5cf73ef35e6c95ace82405da52e293b04300cfc538774ba9b6d6
-- Approved binding approval revision: PENDING
-- Binding metadata approval evidence/reference: PENDING
+- Approved binding approval revision: sha256:6b8db88a6cec5cf73ef35e6c95ace82405da52e293b04300cfc538774ba9b6d6
+- Binding metadata approval evidence/reference: Mohamed explicit Approve handoff reply to request_user_input_async call_MT2WfVk3VFeeSXN2VJViBLEZ in task 01a10aa9-e77b-7150-ad31-54b2da880327 on 2026-10-05; approved sha256:6b8db88a6cec5cf73ef35e6c95ace82405da52e293b04300cfc538774ba9b6d6
 - Legacy metadata migration: no
 
 `Approved reference image revision` MUST be `sha256:<64 lowercase hex>` computed from the exact approved image bytes. `Binding metadata revision` MUST be the SHA-256 of the exact UTF-8/LF bytes beneath `## Binding Facts` through the next level-two heading or EOF. `Binding approval revision` MUST be SHA-256 over the exact UTF-8/LF bytes below, including the final LF after the second line:
