@@ -88,6 +88,42 @@ describe("authenticated-edge-function-service", () => {
     );
   });
 
+  it("replaces mixed-case caller authorization with exactly one stable Authorization header", async () => {
+    mockGetStableAuthSession.mockResolvedValue({
+      data: {
+        session: {
+          access_token: "stable-p-token",
+        },
+      },
+      error: null,
+    });
+    mockInvoke.mockResolvedValue({
+      data: { ok: true },
+      error: null,
+    });
+
+    await expect(
+      invokeAuthenticatedEdgeFunction("parse-sms", {
+        body: { messages: [] },
+        headers: {
+          aUtHoRiZaTiOn: "Bearer raw-provisional-a",
+          "x-request-id": "request-1",
+        },
+      })
+    ).resolves.toEqual({
+      data: { ok: true },
+      error: null,
+    });
+
+    expect(mockInvoke).toHaveBeenCalledWith("parse-sms", {
+      body: { messages: [] },
+      headers: {
+        Authorization: "Bearer stable-p-token",
+        "x-request-id": "request-1",
+      },
+    });
+  });
+
   it("fails before invoking when there is no approved stable session", async () => {
     mockGetStableAuthSession.mockResolvedValue({
       data: { session: null },
