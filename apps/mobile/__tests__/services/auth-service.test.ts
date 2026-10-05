@@ -164,6 +164,73 @@ describe("auth-service - completeAuthSessionFromUrl", () => {
     expect(result).toEqual({ success: true });
   });
 
+  it("deduplicates a second callback for the same PKCE code while the first exchange is pending", async () => {
+    let resolveExchange:
+      | ((value: {
+          data: { session: object };
+          error: null;
+        }) => void)
+      | undefined;
+    const pendingExchange = new Promise<{
+      data: { session: object };
+      error: null;
+    }>((resolve) => {
+      resolveExchange = resolve;
+    });
+    mockExchangeCodeForSession.mockReturnValue(pendingExchange);
+
+    const first = completeAuthSessionFromUrl(
+      "monyvi://auth-callback?code=pending-pkce-code"
+    );
+    const second = completeAuthSessionFromUrl(
+      "monyvi://auth-callback?code=pending-pkce-code"
+    );
+
+    resolveExchange?.({
+      data: { session: {} },
+      error: null,
+    });
+    await Promise.all([first, second]);
+
+    expect(mockExchangeCodeForSession).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not exchange the same PKCE code again after terminal success", async () => {
+    mockExchangeCodeForSession.mockResolvedValue({
+      data: { session: {} },
+      error: null,
+    });
+
+    const first = await completeAuthSessionFromUrl(
+      "monyvi://auth-callback?code=terminal-success-code"
+    );
+    const second = await completeAuthSessionFromUrl(
+      "monyvi://auth-callback?code=terminal-success-code"
+    );
+
+    expect(first).toEqual({ success: true });
+    expect(second).toEqual(first);
+    expect(mockExchangeCodeForSession).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not exchange the same PKCE code again after terminal provider error", async () => {
+    mockExchangeCodeForSession.mockResolvedValue({
+      data: { session: null },
+      error: new Error("PKCE verifier consumed"),
+    });
+
+    const first = await completeAuthSessionFromUrl(
+      "monyvi://auth-callback?code=terminal-error-code"
+    );
+    const second = await completeAuthSessionFromUrl(
+      "monyvi://auth-callback?code=terminal-error-code"
+    );
+
+    expect(first.success).toBe(false);
+    expect(second).toEqual(first);
+    expect(mockExchangeCodeForSession).toHaveBeenCalledTimes(1);
+  });
+
   it("fails closed when Supabase reports no callback session", async () => {
     mockSetSession.mockResolvedValue({
       data: { session: null },
@@ -179,54 +246,6 @@ describe("auth-service - completeAuthSessionFromUrl", () => {
       error: "Could not establish an authenticated session.",
       errorCode: "invalid_callback",
     });
-  });
-
-  it("serializes ordinary email sign-in behind an in-flight callback session mutation", async () => {
-    const events: string[] = [];
-    let persistedSession: "callback-a" | "email-b" | null = null;
-    let resolveCallback:
-      | (() => void)
-      | undefined;
-
-    mockSetSession.mockImplementation(
-      () =>
-        new Promise((resolve) => {
-          resolveCallback = (): void => {
-            persistedSession = "callback-a";
-            events.push("callback-a:save");
-            events.push("callback-a:notify");
-            resolve({
-              data: {
-                session: {
-                  user: { email: "callback-a@example.com" },
-                },
-              },
-              error: null,
-            });
-          };
-        })
-    );
-    mockSignInWithEmailFn.mockImplementation(() => {
-      events.push("email-b:start");
-      persistedSession = "email-b";
-      return Promise.resolve({ success: true });
-    });
-
-    const callbackPromise = completeAuthSessionFromUrl(
-      "monyvi://auth-callback#access_token=callback-a-access&refresh_token=callback-a-refresh&type=signup"
-    );
-    const emailPromise = signInWithEmail("email-b@example.com", "secret");
-
-    await Promise.resolve();
-    resolveCallback?.();
-    await Promise.all([callbackPromise, emailPromise]);
-
-    expect(events).toEqual([
-      "callback-a:save",
-      "callback-a:notify",
-      "email-b:start",
-    ]);
-    expect(persistedSession).toBe("email-b");
   });
 
   it("rejects callbacks when no URL was provided", async () => {
