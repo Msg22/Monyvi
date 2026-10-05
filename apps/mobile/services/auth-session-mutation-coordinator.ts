@@ -100,6 +100,10 @@ function sessionIdentity(session: Session | null): string | null {
   ].join("\u0000");
 }
 
+function normalizeThrownError(error: unknown, fallbackMessage: string): Error {
+  return error instanceof Error ? error : new Error(fallbackMessage);
+}
+
 export function createAuthSessionMutationCoordinator(
   options: AuthSessionMutationCoordinatorOptions
 ): AuthSessionMutationCoordinator {
@@ -344,7 +348,10 @@ export function createAuthSessionMutationCoordinator(
         throw new AuthSessionMutationCancelledError();
       }
       if (operationError !== undefined) {
-        throw operationError;
+        throw normalizeThrownError(
+          operationError,
+          "Authentication session mutation failed."
+        );
       }
       if (!hasResult) {
         throw new Error("Authentication session mutation produced no result.");
@@ -412,21 +419,58 @@ export function createAuthSessionMutationCoordinator(
       activeMutation = active;
 
       let autoRefreshStopped = false;
+      let result: T | undefined;
+      let hasResult = false;
+      let operationError: unknown;
+
       try {
         await options.stopAutoRefresh();
         autoRefreshStopped = true;
 
-        const result = await operation();
-        active.phase = "reconcile";
-        const current = await options.readRawSession();
-
-        if (!isSuccessful(result) || current !== null) {
-          enterQuarantine();
-        } else {
-          commitStable(null);
+        try {
+          result = await operation();
+          hasResult = true;
+        } catch (error: unknown) {
+          operationError = error;
         }
 
-        return result;
+        active.phase = "reconcile";
+
+        let current: Session | null;
+        try {
+          current = await options.readRawSession();
+        } catch (error: unknown) {
+          enterQuarantine();
+          throw normalizeThrownError(
+            operationError ?? error,
+            "Could not verify signed-out session state."
+          );
+        }
+
+        if (current !== null) {
+          enterQuarantine();
+          if (operationError !== undefined) {
+            throw normalizeThrownError(
+              operationError,
+              "Authentication logout failed."
+            );
+          }
+          throw new AuthSessionMutationQuarantinedError();
+        }
+
+        commitStable(null);
+
+        if (operationError !== undefined) {
+          throw normalizeThrownError(
+            operationError,
+            "Authentication logout failed."
+          );
+        }
+        if (!hasResult) {
+          throw new Error("Authentication logout produced no result.");
+        }
+
+        return result as T;
       } finally {
         try {
           if (autoRefreshStopped) {
@@ -470,6 +514,10 @@ export function createAuthSessionMutationCoordinator(
   const subscribe = (listener: CoordinatedAuthListener): (() => void) => {
     listeners.add(listener);
     ensureRawSubscription();
+
+    if (stableInitialized && !quarantined) {
+      void listener("INITIAL_SESSION", stableSession);
+    }
 
     return (): void => {
       listeners.delete(listener);

@@ -29,8 +29,8 @@ const { supabase } = supabaseModule;
 type RawAuthCallback = Parameters<typeof supabase.auth.onAuthStateChange>[0];
 
 interface CoordinatedSupabaseModule {
-  getStableAuthSession?: () => ReturnType<typeof supabase.auth.getSession>;
-  subscribeToCoordinatedAuthStateChange?: (
+  getStableAuthSession: () => ReturnType<typeof supabase.auth.getSession>;
+  subscribeToCoordinatedAuthStateChange: (
     callback: RawAuthCallback
   ) => ReturnType<typeof supabase.auth.onAuthStateChange>;
 }
@@ -109,12 +109,10 @@ describe("Supabase coordinated auth bridge", () => {
   it("keeps provisional A out of stable reads and admits normal refreshed P-prime after compensation", async () => {
     const coordinated =
       jest.requireActual<CoordinatedSupabaseModule>("@/services/supabase");
-    if (
-      typeof coordinated.getStableAuthSession !== "function" ||
-      typeof coordinated.subscribeToCoordinatedAuthStateChange !== "function"
-    ) {
-      return;
-    }
+    expect(coordinated.getStableAuthSession).toEqual(expect.any(Function));
+    expect(coordinated.subscribeToCoordinatedAuthStateChange).toEqual(
+      expect.any(Function)
+    );
 
     const sessionP = createSession("session-p", "refresh-p");
     const sessionA = createSession("session-a", "refresh-a");

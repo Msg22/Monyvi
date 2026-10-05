@@ -475,22 +475,40 @@ describe("auth callback session coordination integration", () => {
       await Promise.resolve();
     });
 
-    const first = await authService.completeAuthSessionFromUrl(
-      "monyvi://auth-callback?code=logout-stale-cache-code"
-    );
-    expect(first.success).toBe(true);
+    let first:
+      | Awaited<ReturnType<typeof authService.completeAuthSessionFromUrl>>
+      | undefined;
+    await act(async () => {
+      first = await authService.completeAuthSessionFromUrl(
+        "monyvi://auth-callback?code=logout-stale-cache-code"
+      );
+    });
+    expect(first?.success).toBe(true);
+    await waitFor(() => {
+      expect(observedTokens.at(-1)).toBe("pkce-a");
+    });
 
     if (!capturedSignOut) {
       throw new Error("AuthContext signOut was not captured");
     }
-    await capturedSignOut();
+    await act(async () => {
+      await capturedSignOut?.();
+    });
+    await waitFor(() => {
+      expect(observedTokens.at(-1)).toBe("none");
+    });
 
-    const replay = await authService.completeAuthSessionFromUrl(
-      "monyvi://auth-callback?code=logout-stale-cache-code"
-    );
+    let replay:
+      | Awaited<ReturnType<typeof authService.completeAuthSessionFromUrl>>
+      | undefined;
+    await act(async () => {
+      replay = await authService.completeAuthSessionFromUrl(
+        "monyvi://auth-callback?code=logout-stale-cache-code"
+      );
+    });
 
     expect(exchangeSpy).toHaveBeenCalledTimes(1);
-    expect(replay.success).toBe(false);
+    expect(replay?.success).toBe(false);
     expect(persistedSession).toBeNull();
     expect(observedTokens.at(-1)).toBe("none");
   });

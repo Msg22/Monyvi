@@ -405,7 +405,7 @@ function runCoordinatedCallback<T>(
 
   const completion: CallbackCompletion = {
     promise,
-    cancel: handle.cancel,
+    cancel: (): void => handle.cancel(),
   };
   callbackCompletions.set(url, completion);
 

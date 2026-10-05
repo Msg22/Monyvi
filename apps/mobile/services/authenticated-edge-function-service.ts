@@ -4,6 +4,7 @@ import {
   clearPersistedAuthSession,
   coordinatedRefreshSession,
   coordinatedSignOut,
+  getStableAuthSession,
   supabase,
 } from "./supabase";
 
@@ -73,9 +74,20 @@ export async function invokeAuthenticatedEdgeFunction<TData>(
   options: FunctionInvokeOptions,
   recovery: AuthenticatedEdgeFunctionRecovery = {}
 ): Promise<EdgeFunctionResponse<TData>> {
+  const {
+    data: { session: stableSession },
+    error: stableSessionError,
+  } = await getStableAuthSession();
+  const stableAccessToken =
+    stableSessionError === null ? (stableSession?.access_token ?? null) : null;
+
+  if (stableAccessToken === null) {
+    throw createEdgeFunctionAuthenticationError();
+  }
+
   const firstResponse = await supabase.functions.invoke<TData>(
     functionName,
-    options
+    withAuthorization(options, stableAccessToken)
   );
   if (
     firstResponse.error === null ||
