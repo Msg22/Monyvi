@@ -1,4 +1,4 @@
-import { act, render } from "@testing-library/react-native";
+import { act, render, waitFor } from "@testing-library/react-native";
 import type { AuthChangeEvent, Session } from "@supabase/supabase-js";
 import React from "react";
 import { Text } from "react-native";
@@ -428,7 +428,7 @@ describe("auth callback session coordination integration", () => {
     });
 
     first.unmount();
-    renderCallbackHarness();
+    const second = renderCallbackHarness();
 
     await act(async () => {
       await Promise.resolve();
@@ -441,9 +441,13 @@ describe("auth callback session coordination integration", () => {
       await releaseExchange.promise;
       await Promise.resolve();
     });
+    await waitFor(() => {
+      expect(observedTokens.at(-1)).toBe("pkce-session-b");
+    });
 
     expect(exchangeSpy).toHaveBeenCalledTimes(1);
     expect(bridge.signOutSpy).not.toHaveBeenCalled();
+    second.unmount();
   });
   it("does not reuse cached PKCE success after explicit logout", async () => {
     const sessionA = createSession("pkce-a", "pkce-refresh-a");
