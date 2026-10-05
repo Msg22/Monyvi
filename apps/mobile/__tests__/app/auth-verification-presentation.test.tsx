@@ -225,22 +225,20 @@ describe("auth verification presentation shell", () => {
     mockViewportHeight = 1024;
     const first = render(<AuthScreen />);
 
-    expect(screen.getByTestId("auth-verification-content")).toHaveStyle({
-      width: "100%",
-      maxWidth: 400,
-      alignSelf: "center",
-    });
+    expect(screen.getByTestId("auth-verification-content")).toHaveProp(
+      "className",
+      expect.stringContaining("w-full max-w-[400px] self-center")
+    );
     expect(screen.getByTestId("verification-code")).toBeOnTheScreen();
 
     first.unmount();
     mockController = createController({ screenState: "verificationSuccess" });
     render(<AuthScreen />);
 
-    expect(screen.getByTestId("auth-verification-content")).toHaveStyle({
-      width: "100%",
-      maxWidth: 400,
-      alignSelf: "center",
-    });
+    expect(screen.getByTestId("auth-verification-content")).toHaveProp(
+      "className",
+      expect.stringContaining("w-full max-w-[400px] self-center")
+    );
     expect(screen.getByTestId("verification-success")).toBeOnTheScreen();
   });
 

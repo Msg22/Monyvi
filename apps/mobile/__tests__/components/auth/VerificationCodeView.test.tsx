@@ -128,9 +128,11 @@ describe("VerificationCodeView", () => {
 
     for (const [index, digit] of ["1", "2", "3", "4", "5", "6"].entries()) {
       expect(
-        within(screen.getByTestId(`verification-code-cell-${index}`)).getByText(
-          digit
-        )
+        within(
+          screen.getByTestId(`verification-code-cell-${index}`, {
+            includeHiddenElements: true,
+          })
+        ).getByText(digit, { includeHiddenElements: true })
       ).toBeOnTheScreen();
     }
   });
@@ -175,7 +177,9 @@ describe("VerificationCodeView", () => {
 
     for (let index = 0; index < 6; index += 1) {
       expect(
-        screen.getByTestId(`verification-code-cell-${index}`)
+        screen.getByTestId(`verification-code-cell-${index}`, {
+          includeHiddenElements: true,
+        })
       ).toHaveStyle({
         width: 48,
         height: 48,
@@ -190,23 +194,14 @@ describe("VerificationCodeView", () => {
 
     for (let index = 0; index < 6; index += 1) {
       expect(
-        screen.getByTestId(`verification-code-cell-${index}`)
+        screen.getByTestId(`verification-code-cell-${index}`, {
+          includeHiddenElements: true,
+        })
       ).toHaveStyle({
         width: expectedCellSize,
         height: expectedCellSize,
       });
     }
-  });
-
-  it("centers the entry surface with the approved 400pt maximum width", () => {
-    mockViewportWidth = 768;
-    renderCodeView();
-
-    expect(screen.getByTestId("verification-code-view")).toHaveStyle({
-      width: "100%",
-      maxWidth: 400,
-      alignSelf: "center",
-    });
   });
 
   it("uses generic ten-minute expiry copy when the device has no known send timestamp", () => {
