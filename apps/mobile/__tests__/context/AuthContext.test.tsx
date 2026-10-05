@@ -47,6 +47,36 @@ const mockClearPersistedAuthSession = jest.fn<Promise<void>, []>();
 const mockUnsubscribe = jest.fn<void, []>();
 const mockLoggerError = jest.fn<void, unknown[]>();
 const mockLoggerInfo = jest.fn<void, unknown[]>();
+let rawAuthListeners: AuthStateChangeCallback[] = [];
+let coordinatedAuthListeners: AuthStateChangeCallback[] = [];
+
+function createSubscriptionResult(): AuthSubscriptionResult {
+  return {
+    data: {
+      subscription: {
+        unsubscribe: mockUnsubscribe,
+      },
+    },
+  };
+}
+
+function emitRawAuthState(
+  event: string,
+  session: TestAuthSession | null
+): void {
+  for (const listener of rawAuthListeners) {
+    listener(event, session);
+  }
+}
+
+function emitCoordinatedAuthState(
+  event: string,
+  session: TestAuthSession | null
+): void {
+  for (const listener of coordinatedAuthListeners) {
+    listener(event, session);
+  }
+}
 
 jest.mock("@/services/supabase", () => ({
   getStableAuthSession: (): Promise<AuthSessionReadResult> =>
@@ -94,20 +124,23 @@ describe("AuthProvider", () => {
     jest.clearAllMocks();
     clearBudgetDashboardFilterSession();
     mockClearPersistedAuthSession.mockResolvedValue(undefined);
+    rawAuthListeners = [];
+    coordinatedAuthListeners = [];
     mockGetStableAuthSession.mockImplementation(
       (): Promise<AuthSessionReadResult> => mockGetSession()
     );
-    mockSubscribeToCoordinatedAuthStateChange.mockImplementation(
-      (callback: AuthStateChangeCallback): AuthSubscriptionResult =>
-        mockOnAuthStateChange(callback)
+    mockOnAuthStateChange.mockImplementation(
+      (callback: AuthStateChangeCallback): AuthSubscriptionResult => {
+        rawAuthListeners.push(callback);
+        return createSubscriptionResult();
+      }
     );
-    mockOnAuthStateChange.mockReturnValue({
-      data: {
-        subscription: {
-          unsubscribe: mockUnsubscribe,
-        },
-      },
-    });
+    mockSubscribeToCoordinatedAuthStateChange.mockImplementation(
+      (callback: AuthStateChangeCallback): AuthSubscriptionResult => {
+        coordinatedAuthListeners.push(callback);
+        return createSubscriptionResult();
+      }
+    );
   });
 
   afterEach(() => {
@@ -143,8 +176,6 @@ describe("AuthProvider", () => {
   });
 
   it("suppresses provisional raw listener A and publishes only later coordinated B", async () => {
-    let rawCallback: AuthStateChangeCallback | null = null;
-    let coordinatedCallback: AuthStateChangeCallback | null = null;
     mockGetSession.mockResolvedValue({
       data: { session: null },
       error: null,
@@ -153,30 +184,6 @@ describe("AuthProvider", () => {
       data: { session: null },
       error: null,
     });
-    mockOnAuthStateChange.mockImplementation(
-      (callback: AuthStateChangeCallback): AuthSubscriptionResult => {
-        rawCallback = callback;
-        return {
-          data: {
-            subscription: {
-              unsubscribe: mockUnsubscribe,
-            },
-          },
-        };
-      }
-    );
-    mockSubscribeToCoordinatedAuthStateChange.mockImplementation(
-      (callback: AuthStateChangeCallback): AuthSubscriptionResult => {
-        coordinatedCallback = callback;
-        return {
-          data: {
-            subscription: {
-              unsubscribe: mockUnsubscribe,
-            },
-          },
-        };
-      }
-    );
 
     const screen = render(
       <AuthProvider>
@@ -189,14 +196,14 @@ describe("AuthProvider", () => {
     });
 
     act(() => {
-      rawCallback?.("SIGNED_IN", {
+      emitRawAuthState("SIGNED_IN", {
         user: { id: "user-u" },
       });
     });
     expect(screen.getByText("anonymous")).toBeTruthy();
 
     act(() => {
-      coordinatedCallback?.("SIGNED_IN", {
+      emitCoordinatedAuthState("SIGNED_IN", {
         user: { id: "user-u" },
       });
     });
@@ -208,8 +215,7 @@ describe("AuthProvider", () => {
     expect(mockSubscribeToCoordinatedAuthStateChange).toHaveBeenCalledTimes(1);
   });
 
-  it("does not call Supabase auth methods from inside the coordinated listener callback", async () => {
-    let coordinatedCallback: AuthStateChangeCallback | null = null;
+  it("rejects raw TOKEN_REFRESHED while coordinated state is still uncommitted", async () => {
     mockGetSession.mockResolvedValue({
       data: { session: null },
       error: null,
@@ -218,18 +224,43 @@ describe("AuthProvider", () => {
       data: { session: null },
       error: null,
     });
-    mockSubscribeToCoordinatedAuthStateChange.mockImplementation(
-      (callback: AuthStateChangeCallback): AuthSubscriptionResult => {
-        coordinatedCallback = callback;
-        return {
-          data: {
-            subscription: {
-              unsubscribe: mockUnsubscribe,
-            },
-          },
-        };
-      }
+
+    const screen = render(
+      <AuthProvider>
+        <AuthProbe />
+      </AuthProvider>
     );
+
+    await waitFor(() => {
+      expect(screen.getByText("anonymous")).toBeTruthy();
+    });
+
+    act(() => {
+      emitRawAuthState("TOKEN_REFRESHED", {
+        user: { id: "user-u" },
+      });
+    });
+    expect(screen.getByText("anonymous")).toBeTruthy();
+
+    act(() => {
+      emitCoordinatedAuthState("SIGNED_IN", {
+        user: { id: "user-u" },
+      });
+    });
+    await waitFor(() => {
+      expect(screen.getByText("authenticated")).toBeTruthy();
+    });
+  });
+
+  it("does not call Supabase auth methods from inside the coordinated listener callback", async () => {
+    mockGetSession.mockResolvedValue({
+      data: { session: null },
+      error: null,
+    });
+    mockGetStableAuthSession.mockResolvedValue({
+      data: { session: null },
+      error: null,
+    });
 
     const screen = render(
       <AuthProvider>
@@ -243,7 +274,7 @@ describe("AuthProvider", () => {
 
     const stableReadsBefore = mockGetStableAuthSession.mock.calls.length;
     act(() => {
-      coordinatedCallback?.("SIGNED_IN", {
+      emitCoordinatedAuthState("SIGNED_IN", {
         user: { id: "user-u" },
       });
     });
@@ -390,7 +421,7 @@ describe("AuthProvider", () => {
       },
     });
     let authCallback: AuthStateChangeCallback | null = null;
-    mockOnAuthStateChange.mockImplementationOnce(
+    mockSubscribeToCoordinatedAuthStateChange.mockImplementationOnce(
       (callback: AuthStateChangeCallback) => {
         authCallback = callback;
         return {
@@ -442,7 +473,7 @@ describe("AuthProvider", () => {
       },
     });
     let authCallback: AuthStateChangeCallback | null = null;
-    mockOnAuthStateChange.mockImplementationOnce(
+    mockSubscribeToCoordinatedAuthStateChange.mockImplementationOnce(
       (callback: AuthStateChangeCallback) => {
         authCallback = callback;
         return {
