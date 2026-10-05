@@ -193,6 +193,24 @@ const AuthCallbackScreen = (
   }
 ).default;
 
+function readFirstTwoChildren(value: unknown): {
+  readonly first: unknown;
+  readonly second: unknown;
+} {
+  if (typeof value !== "object" || value === null || !("children" in value)) {
+    throw new Error("Expected a rendered header with children");
+  }
+
+  const children: unknown = value.children;
+  if (!Array.isArray(children) || children.length < 2) {
+    throw new Error("Expected the rendered header to expose two direct children");
+  }
+
+  const first: unknown = children[0];
+  const second: unknown = children[1];
+  return { first, second };
+}
+
 describe("AuthScreen redirect", () => {
   beforeEach(() => {
     jest.useFakeTimers();
@@ -413,13 +431,14 @@ describe("AuthCallbackScreen verification lifecycle", () => {
       await Promise.resolve();
     });
 
-    const header = screen.getByTestId("auth-topbar");
-    const languageSlot = screen.getByTestId("auth-language-slot");
-    const logoSlot = screen.getByTestId("auth-logo-slot");
+    const header: unknown = screen.getByTestId("auth-topbar");
+    const languageSlot: unknown = screen.getByTestId("auth-language-slot");
+    const logoSlot: unknown = screen.getByTestId("auth-logo-slot");
+    const { first, second } = readFirstTwoChildren(header);
 
     // Native Yoga mirrors flex-row in RTL; JSX order must stay stable.
-    expect(header.children[0]).toBe(languageSlot);
-    expect(header.children[1]).toBe(logoSlot);
+    expect(first).toBe(languageSlot);
+    expect(second).toBe(logoSlot);
   });
 
   it("does not auto-skip verification success on an already-authenticated warm start", async () => {

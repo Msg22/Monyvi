@@ -180,13 +180,32 @@ const AuthScreen = jest.requireActual<typeof import("../../app/auth")>(
   "../../app/auth"
 ).default;
 
-function expectLanguageThenLogoHeader(): void {
-  const header = screen.getByTestId("auth-topbar");
-  const languageSlot = screen.getByTestId("auth-language-slot");
-  const logoSlot = screen.getByTestId("auth-logo-slot");
+function readFirstTwoChildren(value: unknown): {
+  readonly first: unknown;
+  readonly second: unknown;
+} {
+  if (typeof value !== "object" || value === null || !("children" in value)) {
+    throw new Error("Expected a rendered header with children");
+  }
 
-  expect(header.children[0]).toBe(languageSlot);
-  expect(header.children[1]).toBe(logoSlot);
+  const children: unknown = value.children;
+  if (!Array.isArray(children) || children.length < 2) {
+    throw new Error("Expected the rendered header to expose two direct children");
+  }
+
+  const first: unknown = children[0];
+  const second: unknown = children[1];
+  return { first, second };
+}
+
+function expectLanguageThenLogoHeader(): void {
+  const header: unknown = screen.getByTestId("auth-topbar");
+  const languageSlot: unknown = screen.getByTestId("auth-language-slot");
+  const logoSlot: unknown = screen.getByTestId("auth-logo-slot");
+  const { first, second } = readFirstTwoChildren(header);
+
+  expect(first).toBe(languageSlot);
+  expect(second).toBe(logoSlot);
 }
 
 describe("auth verification presentation shell", () => {
