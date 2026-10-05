@@ -2,125 +2,101 @@
 
 **Issue**: #321  
 **Branch**: `codex/issue321-email-verification`  
-**Reviewed**: 2026-09-21  
-**Result**: PASS — ready for implementation
+**Originally reviewed**: 2026-09-21  
+**Reconciled**: 2026-10-05  
+**Result**: IN PROGRESS — earlier link-first/no-server-state assumptions were superseded by explicit later approvals
 
-## Authority and Scope
+## Authority and scope
 
-- [x] `docs/business/business-decisions.md` requires email verification before email/password sign-in succeeds.
-- [x] Historical feature 016 already approved the verification behavior; #321 is completion work, not a new auth product decision.
-- [x] No custom verification-token database, Edge Function, or competing auth source of truth is planned.
-- [x] No PostgreSQL, WatermelonDB, RLS, sync, or financial-action schema change is planned.
-- [x] `monyvi://auth-callback` remains the approved v1 callback; Universal/App Links remain out of scope.
-- [x] Resend custom SMTP is the approved initial production-delivery direction.
-- [x] Issue #20 overlap is documented and guarded; no active #20 implementation PR owned signup at planning start.
-- [x] #240 MFA/session-management scope and password-reset UX expansion remain explicitly out of scope.
+- [x] Supabase Auth remains the only email-verification authority.
+- [x] The primary signup UX is six-digit code verification; signup confirmation
+  link is a secondary fallback.
+- [x] No custom verification-token table or competing auth authority exists.
+- [x] A focused resend limiter table, service-role SQL routines, and one Edge
+  Function were later explicitly approved. The old statement that #321 would
+  add no Edge Function/table is historical and MUST NOT be used as current
+  authority.
+- [x] No WatermelonDB, financial schema, sync, or financial-action contract
+  change is part of #321.
+- [x] `monyvi://auth-callback` remains the v1 callback.
+- [x] Password recovery/reset correctness is excluded from #322 and tracked by
+  #373.
+- [x] Resend public account-state/oracle hardening is excluded from #322 and
+  tracked by #372. Current behavior MUST NOT be called enumeration-safe.
 
-## Mockup Binding
+## Mockup/binding state
 
-- [x] Approved reference images exist at:
-  - `mockups/verification-en-light.png`
-  - `mockups/verification-en-dark.png`
-  - `mockups/verification-ar-light.png`
-- [x] Each approved image has a matching binding sidecar.
-- [x] Mohamed explicitly approved the binding metadata on 2026-09-21.
-- [x] All sidecars have `Binding metadata approval: APPROVED`.
-- [x] Approved metadata revision equals current metadata revision for all three references.
-- [x] Approved combined revision equals current combined revision for all three references.
-- [x] Approval evidence identifies each approved combined revision.
-- [x] Exact current PNG SHA-256 values match the declared approved image revisions.
-- [x] Exact current Binding Facts SHA-256 values match the declared metadata revisions.
-- [x] Exact current combined approval revisions match the declared combined revisions.
-- [x] All required Binding Facts keys occur exactly once and have non-empty values.
-- [x] No fidelity-affecting `UNKNOWN` remains.
-- [x] Presentation-only phone hardware/export framing is explicitly non-binding.
-- [x] Required dark/RTL/responsive/enlarged-text/accessibility completion evidence is represented in `tasks.md`.
+- [x] The sole approved revised board is
+  `mockups/verification-flow-approved.png`, SHA-256
+  `d1a0778e9d0fe00385eeb3c59e27e7428671a96b2eee91e851b3ef7d109e5976`.
+- [x] Its adjacent `verification-flow-approved.binding.md` exists as a
+  truthful **PENDING** draft.
+- [ ] Binding metadata approval is still required.
+- [ ] Approved metadata/combined revisions and approval evidence are still
+  required.
+- [ ] Canonical `scripts/verify-mockup-binding.js` PASS is still required
+  after approval.
+- [x] The older `verification-en-light.png`,
+  `verification-en-dark.png`, and `verification-ar-light.png` pairs are
+  historical link-first evidence only.
+- [x] Visual approval of the image does not authorize the PENDING proposed
+  geometry/token/unknown-state metadata.
 
-**Environment note**: The connector environment validated the exact branch bytes
-against the same digest/approval conditions used by
-`scripts/verify-mockup-binding.js`. Task T002 requires the canonical Node CLI
-to be rerun in the implementation command-runner environment before the first
-production mutation, so implementation cannot silently consume a later-stale
-binding.
+Therefore non-visual TDD work may continue, but board-governed UI production
+changes remain gated.
 
-## Requirements → Task Coverage
+## Current requirements → evidence map
 
-| Requirement | Covered by |
+| Requirement | Primary evidence |
 | --- | --- |
-| FR-001 verified email before private access | T010, T013, T017, T036, T039 |
-| FR-002 approved verification-pending state | T011-T016, T018-T020 |
-| FR-003 valid link establishes auth state | T003, T006, T010, T013, T017 |
-| FR-004 existing startup routing remains authority | T010, T013, T031 |
-| FR-005 unverified sign-in recovery | T021, T024, T025, T026 |
-| FR-006 resend verification | T004, T008, T022-T026 |
-| FR-007 duplicate/in-flight resend protection | T022, T023, T025 |
-| FR-008 invalid callbacks fail closed | T027-T032 |
-| FR-009 EN/AR, RTL, theme, responsive, enlarged text | T014-T020 |
-| FR-010 production-ready transactional sender | T036-T038 |
-| FR-011 local testing without production quota | T009, T017 |
-| FR-012 Supabase remains verification source of truth | T006-T009 |
-| FR-013 no auth/SMTP secret exposure | T027, T029, T030, T035 |
-| FR-014 Google OAuth remains functional | T005, T007, T033 |
-| FR-015 password-reset behavior does not regress | T034 |
-| FR-016 custom callback remains v1 redirect | T004, T008, T013, T036 |
+| Verified email before private access | controller/auth service tests + E2E/device |
+| Code primary, six digits, 10-minute expiry | local Auth config tests + Mailpit E2E + hosted policy check |
+| Auto-submit exactly once / paste / digit normalization | controller/component tests + device input QA |
+| Active success waits for Continue | real authenticated-event controller test + E2E/device |
+| Cold restart after verified signup may proceed normally | fresh authenticated mount test + device restart QA |
+| Returning unverified enters same flow without auto-send | controller tests + E2E |
+| 120s / three resends / anchored 24h | pgTAP + manual device cooldown/fourth-resend |
+| Reservation/cooldown before expired-window reset | F3 pgTAP boundary tests |
+| Callback late-session safety | F1 service/integration tests + independent review |
+| Verification screen accepted by E2E preflight | F6 preflight test + exact-head E2E |
+| Secondary signup confirmation link | local template test + Mailpit fallback-link E2E |
+| Google OAuth remains functional | focused callback/service regression |
+| Password recovery | OUT OF SCOPE #373 |
+| Public resend enumeration hardening | OUT OF SCOPE #372 |
+| EN/AR/light/dark/responsive/a11y | binding-approved visual/manual evidence only |
+| Hosted delivery/provider health | hosted/device/provider manual evidence only |
 
-## Success Criteria → Evidence Coverage
+## Architecture consistency
 
-| Success criterion | Planned evidence |
-| --- | --- |
-| SC-001 no private access before verification | T010, T017, T039 |
-| SC-002 local signup → email → callback → session E2E | T017 |
-| SC-003 unverified sign-in enters recovery | T021-T026 |
-| SC-004 invalid-link matrix fails closed without secret leakage | T027-T032, T035 |
-| SC-005 Gmail/Outlook/third-provider delivery QA | T038 |
-| SC-006 approved visual + responsive + accessibility evidence | T018-T020 |
-| SC-007 OAuth/email auth regression remains Green | T033, T040 |
+- Auth protocol/session mutation belongs under `apps/mobile/services/`.
+- `auth-callback.tsx` is an orchestration route, not a second user/profile
+  state machine.
+- `useAuthScreenController.ts` owns verification-screen lifecycle.
+- The resend limiter is anti-abuse state only; it stores no verification token
+  and no raw email.
+- Callback/session late-race hardening must coordinate session mutation and
+  publication without introducing durable signup-Continue persistence.
+- No listener callback may deadlock by calling/awaiting Supabase auth while
+  inside the SDK auth listener.
+- Exact-head Green evidence is required after late-review changes; historical
+  Green runs remain historical.
 
-## Architecture Consistency
+## Evidence discipline
 
-- [x] Auth protocol/session completion stays in `apps/mobile/services/`.
-- [x] `auth-callback.tsx` remains an orchestration route, not a second auth/profile state machine.
-- [x] `useAuthScreenController.ts` owns UI lifecycle/state transitions, not auth protocol parsing.
-- [x] `VerificationPendingView.tsx` remains presentational.
-- [x] Existing `AUTH_REDIRECT_URL` remains the single canonical callback constant.
-- [x] Future issue #20 metadata can compose with signup options rather than be overwritten.
-- [x] No new dependency is required for the planned implementation.
-- [x] No package-boundary violation is introduced.
+- Functional automated tests, exact-head CI, E2E, visual fidelity,
+  accessibility, hosted Auth/template state, SMTP/provider delivery, and
+  physical-device QA are separate statuses.
+- A cache-hit Android build job is not fresh-build evidence.
+- Hosted configuration is not Green from source code alone.
+- A local template change is not proof that the hosted template changed.
+- A visually approved board with PENDING binding metadata is not final visual
+  implementation authority.
+- Final sign-off records the immutable SHA for every automated category and
+  explicitly labels manual/external evidence.
 
-## TDD and Verification Consistency
+## Final decision
 
-- [x] Shared callback changes have Red tests before production implementation.
-- [x] Signup/resend redirect changes have Red tests before implementation.
-- [x] Valid callback routing has Red tests before implementation.
-- [x] Unverified sign-in recovery has Red tests before implementation.
-- [x] Invalid callback/security behavior has Red tests before implementation.
-- [x] Visual evidence is separate from automated functional tests.
-- [x] Accessibility evidence is separate from screenshot evidence.
-- [x] Production SMTP/DNS/device/mailbox checks are tracked independently from CI.
-- [x] Exact-head Green CI and immutable SHA are required before completion.
-
-## Artifact Consistency
-
-- [x] `spec.md` status is Ready for implementation.
-- [x] `research.md` contains all resolved technical decisions and no unresolved clarification.
-- [x] `data-model.md` correctly records no new persisted domain model.
-- [x] `contracts/email-verification-contract.md` matches spec requirements and plan architecture.
-- [x] `plan.md` has no remaining constitution or mockup approval gate.
-- [x] `quickstart.md` matches the task execution and release QA strategy.
-- [x] `tasks.md` contains 42 dependency-ordered, path-specific tasks.
-- [x] All user-story tasks carry `[US#]` labels and all tasks use the required checkbox/task-ID format.
-- [x] No production source code was changed during the planning phase.
-
-## Remaining Inputs That Do Not Block Coding
-
-- Production sending-domain/subdomain selection and DNS access are required for
-  T036-T038 before release, but they do not block local/TDD implementation.
-- iOS release-build availability may affect when T039 is completed; it does not
-  change the implementation contract.
-
-## Final Decision
-
-**Planning consistency: PASS.** The feature has no unresolved product,
-architecture, security, schema, or visual-fidelity decision blocking
-implementation. Begin with T001-T002, then follow the TDD order in
-`tasks.md`.
+**Implementation remains in progress.** Product direction and non-visual scope
+are approved. Board-governed UI work waits for binding approval. Final release
+readiness also waits for exact-head auth/session Green, E2E, hosted/template,
+provider/device, visual, and accessibility evidence.
