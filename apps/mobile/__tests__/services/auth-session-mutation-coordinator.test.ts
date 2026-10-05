@@ -20,6 +20,18 @@ describe("auth-session mutation coordinator contract", () => {
   });
 });
 
+async function expectQuarantined(promise: Promise<unknown>): Promise<void> {
+  let rejection: unknown;
+
+  try {
+    await promise;
+  } catch (error: unknown) {
+    rejection = error;
+  }
+
+  expect(isAuthSessionMutationQuarantinedError(rejection)).toBe(true);
+}
+
 function createSession(accessToken: string, refreshToken: string): Session {
   return {
     access_token: accessToken,
@@ -68,20 +80,20 @@ describe("auth-session mutation coordinator logout and replay hardening", () => 
 
     await coordinator.getStableSession();
 
-    await expect(
+    await expectQuarantined(
       coordinator.runExplicitLogout(
         () => Promise.resolve({ error: null }),
         (result) => result.error === null
       )
-    ).rejects.toSatisfy(isAuthSessionMutationQuarantinedError);
+    );
 
     expect(rawSession).toEqual(sessionP);
-    await expect(
+    await expectQuarantined(
       coordinator.runMutation(
         () => Promise.resolve({ success: true }),
         (result) => result.success
       )
-    ).rejects.toSatisfy(isAuthSessionMutationQuarantinedError);
+    );
     expect(rawListener).toBeDefined();
   });
 
@@ -114,12 +126,12 @@ describe("auth-session mutation coordinator logout and replay hardening", () => 
     ).rejects.toThrow("SDK logout failed");
 
     expect(rawSession).toEqual(sessionP);
-    await expect(
+    await expectQuarantined(
       coordinator.runMutation(
         () => Promise.resolve({ success: true }),
         (result) => result.success
       )
-    ).rejects.toSatisfy(isAuthSessionMutationQuarantinedError);
+    );
   });
 
   it("replays INITIAL_SESSION with current approved B to a subscriber attaching after bootstrap", async () => {
