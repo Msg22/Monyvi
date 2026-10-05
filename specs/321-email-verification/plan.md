@@ -3,7 +3,7 @@
 **Branch**: `codex/issue321-email-verification`  
 **Revised**: 2026-10-04  
 **Spec**: [spec.md](./spec.md)  
-**Status**: Implementation in progress; non-visual corrections authorized; new visual binding metadata and final release evidence pending
+**Status**: Implementation in progress; combined visual binding approved; rendered visual/device and final release evidence pending
 
 ## Summary
 
@@ -171,22 +171,24 @@ gate work belongs in this PR.
   revised visual reference.
 - The exact image SHA-256 is
   `d1a0778e9d0fe00385eeb3c59e27e7428671a96b2eee91e851b3ef7d109e5976`.
-- `verification-flow-approved.binding.md` is a **PENDING** draft. Its proposed
-  comparison geometry/tokens/unknown-state treatment are not authoritative
-  until the combined image-and-metadata tuple receives explicit approval.
+- `verification-flow-approved.binding.md` is **APPROVED** at combined revision
+  `sha256:6b8db88a6cec5cf73ef35e6c95ace82405da52e293b04300cfc538774ba9b6d6`.
+  The canonical repository binding verifier passes, so the exact image+metadata
+  tuple is authoritative for UI implementation.
 - The earlier `verification-en-light.png`, `verification-en-dark.png`, and
   `verification-ar-light.png` bindings remain historical link-first evidence.
 
-### Binding gate
+### Binding status
 
-No board-governed UI production mutation may consume the PENDING metadata as
-authority. Before visual implementation/sign-off:
+The binding gate is complete for the exact approved tuple. No further design
+approval is required for that image+metadata revision. Rendered visual/device
+fidelity is separate evidence, remains unverified on this PR, and is owned by
+Mohamed. The older three PNG bindings remain historical link-first evidence.
 
-1. obtain explicit combined image + binding metadata approval;
-2. set approval fields only to the exact approved revisions/evidence;
-3. run `node scripts/verify-mockup-binding.js` on the exact sidecar;
-4. implement only the approved binding facts;
-5. capture visual/accessibility evidence separately from functional evidence.
+PR/branch emulator E2E is intentionally not run. The temporary issue-specific
+workflow has been removed; Android E2E remains main-only under the existing
+`.github/workflows/ci.yml` guard, with authored journeys preserved for future
+main CI.
 
 ## Test Strategy
 
@@ -312,7 +314,7 @@ Approved exception to previous #321 "no Edge Function/table" assumption:
 
 No financial schema, WatermelonDB, sync, or financial-action change.
 
-**Result**: Technical/product plan approved. Non-visual implementation is in
-progress. Board-governed UI work remains blocked on the new binding-metadata
-approval/verifier gate. Password recovery (#373) and resend enumeration hardening
-(#372) are explicitly outside PR #322.
+**Result**: Technical/product plan and combined binding tuple are approved.
+Implementation is in progress. Rendered visual/device verification remains
+manual and user-owned; PR/branch emulator E2E is not executed. Password recovery
+(#373) and resend enumeration hardening (#372) remain explicitly outside PR #322.
