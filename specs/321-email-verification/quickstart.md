@@ -133,8 +133,10 @@ Also retest:
 - invalid/malformed callback;
 - reused link;
 - offline/network callback;
-- OAuth;
-- password recovery.
+- Google OAuth regression.
+
+Password recovery/reset correctness is explicitly excluded from PR #322 and is
+tracked by #373; do not use the current recovery route as #322 Green evidence.
 
 ## Local automated E2E target
 
@@ -155,18 +157,38 @@ fresh signup
 
 Do not consume production SMTP in local E2E.
 
+Also cover the secondary local link fallback deterministically:
+
+```text
+fresh signup
+ -> open Mailpit confirmation email
+ -> open its secondary signup confirmation link
+ -> native signup callback
+ -> Email verified
+ -> Continue
+ -> authenticated app
+```
+
+Returning-unverified sign-in must enter the verification screen without an
+automatic resend.
+
 ## Visual QA
 
-The revised English-light code screen is approved.
+The sole approved revised visual reference is:
 
-Before implementation resumes, approve remaining:
+- `mockups/verification-flow-approved.png`
+- SHA-256:
+  `d1a0778e9d0fe00385eeb3c59e27e7428671a96b2eee91e851b3ef7d109e5976`
 
-- English dark code screen;
-- Arabic light/dark code screens;
-- Email verified EN/AR light/dark.
+Its sidecar is intentionally **PENDING**. Do not implement board-governed UI
+details or claim visual fidelity until the combined image-and-metadata tuple is
+explicitly approved and the canonical binding verifier passes.
 
-After implementation, capture baseline/variants and keep functional,
-visual-fidelity, and accessibility statuses separate.
+The older three repository PNGs/sidecars remain historical link-first evidence.
+
+After binding approval, capture ordinary/compact/tablet/orientation/font-scale
+and EN/AR light/dark evidence without stretching the reference board viewport.
+Unpictured states are compatibility evidence, not pixel-comparison targets.
 
 ## Hosted deployment sequence
 
@@ -189,14 +211,24 @@ npm run auth:verification:status
 npm run auth:verification:configure
 ```
 
+Before running any deployment command, inspect the hosted project and all
+pending migrations. A previous read-only audit found migration/function
+deployment still pending; this quickstart does not authorize deployment.
+
 The hosted function derives a purpose-specific limiter HMAC key from server-only
 credentials unless `EMAIL_VERIFICATION_LIMITER_PEPPER` is explicitly set.
 No limiter secret belongs in the mobile bundle or Git.
 
-**Important limitation:** the Monyvi resend path is server-enforced, but the
-underlying public Supabase Auth endpoints still retain their own built-in rate
-limits. Do not describe the product limiter as replacing Supabase's platform
-rate limiting.
+The tracked local Confirm Signup template now contains the primary six-digit
+code plus a secondary confirmation link. The earlier hosted manual template
+install predates that fallback; hosted template parity is therefore PENDING.
+
+**Known limitations:** the Monyvi resend policy is server-enforced once its
+tracked database/function are deployed, while underlying Supabase Auth retains
+its own platform rate limits. Separately, the current public resend response can
+reveal pending-account state in some cooldown/limit cases. That known security
+limitation is tracked by #372; do not describe the current endpoint as
+enumeration-safe.
 
 ## Production delivery QA
 
