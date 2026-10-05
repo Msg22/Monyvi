@@ -193,22 +193,41 @@ const AuthCallbackScreen = (
   }
 ).default;
 
-function readFirstTwoChildren(value: unknown): {
-  readonly first: unknown;
-  readonly second: unknown;
-} {
-  if (typeof value !== "object" || value === null || !("children" in value)) {
-    throw new Error("Expected a rendered header with children");
+function isUnknownArray(value: unknown): value is readonly unknown[] {
+  return Array.isArray(value);
+}
+
+function readHeaderChildTestIds(value: unknown): readonly [string, string] {
+  if (typeof value !== "object" || value === null || !("props" in value)) {
+    throw new Error("Expected a rendered header with props");
   }
 
-  const children: unknown = value.children;
-  if (!Array.isArray(children) || children.length < 2) {
-    throw new Error("Expected the rendered header to expose two direct children");
+  const props: unknown = value.props;
+  if (typeof props !== "object" || props === null || !("children" in props)) {
+    throw new Error("Expected rendered header props with children");
   }
 
-  const first: unknown = children[0];
-  const second: unknown = children[1];
-  return { first, second };
+  const children: unknown = props.children;
+  if (!isUnknownArray(children) || children.length !== 2) {
+    throw new Error("Expected exactly two direct header children");
+  }
+
+  const firstChild: unknown = children[0];
+  const secondChild: unknown = children[1];
+  if (
+    !React.isValidElement<{ readonly testID?: unknown }>(firstChild) ||
+    !React.isValidElement<{ readonly testID?: unknown }>(secondChild)
+  ) {
+    throw new Error("Expected both direct header children to be React elements");
+  }
+
+  const firstTestID: unknown = firstChild.props.testID;
+  const secondTestID: unknown = secondChild.props.testID;
+  if (typeof firstTestID !== "string" || typeof secondTestID !== "string") {
+    throw new Error("Expected both direct header children to have testIDs");
+  }
+
+  return [firstTestID, secondTestID];
 }
 
 describe("AuthScreen redirect", () => {
@@ -432,13 +451,12 @@ describe("AuthCallbackScreen verification lifecycle", () => {
     });
 
     const header: unknown = screen.getByTestId("auth-topbar");
-    const languageSlot: unknown = screen.getByTestId("auth-language-slot");
-    const logoSlot: unknown = screen.getByTestId("auth-logo-slot");
-    const { first, second } = readFirstTwoChildren(header);
 
     // Native Yoga mirrors flex-row in RTL; JSX order must stay stable.
-    expect(first).toBe(languageSlot);
-    expect(second).toBe(logoSlot);
+    expect(readHeaderChildTestIds(header)).toEqual([
+      "auth-language-slot",
+      "auth-logo-slot",
+    ]);
   });
 
   it("does not auto-skip verification success on an already-authenticated warm start", async () => {
