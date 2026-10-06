@@ -36,6 +36,23 @@ describe("email verification local Auth configuration", () => {
     );
   });
 
+  it("keeps the tracked confirmation copy aligned to the six-digit ten-minute contract", () => {
+    const template = readConfirmationTemplate();
+
+    expect(template).toMatch(/6-digit code/i);
+    expect(template).toMatch(/expires in 10 minutes/i);
+  });
+
+  it("keeps the green email header with a solid fallback before its gradient", () => {
+    const template = readConfirmationTemplate().replace(/\s+/g, " ");
+
+    expect(template).toContain('bgcolor="#0f9f8f"');
+    expect(template).toContain("background-color:#0f9f8f");
+    expect(template).toContain(
+      "linear-gradient(135deg,#0f9f8f 0%,#14b8a6 100%)"
+    );
+  });
+
   it("keeps the six-digit code primary while providing a secondary confirmation-link fallback", () => {
     const template = readConfirmationTemplate();
     const tokenIndex = template.indexOf("{{ .Token }}");

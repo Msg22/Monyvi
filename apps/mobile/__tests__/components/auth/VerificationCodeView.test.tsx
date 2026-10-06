@@ -202,6 +202,45 @@ describe("VerificationCodeView", () => {
     }
   });
 
+  it("uses registered red palette classes for invalid-code errors in light and dark mode", () => {
+    renderCodeView({ verificationError: "verification_code_invalid" });
+
+    expect(screen.getByTestId("verification-code-error")).toHaveProp(
+      "className",
+      expect.stringContaining("text-red-600")
+    );
+    expect(screen.getByTestId("verification-code-error")).toHaveProp(
+      "className",
+      expect.stringContaining("dark:text-red-500")
+    );
+  });
+
+  it("renders the cooldown Resend action as the approved filled 52pt rounded disabled control", () => {
+    renderCodeView({
+      resendAvailableAtMs: Date.now() + 2 * 60_000,
+    });
+
+    const resend = screen.getByRole("button", { name: /Resend in/ });
+    expect(resend).toBeDisabled();
+    expect(resend).toHaveProp(
+      "className",
+      expect.stringContaining("h-[52px]")
+    );
+    expect(resend).toHaveProp(
+      "className",
+      expect.stringContaining("rounded-[14px]")
+    );
+    expect(resend).toHaveProp(
+      "className",
+      expect.stringContaining("bg-slate-100")
+    );
+    expect(resend).toHaveProp(
+      "className",
+      expect.stringContaining("dark:bg-slate-800")
+    );
+    expect(resend).toHaveStyle({ opacity: 0.6 });
+  });
+
   it("uses generic ten-minute expiry copy when the device has no known send timestamp", () => {
     renderCodeView({ verificationExpiresAtMs: null });
 
