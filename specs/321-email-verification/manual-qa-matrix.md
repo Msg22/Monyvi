@@ -64,11 +64,11 @@ another.
 | Same PKCE callback while pending                     | One exchange only                                                                 | auth-service                              |
 | Same PKCE callback after terminal success/error      | Never re-exchange consumed code                                                   | auth-service                              |
 | Cached PKCE terminal result after logout/new session | Must not assert stale session authenticated; generation/session validity required | late-review regression before final Green |
-| Warm callback cached before route mount              | Use Expo native latest-URL cache even when RN initial URL is null/stale            | actual Expo JS hook integration test      |
-| Fresh params object during processing                | Must not dispose the sole observer for the same callback URL                       | route lifecycle regression                |
-| Callback A replaced by newer URL B                   | Cleanup A observer; B completes; late A result cannot overwrite B                  | route lifecycle regression                |
-| Native callback delivered after mount                | Active Expo URL subscription processes the new URL                                 | actual Expo JS hook integration test      |
-| Callback route unmount with pending completion       | Listener removed and late result ignored                                           | route lifecycle regression                |
+| Warm callback cached before route mount              | Use Expo native latest-URL cache even when RN initial URL is null/stale           | actual Expo JS hook integration test      |
+| Fresh params object during processing                | Must not dispose the sole observer for the same callback URL                      | route lifecycle regression                |
+| Callback A replaced by newer URL B                   | Cleanup A observer; B completes; late A result cannot overwrite B                 | route lifecycle regression                |
+| Native callback delivered after mount                | Active Expo URL subscription processes the new URL                                | actual Expo JS hook integration test      |
+| Callback route unmount with pending completion       | Listener removed and late result ignored                                          | route lifecycle regression                |
 
 ## Visual / responsive / accessibility matrix
 
@@ -110,24 +110,36 @@ runtime is executed on this PR. Android E2E is intentionally deferred to the
 existing main-only `.github/workflows/ci.yml` guard; Mohamed owns device/visual
 verification.
 
-**2026-10-06 read-only hosted status:** the live hosted project is currently
-misaligned with the approved contract: OTP length **8**, expiry **3600
-seconds**, minimum send frequency **60 seconds**, and the installed confirmation
-template still contains the older one-hour copy with a gradient-only green
-header and no secondary `ConfirmationURL` fallback. SMTP currently reports Brevo
-(`smtp-relay.brevo.com`) with a Gmail From address. These findings are
-diagnostic only; no hosted Auth, template, SMTP, DNS, sender, or provider
-mutation is authorized by this PR wave.
+**2026-10-06 historical pre-alignment diagnostic:** the read-only check found
+OTP length **8**, expiry **3600 seconds**, minimum send frequency **60
+seconds**, and the older one-hour confirmation template with a gradient-only
+green header and no secondary `ConfirmationURL` fallback. These findings
+describe the state before the user-authorized alignment below, not the current
+verified settings.
 
-Release alignment still requires:
+**2026-10-06 user-authorized alignment APPLIED; fresh GET VERIFIED at
+2026-10-06T20:23:13.198Z:** project `yulbcndyssdjicbpmlrk` reports OTP length
+**6**, expiry **600 seconds**, minimum send frequency **120 seconds**, and
+`mailer_autoconfirm=false` (confirm-email enabled). The installed Confirm Signup
+HTML has SHA-256
+`8d5bc2b4717adbab009940e73cafd0325389c0e82ce3aba2126bbb60648e5e01`, with `Token`
+as the primary action, `ConfirmationURL` as the secondary fallback, ten-minute
+copy, and a solid-green fallback. All other Auth fields stayed unchanged,
+including Brevo SMTP (`smtp-relay.brevo.com`), Gmail From address, credentials,
+sender name, and subject. No Monyvi-owned sending domain exists. This wave
+performed no new hosted checks or mutations.
 
-- hosted confirm-email enabled;
-- hosted OTP length = 6;
-- hosted OTP expiry = 600 seconds;
-- hosted minimum send frequency = 120 seconds;
-- tracked limiter migration/function actually deployed before hosted resend QA;
-- hosted Confirm Signup template matches current local code-first +
-  secondary-link template and says 10 minutes (hosted parity remains unproven);
+Hosted Auth/template configuration parity is verified at that timestamp. It does
+not prove inbox delivery, email rendering, app callback completion, or
+physical-device behavior. A server-side Hotmail confirmation alone is not a
+complete callback pass. Mohamed owns the physical/manual checks; E2E remains
+main-only and deferred. Exact-final-head automated evidence is recorded in PR
+metadata separately from this historical hosted record.
+
+Remaining release checks require:
+
+- tracked limiter migration/function actually deployed before hosted resend QA
+  (deployment remains unverified; no deployment is authorized in this wave);
 - Gmail delivery (pending);
 - Outlook/Hotmail delivery (pending);
 - one additional mailbox provider (pending);

@@ -14,6 +14,14 @@ type CallbackResult = Awaited<
 >;
 type CallbackFailure = Extract<CallbackResult, { success: false }>;
 
+interface CallbackFailureCase {
+  readonly label: string;
+  readonly callbackUrl: string;
+  readonly params: Record<string, string | string[]>;
+  readonly result: CallbackFailure;
+  readonly expectedFailureType: string;
+}
+
 interface UrlEvent {
   readonly url: string;
 }
@@ -73,9 +81,8 @@ const mockRnAddEventListener = jest.fn<
 });
 
 jest.mock("expo-modules-core", () => {
-  const actual = jest.requireActual<typeof import("expo-modules-core")>(
-    "expo-modules-core"
-  );
+  const actual =
+    jest.requireActual<typeof import("expo-modules-core")>("expo-modules-core");
 
   return {
     ...actual,
@@ -98,11 +105,14 @@ jest.mock("expo-modules-core", () => {
 jest.mock("react-native/Libraries/Linking/Linking", () => ({
   __esModule: true,
   default: {
-    getInitialURL: (): Promise<string | null> => Promise.resolve(mockRnInitialUrl),
+    getInitialURL: (): Promise<string | null> =>
+      Promise.resolve(mockRnInitialUrl),
     addEventListener: mockRnAddEventListener,
     openSettings: jest.fn<Promise<void>, []>(() => Promise.resolve()),
     openURL: jest.fn<Promise<unknown>, [string]>((url) => Promise.resolve(url)),
-    canOpenURL: jest.fn<Promise<boolean>, [string]>(() => Promise.resolve(true)),
+    canOpenURL: jest.fn<Promise<boolean>, [string]>(() =>
+      Promise.resolve(true)
+    ),
     sendIntent: jest.fn<Promise<void>, [string]>(() => Promise.resolve()),
   },
 }));
@@ -151,7 +161,8 @@ jest.mock("react-native-safe-area-context", () => ({
 jest.mock("@/components/auth/AuthCallbackProcessingView", () => ({
   AuthCallbackProcessingView: (): React.ReactElement => {
     const ReactMod = jest.requireActual<typeof import("react")>("react");
-    const RN = jest.requireActual<typeof import("react-native")>("react-native");
+    const RN =
+      jest.requireActual<typeof import("react-native")>("react-native");
     return ReactMod.createElement(
       RN.Text,
       { testID: "callback-processing" },
@@ -167,7 +178,8 @@ jest.mock("@/components/auth/AuthCallbackFailureView", () => ({
     readonly failureType: string;
   }): React.ReactElement => {
     const ReactMod = jest.requireActual<typeof import("react")>("react");
-    const RN = jest.requireActual<typeof import("react-native")>("react-native");
+    const RN =
+      jest.requireActual<typeof import("react-native")>("react-native");
     return ReactMod.createElement(
       RN.Text,
       { testID: `callback-failure-${failureType}` },
@@ -185,7 +197,8 @@ jest.mock("@/components/auth/VerificationSuccessView", () => ({
     readonly onContinue: () => void;
   }): React.ReactElement => {
     const ReactMod = jest.requireActual<typeof import("react")>("react");
-    const RN = jest.requireActual<typeof import("react-native")>("react-native");
+    const RN =
+      jest.requireActual<typeof import("react-native")>("react-native");
     return ReactMod.createElement(
       RN.View,
       { testID: "verification-success" },
@@ -226,9 +239,8 @@ jest.mock("@/services/auth-service", () => ({
     mockCompleteAuthSessionFromUrl(url),
 }));
 
-const actualExpoLinking = jest.requireActual<typeof import("expo-linking")>(
-  "expo-linking"
-);
+const actualExpoLinking =
+  jest.requireActual<typeof import("expo-linking")>("expo-linking");
 const AuthCallbackScreen = jest.requireActual<
   typeof import("../../app/auth-callback")
 >("../../app/auth-callback").default;
@@ -296,8 +308,7 @@ describe("AuthCallbackScreen Expo Linking lifecycle", () => {
   });
 
   it("proves the real installed useLinkingURL hook reads the cached native URL synchronously", () => {
-    const warmUrl =
-      "monyvi://auth-callback?code=fake-warm-cache&type=signup";
+    const warmUrl = "monyvi://auth-callback?code=fake-warm-cache&type=signup";
     mockExpoLatestUrl = warmUrl;
     mockRnInitialUrl = null;
 
@@ -311,8 +322,7 @@ describe("AuthCallbackScreen Expo Linking lifecycle", () => {
   });
 
   it("uses a cached warm PKCE callback instead of a stale React Native initialURL", async () => {
-    const warmUrl =
-      "monyvi://auth-callback?code=fake-warm-latest&type=signup";
+    const warmUrl = "monyvi://auth-callback?code=fake-warm-latest&type=signup";
     const staleLaunchUrl =
       "monyvi://auth-callback?code=fake-stale-launch&type=signup";
     mockExpoLatestUrl = warmUrl;
@@ -362,8 +372,7 @@ describe("AuthCallbackScreen Expo Linking lifecycle", () => {
   });
 
   it("keeps a deferred successful completion alive across processing rerenders with fresh route params", async () => {
-    const callbackUrl =
-      "monyvi://auth-callback?code=fake-deferred&type=signup";
+    const callbackUrl = "monyvi://auth-callback?code=fake-deferred&type=signup";
     const deferred = createDeferred<CallbackResult>();
     mockExpoLatestUrl = callbackUrl;
     mockRnInitialUrl = callbackUrl;
@@ -398,10 +407,8 @@ describe("AuthCallbackScreen Expo Linking lifecycle", () => {
   });
 
   it("replaces a stale pending callback A with a newer native callback B", async () => {
-    const callbackA =
-      "monyvi://auth-callback?code=fake-stale-a&type=signup";
-    const callbackB =
-      "monyvi://auth-callback?code=fake-current-b&type=signup";
+    const callbackA = "monyvi://auth-callback?code=fake-stale-a&type=signup";
+    const callbackB = "monyvi://auth-callback?code=fake-current-b&type=signup";
     const deferredA = createDeferred<CallbackResult>();
     mockExpoLatestUrl = callbackA;
     mockRnInitialUrl = callbackA;
@@ -446,8 +453,7 @@ describe("AuthCallbackScreen Expo Linking lifecycle", () => {
   });
 
   it("completes a valid cold callback when native cache and initialURL agree", async () => {
-    const callbackUrl =
-      "monyvi://auth-callback?code=fake-cold&type=signup";
+    const callbackUrl = "monyvi://auth-callback?code=fake-cold&type=signup";
     mockExpoLatestUrl = callbackUrl;
     mockRnInitialUrl = callbackUrl;
     mockLocalSearchParams = { type: "signup" };
@@ -538,11 +544,10 @@ describe("AuthCallbackScreen Expo Linking lifecycle", () => {
     expect(mockReplace).not.toHaveBeenCalled();
   });
 
-  it.each([
+  it.each<CallbackFailureCase>([
     {
       label: "invalid callback",
-      callbackUrl:
-        "monyvi://auth-callback?code=fake-invalid&type=signup",
+      callbackUrl: "monyvi://auth-callback?code=fake-invalid&type=signup",
       params: { type: "signup" },
       result: {
         success: false,
@@ -553,8 +558,7 @@ describe("AuthCallbackScreen Expo Linking lifecycle", () => {
     },
     {
       label: "provider failure",
-      callbackUrl:
-        "monyvi://auth-callback?error=access_denied&provider=google",
+      callbackUrl: "monyvi://auth-callback?error=access_denied&provider=google",
       params: { provider: "google" },
       result: {
         success: false,
@@ -590,9 +594,7 @@ describe("AuthCallbackScreen Expo Linking lifecycle", () => {
     expect(mockExpoLinkingListeners.size).toBe(0);
 
     act(() => {
-      emitExpoUrl(
-        "monyvi://auth-callback?code=fake-after-unmount&type=signup"
-      );
+      emitExpoUrl("monyvi://auth-callback?code=fake-after-unmount&type=signup");
     });
 
     expect(mockCompleteAuthSessionFromUrl).not.toHaveBeenCalled();
