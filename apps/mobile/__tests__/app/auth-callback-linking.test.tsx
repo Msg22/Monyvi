@@ -72,21 +72,28 @@ const mockRnAddEventListener = jest.fn<
   };
 });
 
-jest.mock("expo-modules-core", () => ({
-  requireNativeModule: (moduleName: string): object => {
-    if (moduleName !== "ExpoLinking") {
-      throw new Error(`Unexpected native module request: ${moduleName}`);
-    }
+jest.mock("expo-modules-core", () => {
+  const actual = jest.requireActual<typeof import("expo-modules-core")>(
+    "expo-modules-core"
+  );
 
-    return {
-      getLinkingURL: (): string | null => mockExpoLatestUrl,
-      addListener: mockExpoAddListener,
-      clearInitialURL: (): void => {
-        mockExpoLatestUrl = null;
-      },
-    };
-  },
-}));
+  return {
+    ...actual,
+    requireNativeModule: (moduleName: string): object => {
+      if (moduleName === "ExpoLinking") {
+        return {
+          getLinkingURL: (): string | null => mockExpoLatestUrl,
+          addListener: mockExpoAddListener,
+          clearInitialURL: (): void => {
+            mockExpoLatestUrl = null;
+          },
+        };
+      }
+
+      return actual.requireNativeModule(moduleName);
+    },
+  };
+});
 
 jest.mock("react-native/Libraries/Linking/Linking", () => ({
   __esModule: true,
