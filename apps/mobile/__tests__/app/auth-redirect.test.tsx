@@ -40,7 +40,7 @@ jest.mock("react-native/Libraries/Utilities/useWindowDimensions", () => ({
 }));
 
 jest.mock("expo-linking", () => ({
-  useURL: (): string | null => mockCallbackUrl,
+  useLinkingURL: (): string | null => mockCallbackUrl,
 }));
 
 jest.mock("expo-router", () => ({

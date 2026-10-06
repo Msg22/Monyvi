@@ -26,7 +26,7 @@ import {
   cancelAuthSessionCompletion,
   completeAuthSessionFromUrl,
 } from "@/services/auth-service";
-import { useURL } from "expo-linking";
+import { useLinkingURL } from "expo-linking";
 import { type Href, useLocalSearchParams, useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { useEffect, useRef, useState } from "react";
@@ -168,7 +168,9 @@ export default function AuthCallbackScreen(): React.JSX.Element {
   const { user } = useAuth();
   const router = useRouter();
   const params = useLocalSearchParams<Record<string, string | string[]>>();
-  const callbackUrl = useURL();
+  const paramsRef = useRef(params);
+  paramsRef.current = params;
+  const callbackUrl = useLinkingURL();
   const processedUrlRef = useRef<string | null>(null);
   const [callbackState, setCallbackState] = useState<CallbackState>("waiting");
   const [failureType, setFailureType] =
@@ -197,6 +199,7 @@ export default function AuthCallbackScreen(): React.JSX.Element {
     processedUrlRef.current = callbackUrl;
     setCallbackState("processing");
     let isMounted = true;
+    const attemptParams = paramsRef.current;
 
     const completeCallback = async (): Promise<void> => {
       let timeoutId: ReturnType<typeof setTimeout> | null = null;
@@ -228,7 +231,7 @@ export default function AuthCallbackScreen(): React.JSX.Element {
         }
 
         if (result.success) {
-          if (isSignupVerificationLink(params, callbackUrl)) {
+          if (isSignupVerificationLink(attemptParams, callbackUrl)) {
             setVerifiedEmail(result.email);
             setCallbackState("verificationSuccess");
           } else {
@@ -241,10 +244,10 @@ export default function AuthCallbackScreen(): React.JSX.Element {
             result.errorCode === "timeout"
           ) {
             setFailureType("network");
-          } else if (isPasswordRecoveryLink(params, callbackUrl)) {
+          } else if (isPasswordRecoveryLink(attemptParams, callbackUrl)) {
             setFailureType("recovery");
           } else if (
-            params.provider ||
+            attemptParams.provider ||
             (callbackUrl && callbackUrl.includes("provider="))
           ) {
             setFailureType("oauth");
@@ -258,7 +261,7 @@ export default function AuthCallbackScreen(): React.JSX.Element {
         }
         if (isMounted) {
           setCallbackState("failed");
-          if (isPasswordRecoveryLink(params, callbackUrl)) {
+          if (isPasswordRecoveryLink(attemptParams, callbackUrl)) {
             setFailureType("recovery");
           } else {
             setFailureType("verification");
@@ -272,7 +275,7 @@ export default function AuthCallbackScreen(): React.JSX.Element {
     return () => {
       isMounted = false;
     };
-  }, [callbackUrl, retryNonce, params]);
+  }, [callbackUrl, retryNonce]);
 
   const redirectHref: Href | null =
     callbackState === "completed"

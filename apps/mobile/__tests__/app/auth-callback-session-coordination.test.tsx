@@ -8,7 +8,7 @@ let mockLocalSearchParams: Record<string, string | string[]> = {};
 const mockReplace = jest.fn();
 
 jest.mock("expo-linking", () => ({
-  useURL: (): string | null => mockCallbackUrl,
+  useLinkingURL: (): string | null => mockCallbackUrl,
 }));
 
 jest.mock("expo-router", () => ({

@@ -253,6 +253,15 @@ unexecuted evidence owned by Mohamed.
       coherent stable authenticated session and coordinated refresh/sign-out
       mocks where those suites already own them. No SMS production behavior
       changed.
+- [x] R098 Add callback lifecycle regressions using the actual installed Expo
+      Linking JavaScript hooks with controlled native latest-URL cache/events:
+      warm PKCE/implicit links, late delivery, URL replacement, duplicate
+      delivery, fresh params objects, timeout/failure, and unmount cleanup.
+- [x] R099 Switch the callback route to supported `useLinkingURL` and keep each
+      URL completion observer stable across fresh router-param object renders
+      while preserving URL-replacement/unmount cleanup, same-URL dedup, retry,
+      timeout/cancel, signup success, OAuth, and recovery behavior. Exact-head
+      Green verification remains pending.
 
 ## Completion status
 

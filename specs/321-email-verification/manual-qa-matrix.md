@@ -64,6 +64,11 @@ another.
 | Same PKCE callback while pending                     | One exchange only                                                                 | auth-service                              |
 | Same PKCE callback after terminal success/error      | Never re-exchange consumed code                                                   | auth-service                              |
 | Cached PKCE terminal result after logout/new session | Must not assert stale session authenticated; generation/session validity required | late-review regression before final Green |
+| Warm callback cached before route mount              | Use Expo native latest-URL cache even when RN initial URL is null/stale            | actual Expo JS hook integration test      |
+| Fresh params object during processing                | Must not dispose the sole observer for the same callback URL                       | route lifecycle regression                |
+| Callback A replaced by newer URL B                   | Cleanup A observer; B completes; late A result cannot overwrite B                  | route lifecycle regression                |
+| Native callback delivered after mount                | Active Expo URL subscription processes the new URL                                 | actual Expo JS hook integration test      |
+| Callback route unmount with pending completion       | Listener removed and late result ignored                                           | route lifecycle regression                |
 
 ## Visual / responsive / accessibility matrix
 
@@ -129,6 +134,8 @@ Release alignment still requires:
 - spam-folder observation where applicable;
 - SMTP/provider delivery, bounce, suppression, SPF/DKIM/DMARC health;
 - Android physical/emulator end-to-end journey;
+- Android signup-link callback cold + warm/background delivery on a real device;
+- email-client link launch behavior (including app already open/backgrounded);
 - iOS physical/build journey when available;
 - real 2-minute cooldown;
 - fourth-resend denial;
