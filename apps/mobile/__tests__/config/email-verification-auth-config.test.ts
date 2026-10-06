@@ -46,10 +46,8 @@ describe("email verification local Auth configuration", () => {
   it("keeps the green email header with a solid fallback before its gradient", () => {
     const template = readConfirmationTemplate().replace(/\s+/g, " ");
 
-    expect(template).toContain('bgcolor="#0f9f8f"');
-    expect(template).toContain("background-color:#0f9f8f");
-    expect(template).toContain(
-      "linear-gradient(135deg,#0f9f8f 0%,#14b8a6 100%)"
+    expect(template).toMatch(
+      /<(?:table|td)\b(?=[^>]*\bbgcolor="#0f9f8f")(?=[^>]*\bstyle="[^"]*background-color:#0f9f8f[^"]*linear-gradient\(135deg,#0f9f8f 0%,#14b8a6 100%\)[^"]*")[^>]*>/i
     );
   });
 

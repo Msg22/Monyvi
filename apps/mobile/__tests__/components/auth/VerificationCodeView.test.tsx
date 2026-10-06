@@ -220,22 +220,24 @@ describe("VerificationCodeView", () => {
       resendAvailableAtMs: Date.now() + 2 * 60_000,
     });
 
-    const resend = screen.getByRole("button", { name: /Resend in/ });
-    expect(resend).toBeDisabled();
-    expect(resend).toHaveProp("className", expect.stringContaining("h-[52px]"));
-    expect(resend).toHaveProp(
-      "className",
-      expect.stringContaining("rounded-[14px]")
-    );
-    expect(resend).toHaveProp(
-      "className",
-      expect.stringContaining("bg-slate-100")
-    );
-    expect(resend).toHaveProp(
-      "className",
-      expect.stringContaining("dark:bg-slate-800")
-    );
-    expect(resend).toHaveStyle({ opacity: 0.6 });
+    expect(
+      screen.getByRole("button", { name: /Resend in/ })
+    ).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: /Resend in/ })
+    ).toHaveProp("className", expect.stringContaining("h-[52px]"));
+    expect(
+      screen.getByRole("button", { name: /Resend in/ })
+    ).toHaveProp("className", expect.stringContaining("rounded-[14px]"));
+    expect(
+      screen.getByRole("button", { name: /Resend in/ })
+    ).toHaveProp("className", expect.stringContaining("bg-slate-100"));
+    expect(
+      screen.getByRole("button", { name: /Resend in/ })
+    ).toHaveProp("className", expect.stringContaining("dark:bg-slate-800"));
+    expect(
+      screen.getByRole("button", { name: /Resend in/ })
+    ).toHaveStyle({ opacity: 0.6 });
   });
 
   it("uses generic ten-minute expiry copy when the device has no known send timestamp", () => {
