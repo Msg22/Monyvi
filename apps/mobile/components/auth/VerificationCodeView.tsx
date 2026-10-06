@@ -209,7 +209,7 @@ export function VerificationCodeView({
           <Text
             testID="verification-code-error"
             accessibilityRole="alert"
-            className="mt-3 max-w-[330px] text-center text-xs text-error dark:text-error-dark"
+            className="mt-3 max-w-[330px] text-center text-xs text-red-600 dark:text-red-500"
             style={{ fontFamily: fontFamily.regular }}
           >
             {verificationError}
@@ -247,7 +247,7 @@ export function VerificationCodeView({
             disabled: resendDisabled,
             busy: isResending,
           }}
-          className="mt-7 h-[52px] w-full items-center justify-center rounded-[14px] border border-slate-300 dark:border-slate-600"
+          className="mt-7 h-[52px] w-full items-center justify-center rounded-[14px] border border-slate-300 bg-slate-100 dark:border-slate-600 dark:bg-slate-800"
           style={{ opacity: resendDisabled ? 0.6 : 1 }}
         >
           <Text

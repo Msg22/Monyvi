@@ -222,10 +222,7 @@ describe("VerificationCodeView", () => {
 
     const resend = screen.getByRole("button", { name: /Resend in/ });
     expect(resend).toBeDisabled();
-    expect(resend).toHaveProp(
-      "className",
-      expect.stringContaining("h-[52px]")
-    );
+    expect(resend).toHaveProp("className", expect.stringContaining("h-[52px]"));
     expect(resend).toHaveProp(
       "className",
       expect.stringContaining("rounded-[14px]")
