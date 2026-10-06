@@ -90,7 +90,7 @@ Verify manually without stretching the reference board:
 | EN dark                     | code as pictured; unpictured success uses compatibility evidence unless separately approved |
 | AR light                    | code + success where pictured                                                               |
 | AR dark                     | code as pictured                                                                            |
-| Invalid code / cooldown     | error stays visibly red; disabled Resend is filled, 52pt high, radius-14                   |
+| Invalid code / cooldown     | error stays visibly red; disabled Resend is filled, 52pt high, radius-14                    |
 | RTL header/back/email       | mirrored header; email LTR; pictured back direction                                         |
 | Screen reader               | one logical OTP input, clear labels/state, focus order                                      |
 | Legal/footer                | preserve current #327 exception/status                                                      |
@@ -106,10 +106,10 @@ existing main-only `.github/workflows/ci.yml` guard; Mohamed owns device/visual
 verification.
 
 **2026-10-06 read-only hosted status:** the live hosted project is currently
-misaligned with the approved contract: OTP length **8**, expiry **3600 seconds**,
-minimum send frequency **60 seconds**, and the installed confirmation template
-still contains the older one-hour copy with a gradient-only green header and no
-secondary `ConfirmationURL` fallback. SMTP currently reports Brevo
+misaligned with the approved contract: OTP length **8**, expiry **3600
+seconds**, minimum send frequency **60 seconds**, and the installed confirmation
+template still contains the older one-hour copy with a gradient-only green
+header and no secondary `ConfirmationURL` fallback. SMTP currently reports Brevo
 (`smtp-relay.brevo.com`) with a Gmail From address. These findings are
 diagnostic only; no hosted Auth, template, SMTP, DNS, sender, or provider
 mutation is authorized by this PR wave.

@@ -96,10 +96,7 @@ test("real mobile Tailwind config compiles the approved verification state utili
     /background-color:[^;]*30[^;]*41[^;]*59/
   );
   assert.match(readRule(css, "h-\\[52px\\]"), /height:\s*52px/);
-  assert.match(
-    readRule(css, "rounded-\\[14px\\]"),
-    /border-radius:\s*14px/
-  );
+  assert.match(readRule(css, "rounded-\\[14px\\]"), /border-radius:\s*14px/);
 
   assert.equal(css.includes(".text-error"), false);
   assert.equal(css.includes(".dark\\:text-error-dark"), false);
