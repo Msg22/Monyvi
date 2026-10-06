@@ -141,7 +141,6 @@ Release alignment still requires:
 - fourth-resend denial;
 - native OTP/autofill behavior;
 - clipboard paste;
-- Android signup-link callback cold + warm start;
 - visual evidence against the approved binding (pending, Mohamed-owned);
 - screen-reader/accessibility device evidence (pending, Mohamed-owned).
 
