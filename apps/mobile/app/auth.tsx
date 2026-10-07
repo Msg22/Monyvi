@@ -171,6 +171,7 @@ export default function AuthScreen(): React.JSX.Element {
                     verificationExpiresAtMs={controller.verificationExpiresAtMs}
                     resendAvailableAtMs={controller.resendAvailableAtMs}
                     resendLimitUntilMs={controller.resendLimitUntilMs}
+                    isResendLimitReached={controller.isResendLimitReached}
                     isVerifying={
                       controller.pendingAction === "verificationCode"
                     }

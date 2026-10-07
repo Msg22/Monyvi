@@ -132,7 +132,7 @@ BEGIN
     'verify-321@example.com',
     120,
     86400,
-    3,
+    2,
     30
   );
 
@@ -150,21 +150,21 @@ UPDATE public.email_verification_resend_limits
 SET last_sent_at = clock_timestamp() - interval '121 seconds'
 WHERE email_key = repeat('a', 64);
 
-DO $three_resends$
+DO $two_resends$
 DECLARE
   v_result record;
   v_finalized boolean;
   i integer;
   v_count integer;
 BEGIN
-  FOR i IN 1..3 LOOP
+  FOR i IN 1..2 LOOP
     SELECT * INTO v_result
     FROM public.email_verification_reserve_resend(
       repeat('a', 64),
       'verify-321@example.com',
       120,
       86400,
-      3,
+      2,
       30
     );
 
@@ -197,8 +197,8 @@ BEGIN
   FROM public.email_verification_resend_limits
   WHERE email_key = repeat('a', 64);
 
-  IF v_count <> 3 THEN
-    RAISE EXCEPTION 'expected exactly three finalized resends, got %', v_count;
+  IF v_count <> 2 THEN
+    RAISE EXCEPTION 'expected exactly two finalized resends, got %', v_count;
   END IF;
 
   SELECT * INTO v_result
@@ -207,16 +207,43 @@ BEGIN
     'verify-321@example.com',
     120,
     86400,
-    3,
+    2,
     30
   );
 
   IF v_result.accepted OR v_result.decision_code <> 'limit' THEN
-    RAISE EXCEPTION 'fourth resend must be denied by the 24-hour limit';
+    RAISE EXCEPTION 'third resend must be denied by the 24-hour limit';
   END IF;
 END
-$three_resends$;
-SELECT pass('three resends succeed and the fourth is denied');
+$two_resends$;
+SELECT pass('two resends succeed and the third is denied');
+
+DO $legacy_exhaustion$
+DECLARE
+  v_result record;
+  v_anchor timestamptz;
+BEGIN
+  UPDATE public.email_verification_resend_limits
+  SET resend_count = 3, last_sent_at = clock_timestamp() - interval '121 seconds'
+  WHERE email_key = repeat('a', 64);
+  SELECT window_started_at INTO v_anchor FROM public.email_verification_resend_limits
+  WHERE email_key = repeat('a', 64);
+  SELECT * INTO v_result FROM public.email_verification_reserve_resend(
+    repeat('a', 64), 'verify-321@example.com', 120, 86400, 2, 30
+  );
+  IF v_result.accepted OR v_result.decision_code <> 'limit' THEN
+    RAISE EXCEPTION 'legacy count three must remain blocked under the two-resend policy';
+  END IF;
+  IF (SELECT resend_count FROM public.email_verification_resend_limits
+      WHERE email_key = repeat('a', 64)) <> 3 THEN
+    RAISE EXCEPTION 'new policy must not reset or rewrite legacy resend count';
+  END IF;
+  IF v_result.available_at <> v_anchor + interval '24 hours' THEN
+    RAISE EXCEPTION 'limit expiry must stay anchored to the original send';
+  END IF;
+END
+$legacy_exhaustion$;
+SELECT pass('legacy count three stays blocked unchanged until original-send window expiry');
 
 DO $window_reset$
 DECLARE
@@ -237,7 +264,7 @@ BEGIN
     'verify-321@example.com',
     120,
     86400,
-    3,
+    2,
     30
   );
 
@@ -274,7 +301,7 @@ BEGIN
     'verify-321@example.com',
     120,
     86400,
-    3,
+    2,
     30
   );
 
@@ -288,7 +315,7 @@ BEGIN
     'verify-321@example.com',
     120,
     86400,
-    3,
+    2,
     30
   );
 
@@ -320,7 +347,7 @@ BEGIN
     'verify-321@example.com',
     120,
     86400,
-    3,
+    2,
     30
   );
 
@@ -356,7 +383,7 @@ BEGIN
     'verify-321@example.com',
     120,
     86400,
-    3,
+    2,
     30
   );
 
@@ -390,7 +417,7 @@ BEGIN
     'verify-321@example.com',
     120,
     86400,
-    3,
+    2,
     30
   );
 
@@ -429,7 +456,7 @@ BEGIN
     'verify-321@example.com',
     120,
     86400,
-    3,
+    2,
     30
   );
 

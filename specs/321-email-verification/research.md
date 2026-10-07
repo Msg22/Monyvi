@@ -55,9 +55,9 @@ re-enables a later attempt.
 
 ## Decision 5 — Resend policy is product-enforced server-side
 
-Approved rule:
+Approved rule (Mohamed's correction, 2026-10-07):
 
-- original send + three resends;
+- original send + two resends (three emails total);
 - two-minute cooldown;
 - reset 24 hours after original send.
 
@@ -82,7 +82,7 @@ A migration provides private service-role-only SQL routines for:
 - releasing/compensating a reservation after downstream failure.
 
 The reservation routine resets an expired 24-hour window, enforces cooldown, and
-rejects the fourth resend.
+rejects the third resend.
 
 This prevents two concurrent requests from both seeing the same available slot.
 
@@ -106,7 +106,7 @@ If that registration fails:
 
 - signup verification still remains valid in Supabase;
 - the first later resend initializes a conservative window at that later time;
-- maximum three resends is still enforced;
+- maximum two resends is still enforced;
 - the window can become stricter/longer, never looser.
 
 Do not route passwords through the Edge Function merely to make registration

@@ -104,6 +104,17 @@ timestamp.
 
 ### Resend limiter
 
+Mohamed corrected the policy on 2026-10-07 to one original email plus at most
+two resends (three emails total), retaining the 120-second cooldown and
+original-send 24-hour anchor. The existing migration 081 RPC supports
+`p_max_resends = 2`; the Edge adapter supplies that cap without a new migration
+or count reset. Legacy count-three rows remain blocked until their existing
+window expires. Exhaustion uses an explicit controller flag plus optional
+authoritative expiry, a persistent inline notice, and a disabled `Resend` /
+`إعادة الإرسال` action. Missing or invalid expiry fails closed for the current
+flow; OTP edits preserve the notice, while verification success, Back, and fresh
+entry clear limit state.
+
 Add migration:
 
 - `email_verification_resend_limits`;
@@ -221,8 +232,9 @@ Strict Red -> Green -> Refactor.
 
 - register original;
 - cooldown <120s;
-- three success reservations;
-- fourth denied;
+- two success reservations;
+- third denied;
+- legacy count-three rows stay blocked unchanged;
 - 24h reset;
 - concurrent reservations;
 - stale reservation recovery;

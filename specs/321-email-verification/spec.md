@@ -63,8 +63,8 @@ or excessive sends.
 **Approved rule**
 
 - original signup email: 1
-- resends: maximum 3
-- total emails in the active window: maximum 4
+- resends: maximum 2 (Mohamed's correction, 2026-10-07)
+- total emails in the active window: maximum 3
 - cooldown after original send and each successful resend: 2 minutes
 - reset: 24 hours after the original verification send
 
@@ -72,7 +72,12 @@ or excessive sends.
 
 1. Resend is unavailable during the two-minute cooldown.
 2. A successful resend restarts the two-minute cooldown and code-expiry timer.
-3. The fourth resend in the active 24-hour window is rejected.
+3. The third resend in the active 24-hour window is rejected. Exhaustion shows a
+   persistent inline notice and a disabled `Resend` / `إعادة الإرسال` action.
+   OTP edits and retries preserve the notice. A valid server expiry restores
+   resend eligibility when it passes; missing or invalid expiry stays blocked
+   for the current flow, which resets on verification success, Back, or fresh
+   entry.
 4. The resend allowance resets after the active window expires.
 5. Concurrent resend attempts cannot exceed the limit.
 6. A provider/send failure does not unfairly consume a resend slot.
@@ -129,7 +134,7 @@ routing.
   restart with an already verified persisted session may use normal startup.
 - **FR-009**: Resend MUST have a 2-minute client cooldown after each successful
   verification email send.
-- **FR-010**: Server-side policy MUST allow at most three resends within the
+- **FR-010**: Server-side policy MUST allow at most two resends within the
   24-hour window beginning with the original signup send.
 - **FR-011**: Resend limiter state MUST NOT persist raw email addresses.
 - **FR-012**: Resend enforcement MUST be concurrency-safe and MUST compensate a
@@ -229,7 +234,7 @@ historical link-first evidence only.
 - **SC-003**: Paste and digit-by-digit entry both auto-submit once at six
   digits.
 - **SC-004**: OTPs expire after 600 seconds in local and hosted config.
-- **SC-005**: No more than three resends succeed in an active 24-hour window,
+- **SC-005**: No more than two resends succeed in an active 24-hour window,
   including concurrent attempts.
 - **SC-006**: Successful resend failure compensation is proven by automated
   tests.

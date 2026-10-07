@@ -23,6 +23,7 @@ interface VerificationCodeViewProps {
   readonly verificationExpiresAtMs: number | null;
   readonly resendAvailableAtMs: number | null;
   readonly resendLimitUntilMs: number | null;
+  readonly isResendLimitReached: boolean;
   readonly isVerifying: boolean;
   readonly isResending: boolean;
   readonly onCodeChange: (value: string) => void;
@@ -51,6 +52,7 @@ export function VerificationCodeView({
   verificationExpiresAtMs,
   resendAvailableAtMs,
   resendLimitUntilMs,
+  isResendLimitReached,
   isVerifying,
   isResending,
   onCodeChange,
@@ -84,14 +86,15 @@ export function VerificationCodeView({
     resendAvailableAtMs === null ? 0 : resendAvailableAtMs - nowMs;
   const isCoolingDown = cooldownRemaining > 0;
   const isLimitActive =
-    resendLimitUntilMs !== null && resendLimitUntilMs > nowMs;
+    isResendLimitReached &&
+    (resendLimitUntilMs === null || resendLimitUntilMs > nowMs);
   const resendLabel = isResending
     ? t("resending_email")
     : isLimitActive
-      ? t("resend_try_later")
+      ? t("resend_code")
       : isCoolingDown
         ? t("resend_in", { time: formatCountdown(cooldownRemaining) })
-        : t("resend_email");
+        : t("resend_code");
   const actionsDisabled = isVerifying || isResending;
   const resendDisabled = actionsDisabled || isCoolingDown || isLimitActive;
   const accentColor = isDark ? palette.nileGreen[400] : palette.nileGreen[600];
@@ -257,6 +260,17 @@ export function VerificationCodeView({
             {resendLabel}
           </Text>
         </Pressable>
+
+        {isLimitActive ? (
+          <Text
+            testID="verification-resend-limit"
+            accessibilityRole="alert"
+            className="mt-3 max-w-[330px] self-center text-center text-xs text-text-secondary dark:text-text-secondary-dark"
+            style={{ fontFamily: fontFamily.regular }}
+          >
+            {t("resend_limit_reached")}
+          </Text>
+        ) : null}
 
         <Pressable
           onPress={onBack}

@@ -52,7 +52,7 @@ Suggested columns:
 | `email_key`         | text PK              | HMAC-SHA256 of normalized email using server-only pepper |
 | `window_started_at` | timestamptz          | original successful send time for active window          |
 | `last_sent_at`      | timestamptz          | latest successful original/resend timestamp              |
-| `resend_count`      | smallint             | successful resends in active window, 0..3                |
+| `resend_count`      | smallint             | successful resends, current cap 2; legacy storage 0..3   |
 | `reservation_id`    | uuid nullable        | in-flight atomic resend reservation                      |
 | `reserved_at`       | timestamptz nullable | reservation recovery/timeout support                     |
 | `created_at`        | timestamptz          | audit/maintenance                                        |
@@ -84,11 +84,20 @@ Transactionally lock/update the limiter row.
 
 Behavior:
 
-1. if window expired, start a new 24-hour window and reset resend_count;
-2. if last successful send is less than 120 seconds ago, return cooldown;
-3. if resend_count >= 3, return limit reached;
-4. if a live reservation exists, return busy/cooldown-safe denial;
+1. if a live reservation exists, return busy without erasing it at window
+   expiry;
+2. recover a stale ambiguous reservation once, conservatively consuming a slot;
+3. if last successful send is less than 120 seconds ago, return cooldown;
+4. after reservation/cooldown handling, roll over an expired window; otherwise
+   if resend_count >= 2, return limit reached with the original-send window
+   expiry;
 5. otherwise create reservation_id and return permission to send.
+
+Mohamed corrected the policy on 2026-10-07: original email plus two resends,
+three emails total. The Edge adapter passes `p_max_resends = 2` to the existing
+081 RPC. The historical table constraint remains 0..3, and legacy count-three
+rows stay unchanged and blocked until their original-send window expires. No
+migration, schema change, or data reset is needed.
 
 ### finalize resend
 

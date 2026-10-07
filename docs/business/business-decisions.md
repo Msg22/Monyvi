@@ -157,9 +157,17 @@ Business rules:
   signup-link completion reaches the same Email verified + Continue contract.
 - Returning `email_not_confirmed` sign-in enters the same verification flow and
   does not automatically send another email.
-- The original signup send is followed by at most three successful resends in
-  the 24-hour window anchored to the original send. Each successful send has a
+- Mohamed corrected the resend policy on 2026-10-07: the original signup email
+  is followed by at most two successful resends (three emails total) in the
+  24-hour window anchored to the original send. Each successful send has a
   120-second cooldown.
+- Exhaustion shows a persistent inline notice and disables the action with the
+  label `Resend` / `إعادة الإرسال`. An authoritative future limit expiry permits
+  retry when it passes; a missing or invalid expiry stays blocked for the
+  current verification flow. OTP edits/retries do not clear the notice.
+- The existing limiter RPC enforces the new cap through `p_max_resends = 2`.
+  Historical count-three rows stay unchanged and blocked until their anchored
+  window expires; migration 081 and stored counts are not rewritten.
 - Server-side resend reservation/finalization is concurrency-safe. A live
   reservation and active cooldown are resolved before an expired 24-hour
   rollover. A stale ambiguous reservation consumes exactly one slot

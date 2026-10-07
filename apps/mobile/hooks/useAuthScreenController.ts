@@ -38,6 +38,7 @@ interface AuthScreenController {
   readonly verificationExpiresAtMs: number | null;
   readonly resendAvailableAtMs: number | null;
   readonly resendLimitUntilMs: number | null;
+  readonly isResendLimitReached: boolean;
   readonly handleOAuth: (provider: OAuthProvider) => Promise<void>;
   readonly handleEmailSubmit: (
     email: string,
@@ -86,6 +87,7 @@ export function useAuthScreenController(): AuthScreenController {
   const [resendLimitUntilMs, setResendLimitUntilMs] = useState<number | null>(
     null
   );
+  const [isResendLimitReached, setIsResendLimitReached] = useState(false);
   const [verificationFlowActive, setVerificationFlowActive] = useState(false);
 
   useDeferredRouterReplace({
@@ -120,6 +122,7 @@ export function useAuthScreenController(): AuthScreenController {
     setVerificationExpiresAtMs(null);
     setResendAvailableAtMs(null);
     setResendLimitUntilMs(null);
+    setIsResendLimitReached(false);
   }, []);
 
   const enterVerificationCodeState = useCallback(
@@ -259,6 +262,8 @@ export function useAuthScreenController(): AuthScreenController {
       try {
         const result = await verifyEmailVerificationCode(pendingEmail, token);
         if (result.success) {
+          setResendLimitUntilMs(null);
+          setIsResendLimitReached(false);
           setScreenState("verificationSuccess");
           return;
         }
@@ -308,7 +313,10 @@ export function useAuthScreenController(): AuthScreenController {
   );
 
   const handleResendVerification = useCallback(async (): Promise<void> => {
-    if (!pendingEmail || !beginRequest("verificationResend")) {
+    const isLimitActive =
+      isResendLimitReached &&
+      (resendLimitUntilMs === null || Date.now() < resendLimitUntilMs);
+    if (!pendingEmail || isLimitActive || !beginRequest("verificationResend")) {
       return;
     }
 
@@ -322,6 +330,7 @@ export function useAuthScreenController(): AuthScreenController {
         setVerificationExpiresAtMs(result.verificationExpiresAtMs);
         setResendAvailableAtMs(result.resendAvailableAtMs);
         setResendLimitUntilMs(null);
+        setIsResendLimitReached(false);
         showToast({ type: "success", title: t("verification_email_sent") });
         return;
       }
@@ -336,8 +345,14 @@ export function useAuthScreenController(): AuthScreenController {
 
       if (result.status === "limit") {
         setResendAvailableAtMs(null);
-        setResendLimitUntilMs(result.retryAtMs);
-        showToast({ type: "info", title: t("resend_limit_reached") });
+        setIsResendLimitReached(true);
+        setResendLimitUntilMs(
+          result.retryAtMs !== null &&
+            Number.isFinite(result.retryAtMs) &&
+            result.retryAtMs > Date.now()
+            ? result.retryAtMs
+            : null
+        );
         return;
       }
 
@@ -347,7 +362,15 @@ export function useAuthScreenController(): AuthScreenController {
     } finally {
       finishRequest();
     }
-  }, [beginRequest, finishRequest, pendingEmail, showToast, t]);
+  }, [
+    beginRequest,
+    finishRequest,
+    isResendLimitReached,
+    pendingEmail,
+    resendLimitUntilMs,
+    showToast,
+    t,
+  ]);
 
   const handleContinueAfterVerification = useCallback((): void => {
     setVerificationFlowActive(false);
@@ -379,6 +402,7 @@ export function useAuthScreenController(): AuthScreenController {
     verificationExpiresAtMs,
     resendAvailableAtMs,
     resendLimitUntilMs,
+    isResendLimitReached,
     handleOAuth,
     handleEmailSubmit,
     handleForgotPassword,

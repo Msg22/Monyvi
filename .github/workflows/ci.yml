@@ -94,6 +94,7 @@ jobs:
         run: >-
           node --experimental-strip-types --test
           supabase/functions/_shared/email-verification-resend-handler.test.ts
+          scripts/__tests__/email-verification-resend-policy.test.ts
 
       - name: Test QA SMS Privacy Check
         run: npm run test:qa-sms-privacy-check

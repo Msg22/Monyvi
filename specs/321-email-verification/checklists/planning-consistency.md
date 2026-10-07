@@ -47,24 +47,24 @@ changes remain gated.
 
 ## Current requirements → evidence map
 
-| Requirement                                             | Primary evidence                                            |
-| ------------------------------------------------------- | ----------------------------------------------------------- |
-| Verified email before private access                    | controller/auth service tests + E2E/device                  |
-| Code primary, six digits, 10-minute expiry              | local Auth config tests + Mailpit E2E + hosted policy check |
-| Auto-submit exactly once / paste / digit normalization  | controller/component tests + device input QA                |
-| Active success waits for Continue                       | real authenticated-event controller test + E2E/device       |
-| Cold restart after verified signup may proceed normally | fresh authenticated mount test + device restart QA          |
-| Returning unverified enters same flow without auto-send | controller tests + E2E                                      |
-| 120s / three resends / anchored 24h                     | pgTAP + manual device cooldown/fourth-resend                |
-| Reservation/cooldown before expired-window reset        | F3 pgTAP boundary tests                                     |
-| Callback late-session safety                            | F1 service/integration tests + independent review           |
-| Verification screen accepted by E2E preflight           | F6 preflight test + exact-head E2E                          |
-| Secondary signup confirmation link                      | local template test + Mailpit fallback-link E2E             |
-| Google OAuth remains functional                         | focused callback/service regression                         |
-| Password recovery                                       | OUT OF SCOPE #373                                           |
-| Public resend enumeration hardening                     | OUT OF SCOPE #372                                           |
-| EN/AR/light/dark/responsive/a11y                        | binding-approved visual/manual evidence only                |
-| Hosted delivery/provider health                         | hosted/device/provider manual evidence only                 |
+| Requirement                                               | Primary evidence                                            |
+| --------------------------------------------------------- | ----------------------------------------------------------- |
+| Verified email before private access                      | controller/auth service tests + E2E/device                  |
+| Code primary, six digits, 10-minute expiry                | local Auth config tests + Mailpit E2E + hosted policy check |
+| Auto-submit exactly once / paste / digit normalization    | controller/component tests + device input QA                |
+| Active success waits for Continue                         | real authenticated-event controller test + E2E/device       |
+| Cold restart after verified signup may proceed normally   | fresh authenticated mount test + device restart QA          |
+| Returning unverified enters same flow without auto-send   | controller tests + E2E                                      |
+| 120s / two resends / anchored 24h (2026-10-07 correction) | pgTAP + real Edge cap test + manual cooldown/third-resend   |
+| Reservation/cooldown before expired-window reset          | F3 pgTAP boundary tests                                     |
+| Callback late-session safety                              | F1 service/integration tests + independent review           |
+| Verification screen accepted by E2E preflight             | F6 preflight test + exact-head E2E                          |
+| Secondary signup confirmation link                        | local template test + Mailpit fallback-link E2E             |
+| Google OAuth remains functional                           | focused callback/service regression                         |
+| Password recovery                                         | OUT OF SCOPE #373                                           |
+| Public resend enumeration hardening                       | OUT OF SCOPE #372                                           |
+| EN/AR/light/dark/responsive/a11y                          | binding-approved visual/manual evidence only                |
+| Hosted delivery/provider health                           | hosted/device/provider manual evidence only                 |
 
 ## Architecture consistency
 

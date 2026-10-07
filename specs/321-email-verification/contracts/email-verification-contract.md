@@ -73,7 +73,8 @@ Continue explicitly hands routing back to the existing root/startup flow.
 Product policy:
 
 - 120-second cooldown;
-- three successful resends maximum;
+- two successful resends maximum (Mohamed's correction, 2026-10-07), for three
+  emails total including the original signup send;
 - active window begins with original signup send;
 - window resets after 24 hours.
 

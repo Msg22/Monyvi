@@ -8,7 +8,7 @@ import {
 
 const COOLDOWN_SECONDS = 120;
 const WINDOW_SECONDS = 24 * 60 * 60;
-const MAX_RESENDS = 3;
+const MAX_RESENDS = 2;
 const RESERVATION_LEASE_SECONDS = 30;
 const DEFAULT_REDIRECT_URL = "monyvi://auth-callback";
 

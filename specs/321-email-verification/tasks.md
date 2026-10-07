@@ -116,7 +116,9 @@ unexecuted evidence owned by Mohamed.
 - [x] R033 Add Red pgTAP for limiter table privacy/direct-access denial
 - [x] R034 Add Red tests for initial-send registration
 - [x] R035 Add Red tests for 120-second cooldown
-- [x] R036 Add Red tests for exactly three successful resends and fourth denial
+- [x] R036 Add tests for exactly two successful resends and third denial;
+      2026-10-07 corrected policy is exercised through the real Edge adapter and
+      existing 081 RPC, including unchanged exhausted legacy count-three rows
 - [x] R037 Add Red 24-hour reset test
 - [x] R038 Add Red concurrent-reservation test
 - [x] R039 Add Red finalize-idempotency/release-without-increment tests
@@ -192,7 +194,9 @@ unexecuted evidence owned by Mohamed.
 - [x] R071 Automated deterministic limiter tests cover
       cooldown/count/window/concurrency; do not make device E2E sleep through
       all policy windows
-- [ ] R072 Manual device QA real 2-minute cooldown and fourth-resend denial
+- [ ] R072 Manual device QA real 2-minute cooldown and third-resend denial;
+      persistent inline notice, exact EN/AR Resend label, and OTP retry while
+      limited
 - [ ] R073 Manual Android callback legacy-link regression: cold + warm start, no
       skeleton hang
 - [ ] R074 iOS device QA when build available
@@ -312,3 +316,15 @@ unexecuted evidence owned by Mohamed.
   final exact-head sign-off after the late-review F1/F3/F6/template changes.
 - Password recovery is excluded to #373. Resend enumeration hardening is
   excluded to #372. Neither may be presented as PR #322 completion.
+
+## 2026-10-07 resend policy correction checkpoint
+
+Mohamed corrected the policy to the original email plus at most two resends
+(three emails total). The 2026-10-04 checkpoint above records the historical
+three-resend policy at its immutable revision.
+
+Root independently verified the corrected working snapshot: focused mobile Jest
+55/55, Edge entrypoint/handler 9/9, generator exclusion 2/2, transactional pgTAP
+12/12 against existing migration 081, Deno check, and mobile TypeScript check
+all passed. Exact-head CI/review and device/rendered validation remain pending;
+no emulator/E2E or manual device runs were performed for this correction.

@@ -1,5 +1,8 @@
 import { render, screen } from "@testing-library/react-native";
 import React from "react";
+import type { VerificationCodeViewProps } from "@/components/auth/VerificationCodeView";
+
+const mockVerificationCodeProps = jest.fn<void, [VerificationCodeViewProps]>();
 
 let mockViewportWidth = 390;
 let mockViewportHeight = 844;
@@ -35,6 +38,7 @@ function createControllerBase(): {
   verificationExpiresAtMs: number | null;
   resendAvailableAtMs: number | null;
   resendLimitUntilMs: number | null;
+  isResendLimitReached: boolean;
   handleOAuth: jest.Mock<Promise<void>, []>;
   handleEmailSubmit: jest.Mock<Promise<void>, []>;
   handleForgotPassword: jest.Mock<Promise<void>, []>;
@@ -62,6 +66,7 @@ function createControllerBase(): {
     verificationExpiresAtMs: Date.now() + 10 * 60_000,
     resendAvailableAtMs: Date.now() + 2 * 60_000,
     resendLimitUntilMs: null as number | null,
+    isResendLimitReached: false,
     handleOAuth: jest.fn<Promise<void>, []>(() => Promise.resolve()),
     handleEmailSubmit: jest.fn<Promise<void>, []>(() => Promise.resolve()),
     handleForgotPassword: jest.fn<Promise<void>, []>(() => Promise.resolve()),
@@ -134,7 +139,8 @@ jest.mock("@/components/auth/FormView", () => ({
 }));
 
 jest.mock("@/components/auth/VerificationCodeView", () => ({
-  VerificationCodeView: () => {
+  VerificationCodeView: (props: VerificationCodeViewProps) => {
+    mockVerificationCodeProps(props);
     const ReactMod = jest.requireActual<typeof import("react")>("react");
     const RN =
       jest.requireActual<typeof import("react-native")>("react-native");
@@ -237,6 +243,21 @@ describe("auth verification presentation shell", () => {
     mockIsRTL = false;
     mockSafeAreaInsets = { top: 24, right: 0, bottom: 34, left: 0 };
     mockController = createController();
+    mockVerificationCodeProps.mockClear();
+  });
+
+  it("passes an explicit exhausted limit independently from its optional expiry", () => {
+    mockController = createController({
+      isResendLimitReached: true,
+      resendLimitUntilMs: null,
+    });
+    render(<AuthScreen />);
+    expect(mockVerificationCodeProps).toHaveBeenCalledWith(
+      expect.objectContaining({
+        isResendLimitReached: true,
+        resendLimitUntilMs: null,
+      })
+    );
   });
 
   it("keeps VerificationCodeView mounted during a pending verification request", () => {

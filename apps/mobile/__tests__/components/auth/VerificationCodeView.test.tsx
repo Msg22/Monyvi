@@ -1,4 +1,5 @@
 import {
+  act,
   fireEvent,
   render,
   screen,
@@ -81,6 +82,17 @@ jest.mock("react-i18next", () => ({
       if (key === "resend_in") {
         return `Resend in ${time}`;
       }
+      if (key === "resend_code") {
+        const translations =
+          mockLanguage === "ar"
+            ? jest.requireActual<
+                typeof import("../../../locales/ar/auth.json")
+              >("../../../locales/ar/auth.json")
+            : jest.requireActual<
+                typeof import("../../../locales/en/auth.json")
+              >("../../../locales/en/auth.json");
+        return translations.resend_code;
+      }
       return key;
     },
   }),
@@ -97,6 +109,7 @@ function renderCodeView(
       verificationExpiresAtMs={Date.now() + 10 * 60_000}
       resendAvailableAtMs={null}
       resendLimitUntilMs={null}
+      isResendLimitReached={false}
       isVerifying={false}
       isResending={false}
       onCodeChange={jest.fn()}
@@ -158,7 +171,7 @@ describe("VerificationCodeView", () => {
       "editable",
       false
     );
-    expect(screen.getByRole("button", { name: "resend_email" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Resend" })).toBeDisabled();
     expect(
       screen.getByRole("button", { name: "back_to_sign_in" })
     ).toBeDisabled();
@@ -248,6 +261,79 @@ describe("VerificationCodeView", () => {
     expect(
       screen.getByText("verification_code_expires_generic")
     ).toBeOnTheScreen();
+  });
+
+  it.each(["en", "ar"])(
+    "keeps the exhausted %s Resend action disabled with a persistent inline alert",
+    (language) => {
+      mockLanguage = language;
+      mockIsRTL = language === "ar";
+      const onResend = jest.fn();
+      const onCodeChange = jest.fn();
+      renderCodeView({
+        isResendLimitReached: true,
+        resendLimitUntilMs: Date.now() + 60_000,
+        onResend,
+        onCodeChange,
+      });
+      const label = language === "ar" ? "إعادة الإرسال" : "Resend";
+      expect(screen.getByRole("button", { name: label })).toBeDisabled();
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        "resend_limit_reached"
+      );
+      expect(screen.getByRole("alert")).toHaveProp(
+        "className",
+        expect.stringContaining("text-text-secondary")
+      );
+      expect(screen.getByRole("alert")).toHaveProp(
+        "className",
+        expect.stringContaining("dark:text-text-secondary-dark")
+      );
+      fireEvent.press(screen.getByRole("button", { name: label }));
+      expect(onResend).not.toHaveBeenCalled();
+      fireEvent.changeText(screen.getByTestId("verification-code-input"), "12");
+      expect(onCodeChange).toHaveBeenCalledWith("12");
+      expect(screen.getByRole("alert")).toBeOnTheScreen();
+    }
+  );
+
+  it("fails closed without a known limit expiry and preserves separate OTP error", () => {
+    renderCodeView({
+      isResendLimitReached: true,
+      resendLimitUntilMs: null,
+      verificationError: "Wrong code",
+    });
+    expect(screen.getByRole("button", { name: "Resend" })).toBeDisabled();
+    expect(screen.getByTestId("verification-resend-limit")).toHaveTextContent(
+      "resend_limit_reached"
+    );
+    expect(screen.getByTestId("verification-code-error")).toHaveTextContent(
+      "Wrong code"
+    );
+    expect(screen.getByTestId("verification-code-input")).toHaveProp(
+      "editable",
+      true
+    );
+  });
+
+  it("unblocks Resend and removes the notice at the authoritative expiry", () => {
+    jest.useFakeTimers();
+    try {
+      renderCodeView({
+        isResendLimitReached: true,
+        resendLimitUntilMs: Date.now() + 1_000,
+      });
+      expect(screen.getByRole("button", { name: "Resend" })).toBeDisabled();
+      act(() => {
+        jest.advanceTimersByTime(1_000);
+      });
+      expect(screen.getByRole("button", { name: "Resend" })).toBeEnabled();
+      expect(
+        screen.queryByTestId("verification-resend-limit")
+      ).not.toBeOnTheScreen();
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it("locks code editing while a resend request is in flight", () => {

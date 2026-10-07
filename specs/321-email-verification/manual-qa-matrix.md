@@ -33,12 +33,26 @@ another.
 
 ## Resend limiter matrix
 
+Policy correction approved by Mohamed on 2026-10-07: one original signup email
+plus at most two resends (three total), 120-second cooldown, and an
+original-send anchored 24-hour window. Migration 081 and legacy stored counts
+are preserved. No emulator/E2E or manual device runs are performed in this
+correction wave; device behavior, rendered fidelity, and hosted policy
+validation remain separate evidence owned by Mohamed. The reported successful
+hosted resend does not itself verify the corrected two-resend limit.
+
 | Scenario                         | Expected contract                                             | Deterministic evidence                                                                                               | Manual / hosted evidence                        |
 | -------------------------------- | ------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
 | Original send registration       | Anchors 24h window                                            | pgTAP/Edge tests                                                                                                     | hosted signup                                   |
 | <120s resend                     | Cooldown                                                      | pgTAP                                                                                                                | real 2-minute device QA                         |
-| First/second/third resend        | Accepted when otherwise eligible                              | pgTAP/Edge tests                                                                                                     | representative device resend                    |
-| Fourth resend                    | Denied until anchored window resets                           | pgTAP                                                                                                                | fourth-resend device QA                         |
+| First/second resend              | Accepted when otherwise eligible                              | pgTAP; real Edge entrypoint RPC cap test                                                                             | representative device resend                    |
+| Third resend                     | Denied until anchored window resets                           | pgTAP; real Edge entrypoint RPC cap test                                                                             | third-resend device QA                          |
+| Legacy count-three row           | Remains blocked and unchanged until original window expiry    | pgTAP legacy-count/anchor assertion                                                                                  | no account data mutation                        |
+| Exhausted EN/AR action           | Persistent inline notice; disabled `Resend` / `إعادة الإرسال` | VerificationCodeView + controller + route passthrough tests                                                          | device/theme/accessibility QA                   |
+| Missing/invalid limit expiry     | Block current flow without inventing a deadline               | controller null/NaN/Infinity and component missing-expiry tests                                                      | missing-retry fixture device QA                 |
+| OTP edit/retry while exhausted   | OTP errors independent; notice and resend guard persist       | controller OTP failure/edit and component interaction tests                                                          | device invalid-code/retry QA                    |
+| Authoritative expiry             | Notice disappears and resend becomes eligible at expiry       | component fake timer + controller guard/success tests                                                                | device timer sanity                             |
+| Success/Back/fresh verification  | Clear exhausted state                                         | controller success/Back/fresh-entry tests                                                                            | device flow reset QA                            |
 | Live reservation at 24h boundary | `busy`; reservation preserved before rollover                 | F3 pgTAP                                                                                                             | no 24h manual wait                              |
 | Stale reservation at boundary    | Fail closed exactly once, clear reservation, cooldown applies | F3 pgTAP                                                                                                             | no 24h manual wait                              |
 | Active cooldown + expired window | Cooldown wins before rollover                                 | F3 pgTAP                                                                                                             | no 24h manual wait                              |
@@ -150,7 +164,8 @@ Remaining release checks require:
 - email-client link launch behavior (including app already open/backgrounded);
 - iOS physical/build journey when available;
 - real 2-minute cooldown;
-- fourth-resend denial;
+- third-resend denial and persistent inline notice with the exact EN/AR Resend
+  label;
 - native OTP/autofill behavior;
 - clipboard paste;
 - visual evidence against the approved binding (pending, Mohamed-owned);

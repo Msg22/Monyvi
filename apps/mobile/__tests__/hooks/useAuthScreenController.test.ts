@@ -516,13 +516,14 @@ describe("useAuthScreenController", () => {
   });
 
   it("honors the server 24-hour resend limit", async () => {
+    const retryAtMs = Date.now() + 24 * 60 * 60_000;
     mockSignUpWithEmail.mockResolvedValue({
       success: true,
       needsVerification: true,
     });
     mockResendVerificationCode.mockResolvedValue({
       status: "limit",
-      retryAtMs: Date.parse("2026-10-05T10:00:00.000Z"),
+      retryAtMs,
     });
     const { result } = renderHook(() => useAuthScreenController());
 
@@ -538,13 +539,9 @@ describe("useAuthScreenController", () => {
     });
 
     expect(result.current.resendAvailableAtMs).toBeNull();
-    expect(result.current.resendLimitUntilMs).toBe(
-      Date.parse("2026-10-05T10:00:00.000Z")
-    );
-    expect(mockShowToast).toHaveBeenCalledWith({
-      type: "info",
-      title: "auth.resend_limit_reached",
-    });
+    expect(result.current.resendLimitUntilMs).toBe(retryAtMs);
+    expect(result.current.isResendLimitReached).toBe(true);
+    expect(mockShowToast).not.toHaveBeenCalled();
   });
 
   it("returns to form and clears transient errors", async () => {
@@ -581,6 +578,135 @@ describe("useAuthScreenController code-first verification", () => {
 
   afterEach(() => {
     jest.useRealTimers();
+  });
+
+  it.each([null, Number.NaN, Number.POSITIVE_INFINITY])(
+    "keeps a limit without usable retry time blocked through OTP edits (%s)",
+    async (retryAtMs) => {
+      mockSignInWithEmail.mockResolvedValue({
+        success: false,
+        needsVerification: true,
+      });
+      mockResendVerificationCode.mockResolvedValue({
+        status: "limit",
+        retryAtMs,
+      });
+      mockVerifyEmailVerificationCode.mockResolvedValue({
+        success: false,
+        errorCode: "otp_expired",
+      });
+      const { result } = renderHook(() => useAuthScreenController());
+      await act(async () => {
+        await result.current.handleEmailSubmit(
+          "new@example.com",
+          "secret",
+          "signIn"
+        );
+      });
+      await act(async () => {
+        await result.current.handleResendVerification();
+      });
+      expect(result.current.isResendLimitReached).toBe(true);
+      expect(result.current.resendLimitUntilMs).toBeNull();
+      expect(mockShowToast).not.toHaveBeenCalled();
+      await act(async () => {
+        result.current.handleVerificationCodeChange("111111");
+        await Promise.resolve();
+      });
+      act(() => {
+        result.current.handleVerificationCodeChange("12");
+      });
+      expect(result.current.verificationError).toBeNull();
+      expect(result.current.isResendLimitReached).toBe(true);
+      await act(async () => {
+        await result.current.handleResendVerification();
+      });
+      expect(mockResendVerificationCode).toHaveBeenCalledTimes(1);
+      act(() => {
+        result.current.handleBackToForm();
+      });
+      expect(result.current.isResendLimitReached).toBe(false);
+      expect(result.current.resendLimitUntilMs).toBeNull();
+      await act(async () => {
+        await result.current.handleEmailSubmit(
+          "other@example.com",
+          "secret",
+          "signIn"
+        );
+      });
+      expect(result.current.isResendLimitReached).toBe(false);
+    }
+  );
+
+  it("guards a live limit until its server expiry, then allows a successful resend", async () => {
+    mockSignInWithEmail.mockResolvedValue({
+      success: false,
+      needsVerification: true,
+    });
+    const retryAtMs = Date.now() + 60_000;
+    mockResendVerificationCode
+      .mockResolvedValueOnce({ status: "limit", retryAtMs })
+      .mockResolvedValueOnce({
+        status: "sent",
+        sentAtMs: retryAtMs,
+        verificationExpiresAtMs: retryAtMs + 600_000,
+        resendAvailableAtMs: retryAtMs + 120_000,
+      });
+    const { result } = renderHook(() => useAuthScreenController());
+    await act(async () => {
+      await result.current.handleEmailSubmit(
+        "new@example.com",
+        "secret",
+        "signIn"
+      );
+    });
+    await act(async () => {
+      await result.current.handleResendVerification();
+    });
+    await act(async () => {
+      await result.current.handleResendVerification();
+    });
+    expect(mockResendVerificationCode).toHaveBeenCalledTimes(1);
+    expect(result.current.isResendLimitReached).toBe(true);
+    act(() => {
+      jest.advanceTimersByTime(60_000);
+    });
+    await act(async () => {
+      await result.current.handleResendVerification();
+    });
+    expect(mockResendVerificationCode).toHaveBeenCalledTimes(2);
+    expect(result.current.isResendLimitReached).toBe(false);
+    expect(result.current.resendLimitUntilMs).toBeNull();
+  });
+
+  it("clears exhausted resend state when code verification succeeds", async () => {
+    mockSignInWithEmail.mockResolvedValue({
+      success: false,
+      needsVerification: true,
+    });
+    mockResendVerificationCode.mockResolvedValue({
+      status: "limit",
+      retryAtMs: null,
+    });
+    mockVerifyEmailVerificationCode.mockResolvedValue({ success: true });
+    const { result } = renderHook(() => useAuthScreenController());
+    await act(async () => {
+      await result.current.handleEmailSubmit(
+        "new@example.com",
+        "secret",
+        "signIn"
+      );
+    });
+    await act(async () => {
+      await result.current.handleResendVerification();
+    });
+    await act(async () => {
+      result.current.handleVerificationCodeChange("123456");
+      await Promise.resolve();
+    });
+    expect(result.current.screenState).toBe("verificationSuccess");
+    expect(result.current.isResendLimitReached).toBe(false);
+    expect(result.current.resendLimitUntilMs).toBeNull();
   });
 
   it("starts ten-minute expiry and two-minute resend cooldown after signup", async () => {
