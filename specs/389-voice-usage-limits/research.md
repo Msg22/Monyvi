@@ -1,4 +1,4 @@
-# Research: Voice Usage Limits and Subscription-Ready Entitlements
+# Research: Add Transaction Voice Redesign, Usage Limits and Subscription-Ready Entitlements
 
 **Feature**: 389-voice-usage-limits  
 **Date**: 2026-09-27  
@@ -216,23 +216,25 @@ No raw audio, transcript, categories, accounts, amounts, or provider response co
 - Two devices submitting when one daily unit remains must not both be admitted.
 - Database-side atomicity is the security/cost boundary, not client sequencing.
 
-## R-014: UI and mockup gate
+## R-014: Approved mockup binding gate
 
-**Decision**: The voice-limit feature is a material visible UI change and therefore requires approved mockups/binding metadata before production UI implementation.
+**Decision**: Do not generate or redesign the already-approved Add Transaction / Voice mockup. Before UI implementation starts, persist the exact approved reference image bytes from the product conversation unchanged under `specs/389-voice-usage-limits/mockups/`, create the canonical binding sidecar, obtain explicit binding-metadata approval, and pass `scripts/verify-mockup-binding.js`.
 
-Mockups must cover at least:
+The approved mockup is the visual target for:
 
-- normal available state with remaining count;
-- low/last-remaining state if visually distinct;
-- daily exhausted state + reset guidance;
-- temporary burst-limited state;
-- availability/dependency-unavailable recovery state;
-- recording/analyzing interaction with allowance display;
-- English and Arabic/RTL;
-- light/dark;
-- ordinary + compact phone, with tablet/landscape/enlarged-text behavior documented where relevant.
+- the unified Add Transaction page shell;
+- Manual/Voice mode controls;
+- Voice available/recording/analyzing/limit states represented by the approved design;
+- English/LTR and Arabic/RTL behavior;
+- light/dark and required responsive/accessibility validation.
 
-Candidate governed surfaces are the central mic/tab-bar entry and/or `VoiceRecordingOverlay`; exact placement is intentionally not chosen in planning.
+**Rationale**:
+
+- The product owner explicitly approved the existing mockup and asked that it not be regenerated or modified.
+- Repository governance requires approved image bytes plus approved binding metadata before pixel-precise implementation.
+- The current app screens are not the target; implementation must move toward the approved mockup.
+
+**Important**: Persisting/binding the existing approved image is a pre-implementation governance step, not permission to create a replacement mockup.
 
 ## R-015: Testing strategy
 
@@ -259,3 +261,65 @@ Required deterministic coverage:
 - no raw voice/financial content in ledgers/logging.
 
 Routine quota tests use provider doubles and must not consume real Gemini allowance.
+
+
+## R-016: One unified Add Transaction route
+
+**Decision**: Keep `/add-transaction` as the single Add Transaction route and add a route/query mode `manual | voice`. Missing/invalid mode resolves to Manual.
+
+**Entry points**:
+
+- global Add Transaction FAB -> `/add-transaction?mode=manual`;
+- center microphone -> `/add-transaction?mode=voice`;
+- onboarding `openVoiceEntry()` -> Voice mode;
+- voice-review Retry -> Voice mode with retry/auto-start intent.
+
+**Rationale**:
+
+- The FAB already routes to `/add-transaction`.
+- The existing manual form should be reused, not reimplemented.
+- A single route matches the approved redesign and removes the split between a standalone manual form and a tab-layout-owned global voice overlay.
+
+## R-017: Preserve Manual state across mode switches
+
+**Decision**: Extract the existing manual transaction form into a reusable child while keeping its state mounted when the page switches between Manual and Voice.
+
+**Rationale**:
+
+- The existing form has mature validation, transfer, recurring-payment, budget-alert, account/category, and amount-calculator behavior.
+- Unmounting it on every mode switch would silently discard partially entered data.
+- Persisting a draft to storage would be unnecessary scope expansion.
+
+Hidden mode content must be removed from the accessibility tree.
+
+## R-018: Voice orchestration moves into the unified page
+
+**Decision**: The unified Add Transaction page owns `useVoiceTransactionFlow`, consent recovery, authoritative usage availability, and the approved Voice presentation. The private tabs layout stops owning the recording overlay and voice hook.
+
+**Rationale**:
+
+- Voice is now a page mode rather than a global overlay.
+- The existing hook/service contract can be reused without changing Gemini parsing behavior.
+- Navigation entry points become consistent.
+
+## R-019: Mode switching during active voice work
+
+**Decision**: Disable Manual/Voice switching while Voice is recording, paused, finalizing, or analyzing. Switching is allowed in idle, exhausted, burst-limited, availability-error, and recoverable error states.
+
+**Rationale**:
+
+- Silent switching during active audio/provider work could orphan resources or create ambiguous intent.
+- Existing explicit Discard/Retry actions remain the safe way to exit/recover.
+- Voice exhaustion must never block Manual entry.
+
+## R-020: Local-midnight copy
+
+**Decision**: User-facing limit copy must accurately describe next-local-midnight reset behavior without exposing timezone jargon and without saying "tomorrow at the same time". The approved design copy should be adjusted during binding/implementation review to equivalent wording such as "Your voice limit resets tomorrow." with approved Arabic localization.
+
+**Rationale**: Product copy must match authoritative accounting semantics.
+
+## R-021: Business documentation
+
+**Decision**: Record the unified Add Transaction behavior, free-launch 5/day + 2/min limits, local-midnight reset semantics, provider-start consumption rule, and subscription-ready entitlement boundary in `docs/business/business-decisions.md` before implementation is considered complete.
+
+**Rationale**: These are durable product/business rules rather than implementation details.
