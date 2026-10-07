@@ -9,6 +9,7 @@ import type {
   MarketRateSnapshotPullResult,
 } from "@/services/sync/market-rate-snapshot-pull";
 
+const mockRpc = jest.fn();
 const mockGetCurrentUserId = jest.fn<Promise<string | null>, []>();
 const mockPullMarketRateSnapshots = jest.fn<
   Promise<MarketRateSnapshotPullResult>,
@@ -38,6 +39,7 @@ const EMPTY_CHANGES: SyncTableChangeSet = {
 
 jest.mock("@/services/supabase", () => ({
   getCurrentUserId: (): Promise<string | null> => mockGetCurrentUserId(),
+  supabase: { rpc: (...args: readonly unknown[]): unknown => mockRpc(...args) },
 }));
 
 jest.mock("@/services/sync/config", () => ({
@@ -111,6 +113,15 @@ function expectCompletedPullResult(
 describe("atomic pullChanges market-rate composition", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockRpc.mockImplementation((name: string) =>
+      Promise.resolve({
+        data:
+          name === "seal_sync_pull_v1"
+            ? UPPER_WATERMARK
+            : { rows: [], count: 0, upperWatermark: UPPER_WATERMARK },
+        error: null,
+      })
+    );
     mockGetCurrentUserId.mockResolvedValue(USER_ID);
     mockPullMarketRateSnapshots.mockResolvedValue({
       changes: {
@@ -138,6 +149,9 @@ describe("atomic pullChanges market-rate composition", () => {
     expectCompletedPullResult(result);
 
     expect(mockPullMarketRateSnapshots).toHaveBeenCalledWith(null);
+    expect(mockRpc).toHaveBeenNthCalledWith(1, "seal_sync_pull_v1", {
+      p_upper_watermark: UPPER_WATERMARK,
+    });
     expect(result.changes).toMatchObject({
       market_rates: MARKET_ROOT_CHANGES,
       market_rate_observations: MARKET_OBSERVATION_CHANGES,

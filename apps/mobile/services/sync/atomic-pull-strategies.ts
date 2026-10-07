@@ -7,6 +7,8 @@ import type {
 import { getCurrentUserId } from "../supabase";
 import { SYNCABLE_TABLES } from "./config";
 import { pullMarketRateSnapshots } from "./market-rate-snapshot-pull";
+import { sealSyncPull } from "./pull-fence";
+import { pullSnapshotDeletions } from "./snapshot-deletion-pull";
 import {
   protectMetalMetadataPullFragments,
   pullCategories,
@@ -60,15 +62,17 @@ export async function pullChanges(
   const lastSyncDate =
     lastPulledAt === null ? null : new Date(lastPulledAt).toISOString();
   const marketStart =
-    lastSyncDate === null
-      ? null
-      : { createdAt: lastSyncDate, id: UUID_MAX };
+    lastSyncDate === null ? null : { createdAt: lastSyncDate, id: UUID_MAX };
   const marketPull = await pullMarketRateSnapshots(marketStart);
   const { upperWatermark } = marketPull;
+  await sealSyncPull(upperWatermark);
+  const snapshotDeletions = await pullSnapshotDeletions(
+    lastSyncDate,
+    upperWatermark
+  );
   const changes: AppSyncDatabaseChangeSet = {
     market_rates: marketPull.changes.market_rates,
-    market_rate_observations:
-      marketPull.changes.market_rate_observations,
+    market_rate_observations: marketPull.changes.market_rate_observations,
   };
 
   for (const table of SYNCABLE_TABLES) {
@@ -77,12 +81,16 @@ export async function pullChanges(
     }
 
     if (isSnapshotTable(table)) {
-      changes[table] = await pullSnapshotTable(
+      const activeChanges = await pullSnapshotTable(
         table,
         expectedUserId,
         lastSyncDate,
         upperWatermark
       );
+      changes[table] = {
+        ...activeChanges,
+        deleted: [...snapshotDeletions[table]],
+      };
       continue;
     }
 
@@ -132,9 +140,7 @@ export async function pullChanges(
       continue;
     }
 
-    throw new Error(
-      ATOMIC_SYNC_PULL_ERROR_CODES.INVALID_TABLE_CLASSIFICATION
-    );
+    throw new Error(ATOMIC_SYNC_PULL_ERROR_CODES.INVALID_TABLE_CLASSIFICATION);
   }
 
   let holdingStateChanges: SyncTableChangeSet | null = null;
@@ -167,17 +173,13 @@ export async function pullChanges(
   };
 }
 
-async function assertExpectedPullUser(
-  expectedUserId: string
-): Promise<void> {
+async function assertExpectedPullUser(expectedUserId: string): Promise<void> {
   if ((await getCurrentUserId()) !== expectedUserId) {
     throw new Error(ATOMIC_SYNC_PULL_ERROR_CODES.AUTH_SCOPE_LOST);
   }
 }
 
-function isChildTableName(
-  table: SupabaseTablesNames
-): table is ChildTableName {
+function isChildTableName(table: SupabaseTablesNames): table is ChildTableName {
   return (
     table === "account_sms_senders" ||
     table === "asset_metals" ||

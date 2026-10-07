@@ -1,11 +1,4 @@
-/**
- * Unit tests for the Supabase <-> WatermelonDB sync adapter.
- *
- * These tests cover the failure semantics that protect WatermelonDB's sync
- * cursor. Remote pull and push errors must reject the sync so WatermelonDB does
- * not advance metadata after a failed operation, while successful empty table
- * responses remain valid changesets.
- */
+/** Sync failure, ownership, serialization and dirty-change contracts. */
 
 const mockSynchronize = jest.fn();
 const mockGetCurrentUserId = jest.fn();
@@ -33,7 +26,15 @@ interface SupabaseError {
   readonly message: string;
 }
 
+interface PushSyncCallbacks {
+  pushChanges(input: {
+    changes: Record<string, unknown>;
+    lastPulledAt: number | null;
+  }): Promise<unknown>;
+}
+
 interface SupabaseResult {
+  readonly count?: number;
   readonly data: ReadonlyArray<Record<string, unknown>> | null;
   readonly error: SupabaseError | null;
 }
@@ -96,7 +97,9 @@ import { syncDatabase } from "../../services/sync";
 import { MARKET_RATE_VALUE_COLUMNS } from "@monyvi/logic";
 
 function getSelectResult(table?: string): SupabaseResult {
-  return (table ? selectResultsByTable[table] : undefined) ?? selectResult;
+  const result =
+    (table ? selectResultsByTable[table] : undefined) ?? selectResult;
+  return { ...result, count: result.data?.length ?? 0 };
 }
 
 function makeSelectChain(table?: string): Record<string, unknown> {
@@ -145,13 +148,15 @@ beforeEach(() => {
   selectResult = { data: [], error: null };
   selectResultsByTable = {};
   mockGetCurrentUserId.mockResolvedValue("current-user");
-  mockRpc.mockResolvedValue({
-    data: {
-      nextCursor: null,
-      snapshots: [],
-      upperWatermark: "2026-05-18T08:05:00.000Z",
-    },
-    error: null,
+  const upperWatermark = "2026-05-18T08:05:00.000Z";
+  mockRpc.mockImplementation((name: string) => {
+    const data =
+      name === "seal_sync_pull_v1"
+        ? upperWatermark
+        : name === "pull_snapshot_deletions_page_v1"
+          ? { rows: [], count: 0, upperWatermark }
+          : { nextCursor: null, snapshots: [], upperWatermark };
+    return Promise.resolve({ data, error: null });
   });
   mockSupabaseTable();
   mockForeignProfilesFetch.mockResolvedValue([]);
@@ -161,9 +166,9 @@ beforeEach(() => {
   });
   mockOwnedTombstonesFetch.mockResolvedValue([]);
   mockDatabaseGet.mockReturnValue({ query: mockProfileQuery });
-  mockDatabaseWrite.mockImplementation(async (writer: () => Promise<void>) => {
-    await writer();
-  });
+  mockDatabaseWrite.mockImplementation((writer: () => Promise<void>) =>
+    writer()
+  );
 });
 
 describe("syncDatabase", () => {
@@ -217,25 +222,18 @@ describe("syncDatabase", () => {
     mockUpsert.mockResolvedValue({
       error: { message: "created upsert failed" },
     });
-    mockSynchronize.mockImplementation(
-      async (args: {
-        pushChanges: (input: {
-          changes: Record<string, unknown>;
-          lastPulledAt: number | null;
-        }) => Promise<unknown>;
-      }) => {
-        await args.pushChanges({
-          changes: {
-            profiles: {
-              created: [{ id: "profile-1", user_id: "current-user" }],
-              updated: [],
-              deleted: [],
-            },
+    mockSynchronize.mockImplementation(async (args: PushSyncCallbacks) => {
+      await args.pushChanges({
+        changes: {
+          profiles: {
+            created: [{ id: "profile-1", user_id: "current-user" }],
+            updated: [],
+            deleted: [],
           },
-          lastPulledAt: null,
-        });
-      }
-    );
+        },
+        lastPulledAt: null,
+      });
+    });
 
     await expect(syncDatabase(mockDatabase)).rejects.toThrow(
       "created upsert failed"
@@ -244,65 +242,51 @@ describe("syncDatabase", () => {
 
   it("rejects push upsert errors so WatermelonDB keeps the local update dirty", async () => {
     mockUpsert.mockResolvedValue({ error: { message: "upsert failed" } });
-    mockSynchronize.mockImplementation(
-      async (args: {
-        pushChanges: (input: {
-          changes: Record<string, unknown>;
-          lastPulledAt: number | null;
-        }) => Promise<unknown>;
-      }) => {
-        await args.pushChanges({
-          changes: {
-            profiles: {
-              created: [],
-              updated: [{ id: "profile-1", user_id: "current-user" }],
-              deleted: [],
-            },
+    mockSynchronize.mockImplementation(async (args: PushSyncCallbacks) => {
+      await args.pushChanges({
+        changes: {
+          profiles: {
+            created: [],
+            updated: [{ id: "profile-1", user_id: "current-user" }],
+            deleted: [],
           },
-          lastPulledAt: null,
-        });
-      }
-    );
+        },
+        lastPulledAt: null,
+      });
+    });
 
     await expect(syncDatabase(mockDatabase)).rejects.toThrow("upsert failed");
   });
 
   it("batches active updated rows into one Supabase upsert", async () => {
     mockUpsert.mockResolvedValue({ error: null });
-    mockSynchronize.mockImplementation(
-      async (args: {
-        pushChanges: (input: {
-          changes: Record<string, unknown>;
-          lastPulledAt: number | null;
-        }) => Promise<unknown>;
-      }) => {
-        await args.pushChanges({
-          changes: {
-            accounts: {
-              created: [],
-              updated: [
-                {
-                  id: "account-1",
-                  user_id: "current-user",
-                  name: "Main",
-                  currency: "EGP",
-                  deleted: false,
-                },
-                {
-                  id: "account-2",
-                  user_id: "current-user",
-                  name: "Savings",
-                  currency: "EGP",
-                  deleted: false,
-                },
-              ],
-              deleted: [],
-            },
+    mockSynchronize.mockImplementation(async (args: PushSyncCallbacks) => {
+      await args.pushChanges({
+        changes: {
+          accounts: {
+            created: [],
+            updated: [
+              {
+                id: "account-1",
+                user_id: "current-user",
+                name: "Main",
+                currency: "EGP",
+                deleted: false,
+              },
+              {
+                id: "account-2",
+                user_id: "current-user",
+                name: "Savings",
+                currency: "EGP",
+                deleted: false,
+              },
+            ],
+            deleted: [],
           },
-          lastPulledAt: null,
-        });
-      }
-    );
+        },
+        lastPulledAt: null,
+      });
+    });
 
     await expect(syncDatabase(mockDatabase)).resolves.toBeUndefined();
 
@@ -413,7 +397,7 @@ describe("syncDatabase", () => {
       profiles: {
         data: [
           {
-            id: "profile-1",
+            id: "33333333-3333-4333-8333-000000000001",
             user_id: "current-user",
             deleted: false,
             created_at: "2026-05-18T08:00:00.000Z",
