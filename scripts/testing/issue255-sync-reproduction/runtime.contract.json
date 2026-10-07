@@ -1,0 +1,36 @@
+{
+  "issue": 255,
+  "scope": "setup-support-only",
+  "project_id": "monyvi-issue255-repro",
+  "workdir": "scripts/testing/issue255-sync-reproduction",
+  "dedicated_api_url": "http://127.0.0.1:54341",
+  "dedicated_rest_url": "http://127.0.0.1:54341/rest/v1",
+  "dedicated_db_url": "postgresql://postgres:postgres@127.0.0.1:54342/postgres",
+  "ports": {
+    "api": 54341,
+    "db": 54342,
+    "shadow": 54340,
+    "studio_disabled": 54343,
+    "inbucket_disabled": 54344,
+    "analytics_disabled": 54347,
+    "pooler_disabled": 54349
+  },
+  "shared_stack_untouched": {
+    "api": 54321,
+    "db": 54322,
+    "studio": 54323,
+    "inbucket": 54324,
+    "analytics": 54327
+  },
+  "keys": "NOT stored here. Resolved privately into gitignored runtime.local.json via owned resolve-runtime.js. Never printed.",
+  "env_contract": {
+    "ISSUE255_SYNC_REPRO": "1",
+    "ISSUE255_SYNC_CONFIG_JSON": "{supabaseUrl, anonKey, serviceRoleKey, email, password, expectedUserId}"
+  },
+  "fixture_user_email": "issue255@monyvi.test",
+  "fixture_user_expected_id": "e87f8c60-511e-4248-9793-17dd2312290c",
+  "fixture_note": "Auth user only (zero financial rows). Financial fixtures (37/2501 REAL_ESTATE assets, cap+1 zero-balance/revision-zero accounts, account_sms_senders) are created by the transferred test. No broad seed; financial guards intact.",
+  "migrations_applied": 84,
+  "verification_stage": "Final local verification: 001–085 (existing gap 021). Archived initial Red evidence used the earlier 80-migration baseline.",
+  "sqlite": "Disposable SQLite per test run; persisted __watermelon_last_pulled_at must be real (no mocked synchronize/query/router)."
+}

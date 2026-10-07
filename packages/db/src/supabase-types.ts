@@ -7,31 +7,6 @@ export type Json =
   | Json[];
 
 export type Database = {
-  graphql_public: {
-    Tables: {
-      [_ in never]: never;
-    };
-    Views: {
-      [_ in never]: never;
-    };
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json;
-          operationName?: string;
-          query?: string;
-          variables?: Json;
-        };
-        Returns: Json;
-      };
-    };
-    Enums: {
-      [_ in never]: never;
-    };
-    CompositeTypes: {
-      [_ in never]: never;
-    };
-  };
   public: {
     Tables: {
       account_financial_effects: {
@@ -639,6 +614,39 @@ export type Database = {
             referencedColumns: ["id"];
           },
         ];
+      };
+      email_verification_resend_limits: {
+        Row: {
+          created_at: string;
+          email_key: string;
+          last_sent_at: string | null;
+          resend_count: number;
+          reservation_id: string | null;
+          reserved_at: string | null;
+          updated_at: string;
+          window_started_at: string;
+        };
+        Insert: {
+          created_at?: string;
+          email_key: string;
+          last_sent_at?: string | null;
+          resend_count?: number;
+          reservation_id?: string | null;
+          reserved_at?: string | null;
+          updated_at?: string;
+          window_started_at: string;
+        };
+        Update: {
+          created_at?: string;
+          email_key?: string;
+          last_sent_at?: string | null;
+          resend_count?: number;
+          reservation_id?: string | null;
+          reserved_at?: string | null;
+          updated_at?: string;
+          window_started_at?: string;
+        };
+        Relationships: [];
       };
       financial_action_groups: {
         Row: {
@@ -1744,6 +1752,34 @@ export type Database = {
         Args: { p_holding_id: string; p_patch: Json };
         Returns: Json;
       };
+      email_verification_finalize_resend: {
+        Args: { p_email_key: string; p_reservation_id: string };
+        Returns: boolean;
+      };
+      email_verification_register_initial_send: {
+        Args: { p_email: string; p_email_key: string };
+        Returns: boolean;
+      };
+      email_verification_release_resend: {
+        Args: { p_email_key: string; p_reservation_id: string };
+        Returns: boolean;
+      };
+      email_verification_reserve_resend: {
+        Args: {
+          p_cooldown_seconds: number;
+          p_email: string;
+          p_email_key: string;
+          p_max_resends: number;
+          p_reservation_lease_seconds: number;
+          p_window_seconds: number;
+        };
+        Returns: {
+          accepted: boolean;
+          available_at: string;
+          decision_code: string;
+          reservation_id: string;
+        }[];
+      };
       persist_market_rate_snapshot_v1: {
         Args: {
           p_captured_at: string;
@@ -1780,6 +1816,16 @@ export type Database = {
         };
         Returns: Json;
       };
+      pull_snapshot_deletions_page_v1: {
+        Args: {
+          p_after_entry_id?: string;
+          p_after_published_at?: string;
+          p_last_pulled_at?: string;
+          p_limit?: number;
+          p_upper_watermark?: string;
+        };
+        Returns: Json;
+      };
       recalculate_account_balance: {
         Args: { account_id_param: string };
         Returns: number;
@@ -1789,6 +1835,10 @@ export type Database = {
       recalculate_daily_snapshot_balance: { Args: never; Returns: undefined };
       recalculate_daily_snapshot_net_worth: { Args: never; Returns: undefined };
       run_daily_snapshots: { Args: never; Returns: undefined };
+      seal_sync_pull_v1: {
+        Args: { p_upper_watermark: string };
+        Returns: string;
+      };
       sms_ai_cleanup_safeguards: {
         Args: { p_ledger_retention_days?: number; p_lookback_days?: number };
         Returns: undefined;
@@ -2111,9 +2161,6 @@ export type CompositeTypes<
     : never;
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {
       account_type: ["CASH", "BANK", "DIGITAL_WALLET"],

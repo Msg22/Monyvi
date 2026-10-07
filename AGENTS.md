@@ -12,7 +12,7 @@ with Angular equivalents in chat (never in code comments).
 
 <!-- SPECKIT START -->
 
-Active Speckit plan: `specs/345-language-direction/plan.md`
+Active Speckit plan: `specs/389-sync-pagination/plan.md`
 
 <!-- SPECKIT END -->
 

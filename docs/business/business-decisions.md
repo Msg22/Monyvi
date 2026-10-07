@@ -1527,6 +1527,20 @@ Business rules:
 - App lock, MFA or step-up authentication, device/session management, new
   sign-in notifications, and SecureStore logout hardening are deferred to issue
   #240.
+- Sync pull pagination and checkpoint guarantees (issue #255; recorded before
+  production; full contract in `specs/389-sync-pagination/`):
+  - Pulls page every syncable collection to completion with keyset pagination
+    and an exact remaining count; EOF only when count equals rows; cursors use
+    the raw server timestamp plus UUID tie.
+  - One shared upper delivery watermark H bounds a pull for eventual
+    convergence; publication stamps are assigned after fence acquisition and
+    before commit; post-seal writes stamp strictly after H.
+  - Child pulls use server ownership joins including owned soft-deleted parents;
+    snapshot hard deletes publish once via a narrow deleted-ID journal with no
+    pruning.
+  - All pages and tombstones buffer into one apply with one checkpoint; a failed
+    pull advances no metadata; a later push failure keeps a good pull with
+    retryable dirty groups. Financial behavior is unchanged.
 
 ## 11. Current Known Product And Documentation Gaps
 

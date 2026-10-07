@@ -12,6 +12,12 @@ import { getCurrentUserId, supabase } from "../supabase";
 import { SNAPSHOT_RETENTION_DAYS, SYNCABLE_TABLES } from "./config";
 import { createSyncTableError } from "./errors";
 import {
+  PULL_PAGE_SIZE,
+  pullAllKeysetPages,
+  pullCursorFilter,
+  readPullCursor,
+} from "./pull-pagination";
+import {
   getChildTableConfig,
   isServerOwnedUserTable,
   isSnapshotTable,
@@ -33,7 +39,6 @@ export const SYNC_PULL_ERROR_CODES = {
 } as const;
 
 const METAL_OBSERVATION_PAGE_SIZE = 500;
-const METAL_HOLDING_STATE_PAGE_SIZE = 500;
 const METAL_OBSERVATION_RPC = "pull_metal_observations_page_v1";
 const UUID_MAX = "ffffffff-ffff-ffff-ffff-ffffffffffff";
 
@@ -593,27 +598,25 @@ export async function pullSnapshotTable(
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - SNAPSHOT_RETENTION_DAYS);
 
-    let query = supabase
-      .from(table)
-      .select("*")
-      .eq("user_id", userId)
-      .gt("created_at", cutoffDate.toISOString())
-      .order("created_at", { ascending: false });
-
-    if (lastSyncDate) {
-      query = query.gt("created_at", lastSyncDate);
-    }
-    query = query.lte("created_at", upperWatermark);
-
-    const { data, error } = await query;
-
-    if (error) {
-      throw createSyncTableError("pull", table, error);
-    }
-
-    if (!data || data.length === 0) {
-      return { created: [], updated: [], deleted: [] };
-    }
+    const data = await pullAllKeysetPages(
+      async (cursor) => {
+        let query = supabase
+          .from(table)
+          .select("*", { count: "exact" })
+          .eq("user_id", userId)
+          .gt("created_at", cutoffDate.toISOString())
+          .lte("created_at", upperWatermark)
+          .order("created_at", { ascending: true })
+          .order("id", { ascending: true })
+          .limit(PULL_PAGE_SIZE);
+        if (lastSyncDate) query = query.gt("created_at", lastSyncDate);
+        if (cursor) query = query.or(pullCursorFilter("created_at", cursor));
+        const { data: rows, error, count } = await query;
+        if (error) throw createSyncTableError("pull", table, error);
+        return { rows: rows ?? [], count };
+      },
+      (row) => readPullCursor(row, "created_at")
+    );
 
     const activeRecords = data.map((record) =>
       transformFromSupabase(table, record)
@@ -636,29 +639,24 @@ export async function pullUserTable(
   lastSyncDate: string | null,
   upperWatermark: string
 ): Promise<SyncTableChangeSet> {
-  let query = supabase
-    .from(table)
-    .select(pullSelect(table))
-    .eq("user_id", userId);
-
-  if (lastSyncDate) {
-    query = query.gt("updated_at", lastSyncDate);
-  }
-  query = query.lte("updated_at", upperWatermark);
-
-  const { data, error } = await query;
-
-  if (error) {
-    throw createSyncTableError("pull", table, error);
-  }
-
-  if (!data || data.length === 0) {
-    return { created: [], updated: [], deleted: [] };
-  }
-
-  // PostgREST supports the exact-value `::text` projections above, but the
-  // Supabase select-string type parser cannot infer rows containing casts.
-  const records = requirePulledRows(data);
+  const records = await pullAllKeysetPages(
+    async (cursor) => {
+      let query = supabase
+        .from(table)
+        .select(pullSelect(table), { count: "exact" })
+        .eq("user_id", userId)
+        .lte("updated_at", upperWatermark)
+        .order("updated_at", { ascending: true })
+        .order("id", { ascending: true })
+        .limit(PULL_PAGE_SIZE);
+      if (lastSyncDate) query = query.gt("updated_at", lastSyncDate);
+      if (cursor) query = query.or(pullCursorFilter("updated_at", cursor));
+      const { data, error, count } = await query;
+      if (error) throw createSyncTableError("pull", table, error);
+      return { rows: requirePulledRows(data ?? []), count };
+    },
+    (row) => readPullCursor(row, "updated_at")
+  );
   const deleted = records
     .filter((record) => record.deleted === true)
     .map((record) => record.id);
@@ -683,47 +681,37 @@ export async function pullChildTable(
   lastSyncDate: string | null,
   upperWatermark: string
 ): Promise<SyncTableChangeSet> {
-  const parentResult = await supabase
-    .from(childConfig.parentTable)
-    .select("id")
-    .eq("user_id", userId);
-
-  if (parentResult.error) {
-    throw createSyncTableError(
-      "pull",
-      childConfig.parentTable,
-      parentResult.error
-    );
-  }
-
-  if (!parentResult.data || parentResult.data.length === 0) {
-    return { created: [], updated: [], deleted: [] };
-  }
-
-  const ids = parentResult.data.map((p) => p.id);
-  let query = supabase
-    .from(table)
-    .select(pullSelect(table))
-    .in(childConfig.foreignKey, ids);
-
-  if (lastSyncDate) {
-    query = query.gt("updated_at", lastSyncDate);
-  }
-  query = query.lte("updated_at", upperWatermark);
-
-  const { data, error } = await query;
-
-  if (error) {
-    throw createSyncTableError("pull", table, error);
-  }
-
-  if (!data || data.length === 0) {
-    return { created: [], updated: [], deleted: [] };
-  }
-
-  // PostgREST supports the exact-value `::text` projections above, but the
-  // Supabase select-string type parser cannot infer rows containing casts.
-  const records = requirePulledRows(data);
+  const records = await pullAllKeysetPages(
+    async (cursor) => {
+      const select = `${pullSelect(table)},sync_owner:${childConfig.parentTable}!inner(user_id)`;
+      let query = supabase
+        .from(table)
+        .select(select, { count: "exact" })
+        .eq("sync_owner.user_id", userId)
+        .lte("updated_at", upperWatermark)
+        .order("updated_at", { ascending: true })
+        .order("id", { ascending: true })
+        .limit(PULL_PAGE_SIZE);
+      if (lastSyncDate) query = query.gt("updated_at", lastSyncDate);
+      if (cursor) query = query.or(pullCursorFilter("updated_at", cursor));
+      const { data, error, count } = await query;
+      if (error) throw createSyncTableError("pull", table, error);
+      const rows = requirePulledRows(data ?? []).map((record) => {
+        const { sync_owner: owner, ...row } = record;
+        if (
+          typeof owner !== "object" ||
+          owner === null ||
+          !("user_id" in owner) ||
+          owner.user_id !== userId
+        ) {
+          throw new Error(SYNC_PULL_ERROR_CODES.INVALID_PULL_ROW);
+        }
+        return row;
+      });
+      return { rows, count };
+    },
+    (row) => readPullCursor(row, "updated_at")
+  );
   const deleted = records
     .filter((record) => record.deleted === true)
     .map((record) => record.id);
@@ -746,25 +734,24 @@ export async function pullCategories(
   lastSyncDate: string | null,
   upperWatermark: string
 ): Promise<SyncTableChangeSet> {
-  let query = supabase
-    .from("categories")
-    .select("*")
-    .or(`user_id.eq.${userId},user_id.is.null`);
-
-  if (lastSyncDate) {
-    query = query.gt("updated_at", lastSyncDate);
-  }
-  query = query.lte("updated_at", upperWatermark);
-
-  const { data, error } = await query;
-
-  if (error) {
-    throw createSyncTableError("pull", "categories", error);
-  }
-
-  if (!data || data.length === 0) {
-    return { created: [], updated: [], deleted: [] };
-  }
+  const data = await pullAllKeysetPages(
+    async (cursor) => {
+      let query = supabase
+        .from("categories")
+        .select("*", { count: "exact" })
+        .or(`user_id.eq.${userId},user_id.is.null`)
+        .lte("updated_at", upperWatermark)
+        .order("updated_at", { ascending: true })
+        .order("id", { ascending: true })
+        .limit(PULL_PAGE_SIZE);
+      if (lastSyncDate) query = query.gt("updated_at", lastSyncDate);
+      if (cursor) query = query.or(pullCursorFilter("updated_at", cursor));
+      const { data: rows, error, count } = await query;
+      if (error) throw createSyncTableError("pull", "categories", error);
+      return { rows: rows ?? [], count };
+    },
+    (row) => readPullCursor(row, "updated_at")
+  );
 
   const deleted = data
     .filter((record) => record.deleted === true)
@@ -788,45 +775,24 @@ export async function pullMetalDedicatedTable(
   upperWatermark: string,
   database?: Database
 ): Promise<SyncTableChangeSet> {
-  const records: PulledRow[] = [];
-  let cursorUpdatedAt = lastSyncDate;
-  let cursorId: string | null = null;
-  let shouldPullNextPage = true;
-
-  while (shouldPullNextPage) {
-    let query = supabase
-      .from(table)
-      .select(pullSelect(table))
-      .eq("user_id", userId);
-    if (cursorUpdatedAt && cursorId) {
-      query = query.or(
-        `updated_at.gt.${cursorUpdatedAt},and(updated_at.eq.${cursorUpdatedAt},id.gt.${cursorId})`
-      );
-    } else if (cursorUpdatedAt) {
-      query = query.gt("updated_at", cursorUpdatedAt);
-    }
-    query = query
-      .lte("updated_at", upperWatermark)
-      .order("updated_at", { ascending: true })
-      .order("id", { ascending: true })
-      .limit(METAL_HOLDING_STATE_PAGE_SIZE);
-
-    const { data, error } = await query;
-    if (error) {
-      throw createSyncTableError("pull", table, error);
-    }
-    const page = requirePulledRows(data ?? []);
-    records.push(...page);
-    shouldPullNextPage = page.length === METAL_HOLDING_STATE_PAGE_SIZE;
-    if (shouldPullNextPage) {
-      const lastRecord = page[page.length - 1];
-      if (!lastRecord || typeof lastRecord.updated_at !== "string") {
-        throw new Error(SYNC_PULL_ERROR_CODES.INVALID_PULL_ROW);
-      }
-      cursorUpdatedAt = lastRecord.updated_at;
-      cursorId = lastRecord.id;
-    }
-  }
+  const records = await pullAllKeysetPages(
+    async (cursor) => {
+      let query = supabase
+        .from(table)
+        .select(pullSelect(table), { count: "exact" })
+        .eq("user_id", userId)
+        .lte("updated_at", upperWatermark)
+        .order("updated_at", { ascending: true })
+        .order("id", { ascending: true })
+        .limit(PULL_PAGE_SIZE);
+      if (lastSyncDate) query = query.gt("updated_at", lastSyncDate);
+      if (cursor) query = query.or(pullCursorFilter("updated_at", cursor));
+      const { data, error, count } = await query;
+      if (error) throw createSyncTableError("pull", table, error);
+      return { rows: requirePulledRows(data ?? []), count };
+    },
+    (row) => readPullCursor(row, "updated_at")
+  );
 
   // PostgREST supports the exact-value `::text` projection above, but the
   // Supabase select-string type parser cannot infer rows containing casts.
