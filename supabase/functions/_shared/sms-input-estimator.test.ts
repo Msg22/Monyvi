@@ -7,6 +7,11 @@ import {
   estimateSmsRequestInputTokensAtEdge,
   getUtf8ByteLengthAtEdge,
 } from "./sms-input-estimator.ts";
+import {
+  buildSmsAiDynamicCategoryContext,
+  buildSmsAiResponseSchema,
+  buildSmsAiStableSystemPrompt,
+} from "./sms-ai/sms-ai-prompt.ts";
 
 test("serializes the exact user prompt framing sent to the SMS provider", () => {
   assert.equal(
@@ -69,5 +74,33 @@ test("accepts an exact byte/token boundary and rejects one byte over it", () => 
       maxInputTokens: 4,
     }),
     { fits: false, reason: "candidate_too_large" }
+  );
+});
+
+
+test("counts refactored provider input components exactly once", () => {
+  const messages = [
+    {
+      id: "message-1",
+      sender: "QNB EGYPT",
+      date: "2026-07-21T10:00:00.000Z",
+      body: "Purchase EGP 100",
+    },
+  ];
+  const estimate = estimateSmsRequestInputTokensAtEdge({
+    prompt: buildSmsAiStableSystemPrompt(["EGP", "USD"]),
+    categories: buildSmsAiDynamicCategoryContext(
+      "EXPENSE categories:\n  L1: shopping"
+    ),
+    schema: JSON.stringify(buildSmsAiResponseSchema(["EGP", "USD"])),
+    messages: [buildSmsProviderUserPromptAtEdge(messages)],
+  });
+
+  assert.equal(
+    estimate.totalTokens,
+    estimate.promptTokens +
+      estimate.categoryTokens +
+      estimate.schemaTokens +
+      estimate.candidateTokens
   );
 });

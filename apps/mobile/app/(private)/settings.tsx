@@ -38,7 +38,6 @@ import { usePreferredCurrency } from "@/hooks/usePreferredCurrency";
 import { useSettingsAiConsentToggle } from "@/hooks/useSettingsAiConsentToggle";
 import { useSettingsAiConsentState } from "@/hooks/useSettingsAiConsentState";
 import { useSettingsSmsSyncActions } from "@/hooks/useSettingsSmsSyncActions";
-import { setIntroLocaleOverride } from "@/services/intro-flag-service";
 import { setPreferredLanguage } from "@/services/profile-service";
 import { useSmsPermission } from "@/hooks/useSmsPermission";
 import { useSmsSync } from "@/hooks/useSmsSync";
@@ -70,6 +69,8 @@ import {
 import { logger } from "@/utils/logger";
 import type { PendingAiAction } from "@/components/settings/settings-types";
 import { getQaSmsPatternIntakeAvailability } from "@/config/qa-sms-pattern-intake-config";
+import { getEffectiveSmsScanPolicy } from "@/services/sms-scan-policy-service";
+import { isSmsProviderEvaluationRuntimeAvailable } from "@/services/dev/sms-provider-evaluation-service";
 
 const SETTINGS_SCROLL_BOTTOM_GAP = 32;
 
@@ -82,6 +83,9 @@ export default function SettingsScreen(): React.JSX.Element {
   const { t: tCommon } = useTranslation("common");
   const { language } = useLocale();
   const qaSmsPatternIntakeAvailability = getQaSmsPatternIntakeAvailability();
+  const isSmsProviderEvaluationVisible =
+    user !== null && isSmsProviderEvaluationRuntimeAvailable();
+  const smsScanLookbackDays = getEffectiveSmsScanPolicy().lookbackDays;
   const aiConsent = useAiProcessingConsent();
   const [isCurrencyPickerVisible, setIsCurrencyPickerVisible] = useState(false);
   const [isLanguageDropdownOpen, setIsLanguageDropdownOpen] = useState(false);
@@ -766,21 +770,14 @@ export default function SettingsScreen(): React.JSX.Element {
       try {
         // Keep the device override and profile language in sync before the
         // RTL-flip reload so cold launch starts with the selected language.
-        await setIntroLocaleOverride(lang);
         await setPreferredLanguage(lang);
       } catch (error) {
-        // TODO: Replace with structured logging (e.g., Sentry)
-        console.error("Failed to change language:", error);
-        showToast({
-          type: "error",
-          title: tCommon("error"),
-          message: t("language_change_failed"),
-        });
+        logger.warn("language.selection.failed", { error });
       } finally {
         setIsChangingLanguage(false);
       }
     },
-    [isChangingLanguage, showToast, t, tCommon]
+    [isChangingLanguage]
   );
 
   return (
@@ -825,7 +822,9 @@ export default function SettingsScreen(): React.JSX.Element {
           preferredCurrency={preferredCurrency}
           currencyFlag={currencyInfo?.flag ?? "💱"}
           currencyName={
-            currencyInfo ? getCurrencyName(currencyInfo.code) : preferredCurrency
+            currencyInfo
+              ? getCurrencyName(currencyInfo.code)
+              : preferredCurrency
           }
           chevronColor={theme.text.secondary}
           onPress={() => setIsCurrencyPickerVisible(true)}
@@ -846,6 +845,7 @@ export default function SettingsScreen(): React.JSX.Element {
             chevronColor={theme.text.secondary}
             onIncrementalSync={handleIncrementalSync}
             onHistoryRescanPress={() => setIsFullRescanModalOpen(true)}
+            lookbackDays={smsScanLookbackDays}
             historyRescanAvailableAt={
               smsAiAvailability?.historyCooldownAvailableAt ?? null
             }
@@ -877,9 +877,15 @@ export default function SettingsScreen(): React.JSX.Element {
         <DevelopmentToolsSettingsSection
           t={t}
           isVisible={qaSmsPatternIntakeAvailability.isAvailable}
+          isStartupQaVisible={__DEV__}
+          isSmsProviderEvaluationVisible={isSmsProviderEvaluationVisible}
           chevronColor={theme.text.secondary}
           onQaSmsPatternIntakePress={() =>
             router.push("/qa-sms-pattern-intake")
+          }
+          onStartupQaPress={() => router.push("/startup-qa")}
+          onSmsProviderEvaluationPress={() =>
+            router.push("/sms-provider-evaluation")
           }
         />
 
@@ -906,6 +912,7 @@ export default function SettingsScreen(): React.JSX.Element {
         forceLogout={forceLogout}
         isAiDisableConfirmOpen={isAiDisableConfirmOpen}
         isFullRescanModalOpen={isFullRescanModalOpen}
+        lookbackDays={smsScanLookbackDays}
         onCancelAiDisableConfirm={() => setIsAiDisableConfirmOpen(false)}
         onCancelFullRescan={() => setIsFullRescanModalOpen(false)}
         onConfirmAiDisable={() => {

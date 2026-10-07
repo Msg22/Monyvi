@@ -30,6 +30,22 @@ export interface MockFinancialActionRecord {
   ) => MockFinancialActionRecord;
 }
 
+export function createDatabaseBatchBridge<T>(
+  commit: (...operations: T[]) => Promise<void>
+): {
+  adapter: { batch: (operations: readonly T[]) => Promise<void> };
+  batch: (...operations: T[]) => Promise<void>;
+} {
+  const adapter = {
+    batch: (operations: readonly T[]): Promise<void> => commit(...operations),
+  };
+  return {
+    adapter,
+    batch: (...operations: T[]): Promise<void> =>
+      adapter.batch(Array.isArray(operations[0]) ? operations[0] : operations),
+  };
+}
+
 export function assertDirectCachedLinkedOperationOwnership(
   input: FinancialActionLinkedOperationCachedOwnershipInput
 ): Promise<void> {

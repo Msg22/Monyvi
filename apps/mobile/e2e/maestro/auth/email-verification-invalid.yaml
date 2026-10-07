@@ -1,0 +1,35 @@
+appId: com.monyvi.app
+---
+# #321: deterministic fail-closed callback coverage. Expired/reused server-token
+# cases remain manual because their exact redirect depends on auth-server state.
+
+- openLink: "${MAESTRO_E2E_INVALID_CALLBACK}"
+
+- extendedWaitUntil:
+    visible:
+      id: "auth-callback-failure-view"
+    timeout: 120000
+- tapOn:
+    id: "auth-callback-back"
+- extendedWaitUntil:
+    visible:
+      id: "auth-email-input"
+    timeout: 30000
+- assertVisible:
+    id: "auth-mode-sign-in"
+
+# Missing auth material is also rejected behind the same recovery boundary.
+- openLink: "monyvi://auth-callback"
+
+- extendedWaitUntil:
+    visible:
+      id: "auth-callback-failure-view"
+    timeout: 30000
+- tapOn:
+    id: "auth-callback-back"
+- extendedWaitUntil:
+    visible:
+      id: "auth-email-input"
+    timeout: 30000
+- assertVisible:
+    id: "auth-mode-sign-in"

@@ -24,7 +24,12 @@ import React, {
   useState,
 } from "react";
 import { clearBudgetDashboardFilterSession } from "@/hooks/budget-dashboard-filter-session";
-import { clearPersistedAuthSession, supabase } from "@/services/supabase";
+import {
+  clearPersistedAuthSession,
+  coordinatedSignOut,
+  getStableAuthSession,
+  subscribeToCoordinatedAuthStateChange,
+} from "@/services/supabase";
 import { logger } from "@/utils/logger";
 
 const AUTH_BOOTSTRAP_TIMEOUT_MS = 10_000;
@@ -164,7 +169,7 @@ export function AuthProvider({
     const subscribeToAuthChanges = (): void => {
       const {
         data: { subscription },
-      } = supabase.auth.onAuthStateChange((event, newSession) => {
+      } = subscribeToCoordinatedAuthStateChange((event, newSession) => {
         if (event === "SIGNED_OUT") {
           clearBudgetDashboardFilterSession();
         }
@@ -181,7 +186,7 @@ export function AuthProvider({
           data: { session: initialSession },
           error,
         } = await withTimeout(
-          supabase.auth.getSession(),
+          getStableAuthSession(),
           AUTH_BOOTSTRAP_TIMEOUT_MS,
           "auth-bootstrap-timeout"
         );
@@ -219,7 +224,7 @@ export function AuthProvider({
   }, [applySession]);
 
   const signOut = useCallback(async (): Promise<void> => {
-    await supabase.auth.signOut();
+    await coordinatedSignOut();
   }, []);
 
   const isAuthenticated = user !== null;

@@ -118,7 +118,16 @@ function getCursorServiceMocks(): CursorServiceMocks {
 // =============================================================================
 
 jest.mock("@/i18n/changeLanguage", () => {
-  const changeLanguage = jest.fn().mockResolvedValue(undefined);
+  const changeLanguage = jest.fn(
+    async (
+      _language: string,
+      options?: {
+        readonly persist?: (isCurrent: () => boolean) => Promise<void>;
+      }
+    ): Promise<void> => {
+      await options?.persist?.((): boolean => true);
+    }
+  );
   const getCurrentLanguage = jest.fn().mockReturnValue("en");
   return {
     changeLanguage,
@@ -273,7 +282,7 @@ describe("setPreferredLanguage", () => {
 
     const { changeLanguage } = getChangeLanguageMocks();
     expect(changeLanguage).toHaveBeenCalledTimes(1);
-    expect(changeLanguage).toHaveBeenCalledWith("en");
+    expect(changeLanguage).toHaveBeenCalledWith("en", expect.any(Object));
   });
 
   it("accepts 'ar' as a supported language and forwards it to changeLanguage", async (): Promise<void> => {
@@ -285,7 +294,7 @@ describe("setPreferredLanguage", () => {
     const { mockWrite } = getDbMocks();
     expect(mockWrite).toHaveBeenCalledTimes(1);
     const { changeLanguage } = getChangeLanguageMocks();
-    expect(changeLanguage).toHaveBeenCalledWith("ar");
+    expect(changeLanguage).toHaveBeenCalledWith("ar", expect.any(Object));
   });
 
   it("throws if no profile row exists", async (): Promise<void> => {

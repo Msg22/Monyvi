@@ -10,19 +10,15 @@ import {
   type MetalRateReference,
 } from "@monyvi/db";
 import {
-  calculateMetalReferenceValue,
-  calculatePureGrams,
+  calculateCurrentQuotedMetalReferenceValue,
   calculateUnrealizedAttribution,
   isSupportedMetal,
   isSupportedMetalsIsoCurrencyCode,
   parseCanonicalDecimal,
   reduceMetalLifecycle,
   resolveMetalsCurrencyMinorUnits,
-  roundDecimal,
   serializeDecimal,
   validateAndNormalizeRateReference,
-  type CurrencyInstrumentCode,
-  type MetalInstrumentCode,
   type NormalizedRateReference,
   type RateReferenceExpectation,
   type SupportedMetal,
@@ -48,18 +44,32 @@ import {
   type LiveRatesTrustValue,
 } from "@/services/live-rates-trust-read-model-service";
 import {
+  buildCurrentRateInputs,
+  getCurrentValueRates,
+  type MetalDetailRateInputStatus,
+} from "@/services/metal-detail-rate-inputs";
+import {
   buildTimeline,
+  calculateRoundingDifference,
   copyValidDate,
+  findReference,
   getUnavailableExactFacts,
+  hasTrustedCurrentRate,
   normalizePhysicalForm,
+  readCurrentCurrencyRateDecimal,
+  selectCanonicalOrOnly,
+  shapeMetalDetailLifecycleEvents,
+  toCurrencyInstrumentCode,
   toDetailAssetInput,
   toDetailHoldingStateInput,
-  toDetailLifecycleEventInput,
   toDetailMetalInput,
+  toMetalInstrumentCode,
+  toPureGramsDecimal,
   toRateReferenceInput,
   toReducerEvent,
   toRenderKey,
 } from "@/services/metal-detail-read-model-shaping";
+export { shapeMetalDetailLifecycleEvents } from "@/services/metal-detail-read-model-shaping";
 import {
   shapeMetalTerminalFacts,
   type MetalTerminalFacts,
@@ -123,10 +133,28 @@ export interface BuildMetalDetailReadModelInput {
   readonly userId: string;
 }
 
+export type MetalDetailCorrectionField =
+  | "weight"
+  | "purity"
+  | "physicalForm"
+  | "purchasePrice"
+  | "purchaseCurrency"
+  | "purchaseDate";
+
+export interface MetalDetailCorrectionChange {
+  readonly field: MetalDetailCorrectionField;
+  readonly before: string | null;
+  readonly after: string | null;
+  readonly beforeCurrency?: string | null;
+  readonly afterCurrency?: string | null;
+}
+
 export interface MetalDetailTimelineItem {
   readonly id: string;
   readonly kind: MetalDetailLifecycleEventInput["kind"];
   readonly occurredAt: Date;
+  // null means the event exists, but exact before/after changes cannot be read.
+  readonly correctionChanges?: readonly MetalDetailCorrectionChange[] | null;
 }
 
 export interface MetalDetailAttribution {
@@ -147,6 +175,8 @@ export interface MetalDetailRateStatus {
   readonly state: LiveRatesTrustState;
 }
 
+export type { MetalDetailRateInputStatus } from "@/services/metal-detail-rate-inputs";
+
 export type MetalDetailPhysicalForm = "bar" | "coin" | "jewelry";
 export type MetalDetailRenderKey =
   `${"gold" | "silver"}:${MetalDetailPhysicalForm}`;
@@ -157,6 +187,7 @@ export interface MetalDetailReadModel {
   readonly currentValueDecimal: string | null;
   readonly currentValueObservedAt?: Date | null;
   readonly currentValueRateStatus: MetalDetailRateStatus | null;
+  readonly currentValueRateInputs?: readonly MetalDetailRateInputStatus[];
   readonly id: string;
   readonly isActiveOwnership: boolean;
   readonly isFinancialActionLocked: boolean;
@@ -191,10 +222,6 @@ export interface ReadMetalDetailReadModelOptions {
   readonly latestAllowedCalendarDate?: string;
   readonly userId: string;
 }
-
-type DetailRateExpectation = RateReferenceExpectation & {
-  readonly actionId: string | null;
-};
 
 interface DetailCurrentValue {
   readonly currency: CurrencyType;
@@ -364,12 +391,13 @@ async function readDetailDependencies(
       .fetch(),
     readDetailEvidenceAndEvents(scope, asset.id),
   ]);
-  if (metals.length !== 1 || holdingStates.length !== 1) return null;
-  const metal = metals[0];
+  const metal = selectCanonicalOrOnly(metals, asset.id);
+  const holdingState = selectCanonicalOrOnly(holdingStates, asset.id);
+  if (metal === null || holdingState === null) return null;
   if (!isSupportedMetal(metal.metalType)) return null;
   return {
     ...evidenceAndEvents,
-    holdingState: holdingStates[0],
+    holdingState,
     metal,
     metalType: metal.metalType,
   };
@@ -420,19 +448,6 @@ async function readDetailEvidenceAndEvents(
   return { evidence, events, groups, rateReferences };
 }
 
-export function shapeMetalDetailLifecycleEvents(
-  events: readonly MetalLifecycleEvent[],
-  evidence: readonly MetalActionEvidence[]
-): readonly MetalDetailLifecycleEventInput[] {
-  return Object.freeze(
-    events
-      .map((event) => toDetailLifecycleEventInput(event, evidence))
-      .filter(
-        (event): event is MetalDetailLifecycleEventInput => event !== null
-      )
-  );
-}
-
 export function buildMetalDetailReadModel(
   input: BuildMetalDetailReadModelInput
 ): MetalDetailReadModel | null {
@@ -481,6 +496,12 @@ export function buildMetalDetailReadModel(
     currentValueDecimal: currentValue?.valueDecimal ?? null,
     currentValueObservedAt: currentValue?.observedAt ?? null,
     currentValueRateStatus: active ? buildCurrentRateStatus(input) : null,
+    currentValueRateInputs: active
+      ? buildCurrentRateInputs(
+          input,
+          typeof attribution?.totalGainDecimal === "string"
+        )
+      : [],
     id: input.asset.id,
     isActiveOwnership: active,
     isFinancialActionLocked:
@@ -538,7 +559,10 @@ function buildCurrentObservationValue(
     input.preferredCurrency === undefined ||
     !isSupportedMetalsIsoCurrencyCode(input.preferredCurrency) ||
     unavailableExactFacts.includes("weight") ||
-    unavailableExactFacts.includes("purity")
+    unavailableExactFacts.includes("purity") ||
+    input.metal.purityCode === null ||
+    input.metal.purityFactorDecimal === null ||
+    input.metal.weightGramsDecimal === null
   ) {
     return null;
   }
@@ -552,11 +576,13 @@ function buildCurrentObservationValue(
   );
   if (!hasTrustedCurrentRate(metalRate) || currencyRateDecimal === null)
     return null;
-  const value = calculateMetalReferenceValue({
+  const value = calculateCurrentQuotedMetalReferenceValue({
+    metal: input.metal.metalType,
+    purityCode: input.metal.purityCode,
     currencyUsdPerUnitDecimal: currencyRateDecimal,
     metalUsdPerPureGramDecimal: metalRate.valueDecimal,
-    purityFactorDecimal: input.metal.purityFactorDecimal ?? "0",
-    weightGramsDecimal: input.metal.weightGramsDecimal ?? "0",
+    purityFactorDecimal: input.metal.purityFactorDecimal,
+    weightGramsDecimal: input.metal.weightGramsDecimal,
   });
   if (!value.available) return null;
   return {
@@ -591,36 +617,6 @@ function buildCurrentRateStatus(
     source: sources.size === 1 ? Array.from(sources)[0] : null,
     state: summarizeLiveRatesTrust(values),
   };
-}
-
-function getCurrentValueRates(
-  input: BuildMetalDetailReadModelInput
-): readonly LiveRatesTrustValue[] {
-  if (
-    input.currentRates === undefined ||
-    input.preferredCurrency === undefined ||
-    !isSupportedMetalsIsoCurrencyCode(input.preferredCurrency)
-  ) {
-    return [];
-  }
-  const metal =
-    input.metal.metalType === "GOLD"
-      ? input.currentRates.gold
-      : input.currentRates.silver;
-  if (input.preferredCurrency === "USD") return [metal];
-  const currency = input.currentRates.currencies.get(input.preferredCurrency);
-  return currency === undefined ? [] : [metal, currency];
-}
-
-function hasTrustedCurrentRate(
-  rate: LiveRatesTrustReadModel["gold"] | undefined
-): rate is LiveRatesTrustReadModel["gold"] & { readonly valueDecimal: string } {
-  return (
-    rate !== undefined &&
-    rate.state !== "invalid" &&
-    rate.state !== "missing" &&
-    typeof rate.valueDecimal === "string"
-  );
 }
 
 function conservativeObservedAt(
@@ -836,93 +832,6 @@ function buildCurrentReference(
     expectation
   );
   return normalized.available ? normalized.value : null;
-}
-
-function readCurrentCurrencyRateDecimal(
-  currentRates: LiveRatesTrustReadModel | undefined,
-  currency: CurrencyType
-): string | null {
-  if (currency === "USD") return "1";
-  const rate = currentRates?.currencies.get(currency);
-  return hasTrustedCurrentRate(rate) ? rate.valueDecimal : null;
-}
-
-function calculateRoundingDifference(
-  total: string,
-  components: readonly string[],
-  currency: CurrencyType
-): string | null {
-  if (!isSupportedMetalsIsoCurrencyCode(currency)) return null;
-  const decimalPlaces = resolveMetalsCurrencyMinorUnits(`currency:${currency}`);
-  if (decimalPlaces === null) return null;
-  try {
-    const roundedTotal = parseCanonicalDecimal(
-      roundDecimal(total, decimalPlaces)
-    );
-    const roundedComponents = components.reduce(
-      (sum, value) =>
-        sum.plus(parseCanonicalDecimal(roundDecimal(value, decimalPlaces))),
-      parseCanonicalDecimal("0")
-    );
-    const difference = roundedTotal.minus(roundedComponents);
-    return difference.isZero() ? null : serializeDecimal(difference);
-  } catch {
-    return null;
-  }
-}
-
-function toPureGramsDecimal(
-  input: BuildMetalDetailReadModelInput
-): string | null {
-  const weight = input.metal.weightGramsDecimal;
-  const purity = input.metal.purityFactorDecimal;
-  if (weight === null || purity === null) return null;
-  const result = calculatePureGrams({
-    purityFactorDecimal: purity,
-    weightGramsDecimal: weight,
-  });
-  return result.available ? result.valueDecimal : null;
-}
-
-function toCurrencyInstrumentCode(
-  value: string | null
-): CurrencyInstrumentCode | null {
-  return value !== null && isSupportedMetalsIsoCurrencyCode(value)
-    ? `currency:${value}`
-    : null;
-}
-
-function toMetalInstrumentCode(metalType: SupportedMetal): MetalInstrumentCode {
-  return metalType === "GOLD" ? "metal:GOLD" : "metal:SILVER";
-}
-
-function findReference(
-  references: readonly unknown[],
-  expectation: DetailRateExpectation
-): NormalizedRateReference | null {
-  const candidates = references.filter((candidate) =>
-    isRateCandidate(candidate, expectation)
-  );
-  if (candidates.length !== 1) return null;
-  const reference = candidates[0];
-  const normalized = validateAndNormalizeRateReference(reference, expectation);
-  return normalized.available ? normalized.value : null;
-}
-
-function isRateCandidate(
-  candidate: unknown,
-  expectation: DetailRateExpectation
-): candidate is Readonly<Record<string, unknown>> {
-  return (
-    typeof candidate === "object" &&
-    candidate !== null &&
-    "role" in candidate &&
-    candidate.role === expectation.role &&
-    "instrumentCode" in candidate &&
-    candidate.instrumentCode === expectation.instrumentCode &&
-    "actionId" in candidate &&
-    candidate.actionId === expectation.actionId
-  );
 }
 
 function assertRequestedUser(

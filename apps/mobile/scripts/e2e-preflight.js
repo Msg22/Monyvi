@@ -68,6 +68,7 @@ const privateTextFallbackMarkers = [
   ...Object.values(arabicPrivateTextFallbackMarkers),
 ];
 const authReadyMarkers = [
+  "verification-code-input",
   "emailAddress",
   "Welcome to Monyvi",
   "Email address",
@@ -710,7 +711,8 @@ function relaunchE2eFixtureIfRequired(settings, dependencies = {}) {
   waitForSync();
   if (settings.rateState === "invalid") {
     const materializeInvalidRate =
-      dependencies.materializeInvalidRate ?? materializeInvalidMetalsObservation;
+      dependencies.materializeInvalidRate ??
+      materializeInvalidMetalsObservation;
     materializeInvalidRate();
   }
 

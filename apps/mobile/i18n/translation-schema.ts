@@ -787,6 +787,14 @@ interface AuthTranslations {
   readonly private_by_design: string;
   readonly privacy: string;
   readonly terms: string;
+  readonly verification_link_failed_title: string;
+  readonly verification_link_failed_message: string;
+  readonly recovery_link_failed_title: string;
+  readonly recovery_link_failed_message: string;
+  readonly callback_network_failed_title: string;
+  readonly callback_network_failed_message: string;
+  readonly auth_callback_failed_title: string;
+  readonly auth_callback_failed_message: string;
   readonly dismiss: string;
 }
 

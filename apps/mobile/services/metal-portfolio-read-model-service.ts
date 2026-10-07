@@ -10,27 +10,31 @@ import {
   type MetalRateReference,
 } from "@monyvi/db";
 import {
-  calculateMetalReferenceValue,
+  calculateCurrentQuotedMetalReferenceValue,
   hasCanonicalDecimalPrecision,
   isSupportedMetal,
   isSupportedMetalsIsoCurrencyCode,
   parseCanonicalDecimal,
   resolveMetalsCurrencyMinorUnits,
   resolvePuritySelection,
-  roundDecimal,
   serializeDecimal,
   type MetalsIsoCurrencyCode,
   type SupportedMetal,
 } from "@monyvi/logic";
+import {
+  buildFeaturedPurityPriceTiles,
+  calculateDisplayedShare,
+  type MetalPortfolioPurityPriceTile,
+} from "./metal-portfolio-purity-rates-service";
 import { Q, type Query } from "@nozbe/watermelondb";
 
 import {
   queryChildrenOfOwnedParents,
   queryOwned,
 } from "@/services/user-data-access";
-import type {
-  LiveRatesTrustReadModel,
-  LiveRatesTrustValue,
+import {
+  type LiveRatesTrustReadModel,
+  type LiveRatesTrustValue,
 } from "@/services/live-rates-trust-read-model-service";
 import {
   shapeMetalRealizedSaleEvidence,
@@ -152,9 +156,14 @@ export interface ShapeMetalPortfolioHoldingsInput {
   readonly userId: string;
 }
 
+export type { MetalPortfolioPurityPriceTile };
+export { buildFeaturedPurityPriceTiles, calculateDisplayedShare };
+
 export interface BuildMetalPortfolioReadModelInput {
+  readonly currentRates?: LiveRatesTrustReadModel;
   readonly filter: MetalPortfolioFilter;
   readonly holdings: readonly MetalPortfolioHoldingInput[];
+  readonly preferredCurrency?: CurrencyType;
   readonly rateStatus: PortfolioRateStatus;
   readonly userId: string;
 }
@@ -183,6 +192,7 @@ export interface MetalPortfolioReadModel {
   readonly hasTerminalHistory: boolean;
   readonly holdings: readonly MetalPortfolioHoldingInput[];
   readonly listState: MetalPortfolioListState;
+  readonly purityPriceTiles: readonly MetalPortfolioPurityPriceTile[];
   readonly rateStatus: PortfolioRateStatus;
   readonly recentHistory: readonly MetalPortfolioHoldingInput[];
   readonly soldResultDecimal: string | null;
@@ -560,6 +570,10 @@ export function buildMetalPortfolioReadModel(
     hasTerminalHistory: terminalHoldings.length > 0,
     holdings: selectedHoldings,
     listState: determineListState(activeHoldings, selectedHoldings),
+    purityPriceTiles: buildFeaturedPurityPriceTiles(
+      input.currentRates,
+      input.preferredCurrency
+    ),
     rateStatus: { ...input.rateStatus },
     recentHistory: terminalHoldings.slice(0, RECENT_HISTORY_LIMIT),
     soldResultDecimal,
@@ -752,6 +766,7 @@ function calculateHoldingCardValues(input: {
 }): HoldingCardValues {
   if (
     input.facts.weightGramsDecimal === null ||
+    input.facts.purityCode === null ||
     input.facts.purityFactorDecimal === null ||
     !isSupportedMetalsIsoCurrencyCode(input.preferredCurrency)
   ) {
@@ -769,7 +784,9 @@ function calculateHoldingCardValues(input: {
   if (metalRate === null || preferredRate === null) {
     return unavailableHoldingCardValues();
   }
-  const currentValue = calculateMetalReferenceValue({
+  const currentValue = calculateCurrentQuotedMetalReferenceValue({
+    metal: input.metalType,
+    purityCode: input.facts.purityCode,
     currencyUsdPerUnitDecimal: preferredRate,
     metalUsdPerPureGramDecimal: metalRate,
     purityFactorDecimal: input.facts.purityFactorDecimal,
@@ -936,23 +953,4 @@ function sumAvailableDecimals(
   }
 
   return serializeDecimal(total);
-}
-
-function calculateDisplayedShare(
-  amountDecimal: string | null,
-  totalDecimal: string | null
-): string | null {
-  if (amountDecimal === null || totalDecimal === null) {
-    return null;
-  }
-
-  const total = parseCanonicalDecimal(totalDecimal);
-  if (total.isZero()) {
-    return "0";
-  }
-
-  const share = parseCanonicalDecimal(amountDecimal)
-    .times("100")
-    .dividedBy(total);
-  return serializeDecimal(parseCanonicalDecimal(roundDecimal(share, 1)));
 }

@@ -20,7 +20,7 @@ const CATEGORY_ENRICHMENT_FUNCTION = "enrich-sms-categories";
 const AI_CONSENT_REQUIRED_STATUS = 403;
 const CATEGORY_ENRICHMENT_CHUNK_SIZE = 20;
 const CATEGORY_ENRICHMENT_MAX_CONCURRENCY = 2;
-const CATEGORY_ENRICHMENT_TIMEOUT_MS = 20000;
+const CATEGORY_ENRICHMENT_WAVE_TIMEOUT_MS = 70_000;
 const NON_INFORMATIVE_CATEGORY_SYSTEM_NAMES: ReadonlySet<string> = new Set([
   "other",
   "uncategorized",
@@ -457,7 +457,7 @@ function createTimedRequestSignal(
   const timeoutId = setTimeout(() => {
     timedOut = true;
     controller.abort();
-  }, CATEGORY_ENRICHMENT_TIMEOUT_MS);
+  }, CATEGORY_ENRICHMENT_WAVE_TIMEOUT_MS);
 
   return {
     signal: controller.signal,
@@ -650,7 +650,6 @@ function mergeCategoryResults(
 
 async function invokeCategoryChunks(
   chunks: readonly CategoryChunkRequest[],
-  timedSignal: TimedRequestSignal,
   requestContext: SmsCategoryEnrichmentRequestContext,
   abortSignal?: AbortSignal,
   expectedUserId?: string
@@ -662,25 +661,27 @@ async function invokeCategoryChunks(
     start += CATEGORY_ENRICHMENT_MAX_CONCURRENCY
   ) {
     assertNotAborted(abortSignal, "SMS category enrichment aborted");
-    if (timedSignal.didTimeOut()) {
-      results = [...results, emptyResult(0, true, { isTimedOut: true })];
-      break;
-    }
     const wave = chunks.slice(
       start,
       start + CATEGORY_ENRICHMENT_MAX_CONCURRENCY
     );
-    const waveResults = await Promise.all(
-      wave.map((chunk) =>
-        invokeCategoryChunk(
-          chunk,
-          timedSignal,
-          requestContext,
-          abortSignal,
-          expectedUserId
+    const timedSignal = createTimedRequestSignal(abortSignal);
+    let waveResults: readonly TrustedSmsCategoryEnrichmentResult[];
+    try {
+      waveResults = await Promise.all(
+        wave.map((chunk) =>
+          invokeCategoryChunk(
+            chunk,
+            timedSignal,
+            requestContext,
+            abortSignal,
+            expectedUserId
+          )
         )
-      )
-    );
+      );
+    } finally {
+      timedSignal.cleanup();
+    }
     results = [...results, ...waveResults];
     if (
       waveResults.some(
@@ -733,17 +734,11 @@ export async function enrichTrustedSmsCategories(
     prepared,
     resolvedRequestContext.requestKey
   );
-  const timedSignal = createTimedRequestSignal(abortSignal);
-  try {
-    const chunkResults = await invokeCategoryChunks(
-      chunks,
-      timedSignal,
-      resolvedRequestContext,
-      abortSignal,
-      expectedUserId
-    );
-    return mergeCategoryResults(chunkResults);
-  } finally {
-    timedSignal.cleanup();
-  }
+  const chunkResults = await invokeCategoryChunks(
+    chunks,
+    resolvedRequestContext,
+    abortSignal,
+    expectedUserId
+  );
+  return mergeCategoryResults(chunkResults);
 }

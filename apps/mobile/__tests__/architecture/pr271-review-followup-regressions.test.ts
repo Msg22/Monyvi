@@ -91,14 +91,17 @@ describe("PR #271 review follow-up regressions", () => {
     );
   });
 
-  it("renders trust and provenance when detail current value is available", () => {
+  it("keeps the approved no-provider calculation disclosure on detail", () => {
     const value = source(
       "apps/mobile/components/metals/MetalHoldingDetailScreen.tsx"
     );
-    expect(value).toContain("metal-holding-detail-rate-trust");
-    expect(value).toContain("rate.short_");
-    expect(value).toContain("rate.source");
-    expect(value).toContain("rate.quality");
+    expect(value).not.toContain("metal-holding-detail-rate-trust");
+    expect(value).not.toContain("rate.source");
+    expect(value).not.toContain("rate.quality");
+    expect(value).not.toContain("rate.short_");
+    expect(value).toContain("metal-detail-calculation-disclosure");
+    expect(value).toContain("detail.calculation_disclosure");
+    expect(value).toContain("detail.display_rounding");
   });
 
   it("validates the complete Arabic active-holdings plural set", () => {

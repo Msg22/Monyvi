@@ -195,7 +195,8 @@ async function handleRequest(request: Request): Promise<Response> {
     authenticate,
     hasConsent: hasActiveAiProcessingConsent,
     getPolicy: () => policy,
-    fixedPrompt: "SMS safeguard QA deterministic provider",
+    buildFixedPrompt: () => "SMS safeguard QA deterministic provider",
+    buildCategoryContext: (categories) => categories,
     buildResponseSchema: (currencies) => JSON.stringify({ currencies }),
     shouldExclude: (message: ParseSmsMessage) =>
       isExcludedBeforeSmsParsingAtEdge(message.body) ||

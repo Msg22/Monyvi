@@ -90,6 +90,12 @@ jobs:
       - name: Test Repository Scripts
         run: npm run test:scripts
 
+      - name: Test Email Verification Resend Edge Contract
+        run: >-
+          node --experimental-strip-types --test
+          supabase/functions/_shared/email-verification-resend-handler.test.ts
+          scripts/__tests__/email-verification-resend-policy.test.ts
+
       - name: Test QA SMS Privacy Check
         run: npm run test:qa-sms-privacy-check
 
@@ -110,13 +116,15 @@ jobs:
     if: >-
       github.event_name == 'pull_request' && (github.event.pull_request.base.ref
       == 'main' || github.event.pull_request.base.ref ==
-      'codex/035-metals-module-redesign' || github.event.pull_request.base.ref ==
-      'codex/issue282-realized-metal-sale-results' || github.event.pull_request.base.ref ==
+      'codex/035-metals-module-redesign' || github.event.pull_request.base.ref
+      == 'codex/issue282-realized-metal-sale-results' ||
+      github.event.pull_request.base.ref ==
       'codex/035-metals-slice5-integration')
     runs-on: ubuntu-latest
     timeout-minutes: 65
     env:
       SENTRYCLI_SKIP_DOWNLOAD: "1"
+      SUPABASE_INTERNAL_IMAGE_REGISTRY: ghcr.io
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -136,14 +144,17 @@ jobs:
         timeout-minutes: 10
 
       - name: Run financial action pgTAP
-        run:
-          npx supabase test db --local
-          supabase/tests/financial_action_canonicalization_test.sql
-          supabase/tests/metals_issue285_reconciliation_test.sql
-          supabase/tests/metals_issue284_persistence_test.sql
-          supabase/tests/metals_dispose_rate_snapshots_test.sql
-          supabase/tests/atomic_market_rate_snapshots_test.sql
-          supabase/tests/market_snapshot_publication_test.sql
+        run: |
+          npx supabase test db --local supabase/tests/financial_action_canonicalization_test.sql
+          npx supabase test db --local supabase/tests/account_financial_action_rpc_test.sql
+          npx supabase test db --local supabase/tests/account_financial_effects_test.sql
+          npx supabase test db --local supabase/tests/account_edit_balance_adjustment_test.sql
+          npx supabase test db --local supabase/tests/metals_issue285_reconciliation_test.sql
+          npx supabase test db --local supabase/tests/metals_issue284_persistence_test.sql
+          npx supabase test db --local supabase/tests/metals_dispose_rate_snapshots_test.sql
+          npx supabase test db --local supabase/tests/atomic_market_rate_snapshots_test.sql
+          npx supabase test db --local supabase/tests/market_snapshot_publication_test.sql
+          npx supabase test db --local supabase/tests/email_verification_resend_limits_test.sql
 
       - name: Run snapshot publication concurrency pgTAP
         run: node scripts/test-market-snapshot-concurrency.js

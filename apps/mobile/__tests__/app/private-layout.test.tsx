@@ -1,4 +1,4 @@
-import React from "react";
+import React, { createElement } from "react";
 import { render, type RenderAPI } from "@testing-library/react-native";
 
 interface MockAuthState {
@@ -20,6 +20,7 @@ const mockUseAuth = jest.fn<MockAuthState, []>();
 const mockUseSync = jest.fn<MockSyncState, []>();
 const mockUseProfile = jest.fn<MockProfileState, []>();
 const mockReplace = jest.fn();
+const mockLanguageNotice = jest.fn((): null => null);
 let mockRootNavigationReady = true;
 let mockPathname = "/(tabs)";
 
@@ -88,6 +89,13 @@ jest.mock("@/components/AppReadyGate", () => ({
     const RN = require("react-native") as typeof import("react-native");
     return ReactMod.createElement(RN.View, { testID: "app-ready-gate" });
   },
+}));
+
+jest.mock("@/components/LanguageRuntimeBoundary", () => ({
+  PrivateLanguageBoundary: mockCreatePassThroughProvider("language-boundary"),
+}));
+jest.mock("@/components/LanguageFailureNotice", () => ({
+  LanguageFailureNotice: (): null => mockLanguageNotice(),
 }));
 
 jest.mock("@/components/ui/StartupLoadingView", () => ({
@@ -285,5 +293,21 @@ describe("private route layout", () => {
 
     expect(queryAllByTestId("private-stack")).not.toHaveLength(0);
     expect(mockReplace).not.toHaveBeenCalled();
+  });
+
+  it("mounts language warning only after slow account startup settles", (): void => {
+    mockUseAuth.mockReturnValue({ isAuthenticated: true, isLoading: false });
+    mockUseSync.mockReturnValue({
+      initialSyncState: "in-progress",
+      initialSyncFailureReason: null,
+    });
+    const { rerender } = renderLayout();
+    expect(mockLanguageNotice).not.toHaveBeenCalled();
+    mockUseSync.mockReturnValue({
+      initialSyncState: "success",
+      initialSyncFailureReason: null,
+    });
+    rerender(createElement(PrivateLayout));
+    expect(mockLanguageNotice).toHaveBeenCalled();
   });
 });

@@ -186,6 +186,7 @@ export function SmsSyncSettingsSection({
   chevronColor,
   onIncrementalSync,
   onHistoryRescanPress,
+  lookbackDays,
   historyRescanAvailableAt,
   language = "en",
 }: {
@@ -194,6 +195,7 @@ export function SmsSyncSettingsSection({
   readonly chevronColor: string;
   readonly onIncrementalSync: () => void;
   readonly onHistoryRescanPress: () => void;
+  readonly lookbackDays: number;
   readonly historyRescanAvailableAt?: string | null;
   readonly language?: string;
 }): React.JSX.Element {
@@ -221,7 +223,7 @@ export function SmsSyncSettingsSection({
               {t("sync_new")}
             </Text>
             <Text className="text-xs text-slate-500 dark:text-slate-400">
-              {t("sync_new_description")}
+              {t("sync_new_description", { days: lookbackDays })}
             </Text>
           </View>
         </View>
@@ -255,7 +257,7 @@ export function SmsSyncSettingsSection({
               </Text>
               <Text className="text-xs text-slate-500 dark:text-slate-400">
                 {historyRescanAvailability === null
-                  ? t("rescan_recent_description")
+                  ? t("rescan_recent_description", { days: lookbackDays })
                   : t("rescan_recent_available_at", {
                       date: historyRescanAvailability,
                     })}
@@ -446,15 +448,23 @@ export function ProfileNotificationsSection({
 export function DevelopmentToolsSettingsSection({
   t,
   isVisible,
+  isStartupQaVisible,
+  isSmsProviderEvaluationVisible,
   chevronColor,
   onQaSmsPatternIntakePress,
+  onStartupQaPress,
+  onSmsProviderEvaluationPress,
 }: {
   readonly t: TranslateFn;
   readonly isVisible: boolean;
+  readonly isStartupQaVisible: boolean;
+  readonly isSmsProviderEvaluationVisible: boolean;
   readonly chevronColor: string;
   readonly onQaSmsPatternIntakePress: () => void;
+  readonly onStartupQaPress: () => void;
+  readonly onSmsProviderEvaluationPress: () => void;
 }): React.JSX.Element | null {
-  if (!isVisible) {
+  if (!isVisible && !isStartupQaVisible && !isSmsProviderEvaluationVisible) {
     return null;
   }
 
@@ -462,27 +472,77 @@ export function DevelopmentToolsSettingsSection({
     <View className="mb-8">
       <SectionLabel>{t("development_tools")}</SectionLabel>
 
-      <TouchableOpacity
-        testID="qa-sms-pattern-intake-settings-link"
-        onPress={onQaSmsPatternIntakePress}
-        className="flex-row items-center justify-between p-4 rounded-2xl bg-white dark:bg-slate-800"
-      >
-        <View className="flex-1 flex-row items-center gap-3">
-          <SettingsIconTile
-            name="flask-outline"
-            className="bg-teal-600 dark:bg-teal-500"
-          />
-          <View className="flex-1">
-            <Text className="text-base font-medium text-slate-900 dark:text-slate-50">
-              {t("qa_sms_pattern_intake")}
-            </Text>
-            <Text className="text-xs text-slate-500 dark:text-slate-400">
-              {t("qa_sms_pattern_intake_description")}
-            </Text>
+      {isVisible && (
+        <TouchableOpacity
+          testID="qa-sms-pattern-intake-settings-link"
+          onPress={onQaSmsPatternIntakePress}
+          className="flex-row items-center justify-between p-4 rounded-2xl bg-white dark:bg-slate-800"
+        >
+          <View className="flex-1 flex-row items-center gap-3">
+            <SettingsIconTile
+              name="flask-outline"
+              className="bg-teal-600 dark:bg-teal-500"
+            />
+            <View className="flex-1">
+              <Text className="text-base font-medium text-slate-900 dark:text-slate-50">
+                {t("qa_sms_pattern_intake")}
+              </Text>
+              <Text className="text-xs text-slate-500 dark:text-slate-400">
+                {t("qa_sms_pattern_intake_description")}
+              </Text>
+            </View>
           </View>
-        </View>
-        <Ionicons name="chevron-forward" size={20} color={chevronColor} />
-      </TouchableOpacity>
+          <Ionicons name="chevron-forward" size={20} color={chevronColor} />
+        </TouchableOpacity>
+      )}
+
+      {isSmsProviderEvaluationVisible && (
+        <TouchableOpacity
+          testID="sms-provider-evaluation-settings-link"
+          onPress={onSmsProviderEvaluationPress}
+          className="mt-2 flex-row items-center justify-between rounded-2xl bg-white p-4 dark:bg-slate-800"
+        >
+          <View className="flex-1 flex-row items-center gap-3">
+            <SettingsIconTile
+              name="analytics-outline"
+              className="bg-teal-600 dark:bg-teal-500"
+            />
+            <View className="flex-1">
+              <Text className="text-base font-medium text-slate-900 dark:text-slate-50">
+                {t("sms_provider_evaluation.settings_title")}
+              </Text>
+              <Text className="text-xs text-slate-500 dark:text-slate-400">
+                {t("sms_provider_evaluation.settings_description")}
+              </Text>
+            </View>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={chevronColor} />
+        </TouchableOpacity>
+      )}
+
+      {isStartupQaVisible && (
+        <TouchableOpacity
+          testID="startup-qa-rates-settings-link"
+          onPress={onStartupQaPress}
+          className="mt-2 flex-row items-center justify-between rounded-2xl bg-white p-4 dark:bg-slate-800"
+        >
+          <View className="flex-1 flex-row items-center gap-3">
+            <SettingsIconTile
+              name="refresh-outline"
+              className="bg-teal-600 dark:bg-teal-500"
+            />
+            <View className="flex-1">
+              <Text className="text-base font-medium text-slate-900 dark:text-slate-50">
+                {t("startup_qa_rates")}
+              </Text>
+              <Text className="text-xs text-slate-500 dark:text-slate-400">
+                {t("startup_qa_rates_description")}
+              </Text>
+            </View>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={chevronColor} />
+        </TouchableOpacity>
+      )}
     </View>
   );
 }

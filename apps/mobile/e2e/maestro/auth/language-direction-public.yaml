@@ -1,0 +1,35 @@
+appId: com.monyvi.app
+---
+# Precondition: signed out, English selected; use local/fixture test configuration.
+# Screenshots require human direction review; text assertions alone do not prove RTL.
+- launchApp:
+    clearState: false
+- extendedWaitUntil:
+    visible: "Language: EN"
+    timeout: 120000
+- tapOn: "Language: EN"
+- tapOn:
+    id: "language-option-ar"
+- extendedWaitUntil:
+    visible: "Language: AR"
+    timeout: 120000
+- takeScreenshot: language-public-ar
+- stopApp
+- launchApp:
+    clearState: false
+- extendedWaitUntil:
+    visible: "Language: AR"
+    timeout: 120000
+- tapOn: "Language: AR"
+- tapOn:
+    id: "language-option-en"
+- extendedWaitUntil:
+    visible: "Language: EN"
+    timeout: 120000
+- stopApp
+- launchApp:
+    clearState: false
+- extendedWaitUntil:
+    visible: "Language: EN"
+    timeout: 120000
+- takeScreenshot: language-public-en

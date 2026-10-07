@@ -174,14 +174,23 @@ describe("exact Metals decimal contract", () => {
     ["١٢٣٫٤٥", "123.45"],
     ["-٠٫٠٠٥", "-0.005"],
     ["١٬٢٣٤٫٥٦", "1234.56"],
-    ["1234,56", "1234.56"],
-    ["1,23", "1.23"],
+    ["12.5", "12.5"],
+    ["1,234.50", "1234.5"],
     ["١٬٢٣٤٬٥٦٧٫٨٩", "1234567.89"],
   ])("normalizes localized decimal %s to %s", (input, expected) => {
     const { parseLocalizedDecimal, serializeDecimal } = loadDecimalApi();
 
     expect(serializeDecimal(parseLocalizedDecimal(input))).toBe(expected);
   });
+
+  it.each(["12,5", "1234,56", "1,23"])(
+    "rejects comma-decimal notation %s under dot-only amount grammar",
+    (input) => {
+      const { parseLocalizedDecimal } = loadDecimalApi();
+
+      expect(() => parseLocalizedDecimal(input)).toThrow();
+    }
+  );
 
   it.each([
     ["1,234.56", "1234.56"],

@@ -175,7 +175,7 @@ Do not shorten **Dispose** to “Remove,” “Delete,” or `حذف`. Do not us
 
 ### Delete holding
 
-- **Title:** Delete holding? / حذف الحيازة؟
+- **Title:** Delete holding / حذف الحيازة
 - **Body:** Only delete a holding added by mistake. It will be removed from your portfolio and History. Sell and No Longer are separate actions.
 - **Confirm action:** Delete holding / حذف الحيازة.
 - **Availability:** Never show for Sold or Disposed holdings. Explain: “To correct this terminal action, undo it first.” / «لتصحيح هذا الإجراء النهائي، تراجع عنه أولاً.»

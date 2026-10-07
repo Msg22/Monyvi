@@ -188,7 +188,7 @@ describe("LiveRatesScreen Metals V1 production presentation", () => {
     render(<LiveRatesScreen />);
 
     expect(screen.getByText("EGP 40/g")).toBeOnTheScreen();
-    expect(screen.getByText("offline_mode")).toBeOnTheScreen();
+    expect(screen.queryByText("offline_mode")).toBeNull();
     fireEvent.press(screen.getByLabelText("Open currency search"));
     expect(screen.getByPlaceholderText("search_currencies")).toBeOnTheScreen();
   });

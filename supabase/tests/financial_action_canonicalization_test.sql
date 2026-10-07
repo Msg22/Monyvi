@@ -76,11 +76,18 @@ select throws_ok(
   'duplicate raw keys are rejected'
 );
 
-select throws_ok(
-  $$select private.financial_action_canonical_json_v1(private.financial_action_encode_jsonb_v1(jsonb_set(pg_temp.valid_financial_action_envelope(), '{accountGuards}', '[{"accountId":"018f0c7a-1234-7abc-8def-000000000007","expectedRevision":"0"}]'::jsonb)))$$,
-  '22023',
-  'financial_action_invalid_envelope',
-  'non-empty account guards remain disabled in foundation'
+select is(
+  private.financial_action_canonical_json_v1(
+    private.financial_action_encode_jsonb_v1(
+      jsonb_set(
+        pg_temp.valid_financial_action_envelope(),
+        '{accountGuards}',
+        '[{"accountId":"018f0c7a-1234-7abc-8def-000000000007","expectedRevision":"0"}]'::jsonb
+      )
+    )
+  ),
+  '{"accountGuards":[{"accountId":"018f0c7a-1234-7abc-8def-000000000007","expectedRevision":"0"}],"actionId":"018f0c7a-1234-7abc-8def-000000000001","domain":"metals","domainReferenceId":"018f0c7a-1234-7abc-8def-000000000002","envelopeVersion":"monyvi.financial-action/v1","kind":"sell","occurredAt":"2026-08-31T10:15:30.123Z","payload":{"feeMinorUnits":"80000","grossProceedsDecimal":"35500","holdingId":"018f0c7a-1234-7abc-8def-000000000004","includeAccountCredit":false,"netProceedsMinorUnits":"3470000","notes":"ذهب","rateReferenceIds":[]},"payloadVersion":"metals.sell/v1","userId":"018f0c7a-1234-7abc-8def-000000000003"}',
+  'non-empty account guards remain canonical after account effects cutover'
 );
 
 select throws_ok(

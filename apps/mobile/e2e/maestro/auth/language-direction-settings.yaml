@@ -1,0 +1,37 @@
+appId: com.monyvi.app
+---
+# Precondition: signed in/onboarded, English selected; local/fixture configuration.
+# No credentials are embedded. Review captured dashboard direction manually.
+- openLink: monyvi://settings
+- extendedWaitUntil:
+    visible:
+      id: "settings-language"
+    timeout: 120000
+- tapOn:
+    id: "settings-language"
+- tapOn: "Arabic"
+- extendedWaitUntil:
+    visible: "الرئيسية|الإعدادات|الحسابات"
+    timeout: 120000
+- takeScreenshot: language-settings-ar
+- stopApp
+- launchApp:
+    clearState: false
+- openLink: monyvi://settings
+- extendedWaitUntil:
+    visible:
+      id: "settings-language"
+    timeout: 120000
+- tapOn:
+    id: "settings-language"
+- tapOn: "الإنجليزية"
+- extendedWaitUntil:
+    visible: "Home|Settings|Accounts"
+    timeout: 120000
+- stopApp
+- launchApp:
+    clearState: false
+- extendedWaitUntil:
+    visible: "Home|Accounts"
+    timeout: 120000
+- takeScreenshot: language-settings-en

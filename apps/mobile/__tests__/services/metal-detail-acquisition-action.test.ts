@@ -120,6 +120,24 @@ describe("metal detail acquisition-action binding", () => {
     });
   });
 
+  it("uses the quoted 24K rate directly for current gold-999 value without rewriting recorded purity", () => {
+    const input = detailInput();
+    const model = buildMetalDetailReadModel({
+      ...input,
+      metal: {
+        ...input.metal,
+        purityCode: "gold-999",
+        purityFactorDecimal: "0.999",
+      },
+    });
+
+    expect(model).toMatchObject({
+      currentValueDecimal: "120",
+      purityCode: "gold-999",
+      purityFactorDecimal: "0.999",
+    });
+  });
+
   it("uses exact USD identity for current detail value without fabricating a USD observation", () => {
     const input = detailInput();
     const model = buildMetalDetailReadModel({
@@ -145,8 +163,47 @@ describe("metal detail acquisition-action binding", () => {
         source: "fixture",
         state: "fresh",
       },
+      currentValueRateInputs: [
+        { id: "metal:GOLD", state: "fresh", source: "fixture" },
+      ],
       totalGainDecimal: "-880.012",
     });
+  });
+
+  it("preserves separate metal and FX trust for a displayed non-USD valuation", () => {
+    const input = detailInput();
+    const model = buildMetalDetailReadModel({
+      ...input,
+      preferredCurrency: "EGP",
+      currentRates: {
+        ...input.currentRates!,
+        gold: { ...input.currentRates!.gold, state: "stale", ageMs: 172800000 },
+        currencies: new Map([
+          [
+            "EGP",
+            {
+              ...input.currentRates!.currencies.get("USD")!,
+              valueDecimal: "0.02",
+              state: "unknown",
+              ageMs: null,
+              providerObservedAt: null,
+              source: "FX provider",
+            },
+          ],
+        ]),
+      },
+    });
+
+    expect(model?.currentValueDecimal).not.toBeNull();
+    expect(model?.currentValueRateInputs).toMatchObject([
+      { id: "metal:GOLD", state: "stale", ageMs: 172800000, source: "fixture" },
+      {
+        id: "currency:EGP",
+        state: "unknown",
+        ageMs: null,
+        source: "FX provider",
+      },
+    ]);
   });
 
   it("uses exact USD identity when converting detail attribution for display", () => {
@@ -181,6 +238,10 @@ describe("metal detail acquisition-action binding", () => {
       currentValueDecimal: "119.988",
       totalGainDecimal: "-880.012",
     });
+    expect(model?.currentValueRateInputs).toMatchObject([
+      { id: "metal:GOLD", state: "fresh" },
+      { id: "currency:EGP", state: "fresh" },
+    ]);
     expect(model?.attribution?.breakdown.available).toBe(true);
   });
 

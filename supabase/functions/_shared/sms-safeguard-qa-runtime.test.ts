@@ -88,10 +88,11 @@ test("the local QA endpoint cannot import or configure a production AI provider"
     "utf8"
   );
 
-  assert.doesNotMatch(
-    source,
-    /GEMINI_API_KEY|generativelanguage|generateContent/i
-  );
+  const productionProviderPattern =
+    /GEMINI_API_KEY|generativelanguage|generateContent|DEEPINFRA_API_KEY|api\.deepinfra\.com|deepinfra-sms-provider|SMS_AI_PROVIDER|SMS_AI_MODEL|SMS_AI_SERVICE_TIER/i;
+  assert.match("DEEPINFRA_API_KEY", productionProviderPattern);
+  assert.match("deepinfra-sms-provider", productionProviderPattern);
+  assert.doesNotMatch(source, productionProviderPattern);
   assert.match(source, /executeSafeguardQaProvider/);
   assert.match(source, /assertLocalSafeguardQaRuntime/);
 });

@@ -17,6 +17,8 @@ import {
 } from "@/services/metal-detail-read-model-service";
 import { observeMetalDetailActionEvidence } from "@/services/metal-action-evidence-observer-service";
 import { syncDatabase } from "@/services/sync";
+import { logger } from "@/utils/logger";
+import { redactIdentifierForLog } from "@/utils/logger-redaction";
 import { AppState } from "react-native";
 
 const RATE_STATUS_REFRESH_INTERVAL_MS = 60_000;
@@ -147,6 +149,10 @@ export function useMetalHoldingDetail(
     }
     const onChange = (): void => setLocalRevision((value) => value + 1);
     const onObservationError = (cause: unknown): void => {
+      logger.error("metalHoldingDetail.observation.failed", cause, {
+        holdingId,
+        redactedUserId: redactIdentifierForLog(userId),
+      });
       hasLoadedOnceRef.current = false;
       modelIdentityRef.current = null;
       setModel(null);
@@ -244,6 +250,10 @@ export function useMetalHoldingDetail(
         }
       })
       .catch((cause: unknown) => {
+        logger.error("metalHoldingDetail.read.failed", cause, {
+          holdingId,
+          redactedUserId: redactIdentifierForLog(userId),
+        });
         if (isCurrent && detailIdentityRef.current === detailIdentity) {
           modelIdentityRef.current = null;
           setModel(null);

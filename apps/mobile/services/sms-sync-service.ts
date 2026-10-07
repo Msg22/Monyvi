@@ -643,9 +643,12 @@ async function executeScanPipeline(
       // Accumulate chunk durations for rolling average
       chunkDurations.push(aiProgress.chunkDurationMs);
 
-      // Calculate estimated remaining from rolling average of completed chunk durations
+      // Calculate estimated remaining from rolling average of completed chunk
+      // durations. Parallel transport divides by the active concurrent batch
+      // count; local/fixture/QA progress defaults to 1 (sequential).
       const remainingChunks =
         aiProgress.totalChunks - aiProgress.chunksCompleted;
+      const concurrentBatchCount = aiProgress.concurrentBatchCount ?? 1;
       let estimatedRemainingMs: number | undefined;
 
       if (
@@ -655,7 +658,9 @@ async function executeScanPipeline(
       ) {
         const avgChunkDurationMs =
           chunkDurations.reduce((sum, d) => sum + d, 0) / chunkDurations.length;
-        estimatedRemainingMs = Math.round(avgChunkDurationMs * remainingChunks);
+        estimatedRemainingMs = Math.round(
+          (avgChunkDurationMs * remainingChunks) / concurrentBatchCount
+        );
       }
 
       onProgress?.({
