@@ -1,5 +1,5 @@
 import "edge-runtime";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 import {
   handleEmailVerificationResendRequest,
@@ -12,7 +12,7 @@ const MAX_RESENDS = 3;
 const RESERVATION_LEASE_SECONDS = 30;
 const DEFAULT_REDIRECT_URL = "monyvi://auth-callback";
 
-function createServiceClient(): ReturnType<typeof createClient> {
+function createServiceClient(): SupabaseClient {
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   if (!supabaseUrl || !serviceKey) {

@@ -50,6 +50,7 @@ const EXCLUDED_TABLES = [
   "sms_ai_work_requests",
   "sms_ai_usage_events",
   "sms_ai_scan_sessions",
+  "email_verification_resend_limits",
 ];
 
 // Mapping from table names to class names (for irregular plurals)
