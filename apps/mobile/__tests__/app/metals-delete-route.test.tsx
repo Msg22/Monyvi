@@ -12,6 +12,7 @@ import DeleteMetalHoldingRoute from "../../app/(private)/metals/[holdingId]/dele
 
 const mockBack = jest.fn();
 const mockDismissTo = jest.fn();
+const mockReplace = jest.fn();
 const mockEnsureToken = jest.fn();
 const mockExecute = jest.fn();
 const mockCreateCommand = jest.fn();
@@ -26,30 +27,31 @@ let mockDetailError: Error | null = null;
 let mockIdCounter = 0;
 let mockTokenAvailable = true;
 let mockTopInset = 0;
+let mockCanGoBack = true;
 
 interface CapturedSheetProps {
   readonly holding: {
     readonly name: string;
-    readonly description: string;
-    readonly weightLabel: string;
-    readonly currentValueLabel: string;
-    readonly performanceLabel: string;
+    readonly metalLabel: string;
+    readonly metaLabel: string;
   };
   readonly copy: Record<string, string>;
   readonly visible: boolean;
   readonly isOffline: boolean;
   readonly isSubmitting: boolean;
   readonly submitError: string | null;
-  readonly rateWarnings: readonly {
-    readonly id: string;
-    readonly acknowledgment: string;
-  }[];
   readonly onConfirm: () => void;
   readonly onCancel: () => void;
   readonly onRetry: () => void;
 }
 
+interface CapturedDetailProps {
+  readonly actions: readonly unknown[];
+  readonly model: MetalDetailReadModel | null;
+}
+
 let lastSheetProps: CapturedSheetProps | null = null;
+let lastDetailProps: CapturedDetailProps | null = null;
 
 jest.mock("expo-router", () => ({
   useLocalSearchParams: (): { readonly holdingId?: string } => ({
@@ -58,6 +60,8 @@ jest.mock("expo-router", () => ({
   router: {
     back: (...args: unknown[]): unknown => mockBack(...args),
     dismissTo: (...args: unknown[]): unknown => mockDismissTo(...args),
+    replace: (...args: unknown[]): unknown => mockReplace(...args),
+    canGoBack: (): boolean => mockCanGoBack,
   },
 }));
 
@@ -186,6 +190,22 @@ jest.mock("react-i18next", () => ({
   }),
 }));
 
+jest.mock("@/components/metals/MetalHoldingDetailScreen", () => {
+  const React = jest.requireActual<typeof import("react")>("react");
+  const { View: MockView } =
+    jest.requireActual<typeof import("react-native")>("react-native");
+  return {
+    MetalHoldingDetailScreen: (
+      props: CapturedDetailProps
+    ): React.JSX.Element | null => {
+      lastDetailProps = props;
+      return React.createElement(MockView, {
+        testID: "mock-metal-holding-detail",
+      });
+    },
+  };
+});
+
 jest.mock("@/components/metals/DeleteMetalHoldingSheet", () => {
   const React = jest.requireActual<typeof import("react")>("react");
   const { Pressable: MockPressable } =
@@ -275,6 +295,7 @@ describe("delete holding route journey", () => {
   beforeEach((): void => {
     mockBack.mockClear();
     mockDismissTo.mockClear();
+    mockReplace.mockClear();
     mockEnsureToken.mockReset();
     mockTokenAvailable = true;
     mockEnsureToken.mockImplementation(() =>
@@ -307,7 +328,9 @@ describe("delete holding route journey", () => {
     mockIsLoading = false;
     mockDetailError = null;
     mockTopInset = 0;
+    mockCanGoBack = true;
     lastSheetProps = null;
+    lastDetailProps = null;
   });
 
   it("keeps the loading skeleton below the top safe area", () => {
@@ -328,10 +351,8 @@ describe("delete holding route journey", () => {
     expect(lastSheetProps?.visible).toBe(true);
     expect(lastSheetProps?.holding).toEqual({
       name: "Wedding coin",
-      description: "Gold · 24K · 999 · Coin",
-      weightLabel: "31.125 g",
-      currentValueLabel: "EGP 162,317.87",
-      performanceLabel: "+ EGP 11,039.67",
+      metalLabel: "Gold",
+      metaLabel: "24K · 999 · Coin",
     });
     expect(lastSheetProps?.copy.title).toBe("Delete holding");
     expect(lastSheetProps?.copy.consequence).toBe(
@@ -342,37 +363,77 @@ describe("delete holding route journey", () => {
     );
     expect(lastSheetProps?.isOffline).toBe(true);
     expect(lastSheetProps?.copy.offline).toBe("Saved locally first");
+    expect(Object.keys(lastSheetProps?.holding ?? {})).toEqual([
+      "name",
+      "metalLabel",
+      "metaLabel",
+    ]);
   });
 
-  it("passes stale and unknown input warnings into the live Delete confirmation", () => {
-    mockModel = {
-      ...activeModel(),
-      currentValueRateInputs: [
-        {
-          id: "metal:GOLD",
-          state: "stale",
-          ageMs: 172800000,
-          providerObservedAt: null,
-          source: "Metal provider",
-          quality: "valid",
-        },
-        {
-          id: "currency:EGP",
-          state: "unknown",
-          ageMs: null,
-          providerObservedAt: null,
-          source: "FX provider",
-          quality: null,
-        },
-      ],
-    };
+  it("renders the real same-holding Detail beneath the sheet for a pushed entry", () => {
+    mockCanGoBack = true;
 
     render(<DeleteMetalHoldingRoute />);
 
-    expect(lastSheetProps?.rateWarnings).toMatchObject([
-      { id: "metal:GOLD" },
-      { id: "currency:EGP" },
-    ]);
+    expect(
+      screen.getByTestId("metal-holding-delete-direct-detail", {
+        includeHiddenElements: true,
+      })
+    ).toBeTruthy();
+    expect(
+      screen.getByTestId("mock-metal-holding-detail", {
+        includeHiddenElements: true,
+      })
+    ).toBeTruthy();
+    expect(lastDetailProps?.actions).toEqual([]);
+    expect(lastDetailProps?.model?.id).toBe("holding-1");
+    expect(lastDetailProps?.model?.name).toBe("Wedding coin");
+    expect(lastSheetProps?.visible).toBe(true);
+  });
+
+  it("renders the real same-holding Detail beneath the sheet for a direct-link entry", () => {
+    mockCanGoBack = false;
+
+    render(<DeleteMetalHoldingRoute />);
+
+    expect(
+      screen.getByTestId("metal-holding-delete-direct-detail", {
+        includeHiddenElements: true,
+      })
+    ).toBeTruthy();
+    expect(
+      screen.getByTestId("mock-metal-holding-detail", {
+        includeHiddenElements: true,
+      })
+    ).toBeTruthy();
+    expect(lastDetailProps?.actions).toEqual([]);
+    expect(lastDetailProps?.model?.id).toBe("holding-1");
+    expect(lastSheetProps?.visible).toBe(true);
+  });
+
+  it("returns to the previous route when cancelled with history", () => {
+    mockCanGoBack = true;
+    render(<DeleteMetalHoldingRoute />);
+
+    fireEvent.press(screen.getByTestId("sheet-cancel"));
+
+    expect(mockBack).toHaveBeenCalledTimes(1);
+    expect(mockReplace).not.toHaveBeenCalled();
+    expect(mockExecute).not.toHaveBeenCalled();
+  });
+
+  it("replaces to the same-holding detail when cancelled without history", () => {
+    mockCanGoBack = false;
+    render(<DeleteMetalHoldingRoute />);
+
+    fireEvent.press(screen.getByTestId("sheet-cancel"));
+
+    expect(mockBack).not.toHaveBeenCalled();
+    expect(mockReplace).toHaveBeenCalledWith({
+      pathname: "/metals/[id]",
+      params: { id: "holding-1" },
+    });
+    expect(mockExecute).not.toHaveBeenCalled();
   });
 
   it("confirms once and dismisses to the existing portfolio on local success", async () => {
@@ -486,15 +547,6 @@ describe("delete holding route journey", () => {
       expect(mockExecute).not.toHaveBeenCalled();
     }
   );
-
-  it("returns to the holding detail without writing when cancelled", () => {
-    render(<DeleteMetalHoldingRoute />);
-
-    fireEvent.press(screen.getByTestId("sheet-cancel"));
-
-    expect(mockBack).toHaveBeenCalledTimes(1);
-    expect(mockExecute).not.toHaveBeenCalled();
-  });
 
   it("shows the approved not-found state when the holding is gone", () => {
     mockModel = null;

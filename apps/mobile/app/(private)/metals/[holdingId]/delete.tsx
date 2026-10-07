@@ -174,26 +174,24 @@ export default function DeleteMetalHoldingRoute(): React.JSX.Element | null {
 
   return (
     <View className="flex-1">
-      {!canReturnToPreviousRoute ? (
-        <View
-          testID="metal-holding-delete-direct-detail"
-          pointerEvents="none"
-          accessibilityElementsHidden
-          importantForAccessibility="no-hide-descendants"
-          className="flex-1 bg-background dark:bg-background-dark"
-        >
-          <PageHeader
-            showBackButton
-            showDrawer={false}
-            title={t(getHoldingDetailTitleKey(detail.model?.status))}
-          />
-          <MetalHoldingDetailScreen
-            actions={[]}
-            {...detail}
-            onRetry={detail.retry}
-          />
-        </View>
-      ) : null}
+      <View
+        testID="metal-holding-delete-direct-detail"
+        pointerEvents="none"
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
+        className="flex-1 bg-background dark:bg-background-dark"
+      >
+        <PageHeader
+          showBackButton
+          showDrawer={false}
+          title={t(getHoldingDetailTitleKey(detail.model?.status))}
+        />
+        <MetalHoldingDetailScreen
+          actions={[]}
+          {...detail}
+          onRetry={detail.retry}
+        />
+      </View>
 
       <DeleteMetalHoldingSheet
         visible

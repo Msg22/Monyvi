@@ -8,13 +8,9 @@ function read(relativePath: string): string {
 describe("PR #337 Delete confirmation route composition", () => {
   it("uses one transparent native-stack route and no nested React Native Modal", () => {
     const layout = read("../../app/(private)/_layout.tsx");
-    const sheet = read(
-      "../../components/metals/DeleteMetalHoldingSheet.tsx"
-    );
+    const sheet = read("../../components/metals/DeleteMetalHoldingSheet.tsx");
 
-    const routeStart = layout.indexOf(
-      'name="metals/[holdingId]/delete"'
-    );
+    const routeStart = layout.indexOf('name="metals/[holdingId]/delete"');
     expect(routeStart).toBeGreaterThanOrEqual(0);
     const routeSource = layout.slice(routeStart, routeStart + 420);
     expect(routeSource).toContain('presentation: "transparentModal"');
@@ -22,17 +18,13 @@ describe("PR #337 Delete confirmation route composition", () => {
 
     expect(sheet).not.toContain("Modal,");
     expect(sheet).not.toContain("<Modal");
-    expect(sheet).toContain(
-      'BackHandler.addEventListener("hardwareBackPress"'
-    );
+    expect(sheet).toContain("BackHandler.addEventListener");
+    expect(sheet).toContain("hardwareBackPress");
   });
 
-  it("renders the real holding-detail component as the direct-link backdrop fallback", () => {
-    const route = read(
-      "../../app/(private)/metals/[holdingId]/delete.tsx"
-    );
+  it("always renders the real same-holding Detail beneath the sheet", () => {
+    const route = read("../../app/(private)/metals/[holdingId]/delete.tsx");
 
-    expect(route).toContain("router.canGoBack()");
     expect(route).toContain("metal-holding-delete-direct-detail");
     expect(route).toContain("<MetalHoldingDetailScreen");
     expect(route).toContain("actions={[]}");

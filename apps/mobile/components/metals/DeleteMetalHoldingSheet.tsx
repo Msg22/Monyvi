@@ -29,7 +29,8 @@ export interface DeleteMetalHoldingSheetProps {
   readonly visible: boolean;
   readonly holding: {
     readonly name: string;
-    readonly description: string;
+    readonly metalLabel: string;
+    readonly metaLabel: string;
   };
   readonly copy: DeleteMetalHoldingSheetCopy;
   readonly bottomInset: number;
@@ -103,7 +104,7 @@ export function DeleteMetalHoldingSheet(
         onPress={props.onCancel}
         className="absolute inset-0"
       >
-        <View className="flex-1 bg-slate-950/70" />
+        <View className="flex-1 bg-slate-950/50" />
       </TouchableOpacity>
 
       <DeletePanel
@@ -131,12 +132,18 @@ function DeletePanel({
   return (
     <View
       testID="metal-holding-delete-panel"
-      className="max-h-[90%] overflow-hidden rounded-t-3xl bg-slate-25 pt-6 dark:bg-slate-900"
+      className="max-h-[90%] overflow-hidden rounded-t-3xl bg-slate-25 pt-3 dark:bg-slate-900"
       style={{
         paddingLeft: props.leftInset + 20,
         paddingRight: props.rightInset + 20,
       }}
     >
+      <View
+        testID="metal-holding-delete-handle"
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
+        className="mb-3 h-1 w-10 self-center rounded-full bg-slate-300 dark:bg-slate-700"
+      />
       <ScrollView
         testID="metal-holding-delete-scroll"
         showsVerticalScrollIndicator={false}
@@ -149,12 +156,12 @@ function DeletePanel({
           style={directionStyle}
         >
           <View className="items-center gap-3">
-            <View className="h-14 w-14 items-center justify-center rounded-full bg-red-100 dark:bg-red-950">
+            <View className="h-11 w-11 items-center justify-center rounded-full bg-red-100 dark:bg-red-950">
               <Ionicons
                 accessibilityElementsHidden
                 importantForAccessibility="no-hide-descendants"
                 name="trash-outline"
-                size={28}
+                size={22}
                 color={palette.red[600]}
               />
             </View>
@@ -162,23 +169,30 @@ function DeletePanel({
               ref={headingRef}
               accessibilityRole="header"
               accessibilityLabel={props.copy.title}
-              className="text-center text-xl font-bold text-text-primary dark:text-text-primary-dark"
+              className="text-center text-xl font-medium text-text-primary dark:text-text-primary-dark"
             >
               {props.copy.title}
             </Text>
             <Text
               testID="metal-holding-delete-identity"
               accessible
-              accessibilityLabel={`${props.holding.name}. ${props.holding.description}`}
-              className="text-center text-base font-medium text-text-secondary dark:text-text-secondary-dark"
+              accessibilityLabel={`${props.holding.name}. ${props.holding.metalLabel} · ${props.holding.metaLabel}`}
+              className="text-center text-base text-text-secondary dark:text-text-secondary-dark"
             >
-              {`${props.holding.name} · ${props.holding.description}`}
+              <Text className="font-semibold text-text-primary dark:text-text-primary-dark">
+                {props.holding.name}
+              </Text>
+              <Text>{` · `}</Text>
+              <Text className="font-semibold text-gold-600 dark:text-gold-400">
+                {props.holding.metalLabel}
+              </Text>
+              <Text>{` · ${props.holding.metaLabel}`}</Text>
             </Text>
           </View>
 
           <Text
             testID="metal-holding-delete-consequence"
-            className="text-center text-sm leading-5 text-text-secondary dark:text-text-secondary-dark"
+            className="mx-auto max-w-[300px] text-center text-sm leading-5 text-text-secondary dark:text-text-secondary-dark"
           >
             {props.copy.consequence}
           </Text>

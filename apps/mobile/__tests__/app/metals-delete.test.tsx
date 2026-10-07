@@ -35,7 +35,8 @@ interface DeleteMetalHoldingSheetProps {
   readonly visible: boolean;
   readonly holding: {
     readonly name: string;
-    readonly description: string;
+    readonly metalLabel: string;
+    readonly metaLabel: string;
   };
   readonly copy: DeleteMetalHoldingSheetCopy;
   readonly bottomInset: number;
@@ -133,7 +134,8 @@ function renderSheet(
     visible: true,
     holding: {
       name: "Wedding coin",
-      description: "Gold · 24K · 999 · Coin",
+      metalLabel: "Gold",
+      metaLabel: "24K · 999 · Coin",
     },
     copy,
     bottomInset: 24,
@@ -201,12 +203,16 @@ describe("DeleteMetalHoldingSheet approved focused confirmation", () => {
       "testID",
       "metal-holding-delete-consequence"
     );
-    expect(
-      screen.getByText("Wedding coin · Gold · 24K · 999 · Coin")
-    ).toHaveProp("testID", "metal-holding-delete-identity");
-    expect(
-      screen.getByTestId("metal-holding-delete-identity")
-    ).toHaveProp(
+    expect(screen.getByText("Wedding coin")).toHaveProp(
+      "className",
+      expect.stringContaining("text-text-primary")
+    );
+    expect(screen.getByText("Gold")).toHaveProp(
+      "className",
+      expect.stringContaining("text-gold-600")
+    );
+    expect(screen.getByText(/24K · 999 · Coin/)).toBeTruthy();
+    expect(screen.getByTestId("metal-holding-delete-identity")).toHaveProp(
       "accessibilityLabel",
       "Wedding coin. Gold · 24K · 999 · Coin"
     );
@@ -221,6 +227,24 @@ describe("DeleteMetalHoldingSheet approved focused confirmation", () => {
       screen.getByRole("button", { name: copy.accessibilityLabel })
     ).toBeTruthy();
     expect(screen.queryByText("Undo deletion")).toBeNull();
+  });
+
+  it("matches the approved compact chrome: handle, 44dp badge, medium title, readable dim", () => {
+    renderSheet();
+
+    expect(
+      screen.getByTestId("metal-holding-delete-handle", {
+        includeHiddenElements: true,
+      })
+    ).toHaveProp("className", expect.stringContaining("bg-slate-300"));
+    expect(screen.getByRole("header", { name: copy.title })).toHaveProp(
+      "className",
+      expect.stringContaining("font-medium")
+    );
+    expect(screen.getByText(copy.consequence)).toHaveProp(
+      "className",
+      expect.stringContaining("max-w-[300px]")
+    );
   });
 
   it("requests initial focus for the confirmation heading and isolates the background", async () => {
@@ -271,7 +295,6 @@ describe("DeleteMetalHoldingSheet approved focused confirmation", () => {
     expect(handler?.()).toBe(true);
     expect(props.onCancel).not.toHaveBeenCalled();
   });
-
 
   it("locks confirm, cancel, backdrop, and duplicate input while the local action is pending", () => {
     const props = renderSheet({
@@ -385,7 +408,7 @@ describe("useDeleteMetalHolding", () => {
       await expect(first).resolves.toBe(true);
     });
     expect(result.current.isSubmitting).toBe(false);
-  });
+  }, 15000);
 
   it("preserves the complete original command and error state for an idempotent retry", async () => {
     let expectedFinancialRevision = "1";

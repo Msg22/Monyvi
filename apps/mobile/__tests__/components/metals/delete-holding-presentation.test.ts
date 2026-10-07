@@ -84,7 +84,8 @@ describe("delete holding sheet identity", () => {
 
     expect(holding).toEqual({
       name: "Wedding coin",
-      description: "Gold · 24K · 999 · Coin",
+      metalLabel: "Gold",
+      metaLabel: "24K · 999 · Coin",
     });
   });
 
@@ -98,7 +99,11 @@ describe("delete holding sheet identity", () => {
       tMetals
     );
 
-    expect(holding?.description).toBe("Gold · — · Coin");
+    expect(holding).toEqual({
+      name: "Wedding coin",
+      metalLabel: "Gold",
+      metaLabel: "— · Coin",
+    });
   });
 
   it("names an unrecorded physical form instead of hiding the fact", () => {
@@ -107,9 +112,12 @@ describe("delete holding sheet identity", () => {
       tMetals
     );
 
-    expect(holding?.description).toBe("Gold · 24K · 999 · Other form");
+    expect(holding).toEqual({
+      name: "Wedding coin",
+      metalLabel: "Gold",
+      metaLabel: "24K · 999 · Other form",
+    });
   });
-
 });
 
 describe("delete holding sheet copy", () => {

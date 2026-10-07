@@ -21,7 +21,8 @@ export function getDeleteHoldingSheetHolding(
 
   return {
     name: model.name,
-    description: resolveSheetDescription(model, t),
+    metalLabel: resolveSheetMetal(model, t),
+    metaLabel: resolveSheetMeta(model, t),
   };
 }
 
@@ -45,17 +46,21 @@ export function getDeleteHoldingSheetCopy(
   };
 }
 
-function resolveSheetDescription(
+function resolveSheetMetal(
   model: MetalDetailReadModel,
   t: DeleteSheetTranslator
 ): string {
-  const metalLabel = t(
-    model.metalType === "GOLD" ? "metal.gold" : "metal.silver"
-  );
+  return t(model.metalType === "GOLD" ? "metal.gold" : "metal.silver");
+}
+
+function resolveSheetMeta(
+  model: MetalDetailReadModel,
+  t: DeleteSheetTranslator
+): string {
   const formLabel = t(
     model.itemForm === null ? "form.unknown" : `form.${model.itemForm}`
   );
-  return `${metalLabel} · ${resolveSheetPurity(model, t)} · ${formLabel}`;
+  return `${resolveSheetPurity(model, t)} · ${formLabel}`;
 }
 
 function resolveSheetPurity(
