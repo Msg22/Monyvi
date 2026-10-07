@@ -1,0 +1,88 @@
+openapi: 3.1.0
+info:
+  title: Monyvi Voice AI Availability
+  version: 1.0.0
+paths:
+  /functions/v1/voice-ai-availability:
+    post:
+      summary: Read the authenticated user's authoritative voice allowance state
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [timeZone]
+              properties:
+                timeZone:
+                  type: string
+                  minLength: 1
+                  maxLength: 128
+                  description: Valid IANA timezone from the user's device.
+      responses:
+        "200":
+          description: Authoritative availability state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VoiceAvailability"
+        "400":
+          description: Missing or invalid timezone
+        "401":
+          description: Unauthenticated
+        "503":
+          description: Authoritative entitlement/accounting state unavailable
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+  schemas:
+    VoiceAvailability:
+      type: object
+      additionalProperties: false
+      required:
+        - serverNow
+        - timeZone
+        - dailyLimit
+        - remaining
+        - resetAt
+        - reason
+        - availableAt
+        - burstAvailableAt
+        - policyVersion
+      properties:
+        serverNow:
+          type: string
+          format: date-time
+        timeZone:
+          type: string
+        dailyLimit:
+          type: integer
+          minimum: 1
+        remaining:
+          type: integer
+          minimum: 0
+        resetAt:
+          type: string
+          format: date-time
+        reason:
+          type:
+            - string
+            - "null"
+          enum: [daily_limit, burst_limit, null]
+        availableAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+        burstAvailableAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+        policyVersion:
+          type: string
