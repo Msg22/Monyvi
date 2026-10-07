@@ -2,10 +2,16 @@ const mockInvoke = jest.fn();
 const mockRefreshSession = jest.fn();
 const mockSignOut = jest.fn();
 const mockClearPersistedAuthSession = jest.fn();
+const mockGetStableAuthSession = jest.fn();
 
 jest.mock("@/services/supabase", () => ({
+  getStableAuthSession: (): unknown => mockGetStableAuthSession(),
   clearPersistedAuthSession: (...args: readonly unknown[]): unknown =>
     mockClearPersistedAuthSession(...args),
+  coordinatedRefreshSession: (...args: readonly unknown[]): unknown =>
+    mockRefreshSession(...args),
+  coordinatedSignOut: (...args: readonly unknown[]): unknown =>
+    mockSignOut(...args),
   supabase: {
     auth: {
       refreshSession: (...args: readonly unknown[]): unknown =>
@@ -33,6 +39,105 @@ describe("authenticated-edge-function-service", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockSignOut.mockResolvedValue({ error: null });
+    mockGetStableAuthSession.mockResolvedValue({
+      data: {
+        session: {
+          access_token: "stable-access-token",
+        },
+      },
+      error: null,
+    });
+  });
+
+  it("uses the approved stable session token on the first authenticated invoke", async () => {
+    mockGetStableAuthSession.mockResolvedValue({
+      data: {
+        session: {
+          access_token: "stable-p-token",
+        },
+      },
+      error: null,
+    });
+    mockInvoke.mockResolvedValue({
+      data: { ok: true },
+      error: null,
+    });
+
+    await expect(
+      invokeAuthenticatedEdgeFunction("parse-sms", {
+        body: { messages: [] },
+        headers: {
+          Authorization: "Bearer raw-provisional-a",
+          "x-request-id": "request-1",
+        },
+      })
+    ).resolves.toEqual({
+      data: { ok: true },
+      error: null,
+    });
+
+    expect(mockInvoke).toHaveBeenCalledWith(
+      "parse-sms",
+      expect.objectContaining({
+        headers: {
+          Authorization: "Bearer stable-p-token",
+          "x-request-id": "request-1",
+        },
+      })
+    );
+  });
+
+  it("replaces mixed-case caller authorization with exactly one stable Authorization header", async () => {
+    mockGetStableAuthSession.mockResolvedValue({
+      data: {
+        session: {
+          access_token: "stable-p-token",
+        },
+      },
+      error: null,
+    });
+    mockInvoke.mockResolvedValue({
+      data: { ok: true },
+      error: null,
+    });
+
+    await expect(
+      invokeAuthenticatedEdgeFunction("parse-sms", {
+        body: { messages: [] },
+        headers: {
+          aUtHoRiZaTiOn: "Bearer raw-provisional-a",
+          "x-request-id": "request-1",
+        },
+      })
+    ).resolves.toEqual({
+      data: { ok: true },
+      error: null,
+    });
+
+    expect(mockInvoke).toHaveBeenCalledWith("parse-sms", {
+      body: { messages: [] },
+      headers: {
+        Authorization: "Bearer stable-p-token",
+        "x-request-id": "request-1",
+      },
+    });
+  });
+
+  it("fails before invoking when there is no approved stable session", async () => {
+    mockGetStableAuthSession.mockResolvedValue({
+      data: { session: null },
+      error: null,
+    });
+
+    await expect(
+      invokeAuthenticatedEdgeFunction("parse-sms", {
+        body: { messages: [] },
+      })
+    ).rejects.toMatchObject({
+      name: "EdgeFunctionAuthenticationRequiredError",
+    });
+
+    expect(mockInvoke).not.toHaveBeenCalled();
   });
 
   it("returns non-auth failures without refreshing the session", async () => {

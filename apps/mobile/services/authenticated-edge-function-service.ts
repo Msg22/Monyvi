@@ -1,6 +1,12 @@
 import type { FunctionInvokeOptions } from "@supabase/supabase-js";
 
-import { clearPersistedAuthSession, supabase } from "./supabase";
+import {
+  clearPersistedAuthSession,
+  coordinatedRefreshSession,
+  coordinatedSignOut,
+  getStableAuthSession,
+  supabase,
+} from "./supabase";
 
 const EDGE_FUNCTION_AUTHENTICATION_ERROR_NAME =
   "EdgeFunctionAuthenticationRequiredError";
@@ -35,7 +41,7 @@ export function getEdgeFunctionErrorStatus(error: unknown): number | undefined {
 
 async function clearInvalidLocalSession(): Promise<void> {
   try {
-    await supabase.auth.signOut({ scope: "local" });
+    await coordinatedSignOut({ scope: "local" });
   } catch {
     await clearPersistedAuthSession();
   }
@@ -43,7 +49,7 @@ async function clearInvalidLocalSession(): Promise<void> {
 
 async function refreshAccessToken(): Promise<string | null> {
   try {
-    const { data, error } = await supabase.auth.refreshSession();
+    const { data, error } = await coordinatedRefreshSession();
     return error === null ? (data.session?.access_token ?? null) : null;
   } catch {
     return null;
@@ -54,10 +60,16 @@ function withAuthorization(
   options: FunctionInvokeOptions,
   accessToken: string
 ): FunctionInvokeOptions {
+  const headers = Object.fromEntries(
+    Object.entries(options.headers ?? {}).filter(
+      ([key]) => key.toLowerCase() !== "authorization"
+    )
+  );
+
   return {
     ...options,
     headers: {
-      ...options.headers,
+      ...headers,
       Authorization: `Bearer ${accessToken}`,
     },
   };
@@ -68,9 +80,20 @@ export async function invokeAuthenticatedEdgeFunction<TData>(
   options: FunctionInvokeOptions,
   recovery: AuthenticatedEdgeFunctionRecovery = {}
 ): Promise<EdgeFunctionResponse<TData>> {
+  const {
+    data: { session: stableSession },
+    error: stableSessionError,
+  } = await getStableAuthSession();
+  const stableAccessToken =
+    stableSessionError === null ? (stableSession?.access_token ?? null) : null;
+
+  if (stableAccessToken === null) {
+    throw createEdgeFunctionAuthenticationError();
+  }
+
   const firstResponse = await supabase.functions.invoke<TData>(
     functionName,
-    options
+    withAuthorization(options, stableAccessToken)
   );
   if (
     firstResponse.error === null ||

@@ -90,6 +90,12 @@ jobs:
       - name: Test Repository Scripts
         run: npm run test:scripts
 
+      - name: Test Email Verification Resend Edge Contract
+        run: >-
+          node --experimental-strip-types --test
+          supabase/functions/_shared/email-verification-resend-handler.test.ts
+          scripts/__tests__/email-verification-resend-policy.test.ts
+
       - name: Test QA SMS Privacy Check
         run: npm run test:qa-sms-privacy-check
 
@@ -147,6 +153,7 @@ jobs:
           npx supabase test db --local supabase/tests/metals_issue284_persistence_test.sql
           npx supabase test db --local supabase/tests/atomic_market_rate_snapshots_test.sql
           npx supabase test db --local supabase/tests/market_snapshot_publication_test.sql
+          npx supabase test db --local supabase/tests/email_verification_resend_limits_test.sql
 
       - name: Run snapshot publication concurrency pgTAP
         run: node scripts/test-market-snapshot-concurrency.js

@@ -9,7 +9,7 @@
 
 import type { Database } from "@nozbe/watermelondb";
 import { fetch } from "@react-native-community/netinfo";
-import { supabase } from "./supabase";
+import { coordinatedSignOut } from "./supabase";
 import { getActiveSyncPromise, syncDatabase } from "./sync";
 import {
   setAutoConfirm,
@@ -148,7 +148,7 @@ async function disableLiveSmsAutomationSafely(): Promise<void> {
  * Destroy the current Supabase session. Session becomes null.
  */
 async function destroySession(): Promise<void> {
-  const { error } = await supabase.auth.signOut();
+  const { error } = await coordinatedSignOut();
   if (error) {
     throw error;
   }

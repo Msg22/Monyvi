@@ -54,7 +54,8 @@
     "test:coverage": "jest --coverage",
     "test:sms-safeguards": "node scripts/sms-safeguard-qa.js test",
     "i18n:check": "tsx scripts/check-i18n-coverage.ts",
-    "i18n:update-baseline": "tsx scripts/check-i18n-coverage.ts --update-baseline"
+    "i18n:update-baseline": "tsx scripts/check-i18n-coverage.ts --update-baseline",
+    "e2e:email-verification:local": "cross-env E2E_SUPABASE_MODE=local EXPO_PUBLIC_MONYVI_TEST_MODE=e2e EXPO_PUBLIC_AI_SMS_PARSER_MODE=fixture node scripts/run-email-verification-e2e.js"
   },
   "expo": {
     "doctor": {

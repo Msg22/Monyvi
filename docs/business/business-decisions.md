@@ -139,6 +139,50 @@ must be scoped to the authenticated user or to explicitly shared system data.
 | Phone OTP       | Not planned    | No current implementation.                                      |
 | Anonymous/guest | Removed        | Do not reintroduce.                                             |
 
+### Email Verification
+
+Email/password signup uses Supabase Auth as the only verification authority.
+
+Business rules:
+
+- The primary signup verification path is a six-digit code delivered by the
+  Supabase Confirm Signup email. The code lifetime is 10 minutes.
+- Entering/pasting the sixth valid digit auto-submits exactly once.
+- During the active verification-success flow, authenticated state must not skip
+  the Email verified screen; the user explicitly chooses Continue. After a full
+  app restart, an already verified persisted session may use normal startup. No
+  durable Continue-acknowledgement marker is required.
+- The confirmation email may also include a **secondary signup confirmation
+  link**. The link is a fallback, not the primary product path, and successful
+  signup-link completion reaches the same Email verified + Continue contract.
+- Returning `email_not_confirmed` sign-in enters the same verification flow and
+  does not automatically send another email.
+- Mohamed corrected the resend policy on 2026-10-07: the original signup email
+  is followed by at most two successful resends (three emails total) in the
+  24-hour window anchored to the original send. Each successful send has a
+  120-second cooldown.
+- Exhaustion shows a persistent inline notice and disables the action with the
+  label `Resend` / `إعادة الإرسال`. An authoritative future limit expiry permits
+  retry when it passes; a missing or invalid expiry stays blocked for the
+  current verification flow. OTP edits/retries do not clear the notice.
+- The existing limiter RPC enforces the new cap through `p_max_resends = 2`.
+  Historical count-three rows stay unchanged and blocked until their anchored
+  window expires; migration 081 and stored counts are not rewritten.
+- Server-side resend reservation/finalization is concurrency-safe. A live
+  reservation and active cooldown are resolved before an expired 24-hour
+  rollover. A stale ambiguous reservation consumes exactly one slot
+  conservatively; a known downstream send failure releases its reservation.
+- Resend limiter persistence uses a server-only keyed/HMAC digest and stores no
+  raw email or verification code.
+- The current public resend response has a known account-state enumeration
+  limitation. Its public-response/security-contract redesign is deferred to
+  #372; current behavior must not be described as enumeration-safe.
+- Password recovery/reset correctness is a separate flow tracked by #373 and is
+  not a #321 completion claim.
+- Local template/code evidence does not prove hosted configuration. Hosted OTP
+  policy, current template parity (including the secondary link), SMTP/provider
+  health, and device delivery remain separate release evidence.
+
 ### Public And Private Journey
 
 1. First launch reads a device-local intro flag.

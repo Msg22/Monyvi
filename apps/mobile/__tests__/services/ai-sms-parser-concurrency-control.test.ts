@@ -1,3 +1,4 @@
+import type { Session } from "@supabase/supabase-js";
 import { CONCURRENT_BATCHES } from "@/constants/sms-ai";
 import {
   parseSmsWithAi,
@@ -27,6 +28,28 @@ interface Deferred<T> {
   reject: (error: unknown) => void;
 }
 
+const mockStableSession: Session = {
+  access_token: "stable-user-a-token",
+  refresh_token: "stable-user-a-refresh",
+  expires_in: 3600,
+  token_type: "bearer",
+  user: {
+    id: "user-a",
+    aud: "authenticated",
+    role: "authenticated",
+    email: "user-a@example.com",
+    app_metadata: {},
+    user_metadata: {},
+    created_at: "2026-10-05T00:00:00.000Z",
+  },
+};
+const mockGetStableAuthSession = jest.fn(() =>
+  Promise.resolve({
+    data: { session: mockStableSession },
+    error: null,
+  })
+);
+
 const mockInvoke = jest.fn<
   Promise<MockFunctionResponse>,
   [name: string, options: MockFunctionOptions]
@@ -41,6 +64,14 @@ jest.mock("expo-crypto", () => ({
 }));
 
 jest.mock("@/services/supabase", () => ({
+  getStableAuthSession: (): Promise<{
+    data: { session: Session };
+    error: null;
+  }> => mockGetStableAuthSession(),
+  coordinatedRefreshSession: (...args: readonly unknown[]): unknown =>
+    mockRefreshSession(...args),
+  coordinatedSignOut: (...args: readonly unknown[]): unknown =>
+    mockSignOut(...args),
   clearPersistedAuthSession: jest.fn(),
   supabase: {
     auth: {

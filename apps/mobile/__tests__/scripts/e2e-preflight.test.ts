@@ -678,6 +678,25 @@ describe("e2e-preflight", () => {
     expect(preflight.isMissingDeviceSqliteError("")).toBe(false);
   });
 
+  it("treats a preserved verification-code screen as loaded product UI without accepting a bare native root", () => {
+    const verificationCodeXml = `
+      <hierarchy>
+        <node package="com.monyvi.app" class="android.view.View">
+          <node resource-id="verification-code-input" text="" />
+        </node>
+      </hierarchy>
+    `;
+    const bareRootXml = `
+      <hierarchy>
+        <node package="com.monyvi.app" class="android.view.View" />
+      </hierarchy>
+    `;
+
+    expect(preflight.isNativeRootMounted(verificationCodeXml)).toBe(true);
+    expect(preflight.isAppReady(verificationCodeXml)).toBe(true);
+    expect(preflight.isAppReady(bareRootXml)).toBe(false);
+  });
+
   it("treats the pre-auth pitch carousel as loaded product UI", () => {
     expect(preflight.isAppReady('<node text="Skip" />')).toBe(true);
     expect(preflight.isAppReady('<node text="Track with your voice." />')).toBe(

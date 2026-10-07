@@ -1,3 +1,4 @@
+import type { Session } from "@supabase/supabase-js";
 import type { CategoryTreeSource } from "@monyvi/logic";
 import {
   initializeSmsAiScanSession,
@@ -16,6 +17,28 @@ interface MockFunctionOptions {
   readonly headers?: Readonly<Record<string, string>>;
   readonly signal?: AbortSignal;
 }
+
+const mockStableSession: Session = {
+  access_token: "stable-user-a-token",
+  refresh_token: "stable-user-a-refresh",
+  expires_in: 3600,
+  token_type: "bearer",
+  user: {
+    id: "user-a",
+    aud: "authenticated",
+    role: "authenticated",
+    email: "user-a@example.com",
+    app_metadata: {},
+    user_metadata: {},
+    created_at: "2026-10-05T00:00:00.000Z",
+  },
+};
+const mockGetStableAuthSession = jest.fn(() =>
+  Promise.resolve({
+    data: { session: mockStableSession },
+    error: null,
+  })
+);
 
 const mockInvoke = jest.fn<
   Promise<MockFunctionResponse>,
@@ -37,6 +60,14 @@ jest.mock("@/config/e2e-test-config", () => ({
 }));
 
 jest.mock("@/services/supabase", () => ({
+  getStableAuthSession: (): Promise<{
+    data: { session: Session };
+    error: null;
+  }> => mockGetStableAuthSession(),
+  coordinatedRefreshSession: (...args: readonly unknown[]): unknown =>
+    mockRefreshSession(...args),
+  coordinatedSignOut: (...args: readonly unknown[]): unknown =>
+    mockSignOut(...args),
   clearPersistedAuthSession: jest.fn(),
   supabase: {
     auth: {
@@ -272,7 +303,10 @@ describe("AI SMS client safeguards", () => {
     expect(mockInvoke).toHaveBeenCalledWith(
       "sms-safeguard-qa",
       expect.objectContaining({
-        headers: { "x-sms-safeguard-qa-run-id": "unit-test-run" },
+        headers: {
+          Authorization: "Bearer stable-user-a-token",
+          "x-sms-safeguard-qa-run-id": "unit-test-run",
+        },
         body: expect.objectContaining({
           qaProfileId: "partial-quota-v1",
           qaRunId: "unit-test-run",
@@ -421,13 +455,21 @@ describe("AI SMS client safeguards", () => {
         expect.objectContaining({ smsFingerprint: newest.smsFingerprint }),
       ]);
       expect(result.unresolvedCandidates).toEqual([
-        expect.objectContaining({ candidate: next, reason: "capacity_limited" }),
-        expect.objectContaining({ candidate: oldest, reason: "capacity_limited" }),
+        expect.objectContaining({
+          candidate: next,
+          reason: "capacity_limited",
+        }),
+        expect.objectContaining({
+          candidate: oldest,
+          reason: "capacity_limited",
+        }),
       ]);
       const requestKeys = mockInvoke.mock.calls.map(([, options]) =>
         String((options.body as Record<string, unknown>).requestKey)
       );
-      expect(requestKeys.every((key) => key.startsWith("unit-test-run:"))).toBe(true);
+      expect(requestKeys.every((key) => key.startsWith("unit-test-run:"))).toBe(
+        true
+      );
     } finally {
       jest.clearAllTimers();
       jest.useRealTimers();
