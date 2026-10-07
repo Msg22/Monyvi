@@ -19,6 +19,7 @@ export * from "./utils/build-category-tree";
 
 export * from "./utils/helpers";
 export * from "./utils/format-rate";
+export * from "./utils/format-rate-age";
 export * from "./utils/metal";
 export * from "./utils/market-rate";
 export * from "./utils/purity-utils";

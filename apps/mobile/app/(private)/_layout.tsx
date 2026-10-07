@@ -110,6 +110,17 @@ export default function PrivateLayout(): React.ReactNode {
                           <Stack.Screen name="budget-detail" />
                           <Stack.Screen name="budgets" />
                           <Stack.Screen name="live-rates" />
+                          <Stack.Screen
+                            name="metals/[holdingId]/delete"
+                            options={{
+                              presentation: "transparentModal",
+                              animation: "fade",
+                              gestureEnabled: false,
+                              contentStyle: {
+                                backgroundColor: "transparent",
+                              },
+                            }}
+                          />
                           <Stack.Screen name="sms-scan" />
                           <Stack.Screen name="sms-review" />
                           <Stack.Screen name="sms-simulator" />
