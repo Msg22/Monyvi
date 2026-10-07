@@ -1,11 +1,12 @@
 /**
  * Issue #255 checkpoint integration tests (T016 basis, [US3]).
  *
- * AUTHORED ONLY — never executed. Focused tests using REAL
+ * Focused tests using REAL
  * in-memory SQLite, the REAL Watermelon `synchronize` SDK (unmocked), and
  * the REAL production `syncDatabase` entry (only the network transport is
  * mocked and legacy-metal repairs are isolated as documented below).
- * Executed only at the T018 final batch against the owned backend harness.
+ * Dated execution evidence is recorded in specs/389-sync-pagination/quickstart.md.
+ * These tests use no real backend or device.
  *
  * (1) Baseline commits via actual synchronize; then page 1 succeeds and
  *     page 2 fails: actual synchronize rejects, the existing checkpoint
@@ -16,7 +17,7 @@
  *     and checkpoint remain, and the local row is still dirty/retryable.
  *
  * No manual checkpoint writes; no mock upserts passed off as production;
- * no simulation. No device, no backend, no secrets.
+ * No device, no backend, no secrets.
  */
 import {
   Database as WatermelonDatabase,

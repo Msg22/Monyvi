@@ -28,7 +28,7 @@ JSON RPC):
 
 One shared pager implementation serves: ordinary rows, categories, dedicated
 rows, snapshot active rows. Cursor: raw server timestamp + UUID tie. Watermark:
-shared H (§4). The client adapter consumes NORMAL PostgREST data/count/error
+shared H (§5). The client adapter consumes NORMAL PostgREST data/count/error
 responses — NO generic ordinary JSON RPCs are created. New RPCs are ONLY seal
 (§5) + journal (§8). The existing marketV2 server-explicit EOF contract is
 unchanged. The standard `{rows, count, upperWatermark}` adapter MAY be reused
@@ -54,8 +54,10 @@ Granted to authenticated ONLY; requires non-null `auth.uid`. Seals ONLY the
 ordinary barrier (`FOR UPDATE` semantics); reads the fresh committed market
 barrier with NO additional market locks or calls. Validates: finite, millisecond
 precision, not future, not beyond the validated market barrier, no clock
-regression. Computes ordinary `S = max(S, M)`; returns existing market `M`
-UNCHANGED (never returns a newer ordinary S as M).
+regression. H is the requested bound from the completed marketV2 traversal; M is
+the fresh committed server market barrier read during sealing. Requires
+`H <= M`, computes ordinary `S = max(S, H)`, and returns H unchanged, even when
+M or S is newer.
 
 ## 6. Writer fence helpers (private, internal-only grants)
 
@@ -90,7 +92,11 @@ Rebind ONLY explicit target tables. Verify existing trigger names, order, and
 guards BEFORE changing names; preserve ordering everywhere guards depend on old
 stamps. Never globally replace shared `handle_updated_at`. Include existing
 ordinary + child + financial + Metals + SMS writer bindings. Unsupported hard
-deletes / ownership mutations MUST NOT quietly become new feed scope.
+deletes / ownership mutations MUST NOT quietly become new feed scope. Snapshot
+publication triggers run only on INSERT: payload UPDATE preserves the original
+`created_at` and existing 90-day retention cutoff. Known replacement producers
+DELETE the old identity and INSERT a newly stamped identity; DELETE continues to
+publish the old identity to the retained journal.
 
 ## 10. Four early hooks (proposal — verify before code)
 

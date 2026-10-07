@@ -255,3 +255,69 @@ test("real snapshot DELETE journal is transactional, owner scoped and count-page
     );
   }
 });
+
+// Historical rows predate publication fencing. Disable only the named INSERT
+// trigger while building each fixture, then restore it before exercising writes.
+// Every fixture and trigger change rolls back in the same SQL transaction.
+const SNAPSHOTS = [
+  { table: "daily_snapshot_assets", amount: "total_assets_usd" },
+  { table: "daily_snapshot_balance", amount: "total_accounts_usd" },
+  { table: "daily_snapshot_net_worth", amount: "total_net_worth" },
+];
+function historicalSnapshotFixture(table, amount) {
+  return `BEGIN;
+    INSERT INTO auth.users(id,email) VALUES ('${USER}','issue255-fence@monyvi.test') ON CONFLICT(id) DO NOTHING;
+    ALTER TABLE public.${table} DISABLE TRIGGER ${table}_sync_publication;
+    INSERT INTO public.${table}(id,user_id,snapshot_date,${amount},created_at)
+      VALUES ('${RECORD}','${USER}',CURRENT_DATE - 91,1,clock_timestamp() - interval '91 days');
+    ALTER TABLE public.${table} ENABLE TRIGGER ${table}_sync_publication;
+    CREATE TEMP TABLE original_snapshot ON COMMIT DROP AS
+      SELECT created_at FROM public.${table} WHERE id='${RECORD}';`;
+}
+for (const { table, amount } of SNAPSHOTS) {
+  test(`snapshot retention: ${table} payload UPDATE preserves historical publication and 90-day exclusion`, () => {
+    const result = JSON.parse(
+      sql(`${historicalSnapshotFixture(table, amount)}
+      UPDATE public.${table} SET ${amount}=2 WHERE id='${RECORD}';
+      SELECT jsonb_build_object(
+        'unchanged', created_at = (SELECT created_at FROM original_snapshot),
+        'outsideRetention', created_at < clock_timestamp() - interval '90 days',
+        'amount', ${amount},
+        'deletions', (SELECT count(*) FROM private.sync_snapshot_deletions
+          WHERE table_name='${table}' AND record_id='${RECORD}'))
+      FROM public.${table} WHERE id='${RECORD}';
+      ROLLBACK;`)
+    );
+    assert.deepEqual(result, {
+      unchanged: true,
+      outsideRetention: true,
+      amount: 2,
+      deletions: 0,
+    });
+  });
+  test(`snapshot replacement: ${table} DELETE plus INSERT publishes new identity and journals old identity`, () => {
+    const lower = watermark();
+    authenticated(`SELECT public.seal_sync_pull_v1('${lower}')`);
+    const result = JSON.parse(
+      sql(`${historicalSnapshotFixture(table, amount)}
+      DELETE FROM public.${table} WHERE id='${RECORD}';
+      INSERT INTO public.${table}(id,user_id,snapshot_date,${amount},created_at)
+        VALUES ('${RECORD2}','${USER}',CURRENT_DATE - 91,2,'2001-01-01');
+      SELECT jsonb_build_object(
+        'oldAbsent', NOT EXISTS(SELECT 1 FROM public.${table} WHERE id='${RECORD}'),
+        'newPublished', created_at > '${lower}'::timestamptz AND created_at <= clock_timestamp(),
+        'insideRetention', created_at > clock_timestamp() - interval '90 days',
+        'deletions', (SELECT count(*) FROM private.sync_snapshot_deletions
+          WHERE table_name='${table}' AND record_id='${RECORD}' AND user_id='${USER}'
+            AND published_at > '${lower}'::timestamptz AND published_at <= clock_timestamp()))
+      FROM public.${table} WHERE id='${RECORD2}';
+      ROLLBACK;`)
+    );
+    assert.deepEqual(result, {
+      oldAbsent: true,
+      newPublished: true,
+      insideRetention: true,
+      deletions: 1,
+    });
+  });
+}

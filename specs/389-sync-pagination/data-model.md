@@ -27,10 +27,14 @@ below are pull-protocol shapes (server view + client cursor state).
 
 ## Writer fence / seal
 
-- Fields: fence acquisition marker; seal row for the ordinary barrier; ordinary
-  stamp S; market barrier M (returned unchanged).
-- Validation: publication stamps assigned after fence acquisition, before
-  commit; post-seal stamps strictly after H; S = max(S, M).
+- Fields: fence acquisition marker; ordinary barrier S; requested completed
+  traversal bound H; fresh committed server market barrier M.
+- Validation: require H <= M, advance S = max(S, H), and return H unchanged.
+  Publication stamps are assigned after fence acquisition, before commit;
+  post-seal stamps are strictly after S.
+- Snapshot INSERT stamps `created_at`; payload UPDATE preserves it and its
+  existing 90-day retention eligibility. DELETE/INSERT replacement publishes a
+  new identity and journals the old one.
 
 ## Journal entry (tombstone)
 

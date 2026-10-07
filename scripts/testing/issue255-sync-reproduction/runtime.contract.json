@@ -30,6 +30,7 @@
   "fixture_user_email": "issue255@monyvi.test",
   "fixture_user_expected_id": "e87f8c60-511e-4248-9793-17dd2312290c",
   "fixture_note": "Auth user only (zero financial rows). Financial fixtures (37/2501 REAL_ESTATE assets, cap+1 zero-balance/revision-zero accounts, account_sms_senders) are created by the transferred test. No broad seed; financial guards intact.",
-  "migrations_applied": 80,
+  "migrations_applied": 84,
+  "verification_stage": "Final local verification: 001–085 (existing gap 021). Archived initial Red evidence used the earlier 80-migration baseline.",
   "sqlite": "Disposable SQLite per test run; persisted __watermelon_last_pulled_at must be real (no mocked synchronize/query/router)."
 }

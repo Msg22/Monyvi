@@ -271,21 +271,21 @@ BEFORE UPDATE ON public.sms_ai_negative_outcomes
 FOR EACH ROW EXECUTE FUNCTION private.stamp_sync_updated_at_v1();
 
 CREATE TRIGGER daily_snapshot_assets_sync_publication
-BEFORE INSERT OR UPDATE ON public.daily_snapshot_assets
+BEFORE INSERT ON public.daily_snapshot_assets
 FOR EACH ROW EXECUTE FUNCTION private.stamp_sync_snapshot_created_at_v1();
 CREATE TRIGGER daily_snapshot_assets_sync_deletion
 BEFORE DELETE ON public.daily_snapshot_assets
 FOR EACH ROW EXECUTE FUNCTION private.publish_sync_snapshot_deletion_v1();
 
 CREATE TRIGGER daily_snapshot_balance_sync_publication
-BEFORE INSERT OR UPDATE ON public.daily_snapshot_balance
+BEFORE INSERT ON public.daily_snapshot_balance
 FOR EACH ROW EXECUTE FUNCTION private.stamp_sync_snapshot_created_at_v1();
 CREATE TRIGGER daily_snapshot_balance_sync_deletion
 BEFORE DELETE ON public.daily_snapshot_balance
 FOR EACH ROW EXECUTE FUNCTION private.publish_sync_snapshot_deletion_v1();
 
 CREATE TRIGGER daily_snapshot_net_worth_sync_publication
-BEFORE INSERT OR UPDATE ON public.daily_snapshot_net_worth
+BEFORE INSERT ON public.daily_snapshot_net_worth
 FOR EACH ROW EXECUTE FUNCTION private.stamp_sync_snapshot_created_at_v1();
 CREATE TRIGGER daily_snapshot_net_worth_sync_deletion
 BEFORE DELETE ON public.daily_snapshot_net_worth
