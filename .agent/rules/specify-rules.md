@@ -1,9 +1,10 @@
 # Monyvi Development Guidelines
 
-Auto-generated from all feature plans. Last updated: 2026-09-27
+Auto-generated from all feature plans. Last updated: 2026-10-07
 
 ## Active Technologies
 
+- TypeScript ~5.9.2 strict mode; PostgreSQL SQL migrations; Deno-based Supabase Edge Functions + Expo 55, React Native 0.83.6, Expo Router, expo-localization 55, expo-crypto 55, Supabase JS 2.106, Zod 4, @google/genai, NativeWind 4.2.6, i18next (389-voice-usage-limits)
 - TypeScript ~5.9.2 strict mode; Expo 55 / React Native 0.83.6; Supabase Edge Functions + PostgreSQL; expo-localization; Zod 4; existing Gemini voice provider (389-voice-usage-limits)
 - TypeScript (strict mode) **Primary Dependencies**: React
   (002-refactor-upcoming-payments)
@@ -26,6 +27,7 @@ conventions
 
 ## Recent Changes
 
+- 389-voice-usage-limits: Planned unified Manual/Voice Add Transaction redesign, server-authoritative 5/day + 2/min voice allowance, local-midnight timezone windows, and subscription-ready entitlement boundary
 - 389-voice-usage-limits: Planned server-authoritative local-day voice quotas, voice-only operational ledgers, provider-independent entitlements, availability endpoint, and mockup-gated client states
 - 002-refactor-upcoming-payments: Added TypeScript (strict mode) **Primary
   Dependencies**: React
