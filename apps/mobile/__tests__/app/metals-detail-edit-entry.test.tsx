@@ -81,9 +81,7 @@ it("keeps Delete as the only body action while Edit remains the header action", 
     },
   ]);
   expect(mockCapturedActions.some((action) => action.id === "sell")).toBe(false);
-  expect(mockCapturedActions.some((action) => action.id === "dispose")).toBe(
-    false
-  );
+  expect(mockCapturedActions.some((action) => action.id === "dispose")).toBe(false);
   expect(mockCapturedActions.some((action) => action.id === "undo")).toBe(false);
 
   fireEvent.press(screen.getByTestId("metal-holding-detail-edit"));

@@ -72,10 +72,14 @@ function getCurrentValueRatePairs(
     return [];
   }
 
-  const metal = getMetalRatePair(input);
+  const currentRates = input.currentRates;
+  const metal = getMetalRatePair({
+    currentRates,
+    metal: input.metal,
+  });
   if (input.preferredCurrency === "USD") return [metal];
 
-  const currency = input.currentRates.currencies.get(input.preferredCurrency);
+  const currency = currentRates.currencies.get(input.preferredCurrency);
   if (currency === undefined) return [];
 
   return [
@@ -103,10 +107,16 @@ function getDisplayedPerformanceRatePairs(
   const effectiveCurrency = input.preferredCurrency ?? purchaseCurrency;
   if (!isSupportedMetalsIsoCurrencyCode(effectiveCurrency)) return [];
 
-  const pairs: IdentifiedRate[] = [getMetalRatePair(input)];
+  const currentRates = input.currentRates;
+  const pairs: IdentifiedRate[] = [
+    getMetalRatePair({
+      currentRates,
+      metal: input.metal,
+    }),
+  ];
 
   if (purchaseCurrency !== "USD") {
-    const purchaseRate = input.currentRates.currencies.get(purchaseCurrency);
+    const purchaseRate = currentRates.currencies.get(purchaseCurrency);
     if (purchaseRate !== undefined) {
       pairs.push({
         id: `currency:${purchaseCurrency}`,
@@ -116,7 +126,7 @@ function getDisplayedPerformanceRatePairs(
   }
 
   if (effectiveCurrency !== "USD" && effectiveCurrency !== purchaseCurrency) {
-    const effectiveRate = input.currentRates.currencies.get(effectiveCurrency);
+    const effectiveRate = currentRates.currencies.get(effectiveCurrency);
     if (effectiveRate !== undefined) {
       pairs.push({
         id: `currency:${effectiveCurrency}`,

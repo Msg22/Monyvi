@@ -482,11 +482,17 @@ describe("delete holding route journey", () => {
     mockDetailError = new Error("sync_failed");
     view.rerender(<DeleteMetalHoldingRoute />);
 
-    const alert = screen.getByText(
-      "Sync failed. Your saved local state is still available."
+    expect(
+      screen.getByText("Sync failed. Your saved local state is still available.")
+    ).toBeTruthy();
+    expect(screen.getByTestId("metal-holding-delete-sync-error")).toHaveProp(
+      "accessibilityRole",
+      "alert"
     );
-    expect(alert).toHaveProp("accessibilityRole", "alert");
-    expect(alert).toHaveProp("accessibilityLiveRegion", "assertive");
+    expect(screen.getByTestId("metal-holding-delete-sync-error")).toHaveProp(
+      "accessibilityLiveRegion",
+      "assertive"
+    );
     expect(screen.getByTestId("metal-holding-delete-sync-retry")).toBeTruthy();
     expect(lastSheetProps).toBeNull();
     expect(mockExecute).not.toHaveBeenCalled();
