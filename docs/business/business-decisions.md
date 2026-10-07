@@ -902,6 +902,17 @@ Business rules:
   provider execution actually starts, the logical request consumes exactly one
   daily unit even if provider processing later fails, times out, or returns
   invalid output.
+- Feature 389 retention decision (owner-approved 7 October 2026): same-key voice
+  replay protection lasts 35 elapsed days (35 × 24 hours) from immutable first
+  server record creation, and while that identity remains retained. Bounded
+  cleanup deletes eligible whole terminal request records at/after the cutoff;
+  retries/status updates do not extend it. Active work, leases and current
+  daily/burst/reservation accounting must survive under the same per-user
+  admission/start lock. Cleanup never refunds current consumption. After actual
+  identity deletion, the same key may be admitted as new subject to all current
+  auth, consent, validation, entitlement and quota gates. Lifetime replay
+  protection, audio/financial-payload retention and a separate tombstone table
+  are not part of this decision.
 - Voice limits are server-authoritative. Client state is UX-only, reflects
   server availability/remaining usage, and must not reset authoritative usage
   after reinstall, local deletion, device switching, or client tampering.

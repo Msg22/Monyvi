@@ -12,8 +12,9 @@ mockup in the spec.
 
 Each corresponding `.binding.md` records original file identifiers/provenance
 and computed image, metadata and combined fingerprints. Both **binding approvals
-remain PENDING**. Image approval in the supplied conversation does not approve
-newly reconstructed exact binding metadata.
+are APPROVED**, explicitly adopted by the owner on 2026-10-07: "Approve both
+proposed bindings and copy". The sidecars record the exact combined revisions
+and approval receipt; both verifiers exit zero.
 
 Both raster exports are 941 x 1672 pixels including hardware framing. That is
 **not** an evidenced logical app viewport/dp size. Phone hardware/frame,
@@ -25,32 +26,34 @@ explicitly approved spec choice A supersedes that text: reset is local midnight,
 and implementation copy must describe next-day reset accurately. Keep the image
 unchanged; do not implement its superseded text.
 
-Two core binding points need owner confirmation before governed UI
-implementation:
+The owner adopted the normalized reconstruction in both sidecars and
+`../reconciliation.md`; no replacement image was generated. Historical
+viewport/token facts cannot be recovered from the framed raster. The approved
+context supplies explicit implementation values without claiming original
+measurements.
 
-1. The logical baseline viewport and UI crop/safe-area context. The raster
-   includes a phone frame; its pixel dimensions cannot establish app dp
-   dimensions. After this is confirmed, the design owner can propose the exact
-   token/geometry mapping and scoped state/EN-AR/dark/responsive adaptations for
-   binding approval without generating another mockup.
-2. Whether the bottom navigation depicted inside the image binds the standalone
-   `/add-transaction` route or is illustrative navigation context. Do not
-   silently add or remove route chrome.
+The approval resolves the two previous binding gaps:
+
+1. Logical baseline 390 x 844 dp with the sidecars' safe-area, token/geometry
+   and state/EN-AR/dark/responsive adaptations. Runtime uses actual safe-area
+   insets; raster pixels remain provenance only.
+2. The pictured bottom navigation is illustrative. The existing standalone
+   `/add-transaction` stack/back route remains the binding route context.
 
 The existing Manual form semantics remain authoritative under FR-030: its
 illustrative merchant field and expense/income-only image do not authorize a new
 merchant schema or removal of transfer/currency/calculator/recurring/budget
-behavior. This boundary must be reflected in the final approved binding.
+behavior. The approved binding records this boundary.
 
-Resolve metadata through the existing legacy migration procedure, then
-explicitly approve each immutable combined revision and run:
+Approval is recorded through the existing legacy migration procedure. Recheck
+authority after any edit with:
 
 ```sh
 node scripts/verify-mockup-binding.js specs/389-voice-usage-limits/mockups/mockup-1.binding.md
 node scripts/verify-mockup-binding.js specs/389-voice-usage-limits/mockups/mockup-2.binding.md
 ```
 
-A nonzero result is a governed UI implementation blocker. Server/test/task work
-may proceed within its separate accepted contracts and authorization.
-Functional, rendered visual-fidelity and accessibility evidence statuses remain
-separate in `../tasks.md`.
+A nonzero result is an implementation blocker. Binding approval is complete;
+implementation and worker assignments still require finalized contract
+reconciliation and the final analyze gate. Functional, rendered visual-fidelity
+and accessibility evidence statuses remain separate in `../tasks.md`.

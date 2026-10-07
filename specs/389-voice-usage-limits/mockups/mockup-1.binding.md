@@ -3,12 +3,12 @@
 <!-- prettier-ignore -->
 - Approved reference image: mockup-1.png
 - Approved reference image revision: sha256:29530477e85472429473b36fc89766d17fd96a0f9715f03393d9391b91ff5d26
-- Binding metadata approval: PENDING
-- Binding metadata revision: sha256:af49bfea3d42764395f90fefd9faaba51d3a92bf78e72571353fc77a7ea6396a
-- Approved binding metadata revision: PENDING
-- Binding approval revision: sha256:136aa354308c130da0e992ce0185c638b83ad3dfb36623cdde589ea82f3b993d
-- Approved binding approval revision: PENDING
-- Binding metadata approval evidence/reference: PENDING
+- Binding metadata approval: APPROVED
+- Binding metadata revision: sha256:c52331ff2ece9ebf7ec97c6cea0e3701d5ff20584a708e484178f283f14bdb60
+- Approved binding metadata revision: sha256:c52331ff2ece9ebf7ec97c6cea0e3701d5ff20584a708e484178f283f14bdb60
+- Binding approval revision: sha256:67c0ffba93b576edb8d3e3cb1545489aa9930f084de953f68b5fef0ca4e0a2cc
+- Approved binding approval revision: sha256:67c0ffba93b576edb8d3e3cb1545489aa9930f084de953f68b5fef0ca4e0a2cc
+- Binding metadata approval evidence/reference: Owner reply on 2026-10-07 in chat 01a11606-3a5e-7420-a9d7-0ea491bde802 to call_3SOfr0FPm3RmUNgWIRuA5lS8 item 0: "Approve both proposed bindings and copy"; explicitly presented combined revision sha256:67c0ffba93b576edb8d3e3cb1545489aa9930f084de953f68b5fef0ca4e0a2cc
 - Legacy metadata migration: yes
 
 `Approved reference image revision` MUST be `sha256:<64 lowercase hex>` computed
@@ -35,59 +35,89 @@ combined image-and-metadata authority tuple.
 
 ## Binding Facts
 
-- Binding product surface: Unified Add Transaction page, VOICE mode selected;
-  current form behavior is governed by spec FR-030 and the UI contract, not
-  invented fields from the illustration.
-- Declared comparison context: UNKNOWN: approved raster is 941 x 1672 pixels
-  including a phone frame; logical UI viewport/dp, density, UI crop and
-  safe-area metrics were not supplied and cannot be derived as authoritative
-  facts.
-- Presentation-only framing: Phone hardware/frame, notch, status-bar
-  illustration, outer white canvas and export padding are non-binding
-  presentation under the constitution; route-level bottom navigation depicted
-  inside the UI is UNKNOWN pending scope confirmation.
-- Spacing facts: UNKNOWN: exact UI spacing/token mapping was not supplied; card
-  hierarchy and relative composition are visible in the unchanged reference.
-- Sizing facts: UNKNOWN: exact control/card/icon dp sizes and baseline viewport
-  were not supplied; raster pixel measurements are not a logical viewport.
-- Color/theme facts: Reference visibly shows a light surface, green accents and
-  pale neutral card/background areas; exact palette/gradient token mapping is
-  UNKNOWN pending metadata approval.
-- Typography facts: Arabic labels and emphasized headings are visible; exact
-  font family, sizes, weights and line heights are UNKNOWN pending metadata
-  approval.
-- State facts: Arabic/light, Voice selected, numeric remaining example 3 of 5,
-  idle microphone prompt and example phrases;
-  recording/paused/finalizing/analyzing/exhausted/burst/error/recovery visual
-  states are UNKNOWN.
-- Interaction behavior: Per approved spec/UI contract: FAB opens Manual;
-  mic/onboarding/review Retry open Voice; same route supports both modes;
-  existing Manual behavior remains; Voice uses current Gemini/review flow;
-  hidden mode content is inaccessible; the image alone supplies no additional
-  interaction rules.
-- Transition behavior: Per approved plan/UI contract: Manual remains mounted
-  across safe switches; switching is disabled during
-  recording/paused/finalizing/analyzing; exhausted/burst/unavailable Voice
-  allows Manual. Exact animations/focus transitions are UNKNOWN.
-- Responsive variants: Spec/constitution require compact and ordinary phone,
-  tablet and landscape while preserving composition; exact baseline logical
-  viewport and approved reflow/token mapping are UNKNOWN.
-- Dark-mode variants: Dark mode is required by plan/constitution but no dark
-  reference is supplied; exact token mapping is UNKNOWN pending approval, with
-  no new mockup authorized.
-- RTL/Arabic variants: This reference is Arabic/RTL. English/LTR is required by
-  approved spec, but exact mirrored tab/navigation arrangement and localized
-  binding copy are UNKNOWN pending metadata approval.
-- Enlarged-text variants: Enlarged text and accessibility are required by
-  plan/constitution; exact scaling/breakpoint/reflow and focus treatment are
-  UNKNOWN pending metadata approval.
-- Fidelity-affecting unknowns: Logical baseline viewport/UI crop/safe-area
-  context; exact styling tokens/spacing/sizes/typography; bottom navigation
-  route binding; Manual illustration scope; unsupplied
-  active/error/limit/dark/LTR/enlarged-text states. Original reset text says
-  same time tomorrow, superseded by the approved local-midnight spec; final
-  EN/AR copy must accurately reflect next-day reset without changing image
-  bytes.
+- Binding product surface: PROPOSED normalized reconstruction of the unified
+  /add-transaction shell with VOICE selected; approved image remains unchanged.
+- State facts: Arabic/light Voice idle with 3 of 5 example; preserve mode
+  control, full allowance card, microphone card and three example rows. Planned
+  loading uses Skeleton; recording shows current timer/stop/discard controls;
+  paused shows Resume/Discard; finalizing/analyzing shows processing state and
+  locks switching; exhausted/burst/unavailable/error replace the microphone
+  prompt inside the same card with localized status and appropriate recovery.
+  Manual always remains available outside active recording/processing locks.
+
+- Declared comparison context: PROPOSED FOR APPROVAL, not recovered historical
+  metadata: 390 x 844 logical dp, font scale 1, Arabic RTL, light theme.
+  Reference phone hardware/notch/status-bar artwork/export canvas is excluded.
+  Test capture uses top inset 24 dp and bottom inset 34 dp; runtime always uses
+  actual safe-area metrics once, never these fixture numbers as fixed padding.
+  Raster dimensions are provenance only and do not establish device density.
+- Presentation-only framing: Hardware, notch, illustrated OS status bar, home
+  indicator, white export canvas and pictured five-item bottom navigation are
+  proposed as non-binding. The standalone /add-transaction route keeps its
+  existing stack/back navigation; global app tabs remain on their current
+  routes. Adding the pictured Add tab is outside this proposed binding.
+- Spacing facts: PROPOSED: outer horizontal gutter 16 dp; vertical section gaps
+  12 dp; card inner padding 16 dp; label-to-control gap 8 dp; example-row gap 8
+  dp. Safe-area insets are applied once. Content scrolls rather than clipping or
+  shrinking text to force the entire raster onto one phone.
+- Sizing facts: PROPOSED: shell header uses shared PageHeader with minimum 56 dp
+  row; mode track minimum 44 dp, two equal targets; cards radius 16 dp and
+  border 1 dp; general touch targets minimum 48 dp. Allowance icon 24 dp inside
+  48 dp circle; progress track 8 dp. Voice mic target diameter 104 dp, with
+  decorative halos 140/172 dp; main Voice card minimum 260 dp, growing with
+  text. Manual quota strip minimum 68 dp, growing with content; Voice summary
+  minimum 128 dp. Form widgets retain current shared component sizing.
+- Color/theme facts: PROPOSED: existing background/surface/border/text semantic
+  classes; slate-50 page, slate-25 cards, slate-200 borders in light mode;
+  matching registered dark variants. NileGreen-500 microphone/progress/action,
+  nileGreen-50 selected/halo surface and nileGreen-700 selected labels. Main
+  microphone/Save gradient uses existing nileGreen-500 and -600, with slate-25
+  glyph/text. No new palette. Error uses existing red-500; temporary blocker
+  uses existing gold-600. NativeWind interactive-shadow exceptions follow
+  AGENTS.md.
+- Typography facts: PROPOSED: existing locale font families from
+  apps/mobile/constants/typography.ts (Noto Sans Arabic for Arabic, Inter for
+  English); title 22/32 dp bold; tabs/status 16/26 semibold; card/mic heading
+  18/28 bold; body/example 14/22 regular; reset/helper 12/20 regular. Numeric
+  quota uses locale formatting and remains readable as one group.
+- Interaction behavior: FAB opens Manual; mic/onboarding/voice-review Retry open
+  Voice on the same route. Manual remains mounted and hidden mode content is
+  inaccessible. Recording begins only after current consent/permission and fresh
+  authoritative availability gates. No native permission request without the
+  existing custom explanatory/recovery action. Back/Discard/Retry retain current
+  voice cleanup and review-origin semantics. Manual save remains local and works
+  offline; passive quota failure never prompts consent or blocks it.
+- Transition behavior: PROPOSED: immediate mode change without sliding the
+  entire form, retaining Manual focus/draft where safe. Disable both mode
+  controls while recording/paused/finalizing/analyzing; existing explicit
+  discard/stop/pause/resume actions control those states. Move focus to active
+  mode heading after safe switch; announce quota/blocker updates politely.
+  Decorative microphone pulse runs only during recording, uses existing
+  Reanimated primitives, stops on pause/unmount and respects reduced motion.
+- Responsive variants: PROPOSED: normal baseline 390 x 844; compact 320 x 640;
+  tablet 768 x 1024 with centered 560 dp maximum content width; landscape 844 x
+  390 with vertical scrolling. Use shared ui.ts compact threshold width < 340 or
+  font scale > 1.35 for compact/reflow treatment. Tabs stay on one equal-width
+  row; cards grow, status/count stack only when needed. No fixed screen-height
+  composition and no controls under bottom safe area.
+- Dark-mode variants: PROPOSED: same composition, registered dark background/
+  surface/border/text classes; green primary hierarchy retained. Rendered
+  comparisons required, with no new image replacing the approved reference.
+- RTL/Arabic variants: PROPOSED: Arabic Manual on right and Voice on left as
+  depicted; English Manual on left and Voice on right. Use shared PageHeader
+  locale-aware back action rather than copying the raster's left-side arrow.
+  Align body/labels to locale; preserve number/date input grammar and existing
+  Arabic numeric presentation. Full copy table is in ../reconciliation.md.
+- Enlarged-text variants: PROPOSED: verify font scales 1.35 and 2, using shared
+  compact rules and expanding card/control heights; no truncation of actions or
+  forced font shrink. Preserve semantic order, localize tab roles/names/
+  selected/disabled states, exclude decorative halos and hidden form tree.
+- Fidelity-affecting unknowns: Historical logical viewport/density/crop and
+  exact original font/token values remain unrecoverable. This is an explicit
+  normalized reconstruction proposal, not an assertion of recovered facts.
+  Approval must adopt this comparison context, chrome scope, token mapping and
+  state/variant adaptations before UI production. Functional, visual and
+  accessibility proof remain separate; current draft conveys no approval.
 
 ## Provenance and approval boundary
 
@@ -105,7 +135,10 @@ combined image-and-metadata authority tuple.
 - Copy correction authority: spec clarification records choice A, local-midnight
   calendar-day reset. The earlier same-time-tomorrow raster wording is preserved
   unchanged for provenance and must not become implemented copy.
-- Sidecar created from `.specify/templates/mockup-binding-template.md`; all
-  approval fields remain PENDING. Do not consume these draft facts as
-  authoritative until missing facts are resolved, the exact combined revision is
-  explicitly approved and the verifier exits zero.
+- Sidecar created from `.specify/templates/mockup-binding-template.md`. The
+  owner approved this exact combined revision on 2026-10-07 in the current local
+  chat: "Approve both proposed bindings and copy". The frozen Binding Facts
+  retain proposal wording to preserve their approved bytes; the approval header
+  now adopts those facts. Historical proposal disclaimers describe the
+  pre-approval draft. Functional, rendered and accessibility evidence remain
+  separate gates; authority requires verifier exit zero.

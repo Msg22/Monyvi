@@ -3,103 +3,15 @@ info:
   title: Monyvi Voice Usage and Parse Contracts
   version: 1.0.0
   description: >
-    Feature 389 adds authoritative voice availability/usage metadata while
-    preserving the successful parse-voice transaction response contract.
+    Compatibility index for feature 389. Endpoint-specific files own the
+    canonical paths and schemas; this index must not redefine them. The
+    successful parse-voice financial response remains the existing runtime
+    contract, with no quota fields added.
 paths:
   /functions/v1/voice-ai-availability:
-    get:
-      summary: Read authoritative voice allowance state
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: query
-          name: timeZone
-          required: true
-          schema:
-            type: string
-            minLength: 1
-            maxLength: 100
-          description: Device IANA timezone used only when establishing the next accepted local-day window.
-      responses:
-        "200":
-          description: Current authoritative availability
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/VoiceAvailability"
-        "400":
-          description: Missing or invalid timezone
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AvailabilityError"
-        "401":
-          description: Unauthenticated
-        "403":
-          description: AI consent required
-        "503":
-          description: Entitlement/usage state unavailable; client must fail closed
+    $ref: "voice-ai-availability.openapi.yaml#/paths/~1functions~1v1~1voice-ai-availability"
   /functions/v1/parse-voice:
-    post:
-      summary: Parse one voice recording using the existing voice AI provider
-      security:
-        - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          multipart/form-data:
-            schema:
-              type: object
-              required:
-                - audio
-                - requestKey
-                - callerTimeZone
-              properties:
-                audio:
-                  type: string
-                  format: binary
-                requestKey:
-                  type: string
-                  minLength: 1
-                  maxLength: 160
-                callerTimeZone:
-                  type: string
-                  minLength: 1
-                  maxLength: 100
-                callerLocalDate:
-                  type: string
-                  pattern: "^\\d{4}-\\d{2}-\\d{2}$"
-                  description: Existing relative-transaction-date input; unchanged by quota design.
-                categories:
-                  type: string
-                accounts:
-                  type: string
-                  description: Existing serialized account context.
-      responses:
-        "200":
-          description: Existing successful voice parsing response; quota metadata is not added here.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ParseVoiceSuccess"
-        "400":
-          description: Malformed audio/request/timezone
-        "401":
-          description: Unauthenticated
-        "403":
-          description: AI consent required
-        "413":
-          description: Existing audio-size limit
-        "429":
-          description: Daily/burst/idempotent replay refusal before provider execution
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/VoiceUsageRefusal"
-        "500":
-          description: Existing provider/runtime failure after provider start; usage remains consumed when provider start was recorded.
-        "503":
-          description: Authoritative entitlement/usage state unavailable before provider start.
+    $ref: "parse-voice-quota.openapi.yaml#/paths/~1functions~1v1~1parse-voice"
 components:
   securitySchemes:
     bearerAuth:
@@ -107,80 +19,4 @@ components:
       scheme: bearer
   schemas:
     VoiceAvailability:
-      type: object
-      additionalProperties: false
-      required:
-        - serverNow
-        - timeZone
-        - dailyLimit
-        - remaining
-        - resetAt
-        - reason
-        - availableAt
-        - burstAvailableAt
-      properties:
-        serverNow:
-          type: string
-          format: date-time
-        timeZone:
-          type: string
-        dailyLimit:
-          type: [integer, "null"]
-          minimum: 1
-        remaining:
-          type: [integer, "null"]
-          minimum: 0
-        resetAt:
-          type: [string, "null"]
-          format: date-time
-        reason:
-          type: [string, "null"]
-          enum: [daily_limit, burst_limit, already_processed_result_unavailable, null]
-        availableAt:
-          type: [string, "null"]
-          format: date-time
-        burstAvailableAt:
-          type: [string, "null"]
-          format: date-time
-    AvailabilityError:
-      type: object
-      additionalProperties: false
-      required: [reason]
-      properties:
-        reason:
-          type: string
-    VoiceUsageRefusal:
-      type: object
-      additionalProperties: false
-      required: [error, reason, availability]
-      properties:
-        error:
-          type: string
-        reason:
-          type: string
-          enum:
-            - daily_limit
-            - burst_limit
-            - already_processed_result_unavailable
-        availability:
-          $ref: "#/components/schemas/VoiceAvailability"
-    ParseVoiceSuccess:
-      type: object
-      additionalProperties: false
-      required:
-        - transcript
-        - original_transcript
-        - detected_language
-        - transactions
-      properties:
-        transcript:
-          type: string
-        original_transcript:
-          type: string
-        detected_language:
-          type: string
-        transactions:
-          type: array
-          items:
-            type: object
-            additionalProperties: true
+      $ref: "voice-ai-availability.openapi.yaml#/components/schemas/VoiceAvailability"

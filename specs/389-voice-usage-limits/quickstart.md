@@ -2,27 +2,32 @@
 
 **Feature**: 389-voice-usage-limits
 
-This is planning/QA guidance. Do not generate a new mockup. Production UI implementation must not begin until the exact already-approved Add Transaction / Voice reference image from the product conversation is persisted unchanged, its binding metadata is explicitly approved, and the binding verifier passes.
+This is planning/QA guidance. Do not generate a new mockup. Production UI
+implementation must not begin until the exact already-approved Add Transaction /
+Voice reference image from the product conversation is persisted unchanged, its
+binding metadata is explicitly approved, and the binding verifier passes.
 
 ## 1. Planned server policy configuration
 
 Free-launch defaults:
 
-~~~text
+```text
 VOICE_AI_DAILY_LIMIT=5
 VOICE_AI_BURST_LIMIT=2
 VOICE_AI_BURST_WINDOW_SECONDS=60
 VOICE_AI_RESERVATION_LEASE_SECONDS=120
 VOICE_AI_POLICY_VERSION=free-launch-v1
-~~~
+```
 
-Values are server-side operational policy. No mobile release should be required to change them.
+Values are server-side operational policy. No mobile release should be required
+to change them.
 
 The current voice provider configuration remains unchanged.
 
 ## 2. Planned local-first migration workflow
 
-The implementation will create a normal SQL migration in `supabase/migrations/` for:
+The implementation will create a normal SQL migration in `supabase/migrations/`
+for:
 
 - `voice_ai_usage_windows`
 - `voice_ai_work_requests`
@@ -43,28 +48,32 @@ No dashboard SQL or MCP schema mutation is allowed.
 
 Required deterministic tests before production wiring:
 
-| Scenario | Expected |
-| --- | --- |
-| Uses 1–5 in same accepted local day | provider start allowed |
-| Sixth request | daily_limit before provider call |
-| Two starts within minute | allowed |
-| Third start within minute | burst_limit before provider call |
-| Two devices race for final daily unit | exactly one provider start |
-| Same requestKey transport replay | no second provider call/unit |
-| Auth/consent/malformed audio failure | zero consumption |
-| Missing/invalid timezone | zero provider start, fail closed |
-| Missing/invalid entitlement config | zero provider start, fail closed |
-| Provider succeeds after start | one consumed |
-| Provider fails after start | one consumed |
-| Provider times out after start | one consumed |
-| Provider returns invalid JSON after start | one consumed |
-| Gemini internally retries | still one consumed |
-| DST 23-hour local day | correct next local midnight |
-| DST 25-hour local day | correct next local midnight |
-| Device timezone changes mid-window | active window/reset does not reset |
-| First request after old window expires | new valid device timezone adopted |
-| Availability storage unavailable | 503/fail closed |
-| User switch on same device | no foreign allowance state |
+| Scenario                                                | Expected                                        |
+| ------------------------------------------------------- | ----------------------------------------------- |
+| Uses 1–5 in same accepted local day                     | provider start allowed                          |
+| Sixth request                                           | daily_limit before provider call                |
+| Two starts within minute                                | allowed                                         |
+| Third start within minute                               | burst_limit before provider call                |
+| Two devices race for final daily unit                   | exactly one provider start                      |
+| Same requestKey replay within 35 days or while retained | no second provider call/unit                    |
+| Terminal record just before 35 elapsed days             | retain identity                                 |
+| Eligible terminal record at/after 35 days               | delete identity; preserve current accounting    |
+| Same key after actual deletion                          | new admission subject to current gates          |
+| Old active work/current accounting; cleanup race        | preserve record/count; serialize with admission |
+| Auth/consent/malformed audio failure                    | zero consumption                                |
+| Missing/invalid timezone                                | zero provider start, fail closed                |
+| Missing/invalid entitlement config                      | zero provider start, fail closed                |
+| Provider succeeds after start                           | one consumed                                    |
+| Provider fails after start                              | one consumed                                    |
+| Provider times out after start                          | one consumed                                    |
+| Provider returns invalid JSON after start               | one consumed                                    |
+| Gemini internally retries                               | still one consumed                              |
+| DST 23-hour local day                                   | correct next local midnight                     |
+| DST 25-hour local day                                   | correct next local midnight                     |
+| Device timezone changes mid-window                      | active window/reset does not reset              |
+| First request after old window expires                  | new valid device timezone adopted               |
+| Availability storage unavailable                        | 503/fail closed                                 |
+| User switch on same device                              | no foreign allowance state                      |
 
 Provider calls in routine quota tests are doubles; do not consume Gemini quota.
 
@@ -78,7 +87,23 @@ The mobile service sends:
 
 The successful voice response shape remains unchanged.
 
-A separate `voice-ai-availability` service/hook reads the authoritative state and refreshes on focus/foreground, after voice attempts, and at reset/burst boundaries.
+A separate `voice-ai-availability` service/hook reads the authoritative state
+and refreshes on focus/foreground, after voice attempts, and at reset/burst
+boundaries.
+
+The canonical read contract is POST JSON `{ "timeZone": "Africa/Cairo" }` with
+JWT plus current AI consent. The timezone is 1–128 characters followed by server
+IANA validation. `policyVersion` is required. Existing optional
+`callerLocalDate` retains its omitted/empty UTC-date fallback for transaction
+parsing only; quota context must never fall back to UTC or Egypt.
+
+Current free launch emits numeric allowance/count and a reset timestamp;
+technical unmetered null-triplet compatibility is exercised only through
+controlled future-entitlement doubles. Owner-approved retention is 35 elapsed
+days from first server record creation, followed by safe deletion of eligible
+terminal identities. Active work and current accounting are excluded; retained
+identities still protect replay until actual deletion. See data-model §3 and
+`reconciliation.md`.
 
 ## 5. Approved mockup binding gate
 
@@ -86,7 +111,8 @@ Do **not** create another mockup.
 
 Before UI implementation:
 
-1. persist the exact already-approved Add Transaction / Voice image bytes unchanged in `specs/389-voice-usage-limits/mockups/`;
+1. persist the exact already-approved Add Transaction / Voice image bytes
+   unchanged in `specs/389-voice-usage-limits/mockups/`;
 2. create the matching canonical binding sidecar;
 3. record only evidenced binding facts and mark unknowns explicitly;
 4. obtain explicit approval of the sidecar metadata + combined binding revision;
@@ -112,8 +138,9 @@ Update/add focused tests for:
 - `ai-voice-parser-service` request key/timezone/refusal parsing;
 - voice availability service Zod contract;
 - availability hook focus/foreground/expiry refresh;
-- `useVoiceTransactionFlow` known-exhausted, stale-refusal, provider-failure refresh, and consent interaction;
-- tab layout user-switch isolation;
+- `useVoiceTransactionFlow` known-exhausted, stale-refusal, provider-failure
+  refresh, and consent interaction;
+- unified Add Transaction route/user-switch isolation;
 - governed UI states after mockup approval;
 - EN/AR accessibility labels/roles/states;
 - existing representative voice parsing regression.
@@ -133,8 +160,10 @@ After implementation and approved visual evidence:
 9. Force a provider-started failure; remaining still decreases by one.
 10. Force pre-provider consent/malformed refusal; remaining does not decrease.
 11. Logout/login another user; allowance state changes to that user only.
-12. Verify English/Arabic, LTR/RTL, light/dark, compact/ordinary phone, enlarged text.
-13. Verify ordinary allowed voice transactions produce the same review results as before.
+12. Verify English/Arabic, LTR/RTL, light/dark, compact/ordinary phone, enlarged
+    text.
+13. Verify ordinary allowed voice transactions produce the same review results
+    as before.
 
 ## 9. Deployment/rollback
 
@@ -148,20 +177,21 @@ When implementation is later approved and verified:
 - verify availability first;
 - smoke-test voice within allowance.
 
-Rollback must preserve server ledger integrity; do not simply remove the server quota gate while leaving UI claims active.
-
+Rollback must preserve server ledger integrity; do not simply remove the server
+quota gate while leaving UI claims active.
 
 ## 10. Add Transaction manual/voice QA additions
 
-| Scenario | Expected |
-| --- | --- |
-| FAB Add Transaction | unified page opens in Manual |
-| Center mic | unified page opens in Voice |
-| Partially fill Manual -> Voice -> Manual | Manual input remains |
-| Start recording | mode switching disabled until safe state |
-| Voice exhausted -> Manual | Manual remains fully usable |
-| Arabic | approved RTL design + localized usage copy |
-| English | approved LTR design |
-| Voice-review Retry | unified page Voice mode resumes retry intent |
+| Scenario                                 | Expected                                     |
+| ---------------------------------------- | -------------------------------------------- |
+| FAB Add Transaction                      | unified page opens in Manual                 |
+| Center mic                               | unified page opens in Voice                  |
+| Partially fill Manual -> Voice -> Manual | Manual input remains                         |
+| Start recording                          | mode switching disabled until safe state     |
+| Voice exhausted -> Manual                | Manual remains fully usable                  |
+| Arabic                                   | approved RTL design + localized usage copy   |
+| English                                  | approved LTR design                          |
+| Voice-review Retry                       | unified page Voice mode resumes retry intent |
 
-User-facing reset copy must match local-midnight semantics and must not say "tomorrow at the same time".
+User-facing reset copy must match local-midnight semantics and must not say
+"tomorrow at the same time".
