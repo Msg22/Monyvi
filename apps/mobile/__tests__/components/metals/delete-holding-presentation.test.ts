@@ -3,7 +3,6 @@ import type { MetalDetailReadModel } from "@/services/metal-detail-read-model-se
 import {
   getDeleteHoldingSheetCopy,
   getDeleteHoldingSheetHolding,
-  getDeleteHoldingRateWarnings,
 } from "@/components/metals/delete-holding-presentation";
 
 type TranslateOptions = Record<string, string | number>;
@@ -16,27 +15,12 @@ const METALS_COPY: Record<string, string> = {
   "delete.failure": "We couldn't delete this holding. Try again.",
   "delete.offline": "Saved locally first",
   "delete.pending": "Deleting holding…",
-  "delete.performance": "Since purchase",
-  "delete.rate_stale": "{{rateName}} is {{rateAge}} old.",
-  "delete.rate_unknown": "The age of {{rateName}} is unknown.",
-  "delete.rate_ack_stale": "I understand that {{rateName}} is {{rateAge}} old.",
-  "delete.rate_ack_unknown":
-    "I understand that the age of {{rateName}} is unknown.",
-  "delete.rate_source_unknown": "Source unknown",
-  "delete.rate_quality_unknown": "Quality unknown",
-  "delete.rate_updated_unknown": "Provider update time unknown",
-  "detail.current_value": "Current value",
   "detail.retry": "Try again",
-  "detail.since_purchase": "{{amount}} since purchase",
-  "detail.value_unavailable": "Value unavailable",
   "form.coin": "Coin",
   "form.unknown": "Other form",
   "metal.gold": "Gold",
   "metal.silver": "Silver",
-  "portfolio.performance_unavailable":
-    "Since-purchase result unavailable. Purchase cost is not available.",
   purity_gold_999: "24K · 999",
-  weight_unit: "g",
 };
 
 const COMMON_COPY: Record<string, string> = {
@@ -94,69 +78,14 @@ function activeModel(
   };
 }
 
-describe("delete holding sheet facts", () => {
-  it("names each stale or unknown rate input separately before Delete", () => {
-    const warnings = getDeleteHoldingRateWarnings(
-      activeModel({
-        currentValueRateInputs: [
-          {
-            id: "metal:GOLD",
-            state: "stale",
-            ageMs: 172800000,
-            providerObservedAt: null,
-            source: "Metal provider",
-            quality: "valid",
-          },
-          {
-            id: "currency:EGP",
-            state: "unknown",
-            ageMs: null,
-            providerObservedAt: null,
-            source: null,
-            quality: null,
-          },
-        ],
-      }),
-      tMetals,
-      "en"
-    );
-
-    expect(warnings).toHaveLength(2);
-    expect(warnings[0]).toMatchObject({
-      id: "metal:GOLD",
-      name: "Gold",
-      state: "stale",
-      source: "Metal provider",
-      quality: "valid",
-    });
-    expect(warnings[0].acknowledgment).toContain("Gold");
-    expect(warnings[1]).toMatchObject({
-      id: "currency:EGP",
-      name: "EGP",
-      state: "unknown",
-      source: "Source unknown",
-      quality: "Quality unknown",
-    });
-    expect(warnings[1].acknowledgment).toBe(
-      "I understand that the age of EGP is unknown."
-    );
-  });
-  it("shapes the approved Screen 14 identity, purity, weight, and value facts", () => {
+describe("delete holding sheet identity", () => {
+  it("shapes only the approved Screen 14 compact identity facts", () => {
     const holding = getDeleteHoldingSheetHolding(activeModel(), tMetals);
 
     expect(holding).toEqual({
       name: "Wedding coin",
       description: "Gold · 24K · 999 · Coin",
-      weightLabel: "31.125 g",
-      currentValueLabel: "EGP 162,317.87",
-      performanceLabel: "+ EGP 11,039.67",
     });
-  });
-
-  it("keeps the performance value free of the card label wording", () => {
-    const holding = getDeleteHoldingSheetHolding(activeModel(), tMetals);
-
-    expect(holding?.performanceLabel).not.toContain("since purchase");
   });
 
   it("returns null when the holding model is unavailable", () => {
@@ -181,25 +110,6 @@ describe("delete holding sheet facts", () => {
     expect(holding?.description).toBe("Gold · 24K · 999 · Other form");
   });
 
-  it("keeps the confirmation usable when weight, value, or performance are unavailable", () => {
-    const holding = getDeleteHoldingSheetHolding(
-      activeModel({
-        currentValueDecimal: null,
-        totalGainDecimal: null,
-        weightGramsDecimal: null,
-      }),
-      tMetals
-    );
-
-    expect(holding).toEqual({
-      name: "Wedding coin",
-      description: "Gold · 24K · 999 · Coin",
-      weightLabel: "Value unavailable",
-      currentValueLabel: "—",
-      performanceLabel:
-        "Since-purchase result unavailable. Purchase cost is not available.",
-    });
-  });
 });
 
 describe("delete holding sheet copy", () => {
@@ -210,8 +120,6 @@ describe("delete holding sheet copy", () => {
       title: "Delete holding",
       consequence:
         "Only delete a holding added by mistake. It will be removed from your portfolio and History. Sell and No Longer are separate actions.",
-      currentValue: "Current value",
-      performance: "Since purchase",
       confirm: "Delete holding",
       pending: "Deleting holding…",
       cancel: "Cancel",

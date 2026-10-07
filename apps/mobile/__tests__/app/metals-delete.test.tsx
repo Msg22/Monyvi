@@ -7,6 +7,7 @@ import {
   within,
   waitFor,
 } from "@testing-library/react-native";
+import { BackHandler } from "react-native";
 import React, { StrictMode } from "react";
 
 // The submission hook shares the revision-conflict code with the command
@@ -21,8 +22,6 @@ jest.mock("@/services/user-data-access", () => ({
 interface DeleteMetalHoldingSheetCopy {
   readonly title: string;
   readonly consequence: string;
-  readonly currentValue: string;
-  readonly performance: string;
   readonly confirm: string;
   readonly pending: string;
   readonly cancel: string;
@@ -37,13 +36,8 @@ interface DeleteMetalHoldingSheetProps {
   readonly holding: {
     readonly name: string;
     readonly description: string;
-    readonly weightLabel: string;
-    readonly currentValueLabel: string;
-    readonly performanceLabel: string;
   };
   readonly copy: DeleteMetalHoldingSheetCopy;
-  readonly width: number;
-  readonly fontScale: number;
   readonly bottomInset: number;
   readonly leftInset: number;
   readonly rightInset: number;
@@ -51,16 +45,6 @@ interface DeleteMetalHoldingSheetProps {
   readonly isOffline: boolean;
   readonly isSubmitting: boolean;
   readonly submitError: string | null;
-  readonly rateWarnings: readonly {
-    readonly id: string;
-    readonly name: string;
-    readonly state: string;
-    readonly summary: string;
-    readonly source: string;
-    readonly quality: string;
-    readonly updated: string;
-    readonly acknowledgment: string;
-  }[];
   readonly onConfirm: () => void;
   readonly onCancel: () => void;
   readonly onRetry: () => void;
@@ -115,8 +99,6 @@ const copy: DeleteMetalHoldingSheetCopy = {
   title: "Delete holding",
   consequence:
     "Only delete a holding added by mistake. It will be removed from your portfolio and History. Sell and No Longer are separate actions.",
-  currentValue: "Current value",
-  performance: "Since purchase",
   confirm: "Delete holding",
   pending: "Deleting holding…",
   cancel: "Cancel",
@@ -152,13 +134,8 @@ function renderSheet(
     holding: {
       name: "Wedding coin",
       description: "Gold · 24K · 999 · Coin",
-      weightLabel: "31.125 g",
-      currentValueLabel: "EGP 162,317.87",
-      performanceLabel: "+ EGP 11,039.67 since purchase",
     },
     copy,
-    width: 390,
-    fontScale: 1,
     bottomInset: 24,
     leftInset: 0,
     rightInset: 0,
@@ -166,7 +143,6 @@ function renderSheet(
     isOffline: true,
     isSubmitting: false,
     submitError: null,
-    rateWarnings: [],
     onConfirm: jest.fn(),
     onCancel: jest.fn(),
     onRetry: jest.fn(),
@@ -213,7 +189,7 @@ describe("DeleteMetalHoldingSheet approved focused confirmation", () => {
     jest.restoreAllMocks();
   });
 
-  it("renders the approved destructive copy with exact identity, purity, weight, and value facts", () => {
+  it("renders only the approved compact identity and destructive copy", () => {
     renderSheet();
 
     expect(screen.getByTestId("metal-holding-delete-sheet")).toHaveProp(
@@ -226,38 +202,25 @@ describe("DeleteMetalHoldingSheet approved focused confirmation", () => {
       "metal-holding-delete-consequence"
     );
     expect(
-      screen.getByText("Wedding coin", { includeHiddenElements: true })
-    ).toBeTruthy();
+      screen.getByText("Wedding coin · Gold · 24K · 999 · Coin")
+    ).toHaveProp("testID", "metal-holding-delete-identity");
     expect(
-      screen.getByText("Gold · 24K · 999 · Coin", {
-        includeHiddenElements: true,
-      })
-    ).toBeTruthy();
+      screen.getByTestId("metal-holding-delete-identity")
+    ).toHaveProp(
+      "accessibilityLabel",
+      "Wedding coin. Gold · 24K · 999 · Coin"
+    );
     expect(
-      screen.getByText("31.125 g", { includeHiddenElements: true })
-    ).toBeTruthy();
+      screen.queryByTestId("metal-holding-delete-holding-summary")
+    ).toBeNull();
     expect(
-      screen.getByText("EGP 162,317.87", { includeHiddenElements: true })
-    ).toHaveProp("testID", "metal-holding-delete-current-value");
-    expect(
-      screen.getByText("+ EGP 11,039.67 since purchase", {
-        includeHiddenElements: true,
-      })
-    ).toBeTruthy();
+      screen.queryByTestId("metal-holding-delete-current-value")
+    ).toBeNull();
     expect(screen.getByText(copy.offline)).toBeTruthy();
     expect(
       screen.getByRole("button", { name: copy.accessibilityLabel })
     ).toBeTruthy();
     expect(screen.queryByText("Undo deletion")).toBeNull();
-    expect(
-      screen.getByTestId("metal-holding-delete-holding-summary")
-    ).toHaveProp(
-      "accessibilityLabel",
-      "Wedding coin. Gold · 24K · 999 · Coin. 31.125 g. Current value: EGP 162,317.87. Since purchase: + EGP 11,039.67 since purchase"
-    );
-    expect(
-      screen.getByTestId("metal-holding-delete-holding-summary")
-    ).toHaveProp("importantForAccessibility", "yes");
   });
 
   it("requests initial focus for the confirmation heading and isolates the background", async () => {
@@ -285,54 +248,30 @@ describe("DeleteMetalHoldingSheet approved focused confirmation", () => {
     expect(props.onCancel).toHaveBeenCalledTimes(2);
   });
 
-  it("requires explicit acknowledgement of each stale or unknown input before Delete", () => {
-    const props = renderSheet({
-      rateWarnings: [
-        {
-          id: "metal:GOLD",
-          name: "Gold",
-          state: "stale",
-          summary: "Gold is 2 days old.",
-          source: "Metal provider",
-          quality: "valid",
-          updated: "Provider update time unknown",
-          acknowledgment: "I understand that Gold is 2 days old.",
-        },
-        {
-          id: "currency:EGP",
-          name: "EGP",
-          state: "unknown",
-          summary: "The age of EGP is unknown.",
-          source: "FX provider",
-          quality: "valid",
-          updated: "Provider update time unknown",
-          acknowledgment: "I understand that the age of EGP is unknown.",
-        },
-      ],
-    });
+  it("treats hardware Back as Cancel before submission", () => {
+    const addEventListener = jest.spyOn(BackHandler, "addEventListener");
+    const props = renderSheet();
+    const handler = addEventListener.mock.calls.find(
+      ([event]) => event === "hardwareBackPress"
+    )?.[1];
 
-    expect(
-      screen.getByRole("button", { name: copy.accessibilityLabel })
-    ).toBeDisabled();
-    expect(screen.getByText("Gold is 2 days old.")).toBeTruthy();
-    expect(screen.getByText("The age of EGP is unknown.")).toBeTruthy();
-    fireEvent.press(
-      screen.getByTestId("metal-holding-delete-rate-ack-metal:GOLD")
-    );
-    expect(
-      screen.getByRole("button", { name: copy.accessibilityLabel })
-    ).toBeDisabled();
-    fireEvent.press(
-      screen.getByTestId("metal-holding-delete-rate-ack-currency:EGP")
-    );
-    expect(
-      screen.getByRole("button", { name: copy.accessibilityLabel })
-    ).toBeEnabled();
-    fireEvent.press(
-      screen.getByRole("button", { name: copy.accessibilityLabel })
-    );
-    expect(props.onConfirm).toHaveBeenCalledTimes(1);
+    expect(handler).toBeDefined();
+    expect(handler?.()).toBe(true);
+    expect(props.onCancel).toHaveBeenCalledTimes(1);
   });
+
+  it("consumes hardware Back without cancelling while Delete is submitting", () => {
+    const addEventListener = jest.spyOn(BackHandler, "addEventListener");
+    const props = renderSheet({ isSubmitting: true });
+    const handler = addEventListener.mock.calls.find(
+      ([event]) => event === "hardwareBackPress"
+    )?.[1];
+
+    expect(handler).toBeDefined();
+    expect(handler?.()).toBe(true);
+    expect(props.onCancel).not.toHaveBeenCalled();
+  });
+
 
   it("locks confirm, cancel, backdrop, and duplicate input while the local action is pending", () => {
     const props = renderSheet({
@@ -370,22 +309,14 @@ describe("DeleteMetalHoldingSheet approved focused confirmation", () => {
     await waitFor(() => expect(focus).toHaveBeenLastCalledWith("recovery"));
   });
 
-  it.each([
-    [390, 1, false, "flex-row gap-3"],
-    [320, 1, false, "gap-3"],
-    [768, 2, true, "gap-3"],
-  ] as const)(
-    "uses the shared responsive rule at %ipx/%sx RTL=%s",
-    (width, fontScale, isRtl, expectedLayout) => {
-      renderSheet({ width, fontScale, isRtl });
-      expect(
-        screen.getByTestId("metal-holding-delete-facts", {
-          includeHiddenElements: true,
-        })
-      ).toHaveProp("className", expectedLayout);
+  it.each([false, true] as const)(
+    "applies confirmation direction RTL=%s without changing the compact composition",
+    (isRtl) => {
+      renderSheet({ isRtl });
       expect(screen.getByTestId("metal-holding-delete-content")).toHaveStyle({
         direction: isRtl ? "rtl" : "ltr",
       });
+      expect(screen.getByTestId("metal-holding-delete-identity")).toBeTruthy();
     }
   );
 
@@ -413,8 +344,6 @@ describe("DeleteMetalHoldingSheet approved focused confirmation", () => {
 
   it("bounds and scrolls confirmation content while keeping safe-area actions outside the scroll region", () => {
     renderSheet({
-      width: 320,
-      fontScale: 2,
       bottomInset: 34,
       submitError: "The holding was not deleted. Try again.",
     });

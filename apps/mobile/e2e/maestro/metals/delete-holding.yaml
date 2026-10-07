@@ -2,7 +2,8 @@ appId: com.monyvi.app
 ---
 # T115 partial Red contract. The PR276 Delete route
 # (app/(private)/metals/[holdingId]/delete.tsx) and the detail Delete action
-# composition are live, so this sequence can open the real confirmation.
+# composition are live, so this sequence can open the real confirmation over
+# the real Holding Details surface, including from this direct-link entry.
 # Shared integration must still provide an effective Active Gold holding with
 # retained creation/correction evidence before this sequence can run. Offline
 # and terminal-state proof remain explicitly missing: the shared harness has
@@ -17,13 +18,13 @@ appId: com.monyvi.app
 
 # Approved Screen 14 is one focused confirmation, not Sell, No Longer, or Undo.
 - assertVisible: "Delete holding"
-- assertVisible: "E2E Gold Bar"
-- assertVisible: "Gold · 24K · 999 · Bar"
-- assertVisible: "10 g"
-- assertVisible:
-    id: metal-holding-delete-current-value
+- assertVisible: "E2E Gold Bar · Gold · 24K · 999 · Bar"
 - assertVisible:
     id: metal-holding-delete-consequence
+- assertNotVisible:
+    id: metal-holding-delete-holding-summary
+- assertNotVisible:
+    id: metal-holding-delete-current-value
 
 # Duplicate input can produce only one local grouped Delete action.
 - doubleTapOn:

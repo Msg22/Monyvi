@@ -1,16 +1,17 @@
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { Pressable, Text, View, useWindowDimensions } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { DeleteMetalHoldingSheet } from "@/components/metals/DeleteMetalHoldingSheet";
 import {
   getDeleteHoldingSheetCopy,
   getDeleteHoldingSheetHolding,
-  getDeleteHoldingRateWarnings,
   type DeleteSheetTranslator,
 } from "@/components/metals/delete-holding-presentation";
+import { getHoldingDetailTitleKey } from "@/components/metals/holding-detail-presentation";
+import { MetalHoldingDetailScreen } from "@/components/metals/MetalHoldingDetailScreen";
 import { PageHeader } from "@/components/navigation/PageHeader";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useToast } from "@/components/ui/Toast";
@@ -28,9 +29,10 @@ export default function DeleteMetalHoldingRoute(): React.JSX.Element | null {
   const submission = useDeleteMetalHolding(command.input);
   const { t, i18n } = useTranslation("metals");
   const { t: tCommon } = useTranslation("common");
-  const { width, fontScale } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const { showToast } = useToast();
+  const canReturnToPreviousRoute =
+    typeof router.canGoBack === "function" && router.canGoBack();
 
   const finishDelete = useCallback((): void => {
     showToast({ type: "success", title: t("delete.success") });
@@ -40,10 +42,6 @@ export default function DeleteMetalHoldingRoute(): React.JSX.Element | null {
   const handleConfirm = useCallback(async (): Promise<void> => {
     await command.ensureToken();
     const succeeded = await submission.submit();
-    // Dismiss to the existing portfolio instead of replacing the top route,
-    // so the now-deleted holding detail is removed from the back stack. When
-    // the route was deep-linked with no portfolio underneath, dismissTo
-    // replaces the current screen instead.
     if (succeeded) finishDelete();
   }, [command, finishDelete, submission]);
 
@@ -54,8 +52,14 @@ export default function DeleteMetalHoldingRoute(): React.JSX.Element | null {
   }, [command, finishDelete, submission]);
 
   const handleCancel = useCallback((): void => {
-    router.back();
-  }, []);
+    if (canReturnToPreviousRoute) {
+      router.back();
+      return;
+    }
+    if (holdingId) {
+      router.replace({ pathname: "/metals/[id]", params: { id: holdingId } });
+    }
+  }, [canReturnToPreviousRoute, holdingId]);
 
   const tMetals = useCallback<DeleteSheetTranslator>(
     (key, options): string => t(key, options),
@@ -113,14 +117,8 @@ export default function DeleteMetalHoldingRoute(): React.JSX.Element | null {
     );
   }
 
-  const holding = getDeleteHoldingSheetHolding(
-    detail.model,
-    tMetals,
-    i18n.resolvedLanguage
-  );
-  // A deep link can land here for a holding that Delete must never touch.
-  // Never show the confirmation for a terminal holding; direct recovery to
-  // Undo with the approved explanation instead.
+  const holding = getDeleteHoldingSheetHolding(detail.model, tMetals);
+
   if (detail.model !== null && !detail.model.isActiveOwnership) {
     return (
       <View className="flex-1 bg-background dark:bg-background-dark">
@@ -137,6 +135,7 @@ export default function DeleteMetalHoldingRoute(): React.JSX.Element | null {
       </View>
     );
   }
+
   if (holding === null) {
     return (
       <View className="flex-1 bg-background dark:bg-background-dark">
@@ -174,31 +173,47 @@ export default function DeleteMetalHoldingRoute(): React.JSX.Element | null {
       : i18n.resolvedLanguage === "ar";
 
   return (
-    <DeleteMetalHoldingSheet
-      visible
-      holding={holding}
-      rateWarnings={getDeleteHoldingRateWarnings(
-        detail.model,
-        tMetals,
-        i18n.resolvedLanguage
-      )}
-      copy={getDeleteHoldingSheetCopy(
-        tMetals,
-        tCommonCallback,
-        detail.model?.name ?? holding.name
-      )}
-      width={width}
-      fontScale={fontScale}
-      bottomInset={insets.bottom}
-      leftInset={insets.left}
-      rightInset={insets.right}
-      isRtl={isRtl}
-      isOffline={detail.isOffline}
-      isSubmitting={submission.isSubmitting}
-      submitError={submission.submitError}
-      onConfirm={() => void handleConfirm()}
-      onCancel={handleCancel}
-      onRetry={() => void handleRetry()}
-    />
+    <View className="flex-1">
+      {!canReturnToPreviousRoute ? (
+        <View
+          testID="metal-holding-delete-direct-detail"
+          pointerEvents="none"
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
+          className="flex-1 bg-background dark:bg-background-dark"
+        >
+          <PageHeader
+            showBackButton
+            showDrawer={false}
+            title={t(getHoldingDetailTitleKey(detail.model?.status))}
+          />
+          <MetalHoldingDetailScreen
+            actions={[]}
+            {...detail}
+            onRetry={detail.retry}
+          />
+        </View>
+      ) : null}
+
+      <DeleteMetalHoldingSheet
+        visible
+        holding={holding}
+        copy={getDeleteHoldingSheetCopy(
+          tMetals,
+          tCommonCallback,
+          detail.model?.name ?? holding.name
+        )}
+        bottomInset={insets.bottom}
+        leftInset={insets.left}
+        rightInset={insets.right}
+        isRtl={isRtl}
+        isOffline={detail.isOffline}
+        isSubmitting={submission.isSubmitting}
+        submitError={submission.submitError}
+        onConfirm={() => void handleConfirm()}
+        onCancel={handleCancel}
+        onRetry={() => void handleRetry()}
+      />
+    </View>
   );
 }
