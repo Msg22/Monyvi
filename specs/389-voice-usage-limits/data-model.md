@@ -1,4 +1,4 @@
-# Data Model: Voice Usage Limits and Subscription-Ready Entitlements
+# Data Model: Add Transaction Voice Redesign, Usage Limits and Subscription-Ready Entitlements
 
 **Feature**: 389-voice-usage-limits  
 **Date**: 2026-09-27
@@ -154,3 +154,42 @@ Quota state is read by the app only through the authenticated availability Edge 
 ## 8. Future subscription integration
 
 A future subscription module may replace the free-launch entitlement resolver input, but must return the same `VoiceEntitlementPolicy` shape. This feature does not define plan names, prices, billing state, or paid-plan quota values.
+
+
+## 9. Unified Add Transaction Mode (client route state)
+
+```ts
+type AddTransactionMode = "manual" | "voice";
+```
+
+Rules:
+
+- missing/invalid route mode -> `manual`;
+- FAB -> `manual`;
+- center mic/onboarding/review retry -> `voice`;
+- Manual form stays mounted across safe mode switches;
+- mode switching is disabled while Voice is recording, paused, finalizing, or analyzing;
+- Voice exhausted/burst-limited/unavailable never disables Manual.
+
+## 10. Voice Availability UI State
+
+The client derives only presentation state from the authoritative `VoiceAvailabilitySnapshot`:
+
+- available with remaining count;
+- burst-limited until `availableAt`;
+- daily exhausted until `resetAt`;
+- authoritative availability unavailable/recovery.
+
+The client never decrements an authoritative durable counter locally. It refreshes after voice attempts and on authoritative refusal.
+
+## 11. Request Metadata
+
+Each provider-starting submission carries:
+
+| Field | Type | Rule |
+| --- | --- | --- |
+| `requestKey` | opaque string/UUID | generated once per logical submission and reused only for replay |
+| `callerTimeZone` | IANA timezone | device context; validated/pinned server-side |
+| `callerLocalDate` | YYYY-MM-DD | existing Gemini relative-date context |
+
+No field contains raw audio/transcript/financial content.
