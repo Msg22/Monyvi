@@ -102,6 +102,16 @@ export default function DeleteMetalHoldingRoute(): React.JSX.Element | null {
           <Text className="text-center text-sm text-text-secondary dark:text-text-secondary-dark">
             {t("delete.checking_changes_body")}
           </Text>
+          {detail.error === null ? null : (
+            <Text
+              testID="metal-holding-delete-sync-error"
+              accessibilityRole="alert"
+              accessibilityLiveRegion="assertive"
+              className="text-center text-sm text-red-700 dark:text-red-300"
+            >
+              {t("reconciliation.sync_failed")}
+            </Text>
+          )}
           <Pressable
             testID="metal-holding-delete-sync-retry"
             accessibilityRole="button"

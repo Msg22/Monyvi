@@ -153,6 +153,8 @@ const mockMetalsCopy: Record<string, string> = {
   "delete.checking_changes": "Checking changes",
   "delete.checking_changes_body":
     "This holding changed on another device. We’re checking the holding and account before showing the final result.",
+  "reconciliation.sync_failed":
+    "Sync failed. Your saved local state is still available.",
   "delete.performance": "Since purchase",
   "delete.terminal_unavailable":
     "To correct this terminal action, undo it first.",
@@ -463,6 +465,30 @@ describe("delete holding route journey", () => {
     expect(lastSheetProps).toBeNull();
     fireEvent.press(screen.getByTestId("metal-holding-delete-sync-retry"));
     expect(mockDetailRetry).toHaveBeenCalledTimes(1);
+    expect(mockExecute).not.toHaveBeenCalled();
+  });
+
+  it("announces a failed reconciliation retry while keeping recovery reachable and Delete locked", () => {
+    mockModel = {
+      ...activeModel(),
+      isFinancialActionLocked: true,
+      reconciliationState: "reconciliation_incomplete",
+    };
+    const view = render(<DeleteMetalHoldingRoute />);
+
+    fireEvent.press(screen.getByTestId("metal-holding-delete-sync-retry"));
+    expect(mockDetailRetry).toHaveBeenCalledTimes(1);
+
+    mockDetailError = new Error("sync_failed");
+    view.rerender(<DeleteMetalHoldingRoute />);
+
+    const alert = screen.getByText(
+      "Sync failed. Your saved local state is still available."
+    );
+    expect(alert).toHaveProp("accessibilityRole", "alert");
+    expect(alert).toHaveProp("accessibilityLiveRegion", "assertive");
+    expect(screen.getByTestId("metal-holding-delete-sync-retry")).toBeTruthy();
+    expect(lastSheetProps).toBeNull();
     expect(mockExecute).not.toHaveBeenCalled();
   });
 
