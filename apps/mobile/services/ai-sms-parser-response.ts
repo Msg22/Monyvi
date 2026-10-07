@@ -62,6 +62,11 @@ const SmsSafeguardRefusalSchema = z.object({
   sizeScope: z.enum(["batch", "candidate", "shared_request"]).optional(),
 });
 
+const SmsProviderRetrySchema = z.object({
+  reason: z.enum(["provider_failed", "response_invalid"]),
+  retryRequestMode: z.literal("fresh"),
+});
+
 export type AiSmsTransaction = z.infer<typeof AiSmsTransactionSchema>;
 
 export interface ChunkAiResult {
@@ -90,6 +95,22 @@ export function parseSmsSafeguardRefusal(
   value: unknown
 ): SmsSafeguardRefusal | undefined {
   const parsed = SmsSafeguardRefusalSchema.safeParse(value);
+  return parsed.success ? parsed.data : undefined;
+}
+
+export type SmsProviderRetryReason = z.infer<
+  typeof SmsProviderRetrySchema
+>["reason"];
+
+export interface SmsProviderRetry {
+  readonly reason: SmsProviderRetryReason;
+  readonly retryRequestMode: "fresh";
+}
+
+export function parseSmsProviderRetry(
+  value: unknown
+): SmsProviderRetry | undefined {
+  const parsed = SmsProviderRetrySchema.safeParse(value);
   return parsed.success ? parsed.data : undefined;
 }
 

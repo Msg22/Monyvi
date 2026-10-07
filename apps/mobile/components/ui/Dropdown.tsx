@@ -1,6 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
-import React from "react";
 import {
   Modal,
   ScrollView,
@@ -9,6 +8,7 @@ import {
   TouchableWithoutFeedback,
   View,
 } from "react-native";
+import { useTranslation } from "react-i18next";
 import { palette } from "@/constants/colors";
 import { useTheme } from "@/context/ThemeContext";
 import { useModalBottomInset } from "@/hooks/useModalBottomInset";
@@ -26,7 +26,10 @@ export interface DropdownItem<T> {
 }
 
 interface DropdownBaseProps<T> {
+  variant?: "default" | "outlined";
   label: string;
+  required?: boolean;
+  accessibilityHint?: string;
   items: ReadonlyArray<DropdownItem<T>>;
   value: T;
   onChange: (value: T) => void;
@@ -189,6 +192,7 @@ function DropdownModalView<T extends string | number>({
 
               {/* Items */}
               <ScrollView
+                testID={testID ? `${testID}-options-scroll` : undefined}
                 className="max-h-80"
                 showsVerticalScrollIndicator={false}
               >
@@ -233,31 +237,58 @@ function DropdownModalView<T extends string | number>({
  */
 export function Dropdown<T extends string | number>({
   label,
+  required,
   items,
   value,
   onChange,
   isOpen,
   onToggle,
   className = "",
+  variant = "default",
   placeholder = "Select...",
   useModal = false,
   disabled = false,
   testID,
+  accessibilityHint,
 }: DropdownProps<T>): React.JSX.Element {
+  const { t } = useTranslation("common");
   const { isDark } = useTheme();
   const selectedItem = items.find((item) => item.value === value);
 
   return (
-    <View className={`mb-3 ${className} ${disabled ? "opacity-50" : ""}`}>
-      <Text className="input-label mb-2">{label}</Text>
+    <View
+      collapsable={false}
+      className={`${variant === "outlined" ? "" : "mb-3"} ${className ?? ""} ${disabled ? "opacity-50" : ""}`.trim()}
+    >
+      <Text
+        className={
+          variant === "outlined"
+            ? "mb-1 text-sm font-normal text-text-secondary dark:text-text-secondary-dark"
+            : "input-label mb-2"
+        }
+      >
+        {label}
+        {required ? <Text className="text-red-500">{" *"}</Text> : null}
+      </Text>
 
-      <View className="rounded-2xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800 overflow-hidden shadow-sm">
+      <View
+        className={
+          variant === "outlined"
+            ? "rounded-lg border border-slate-200 bg-slate-25 dark:border-slate-700 dark:bg-slate-900 overflow-hidden"
+            : "rounded-2xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800 overflow-hidden shadow-sm"
+        }
+      >
         <TouchableOpacity
           testID={testID ? `${testID}-trigger` : undefined}
           onPress={onToggle}
           activeOpacity={0.7}
           disabled={disabled}
-          className="p-4"
+          accessibilityHint={
+            accessibilityHint ?? (required ? t("required_field") : undefined)
+          }
+          className={
+            variant === "outlined" ? "min-h-11 justify-center px-3 py-2" : "p-4"
+          }
         >
           <View className="flex-row items-center justify-between">
             <View className="flex-row items-center">
@@ -276,7 +307,9 @@ export function Dropdown<T extends string | number>({
                   )}
                 </View>
               )}
-              <Text className="text-base font-medium text-slate-900 dark:text-white">
+              <Text
+                className={`text-base ${variant === "outlined" ? "font-normal" : "font-medium"} text-slate-900 dark:text-white`}
+              >
                 {selectedItem?.label || placeholder}
               </Text>
             </View>

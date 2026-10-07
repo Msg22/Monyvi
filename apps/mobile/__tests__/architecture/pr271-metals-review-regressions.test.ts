@@ -98,7 +98,11 @@ describe("PR #271 validated Metals review regressions", () => {
     const shaping = source("services/metal-detail-read-model-shaping.ts");
     expect(value).toContain("effectiveActionId");
     expect(shaping).toContain("actionId: reference.actionId");
-    expect(value).toContain("expectation.actionId");
+    expect(value).toMatch(
+      /findReference,[\s\S]*from "@\/services\/metal-detail-read-model-shaping"/
+    );
+    expect(value).toContain("findReference(references, {");
+    expect(shaping).toContain("candidate.actionId === expectation.actionId");
   });
 
   it("converts lifecycle-backed detail values to the preferred currency", () => {

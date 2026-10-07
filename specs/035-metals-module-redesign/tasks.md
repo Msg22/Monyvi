@@ -222,17 +222,17 @@ This topology controls ownership, dependency stacks, and future review size. Aft
 
 #### Red
 
-- [ ] T075 [US2] Define Add manual/timed scenarios and FR/SC mappings in `specs/035-metals-module-redesign/manual-tests/us2-add-holding.md` and `specs/035-metals-module-redesign/coverage/us2.md`
-- [ ] T076 [P] [US2] Write failing locale parsing, required fields, precision/range/date, Gold/Silver-only, unusual acknowledgment, exact preview, `24K · 999`, and unavailable-rate tests in `apps/mobile/__tests__/validation/metal-holding-form-validation.test.ts`
-- [ ] T077 [P] [US2] Write failing SQLite Add atomicity, stable action, duplicate, rollback, restart, ownership, and sync-pending tests in `apps/mobile/__tests__/services/add-metal-holding-command-service.integration.test.ts`
-- [ ] T078 [P] [US2] Write failing full-form order, live preview, dirty exit, safe area, error focus, pending lock, EN/AR/RTL/theme/breakpoint/200%-text tests in `apps/mobile/__tests__/app/metals-add.test.tsx`
-- [ ] T079 [P] [US2] Create failing Gold/Silver/offline-restart/validation Maestro coverage in `apps/mobile/e2e/maestro/metals/add-holding.yaml`
+- [x] T075 [US2] Define Add manual/timed scenarios and FR/SC mappings in `specs/035-metals-module-redesign/manual-tests/us2-add-holding.md` and `specs/035-metals-module-redesign/coverage/us2.md`
+- [x] T076 [P] [US2] Write failing locale parsing, required fields, precision/range/date, Gold/Silver-only, unusual acknowledgment, exact preview, `24K · 999`, and unavailable-rate tests in `apps/mobile/__tests__/validation/metal-holding-form-validation.test.ts`
+- [x] T077 [P] [US2] Write failing SQLite Add atomicity, stable action, duplicate, rollback, restart, ownership, and sync-pending tests in `apps/mobile/__tests__/services/add-metal-holding-command-service.integration.test.ts`
+- [x] T078 [P] [US2] Write failing full-form order, live preview, dirty exit, safe area, error focus, pending lock, EN/AR/RTL/theme/breakpoint/200%-text tests in `apps/mobile/__tests__/app/metals-add.test.tsx`
+- [x] T079 [P] [US2] Create failing Gold/Silver/offline-restart/validation Maestro coverage in `apps/mobile/e2e/maestro/metals/add-holding.yaml`
 - [ ] T080 [US2] Run T076–T079 and record intended Red failures in `specs/035-metals-module-redesign/evidence/us2-red.md`
 
 #### Green, refactor, verify
 
-- [ ] T081 [US2] Implement locale-aware validation, exact preview shaping, and scoped Add command in `apps/mobile/validation/metal-holding-form-validation.ts`, `apps/mobile/services/metal-holding-preview-service.ts`, and `apps/mobile/services/add-metal-holding-command-service.ts`
-- [ ] T082 [US2] Implement reusable shaped-prop form, Add lifecycle facade, and direct-submit isolated route in `apps/mobile/components/metals/MetalHoldingForm.tsx`, `apps/mobile/hooks/useAddMetalHolding.ts`, and `apps/mobile/app/(private)/metals/add.tsx`
+- [x] T081 [US2] Implement locale-aware validation, exact preview shaping, and scoped Add command in `apps/mobile/validation/metal-holding-form-validation.ts`, `apps/mobile/services/metal-holding-preview-service.ts`, and `apps/mobile/services/add-metal-holding-command-service.ts`
+- [x] T082 [US2] Implement reusable shaped-prop form, Add lifecycle facade, and direct-submit isolated route in `apps/mobile/components/metals/MetalHoldingForm.tsx`, `apps/mobile/hooks/useAddMetalHolding.ts`, and `apps/mobile/app/(private)/metals/add.tsx`
 - [ ] T083 [US2] Run US2 suites and Maestro, refactor while green, and record evidence in `specs/035-metals-module-redesign/coverage/us2.md`
 
 ### User Story 4 — Edit a Holding or Correct Active Facts (Priority: P1)
@@ -241,17 +241,17 @@ This topology controls ownership, dependency stacks, and future review size. Aft
 
 #### Red
 
-- [ ] T084 [US4] Define Edit/correction manual scenarios and FR/SC mappings in `specs/035-metals-module-redesign/manual-tests/us4-edit-correction.md` and `specs/035-metals-module-redesign/coverage/us4.md`
+- [x] T084 [US4] Define Edit/correction manual scenarios and FR/SC mappings in `specs/035-metals-module-redesign/manual-tests/us4-edit-correction.md` and `specs/035-metals-module-redesign/coverage/us4.md`
 - [ ] T085 [P] [US4] Write failing persisted-vs-current diff, reason toggle, physical-form-only summary, locked metal, terminal immutability, exact consequence, and metadata-LWW tests in `apps/mobile/__tests__/services/edit-metal-holding-preview-command.test.ts`
 - [ ] T086 [P] [US4] Write failing SQLite mixed metadata/material atomicity, whole-fact-set CAS, duplicate, rollback, restart, and History tests in `apps/mobile/__tests__/services/edit-metal-holding-command-service.integration.test.ts`
-- [ ] T087 [P] [US4] Write failing same-form order, previous/current cues, dynamic summary, dirty exit, pending lock, focus, EN/AR/RTL/theme/reflow tests in `apps/mobile/__tests__/app/metals-edit.test.tsx`
-- [ ] T088 [P] [US4] Create failing metadata/material/reverted-delta/offline Maestro coverage in `apps/mobile/e2e/maestro/metals/edit-holding.yaml`
+- [x] T087 [P] [US4] Write failing same-form order, previous/current cues, dynamic summary, dirty exit, pending lock, focus, EN/AR/RTL/theme/reflow tests in `apps/mobile/__tests__/app/metals-edit.test.tsx`
+- [x] T088 [P] [US4] Create failing metadata/material/reverted-delta/offline Maestro coverage in `apps/mobile/e2e/maestro/metals/edit-holding.yaml`
 - [ ] T089 [US4] Run T085–T088 and record intended Red failures in `specs/035-metals-module-redesign/evidence/us4-red.md`
 
 #### Green, refactor, verify
 
-- [ ] T090 [US4] Implement exact change comparison, consequence shaping, metadata patching, and material-correction command in `apps/mobile/services/edit-metal-holding-preview-service.ts` and `apps/mobile/services/edit-metal-holding-command-service.ts`
-- [ ] T091 [US4] Extend shared form without changing Add behavior, implement Edit facade/action descriptor, and add isolated route in `apps/mobile/components/metals/MetalHoldingForm.tsx`, `apps/mobile/hooks/useEditMetalHolding.ts`, `apps/mobile/components/metals/holding-actions/edit-action.ts`, and `apps/mobile/app/(private)/metals/[holdingId]/edit.tsx`
+- [x] T090 [US4] Implement exact change comparison, consequence shaping, metadata patching, and material-correction command in `apps/mobile/services/edit-metal-holding-preview-service.ts` and `apps/mobile/services/edit-metal-holding-command-service.ts`
+- [x] T091 [US4] Extend shared form without changing Add behavior, implement Edit facade/action descriptor, and add isolated route in `apps/mobile/components/metals/MetalHoldingForm.tsx`, `apps/mobile/hooks/useEditMetalHolding.ts`, `apps/mobile/components/metals/holding-actions/edit-action.ts`, and `apps/mobile/app/(private)/metals/[holdingId]/edit.tsx`
 - [ ] T092 [US4] Run US4 plus Add regression suites and Maestro, refactor while green, and record evidence in `specs/035-metals-module-redesign/coverage/us4.md`
 
 ---

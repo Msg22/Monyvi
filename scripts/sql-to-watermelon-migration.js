@@ -40,6 +40,7 @@ const EXCLUDED_TABLES = [
   "sms_ai_work_requests",
   "sms_ai_usage_events",
   "sms_ai_scan_sessions",
+  "email_verification_resend_limits",
 ];
 
 // Timestamp fields — these use WatermelonDB type "number" regardless of SQL type

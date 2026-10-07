@@ -599,23 +599,23 @@ describe("sms-parser-orchestrator", () => {
   });
 
   it("resolves exact trusted rejection templates without sending them to AI", async () => {
-    const otp = candidate({
+    const rejection = candidate({
       message: {
-        id: "sms-otp",
+        id: "sms-trusted-rejection",
         address: "QNB EGYPT",
-        body: "QNB OTP:369154 at Orange for EGP 1572 الرقم السرى مخصص لعملية الشراء اونلاين برجاء عدم الافصاح عنه",
+        body: "عزيزى العميل نذكركم بإستلام بطاقه الخصم المباشر حيث ستلغي بعد 45 يوم",
         date: RECEIVED_AT_MS,
         read: false,
       },
-      smsFingerprint: "fingerprint-otp",
+      smsFingerprint: "fingerprint-trusted-rejection",
     });
 
-    const result = await parseSmsWithOrchestrator([otp], context);
+    const result = await parseSmsWithOrchestrator([rejection], context);
 
     expect(mockParseSmsWithAi).not.toHaveBeenCalled();
     expect(result.transactions).toEqual([]);
     expect(result.durableLocalRejectionFingerprints).toEqual([
-      "fingerprint-otp",
+      "fingerprint-trusted-rejection",
     ]);
     expect(result.diagnostics).toMatchObject({
       mode: "hybrid",

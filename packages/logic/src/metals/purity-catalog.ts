@@ -24,6 +24,31 @@ export type PurityResolution =
 
 export const PURITY_CATALOG_VERSION = "1" as const;
 
+export interface FeaturedPurityCode {
+  readonly metal: SupportedMetal;
+  readonly purityCode: string;
+}
+
+export const FEATURED_PURITY_CODES: readonly FeaturedPurityCode[] =
+  Object.freeze([
+    {
+      metal: "GOLD",
+      purityCode: "gold-999",
+    },
+    {
+      metal: "GOLD",
+      purityCode: "gold-875",
+    },
+    {
+      metal: "GOLD",
+      purityCode: "gold-750",
+    },
+    {
+      metal: "SILVER",
+      purityCode: "silver-999",
+    },
+  ]);
+
 const PURITY_CATALOG: readonly PurityCatalogEntry[] = Object.freeze([
   entry("gold-9999", "GOLD", "purity_gold_9999", "0.9999"),
   entry("gold-999", "GOLD", "purity_gold_999", "0.999"),

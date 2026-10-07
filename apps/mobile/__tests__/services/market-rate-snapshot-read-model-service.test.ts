@@ -74,6 +74,41 @@ describe("selectMarketRateSnapshot", () => {
     expect(selected?.snapshotId).toBe(SNAPSHOT_B_ID);
   });
 
+  it("prefers an imported provider snapshot over a newer manual QA fixture", () => {
+    const fixtureObservations = createObservationsB().map((row) => ({
+      ...row,
+      source: "manual_qa_fixture:manual-qa",
+    }));
+    const roots = [createRootA(), createRootB()];
+    const observations = [...createObservationsA(), ...fixtureObservations];
+
+    expect(
+      selectMarketRateSnapshot(roots, observations, NOW_MS)?.snapshotId
+    ).toBe(SNAPSHOT_A_ID);
+    expect(
+      selectMarketRateSnapshot([roots[1]], fixtureObservations, NOW_MS)
+        ?.snapshotId
+    ).toBe(SNAPSHOT_B_ID);
+  });
+
+  it("does not demote a newer snapshot with mixed provenance", () => {
+    const observations = createObservationsB().map((row) => ({
+      ...row,
+      source:
+        row.instrumentCode === "metal:GOLD"
+          ? "metals.dev"
+          : "manual_qa_fixture:manual-qa",
+    }));
+
+    expect(
+      selectMarketRateSnapshot(
+        [createRootA(), createRootB()],
+        [...createObservationsA(), ...observations],
+        NOW_MS
+      )?.snapshotId
+    ).toBe(SNAPSHOT_B_ID);
+  });
+
   it("never repairs an incomplete candidate from another batch", () => {
     const fixture = crossBatchRepairFixture();
     const selected = selectMarketRateSnapshot(

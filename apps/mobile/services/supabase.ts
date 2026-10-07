@@ -8,10 +8,22 @@
  */
 
 import { SupabaseDatabase } from "@monyvi/db";
-import { createClient, AuthError, processLock } from "@supabase/supabase-js";
+import {
+  createClient,
+  AuthError,
+  processLock,
+  type AuthChangeEvent,
+  type Session,
+  type Subscription,
+} from "@supabase/supabase-js";
 import * as SecureStore from "expo-secure-store";
 import { AUTH_REDIRECT_URL } from "@/constants/auth-constants";
 import { z } from "zod";
+import {
+  createAuthSessionMutationCoordinator,
+  isAuthSessionMutationQuarantinedError,
+  type CancellableMutation,
+} from "@/services/auth-session-mutation-coordinator";
 
 function readPublicEnvironmentVariable(value: unknown): string | undefined {
   return typeof value === "string" ? value : undefined;
@@ -190,6 +202,131 @@ export const supabase = createClient<SupabaseDatabase>(
   }
 );
 
+type GetSessionResult = Awaited<ReturnType<typeof supabase.auth.getSession>>;
+type SignOutOptions = Parameters<typeof supabase.auth.signOut>[0];
+type AuthStateCallback = (
+  event: AuthChangeEvent,
+  session: Session | null
+) => void;
+
+const authSessionCoordinator = createAuthSessionMutationCoordinator({
+  readRawSession: async (): Promise<Session | null> => {
+    const {
+      data: { session },
+      error,
+    } = await supabase.auth.getSession();
+    if (error) throw error;
+    return session;
+  },
+  restoreRawSession: async (session: Session): Promise<void> => {
+    const { data, error } = await supabase.auth.setSession({
+      access_token: session.access_token,
+      refresh_token: session.refresh_token,
+    });
+    if (error) throw error;
+    if (!data.session) {
+      throw new AuthError(
+        "Could not restore authenticated session.",
+        undefined,
+        "unexpected_failure"
+      );
+    }
+  },
+  clearRawSession: async (): Promise<void> => {
+    const { error } = await supabase.auth.signOut({ scope: "local" });
+    if (error) throw error;
+  },
+  stopAutoRefresh: async (): Promise<void> => {
+    await supabase.auth.stopAutoRefresh();
+  },
+  startAutoRefresh: async (): Promise<void> => {
+    await supabase.auth.startAutoRefresh();
+  },
+  subscribeRaw: (
+    listener: (event: AuthChangeEvent, session: Session | null) => void
+  ): (() => void) => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      listener(event, session);
+      return Promise.resolve();
+    });
+    return (): void => subscription.unsubscribe();
+  },
+});
+
+export async function getStableAuthSession(): Promise<GetSessionResult> {
+  try {
+    const session = await authSessionCoordinator.getStableSession();
+    if (session) {
+      return { data: { session }, error: null };
+    }
+    return { data: { session: null }, error: null };
+  } catch (error: unknown) {
+    const authError =
+      error instanceof AuthError
+        ? error
+        : new AuthError(
+            "Could not read authenticated session.",
+            undefined,
+            "unexpected_failure"
+          );
+    return { data: { session: null }, error: authError };
+  }
+}
+
+export function subscribeToCoordinatedAuthStateChange(
+  callback: AuthStateCallback
+): { readonly data: { readonly subscription: Subscription } } {
+  const unsubscribe = authSessionCoordinator.subscribe(callback);
+  const sdkCallback = (
+    event: AuthChangeEvent,
+    session: Session | null
+  ): Promise<void> => {
+    callback(event, session);
+    return Promise.resolve();
+  };
+  const subscription: Subscription = {
+    id: "monyvi-coordinated-auth",
+    callback: sdkCallback,
+    unsubscribe,
+  };
+
+  return { data: { subscription } };
+}
+
+export function getAuthSessionGeneration(): number {
+  return authSessionCoordinator.getGeneration();
+}
+
+export function beginCoordinatedAuthCallbackMutation<T>(
+  operation: () => Promise<T>,
+  isSuccessful: (result: T) => boolean
+): CancellableMutation<T> {
+  return authSessionCoordinator.beginCancellableMutation(
+    operation,
+    isSuccessful
+  );
+}
+
+export function coordinatedSignOut(
+  options?: SignOutOptions
+): ReturnType<typeof supabase.auth.signOut> {
+  return authSessionCoordinator.runExplicitLogout(
+    () => supabase.auth.signOut(options),
+    (result) => result.error === null
+  );
+}
+
+export function coordinatedRefreshSession(): ReturnType<
+  typeof supabase.auth.refreshSession
+> {
+  return authSessionCoordinator.runMutation(
+    () => supabase.auth.refreshSession(),
+    (result) => result.error === null
+  );
+}
+
 export async function clearPersistedAuthSession(): Promise<void> {
   await secureStoreAdapter.removeItem(AUTH_STORAGE_KEY);
   await secureStoreAdapter.removeItem(`${AUTH_STORAGE_KEY}-code-verifier`);
@@ -203,7 +340,7 @@ export async function clearPersistedAuthSession(): Promise<void> {
 export async function getCurrentUserId(): Promise<string | null> {
   const {
     data: { session },
-  } = await supabase.auth.getSession();
+  } = await getStableAuthSession();
   return session?.user.id ?? null;
 }
 
@@ -213,7 +350,7 @@ export async function getCurrentUserId(): Promise<string | null> {
 export async function isAuthenticated(): Promise<boolean> {
   const {
     data: { session },
-  } = await supabase.auth.getSession();
+  } = await getStableAuthSession();
 
   return session !== null;
 }
@@ -290,6 +427,11 @@ interface EmailAuthResult {
   readonly needsVerification?: boolean;
 }
 
+interface EmailVerificationCodeResult {
+  readonly success: boolean;
+  readonly errorCode?: string;
+}
+
 /**
  * Sign up a new user with email and password.
  *
@@ -305,10 +447,17 @@ export async function signUpWithEmail(
   email: string,
   password: string
 ): Promise<EmailAuthResult> {
-  const { data, error } = await supabase.auth.signUp({
-    email,
-    password,
-  });
+  const { data, error } = await authSessionCoordinator.runMutation(
+    () =>
+      supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: AUTH_REDIRECT_URL,
+        },
+      }),
+    (result) => result.error === null
+  );
 
   if (error) {
     return { success: false, error };
@@ -333,13 +482,37 @@ export async function signInWithEmail(
   email: string,
   password: string
 ): Promise<EmailAuthResult> {
-  const { error } = await supabase.auth.signInWithPassword({
-    email,
-    password,
-  });
+  let response: Awaited<ReturnType<typeof supabase.auth.signInWithPassword>>;
+  try {
+    response = await authSessionCoordinator.runMutation(
+      () =>
+        supabase.auth.signInWithPassword({
+          email,
+          password,
+        }),
+      (result) => result.error === null
+    );
+  } catch (error: unknown) {
+    if (isAuthSessionMutationQuarantinedError(error)) {
+      return {
+        success: false,
+        error: new AuthError(
+          "Authentication session requires a fresh app start.",
+          undefined,
+          "unexpected_failure"
+        ),
+      };
+    }
+    throw error;
+  }
+  const { error } = response;
 
   if (error) {
-    return { success: false, error };
+    return {
+      success: false,
+      error,
+      needsVerification: error.code === "email_not_confirmed",
+    };
   }
 
   return { success: true };
@@ -353,6 +526,52 @@ export async function signInWithEmail(
  *
  * @param email - The email address to send the reset link to
  * @returns Result indicating success or error
+ */
+export async function verifyEmailVerificationCode(
+  email: string,
+  token: string
+): Promise<EmailVerificationCodeResult> {
+  let response: Awaited<ReturnType<typeof supabase.auth.verifyOtp>>;
+  try {
+    response = await authSessionCoordinator.runMutation(
+      () =>
+        supabase.auth.verifyOtp({
+          email,
+          token,
+          type: "email",
+        }),
+      (result) => result.error === null && result.data.session !== null
+    );
+  } catch (error: unknown) {
+    if (isAuthSessionMutationQuarantinedError(error)) {
+      return {
+        success: false,
+        errorCode: "unexpected_failure",
+      };
+    }
+    throw error;
+  }
+  const { data, error } = response;
+
+  if (error) {
+    return {
+      success: false,
+      errorCode: error.code ?? "unknown",
+    };
+  }
+
+  if (!data.session) {
+    return {
+      success: false,
+      errorCode: "unexpected_failure",
+    };
+  }
+
+  return { success: true };
+}
+
+/**
+ * Send a password reset email to the specified address.
  */
 export async function resetPasswordForEmail(
   email: string
@@ -368,25 +587,4 @@ export async function resetPasswordForEmail(
   return { success: true };
 }
 
-/**
- * Resend the email verification link for a pending sign-up.
- *
- * @param email - The email address to resend verification to
- * @returns Result indicating success or error
- */
-export async function resendVerificationEmail(
-  email: string
-): Promise<EmailAuthResult> {
-  const { error } = await supabase.auth.resend({
-    type: "signup",
-    email,
-  });
-
-  if (error) {
-    return { success: false, error };
-  }
-
-  return { success: true };
-}
-
-export type { OAuthProvider, EmailAuthResult };
+export type { OAuthProvider, EmailAuthResult, EmailVerificationCodeResult };

@@ -1,10 +1,46 @@
 import { fireEvent, render, screen } from "@testing-library/react-native";
+import i18next, { type i18n } from "i18next";
 import React from "react";
 import { Pressable, Text } from "react-native";
+import { I18nextProvider, initReactI18next } from "react-i18next";
 
 import { TextField } from "@/components/ui/TextField";
+import arCommon from "@/locales/ar/common.json";
+import enCommon from "@/locales/en/common.json";
+
+async function createTestI18n(): Promise<i18n> {
+  const instance = i18next.createInstance();
+  await instance.use(initReactI18next).init({
+    lng: "en",
+    fallbackLng: "en",
+    ns: ["common"],
+    defaultNS: "common",
+    resources: {
+      en: { common: enCommon },
+      ar: { common: arCommon },
+    },
+    interpolation: { escapeValue: false },
+    react: { useSuspense: false },
+  });
+  return instance;
+}
 
 describe("TextField", () => {
+  it("reserves measured currency width for enlarged outlined inputs", () => {
+    render(
+      <TextField
+        variant="outlined"
+        testID="amount"
+        label="Amount"
+        value="47800"
+        leadingAdornment={<Text>EGP</Text>}
+      />
+    );
+    fireEvent(screen.getByTestId("amount-leading-adornment"), "layout", {
+      nativeEvent: { layout: { width: 80, height: 44, x: 0, y: 0 } },
+    });
+    expect(screen.getByLabelText("Amount")).toHaveStyle({ paddingStart: 88 });
+  });
   it("keeps fast typed text visible while a focused parent render is stale", () => {
     const onChangeText = jest.fn();
     const { rerender } = render(
@@ -114,5 +150,21 @@ describe("TextField", () => {
     expect(screen.getByRole("alert")).toHaveStyle({
       fontFamily: "NotoSansArabic_400Regular",
     });
+  });
+
+  it("renders red asterisk and the localized accessibilityHint when required is true", async () => {
+    const instance = await createTestI18n();
+
+    render(
+      <I18nextProvider i18n={instance}>
+        <TextField label="Full Name" required value="" />
+      </I18nextProvider>
+    );
+
+    expect(screen.getByText("Full Name *")).toBeOnTheScreen();
+    expect(screen.getByLabelText("Full Name")).toHaveProp(
+      "accessibilityHint",
+      enCommon.required_field
+    );
   });
 });

@@ -1,13 +1,23 @@
 import assert from "node:assert/strict";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import test from "node:test";
 import {
   calibratePromptTokenReport,
   comparePromptVariants,
   estimatePromptTokenReport,
+  evaluatePromptFiles,
   loadCurrentPromptVariant,
   type PromptCorpusCase,
   type PromptVariant,
 } from "../evaluate-sms-parser-prompt";
+import {
+  BUILT_IN_SMS_CATEGORY_TREE,
+  buildSmsAiResponseSchema,
+  buildSmsAiStableSystemPrompt,
+  DEFAULT_SMS_CURRENCIES,
+} from "../../supabase/functions/_shared/sms-ai/sms-ai-prompt";
 
 const currentPrompt: PromptVariant = {
   name: "current",
@@ -89,12 +99,93 @@ test("local estimation is deterministic for UTF-8 fixture content", () => {
 });
 
 test("loads the current production prompt as data without invoking the Edge function", () => {
-  const prompt = loadCurrentPromptVariant("E:/Work/My Projects/Monyvi");
+  const prompt = loadCurrentPromptVariant();
 
   assert.equal(prompt.name, "current");
   assert.match(prompt.fixedInstructions, /You are Monyvi AI/);
-  assert.match(prompt.categoryTree, /food_drinks/);
-  assert.equal(typeof prompt.schema, "object");
+  assert.equal(prompt.categoryTree, BUILT_IN_SMS_CATEGORY_TREE.trim());
+  assert.deepEqual(prompt.schema, buildSmsAiResponseSchema(DEFAULT_SMS_CURRENCIES));
+  assert.equal(
+    prompt.fixedInstructions,
+    buildSmsAiStableSystemPrompt(DEFAULT_SMS_CURRENCIES).replace(
+      `BUILT-IN CATEGORY TREE:\n${prompt.categoryTree}`,
+      ""
+    )
+  );
+});
+
+test("file evaluation rejects DeepInfra calibration without a model-specific counter", async () => {
+  const temporaryDirectory = mkdtempSync(path.join(tmpdir(), "sms-prompt-test-"));
+  writeFileSync(
+    path.join(temporaryDirectory, "candidate.json"),
+    JSON.stringify(candidatePrompt)
+  );
+  const originalFetch = globalThis.fetch;
+  let fetchCalls = 0;
+  globalThis.fetch = async (): Promise<Response> => {
+    fetchCalls += 1;
+    throw new Error("unexpected_provider_request");
+  };
+
+  try {
+    await assert.rejects(
+      evaluatePromptFiles({
+        rootDirectory: temporaryDirectory,
+        candidatePath: "candidate.json",
+        calibrate: true,
+        model: "deepseek-ai/DeepSeek-V4-Flash-0731",
+        apiKey: "unused-test-key",
+      }),
+      /selected_model_calibration_unsupported_model/
+    );
+    assert.equal(fetchCalls, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+    rmSync(temporaryDirectory, { recursive: true, force: true });
+  }
+});
+
+test("explicit Gemini file calibration uses countTokens without content generation", async () => {
+  const temporaryDirectory = mkdtempSync(path.join(tmpdir(), "sms-prompt-test-"));
+  writeFileSync(
+    path.join(temporaryDirectory, "candidate.json"),
+    JSON.stringify(candidatePrompt)
+  );
+  const originalFetch = globalThis.fetch;
+  const requests: { url: string; body: unknown }[] = [];
+  globalThis.fetch = async (input, init): Promise<Response> => {
+    requests.push({
+      url: String(input),
+      body: JSON.parse(String(init?.body)) as unknown,
+    });
+    return new Response(JSON.stringify({ totalTokens: 3 }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  };
+
+  try {
+    const result = await evaluatePromptFiles({
+      rootDirectory: temporaryDirectory,
+      candidatePath: "candidate.json",
+      calibrate: true,
+      model: "gemini-2.5-flash-lite",
+      apiKey: "unused-test-key",
+    });
+    assert.equal(result.mode, "selected-model-count-tokens");
+    assert.equal(result.comparison.current.model, "gemini-2.5-flash-lite");
+    assert.equal(requests.length, 8);
+    for (const request of requests) {
+      assert.match(request.url, /gemini-2\.5-flash-lite:countTokens/);
+      assert.doesNotMatch(request.url, /:generateContent/);
+      assert.deepEqual(Object.keys(request.body as Record<string, unknown>), [
+        "generateContentRequest",
+      ]);
+    }
+  } finally {
+    globalThis.fetch = originalFetch;
+    rmSync(temporaryDirectory, { recursive: true, force: true });
+  }
 });
 
 test("selected-model calibration is impossible without explicit opt-in", async () => {
@@ -108,7 +199,7 @@ test("selected-model calibration is impossible without explicit opt-in", async (
     calibratePromptTokenReport({
       prompt: currentPrompt,
       corpus,
-      model: "gemini-test",
+      model: "test-model",
       enabled: false,
       countTokens,
     }),
@@ -122,7 +213,7 @@ test("selected-model calibration calls count-tokens only and preserves decomposi
   const report = await calibratePromptTokenReport({
     prompt: currentPrompt,
     corpus,
-    model: "gemini-test",
+    model: "test-model",
     enabled: true,
     countTokens: async ({ text }): Promise<number> => {
       requests.push(text);

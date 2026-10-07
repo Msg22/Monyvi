@@ -139,6 +139,50 @@ must be scoped to the authenticated user or to explicitly shared system data.
 | Phone OTP       | Not planned    | No current implementation.                                      |
 | Anonymous/guest | Removed        | Do not reintroduce.                                             |
 
+### Email Verification
+
+Email/password signup uses Supabase Auth as the only verification authority.
+
+Business rules:
+
+- The primary signup verification path is a six-digit code delivered by the
+  Supabase Confirm Signup email. The code lifetime is 10 minutes.
+- Entering/pasting the sixth valid digit auto-submits exactly once.
+- During the active verification-success flow, authenticated state must not skip
+  the Email verified screen; the user explicitly chooses Continue. After a full
+  app restart, an already verified persisted session may use normal startup. No
+  durable Continue-acknowledgement marker is required.
+- The confirmation email may also include a **secondary signup confirmation
+  link**. The link is a fallback, not the primary product path, and successful
+  signup-link completion reaches the same Email verified + Continue contract.
+- Returning `email_not_confirmed` sign-in enters the same verification flow and
+  does not automatically send another email.
+- Mohamed corrected the resend policy on 2026-10-07: the original signup email
+  is followed by at most two successful resends (three emails total) in the
+  24-hour window anchored to the original send. Each successful send has a
+  120-second cooldown.
+- Exhaustion shows a persistent inline notice and disables the action with the
+  label `Resend` / `إعادة الإرسال`. An authoritative future limit expiry permits
+  retry when it passes; a missing or invalid expiry stays blocked for the
+  current verification flow. OTP edits/retries do not clear the notice.
+- The existing limiter RPC enforces the new cap through `p_max_resends = 2`.
+  Historical count-three rows stay unchanged and blocked until their anchored
+  window expires; migration 081 and stored counts are not rewritten.
+- Server-side resend reservation/finalization is concurrency-safe. A live
+  reservation and active cooldown are resolved before an expired 24-hour
+  rollover. A stale ambiguous reservation consumes exactly one slot
+  conservatively; a known downstream send failure releases its reservation.
+- Resend limiter persistence uses a server-only keyed/HMAC digest and stores no
+  raw email or verification code.
+- The current public resend response has a known account-state enumeration
+  limitation. Its public-response/security-contract redesign is deferred to
+  #372; current behavior must not be described as enumeration-safe.
+- Password recovery/reset correctness is a separate flow tracked by #373 and is
+  not a #321 completion claim.
+- Local template/code evidence does not prove hosted configuration. Hosted OTP
+  policy, current template parity (including the secondary link), SMTP/provider
+  health, and device delivery remain separate release evidence.
+
 ### Public And Private Journey
 
 1. First launch reads a device-local intro flag.
@@ -512,19 +556,35 @@ Business rules:
   accepted material correction may replace that tuple. Immutable before/after
   tuples and their catalog snapshots remain in append-only action evidence, and
   later catalog changes never rewrite current or historical recorded facts.
+- `acquisition_action_id` identifies the accepted action whose acquisition-rate
+  evidence supports the current acquisition projection. A material correction
+  that consumes no new `acquisition_metal` plus `acquisition_purchase_currency`
+  reference set MUST preserve the prior link. A correction that consumes a
+  complete new acquisition reference set replaces the link with that correction
+  action. A legacy null link remains null when no new acquisition evidence is
+  consumed; no correction fabricates a link.
+- The Add/Edit Gold purity picker offers 24K (`gold-999`), 21K (`gold-875`), and
+  18K (`gold-750`) once each, with karat-only labels. Silver retains its catalog
+  choices. Historical holdings keep their exact recorded code and factor, even
+  when their Gold grade is no longer an offered choice; a material correction
+  changes it only after explicit selection. Other read surfaces may still show
+  exact fineness when needed for historical identification.
 - Metal type is locked after creation. Correcting a wrong metal uses Delete
   holding, then Add holding with the correct metal.
 - Add holding uses one focused full-screen form in this order: Name, Metal,
   Weight and Purity on one row when space permits, total purchase price,
   purchase currency, purchase date, Physical form, Notes, compact live preview,
-  local-first status, then direct `Add holding`. Submission stays in the same
-  form with no intermediate step or route.
+  then direct `Add holding`. The form omits the passive device-save note while
+  retaining local-first persistence. Submission stays in the same form with no
+  intermediate step or route.
 - Every other Active holding field is correctable. Name and notes are ordinary
   metadata edits. Weight, purity, physical form, total purchase price, purchase
-  currency, and purchase date are material corrections that require a reason and
-  preserve immutable before/after evidence in History.
+  currency, and purchase date are material corrections with an optional reason
+  and preserve immutable before/after evidence in History. The correction
+  payload retains a string reason property; empty user text is stored as an
+  empty string, never a fabricated reason.
 - Edit holding is one form with one direct `Save changes` action. Material
-  differences reveal previous/current facts, required reason, and a live
+  differences reveal previous/current facts, optional reason, and a live
   consequence summary; there is no separate correction-review route.
 - Preserved legacy holdings with unavailable exact weight, purity tuple, or
   total purchase price remain visible and show those saved facts as not
@@ -599,9 +659,15 @@ Approved purity catalog version 1:
 | Silver | 600                | `0.6`                 |
 
 A bare `24K = 1.0` option is forbidden. The user selects the actual stamped
-fineness. Current pure grams equal exact weight multiplied by the stored factor
-snapshot; current value is calculated from pure grams and the trusted local
-metal/FX references.
+fineness. Recorded pure grams and immutable historical calculations continue to
+use exact weight multiplied by the stored factor snapshot.
+
+For **current selected-quote presentation and current holding valuation only**,
+the selected `metal:GOLD` quote is the quoted 24K gram price. An exact
+`gold-999` / `0.999` holding therefore uses that quoted gram rate directly and
+MUST NOT multiply the quote by `0.999` again. The persisted/catalog purity tuple
+remains `gold-999` / `0.999`. Gold 21K/18K and Silver retain their existing
+catalog-factor basis.
 
 ### Financial Arithmetic
 
@@ -633,6 +699,11 @@ introduce a new calculation or product decision.
   USD value of one unit of currency `C`; USD is `1`. The reference value in
   currency `C` at time `t` is `q × m_t ÷ x_{C,t}`. Missing or invalid rate
   inputs are unavailable, never zero.
+- Current selected-quote exception: for exact Gold `gold-999` / `0.999`, current
+  quoted gram price and current holding value use the selected Gold 24K quote
+  directly: `weight × m_current ÷ x_current`. This does not mutate `p = 0.999`,
+  does not change Gold 21K/18K or Silver factor semantics, and does not rewrite
+  immutable acquisition, terminal, History, or attribution calculations.
 - Purchase currency `P` is the canonical calculation and reporting basis. With
   acquisition time `a`, current or terminal valuation time `v`, and positive
   known all-in purchase cost `K`: acquisition reference `A = q × m_a ÷ x_{P,a}`;
@@ -1190,10 +1261,15 @@ Business rules:
   offline, consent, and server failures preserve the original trusted local
   suggestion and direction-correct fallback category. A failed enrichment must
   never send the trusted SMS to the full parser.
-- Category enrichment sends at most 20 unique merchants per request, permits no
-  more than two requests in flight, and shares one 20-second total client
-  deadline per parse operation. Expiry stops remaining enrichment while
-  preserving trusted local suggestions and already accepted outcomes.
+- Category enrichment sends at most 20 unique merchants per request and permits
+  no more than two requests in flight. For the approved CAT-TIMEOUT-060 trial,
+  the Edge category provider gets one 60-second attempt with zero automatic
+  provider retries. Mobile processes chunks in concurrency waves of at most two
+  requests and gives each wave a fresh 70-second deadline: the 60-second Edge
+  attempt plus a 10-second margin for user-scope/auth, network, and response
+  completion. Time spent in an earlier wave does not consume a later wave's
+  budget. Expiry preserves trusted local suggestions and already accepted
+  outcomes.
 - Malformed, duplicated, or invalid enrichment outcomes invalidate only their
   opaque merchant identity. Unrelated valid merchant outcomes remain usable;
   only a malformed response envelope invalidates the complete response.
@@ -1263,6 +1339,47 @@ Business rules:
   identity-invalid responses add no strike. An exact active trusted local
   template may still produce a local review result without clearing the terminal
   AI block.
+- **2026-10-01 — SMS provider mixed-row validation**: A structurally valid,
+  complete provider response is validated per returned transaction entry.
+  Independently valid, uniquely identified submitted transactions are preserved
+  even when peer entries are fake, placeholder-shaped, duplicated, or
+  semantically invalid. Invalid entries are never coerced into financial data
+  and never cause independently valid peers to be discarded.
+- A correlated invalid or duplicate candidate remains unresolved and retryable
+  with a fresh request identity. If an invalid returned entry cannot be
+  correlated to a submitted identity, submitted candidates omitted from the
+  independently valid returned set remain unresolved because omission is no
+  longer trustworthy for negative classification.
+- Invalid or uncertain candidates never create, increment, reset, clear, or
+  terminalize an `ai_no_transaction` outcome. Ordinary validated omissions and
+  otherwise valid `isTrusted: false` entries retain the existing negative
+  lifecycle. Malformed JSON/envelopes, incomplete provider completion,
+  transport/provider failures, and auth/consent/safeguard refusals remain
+  request-level failures. Provider-started allowance remains consumed.
+- **2026-10-02 — Live SMS confirmed-failure retry identity**: A live SMS retry
+  must distinguish an ambiguous transport/result-loss replay from a
+  server-confirmed provider failure. If the client cannot know whether provider
+  work started or completed, it reuses the same request identity so the server
+  ledger prevents duplicate provider execution. Only after the server has
+  durably completed the request as a retryable provider error may the response
+  authorize `retryRequestMode: fresh`; that fresh retry uses a new request
+  identity, starts new normally-accounted provider work, and may consume another
+  allowance unit/provider call. Provider failure, schema-invalid response, and
+  incomplete provider statuses (`truncated`, `safety_stopped`, `failed`) may
+  grant that directive only when ledger completion is confirmed. Caller
+  cancellation, ambiguous provider-start state, reconciliation failure, or
+  unconfirmed completion never grants a fresh retry. Android's existing bounded
+  native retry policy remains three attempts with a 10-second delay; the
+  provider remains one 60-second attempt with zero automatic provider retries.
+  The approved mobile successor may persist only the current user-scoped
+  fingerprint/request-key retry identity with bounded expiry across JS restarts;
+  it must not persist SMS/provider output merely to enable retries.
+- Explicit OTP, verification-code, security-code, and PIN-only messages are
+  excluded before the full AI provider with Edge/shared parity. A message that
+  independently contains clear completed money movement is not excluded merely
+  because it also includes a security warning. The stable provider prompt also
+  forbids OTP/fake/zero-amount placeholder transaction rows; strict server-side
+  financial validation remains authoritative.
 - Capacity, cooldown, or oversized-input failures preserve all accepted local
   and earlier AI suggestions and keep Save available. Guidance is aggregate,
   friendly, and may show one localized absolute availability time. It does not
@@ -1271,11 +1388,11 @@ Business rules:
 - Deterministic safeguard QA uses named fixture/provider/policy profiles with a
   fixed clock and isolated reset namespace. Client-owned boundaries may use a
   pure preflight, but server-owned profiles must execute the local Supabase Edge
-  handler and real safeguard RPCs; only the fixture inbox and Gemini provider
-  may be substituted. Routine QA must prove zero production Gemini calls and
-  zero production allowance consumption. Any selected-model count-token
-  calibration is a separately named explicit opt-in operation and never
-  generates content.
+  handler and real safeguard RPCs; only the fixture inbox and configured SMS AI
+  provider may be substituted. Routine QA must prove zero calls to the
+  production-configured SMS AI provider and zero production allowance
+  consumption. Any selected-model count-token calibration is a separately named
+  explicit opt-in operation and never generates content.
 - These safeguards are SMS-specific. Voice consent, parsing, request contracts,
   and usage accounting remain unchanged. Persistent review drafts and dismissed
   fingerprints remain owned by issue #770.
@@ -1377,13 +1494,14 @@ Business rules:
 - Settings can change language after sign-in.
 - Theme preference is `LIGHT`, `DARK`, or `SYSTEM`.
 - Preferred currency affects display conversion and defaults.
-- User-visible monetary output follows the active language without changing stored
-  values or calculations. Arabic uses `ar-EG` Arabic-Indic digits, Arabic
-  grouping and decimal separators, then a fixed Arabic currency unit label
-  (for example `٤٤٤٬٩٥٦ جنيه مصري` and `٠٫٠٠١٠٠٠٠٠ بيتكوين`).
+- User-visible monetary output follows the active language without changing
+  stored values or calculations. Arabic uses `ar-EG` Arabic-Indic digits, Arabic
+  grouping and decimal separators, then a fixed Arabic currency unit label (for
+  example `٤٤٤٬٩٥٦ جنيه مصري` and `٠٫٠٠١٠٠٠٠٠ بيتكوين`).
 - English monetary presentation keeps its existing symbol/code placement.
   Editable financial inputs keep the Latin-digit, `.` decimal grammar defined
-  under Financial Amount Entry; display localization never changes input parsing.
+  under Financial Amount Entry; display localization never changes input
+  parsing.
 - Monetary amount labels cover every generated `CurrencyType` through an
   exhaustive catalogue. Standalone currency names, stored ISO codes, parser
   identifiers, rate instruments, and sync payloads remain code based.

@@ -1,0 +1,17 @@
+appId: com.monyvi.app
+---
+# Development build only. Signed-in local QA user required.
+- openLink: monyvi://settings
+- extendedWaitUntil:
+    visible:
+      id: "startup-qa-rates-settings-link"
+    timeout: 120000
+- tapOn:
+    id: "startup-qa-rates-settings-link"
+- extendedWaitUntil:
+    visible: "Remove local market rates"
+    timeout: 120000
+- tapOn: "Remove local market rates"
+- extendedWaitUntil:
+    visible: "Removed .* local market-rate rows.*"
+    timeout: 120000

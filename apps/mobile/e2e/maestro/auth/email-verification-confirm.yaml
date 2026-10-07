@@ -1,0 +1,40 @@
+appId: com.monyvi.app
+---
+# #321: enter the captured Mailpit code. Six digits auto-submit, then the user
+# explicitly continues from Email verified into the existing authenticated flow.
+
+- tapOn:
+    id: "verification-code-input"
+- inputText: ${MAESTRO_E2E_VERIFICATION_CODE}
+
+- extendedWaitUntil:
+    visible: "Email verified"
+    timeout: 30000
+- assertVisible: "Continue to dashboard"
+- takeScreenshot: issue321-email-verified-en-light
+- tapOn: "Continue to dashboard"
+
+- extendedWaitUntil:
+    visible:
+      "Choose your primary currency|Auto-Track Transactions|Transactions|Accounts|Open menu|Good Morning|Good Afternoon|Good Evening"
+    timeout: 120000
+
+- runFlow:
+    when:
+      visible: "Choose your primary currency"
+    commands:
+      - tapOn: "Confirm"
+
+- runFlow:
+    when:
+      visible: "Auto-Track Transactions"
+    commands:
+      - tapOn: "Not Now"
+
+- extendedWaitUntil:
+    visible:
+      "Transactions|Accounts|Open menu|Good Morning|Good Afternoon|Good Evening"
+    timeout: 120000
+
+- assertNotVisible:
+    id: "auth-email-input"

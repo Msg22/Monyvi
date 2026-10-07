@@ -1,3 +1,4 @@
+import type { Session } from "@supabase/supabase-js";
 interface MockFunctionResponse {
   readonly data: unknown;
   readonly error: unknown;
@@ -8,6 +9,28 @@ interface MockFunctionOptions {
   readonly headers?: Readonly<Record<string, string>>;
   readonly signal?: AbortSignal;
 }
+
+const mockStableSession: Session = {
+  access_token: "stable-user-a-token",
+  refresh_token: "stable-user-a-refresh",
+  expires_in: 3600,
+  token_type: "bearer",
+  user: {
+    id: "user-a",
+    aud: "authenticated",
+    role: "authenticated",
+    email: "user-a@example.com",
+    app_metadata: {},
+    user_metadata: {},
+    created_at: "2026-10-05T00:00:00.000Z",
+  },
+};
+const mockGetStableAuthSession = jest.fn(() =>
+  Promise.resolve({
+    data: { session: mockStableSession },
+    error: null,
+  })
+);
 
 const mockInvoke = jest.fn<
   Promise<MockFunctionResponse>,
@@ -37,6 +60,10 @@ jest.mock("expo-crypto", () => ({
 }));
 
 jest.mock("@/services/supabase", () => ({
+  getStableAuthSession: (): Promise<{
+    data: { session: Session };
+    error: null;
+  }> => mockGetStableAuthSession(),
   supabase: {
     functions: {
       invoke: (
@@ -75,6 +102,7 @@ import { MAX_TRANSACTION_AMOUNT, type CategoryTreeSource } from "@monyvi/logic";
 import {
   isAiConsentRequiredError,
   parseSmsWithAi,
+  type SmsAiRetryRequest,
   type SmsCandidate,
 } from "@/services/ai-sms-parser-service";
 import { getFixtureById } from "@/services/dev/sms-fixtures";
@@ -107,6 +135,8 @@ const context = {
   supportedCurrencies: ["EGP", "USD"],
 };
 
+const APPROVED_PRODUCTION_SMS_CHUNK_SIZE = 15;
+
 function candidate(fixtureId: string): SmsCandidate {
   const fixture = getFixtureById(fixtureId);
   if (!fixture) throw new Error(`Missing fixture ${fixtureId}`);
@@ -121,6 +151,20 @@ function candidate(fixtureId: string): SmsCandidate {
     },
     smsFingerprint: `fingerprint-${fixture.id}`,
   };
+}
+
+function expectRetryRequest(
+  retryRequest: SmsAiRetryRequest | undefined,
+  expectedCandidates: readonly SmsCandidate[]
+): void {
+  expect(retryRequest).toBeDefined();
+  if (retryRequest === undefined) {
+    throw new Error("Expected retry request");
+  }
+  expect(typeof retryRequest.requestKey).toBe("string");
+  expect(retryRequest.requestKey.length).toBeGreaterThan(0);
+  expect(retryRequest.candidates).toEqual(expectedCandidates);
+  expect(retryRequest.requestContext.scanKind).toBe("incremental");
 }
 
 describe("ai-sms-parser-service parser strategy", () => {
@@ -578,8 +622,14 @@ describe("ai-sms-parser-service parser strategy", () => {
   it("cancels an inter-chunk delay without waiting for its timer", async () => {
     jest.useFakeTimers();
     try {
+      process.env.EXPO_PUBLIC_SMS_SAFEGUARD_QA = "true";
+      process.env.EXPO_PUBLIC_SMS_SAFEGUARD_QA_PROVIDER = "simulated";
+      process.env.EXPO_PUBLIC_SMS_SAFEGUARD_QA_INBOX = "fixture";
+      process.env.EXPO_PUBLIC_SMS_SAFEGUARD_QA_PROFILE = "cutoff-boundary-v1";
+      process.env.EXPO_PUBLIC_SMS_SAFEGUARD_QA_RUN_ID = "delay-cancel";
+
       const candidates: SmsCandidate[] = Array.from(
-        { length: 51 },
+        { length: 3 },
         (_, index) => ({
           message: {
             id: `sms-delay-${index}`,
@@ -592,39 +642,45 @@ describe("ai-sms-parser-service parser strategy", () => {
         })
       );
       const abortController = new AbortController();
+      let reportFirstProgress: (() => void) | undefined;
+      let releaseFirstProgress: (() => void) | undefined;
+      const firstProgressReported = new Promise<void>((resolve) => {
+        reportFirstProgress = resolve;
+      });
+      const firstProgressRelease = new Promise<void>((resolve) => {
+        releaseFirstProgress = resolve;
+      });
+      const onProgress = jest.fn((): Promise<void> | undefined => {
+        if (onProgress.mock.calls.length !== 1) return undefined;
+        reportFirstProgress?.();
+        return firstProgressRelease;
+      });
       mockInvoke.mockResolvedValue({
         data: { transactions: [] },
         error: null,
       });
+
       const parsePromise = parseSmsWithAi(
         candidates,
         context,
-        undefined,
+        onProgress,
         abortController.signal
       );
-      for (
-        let attempt = 0;
-        attempt < 10 && jest.getTimerCount() === 0;
-        attempt++
-      ) {
-        await Promise.resolve();
-      }
+      await firstProgressReported;
+
+      expect(mockInvoke).toHaveBeenCalledTimes(1);
+      expect(mockInvoke.mock.calls[0]?.[0]).toBe("sms-safeguard-qa");
+
+      releaseFirstProgress?.();
+      await jest.advanceTimersByTimeAsync(0);
       expect(jest.getTimerCount()).toBe(1);
 
-      let outcome = "pending";
-      void parsePromise.then(
-        () => {
-          outcome = "resolved";
-        },
-        (error: unknown) => {
-          outcome = error instanceof Error ? error.name : "unknown";
-        }
-      );
       abortController.abort();
-      await Promise.resolve();
-      await Promise.resolve();
 
-      expect(outcome).toBe("AbortError");
+      await expect(parsePromise).rejects.toMatchObject({
+        name: "AbortError",
+        message: "SMS parse aborted",
+      });
       expect(mockInvoke).toHaveBeenCalledTimes(1);
       expect(jest.getTimerCount()).toBe(0);
     } finally {
@@ -651,9 +707,8 @@ describe("ai-sms-parser-service parser strategy", () => {
   });
 
   it("preserves successful chunks and correlates only failed chunk candidates", async () => {
-    jest.useFakeTimers();
     const candidates: SmsCandidate[] = Array.from(
-      { length: 60 },
+      { length: APPROVED_PRODUCTION_SMS_CHUNK_SIZE + 1 },
       (_, index) => ({
         message: {
           id: `sms-${index}`,
@@ -664,6 +719,9 @@ describe("ai-sms-parser-service parser strategy", () => {
         },
         smsFingerprint: `fingerprint-${index}`,
       })
+    );
+    const failedCandidates = candidates.slice(
+      APPROVED_PRODUCTION_SMS_CHUNK_SIZE
     );
     mockInvoke
       .mockResolvedValueOnce({
@@ -691,98 +749,88 @@ describe("ai-sms-parser-service parser strategy", () => {
         }),
       });
 
-    const parsePromise = parseSmsWithAi(candidates, context);
-    await Promise.resolve();
-    await jest.advanceTimersByTimeAsync(2000);
-    const result = await parsePromise;
+    const result = await parseSmsWithAi(candidates, context);
 
+    expect(mockInvoke).toHaveBeenCalledTimes(2);
     expect(result.transactions).toHaveLength(1);
-    expect(result.unresolvedCandidates).toMatchObject(
-      candidates.slice(50).map((failedCandidate) => ({
-        candidate: failedCandidate,
-        reason: "chunk_failed",
-        isRetryable: true,
-      }))
-    );
+    const unresolvedCandidates = result.unresolvedCandidates ?? [];
+    expect(unresolvedCandidates).toHaveLength(1);
+    expect(unresolvedCandidates[0]?.candidate).toEqual(failedCandidates[0]);
+    expect(unresolvedCandidates[0]?.reason).toBe("chunk_failed");
+    expect(unresolvedCandidates[0]?.isRetryable).toBe(true);
+    expectRetryRequest(unresolvedCandidates[0]?.retryRequest, failedCandidates);
     const loggedError = mockLoggerError.mock.calls.find(
       ([message]) => message === "[ai-sms-parser] parse-sms chunk failed"
     )?.[1] as { readonly context?: unknown } | undefined;
     expect(loggedError?.context).toBeUndefined();
-    jest.useRealTimers();
   });
 
   it("preserves earlier chunk results when a later AI entry has an unsupported enum", async () => {
-    jest.useFakeTimers();
-    try {
-      const candidates: SmsCandidate[] = Array.from(
-        { length: 51 },
-        (_, index) => ({
-          message: {
-            id: `sms-enum-${index}`,
-            address: "NBE",
-            body: `Purchase message ${index}`,
-            date: 1775658180000 + index,
-            read: false,
-          },
-          smsFingerprint: `enum-fingerprint-${index}`,
-        })
-      );
-      mockInvoke
-        .mockResolvedValueOnce({
-          data: {
-            transactions: [
-              {
-                messageId: "sms-enum-0",
-                amount: 25,
-                currency: "EGP",
-                type: "EXPENSE",
-                counterparty: "Shop",
-                date: "2026-04-08T12:00:00.000Z",
-                categorySystemName: "shopping",
-                confidenceScore: 0.9,
-                isTrusted: true,
-              },
-            ],
-          },
-          error: null,
-        })
-        .mockResolvedValueOnce({
-          data: {
-            transactions: [
-              {
-                messageId: "sms-enum-50",
-                amount: 40,
-                currency: "BTC",
-                type: "PURCHASE",
-                counterparty: "Shop",
-                date: "2026-04-08T12:00:00.000Z",
-                categorySystemName: "shopping",
-                confidenceScore: 0.9,
-                isTrusted: true,
-              },
-            ],
-          },
-          error: null,
-        });
+    const candidates: SmsCandidate[] = Array.from(
+      { length: APPROVED_PRODUCTION_SMS_CHUNK_SIZE + 1 },
+      (_, index) => ({
+        message: {
+          id: `sms-enum-${index}`,
+          address: "NBE",
+          body: `Purchase message ${index}`,
+          date: 1775658180000 + index,
+          read: false,
+        },
+        smsFingerprint: `enum-fingerprint-${index}`,
+      })
+    );
+    const failedCandidate = candidates[APPROVED_PRODUCTION_SMS_CHUNK_SIZE];
+    mockInvoke
+      .mockResolvedValueOnce({
+        data: {
+          transactions: [
+            {
+              messageId: "sms-enum-0",
+              amount: 25,
+              currency: "EGP",
+              type: "EXPENSE",
+              counterparty: "Shop",
+              date: "2026-04-08T12:00:00.000Z",
+              categorySystemName: "shopping",
+              confidenceScore: 0.9,
+              isTrusted: true,
+            },
+          ],
+        },
+        error: null,
+      })
+      .mockResolvedValueOnce({
+        data: {
+          transactions: [
+            {
+              messageId: `sms-enum-${APPROVED_PRODUCTION_SMS_CHUNK_SIZE}`,
+              amount: 40,
+              currency: "BTC",
+              type: "PURCHASE",
+              counterparty: "Shop",
+              date: "2026-04-08T12:00:00.000Z",
+              categorySystemName: "shopping",
+              confidenceScore: 0.9,
+              isTrusted: true,
+            },
+          ],
+        },
+        error: null,
+      });
 
-      const parsePromise = parseSmsWithAi(candidates, context);
-      await Promise.resolve();
-      await jest.advanceTimersByTimeAsync(2000);
-      const result = await parsePromise;
+    const result = await parseSmsWithAi(candidates, context);
 
-      expect(result.transactions).toHaveLength(1);
-      expect(result.transactions[0]?.smsFingerprint).toBe("enum-fingerprint-0");
-      expect(result.unresolvedCandidates).toEqual([
-        expect.objectContaining({
-          candidate: candidates[50],
-          reason: "response_invalid",
-          isRetryable: true,
-        }),
-      ]);
-    } finally {
-      jest.clearAllTimers();
-      jest.useRealTimers();
-    }
+    expect(mockInvoke).toHaveBeenCalledTimes(2);
+    expect(result.transactions).toHaveLength(1);
+    expect(result.transactions[0]?.smsFingerprint).toBe("enum-fingerprint-0");
+    const unresolvedCandidates = result.unresolvedCandidates ?? [];
+    expect(unresolvedCandidates).toHaveLength(1);
+    expect(unresolvedCandidates[0]?.candidate).toEqual(failedCandidate);
+    expect(unresolvedCandidates[0]?.reason).toBe("response_invalid");
+    expect(unresolvedCandidates[0]?.isRetryable).toBe(true);
+    expectRetryRequest(unresolvedCandidates[0]?.retryRequest, [
+      failedCandidate,
+    ]);
   });
 
   it("preserves usable rows instead of retry-splitting a partially malformed chunk", async () => {
@@ -838,60 +886,54 @@ describe("ai-sms-parser-service parser strategy", () => {
   });
 
   it("preserves earlier chunks when a later Edge Function invocation throws", async () => {
-    jest.useFakeTimers();
-    try {
-      const candidates: SmsCandidate[] = Array.from(
-        { length: 51 },
-        (_, index) => ({
-          message: {
-            id: `sms-thrown-${index}`,
-            address: "NBE",
-            body: `Purchase message ${index}`,
-            date: 1775658180000 + index,
-            read: false,
-          },
-          smsFingerprint: `thrown-fingerprint-${index}`,
-        })
-      );
-      mockInvoke
-        .mockResolvedValueOnce({
-          data: {
-            transactions: [
-              {
-                messageId: "sms-thrown-0",
-                amount: 25,
-                currency: "EGP",
-                type: "EXPENSE",
-                counterparty: "Shop",
-                date: "2026-04-08T12:00:00.000Z",
-                categorySystemName: "shopping",
-                confidenceScore: 0.9,
-                isTrusted: true,
-              },
-            ],
-          },
-          error: null,
-        })
-        .mockRejectedValueOnce(new Error("network failure"));
+    const candidates: SmsCandidate[] = Array.from(
+      { length: APPROVED_PRODUCTION_SMS_CHUNK_SIZE + 1 },
+      (_, index) => ({
+        message: {
+          id: `sms-thrown-${index}`,
+          address: "NBE",
+          body: `Purchase message ${index}`,
+          date: 1775658180000 + index,
+          read: false,
+        },
+        smsFingerprint: `thrown-fingerprint-${index}`,
+      })
+    );
+    const failedCandidate = candidates[APPROVED_PRODUCTION_SMS_CHUNK_SIZE];
+    mockInvoke
+      .mockResolvedValueOnce({
+        data: {
+          transactions: [
+            {
+              messageId: "sms-thrown-0",
+              amount: 25,
+              currency: "EGP",
+              type: "EXPENSE",
+              counterparty: "Shop",
+              date: "2026-04-08T12:00:00.000Z",
+              categorySystemName: "shopping",
+              confidenceScore: 0.9,
+              isTrusted: true,
+            },
+          ],
+        },
+        error: null,
+      })
+      .mockRejectedValueOnce(new Error("network failure"));
 
-      const parsePromise = parseSmsWithAi(candidates, context);
-      await Promise.resolve();
-      await jest.advanceTimersByTimeAsync(2000);
-      const result = await parsePromise;
+    const result = await parseSmsWithAi(candidates, context);
 
-      expect(result.transactions).toEqual([
-        expect.objectContaining({ smsFingerprint: "thrown-fingerprint-0" }),
-      ]);
-      expect(result.unresolvedCandidates).toEqual([
-        expect.objectContaining({
-          candidate: candidates[50],
-          reason: "unexpected_failure",
-          isRetryable: true,
-        }),
-      ]);
-    } finally {
-      jest.clearAllTimers();
-      jest.useRealTimers();
-    }
+    expect(mockInvoke).toHaveBeenCalledTimes(2);
+    expect(result.transactions).toEqual([
+      expect.objectContaining({ smsFingerprint: "thrown-fingerprint-0" }),
+    ]);
+    const unresolvedCandidates = result.unresolvedCandidates ?? [];
+    expect(unresolvedCandidates).toHaveLength(1);
+    expect(unresolvedCandidates[0]?.candidate).toEqual(failedCandidate);
+    expect(unresolvedCandidates[0]?.reason).toBe("unexpected_failure");
+    expect(unresolvedCandidates[0]?.isRetryable).toBe(true);
+    expectRetryRequest(unresolvedCandidates[0]?.retryRequest, [
+      failedCandidate,
+    ]);
   });
 });
