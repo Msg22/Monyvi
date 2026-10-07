@@ -1,8 +1,8 @@
-# Quickstart: Voice Usage Limits and Subscription-Ready Entitlements
+# Quickstart: Add Transaction Voice Redesign, Usage Limits and Subscription-Ready Entitlements
 
 **Feature**: 389-voice-usage-limits
 
-This is planning/QA guidance. Production implementation must not begin until required voice-limit mockups and binding metadata are explicitly approved.
+This is planning/QA guidance. Do not generate a new mockup. Production UI implementation must not begin until the exact already-approved Add Transaction / Voice reference image from the product conversation is persisted unchanged, its binding metadata is explicitly approved, and the binding verifier passes.
 
 ## 1. Planned server policy configuration
 
@@ -80,27 +80,32 @@ The successful voice response shape remains unchanged.
 
 A separate `voice-ai-availability` service/hook reads the authoritative state and refreshes on focus/foreground, after voice attempts, and at reset/burst boundaries.
 
-## 5. UI/mockup approval gate
+## 5. Approved mockup binding gate
 
-Before UI implementation, create and approve scoped mockups + binding sidecars for the voice entry surface.
+Do **not** create another mockup.
 
-At minimum review:
+Before UI implementation:
 
-- available with remaining count;
-- last/low remaining if distinct;
-- exhausted until next local day;
-- temporary burst limit;
-- authoritative availability unavailable/recovery;
-- recording/analyzing interaction;
-- English + Arabic/RTL;
-- light + dark;
-- compact/ordinary phone;
-- enlarged text and accessibility semantics;
-- tablet/landscape behavior if the existing tab-bar/overlay surface is supported there.
+1. persist the exact already-approved Add Transaction / Voice image bytes unchanged in `specs/389-voice-usage-limits/mockups/`;
+2. create the matching canonical binding sidecar;
+3. record only evidenced binding facts and mark unknowns explicitly;
+4. obtain explicit approval of the sidecar metadata + combined binding revision;
+5. run `node scripts/verify-mockup-binding.js <sidecar>`.
 
-Do not infer whether the count belongs on the mic button, tab bar, recording sheet, or another element until the mockup is approved.
+The existing app screens are not the visual authority; the approved mockup is.
 
-## 6. Planned mobile automated coverage
+## 6. Planned route behavior
+
+- FAB Add Transaction -> `/add-transaction?mode=manual`
+- center microphone -> `/add-transaction?mode=voice`
+- onboarding Voice entry -> same Voice mode
+- voice-review Retry -> same Voice mode with retry/auto-start intent
+- missing/invalid mode -> Manual
+- mode switching disabled during active recording/paused/finalizing/analyzing
+- partially entered Manual state remains mounted across safe switches
+- exhausted/burst-limited/unavailable Voice never blocks Manual
+
+## 7. Planned mobile automated coverage
 
 Update/add focused tests for:
 
@@ -113,7 +118,7 @@ Update/add focused tests for:
 - EN/AR accessibility labels/roles/states;
 - existing representative voice parsing regression.
 
-## 7. Manual QA matrix
+## 8. Manual QA matrix
 
 After implementation and approved visual evidence:
 
@@ -131,7 +136,7 @@ After implementation and approved visual evidence:
 12. Verify English/Arabic, LTR/RTL, light/dark, compact/ordinary phone, enlarged text.
 13. Verify ordinary allowed voice transactions produce the same review results as before.
 
-## 8. Deployment/rollback
+## 9. Deployment/rollback
 
 Deployment is not part of planning.
 
@@ -144,3 +149,19 @@ When implementation is later approved and verified:
 - smoke-test voice within allowance.
 
 Rollback must preserve server ledger integrity; do not simply remove the server quota gate while leaving UI claims active.
+
+
+## 10. Add Transaction manual/voice QA additions
+
+| Scenario | Expected |
+| --- | --- |
+| FAB Add Transaction | unified page opens in Manual |
+| Center mic | unified page opens in Voice |
+| Partially fill Manual -> Voice -> Manual | Manual input remains |
+| Start recording | mode switching disabled until safe state |
+| Voice exhausted -> Manual | Manual remains fully usable |
+| Arabic | approved RTL design + localized usage copy |
+| English | approved LTR design |
+| Voice-review Retry | unified page Voice mode resumes retry intent |
+
+User-facing reset copy must match local-midnight semantics and must not say "tomorrow at the same time".
