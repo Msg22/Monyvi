@@ -27,8 +27,16 @@ const mockExchangeCodeForSession = jest.fn();
 const mockSignUpWithEmail = jest.fn();
 const mockSignInWithEmailFn = jest.fn();
 const mockResetPasswordForEmail = jest.fn();
+const mockAuthSessionGeneration = 0;
 
 jest.mock("@/services/supabase", () => ({
+  beginCoordinatedAuthCallbackMutation: <T>(
+    operation: () => Promise<T>
+  ): { readonly promise: Promise<T>; readonly cancel: () => void } => ({
+    promise: operation(),
+    cancel: jest.fn(),
+  }),
+  getAuthSessionGeneration: (): number => mockAuthSessionGeneration,
   signInWithOAuthProvider: (...args: unknown[]): Promise<unknown> =>
     mockSignInWithOAuthProvider(...args) as Promise<unknown>,
   signUpWithEmail: (...args: unknown[]): Promise<unknown> =>
@@ -60,7 +68,7 @@ const mockDismissAuthSession = jest.fn();
 jest.mock("expo-web-browser", () => ({
   maybeCompleteAuthSession: jest.fn(),
   openAuthSessionAsync: (...args: unknown[]): Promise<unknown> =>
-    mockOpenAuthSession(...args) as Promise<unknown>,
+    mockOpenAuthSession(...args),
   dismissAuthSession: (...args: unknown[]): unknown =>
     mockDismissAuthSession(...args) as unknown,
   WebBrowserResultType: {
@@ -72,6 +80,7 @@ jest.mock("expo-web-browser", () => ({
 
 // Import after mocks
 import {
+  completeAuthSessionFromUrl,
   signInWithOAuth,
   signUpWithEmail,
   signInWithEmail,
@@ -98,6 +107,318 @@ function createRetryableFetchError(
   error.status = 0;
   return error;
 }
+
+// ---------------------------------------------------------------------------
+// Test Suite: completeAuthSessionFromUrl
+// ---------------------------------------------------------------------------
+
+describe("auth-service - completeAuthSessionFromUrl", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("establishes a session from implicit-flow access and refresh tokens", async () => {
+    mockSetSession.mockResolvedValue({
+      data: { session: {} },
+      error: null,
+    });
+
+    const result = await completeAuthSessionFromUrl(
+      "monyvi://auth-callback#access_token=verification-access&refresh_token=verification-refresh&token_type=bearer"
+    );
+
+    expect(mockSetSession).toHaveBeenCalledWith({
+      access_token: "verification-access",
+      refresh_token: "verification-refresh",
+    });
+    expect(mockExchangeCodeForSession).not.toHaveBeenCalled();
+    expect(result).toEqual({ success: true });
+  });
+
+  it("returns the verified email from the established callback session", async () => {
+    mockSetSession.mockResolvedValue({
+      data: {
+        session: {
+          user: { email: "verified@example.com" },
+        },
+      },
+      error: null,
+    });
+
+    await expect(
+      completeAuthSessionFromUrl(
+        "monyvi://auth-callback#access_token=verification-access&refresh_token=verification-refresh&type=signup"
+      )
+    ).resolves.toEqual({
+      success: true,
+      email: "verified@example.com",
+    });
+  });
+
+  it("establishes a session from a PKCE authorization code", async () => {
+    mockExchangeCodeForSession.mockResolvedValue({
+      data: { session: {} },
+      error: null,
+    });
+
+    const result = await completeAuthSessionFromUrl(
+      "monyvi://auth-callback?code=verification-pkce-code"
+    );
+
+    expect(mockExchangeCodeForSession).toHaveBeenCalledWith(
+      "verification-pkce-code"
+    );
+    expect(mockSetSession).not.toHaveBeenCalled();
+    expect(result).toEqual({ success: true });
+  });
+
+  it("deduplicates a second callback for the same PKCE code while the first exchange is pending", async () => {
+    let resolveExchange:
+      | ((value: { data: { session: object }; error: null }) => void)
+      | undefined;
+    const pendingExchange = new Promise<{
+      data: { session: object };
+      error: null;
+    }>((resolve) => {
+      resolveExchange = resolve;
+    });
+    mockExchangeCodeForSession.mockReturnValue(pendingExchange);
+
+    const first = completeAuthSessionFromUrl(
+      "monyvi://auth-callback?code=pending-pkce-code"
+    );
+    const second = completeAuthSessionFromUrl(
+      "monyvi://auth-callback?code=pending-pkce-code"
+    );
+
+    resolveExchange?.({
+      data: { session: {} },
+      error: null,
+    });
+    await Promise.all([first, second]);
+
+    expect(mockExchangeCodeForSession).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not exchange the same PKCE code again after terminal success", async () => {
+    mockExchangeCodeForSession.mockResolvedValue({
+      data: { session: {} },
+      error: null,
+    });
+
+    const first = await completeAuthSessionFromUrl(
+      "monyvi://auth-callback?code=terminal-success-code"
+    );
+    const second = await completeAuthSessionFromUrl(
+      "monyvi://auth-callback?code=terminal-success-code"
+    );
+
+    expect(first).toEqual({ success: true });
+    expect(second).toEqual(first);
+    expect(mockExchangeCodeForSession).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not exchange the same PKCE code again after terminal provider error", async () => {
+    mockExchangeCodeForSession.mockResolvedValue({
+      data: { session: null },
+      error: new Error("PKCE verifier consumed"),
+    });
+
+    const first = await completeAuthSessionFromUrl(
+      "monyvi://auth-callback?code=terminal-error-code"
+    );
+    const second = await completeAuthSessionFromUrl(
+      "monyvi://auth-callback?code=terminal-error-code"
+    );
+
+    expect(first.success).toBe(false);
+    expect(second).toEqual(first);
+    expect(mockExchangeCodeForSession).toHaveBeenCalledTimes(1);
+  });
+
+  it("fails closed when Supabase reports no callback session", async () => {
+    mockSetSession.mockResolvedValue({
+      data: { session: null },
+      error: null,
+    });
+
+    await expect(
+      completeAuthSessionFromUrl(
+        "monyvi://auth-callback#access_token=verification-access&refresh_token=verification-refresh"
+      )
+    ).resolves.toEqual({
+      success: false,
+      error: "Could not establish an authenticated session.",
+      errorCode: "invalid_callback",
+    });
+  });
+
+  it("rejects callbacks when no URL was provided", async () => {
+    const result = await completeAuthSessionFromUrl(undefined);
+
+    expect(result).toEqual({
+      success: false,
+      error: "No redirect URL received from the browser.",
+      errorCode: "invalid_callback",
+    });
+    expect(mockSetSession).not.toHaveBeenCalled();
+    expect(mockExchangeCodeForSession).not.toHaveBeenCalled();
+  });
+});
+
+describe("auth-service - callback failure hardening", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("rejects token-bearing callbacks from any URL other than the canonical Monyvi callback", async () => {
+    mockSetSession.mockResolvedValue({
+      data: { session: {} },
+      error: null,
+    });
+
+    const result = await completeAuthSessionFromUrl(
+      "evil://auth-callback#access_token=stolen-access&refresh_token=stolen-refresh"
+    );
+
+    expect(result).toEqual({
+      success: false,
+      error: "Could not validate the authentication callback.",
+      errorCode: "invalid_callback",
+    });
+    expect(mockSetSession).not.toHaveBeenCalled();
+    expect(mockExchangeCodeForSession).not.toHaveBeenCalled();
+  });
+
+  it("fails closed on provider-declared callback errors without exposing provider details", async () => {
+    const secretDescription = "verification-secret-should-not-leak";
+    const result = await completeAuthSessionFromUrl(
+      `monyvi://auth-callback?error=access_denied&error_description=${secretDescription}`
+    );
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.errorCode).toBe("provider_error");
+      expect(result.error).not.toContain(secretDescription);
+      expect(result.error).not.toContain("monyvi://auth-callback");
+    }
+    expect(mockSetSession).not.toHaveBeenCalled();
+    expect(mockExchangeCodeForSession).not.toHaveBeenCalled();
+  });
+
+  it("sanitizes token-session failures instead of echoing callback secrets", async () => {
+    const accessToken = "access-secret-321";
+    const refreshToken = "refresh-secret-321";
+    mockSetSession.mockResolvedValue({
+      data: { session: null },
+      error: new Error(
+        `provider failed for ${accessToken} and ${refreshToken}`
+      ),
+    });
+
+    const result = await completeAuthSessionFromUrl(
+      `monyvi://auth-callback#access_token=${accessToken}&refresh_token=${refreshToken}`
+    );
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error).not.toContain(accessToken);
+      expect(result.error).not.toContain(refreshToken);
+      expect(result.error).not.toContain("monyvi://auth-callback");
+    }
+  });
+
+  it("classifies rejected token-session requests without exposing callback secrets", async () => {
+    const accessToken = "rejected-access-secret-321";
+    const refreshToken = "rejected-refresh-secret-321";
+    mockSetSession.mockRejectedValue(
+      createRetryableFetchError(
+        `network failed for ${accessToken} and ${refreshToken}`
+      )
+    );
+
+    const result = await completeAuthSessionFromUrl(
+      `monyvi://auth-callback#access_token=${accessToken}&refresh_token=${refreshToken}`
+    );
+
+    expect(result).toEqual({
+      success: false,
+      error: "No internet connection. Please check your network and try again.",
+      errorCode: "network",
+    });
+    if (!result.success) {
+      expect(result.error).not.toContain(accessToken);
+      expect(result.error).not.toContain(refreshToken);
+      expect(result.error).not.toContain("monyvi://auth-callback");
+    }
+  });
+
+  it("fails closed when only one implicit-flow token is present", async () => {
+    const result = await completeAuthSessionFromUrl(
+      "monyvi://auth-callback#access_token=orphaned-access-token"
+    );
+
+    expect(result).toEqual({
+      success: false,
+      error: "Could not extract session from the sign-in response.",
+      errorCode: "invalid_callback",
+    });
+    expect(mockSetSession).not.toHaveBeenCalled();
+    expect(mockExchangeCodeForSession).not.toHaveBeenCalled();
+  });
+
+  it("sanitizes resolved PKCE exchange failures", async () => {
+    const authorizationCode = "pkce-secret-321";
+    mockExchangeCodeForSession.mockResolvedValue({
+      data: { session: null },
+      error: new Error(`provider failed for ${authorizationCode}`),
+    });
+
+    const result = await completeAuthSessionFromUrl(
+      `monyvi://auth-callback?code=${authorizationCode}`
+    );
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.errorCode).toBe("unknown");
+      expect(result.error).not.toContain(authorizationCode);
+      expect(result.error).not.toContain("monyvi://auth-callback");
+    }
+  });
+
+  it("classifies rejected PKCE exchanges without exposing callback secrets", async () => {
+    const authorizationCode = "rejected-pkce-secret-321";
+    mockExchangeCodeForSession.mockRejectedValue(
+      createRetryableFetchError(`network failed for ${authorizationCode}`)
+    );
+
+    const result = await completeAuthSessionFromUrl(
+      `monyvi://auth-callback?code=${authorizationCode}`
+    );
+
+    expect(result).toEqual({
+      success: false,
+      error: "No internet connection. Please check your network and try again.",
+      errorCode: "network",
+    });
+    if (!result.success) {
+      expect(result.error).not.toContain(authorizationCode);
+      expect(result.error).not.toContain("monyvi://auth-callback");
+    }
+  });
+
+  it("fails closed when the canonical callback contains no usable auth material", async () => {
+    const result = await completeAuthSessionFromUrl("monyvi://auth-callback");
+
+    expect(result).toEqual({
+      success: false,
+      error: "Could not extract session from the sign-in response.",
+      errorCode: "invalid_callback",
+    });
+    expect(mockSetSession).not.toHaveBeenCalled();
+    expect(mockExchangeCodeForSession).not.toHaveBeenCalled();
+  });
+});
 
 // ---------------------------------------------------------------------------
 // Test Suite: signInWithOAuth

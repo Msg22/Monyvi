@@ -48,6 +48,7 @@ export const EXCLUDED_TABLES = [
   "sms_review_queues",
   "sms_review_draft_items",
   "dismissed_sms_fingerprints",
+  "email_verification_resend_limits",
 ] as const;
 export const METALS_DEDICATED_SYNC_TABLES = [
   "metal_holding_states",
@@ -57,6 +58,7 @@ export const METALS_DEDICATED_SYNC_TABLES = [
 ] as const;
 export const DEDICATED_SYNC_TABLES = new Set<string>([
   "financial_action_groups",
+  "account_financial_effects",
   ...METALS_DEDICATED_SYNC_TABLES,
 ]);
 export const PULL_ONLY_SHARED_TABLES = new Set<string>([

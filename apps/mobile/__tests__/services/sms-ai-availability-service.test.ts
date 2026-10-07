@@ -1,6 +1,33 @@
+import type { Session } from "@supabase/supabase-js";
+const mockStableSession: Session = {
+  access_token: "stable-user-a-token",
+  refresh_token: "stable-user-a-refresh",
+  expires_in: 3600,
+  token_type: "bearer",
+  user: {
+    id: "user-a",
+    aud: "authenticated",
+    role: "authenticated",
+    email: "user-a@example.com",
+    app_metadata: {},
+    user_metadata: {},
+    created_at: "2026-10-05T00:00:00.000Z",
+  },
+};
+const mockGetStableAuthSession = jest.fn(() =>
+  Promise.resolve({
+    data: { session: mockStableSession },
+    error: null,
+  })
+);
+
 const mockInvoke = jest.fn();
 
 jest.mock("@/services/supabase", () => ({
+  getStableAuthSession: (): Promise<{
+    data: { session: Session };
+    error: null;
+  }> => mockGetStableAuthSession(),
   supabase: {
     functions: {
       invoke: (...args: readonly unknown[]): unknown => mockInvoke(...args),
@@ -38,6 +65,9 @@ describe("sms-ai-availability-service", () => {
     });
     expect(mockInvoke).toHaveBeenCalledWith("sms-ai-availability", {
       method: "GET",
+      headers: {
+        Authorization: "Bearer stable-user-a-token",
+      },
     });
   });
 

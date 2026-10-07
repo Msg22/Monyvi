@@ -40,10 +40,7 @@ import {
   protectMetalMetadataPullFragments,
   runMetalPullStrategy,
 } from "../../services/sync/pull-strategies";
-import {
-  pushMetalDedicatedChanges,
-  runMetalPushStrategy,
-} from "../../services/sync/push-service";
+import { pushMetalDedicatedChanges } from "../../services/sync/push-service";
 
 const USER_ID = "018f0c7a-1234-7abc-8def-000000000003";
 const ACTION_ID = "018f0c7a-1234-7abc-8def-000000000001";
@@ -64,6 +61,16 @@ const createMetadataDatabase = (): Promise<MetalMetadataFixtureDatabase> =>
     acquisitionActionId: ACTION_ID,
     holdingId: HOLDING_ID,
   });
+
+function createMockDatabase(): Database {
+  return {
+    get: jest.fn(() => ({
+      query: jest.fn(() => ({
+        fetch: jest.fn().mockResolvedValue([]),
+      })),
+    })),
+  } as unknown as Database;
+}
 
 type StaleMetalRpcOutcome = Extract<
   MetalRpcOutcome,
@@ -694,12 +701,16 @@ describe("Metals reconciliation, sync, rates, and metadata", () => {
 
     await expect(
       pushMetalDedicatedChanges(
+        createMockDatabase(),
         {
           financial_action_groups: {
             created: [
               {
                 id: ACTION_ID,
                 action_id: ACTION_ID,
+                domain: "metals",
+                domain_reference_id: HOLDING_ID,
+                kind: "add",
                 user_id: USER_ID,
                 payload_json: payloadJson,
                 payload_hash: HASH,
@@ -759,7 +770,10 @@ describe("Metals reconciliation, sync, rates, and metadata", () => {
         undefined,
         commitMetadataOutcome
       )
-    ).resolves.toEqual({ acknowledgeAllDedicatedRows: true });
+    ).resolves.toEqual({
+      acknowledgeAllDedicatedRows: true,
+      acknowledgedActionIds: new Set([ACTION_ID]),
+    });
     expect(commitMetadataOutcome).toHaveBeenCalledTimes(1);
     expect(rpc).toHaveBeenNthCalledWith(1, "apply_metal_action_v1", {
       p_payload_hash: HASH,
@@ -790,12 +804,16 @@ describe("Metals reconciliation, sync, rates, and metadata", () => {
     });
     await expect(
       pushMetalDedicatedChanges(
+        createMockDatabase(),
         {
           financial_action_groups: {
             created: [
               {
                 id: "local-root",
                 action_id: ACTION_ID,
+                domain: "metals",
+                domain_reference_id: HOLDING_ID,
+                kind: "dispose",
                 user_id: USER_ID,
                 payload_json: payloadJson,
                 payload_hash: HASH,
@@ -808,7 +826,10 @@ describe("Metals reconciliation, sync, rates, and metadata", () => {
         USER_ID,
         rpc
       )
-    ).resolves.toEqual({ acknowledgeAllDedicatedRows: false });
+    ).resolves.toEqual({
+      acknowledgeAllDedicatedRows: false,
+      acknowledgedActionIds: new Set<string>(),
+    });
     expect(rpc).not.toHaveBeenCalled();
   });
 
@@ -832,6 +853,7 @@ describe("Metals reconciliation, sync, rates, and metadata", () => {
 
     await expect(
       pushMetalDedicatedChanges(
+        createMockDatabase(),
         {
           metal_holding_states: {
             created: [],
@@ -857,7 +879,10 @@ describe("Metals reconciliation, sync, rates, and metadata", () => {
         undefined,
         commitMetadataOutcome
       )
-    ).resolves.toEqual({ acknowledgeAllDedicatedRows: true });
+    ).resolves.toEqual({
+      acknowledgeAllDedicatedRows: true,
+      acknowledgedActionIds: new Set<string>(),
+    });
     expect(commitMetadataOutcome).toHaveBeenCalledWith({
       canonicalMetadata: {
         name: {
@@ -894,16 +919,5 @@ describe("Metals reconciliation, sync, rates, and metadata", () => {
       })
     ).rejects.toThrow("pull_failed");
     expect(commitWatermark).not.toHaveBeenCalled();
-  });
-
-  it("propagates RPC/push failures without marking local changes synced", async () => {
-    const markSynced = jest.fn();
-    await expect(
-      runMetalPushStrategy({
-        push: () => Promise.reject(new Error("rpc_failed")),
-        markSynced,
-      })
-    ).rejects.toThrow("rpc_failed");
-    expect(markSynced).not.toHaveBeenCalled();
   });
 });

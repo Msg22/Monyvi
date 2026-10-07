@@ -15,6 +15,7 @@ interface RunCiE2eModule {
   getRequestedCiSuites(
     env?: Readonly<Record<string, string | undefined>>
   ): ReadonlySet<
+    | "auth"
     | "accounts"
     | "transactions"
     | "recurring-payments"
@@ -41,6 +42,9 @@ interface RunCiE2eModule {
   };
   getBudgetAuthBootstrapOptions(): {
     readonly env: Readonly<Record<string, string>>;
+    readonly retryOnDeviceFailure: boolean;
+  };
+  getEmailVerificationSuiteOptions(): {
     readonly retryOnDeviceFailure: boolean;
   };
   getMaestroSuiteFlowOptions(
@@ -82,6 +86,10 @@ interface RunCiE2eModule {
   shouldRestoreDefaultFixtureBeforeLocalization(
     selectedSuites: ReadonlySet<string>
   ): boolean;
+  shouldRunEmailVerificationSuite(
+    selectedSuites: ReadonlySet<string>,
+    supabaseMode?: "local" | "remote"
+  ): boolean;
   assertBudgetSuiteIsolation(
     selectedSuites: ReadonlySet<string>,
     env?: Readonly<Record<string, string | undefined>>
@@ -95,6 +103,7 @@ const runCiE2e = jest.requireActual(
 describe("run-ci-e2e helpers", () => {
   it("defaults to all E2E suites when no selective suite is requested", () => {
     expect([...runCiE2e.getRequestedCiSuites({})]).toEqual([
+      "auth",
       "accounts",
       "transactions",
       "recurring-payments",
@@ -184,9 +193,10 @@ describe("run-ci-e2e helpers", () => {
     expect([
       ...runCiE2e.getRequestedCiSuites({
         E2E_CI_SUITES:
-          "accounts,recurring-payments,sms-sync,live-sms,localization",
+          "auth,accounts,recurring-payments,sms-sync,live-sms,localization",
       }),
     ]).toEqual([
+      "auth",
       "accounts",
       "recurring-payments",
       "sms-sync",
@@ -197,6 +207,18 @@ describe("run-ci-e2e helpers", () => {
     expect(runCiE2e.getRequestedCiSuites({ E2E_CI_SUITES: "skip" }).size).toBe(
       0
     );
+  });
+
+  it("gates email verification E2E on local Supabase mode", () => {
+    expect(
+      runCiE2e.shouldRunEmailVerificationSuite(new Set(["auth"]), "local")
+    ).toBe(true);
+    expect(
+      runCiE2e.shouldRunEmailVerificationSuite(new Set(["auth"]), "remote")
+    ).toBe(false);
+    expect(
+      runCiE2e.shouldRunEmailVerificationSuite(new Set(["accounts"]), "local")
+    ).toBe(false);
   });
 
   it("keeps only a bounded output tail for retry detection", () => {
@@ -246,6 +268,12 @@ describe("run-ci-e2e helpers", () => {
     expect(runCiE2e.getBudgetAuthBootstrapOptions()).toEqual({
       env: { E2E_CLEAR_APP_STATE: "1" },
       retryOnDeviceFailure: true,
+    });
+  });
+
+  it("does not replay email verification sends after a device transport failure", () => {
+    expect(runCiE2e.getEmailVerificationSuiteOptions()).toEqual({
+      retryOnDeviceFailure: false,
     });
   });
 

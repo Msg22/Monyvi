@@ -1,22 +1,31 @@
 import { act, renderHook } from "@testing-library/react-native";
 
-import { useAuthScreenController } from "@/hooks/useAuthScreenController";
+import {
+  normalizeVerificationCode,
+  useAuthScreenController,
+} from "@/hooks/useAuthScreenController";
 import {
   requestPasswordReset,
   signInWithEmail,
   signInWithOAuth,
   signUpWithEmail,
 } from "@/services/auth-service";
-import { resendVerificationEmail } from "@/services/supabase";
+import {
+  registerInitialVerificationSend,
+  resendVerificationCode,
+} from "@/services/email-verification-resend-service";
+import { verifyEmailVerificationCode } from "@/services/supabase";
 
 const mockShowToast = jest.fn();
 const mockUseDeferredRouterReplace = jest.fn();
+let mockAuthState = {
+  isAuthenticated: false,
+  isLoading: false,
+};
 
 jest.mock("@/context/AuthContext", () => ({
-  useAuth: (): { isAuthenticated: boolean; isLoading: boolean } => ({
-    isAuthenticated: false,
-    isLoading: false,
-  }),
+  useAuth: (): { isAuthenticated: boolean; isLoading: boolean } =>
+    mockAuthState,
 }));
 
 jest.mock("@/components/ui/Toast", () => ({
@@ -44,23 +53,42 @@ jest.mock("@/services/auth-service", () => ({
   signUpWithEmail: jest.fn(),
 }));
 
+jest.mock("@/services/email-verification-resend-service", () => ({
+  registerInitialVerificationSend: jest.fn(),
+  resendVerificationCode: jest.fn(),
+}));
+
 jest.mock("@/services/supabase", () => ({
-  resendVerificationEmail: jest.fn(),
+  verifyEmailVerificationCode: jest.fn(),
 }));
 
 const mockRequestPasswordReset = jest.mocked(requestPasswordReset);
 const mockSignInWithEmail = jest.mocked(signInWithEmail);
 const mockSignInWithOAuth = jest.mocked(signInWithOAuth);
 const mockSignUpWithEmail = jest.mocked(signUpWithEmail);
-const mockResendVerificationEmail = jest.mocked(resendVerificationEmail);
+const mockRegisterInitialVerificationSend = jest.mocked(
+  registerInitialVerificationSend
+);
+const mockResendVerificationCode = jest.mocked(resendVerificationCode);
+const mockVerifyEmailVerificationCode = jest.mocked(
+  verifyEmailVerificationCode
+);
 
 function createAuthError(message: string): never {
   return new Error(message) as never;
 }
 
+describe("verification code normalization", () => {
+  it("normalizes Arabic-Indic and Eastern Arabic/Persian digits to ASCII", () => {
+    expect(normalizeVerificationCode("١٢٣٤٥٦")).toBe("123456");
+    expect(normalizeVerificationCode("۱۲۳۴۵۶")).toBe("123456");
+  });
+});
+
 describe("useAuthScreenController", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockAuthState = { isAuthenticated: false, isLoading: false };
   });
 
   it("keeps authenticated redirect contract", () => {
@@ -195,6 +223,31 @@ describe("useAuthScreenController", () => {
     expect(result.current.emailError).toBeNull();
   });
 
+  it("routes an unverified returning user to verification pending without raw provider error", async () => {
+    mockSignInWithEmail.mockResolvedValue({
+      success: false,
+      needsVerification: true,
+      error: createAuthError("Email not confirmed"),
+    });
+    const { result } = renderHook(() => useAuthScreenController());
+
+    await act(async () => {
+      await result.current.handleEmailSubmit(
+        "  unverified@example.com  ",
+        "secret",
+        "signIn"
+      );
+    });
+
+    expect(mockSignInWithEmail).toHaveBeenCalledWith(
+      "unverified@example.com",
+      "secret"
+    );
+    expect(result.current.pendingEmail).toBe("unverified@example.com");
+    expect(result.current.screenState).toBe("verificationCode");
+    expect(result.current.emailError).toBeNull();
+  });
+
   it("shows email authentication errors inline", async () => {
     mockSignInWithEmail.mockResolvedValue({
       success: false,
@@ -213,7 +266,7 @@ describe("useAuthScreenController", () => {
     expect(result.current.emailError).toBe("Invalid credentials");
   });
 
-  it("moves successful sign-up requiring verification to pending state", async () => {
+  it("moves successful sign-up requiring verification to pending state with normalized email", async () => {
     mockSignUpWithEmail.mockResolvedValue({
       success: true,
       needsVerification: true,
@@ -222,14 +275,18 @@ describe("useAuthScreenController", () => {
 
     await act(async () => {
       await result.current.handleEmailSubmit(
-        "new@example.com",
+        "  new@example.com  ",
         "secret",
         "signUp"
       );
     });
 
+    expect(mockSignUpWithEmail).toHaveBeenCalledWith(
+      "new@example.com",
+      "secret"
+    );
     expect(result.current.pendingEmail).toBe("new@example.com");
-    expect(result.current.screenState).toBe("verificationPending");
+    expect(result.current.screenState).toBe("verificationCode");
   });
 
   it("shows sign-up failures inline without changing state", async () => {
@@ -316,7 +373,12 @@ describe("useAuthScreenController", () => {
       success: true,
       needsVerification: true,
     });
-    mockResendVerificationEmail.mockResolvedValue({ success: true });
+    mockResendVerificationCode.mockResolvedValue({
+      status: "sent" as const,
+      sentAtMs: Date.parse("2026-10-04T10:02:01.000Z"),
+      resendAvailableAtMs: Date.parse("2026-10-04T10:04:01.000Z"),
+      verificationExpiresAtMs: Date.parse("2026-10-04T10:12:01.000Z"),
+    });
     const { result } = renderHook(() => useAuthScreenController());
 
     await act(async () => {
@@ -330,11 +392,67 @@ describe("useAuthScreenController", () => {
       await result.current.handleResendVerification();
     });
 
-    expect(mockResendVerificationEmail).toHaveBeenCalledWith("new@example.com");
+    expect(mockRegisterInitialVerificationSend).toHaveBeenCalledWith(
+      "new@example.com"
+    );
+    expect(mockResendVerificationCode).toHaveBeenCalledWith("new@example.com");
     expect(mockShowToast).toHaveBeenCalledWith({
       type: "success",
       title: "auth.verification_email_sent",
     });
+    expect(result.current.pendingAction).toBeNull();
+  });
+
+  it("ignores a duplicate resend while verification resend remains pending", async () => {
+    mockSignUpWithEmail.mockResolvedValue({
+      success: true,
+      needsVerification: true,
+    });
+
+    let resolveResend:
+      | ((value: {
+          status: "sent";
+          sentAtMs: number;
+          resendAvailableAtMs: number;
+          verificationExpiresAtMs: number;
+        }) => void)
+      | undefined;
+    mockResendVerificationCode.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveResend = resolve;
+        })
+    );
+
+    const { result } = renderHook(() => useAuthScreenController());
+
+    await act(async () => {
+      await result.current.handleEmailSubmit(
+        "new@example.com",
+        "secret",
+        "signUp"
+      );
+    });
+
+    let firstResend: Promise<void> | undefined;
+    act(() => {
+      firstResend = result.current.handleResendVerification();
+      void result.current.handleResendVerification();
+    });
+
+    expect(mockResendVerificationCode).toHaveBeenCalledTimes(1);
+    expect(result.current.pendingAction).toBe("verificationResend");
+
+    await act(async () => {
+      resolveResend?.({
+        status: "sent" as const,
+        sentAtMs: Date.parse("2026-10-04T10:02:01.000Z"),
+        resendAvailableAtMs: Date.parse("2026-10-04T10:04:01.000Z"),
+        verificationExpiresAtMs: Date.parse("2026-10-04T10:12:01.000Z"),
+      });
+      await firstResend;
+    });
+
     expect(result.current.pendingAction).toBeNull();
   });
 
@@ -343,9 +461,8 @@ describe("useAuthScreenController", () => {
       success: true,
       needsVerification: true,
     });
-    mockResendVerificationEmail.mockResolvedValue({
-      success: false,
-      error: createAuthError("Resend unavailable"),
+    mockResendVerificationCode.mockResolvedValue({
+      status: "temporary_failure",
     });
     const { result } = renderHook(() => useAuthScreenController());
 
@@ -362,9 +479,69 @@ describe("useAuthScreenController", () => {
 
     expect(mockShowToast).toHaveBeenCalledWith({
       type: "error",
-      title: "Resend unavailable",
+      title: "auth.resend_verification_failed",
     });
     expect(result.current.pendingAction).toBeNull();
+  });
+
+  it("honors server cooldown without sending provider details to the UI", async () => {
+    mockSignUpWithEmail.mockResolvedValue({
+      success: true,
+      needsVerification: true,
+    });
+    mockResendVerificationCode.mockResolvedValue({
+      status: "cooldown",
+      retryAtMs: Date.parse("2026-10-04T10:03:30.000Z"),
+    });
+    const { result } = renderHook(() => useAuthScreenController());
+
+    await act(async () => {
+      await result.current.handleEmailSubmit(
+        "new@example.com",
+        "secret",
+        "signUp"
+      );
+    });
+    await act(async () => {
+      await result.current.handleResendVerification();
+    });
+
+    expect(result.current.resendAvailableAtMs).toBe(
+      Date.parse("2026-10-04T10:03:30.000Z")
+    );
+    expect(mockShowToast).toHaveBeenCalledWith({
+      type: "info",
+      title: "auth.resend_cooldown",
+    });
+  });
+
+  it("honors the server 24-hour resend limit", async () => {
+    const retryAtMs = Date.now() + 24 * 60 * 60_000;
+    mockSignUpWithEmail.mockResolvedValue({
+      success: true,
+      needsVerification: true,
+    });
+    mockResendVerificationCode.mockResolvedValue({
+      status: "limit",
+      retryAtMs,
+    });
+    const { result } = renderHook(() => useAuthScreenController());
+
+    await act(async () => {
+      await result.current.handleEmailSubmit(
+        "new@example.com",
+        "secret",
+        "signUp"
+      );
+    });
+    await act(async () => {
+      await result.current.handleResendVerification();
+    });
+
+    expect(result.current.resendAvailableAtMs).toBeNull();
+    expect(result.current.resendLimitUntilMs).toBe(retryAtMs);
+    expect(result.current.isResendLimitReached).toBe(true);
+    expect(mockShowToast).not.toHaveBeenCalled();
   });
 
   it("returns to form and clears transient errors", async () => {
@@ -388,5 +565,341 @@ describe("useAuthScreenController", () => {
     expect(result.current.screenState).toBe("form");
     expect(result.current.emailError).toBeNull();
     expect(result.current.networkError).toBeNull();
+  });
+});
+
+describe("useAuthScreenController code-first verification", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockAuthState = { isAuthenticated: false, isLoading: false };
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date("2026-10-04T10:00:00.000Z"));
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it.each([null, Number.NaN, Number.POSITIVE_INFINITY])(
+    "keeps a limit without usable retry time blocked through OTP edits (%s)",
+    async (retryAtMs) => {
+      mockSignInWithEmail.mockResolvedValue({
+        success: false,
+        needsVerification: true,
+      });
+      mockResendVerificationCode.mockResolvedValue({
+        status: "limit",
+        retryAtMs,
+      });
+      mockVerifyEmailVerificationCode.mockResolvedValue({
+        success: false,
+        errorCode: "otp_expired",
+      });
+      const { result } = renderHook(() => useAuthScreenController());
+      await act(async () => {
+        await result.current.handleEmailSubmit(
+          "new@example.com",
+          "secret",
+          "signIn"
+        );
+      });
+      await act(async () => {
+        await result.current.handleResendVerification();
+      });
+      expect(result.current.isResendLimitReached).toBe(true);
+      expect(result.current.resendLimitUntilMs).toBeNull();
+      expect(mockShowToast).not.toHaveBeenCalled();
+      await act(async () => {
+        result.current.handleVerificationCodeChange("111111");
+        await Promise.resolve();
+      });
+      act(() => {
+        result.current.handleVerificationCodeChange("12");
+      });
+      expect(result.current.verificationError).toBeNull();
+      expect(result.current.isResendLimitReached).toBe(true);
+      await act(async () => {
+        await result.current.handleResendVerification();
+      });
+      expect(mockResendVerificationCode).toHaveBeenCalledTimes(1);
+      act(() => {
+        result.current.handleBackToForm();
+      });
+      expect(result.current.isResendLimitReached).toBe(false);
+      expect(result.current.resendLimitUntilMs).toBeNull();
+      await act(async () => {
+        await result.current.handleEmailSubmit(
+          "other@example.com",
+          "secret",
+          "signIn"
+        );
+      });
+      expect(result.current.isResendLimitReached).toBe(false);
+    }
+  );
+
+  it("guards a live limit until its server expiry, then allows a successful resend", async () => {
+    mockSignInWithEmail.mockResolvedValue({
+      success: false,
+      needsVerification: true,
+    });
+    const retryAtMs = Date.now() + 60_000;
+    mockResendVerificationCode
+      .mockResolvedValueOnce({ status: "limit", retryAtMs })
+      .mockResolvedValueOnce({
+        status: "sent",
+        sentAtMs: retryAtMs,
+        verificationExpiresAtMs: retryAtMs + 600_000,
+        resendAvailableAtMs: retryAtMs + 120_000,
+      });
+    const { result } = renderHook(() => useAuthScreenController());
+    await act(async () => {
+      await result.current.handleEmailSubmit(
+        "new@example.com",
+        "secret",
+        "signIn"
+      );
+    });
+    await act(async () => {
+      await result.current.handleResendVerification();
+    });
+    await act(async () => {
+      await result.current.handleResendVerification();
+    });
+    expect(mockResendVerificationCode).toHaveBeenCalledTimes(1);
+    expect(result.current.isResendLimitReached).toBe(true);
+    act(() => {
+      jest.advanceTimersByTime(60_000);
+    });
+    await act(async () => {
+      await result.current.handleResendVerification();
+    });
+    expect(mockResendVerificationCode).toHaveBeenCalledTimes(2);
+    expect(result.current.isResendLimitReached).toBe(false);
+    expect(result.current.resendLimitUntilMs).toBeNull();
+  });
+
+  it("clears exhausted resend state when code verification succeeds", async () => {
+    mockSignInWithEmail.mockResolvedValue({
+      success: false,
+      needsVerification: true,
+    });
+    mockResendVerificationCode.mockResolvedValue({
+      status: "limit",
+      retryAtMs: null,
+    });
+    mockVerifyEmailVerificationCode.mockResolvedValue({ success: true });
+    const { result } = renderHook(() => useAuthScreenController());
+    await act(async () => {
+      await result.current.handleEmailSubmit(
+        "new@example.com",
+        "secret",
+        "signIn"
+      );
+    });
+    await act(async () => {
+      await result.current.handleResendVerification();
+    });
+    await act(async () => {
+      result.current.handleVerificationCodeChange("123456");
+      await Promise.resolve();
+    });
+    expect(result.current.screenState).toBe("verificationSuccess");
+    expect(result.current.isResendLimitReached).toBe(false);
+    expect(result.current.resendLimitUntilMs).toBeNull();
+  });
+
+  it("starts ten-minute expiry and two-minute resend cooldown after signup", async () => {
+    mockSignUpWithEmail.mockResolvedValue({
+      success: true,
+      needsVerification: true,
+    });
+    const { result } = renderHook(() => useAuthScreenController());
+
+    await act(async () => {
+      await result.current.handleEmailSubmit(
+        "new@example.com",
+        "secret",
+        "signUp"
+      );
+    });
+
+    expect(result.current.screenState).toBe("verificationCode");
+    expect(result.current.verificationExpiresAtMs).toBe(
+      Date.parse("2026-10-04T10:10:00.000Z")
+    );
+    expect(result.current.resendAvailableAtMs).toBe(
+      Date.parse("2026-10-04T10:02:00.000Z")
+    );
+  });
+
+  it("sanitizes pasted input and auto-submits exactly once at six digits", async () => {
+    mockSignUpWithEmail.mockResolvedValue({
+      success: true,
+      needsVerification: true,
+    });
+    mockVerifyEmailVerificationCode.mockResolvedValue({ success: true });
+    const { result } = renderHook(() => useAuthScreenController());
+
+    await act(async () => {
+      await result.current.handleEmailSubmit(
+        "new@example.com",
+        "secret",
+        "signUp"
+      );
+    });
+
+    await act(async () => {
+      result.current.handleVerificationCodeChange("12 3-456");
+      await Promise.resolve();
+    });
+
+    expect(result.current.verificationCode).toBe("123456");
+    expect(mockVerifyEmailVerificationCode).toHaveBeenCalledTimes(1);
+    expect(mockVerifyEmailVerificationCode).toHaveBeenCalledWith(
+      "new@example.com",
+      "123456"
+    );
+    expect(result.current.screenState).toBe("verificationSuccess");
+
+    await act(async () => {
+      result.current.handleVerificationCodeChange("123456");
+      await Promise.resolve();
+    });
+    expect(mockVerifyEmailVerificationCode).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps authenticated redirects suppressed through the active success state until Continue", async () => {
+    mockSignUpWithEmail.mockResolvedValue({
+      success: true,
+      needsVerification: true,
+    });
+    mockVerifyEmailVerificationCode.mockResolvedValue({ success: true });
+    const { result, rerender } = renderHook(
+      (_props: { readonly revision: number }) => useAuthScreenController(),
+      { initialProps: { revision: 0 } }
+    );
+
+    await act(async () => {
+      await result.current.handleEmailSubmit(
+        "new@example.com",
+        "secret",
+        "signUp"
+      );
+    });
+    await act(async () => {
+      result.current.handleVerificationCodeChange("123456");
+      await Promise.resolve();
+    });
+
+    mockAuthState = { isAuthenticated: true, isLoading: false };
+    rerender({ revision: 1 });
+
+    expect(result.current.screenState).toBe("verificationSuccess");
+    expect(mockUseDeferredRouterReplace).toHaveBeenLastCalledWith({
+      enabled: false,
+      href: "/",
+    });
+
+    act(() => {
+      result.current.handleContinueAfterVerification();
+    });
+    rerender({ revision: 2 });
+
+    expect(mockUseDeferredRouterReplace).toHaveBeenLastCalledWith({
+      enabled: true,
+      href: "/",
+    });
+  });
+
+  it("allows normal authenticated routing on a fresh mount after a verified cold restart", () => {
+    mockAuthState = { isAuthenticated: true, isLoading: false };
+
+    renderHook(() => useAuthScreenController());
+
+    expect(mockUseDeferredRouterReplace).toHaveBeenLastCalledWith({
+      enabled: true,
+      href: "/",
+    });
+  });
+
+  it("blocks duplicate auto-submit while the six-digit verification request is pending", async () => {
+    mockSignUpWithEmail.mockResolvedValue({
+      success: true,
+      needsVerification: true,
+    });
+
+    let resolveVerification: ((value: { success: true }) => void) | undefined;
+    mockVerifyEmailVerificationCode.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveVerification = resolve;
+        })
+    );
+    const { result } = renderHook(() => useAuthScreenController());
+
+    await act(async () => {
+      await result.current.handleEmailSubmit(
+        "new@example.com",
+        "secret",
+        "signUp"
+      );
+    });
+
+    act(() => {
+      result.current.handleVerificationCodeChange("123456");
+      result.current.handleVerificationCodeChange("123456");
+    });
+
+    expect(mockVerifyEmailVerificationCode).toHaveBeenCalledTimes(1);
+    expect(result.current.pendingAction).toBe("verificationCode");
+
+    await act(async () => {
+      resolveVerification?.({ success: true });
+      await Promise.resolve();
+    });
+
+    expect(result.current.screenState).toBe("verificationSuccess");
+  });
+
+  it("shows invalid-code copy and permits retry after verification fails", async () => {
+    mockSignUpWithEmail.mockResolvedValue({
+      success: true,
+      needsVerification: true,
+    });
+    mockVerifyEmailVerificationCode
+      .mockResolvedValueOnce({ success: false, errorCode: "otp_expired" })
+      .mockResolvedValueOnce({ success: true });
+    const { result } = renderHook(() => useAuthScreenController());
+
+    await act(async () => {
+      await result.current.handleEmailSubmit(
+        "new@example.com",
+        "secret",
+        "signUp"
+      );
+    });
+
+    await act(async () => {
+      result.current.handleVerificationCodeChange("111111");
+      await Promise.resolve();
+    });
+
+    expect(result.current.verificationError).toBe(
+      "auth.verification_code_invalid"
+    );
+    expect(result.current.verificationCode).toBe("");
+    expect(result.current.screenState).toBe("verificationCode");
+
+    act(() => {
+      result.current.handleVerificationCodeChange("");
+    });
+    await act(async () => {
+      result.current.handleVerificationCodeChange("111111");
+      await Promise.resolve();
+    });
+
+    expect(mockVerifyEmailVerificationCode).toHaveBeenCalledTimes(2);
+    expect(result.current.screenState).toBe("verificationSuccess");
   });
 });

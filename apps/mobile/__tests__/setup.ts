@@ -16,6 +16,11 @@ jest.mock(
   { virtual: true }
 );
 
+// Provide placeholder environment variables for Supabase in test environments
+// to prevent module-load errors if services/supabase.ts is evaluated.
+process.env.EXPO_PUBLIC_SUPABASE_URL ??= "https://placeholder.supabase.co";
+process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??= "placeholder-anon-key";
+
 // Mock expo-secure-store — referenced by services/supabase.ts for token storage
 // but not needed in unit tests. Supplying stubs prevents module-load failures.
 jest.mock(
@@ -188,4 +193,32 @@ jest.mock("@expo/vector-icons/FontAwesome5", () => {
 jest.mock("@expo/vector-icons/MaterialCommunityIcons", () => {
   const NullIcon = (): null => null;
   return { __esModule: true, default: NullIcon };
+});
+
+const mockNavigationDispatch = jest.fn();
+const mockNavigationNavigate = jest.fn();
+const mockNavigationGoBack = jest.fn();
+const mockNavigationAddListener = jest.fn(() => jest.fn());
+
+// Mock @react-navigation/native hooks so routes using navigation-level exit guards
+// (usePreventRemove, useNavigation) can render in unit tests without throwing.
+jest.mock("@react-navigation/native", () => {
+  const actual = jest.requireActual<Record<string, unknown>>(
+    "@react-navigation/native"
+  );
+  return {
+    ...actual,
+    useNavigation: (): {
+      readonly dispatch: jest.Mock;
+      readonly navigate: jest.Mock;
+      readonly goBack: jest.Mock;
+      readonly addListener: jest.Mock;
+    } => ({
+      dispatch: mockNavigationDispatch,
+      navigate: mockNavigationNavigate,
+      goBack: mockNavigationGoBack,
+      addListener: mockNavigationAddListener,
+    }),
+    usePreventRemove: jest.fn(),
+  };
 });

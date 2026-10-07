@@ -75,8 +75,6 @@ const mockEmailSubmit = jest.fn<
 const mockForgotPassword = jest.fn<Promise<void>, [string]>();
 const mockClearError = jest.fn();
 const mockClearNetworkError = jest.fn();
-const mockPrivacy = jest.fn();
-const mockTerms = jest.fn();
 
 function renderForm(
   overrides: Partial<React.ComponentProps<typeof FormView>> = {}
@@ -93,8 +91,6 @@ function renderForm(
       onForgotPassword={mockForgotPassword}
       onClearError={mockClearError}
       onClearNetworkError={mockClearNetworkError}
-      onPrivacyPress={mockPrivacy}
-      onTermsPress={mockTerms}
       {...overrides}
     />
   );
@@ -130,8 +126,12 @@ describe("FormView", () => {
     expect(screen.getByTestId("auth-email-input")).toBeOnTheScreen();
     expect(screen.getByTestId("auth-password-input")).toBeOnTheScreen();
     expect(screen.getByTestId("auth-submit-button")).toBeOnTheScreen();
-    expect(screen.getByRole("link", { name: "Privacy" })).toBeOnTheScreen();
-    expect(screen.getByRole("link", { name: "Terms" })).toBeOnTheScreen();
+    expect(screen.getByText("Privacy")).toBeOnTheScreen();
+    expect(screen.getByText("Terms")).toBeOnTheScreen();
+    expect(
+      screen.queryByRole("link", { name: "Privacy" })
+    ).not.toBeOnTheScreen();
+    expect(screen.queryByRole("link", { name: "Terms" })).not.toBeOnTheScreen();
   });
 
   it("matches the approved standard hero and legal-footer layout", () => {
@@ -350,15 +350,5 @@ describe("FormView", () => {
     ).toBeOnTheScreen();
     fireEvent.press(screen.getByRole("button", { name: "dismiss" }));
     expect(mockClearNetworkError).toHaveBeenCalledTimes(1);
-  });
-
-  it("opens legal destinations through functional links", () => {
-    renderForm();
-
-    fireEvent.press(screen.getByRole("link", { name: "Privacy" }));
-    fireEvent.press(screen.getByRole("link", { name: "Terms" }));
-
-    expect(mockPrivacy).toHaveBeenCalledTimes(1);
-    expect(mockTerms).toHaveBeenCalledTimes(1);
   });
 });

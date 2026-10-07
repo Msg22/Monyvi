@@ -1,0 +1,884 @@
+import * as Crypto from "expo-crypto";
+import {
+  buildCategoryTree,
+  buildSyntheticEvaluationCorpus,
+  computeSmsFingerprint,
+  ParseSmsEvaluationResponseSchema,
+  scoreSmsProviderEvaluation,
+  STAGING_SUPABASE_URL,
+  type CategoryTreeSource,
+  type EvaluationReport,
+  type FinalBatchObservation,
+  type FinalObservationClassification,
+  type SyntheticEvaluationCase,
+} from "@monyvi/logic";
+
+import {
+  getEdgeFunctionErrorStatus,
+  invokeAuthenticatedEdgeFunction,
+  isEdgeFunctionAuthenticationError,
+} from "@/services/authenticated-edge-function-service";
+import {
+  MOBILE_SMS_PROVIDER_EVALUATION_BATCH_SIZE,
+  MOBILE_SMS_PROVIDER_EVALUATION_MAX_CONCURRENT_BATCHES,
+} from "@/constants/sms-provider-evaluation";
+import {
+  runConcurrentBatchQueue,
+  type ConcurrentBatchRun,
+} from "@/services/concurrent-batch-queue-service";
+import { assertExpectedCurrentUser } from "@/services/user-data-access";
+
+export const SMS_PROVIDER_EVALUATION_OWNER_CHANGED =
+  "sms_provider_evaluation_owner_changed";
+export const SMS_PROVIDER_EVALUATION_UNAVAILABLE =
+  "sms_provider_evaluation_unavailable";
+export const SMS_PROVIDER_EVALUATION_AUTH_REQUIRED =
+  "sms_provider_evaluation_auth_required";
+export const SMS_PROVIDER_EVALUATION_FUNCTION_NAME = "sms-provider-evaluation";
+
+const SAFE_REFUSAL_REASONS = new Set([
+  "unauthenticated",
+  "consent_required",
+  "malformed_request",
+  "capability_disabled",
+  "terminal_outcome",
+  "candidate_too_large",
+  "request_limit",
+  "scan_limit",
+  "rolling_limit",
+  "burst_limit",
+  "history_cooldown",
+  "dependency_unavailable",
+  "already_processed_result_unavailable",
+  "payload_limit",
+  "input_token_limit",
+  "response_invalid",
+  "provider_failed",
+  "method_not_allowed",
+]);
+
+let lastEvaluationAnchorMs = 0;
+
+export type SmsProviderEvaluationTerminalStatus =
+  | "finished"
+  | "cancelled"
+  | "fatal";
+
+export type SmsProviderEvaluationBatchStatus =
+  | "completed"
+  | "failed"
+  | "running"
+  | "cancelled"
+  | "not_run";
+
+export interface SmsProviderEvaluationBatchDetail {
+  readonly batchId: string;
+  readonly batchNumber: number;
+  readonly caseIds: readonly string[];
+  readonly messageCount: number;
+  readonly status: SmsProviderEvaluationBatchStatus;
+  readonly classification: FinalObservationClassification;
+  readonly elapsedMs?: number;
+  readonly httpStatus?: number;
+  readonly refusalReason?: string;
+  readonly completionStatus?: string;
+}
+
+export interface SmsProviderEvaluationProgress {
+  readonly report: EvaluationReport;
+  readonly batches: readonly SmsProviderEvaluationBatchDetail[];
+  readonly activeBatchNumber: number | null;
+  readonly completedBatchCount: number;
+  readonly processedCaseCount: number;
+  readonly attemptedRequestCount: number;
+  readonly totalBatchCount: number;
+  readonly totalCaseCount: number;
+}
+
+export interface SmsProviderEvaluationRunResult extends SmsProviderEvaluationProgress {
+  readonly status: SmsProviderEvaluationTerminalStatus;
+  readonly fatalReason?: string;
+}
+
+export interface StartSmsProviderEvaluationInput {
+  readonly initiatingUserId: string;
+  readonly categories: readonly CategoryTreeSource[];
+  readonly supportedCurrencies: readonly string[];
+  readonly isAiConsented: boolean;
+  readonly signal: AbortSignal;
+  readonly onProgress?: (
+    progress: SmsProviderEvaluationProgress
+  ) => void | Promise<void>;
+}
+
+interface EdgeFunctionResponse {
+  readonly data: unknown;
+  readonly error: unknown;
+}
+
+interface EvaluationRunContext {
+  readonly runId: string;
+  readonly anchorMs: number;
+  readonly cases: readonly SyntheticEvaluationCase[];
+  readonly batches: ReadonlyArray<readonly SyntheticEvaluationCase[]>;
+}
+
+interface BatchRequestContext {
+  readonly runId: string;
+  readonly anchorMs: number;
+}
+
+interface RunSessionState {
+  readonly runId: string;
+  readonly anchorMs: number;
+  readonly cases: readonly SyntheticEvaluationCase[];
+  readonly batches: ReadonlyArray<readonly SyntheticEvaluationCase[]>;
+  readonly observations: readonly FinalBatchObservation[];
+  readonly completedBatchCount: number;
+  readonly processedCaseCount: number;
+  readonly attemptedRequestCount: number;
+  readonly activeBatchNumbers: readonly number[];
+  readonly cancelledBatches: ReadonlyMap<number, number>;
+  readonly stopped: "running" | "cancelled" | "fatal";
+  readonly fatalReason?: string;
+}
+
+interface RunSession {
+  state: RunSessionState;
+  emitChain: Promise<void>;
+  emitFailure: unknown;
+}
+
+interface BatchExecutionResult {
+  readonly observation?: FinalBatchObservation;
+  readonly cancelled: boolean;
+  readonly cancelledElapsedMs?: number;
+  readonly fatalReason?: string;
+}
+
+function createEvaluationError(code: string): Error {
+  const error = new Error(code);
+  error.name = "SmsProviderEvaluationError";
+  return error;
+}
+
+export function isSmsProviderEvaluationOwnerChanged(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    error.message === SMS_PROVIDER_EVALUATION_OWNER_CHANGED
+  );
+}
+
+export function isSmsProviderEvaluationRuntimeAvailable(): boolean {
+  return (
+    __DEV__ && process.env.EXPO_PUBLIC_SUPABASE_URL === STAGING_SUPABASE_URL
+  );
+}
+
+async function assertPinnedUser(expectedUserId: string): Promise<void> {
+  try {
+    await assertExpectedCurrentUser(expectedUserId);
+  } catch {
+    throw createEvaluationError(SMS_PROVIDER_EVALUATION_OWNER_CHANGED);
+  }
+}
+
+function nextRunAnchorMs(): number {
+  const anchorMs = Math.max(Date.now(), lastEvaluationAnchorMs + 1);
+  lastEvaluationAnchorMs = anchorMs;
+  return anchorMs;
+}
+
+function createRunId(anchorMs: number): string {
+  return `sms-eval-${anchorMs}-${Crypto.randomUUID()}`;
+}
+
+function batchId(index: number): string {
+  return `batch-${String(index + 1).padStart(3, "0")}`;
+}
+
+function requestKey(runId: string, id: string): string {
+  return `sms-eval:${runId}:${id}`.slice(0, 160);
+}
+
+function scanSessionId(runId: string): string {
+  return `sms-eval:${runId}`.slice(0, 160);
+}
+
+function chunkCases(
+  cases: readonly SyntheticEvaluationCase[]
+): ReadonlyArray<readonly SyntheticEvaluationCase[]> {
+  const batches: SyntheticEvaluationCase[][] = [];
+  for (
+    let index = 0;
+    index < cases.length;
+    index += MOBILE_SMS_PROVIDER_EVALUATION_BATCH_SIZE
+  ) {
+    batches.push(
+      cases.slice(index, index + MOBILE_SMS_PROVIDER_EVALUATION_BATCH_SIZE)
+    );
+  }
+  return batches;
+}
+
+function safeRefusalReason(status: number, value: unknown): string {
+  if (
+    typeof value === "object" &&
+    value !== null &&
+    !Array.isArray(value) &&
+    typeof (value as Readonly<Record<string, unknown>>).reason === "string"
+  ) {
+    const reason = (value as Readonly<Record<string, unknown>>)
+      .reason as string;
+    if (SAFE_REFUSAL_REASONS.has(reason)) return reason;
+  }
+  return `http_${status}`;
+}
+
+function isAdmissionStatus(status: number): boolean {
+  return status >= 400 && status < 500;
+}
+
+function shouldStopAfterAdmission(status: number): boolean {
+  return [400, 401, 403, 413, 429].includes(status);
+}
+
+async function errorResponseValue(error: unknown): Promise<unknown> {
+  const context = (error as { readonly context?: unknown } | null)?.context;
+  if (!(context instanceof Response)) return undefined;
+  try {
+    const textValue = await context.clone().text();
+    return textValue ? (JSON.parse(textValue) as unknown) : null;
+  } catch {
+    return undefined;
+  }
+}
+
+function batchCaseIds(
+  cases: readonly SyntheticEvaluationCase[]
+): readonly string[] {
+  return cases.map(({ caseId }) => caseId);
+}
+
+function classifySuccessfulResponse(input: {
+  readonly runId: string;
+  readonly id: string;
+  readonly cases: readonly SyntheticEvaluationCase[];
+  readonly value: unknown;
+  readonly latencyMs: number;
+}): FinalBatchObservation {
+  const parsed = ParseSmsEvaluationResponseSchema.safeParse(input.value);
+  const common = {
+    runId: input.runId,
+    batchId: input.id,
+    caseIds: batchCaseIds(input.cases),
+    latencyMs: input.latencyMs,
+    replayProvenance: "unknown" as const,
+  };
+  if (!parsed.success) {
+    return { ...common, classification: "response_invalid" };
+  }
+  if (parsed.data.completionStatus !== "complete") {
+    return observationFromParsed(common, parsed.data, "unresolved");
+  }
+  return observationFromParsed(common, parsed.data, "observed");
+}
+
+function observationFromParsed(
+  common: Omit<FinalBatchObservation, "classification">,
+  parsed: ReturnType<typeof ParseSmsEvaluationResponseSchema.parse>,
+  classification: "observed" | "unresolved"
+): FinalBatchObservation {
+  return {
+    ...common,
+    classification,
+    completionStatus: parsed.completionStatus,
+    transactions: parsed.transactions,
+    negativeFingerprints: parsed.negativeFingerprints,
+    terminalFingerprints: parsed.terminalFingerprints,
+    unresolvedFingerprints: parsed.unresolvedFingerprints,
+  };
+}
+
+function reportFromState(
+  state: RunSessionState,
+  cancelled: boolean
+): EvaluationReport {
+  return scoreSmsProviderEvaluation({
+    runId: state.runId,
+    mode: "live",
+    cancelled,
+    cases: state.cases,
+    finalObservations: state.observations,
+  });
+}
+
+function activeBatchNumberFrom(state: RunSessionState): number | null {
+  const firstActive = state.activeBatchNumbers[0];
+  return firstActive === undefined ? null : firstActive;
+}
+
+function batchStatusFor(
+  observation: FinalBatchObservation | undefined,
+  isActive: boolean,
+  isCancelled: boolean
+): SmsProviderEvaluationBatchStatus {
+  if (isCancelled) return "cancelled";
+  if (isActive) return "running";
+  if (
+    observation === undefined ||
+    observation.classification === "unattempted"
+  ) {
+    return "not_run";
+  }
+  return observation.classification === "observed" ? "completed" : "failed";
+}
+
+function batchDetailsFromState(
+  state: RunSessionState
+): readonly SmsProviderEvaluationBatchDetail[] {
+  const observations = new Map(
+    state.observations.map((observation) => [observation.batchId, observation])
+  );
+  return state.batches.map((batch, index) =>
+    batchDetailFromState(state, batch, index, observations)
+  );
+}
+
+function batchDetailFromState(
+  state: RunSessionState,
+  batch: readonly SyntheticEvaluationCase[],
+  index: number,
+  observations: ReadonlyMap<string, FinalBatchObservation>
+): SmsProviderEvaluationBatchDetail {
+  const batchNumber = index + 1;
+  const id = batchId(index);
+  const observation = observations.get(id);
+  const isActive = state.activeBatchNumbers.includes(batchNumber);
+  const cancelledElapsedMs = state.cancelledBatches.get(batchNumber);
+  const isCancelled = cancelledElapsedMs !== undefined;
+  const elapsedMs = isCancelled ? cancelledElapsedMs : observation?.latencyMs;
+  return {
+    batchId: id,
+    batchNumber,
+    caseIds: batchCaseIds(batch),
+    messageCount: batch.length,
+    status: batchStatusFor(observation, isActive, isCancelled),
+    classification: observation?.classification ?? "unattempted",
+    ...(elapsedMs === undefined ? {} : { elapsedMs }),
+    ...(observation?.httpStatus === undefined
+      ? {}
+      : { httpStatus: observation.httpStatus }),
+    ...(observation?.refusalReason === undefined
+      ? {}
+      : { refusalReason: observation.refusalReason }),
+    ...(observation?.completionStatus === undefined
+      ? {}
+      : { completionStatus: observation.completionStatus }),
+  };
+}
+
+function progressFromState(
+  state: RunSessionState
+): SmsProviderEvaluationProgress {
+  return {
+    report: reportFromState(state, false),
+    batches: batchDetailsFromState(state),
+    activeBatchNumber: activeBatchNumberFrom(state),
+    completedBatchCount: state.completedBatchCount,
+    processedCaseCount: state.processedCaseCount,
+    attemptedRequestCount: state.attemptedRequestCount,
+    totalBatchCount: state.batches.length,
+    totalCaseCount: state.cases.length,
+  };
+}
+
+async function emitProgress(
+  session: RunSession,
+  onProgress: StartSmsProviderEvaluationInput["onProgress"]
+): Promise<void> {
+  // Primitive-fidelity exception: emitFailure stores the exact progress-listener
+  // value (including non-Error primitives) and rethrows it unchanged.
+  // eslint-disable-next-line @typescript-eslint/only-throw-error
+  if (session.emitFailure !== null) throw session.emitFailure;
+  session.emitChain = session.emitChain.then(async () => {
+    if (typeof onProgress !== "function") return;
+    const snapshot = progressFromState(session.state);
+    const emitted = onProgress(snapshot);
+    if (emitted !== undefined) await emitted;
+  });
+  try {
+    await session.emitChain;
+  } catch (error: unknown) {
+    if (session.emitFailure === null) session.emitFailure = error;
+    throw error;
+  }
+}
+
+function initialSessionState(context: EvaluationRunContext): RunSessionState {
+  return {
+    runId: context.runId,
+    anchorMs: context.anchorMs,
+    cases: context.cases,
+    batches: context.batches,
+    observations: [],
+    completedBatchCount: 0,
+    processedCaseCount: 0,
+    attemptedRequestCount: 0,
+    activeBatchNumbers: [],
+    cancelledBatches: new Map(),
+    stopped: "running",
+  };
+}
+
+function beginBatch(state: RunSessionState, index: number): RunSessionState {
+  return {
+    ...state,
+    attemptedRequestCount: state.attemptedRequestCount + 1,
+    activeBatchNumbers: [...state.activeBatchNumbers, index + 1].sort(
+      (a, b) => a - b
+    ),
+  };
+}
+
+function completeBatch(
+  state: RunSessionState,
+  index: number,
+  observation: FinalBatchObservation
+): RunSessionState {
+  const batchNumber = index + 1;
+  const batch = state.batches[index];
+  return {
+    ...state,
+    observations: [...state.observations, observation],
+    completedBatchCount: state.completedBatchCount + 1,
+    processedCaseCount:
+      state.processedCaseCount + (batch === undefined ? 0 : batch.length),
+    activeBatchNumbers: state.activeBatchNumbers.filter(
+      (number) => number !== batchNumber
+    ),
+  };
+}
+
+function cancelActiveBatch(
+  state: RunSessionState,
+  index: number,
+  elapsedMs: number | undefined
+): RunSessionState {
+  const batchNumber = index + 1;
+  const cancelledBatches = new Map(state.cancelledBatches);
+  if (elapsedMs !== undefined) {
+    cancelledBatches.set(batchNumber, elapsedMs);
+  }
+  return {
+    ...state,
+    activeBatchNumbers: state.activeBatchNumbers.filter(
+      (number) => number !== batchNumber
+    ),
+    cancelledBatches,
+  };
+}
+
+function abandonBatch(state: RunSessionState, index: number): RunSessionState {
+  const batchNumber = index + 1;
+  return {
+    ...state,
+    attemptedRequestCount: Math.max(0, state.attemptedRequestCount - 1),
+    activeBatchNumbers: state.activeBatchNumbers.filter(
+      (number) => number !== batchNumber
+    ),
+  };
+}
+
+function markCancelled(state: RunSessionState): RunSessionState {
+  return { ...state, stopped: "cancelled" };
+}
+
+function markFatal(
+  state: RunSessionState,
+  fatalReason: string
+): RunSessionState {
+  return { ...state, stopped: "fatal", fatalReason };
+}
+
+async function createRunContext(): Promise<EvaluationRunContext> {
+  const anchorMs = nextRunAnchorMs();
+  const runId = createRunId(anchorMs);
+  const cases = await buildSyntheticEvaluationCorpus(
+    { runId, anchorMs },
+    { computeFingerprint: computeSmsFingerprint }
+  );
+  return {
+    runId,
+    anchorMs,
+    cases,
+    batches: chunkCases(cases),
+  };
+}
+
+function createTransportObservation(input: {
+  readonly context: BatchRequestContext;
+  readonly id: string;
+  readonly batch: readonly SyntheticEvaluationCase[];
+  readonly startedAt: number;
+}): FinalBatchObservation {
+  return {
+    runId: input.context.runId,
+    batchId: input.id,
+    caseIds: batchCaseIds(input.batch),
+    classification: "transport_failure",
+    latencyMs: Math.max(0, Date.now() - input.startedAt),
+    replayProvenance: "unknown",
+  };
+}
+
+function createAuthFailureObservation(input: {
+  readonly context: BatchRequestContext;
+  readonly id: string;
+  readonly batch: readonly SyntheticEvaluationCase[];
+  readonly startedAt: number;
+}): FinalBatchObservation {
+  return {
+    ...createTransportObservation(input),
+    classification: "admission_failure",
+    httpStatus: 401,
+    refusalReason: "unauthenticated",
+  };
+}
+
+function throwIfRunCancelled(signal: AbortSignal): void {
+  if (signal.aborted) {
+    throw new Error("sms_provider_evaluation_cancelled");
+  }
+}
+
+async function assertPinnedUserAndActive(
+  expectedUserId: string,
+  signal: AbortSignal
+): Promise<void> {
+  await assertPinnedUser(expectedUserId);
+  throwIfRunCancelled(signal);
+}
+
+async function invokeBatch(
+  input: StartSmsProviderEvaluationInput,
+  context: BatchRequestContext,
+  batch: readonly SyntheticEvaluationCase[],
+  id: string
+): Promise<EdgeFunctionResponse> {
+  await assertPinnedUserAndActive(input.initiatingUserId, input.signal);
+  return invokeAuthenticatedEdgeFunction<unknown>(
+    SMS_PROVIDER_EVALUATION_FUNCTION_NAME,
+    {
+      body: {
+        requestKey: requestKey(context.runId, id),
+        scanSessionId: scanSessionId(context.runId),
+        scanKind: "incremental",
+        scanStartedAt: new Date(context.anchorMs).toISOString(),
+        messages: batch.map(({ message }) => ({
+          id: message.id,
+          sender: message.sender,
+          body: message.body,
+          date: message.date,
+          smsFingerprint: message.smsFingerprint,
+        })),
+        categories: buildCategoryTree(input.categories),
+        supportedCurrencies: input.supportedCurrencies,
+        syntheticEvaluation: {
+          runId: context.runId,
+          anchorMs: context.anchorMs,
+        },
+      },
+      signal: input.signal,
+    },
+    {
+      beforeRetry: () =>
+        assertPinnedUserAndActive(input.initiatingUserId, input.signal),
+    }
+  );
+}
+
+async function executeBatch(input: {
+  readonly runInput: StartSmsProviderEvaluationInput;
+  readonly context: BatchRequestContext;
+  readonly batch: readonly SyntheticEvaluationCase[];
+  readonly id: string;
+}): Promise<BatchExecutionResult> {
+  const startedAt = Date.now();
+  try {
+    const response = await invokeBatch(
+      input.runInput,
+      input.context,
+      input.batch,
+      input.id
+    );
+    await assertPinnedUserAndActive(
+      input.runInput.initiatingUserId,
+      input.runInput.signal
+    );
+    return classifyBatchResponse(input, response, startedAt);
+  } catch (error: unknown) {
+    return classifyBatchError(input, error, startedAt);
+  }
+}
+
+async function classifyBatchResponse(
+  input: {
+    readonly runInput: StartSmsProviderEvaluationInput;
+    readonly context: BatchRequestContext;
+    readonly batch: readonly SyntheticEvaluationCase[];
+    readonly id: string;
+  },
+  response: EdgeFunctionResponse,
+  startedAt: number
+): Promise<BatchExecutionResult> {
+  if (response.error === null) {
+    return {
+      cancelled: false,
+      observation: classifySuccessfulResponse({
+        runId: input.context.runId,
+        id: input.id,
+        cases: input.batch,
+        value: response.data,
+        latencyMs: Math.max(0, Date.now() - startedAt),
+      }),
+    };
+  }
+  return classifyHttpError(input, response.error, startedAt);
+}
+
+async function classifyHttpError(
+  input: {
+    readonly context: BatchRequestContext;
+    readonly batch: readonly SyntheticEvaluationCase[];
+    readonly id: string;
+  },
+  error: unknown,
+  startedAt: number
+): Promise<BatchExecutionResult> {
+  const status = getEdgeFunctionErrorStatus(error);
+  const effectiveStatus = status ?? 503;
+  const admission = status !== undefined && isAdmissionStatus(status);
+  const reason = safeRefusalReason(
+    effectiveStatus,
+    await errorResponseValue(error)
+  );
+  return {
+    cancelled: false,
+    observation: {
+      runId: input.context.runId,
+      batchId: input.id,
+      caseIds: batchCaseIds(input.batch),
+      classification: admission ? "admission_failure" : "transport_failure",
+      ...(status === undefined ? {} : { httpStatus: status }),
+      refusalReason: reason,
+      latencyMs: Math.max(0, Date.now() - startedAt),
+      replayProvenance: "unknown",
+    },
+    ...(status !== undefined && admission && shouldStopAfterAdmission(status)
+      ? { fatalReason: reason }
+      : {}),
+  };
+}
+
+function classifyBatchError(
+  input: {
+    readonly runInput: StartSmsProviderEvaluationInput;
+    readonly context: BatchRequestContext;
+    readonly batch: readonly SyntheticEvaluationCase[];
+    readonly id: string;
+  },
+  error: unknown,
+  startedAt: number
+): BatchExecutionResult {
+  if (isSmsProviderEvaluationOwnerChanged(error)) throw error;
+  if (input.runInput.signal.aborted) {
+    return {
+      cancelled: true,
+      cancelledElapsedMs: Math.max(0, Date.now() - startedAt),
+    };
+  }
+  const observation = isEdgeFunctionAuthenticationError(error)
+    ? createAuthFailureObservation({ ...input, startedAt })
+    : createTransportObservation({ ...input, startedAt });
+  return {
+    cancelled: false,
+    observation,
+    ...(isEdgeFunctionAuthenticationError(error)
+      ? { fatalReason: "unauthenticated" }
+      : {}),
+  };
+}
+
+function isRunStopped(session: RunSession, signal: AbortSignal): boolean {
+  return session.state.stopped !== "running" || signal.aborted;
+}
+
+async function processBatch(input: {
+  readonly runInput: StartSmsProviderEvaluationInput;
+  readonly session: RunSession;
+  readonly requestContext: BatchRequestContext;
+  readonly batch: readonly SyntheticEvaluationCase[];
+  readonly index: number;
+  readonly run: ConcurrentBatchRun<readonly SyntheticEvaluationCase[]>;
+  readonly abortRun: () => void;
+}): Promise<void> {
+  const { session, index } = input;
+  try {
+    session.state = beginBatch(session.state, index);
+    await emitProgress(session, input.runInput.onProgress);
+    if (isRunStopped(session, input.runInput.signal)) {
+      session.state = abandonBatch(session.state, index);
+      await emitProgress(session, input.runInput.onProgress);
+      return;
+    }
+    const result = await executeBatch({
+      runInput: input.runInput,
+      context: input.requestContext,
+      batch: input.batch,
+      id: batchId(index),
+    });
+    if (result.fatalReason !== undefined) {
+      if (session.state.stopped === "running") {
+        session.state = markFatal(session.state, result.fatalReason);
+      }
+      input.run.stop();
+      input.abortRun();
+      if (result.observation !== undefined) {
+        session.state = completeBatch(session.state, index, result.observation);
+      }
+      await emitProgress(session, input.runInput.onProgress);
+      return;
+    }
+    if (result.cancelled) {
+      session.state = cancelActiveBatch(
+        session.state,
+        index,
+        result.cancelledElapsedMs
+      );
+      await emitProgress(session, input.runInput.onProgress);
+      return;
+    }
+    if (result.observation !== undefined) {
+      session.state = completeBatch(session.state, index, result.observation);
+      await emitProgress(session, input.runInput.onProgress);
+    }
+  } catch (error: unknown) {
+    if (isSmsProviderEvaluationOwnerChanged(error)) {
+      session.state = markCancelled(session.state);
+      input.run.stop();
+      input.abortRun();
+      throw error;
+    }
+    session.state = markCancelled(session.state);
+    input.run.stop();
+    input.abortRun();
+    throw error;
+  }
+}
+
+function validateRunInput(input: StartSmsProviderEvaluationInput): void {
+  if (!isSmsProviderEvaluationRuntimeAvailable()) {
+    throw createEvaluationError(SMS_PROVIDER_EVALUATION_UNAVAILABLE);
+  }
+  if (!input.initiatingUserId.trim()) {
+    throw createEvaluationError(SMS_PROVIDER_EVALUATION_AUTH_REQUIRED);
+  }
+  if (!input.isAiConsented) {
+    throw createEvaluationError("consent_required");
+  }
+}
+
+function resultFromSession(
+  state: RunSessionState,
+  input: StartSmsProviderEvaluationInput
+): SmsProviderEvaluationRunResult {
+  const status: SmsProviderEvaluationTerminalStatus =
+    state.stopped === "fatal"
+      ? "fatal"
+      : state.stopped === "cancelled" || input.signal.aborted
+        ? "cancelled"
+        : "finished";
+  return {
+    report: reportFromState(state, status === "cancelled"),
+    batches: batchDetailsFromState(state),
+    activeBatchNumber: null,
+    completedBatchCount: state.completedBatchCount,
+    processedCaseCount: state.processedCaseCount,
+    attemptedRequestCount: state.attemptedRequestCount,
+    totalBatchCount: state.batches.length,
+    totalCaseCount: state.cases.length,
+    status,
+    ...(state.fatalReason === undefined
+      ? {}
+      : { fatalReason: state.fatalReason }),
+  };
+}
+
+async function runPreparedEvaluation(
+  input: StartSmsProviderEvaluationInput,
+  initialContext: EvaluationRunContext,
+  abortRun: () => void
+): Promise<SmsProviderEvaluationRunResult> {
+  const session: RunSession = {
+    state: initialSessionState(initialContext),
+    emitChain: Promise.resolve(),
+    emitFailure: null,
+  };
+  await emitProgress(session, input.onProgress);
+  const requestContext: BatchRequestContext = {
+    runId: session.state.runId,
+    anchorMs: session.state.anchorMs,
+  };
+  const batches = session.state.batches;
+  const process = async (
+    batch: readonly SyntheticEvaluationCase[],
+    run: ConcurrentBatchRun<readonly SyntheticEvaluationCase[]>
+  ): Promise<void> => {
+    const index = batches.indexOf(batch);
+    if (index < 0) return;
+    await processBatch({
+      runInput: input,
+      session,
+      requestContext,
+      batch,
+      index,
+      run,
+      abortRun,
+    });
+  };
+  const queueResult = await runConcurrentBatchQueue({
+    items: batches,
+    maxConcurrent: MOBILE_SMS_PROVIDER_EVALUATION_MAX_CONCURRENT_BATCHES,
+    signal: input.signal,
+    process,
+  });
+  const firstFailure = queueResult.failed[0];
+  if (firstFailure !== undefined) throw firstFailure.error;
+  return resultFromSession(session.state, input);
+}
+
+export async function runSmsProviderEvaluationForCurrentUser(
+  input: StartSmsProviderEvaluationInput
+): Promise<SmsProviderEvaluationRunResult> {
+  validateRunInput(input);
+  await assertPinnedUser(input.initiatingUserId);
+  const context = await createRunContext();
+  const runController = new AbortController();
+  const runSignal = runController.signal;
+  const forwardAbort = (): void => runController.abort();
+  if (input.signal.aborted) {
+    runController.abort();
+  } else {
+    input.signal.addEventListener("abort", forwardAbort, { once: true });
+  }
+  try {
+    return await runPreparedEvaluation(
+      { ...input, signal: runSignal },
+      context,
+      () => runController.abort()
+    );
+  } finally {
+    input.signal.removeEventListener("abort", forwardAbort);
+  }
+}

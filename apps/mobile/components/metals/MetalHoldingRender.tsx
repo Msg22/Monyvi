@@ -8,7 +8,7 @@ import { getMetalRenderEntry } from "@/assets/images/metals/manifest";
 interface MetalHoldingRenderProps {
   readonly itemForm: "bar" | "coin" | "jewelry" | null;
   readonly metalType: SupportedMetal;
-  readonly size?: "card" | "detail";
+  readonly size?: "card" | "detail" | "form";
 }
 
 export function MetalHoldingRender({
@@ -26,7 +26,12 @@ export function MetalHoldingRender({
           metal: t(entry.metalLabelKey),
         })
       : t(entry.accessibilityLabelKey);
-  const dimensionClassName = size === "detail" ? "h-44 w-44" : "h-20 w-20";
+  const dimensionClassName =
+    size === "detail"
+      ? "h-44 w-44"
+      : size === "form"
+        ? "h-12 w-12"
+        : "h-20 w-20";
 
   if (entry.kind === "neutral") {
     return (

@@ -554,8 +554,22 @@ function assertServerProfileResult(
     profileId === "partial-quota-v1" &&
     !categoryResponses.some(({ status }) => status === 429)
   ) {
+    const categoryUsageCount = snapshot.usage.filter(({ request_id }) =>
+      snapshot.work.some(
+        ({ id, capability }) =>
+          id === request_id && capability === "sms_category_enrichment"
+      )
+    ).length;
     throw new Error(
-      "Category enrichment did not exercise its server allowance."
+      `Category enrichment did not exercise its server allowance. ${JSON.stringify({
+        categoryResponseStatuses: categoryResponses.map(({ status }) => status),
+        categoryResponseReasons: categoryResponses.map(({ data }) => ({
+          reason: data?.reason ?? null,
+          error: data?.error ?? null,
+        })),
+        categoryUsageCount,
+        workCount: snapshot.work.length,
+      })}`
     );
   }
 

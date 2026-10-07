@@ -1,6 +1,6 @@
 import i18n from "./index";
 
-import { applyRTL } from "@/utils/rtl";
+import { languageCoordinator } from "@/services/language-runtime-service";
 
 export type { SupportedLanguage } from "./translation-schema";
 import type { SupportedLanguage } from "./translation-schema";
@@ -24,12 +24,11 @@ import type { SupportedLanguage } from "./translation-schema";
  *
  * @param lang - Language code ("en" or "ar")
  */
-export async function changeLanguage(lang: SupportedLanguage): Promise<void> {
-  // Update i18next language
-  await i18n.changeLanguage(lang);
-
-  // Apply RTL layout (will trigger reload if changing to/from Arabic)
-  await applyRTL(lang === "ar");
+export async function changeLanguage(
+  lang: SupportedLanguage,
+  options?: { readonly persist?: (isCurrent: () => boolean) => Promise<void> }
+): Promise<void> {
+  await languageCoordinator.apply(lang, options);
 }
 
 /**

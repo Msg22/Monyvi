@@ -199,3 +199,50 @@ test("keeps CREATE TABLE without IF NOT EXISTS when the table already exists in 
   assert.deepEqual(Object.keys(filtered.createTables), ["categories"]);
   assert.deepEqual(filtered.skipped, []);
 });
+
+test("parses exact account fields after semicolon-bearing line comments", () => {
+  const parsed = parseSql(`
+    -- Account cutover; unknown writers remain fail-closed.
+    ALTER TABLE public.accounts
+      ADD COLUMN financial_revision bigint NOT NULL DEFAULT 0;
+    CREATE TABLE public.account_financial_effects (
+      id uuid PRIMARY KEY,
+      amount_minor_units bigint NOT NULL,
+      accepted_account_revision bigint NOT NULL,
+      compensated_at timestamptz
+    );
+  `);
+
+  assert.deepEqual(parsed.addColumns.accounts, [
+    {
+      name: "financial_revision",
+      type: "string",
+      isOptional: false,
+      isIndexed: false,
+      isIfNotExists: false,
+    },
+  ]);
+  assert.equal(
+    parsed.createTables.account_financial_effects.find(
+      (column) => column.name === "amount_minor_units"
+    ).type,
+    "string"
+  );
+  assert.equal(
+    parsed.createTables.account_financial_effects.find(
+      (column) => column.name === "compensated_at"
+    ).type,
+    "number"
+  );
+});
+
+test("excludes private cutover quarantine tables from the local schema", () => {
+  const parsed = parseSql(`
+    CREATE TABLE private.account_financial_action_cutover_quarantine (
+      id uuid PRIMARY KEY,
+      payload_json jsonb NOT NULL
+    );
+  `);
+
+  assert.deepEqual(parsed.createTables, {});
+});

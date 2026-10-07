@@ -10,14 +10,14 @@ function source(relativePath: string): string {
 describe("068 Metals domain migration and persisted models", () => {
   const migrationPath = "supabase/migrations/068_metals_domain.sql";
 
-  it("keeps the financial foundation before Metals and reserves 069", () => {
+  it("keeps the financial foundation before Metals and account effects after it", () => {
     expect(
       source("supabase/migrations/067_financial_action_foundation.sql")
     ).toContain("financial_action_groups");
     expect(() => source(migrationPath)).not.toThrow();
-    expect(() =>
-      source("supabase/migrations/069_account_financial_effects.sql")
-    ).toThrow();
+    expect(
+      source("supabase/migrations/076_account_financial_effects.sql")
+    ).toContain("account_financial_effects");
   });
 
   it("adds exact compatibility-preserving fields and a guarded Gold/Silver-only backfill", () => {
@@ -153,15 +153,16 @@ describe("068 Metals domain migration and persisted models", () => {
     expect(sql).toMatch(/created_at[\s\S]*updated_at[\s\S]*deleted/i);
   });
 
-  it("registers schema version 28 and persisted-field-only models", () => {
+  it("keeps persisted Metals models after schema version 29", () => {
     const schema = source("packages/db/src/schema.ts");
     const migrations = source("packages/db/src/migrations.ts");
     const database = source("packages/db/src/database.ts");
     const index = source("packages/db/src/index.ts");
 
-    expect(schema).toContain("version: 28");
+    expect(schema).toContain("version: 29");
     expect(migrations).toContain("toVersion: 27");
     expect(migrations).toContain("toVersion: 28");
+    expect(migrations).toContain("toVersion: 29");
     expect(migrations.indexOf('name: "metal_holding_states"')).toBeLessThan(
       migrations.indexOf("unsafeExecuteSql(METALS_V27_BACKFILL_SQL)")
     );
@@ -194,23 +195,112 @@ describe("068 Metals domain migration and persisted models", () => {
     );
   });
 
-  it("keeps every exact decimal and bigint revision as text at the generated boundary", () => {
-    const types = source("packages/db/src/supabase-types.ts");
+  it("keeps exact Metals decimals and bigint revisions as canonical text before Watermelon writes", () => {
+    const sql = source(migrationPath);
+    const pulls = source("apps/mobile/services/sync/pull-strategies.ts");
+    const transform = source("scripts/transform-schema.js");
 
-    expect(types).toMatch(
-      /market_rate_observations:[\s\S]*value_decimal:\s*string/
+    // The observation RPC establishes its exact-text boundary server-side.
+    expect(sql).toMatch(/'valueDecimal',\s*page_row\.value_decimal::text/);
+    expect(pulls).toContain(
+      'const METAL_OBSERVATION_RPC = "pull_metal_observations_page_v1"'
     );
-    expect(types).toMatch(
-      /metal_rate_references:[\s\S]*value_decimal:\s*string/
+    expect(pulls).toContain("value_decimal: row.valueDecimal");
+
+    // Supabase-generated transport declarations may expose PostgreSQL
+    // numeric/bigint as number. Dedicated pulls must cast every exact Metals
+    // field to text before it can cross into WatermelonDB.
+    for (const select of [
+      "purchase_price_decimal_text:purchase_price_decimal::text",
+      "weight_grams_decimal_text:weight_grams_decimal::text",
+      "purity_factor_decimal_text:purity_factor_decimal::text",
+      "canonical_holding_revision_text:canonical_holding_revision::text",
+      "expected_holding_revision_text:expected_holding_revision::text",
+      "financial_revision_text:financial_revision::text",
+      "value_decimal_text:value_decimal::text",
+    ]) {
+      expect(pulls).toContain(select);
+    }
+    expect(pulls).toContain(".select(pullSelect(table))");
+
+    // Exact aliases are validated as canonical strings and copied to their
+    // Watermelon column names without numeric coercion.
+    expect(pulls).toContain('if (value !== null && typeof value !== "string")');
+    expect(pulls).toContain("validate(value);");
+    expect(pulls).toContain(
+      "const normalized = { ...record, [target]: value };"
     );
-    expect(types).toMatch(
-      /metal_holding_states:[\s\S]*financial_revision:\s*string/
+    expect(pulls).toMatch(
+      /"purchase_price_decimal_text",\s*"purchase_price_decimal",\s*validateCanonicalDecimal/
     );
-    expect(types).toMatch(
-      /metal_action_evidence:[\s\S]*canonical_holding_revision:\s*string\s*\|\s*null/
+    expect(pulls).toMatch(
+      /"weight_grams_decimal_text",\s*"weight_grams_decimal",\s*validateCanonicalDecimal/
     );
-    expect(types).toMatch(
-      /metal_action_evidence:[\s\S]*expected_holding_revision:\s*string\s*\|\s*null/
+    expect(pulls).toMatch(
+      /"purity_factor_decimal_text",\s*"purity_factor_decimal",\s*validateCanonicalDecimal/
     );
+    expect(pulls).toMatch(
+      /"canonical_holding_revision_text",\s*"canonical_holding_revision",\s*assertCanonicalMetalRevision/
+    );
+    expect(pulls).toMatch(
+      /"expected_holding_revision_text",\s*"expected_holding_revision",\s*assertCanonicalMetalRevision/
+    );
+    expect(pulls).toMatch(
+      /"financial_revision_text",\s*"financial_revision",\s*assertCanonicalMetalRevision/
+    );
+    expect(pulls).toMatch(
+      /"value_decimal_text",\s*"value_decimal",\s*validateCanonicalDecimal/
+    );
+
+    // Schema generation deliberately keeps the exact local financial fields
+    // as strings even though the raw Supabase transport types are numeric.
+    for (const field of [
+      "assets.purchase_price_decimal",
+      "asset_metals.weight_grams_decimal",
+      "asset_metals.purity_factor_decimal",
+      "market_rate_observations.value_decimal",
+      "metal_action_evidence.canonical_holding_revision",
+      "metal_action_evidence.expected_holding_revision",
+      "metal_holding_states.financial_revision",
+      "metal_rate_references.value_decimal",
+    ]) {
+      expect(transform).toContain(`"${field}"`);
+    }
+    expect(transform).toContain("EXACT_TEXT_MODEL_FIELDS.has(fieldKey)");
+    expect(transform).toContain('wmType = "string"');
+
+    for (const [modelPath, declaration] of [
+      [
+        "packages/db/src/models/base/base-asset.ts",
+        "purchasePriceDecimal!: string | null",
+      ],
+      [
+        "packages/db/src/models/base/base-asset-metal.ts",
+        "weightGramsDecimal!: string | null",
+      ],
+      [
+        "packages/db/src/models/base/base-asset-metal.ts",
+        "purityFactorDecimal!: string | null",
+      ],
+      [
+        "packages/db/src/models/MarketRateObservation.ts",
+        "valueDecimal!: string",
+      ],
+      ["packages/db/src/models/MetalRateReference.ts", "valueDecimal!: string"],
+      [
+        "packages/db/src/models/MetalHoldingState.ts",
+        "financialRevision!: string",
+      ],
+      [
+        "packages/db/src/models/MetalActionEvidence.ts",
+        "canonicalHoldingRevision!: string | null",
+      ],
+      [
+        "packages/db/src/models/MetalActionEvidence.ts",
+        "expectedHoldingRevision!: string | null",
+      ],
+    ] as const) {
+      expect(source(modelPath)).toContain(declaration);
+    }
   });
 });

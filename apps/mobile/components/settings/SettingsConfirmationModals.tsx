@@ -2,20 +2,23 @@ import React from "react";
 import { ConfirmationModal } from "@/components/modals/ConfirmationModal";
 import { logger } from "@/utils/logger";
 
+type TranslateFn = (key: string, opts?: Record<string, unknown>) => string;
+
 interface SettingsConfirmationModalsProps {
   readonly dismissForceLogoutError: () => void;
   readonly dismissSyncWarning: () => void;
   readonly forceLogout: () => Promise<void>;
   readonly isAiDisableConfirmOpen: boolean;
   readonly isFullRescanModalOpen: boolean;
+  readonly lookbackDays: number;
   readonly onCancelAiDisableConfirm: () => void;
   readonly onCancelFullRescan: () => void;
   readonly onConfirmAiDisable: () => void;
   readonly onConfirmFullRescan: () => void;
   readonly showForceLogoutError: boolean;
   readonly showSyncWarning: boolean;
-  readonly t: (key: string) => string;
-  readonly tCommon: (key: string) => string;
+  readonly t: TranslateFn;
+  readonly tCommon: TranslateFn;
 }
 
 export function SettingsConfirmationModals({
@@ -24,6 +27,7 @@ export function SettingsConfirmationModals({
   forceLogout,
   isAiDisableConfirmOpen,
   isFullRescanModalOpen,
+  lookbackDays,
   onCancelAiDisableConfirm,
   onCancelFullRescan,
   onConfirmAiDisable,
@@ -53,7 +57,7 @@ export function SettingsConfirmationModals({
         onConfirm={onConfirmFullRescan}
         onCancel={onCancelFullRescan}
         title={t("rescan_title")}
-        message={t("rescan_message")}
+        message={t("rescan_message", { days: lookbackDays })}
         confirmLabel={t("rescan_confirm")}
         variant="warning"
       />

@@ -6,6 +6,7 @@ import {
   type SmsAiAdmissionDecision,
   type SmsAiAdmissionInput,
   type SmsAiProviderStartDecision,
+  type SmsSafeguardFunctionName,
   type SmsSafeguardRpcClient,
 } from "./sms-ai-safeguard-contract.ts";
 import type { SmsSafeguardPolicy } from "./sms-safeguard-policy.ts";
@@ -14,7 +15,7 @@ const MILLISECONDS_PER_SECOND = 1000;
 
 async function callRpc(
   client: SmsSafeguardRpcClient,
-  name: string,
+  name: SmsSafeguardFunctionName,
   params: Readonly<Record<string, unknown>>
 ): Promise<unknown> {
   const { data, error } = await client.rpc(name, params);
