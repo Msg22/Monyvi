@@ -283,11 +283,11 @@ describe("VerificationCodeView", () => {
       );
       expect(screen.getByRole("alert")).toHaveProp(
         "className",
-        expect.stringContaining("text-text-secondary")
+        expect.stringContaining("text-red-600")
       );
       expect(screen.getByRole("alert")).toHaveProp(
         "className",
-        expect.stringContaining("dark:text-text-secondary-dark")
+        expect.stringContaining("dark:text-red-500")
       );
       fireEvent.press(screen.getByRole("button", { name: label }));
       expect(onResend).not.toHaveBeenCalled();

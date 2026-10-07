@@ -250,11 +250,19 @@ export function VerificationCodeView({
             disabled: resendDisabled,
             busy: isResending,
           }}
-          className="mt-7 h-[52px] w-full items-center justify-center rounded-[14px] border border-slate-300 bg-slate-100 dark:border-slate-600 dark:bg-slate-800"
+          className={`mt-7 h-[52px] w-full items-center justify-center rounded-[14px] ${
+            resendDisabled
+              ? "border border-slate-300 bg-slate-100 dark:border-slate-600 dark:bg-slate-800"
+              : "bg-nileGreen-600 dark:bg-nileGreen-500"
+          }`}
           style={{ opacity: resendDisabled ? 0.6 : 1 }}
         >
           <Text
-            className="text-[15px] text-text-secondary dark:text-text-secondary-dark"
+            className={`text-[15px] ${
+              resendDisabled
+                ? "text-text-secondary dark:text-text-secondary-dark"
+                : "text-white"
+            }`}
             style={{ fontFamily: fontFamily.semiBold }}
           >
             {resendLabel}
@@ -265,7 +273,7 @@ export function VerificationCodeView({
           <Text
             testID="verification-resend-limit"
             accessibilityRole="alert"
-            className="mt-3 max-w-[330px] self-center text-center text-xs text-text-secondary dark:text-text-secondary-dark"
+            className="mt-3 max-w-[330px] self-center text-center text-xs text-red-600 dark:text-red-500"
             style={{ fontFamily: fontFamily.regular }}
           >
             {t("resend_limit_reached")}
