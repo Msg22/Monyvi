@@ -13,7 +13,7 @@ Recorded implementation head:
   Verification passed on that head. Android E2E was skipped.
 - Recorded Dispose evidence is 7 focused mobile suites / 98 tests after the hook
   split; the two hook suites are 20/20. Adjacent main-contract suites are 2/39,
-  logic suites are 3/109, and migration 077 pgTAP is 23/23.
+  logic suites are 3/109, and migration 086 pgTAP is 23/23.
 - No runnable Dispose Maestro flow or physical-device result is claimed. This
   documentation update does not claim a new local verification run.
 
