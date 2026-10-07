@@ -840,6 +840,20 @@ Business rules:
   plan-specific allowances without changing voice parsing.
 - Subscription tier names, pricing, billing/paywall flows, and final paid-plan
   voice quotas remain outside the voice-limit feature.
+- Add Transaction uses one unified page with Manual and Voice modes. The global
+  Add Transaction FAB opens that page in Manual mode by default; the center
+  microphone, onboarding voice entry, and voice-review retry flow open the same
+  page in Voice mode.
+- Manual mode reuses the existing manual transaction form and preserves its
+  transaction-entry/submission behavior. Partially entered Manual state must not
+  be silently discarded by a safe switch to Voice and back.
+- Voice mode uses the approved Add Transaction / Voice mockup as the visual
+  target while preserving the existing Gemini parsing and review contract.
+- Manual/Voice switching is unavailable while voice recording, pause/finalize,
+  or provider analysis is actively in progress. Voice exhaustion, burst
+  limiting, or availability failure must never block Manual transaction entry.
+- User-facing reset copy must match local-midnight daily semantics and must not
+  claim the limit resets "at the same time tomorrow."
 
 ## 7. SMS Import And Live Detection
 
