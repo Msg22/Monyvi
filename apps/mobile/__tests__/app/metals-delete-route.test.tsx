@@ -483,7 +483,9 @@ describe("delete holding route journey", () => {
     view.rerender(<DeleteMetalHoldingRoute />);
 
     expect(
-      screen.getByText("Sync failed. Your saved local state is still available.")
+      screen.getByText(
+        "Sync failed. Your saved local state is still available."
+      )
     ).toBeTruthy();
     expect(screen.getByTestId("metal-holding-delete-sync-error")).toHaveProp(
       "accessibilityRole",
