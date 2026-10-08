@@ -7,6 +7,8 @@
 } from "@testing-library/react-native";
 import React from "react";
 import { AccessibilityInfo } from "react-native";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 
 jest.mock("@/components/navigation/PageHeader", () => {
   const { Pressable, Text, View } =
@@ -741,8 +743,21 @@ describe("Dispose metal holding direct form", () => {
   it("prefixes every live consequence with a check icon and outlines Cancel", (): void => {
     renderScreen({ category: "donated", treatment: "external_transfer" });
     expect(screen.getAllByTestId("dispose-summary-check")).toHaveLength(5);
-    expect(screen.getByTestId("dispose-cancel")).toHaveStyle({
-      borderWidth: 1,
-    });
+    expect(screen.getByTestId("dispose-cancel")).toHaveProp(
+      "accessibilityRole",
+      "button"
+    );
+    expect(screen.getByText(copy.cancelLabel)).toBeOnTheScreen();
+    const source = readFileSync(
+      resolve(
+        __dirname,
+        "../../components/metals/DisposeMetalHoldingScreen.tsx"
+      ),
+      "utf8"
+    );
+    const cancelBlock = source.slice(source.indexOf('testID="dispose-cancel"'));
+    expect(cancelBlock).toMatch(
+      /testID="dispose-cancel"[\s\S]*?className="[^"]*border border-slate-300/
+    );
   });
 });

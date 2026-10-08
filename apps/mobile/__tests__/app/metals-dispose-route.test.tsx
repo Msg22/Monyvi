@@ -1,4 +1,5 @@
 import {
+  act,
   fireEvent,
   render,
   screen,
@@ -92,6 +93,10 @@ jest.mock("react-i18next", () => ({
     },
     i18n: { resolvedLanguage: "en", language: "en" },
   }),
+}));
+
+jest.mock("@/context/ThemeContext", () => ({
+  useTheme: (): { readonly isDark: boolean } => ({ isDark: false }),
 }));
 
 jest.mock("@/providers/DatabaseProvider", () => ({
@@ -275,7 +280,9 @@ describe("Dispose production route", () => {
     mockFacade = { ...facadeBase, isDirty: true };
     render(<DisposeMetalHoldingRoute />);
     expect(capturedPreventRemove?.enabled).toBe(true);
-    capturedPreventRemove?.handler({ data: { action: "NAV_ACTION" } });
+    act(() => {
+      capturedPreventRemove?.handler({ data: { action: "NAV_ACTION" } });
+    });
     expect(screen.getByTestId("dispose-exit-guard")).toBeOnTheScreen();
     fireEvent.press(screen.getByText("Discard changes"));
     expect(mockDispatch).toHaveBeenCalledWith("NAV_ACTION");
@@ -285,7 +292,9 @@ describe("Dispose production route", () => {
   it("keeps editing on native back without dispatching anything", (): void => {
     mockFacade = { ...facadeBase, isDirty: true };
     render(<DisposeMetalHoldingRoute />);
-    capturedPreventRemove?.handler({ data: { action: "NAV_ACTION" } });
+    act(() => {
+      capturedPreventRemove?.handler({ data: { action: "NAV_ACTION" } });
+    });
     fireEvent.press(screen.getByText("Keep editing"));
     expect(mockDispatch).not.toHaveBeenCalled();
     expect(mockBack).not.toHaveBeenCalled();
@@ -297,7 +306,9 @@ describe("Dispose production route", () => {
     fireEvent.press(screen.getByTestId("dispose-cancel"));
     expect(screen.queryByTestId("dispose-exit-guard")).toBeNull();
     expect(mockBack).not.toHaveBeenCalled();
-    capturedPreventRemove?.handler({ data: { action: "NAV_ACTION" } });
+    act(() => {
+      capturedPreventRemove?.handler({ data: { action: "NAV_ACTION" } });
+    });
     expect(screen.queryByTestId("dispose-exit-guard")).toBeNull();
     expect(mockDispatch).not.toHaveBeenCalled();
   });
