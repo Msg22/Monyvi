@@ -1,9 +1,13 @@
+import DateTimePicker, {
+  type DateTimePickerEvent,
+} from "@react-native-community/datetimepicker";
+import { Ionicons } from "@expo/vector-icons";
 import React, {
   useCallback,
   useEffect,
   useMemo,
   useRef,
-  type Ref,
+  useState,
 } from "react";
 import {
   AccessibilityInfo,
@@ -18,9 +22,25 @@ import {
 } from "react-native";
 
 import { PageHeader } from "@/components/navigation/PageHeader";
+import {
+  DISPOSE_CATEGORIES,
+  DISPOSE_CONSEQUENCE_ORDER,
+  DISPOSE_TREATMENTS,
+  CategoryTile,
+  RequiredMark,
+  SummaryRow,
+  TreatmentOption,
+  categoryIconName,
+  formatDisposalDate,
+  parseDisposalDate,
+  toDisposalDateOnlyString,
+  type DisposeChoiceButtonHandle,
+} from "@/components/metals/dispose-form-presentation";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { TextField } from "@/components/ui/TextField";
+import { palette } from "@/constants/colors";
 import { shouldUseCompactLayout } from "@/constants/ui";
+import { useTheme } from "@/context/ThemeContext";
 import type {
   DisposeCategory,
   DisposeRateRole,
@@ -30,7 +50,8 @@ import type {
 export const DISPOSE_METAL_HOLDING_COPY_KEYS = Object.freeze({
   title: "dispose.title",
   intro: "dispose.intro",
-  reasonLabel: "dispose.reasonLabel",
+  whatHappened: "dispose.whatHappened",
+  affectsRecords: "dispose.affectsRecords",
   categories: Object.freeze({
     lost_or_stolen: "dispose.categories.lostOrStolen",
     destroyed_or_damaged: "dispose.categories.destroyedOrDamaged",
@@ -38,10 +59,13 @@ export const DISPOSE_METAL_HOLDING_COPY_KEYS = Object.freeze({
     donated: "dispose.categories.donated",
     other: "dispose.categories.other",
   }),
-  otherTreatmentLabel: "dispose.otherTreatmentLabel",
   treatments: Object.freeze({
     write_off: "dispose.treatments.writeOff",
     external_transfer: "dispose.treatments.externalTransfer",
+  }),
+  treatmentDescriptions: Object.freeze({
+    write_off: "dispose.treatments.writeOffDescription",
+    external_transfer: "dispose.treatments.externalTransferDescription",
   }),
   dateLabel: "dispose.dateLabel",
   notesLabel: "dispose.notesLabel",
@@ -109,10 +133,11 @@ export const DISPOSE_SUBMISSION_ERROR_CODES = Object.freeze([
 export interface DisposeMetalHoldingCopy {
   readonly title: string;
   readonly intro: string;
-  readonly reasonLabel: string;
+  readonly whatHappened: string;
+  readonly affectsRecords: string;
   readonly categoryLabels: Readonly<Record<DisposeCategory, string>>;
-  readonly otherTreatmentLabel: string;
   readonly treatmentLabels: Readonly<Record<DisposeTreatment, string>>;
+  readonly treatmentDescriptions: Readonly<Record<DisposeTreatment, string>>;
   readonly dateLabel: string;
   readonly notesLabel: string;
   readonly notesOptional: string;
@@ -151,9 +176,7 @@ export interface DisposeRateEvidenceDisplay {
   readonly role: DisposeRateRole;
   readonly valueLabel: string;
   readonly freshness: "fresh" | "stale" | "unknown";
-  readonly sourceLabel: string;
   readonly observedLabel: string;
-  readonly qualityLabel: string;
 }
 
 export interface DisposeMetalHoldingScreenProps {
@@ -189,28 +212,6 @@ export interface DisposeMetalHoldingScreenProps {
   readonly onRetry: () => void;
 }
 
-const CATEGORIES: readonly DisposeCategory[] = [
-  "lost_or_stolen",
-  "destroyed_or_damaged",
-  "given_away",
-  "donated",
-  "other",
-];
-const TREATMENTS: readonly DisposeTreatment[] = [
-  "write_off",
-  "external_transfer",
-];
-const CONSEQUENCE_ORDER = [
-  "reason",
-  "treatment",
-  "ownership",
-  "sale-money-account",
-  "sale-profit-loss",
-  "history",
-] as const;
-
-type ChoiceButtonHandle = React.ComponentRef<typeof TouchableOpacity>;
-
 function dateValidationMessage(
   code: string | undefined,
   copy: DisposeMetalHoldingCopy
@@ -222,49 +223,6 @@ function dateValidationMessage(
     return copy.dateInvalid;
   }
   return copy.dateRequired;
-}
-
-function ChoiceButton(props: {
-  readonly id: string;
-  readonly label: string;
-  readonly isSelected: boolean;
-  readonly isDisabled: boolean;
-  readonly isStacked: boolean;
-  readonly buttonRef?: Ref<ChoiceButtonHandle>;
-  readonly onPress: () => void;
-}): React.JSX.Element {
-  const className = props.isStacked
-    ? "min-h-12 w-full justify-center rounded-2xl border border-slate-300 bg-slate-25 px-4 py-3 dark:border-slate-700 dark:bg-slate-900"
-    : "min-h-12 w-[48%] justify-center rounded-2xl border border-slate-300 bg-slate-25 px-4 py-3 dark:border-slate-700 dark:bg-slate-900";
-  return (
-    <TouchableOpacity
-      ref={props.buttonRef}
-      testID={props.id}
-      accessibilityRole="radio"
-      accessibilityState={{
-        selected: props.isSelected,
-        disabled: props.isDisabled,
-      }}
-      disabled={props.isDisabled}
-      onPress={props.onPress}
-      className={`${className} ${
-        props.isSelected
-          ? "border-nileGreen-700 bg-nileGreen-50 dark:border-nileGreen-400 dark:bg-slate-800"
-          : ""
-      }`}
-      style={props.isDisabled ? { opacity: 0.55 } : undefined}
-    >
-      <Text
-        className={
-          props.isSelected
-            ? "text-sm font-semibold text-nileGreen-800 dark:text-nileGreen-300"
-            : "text-sm font-medium text-text-primary dark:text-text-primary-dark"
-        }
-      >
-        {props.label}
-      </Text>
-    </TouchableOpacity>
-  );
 }
 
 function LoadingState(): React.JSX.Element {
@@ -315,19 +273,34 @@ export function DisposeMetalHoldingScreen({
 }: DisposeMetalHoldingScreenProps): React.JSX.Element {
   const isStacked = shouldUseCompactLayout(width, fontScale);
   const hasSummary = category !== null && treatment !== null;
+  const { isDark } = useTheme();
+  const iconColor = isDark ? palette.slate[300] : palette.slate[500];
+  const checkColor = isDark ? palette.nileGreen[400] : palette.nileGreen[700];
+  const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   const validationSummaryRef = useRef<View>(null);
-  const firstCategoryRef = useRef<ChoiceButtonHandle>(null);
-  const firstTreatmentRef = useRef<ChoiceButtonHandle>(null);
+  const firstCategoryRef = useRef<DisposeChoiceButtonHandle>(null);
+  const firstTreatmentRef = useRef<DisposeChoiceButtonHandle>(null);
   const dateFieldRef = useRef<TextInput>(null);
   const notesFieldRef = useRef<TextInput>(null);
   const rateEvidenceErrorRef = useRef<View>(null);
-  const submitErrorRef = useRef<View>(null);
+  const submitErrorRef = useRef<Text>(null);
   const submit = useCallback((): void => {
     if (!isSubmitting && !isRateLoading) onSubmit();
   }, [isSubmitting, isRateLoading, onSubmit]);
   const requestExit = useCallback((): void => {
     if (!isSubmitting) onRequestExit();
   }, [isSubmitting, onRequestExit]);
+  const handleDisposalDateChange = useCallback(
+    (event: DateTimePickerEvent, selectedDate?: Date): void => {
+      if (event.type === "dismissed") {
+        setIsDatePickerOpen(false);
+        return;
+      }
+      setIsDatePickerOpen(Platform.OS === "ios");
+      if (selectedDate) onDateChange(toDisposalDateOnlyString(selectedDate));
+    },
+    [onDateChange]
+  );
   const formMetadata = useMemo(
     () => ({
       writingDirection: isRtl ? ("rtl" as const) : ("ltr" as const),
@@ -338,7 +311,7 @@ export function DisposeMetalHoldingScreen({
     layoutMode: isStacked ? ("stacked" as const) : ("two-column" as const),
   };
   const submitAreaMetadata = { bottomInset };
-  const summaryMetadata = { consequenceOrder: CONSEQUENCE_ORDER };
+  const summaryMetadata = { consequenceOrder: DISPOSE_CONSEQUENCE_ORDER };
   const submitErrorMessage = submitError
     ? (copy.submitErrorMessages[submitError] ?? copy.submitFailed)
     : null;
@@ -465,24 +438,30 @@ export function DisposeMetalHoldingScreen({
             ) : null}
 
             <View className="gap-3">
-              <Text className="text-sm font-semibold text-text-primary dark:text-text-primary-dark">
-                {copy.reasonLabel}
+              <Text className="text-base font-bold text-text-primary dark:text-text-primary-dark">
+                {copy.whatHappened}
+                <RequiredMark testID="dispose-required-reason" />
               </Text>
               <View
                 testID="dispose-category-group"
                 accessibilityRole="radiogroup"
+                accessibilityLabel={`${copy.whatHappened}, ${copy.categoryRequired}`}
                 aria-invalid={Boolean(validationErrors.category)}
                 className="flex-row flex-wrap justify-between gap-y-3"
                 {...categoryMetadata}
               >
-                {CATEGORIES.map((value, index) => (
-                  <ChoiceButton
+                {DISPOSE_CATEGORIES.map((value, index) => (
+                  <CategoryTile
                     key={value}
                     id={`dispose-category-${value}`}
+                    iconTestID={`dispose-category-icon-${value}`}
+                    showsSelectedIndicator
                     label={copy.categoryLabels[value]}
                     isSelected={category === value}
                     isDisabled={isSubmitting}
                     isStacked={isStacked || value === "other"}
+                    iconColor={iconColor}
+                    icon={categoryIconName(value)}
                     buttonRef={index === 0 ? firstCategoryRef : undefined}
                     onPress={() => onCategoryChange(value)}
                   />
@@ -501,18 +480,20 @@ export function DisposeMetalHoldingScreen({
 
             {category === "other" ? (
               <View testID="dispose-treatment-group" className="gap-3">
-                <Text className="text-sm font-semibold text-text-primary dark:text-text-primary-dark">
-                  {copy.otherTreatmentLabel}
+                <Text className="text-base font-bold text-text-primary dark:text-text-primary-dark">
+                  {copy.affectsRecords}
+                  <RequiredMark testID="dispose-required-treatment" />
                 </Text>
                 <View accessibilityRole="radiogroup" className="gap-3">
-                  {TREATMENTS.map((value, index) => (
-                    <ChoiceButton
+                  {DISPOSE_TREATMENTS.map((value, index) => (
+                    <TreatmentOption
                       key={value}
                       id={`dispose-treatment-${value}`}
+                      descriptionTestID={`dispose-treatment-description-${value}`}
                       label={copy.treatmentLabels[value]}
+                      description={copy.treatmentDescriptions[value]}
                       isSelected={otherTreatment === value}
                       isDisabled={isSubmitting}
-                      isStacked
                       buttonRef={index === 0 ? firstTreatmentRef : undefined}
                       onPress={() => onOtherTreatmentChange(value)}
                     />
@@ -530,20 +511,54 @@ export function DisposeMetalHoldingScreen({
               </View>
             ) : null}
 
-            <TextField
-              inputRef={dateFieldRef}
-              testID="dispose-date-field"
-              label={copy.dateLabel}
-              value={disposalDate}
-              onChangeText={onDateChange}
-              editable={!isSubmitting}
-              aria-invalid={Boolean(validationErrors.disposalDate)}
-              error={
-                validationErrors.disposalDate
-                  ? dateValidationMessage(validationErrors.disposalDate, copy)
-                  : undefined
-              }
-            />
+            <View className="gap-1">
+              <TouchableOpacity
+                testID="dispose-date-field"
+                accessibilityRole="button"
+                accessibilityLabel={copy.dateLabel}
+                disabled={isSubmitting}
+                onPress={() => setIsDatePickerOpen((isOpen) => !isOpen)}
+              >
+                <View pointerEvents="none">
+                  <TextField
+                    variant="outlined"
+                    inputRef={dateFieldRef}
+                    testID="dispose-date-input"
+                    label={copy.dateLabel}
+                    required
+                    value={formatDisposalDate(disposalDate, locale)}
+                    editable={false}
+                    aria-invalid={Boolean(validationErrors.disposalDate)}
+                    error={
+                      validationErrors.disposalDate
+                        ? dateValidationMessage(
+                            validationErrors.disposalDate,
+                            copy
+                          )
+                        : undefined
+                    }
+                    trailingAdornment={
+                      <Ionicons
+                        name="calendar-outline"
+                        size={20}
+                        color={palette.slate[500]}
+                      />
+                    }
+                    containerClassName=""
+                  />
+                </View>
+              </TouchableOpacity>
+            </View>
+            {isDatePickerOpen && !isSubmitting ? (
+              <DateTimePicker
+                testID="dispose-date-picker"
+                value={parseDisposalDate(disposalDate) ?? new Date()}
+                maximumDate={new Date()}
+                mode="date"
+                display="default"
+                onChange={handleDisposalDateChange}
+              />
+            ) : null}
             <View className="gap-1">
               <TextField
                 inputRef={notesFieldRef}
@@ -584,13 +599,7 @@ export function DisposeMetalHoldingScreen({
                       className="text-xs text-text-secondary dark:text-text-secondary-dark"
                     >
                       {copy.rateFreshness[reference.freshness]} ·{" "}
-                      {reference.sourceLabel} · {reference.observedLabel}
-                    </Text>
-                    <Text
-                      testID={`dispose-rate-quality-${reference.role}`}
-                      className="text-xs text-text-secondary dark:text-text-secondary-dark"
-                    >
-                      {reference.qualityLabel}
+                      {reference.observedLabel}
                     </Text>
                   </View>
                 ))}
@@ -675,36 +684,32 @@ export function DisposeMetalHoldingScreen({
                 <Text className="text-base font-bold text-nileGreen-900 dark:text-nileGreen-300">
                   {copy.summaryTitle}
                 </Text>
-                <Text className="text-sm text-text-primary dark:text-text-primary-dark">
-                  {copy.reasonLabel}:{" "}
-                  {category ? copy.categoryLabels[category] : ""}
-                </Text>
-                <Text
+                <SummaryRow
+                  checkColor={checkColor}
                   testID={`dispose-summary-${treatment}`}
-                  className="text-sm text-text-primary dark:text-text-primary-dark"
                 >
                   {treatment === "write_off"
                     ? copy.writeOffSummary
                     : copy.externalTransferSummary}
-                </Text>
-                <Text className="text-sm text-text-secondary dark:text-text-secondary-dark">
+                </SummaryRow>
+                <SummaryRow checkColor={checkColor}>
                   {copy.activeOwnershipSummary}
-                </Text>
-                <Text
+                </SummaryRow>
+                <SummaryRow
+                  checkColor={checkColor}
                   testID="dispose-summary-no-sale-money-account"
-                  className="text-sm text-text-secondary dark:text-text-secondary-dark"
                 >
                   {copy.noSaleMoneyOrAccountSummary}
-                </Text>
-                <Text
+                </SummaryRow>
+                <SummaryRow
+                  checkColor={checkColor}
                   testID="dispose-summary-no-sale-profit-loss"
-                  className="text-sm text-text-secondary dark:text-text-secondary-dark"
                 >
                   {copy.noSaleProfitLossSummary}
-                </Text>
-                <Text className="text-sm text-text-secondary dark:text-text-secondary-dark">
+                </SummaryRow>
+                <SummaryRow checkColor={checkColor}>
                   {copy.historySummary}
-                </Text>
+                </SummaryRow>
               </View>
             ) : null}
 
@@ -769,7 +774,7 @@ export function DisposeMetalHoldingScreen({
             accessibilityRole="button"
             disabled={isSubmitting}
             onPress={requestExit}
-            className="min-h-12 items-center justify-center rounded-2xl px-5 py-3"
+            className="min-h-12 items-center justify-center rounded-2xl border border-slate-300 px-5 py-3 dark:border-slate-600"
             style={isSubmitting ? { opacity: 0.55 } : undefined}
           >
             <Text className="font-semibold text-text-secondary dark:text-text-secondary-dark">

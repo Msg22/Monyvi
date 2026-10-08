@@ -359,6 +359,77 @@
     "treatment_write_off": "تسجيل خسارة",
     "treatment_external_transfer": "تسجيل خروجها من ملكيتك"
   },
+  "dispose": {
+    "title": "لم تعد {{holdingName}} في حوزتي",
+    "intro": "استخدم هذا الخيار عندما لا تعود الحيازة ملكك ولم تبعها.",
+    "whatHappened": "ماذا حدث",
+    "affectsRecords": "كيف يؤثر ذلك على سجلاتك؟",
+    "categories": {
+      "lostOrStolen": "مفقودة أو مسروقة",
+      "destroyedOrDamaged": "مدمرة أو تالفة",
+      "givenAway": "تم إعطاؤها للغير",
+      "donated": "متبرع بها",
+      "other": "سبب آخر"
+    },
+    "treatments": {
+      "writeOff": "تسجيل خسارة",
+      "externalTransfer": "تسجيل خروجها من ملكيتك",
+      "writeOffDescription": "ستُسجَّل تكلفة شرائها كخسارة. لا تُضاف أموال بيع.",
+      "externalTransferDescription": "ستخرج من معادنك. لا يُسجَّل ربح أو خسارة من بيع."
+    },
+    "dateLabel": "التاريخ",
+    "notesLabel": "ملاحظات",
+    "notesOptional": "اختياري",
+    "notesTooLong": "اختصر ملاحظاتك وحاول مرة أخرى.",
+    "summaryTitle": "ما الذي سيحدث",
+    "writeOffSummary": "ستُسجَّل تكلفة شرائها كخسارة.",
+    "externalTransferSummary": "ستخرج من معادنك النشطة.",
+    "activeOwnershipSummary": "لن تعود هذه الحيازة نشطة.",
+    "historySummary": "سيظهر هذا التغيير في السجل.",
+    "noSaleMoneyOrAccountSummary": "لا توجد أموال بيع أو تغيّر في الحساب.",
+    "noSaleProfitLossSummary": "لا يوجد ربح أو خسارة من بيع.",
+    "rateEvidenceTitle": "الأسعار المحفوظة مع هذا التسجيل",
+    "rateRoles": {
+      "terminalMetal": "سعر المعدن",
+      "terminalPurchaseCurrency": "سعر العملة"
+    },
+    "rateFreshness": {
+      "fresh": "حديث",
+      "stale": "آخر سعر متاح",
+      "unknown": "العمر غير معروف"
+    },
+    "rateAcknowledgment": "أفهم أن الأسعار أعلاه قد تكون قديمة أو غير معروفة العمر.",
+    "rateAcknowledgmentRequired": "أكّد ملاحظة السعر للمتابعة.",
+    "rateEvidenceUnavailable": "تعذّر التحقق من الأسعار. حاول مرة أخرى.",
+    "ratePendingLabel": "جارٍ التحقق من الأسعار",
+    "observedUnknown": "وقت التحديث غير معروف",
+    "submitLabel": "تسجيل التغيير",
+    "pendingLabel": "جارٍ تسجيل التغيير…",
+    "cancelLabel": "إلغاء",
+    "retryLabel": "إعادة المحاولة",
+    "loadError": "تعذر تحميل هذا المقتنى.",
+    "categoryRequired": "اختر السبب.",
+    "treatmentRequired": "اختر تسجيل خسارة أو تسجيل خروجها من ملكيتك.",
+    "dateRequired": "اختر تاريخاً صالحاً.",
+    "dateInvalid": "أدخل تاريخاً حقيقياً ليس في المستقبل.",
+    "dateBeforeAcquisition": "اختر تاريخاً في تاريخ الشراء أو بعده.",
+    "submitFailed": "لم يتم تسجيل التغيير. حاول مرة أخرى.",
+    "submitErrors": {
+      "holdingNotFound": "تعذّر العثور على هذا المقتنى.",
+      "holdingNotActive": "لم يعد هذا المقتنى نشطاً.",
+      "revisionConflict": "تغيّرت الحيازة على جهاز آخر.",
+      "authScopeChanged": "بدّلت الحساب. حاول مرة أخرى.",
+      "notEffectiveHolding": "جارٍ التحقق من هذا المقتنى. حاول مرة أخرى.",
+      "lifecycleConflict": "هذا المقتنى به تعارض يجب حله أولاً.",
+      "dateBeforeAcquisition": "اختر تاريخاً في تاريخ الشراء أو بعده.",
+      "recoveryRequired": "هذا الإجراء يحتاج إلى استعادة. حاول مرة أخرى."
+    },
+    "success": "تم تسجيل أن {{holdingName}} لم تعد ضمن محفظتك النشطة.",
+    "exitTitle": "تجاهل التغييرات؟",
+    "exitMessage": "ستفقد التغييرات غير المحفوظة.",
+    "keepEditing": "متابعة التعديل",
+    "discardChanges": "تجاهل التغييرات"
+  },
   "delete": {
     "consequence": "احذف المقتنى فقط إذا أُضيف عن طريق الخطأ. ستتم إزالته من محفظتك ومن السجل. البيع و«لم يعد بحوزتي» إجراءان منفصلان.",
     "performance": "منذ الشراء",

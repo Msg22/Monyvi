@@ -45,18 +45,17 @@ interface RateEvidenceDisplay {
   readonly role: "terminal_metal" | "terminal_purchase_currency";
   readonly valueLabel: string;
   readonly freshness: "fresh" | "stale" | "unknown";
-  readonly sourceLabel: string;
   readonly observedLabel: string;
-  readonly qualityLabel: string;
 }
 
 interface DisposeCopy {
   readonly title: string;
   readonly intro: string;
-  readonly reasonLabel: string;
+  readonly whatHappened: string;
+  readonly affectsRecords: string;
   readonly categoryLabels: Readonly<Record<Category, string>>;
-  readonly otherTreatmentLabel: string;
   readonly treatmentLabels: Readonly<Record<Treatment, string>>;
+  readonly treatmentDescriptions: Readonly<Record<Treatment, string>>;
   readonly dateLabel: string;
   readonly notesLabel: string;
   readonly notesOptional: string;
@@ -130,7 +129,8 @@ interface DisposeScreenModule {
 const copy: DisposeCopy = {
   title: "No longer in my possession: Wedding coin",
   intro: "Use this when you no longer own the holding and did not sell it.",
-  reasonLabel: "Reason",
+  whatHappened: "What happened?",
+  affectsRecords: "How should this affect your records?",
   categoryLabels: {
     lost_or_stolen: "Lost or stolen",
     destroyed_or_damaged: "Destroyed or damaged",
@@ -138,10 +138,15 @@ const copy: DisposeCopy = {
     donated: "Donated",
     other: "Other",
   },
-  otherTreatmentLabel: "Choose how to record this",
   treatmentLabels: {
     write_off: "Record a loss",
     external_transfer: "Record it as moved out",
+  },
+  treatmentDescriptions: {
+    write_off:
+      "Its purchase cost will be recorded as a loss. No sale money is added.",
+    external_transfer:
+      "It leaves your metals. No sale profit or loss is recorded.",
   },
   dateLabel: "Date",
   notesLabel: "Notes",
@@ -281,7 +286,6 @@ describe("Dispose metal holding direct form", () => {
       expect(screen.getByTestId("dispose-live-summary")).toHaveProp(
         "consequenceOrder",
         [
-          "reason",
           "treatment",
           "ownership",
           "sale-money-account",
@@ -320,7 +324,7 @@ describe("Dispose metal holding direct form", () => {
     expect(screen.getByTestId("dispose-submit-area")).toHaveStyle({
       paddingBottom: 60,
     });
-    expect(screen.getByTestId("dispose-date-field")).toHaveProp(
+    expect(screen.getByTestId("dispose-date-input")).toHaveProp(
       "editable",
       false
     );
@@ -417,7 +421,7 @@ describe("Dispose metal holding direct form", () => {
     renderScreen({
       validationErrors: { disposalDate: "dispose_date_invalid" },
     });
-    expect(screen.getByTestId("dispose-date-field")).toHaveProp(
+    expect(screen.getByTestId("dispose-date-input")).toHaveProp(
       "aria-invalid",
       true
     );
@@ -461,17 +465,13 @@ describe("Dispose metal holding direct form", () => {
           role: "terminal_metal",
           valueLabel: "3,600 USD/g",
           freshness: "stale",
-          sourceLabel: "provider-a",
           observedLabel: "5 Sep 10:00",
-          qualityLabel: "Valid",
         },
         {
           role: "terminal_purchase_currency",
           valueLabel: "0.02 USD/EGP",
           freshness: "fresh",
-          sourceLabel: "provider-b",
           observedLabel: "5 Sep 11:30",
-          qualityLabel: "Valid",
         },
       ],
       requiresRateAcknowledgment: true,
@@ -508,16 +508,14 @@ describe("Dispose metal holding direct form", () => {
           role: "terminal_metal",
           valueLabel: "3,600 USD/g",
           freshness: "fresh",
-          sourceLabel: "provider-a",
           observedLabel: "5 Sep 11:30",
-          qualityLabel: "Valid",
         },
       ],
     });
     expect(screen.queryByTestId("dispose-rate-acknowledgment")).toBeNull();
   });
 
-  it("renders each consumed terminal rate source quality for trust disclosure", (): void => {
+  it("never exposes provider names or trust-engineering metadata in the user form", (): void => {
     renderScreen({
       category: "donated",
       treatment: "external_transfer",
@@ -526,18 +524,17 @@ describe("Dispose metal holding direct form", () => {
           role: "terminal_metal",
           valueLabel: "3,600 USD/g",
           freshness: "stale",
-          sourceLabel: "provider-a",
           observedLabel: "5 Sep 10:00",
-          qualityLabel: "Valid",
         },
       ],
       requiresRateAcknowledgment: true,
     });
+    expect(screen.getByTestId("dispose-rate-evidence")).toBeOnTheScreen();
     expect(
-      within(
-        screen.getByTestId("dispose-rate-quality-terminal_metal")
-      ).getByText(/Valid/)
-    ).toBeOnTheScreen();
+      screen.queryByTestId("dispose-rate-quality-terminal_metal")
+    ).toBeNull();
+    expect(screen.queryByText(/provider-a/)).toBeNull();
+    expect(screen.queryByText("Valid")).toBeNull();
   });
 
   it("shows a visible checked indicator for the rate acknowledgment", (): void => {
@@ -675,6 +672,8 @@ describe("Dispose metal holding direct form", () => {
     expect(loadScreen().DISPOSE_METAL_HOLDING_COPY_KEYS).toMatchObject({
       title: "dispose.title",
       intro: "dispose.intro",
+      whatHappened: "dispose.whatHappened",
+      affectsRecords: "dispose.affectsRecords",
       categories: {
         lost_or_stolen: "dispose.categories.lostOrStolen",
         destroyed_or_damaged: "dispose.categories.destroyedOrDamaged",
@@ -682,6 +681,68 @@ describe("Dispose metal holding direct form", () => {
         donated: "dispose.categories.donated",
         other: "dispose.categories.other",
       },
+      treatments: {
+        write_off: "dispose.treatments.writeOff",
+        external_transfer: "dispose.treatments.externalTransfer",
+      },
+      treatmentDescriptions: {
+        write_off: "dispose.treatments.writeOffDescription",
+        external_transfer: "dispose.treatments.externalTransferDescription",
+      },
     });
+  });
+
+  it("renders an icon per reason and a selected radio indicator", (): void => {
+    renderScreen({ category: "other", otherTreatment: "write_off" });
+    for (const category of Object.keys(copy.categoryLabels) as Category[]) {
+      expect(
+        screen.getByTestId(`dispose-category-icon-${category}`)
+      ).toBeOnTheScreen();
+    }
+    expect(
+      screen.getByTestId("dispose-category-selected-indicator")
+    ).toBeOnTheScreen();
+    expect(screen.getByText(copy.whatHappened)).toBeOnTheScreen();
+  });
+
+  it("shows each Other treatment with its explanatory copy", (): void => {
+    renderScreen({ category: "other", otherTreatment: "write_off" });
+    expect(
+      screen.getByText(copy.affectsRecords, { exact: false })
+    ).toBeOnTheScreen();
+    expect(
+      screen.getByTestId("dispose-treatment-description-write_off")
+    ).toHaveTextContent(copy.treatmentDescriptions.write_off);
+    expect(
+      screen.getByTestId("dispose-treatment-description-external_transfer")
+    ).toHaveTextContent(copy.treatmentDescriptions.external_transfer);
+  });
+
+  it("marks reason and treatment as required and keeps the standard date required label", (): void => {
+    renderScreen({ category: "other" });
+    expect(screen.getByTestId("dispose-required-reason")).toBeOnTheScreen();
+    expect(screen.getByTestId("dispose-required-treatment")).toBeOnTheScreen();
+    expect(screen.queryByTestId("dispose-required-date")).toBeNull();
+    expect(screen.getByTestId("dispose-date-input")).toHaveProp(
+      "accessibilityHint",
+      "required_field"
+    );
+  });
+
+  it("opens the shared date picker from the date field", (): void => {
+    const props = renderScreen({});
+    fireEvent.press(screen.getByTestId("dispose-date-field"));
+    expect(props.onDateChange).not.toHaveBeenCalled();
+    expect(screen.getByTestId("dispose-date-picker")).toBeOnTheScreen();
+    expect(screen.getByTestId("dispose-date-input")).toBeOnTheScreen();
+  });
+
+  it("prefixes every live consequence with a check icon and outlines Cancel", (): void => {
+    renderScreen({ category: "donated", treatment: "external_transfer" });
+    expect(screen.getAllByTestId("dispose-summary-check")).toHaveLength(5);
+    expect(screen.getByTestId("dispose-cancel")).toHaveProp(
+      "className",
+      expect.stringContaining("border")
+    );
   });
 });

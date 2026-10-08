@@ -351,6 +351,77 @@
     "treatment_write_off": "Record a loss",
     "treatment_external_transfer": "Record it as moved out"
   },
+  "dispose": {
+    "title": "No longer in my possession: {{holdingName}}",
+    "intro": "Use this when you no longer own the holding and did not sell it.",
+    "whatHappened": "What happened?",
+    "affectsRecords": "How should this affect your records?",
+    "categories": {
+      "lostOrStolen": "Lost or stolen",
+      "destroyedOrDamaged": "Destroyed or damaged",
+      "givenAway": "Given away",
+      "donated": "Donated",
+      "other": "Other"
+    },
+    "treatments": {
+      "writeOff": "Record a loss",
+      "externalTransfer": "Record it as moved out",
+      "writeOffDescription": "Its purchase cost will be recorded as a loss. No sale money is added.",
+      "externalTransferDescription": "It leaves your metals. No sale profit or loss is recorded."
+    },
+    "dateLabel": "Date",
+    "notesLabel": "Notes",
+    "notesOptional": "Optional",
+    "notesTooLong": "Shorten your notes and try again.",
+    "summaryTitle": "What will happen",
+    "writeOffSummary": "Its purchase cost will be recorded as a loss.",
+    "externalTransferSummary": "It will leave your active metals.",
+    "activeOwnershipSummary": "This holding will no longer be active.",
+    "historySummary": "This change will appear in History.",
+    "noSaleMoneyOrAccountSummary": "There is no sale money or account change.",
+    "noSaleProfitLossSummary": "There is no profit or loss from a sale.",
+    "rateEvidenceTitle": "Rates kept with this record",
+    "rateRoles": {
+      "terminalMetal": "Metal rate",
+      "terminalPurchaseCurrency": "Currency rate"
+    },
+    "rateFreshness": {
+      "fresh": "Current",
+      "stale": "Last available",
+      "unknown": "Age unknown"
+    },
+    "rateAcknowledgment": "I understand the rates above may be old or of unknown age.",
+    "rateAcknowledgmentRequired": "Confirm the rate note to continue.",
+    "rateEvidenceUnavailable": "We could not check the rates. Try again.",
+    "ratePendingLabel": "Checking rates",
+    "observedUnknown": "Update time unknown",
+    "submitLabel": "Record change",
+    "pendingLabel": "Recording change",
+    "cancelLabel": "Cancel",
+    "retryLabel": "Retry",
+    "loadError": "We couldn't load this holding.",
+    "categoryRequired": "Choose a reason.",
+    "treatmentRequired": "Choose how to record Other.",
+    "dateRequired": "Choose a valid date.",
+    "dateInvalid": "Enter a real date that is not in the future.",
+    "dateBeforeAcquisition": "Choose a date on or after the purchase date.",
+    "submitFailed": "The change was not recorded. Try again.",
+    "submitErrors": {
+      "holdingNotFound": "This holding could not be found.",
+      "holdingNotActive": "This holding is no longer active.",
+      "revisionConflict": "Holding changed on another device.",
+      "authScopeChanged": "You switched accounts. Try again.",
+      "notEffectiveHolding": "This holding is being checked. Try again.",
+      "lifecycleConflict": "This holding has a conflict to resolve first.",
+      "dateBeforeAcquisition": "Choose a date on or after the purchase date.",
+      "recoveryRequired": "This action needs recovery. Try again."
+    },
+    "success": "Recorded: {{holdingName}} is no longer in your active portfolio.",
+    "exitTitle": "Discard changes?",
+    "exitMessage": "Your unsaved changes will be lost.",
+    "keepEditing": "Keep editing",
+    "discardChanges": "Discard changes"
+  },
   "delete": {
     "consequence": "Only delete a holding added by mistake. It will be removed from your portfolio and History. Sell and No Longer are separate actions.",
     "performance": "Since purchase",
