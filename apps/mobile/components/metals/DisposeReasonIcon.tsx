@@ -46,10 +46,7 @@ export function DisposeReasonIcon({
             {...common}
             d="M12 3 19 6v5c0 4.6-2.9 8-7 10-4.1-2-7-5.4-7-10V6l7-3Z"
           />
-          <Polyline
-            {...common}
-            points="13 6.5 10.5 10.5 13 12 10.5 16.5"
-          />
+          <Polyline {...common} points="13 6.5 10.5 10.5 13 12 10.5 16.5" />
         </>
       ) : null}
 

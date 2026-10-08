@@ -140,7 +140,7 @@ const copy: DisposeCopy = {
   historySummary: "This change will appear in History.",
   noSaleMoneyOrAccountSummary: "There is no sale money or account change.",
   noSaleProfitLossSummary: "There is no profit or loss from a sale.",
-  rateEvidenceUnavailable: "We could not check the rates. Try again.",  rateEvidenceUnavailable: "We could not check the rates. Try again.",
+  rateEvidenceUnavailable: "We could not check the rates. Try again.",
   ratePendingLabel: "Checking rates",
   notesTooLong: "Shorten your notes and try again.",
   submitLabel: "Record change",

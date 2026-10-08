@@ -13,9 +13,7 @@ let mockModel: Pick<
   "isActiveOwnership" | "isFinancialActionLocked" | "status"
 > | null = null;
 
-let capturedActions:
-  | ReadonlyArray<{ readonly id: string }>
-  | undefined;
+let capturedActions: ReadonlyArray<{ readonly id: string }> | undefined;
 let capturedOnAction: ((action: HoldingActionId) => void) | undefined;
 
 jest.mock("expo-router", () => ({

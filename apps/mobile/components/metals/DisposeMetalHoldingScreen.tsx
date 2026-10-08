@@ -373,7 +373,7 @@ export function DisposeMetalHoldingScreen({
               <Text className="text-sm leading-6 text-text-secondary dark:text-text-secondary-dark">
                 {copy.intro}
               </Text>
-  
+
               {validationMessages.length > 0 ? (
                 <View
                   ref={validationSummaryRef}
@@ -388,7 +388,7 @@ export function DisposeMetalHoldingScreen({
                   </Text>
                 </View>
               ) : null}
-  
+
               <View className="gap-3">
                 <Text className="text-base font-bold text-text-primary dark:text-text-primary-dark">
                   {copy.whatHappened}
@@ -429,8 +429,7 @@ export function DisposeMetalHoldingScreen({
                   </Text>
                 ) : null}
               </View>
-  
-              </View>
+            </View>
 
             {category === "other" ? (
               <View testID="dispose-treatment-group" className="gap-3">
