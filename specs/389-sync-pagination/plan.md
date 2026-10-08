@@ -161,12 +161,12 @@ remains withheld. Report the specific blocker rather than expanding #339.
 
 ### Test and interface intake
 
-H:
-apps/mobile/**tests**/services/sync/issue255-historical-recovery.sqlite.integration.test.ts
-E:
-apps/mobile/**tests**/services/sync/issue367-effect-delivery.sqlite.integration.test.ts
-K:
-apps/mobile/**tests**/services/sync/issue255-sync-checkpoint.sqlite.integration.test.ts
+- H:
+  `apps/mobile/__tests__/services/sync/issue255-historical-recovery.sqlite.integration.test.ts`
+- E:
+  `apps/mobile/__tests__/services/sync/issue367-effect-delivery.sqlite.integration.test.ts`
+- K:
+  `apps/mobile/__tests__/services/sync/issue255-sync-checkpoint.sqlite.integration.test.ts`
 
 Reuse the local joint b2 batch: 17 tests, nine genuine failures, eight passes,
 zero harness failures. K's three controls and the actual direct rejected-action

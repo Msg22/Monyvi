@@ -15,6 +15,7 @@ import { hasOwnedUnresolvedFinancialActions } from "./sync/financial-pull-shapin
 import {
   isHistoricalRecoveryRequired,
   markHistoricalRecoveryComplete,
+  removeHistoricalRecoveryReceipt,
 } from "./sync/historical-recovery";
 import { pushChanges } from "./sync/push-service";
 import { getCurrentUserId } from "./supabase";
@@ -108,6 +109,9 @@ export async function syncDatabase(
         const hadUnresolvedFinancialActions =
           historicalRecoveryRequired &&
           (await hasOwnedUnresolvedFinancialActions(database, userId));
+        if (hadUnresolvedFinancialActions) {
+          logger.warn("sync.historicalRecoveryReceiptWithheld");
+        }
         await synchronize({
           database,
           pullChanges: async ({ lastPulledAt }): Promise<SyncPullResult> => {
@@ -125,7 +129,14 @@ export async function syncDatabase(
         await assertExpectedSyncUser(userId);
         if (historicalRecoveryRequired && !hadUnresolvedFinancialActions) {
           await markHistoricalRecoveryComplete(database, userId);
-          await assertExpectedSyncUser(userId);
+          try {
+            await assertExpectedSyncUser(userId);
+          } catch (error) {
+            // Invalidate only this attempt's captured-owner receipt.
+            // A cleanup failure propagates rather than hiding failed removal.
+            await removeHistoricalRecoveryReceipt(database, userId);
+            throw error;
+          }
         }
         logger.debug("sync.completed");
       } catch (error) {

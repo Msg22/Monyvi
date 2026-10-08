@@ -4,6 +4,7 @@ import {
   parseFinancialActionEnvelopeJson,
   serializeFinancialActionEnvelope,
   type FinancialActionState,
+  type FinancialActionValidationInput,
 } from "@monyvi/logic";
 import { Q, type Database } from "@nozbe/watermelondb";
 
@@ -59,13 +60,24 @@ function isUnresolvedState(state: string): boolean {
 }
 
 function currentCalendarDate(): string {
-  const now = new Date();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
-  return `${now.getFullYear()}-${month}-${day}`;
+  // Match the existing Add/Edit creation-side business-date contract.
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Africa/Cairo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const read = (type: Intl.DateTimeFormatPartTypes): string => {
+    const part = parts.find((candidate) => candidate.type === type);
+    if (!part) fail();
+    return part.value;
+  };
+  return `${read("year")}-${read("month")}-${read("day")}`;
 }
-function canonicalPayloadIdentity(rawText: string): string {
-  const validationInput = { latestAllowedCalendarDate: currentCalendarDate() };
+function canonicalPayloadIdentity(
+  rawText: string,
+  validationInput: FinancialActionValidationInput
+): string {
   try {
     return serializeFinancialActionEnvelope(
       parseFinancialActionEnvelopeJson(rawText, undefined, validationInput),
@@ -117,12 +129,15 @@ function shapeRootRecord(
   const actionId = readOwnedActionId(record, userId);
   if (!local) return [record];
   if (!isUnresolvedState(local.state)) return [{ ...record, id: local.id }];
+  const validationInput: FinancialActionValidationInput = {
+    latestAllowedCalendarDate: currentCalendarDate(),
+  };
   if (
     local.userId !== userId ||
     local.actionId !== actionId ||
     local.payloadHash !== requiredString(record, "payload_hash") ||
-    canonicalPayloadIdentity(local.payloadJson) !==
-      canonicalPayloadIdentity(readServerPayloadJson(record))
+    canonicalPayloadIdentity(local.payloadJson, validationInput) !==
+      canonicalPayloadIdentity(readServerPayloadJson(record), validationInput)
   )
     fail();
   // Existing push RPC and reconciliation own the entire unresolved local root.

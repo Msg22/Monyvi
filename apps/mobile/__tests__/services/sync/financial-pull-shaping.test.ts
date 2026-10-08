@@ -270,7 +270,11 @@ async function dirtyEffect(
   });
 }
 
-function metalEnvelope(action: string): Readonly<Record<string, unknown>> {
+function metalEnvelope(
+  action: string,
+  purchaseDate = "2020-08-30",
+  occurredAt = "2020-08-30T10:16:00.123Z"
+): Readonly<Record<string, unknown>> {
   return {
     accountGuards: [],
     actionId: action,
@@ -278,7 +282,7 @@ function metalEnvelope(action: string): Readonly<Record<string, unknown>> {
     domainReferenceId: DOMAIN_REF,
     envelopeVersion: "monyvi.financial-action/v1",
     kind: "add",
-    occurredAt: "2020-08-30T10:16:00.123Z",
+    occurredAt,
     payloadVersion: "metals.add/v1",
     userId: USER,
     payload: {
@@ -296,7 +300,7 @@ function metalEnvelope(action: string): Readonly<Record<string, unknown>> {
         purityCatalogVersion: "1",
         purchasePriceDecimal: "150000",
         purchaseCurrency: "EGP",
-        purchaseDate: "2020-08-30",
+        purchaseDate,
       },
       rateSnapshots: metalAcquisitionSnapshots(),
     },
@@ -332,6 +336,102 @@ function metalAcquisitionSnapshots(): ReadonlyArray<Record<string, string>> {
 }
 
 describe("#255 financial pull shaping", () => {
+  it("preserves a creation-valid Cairo-next-day collision on a UTC device without accepting changed semantics", async () => {
+    const db = await database();
+    jest.useFakeTimers({
+      now: Date.parse("2026-10-08T21:30:00.000Z"),
+      doNotFake: [
+        "hrtime",
+        "nextTick",
+        "performance",
+        "queueMicrotask",
+        "requestAnimationFrame",
+        "cancelAnimationFrame",
+        "requestIdleCallback",
+        "cancelIdleCallback",
+        "setImmediate",
+        "clearImmediate",
+        "setInterval",
+        "clearInterval",
+        "setTimeout",
+        "clearTimeout",
+      ],
+    });
+    // Model UTC device-local getters independently of the runner's timezone.
+    // Intl's explicit Africa/Cairo conversion still uses the real instant.
+    const year = jest
+      .spyOn(Date.prototype, "getFullYear")
+      .mockImplementation(function (this: Date): number {
+        return this.getUTCFullYear();
+      });
+    const month = jest
+      .spyOn(Date.prototype, "getMonth")
+      .mockImplementation(function (this: Date): number {
+        return this.getUTCMonth();
+      });
+    const day = jest
+      .spyOn(Date.prototype, "getDate")
+      .mockImplementation(function (this: Date): number {
+        return this.getUTCDate();
+      });
+    try {
+      expect(new Date().getDate()).toBe(8);
+      const index = 91;
+      const payload = serializeFinancialActionEnvelope(
+        metalEnvelope(
+          actionId(index),
+          "2026-10-09",
+          "2026-10-08T21:30:00.000Z"
+        ),
+        undefined,
+        { latestAllowedCalendarDate: "2026-10-09" }
+      );
+      const root = await db.write(async (): Promise<FinancialActionGroup> => {
+        const record = db
+          .get<FinancialActionGroup>("financial_action_groups")
+          .prepareCreateFromDirtyRaw({
+            ...rootRaw(index, "sync_failed"),
+            account_guards_json: "[]",
+            domain: "metals",
+            kind: "add",
+            payload_json: payload,
+          });
+        await db.batch(record);
+        return record;
+      });
+      const before = { ...root._raw };
+      const remote = serverRoot(index, {
+        domain: "metals",
+        kind: "add",
+        payload_json_text: JSON.stringify(
+          reverseJsonKeys(JSON.parse(payload)),
+          null,
+          2
+        ),
+      });
+
+      await expect(
+        shapeFinancialActionRootPull(db, USER, [remote])
+      ).resolves.toEqual([]);
+      expect(root._raw).toEqual(before);
+      await expect(
+        shapeFinancialActionRootPull(db, USER, [
+          {
+            ...remote,
+            payload_json_text: payload.replace('"150000"', '"150001"'),
+          },
+        ])
+      ).rejects.toThrow(FINANCIAL_PULL_SHAPING_ERROR_CODE);
+      expect(root._raw).toEqual(before);
+    } finally {
+      day.mockRestore();
+      month.mockRestore();
+      year.mockRestore();
+      jest.useRealTimers();
+      await db.write(() => db.unsafeResetDatabase());
+    }
+  });
+
   it("preserves a valid unresolved Metals Add with canonical date validation and rejects changed semantics", async () => {
     const db = await database();
     try {

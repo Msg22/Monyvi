@@ -47,6 +47,29 @@ function localSnapshot(id: string, createdAt: string): Record<string, unknown> {
   };
 }
 
+// Freeze Date only; SQLite callbacks, timers and microtasks remain real.
+function useSnapshotDate(now: string = H2): void {
+  jest.useFakeTimers({
+    now: Date.parse(now),
+    doNotFake: [
+      "hrtime",
+      "nextTick",
+      "performance",
+      "queueMicrotask",
+      "requestAnimationFrame",
+      "cancelAnimationFrame",
+      "requestIdleCallback",
+      "cancelIdleCallback",
+      "setImmediate",
+      "clearImmediate",
+      "setInterval",
+      "clearInterval",
+      "setTimeout",
+      "clearTimeout",
+    ],
+  });
+}
+
 describe("#255 historical recovery receipt continuation", () => {
   it("writes the owner-scoped receipt only after a successful production recovery", async () => {
     let database = await createDatabase("receipt-success");
@@ -348,11 +371,36 @@ describe("#255 historical recovery receipt continuation", () => {
     await database.adapter.setLocal(OWNER_KEY, USER_A);
   }
 
+  it("demonstrates why October fixture replacement cannot use a January host clock", async () => {
+    const database = await createDatabase("snapshot-future-clock-control");
+    const oldId = "02550000-0000-4000-8000-000000000481";
+    const newId = "02550000-0000-4000-8000-000000000482";
+    try {
+      useSnapshotDate("2027-01-10T12:00:00.000Z");
+      await seedSnapshotBaseline(database, [
+        localSnapshot(oldId, "2026-10-07T08:00:00.000Z"),
+      ]);
+      setMarketWatermarks([H2]);
+      setRemoteRows("daily_snapshot_assets", [
+        snapshot(newId, "2026-10-07T09:00:00.000Z"),
+      ]);
+      await syncDatabase(database);
+      // Both October rows are outside the current retention window.
+      // The original in-window expectation [newId] would fail here.
+      expect(await ids(database, "daily_snapshot_assets")).toEqual([oldId]);
+      expect(await ids(database, "daily_snapshot_assets")).not.toContain(newId);
+    } finally {
+      jest.useRealTimers();
+      await database.write(() => database.unsafeResetDatabase());
+    }
+  });
+
   it("applies pre-journal snapshot cleanup through production once, then preserves absence on a later forced full pull", async () => {
     const database = await createDatabase("snapshot-one-time-production");
     const oldId = "02550000-0000-4000-8000-000000000421";
     const newId = "02550000-0000-4000-8000-000000000422";
     try {
+      useSnapshotDate();
       await seedSnapshotBaseline(database, [
         localSnapshot(oldId, "2026-10-07T08:00:00.000Z"),
       ]);
@@ -367,6 +415,7 @@ describe("#255 historical recovery receipt continuation", () => {
       await syncDatabase(database, true);
       expect(await ids(database, "daily_snapshot_assets")).toEqual([newId]);
     } finally {
+      jest.useRealTimers();
       await database.write(() => database.unsafeResetDatabase());
     }
   });
@@ -376,6 +425,7 @@ describe("#255 historical recovery receipt continuation", () => {
     const id = "02550000-0000-4000-8000-000000000431";
     let edited = false;
     try {
+      useSnapshotDate();
       await seedSnapshotBaseline(database, [
         localSnapshot(id, "2026-10-07T08:00:00.000Z"),
       ]);
@@ -410,6 +460,7 @@ describe("#255 historical recovery receipt continuation", () => {
         (await database.get("daily_snapshot_assets").find(id))._raw
       ).toMatchObject({ total_assets_usd: 9876, user_id: USER_A });
     } finally {
+      jest.useRealTimers();
       jest.restoreAllMocks();
       await database.write(() => database.unsafeResetDatabase());
     }
@@ -420,6 +471,7 @@ describe("#255 historical recovery receipt continuation", () => {
     const dirtyId = "02550000-0000-4000-8000-000000000441";
     const cleanId = "02550000-0000-4000-8000-000000000442";
     try {
+      useSnapshotDate();
       await seedSnapshotBaseline(database, [
         localSnapshot(dirtyId, "2026-10-07T08:00:00.000Z"),
         localSnapshot(cleanId, "2026-10-07T08:00:00.000Z"),
@@ -443,6 +495,7 @@ describe("#255 historical recovery receipt continuation", () => {
       expect(row.syncStatus).toBe("updated");
       expect(row._raw).toMatchObject({ total_assets_usd: 7654 });
     } finally {
+      jest.useRealTimers();
       await database.write(() => database.unsafeResetDatabase());
     }
   });
@@ -509,6 +562,104 @@ describe("#255 historical recovery receipt continuation", () => {
       await database.write(() => database.unsafeResetDatabase());
     }
   });
+
+  it.each([false, true])(
+    "handles auth loss after the receipt actually commits; cleanup failure=%s",
+    async (cleanupFails): Promise<void> => {
+      const database = await createDatabase(
+        `receipt-post-write-auth-${String(cleanupFails)}`
+      );
+      const receiptKey = `__monyvi_sync_historical_recovery:${HISTORICAL_RECOVERY_VERSION}:${USER_A}`;
+      const foreignReceiptKey = `__monyvi_sync_historical_recovery:${HISTORICAL_RECOVERY_VERSION}:${USER_B}`;
+      const retryId = "02550000-0000-4000-8000-000000000491";
+      try {
+        // B's pre-existing receipt comes from successful production sync,
+        // not a fabricated completion flag.
+        setCurrentUser(USER_B);
+        setMarketWatermarks([H1]);
+        await syncDatabase(database);
+        expect(await database.adapter.getLocal(foreignReceiptKey)).toBe(
+          "complete"
+        );
+
+        setCurrentUser(USER_A);
+        jest.clearAllMocks();
+        await seedExistingInstallBaseline(database);
+        setMarketWatermarks([H2, H3]);
+        setRemoteRows("assets", [
+          serverAsset(HISTORICAL_ID, USER_A, "2026-10-07T23:59:00.000Z"),
+        ]);
+        expect(await isHistoricalRecoveryRequired(database, USER_A)).toBe(true);
+
+        const originalSetLocal = database.adapter.setLocal.bind(
+          database.adapter
+        );
+        const originalRemoveLocal = database.adapter.removeLocal.bind(
+          database.adapter
+        );
+        let receiptCommitted = false;
+        const storage = jest
+          .spyOn(database.adapter, "setLocal")
+          .mockImplementation(
+            async (key: string, value: string): Promise<void> => {
+              await originalSetLocal(key, value);
+              if (key === receiptKey) {
+                expect(await database.adapter.getLocal(key)).toBe("complete");
+                receiptCommitted = true;
+                setCurrentUser(USER_B);
+              }
+            }
+          );
+        const cleanup = jest
+          .spyOn(database.adapter, "removeLocal")
+          .mockImplementation(async (key: string): Promise<void> => {
+            if (key === receiptKey && cleanupFails) {
+              throw new Error("receipt-cleanup-down");
+            }
+            await originalRemoveLocal(key);
+          });
+        try {
+          await expect(syncDatabase(database)).rejects.toThrow(
+            cleanupFails ? "receipt-cleanup-down" : "sync_auth_scope_lost"
+          );
+          expect(receiptCommitted).toBe(true);
+          expect(await ids(database, "assets")).toContain(HISTORICAL_ID);
+          expect(await checkpoint(database)).toBe(String(Date.parse(H2)));
+          expect(await owner(database)).toBe(USER_A);
+          expect(await database.adapter.getLocal(receiptKey)).toBe(
+            cleanupFails ? "complete" : null
+          );
+          expect(await database.adapter.getLocal(foreignReceiptKey)).toBe(
+            "complete"
+          );
+          expect(cleanup).toHaveBeenCalledWith(receiptKey);
+          expect(cleanup).not.toHaveBeenCalledWith(foreignReceiptKey);
+        } finally {
+          storage.mockRestore();
+          cleanup.mockRestore();
+          setCurrentUser(USER_A);
+        }
+
+        if (!cleanupFails) {
+          // No intervening B sync or owner-marker change forces this retry.
+          // The additional row predates the checkpoint and needs a full pull.
+          setRemoteRows("assets", [
+            serverAsset(HISTORICAL_ID, USER_A, "2026-10-07T23:59:00.000Z"),
+            serverAsset(retryId, USER_A, "2026-10-07T23:58:00.000Z"),
+          ]);
+          await syncDatabase(database);
+          expect(await ids(database, "assets")).toContain(retryId);
+          expect(await database.adapter.getLocal(receiptKey)).toBe("complete");
+          expect(await database.adapter.getLocal(foreignReceiptKey)).toBe(
+            "complete"
+          );
+        }
+      } finally {
+        setCurrentUser(USER_A);
+        await database.write(() => database.unsafeResetDatabase());
+      }
+    }
+  );
 
   it("does not write a recovery receipt when owner changes after SDK success", async () => {
     const database = await createDatabase("receipt-post-apply-auth");

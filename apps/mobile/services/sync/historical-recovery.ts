@@ -29,6 +29,13 @@ export async function markHistoricalRecoveryComplete(
   await database.adapter.setLocal(receiptKey(userId), RECEIPT_VALUE);
 }
 
+export async function removeHistoricalRecoveryReceipt(
+  database: Database,
+  userId: string
+): Promise<void> {
+  await database.adapter.removeLocal(receiptKey(userId));
+}
+
 export function createSnapshotRetentionCutoffIso(
   reference = new Date()
 ): string {
