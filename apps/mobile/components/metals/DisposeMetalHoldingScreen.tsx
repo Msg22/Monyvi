@@ -75,7 +75,7 @@ export const DISPOSE_METAL_HOLDING_COPY_KEYS = Object.freeze({
   historySummary: "dispose.historySummary",
   noSaleMoneyOrAccountSummary: "dispose.noSaleMoneyOrAccountSummary",
   noSaleProfitLossSummary: "dispose.noSaleProfitLossSummary",
-  rateEvidenceUnavailable: "dispose.rateEvidenceUnavailable",  rateEvidenceUnavailable: "dispose.rateEvidenceUnavailable",
+  rateEvidenceUnavailable: "dispose.rateEvidenceUnavailable",
   ratePendingLabel: "dispose.ratePendingLabel",
   submitLabel: "dispose.submitLabel",
   pendingLabel: "dispose.pendingLabel",
@@ -133,7 +133,7 @@ export interface DisposeMetalHoldingCopy {
   readonly historySummary: string;
   readonly noSaleMoneyOrAccountSummary: string;
   readonly noSaleProfitLossSummary: string;
-  readonly rateEvidenceUnavailable: string;  readonly rateEvidenceUnavailable: string;
+  readonly rateEvidenceUnavailable: string;
   readonly ratePendingLabel: string;
   readonly submitLabel: string;
   readonly pendingLabel: string;
@@ -149,7 +149,7 @@ export interface DisposeMetalHoldingCopy {
   readonly submitErrorMessages: Readonly<Record<string, string>>;
 }
 
-export interface DisposeMetalHoldingScreenProps {export interface DisposeMetalHoldingScreenProps {
+export interface DisposeMetalHoldingScreenProps {
   readonly copy: DisposeMetalHoldingCopy;
   readonly locale: "en" | "ar";
   readonly isRtl: boolean;
@@ -527,7 +527,7 @@ export function DisposeMetalHoldingScreen({
               />
             </View>
 
-            {rateEvidenceError ? (            {rateEvidenceError ? (
+            {rateEvidenceError ? (
               <View
                 ref={rateEvidenceErrorRef}
                 accessibilityRole="alert"

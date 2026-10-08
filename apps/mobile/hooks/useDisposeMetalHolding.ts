@@ -145,7 +145,7 @@ function snapshotsFromDrafts(
   return drafts.map((draft) => ({ ...draft, referenceId: createId() }));
 }
 
-type TerminalRateLoadResult =type TerminalRateLoadResult =
+type TerminalRateLoadResult =
   | {
       readonly status: "loaded";
       readonly drafts: readonly DisposeRateSnapshotDraft[];

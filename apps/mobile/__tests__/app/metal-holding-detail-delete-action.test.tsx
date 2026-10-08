@@ -126,7 +126,7 @@ describe("metal holding detail implemented action composition", () => {
     expect(screen.queryByTestId("detail-action-undo")).toBeNull();
   });
 
-  it("navigates to the holding-scoped Delete route without touching unimplemented actions", () => {  it("navigates to the holding-scoped Delete route without touching unimplemented actions", () => {
+  it("navigates to the holding-scoped Delete route without touching unimplemented actions", () => {
     mockModel = activeModel();
 
     render(<MetalHoldingDetailRoute />);

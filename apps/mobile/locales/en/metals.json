@@ -379,7 +379,7 @@
     "historySummary": "This change will appear in History.",
     "noSaleMoneyOrAccountSummary": "There is no sale money or account change.",
     "noSaleProfitLossSummary": "There is no profit or loss from a sale.",
-    "rateEvidenceUnavailable": "We could not check the rates. Try again.",    "rateEvidenceUnavailable": "We could not check the rates. Try again.",
+    "rateEvidenceUnavailable": "We could not check the rates. Try again.",
     "ratePendingLabel": "Checking rates",
     "submitLabel": "Record change",
     "pendingLabel": "Recording change",

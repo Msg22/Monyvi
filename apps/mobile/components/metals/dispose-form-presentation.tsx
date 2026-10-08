@@ -33,7 +33,7 @@ export const DISPOSE_CONSEQUENCE_ORDER = Object.freeze([
   "history",
 ]);
 
-export function RequiredMarkexport function RequiredMark({
+export function RequiredMark({
   testID,
 }: {
   readonly testID: string;
@@ -122,7 +122,7 @@ export function CategoryTile(props: {
   );
 }
 
-export function TreatmentOptionexport function TreatmentOption(props: {
+export function TreatmentOption(props: {
   readonly id: string;
   readonly descriptionTestID: string;
   readonly label: string;

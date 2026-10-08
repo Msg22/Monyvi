@@ -129,7 +129,7 @@ function DisposeMetalHoldingForm({
   });
 
   const copy = useMemo(() => createDisposeCopy(t), [t]);
-  const navigation = useNavigation();  const navigation = useNavigation();
+  const navigation = useNavigation();
   const pendingActionRef = useRef<NavigationAction | null>(null);
   const exitRequestedRef = useRef(false);
   const pendingDetailsRef = useRef<string | null>(null);
@@ -357,7 +357,7 @@ function createDisposeCopy(
     historySummary: t("dispose.historySummary"),
     noSaleMoneyOrAccountSummary: t("dispose.noSaleMoneyOrAccountSummary"),
     noSaleProfitLossSummary: t("dispose.noSaleProfitLossSummary"),
-    rateEvidenceUnavailable: t("dispose.rateEvidenceUnavailable"),    rateEvidenceUnavailable: t("dispose.rateEvidenceUnavailable"),
+    rateEvidenceUnavailable: t("dispose.rateEvidenceUnavailable"),
     ratePendingLabel: t("dispose.ratePendingLabel"),
     submitLabel: t("dispose.submitLabel"),
     pendingLabel: t("dispose.pendingLabel"),

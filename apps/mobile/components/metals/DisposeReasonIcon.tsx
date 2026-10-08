@@ -1,5 +1,5 @@
 import React from "react";
-import Svg, { Circle, Path, Polyline } from "react-native-svg";
+import { Circle, Path, Polyline, Svg } from "react-native-svg";
 
 import type { DisposeCategory } from "@/services/dispose-metal-holding-command-service";
 

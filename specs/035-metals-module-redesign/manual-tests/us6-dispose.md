@@ -102,7 +102,7 @@ database; it is a test fixture only and never a real user's local row.
    commits exactly the replacement terminal pair returned for the selected
    disposal date.
 
-## Open production integration gates## Open production integration gates
+## Open production integration gates
 
 Device-only fidelity for D15 and shared-shell dirty-exit integration for D16
 remain required. The production Dispose route (real command factory,

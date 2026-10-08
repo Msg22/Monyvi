@@ -42,7 +42,7 @@ type Category =
   | "other";
 type Treatment = "write_off" | "external_transfer";
 
-interface DisposeCopy {interface DisposeCopy {
+interface DisposeCopy {
   readonly title: string;
   readonly intro: string;
   readonly whatHappened: string;
