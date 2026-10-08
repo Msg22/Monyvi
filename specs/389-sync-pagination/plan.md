@@ -1,9 +1,12 @@
 # Implementation Plan: Fix Issue #255 Sync Pagination and Checkpoint
 
-**Branch**: `codex/issue255-sync-pagination` (helper alias `389-sync-pagination`
-used only for the prerequisites script; actual Git branch unchanged) | **Date**:
-2026-10-07 | **Spec**: `specs/389-sync-pagination/spec.md` **Input**: Feature
-specification from `specs/389-sync-pagination/spec.md`
+**Branch**: `codex/issue255-historical-recovery` | **Continuation**: C255-S
+**Base/governance**: `b2ec0fd4bc81cf2bf504f86d3bb781f605b355fc` **Spec**:
+`specs/389-sync-pagination/spec.md`
+
+The original sections below describe the delivered PR381 core. Their migration
+plans, PASS statements and execution rules are historical, not continuation
+completion evidence. The approved continuation follows at the end of this file.
 
 ## Summary
 
@@ -101,3 +104,102 @@ The spec states outcomes and testable rules. All mechanism lives here: keyset
 pager algorithm and page envelope (`contracts/sync-pull.md`), seal RPC
 validation order, journal shape and cursor, trigger rebinding rules, the four
 early-hook placements, and the buffered-apply/checkpoint unit.
+
+## Approved bounded continuation — #255/#367/#377
+
+### Ownership and boundaries
+
+Production patch owner: Monyvi #255 Sync Reproduction. The documentation/test
+proposal lane is response-only; one trusted local successor integrates its
+artifacts and executes checks. The lead alone dispatches and accepts work.
+Worktree: E:/Work/My Projects/Monyvi-issue255-historical-recovery. Branch setup
+was already authorized/completed; do not repeat it. No commit, push, merge,
+deployment, device write or remote data authorization.
+
+No schema bump, SQL migration, reset, financial replay, generic conflict/feed/
+backfill framework, or compensation during pull. Preserve offline-first. #382
+frozen-clock and broader #339 liveness remain deferred.
+
+### Minimal integration boundaries
+
+1. sync.ts: decide whether the captured owner needs the fixed repair; invoke the
+   existing complete pull without a lower checkpoint for that attempt. Do not
+   erase the persisted checkpoint. Persist the owner-local receipt only after
+   actual successful synchronization/application and owner checks.
+2. sync/atomic-pull-strategies.ts: include account_financial_effects in the
+   active dedicated traversal. Complete every required stream before return;
+   preserve the market watermark and all current retention rules.
+3. sync/pull-strategies.ts and a focused helper only if necessary: strict
+   compensated_at conversion, existing-root identity/remapping validation, and
+   whole-record protection of existing unresolved roots/colliding effects.
+   Preserve the existing command/RPC/outcome/reconciliation pathway.
+4. Snapshot repair: use one frozen cutoff with H across all three snapshot pulls
+   and cleanup candidates. After complete remote enumeration, use the installed
+   SDK per-table replacement option only for snapshots. Its scoped candidate
+   query runs inside the SDK apply writer: owner, (cutoff,H], and synced status.
+   Ordinary/financial tables stay incremental; explicit journal IDs retain
+   existing authoritative deletion behavior.
+
+No new public production API is required by this plan. The production owner
+binds the exact fixed receipt key/value and any private plumbing before
+dependent test authoring; this proposal does not guess those names. Do not
+change package schemas/generated models for this client-only repair.
+
+### Receipt safety
+
+Successful synchronization is necessary but not sufficient: withheld required
+canonical evidence must not be stranded behind the receipt. Keep repair due
+until safe application is established. A successful pull followed by failed push
+keeps its checkpoint and dirty work but does not complete the repair.
+Receipt-storage failure remains an error with idempotent retry. Do not persist
+completion from an unauthenticated/concurrent-sync skip or finally block. Crash
+before receipt may repeat reads, never financial effects.
+
+Preserving reconciliation_incomplete is not proof that its broader recovery
+liveness is solved. Do not claim successful repair for that case while evidence
+remains withheld. Report the specific blocker rather than expanding #339.
+
+### Test and interface intake
+
+H:
+apps/mobile/**tests**/services/sync/issue255-historical-recovery.sqlite.integration.test.ts
+E:
+apps/mobile/**tests**/services/sync/issue367-effect-delivery.sqlite.integration.test.ts
+K:
+apps/mobile/**tests**/services/sync/issue255-sync-checkpoint.sqlite.integration.test.ts
+
+Reuse the local joint b2 batch: 17 tests, nine genuine failures, eight passes,
+zero harness failures. K's three controls and the actual direct rejected-action
+reconciliation control passed. This is lead-supplied execution evidence. Do not
+substitute the earlier mocked five-call composition test for routing proof or
+describe scripted network tests as live Supabase/device execution.
+
+Before binding missing H snippets, the local successor supplies/uses:
+
+- the production owner's exact fixed receipt key and serialized value;
+- the corrected H fixture's real-checkpoint setup, auth-switch control and
+  persistent-database reopen mechanism;
+- its actual SQLite apply-failure injection boundary.
+
+These are narrow technical bindings, not new product decisions or permission to
+introduce a helper framework. Preserve unpublished fixture corrections.
+Integrate snippets by replacement/refactoring as needed to respect AGENTS.md's
+file-size limit; do not duplicate an entire fixture or collision suite.
+
+### Verification and acceptance
+
+Map every deterministic case in quickstart.md to an existing or supplemental
+test. Reuse the observed genuine Red; author supplemental tests before
+production. Run them in Mohamed’s single final batch with affected Green,
+TypeScript, lint and formatting checks; no additional per-file Red runs. Record
+actual commands, source/test revisions, results and exclusions.
+
+Then run the owned-backend-085 plan in quickstart.md. Reuse the original cap
+harness and synthetic fixtures; no benchmark framework or shared-stack reset.
+Independent review must cover financial state/identity, owner/receipt safety,
+snapshot candidate scope and failure/retry behavior.
+
+Code verification, owned-backend verification, live deployment and supported
+installed-build upgrade evidence are separate dispositions. Unknown physical
+JS/build/backend origin and live migration 081 remain explicit blockers to
+deployment/upgrade claims, not reasons to erase installed data.

@@ -70,11 +70,23 @@ const NEXT_WATERMARK = 1_700_000_100_000;
 
 function createOwnerMarkerHarness(initialOwner?: string): OwnerMarkerHarness {
   let owner = initialOwner;
-  const getLocal = jest.fn(
-    (): Promise<string | undefined> => Promise.resolve(owner)
+  const completedReceiptKeys = new Set(
+    [USER_A, USER_B, USER_C].map(
+      (userId) => `__monyvi_sync_historical_recovery:issue255-v1:${userId}`
+    )
   );
-  const setLocal = jest.fn((_key: string, value: string): Promise<void> => {
-    owner = value;
+  const getLocal = jest.fn(
+    (key: string): Promise<string | undefined> =>
+      Promise.resolve(
+        key === "__monyvi_sync_owner_user_id"
+          ? owner
+          : completedReceiptKeys.has(key)
+            ? "complete"
+            : undefined
+      )
+  );
+  const setLocal = jest.fn((key: string, value: string): Promise<void> => {
+    if (key === "__monyvi_sync_owner_user_id") owner = value;
     return Promise.resolve();
   });
   const database = {

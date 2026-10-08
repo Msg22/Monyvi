@@ -11,6 +11,11 @@ import { synchronize, type SyncPullResult } from "@nozbe/watermelondb/sync";
 import { logger } from "@/utils/logger";
 
 import { pullChanges } from "./sync/atomic-pull-strategies";
+import { hasOwnedUnresolvedFinancialActions } from "./sync/financial-pull-shaping";
+import {
+  isHistoricalRecoveryRequired,
+  markHistoricalRecoveryComplete,
+} from "./sync/historical-recovery";
 import { pushChanges } from "./sync/push-service";
 import { getCurrentUserId } from "./supabase";
 import { repairLegacyMetalAdds } from "./legacy-metal-add-repair-service";
@@ -67,7 +72,14 @@ export async function syncDatabase(
 
     const persistedSyncOwner =
       await database.adapter.getLocal(SYNC_OWNER_LOCAL_KEY);
-    const shouldForceFullSync = forceFullSync || persistedSyncOwner !== userId;
+    const historicalRecoveryRequired = await isHistoricalRecoveryRequired(
+      database,
+      userId
+    );
+    const shouldForceFullSync =
+      forceFullSync ||
+      persistedSyncOwner !== userId ||
+      historicalRecoveryRequired;
 
     if (shouldForceFullSync) {
       logger.info("sync.forceFullSyncRequested");
@@ -82,9 +94,7 @@ export async function syncDatabase(
             reason: skip.reason,
           });
         }
-        if (
-          addRepair.skipped.some((skip) => skip.reason === "superseded")
-        ) {
+        if (addRepair.skipped.some((skip) => skip.reason === "superseded")) {
           throw new Error(SYNC_ERROR_CODES.LEGACY_METAL_CHAIN_UNSAFE);
         }
         const editRepair = await repairLegacyMetalEdits(database, userId);
@@ -94,6 +104,10 @@ export async function syncDatabase(
             reason: skip.reason,
           });
         }
+        // Withheld canonical evidence requires another complete pull after resolution.
+        const hadUnresolvedFinancialActions =
+          historicalRecoveryRequired &&
+          (await hasOwnedUnresolvedFinancialActions(database, userId));
         await synchronize({
           database,
           pullChanges: async ({ lastPulledAt }): Promise<SyncPullResult> => {
@@ -109,6 +123,10 @@ export async function syncDatabase(
         await assertExpectedSyncUser(userId);
         await database.adapter.setLocal(SYNC_OWNER_LOCAL_KEY, userId);
         await assertExpectedSyncUser(userId);
+        if (historicalRecoveryRequired && !hadUnresolvedFinancialActions) {
+          await markHistoricalRecoveryComplete(database, userId);
+          await assertExpectedSyncUser(userId);
+        }
         logger.debug("sync.completed");
       } catch (error) {
         const errorMessage = String(error);

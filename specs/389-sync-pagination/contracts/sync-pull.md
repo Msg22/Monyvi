@@ -122,3 +122,83 @@ Cairo future-sale-date guard. The four hooks cover supported app/public RPC
 routes transitively — no extra private-entry hooks and no ACL revocations are
 warranted. Private administrative SQL access is not a supported app path:
 unverified and outside bounded core scope.
+
+## 11. Approved historical-recovery continuation
+
+This section extends only the approved #255/#367/#377 scope. Sections 1–10
+retain PR381's transport/fence/journal contract. No new SQL, public RPC,
+Watermelon row schema, financial payload version or recovery framework.
+
+### Fixed owner-local receipt
+
+Key: `__monyvi_sync_historical_recovery:issue255-v1:${userId}`. Value: the
+literal string `complete`, not JSON or a stored watermark. Use existing
+database-local metadata; a receipt for another owner is irrelevant.
+
+Without that owner's completion, invoke the existing complete pull with no lower
+checkpoint bound. Do not erase the persisted SDK checkpoint. Keep H
+server-authoritative and freeze the existing snapshot cutoff for the attempt.
+
+At attempt start, determine whether any canonical unresolved owned root exists.
+Such an attempt MUST NOT write the receipt, even if its push later resolves
+every root. A later full attempt must hydrate previously withheld canonical
+records before completion. If that attempt also starts unresolved, it likewise
+cannot complete. Successful SDK synchronization and owner checks are required;
+download completion, a checkpoint change or imported terminal state is not
+enough. No receipt from skip/error/finally paths or while required evidence
+remains withheld. Storage errors surface and retry; no financial replay.
+
+### Root/effect preservation
+
+Canonical unresolved states are pending_local, local_complete, sync_pending,
+sync_failed, rejected_compensating and reconciliation_incomplete. Protection
+does not depend on `_status` or `_changed`; invalid evidence is not terminal
+success. Use existing `parseFinancialActionEnvelopeJson` and
+`serializeFinancialActionEnvelope` from `@monyvi/logic` for canonical root
+identity, preserving owner/action/payload/hash binding and existing verified
+local persistence-ID remapping.
+
+Compare the existing immutable business identity: id, user_id, action_id,
+account_id, domain, kind, amount_minor_units, currency,
+accepted_account_revision and reverses_effect_id. Incompatible identity must not
+silently merge. SQL 076 also freezes server created_at after insertion; that
+server-only immutability does not guarantee equality with an optimistic local
+creation timestamp. Existing wire timestamp normalization remains in place; do
+not introduce optimistic/server created_at parity rejection.
+
+Preserve whole existing unresolved local roots and existing colliding effects,
+including root state/outcome/rejection fields and effect
+is_effective/compensated_at. Do not modify SDK dirty metadata to manufacture
+acknowledgement. Previously missing records remain eligible for normal delivery.
+Keep existing RPC/outcome/reconciliation routing; do not perform local
+compensation while fetching pages. The receipt gate ensures a later full pull
+can recover canonical rows withheld behind an advanced checkpoint.
+
+### Effect time and snapshot bounds
+
+Effect compensated_at accepts explicit null or a valid server timestamp. Convert
+the latter to a finite local numeric timestamp before SDK apply; reject
+malformed values, preserving raw timestamp-plus-UUID paging cursors. Effect
+hydration is persistence of evidence, not a balance command.
+
+For snapshot repair, cutoff is the existing retention cutoff frozen once, not a
+new snapshot_date rule. Use exactly the same (cutoff,H] interval for all three
+remote enumerations and local cleanup candidates. Only absent clean
+current-owner identities are eligible after all required streams complete. The
+installed SDK replacement candidate query rechecks owner/window/synced status
+inside its apply writer, after all pages finish. Only the three snapshot tables
+use this one-time strategy; other tables remain incremental. Remote row IDs
+still use normal SDK merge matching; explicit journal deletions remain
+authoritative and independent of the absence-candidate query. No cleanup after
+failed reads, outside this interval, on dirty/foreign rows, or during ordinary
+post-receipt incremental pulls.
+
+### Verification boundary
+
+Reuse the reported nine genuine b2 behavioral Reds; supplemental tests are
+authored before production changes and executed in the authorized single final
+batch, not additional per-file Red runs. Withheld-evidence retry, real local
+undo, receipt failure/restart/A-B and snapshot protections require explicit
+results. Broader #339 liveness/terminal-corruption repair and #382 are deferred.
+No code-only result establishes live-081 compatibility, deployment of 082–085,
+or upgrade correctness for an unidentified installed JS/build/backend origin.

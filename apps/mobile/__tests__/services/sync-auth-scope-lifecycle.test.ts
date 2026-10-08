@@ -46,7 +46,15 @@ const EXPECTED_USER_ID = "current-user";
 const INITIAL_WATERMARK = 1_700_000_000_000;
 const database = {
   adapter: {
-    getLocal: jest.fn().mockResolvedValue(undefined),
+    // Existing lifecycle cases start after this fixed repair completed.
+    getLocal: jest.fn(
+      (key: string): Promise<string | undefined> =>
+        Promise.resolve(
+          key === "__monyvi_sync_historical_recovery:issue255-v1:current-user"
+            ? "complete"
+            : undefined
+        )
+    ),
     setLocal: jest.fn().mockResolvedValue(undefined),
   },
 } as unknown as Database;

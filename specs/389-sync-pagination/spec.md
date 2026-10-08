@@ -1,10 +1,17 @@
 # Feature Specification: Fix Issue #255 Sync Pagination and Checkpoint
 
-**Feature Branch**: `codex/issue255-sync-pagination` **Feature Directory**:
-`specs/389-sync-pagination` **Created**: 2026-10-07 **Status**: Implemented and
-locally validated; manual/device and pre-existing DB typecheck exclusions
-recorded in quickstart.md **Input**: User description: "Fix issue255 sync
-pagination and checkpoint"
+**Feature Branch**: `codex/issue255-historical-recovery` **Feature Directory**:
+`specs/389-sync-pagination` **Created**: 2026-10-07 **Continuation
+base/governance**: `b2ec0fd4bc81cf2bf504f86d3bb781f605b355fc` **Status**: PR381
+core implemented and locally validated as historically recorded in
+quickstart.md. The bounded #255/#367/#377 continuation is approved; approval
+does not establish Green, deployment or installed-build upgrade completion.
+**Input**: Complete required historical delivery without losing pending local
+work or replaying financial effects.
+
+The original baseline, T001–T019 results and dated environment statements are
+historical evidence. The continuation below supersedes only the explicitly
+identified scope exclusions; it does not retroactively expand earlier PASS.
 
 ## Baseline (proven Red, reused not rerun)
 
@@ -98,9 +105,10 @@ permanent silent loss.
   snapshot view.
 - **FR-004**: EOF is decided ONLY by exact count==rows (continue while
   count>rows), cap-independent. Page-size heuristics MUST NOT signal EOF.
-- **FR-005**: Only missing/invalid count, empty-with-positive-count,
-  malformed/non-advancing cursor, or query error fail; failures advance nothing
-  and surface the error.
+- **FR-005**: Paging rejects missing/invalid count, empty-with-positive-count,
+  malformed/non-advancing cursor and query errors. Failed pulls surface errors
+  and advance no checkpoint. Existing auth/record validation and the strict
+  effect/identity validation in FR-015–FR-016 also remain fail-closed.
 - **FR-006**: Child pulls MUST use owner relational joins including owned
   soft-deleted parents (especially deleted children); fetched-ID giant
   `.in(...)` lists are forbidden.
@@ -113,7 +121,8 @@ permanent silent loss.
 - **FR-009**: Snapshot hard deletes MUST publish once via a narrow deleted-ID
   journal (publication timestamp + unique entry ID; OLD table/user/row; no
   prune). Fenced replacements carry fenced `created_at`; the 90-day policy is
-  unchanged (no rewrite/backfill).
+  unchanged. FR-017 adds only bounded local pre-journal cleanup, not a server
+  timestamp rewrite, journal backfill or new retention policy.
 - **FR-010**: The client MUST buffer all pages/tombstones, then apply one unit
   with one checkpoint; partial application is forbidden.
 - **FR-011**: RPC guards, roles, expected-`updated_at`/CAS, exact text,
@@ -148,11 +157,15 @@ permanent silent loss.
 ## Explicit Non-Goals
 
 - No generic immutable feed, blanket retry/validation, or framework/perf work.
-- #367/#377 NOT implemented (coordinated dependencies); #368/#376/#380 deferred.
-  If a #368-class defect appears, do NOT repair it inside #255 without lead
-  classification and user direction.
+- PR381 did not implement #367/#377. Only US4–US6 and FR-013–FR-018 below extend
+  this feature for their approved coordination. #368/#376/#380, #382
+  frozen-clock work, broader #339 liveness and repair of already-corrupted
+  terminal local actions remain outside this continuation. If a deferred-class
+  defect appears, obtain lead classification and user direction rather than
+  silently expanding this repair.
 - No new UI/copy/navigation; no duplication of `specs/005` or `specs/007`.
-- No migration rewrite/backfill; no global `handle_updated_at` replacement.
+- No schema bump, new SQL migration, data reset, server timestamp rewrite,
+  financial-effect replay or global `handle_updated_at` replacement.
 
 ## Manual Plan / Automation Boundary (requirement level)
 
@@ -202,3 +215,111 @@ permanent silent loss.
   coordination-only; QA proposals are remote-only.
 - Q: Cap-1000 vs agnostic; device status? → A: Already determined (see
   Assumptions); no user question asked.
+
+## Approved continuation — historical delivery and local recovery safety
+
+### User Story 4 — Recover previously missed history (Priority: P1)
+
+Given the same owner, schema and an already-advanced checkpoint, ordinary sync
+recovers required older records and their original values without a reset, owner
+change or caller-forced-full workaround. After actual successful repair, that
+owner's fixed receipt prevents unnecessary repeated repair.
+
+Acceptance: failed page/apply/push/receipt storage leaves repair retryable.
+Restart before receipt repeats safely; restart after receipt retains completion.
+A's receipt never completes B's repair. No unchanged-schema installation is
+excluded merely because SQLite migrations have already run.
+
+### User Story 5 — Deliver effects without bypassing local undo (Priority: P1)
+
+Fresh and existing devices receive owned accounts, action roots and required
+account effects with stable links, exact strings and valid compensation times.
+Downloaded evidence never posts its amount to the account again.
+
+Acceptance: a same-owner/action/hash terminal server root cannot make an
+unresolved optimistic local action terminal by merge alone. In the reproduced
+fixture, terminal local reconciliation requires balance 110, an inactive effect
+and a deleted losing transaction, not balance 125/effective/undeleted. Original
+local root ID, action ID, payload/hash and effect identity remain preserved.
+
+### User Story 6 — Remove bounded pre-journal snapshot ghosts (Priority: P1)
+
+A complete repair replaces an eligible stale local snapshot identity with the
+remote replacement without duplicate visible totals. Absence is actionable only
+inside the same frozen retention/delivery window after complete reads.
+
+Acceptance: clean owned S-old absent remotely is removed; S-new appears once.
+Dirty, foreign and out-of-window records survive. Page/apply failure performs no
+partial cleanup, and a local edit before apply prevents stale clean-state
+assumptions from deleting that row.
+
+### Continuation functional requirements
+
+- **FR-013 — Complete historical hydration:** Reuse the complete normal pull
+  without its lower checkpoint bound when the current owner's fixed repair is
+  due. Preserve the checkpoint until actual application; do not clear it.
+  Include required ordinary/child/shared/dedicated/snapshot streams under their
+  existing ownership and retention rules. Restore existing historical values,
+  not defaults, synthetic actions or current-for-historical substitutions.
+- **FR-014 — Durable completion:** Use the fixed owner-local receipt defined in
+  contracts/sync-pull.md. Write it only after successful SDK synchronization,
+  actual apply and owner checks. An attempt starting with ANY canonical
+  unresolved owned financial root cannot write the receipt, even if push
+  resolves that root during the attempt. A subsequent complete full pull must
+  hydrate withheld canonical records before receipt completion. Failed/skipped
+  attempts and receipt-storage failure remain retryable. A good pull followed by
+  failed push retains applied rows/checkpoint and unsent dirty work.
+- **FR-015 — Required effect delivery:** Include account_financial_effects in
+  active dedicated pulling, never generic financial writes. Preserve exact
+  minor-unit/revision strings and owner/account/action/effect links. Explicit
+  null compensated_at remains null; valid server timestamps become local numeric
+  timestamps; malformed values fail before apply. Raw paging cursors retain
+  their existing precision. Importing an effect never reapplies money.
+- **FR-016 — Unresolved local protection:** Determine unresolved state from the
+  canonical action state, not SDK dirty status. Validate immutable identity with
+  existing envelope/effect contracts. Preserve whole existing unresolved local
+  roots and their existing colliding effects; retain their local IDs, canonical
+  payload/hash, links, recovery state and compensation evidence. Missing records
+  and unrelated resolved actions retain normal delivery. Existing same-hash
+  RPC/outcome/reconciliation remains responsible for actual resolution; no
+  compensation during pull or terminal acknowledgement shortcut. Required
+  withheld evidence cannot be stranded behind a completion receipt.
+- **FR-017 — Bounded snapshot cleanup:** During the one-time full repair,
+  compare complete remote identities with clean current-owner local rows only in
+  the identical frozen created_at interval (cutoff,H]. For the three daily
+  snapshot tables, include eligible absent IDs in the buffered apply only after
+  all required pages finish. Recheck ownership/cleanliness before cleanup.
+  Preserve dirty/foreign/out-of-window rows and pending deletion intent. Keep
+  normal deletion-journal delivery; no general absence-based deletion policy.
+- **FR-018 — Compatibility and honest completion:** Preserve offline/local-first
+  behavior and supported installed data. Validate actual supported same-owner
+  upgrades independently of fresh installs. Code completion, owned-backend
+  verification, live deployment and device/upgrade acceptance are separate.
+  Unknown build/backend origins and missing live/device evidence remain BLOCKED.
+
+### Continuation evidence and verification boundary
+
+Lead-reported b2 joint real SDK/SQLite batch: 17 tests, nine genuine behavioral
+failures, eight passes, zero harness failures. The three existing checkpoint
+controls and direct rejected-action reconciliation control passed. Do not infer
+other per-scenario PASS results from that aggregate.
+
+Reuse these genuine Reds. Author supplemental deterministic tests before their
+production changes; Mohamed's SINGLE final check batch governs the continuation.
+Do not prescribe additional per-file Red runs. This supersedes conflicting
+continuation check wording elsewhere, without changing historical T018 evidence.
+
+H/E/K suites and the complete C01–C13 matrix are defined in quickstart.md;
+T020–T027 provide continuation traceability. Scripted-network SDK/SQLite tests
+do not establish live Supabase behavior or device E2E.
+
+Lead inventory: SM-A546E Android 16, development 1.0.0/code 1, schema 29 and
+owner/checkpoint present; active JS/source/OTA and historical backend origin
+unknown. Emulator has no app; second physical origin is unknown. Live cloud is
+at migration 081; owned isolated backend is at 085. No deployment or physical
+reset/clear-data/launch/install is authorized by these documents.
+
+FR-011 and SC-005 continue to prohibit new financial semantics or UI. The
+approved protection restores local consistency; it does not solve broader #339
+liveness or already-corrupted terminal records. Full issue closure remains
+blocked until required live/device/upgrade gaps are actually verified.

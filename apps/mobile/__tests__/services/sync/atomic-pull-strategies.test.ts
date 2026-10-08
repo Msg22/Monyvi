@@ -161,7 +161,14 @@ describe("atomic pullChanges market-rate composition", () => {
       null,
       UPPER_WATERMARK
     );
-    expect(mockPullMetalDedicatedTable).toHaveBeenCalledTimes(5);
+    expect(mockPullMetalDedicatedTable).toHaveBeenCalledTimes(6);
+    expect(mockPullMetalDedicatedTable).toHaveBeenCalledWith(
+      "account_financial_effects",
+      USER_ID,
+      null,
+      UPPER_WATERMARK,
+      undefined
+    );
     expect(mockPullUserTable).not.toHaveBeenCalledWith(
       "market_rates",
       expect.anything(),
