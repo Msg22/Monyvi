@@ -111,7 +111,7 @@ let mockCurrentUserId: string | null = "user-1";
 let mockIsResolvingUser = false;
 const capturedHookInputs: unknown[] = [];
 const mockProductionCreateId = jest.fn(() => "mock-uuid");
-let mockProductionDependencies: {
+const mockProductionDependencies: {
   readonly loadHolding: () => Promise<never>;
   readonly loadTerminalRateSnapshots: () => Promise<never>;
   readonly disposeHolding: () => Promise<never>;
@@ -120,6 +120,30 @@ let mockProductionDependencies: {
   loadTerminalRateSnapshots: jest.fn(),
   disposeHolding: jest.fn(),
 };
+
+jest.mock("@/components/navigation/PageHeader", () => {
+  const {
+    Pressable: MockHeaderPressable,
+    Text: MockHeaderText,
+    View: MockHeaderView,
+  } = jest.requireActual<typeof import("react-native")>("react-native");
+  return {
+    PageHeader: ({
+      title,
+      onBack,
+    }: {
+      readonly title: string;
+      readonly onBack?: () => void;
+    }): React.JSX.Element => (
+      <MockHeaderView>
+        <MockHeaderText>{title}</MockHeaderText>
+        <MockHeaderPressable testID="dispose-header-back" onPress={onBack}>
+          <MockHeaderText>Back</MockHeaderText>
+        </MockHeaderPressable>
+      </MockHeaderView>
+    ),
+  };
+});
 
 jest.mock("@/hooks/useCurrentUser", () => ({
   useCurrentUser: (): {

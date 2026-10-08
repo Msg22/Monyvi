@@ -93,6 +93,22 @@ Device fidelity and the offline/two-device profiles remain open.
   No Jest/tsc/lint/Maestro run is claimed for these files; Prettier
   application stays with final pre-push integration.
 
+## Current state (final-prepush wave: production-complete, verification pending)
+
+- Production is complete for the Dispose slice: route + child form split,
+  auth-gated Skeleton, stable facade dependencies, effect-coordinated
+  post-save navigation, pinned user fail-closed, scoped loader with canonical
+  validation/coherence/ambiguity-skip/fixture precedence, approved-12
+  composition, complete `dispose.*` EN/AR resources, and the authored test
+  set (T104/T109/T110 authored-complete).
+- Final verification is pending the lead-run batch: full Jest Red/Green,
+  typecheck, lint, Maestro, and device runs are unclaimed here.
+- Honest gaps: Maestro `dispose-holding.yaml` stays BLOCKED (no supplied
+  disposable holding fixture, no registered dispose deep link, no
+  runner-controlled offline profile); offline D10/D12 and two-device D20
+  proofs are manual-only until harness and devices exist; combined Maestro
+  gates and whole T142 remain unchecked.
+
 ### Current boundary
 
 - The authored route, loader, translations, and Maestro journey above are the

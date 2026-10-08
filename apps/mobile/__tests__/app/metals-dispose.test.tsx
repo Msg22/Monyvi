@@ -9,9 +9,8 @@ import React from "react";
 import { AccessibilityInfo } from "react-native";
 
 jest.mock("@/components/navigation/PageHeader", () => {
-  const { Pressable, Text, View } = jest.requireActual(
-    "react-native"
-  ) as typeof import("react-native");
+  const { Pressable, Text, View } =
+    jest.requireActual<typeof import("react-native")>("react-native");
   return {
     PageHeader: ({
       title,
@@ -702,7 +701,9 @@ describe("Dispose metal holding direct form", () => {
     expect(
       screen.getByTestId("dispose-category-selected-indicator")
     ).toBeOnTheScreen();
-    expect(screen.getByText(copy.whatHappened)).toBeOnTheScreen();
+    expect(
+      screen.getByText(copy.whatHappened, { exact: false })
+    ).toBeOnTheScreen();
   });
 
   it("shows each Other treatment with its explanatory copy", (): void => {
@@ -740,9 +741,8 @@ describe("Dispose metal holding direct form", () => {
   it("prefixes every live consequence with a check icon and outlines Cancel", (): void => {
     renderScreen({ category: "donated", treatment: "external_transfer" });
     expect(screen.getAllByTestId("dispose-summary-check")).toHaveLength(5);
-    expect(screen.getByTestId("dispose-cancel")).toHaveProp(
-      "className",
-      expect.stringContaining("border")
-    );
+    expect(screen.getByTestId("dispose-cancel")).toHaveStyle({
+      borderWidth: 1,
+    });
   });
 });

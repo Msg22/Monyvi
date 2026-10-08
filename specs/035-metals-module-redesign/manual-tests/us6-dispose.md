@@ -116,6 +116,15 @@ no registered dispose deep link, no runner-controlled offline profile); the
 offline Record change proof for D10/D12; and the two-device conflict proof for
 D20.
 
+## Current state (final-prepush wave: production-complete, verification pending)
+
+- The Dispose production slice is complete as authored (see coverage/us6.md for
+  the file inventory). T104/T109/T110 are authored-complete.
+- No verification pass is claimed: Jest, typecheck, lint, Maestro, and device
+  runs remain pending the lead-run batch.
+- The D10/D12 offline and D20 two-device scenarios stay manual-only until the
+  harness supplies an offline profile and devices are available.
+
 The revision-zero registry contract is satisfied: a predecessor-less
 revision-zero Dispose payload is accepted only for revision `0`. Device evidence
 is still required before release.

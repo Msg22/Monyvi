@@ -40,7 +40,7 @@ interface DisposeReadModelModule {
     disposalDate: string,
     options?: { readonly nowMs?: number }
   ) => Promise<
-    readonly {
+    ReadonlyArray<{
       readonly role: "terminal_metal" | "terminal_purchase_currency";
       readonly kind: "metal" | "currency";
       readonly instrumentCode: string;
@@ -55,7 +55,7 @@ interface DisposeReadModelModule {
       readonly quality: "valid";
       readonly capturedFreshness: "fresh" | "stale" | "unknown";
       readonly capturedAt: string;
-    }[]
+    }>
   >;
 }
 
@@ -85,10 +85,7 @@ jest.mock("../../services/user-data-access", () => {
       userId: string,
       ...clauses: never[]
     ): never =>
-      (collection.query as (...args: never[]) => never)(
-        scopedQ.where("user_id", userId) as never,
-        ...clauses
-      ),
+      collection.query(scopedQ.where("user_id", userId) as never, ...clauses),
     queryChildrenOfOwnedParent: (
       collection: { query: (...args: never[]) => never },
       parentRecord: { id: string; userId: string },
@@ -97,7 +94,7 @@ jest.mock("../../services/user-data-access", () => {
       ...clauses: never[]
     ): never => {
       if (parentRecord.userId !== userId) throw new Error("ownership_failed");
-      return (collection.query as (...args: never[]) => never)(
+      return collection.query(
         scopedQ.where(foreignKey, parentRecord.id) as never,
         ...clauses
       );
@@ -162,11 +159,7 @@ function testScope(userId: string = IDS.user): unknown {
     queryOwned: (
       collection: { query: (...args: unknown[]) => unknown },
       ...clauses: unknown[]
-    ): unknown =>
-      (collection.query as (...args: unknown[]) => unknown)(
-        Q.where("user_id", userId),
-        ...clauses
-      ),
+    ): unknown => collection.query(Q.where("user_id", userId), ...clauses),
     assertOwned: <T extends { userId: string }>(record: T): T => {
       if (record.userId !== userId) throw new Error("ownership_failed");
       return record;
@@ -177,10 +170,7 @@ function testScope(userId: string = IDS.user): unknown {
       foreignKey: string,
       ...clauses: unknown[]
     ): unknown =>
-      (collection.query as (...args: unknown[]) => unknown)(
-        Q.where(foreignKey, parentRecord.id),
-        ...clauses
-      ),
+      collection.query(Q.where(foreignKey, parentRecord.id), ...clauses),
   };
 }
 
@@ -793,7 +783,7 @@ describe("Dispose production loader-to-command integration", () => {
       referenceId: [
         "118f0c7a-1234-7abc-8def-000000000021",
         "118f0c7a-1234-7abc-8def-000000000022",
-      ][index] as string,
+      ][index],
     }));
     await expect(
       service.dispose({
