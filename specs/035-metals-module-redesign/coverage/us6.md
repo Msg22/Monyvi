@@ -20,6 +20,10 @@ Maestro journey is authored but BLOCKED (no supplied disposable holding
 fixture, no registered dispose deep link, no runner-controlled offline
 profile). No new local verification is claimed by this documentation update.
 Device fidelity and the offline/two-device profiles remain open.
+- October 8 user-approved correction removes No Longer-only customer-facing
+  terminal-rate disclosure and stale/unknown acknowledgment while preserving
+  immutable terminal snapshot capture, rate-store failure/retry, missing-pair
+  behavior, operational retry pinning, and revision-conflict reload.
 
 | Manual | FR / SC | Deterministic automation | Maestro / manual | Current evidence |
 | --- | --- | --- | --- | --- |
@@ -27,16 +31,16 @@ Device fidelity and the offline/two-device profiles remain open.
 | D03–D08 | FR-033–FR-036, SC-020 | service mapping/consequence cases plus form conditional-summary cases | Manual user-visible summary fidelity | Green: exact category IDs, six canonical reasons, and summaries |
 | D09 | FR-033, FR-067 | SQLite null/Unicode evidence test | Manual Unicode keyboard fidelity | Green: deterministic persistence |
 | D10 | FR-036, FR-039, FR-063–FR-065, FR-091–FR-098, SC-002, SC-007, SC-027–SC-030 | SQLite exact group/state/revision/history/no-account test, including predecessor-less revision zero, full lifecycle/action-root reduction, verified legacy-disposal baseline reduction, and a compensated reconciled Delete root treated as rejected CAS evidence on a restored Active holding | Manual offline journey until a controllable offline fixture exists | Green through the production registry and command service |
-| D11–D12 | FR-039, FR-073–FR-080, SC-015–SC-016 | hook duplicate-submit lock and retained-command retry; displayed/acknowledged terminal pair, command object, IDs, values, and freshness remain pinned across ambiguous operational retry; repository batch rollback/retry | Manual operational retry with visible/committed evidence comparison | Green: deterministic hook/repository; device open |
+| D11–D12 | FR-039, FR-073–FR-080, SC-015–SC-016 | hook duplicate-submit lock and retained-command retry; terminal pair, command object, IDs, values, dates, provenance, and captured freshness remain pinned across ambiguous operational retry without client acknowledgment; repository batch rollback/retry | Manual operational retry with visible/committed evidence comparison | Green: deterministic hook/repository; device open |
 | D13 | FR-040–FR-043, FR-047, FR-075, FR-094, SC-003, SC-010, SC-011, SC-023 | SQLite replay/payload mismatch/service recreation; unsuccessful recovery-root rejection; terminal rate references rolled back with the failed group and replayed without duplication | Manual process restart after route integration | Green: deterministic replay; process-level proof blocked |
-| D14 | FR-061–FR-062, FR-073–FR-075, FR-092–FR-093 | active-only/stale-revision/foreign-user/non-effective-projection/UUID-boundary tests plus terminal rate evidence: registry snapshot-pair acceptance/rejection cases, exact `metal_rate_references` persistence, reference-id stability, instrument-context rejection, disposal-date-keyed reloads, injected-clock current-freshness acknowledgment gating, shaped per-reference freshness/provenance display, and a distinct terminal-rate-store failure that blocks submission until a successful reload | Manual multi-account transition and device acknowledgment fidelity | Green: deterministic fail-closed paths and FR-073–FR-075 capture |
+| D14 | FR-061–FR-062, FR-073–FR-075, FR-092–FR-093 | active-only/stale-revision/foreign-user/non-effective-projection/UUID-boundary tests plus terminal rate evidence: registry snapshot-pair acceptance/rejection cases, exact `metal_rate_references` persistence, reference-id stability, instrument-context rejection, disposal-date-keyed reloads, immutable per-reference provenance capture, and a distinct terminal-rate-store failure that blocks submission until a successful reload | Manual multi-account transition and device acknowledgment fidelity | Green: deterministic fail-closed paths and FR-073–FR-075 capture |
 | D15 | FR-066–FR-072, FR-077–FR-079, SC-013, SC-022, SC-024 | screen safe-area/RTL/theme/shared-breakpoint/text-scale/accessibility tests, individually accessible radio choices, focus on validation and operational submit failures, and localized command-failure/date/acquisition-boundary messages | Manual device fidelity gate | Green: component contract; device open |
 | D16 | FR-080, FR-086 | pending dismissal contract; dirty-exit callback contract | Manual shared-shell guard integration | Partial: component/hook only; route open |
 | D17 | FR-034–FR-036, FR-040–FR-047, FR-091 | exact consequence object and immutable state/event/evidence assertions, including a verified revision-zero legacy disposal that remains readable in detail and History | Manual integrated portfolio/detail/history/reporting | Green: story evidence; downstream integration open |
-| D18 | FR-054–FR-055, FR-075 | hook partial-date/loading, changed-evidence acknowledgment, and clock-boundary timer tests; screen pending-button contract | Manual date keyboard focus and open-form trust fidelity | Green: deterministic hook/screen; device open |
+| D18 | FR-054–FR-055, FR-075 | hook partial-date/loading and selected-date evidence reload tests; screen pending-button contract | Manual date keyboard focus and open-form trust fidelity | Green: deterministic hook/screen; device open |
 | D19 | FR-033, FR-067, FR-092 | hook UTF-8 byte validation plus notes field and summary feedback test | Manual Arabic/emoji entry and TalkBack/VoiceOver | Green: deterministic hook/screen; device open |
-| D20 | FR-073–FR-080 | hook revision-conflict test discards the old command, reloads holding plus rates, resets acknowledgment for changed evidence, and submits a new action with the refreshed revision and exactly the newly displayed pair | Manual two-device conflict/reload with displayed/committed evidence comparison | Green: deterministic hook; device open |
-| PR336 route/loader/i18n (authored, runs deferred) | FR-025, FR-033, FR-036, FR-053–FR-055, FR-058, FR-061–FR-065, FR-068, FR-072–FR-080, FR-086, SC-020 | `dispose-action.test.tsx`: stable descriptor, trimmed id, empty-id rejection; `dispose-metal-holding-read-model.integration.test.ts`: scoped SQLite holding load, terminal/foreign/non-effective fail-closed, today-pair with actual dates, backdated provider-date filtering, unknown-date omission for history, missing-leg `[]`, USD exact identity, `rate_store_unavailable`, ambiguous-batch skip, capture-incoherence skip, provider-over-fixture precedence with fixture fallback, loader-to-command commit; `metals-dispose-route.test.tsx`: missing/blank-id error with no facade invocation, toast-to-Details coordinated after guard disable with no post-save prompt, duplicate/in-flight/submit locks, explicit-Cancel and native-back Keep/Discard paths, pending-submission block, stable facade dependencies across re-renders, account-switch fail-closed with no submit surface; `metals-detail-dispose.test.tsx`: active Dispose+Delete with Edit preserved, terminal/locked fail-closed; `dispose-rate-presentation.test.tsx`: grouped exact values, no provider/quality identifiers, unknown observation label; `dispose-holding.yaml`: authored category/Other/duplicate-tap/restart contract, BLOCKED on fixture/deep-link/offline profile | Manual device/offline/two-device gates until the pre-push batch runs these suites | Authored only; no pass claimed |
+| D20 | FR-073–FR-080 | hook revision-conflict test discards the old command, reloads holding plus terminal rates, and submits a new action with the refreshed revision and exactly the replacement pair | Manual two-device conflict/reload with displayed/committed evidence comparison | Green: deterministic hook; device open |
+| PR336 route/loader/i18n (authored, runs deferred) | FR-025, FR-033, FR-036, FR-053–FR-055, FR-058, FR-061–FR-065, FR-068, FR-072–FR-080, FR-086, SC-020 | `dispose-action.test.tsx`: stable descriptor, trimmed id, empty-id rejection; `dispose-metal-holding-read-model.integration.test.ts`: scoped SQLite holding load, terminal/foreign/non-effective fail-closed, today-pair with actual dates, backdated provider-date filtering, unknown-date omission for history, missing-leg `[]`, USD exact identity, `rate_store_unavailable`, ambiguous-batch skip, capture-incoherence skip, provider-over-fixture precedence with fixture fallback, loader-to-command commit; `metals-dispose-route.test.tsx`: missing/blank-id error with no facade invocation, toast-to-Details coordinated after guard disable with no post-save prompt, duplicate/in-flight/submit locks, explicit-Cancel and native-back Keep/Discard paths, pending-submission block, stable facade dependencies across re-renders, account-switch fail-closed with no submit surface; `metals-detail-dispose.test.tsx`: active Dispose+Delete with Edit preserved, terminal/locked fail-closed; `dispose-holding.yaml`: authored category/Other/duplicate-tap/restart contract, BLOCKED on fixture/deep-link/offline profile | Manual device/offline/two-device gates until the pre-push batch runs these suites | Authored only; no pass claimed |
 
 ## Verification evidence
 
@@ -74,9 +78,7 @@ Device fidelity and the offline/two-device profiles remain open.
   toasts or navigates after unmount/account switch); detail `[id].tsx`
   whitespace-param normalization with guarded action creation; loader batch
   capture coherence, ambiguous-batch skip, and provider-over-fixture
-  precedence; `dispose-rate-presentation` via the shared canonical decimal
-  primitive (metal two-decimal display, truthful direct/inverse FX units,
-  explicit historical year, Western digits); approved-12 composition in
+  precedence; approved-12 composition in
   `DisposeMetalHoldingScreen.tsx` (reason icons, selection radio, treatment
   descriptions, shared date-picker pattern, required markers, summary check
   icons, outlined Cancel); `dispose.whatHappened/affectsRecords/treatments`
@@ -120,10 +122,10 @@ Device fidelity and the offline/two-device profiles remain open.
 
 ## Honest boundary
 
-- Ambiguous operational retry retains the original command and its displayed,
-  acknowledged terminal pair. A revision conflict discards that command,
-  reloads the holding and rates, clears acknowledgment when evidence changes,
-  and commits exactly the refreshed pair currently shown.
+- Ambiguous operational retry retains the original command and its immutable
+  terminal pair without customer-facing rate disclosure or acknowledgment. A
+  revision conflict discards that command, reloads the holding and terminal
+  pair, and commits exactly the refreshed replacement pair.
 - The production `metals.dispose/v1` registry accepts a null predecessor only
   for revision `0`; later revisions still require a valid predecessor UUID.
 - FR-073–FR-075 terminal rate capture is deterministic at the registry,

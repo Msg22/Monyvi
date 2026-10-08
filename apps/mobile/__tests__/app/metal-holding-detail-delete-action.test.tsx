@@ -86,7 +86,7 @@ function activeModel(): Pick<
   };
 }
 
-describe("metal holding detail delete action composition", () => {
+describe("metal holding detail implemented action composition", () => {
   beforeEach((): void => {
     mockPush.mockClear();
     mockModel = null;
@@ -94,12 +94,21 @@ describe("metal holding detail delete action composition", () => {
     capturedOnAction = undefined;
   });
 
-  it("exposes only the implemented Delete action for an eligible active holding", () => {
+  it("exposes only the implemented Dispose and Delete actions for an eligible active holding", () => {
     mockModel = activeModel();
 
     render(<MetalHoldingDetailRoute />);
 
     expect(capturedActions).toEqual([
+      {
+        id: "dispose",
+        labelKey: "actions.dispose",
+        tone: "secondary",
+        href: {
+          pathname: "/(private)/metals/[holdingId]/dispose",
+          params: { holdingId: "holding-1" },
+        },
+      },
       {
         id: "delete",
         labelKey: "actions.delete",
@@ -110,14 +119,14 @@ describe("metal holding detail delete action composition", () => {
         },
       },
     ]);
+    expect(screen.getByTestId("detail-action-dispose")).toBeTruthy();
     expect(screen.getByTestId("detail-action-delete")).toBeTruthy();
     expect(screen.queryByTestId("detail-action-sell")).toBeNull();
     expect(screen.queryByTestId("detail-action-edit")).toBeNull();
-    expect(screen.queryByTestId("detail-action-dispose")).toBeNull();
     expect(screen.queryByTestId("detail-action-undo")).toBeNull();
   });
 
-  it("navigates to the holding-scoped Delete route without touching unimplemented actions", () => {
+  it("navigates to the holding-scoped Delete route without touching unimplemented actions", () => {  it("navigates to the holding-scoped Delete route without touching unimplemented actions", () => {
     mockModel = activeModel();
 
     render(<MetalHoldingDetailRoute />);
@@ -139,7 +148,7 @@ describe("metal holding detail delete action composition", () => {
     expect(capturedOnAction).toBeUndefined();
   });
 
-  it("hides the Delete action for a terminal holding", () => {
+  it("hides Dispose and Delete for a terminal holding", () => {
     mockModel = {
       isActiveOwnership: false,
       isFinancialActionLocked: false,
@@ -149,6 +158,7 @@ describe("metal holding detail delete action composition", () => {
     render(<MetalHoldingDetailRoute />);
 
     expect(capturedActions).toEqual([]);
+    expect(screen.queryByTestId("detail-action-dispose")).toBeNull();
     expect(screen.queryByTestId("detail-action-delete")).toBeNull();
   });
 

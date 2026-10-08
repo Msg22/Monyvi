@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import React, { type Ref } from "react";
 import { Text, TouchableOpacity, View } from "react-native";
 
+import { DisposeReasonIcon } from "@/components/metals/DisposeReasonIcon";
 import type {
   DisposeCategory,
   DisposeTreatment,
@@ -32,17 +33,7 @@ export const DISPOSE_CONSEQUENCE_ORDER = Object.freeze([
   "history",
 ]);
 
-const CATEGORY_ICONS: Readonly<Record<DisposeCategory, string>> = Object.freeze(
-  {
-    lost_or_stolen: "location-outline",
-    destroyed_or_damaged: "shield-outline",
-    given_away: "gift-outline",
-    donated: "heart-outline",
-    other: "chatbubble-ellipses-outline",
-  }
-);
-
-export function RequiredMark({
+export function RequiredMarkexport function RequiredMark({
   testID,
 }: {
   readonly testID: string;
@@ -83,7 +74,7 @@ export function CategoryTile(props: {
   readonly isDisabled: boolean;
   readonly isStacked: boolean;
   readonly iconColor: string;
-  readonly icon: string;
+  readonly reason: DisposeCategory;
   readonly buttonRef?: Ref<DisposeChoiceButtonHandle>;
   readonly onPress: () => void;
 }): React.JSX.Element {
@@ -113,17 +104,15 @@ export function CategoryTile(props: {
           <RadioDot isSelected />
         </View>
       ) : null}
-      <View testID={props.iconTestID}>
-        <Ionicons
-          name={props.icon as keyof typeof Ionicons.glyphMap}
-          size={22}
-          color={props.iconColor}
-        />
-      </View>
+      <DisposeReasonIcon
+        testID={props.iconTestID}
+        reason={props.reason}
+        color={props.iconColor}
+      />
       <Text
         className={
           props.isSelected
-            ? "min-w-0 flex-1 text-sm font-semibold text-nileGreen-800 dark:text-nileGreen-300"
+            ? "min-w-0 flex-1 text-sm font-semibold text-nileGreen-800 dark:text-nileGreen-400"
             : "min-w-0 flex-1 text-sm font-medium text-text-primary dark:text-text-primary-dark"
         }
       >
@@ -133,11 +122,7 @@ export function CategoryTile(props: {
   );
 }
 
-export function categoryIconName(category: DisposeCategory): string {
-  return CATEGORY_ICONS[category] ?? "ellipse-outline";
-}
-
-export function TreatmentOption(props: {
+export function TreatmentOptionexport function TreatmentOption(props: {
   readonly id: string;
   readonly descriptionTestID: string;
   readonly label: string;
@@ -170,7 +155,7 @@ export function TreatmentOption(props: {
         <Text
           className={
             props.isSelected
-              ? "text-sm font-semibold text-nileGreen-800 dark:text-nileGreen-300"
+              ? "text-sm font-semibold text-nileGreen-800 dark:text-nileGreen-400"
               : "text-sm font-medium text-text-primary dark:text-text-primary-dark"
           }
         >

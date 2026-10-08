@@ -101,7 +101,7 @@ describe("useDisposeMetalHolding lifecycle", () => {
     };
   }
 
-  it("blocks submission until stale or unknown terminal rates are acknowledged and captures the pair with stable ids", async (): Promise<void> => {
+  it("submits stale or unknown terminal rates without client acknowledgment and captures the pair with stable ids", async (): Promise<void> => {
     const dependencies = createDependencies(
       undefined,
       jest.fn(() => Promise.resolve(rateDrafts("stale", "unknown")))
@@ -124,20 +124,14 @@ describe("useDisposeMetalHolding lifecycle", () => {
     );
     await waitFor(() => expect(result.current.isLoading).toBe(false));
     expect(result.current.terminalRates).toHaveLength(2);
-    expect(result.current.requiresRateAcknowledgment).toBe(true);
+    expect("requiresRateAcknowledgment" in result.current).toBe(false);
+    expect("rateAcknowledged" in result.current).toBe(false);
+    expect("setRateAcknowledged" in result.current).toBe(false);
     act((): void => result.current.setCategory("donated"));
-    await act(async (): Promise<void> => {
-      await expect(result.current.submit()).resolves.toBe(false);
-    });
-    expect(result.current.validationErrors.rateAcknowledgment).toBe(
-      "dispose_rate_acknowledgment_required"
-    );
-    expect(dependencies.disposeHolding).not.toHaveBeenCalled();
-    act((): void => result.current.setRateAcknowledged(true));
-    expect(result.current.validationErrors.rateAcknowledgment).toBeUndefined();
     await act(async (): Promise<void> => {
       await expect(result.current.submit()).resolves.toBe(true);
     });
+    expect(result.current.validationErrors.rateAcknowledgment).toBeUndefined();
     expect(dependencies.disposeHolding).toHaveBeenCalledWith(
       expect.objectContaining({
         rateSnapshots: [
@@ -156,98 +150,6 @@ describe("useDisposeMetalHolding lifecycle", () => {
     );
   });
 
-  it("requires acknowledgment after loaded references become stale while the form remains open", async (): Promise<void> => {
-    const dependencies = createDependencies(
-      undefined,
-      jest.fn(() => Promise.resolve(rateDrafts("fresh", "fresh")))
-    );
-    let currentNowMs = Date.parse("2026-09-05T10:00:00.000Z");
-    const nowMs = jest.fn(() => currentNowMs);
-    const { result } = renderHook(() =>
-      useDisposeMetalHolding({
-        holdingId: holding.holdingId,
-        today: "2026-09-05",
-        createId: jest.fn((): string => "stable-id"),
-        nowMs,
-        dependencies,
-      })
-    );
-    await waitFor(() => expect(result.current.isLoading).toBe(false));
-    expect(result.current.terminalRateTrust).toEqual([
-      { role: "terminal_metal", currentFreshness: "fresh" },
-      { role: "terminal_purchase_currency", currentFreshness: "fresh" },
-    ]);
-    expect(result.current.requiresRateAcknowledgment).toBe(false);
-    currentNowMs = Date.parse("2026-09-06T09:00:00.001Z");
-    act((): void => result.current.setCategory("donated"));
-    await act(async (): Promise<void> => {
-      await expect(result.current.submit()).resolves.toBe(false);
-    });
-    expect(result.current.validationErrors.rateAcknowledgment).toBe(
-      "dispose_rate_acknowledgment_required"
-    );
-    expect(result.current.terminalRateTrust).toEqual([
-      { role: "terminal_metal", currentFreshness: "stale" },
-      { role: "terminal_purchase_currency", currentFreshness: "stale" },
-    ]);
-    expect(result.current.requiresRateAcknowledgment).toBe(true);
-    expect(dependencies.disposeHolding).not.toHaveBeenCalled();
-    act((): void => result.current.setRateAcknowledged(true));
-    await act(async (): Promise<void> => {
-      await expect(result.current.submit()).resolves.toBe(true);
-    });
-    expect(dependencies.disposeHolding).toHaveBeenCalledWith(
-      expect.objectContaining({
-        rateSnapshots: [
-          expect.objectContaining({
-            capturedFreshness: "fresh",
-            providerObservedAt: "2026-09-05T09:00:00.000Z",
-          }),
-          expect.objectContaining({
-            capturedFreshness: "fresh",
-            providerObservedAt: "2026-09-05T09:00:00.000Z",
-          }),
-        ],
-      })
-    );
-  });
-
-  it("updates displayed freshness at the 24-hour boundary without a submit", async (): Promise<void> => {
-    jest.useFakeTimers();
-    try {
-      let currentNowMs = Date.parse("2026-09-05T10:00:00.000Z");
-      const dependencies = createDependencies(
-        undefined,
-        jest.fn(() => Promise.resolve(rateDrafts("fresh", "fresh")))
-      );
-      const { result } = renderHook(() =>
-        useDisposeMetalHolding({
-          holdingId: holding.holdingId,
-          today: "2026-09-05",
-          createId: jest.fn(() => "stable-id"),
-          nowMs: () => currentNowMs,
-          dependencies,
-        })
-      );
-      await act(async (): Promise<void> => {
-        await Promise.resolve();
-      });
-      expect(result.current.terminalRateTrust[0]?.currentFreshness).toBe(
-        "fresh"
-      );
-      currentNowMs = Date.parse("2026-09-06T09:00:00.001Z");
-      act((): void => {
-        jest.advanceTimersByTime(23 * 60 * 60 * 1000 + 1);
-      });
-      expect(result.current.terminalRateTrust[0]?.currentFreshness).toBe(
-        "stale"
-      );
-      expect(result.current.requiresRateAcknowledgment).toBe(true);
-    } finally {
-      jest.useRealTimers();
-    }
-  });
-
   it("submits fresh terminal rate pairs without acknowledgment", async (): Promise<void> => {
     const dependencies = createDependencies(
       undefined,
@@ -263,7 +165,6 @@ describe("useDisposeMetalHolding lifecycle", () => {
       })
     );
     await waitFor(() => expect(result.current.isLoading).toBe(false));
-    expect(result.current.requiresRateAcknowledgment).toBe(false);
     act((): void => result.current.setCategory("donated"));
     await act(async (): Promise<void> => {
       await expect(result.current.submit()).resolves.toBe(true);
@@ -293,7 +194,6 @@ describe("useDisposeMetalHolding lifecycle", () => {
     );
     await waitFor(() => expect(result.current.isLoading).toBe(false));
     expect(result.current.terminalRates).toEqual([]);
-    expect(result.current.requiresRateAcknowledgment).toBe(false);
     act((): void => result.current.setCategory("donated"));
     await act(async (): Promise<void> => {
       await expect(result.current.submit()).resolves.toBe(true);
@@ -350,7 +250,6 @@ describe("useDisposeMetalHolding lifecycle", () => {
       ).toEqual(["stale", "stale"])
     );
     expect(result.current.terminalRates).toHaveLength(2);
-    expect(result.current.requiresRateAcknowledgment).toBe(true);
   });
 
   it("keeps the form mounted and skips rate requests for partial dates", async (): Promise<void> => {
@@ -415,7 +314,7 @@ describe("useDisposeMetalHolding lifecycle", () => {
     expect(result.current.terminalRates).toHaveLength(2);
   });
 
-  it("clears acknowledgment when another date loads different rate evidence", async (): Promise<void> => {
+  it("reloads terminal rate evidence for another date without any client consent state", async (): Promise<void> => {
     const dependencies = createDependencies(
       undefined,
       jest.fn(
@@ -437,14 +336,13 @@ describe("useDisposeMetalHolding lifecycle", () => {
       })
     );
     await waitFor(() => expect(result.current.terminalRates).toHaveLength(2));
-    act((): void => result.current.setRateAcknowledged(true));
     act((): void => result.current.setDisposalDate("2026-09-04"));
     await waitFor(() =>
       expect(result.current.terminalRates[0]?.capturedAt).toBe(
         "2026-09-04T10:00:00.000Z"
       )
     );
-    expect(result.current.rateAcknowledged).toBe(false);
+    expect("rateAcknowledged" in result.current).toBe(false);
   });
 
   it("discards a revision-conflict command and reloads the holding and terminal-rate evidence", async (): Promise<void> => {
@@ -491,7 +389,6 @@ describe("useDisposeMetalHolding lifecycle", () => {
     );
     act((): void => {
       result.current.setCategory("donated");
-      result.current.setRateAcknowledged(true);
     });
     await act(async (): Promise<void> => {
       await expect(result.current.submit()).resolves.toBe(false);
@@ -504,8 +401,6 @@ describe("useDisposeMetalHolding lifecycle", () => {
     await waitFor(() =>
       expect(result.current.terminalRates).toEqual(refreshedRates)
     );
-    expect(result.current.rateAcknowledged).toBe(false);
-    act((): void => result.current.setRateAcknowledged(true));
     await act(async (): Promise<void> => {
       await expect(result.current.submit()).resolves.toBe(true);
     });
@@ -528,7 +423,7 @@ describe("useDisposeMetalHolding lifecycle", () => {
     );
   });
 
-  it("pins displayed and acknowledged terminal rates to an operational retry's retained command", async (): Promise<void> => {
+  it("pins terminal rates to an operational retry's retained command", async (): Promise<void> => {
     const initialRates = rateDrafts("stale", "unknown");
     const replacementRates = rateDrafts("stale", "unknown").map((rate) => ({
       ...rate,
@@ -576,7 +471,6 @@ describe("useDisposeMetalHolding lifecycle", () => {
     );
     act((): void => {
       result.current.setCategory("donated");
-      result.current.setRateAcknowledged(true);
     });
     await act(async (): Promise<void> => {
       await expect(result.current.submit()).resolves.toBe(false);
@@ -611,7 +505,6 @@ describe("useDisposeMetalHolding lifecycle", () => {
     expect(initialRateLoader).toHaveBeenCalledTimes(1);
     expect(replacementRateLoader).not.toHaveBeenCalled();
     expect(result.current.terminalRates).toEqual(initialRates);
-    expect(result.current.rateAcknowledged).toBe(true);
     await act(async (): Promise<void> => {
       await expect(result.current.submit()).resolves.toBe(true);
     });

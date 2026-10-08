@@ -352,7 +352,7 @@
     "treatment_external_transfer": "Record it as moved out"
   },
   "dispose": {
-    "title": "No longer in my possession: {{holdingName}}",
+    "title": "No longer owned",
     "intro": "Use this when you no longer own the holding and did not sell it.",
     "whatHappened": "What happened?",
     "affectsRecords": "How should this affect your records?",
@@ -370,8 +370,7 @@
       "externalTransferDescription": "It leaves your metals. No sale profit or loss is recorded."
     },
     "dateLabel": "Date",
-    "notesLabel": "Notes",
-    "notesOptional": "Optional",
+    "notesLabel": "Notes (optional)",
     "notesTooLong": "Shorten your notes and try again.",
     "summaryTitle": "What will happen",
     "writeOffSummary": "Its purchase cost will be recorded as a loss.",
@@ -380,21 +379,8 @@
     "historySummary": "This change will appear in History.",
     "noSaleMoneyOrAccountSummary": "There is no sale money or account change.",
     "noSaleProfitLossSummary": "There is no profit or loss from a sale.",
-    "rateEvidenceTitle": "Rates kept with this record",
-    "rateRoles": {
-      "terminalMetal": "Metal rate",
-      "terminalPurchaseCurrency": "Currency rate"
-    },
-    "rateFreshness": {
-      "fresh": "Current",
-      "stale": "Last available",
-      "unknown": "Age unknown"
-    },
-    "rateAcknowledgment": "I understand the rates above may be old or of unknown age.",
-    "rateAcknowledgmentRequired": "Confirm the rate note to continue.",
-    "rateEvidenceUnavailable": "We could not check the rates. Try again.",
+    "rateEvidenceUnavailable": "We could not check the rates. Try again.",    "rateEvidenceUnavailable": "We could not check the rates. Try again.",
     "ratePendingLabel": "Checking rates",
-    "observedUnknown": "Update time unknown",
     "submitLabel": "Record change",
     "pendingLabel": "Recording change",
     "cancelLabel": "Cancel",
@@ -416,7 +402,7 @@
       "dateBeforeAcquisition": "Choose a date on or after the purchase date.",
       "recoveryRequired": "This action needs recovery. Try again."
     },
-    "success": "Recorded: {{holdingName}} is no longer in your active portfolio.",
+    "success": "Recorded: {{holdingName}} is no longer in your metals.",
     "exitTitle": "Discard changes?",
     "exitMessage": "Your unsaved changes will be lost.",
     "keepEditing": "Keep editing",

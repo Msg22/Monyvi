@@ -40,9 +40,6 @@ const facadeBase = {
   disposalDate: "2026-09-05",
   notes: "",
   terminalRates: [],
-  terminalRateTrust: [],
-  requiresRateAcknowledgment: false,
-  rateAcknowledged: false,
   isLoading: false,
   isRateLoading: false,
   isSubmitting: false,
@@ -55,7 +52,6 @@ const facadeBase = {
   setOtherTreatment: jest.fn(),
   setDisposalDate: jest.fn(),
   setNotes: jest.fn(),
-  setRateAcknowledged: jest.fn(),
   submit: mockSubmit,
   retryLoad: mockRetryLoad,
 };

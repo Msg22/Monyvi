@@ -42,14 +42,7 @@ type Category =
   | "other";
 type Treatment = "write_off" | "external_transfer";
 
-interface RateEvidenceDisplay {
-  readonly role: "terminal_metal" | "terminal_purchase_currency";
-  readonly valueLabel: string;
-  readonly freshness: "fresh" | "stale" | "unknown";
-  readonly observedLabel: string;
-}
-
-interface DisposeCopy {
+interface DisposeCopy {interface DisposeCopy {
   readonly title: string;
   readonly intro: string;
   readonly whatHappened: string;
@@ -59,7 +52,6 @@ interface DisposeCopy {
   readonly treatmentDescriptions: Readonly<Record<Treatment, string>>;
   readonly dateLabel: string;
   readonly notesLabel: string;
-  readonly notesOptional: string;
   readonly summaryTitle: string;
   readonly writeOffSummary: string;
   readonly externalTransferSummary: string;
@@ -67,11 +59,6 @@ interface DisposeCopy {
   readonly historySummary: string;
   readonly noSaleMoneyOrAccountSummary: string;
   readonly noSaleProfitLossSummary: string;
-  readonly rateEvidenceTitle: string;
-  readonly rateRoles: Readonly<Record<string, string>>;
-  readonly rateFreshness: Readonly<Record<string, string>>;
-  readonly rateAcknowledgment: string;
-  readonly rateAcknowledgmentRequired: string;
   readonly rateEvidenceUnavailable: string;
   readonly ratePendingLabel: string;
   readonly notesTooLong: string;
@@ -90,7 +77,6 @@ interface DisposeCopy {
 }
 
 interface DisposeScreenProps {
-  readonly holdingName: string;
   readonly copy: DisposeCopy;
   readonly locale: "en" | "ar";
   readonly isRtl: boolean;
@@ -102,9 +88,6 @@ interface DisposeScreenProps {
   readonly treatment: Treatment | null;
   readonly disposalDate: string;
   readonly notes: string;
-  readonly rateEvidence?: readonly RateEvidenceDisplay[];
-  readonly requiresRateAcknowledgment?: boolean;
-  readonly rateAcknowledged?: boolean;
   readonly rateEvidenceError?: string | null;
   readonly isLoading?: boolean;
   readonly isRateLoading?: boolean;
@@ -116,7 +99,6 @@ interface DisposeScreenProps {
   readonly onOtherTreatmentChange: (treatment: Treatment) => void;
   readonly onDateChange: (value: string) => void;
   readonly onNotesChange: (value: string) => void;
-  readonly onRateAcknowledgmentChange?: (acknowledged: boolean) => void;
   readonly onSubmit: () => void;
   readonly onRequestExit: () => void;
   readonly onRetry: () => void;
@@ -128,7 +110,7 @@ interface DisposeScreenModule {
 }
 
 const copy: DisposeCopy = {
-  title: "No longer in my possession: Wedding coin",
+  title: "No longer owned",
   intro: "Use this when you no longer own the holding and did not sell it.",
   whatHappened: "What happened?",
   affectsRecords: "How should this affect your records?",
@@ -150,8 +132,7 @@ const copy: DisposeCopy = {
       "It leaves your metals. No sale profit or loss is recorded.",
   },
   dateLabel: "Date",
-  notesLabel: "Notes",
-  notesOptional: "Optional",
+  notesLabel: "Notes (optional)",
   summaryTitle: "What will happen",
   writeOffSummary: "Its purchase cost will be recorded as a loss.",
   externalTransferSummary: "It will leave your active metals.",
@@ -159,19 +140,7 @@ const copy: DisposeCopy = {
   historySummary: "This change will appear in History.",
   noSaleMoneyOrAccountSummary: "There is no sale money or account change.",
   noSaleProfitLossSummary: "There is no profit or loss from a sale.",
-  rateEvidenceTitle: "Rates kept with this record",
-  rateRoles: {
-    terminal_metal: "Metal rate",
-    terminal_purchase_currency: "Currency rate",
-  },
-  rateFreshness: {
-    fresh: "Fresh",
-    stale: "Old",
-    unknown: "Unknown",
-  },
-  rateAcknowledgment: "I understand these rates may be old or unknown",
-  rateAcknowledgmentRequired: "Confirm the rate note to continue.",
-  rateEvidenceUnavailable: "We could not check the rates. Try again.",
+  rateEvidenceUnavailable: "We could not check the rates. Try again.",  rateEvidenceUnavailable: "We could not check the rates. Try again.",
   ratePendingLabel: "Checking rates",
   notesTooLong: "Shorten your notes and try again.",
   submitLabel: "Record change",
@@ -204,7 +173,6 @@ function renderScreen(
   overrides: Partial<DisposeScreenProps> = {}
 ): DisposeScreenProps {
   const props: DisposeScreenProps = {
-    holdingName: "Wedding coin",
     copy,
     locale: "en",
     isRtl: false,
@@ -248,7 +216,10 @@ describe("Dispose metal holding direct form", () => {
         /^dispose-category-(lost_or_stolen|destroyed_or_damaged|given_away|donated|other)$/
       )
     ).toHaveLength(5);
-    expect(screen.getByText("Optional")).toBeOnTheScreen();
+    expect(screen.getByText("No longer owned")).toBeOnTheScreen();
+    expect(screen.queryByText("Wedding coin")).toBeNull();
+    expect(screen.getByText("Notes (optional)")).toBeOnTheScreen();
+    expect(screen.queryByText("Optional")).toBeNull();
     expect(screen.queryByTestId("dispose-treatment-group")).toBeNull();
     expect(screen.queryByTestId("metal-holding-review-screen")).toBeNull();
     fireEvent.press(screen.getByTestId("dispose-submit"));
@@ -457,104 +428,12 @@ describe("Dispose metal holding direct form", () => {
     expect(screen.queryByText(copy.writeOffSummary)).toBeNull();
   });
 
-  it("renders each consumed terminal rate with its own freshness and provenance", (): void => {
-    renderScreen({
-      category: "donated",
-      treatment: "external_transfer",
-      rateEvidence: [
-        {
-          role: "terminal_metal",
-          valueLabel: "3,600 USD/g",
-          freshness: "stale",
-          observedLabel: "5 Sep 10:00",
-        },
-        {
-          role: "terminal_purchase_currency",
-          valueLabel: "0.02 USD/EGP",
-          freshness: "fresh",
-          observedLabel: "5 Sep 11:30",
-        },
-      ],
-      requiresRateAcknowledgment: true,
-    });
-    expect(screen.getByTestId("dispose-rate-evidence")).toBeOnTheScreen();
-    expect(
-      within(
-        screen.getByTestId("dispose-rate-evidence-terminal_metal")
-      ).getByText(/3,600 USD\/g/)
-    ).toBeOnTheScreen();
-    expect(
-      within(
-        screen.getByTestId("dispose-rate-freshness-terminal_metal")
-      ).getByText(new RegExp(copy.rateFreshness.stale))
-    ).toBeOnTheScreen();
-    expect(
-      within(
-        screen.getByTestId("dispose-rate-freshness-terminal_purchase_currency")
-      ).getByText(new RegExp(copy.rateFreshness.fresh))
-    ).toBeOnTheScreen();
-    expect(screen.getByTestId("dispose-rate-acknowledgment")).toHaveProp(
-      "accessibilityRole",
-      "checkbox"
-    );
-  });
-
-  it("hides the rate acknowledgment for fresh evidence and missing references", (): void => {
-    renderScreen({});
+  it("keeps terminal rate evidence out of the No Longer form", (): void => {
+    renderScreen({ category: "donated", treatment: "external_transfer" });
     expect(screen.queryByTestId("dispose-rate-evidence")).toBeNull();
     expect(screen.queryByTestId("dispose-rate-acknowledgment")).toBeNull();
-    renderScreen({
-      rateEvidence: [
-        {
-          role: "terminal_metal",
-          valueLabel: "3,600 USD/g",
-          freshness: "fresh",
-          observedLabel: "5 Sep 11:30",
-        },
-      ],
-    });
-    expect(screen.queryByTestId("dispose-rate-acknowledgment")).toBeNull();
-  });
-
-  it("never exposes provider names or trust-engineering metadata in the user form", (): void => {
-    renderScreen({
-      category: "donated",
-      treatment: "external_transfer",
-      rateEvidence: [
-        {
-          role: "terminal_metal",
-          valueLabel: "3,600 USD/g",
-          freshness: "stale",
-          observedLabel: "5 Sep 10:00",
-        },
-      ],
-      requiresRateAcknowledgment: true,
-    });
-    expect(screen.getByTestId("dispose-rate-evidence")).toBeOnTheScreen();
-    expect(
-      screen.queryByTestId("dispose-rate-quality-terminal_metal")
-    ).toBeNull();
-    expect(screen.queryByText(/provider-a/)).toBeNull();
-    expect(screen.queryByText("Valid")).toBeNull();
-  });
-
-  it("shows a visible checked indicator for the rate acknowledgment", (): void => {
-    renderScreen({
-      requiresRateAcknowledgment: true,
-      rateAcknowledged: false,
-      onRateAcknowledgmentChange: jest.fn(),
-    });
-    expect(
-      screen.queryByTestId("dispose-rate-acknowledgment-indicator")
-    ).toBeNull();
-    renderScreen({
-      requiresRateAcknowledgment: true,
-      rateAcknowledged: true,
-      onRateAcknowledgmentChange: jest.fn(),
-    });
-    expect(
-      screen.getByTestId("dispose-rate-acknowledgment-indicator")
-    ).toBeOnTheScreen();
+    expect(screen.queryByText(/Rates kept with this record/i)).toBeNull();
+    expect(screen.queryByText(/I understand the rates/i)).toBeNull();
   });
 
   it("surfaces a terminal rate-store failure separately with a retry", (): void => {
@@ -599,26 +478,6 @@ describe("Dispose metal holding direct form", () => {
       copy.notesTooLong
     );
     expect(screen.getAllByText(copy.notesTooLong).length).toBeGreaterThan(1);
-  });
-
-  it("surfaces the acknowledgment error and toggles through the callback", (): void => {
-    const props = renderScreen({
-      validationErrors: {
-        rateAcknowledgment: "dispose_rate_acknowledgment_required",
-      },
-      requiresRateAcknowledgment: true,
-      rateAcknowledged: false,
-      onRateAcknowledgmentChange: jest.fn(),
-    });
-    expect(
-      screen.getByTestId("dispose-rate-acknowledgment-error")
-    ).toHaveTextContent(copy.rateAcknowledgmentRequired);
-    expect(screen.getByTestId("dispose-validation-summary")).toHaveProp(
-      "accessibilityLabel",
-      copy.rateAcknowledgmentRequired
-    );
-    fireEvent.press(screen.getByTestId("dispose-rate-acknowledgment"));
-    expect(props.onRateAcknowledgmentChange).toHaveBeenCalledWith(true);
   });
 
   it("uses Skeleton for loading", (): void => {
@@ -706,6 +565,63 @@ describe("Dispose metal holding direct form", () => {
     expect(
       screen.getByText(copy.whatHappened, { exact: false })
     ).toBeOnTheScreen();
+  });
+
+  it("uses the approved reason icon semantics and defined dark Nile Green tokens", (): void => {
+    renderScreen({
+      category: "other",
+      otherTreatment: "write_off",
+      treatment: "write_off",
+    });
+
+    const presentation = readFileSync(
+      resolve(
+        __dirname,
+        "../../components/metals/dispose-form-presentation.tsx"
+      ),
+      "utf8"
+    );
+    const screenSource = readFileSync(
+      resolve(
+        __dirname,
+        "../../components/metals/DisposeMetalHoldingScreen.tsx"
+      ),
+      "utf8"
+    );
+
+    expect(presentation).toContain("DisposeReasonIcon");
+    expect(presentation).not.toContain("shield-outline");
+    expect(presentation).not.toContain("heart-outline");
+    expect([presentation, screenSource].join("\n")).not.toContain(
+      "dark:text-nileGreen-300"
+    );
+    expect(screenSource).not.toContain("border-nileGreen-200");
+    expect(screen.getByText(copy.categoryLabels.other)).toHaveProp(
+      "className",
+      expect.stringContaining("dark:text-nileGreen-400")
+    );
+    expect(screen.getByText(copy.treatmentLabels.write_off)).toHaveProp(
+      "className",
+      expect.stringContaining("dark:text-nileGreen-400")
+    );
+    expect(screen.getByText(copy.summaryTitle)).toHaveProp(
+      "className",
+      expect.stringContaining("dark:text-nileGreen-400")
+    );
+  });
+
+  it("keeps the intro and What happened group compact while preserving validation summary access", (): void => {
+    renderScreen({
+      validationErrors: { category: "dispose_category_required" },
+    });
+    expect(screen.getByTestId("dispose-intro-reason-group")).toHaveProp(
+      "className",
+      expect.stringContaining("gap-4")
+    );
+    expect(screen.getByTestId("dispose-validation-summary")).toHaveProp(
+      "accessibilityRole",
+      "alert"
+    );
   });
 
   it("shows each Other treatment with its explanatory copy", (): void => {

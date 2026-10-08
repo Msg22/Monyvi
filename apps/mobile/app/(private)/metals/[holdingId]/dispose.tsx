@@ -26,7 +26,6 @@ import {
   DisposeMetalHoldingScreen,
   type DisposeMetalHoldingCopy,
 } from "@/components/metals/DisposeMetalHoldingScreen";
-import { shapeDisposeRateEvidence } from "@/components/metals/dispose-rate-presentation";
 import { PageHeader } from "@/components/navigation/PageHeader";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useToast } from "@/components/ui/Toast";
@@ -48,7 +47,7 @@ export default function DisposeMetalHoldingRoute(): React.JSX.Element {
     return (
       <View className="flex-1 bg-background dark:bg-background-dark">
         <PageHeader
-          title={t("actions.dispose")}
+          title={t("dispose.title")}
           showBackButton
           showDrawer={false}
           onBack={router.back}
@@ -130,16 +129,7 @@ function DisposeMetalHoldingForm({
   });
 
   const copy = useMemo(() => createDisposeCopy(t), [t]);
-  const rateEvidence = useMemo(
-    () =>
-      shapeDisposeRateEvidence(form.terminalRates, form.terminalRateTrust, {
-        locale,
-        unknownLabel: t("dispose.observedUnknown"),
-      }),
-    [form.terminalRates, form.terminalRateTrust, locale, t]
-  );
-
-  const navigation = useNavigation();
+  const navigation = useNavigation();  const navigation = useNavigation();
   const pendingActionRef = useRef<NavigationAction | null>(null);
   const exitRequestedRef = useRef(false);
   const pendingDetailsRef = useRef<string | null>(null);
@@ -223,7 +213,7 @@ function DisposeMetalHoldingForm({
     return (
       <View className="flex-1 bg-background dark:bg-background-dark">
         <PageHeader
-          title={t("actions.dispose")}
+          title={t("dispose.title")}
           showBackButton
           showDrawer={false}
           onBack={router.back}
@@ -256,7 +246,6 @@ function DisposeMetalHoldingForm({
   return (
     <View className="flex-1 bg-background dark:bg-background-dark">
       <DisposeMetalHoldingScreen
-        holdingName={form.model?.name ?? ""}
         copy={copy}
         locale={locale}
         isRtl={I18nManager.isRTL}
@@ -268,9 +257,6 @@ function DisposeMetalHoldingForm({
         treatment={form.treatment}
         disposalDate={form.disposalDate}
         notes={form.notes}
-        rateEvidence={rateEvidence}
-        requiresRateAcknowledgment={form.requiresRateAcknowledgment}
-        rateAcknowledged={form.rateAcknowledged}
         rateEvidenceError={form.rateEvidenceError}
         isLoading={form.isLoading}
         isRateLoading={form.isRateLoading}
@@ -282,7 +268,6 @@ function DisposeMetalHoldingForm({
         onOtherTreatmentChange={form.setOtherTreatment}
         onDateChange={form.setDisposalDate}
         onNotesChange={form.setNotes}
-        onRateAcknowledgmentChange={form.setRateAcknowledged}
         onSubmit={submit}
         onRequestExit={requestExit}
         onRetry={form.retryLoad}
@@ -364,7 +349,6 @@ function createDisposeCopy(
     },
     dateLabel: t("dispose.dateLabel"),
     notesLabel: t("dispose.notesLabel"),
-    notesOptional: t("dispose.notesOptional"),
     notesTooLong: t("dispose.notesTooLong"),
     summaryTitle: t("dispose.summaryTitle"),
     writeOffSummary: t("dispose.writeOffSummary"),
@@ -373,21 +357,7 @@ function createDisposeCopy(
     historySummary: t("dispose.historySummary"),
     noSaleMoneyOrAccountSummary: t("dispose.noSaleMoneyOrAccountSummary"),
     noSaleProfitLossSummary: t("dispose.noSaleProfitLossSummary"),
-    rateEvidenceTitle: t("dispose.rateEvidenceTitle"),
-    rateRoles: {
-      terminal_metal: t("dispose.rateRoles.terminalMetal"),
-      terminal_purchase_currency: t(
-        "dispose.rateRoles.terminalPurchaseCurrency"
-      ),
-    },
-    rateFreshness: {
-      fresh: t("dispose.rateFreshness.fresh"),
-      stale: t("dispose.rateFreshness.stale"),
-      unknown: t("dispose.rateFreshness.unknown"),
-    },
-    rateAcknowledgment: t("dispose.rateAcknowledgment"),
-    rateAcknowledgmentRequired: t("dispose.rateAcknowledgmentRequired"),
-    rateEvidenceUnavailable: t("dispose.rateEvidenceUnavailable"),
+    rateEvidenceUnavailable: t("dispose.rateEvidenceUnavailable"),    rateEvidenceUnavailable: t("dispose.rateEvidenceUnavailable"),
     ratePendingLabel: t("dispose.ratePendingLabel"),
     submitLabel: t("dispose.submitLabel"),
     pendingLabel: t("dispose.pendingLabel"),

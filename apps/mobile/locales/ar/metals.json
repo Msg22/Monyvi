@@ -360,7 +360,7 @@
     "treatment_external_transfer": "تسجيل خروجها من ملكيتك"
   },
   "dispose": {
-    "title": "لم تعد {{holdingName}} في حوزتي",
+    "title": "لم يعد لدي",
     "intro": "استخدم هذا الخيار عندما لا تعود الحيازة ملكك ولم تبعها.",
     "whatHappened": "ماذا حدث",
     "affectsRecords": "كيف يؤثر ذلك على سجلاتك؟",
@@ -378,8 +378,7 @@
       "externalTransferDescription": "ستخرج من معادنك. لا يُسجَّل ربح أو خسارة من بيع."
     },
     "dateLabel": "التاريخ",
-    "notesLabel": "ملاحظات",
-    "notesOptional": "اختياري",
+    "notesLabel": "ملاحظات (اختياري)",
     "notesTooLong": "اختصر ملاحظاتك وحاول مرة أخرى.",
     "summaryTitle": "ما الذي سيحدث",
     "writeOffSummary": "ستُسجَّل تكلفة شرائها كخسارة.",
@@ -388,21 +387,8 @@
     "historySummary": "سيظهر هذا التغيير في السجل.",
     "noSaleMoneyOrAccountSummary": "لا توجد أموال بيع أو تغيّر في الحساب.",
     "noSaleProfitLossSummary": "لا يوجد ربح أو خسارة من بيع.",
-    "rateEvidenceTitle": "الأسعار المحفوظة مع هذا التسجيل",
-    "rateRoles": {
-      "terminalMetal": "سعر المعدن",
-      "terminalPurchaseCurrency": "سعر العملة"
-    },
-    "rateFreshness": {
-      "fresh": "حديث",
-      "stale": "آخر سعر متاح",
-      "unknown": "العمر غير معروف"
-    },
-    "rateAcknowledgment": "أفهم أن الأسعار أعلاه قد تكون قديمة أو غير معروفة العمر.",
-    "rateAcknowledgmentRequired": "أكّد ملاحظة السعر للمتابعة.",
-    "rateEvidenceUnavailable": "تعذّر التحقق من الأسعار. حاول مرة أخرى.",
+    "rateEvidenceUnavailable": "تعذّر التحقق من الأسعار. حاول مرة أخرى.",    "rateEvidenceUnavailable": "تعذّر التحقق من الأسعار. حاول مرة أخرى.",
     "ratePendingLabel": "جارٍ التحقق من الأسعار",
-    "observedUnknown": "وقت التحديث غير معروف",
     "submitLabel": "تسجيل التغيير",
     "pendingLabel": "جارٍ تسجيل التغيير…",
     "cancelLabel": "إلغاء",
@@ -424,7 +410,7 @@
       "dateBeforeAcquisition": "اختر تاريخاً في تاريخ الشراء أو بعده.",
       "recoveryRequired": "هذا الإجراء يحتاج إلى استعادة. حاول مرة أخرى."
     },
-    "success": "تم تسجيل أن {{holdingName}} لم تعد ضمن محفظتك النشطة.",
+    "success": "تم تسجيل أن {{holdingName}} لم تعد ضمن معادنك.",
     "exitTitle": "تجاهل التغييرات؟",
     "exitMessage": "ستفقد التغييرات غير المحفوظة.",
     "keepEditing": "متابعة التعديل",

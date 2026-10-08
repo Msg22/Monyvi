@@ -30,7 +30,6 @@ import {
   RequiredMark,
   SummaryRow,
   TreatmentOption,
-  categoryIconName,
   formatDisposalDate,
   parseDisposalDate,
   toDisposalDateOnlyString,
@@ -43,7 +42,6 @@ import { shouldUseCompactLayout } from "@/constants/ui";
 import { useTheme } from "@/context/ThemeContext";
 import type {
   DisposeCategory,
-  DisposeRateRole,
   DisposeTreatment,
 } from "@/services/dispose-metal-holding-command-service";
 
@@ -69,7 +67,6 @@ export const DISPOSE_METAL_HOLDING_COPY_KEYS = Object.freeze({
   }),
   dateLabel: "dispose.dateLabel",
   notesLabel: "dispose.notesLabel",
-  notesOptional: "dispose.notesOptional",
   notesTooLong: "dispose.notesTooLong",
   summaryTitle: "dispose.summaryTitle",
   writeOffSummary: "dispose.writeOffSummary",
@@ -78,19 +75,7 @@ export const DISPOSE_METAL_HOLDING_COPY_KEYS = Object.freeze({
   historySummary: "dispose.historySummary",
   noSaleMoneyOrAccountSummary: "dispose.noSaleMoneyOrAccountSummary",
   noSaleProfitLossSummary: "dispose.noSaleProfitLossSummary",
-  rateEvidenceTitle: "dispose.rateEvidenceTitle",
-  rateRoles: Object.freeze({
-    terminal_metal: "dispose.rateRoles.terminalMetal",
-    terminal_purchase_currency: "dispose.rateRoles.terminalPurchaseCurrency",
-  }),
-  rateFreshness: Object.freeze({
-    fresh: "dispose.rateFreshness.fresh",
-    stale: "dispose.rateFreshness.stale",
-    unknown: "dispose.rateFreshness.unknown",
-  }),
-  rateAcknowledgment: "dispose.rateAcknowledgment",
-  rateAcknowledgmentRequired: "dispose.rateAcknowledgmentRequired",
-  rateEvidenceUnavailable: "dispose.rateEvidenceUnavailable",
+  rateEvidenceUnavailable: "dispose.rateEvidenceUnavailable",  rateEvidenceUnavailable: "dispose.rateEvidenceUnavailable",
   ratePendingLabel: "dispose.ratePendingLabel",
   submitLabel: "dispose.submitLabel",
   pendingLabel: "dispose.pendingLabel",
@@ -140,7 +125,6 @@ export interface DisposeMetalHoldingCopy {
   readonly treatmentDescriptions: Readonly<Record<DisposeTreatment, string>>;
   readonly dateLabel: string;
   readonly notesLabel: string;
-  readonly notesOptional: string;
   readonly notesTooLong: string;
   readonly summaryTitle: string;
   readonly writeOffSummary: string;
@@ -149,14 +133,7 @@ export interface DisposeMetalHoldingCopy {
   readonly historySummary: string;
   readonly noSaleMoneyOrAccountSummary: string;
   readonly noSaleProfitLossSummary: string;
-  readonly rateEvidenceTitle: string;
-  readonly rateRoles: Readonly<Record<DisposeRateRole, string>>;
-  readonly rateFreshness: Readonly<
-    Record<"fresh" | "stale" | "unknown", string>
-  >;
-  readonly rateAcknowledgment: string;
-  readonly rateAcknowledgmentRequired: string;
-  readonly rateEvidenceUnavailable: string;
+  readonly rateEvidenceUnavailable: string;  readonly rateEvidenceUnavailable: string;
   readonly ratePendingLabel: string;
   readonly submitLabel: string;
   readonly pendingLabel: string;
@@ -172,15 +149,7 @@ export interface DisposeMetalHoldingCopy {
   readonly submitErrorMessages: Readonly<Record<string, string>>;
 }
 
-export interface DisposeRateEvidenceDisplay {
-  readonly role: DisposeRateRole;
-  readonly valueLabel: string;
-  readonly freshness: "fresh" | "stale" | "unknown";
-  readonly observedLabel: string;
-}
-
-export interface DisposeMetalHoldingScreenProps {
-  readonly holdingName: string;
+export interface DisposeMetalHoldingScreenProps {export interface DisposeMetalHoldingScreenProps {
   readonly copy: DisposeMetalHoldingCopy;
   readonly locale: "en" | "ar";
   readonly isRtl: boolean;
@@ -192,9 +161,6 @@ export interface DisposeMetalHoldingScreenProps {
   readonly treatment: DisposeTreatment | null;
   readonly disposalDate: string;
   readonly notes: string;
-  readonly rateEvidence?: readonly DisposeRateEvidenceDisplay[];
-  readonly requiresRateAcknowledgment?: boolean;
-  readonly rateAcknowledged?: boolean;
   readonly rateEvidenceError?: string | null;
   readonly isLoading?: boolean;
   readonly isRateLoading?: boolean;
@@ -206,7 +172,6 @@ export interface DisposeMetalHoldingScreenProps {
   readonly onOtherTreatmentChange: (treatment: DisposeTreatment) => void;
   readonly onDateChange: (value: string) => void;
   readonly onNotesChange: (value: string) => void;
-  readonly onRateAcknowledgmentChange?: (acknowledged: boolean) => void;
   readonly onSubmit: () => void;
   readonly onRequestExit: () => void;
   readonly onRetry: () => void;
@@ -240,7 +205,6 @@ function LoadingState(): React.JSX.Element {
 }
 
 export function DisposeMetalHoldingScreen({
-  holdingName,
   copy,
   locale,
   isRtl,
@@ -252,9 +216,6 @@ export function DisposeMetalHoldingScreen({
   treatment,
   disposalDate,
   notes,
-  rateEvidence = [],
-  requiresRateAcknowledgment = false,
-  rateAcknowledged = false,
   rateEvidenceError = null,
   isLoading = false,
   isRateLoading = false,
@@ -266,7 +227,6 @@ export function DisposeMetalHoldingScreen({
   onOtherTreatmentChange,
   onDateChange,
   onNotesChange,
-  onRateAcknowledgmentChange,
   onSubmit,
   onRequestExit,
   onRetry,
@@ -324,9 +284,6 @@ export function DisposeMetalHoldingScreen({
           ? dateValidationMessage(validationErrors.disposalDate, copy)
           : null,
         validationErrors.notes ? copy.notesTooLong : null,
-        validationErrors.rateAcknowledgment
-          ? copy.rateAcknowledgmentRequired
-          : null,
         validationErrors.rateEvidence && rateEvidenceError
           ? copy.rateEvidenceUnavailable
           : null,
@@ -351,9 +308,7 @@ export function DisposeMetalHoldingScreen({
               ? notesFieldRef.current
               : validationErrors.rateEvidence
                 ? rateEvidenceErrorRef.current
-                : validationErrors.rateAcknowledgment
-                  ? null
-                  : dateFieldRef.current;
+                : dateFieldRef.current;
       const targetHandle = findNodeHandle(firstInvalidTarget);
       if (targetHandle !== null) {
         AccessibilityInfo.setAccessibilityFocus(targetHandle);
@@ -379,11 +334,7 @@ export function DisposeMetalHoldingScreen({
       className="flex-1 bg-slate-25 dark:bg-slate-950"
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
-      <PageHeader
-        title={copy.title.replace("{{holdingName}}", holdingName)}
-        showBackButton
-        onBack={requestExit}
-      />
+      <PageHeader title={copy.title} showBackButton onBack={requestExit} />
       <View
         testID="dispose-form"
         className="flex-1"
@@ -418,65 +369,68 @@ export function DisposeMetalHoldingScreen({
             keyboardShouldPersistTaps="handled"
             contentContainerClassName="gap-6 px-5 py-5"
           >
-            <Text className="text-sm leading-6 text-text-secondary dark:text-text-secondary-dark">
-              {copy.intro}
-            </Text>
-
-            {validationMessages.length > 0 ? (
-              <View
-                ref={validationSummaryRef}
-                testID="dispose-validation-summary"
-                accessible
-                accessibilityRole="alert"
-                accessibilityLabel={validationMessages.join(" ")}
-                className="rounded-2xl border border-red-600 p-3 dark:border-red-400"
-              >
-                <Text className="text-sm text-red-700 dark:text-red-300">
-                  {validationMessages.join(" ")}
-                </Text>
-              </View>
-            ) : null}
-
-            <View className="gap-3">
-              <Text className="text-base font-bold text-text-primary dark:text-text-primary-dark">
-                {copy.whatHappened}
-                <RequiredMark testID="dispose-required-reason" />
+            <View testID="dispose-intro-reason-group" className="gap-4">
+              <Text className="text-sm leading-6 text-text-secondary dark:text-text-secondary-dark">
+                {copy.intro}
               </Text>
-              <View
-                testID="dispose-category-group"
-                accessibilityRole="radiogroup"
-                accessibilityLabel={`${copy.whatHappened}, ${copy.categoryRequired}`}
-                aria-invalid={Boolean(validationErrors.category)}
-                className="flex-row flex-wrap justify-between gap-y-3"
-                {...categoryMetadata}
-              >
-                {DISPOSE_CATEGORIES.map((value, index) => (
-                  <CategoryTile
-                    key={value}
-                    id={`dispose-category-${value}`}
-                    iconTestID={`dispose-category-icon-${value}`}
-                    showsSelectedIndicator
-                    label={copy.categoryLabels[value]}
-                    isSelected={category === value}
-                    isDisabled={isSubmitting}
-                    isStacked={isStacked || value === "other"}
-                    iconColor={iconColor}
-                    icon={categoryIconName(value)}
-                    buttonRef={index === 0 ? firstCategoryRef : undefined}
-                    onPress={() => onCategoryChange(value)}
-                  />
-                ))}
-              </View>
-              {validationErrors.category ? (
-                <Text
-                  testID="dispose-category-error"
+  
+              {validationMessages.length > 0 ? (
+                <View
+                  ref={validationSummaryRef}
+                  testID="dispose-validation-summary"
+                  accessible
                   accessibilityRole="alert"
-                  className="text-sm text-red-600 dark:text-red-400"
+                  accessibilityLabel={validationMessages.join(" ")}
+                  className="rounded-2xl border border-red-600 p-3 dark:border-red-400"
                 >
-                  {copy.categoryRequired}
-                </Text>
+                  <Text className="text-sm text-red-700 dark:text-red-300">
+                    {validationMessages.join(" ")}
+                  </Text>
+                </View>
               ) : null}
-            </View>
+  
+              <View className="gap-3">
+                <Text className="text-base font-bold text-text-primary dark:text-text-primary-dark">
+                  {copy.whatHappened}
+                  <RequiredMark testID="dispose-required-reason" />
+                </Text>
+                <View
+                  testID="dispose-category-group"
+                  accessibilityRole="radiogroup"
+                  accessibilityLabel={`${copy.whatHappened}, ${copy.categoryRequired}`}
+                  aria-invalid={Boolean(validationErrors.category)}
+                  className="flex-row flex-wrap justify-between gap-y-3"
+                  {...categoryMetadata}
+                >
+                  {DISPOSE_CATEGORIES.map((value, index) => (
+                    <CategoryTile
+                      key={value}
+                      id={`dispose-category-${value}`}
+                      iconTestID={`dispose-category-icon-${value}`}
+                      showsSelectedIndicator
+                      label={copy.categoryLabels[value]}
+                      isSelected={category === value}
+                      isDisabled={isSubmitting}
+                      isStacked={isStacked || value === "other"}
+                      iconColor={iconColor}
+                      reason={value}
+                      buttonRef={index === 0 ? firstCategoryRef : undefined}
+                      onPress={() => onCategoryChange(value)}
+                    />
+                  ))}
+                </View>
+                {validationErrors.category ? (
+                  <Text
+                    testID="dispose-category-error"
+                    accessibilityRole="alert"
+                    className="text-sm text-red-600 dark:text-red-400"
+                  >
+                    {copy.categoryRequired}
+                  </Text>
+                ) : null}
+              </View>
+  
+              </View>
 
             {category === "other" ? (
               <View testID="dispose-treatment-group" className="gap-3">
@@ -571,42 +525,9 @@ export function DisposeMetalHoldingScreen({
                 aria-invalid={Boolean(validationErrors.notes)}
                 error={validationErrors.notes ? copy.notesTooLong : undefined}
               />
-              <Text className="text-xs text-text-muted dark:text-text-muted-dark">
-                {copy.notesOptional}
-              </Text>
             </View>
 
-            {rateEvidence.length > 0 ? (
-              <View
-                testID="dispose-rate-evidence"
-                className="gap-2 rounded-2xl border border-nileGreen-200 bg-nileGreen-50 p-4 dark:border-nileGreen-800 dark:bg-slate-900"
-              >
-                <Text className="text-base font-bold text-nileGreen-900 dark:text-nileGreen-300">
-                  {copy.rateEvidenceTitle}
-                </Text>
-                {rateEvidence.map((reference) => (
-                  <View
-                    key={reference.role}
-                    testID={`dispose-rate-evidence-${reference.role}`}
-                    accessibilityRole="summary"
-                    className="gap-1"
-                  >
-                    <Text className="text-sm font-semibold text-text-primary dark:text-text-primary-dark">
-                      {copy.rateRoles[reference.role]}: {reference.valueLabel}
-                    </Text>
-                    <Text
-                      testID={`dispose-rate-freshness-${reference.role}`}
-                      className="text-xs text-text-secondary dark:text-text-secondary-dark"
-                    >
-                      {copy.rateFreshness[reference.freshness]} ·{" "}
-                      {reference.observedLabel}
-                    </Text>
-                  </View>
-                ))}
-              </View>
-            ) : null}
-
-            {rateEvidenceError ? (
+            {rateEvidenceError ? (            {rateEvidenceError ? (
               <View
                 ref={rateEvidenceErrorRef}
                 accessibilityRole="alert"
@@ -632,56 +553,13 @@ export function DisposeMetalHoldingScreen({
               </View>
             ) : null}
 
-            {requiresRateAcknowledgment ? (
-              <TouchableOpacity
-                testID="dispose-rate-acknowledgment"
-                accessibilityRole="checkbox"
-                accessibilityState={{
-                  checked: rateAcknowledged,
-                  disabled: isSubmitting,
-                }}
-                disabled={isSubmitting}
-                onPress={(): void =>
-                  onRateAcknowledgmentChange?.(!rateAcknowledged)
-                }
-                className={`min-h-12 flex-row items-center gap-3 rounded-2xl border px-4 ${
-                  rateAcknowledged
-                    ? "border-nileGreen-700 bg-nileGreen-50 dark:border-nileGreen-400 dark:bg-slate-800"
-                    : "border-slate-300 dark:border-slate-700"
-                }`}
-              >
-                {rateAcknowledged ? (
-                  <View
-                    testID="dispose-rate-acknowledgment-indicator"
-                    className="h-5 w-5 items-center justify-center rounded border border-nileGreen-700 bg-nileGreen-700 dark:border-nileGreen-400 dark:bg-nileGreen-400"
-                  >
-                    <Text className="text-xs font-bold text-slate-25 dark:text-slate-900">
-                      ✓
-                    </Text>
-                  </View>
-                ) : null}
-                <Text className="text-sm font-medium text-text-primary dark:text-text-primary-dark">
-                  {copy.rateAcknowledgment}
-                </Text>
-              </TouchableOpacity>
-            ) : null}
-            {validationErrors.rateAcknowledgment ? (
-              <Text
-                testID="dispose-rate-acknowledgment-error"
-                accessibilityRole="alert"
-                className="text-sm text-red-600 dark:text-red-400"
-              >
-                {copy.rateAcknowledgmentRequired}
-              </Text>
-            ) : null}
-
             {hasSummary ? (
               <View
                 testID="dispose-live-summary"
-                className="gap-2 rounded-2xl border border-nileGreen-200 bg-nileGreen-50 p-4 dark:border-nileGreen-800 dark:bg-slate-900"
+                className="gap-2 rounded-2xl border border-nileGreen-100 bg-nileGreen-50 p-4 dark:border-nileGreen-800 dark:bg-slate-900"
                 {...summaryMetadata}
               >
-                <Text className="text-base font-bold text-nileGreen-900 dark:text-nileGreen-300">
+                <Text className="text-base font-bold text-nileGreen-900 dark:text-nileGreen-400">
                   {copy.summaryTitle}
                 </Text>
                 <SummaryRow

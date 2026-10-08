@@ -620,6 +620,14 @@ Business rules:
   credit, or realized sale profit/loss.
 - No Longer shows a complete live `What will happen` summary and commits
   directly with `Record change`; no second review or confirmation appears.
+- No Longer does not show terminal-rate values, provenance/freshness, or a
+  stale/unknown acknowledgment checkbox. Stale or unknown age alone does not
+  block No Longer submission. The existing immutable terminal Metal +
+  purchase-currency snapshot pair is still captured internally when available,
+  retained with its exact values/dates/IDs/provenance, pinned across ambiguous
+  operational retry, refreshed after revision conflict, and rate-store failures
+  still fail visibly with retry. This exception is No Longer-only; Sell, Add,
+  and material correction trust/acknowledgment rules are unchanged.
 - Delete holding is only for an incorrect Active record. It creates no Sale,
   disposal, proceeds, profit/loss, write-off, or transfer. Complete hidden
   non-effective audit/sync evidence prevents the mistaken holding from
