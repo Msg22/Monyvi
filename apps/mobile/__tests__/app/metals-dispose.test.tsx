@@ -523,7 +523,19 @@ describe("Dispose metal holding direct form", () => {
     renderScreen({ category: "donated", treatment: "external_transfer" });
     expect(screen.getByTestId("metal-holding-dispose-screen")).toHaveProp(
       "className",
-      expect.stringContaining("dark:bg-slate-950")
+      expect.stringContaining("bg-background")
+    );
+    expect(screen.getByTestId("metal-holding-dispose-screen")).toHaveProp(
+      "className",
+      expect.stringContaining("dark:bg-background-dark")
+    );
+    expect(screen.getByTestId("dispose-submit-area")).toHaveProp(
+      "className",
+      expect.stringContaining("bg-background")
+    );
+    expect(screen.getByTestId("dispose-submit-area")).toHaveProp(
+      "className",
+      expect.stringContaining("dark:bg-background-dark")
     );
     expect(screen.getByTestId("dispose-live-summary")).toHaveProp(
       "className",

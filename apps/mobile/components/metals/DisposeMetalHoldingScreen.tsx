@@ -331,7 +331,7 @@ export function DisposeMetalHoldingScreen({
   return (
     <KeyboardAvoidingView
       testID="metal-holding-dispose-screen"
-      className="flex-1 bg-slate-25 dark:bg-slate-950"
+      className="flex-1 bg-background dark:bg-background-dark"
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
       <PageHeader title={copy.title} showBackButton onBack={requestExit} />
@@ -620,7 +620,7 @@ export function DisposeMetalHoldingScreen({
       {!isLoading && !loadError ? (
         <View
           testID="dispose-submit-area"
-          className="gap-2 border-t border-slate-200 bg-slate-25 px-5 pt-3 dark:border-slate-800 dark:bg-slate-950"
+          className="gap-2 border-t border-slate-200 bg-background px-5 pt-3 dark:border-slate-800 dark:bg-background-dark"
           style={{ paddingBottom: bottomInset + 12 }}
           {...submitAreaMetadata}
         >
