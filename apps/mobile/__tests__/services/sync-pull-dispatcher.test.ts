@@ -6,6 +6,7 @@ const mockRpc = jest.fn();
 const mockLoggerError = jest.fn();
 
 interface SupabaseResult {
+  readonly count?: number;
   readonly data: ReadonlyArray<Record<string, unknown>> | null;
   readonly error: { readonly message: string } | null;
 }
@@ -107,7 +108,11 @@ function makeSelectChain(
     then: (
       resolve: (value: SupabaseResult) => unknown,
       reject?: (reason: unknown) => unknown
-    ) => Promise.resolve(result).then(resolve, reject),
+    ) =>
+      Promise.resolve({
+        ...result,
+        count: result.count ?? result.data?.length ?? 0,
+      }).then(resolve, reject),
   };
 
   return chain;
@@ -163,7 +168,7 @@ beforeEach(() => {
         ? {
             data: [
               {
-                id: "server-root-1",
+                id: "11111111-1111-4111-8111-000000000001",
                 action_id: "action-1",
                 user_id: "current-user",
                 account_guards_json_text: "[]",
@@ -179,11 +184,12 @@ beforeEach(() => {
           ? {
               data: [
                 {
-                  id: "evidence-1",
+                  id: "11111111-1111-4111-8111-000000000002",
                   action_id: "action-1",
                   user_id: "current-user",
                   canonical_holding_revision_text: "0",
-                  domain_payload_json_text: '{"holdingId":"asset-1"}',
+                  domain_payload_json_text:
+                    '{"holdingId":"11111111-1111-4111-8111-000000000007"}',
                   expected_holding_revision_text: null,
                   deleted: false,
                   updated_at: "2026-05-18T08:02:00.000Z",
@@ -195,10 +201,11 @@ beforeEach(() => {
             ? {
                 data: [
                   {
-                    id: "event-1",
+                    id: "11111111-1111-4111-8111-000000000003",
                     action_id: "action-1",
                     user_id: "current-user",
-                    payload_json_text: '{"holdingId":"asset-1"}',
+                    payload_json_text:
+                      '{"holdingId":"11111111-1111-4111-8111-000000000007"}',
                     deleted: false,
                     updated_at: "2026-05-18T08:02:00.000Z",
                   },
@@ -209,7 +216,7 @@ beforeEach(() => {
               ? {
                   data: [
                     {
-                      id: "rate-reference-1",
+                      id: "11111111-1111-4111-8111-000000000004",
                       action_id: "action-1",
                       user_id: "current-user",
                       value_decimal_text: "3510.500000000000000001",
@@ -223,9 +230,10 @@ beforeEach(() => {
                 ? {
                     data: [
                       {
-                        id: "asset-1",
+                        id: "11111111-1111-4111-8111-000000000007",
                         deleted: false,
                         purchase_currency: "EGP",
+                        updated_at: "2026-05-18T08:02:00.000Z",
                         purchase_price_decimal_text: "100000.125",
                         acquisition_action_id: "action-1",
                       },
@@ -236,10 +244,12 @@ beforeEach(() => {
                   ? {
                       data: [
                         {
-                          id: "asset-metal-1",
-                          asset_id: "asset-1",
+                          id: "11111111-1111-4111-8111-000000000005",
+                          asset_id: "11111111-1111-4111-8111-000000000007",
                           deleted: false,
                           weight_grams_decimal_text: "10.125",
+                          updated_at: "2026-05-18T08:02:00.000Z",
+                          sync_owner: { user_id: "current-user" },
                           purity_factor_decimal_text: "0.999",
                         },
                       ],
@@ -249,9 +259,9 @@ beforeEach(() => {
                     ? {
                         data: [
                           {
-                            id: "holding-state-1",
+                            id: "11111111-1111-4111-8111-000000000006",
                             user_id: "current-user",
-                            holding_id: "asset-1",
+                            holding_id: "11111111-1111-4111-8111-000000000007",
                             financial_revision_text: "9223372036854775807",
                             deleted: false,
                             created_at: "2026-05-18T08:01:00.000Z",
@@ -322,9 +332,11 @@ describe("pullChanges", () => {
       "user_id",
       "current-user"
     );
-    expect(getFirstChain("asset_metals").in).toHaveBeenCalledWith("asset_id", [
-      "asset-1",
-    ]);
+    expect(getFirstChain("asset_metals").eq).toHaveBeenCalledWith(
+      "sync_owner.user_id",
+      "current-user"
+    );
+    expect(getFirstChain("asset_metals").in).not.toHaveBeenCalled();
     expect(getFirstChain("asset_metals").gt).toHaveBeenCalledWith(
       "updated_at",
       "2026-05-18T08:00:00.000Z"
@@ -348,17 +360,20 @@ describe("pullChanges", () => {
     ).toHaveBeenCalledWith(
       expect.stringContaining(
         "purchase_price_decimal_text:purchase_price_decimal::text"
-      )
+      ),
+      { count: "exact" }
     );
     expect(getFirstChain("asset_metals").select).toHaveBeenCalledWith(
       expect.stringContaining(
         "weight_grams_decimal_text:weight_grams_decimal::text"
-      )
+      ),
+      { count: "exact" }
     );
     expect(getFirstChain("metal_holding_states").select).toHaveBeenCalledWith(
       expect.stringContaining(
         "financial_revision_text:financial_revision::text"
-      )
+      ),
+      { count: "exact" }
     );
     for (const table of [
       "financial_action_groups",
@@ -394,16 +409,17 @@ describe("pullChanges", () => {
     });
     expect(changes.financial_action_groups?.updated[0]).toMatchObject({
       account_guards_json: "[]",
-      id: "server-root-1",
+      id: "11111111-1111-4111-8111-000000000001",
       payload_json: '{"kind":"add"}',
     });
     expect(changes.metal_action_evidence?.updated[0]).toMatchObject({
       canonical_holding_revision: "0",
-      domain_payload_json: '{"holdingId":"asset-1"}',
+      domain_payload_json:
+        '{"holdingId":"11111111-1111-4111-8111-000000000007"}',
       expected_holding_revision: null,
     });
     expect(changes.metal_lifecycle_events?.updated[0]).toMatchObject({
-      payload_json: '{"holdingId":"asset-1"}',
+      payload_json: '{"holdingId":"11111111-1111-4111-8111-000000000007"}',
     });
     expect(changes.metal_rate_references?.updated[0]).toMatchObject({
       value_decimal: "3510.500000000000000001",
@@ -586,7 +602,7 @@ describe("pullMarketRates", () => {
 describe("pullMetalHoldingStates", () => {
   it("paginates the complete bounded interval before returning", async () => {
     const rows = Array.from({ length: 501 }, (_, index) => ({
-      id: `state-${String(index).padStart(4, "0")}`,
+      id: `22222222-2222-4222-8222-${String(index).padStart(12, "0")}`,
       deleted: false,
       financial_revision_text: String(index),
       updated_at: `2026-05-18T08:02:${String(Math.floor(index / 10)).padStart(2, "0")}.000Z`,
@@ -597,6 +613,7 @@ describe("pullMetalHoldingStates", () => {
       page += 1;
       return makeSelectChain({
         data: rows.slice(offset, offset + 500),
+        count: rows.length - offset,
         error: null,
       });
     });
@@ -616,7 +633,7 @@ describe("pullMetalHoldingStates", () => {
       makeSelectChain({
         data: [
           {
-            id: "server-root-1",
+            id: "11111111-1111-4111-8111-000000000001",
             action_id: "action-1",
             user_id: "current-user",
             account_guards_json_text: "[]",

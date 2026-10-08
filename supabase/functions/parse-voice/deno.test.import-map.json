@@ -1,0 +1,7 @@
+{
+  "imports": {
+    "edge-runtime": "./test-fixtures/edge-runtime.ts",
+    "@google/genai": "./test-fixtures/google-genai.ts",
+    "@supabase/supabase-js": "./test-fixtures/supabase-js.ts"
+  }
+}

@@ -188,8 +188,12 @@ export default function VoiceReviewScreen(): React.JSX.Element {
           label: t("voice_retry"),
           onPress: () => {
             router.replace({
-              pathname: originTabRoute,
-              params: { retry: "true" },
+              pathname: "/add-transaction",
+              params: {
+                mode: "voice",
+                retry: "true",
+                originTabIndex: params.originTabIndex ?? "2",
+              },
             });
           },
         }}

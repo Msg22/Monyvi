@@ -128,7 +128,6 @@ export type Database = {
   assert.match(financialActionModel, /serverOutcome!: string \| null;/);
   assert.match(assetModel, /notes!: string \| null;/);
   assert.match(ordinaryModel, /notes\?: string;/);
-
 });
 
 test("financial action nullable outcome generation is deterministic", () => {
@@ -212,4 +211,46 @@ test("generates exact local account revisions, effects, and uniqueness", () => {
   assert.match(generatedEffectModel, /amountMinorUnits!: string;/);
   assert.match(generatedEffectModel, /compensatedAt!: Date \| null;/);
   assert.match(generatedRecurringModel, /financialRevision!: string;/);
+});
+
+test("excludes voice AI operational tables from Watermelon schema generation", () => {
+  const parsed = transformSchema.parseSupabaseTypes(`
+export type Database = {
+  public: {
+    Tables: {
+      accounts: {
+        Row: { id: string; name: string; };
+        Insert: {};
+        Update: {};
+        Relationships: [];
+      };
+      sms_ai_work_requests: {
+        Row: { id: string; user_id: string; request_key: string; };
+        Insert: {};
+        Update: {};
+        Relationships: [];
+      };
+      voice_ai_usage_windows: {
+        Row: { user_id: string; time_zone: string; };
+        Insert: {};
+        Update: {};
+        Relationships: [];
+      };
+      voice_ai_work_requests: {
+        Row: { id: string; user_id: string; request_key: string; };
+        Insert: {};
+        Update: {};
+        Relationships: [];
+      };
+    }
+    Enums: { [_ in never]: never }
+  }
+}`);
+
+  assert.deepEqual(Object.keys(parsed.tables), ["accounts"]);
+  const generatedSchema = transformSchema.generateSchema(parsed.tables);
+  assert.doesNotMatch(
+    generatedSchema,
+    /sms_ai_work_requests|voice_ai_usage_windows|voice_ai_work_requests/
+  );
 });

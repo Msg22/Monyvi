@@ -72,13 +72,15 @@ describe("sync auth scope lifecycle", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockGetCurrentUserId.mockReset();
-    mockRpc.mockResolvedValue({
-      data: {
-        nextCursor: null,
-        snapshots: [],
-        upperWatermark: "2026-05-18T08:05:00.000Z",
-      },
-      error: null,
+    const upperWatermark = "2026-05-18T08:05:00.000Z";
+    mockRpc.mockImplementation((name: string) => {
+      const data =
+        name === "seal_sync_pull_v1"
+          ? upperWatermark
+          : name === "pull_snapshot_deletions_page_v1"
+            ? { rows: [], count: 0, upperWatermark }
+            : { nextCursor: null, snapshots: [], upperWatermark };
+      return Promise.resolve({ data, error: null });
     });
     mockFrom.mockImplementation(() => {
       const chain: EmptySelectChain = {
@@ -96,7 +98,7 @@ describe("sync auth scope lifecycle", () => {
           }) => unknown,
           reject?: (reason: unknown) => unknown
         ) =>
-          Promise.resolve({ data: [], error: null } as const).then(
+          Promise.resolve({ data: [], error: null, count: 0 } as const).then(
             resolve,
             reject
           ),

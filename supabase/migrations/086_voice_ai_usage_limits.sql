@@ -1,0 +1,308 @@
+-- Issue #347: authoritative server-only Voice AI usage limits.
+--
+-- Voice provider/accounting state is intentionally isolated from financial
+-- persistence and WatermelonDB sync. Raw audio, transcripts, parsed financial
+-- content and provider payloads never enter these tables.
+--
+-- Public Edge-facing RPCs use server clock_timestamp(). Deterministic *_at
+-- cores live in the private schema for privileged local PostgreSQL verification
+-- only and are never executable by PUBLIC, anon, authenticated or service_role.
+CREATE SCHEMA IF NOT EXISTS private;
+CREATE TABLE public.voice_ai_usage_windows (user_id uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE, time_zone text NOT NULL, local_date date NOT NULL, window_started_at timestamptz NOT NULL, window_ends_at timestamptz NOT NULL, policy_version text NOT NULL, created_at timestamptz NOT NULL DEFAULT clock_timestamp(), updated_at timestamptz NOT NULL DEFAULT clock_timestamp(), CONSTRAINT voice_ai_usage_windows_time_zone_not_blank CHECK (length(btrim(time_zone)) BETWEEN 1 AND 128), CONSTRAINT voice_ai_usage_windows_policy_version_not_blank CHECK (length(btrim(policy_version)) > 0), CONSTRAINT voice_ai_usage_windows_ordered CHECK (window_ends_at > window_started_at) );
+CREATE TABLE public.voice_ai_work_requests (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE, request_key text NOT NULL, time_zone text NOT NULL, window_started_at timestamptz NOT NULL, window_ends_at timestamptz NOT NULL, status text NOT NULL, decision_code text NOT NULL, available_at timestamptz, reservation_expires_at timestamptz, provider_started_at timestamptz, created_at timestamptz NOT NULL DEFAULT clock_timestamp(), updated_at timestamptz NOT NULL DEFAULT clock_timestamp(), CONSTRAINT voice_ai_work_requests_identity UNIQUE (user_id, request_key), CONSTRAINT voice_ai_work_requests_request_key CHECK (length(request_key) BETWEEN 1 AND 160), CONSTRAINT voice_ai_work_requests_time_zone CHECK (length(btrim(time_zone)) BETWEEN 1 AND 128), CONSTRAINT voice_ai_work_requests_window_ordered CHECK (window_ends_at > window_started_at), CONSTRAINT voice_ai_work_requests_status CHECK (status IN ('reserved', 'provider_started', 'completed', 'completed_with_provider_error', 'released', 'refused' ) ), CONSTRAINT voice_ai_work_requests_decision_not_blank CHECK (length(btrim(decision_code)) > 0), CONSTRAINT voice_ai_work_requests_reservation_shape CHECK ((status = 'reserved' AND reservation_expires_at IS NOT NULL AND provider_started_at IS NULL ) OR (status <> 'reserved' AND reservation_expires_at IS NULL ) ), CONSTRAINT voice_ai_work_requests_provider_start_shape CHECK ((status IN ('provider_started', 'completed', 'completed_with_provider_error' ) AND provider_started_at IS NOT NULL ) OR (status NOT IN ('provider_started', 'completed', 'completed_with_provider_error' ) AND provider_started_at IS NULL ) ) );
+CREATE INDEX voice_ai_work_requests_daily_capacity ON public.voice_ai_work_requests (user_id, window_started_at, window_ends_at, status );
+CREATE INDEX voice_ai_work_requests_burst_capacity ON public.voice_ai_work_requests (user_id, provider_started_at ) WHERE provider_started_at IS NOT NULL;
+CREATE INDEX voice_ai_work_requests_active_reservations ON public.voice_ai_work_requests (user_id, reservation_expires_at ) WHERE status = 'reserved';
+CREATE INDEX voice_ai_work_requests_cleanup ON public.voice_ai_work_requests (created_at, user_id ) WHERE status IN ('completed', 'completed_with_provider_error', 'released', 'refused' );
+ALTER TABLE public.voice_ai_usage_windows ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.voice_ai_work_requests ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.voice_ai_usage_windows FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON public.voice_ai_work_requests FROM PUBLIC, anon, authenticated;
+-- Edge code uses SECURITY DEFINER RPCs, not direct ledger CRUD.
+REVOKE ALL ON public.voice_ai_usage_windows FROM service_role;
+REVOKE ALL ON public.voice_ai_work_requests FROM service_role;
+CREATE OR REPLACE FUNCTION private.voice_ai_lock_user_v1(p_user_id uuid ) RETURNS void LANGUAGE plpgsql SET search_path TO 'pg_catalog', 'pg_temp' AS $function$ BEGIN IF p_user_id IS NULL THEN RAISE EXCEPTION 'Voice AI user id is required' USING ERRCODE = '22023';
+END IF;
+PERFORM pg_advisory_xact_lock(hashtextextended(p_user_id::text || ':voice_ai', 0 ) );
+END;
+$function$;
+CREATE OR REPLACE FUNCTION private.voice_ai_assert_time_zone_v1(p_time_zone text ) RETURNS void LANGUAGE plpgsql STABLE SET search_path TO 'pg_catalog', 'pg_temp' AS $function$ BEGIN IF p_time_zone IS NULL OR p_time_zone <> btrim(p_time_zone) OR length(p_time_zone) NOT BETWEEN 1 AND 128 OR p_time_zone ~* '^([+-][0-9]{2}(:?[0-9]{2})?|(UTC|GMT)[+-][0-9]{1,2}(:?[0-9]{2})?)$' OR NOT EXISTS (SELECT 1 FROM pg_catalog.pg_timezone_names WHERE name = p_time_zone ) THEN RAISE EXCEPTION 'Invalid Voice AI IANA timezone' USING ERRCODE = '22023';
+END IF;
+END;
+$function$;
+CREATE OR REPLACE FUNCTION private.voice_ai_assert_policy_v1(p_mode text, p_daily_limit integer, p_burst_limit integer, p_burst_window_seconds integer, p_policy_version text ) RETURNS void LANGUAGE plpgsql IMMUTABLE SET search_path TO 'pg_catalog', 'pg_temp' AS $function$ BEGIN IF p_mode IS NULL OR p_mode NOT IN ('metered', 'unmetered') OR p_burst_limit IS NULL OR p_burst_limit <= 0 OR p_burst_window_seconds IS NULL OR p_burst_window_seconds <= 0 OR p_policy_version IS NULL OR p_policy_version <> btrim(p_policy_version) OR length(p_policy_version) = 0 OR (p_mode = 'metered' AND (p_daily_limit IS NULL OR p_daily_limit <= 0 ) ) OR (p_mode = 'unmetered' AND p_daily_limit IS NOT NULL ) THEN RAISE EXCEPTION 'Invalid Voice AI entitlement policy' USING ERRCODE = '22023';
+END IF;
+END;
+$function$;
+CREATE OR REPLACE FUNCTION private.voice_ai_ensure_window_at_v1(p_user_id uuid, p_time_zone text, p_policy_version text, p_server_now timestamptz ) RETURNS public.voice_ai_usage_windows LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public', 'private', 'pg_catalog', 'pg_temp' AS $function$ DECLARE v_window public.voice_ai_usage_windows%ROWTYPE;
+v_local_date date;
+v_window_started_at timestamptz;
+v_window_ends_at timestamptz;
+BEGIN IF p_server_now IS NULL THEN RAISE EXCEPTION 'Voice AI server time is required' USING ERRCODE = '22023';
+END IF;
+PERFORM private.voice_ai_assert_time_zone_v1(p_time_zone);
+IF p_policy_version IS NULL OR p_policy_version <> btrim(p_policy_version) OR length(p_policy_version) = 0 THEN RAISE EXCEPTION 'Voice AI policy version is required' USING ERRCODE = '22023';
+END IF;
+SELECT * INTO v_window FROM public.voice_ai_usage_windows WHERE user_id = p_user_id FOR UPDATE;
+IF FOUND AND p_server_now >= v_window.window_started_at AND p_server_now < v_window.window_ends_at THEN RETURN v_window;
+END IF;
+v_local_date := (p_server_now AT TIME ZONE p_time_zone)::date;
+v_window_started_at := (v_local_date::timestamp without time zone AT TIME ZONE p_time_zone );
+v_window_ends_at := ((v_local_date + 1)::timestamp without time zone AT TIME ZONE p_time_zone );
+INSERT INTO public.voice_ai_usage_windows (user_id, time_zone, local_date, window_started_at, window_ends_at, policy_version, created_at, updated_at ) VALUES (p_user_id, p_time_zone, v_local_date, v_window_started_at, v_window_ends_at, p_policy_version, p_server_now, p_server_now ) ON CONFLICT (user_id) DO UPDATE SET time_zone = EXCLUDED.time_zone, local_date = EXCLUDED.local_date, window_started_at = EXCLUDED.window_started_at, window_ends_at = EXCLUDED.window_ends_at, policy_version = EXCLUDED.policy_version, updated_at = EXCLUDED.updated_at RETURNING * INTO v_window;
+RETURN v_window;
+END;
+$function$;
+CREATE OR REPLACE FUNCTION private.voice_ai_reclaim_expired_reservations_at_v1(p_user_id uuid, p_server_now timestamptz ) RETURNS integer LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public', 'pg_catalog', 'pg_temp' AS $function$ DECLARE v_reclaimed integer;
+BEGIN IF p_user_id IS NULL OR p_server_now IS NULL THEN RAISE EXCEPTION 'Invalid Voice AI reservation cleanup input' USING ERRCODE = '22023';
+END IF;
+UPDATE public.voice_ai_work_requests SET status = 'released', decision_code = 'reservation_expired', available_at = NULL, reservation_expires_at = NULL, updated_at = p_server_now WHERE user_id = p_user_id AND status = 'reserved' AND reservation_expires_at <= p_server_now;
+GET DIAGNOSTICS v_reclaimed = ROW_COUNT;
+RETURN v_reclaimed;
+END;
+$function$;
+REVOKE ALL ON FUNCTION private.voice_ai_lock_user_v1(uuid) FROM PUBLIC, anon, authenticated, service_role;
+REVOKE ALL ON FUNCTION private.voice_ai_assert_time_zone_v1(text) FROM PUBLIC, anon, authenticated, service_role;
+REVOKE ALL ON FUNCTION private.voice_ai_assert_policy_v1(text, integer, integer, integer, text ) FROM PUBLIC, anon, authenticated, service_role;
+REVOKE ALL ON FUNCTION private.voice_ai_ensure_window_at_v1(uuid, text, text, timestamptz ) FROM PUBLIC, anon, authenticated, service_role;
+REVOKE ALL ON FUNCTION private.voice_ai_reclaim_expired_reservations_at_v1(uuid, timestamptz ) FROM PUBLIC, anon, authenticated, service_role;
+-- PART 1 END: core schema, privacy boundary, lock/timezone/policy/window helpers.
+CREATE OR REPLACE FUNCTION private.voice_ai_get_availability_at(p_user_id uuid, p_time_zone text, p_mode text, p_daily_limit integer, p_burst_limit integer, p_burst_window_seconds integer, p_policy_version text, p_server_now timestamptz ) RETURNS TABLE (server_now timestamptz, time_zone text, window_started_at timestamptz, window_ends_at timestamptz, daily_limit integer, remaining integer, reset_at timestamptz, reason text, available_at timestamptz, burst_available_at timestamptz, policy_version text ) LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public', 'private', 'pg_catalog', 'pg_temp' AS $function$ DECLARE v_window public.voice_ai_usage_windows%ROWTYPE;
+v_started integer := 0;
+v_reserved integer := 0;
+v_burst_started integer := 0;
+v_burst_reserved integer := 0;
+v_remaining integer;
+v_reason text;
+v_available_at timestamptz;
+v_burst_available_at timestamptz;
+BEGIN IF p_server_now IS NULL THEN RAISE EXCEPTION 'Voice AI server time is required' USING ERRCODE = '22023';
+END IF;
+PERFORM private.voice_ai_assert_policy_v1(p_mode, p_daily_limit, p_burst_limit, p_burst_window_seconds, p_policy_version );
+PERFORM private.voice_ai_assert_time_zone_v1(p_time_zone);
+PERFORM private.voice_ai_lock_user_v1(p_user_id);
+v_window := private.voice_ai_ensure_window_at_v1(p_user_id, p_time_zone, p_policy_version, p_server_now );
+PERFORM private.voice_ai_reclaim_expired_reservations_at_v1(p_user_id, p_server_now );
+SELECT count(*)::integer INTO v_started FROM public.voice_ai_work_requests WHERE user_id = p_user_id AND provider_started_at >= v_window.window_started_at AND provider_started_at < v_window.window_ends_at AND status IN ('provider_started', 'completed', 'completed_with_provider_error' );
+SELECT count(*)::integer INTO v_reserved FROM public.voice_ai_work_requests AS request WHERE request.user_id = p_user_id AND request.window_started_at = v_window.window_started_at AND request.window_ends_at = v_window.window_ends_at AND request.status = 'reserved' AND request.reservation_expires_at > p_server_now;
+SELECT count(*)::integer INTO v_burst_started FROM public.voice_ai_work_requests WHERE user_id = p_user_id AND provider_started_at > (p_server_now - make_interval(secs => p_burst_window_seconds) ) AND provider_started_at <= p_server_now;
+SELECT count(*)::integer INTO v_burst_reserved FROM public.voice_ai_work_requests WHERE user_id = p_user_id AND status = 'reserved' AND reservation_expires_at > p_server_now;
+IF p_mode = 'metered' THEN v_remaining := GREATEST(p_daily_limit - v_started - v_reserved, 0 );
+ELSE v_remaining := NULL;
+END IF;
+IF p_mode = 'metered' AND v_remaining = 0 THEN v_reason := 'daily_limit';
+v_available_at := v_window.window_ends_at;
+ELSIF v_burst_started + v_burst_reserved >= p_burst_limit THEN SELECT min(expiry) INTO v_burst_available_at FROM (SELECT provider_started_at + make_interval(secs => p_burst_window_seconds) AS expiry FROM public.voice_ai_work_requests WHERE user_id = p_user_id AND provider_started_at > (p_server_now - make_interval(secs => p_burst_window_seconds ) ) AND provider_started_at <= p_server_now UNION ALL SELECT reservation_expires_at FROM public.voice_ai_work_requests WHERE user_id = p_user_id AND status = 'reserved' AND reservation_expires_at > p_server_now ) AS capacity_expiries;
+v_reason := 'burst_limit';
+v_available_at := v_burst_available_at;
+END IF;
+RETURN QUERY SELECT p_server_now, v_window.time_zone, v_window.window_started_at, v_window.window_ends_at, CASE WHEN p_mode = 'metered' THEN p_daily_limit ELSE NULL END, v_remaining, CASE WHEN p_mode = 'metered' THEN v_window.window_ends_at ELSE NULL END, v_reason, v_available_at, v_burst_available_at, p_policy_version;
+END;
+$function$;
+DROP FUNCTION IF EXISTS public.voice_ai_get_availability(uuid, text, text, integer, integer, integer, text );
+CREATE OR REPLACE FUNCTION public.voice_ai_get_availability(p_user_id uuid, p_time_zone text, p_mode text, p_burst_limit integer, p_burst_window_seconds integer, p_policy_version text, p_daily_limit integer DEFAULT NULL ) RETURNS TABLE (server_now timestamptz, time_zone text, window_started_at timestamptz, window_ends_at timestamptz, daily_limit integer, remaining integer, reset_at timestamptz, reason text, available_at timestamptz, burst_available_at timestamptz, policy_version text ) LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public', 'private', 'auth', 'pg_catalog', 'pg_temp' AS $function$ BEGIN IF COALESCE(auth.role(), '') <> 'service_role' THEN RAISE EXCEPTION 'voice_ai_get_availability is service-role only';
+END IF;
+RETURN QUERY SELECT * FROM private.voice_ai_get_availability_at(p_user_id, p_time_zone, p_mode, p_daily_limit, p_burst_limit, p_burst_window_seconds, p_policy_version, clock_timestamp() );
+END;
+$function$;
+CREATE OR REPLACE FUNCTION private.voice_ai_reserve_work_at(p_user_id uuid, p_request_key text, p_time_zone text, p_mode text, p_daily_limit integer, p_burst_limit integer, p_burst_window_seconds integer, p_reservation_lease_seconds integer, p_policy_version text, p_server_now timestamptz ) RETURNS TABLE (request_id uuid, accepted boolean, decision_code text, is_replay boolean, server_now timestamptz, time_zone text, daily_limit integer, remaining integer, reset_at timestamptz, available_at timestamptz, burst_available_at timestamptz, reservation_expires_at timestamptz, policy_version text ) LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public', 'private', 'pg_catalog', 'pg_temp' AS $function$ DECLARE v_existing public.voice_ai_work_requests%ROWTYPE;
+v_availability record;
+v_request_id uuid;
+v_reservation_expires_at timestamptz;
+BEGIN IF p_server_now IS NULL OR p_user_id IS NULL OR p_request_key IS NULL OR length(p_request_key) NOT BETWEEN 1 AND 160 OR p_reservation_lease_seconds IS NULL OR p_reservation_lease_seconds <= 0 THEN RAISE EXCEPTION 'Invalid Voice AI reservation input' USING ERRCODE = '22023';
+END IF;
+PERFORM private.voice_ai_assert_policy_v1(p_mode, p_daily_limit, p_burst_limit, p_burst_window_seconds, p_policy_version );
+PERFORM private.voice_ai_assert_time_zone_v1(p_time_zone);
+PERFORM private.voice_ai_lock_user_v1(p_user_id);
+SELECT * INTO v_existing FROM public.voice_ai_work_requests WHERE user_id = p_user_id AND request_key = p_request_key FOR UPDATE;
+IF FOUND THEN IF v_existing.status = 'reserved' AND v_existing.reservation_expires_at > p_server_now THEN SELECT * INTO v_availability FROM private.voice_ai_get_availability_at(p_user_id, p_time_zone, p_mode, p_daily_limit, p_burst_limit, p_burst_window_seconds, p_policy_version, p_server_now );
+RETURN QUERY SELECT v_existing.id, true, 'accepted'::text, true, v_availability.server_now, v_availability.time_zone, v_availability.daily_limit, v_availability.remaining, v_availability.reset_at, v_availability.available_at, v_availability.burst_available_at, v_existing.reservation_expires_at, v_availability.policy_version;
+RETURN;
+END IF;
+IF v_existing.status = 'reserved' THEN UPDATE public.voice_ai_work_requests SET status = 'released', decision_code = 'reservation_expired', reservation_expires_at = NULL, available_at = NULL, updated_at = p_server_now WHERE id = v_existing.id;
+v_existing.status := 'released';
+v_existing.decision_code := 'reservation_expired';
+v_existing.reservation_expires_at := NULL;
+END IF;
+SELECT * INTO v_availability FROM private.voice_ai_get_availability_at(p_user_id, p_time_zone, p_mode, p_daily_limit, p_burst_limit, p_burst_window_seconds, p_policy_version, p_server_now );
+RETURN QUERY SELECT v_existing.id, false, CASE WHEN v_existing.status = 'refused' AND v_existing.decision_code = 'daily_limit' AND v_availability.reason = 'daily_limit' THEN 'daily_limit' WHEN v_existing.status = 'refused' AND v_existing.decision_code = 'burst_limit' AND v_availability.reason = 'burst_limit' THEN 'burst_limit' ELSE 'already_processed_result_unavailable' END, true, v_availability.server_now, v_availability.time_zone, v_availability.daily_limit, v_availability.remaining, v_availability.reset_at, v_availability.available_at, v_availability.burst_available_at, NULL::timestamptz, v_availability.policy_version;
+RETURN;
+END IF;
+SELECT * INTO v_availability FROM private.voice_ai_get_availability_at(p_user_id, p_time_zone, p_mode, p_daily_limit, p_burst_limit, p_burst_window_seconds, p_policy_version, p_server_now );
+IF v_availability.reason IN ('daily_limit', 'burst_limit' ) THEN INSERT INTO public.voice_ai_work_requests (user_id, request_key, time_zone, window_started_at, window_ends_at, status, decision_code, available_at, created_at, updated_at ) VALUES (p_user_id, p_request_key, v_availability.time_zone, v_availability.window_started_at, v_availability.window_ends_at, 'refused', v_availability.reason, v_availability.available_at, p_server_now, p_server_now ) RETURNING id INTO v_request_id;
+RETURN QUERY SELECT v_request_id, false, v_availability.reason, false, v_availability.server_now, v_availability.time_zone, v_availability.daily_limit, v_availability.remaining, v_availability.reset_at, v_availability.available_at, v_availability.burst_available_at, NULL::timestamptz, v_availability.policy_version;
+RETURN;
+END IF;
+v_reservation_expires_at := p_server_now + make_interval(secs => p_reservation_lease_seconds);
+INSERT INTO public.voice_ai_work_requests (user_id, request_key, time_zone, window_started_at, window_ends_at, status, decision_code, available_at, reservation_expires_at, created_at, updated_at ) VALUES (p_user_id, p_request_key, v_availability.time_zone, v_availability.window_started_at, v_availability.window_ends_at, 'reserved', 'accepted', NULL, v_reservation_expires_at, p_server_now, p_server_now ) RETURNING id INTO v_request_id;
+SELECT * INTO v_availability FROM private.voice_ai_get_availability_at(p_user_id, p_time_zone, p_mode, p_daily_limit, p_burst_limit, p_burst_window_seconds, p_policy_version, p_server_now );
+RETURN QUERY SELECT v_request_id, true, 'accepted'::text, false, v_availability.server_now, v_availability.time_zone, v_availability.daily_limit, v_availability.remaining, v_availability.reset_at, v_availability.available_at, v_availability.burst_available_at, v_reservation_expires_at, v_availability.policy_version;
+END;
+$function$;
+DROP FUNCTION IF EXISTS public.voice_ai_reserve_work(uuid, text, text, text, integer, integer, integer, integer, text );
+CREATE OR REPLACE FUNCTION public.voice_ai_reserve_work(p_user_id uuid, p_request_key text, p_time_zone text, p_mode text, p_burst_limit integer, p_burst_window_seconds integer, p_reservation_lease_seconds integer, p_policy_version text, p_daily_limit integer DEFAULT NULL ) RETURNS TABLE (request_id uuid, accepted boolean, decision_code text, is_replay boolean, server_now timestamptz, time_zone text, daily_limit integer, remaining integer, reset_at timestamptz, available_at timestamptz, burst_available_at timestamptz, reservation_expires_at timestamptz, policy_version text ) LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public', 'private', 'auth', 'pg_catalog', 'pg_temp' AS $function$ BEGIN IF COALESCE(auth.role(), '') <> 'service_role' THEN RAISE EXCEPTION 'voice_ai_reserve_work is service-role only';
+END IF;
+RETURN QUERY SELECT * FROM private.voice_ai_reserve_work_at(p_user_id, p_request_key, p_time_zone, p_mode, p_daily_limit, p_burst_limit, p_burst_window_seconds, p_reservation_lease_seconds, p_policy_version, clock_timestamp() );
+END;
+$function$;
+-- PART 2A END: availability + atomic reservation.
+CREATE OR REPLACE FUNCTION private.voice_ai_mark_provider_started_at(p_user_id uuid, p_request_id uuid, p_time_zone text, p_mode text, p_daily_limit integer, p_burst_limit integer, p_burst_window_seconds integer, p_policy_version text, p_server_now timestamptz ) RETURNS TABLE (request_id uuid, started boolean, decision_code text, is_replay boolean, server_now timestamptz, time_zone text, daily_limit integer, remaining integer, reset_at timestamptz, available_at timestamptz, burst_available_at timestamptz, policy_version text ) LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public', 'private', 'pg_catalog', 'pg_temp' AS $function$ DECLARE v_work public.voice_ai_work_requests%ROWTYPE;
+v_window public.voice_ai_usage_windows%ROWTYPE;
+v_effective_time_zone text;
+v_started integer := 0;
+v_reserved integer := 0;
+v_burst_started integer := 0;
+v_burst_reserved integer := 0;
+v_remaining integer;
+v_available_at timestamptz;
+v_burst_available_at timestamptz;
+v_replay_availability record;
+BEGIN IF p_user_id IS NULL OR p_request_id IS NULL OR p_server_now IS NULL THEN RAISE EXCEPTION 'Invalid Voice AI provider-start input' USING ERRCODE = '22023';
+END IF;
+PERFORM private.voice_ai_assert_policy_v1(p_mode, p_daily_limit, p_burst_limit, p_burst_window_seconds, p_policy_version );
+PERFORM private.voice_ai_assert_time_zone_v1(p_time_zone);
+PERFORM private.voice_ai_lock_user_v1(p_user_id);
+SELECT * INTO v_work FROM public.voice_ai_work_requests WHERE id = p_request_id AND user_id = p_user_id FOR UPDATE;
+IF NOT FOUND THEN RAISE EXCEPTION 'Voice AI request not found' USING ERRCODE = 'P0002';
+END IF;
+IF p_server_now >= v_work.window_started_at AND p_server_now < v_work.window_ends_at THEN v_effective_time_zone := v_work.time_zone;
+ELSE v_effective_time_zone := p_time_zone;
+END IF;
+IF v_work.status IN ('provider_started', 'completed', 'completed_with_provider_error' ) THEN SELECT * INTO v_replay_availability FROM private.voice_ai_get_availability_at(p_user_id, v_effective_time_zone, p_mode, p_daily_limit, p_burst_limit, p_burst_window_seconds, p_policy_version, p_server_now );
+RETURN QUERY SELECT v_work.id, false, 'already_processed_result_unavailable'::text, true, v_replay_availability.server_now, v_replay_availability.time_zone, v_replay_availability.daily_limit, v_replay_availability.remaining, v_replay_availability.reset_at, v_replay_availability.available_at, v_replay_availability.burst_available_at, v_replay_availability.policy_version;
+RETURN;
+END IF;
+IF v_work.status <> 'reserved' THEN SELECT * INTO v_replay_availability FROM private.voice_ai_get_availability_at(p_user_id, v_effective_time_zone, p_mode, p_daily_limit, p_burst_limit, p_burst_window_seconds, p_policy_version, p_server_now );
+RETURN QUERY SELECT v_work.id, false, CASE WHEN v_work.status = 'refused' AND v_work.decision_code = 'daily_limit' AND v_replay_availability.reason = 'daily_limit' THEN 'daily_limit' WHEN v_work.status = 'refused' AND v_work.decision_code = 'burst_limit' AND v_replay_availability.reason = 'burst_limit' THEN 'burst_limit' ELSE 'already_processed_result_unavailable' END, true, v_replay_availability.server_now, v_replay_availability.time_zone, v_replay_availability.daily_limit, v_replay_availability.remaining, v_replay_availability.reset_at, v_replay_availability.available_at, v_replay_availability.burst_available_at, v_replay_availability.policy_version;
+RETURN;
+END IF;
+IF v_work.reservation_expires_at <= p_server_now THEN UPDATE public.voice_ai_work_requests SET status = 'released', decision_code = 'reservation_expired', available_at = NULL, reservation_expires_at = NULL, updated_at = p_server_now WHERE id = v_work.id;
+SELECT * INTO v_replay_availability FROM private.voice_ai_get_availability_at(p_user_id, v_effective_time_zone, p_mode, p_daily_limit, p_burst_limit, p_burst_window_seconds, p_policy_version, p_server_now );
+RETURN QUERY SELECT v_work.id, false, 'reservation_expired'::text, false, v_replay_availability.server_now, v_replay_availability.time_zone, v_replay_availability.daily_limit, v_replay_availability.remaining, v_replay_availability.reset_at, v_replay_availability.available_at, v_replay_availability.burst_available_at, v_replay_availability.policy_version;
+RETURN;
+END IF;
+v_window := private.voice_ai_ensure_window_at_v1(p_user_id, v_effective_time_zone, p_policy_version, p_server_now );
+PERFORM private.voice_ai_reclaim_expired_reservations_at_v1(p_user_id, p_server_now );
+-- A reservation that crosses its pinned local-day boundary is evaluated
+-- against the newly authoritative caller timezone before provider start.
+UPDATE public.voice_ai_work_requests SET time_zone = v_window.time_zone, window_started_at = v_window.window_started_at, window_ends_at = v_window.window_ends_at, updated_at = p_server_now WHERE id = v_work.id;
+SELECT count(*)::integer INTO v_started FROM public.voice_ai_work_requests WHERE user_id = p_user_id AND provider_started_at >= v_window.window_started_at AND provider_started_at < v_window.window_ends_at AND status IN ('provider_started', 'completed', 'completed_with_provider_error' );
+SELECT count(*)::integer INTO v_reserved FROM public.voice_ai_work_requests WHERE user_id = p_user_id AND id <> v_work.id AND status = 'reserved' AND window_started_at = v_window.window_started_at AND window_ends_at = v_window.window_ends_at AND reservation_expires_at > p_server_now;
+IF p_mode = 'metered' AND v_started + v_reserved >= p_daily_limit THEN UPDATE public.voice_ai_work_requests SET status = 'refused', decision_code = 'daily_limit', available_at = v_window.window_ends_at, reservation_expires_at = NULL, updated_at = p_server_now WHERE id = v_work.id;
+RETURN QUERY SELECT v_work.id, false, 'daily_limit'::text, false, p_server_now, v_window.time_zone, p_daily_limit, 0, v_window.window_ends_at, v_window.window_ends_at, NULL::timestamptz, p_policy_version;
+RETURN;
+END IF;
+SELECT count(*)::integer INTO v_burst_started FROM public.voice_ai_work_requests WHERE user_id = p_user_id AND provider_started_at > (p_server_now - make_interval(secs => p_burst_window_seconds) ) AND provider_started_at <= p_server_now;
+SELECT count(*)::integer INTO v_burst_reserved FROM public.voice_ai_work_requests WHERE user_id = p_user_id AND id <> v_work.id AND status = 'reserved' AND reservation_expires_at > p_server_now;
+IF v_burst_started + v_burst_reserved >= p_burst_limit THEN SELECT min(expiry) INTO v_burst_available_at FROM (SELECT provider_started_at + make_interval(secs => p_burst_window_seconds) AS expiry FROM public.voice_ai_work_requests WHERE user_id = p_user_id AND provider_started_at > (p_server_now - make_interval(secs => p_burst_window_seconds ) ) AND provider_started_at <= p_server_now UNION ALL SELECT reservation_expires_at FROM public.voice_ai_work_requests WHERE user_id = p_user_id AND id <> v_work.id AND status = 'reserved' AND reservation_expires_at > p_server_now ) AS burst_expiries;
+UPDATE public.voice_ai_work_requests SET status = 'refused', decision_code = 'burst_limit', available_at = v_burst_available_at, reservation_expires_at = NULL, updated_at = p_server_now WHERE id = v_work.id;
+IF p_mode = 'metered' THEN v_remaining := GREATEST(p_daily_limit - v_started - v_reserved, 0 );
+ELSE v_remaining := NULL;
+END IF;
+RETURN QUERY SELECT v_work.id, false, 'burst_limit'::text, false, p_server_now, v_window.time_zone, CASE WHEN p_mode = 'metered' THEN p_daily_limit ELSE NULL END, v_remaining, CASE WHEN p_mode = 'metered' THEN v_window.window_ends_at ELSE NULL END, v_burst_available_at, v_burst_available_at, p_policy_version;
+RETURN;
+END IF;
+-- Exactly this transition is the usage charge. Gemini's existing internal
+-- retry loop happens after this RPC and never creates additional starts.
+UPDATE public.voice_ai_work_requests SET status = 'provider_started', decision_code = 'provider_started', provider_started_at = p_server_now, reservation_expires_at = NULL, available_at = NULL, updated_at = p_server_now WHERE id = v_work.id AND status = 'reserved';
+v_started := v_started + 1;
+v_burst_started := v_burst_started + 1;
+IF p_mode = 'metered' THEN v_remaining := GREATEST(p_daily_limit - v_started - v_reserved, 0 );
+ELSE v_remaining := NULL;
+END IF;
+IF p_mode = 'metered' AND v_remaining = 0 THEN v_available_at := v_window.window_ends_at;
+v_burst_available_at := NULL;
+ELSIF v_burst_started + v_burst_reserved >= p_burst_limit THEN SELECT min(expiry) INTO v_burst_available_at FROM (SELECT provider_started_at + make_interval(secs => p_burst_window_seconds) AS expiry FROM public.voice_ai_work_requests WHERE user_id = p_user_id AND provider_started_at > (p_server_now - make_interval(secs => p_burst_window_seconds ) ) AND provider_started_at <= p_server_now UNION ALL SELECT reservation_expires_at FROM public.voice_ai_work_requests WHERE user_id = p_user_id AND status = 'reserved' AND reservation_expires_at > p_server_now ) AS burst_expiries;
+v_available_at := v_burst_available_at;
+END IF;
+RETURN QUERY SELECT v_work.id, true, 'provider_started'::text, false, p_server_now, v_window.time_zone, CASE WHEN p_mode = 'metered' THEN p_daily_limit ELSE NULL END, v_remaining, CASE WHEN p_mode = 'metered' THEN v_window.window_ends_at ELSE NULL END, v_available_at, v_burst_available_at, p_policy_version;
+END;
+$function$;
+DROP FUNCTION IF EXISTS public.voice_ai_mark_provider_started(uuid, uuid, text, text, integer, integer, integer, text );
+CREATE OR REPLACE FUNCTION public.voice_ai_mark_provider_started(p_user_id uuid, p_request_id uuid, p_time_zone text, p_mode text, p_burst_limit integer, p_burst_window_seconds integer, p_policy_version text, p_daily_limit integer DEFAULT NULL ) RETURNS TABLE (request_id uuid, started boolean, decision_code text, is_replay boolean, server_now timestamptz, time_zone text, daily_limit integer, remaining integer, reset_at timestamptz, available_at timestamptz, burst_available_at timestamptz, policy_version text ) LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public', 'private', 'auth', 'pg_catalog', 'pg_temp' AS $function$ BEGIN IF COALESCE(auth.role(), '') <> 'service_role' THEN RAISE EXCEPTION 'voice_ai_mark_provider_started is service-role only';
+END IF;
+RETURN QUERY SELECT * FROM private.voice_ai_mark_provider_started_at(p_user_id, p_request_id, p_time_zone, p_mode, p_daily_limit, p_burst_limit, p_burst_window_seconds, p_policy_version, clock_timestamp() );
+END;
+$function$;
+-- PART 2B END: authoritative provider-start transition and recheck.
+CREATE OR REPLACE FUNCTION public.voice_ai_release_work(p_user_id uuid, p_request_id uuid, p_decision_code text ) RETURNS boolean LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public', 'private', 'auth', 'pg_catalog', 'pg_temp' AS $function$ DECLARE v_updated integer;
+BEGIN IF COALESCE(auth.role(), '') <> 'service_role' THEN RAISE EXCEPTION 'voice_ai_release_work is service-role only';
+END IF;
+IF p_user_id IS NULL OR p_request_id IS NULL OR p_decision_code IS NULL OR length(btrim(p_decision_code)) = 0 THEN RAISE EXCEPTION 'Invalid Voice AI release input' USING ERRCODE = '22023';
+END IF;
+PERFORM private.voice_ai_lock_user_v1(p_user_id);
+-- Release is allowed only while provider start is still provably absent.
+UPDATE public.voice_ai_work_requests SET status = 'released', decision_code = p_decision_code, available_at = NULL, reservation_expires_at = NULL, updated_at = clock_timestamp() WHERE id = p_request_id AND user_id = p_user_id AND status = 'reserved' AND provider_started_at IS NULL;
+GET DIAGNOSTICS v_updated = ROW_COUNT;
+RETURN v_updated = 1;
+END;
+$function$;
+CREATE OR REPLACE FUNCTION public.voice_ai_complete_work(p_user_id uuid, p_request_id uuid, p_completed_with_provider_error boolean, p_decision_code text ) RETURNS boolean LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public', 'private', 'auth', 'pg_catalog', 'pg_temp' AS $function$ DECLARE v_updated integer;
+BEGIN IF COALESCE(auth.role(), '') <> 'service_role' THEN RAISE EXCEPTION 'voice_ai_complete_work is service-role only';
+END IF;
+IF p_user_id IS NULL OR p_request_id IS NULL OR p_completed_with_provider_error IS NULL OR p_decision_code IS NULL OR length(btrim(p_decision_code)) = 0 THEN RAISE EXCEPTION 'Invalid Voice AI completion input' USING ERRCODE = '22023';
+END IF;
+PERFORM private.voice_ai_lock_user_v1(p_user_id);
+UPDATE public.voice_ai_work_requests SET status = CASE WHEN p_completed_with_provider_error THEN 'completed_with_provider_error' ELSE 'completed' END, decision_code = p_decision_code, updated_at = clock_timestamp() WHERE id = p_request_id AND user_id = p_user_id AND status = 'provider_started' AND provider_started_at IS NOT NULL;
+GET DIAGNOSTICS v_updated = ROW_COUNT;
+RETURN v_updated = 1;
+END;
+$function$;
+CREATE OR REPLACE FUNCTION private.voice_ai_cleanup_expired_requests_at(p_limit integer, p_server_now timestamptz ) RETURNS integer LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public', 'private', 'pg_catalog', 'pg_temp' AS $function$ DECLARE c_retention constant interval := interval '840 hours';
+c_accounting_horizon constant interval := interval '840 hours';
+c_hard_max_rows constant integer := 500;
+v_candidate record;
+v_active_window public.voice_ai_usage_windows%ROWTYPE;
+v_deleted integer := 0;
+BEGIN IF p_limit IS NULL OR p_limit < 1 OR p_limit > c_hard_max_rows OR p_server_now IS NULL THEN RAISE EXCEPTION 'Invalid Voice AI cleanup input' USING ERRCODE = '22023';
+END IF;
+-- Candidate discovery uses immutable created_at only. Every candidate is
+-- rechecked after acquiring the same per-user advisory lock used by
+-- admission/provider-start before deletion is allowed.
+FOR v_candidate IN SELECT request.id, request.user_id FROM public.voice_ai_work_requests AS request WHERE request.created_at <= p_server_now - c_retention AND request.status IN ('completed', 'completed_with_provider_error', 'released', 'refused' ) ORDER BY request.user_id, request.created_at, request.id LIMIT p_limit LOOP EXIT WHEN v_deleted >= p_limit;
+PERFORM private.voice_ai_lock_user_v1(v_candidate.user_id);
+v_active_window := NULL;
+SELECT * INTO v_active_window FROM public.voice_ai_usage_windows WHERE user_id = v_candidate.user_id AND p_server_now >= window_started_at AND p_server_now < window_ends_at;
+-- Recheck all retention and accounting invariants while holding the
+-- admission/start lock. A terminal identity is deletable only when:
+--   * immutable created_at is at least 840 elapsed hours old;
+--   * it still has a terminal lifecycle status;
+--   * it has no reservation lease;
+--   * it is not an active provider-start lifecycle row;
+--   * its provider start cannot contribute to the current local-day
+--     accounting window;
+--   * its provider start cannot contribute to the frozen 60-second burst.
+DELETE FROM public.voice_ai_work_requests AS request WHERE request.id = v_candidate.id AND request.user_id = v_candidate.user_id AND request.created_at <= p_server_now - c_retention AND request.status IN ('completed', 'completed_with_provider_error', 'released', 'refused' ) AND request.reservation_expires_at IS NULL AND request.status <> 'provider_started' AND (request.provider_started_at IS NULL OR request.provider_started_at <= p_server_now - c_accounting_horizon ) AND (request.provider_started_at IS NULL OR v_active_window.user_id IS NULL OR request.provider_started_at < v_active_window.window_started_at OR request.provider_started_at >= v_active_window.window_ends_at );
+IF FOUND THEN v_deleted := v_deleted + 1;
+END IF;
+END LOOP;
+RETURN v_deleted;
+END;
+$function$;
+CREATE OR REPLACE FUNCTION public.voice_ai_cleanup_expired_requests(p_limit integer DEFAULT 500 ) RETURNS integer LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public', 'private', 'auth', 'pg_catalog', 'pg_temp' AS $function$ BEGIN IF COALESCE(auth.role(), '') <> 'service_role' AND session_user <> 'postgres' THEN RAISE EXCEPTION 'voice_ai_cleanup_expired_requests is privileged only';
+END IF;
+RETURN private.voice_ai_cleanup_expired_requests_at(p_limit, clock_timestamp() );
+END;
+$function$;
+-- Deterministic-clock cores are privileged local PostgreSQL verification
+-- seams only. Edge/service_role can call only the public server-clock wrappers.
+REVOKE ALL ON FUNCTION private.voice_ai_get_availability_at(uuid, text, text, integer, integer, integer, text, timestamptz ) FROM PUBLIC, anon, authenticated, service_role;
+REVOKE ALL ON FUNCTION private.voice_ai_reserve_work_at(uuid, text, text, text, integer, integer, integer, integer, text, timestamptz ) FROM PUBLIC, anon, authenticated, service_role;
+REVOKE ALL ON FUNCTION private.voice_ai_mark_provider_started_at(uuid, uuid, text, text, integer, integer, integer, text, timestamptz ) FROM PUBLIC, anon, authenticated, service_role;
+REVOKE ALL ON FUNCTION private.voice_ai_cleanup_expired_requests_at(integer, timestamptz ) FROM PUBLIC, anon, authenticated, service_role;
+REVOKE ALL ON FUNCTION public.voice_ai_get_availability(uuid, text, text, integer, integer, text, integer ) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.voice_ai_get_availability(uuid, text, text, integer, integer, text, integer ) TO service_role;
+REVOKE ALL ON FUNCTION public.voice_ai_reserve_work(uuid, text, text, text, integer, integer, integer, text, integer ) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.voice_ai_reserve_work(uuid, text, text, text, integer, integer, integer, text, integer ) TO service_role;
+REVOKE ALL ON FUNCTION public.voice_ai_mark_provider_started(uuid, uuid, text, text, integer, integer, text, integer ) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.voice_ai_mark_provider_started(uuid, uuid, text, text, integer, integer, text, integer ) TO service_role;
+REVOKE ALL ON FUNCTION public.voice_ai_release_work(uuid, uuid, text ) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.voice_ai_release_work(uuid, uuid, text ) TO service_role;
+REVOKE ALL ON FUNCTION public.voice_ai_complete_work(uuid, uuid, boolean, text ) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.voice_ai_complete_work(uuid, uuid, boolean, text ) TO service_role;
+REVOKE ALL ON FUNCTION public.voice_ai_cleanup_expired_requests(integer) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.voice_ai_cleanup_expired_requests(integer) TO service_role;
+SELECT cron.unschedule('voice-ai-ledger-cleanup') WHERE EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'voice-ai-ledger-cleanup' );
+SELECT cron.schedule('voice-ai-ledger-cleanup', '17 * * * *', 'SELECT public.voice_ai_cleanup_expired_requests(500)' );
+-- PART 3 END: lifecycle finalization, accounting-safe 840-hour retention,
+-- privilege closure and hourly :17 cleanup scheduling.

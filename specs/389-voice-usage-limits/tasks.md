@@ -14,12 +14,37 @@ handoff `dcf1671daa4b2ab14bc2b8846911d411e6c08a0d`.
 
 **Status**: Existing 59-task checklist reviewed and refined in place. Binding/
 copy and 35-day replay retention decisions are owner-approved. Final artifact
-analysis is complete: T002/T003 planning gates passed. T004/T005 runner and
-behavioral Red gates remain separate implementation prerequisites.
-Implementation, runtime Red/Green and visual/accessibility completion are not
-claimed. No worker assignments before those gates.
+analysis is complete: T001–T004 source/planning/feasibility assessments passed.
+T004 identifies explicit runtime blockers; it does not claim their execution.
+T005 native baseline and task-specific behavioral Red remain separate gates.
+Initial server exclusions and mobile route/parser behavioral Red are recorded in
+checklists/server-initial-red.md and checklists/mobile-initial-red.md. Direct
+production source for the server accounting/API/generated-type boundary and
+unified Manual/Voice route/client is written in the isolated delivery worktree.
+Complete quota/runtime Green and visual/accessibility completion are not
+claimed. Current execution authority and live ownership are recorded in
+`implementation-ledger.md`; remote test proposals may be authored while local
+runner intake completes. For the current owner-authorized direct-implementation
+pass, test-first execution, tests, independent reviews, native builds and
+device/visual checks are deferred as recorded in `implementation-ledger.md`.
+Written implementation is not verified delivery; existing evidence and
+unfinished verification tasks stay intact. Changes remain uncommitted/unpushed
+until verification.
 
-Strict TDD is mandatory under `AGENTS.md` and
+**Current prepared main**: `b2ec0fd4bc81cf2bf504f86d3bb781f605b355fc`; Voice
+migration is now `086_voice_ai_usage_limits.sql`. The local main merge is
+prepared and remains uncommitted/unpublished under the verification deferral.
+
+**Direct source status — 8 October 2026**: Source for T015–T020, T029–T032 and
+T043–T047 is integrated locally, including the final bound layout details. Task
+checkboxes remain unchanged because their normal behavioral prerequisites and
+linked verification are deferred, not passed. T016 has real authoritative local
+SQL/type generation evidence; it is not SQL behavior/race/cleanup proof. See the
+current ledger for exact worktrees, ownership and generation records.
+
+The following is the normal verification workflow; the later explicit owner
+instruction defers its test-first gate for the current direct-implementation
+pass only. Strict TDD is mandatory under `AGENTS.md` and
 `.agent/workflows/sprint-issue.md`: write unit/integration and honest
 user-journey E2E tests first, run them and record the expected behavior failure
 before production changes. An import/setup failure is not behavioral Red. A
@@ -30,11 +55,13 @@ doubles, never real Gemini usage.
 Implementation team lead remains coordination-only under
 `.agent/workflows/team-led-delivery.md`; workers own edits in exclusive sibling
 worktrees. This checklist defines suggested lanes, not actual assignments or
-Git/external mutation authority. No installs in secondary worktrees. No
-deployment, hosted policy configuration, shared remote migrations, commit hooks,
-commits, pushes, PRs or issue edits are authorized by this checklist. Current
-owner separately authorized lead-only local planning edits and feature/main
-sync; those exceptions do not authorize product implementation or delegation.
+Git/external mutation authority. No installs in secondary worktrees. This
+checklist does not grant Git/external mutation authority. Later owner approval
+authorizes full local delivery, finalized planning publication and separate
+server/mobile worker branches, as recorded in `implementation-ledger.md`. No
+main merge, PR, issue mutation, hosted migration, policy change, deployment or
+paid provider request is authorized. Checks remain batched before commits; push
+once per accepted batch.
 
 `[P]` means an ownership-safe task can run beside another ready task with
 disjoint files after its stated prerequisites. Story numbers preserve the
@@ -44,7 +71,7 @@ three are P1.
 
 ## Phase 1: Setup and blocking design gates
 
-- [ ] T001 Verify the selected feature and immutable source, inspect existing
+- [x] T001 Verify the selected feature and immutable source, inspect existing
       route/voice/SMS behavior and record baseline/gate status in
       `specs/389-voice-usage-limits/tasks.md`; use
       `SPECIFY_FEATURE_DIRECTORY=specs/389-voice-usage-limits SPECIFY_FEATURE=389-voice-usage-limits`
@@ -76,13 +103,13 @@ three are P1.
       horizon and safe terminal identity deletion across all artifacts. Resolve
       every blocking analysis finding before implementation or worker
       assignments.
-- [ ] T004 Establish the complete manual-to-automation matrix and local runner
+- [x] T004 Establish the complete manual-to-automation matrix and local runner
       feasibility in `specs/389-voice-usage-limits/tasks.md` using
       `quickstart.md` sections 3/8/10 and `apps/mobile/e2e/maestro/README.md`;
       identify emulator/audio/provider-double/clock capabilities,
       permission/restart/resume cases and manual-only blockers, and reserve the
       exact next migration filename
-      `supabase/migrations/082_voice_ai_usage_limits.sql` after rechecking
+      `supabase/migrations/086_voice_ai_usage_limits.sql` after rechecking
       migration numbering at assignment time.
 - [ ] T005 Run existing focused baseline commands for
       `apps/mobile/__tests__/services/ai-voice-parser-service.test.ts`,
@@ -117,15 +144,17 @@ than asserted covered.
       unknown/malformed RPC outputs and authoritative fail-closed decisions; use
       the T003-reconciled contract, explicit return types and Zod-derived
       external types.
-- [ ] T008 Record actual behavioral Red evidence for T006/T007 and agreed
-      architectural interfaces in `specs/389-voice-usage-limits/tasks.md`;
-      preserve Watermelon financial schema, local Manual writes, consent
-      semantics and Gemini successful response, with no service imports in new
-      presentational components and no DB writes/business policy in hooks.
+- [ ] T008 Record staged T006/existing-HTTP Red, agreed bootstrap interfaces and
+      later direct T007 behavioral Red separately in
+      `specs/389-voice-usage-limits/tasks.md`; preserve Watermelon financial
+      schema, local Manual writes, consent semantics and Gemini successful
+      response, with no service imports in new presentational components and no
+      DB writes/business policy in hooks.
 
-**Checkpoint**: Shared external shapes, server-only exclusions and ownership
-interfaces are tested and frozen for assignment. These tests become Green with
-US2 implementation; no premature claim that foundation tests already pass.
+**Checkpoint**: Freeze agreed external shapes and exclusive ownership before
+bootstrap dispatch. Initial T006/existing-HTTP Red releases only the bounded
+bootstrap; direct T007 evidence is a later gate, not an initial assignment
+prerequisite. Foundation completion and Green remain separate unfinished gates.
 
 ## Phase 3: US2 — Enforce Voice Cost Controls on the Server (P1)
 
@@ -159,8 +188,9 @@ success/error/timeout/invalid output and internal retries consume one.
       `scripts/__tests__/voice-ai-safeguard-concurrency.test.ts` for two devices
       racing the last daily/burst slot, same-key concurrent reservation/start,
       different-user independence, admission-versus-provider-start and bounded
-      cleanup-versus-admission/start races; bind only a verified local database
-      and record failed expected assertions before migration.
+      cleanup-versus-admission/start races; bind only a verified isolated local
+      test database. Author first, then run against callable RPCs through the
+      bootstrap sequence below; missing functions are not race Red.
 - [ ] T011 [P] [US2] Write policy/default/config-failure tests in
       `supabase/functions/_shared/voice-ai-entitlement.test.ts` and RPC
       state-machine tests in
@@ -192,16 +222,16 @@ success/error/timeout/invalid output and internal retries consume one.
 
 ### Implementation after accepted Red
 
-- [ ] T015 [US2] Implement `supabase/migrations/082_voice_ai_usage_limits.sql`
-      after T009/T010 Red, with voice-only tables/indexes/checks,
-      authenticated-user lock and accepted timezone window, atomic
-      availability/reserve/start/release/complete RPCs, unique user/request key,
-      server timestamps, pinned DST-aware local midnight, active reservation
-      capacity and service-role-only grants/RLS; implement tested bounded
-      cleanup of whole eligible terminal identities at/after 35 elapsed days
-      from server created_at under the same user lock, excluding active
-      work/leases and current accounting; no lifetime tombstone or refund, and a
-      deleted key follows current gates as new. Never store
+- [ ] T015 [US2] Implement `supabase/migrations/086_voice_ai_usage_limits.sql`
+      through the bounded bootstrap sequence below, with voice-only
+      tables/indexes/checks, authenticated-user lock and accepted timezone
+      window, atomic availability/reserve/start/release/complete RPCs, unique
+      user/request key, server timestamps, pinned DST-aware local midnight,
+      active reservation capacity and service-role-only grants/RLS; implement
+      tested bounded cleanup of whole eligible terminal identities at/after 35
+      elapsed days from server created_at under the same user lock, excluding
+      active work/leases and current accounting; no lifetime tombstone or
+      refund, and a deleted key follows current gates as new. Never store
       audio/transcript/financial/provider content. Revalidate the reserved
       number immediately before writing.
 - [ ] T016 [US2] After local migration and T006 Red, regenerate
@@ -213,10 +243,12 @@ success/error/timeout/invalid output and internal retries consume one.
       signature/types match actual SQL.
 - [ ] T017 [US2] Implement validated server contract/policy boundary in
       `supabase/functions/_shared/voice-ai-safeguard-contract.ts` and
-      `supabase/functions/_shared/voice-ai-entitlement.ts` after T007/T011 Red;
-      free launch is operational 5/day, 2/min with 60-second burst and
-      120-second lease, missing/invalid config fails closed, and Gemini owns no
-      policy/commercial details.
+      `supabase/functions/_shared/voice-ai-entitlement.ts` through the bootstrap
+      sequence below, with accepted existing-boundary Red first and direct
+      T007/T011 Red before remaining contract/policy behavior; free launch is
+      operational 5/day, 2/min with 60-second burst and 120-second lease,
+      missing/invalid config fails closed, and Gemini owns no policy/commercial
+      details.
 - [ ] T018 [US2] Implement
       `supabase/functions/_shared/voice-ai-safeguard-service.ts` after T011 Red,
       using canonical generated Supabase RPC types and runtime validation, one
@@ -249,7 +281,7 @@ success/error/timeout/invalid output and internal retries consume one.
       measured unchanged-success contract evidence in
       `specs/389-voice-usage-limits/tasks.md`.
 - [ ] T023 [US2] Obtain independent DB/security review of
-      `supabase/migrations/082_voice_ai_usage_limits.sql`, server
+      `supabase/migrations/086_voice_ai_usage_limits.sql`, server
       contract/services/endpoints and exclusion/type updates; record findings
       and corrected evidence in `specs/389-voice-usage-limits/tasks.md`,
       including grants, per-user locks, timezone boundary races, lease/cleanup
@@ -559,18 +591,18 @@ paid names/prices/purchase/paywall UI ships.
 
 ## Dependencies and implementation waves
 
-| Wave               | Ready tasks | Prerequisites / handoff                                                                                        |
-| ------------------ | ----------- | -------------------------------------------------------------------------------------------------------------- |
-| Intake             | T001–T005   | Immutable source, correct feature override, artifact analysis and runner/binding gates                         |
-| Shared Red         | T006–T008   | T001/T003/T004/T005; disjoint exclusion/contract test ownership                                                |
-| Server Red         | T009–T014   | Resolved contracts; local test database/provider doubles; accepted behavioral failure evidence                 |
-| Server Green       | T015–T023   | Shared and server Red; migration/exclusion/types are one integration lane; independent DB review               |
-| Unified UI Red     | T024–T028   | Resolved nonvisual contracts; metadata needed by binding-dependent layout tests; honest E2E controls           |
-| Unified UI Green   | T029–T035   | T002 approved binding + accepted route/Manual/nav/E2E Red; backend required when integrated quota is exercised |
-| Client quota Red   | T036–T042   | US2 contracts frozen; client tests may use doubles before US2 Green; E2E runner and recording control verified |
-| Client quota Green | T043–T050   | US2 Green + US0 shell ready + accepted client Red + T002 UI binding approval                                   |
-| Entitlements       | T051–T054   | Shared/current free policy ready; do not concurrently edit US2 service or US1 state-test files                 |
-| Final              | T055–T059   | All included stories, required evidence and independent reviews                                                |
+| Wave               | Ready tasks                                | Prerequisites / handoff                                                                                                                                                               |
+| ------------------ | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Intake             | T001–T005                                  | Immutable source, correct feature override, artifact analysis and runner/binding gates                                                                                                |
+| Shared Red         | T006 plus initial T007/T008 boundary cases | Approved planning; disjoint test proposals; runner-ready execution before bounded bootstrap; direct T007/T008 completion follows callable interfaces                                  |
+| Server Red         | T009–T014                                  | Resolved contracts; local test database/provider doubles; accepted behavioral failure evidence                                                                                        |
+| Server Green       | T015–T023                                  | Staged bootstrap below; accepted existing-boundary Red before minimal interfaces, then real SQL/contract/race Red before further behavior; one schema owner and independent DB review |
+| Unified UI Red     | T024–T028                                  | Resolved nonvisual contracts; metadata needed by binding-dependent layout tests; honest E2E controls                                                                                  |
+| Unified UI Green   | T029–T035                                  | T002 approved binding + accepted route/Manual/nav/E2E Red; backend required when integrated quota is exercised                                                                        |
+| Client quota Red   | T036–T042                                  | US2 contracts frozen; client tests may use doubles before US2 Green; E2E runner and recording control verified                                                                        |
+| Client quota Green | T043–T050                                  | US2 Green + US0 shell ready + accepted client Red + T002 UI binding approval                                                                                                          |
+| Entitlements       | T051–T054                                  | Shared/current free policy ready; do not concurrently edit US2 service or US1 state-test files                                                                                        |
+| Final              | T055–T059                                  | All included stories, required evidence and independent reviews                                                                                                                       |
 
 US2 is independently testable against local server infrastructure after this
 continuation's pre-implementation T002/T003 gates pass. US0 may then be
@@ -585,6 +617,51 @@ Within each slice, acceptance tests and E2E precede production, runtime schema
 precedes service, service precedes handler/hook integration, and
 rendered/accessibility evidence follows complete governed UI. All blocking task
 results are inspected by the lead before the next assignment.
+
+### Greenfield test bootstrap (execution refinement, 7 October 2026)
+
+The current parse-voice HTTP handler exists, but Voice RPCs and the new contract
+module do not. Preserve all 59 task IDs and final requirements; stage their
+execution to avoid a missing import/function masquerading as behavioral Red:
+
+1. Author T006 and the T007/T011/T013 boundary cases plus T009/T010 tests first.
+   A test-only Deno import map substitutes local SDK/auth/provider doubles while
+   capturing the actual existing parse-voice handler. No production fixture
+   flag, paid Gemini request, remote network or future-module import is needed.
+   Execute unchanged-success controls and quota/replay/input/config assertions
+   at that existing boundary. The required refusal/provider-call mismatch is
+   behavioral Red; loader, runner and missing RPC errors are blockers.
+2. After accepted T006 and existing-boundary Red, release only the minimum local
+   T015/T017 callable SQL/contract interfaces needed by those tests. Preserve
+   service-role-only access, ownership and fail-closed behavior during
+   bootstrap. No insecure hosted stub, interim deployment or intermediate
+   production commit is permitted. This is implementation driven by already
+   failing public behavior, not permission to complete the whole server slice.
+3. With those interfaces callable, execute direct T007/T011 contract tests and
+   real single-session T009 SQL assertions; accept their behavioral Red before
+   corresponding validation/accounting/cleanup implementation. Bring basic
+   single-request admission and state controls Green, then execute authored T010
+   independent-session races. A fail-closed all-deny result cannot prove
+   last-slot contention. Accept race-specific failed assertions before any
+   additional locking/race fix; if already Green, retain regression evidence
+   without inventing a failure or unnecessary production change. SQL undefined
+   function/relation errors never satisfy either gate; existing HTTP Red is not
+   evidence of database concurrency.
+4. Finish T015/T017/T018 and wiring through the remaining T012/T013/T014 Red
+   gates. T014's full local PostgreSQL HTTP scenarios run once the real RPCs
+   exist and before final production HTTP wiring; SDK-only handler tests do not
+   replace that integration layer. Run the complete Green/security/privacy batch
+   in T022 before committing the production batch.
+
+T008 records both initial boundary evidence and the later direct-contract gate;
+T009/T010/T015 stay unfinished until their real SQL/race evidence is accepted.
+Local DB tests use isolated synthetic accounts/state with targeted cleanup;
+shared main/device fixtures and hosted services remain outside that test target.
+Cleanup technical parameters are frozen: hourly at minute 17 (cron
+`17 * * * *`), maximum 500 eligible work-request rows per invocation, under the
+same per-user admission/start lock. T009/T010 must verify bounded backlog
+processing and safety before completion; these parameters cannot alter the
+approved 35 elapsed-day eligibility or actual-deletion replay semantics.
 
 ### Ownership-safe parallel examples
 
@@ -697,8 +774,8 @@ remain explicit.
 | Exact approved reference bytes saved | VERIFIED UNCHANGED   | `mockups/README.md` provenance/hashes; both copies byte-for-byte SHA-256 match the original supplied files                                                                                                     |
 | Binding approval/verifier            | APPROVED; VERIFIED   | Owner approved both exact combined revisions and EN/AR copy on 2026-10-07. Both verifiers exit 0; images and Binding Facts unchanged. See reconciliation.md.                                                   |
 | Artifact consistency/analyze         | PASSED PLANNING GATE | API/date/policy/refresh drift reconciled. Owner choices promoted and read-only analyze complete: 51/51 covered, 0 critical/high findings. See checklists/final-analysis.md; T004/T005 runtime gates stay open. |
-| Runtime TDD                          | NOT RUN              | T006–T014/T024–T028/T036–T042/T051–T052 must record behavioral Red first                                                                                                                                       |
-| Functional completion                | NOT STARTED          | Story gates + T056–T058                                                                                                                                                                                        |
+| Runtime TDD                          | PARTIAL RED/GREEN    | Actual existing-boundary tests executed; SQL/races and full runtime gates remain open. See checklists/continuation-checkpoint.md and implementation-ledger.md.                                                 |
+| Functional completion                | IN PROGRESS          | Bounded exclusions/metadata/canonical-contract slices applied; full stories, integration and T056–T058 remain open. See checklists/continuation-checkpoint.md.                                                 |
 | Visual fidelity                      | NOT RUN              | Binding approved; required rendered T034/T049                                                                                                                                                                  |
 | Accessibility evidence               | NOT RUN              | Separate T035/T050; screenshots insufficient                                                                                                                                                                   |
 | Hosted policy/deployment             | NOT AUTHORIZED       | Separate later authorization; T059 only prepares handoff                                                                                                                                                       |
@@ -751,6 +828,12 @@ remain explicit.
 node node_modules/jest/bin/jest.js --config apps/mobile/jest.config.js --runInBand --runTestsByPath apps/mobile/__tests__/services/ai-voice-parser-service.test.ts apps/mobile/__tests__/hooks/useVoiceTransactionFlow.test.ts apps/mobile/__tests__/hooks/useVoiceRecorder.test.ts apps/mobile/__tests__/components/fab/QuickActionFab.test.tsx apps/mobile/__tests__/components/tab-bar/CustomBottomTabBar.test.tsx apps/mobile/__tests__/app/add-transaction-account-selection.test.tsx apps/mobile/__tests__/app/add-transaction-recurring-name.test.tsx apps/mobile/__tests__/app/add-transaction-recurring-date-error.test.ts --json --outputFile specs/389-voice-usage-limits/checklists/baseline-jest-results.json
 ```
 
-Current planning edits remain local and uncommitted; the separately authorized
-main-sync merge is already published. No implementation, delegation, commercial
-policy, hosted deployment or feature runtime TDD evidence is claimed.
+The evidence above records the completed planning phase. Planning publication is
+now ac1ef5583656190d04f3d068a742d98f742085cf, synced with governing main. Later
+owner-approved delivery/test-authoring and bounded native QA are tracked in
+`implementation-ledger.md`. T001 identity and T004 feasibility assessments are
+complete; the detailed manual-to-automation matrix and runtime blockers are in
+`checklists/runtime-readiness.md`. Initial scoped Red evidence is in
+`checklists/mobile-initial-red.md` and `checklists/server-initial-red.md`. T005
+native baseline, remaining behavioral Red, complete quota/SQL Green and
+visual/accessibility evidence remain unfinished.

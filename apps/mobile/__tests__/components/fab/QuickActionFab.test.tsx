@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react-native";
+import { act, fireEvent, render, screen } from "@testing-library/react-native";
 import React from "react";
 
 import { QuickActionFab } from "@/components/fab/QuickActionFab";
@@ -6,6 +6,7 @@ import { TAB_BAR_HEIGHT } from "@/constants/ui";
 
 let mockSuppressed = false;
 let mockBottomInset = 0;
+const mockRouterPush = jest.fn<void, [string]>();
 
 jest.mock("@/hooks/useQuickActionFabVisibility", () => ({
   useIsQuickActionFabSuppressed: () => mockSuppressed,
@@ -21,7 +22,11 @@ jest.mock("react-native-safe-area-context", () => ({
 }));
 
 jest.mock("expo-router", () => ({
-  router: { push: jest.fn() },
+  router: {
+    push: (route: string): void => {
+      mockRouterPush(route);
+    },
+  },
 }));
 
 jest.mock("@expo/vector-icons", () => {
@@ -38,6 +43,7 @@ describe("QuickActionFab expansion and suppression lifecycle", () => {
   beforeEach(() => {
     mockSuppressed = false;
     mockBottomInset = 0;
+    mockRouterPush.mockClear();
   });
 
   it("resets expansion state when suppression becomes active while open", () => {
@@ -60,6 +66,27 @@ describe("QuickActionFab expansion and suppression lifecycle", () => {
 
     expect(screen.getByLabelText("Quick actions")).toBeTruthy();
     expect(screen.queryByTestId("fab-transaction")).toBeNull();
+  });
+
+  it("opens Add Transaction with explicit Manual mode intent", () => {
+    jest.useFakeTimers();
+
+    try {
+      render(<QuickActionFab />);
+      fireEvent.press(screen.getByLabelText("Quick actions"));
+      fireEvent.press(screen.getByTestId("fab-transaction"));
+
+      act(() => {
+        jest.advanceTimersByTime(100);
+      });
+
+      expect(mockRouterPush).toHaveBeenCalledTimes(1);
+      expect(mockRouterPush).toHaveBeenCalledWith(
+        "/add-transaction?mode=manual"
+      );
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it("keeps the expanded actions above the device bottom inset", () => {

@@ -103,6 +103,8 @@ function makeDefaultOptions(overrides: Record<string, unknown> = {}): {
   categories: string;
   accounts: ReadonlyArray<{ id: string; name: string; currency: string }>;
   categoryRecords: readonly Category[];
+  requestKey: string;
+  callerTimeZone: string;
 } {
   return {
     audioUri: "file:///tmp/recording.m4a",
@@ -110,6 +112,8 @@ function makeDefaultOptions(overrides: Record<string, unknown> = {}): {
     categories: "Food > Coffee",
     accounts: [{ id: "acc-1", name: "Cash EGP", currency: "EGP" }],
     categoryRecords: [] as Category[],
+    requestKey: "voice-request-default",
+    callerTimeZone: "Africa/Cairo",
     ...overrides,
   };
 }
@@ -201,6 +205,13 @@ describe("ai-voice-parser-service", () => {
       return audioCall?.[1];
     }
 
+    function getAppendedStringValues(field: string): readonly string[] {
+      return appendSpy.mock.calls
+        .filter((call: unknown[]) => call[0] === field)
+        .map((call: unknown[]) => call[1])
+        .filter((value: unknown): value is string => typeof value === "string");
+    }
+
     it("should return parsed transactions for valid response", async () => {
       const tx = makeValidTransaction();
       mockInvoke.mockResolvedValueOnce(makeSuccessResponse([tx]));
@@ -288,6 +299,41 @@ describe("ai-voice-parser-service", () => {
       ) as [string, string] | undefined;
       expect(accountsCall).toBeDefined();
       expect(accountsCall?.[1]).toBe(JSON.stringify(opts.accounts));
+    });
+
+    it("submits the same caller-provided request key for the same logical replay", async () => {
+      const requestKey = "voice-logical-request-347";
+      const opts = makeDefaultOptions({ requestKey });
+
+      mockInvoke
+        .mockResolvedValueOnce(makeSuccessResponse([makeValidTransaction()]))
+        .mockResolvedValueOnce(makeSuccessResponse([makeValidTransaction()]));
+
+      await parseVoiceWithAi(opts);
+      await parseVoiceWithAi(opts);
+
+      // Preserve the existing relative-date context while adding logical
+      // request identity. This is expected to remain Green in the Red run.
+      expect(getAppendedStringValues("callerLocalDate")).toHaveLength(2);
+      expect(getAppendedStringValues("requestKey")).toEqual([
+        requestKey,
+        requestKey,
+      ]);
+    });
+
+    it("submits the caller-provided device timezone independently", async () => {
+      const callerTimeZone = "Africa/Cairo";
+      const opts = makeDefaultOptions({ callerTimeZone });
+
+      mockInvoke.mockResolvedValueOnce(
+        makeSuccessResponse([makeValidTransaction()])
+      );
+
+      await parseVoiceWithAi(opts);
+
+      expect(getAppendedStringValues("callerTimeZone")).toEqual([
+        callerTimeZone,
+      ]);
     });
 
     it("should return multiple parsed transactions", async () => {

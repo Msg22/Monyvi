@@ -376,6 +376,16 @@ third table or sensitive payload. SQL and HTTP tests cover just before/exactly
 at/after the cutoff, cleanup races, active-record preservation and post-deletion
 readmission/refusal.
 
+Technical execution parameters frozen on 7 October 2026: schedule cleanup hourly
+at minute 17 (cron `17 * * * *`), with a hard maximum of 500 eligible
+work-request rows per invocation. Use descriptive SQL constants/defaults and
+test the job definition, bounded batch and repeated backlog drainage. Candidate
+selection is not deletion authority: recheck terminal/current-accounting safety
+under each candidate user's admission/start lock. Busy or unsafe rows may remain
+retained until a later run; replay protection continues until actual deletion.
+Cadence/batch tuning cannot change the 35 × 24 elapsed-hour cutoff, release
+active work, refund quota or add client/hosted mutation authority.
+
 ### parse-voice sequence
 
 Existing parsing logic remains inside the provider boundary. New flow:
@@ -471,6 +481,19 @@ change/unmount. The client never durably decrements quota.
 - temporary burst-limited;
 - already-processed result unavailable;
 - authoritative usage unavailable.
+
+### Test-first bootstrap for new server interfaces
+
+The existing parse-voice HTTP handler is the initial executable behavior
+boundary. Test-only Deno import mappings replace SDKs with controlled doubles
+and capture that unchanged handler; no production fixture mode or real provider
+is needed. After its accepted behavioral quota/replay/input Red and T006 schema
+contract Red, introduce only the minimum local callable SQL/contract interfaces.
+Then execute direct contract and actual independent-session PostgreSQL tests
+before implementing the remaining behavior. Missing modules/functions are
+runner/setup blockers, never behavioral or concurrency evidence. Full local
+PostgreSQL HTTP Red still precedes final production wiring. The detailed staged
+DAG is in tasks.md; all 59 IDs, endpoint contracts and owner decisions remain.
 
 ### Server-only migration and sync boundary
 
@@ -664,32 +687,39 @@ Implementation is not complete until all are true:
 This is sequencing guidance for the later `speckit.tasks` workflow; no
 implementation occurs in this command.
 
-1. Persist the exact approved mockup image unchanged, create binding sidecar,
-   resolve any fidelity-affecting UNKNOWNs, obtain explicit binding approval,
-   and pass the verifier.
-2. Add Red SQL/RPC tests for local-day window, timezone validation/pinning,
-   exact quota/burst limits, concurrent final unit, idempotent replay,
-   reserve/start/release, provider-start failure consumption, privacy, cleanup,
-   and server-only exclusions.
-3. Add the numbered SQL migration + generated Supabase types + exclusion wiring;
-   bring DB/RPC tests Green.
-4. Add Red entitlement-policy/safeguard/availability-handler tests.
-5. Implement policy resolver, safeguard service, availability endpoint.
-6. Add Red `parse-voice` admission/accounting tests with a Gemini double; wire
-   requestKey/timezone/reserve/start/complete around the existing provider call
-   without changing successful response.
-7. Add Red mobile request identity/timezone/refusal/availability service tests.
-8. Implement device timezone utility, stable request key lifecycle, availability
-   service/hook, and quota-aware flow refresh/error mapping.
-9. Add Red unified-route/navigation/manual-state tests.
-10. Extract the current manual form without behavioral changes; implement
-    unified route/mode ownership; reroute FAB, center mic, onboarding voice
-    entry, and review Retry.
-11. Implement the approved Voice UI exactly from authoritative binding,
-    including limit/exhausted/burst/unavailable states and EN/AR copy.
-12. Run regression/type/lint/i18n/migration checks, rendered
-    visual/accessibility evidence, and manual multi-device/timezone/voice QA.
-13. Configure hosted policy/deploy only with separate deployment authorization.
+1. Complete exact mockup binding approval/verifier and planning reconciliation/
+   analyze; these approvals already exist and must be preserved.
+2. Author exclusion, contract, SQL/race and existing parse-voice HTTP tests.
+   Execute T006 and actual existing-handler quota/replay/input Red through
+   test-only SDK doubles. Missing imports/functions never count as Red.
+3. Introduce only minimum local callable SQL/contract interfaces under accepted
+   existing-boundary Red; preserve ownership, service-only access and
+   fail-closed behavior. No intermediate production commit or hosted mutation.
+4. Run direct contract and single-session real PostgreSQL tests; accept their
+   behavioral Red before additional contract/accounting/cleanup implementation.
+   Bring single-request controls Green before executing real concurrent races.
+5. Accept any race-specific failure before the corresponding locking/race fix;
+   retain already-Green race regression evidence without manufacturing failure.
+   Generate local Supabase types and server-only exclusions; final SQL/race
+   Green and independent DB/security review remain mandatory.
+6. Execute policy/safeguard/availability handler and full local PostgreSQL HTTP
+   Red before completing services/endpoints and final parse-voice wiring.
+   Preserve requestKey/timezone/reserve/start/complete accounting and the
+   existing provider success response; SDK doubles do not replace actual SQL
+   integration.
+7. Author and execute mobile request identity/timezone/refusal/availability and
+   unified route/navigation/Manual tests using existing importable entry points.
+   Disjoint authoring may overlap server work; corresponding production waits
+   for accepted Red and honest native/E2E feasibility.
+8. Extract the mature Manual form without behavior changes; implement unified
+   route/mode ownership and reroute FAB/mic/onboarding/Review Retry.
+9. Implement approved Voice UI and quota-aware service/hook/refresh/error state;
+   integrated client quota Green depends on actual server Green. Preserve all
+   approved EN/AR copy, responsive/accessibility and binding facts.
+10. Run complete regression/type/lint/i18n/migration and independent review
+    batches before commits, then rendered visual/accessibility and honest manual
+    multi-device/timezone/voice QA. Record manual-only blockers explicitly.
+11. Hosted policy/deployment requires separate authorization.
 
 ## Complexity Tracking
 

@@ -1,5 +1,6 @@
 import React from "react";
 import { fireEvent, render, screen } from "@testing-library/react-native";
+import type { HoldingActionDescriptor } from "@/components/metals/holding-actions/registry";
 import { router } from "expo-router";
 import MetalHoldingDetailRoute from "@/app/(private)/metals/[id]";
 
@@ -48,6 +49,8 @@ jest.mock("@/hooks/useMetalHoldingDetail", () => ({
     retry: jest.fn(),
   }),
 }));
+let mockCapturedActions: readonly HoldingActionDescriptor[] = [];
+
 jest.mock("@/components/metals/MetalHoldingDetailScreen", () => {
   const { View } =
     jest.requireActual<typeof import("react-native")>("react-native");
@@ -55,15 +58,38 @@ jest.mock("@/components/metals/MetalHoldingDetailScreen", () => {
     MetalHoldingDetailScreen: ({
       actions,
     }: {
-      readonly actions: ReadonlyArray<{ id: string; labelKey: string }>;
-    }): React.JSX.Element => <View testID="detail-screen-actions-empty">{actions.length === 0 ? "no-actions" : "has-actions"}</View>,
+      readonly actions: readonly HoldingActionDescriptor[];
+    }): React.JSX.Element => {
+      mockCapturedActions = actions;
+      return <View testID="detail-screen-actions" />;
+    },
   };
 });
-it("opens the existing Edit route from the detail header action", () => {
+
+it("keeps Delete as the only body action while Edit remains the header action", () => {
   render(<MetalHoldingDetailRoute />);
-  expect(screen.getByTestId("detail-screen-actions-empty")).toHaveTextContent(
-    "no-actions"
+
+  expect(mockCapturedActions).toEqual([
+    {
+      id: "delete",
+      labelKey: "actions.delete",
+      tone: "danger",
+      href: {
+        pathname: "/(private)/metals/[holdingId]/delete",
+        params: { holdingId: "holding-123" },
+      },
+    },
+  ]);
+  expect(mockCapturedActions.some((action) => action.id === "sell")).toBe(
+    false
   );
+  expect(mockCapturedActions.some((action) => action.id === "dispose")).toBe(
+    false
+  );
+  expect(mockCapturedActions.some((action) => action.id === "undo")).toBe(
+    false
+  );
+
   fireEvent.press(screen.getByTestId("metal-holding-detail-edit"));
   expect(router.push).toHaveBeenCalledWith("/metals/holding-123/edit");
 });

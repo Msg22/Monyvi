@@ -221,7 +221,9 @@ describe("068 Metals domain migration and persisted models", () => {
     ]) {
       expect(pulls).toContain(select);
     }
-    expect(pulls).toContain(".select(pullSelect(table))");
+    expect(pulls).toMatch(
+      /\.select\(\s*pullSelect\(\s*table\s*\)\s*(?:,\s*\{\s*count:\s*"exact"\s*\}\s*)?\)/
+    );
 
     // Exact aliases are validated as canonical strings and copied to their
     // Watermelon column names without numeric coercion.

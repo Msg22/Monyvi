@@ -32,7 +32,7 @@ original T001–T059 checklist is preserved and refined in place.
 | Replay mixed into snapshot reason | Snapshot reason is current daily/burst blocker or null; replay is enclosing parse refusal                                                                                   | Snapshot answers current availability; parse refusal identifies request-specific replay           |
 | Duplicate APIs                    | `voice-ai.openapi.yaml` becomes reference-only compatibility index                                                                                                          | Endpoint files own paths/shapes; no repeated contradictory schema                                 |
 | Layout-owned refresh              | Unified Add Transaction route focus, foreground, every attempt/refusal and server boundary                                                                                  | Expanded plan, R-018; R-009 corrected                                                             |
-| Migration collision               | Next candidate `082_voice_ai_usage_limits.sql`, recheck immediately before writing                                                                                          | Current main already contains 077–081; no migration written                                       |
+| Migration collision               | Next candidate `086_voice_ai_usage_limits.sql`, recheck immediately before writing                                                                                          | Current main b2ec0fd4 contains 077–085; Voice source renumbered 086 with identical SQL bytes      |
 | 35-day cleanup versus replay      | APPROVED 35-day horizon and safe terminal identity deletion; see below                                                                                                      | FR-010/SC-004 now explicitly bound replay protection; business decisions updated                  |
 
 No source provider/model, successful financial response, date semantics,
@@ -132,3 +132,31 @@ supplied environment. Use Git Bash with both explicit feature overrides.
 Execution pool capability checks and actual role/owner mapping wait until the
 implementation phase. Order: user-created Normal ChatGPT chats, suitable
 OpenCode, Antigravity, then justified native fallback for the specific task.
+
+## Execution-interface reconciliation — 7 October 2026
+
+Runtime intake found no current Voice RPC/contract/provider seam. Existing
+parse-voice can be exercised through test-only Deno SDK import maps with
+synthetic auth/consent/provider data, so initial quota/replay/input behavioral
+Red can precede minimal local interface implementation. Direct contract and
+actual multi-session SQL Red then precede their further behavior. Undefined
+modules/functions remain setup blockers and HTTP evidence does not count as DB
+race evidence. tasks.md and plan.md now state this staged sequence without
+regenerating tasks or changing product/API/retention/binding decisions. The
+import-map runner remains source-inferred until executed by local QA; production
+release awaits refreshed analyze and accepted runtime evidence.
+
+Independent local QA caught stale final plan sequencing and premature direct
+T007 foundation language; both are corrected. Genuine race evidence additionally
+requires passing single-request controls first: all-deny callable stubs do not
+prove final-slot contention. Already-Green races are retained as regression
+evidence; no artificial defect is introduced to manufacture Red.
+
+## Bounded cleanup parameter freeze
+
+Lead accepted server's technical recommendation: hourly minute17, maximum500
+eligible work-request rows per invocation. This is bounded scheduling capacity,
+not a new retention or commercial rule. SQL tests must prove the job/batch
+configuration, per-user lock recheck, repeated backlog drainage and preservation
+of all active/current accounting. Protection lasts while identity is retained;
+reuse as new begins only after actual deletion.

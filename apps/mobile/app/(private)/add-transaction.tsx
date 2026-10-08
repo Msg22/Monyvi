@@ -1,978 +1,599 @@
-import { AmountDisplay } from "@/components/add-transaction/AmountDisplay";
+import { useLocale } from "@/context/LocaleContext";
+import { formatLocalizedCount } from "@/utils/localized-number-display";
+import { PermissionRecoveryModal } from "@/components/permissions/PermissionRecoveryModal";
+import { AiProcessingConsentSheet } from "@/components/ai-consent/AiProcessingConsentSheet";
 import {
-  CalculatorKey,
-  CalculatorKeypad,
-} from "@/components/add-transaction/CalculatorKeypad";
-import { CategoryPicker } from "@/components/add-transaction/CategoryPicker";
-import { OptionalSection } from "@/components/add-transaction/OptionalSection";
-import { TransferFields } from "@/components/add-transaction/TransferFields";
-import { TypeTabs } from "@/components/add-transaction/TypeTabs";
-import { CategoryIcon, IconLibrary } from "@/components/common/CategoryIcon";
-import { AccountSelectorModal } from "@/components/modals/AccountSelectorModal";
-import { CategorySelectorModal } from "@/components/modals/CategorySelectorModal";
+  AddTransactionModeTabs,
+  type AddTransactionMode,
+} from "@/components/add-transaction/AddTransactionModeTabs";
+import {
+  ManualTransactionEntry,
+  type ManualTransactionEntryHandle,
+} from "@/components/add-transaction/ManualTransactionEntry";
+import {
+  VoiceTransactionEntry,
+  type VoiceTransactionEntryState,
+} from "@/components/add-transaction/VoiceTransactionEntry";
 import { PageHeader } from "@/components/navigation/PageHeader";
-import { EmptyStateCard } from "@/components/ui/EmptyStateCard";
-import { useToast } from "@/components/ui/Toast";
-import { palette } from "@/constants/colors";
-import { useCategoryLookup } from "@/context/CategoriesContext";
-import { useTheme } from "@/context/ThemeContext";
 import { useAccounts } from "@/hooks/useAccounts";
+import { useAiProcessingConsent } from "@/hooks/useAiProcessingConsent";
 import { useCategories } from "@/hooks/useCategories";
-import { useCategoryChildren } from "@/hooks/useCategoryChildren";
-import { useFormScroll } from "@/hooks/useFormScroll";
-import { useMarketRates } from "@/hooks/useMarketRates";
-import {
-  createRecurringPayment,
-  deleteRecurringPayment,
-  RECURRING_PAYMENT_SERVICE_ERROR_CODES,
-} from "@/services/recurring-payment-service";
-import { createTransaction } from "@/services/transaction-service";
-import { createTransfer } from "@/services/transfer-service";
-import { getSelectedCurrentCurrencyRate } from "@/services/current-market-snapshot-calculations";
-import { resolveInitialTransactionAccountSelection } from "@/utils/account-selection";
-import { logger } from "@/utils/logger";
-import { formatLocalizedMoneyAmount } from "@/utils/localized-money-display";
-import { useBudgetAlert } from "@/hooks/useBudgetAlert";
-import { BudgetAlertModal } from "@/components/budget/BudgetAlertModal";
-import {
-  validateTransactionForm,
-  type TransactionValidationErrors,
-} from "@/validation/transaction-validation";
-import type {
-  CurrencyType,
-  RecurringFrequency,
-  TransactionType,
-  Transaction,
-} from "@monyvi/db";
-import {
-  evaluateAmountExpression,
-  parsePositiveFiniteAmountInput,
-} from "@monyvi/logic";
-import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
-import { useTranslation } from "react-i18next";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { ScrollView, Text, TouchableOpacity, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { usePreferredCurrency } from "@/hooks/usePreferredCurrency";
+import { useVoiceAiAvailability } from "@/hooks/useVoiceAiAvailability";
+import { useVoiceTransactionFlow } from "@/hooks/useVoiceTransactionFlow";
+import { getAiProcessingConsentStatus } from "@/services/profile-service";
+import { toCategoryTreeSources } from "@/utils/category-tree-source";
+import { logger } from "@/utils/logger";
+import { buildCategoryTree } from "@monyvi/logic";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { AccessibilityInfo, findNodeHandle, Text, View } from "react-native";
+import { useTranslation } from "react-i18next";
 
-const TRANSACTION_FIELD_ORDER: readonly (keyof TransactionValidationErrors)[] =
-  [
-    "amount",
-    "accountId",
-    "categoryId",
-    "fromAccountId",
-    "toAccountId",
-    "recurringName",
-  ];
+function resolveMode(value: string | undefined): AddTransactionMode {
+  return value === "voice" ? "voice" : "manual";
+}
 
-export default function AddTransaction(): React.ReactNode {
+function resolveOriginTabIndex(value: string | undefined): number {
+  const parsed = Number(value ?? "0");
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : 0;
+}
+
+type MicrophoneRecoveryMode = "request" | "blocked" | null;
+
+export default function AddTransaction(): React.JSX.Element {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
-  const budgetAlert = useBudgetAlert();
+  const params = useLocalSearchParams<{
+    mode?: string;
+    retry?: string;
+    originTabIndex?: string;
+  }>();
   const { t } = useTranslation("transactions");
   const { t: tCommon } = useTranslation("common");
 
-  const { accounts } = useAccounts();
+  const requestedMode = resolveMode(params.mode);
+  const [mode, setMode] = useState<AddTransactionMode>(requestedMode);
+  const [isManualSubmitting, setIsManualSubmitting] = useState(false);
+  const [isVoiceConsentVisible, setIsVoiceConsentVisible] = useState(false);
+  const [microphoneRecoveryMode, setMicrophoneRecoveryMode] =
+    useState<MicrophoneRecoveryMode>(null);
 
-  const [type, setType] = useState<TransactionType | "TRANSFER">("EXPENSE");
-  const [amount, setAmount] = useState<string>("");
-  const [targetAmount, setTargetAmount] = useState<string>("");
+  const manualEntryRef = useRef<ManualTransactionEntryHandle>(null);
+  const previousRequestedModeRef = useRef<AddTransactionMode>(requestedMode);
+  const pendingRequestedModeRef = useRef<AddTransactionMode | null>(null);
+  const manualModeHeadingRef = useRef<React.ElementRef<typeof Text>>(null);
+  const voiceModeHeadingRef = useRef<React.ElementRef<typeof Text>>(null);
+  const pendingModeFocusRef = useRef<AddTransactionMode | null>(null);
+  const retryConsumedRef = useRef(false);
+  const shouldResumeConsentAfterPrivacyRef = useRef(false);
 
-  // Selection State
-  const [selectedAccountId, setSelectedAccountId] = useState<string | null>(
-    null
-  );
-  const [toAccountId, setToAccountId] = useState<string | null>(null); // For Transfer
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string>("");
-
-  // Optional Fields
-  const [counterparty, setCounterparty] = useState<string | undefined>(
-    undefined
-  );
-  const [note, setNote] = useState<string | undefined>(undefined);
-  const [date, setDate] = useState(new Date());
-  const [isRecurring, setIsRecurring] = useState(false);
-  const [recurringName, setRecurringName] = useState("");
-  const [recurringFrequency, setRecurringFrequency] =
-    useState<RecurringFrequency>("MONTHLY");
-  const [recurringAutoCreate, setRecurringAutoCreate] = useState(false);
-
-  // UI State
-  const [isOptionalExpanded, setIsOptionalExpanded] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [formErrors, setFormErrors] = useState<TransactionValidationErrors>({});
-  const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
-  const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
-  const [activeAmountField, setActiveAmountField] = useState<
-    "amount" | "targetAmount"
-  >("amount");
-  const hasInitializedAccountSelectionRef = useRef(false);
-  const hasUserSelectedAccountRef = useRef(false);
-  const { isDark } = useTheme();
-
-  // Hooks
-  const {
-    expenseCategories,
-    incomeCategories,
-    isLoading: _categoriesLoading,
-  } = useCategories();
-  const { selectedSnapshot } = useMarketRates();
-  const { showToast } = useToast();
+  const aiConsent = useAiProcessingConsent();
   const { preferredCurrency } = usePreferredCurrency();
-  const { scrollViewRef, getFieldRef, onScroll, scrollToFirstError } =
-    useFormScroll<keyof TransactionValidationErrors>({
-      bottomInset: insets.bottom,
-    });
+  const { accounts } = useAccounts();
+  const { categories: allCategories } = useCategories({
+    topLevelOnly: false,
+  });
+
+  const categoryTree = useMemo(
+    () => buildCategoryTree(toCategoryTreeSources(allCategories)),
+    [allCategories]
+  );
+
+  const accountInputs = useMemo(
+    () =>
+      accounts.map((account) => ({
+        id: account.id,
+        name: account.name,
+        currency: account.currency,
+      })),
+    [accounts]
+  );
+
+  const originTabIndex = useMemo(
+    () => resolveOriginTabIndex(params.originTabIndex),
+    [params.originTabIndex]
+  );
+
+  // Kept active for the whole unified route so Manual can show the approved
+  // compact Voice allowance strip. Failure here never blocks Manual behavior.
+  const voiceAvailability = useVoiceAiAvailability(true);
+
+  const ensureAiProcessingConsent = useCallback(async (): Promise<boolean> => {
+    if (aiConsent.isLoading) return false;
+
+    try {
+      const status = await getAiProcessingConsentStatus();
+      if (status.isConsented) return true;
+    } catch (error: unknown) {
+      logger.error("voice.aiConsentFreshStatus.failed", error);
+    }
+
+    setIsVoiceConsentVisible(true);
+    return false;
+  }, [aiConsent.isLoading]);
+
+  const voiceFlow = useVoiceTransactionFlow({
+    preferredCurrency,
+    categories: categoryTree,
+    accounts: accountInputs,
+    categoryRecords: allCategories,
+    originTabIndex,
+    ensureAiProcessingConsent,
+    onAiProcessingConsentRequired: () => {
+      setIsVoiceConsentVisible(true);
+    },
+    voiceAvailability,
+  });
 
   useEffect(() => {
-    if (!Object.values(formErrors).some(Boolean)) return;
+    const previousRequestedMode = previousRequestedModeRef.current;
 
-    // Let newly expanded details and their error messages mount before the
-    // scrolling hook measures native layout. A new submit retriggers this effect.
+    if (requestedMode !== previousRequestedMode) {
+      previousRequestedModeRef.current = requestedMode;
+
+      if (voiceFlow.isModeSwitchLocked) {
+        pendingRequestedModeRef.current = requestedMode;
+        return;
+      }
+
+      pendingRequestedModeRef.current = null;
+      setMode(requestedMode);
+      return;
+    }
+
+    if (
+      !voiceFlow.isModeSwitchLocked &&
+      pendingRequestedModeRef.current !== null
+    ) {
+      const pendingMode = pendingRequestedModeRef.current;
+      pendingRequestedModeRef.current = null;
+      setMode(pendingMode);
+    }
+  }, [requestedMode, voiceFlow.isModeSwitchLocked]);
+
+  useEffect(() => {
+    if (voiceFlow.isMicrophonePermissionError) {
+      setMicrophoneRecoveryMode("blocked");
+    }
+  }, [voiceFlow.isMicrophonePermissionError]);
+
+  const requestVoiceStart = useCallback(async (): Promise<void> => {
+    if (voiceFlow.isModeSwitchLocked || aiConsent.isLoading) return;
+
+    const hasConsent = await ensureAiProcessingConsent();
+    if (!hasConsent) return;
+
+    if (!voiceFlow.hasPermission) {
+      setMicrophoneRecoveryMode("request");
+      return;
+    }
+
+    await voiceFlow.startFlow({
+      skipAiProcessingConsent: true,
+    });
+  }, [
+    aiConsent.isLoading,
+    ensureAiProcessingConsent,
+    voiceFlow.hasPermission,
+    voiceFlow.isModeSwitchLocked,
+    voiceFlow.startFlow,
+  ]);
+
+  useEffect(() => {
+    if (params.retry !== "true") {
+      retryConsumedRef.current = false;
+      return;
+    }
+
+    if (
+      retryConsumedRef.current ||
+      requestedMode !== "voice" ||
+      aiConsent.isLoading
+    ) {
+      return;
+    }
+
+    retryConsumedRef.current = true;
+    router.setParams({ retry: undefined });
+    void requestVoiceStart();
+  }, [
+    aiConsent.isLoading,
+    params.retry,
+    requestVoiceStart,
+    requestedMode,
+    router,
+  ]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!shouldResumeConsentAfterPrivacyRef.current) return;
+
+      shouldResumeConsentAfterPrivacyRef.current = false;
+
+      if (!aiConsent.isLoading && !aiConsent.isConsented) {
+        setIsVoiceConsentVisible(true);
+      }
+    }, [aiConsent.isConsented, aiConsent.isLoading])
+  );
+
+  const handleModeChange = useCallback(
+    (nextMode: AddTransactionMode): void => {
+      if (voiceFlow.isModeSwitchLocked || nextMode === mode) {
+        return;
+      }
+
+      setMicrophoneRecoveryMode(null);
+      pendingModeFocusRef.current = nextMode;
+      setMode(nextMode);
+    },
+    [mode, voiceFlow.isModeSwitchLocked]
+  );
+
+  useEffect(() => {
+    if (pendingModeFocusRef.current !== mode) {
+      return;
+    }
+
+    pendingModeFocusRef.current = null;
+
     const frame = requestAnimationFrame(() => {
-      scrollToFirstError(formErrors, TRANSACTION_FIELD_ORDER);
+      const target =
+        mode === "manual"
+          ? manualModeHeadingRef.current
+          : voiceModeHeadingRef.current;
+
+      if (!target) return;
+
+      const node = findNodeHandle(target);
+      if (node !== null) {
+        AccessibilityInfo.setAccessibilityFocus(node);
+      }
     });
+
     return () => cancelAnimationFrame(frame);
-  }, [formErrors, scrollToFirstError]);
+  }, [mode]);
 
-  // Derived Values
-  const selectedAccount = accounts.find((a) => a.id === selectedAccountId);
-  const parsedAmount = parsePositiveFiniteAmountInput(amount);
-  const toAccount = accounts.find((a) => a.id === toAccountId);
+  const handleMicrophoneRecoveryPrimary = useCallback((): void => {
+    const recoveryMode = microphoneRecoveryMode;
 
-  const relevantCategories =
-    type === "EXPENSE" ? expenseCategories : incomeCategories;
+    if (recoveryMode === null) return;
 
-  // Use global category map — supports L2/L3 categories
-  // that are not in the root-level categories list
-  const categoryMap = useCategoryLookup();
-  const selectedCategory = categoryMap.get(selectedCategoryId) ?? null;
-  // For income: when only 1 L1 category, fetch its L2 children for chips
-  const singleIncomeL1Id =
-    type === "INCOME" && incomeCategories.length === 1
-      ? incomeCategories[0].id
-      : null;
-  const { children: incomeL2Children } = useCategoryChildren(singleIncomeL1Id);
+    setMicrophoneRecoveryMode(null);
 
-  // Categories to show in chips: income L2 when only 1 L1, otherwise L1
-  const chipCategories = useMemo(() => {
-    if (singleIncomeL1Id && incomeL2Children.length > 0) {
-      return incomeL2Children;
-    }
-    return relevantCategories;
-  }, [singleIncomeL1Id, incomeL2Children, relevantCategories]);
-
-  // Categories to pass as root to the modal
-  const modalRootCategories = relevantCategories;
-
-  const hasAccounts = accounts.length > 0;
-  const canTransfer = accounts.length >= 2;
-
-  // Initialize Defaults
-  useEffect(() => {
-    if (!hasAccounts) {
-      hasInitializedAccountSelectionRef.current = false;
-      hasUserSelectedAccountRef.current = false;
+    if (recoveryMode === "blocked") {
+      void voiceFlow.openMicrophoneSettings();
       return;
+    }
+
+    // This is the only path that reaches the native permission request.
+    void voiceFlow.startFlow({
+      skipAiProcessingConsent: true,
+    });
+  }, [
+    microphoneRecoveryMode,
+    voiceFlow.openMicrophoneSettings,
+    voiceFlow.startFlow,
+  ]);
+
+  const handleMicrophoneRecoveryCancel = useCallback((): void => {
+    setMicrophoneRecoveryMode(null);
+    handleModeChange("manual");
+  }, [handleModeChange]);
+
+  const handleTryAgain = useCallback(async (): Promise<void> => {
+    if (voiceFlow.canRetrySubmission) {
+      await voiceFlow.retrySubmission();
+      return;
+    }
+
+    if (voiceFlow.flowStatus === "error") {
+      await voiceFlow.retryRecording();
+      return;
+    }
+
+    await requestVoiceStart();
+  }, [
+    requestVoiceStart,
+    voiceFlow.canRetrySubmission,
+    voiceFlow.flowStatus,
+    voiceFlow.retryRecording,
+    voiceFlow.retrySubmission,
+  ]);
+
+  const voiceState = useMemo<VoiceTransactionEntryState>(() => {
+    if (microphoneRecoveryMode === "request") {
+      return "permission-explanation";
+    }
+
+    if (voiceFlow.isFinalizing) {
+      return "processing";
+    }
+
+    switch (voiceFlow.flowStatus) {
+      case "recording":
+        return "recording";
+      case "paused":
+        return "paused";
+      case "completed":
+        return "completed";
+      case "analyzing":
+        return "processing";
+      case "error":
+        return voiceFlow.isMicrophonePermissionError
+          ? "permission-denied"
+          : "error";
+    }
+
+    if (voiceFlow.refusalReason === "already_processed_result_unavailable") {
+      return "replay";
     }
 
     if (
-      hasInitializedAccountSelectionRef.current ||
-      hasUserSelectedAccountRef.current
+      voiceFlow.refusalReason === "daily_limit" ||
+      voiceAvailability.availability?.reason === "daily_limit" ||
+      voiceAvailability.availability?.remaining === 0
     ) {
-      return;
+      return "daily-limit";
     }
 
-    const selection = resolveInitialTransactionAccountSelection(accounts);
-    if (!selection.selectedAccountId) return;
-
-    setSelectedAccountId(selection.selectedAccountId);
-    setToAccountId(selection.toAccountId);
-    hasInitializedAccountSelectionRef.current = true;
-  }, [accounts, hasAccounts]);
-
-  // Track the previous type to only auto-reset category on type change.
-  // Without this, selecting L2/L3 categories resets to L1 because
-  // the effect would validate against the L1-only relevantCategories.
-  const prevTypeRef = useRef(type);
-
-  useEffect(() => {
-    if (relevantCategories.length === 0) return;
-
-    const typeChanged = prevTypeRef.current !== type;
-    prevTypeRef.current = type;
-
-    // Auto-select first category when: no selection yet, or type just changed
-    if (!selectedCategoryId || typeChanged) {
-      setSelectedCategoryId(relevantCategories[0].id);
-    }
-
-    // Reset keypad target to main amount when switching away from TRANSFER
-    if (typeChanged && type !== "TRANSFER") {
-      setActiveAmountField("amount");
-    }
-  }, [relevantCategories, selectedCategoryId, type]);
-
-  // Calculator Logic
-  const handleKeyPress = async (key: CalculatorKey): Promise<void> => {
-    // Clear amount error on interaction
-    if (formErrors.amount) {
-      setFormErrors((prev) => ({ ...prev, amount: undefined }));
-    }
-
-    if (key === "DONE") {
-      await handleSave();
-      return;
-    }
-
-    // Determine which setter to use based on active field
-    const isTargetField = activeAmountField === "targetAmount";
-    const currentValue = isTargetField ? targetAmount : amount;
-    const setValue = isTargetField ? setTargetAmount : setAmount;
-
-    if (key === "=") {
-      const result = calculateResult(currentValue);
-      if (result !== null) {
-        const formatted = Number(result.toFixed(10)).toString();
-        setValue(formatted);
-      }
-      return;
-    }
-
-    if (key === "DEL") {
-      setValue((prev) => prev.slice(0, -1));
-      return;
-    }
-
-    // Operator keys: +, -, *, /
-    const isOperator = ["+", "-", "*", "/"].includes(key);
-
-    setValue((prev) => {
-      // Prevent multiple decimals in the current number segment
-      if (key === ".") {
-        const lastOpIdx = Math.max(
-          prev.lastIndexOf("+"),
-          prev.lastIndexOf("-"),
-          prev.lastIndexOf("*"),
-          prev.lastIndexOf("/")
-        );
-        const currentSegment = prev.slice(lastOpIdx + 1);
-        if (currentSegment.includes(".")) return prev;
-      }
-
-      // Prevent consecutive operators — replace the last one
-      if (isOperator && prev.length > 0) {
-        const lastChar = prev[prev.length - 1];
-        if (["+", "-", "*", "/"].includes(lastChar)) {
-          return prev.slice(0, -1) + key;
-        }
-      }
-
-      // Prevent starting with an operator (except minus for negative)
-      if (isOperator && prev.length === 0 && key !== "-") return prev;
-
-      return prev + key;
-    });
-  };
-
-  // Convert amount logic
-  const calculateResult = (expr: string): number | null => {
-    return evaluateAmountExpression(expr);
-  };
-
-  // Auto-calculate target amount for transfers
-  useEffect(() => {
-    setTargetAmount("");
     if (
-      type === "TRANSFER" &&
-      selectedAccount &&
-      toAccount &&
-      amount &&
-      selectedAccount.currency !== toAccount.currency
+      voiceFlow.refusalReason === "burst_limit" ||
+      voiceAvailability.availability?.reason === "burst_limit"
     ) {
-      const numAmount = calculateResult(amount);
-      if (numAmount !== null && numAmount > 0) {
-        if (selectedSnapshot) {
-          const rate = getSelectedCurrentCurrencyRate({
-            fromCurrency: selectedAccount.currency,
-            toCurrency: toAccount.currency,
-            currentSnapshot: selectedSnapshot,
-          });
-          if (rate !== null) {
-            setTargetAmount((numAmount * rate).toFixed(2));
-          }
-        }
-      }
-    }
-  }, [type, selectedAccount, toAccount, amount, selectedSnapshot]);
-
-  const createRecurring = async (
-    amount: number,
-    type: TransactionType,
-    currency: CurrencyType
-  ): Promise<string> => {
-    if (!selectedAccountId) {
-      throw new Error(t("please_select_an_account"));
+      return "burst-limit";
     }
 
-    try {
-      const recurring = await createRecurringPayment({
-        name: recurringName.trim(),
-        amount,
-        currency,
-        type,
-        accountId: selectedAccountId,
-        categoryId: selectedCategoryId,
-        frequency: recurringFrequency,
-        startDate: date,
-        initialOccurrenceRecorded: true,
-        action: recurringAutoCreate ? "AUTO_CREATE" : "NOTIFY",
-      });
-      return recurring.id;
-    } catch (error: unknown) {
-      if (getRecurringPaymentErrorMessage(error, t) === null) {
-        logger.error("Recurring payment operation failed", error, {
-          operation: "create",
-          source: "add-transaction",
-        });
-      }
-      throw error;
-    }
-  };
-
-  const validateAndCreateTransfer = async (
-    amount: number
-  ): Promise<boolean> => {
-    if (!toAccountId) {
-      setFormErrors({ toAccountId: t("please_select_destination_account") });
-      setIsSubmitting(false);
-      return false;
+    if (voiceAvailability.error?.kind === "consent_required") {
+      return "idle";
     }
 
-    if (!selectedAccountId || !selectedAccount) {
-      setFormErrors({ fromAccountId: t("please_select_source_account") });
-      setIsSubmitting(false);
-      return false;
+    if (voiceAvailability.error !== null) {
+      return "unavailable";
     }
 
-    const isCrossCurrency = selectedAccount.currency !== toAccount?.currency;
-    const parsedTargetAmount =
-      isCrossCurrency && targetAmount
-        ? parsePositiveFiniteAmountInput(targetAmount)
-        : null;
-    if (isCrossCurrency && parsedTargetAmount === null) {
-      setFormErrors({ amount: t("invalid_amount") });
-      setIsSubmitting(false);
-      return false;
+    if (voiceAvailability.availability === null) {
+      return "loading";
     }
 
-    const exchangeRate =
-      parsedTargetAmount !== null && amount > 0
-        ? parsedTargetAmount / amount
-        : undefined;
+    return "idle";
+  }, [
+    microphoneRecoveryMode,
+    voiceAvailability.availability,
+    voiceAvailability.error,
+    voiceFlow.flowStatus,
+    voiceFlow.isFinalizing,
+    voiceFlow.isMicrophonePermissionError,
+    voiceFlow.refusalReason,
+  ]);
 
-    try {
-      await createTransfer({
-        amount,
-        currency: selectedAccount.currency,
-        fromAccountId: selectedAccountId,
-        toAccountId,
-        date,
-        notes: note,
-        convertedAmount: parsedTargetAmount ?? undefined,
-        exchangeRate,
-      });
-      showToast({
-        type: "success",
-        title: t("transfer_created"),
-        message: t("transfer_created_message"),
-      });
-      return true;
-    } catch (error: unknown) {
-      showToast({
-        type: "error",
-        title: t("update_error"),
-        message: t("transaction_creation_failed"),
-      });
-      throw error;
-    }
-  };
-
-  const validateAndCreateTransaction = async ({
-    amount,
-    note,
-    type,
-    linkedRecurringId,
-  }: {
-    amount: number;
-    note?: string;
-    type: TransactionType;
-    linkedRecurringId?: string;
-  }): Promise<Transaction | undefined> => {
-    if (!selectedAccountId || !selectedAccount) {
-      setFormErrors({ accountId: t("please_select_an_account") });
-      setIsSubmitting(false);
-      return undefined;
-    }
-
-    return createTransaction({
-      amount,
-      currency: selectedAccount.currency,
-      categoryId: selectedCategoryId,
-      counterparty,
-      accountId: selectedAccountId,
-      note,
-      source: "MANUAL",
-      type,
-      date,
-      linkedRecurringId,
-    });
-  };
-
-  // Handle Save
-  const handleSave = async (): Promise<void> => {
-    // Clear previous errors
-    setFormErrors({});
-
-    const evaluatedAmount = calculateResult(amount);
-    const amountForValidation =
-      evaluatedAmount === null ? amount : evaluatedAmount.toString();
-
-    // Build form data for validation
-    const formData =
-      type === "TRANSFER"
-        ? {
-            amount: amountForValidation,
-            fromAccountId: selectedAccountId,
-            toAccountId,
-          }
-        : {
-            amount: amountForValidation,
-            accountId: selectedAccountId,
-            categoryId: selectedCategoryId,
-            isRecurring,
-            recurringName,
-          };
-
-    const { isValid, errors } = validateTransactionForm(
-      type,
-      formData,
-      {
-        amountRequired: t("amount_required"),
-        invalidAmount: t("invalid_amount"),
-        amountMustBePositive: t("amount_must_be_positive"),
-        amountMaximum: (maximum) =>
-          t("amount_maximum_error", {
-            maximum: maximum.toLocaleString("en-US"),
-          }),
-        amountPrecision: (precision) =>
-          t("amount_precision_error", { precision }),
-        accountRequired: t("please_select_an_account"),
-        sourceAccountRequired: t("please_select_source_account"),
-        destinationAccountRequired: t("please_select_destination_account"),
-        recurringNameRequired: tCommon("recurring_name_required"),
-      },
-      { currency: selectedAccount?.currency }
-    );
-    if (!isValid) {
-      setFormErrors(errors);
-      if (errors.recurringName) setIsOptionalExpanded(true);
-      return;
-    }
-
-    const finalAmount = evaluatedAmount;
-    if (finalAmount === null || finalAmount <= 0) {
-      setFormErrors({ amount: t("invalid_amount") });
-      return;
-    }
-
-    setIsSubmitting(true);
-    try {
-      let alertTriggered = false;
-
-      if (type === "TRANSFER") {
-        if (!(await validateAndCreateTransfer(finalAmount))) return;
-      } else {
-        let createdRecurringPaymentId: string | undefined;
-        let linkedRecurringId: string | undefined;
-
-        if (isRecurring && selectedAccount) {
-          createdRecurringPaymentId = await createRecurring(
-            finalAmount,
-            type,
-            selectedAccount.currency
-          );
-          linkedRecurringId = createdRecurringPaymentId;
-        }
-
-        let tx: Transaction | undefined;
-        try {
-          tx = await validateAndCreateTransaction({
-            amount: finalAmount,
-            note,
-            type,
-            linkedRecurringId,
-          });
-        } catch (error: unknown) {
-          if (createdRecurringPaymentId) {
-            try {
-              await deleteRecurringPayment(createdRecurringPaymentId);
-            } catch (cleanupError: unknown) {
-              logger.error(
-                "Failed to remove recurring payment after transaction failure",
-                cleanupError,
-                { recurringPaymentId: createdRecurringPaymentId }
-              );
-            }
-          }
-          throw error;
-        }
-
-        // F-02: Show success feedback immediately before non-critical alert check
-        showToast({
-          type: "success",
-          title: t("transaction_created"),
-          message: t("transaction_created_message"),
-        });
-
-        // Check budget alerts for expense transactions (non-blocking to the success flow)
-        if (tx && type === "EXPENSE") {
-          alertTriggered = await budgetAlert.checkAfterTransaction(tx);
-        }
-      }
-
-      // If a budget alert was triggered, stay on screen to show the modal
-      if (!alertTriggered) {
-        router.back();
-      }
-    } catch (error: unknown) {
-      const recurringPaymentErrorMessage = getRecurringPaymentErrorMessage(
-        error,
-        t
-      );
-
-      if (recurringPaymentErrorMessage) {
-        showToast({
-          type: "error",
-          title: t("transaction_creation_failed"),
-          message: recurringPaymentErrorMessage,
-        });
-      } else if (type !== "TRANSFER") {
-        showToast({
-          type: "error",
-          title: t("update_error"),
-          message: t("transaction_creation_failed"),
-        });
-      }
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
+  const isManualMode = mode === "manual";
+  const availability = voiceAvailability.availability;
 
   return (
     <View className="flex-1 bg-slate-50 dark:bg-slate-900">
-      {/* Header */}
       <PageHeader
         title={t("new_transaction")}
-        showBackButton={true}
+        showDrawer={false}
+        showBackButton
         backIcon="arrow"
-        rightAction={{
-          label: t("save"),
-          onPress: handleSave,
-          loading: isSubmitting,
-        }}
-      />
-
-      <ScrollView
-        ref={scrollViewRef}
-        onScroll={onScroll}
-        scrollEventThrottle={16}
-        className="flex-1 bg-slate-50 dark:bg-slate-900"
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 40 }}
-      >
-        {/* Type Tabs */}
-        <View className="mt-4">
-          <TypeTabs selectedType={type} onSelect={setType} />
-        </View>
-
-        {/* Amount Display — hidden when transfer has no valid accounts */}
-        {!(type === "TRANSFER" && !canTransfer) && (
-          <View ref={getFieldRef("amount")} collapsable={false}>
-            {/* Insufficient balance warning */}
-            {type === "EXPENSE" &&
-              selectedAccount &&
-              parsedAmount !== null &&
-              parsedAmount > selectedAccount.balance && (
-                <Text className="text-amber-500 text-xs font-medium text-center mb-1">
-                  ⚠️ {t("warning_negative_balance")} -{" "}
-                  {formatLocalizedMoneyAmount({
-                    amount: parsedAmount - selectedAccount.balance,
-                    currency: selectedAccount.currency,
-                    englishPresentation: "code-suffix",
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                  })}
-                </Text>
-              )}
-            <AmountDisplay
-              amount={amount}
-              currency={selectedAccount?.currency ?? preferredCurrency}
-              type={type}
-              mainColor={selectedCategory?.color}
-              onPress={
-                isOptionalExpanded
-                  ? () => setIsOptionalExpanded(false)
-                  : activeAmountField === "targetAmount"
-                    ? () => setActiveAmountField("amount")
-                    : undefined
+        rightAction={
+          isManualMode
+            ? {
+                label: t("save"),
+                loading: isManualSubmitting,
+                onPress: () => {
+                  void manualEntryRef.current?.save();
+                },
               }
-            />
-            {formErrors.amount && (
-              <Text className="text-red-500 text-xs font-medium text-center mt-1">
-                {formErrors.amount}
-              </Text>
-            )}
-          </View>
-        )}
-
-        {/* Form Content */}
-        <View className="px-6 mt-">
-          {type === "TRANSFER" ? (
-            canTransfer ? (
-              <TransferFields
-                accounts={accounts}
-                fromAccountId={selectedAccountId}
-                toAccountId={toAccountId}
-                onSelectFrom={(id) => {
-                  hasUserSelectedAccountRef.current = true;
-                  setFormErrors((prev) => ({
-                    ...prev,
-                    fromAccountId: undefined,
-                  }));
-                  setSelectedAccountId(id);
-                }}
-                onSelectTo={(id) => {
-                  hasUserSelectedAccountRef.current = true;
-                  setFormErrors((prev) => ({
-                    ...prev,
-                    toAccountId: undefined,
-                  }));
-                  setToAccountId(id);
-                }}
-                amount={amount}
-                targetAmount={targetAmount}
-                onChangeTargetAmount={setTargetAmount}
-                fromAccountError={formErrors.fromAccountId}
-                toAccountError={formErrors.toAccountId}
-                fromAccountRef={getFieldRef("fromAccountId")}
-                toAccountRef={getFieldRef("toAccountId")}
-                exchangeRate={
-                  selectedAccount && toAccount
-                    ? (getSelectedCurrentCurrencyRate({
-                        fromCurrency: selectedAccount.currency,
-                        toCurrency: toAccount.currency,
-                        currentSnapshot: selectedSnapshot,
-                      }) ?? undefined)
-                    : undefined
-                }
-                isTargetAmountActive={activeAmountField === "targetAmount"}
-                onFocusTargetAmount={() => setActiveAmountField("targetAmount")}
-              />
-            ) : (
-              <View className="flex-1 items-center justify-center py-16">
-                <EmptyStateCard
-                  onPress={() => router.push("/add-account")}
-                  icon="swap-horizontal-outline"
-                  title={t("need_more_accounts")}
-                  description={t("need_more_accounts_description")}
-                  height={160}
-                  borderRadius={20}
-                  className="w-full"
-                />
-              </View>
-            )
-          ) : (
-            <>
-              <View className="flex-row gap-4 mb-4">
-                {/* Account Field */}
-                <View
-                  ref={getFieldRef("accountId")}
-                  collapsable={false}
-                  className="flex-1"
-                >
-                  <Text className="input-label">
-                    {t("account").toUpperCase()}
-                  </Text>
-                  {hasAccounts ? (
-                    <TouchableOpacity
-                      onPress={() => {
-                        setFormErrors((prev) => ({
-                          ...prev,
-                          accountId: undefined,
-                        }));
-                        setIsAccountModalOpen(true);
-                      }}
-                      activeOpacity={0.7}
-                      className="flex-row items-center bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700"
-                    >
-                      <View
-                        className="w-8 h-8 rounded-xl items-center justify-center me-2 bg-slate-100 dark:bg-slate-700/50"
-                        style={{
-                          backgroundColor: selectedCategory?.color
-                            ? `${selectedCategory.color}20`
-                            : undefined,
-                        }}
-                      >
-                        <Ionicons
-                          name={
-                            selectedAccount?.type === "BANK"
-                              ? "business-outline"
-                              : selectedAccount?.type === "DIGITAL_WALLET"
-                                ? "card-outline"
-                                : "wallet-outline"
-                          }
-                          size={18}
-                          color={
-                            selectedCategory?.color ||
-                            (isDark ? palette.slate[400] : palette.slate[500])
-                          }
-                        />
-                      </View>
-                      <Text
-                        numberOfLines={1}
-                        className="flex-1 text-sm font-semibold text-slate-900 dark:text-white"
-                      >
-                        {selectedAccount?.name || t("select")}
-                      </Text>
-                    </TouchableOpacity>
-                  ) : (
-                    <EmptyStateCard
-                      onPress={() => router.push("/add-account")}
-                      icon="wallet-outline"
-                      title={t("no_accounts_found")}
-                      description={t("tap_here_to_add_one")}
-                      height={56}
-                      borderRadius={16}
-                      className="mt-0.5"
-                    />
-                  )}
-                  {formErrors.accountId && (
-                    <Text className="text-red-500 text-xs font-medium mt-1">
-                      {formErrors.accountId}
-                    </Text>
-                  )}
-                </View>
-
-                {/* Category Field */}
-                <View
-                  ref={getFieldRef("categoryId")}
-                  collapsable={false}
-                  className="flex-1"
-                >
-                  <Text className="input-label">
-                    {t("category").toUpperCase()}
-                  </Text>
-                  <TouchableOpacity
-                    onPress={() => {
-                      setFormErrors((prev) => ({
-                        ...prev,
-                        categoryId: undefined,
-                      }));
-                      setIsCategoryModalOpen(true);
-                    }}
-                    activeOpacity={0.7}
-                    className="flex-row items-center bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700"
-                  >
-                    <View
-                      className="w-8 h-8 rounded-xl items-center justify-center me-2 bg-slate-100 dark:bg-slate-700/50"
-                      style={{
-                        backgroundColor: selectedCategory?.color
-                          ? `${selectedCategory.color}20`
-                          : undefined,
-                      }}
-                    >
-                      {selectedCategory ? (
-                        <CategoryIcon
-                          iconName={selectedCategory.icon}
-                          iconLibrary={
-                            selectedCategory.iconLibrary as IconLibrary
-                          }
-                          size={18}
-                          color={selectedCategory.color}
-                        />
-                      ) : (
-                        <Ionicons
-                          name="grid-outline"
-                          size={18}
-                          color={
-                            isDark ? palette.slate[400] : palette.slate[500]
-                          }
-                        />
-                      )}
-                    </View>
-                    <Text
-                      numberOfLines={1}
-                      className="flex-1 text-sm font-semibold text-slate-900 dark:text-white"
-                    >
-                      {selectedCategory?.displayName || t("select_category")}
-                    </Text>
-                  </TouchableOpacity>
-                  {formErrors.categoryId && (
-                    <Text className="text-red-500 text-xs font-medium mt-1">
-                      {formErrors.categoryId}
-                    </Text>
-                  )}
-                </View>
-              </View>
-
-              {/* Category Chips (2-row horizontal scroll grid) */}
-              <CategoryPicker
-                selectedCategory={selectedCategory}
-                categories={chipCategories}
-                onOpenPicker={() => setIsCategoryModalOpen(true)}
-                onSelectCategory={(cat) => setSelectedCategoryId(cat.id)}
-                hideMainSelector={true}
-              />
-            </>
-          )}
-
-          {/* Optional Section (expanded content) — hidden for transfers */}
-          {type !== "TRANSFER" && isOptionalExpanded && (
-            <OptionalSection
-              expanded={isOptionalExpanded}
-              onToggleExpand={() => setIsOptionalExpanded(false)}
-              transactionType={type}
-              recurringNameError={formErrors.recurringName}
-              recurringNameRef={getFieldRef("recurringName")}
-              fields={{
-                counterparty,
-                note,
-                date,
-                isRecurring,
-                recurringName,
-                recurringFrequency,
-                recurringAutoCreate,
-              }}
-              onChange={(updates) => {
-                if (updates.counterparty !== undefined)
-                  setCounterparty(updates.counterparty);
-                if (updates.note !== undefined) setNote(updates.note);
-                if (updates.date !== undefined) setDate(updates.date);
-                if (updates.isRecurring !== undefined)
-                  setIsRecurring(updates.isRecurring);
-                if (updates.recurringName !== undefined)
-                  setRecurringName(updates.recurringName);
-                if (updates.recurringFrequency !== undefined)
-                  setRecurringFrequency(updates.recurringFrequency);
-                if (updates.recurringAutoCreate !== undefined)
-                  setRecurringAutoCreate(updates.recurringAutoCreate);
-                if (
-                  updates.isRecurring === false ||
-                  (updates.recurringName !== undefined &&
-                    updates.recurringName.trim().length > 0)
-                ) {
-                  setFormErrors((previous) => ({
-                    ...previous,
-                    recurringName: undefined,
-                  }));
-                }
-              }}
-            />
-          )}
-        </View>
-      </ScrollView>
-
-      {/* "Add more details" bar — hidden for transfers */}
-      {type !== "TRANSFER" && !isOptionalExpanded && (
-        <TouchableOpacity
-          onPress={() => setIsOptionalExpanded(true)}
-          className="flex-row items-center justify-center border-t border-slate-200 bg-slate-50 py-2 dark:border-slate-800 dark:bg-slate-900"
-        >
-          <Ionicons
-            name="create-outline"
-            size={16}
-            color={isDark ? palette.nileGreen[400] : palette.nileGreen[600]}
-          />
-          <Text className="ms-1.5 text-sm font-bold text-nileGreen-600 dark:text-nileGreen-400">
-            {t("add_more_details")}
-          </Text>
-          <Ionicons
-            name="chevron-down"
-            size={14}
-            color={isDark ? palette.nileGreen[400] : palette.nileGreen[600]}
-            className="ms-1"
-          />
-        </TouchableOpacity>
-      )}
-
-      {/* Keypad - Fixed at bottom */}
-      {/* Hide keypad when optional section is expanded or when transfer has no accounts */}
-      {!(type === "TRANSFER" && !canTransfer) && (
-        <CalculatorKeypad
-          onKeyPress={handleKeyPress}
-          hide={isOptionalExpanded}
-        />
-      )}
-
-      {/* Bottom spacer for safe area if keypad is hidden */}
-      {isOptionalExpanded && <View style={{ height: insets.bottom }} />}
-
-      {/* Modals */}
-      <AccountSelectorModal
-        visible={isAccountModalOpen}
-        accounts={accounts}
-        selectedId={selectedAccountId}
-        onSelect={(id) => {
-          hasUserSelectedAccountRef.current = true;
-          setSelectedAccountId(id);
-        }}
-        onClose={() => setIsAccountModalOpen(false)}
+            : undefined
+        }
       />
 
-      {type !== "TRANSFER" && (
-        <CategorySelectorModal
-          visible={isCategoryModalOpen}
-          rootCategories={modalRootCategories}
-          selectedId={selectedCategoryId}
-          type={type}
-          onSelect={setSelectedCategoryId}
-          onClose={() => setIsCategoryModalOpen(false)}
-        />
-      )}
+      <AddTransactionModeTabs
+        mode={mode}
+        disabled={voiceFlow.isModeSwitchLocked}
+        manualLabel={t("add_transaction_mode_manual")}
+        voiceLabel={t("add_transaction_mode_voice")}
+        onModeChange={handleModeChange}
+      />
 
-      {/* Budget Alert Modal */}
-      <BudgetAlertModal
-        visible={budgetAlert.isVisible}
-        alert={budgetAlert.alert}
-        onDismiss={() => {
-          budgetAlert.dismiss();
-          router.back();
+      <View className="mt-3 flex-1">
+        <View
+          className={isManualMode ? "flex-1" : "hidden"}
+          accessibilityElementsHidden={!isManualMode}
+          importantForAccessibility={
+            isManualMode ? "auto" : "no-hide-descendants"
+          }
+          pointerEvents={isManualMode ? "auto" : "none"}
+        >
+          <Text
+            ref={manualModeHeadingRef}
+            accessible
+            accessibilityRole="header"
+            accessibilityLabel={t("add_transaction_mode_manual")}
+            className="absolute h-px w-px opacity-0"
+          >
+            {t("add_transaction_mode_manual")}
+          </Text>
+          <ManualVoiceAllowanceStrip
+            remaining={availability?.remaining ?? null}
+            dailyLimit={availability?.dailyLimit ?? null}
+            isUnavailable={voiceAvailability.error !== null}
+          />
+
+          <View className="flex-1">
+            <ManualTransactionEntry
+              ref={manualEntryRef}
+              onSubmittingChange={setIsManualSubmitting}
+            />
+          </View>
+        </View>
+
+        <View
+          className={isManualMode ? "hidden" : "flex-1"}
+          accessibilityElementsHidden={isManualMode}
+          importantForAccessibility={
+            isManualMode ? "no-hide-descendants" : "auto"
+          }
+          pointerEvents={isManualMode ? "none" : "auto"}
+        >
+          <Text
+            ref={voiceModeHeadingRef}
+            accessible
+            accessibilityRole="header"
+            accessibilityLabel={t("add_transaction_mode_voice")}
+            className="absolute h-px w-px opacity-0"
+          >
+            {t("add_transaction_mode_voice")}
+          </Text>
+          <VoiceTransactionEntry
+            state={voiceState}
+            remaining={availability?.remaining ?? null}
+            dailyLimit={availability?.dailyLimit ?? null}
+            durationMs={voiceFlow.durationMs}
+            errorMessage={voiceFlow.errorMessage}
+            onStart={() => {
+              void requestVoiceStart();
+            }}
+            onPause={voiceFlow.pauseRecording}
+            onResume={voiceFlow.resumeRecording}
+            onSubmit={() => {
+              void voiceFlow.submitRecording();
+            }}
+            onDiscard={() => {
+              void voiceFlow.discardRecording();
+            }}
+            onTryAgain={() => {
+              void handleTryAgain();
+            }}
+            onUseManual={() => {
+              handleModeChange("manual");
+            }}
+            onRefreshAvailability={() => {
+              void voiceAvailability.refresh();
+            }}
+            onOpenSettings={() => {
+              void voiceFlow.openMicrophoneSettings();
+            }}
+            onPermissionContinue={handleMicrophoneRecoveryPrimary}
+            onPermissionCancel={handleMicrophoneRecoveryCancel}
+          />
+        </View>
+      </View>
+
+      <AiProcessingConsentSheet
+        visible={isVoiceConsentVisible}
+        onContinue={async () => {
+          let didGrantConsent = false;
+
+          try {
+            await aiConsent.grantConsent();
+            didGrantConsent = true;
+            shouldResumeConsentAfterPrivacyRef.current = false;
+            setIsVoiceConsentVisible(false);
+
+            if (!voiceFlow.hasPermission) {
+              setMicrophoneRecoveryMode("request");
+              return;
+            }
+
+            await voiceFlow.startFlow({
+              skipAiProcessingConsent: true,
+            });
+          } catch {
+            shouldResumeConsentAfterPrivacyRef.current = false;
+            setIsVoiceConsentVisible(didGrantConsent ? false : true);
+          }
         }}
-        onViewBudget={budgetAlert.viewBudget}
+        onNotNow={() => {
+          shouldResumeConsentAfterPrivacyRef.current = false;
+          setIsVoiceConsentVisible(false);
+        }}
+        onPrivacyDetails={() => {
+          shouldResumeConsentAfterPrivacyRef.current = true;
+          setIsVoiceConsentVisible(false);
+          router.push("/privacy-details");
+        }}
+      />
+
+      <PermissionRecoveryModal
+        visible={microphoneRecoveryMode !== null}
+        icon={
+          microphoneRecoveryMode === "blocked"
+            ? "settings-outline"
+            : "mic-outline"
+        }
+        title={tCommon("voice_recording_label")}
+        message={
+          microphoneRecoveryMode === "blocked"
+            ? tCommon("voice_microphone_permission_error")
+            : tCommon("voice_recording_hint")
+        }
+        primaryLabel={
+          microphoneRecoveryMode === "blocked"
+            ? tCommon("open_settings")
+            : tCommon("continue")
+        }
+        cancelLabel={t("voice_action_use_manual")}
+        onPrimaryPress={handleMicrophoneRecoveryPrimary}
+        onCancel={handleMicrophoneRecoveryCancel}
       />
     </View>
   );
 }
 
-function getRecurringPaymentErrorMessage(
-  error: unknown,
-  t: (key: string) => string
-): string | null {
-  const message = error instanceof Error ? error.message : undefined;
+function ManualVoiceAllowanceStrip({
+  remaining,
+  dailyLimit,
+  isUnavailable,
+}: {
+  readonly remaining: number | null;
+  readonly dailyLimit: number | null;
+  readonly isUnavailable: boolean;
+}): React.JSX.Element | null {
+  const { t } = useTranslation("transactions");
+  const { language } = useLocale();
 
-  if (message === RECURRING_PAYMENT_SERVICE_ERROR_CODES.ACCOUNT_UNAVAILABLE) {
-    return t("recurring_payment_account_unavailable");
+  const hasMeteredAllowance = remaining !== null && dailyLimit !== null;
+
+  if (!hasMeteredAllowance && !isUnavailable) {
+    return null;
   }
 
-  if (message === RECURRING_PAYMENT_SERVICE_ERROR_CODES.CATEGORY_UNAVAILABLE) {
-    return t("recurring_payment_category_unavailable");
-  }
+  const formattedRemaining =
+    remaining === null ? null : formatLocalizedCount(remaining, language);
+  const formattedLimit =
+    dailyLimit === null ? null : formatLocalizedCount(dailyLimit, language);
 
-  if (message === RECURRING_PAYMENT_SERVICE_ERROR_CODES.INVALID_START_DATE) {
-    return t("due_payment_date_range");
-  }
+  return (
+    <View
+      className="mx-4 mb-1 mt-3 min-h-[68px] justify-center rounded-2xl border border-slate-200 bg-slate-25 px-4 py-3 dark:border-slate-700 dark:bg-slate-800"
+      accessibilityLiveRegion="polite"
+    >
+      {formattedRemaining !== null && formattedLimit !== null ? (
+        <>
+          <Text className="text-sm font-semibold text-slate-800 dark:text-slate-25">
+            {t("voice_limit_heading")}
+          </Text>
 
-  return null;
+          <Text className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
+            {t("voice_limit_remaining", {
+              remaining: formattedRemaining,
+              limit: formattedLimit,
+            })}
+          </Text>
+        </>
+      ) : (
+        <Text className="text-xs leading-5 text-slate-500 dark:text-slate-400">
+          {t("voice_limit_unavailable")}
+        </Text>
+      )}
+    </View>
+  );
 }

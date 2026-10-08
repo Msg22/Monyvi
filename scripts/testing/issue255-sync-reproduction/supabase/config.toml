@@ -1,0 +1,83 @@
+# Dedicated disposable backend for Monyvi #255 sync-reproduction.
+# Owned scope only. Never edit production supabase/config.toml.
+project_id = "monyvi-issue255-repro"
+
+[api]
+enabled = true
+port = 54341
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54342
+shadow_port = 54340
+major_version = 17
+
+[db.pooler]
+enabled = false
+port = 54349
+pool_mode = "transaction"
+default_pool_size = 20
+max_client_conn = 100
+
+[db.migrations]
+enabled = true
+schema_paths = []
+
+[db.seed]
+enabled = false
+sql_paths = []
+
+[realtime]
+enabled = false
+
+[studio]
+enabled = false
+port = 54343
+api_url = "http://127.0.0.1"
+
+[inbucket]
+enabled = false
+port = 54344
+
+[storage]
+enabled = false
+
+[auth]
+enabled = true
+site_url = "http://127.0.0.1:3000"
+additional_redirect_urls = ["https://127.0.0.1:3000", "monyvi://auth-callback"]
+jwt_expiry = 3600
+enable_refresh_token_rotation = true
+refresh_token_reuse_interval = 10
+enable_signup = true
+enable_anonymous_sign_ins = false
+enable_manual_linking = false
+minimum_password_length = 6
+password_requirements = ""
+
+[auth.email]
+enable_signup = true
+double_confirm_changes = true
+enable_confirmations = false
+secure_password_change = false
+max_frequency = "2m"
+otp_length = 6
+otp_expiry = 600
+
+[auth.sms]
+enable_signup = false
+enable_confirmations = false
+template = "Your code is {{ .Code }}"
+max_frequency = "5s"
+
+[edge_runtime]
+enabled = false
+policy = "per_worker"
+inspector_port = 8093
+
+[analytics]
+enabled = false
+port = 54347
+backend = "postgres"

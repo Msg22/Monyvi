@@ -1,5 +1,7 @@
 import { act, renderHook } from "@testing-library/react-native";
 import { Linking } from "react-native";
+import type { VoiceAvailabilitySnapshot } from "@monyvi/logic";
+import type { UseVoiceAiAvailabilityResult } from "@/hooks/useVoiceAiAvailability";
 import { useVoiceTransactionFlow } from "@/hooks/useVoiceTransactionFlow";
 import { getAiProcessingConsentStatus } from "@/services/profile-service";
 
@@ -13,6 +15,27 @@ const mockRecorderReset = jest.fn();
 const mockRequestPermission = jest.fn();
 const mockParseVoiceWithAi = jest.fn();
 const mockOpenSettings = jest.fn();
+
+const alwaysAvailableSnapshot: VoiceAvailabilitySnapshot = {
+  serverNow: "2026-07-07T12:00:00.000Z",
+  timeZone: "Africa/Cairo",
+  dailyLimit: null,
+  remaining: null,
+  resetAt: null,
+  reason: null,
+  availableAt: null,
+  burstAvailableAt: null,
+  policyVersion: "test",
+};
+
+const alwaysAvailableVoiceAvailability: UseVoiceAiAvailabilityResult = {
+  availability: alwaysAvailableSnapshot,
+  isLoading: false,
+  error: null,
+  refresh: (): Promise<VoiceAvailabilitySnapshot> =>
+    Promise.resolve(alwaysAvailableSnapshot),
+  reconcileAuthoritativeSnapshot: (): void => {},
+};
 
 jest.mock("i18next", () => ({
   t: (key: string): string => {
@@ -89,6 +112,7 @@ function renderVoiceFlow(
       categories: "",
       accounts: [],
       categoryRecords: [],
+      voiceAvailability: alwaysAvailableVoiceAvailability,
       ensureAiProcessingConsent,
       hasFreshAiProcessingConsent,
       onAiProcessingConsentRequired,

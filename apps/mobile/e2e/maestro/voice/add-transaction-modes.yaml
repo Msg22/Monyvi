@@ -1,0 +1,66 @@
+appId: com.monyvi.app
+---
+
+# T028: Unified Add Transaction Manual/Voice navigation.
+#
+# This flow intentionally exercises only user-visible navigation and idle UI.
+# It does not start recording, submit audio, call the provider, or enter review.
+#
+# Precondition: authenticated seeded E2E user with at least one account.
+
+- runFlow: ../helpers/setup.yaml
+
+# Open Add Transaction through the existing public FAB interaction.
+- tapOn:
+    id: "fab-button"
+
+- waitForAnimationToEnd
+
+- tapOn:
+    id: "fab-transaction"
+
+- waitForAnimationToEnd
+
+# Prove the existing route loaded before reaching the new mode behavior.
+- assertVisible: "New Transaction"
+- assertVisible: "EXPENSE"
+
+# Create observable Manual state using the existing calculator.
+- tapOn: "1"
+- tapOn: "5"
+- tapOn: "0"
+
+- assertVisible: "150"
+
+# Behavioral Red against current production:
+# the unified Voice mode control does not exist yet.
+- tapOn: "Voice"
+
+# Approved binding copy for the idle Voice state.
+- assertVisible: "Tap and speak to add a transaction"
+
+# Manual remains available while Voice is idle.
+- assertVisible: "Manual"
+
+- tapOn: "Manual"
+
+# The existing Manual subtree must have remained mounted.
+- assertVisible: "150"
+
+# Return to the Transactions tab.
+- tapOn:
+    id: "header-back"
+
+- waitForAnimationToEnd
+
+- assertVisible: "Transactions"
+
+# Exercise the existing public center-mic accessibility interaction.
+# After implementation this must navigate to the idle unified Voice route.
+# It must NOT require recording to begin merely to prove navigation.
+- tapOn: "Voice input - record a transaction"
+
+- waitForAnimationToEnd
+
+- assertVisible: "Voice"
+- assertVisible: "Tap and speak to add a transaction"

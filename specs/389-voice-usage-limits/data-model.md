@@ -106,6 +106,16 @@ deletion, the same key is treated as new through all ordinary admission gates.
 The configured cleanup schedule and batch size must be tested with the
 migration.
 
+Technical execution parameters frozen on 7 October 2026: schedule cleanup hourly
+at minute 17 (cron `17 * * * *`), with a hard maximum of 500 eligible
+work-request rows per invocation. Use descriptive SQL constants/defaults and
+test the job definition, bounded batch and repeated backlog drainage. Candidate
+selection is not deletion authority: recheck terminal/current-accounting safety
+under each candidate user's admission/start lock. Busy or unsafe rows may remain
+retained until a later run; replay protection continues until actual deletion.
+Cadence/batch tuning cannot change the 35 × 24 elapsed-hour cutoff, release
+active work, refund quota or add client/hosted mutation authority.
+
 ## 4. VoiceAvailabilitySnapshot (public Edge/mobile contract)
 
 | Field              | Type               | Meaning                                                                  |

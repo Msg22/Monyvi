@@ -1,0 +1,10 @@
+# Issue #255 owned private/generated artifacts — never commit.
+runtime.local.json
+status.json
+.env.local
+*.log
+supabase/migrations/*.sql
+supabase/.temp/
+supabase/.branches/
+supabase/.config/
+evidence/

@@ -7,31 +7,6 @@ export type Json =
   | Json[];
 
 export type Database = {
-  graphql_public: {
-    Tables: {
-      [_ in never]: never;
-    };
-    Views: {
-      [_ in never]: never;
-    };
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json;
-          operationName?: string;
-          query?: string;
-          variables?: Json;
-        };
-        Returns: Json;
-      };
-    };
-    Enums: {
-      [_ in never]: never;
-    };
-    CompositeTypes: {
-      [_ in never]: never;
-    };
-  };
   public: {
     Tables: {
       account_financial_effects: {
@@ -639,6 +614,39 @@ export type Database = {
             referencedColumns: ["id"];
           },
         ];
+      };
+      email_verification_resend_limits: {
+        Row: {
+          created_at: string;
+          email_key: string;
+          last_sent_at: string | null;
+          resend_count: number;
+          reservation_id: string | null;
+          reserved_at: string | null;
+          updated_at: string;
+          window_started_at: string;
+        };
+        Insert: {
+          created_at?: string;
+          email_key: string;
+          last_sent_at?: string | null;
+          resend_count?: number;
+          reservation_id?: string | null;
+          reserved_at?: string | null;
+          updated_at?: string;
+          window_started_at: string;
+        };
+        Update: {
+          created_at?: string;
+          email_key?: string;
+          last_sent_at?: string | null;
+          resend_count?: number;
+          reservation_id?: string | null;
+          reserved_at?: string | null;
+          updated_at?: string;
+          window_started_at?: string;
+        };
+        Relationships: [];
       };
       financial_action_groups: {
         Row: {
@@ -1727,6 +1735,87 @@ export type Database = {
           },
         ];
       };
+      voice_ai_usage_windows: {
+        Row: {
+          created_at: string;
+          local_date: string;
+          policy_version: string;
+          time_zone: string;
+          updated_at: string;
+          user_id: string;
+          window_ends_at: string;
+          window_started_at: string;
+        };
+        Insert: {
+          created_at?: string;
+          local_date: string;
+          policy_version: string;
+          time_zone: string;
+          updated_at?: string;
+          user_id: string;
+          window_ends_at: string;
+          window_started_at: string;
+        };
+        Update: {
+          created_at?: string;
+          local_date?: string;
+          policy_version?: string;
+          time_zone?: string;
+          updated_at?: string;
+          user_id?: string;
+          window_ends_at?: string;
+          window_started_at?: string;
+        };
+        Relationships: [];
+      };
+      voice_ai_work_requests: {
+        Row: {
+          available_at: string | null;
+          created_at: string;
+          decision_code: string;
+          id: string;
+          provider_started_at: string | null;
+          request_key: string;
+          reservation_expires_at: string | null;
+          status: string;
+          time_zone: string;
+          updated_at: string;
+          user_id: string;
+          window_ends_at: string;
+          window_started_at: string;
+        };
+        Insert: {
+          available_at?: string | null;
+          created_at?: string;
+          decision_code: string;
+          id?: string;
+          provider_started_at?: string | null;
+          request_key: string;
+          reservation_expires_at?: string | null;
+          status: string;
+          time_zone: string;
+          updated_at?: string;
+          user_id: string;
+          window_ends_at: string;
+          window_started_at: string;
+        };
+        Update: {
+          available_at?: string | null;
+          created_at?: string;
+          decision_code?: string;
+          id?: string;
+          provider_started_at?: string | null;
+          request_key?: string;
+          reservation_expires_at?: string | null;
+          status?: string;
+          time_zone?: string;
+          updated_at?: string;
+          user_id?: string;
+          window_ends_at?: string;
+          window_started_at?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: {
       [_ in never]: never;
@@ -1743,6 +1832,34 @@ export type Database = {
       apply_metal_metadata_patch_v1: {
         Args: { p_holding_id: string; p_patch: Json };
         Returns: Json;
+      };
+      email_verification_finalize_resend: {
+        Args: { p_email_key: string; p_reservation_id: string };
+        Returns: boolean;
+      };
+      email_verification_register_initial_send: {
+        Args: { p_email: string; p_email_key: string };
+        Returns: boolean;
+      };
+      email_verification_release_resend: {
+        Args: { p_email_key: string; p_reservation_id: string };
+        Returns: boolean;
+      };
+      email_verification_reserve_resend: {
+        Args: {
+          p_cooldown_seconds: number;
+          p_email: string;
+          p_email_key: string;
+          p_max_resends: number;
+          p_reservation_lease_seconds: number;
+          p_window_seconds: number;
+        };
+        Returns: {
+          accepted: boolean;
+          available_at: string;
+          decision_code: string;
+          reservation_id: string;
+        }[];
       };
       persist_market_rate_snapshot_v1: {
         Args: {
@@ -1780,6 +1897,16 @@ export type Database = {
         };
         Returns: Json;
       };
+      pull_snapshot_deletions_page_v1: {
+        Args: {
+          p_after_entry_id?: string;
+          p_after_published_at?: string;
+          p_last_pulled_at?: string;
+          p_limit?: number;
+          p_upper_watermark?: string;
+        };
+        Returns: Json;
+      };
       recalculate_account_balance: {
         Args: { account_id_param: string };
         Returns: number;
@@ -1789,6 +1916,10 @@ export type Database = {
       recalculate_daily_snapshot_balance: { Args: never; Returns: undefined };
       recalculate_daily_snapshot_net_worth: { Args: never; Returns: undefined };
       run_daily_snapshots: { Args: never; Returns: undefined };
+      seal_sync_pull_v1: {
+        Args: { p_upper_watermark: string };
+        Returns: string;
+      };
       sms_ai_cleanup_safeguards: {
         Args: { p_ledger_retention_days?: number; p_lookback_days?: number };
         Returns: undefined;
@@ -1917,6 +2048,105 @@ export type Database = {
         };
         Returns: {
           accepted_scan_started_at: string;
+        }[];
+      };
+      voice_ai_cleanup_expired_requests: {
+        Args: { p_limit?: number };
+        Returns: number;
+      };
+      voice_ai_complete_work: {
+        Args: {
+          p_completed_with_provider_error: boolean;
+          p_decision_code: string;
+          p_request_id: string;
+          p_user_id: string;
+        };
+        Returns: boolean;
+      };
+      voice_ai_get_availability: {
+        Args: {
+          p_burst_limit: number;
+          p_burst_window_seconds: number;
+          p_daily_limit?: number;
+          p_mode: string;
+          p_policy_version: string;
+          p_time_zone: string;
+          p_user_id: string;
+        };
+        Returns: {
+          available_at: string;
+          burst_available_at: string;
+          daily_limit: number;
+          policy_version: string;
+          reason: string;
+          remaining: number;
+          reset_at: string;
+          server_now: string;
+          time_zone: string;
+          window_ends_at: string;
+          window_started_at: string;
+        }[];
+      };
+      voice_ai_mark_provider_started: {
+        Args: {
+          p_burst_limit: number;
+          p_burst_window_seconds: number;
+          p_daily_limit?: number;
+          p_mode: string;
+          p_policy_version: string;
+          p_request_id: string;
+          p_time_zone: string;
+          p_user_id: string;
+        };
+        Returns: {
+          available_at: string;
+          burst_available_at: string;
+          daily_limit: number;
+          decision_code: string;
+          is_replay: boolean;
+          policy_version: string;
+          remaining: number;
+          request_id: string;
+          reset_at: string;
+          server_now: string;
+          started: boolean;
+          time_zone: string;
+        }[];
+      };
+      voice_ai_release_work: {
+        Args: {
+          p_decision_code: string;
+          p_request_id: string;
+          p_user_id: string;
+        };
+        Returns: boolean;
+      };
+      voice_ai_reserve_work: {
+        Args: {
+          p_burst_limit: number;
+          p_burst_window_seconds: number;
+          p_daily_limit?: number;
+          p_mode: string;
+          p_policy_version: string;
+          p_request_key: string;
+          p_reservation_lease_seconds: number;
+          p_time_zone: string;
+          p_user_id: string;
+        };
+        Returns: {
+          accepted: boolean;
+          available_at: string;
+          burst_available_at: string;
+          daily_limit: number;
+          decision_code: string;
+          is_replay: boolean;
+          policy_version: string;
+          remaining: number;
+          request_id: string;
+          reservation_expires_at: string;
+          reset_at: string;
+          server_now: string;
+          time_zone: string;
         }[];
       };
     };
@@ -2111,9 +2341,6 @@ export type CompositeTypes<
     : never;
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {
       account_type: ["CASH", "BANK", "DIGITAL_WALLET"],
