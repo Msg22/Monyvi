@@ -138,6 +138,7 @@ export function useVoiceTransactionFlow(
   >(null);
   const [canRetrySubmission, setCanRetrySubmission] = useState(false);
   const [isFinalizing, setIsFinalizing] = useState(false);
+  const [isStartPending, setIsStartPending] = useState(false);
   const mountedRef = useRef(true);
   const currentUserIdRef = useRef(userId);
   const isResolvingUserRef = useRef(isResolvingUser);
@@ -153,6 +154,8 @@ export function useVoiceTransactionFlow(
   const requestOwnerUserIdRef = useRef<string | null>(null);
   const callerTimeZoneRef = useRef<string | null>(null);
   const retainedSubmissionRef = useRef<RetainedSubmission | null>(null);
+  const discardRef = useRef(recorder.discard);
+  discardRef.current = recorder.discard;
   const updateFlowStatus = useCallback((next: VoiceFlowStatus): void => {
     flowStatusRef.current = next;
     setFlowStatus(next);
@@ -221,6 +224,7 @@ export function useVoiceTransactionFlow(
     requestOwnerUserIdRef.current = null;
     callerTimeZoneRef.current = null;
     retainedSubmissionRef.current = null;
+    setIsStartPending(false);
     setIsFinalizing(false);
     setCanRetrySubmission(false);
     setRefusalReason(null);
@@ -228,14 +232,8 @@ export function useVoiceTransactionFlow(
     setErrorKind(null);
     setIsOverlayVisible(false);
     updateFlowStatus("idle");
-    void recorder.discard();
-  }, [
-    invalidateOperations,
-    isResolvingUser,
-    recorder.discard,
-    updateFlowStatus,
-    userId,
-  ]);
+    void discardRef.current();
+  }, [invalidateOperations, isResolvingUser, updateFlowStatus, userId]);
   useEffect(() => {
     mountedRef.current = true;
     return () => {
@@ -247,9 +245,8 @@ export function useVoiceTransactionFlow(
       requestOwnerUserIdRef.current = null;
       callerTimeZoneRef.current = null;
       retainedSubmissionRef.current = null;
-      void recorder.discard();
     };
-  }, [invalidateOperations, recorder.discard]);
+  }, [invalidateOperations]);
   useEffect(() => {
     if (
       recorder.status === "completed" &&
@@ -334,6 +331,7 @@ export function useVoiceTransactionFlow(
       const operation = beginOperation();
       if (operation === null) return;
       startPendingGenerationRef.current = operation.generation;
+      setIsStartPending(true);
       try {
         if (
           !options?.skipAiProcessingConsent &&
@@ -403,6 +401,9 @@ export function useVoiceTransactionFlow(
       } finally {
         if (startPendingGenerationRef.current === operation.generation) {
           startPendingGenerationRef.current = null;
+          if (mountedRef.current) {
+            setIsStartPending(false);
+          }
         }
       }
     },
@@ -464,7 +465,8 @@ export function useVoiceTransactionFlow(
   const processSubmission = useCallback(
     async (
       operation: FlowOperation,
-      submission: RetainedSubmission
+      submission: RetainedSubmission,
+      isRetainedRetry = false
     ): Promise<void> => {
       if (
         !isOperationCurrent(operation) ||
@@ -480,20 +482,22 @@ export function useVoiceTransactionFlow(
       if (!isOperationCurrent(operation)) {
         return;
       }
-      const mayStartProvider = await refreshBeforeProvider(operation);
-      if (!isOperationCurrent(operation)) {
-        return;
-      }
-      if (!mayStartProvider) {
-        if (!(await discardForOperation(operation))) {
+      if (!isRetainedRetry) {
+        const mayStartProvider = await refreshBeforeProvider(operation);
+        if (!isOperationCurrent(operation)) {
           return;
         }
-        clearSubmissionIdentity();
-        setErrorMessage(null);
-        setErrorKind(null);
-        setIsOverlayVisible(false);
-        updateFlowStatus("idle");
-        return;
+        if (!mayStartProvider) {
+          if (!(await discardForOperation(operation))) {
+            return;
+          }
+          clearSubmissionIdentity();
+          setErrorMessage(null);
+          setErrorKind(null);
+          setIsOverlayVisible(false);
+          updateFlowStatus("idle");
+          return;
+        }
       }
       const aiResult = await parseVoiceWithAi({
         audioUri: submission.audioUri,
@@ -540,7 +544,10 @@ export function useVoiceTransactionFlow(
         return;
       }
       if (isVoiceParserError(aiResult)) {
-        if (aiResult.kind === "network" || aiResult.kind === "timeout") {
+        if (
+          (aiResult.kind === "network" || aiResult.kind === "timeout") &&
+          aiResult.retryableSameRequest === true
+        ) {
           retainedSubmissionRef.current = submission;
           setCanRetrySubmission(true);
           setErrorMessage(aiResult.message);
@@ -548,6 +555,7 @@ export function useVoiceTransactionFlow(
           updateFlowStatus("error");
           return;
         }
+
         if (!(await discardForOperation(operation))) {
           return;
         }
@@ -567,10 +575,11 @@ export function useVoiceTransactionFlow(
         updateFlowStatus("error");
         return;
       }
-      await recorder.reset();
-      if (!isOperationCurrent(operation)) {
+
+      if (!(await discardForOperation(operation))) {
         return;
       }
+
       clearSubmissionIdentity();
       if (aiResult.transactions.length === 0) {
         setRefusalReason(null);
@@ -739,7 +748,7 @@ export function useVoiceTransactionFlow(
     setErrorMessage(null);
     setErrorKind(null);
     try {
-      await processSubmission(operation, retained);
+      await processSubmission(operation, retained, true);
     } finally {
       if (submissionPendingGenerationRef.current === operation.generation) {
         submissionPendingGenerationRef.current = null;
@@ -830,6 +839,7 @@ export function useVoiceTransactionFlow(
     }
   }, [beginOperation, isOperationCurrent, updateFlowStatus]);
   const isModeSwitchLocked =
+    isStartPending ||
     flowStatus === "recording" ||
     flowStatus === "paused" ||
     flowStatus === "completed" ||

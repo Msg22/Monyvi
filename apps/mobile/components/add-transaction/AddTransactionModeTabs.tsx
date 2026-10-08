@@ -1,5 +1,5 @@
 import React from "react";
-import { I18nManager, Pressable, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 
 export type AddTransactionMode = "manual" | "voice";
 
@@ -37,9 +37,7 @@ export function AddTransactionModeTabs({
   return (
     <View
       accessibilityRole="tablist"
-      className={`mx-4 min-h-11 rounded-2xl bg-slate-100 p-1 dark:bg-slate-800 ${
-        I18nManager.isRTL ? "flex-row-reverse" : "flex-row"
-      }`}
+      className="mx-4 min-h-11 flex-row rounded-2xl bg-slate-100 p-1 dark:bg-slate-800"
     >
       {options.map((option) => {
         const isSelected = mode === option.value;

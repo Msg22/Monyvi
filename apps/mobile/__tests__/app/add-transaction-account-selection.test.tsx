@@ -325,7 +325,7 @@ jest.mock("@/services/transfer-service", () => ({
   createTransfer: jest.fn(),
 }));
 
-import AddTransaction from "@/app/(private)/add-transaction";
+import { ManualTransactionEntry as AddTransaction } from "@/components/add-transaction/ManualTransactionEntry";
 
 interface RecurringPaymentServiceMocks {
   readonly createRecurringPayment: jest.Mock;
@@ -341,9 +341,9 @@ function recurringPaymentServiceMocks(): RecurringPaymentServiceMocks {
 function transactionServiceMocks(): {
   readonly createTransaction: jest.Mock;
 } {
-  return jest.requireMock("@/services/transaction-service") as {
+  return jest.requireMock<{
     readonly createTransaction: jest.Mock;
-  };
+  }>("@/services/transaction-service");
 }
 
 function account(id: string, name: string, isDefault: boolean): MockAccount {

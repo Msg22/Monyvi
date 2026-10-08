@@ -77,6 +77,20 @@ Required deterministic tests before production wiring:
 
 Provider calls in routine quota tests are doubles; do not consume Gemini quota.
 
+### Current direct parse-voice fixture command
+
+Run from the repository root with the existing dependency/cache state. The test
+import map resolves the SDK/provider doubles plus cached `npm:zod@4.4.3`;
+`--cached-only` prevents dependency downloads. Do not install dependencies in a
+secondary worktree.
+
+```text
+deno test --no-config --no-lock --no-remote --cached-only --no-prompt --deny-net --deny-import --allow-env=SUPABASE_URL,SUPABASE_SERVICE_ROLE_KEY,GEMINI_API_KEY,VOICE_AI_DAILY_LIMIT,VOICE_AI_BURST_LIMIT,VOICE_AI_BURST_WINDOW_SECONDS,VOICE_AI_RESERVATION_LEASE_SECONDS,VOICE_AI_POLICY_VERSION --import-map supabase/functions/parse-voice/deno.test.import-map.json supabase/functions/parse-voice/index.test.ts
+```
+
+Historical checklist commands remain execution evidence for the environment and
+flags used at the time; use this command for the current fixture suite.
+
 ## 4. Planned client contract
 
 The mobile service sends:

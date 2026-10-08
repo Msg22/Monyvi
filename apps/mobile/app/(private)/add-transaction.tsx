@@ -61,6 +61,7 @@ export default function AddTransaction(): React.JSX.Element {
   const [mode, setMode] = useState<AddTransactionMode>(requestedMode);
   const [isManualSubmitting, setIsManualSubmitting] = useState(false);
   const [isVoiceConsentVisible, setIsVoiceConsentVisible] = useState(false);
+  const [isVoiceStartPending, setIsVoiceStartPending] = useState(false);
   const [microphoneRecoveryMode, setMicrophoneRecoveryMode] =
     useState<MicrophoneRecoveryMode>(null);
 
@@ -72,6 +73,9 @@ export default function AddTransaction(): React.JSX.Element {
   const pendingModeFocusRef = useRef<AddTransactionMode | null>(null);
   const retryConsumedRef = useRef(false);
   const shouldResumeConsentAfterPrivacyRef = useRef(false);
+  const isRouteMountedRef = useRef(true);
+  const voiceStartGenerationRef = useRef(0);
+  const voiceStartPendingRef = useRef(false);
 
   const aiConsent = useAiProcessingConsent();
   const { preferredCurrency } = usePreferredCurrency();
@@ -131,13 +135,35 @@ export default function AddTransaction(): React.JSX.Element {
     voiceAvailability,
   });
 
+  const isModeSwitchLocked =
+    isVoiceStartPending || voiceFlow.isModeSwitchLocked;
+
+  const invalidatePendingVoiceStart = useCallback((): void => {
+    voiceStartGenerationRef.current += 1;
+    voiceStartPendingRef.current = false;
+
+    if (isRouteMountedRef.current) {
+      setIsVoiceStartPending(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    isRouteMountedRef.current = true;
+
+    return () => {
+      isRouteMountedRef.current = false;
+      voiceStartGenerationRef.current += 1;
+      voiceStartPendingRef.current = false;
+    };
+  }, []);
+
   useEffect(() => {
     const previousRequestedMode = previousRequestedModeRef.current;
 
     if (requestedMode !== previousRequestedMode) {
       previousRequestedModeRef.current = requestedMode;
 
-      if (voiceFlow.isModeSwitchLocked) {
+      if (isModeSwitchLocked) {
         pendingRequestedModeRef.current = requestedMode;
         return;
       }
@@ -147,15 +173,12 @@ export default function AddTransaction(): React.JSX.Element {
       return;
     }
 
-    if (
-      !voiceFlow.isModeSwitchLocked &&
-      pendingRequestedModeRef.current !== null
-    ) {
+    if (!isModeSwitchLocked && pendingRequestedModeRef.current !== null) {
       const pendingMode = pendingRequestedModeRef.current;
       pendingRequestedModeRef.current = null;
       setMode(pendingMode);
     }
-  }, [requestedMode, voiceFlow.isModeSwitchLocked]);
+  }, [isModeSwitchLocked, requestedMode]);
 
   useEffect(() => {
     if (voiceFlow.isMicrophonePermissionError) {
@@ -164,19 +187,45 @@ export default function AddTransaction(): React.JSX.Element {
   }, [voiceFlow.isMicrophonePermissionError]);
 
   const requestVoiceStart = useCallback(async (): Promise<void> => {
-    if (voiceFlow.isModeSwitchLocked || aiConsent.isLoading) return;
-
-    const hasConsent = await ensureAiProcessingConsent();
-    if (!hasConsent) return;
-
-    if (!voiceFlow.hasPermission) {
-      setMicrophoneRecoveryMode("request");
+    if (
+      voiceStartPendingRef.current ||
+      voiceFlow.isModeSwitchLocked ||
+      aiConsent.isLoading
+    ) {
       return;
     }
 
-    await voiceFlow.startFlow({
-      skipAiProcessingConsent: true,
-    });
+    const generation = ++voiceStartGenerationRef.current;
+    voiceStartPendingRef.current = true;
+    setIsVoiceStartPending(true);
+
+    try {
+      const hasConsent = await ensureAiProcessingConsent();
+      if (
+        !isRouteMountedRef.current ||
+        generation !== voiceStartGenerationRef.current ||
+        !hasConsent
+      ) {
+        return;
+      }
+
+      if (!voiceFlow.hasPermission) {
+        setMicrophoneRecoveryMode("request");
+        return;
+      }
+
+      await voiceFlow.startFlow({
+        skipAiProcessingConsent: true,
+      });
+    } finally {
+      if (
+        isRouteMountedRef.current &&
+        generation === voiceStartGenerationRef.current
+      ) {
+        voiceStartPendingRef.current = false;
+        setIsVoiceStartPending(false);
+      }
+    }
   }, [
     aiConsent.isLoading,
     ensureAiProcessingConsent,
@@ -224,7 +273,7 @@ export default function AddTransaction(): React.JSX.Element {
 
   const handleModeChange = useCallback(
     (nextMode: AddTransactionMode): void => {
-      if (voiceFlow.isModeSwitchLocked || nextMode === mode) {
+      if (isModeSwitchLocked || nextMode === mode) {
         return;
       }
 
@@ -232,8 +281,20 @@ export default function AddTransaction(): React.JSX.Element {
       pendingModeFocusRef.current = nextMode;
       setMode(nextMode);
     },
-    [mode, voiceFlow.isModeSwitchLocked]
+    [isModeSwitchLocked, mode]
   );
+
+  const handleBack = useCallback(async (): Promise<void> => {
+    invalidatePendingVoiceStart();
+
+    if (mode === "voice") {
+      await voiceFlow.discardRecording();
+    }
+
+    if (isRouteMountedRef.current) {
+      router.back();
+    }
+  }, [invalidatePendingVoiceStart, mode, router, voiceFlow.discardRecording]);
 
   useEffect(() => {
     if (pendingModeFocusRef.current !== mode) {
@@ -334,17 +395,25 @@ export default function AddTransaction(): React.JSX.Element {
       return "replay";
     }
 
+    const hasReadyAuthoritativeAvailability =
+      voiceAvailability.availability !== null &&
+      voiceAvailability.availability.reason === null &&
+      (voiceAvailability.availability.remaining === null ||
+        voiceAvailability.availability.remaining > 0);
+
     if (
-      voiceFlow.refusalReason === "daily_limit" ||
       voiceAvailability.availability?.reason === "daily_limit" ||
-      voiceAvailability.availability?.remaining === 0
+      voiceAvailability.availability?.remaining === 0 ||
+      (voiceFlow.refusalReason === "daily_limit" &&
+        !hasReadyAuthoritativeAvailability)
     ) {
       return "daily-limit";
     }
 
     if (
-      voiceFlow.refusalReason === "burst_limit" ||
-      voiceAvailability.availability?.reason === "burst_limit"
+      voiceAvailability.availability?.reason === "burst_limit" ||
+      (voiceFlow.refusalReason === "burst_limit" &&
+        !hasReadyAuthoritativeAvailability)
     ) {
       return "burst-limit";
     }
@@ -382,6 +451,9 @@ export default function AddTransaction(): React.JSX.Element {
         showDrawer={false}
         showBackButton
         backIcon="arrow"
+        onBack={() => {
+          void handleBack();
+        }}
         rightAction={
           isManualMode
             ? {
@@ -397,7 +469,7 @@ export default function AddTransaction(): React.JSX.Element {
 
       <AddTransactionModeTabs
         mode={mode}
-        disabled={voiceFlow.isModeSwitchLocked}
+        disabled={isModeSwitchLocked}
         manualLabel={t("add_transaction_mode_manual")}
         voiceLabel={t("add_transaction_mode_voice")}
         onModeChange={handleModeChange}
@@ -490,10 +562,25 @@ export default function AddTransaction(): React.JSX.Element {
       <AiProcessingConsentSheet
         visible={isVoiceConsentVisible}
         onContinue={async () => {
+          if (voiceStartPendingRef.current || voiceFlow.isModeSwitchLocked) {
+            return;
+          }
+
+          const generation = ++voiceStartGenerationRef.current;
+          voiceStartPendingRef.current = true;
+          setIsVoiceStartPending(true);
           let didGrantConsent = false;
 
           try {
             await aiConsent.grantConsent();
+
+            if (
+              !isRouteMountedRef.current ||
+              generation !== voiceStartGenerationRef.current
+            ) {
+              return;
+            }
+
             didGrantConsent = true;
             shouldResumeConsentAfterPrivacyRef.current = false;
             setIsVoiceConsentVisible(false);
@@ -507,8 +594,23 @@ export default function AddTransaction(): React.JSX.Element {
               skipAiProcessingConsent: true,
             });
           } catch {
+            if (
+              !isRouteMountedRef.current ||
+              generation !== voiceStartGenerationRef.current
+            ) {
+              return;
+            }
+
             shouldResumeConsentAfterPrivacyRef.current = false;
             setIsVoiceConsentVisible(didGrantConsent ? false : true);
+          } finally {
+            if (
+              isRouteMountedRef.current &&
+              generation === voiceStartGenerationRef.current
+            ) {
+              voiceStartPendingRef.current = false;
+              setIsVoiceStartPending(false);
+            }
           }
         }}
         onNotNow={() => {

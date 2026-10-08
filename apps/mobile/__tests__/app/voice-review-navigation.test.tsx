@@ -167,6 +167,7 @@ describe("Voice review navigation", () => {
       params: {
         mode: "voice",
         retry: "true",
+        originTabIndex: "3",
       },
     });
   });

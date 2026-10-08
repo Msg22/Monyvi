@@ -154,7 +154,7 @@ Candidate command after the owner supplies the named test-only configuration and
 test file; it has not been executed here:
 
 ```powershell
-& 'C:/Users/Mohamed/.deno/bin/deno.exe' test --config supabase/tests/voice-parse-http/deno.json --cached-only --no-prompt --allow-env=SUPABASE_URL,SUPABASE_SERVICE_ROLE_KEY,GEMINI_API_KEY --allow-net=127.0.0.1 supabase/functions/parse-voice/index.test.ts
+& 'C:/Users/Mohamed/.deno/bin/deno.exe' test --config supabase/tests/voice-parse-http/deno.json --cached-only --no-prompt --allow-env=SUPABASE_URL,SUPABASE_SERVICE_ROLE_KEY,GEMINI_API_KEY,VOICE_AI_DAILY_LIMIT,VOICE_AI_BURST_LIMIT,VOICE_AI_BURST_WINDOW_SECONDS,VOICE_AI_RESERVATION_LEASE_SECONDS,VOICE_AI_POLICY_VERSION --allow-net=127.0.0.1 supabase/functions/parse-voice/index.test.ts
 ```
 
 The configuration/test path above is proposed new harness, not existing source.

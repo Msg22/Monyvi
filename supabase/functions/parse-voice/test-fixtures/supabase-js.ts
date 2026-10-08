@@ -1,3 +1,4 @@
+import type { Database } from "../../../../packages/db/src/supabase-types.ts";
 import {
   getAuthUserId,
   getConsentValue,
@@ -18,7 +19,7 @@ interface FakeProfileQuery {
   }>;
 }
 
-interface FakeSupabaseClient {
+export interface SupabaseClient<Schema extends Database = Database> {
   readonly auth: {
     readonly getUser: (token: string) => Promise<{
       readonly data: {
@@ -27,10 +28,12 @@ interface FakeSupabaseClient {
       readonly error: FakeError | null;
     }>;
   };
-  readonly from: (tableName: string) => FakeProfileQuery;
-  readonly rpc: (
-    name: string,
-    params: Readonly<Record<string, unknown>>
+  readonly from: (
+    tableName: keyof Schema["public"]["Tables"] & string
+  ) => FakeProfileQuery;
+  readonly rpc: <Name extends keyof Database["public"]["Functions"]>(
+    name: Name,
+    params: Schema["public"]["Functions"][Name]["Args"]
   ) => Promise<{
     readonly data: unknown;
     readonly error: FakeError | null;
@@ -52,11 +55,11 @@ function createProfileQuery(): FakeProfileQuery {
   return query;
 }
 
-export function createClient(
+export function createClient<Schema extends Database = Database>(
   _url: string,
   _key: string,
   _options?: unknown
-): FakeSupabaseClient {
+): SupabaseClient<Schema> {
   return {
     auth: {
       getUser: async (
@@ -85,9 +88,9 @@ export function createClient(
       }
       return createProfileQuery();
     },
-    rpc: async (
-      name: string,
-      params: Readonly<Record<string, unknown>>
+    rpc: async <Name extends keyof Database["public"]["Functions"]>(
+      name: Name,
+      params: Schema["public"]["Functions"][Name]["Args"]
     ): Promise<{
       readonly data: unknown;
       readonly error: FakeError | null;

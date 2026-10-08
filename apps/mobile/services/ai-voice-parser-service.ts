@@ -54,6 +54,7 @@ const VOICE_ANALYSIS_NETWORK_ERROR_MESSAGE =
   "We couldn't reach voice analysis right now. Please check your connection and try again.";
 const AI_CONSENT_REQUIRED_STATUS = 403;
 const VOICE_QUOTA_REFUSAL_STATUS = 429;
+const VOICE_AMBIGUOUS_SERVER_STATUS = 503;
 
 // ---------------------------------------------------------------------------
 // Types
@@ -97,7 +98,13 @@ export interface VoiceQuotaParserError {
   readonly availability: VoiceQuotaRefusal["availability"];
 }
 
-export type VoiceParserFailure = VoiceParserError | VoiceQuotaParserError;
+export interface VoiceParserTransportFailure extends VoiceParserError {
+  readonly retryableSameRequest?: boolean;
+}
+
+export type VoiceParserFailure =
+  | VoiceParserTransportFailure
+  | VoiceQuotaParserError;
 
 // ---------------------------------------------------------------------------
 // Schemas — AI response validation
@@ -282,6 +289,27 @@ export async function parseVoiceWithAi(
     if (response.error) {
       const context = getEdgeFunctionResponse(response.error);
       const status = context?.status;
+
+      if (options.signal?.aborted) {
+        return {
+          kind: "network",
+          message: VOICE_ANALYSIS_NETWORK_ERROR_MESSAGE,
+          retryableSameRequest: false,
+        };
+      }
+
+      // Supabase returns fetch aborts as FunctionsFetchError, rather than throwing.
+      if (context === null && didClientTimeout) {
+        return {
+          kind: "timeout",
+          message:
+            "Analysis took too long. Please check your connection and try again.",
+          retryableSameRequest: true,
+        };
+      }
+
+      const retryableSameRequest =
+        context === null || status === VOICE_AMBIGUOUS_SERVER_STATUS;
       let bodyLength: number | undefined;
 
       /*
@@ -338,6 +366,7 @@ export async function parseVoiceWithAi(
       return {
         kind: "network",
         message: VOICE_ANALYSIS_NETWORK_ERROR_MESSAGE,
+        retryableSameRequest,
       };
     }
 
@@ -515,12 +544,14 @@ export async function parseVoiceWithAi(
           kind: "timeout",
           message:
             "Analysis took too long. Please check your connection and try again.",
+          retryableSameRequest: true,
         };
       }
 
       return {
         kind: "network",
         message: VOICE_ANALYSIS_NETWORK_ERROR_MESSAGE,
+        retryableSameRequest: false,
       };
     }
 
