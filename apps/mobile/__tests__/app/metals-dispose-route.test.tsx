@@ -11,6 +11,7 @@ import DisposeMetalHoldingRoute from "../../app/(private)/metals/[holdingId]/dis
 
 const mockBack = jest.fn();
 const mockReplace = jest.fn();
+const mockDismissTo = jest.fn();
 const mockShowToast = jest.fn();
 const mockSubmit = jest.fn();
 const mockRetryLoad = jest.fn();
@@ -23,6 +24,7 @@ let capturedPreventRemove: {
 } | null = null;
 
 let mockHoldingId: string | string[] | undefined = "holding-1";
+let mockCanGoBack = true;
 
 const facadeBase = {
   model: {
@@ -65,7 +67,8 @@ jest.mock("expo-router", () => ({
   router: {
     back: (...args: unknown[]): unknown => mockBack(...args),
     replace: (...args: unknown[]): unknown => mockReplace(...args),
-    canGoBack: (): boolean => true,
+    dismissTo: (...args: unknown[]): unknown => mockDismissTo(...args),
+    canGoBack: (): boolean => mockCanGoBack,
   },
 }));
 
@@ -230,6 +233,7 @@ jest.mock("@/components/metals/DisposeMetalHoldingScreen", () => {
 beforeEach(() => {
   jest.clearAllMocks();
   mockHoldingId = "holding-1";
+  mockCanGoBack = true;
   mockCurrentUserId = "user-1";
   mockIsResolvingUser = false;
   capturedHookInputs.length = 0;
@@ -309,18 +313,62 @@ describe("Dispose production route", () => {
     expect(mockDispatch).not.toHaveBeenCalled();
   });
 
-  it("navigates after the guard is disabled with no discard prompt after save", async (): Promise<void> => {
+  it("dismisses to the existing Details after a dirty save, so Android Back can reach My Metals", async (): Promise<void> => {
+    mockFacade = { ...facadeBase, isDirty: true };
     render(<DisposeMetalHoldingRoute />);
+    expect(capturedPreventRemove?.enabled).toBe(true);
+
     fireEvent.press(screen.getByTestId("dispose-submit"));
     await waitFor(() => expect(mockSubmit).toHaveBeenCalledTimes(1));
     await waitFor(() =>
-      expect(mockReplace).toHaveBeenCalledWith({
+      expect(mockDismissTo).toHaveBeenCalledWith({
         pathname: "/metals/[id]",
         params: { id: "holding-1" },
       })
     );
+    expect(capturedPreventRemove?.enabled).toBe(false);
+    expect(mockReplace).not.toHaveBeenCalled();
+    expect(mockBack).not.toHaveBeenCalled();
+    expect(mockDispatch).not.toHaveBeenCalled();
     expect(screen.queryByTestId("dispose-exit-guard")).toBeNull();
     expect(mockShowToast).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses the same Details destination for a direct-linked Dispose with no previous screen", async (): Promise<void> => {
+    // Expo Router dismissTo falls back to replacing the current route when
+    // the requested Details route does not already exist in the stack.
+    mockCanGoBack = false;
+    mockHoldingId = [" holding-1 ", "ignored"];
+    render(<DisposeMetalHoldingRoute />);
+    fireEvent.press(screen.getByTestId("dispose-submit"));
+
+    await waitFor(() =>
+      expect(mockDismissTo).toHaveBeenCalledWith({
+        pathname: "/metals/[id]",
+        params: { id: "holding-1" },
+      })
+    );
+    expect(mockReplace).not.toHaveBeenCalled();
+    expect(mockBack).not.toHaveBeenCalled();
+    expect(mockShowToast).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not navigate or toast after a failed local submission", async (): Promise<void> => {
+    mockSubmit.mockResolvedValue(false);
+    mockFacade = {
+      ...facadeBase,
+      isDirty: true,
+      submitError: "holding_revision_conflict",
+    };
+    render(<DisposeMetalHoldingRoute />);
+    fireEvent.press(screen.getByTestId("dispose-submit"));
+
+    await waitFor(() => expect(mockSubmit).toHaveBeenCalledTimes(1));
+    expect(mockDismissTo).not.toHaveBeenCalled();
+    expect(mockReplace).not.toHaveBeenCalled();
+    expect(mockBack).not.toHaveBeenCalled();
+    expect(mockShowToast).not.toHaveBeenCalled();
+    expect(capturedPreventRemove?.enabled).toBe(true);
   });
 
   it("blocks duplicate submits while the command is in flight", (): void => {
@@ -413,6 +461,7 @@ describe("Dispose production route", () => {
     resolveSubmit(true);
     await waitFor(() => expect(mockSubmit).toHaveBeenCalledTimes(1));
     expect(mockReplace).not.toHaveBeenCalled();
+    expect(mockDismissTo).not.toHaveBeenCalled();
     expect(mockShowToast).not.toHaveBeenCalled();
   });
 });

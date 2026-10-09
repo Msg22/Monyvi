@@ -62,7 +62,7 @@ jest.mock("react-native/Libraries/Utilities/useWindowDimensions", () => ({
 
 const translations: Readonly<Record<string, string>> = {
   "actions.delete": "Delete holding",
-  "actions.dispose": "No longer in my possession",
+  "actions.dispose": "No longer owned",
   "actions.edit": "Edit details",
   "actions.sell": "Sell holding",
   "detail.acquired": "Acquired",
@@ -89,7 +89,7 @@ const translations: Readonly<Record<string, string>> = {
   "detail.paid": "{{amount}} paid",
   "detail.net_proceeds": "Net proceeds",
   "detail.no_longer_active": "No longer among your gold and silver.",
-  "detail.no_longer_possession": "No longer in my possession",
+  "detail.no_longer_possession": "No longer owned",
   "detail.notes": "Notes",
   "detail.physical_facts": "Physical facts",
   "detail.purchase_premium_costs": "Purchase premium and costs",
@@ -335,7 +335,7 @@ describe("approved active holding-detail fidelity", () => {
 
     fireEvent.press(screen.getByText("Sell holding"));
     fireEvent.press(screen.getByText("Edit details"));
-    fireEvent.press(screen.getByText("No longer in my possession"));
+    fireEvent.press(screen.getByText("No longer owned"));
     fireEvent.press(screen.getByText("Delete holding"));
 
     expect(onAction).toHaveBeenNthCalledWith(1, "sell");
@@ -838,7 +838,7 @@ describe("approved active holding-detail fidelity", () => {
       screen.getByText("No longer among your gold and silver.")
     ).toBeTruthy();
     expect(screen.getByText("Holding story")).toBeTruthy();
-    expect(screen.getByText("No longer in my possession")).toBeTruthy();
+    expect(screen.getByText("No longer owned")).toBeTruthy();
     expect(screen.getByText("24 Aug 2026")).toBeTruthy();
     expect(screen.getByText("What happened")).toBeTruthy();
     expect(

@@ -294,7 +294,7 @@
     "paid": "Paid {{amount}}",
     "net_proceeds": "Net proceeds",
     "no_longer_active": "No longer among your gold and silver.",
-    "no_longer_possession": "No longer in my possession",
+    "no_longer_possession": "No longer owned",
     "notes": "Notes",
     "timeline_current_value": "Current value at this point",
     "fact_accessibility": "{{label}}: {{value}}",
@@ -329,7 +329,7 @@
   },
   "history": {
     "title": "History",
-    "subtitle": "Sales and holdings no longer in your possession.",
+    "subtitle": "Sales and holdings no longer owned.",
     "all": "All",
     "sold": "Sold",
     "disposed": "Disposed",
@@ -431,7 +431,7 @@
   "actions": {
     "sell": "Sell holding",
     "edit": "Edit",
-    "dispose": "No longer in my possession",
+    "dispose": "No longer owned",
     "delete": "Delete holding",
     "undo_sale": "Undo sale",
     "undo_disposal": "Undo disposal"
@@ -442,7 +442,7 @@
     "change": "{{field}}: {{before}} → {{after}}",
     "change_unavailable": "Change details unavailable",
     "sell": "Sold",
-    "dispose": "No longer in my possession",
+    "dispose": "No longer owned",
     "delete": "Deleted",
     "undo": "Restored"
   }

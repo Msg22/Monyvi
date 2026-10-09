@@ -16,22 +16,20 @@ let mockLanguage: "en" | "ar" = "en";
 jest.mock("react-i18next", () => ({
   useTranslation: () => ({
     i18n: {
-      dir: (lng?: string): "rtl" | "ltr" =>
-        (lng ?? mockLanguage) === "ar" ? "rtl" : "ltr",
       language: mockLanguage,
       resolvedLanguage: mockLanguage,
     },
-    t: (key: string): string =>
-      key === "portfolio.recent_history"
-        ? mockLanguage === "ar"
-          ? "السجل"
-          : "History"
-        : key === "portfolio.view_all"
-          ? mockLanguage === "ar"
-            ? "عرض الكل"
-            : "View all"
-          : key,
+    t: (key: string): string => {
+      if (key === "add_holding") {
+        return mockLanguage === "ar" ? "إضافة مقتنى" : "Add holding";
+      }
+      return key;
+    },
   }),
+}));
+
+jest.mock("@/context/ThemeContext", () => ({
+  useTheme: () => ({ isDark: false }),
 }));
 
 jest.mock("@/hooks/useUiPolishCopy", () => ({
@@ -40,7 +38,7 @@ jest.mock("@/hooks/useUiPolishCopy", () => ({
     metals_empty:
       mockLanguage === "ar"
         ? {
-            header: "ذهبك وفضتك",
+            header: "معادني",
             title: "ابدأ تتابع ذهبك وفضتك",
             body: "ضيف أول قطعة علشان تتابع قيمتها مع الوقت.",
             cta: "ضيف أول قطعة",
@@ -78,51 +76,50 @@ const ready: MetalPortfolioSectionReadiness = {
   realizedSale: true,
   summary: true,
 };
-const notReady: MetalPortfolioSectionReadiness = {
-  ...ready,
-  summary: false,
-};
+
 const emptyPortfolio = {
   activeHoldings: [],
   holdings: [],
   listState: "PORTFOLIO_EMPTY",
   recentHistory: [],
 } as unknown as MetalPortfolioReadModel;
-const populatedPortfolio = {
-  ...emptyPortfolio,
-  activeHoldings: [{ id: "gold-1", metalType: "GOLD" }],
-  listState: "POPULATED",
-} as unknown as MetalPortfolioReadModel;
 
-describe("MetalPortfolioEmptyState", () => {
-  beforeEach(() => {
+describe("My Metals inline empty active-items state", () => {
+  beforeEach((): void => {
     mockLanguage = "en";
   });
 
-  it("recognizes only a ready, truly empty active portfolio", () => {
+  it("requires ready active-item evidence, not loading, a filter-empty state, or a missing portfolio", (): void => {
     expect(isTrueMetalPortfolioEmpty(emptyPortfolio, ready)).toBe(true);
-    expect(isTrueMetalPortfolioEmpty(populatedPortfolio, ready)).toBe(false);
+    expect(
+      isTrueMetalPortfolioEmpty({
+        ...emptyPortfolio,
+        listState: "FILTER_EMPTY",
+      }, ready)
+    ).toBe(false);
     expect(
       isTrueMetalPortfolioEmpty(
-        { ...emptyPortfolio, listState: "FILTER_EMPTY" },
+        { ...emptyPortfolio, activeHoldings: [{ id: "holding-1" }] },
         ready
       )
     ).toBe(false);
-    expect(isTrueMetalPortfolioEmpty(emptyPortfolio, notReady)).toBe(false);
+    expect(isTrueMetalPortfolioEmpty(emptyPortfolio, { ...ready, summary: false })).toBe(false);
     expect(isTrueMetalPortfolioEmpty(null, ready)).toBe(false);
   });
 
-  it("renders the approved English composition and opens Add Holding", () => {
+  it("reuses original gold/silver overlap in a 196 × 141.12 inline illustration without a nested scroll view", (): void => {
     const onAddPress = jest.fn();
     render(<MetalPortfolioEmptyState onAddPress={onAddPress} />);
 
-    expect(
-      screen.getByText("Start tracking your gold and silver")
-    ).toBeTruthy();
-    expect(
-      screen.getByText("Add your first holding to follow its value over time.")
-    ).toBeTruthy();
-
+    const illustration = screen.getByTestId("metal-empty-illustration", {
+      includeHiddenElements: true,
+    });
+    expect(illustration).toHaveStyle({ width: 196, height: 141.12 });
+    expect(illustration).toHaveProp("accessible", false);
+    expect(illustration).toHaveProp(
+      "importantForAccessibility",
+      "no-hide-descendants"
+    );
     expect(
       screen.getByTestId("metal-empty-silver-stack", {
         includeHiddenElements: true,
@@ -133,128 +130,42 @@ describe("MetalPortfolioEmptyState", () => {
         includeHiddenElements: true,
       })
     ).toBeTruthy();
-    expect(screen.queryByTestId("metal-empty-silver-bar-back")).toBeNull();
-    expect(screen.queryByTestId("metal-empty-silver-bar-front")).toBeNull();
+    expect(screen.getByTestId("metal-portfolio-empty-state")).toHaveProp(
+      "className",
+      expect.stringContaining("items-center")
+    );
+    expect(screen.queryByTestId("metal-empty-add-gradient")).toBeNull();
+    expect(screen.queryByTestId("metal-empty-history")).toBeNull();
 
+    expect(screen.getByText("Start tracking your gold and silver")).toBeTruthy();
     expect(
-      screen.getByTestId("metal-empty-illustration", {
-        includeHiddenElements: true,
-      })
-    ).toHaveProp("accessible", false);
-    expect(
-      screen.getByTestId("metal-empty-illustration", {
-        includeHiddenElements: true,
-      })
-    ).toHaveProp("importantForAccessibility", "no-hide-descendants");
+      screen.getByText("Add your first holding to follow its value over time.")
+    ).toBeTruthy();
+    const add = screen.getByLabelText("Add holding");
+    expect(add).toHaveProp("className", expect.stringContaining("rounded-xl"));
+    expect(add).toHaveProp("className", expect.stringContaining("border-nileGreen-500"));
+    expect(add).toHaveProp("className", expect.stringContaining("min-h-11"));
+    expect(screen.getByTestId("icon-add")).toBeTruthy();
 
-    expect(screen.getByLabelText("Add your first holding")).toHaveProp(
-      "accessibilityRole",
-      "button"
-    );
-    expect(screen.getByLabelText("Add your first holding")).toHaveProp(
-      "className",
-      expect.stringContaining("min-h-14")
-    );
-    expect(screen.getByLabelText("Add your first holding")).toHaveProp(
-      "className",
-      expect.stringContaining("rounded-full")
-    );
-    expect(screen.getByLabelText("Add your first holding")).toHaveProp(
-      "className",
-      expect.stringContaining("overflow-hidden")
-    );
-
-    expect(screen.getByTestId("metal-empty-add-gradient")).toHaveProp(
-      "className",
-      expect.stringContaining("rounded-full")
-    );
-    expect(screen.getByTestId("metal-empty-add-gradient")).toHaveProp(
-      "startPoint",
-      [0, 0]
-    );
-    expect(screen.getByTestId("metal-empty-add-gradient")).toHaveProp(
-      "endPoint",
-      [1, 0]
-    );
-
-    expect(
-      screen.getAllByRole("button", { name: "Add your first holding" })
-    ).toHaveLength(1);
-
-    fireEvent.press(screen.getByLabelText("Add your first holding"));
+    fireEvent.press(add);
     expect(onAddPress).toHaveBeenCalledTimes(1);
   });
 
-  it("mirrors CTA gradient and layout for Arabic without English UI", () => {
+  it("uses unchanged Arabic title/body but the existing short localized Add holding label", (): void => {
     mockLanguage = "ar";
     render(<MetalPortfolioEmptyState onAddPress={jest.fn()} />);
-
     expect(screen.getByText("ابدأ تتابع ذهبك وفضتك")).toBeTruthy();
     expect(
       screen.getByText("ضيف أول قطعة علشان تتابع قيمتها مع الوقت.")
     ).toBeTruthy();
-    expect(screen.getByText("ضيف أول قطعة")).toBeTruthy();
-    expect(
-      screen.queryByText("Start tracking your gold and silver")
-    ).toBeNull();
-
-    expect(screen.getByLabelText("ضيف أول قطعة")).toHaveProp(
-      "className",
-      expect.stringContaining("overflow-hidden")
-    );
-    expect(screen.getByLabelText("ضيف أول قطعة")).toHaveProp(
-      "className",
-      expect.stringContaining("rounded-full")
-    );
-
-    expect(screen.getByTestId("metal-empty-add-gradient")).toHaveProp(
-      "startPoint",
-      [1, 0]
-    );
-    expect(screen.getByTestId("metal-empty-add-gradient")).toHaveProp(
-      "endPoint",
-      [0, 0]
-    );
-
-    expect(
-      screen.getByTestId("metal-empty-silver-stack", {
-        includeHiddenElements: true,
-      })
-    ).toBeTruthy();
-    expect(
-      screen.getByTestId("metal-empty-gold-coin", {
-        includeHiddenElements: true,
-      })
-    ).toBeTruthy();
+    expect(screen.getByLabelText("إضافة مقتنى")).toBeTruthy();
+    expect(screen.queryByText("Add your first holding")).toBeNull();
   });
 
-  it("reduces illustration size and gaps for compact or enlarged text, and supports one-line title on ordinary layout", () => {
-    const ordinary = getMetalEmptyStateLayout(390, 1);
-    const compact = getMetalEmptyStateLayout(320, 1);
-    const enlarged = getMetalEmptyStateLayout(390, 2);
-
-    expect(ordinary.isCompact).toBe(false);
-    expect(ordinary.illustrationSize).toBe(316);
-    expect(ordinary.titleFontSize).toBeLessThanOrEqual(22);
-    expect(compact.isCompact).toBe(true);
-    expect(enlarged.isCompact).toBe(true);
-    expect(compact.illustrationSize).toBeLessThan(ordinary.illustrationSize);
-    expect(enlarged.verticalGap).toBeLessThan(ordinary.verticalGap);
-    expect(compact.titleFontSize).toBeLessThanOrEqual(ordinary.titleFontSize);
-  });
-
-  it("keeps terminal History reachable as a secondary action", () => {
-    const onHistoryPress = jest.fn();
-    render(
-      <MetalPortfolioEmptyState
-        hasHistory
-        onAddPress={jest.fn()}
-        onHistoryPress={onHistoryPress}
-      />
-    );
-
-    expect(screen.getByLabelText("History")).toHaveTextContent("History");
-    fireEvent.press(screen.getByTestId("metal-empty-history"));
-    expect(onHistoryPress).toHaveBeenCalledTimes(1);
+  it("preserves the reference size at 360px and caps the illustration on very narrow screens", (): void => {
+    expect(getMetalEmptyStateLayout(360, 1).illustrationSize).toBe(196);
+    expect(getMetalEmptyStateLayout(390, 2).illustrationSize).toBe(196);
+    expect(getMetalEmptyStateLayout(230, 2).illustrationSize).toBeLessThan(196);
+    expect(getMetalEmptyStateLayout(360, 1).verticalGap).toBe(12);
   });
 });

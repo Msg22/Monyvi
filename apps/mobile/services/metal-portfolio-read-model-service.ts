@@ -37,6 +37,10 @@ import {
   type LiveRatesTrustValue,
 } from "@/services/live-rates-trust-read-model-service";
 import {
+  shapeMetalDisposedEvidence,
+  type MetalDisposalTreatment,
+} from "./metal-disposed-evidence-service";
+import {
   shapeMetalRealizedSaleEvidence,
   toMetalSellEventSnapshot,
   type MetalRealizedSaleOutcome,
@@ -52,6 +56,7 @@ import {
 const RECENT_HISTORY_LIMIT = 3;
 
 export type MetalPortfolioFilter = "ALL" | SupportedMetal;
+export type MetalRecentHistoryOutcome = "gain" | "loss" | "neutral";
 
 export interface PortfolioRateStatus {
   readonly ageMs: number | null;
@@ -75,6 +80,7 @@ export interface MetalPortfolioHoldingInput {
   readonly purchaseCurrency: MetalsIsoCurrencyCode | null;
   readonly purchaseDate: Date | null;
   readonly purchasePriceDecimal: string | null;
+  readonly recentHistoryOutcome?: MetalRecentHistoryOutcome;
   readonly purityCatalogVersion: "1" | null;
   readonly purityCode: string | null;
   readonly purityFactorDecimal: string | null;
@@ -225,7 +231,9 @@ export function observePortfolioMetalSellGroups(
     database.get<FinancialActionGroup>("financial_action_groups"),
     userId,
     Q.where("domain", "metals"),
-    Q.where("kind", "sell"),
+    // Both terminal action groups are needed to classify recent History.
+    // Existing sale outcome shaping continues to validate sell groups alone.
+    Q.where("kind", Q.oneOf(["sell", "dispose"])),
     Q.where("deleted", false)
   );
 }
@@ -441,6 +449,37 @@ export function shapeMetalPortfolioHoldings(
       ? input.preferredCurrency
       : null;
 
+    // A disposal outcome comes only from accepted, matching immutable
+    // lifecycle + group evidence. Do not infer a write-off from market prices,
+    // current ownership, or missing/unsupported payloads.
+    const disposalEvidence =
+      status === "disposed"
+        ? shapeMetalDisposedEvidence({
+            event: toMetalSellEventSnapshot(effectiveEvent),
+            group: toPortfolioSaleGroup(effectiveEvent, groupsByActionId),
+            holding: {
+              effectiveActionId: state.effectiveActionId ?? null,
+              effectiveEventId: state.effectiveEventId,
+              holdingId: asset.id,
+              isVisible: state.isVisible,
+              reconciliationState: state.reconciliationState,
+              status,
+              userId: asset.userId,
+            },
+            latestAllowedCalendarDate: input.latestAllowedCalendarDate,
+            userId: input.userId,
+          })
+        : null;
+    const disposalTreatment =
+      disposalEvidence !== null && disposalEvidence.available
+        ? disposalEvidence.value.treatment
+        : null;
+    const recentHistoryOutcome = classifyMetalRecentHistoryOutcome(
+      status,
+      soldResultDecimal,
+      disposalTreatment
+    );
+
     return [
       {
         currentPerformanceDecimal: values.currentPerformanceDecimal,
@@ -460,6 +499,7 @@ export function shapeMetalPortfolioHoldings(
         purchaseCurrency: exactFacts.purchaseCurrency,
         purchaseDate: copyValidDate(asset.purchaseDate),
         purchasePriceDecimal: exactFacts.purchasePriceDecimal,
+        recentHistoryOutcome,
         purityCatalogVersion: exactFacts.purityCatalogVersion,
         purityCode: exactFacts.purityCode,
         purityFactorDecimal: exactFacts.purityFactorDecimal,
@@ -476,6 +516,35 @@ export function shapeMetalPortfolioHoldings(
       },
     ];
   });
+}
+
+/**
+ * Service-level classification of recorded terminal outcomes. Exact decimal
+ * strings are never coerced to JavaScript numbers for sign comparison.
+ */
+export function classifyMetalRecentHistoryOutcome(
+  status: MetalPortfolioHoldingInput["status"],
+  soldResultDecimal: string | null,
+  disposalTreatment: MetalDisposalTreatment | null
+): MetalRecentHistoryOutcome {
+  if (status === "disposed") {
+    return disposalTreatment === "write_off" ? "loss" : "neutral";
+  }
+  if (
+    status !== "sold" ||
+    soldResultDecimal === null ||
+    !hasCanonicalDecimalPrecision(soldResultDecimal)
+  ) {
+    return "neutral";
+  }
+  try {
+    const result = parseCanonicalDecimal(soldResultDecimal);
+    if (result.greaterThan("0")) return "gain";
+    if (result.lessThan("0")) return "loss";
+    return "neutral";
+  } catch {
+    return "neutral";
+  }
 }
 
 export function hasBoundEffectiveActionEvidence(

@@ -1,0 +1,39 @@
+appId: com.monyvi.app
+---
+# PR336 inline empty active-items journey — AUTHORED, BLOCKED.
+# Runner currently lacks a deterministic authenticated zero-active-holdings
+# fixture, including a no-active/with-terminal-History variant. Do not claim
+# a passing device run until those fixtures and real market-rate data are
+# provided. Do not clear another owner's financial fixtures.
+- runFlow: ../helpers/setup.yaml
+- openLink: monyvi://metals
+- extendedWaitUntil:
+    visible:
+      id: metal-portfolio-root
+    timeout: 30000
+- assertVisible:
+    id: metal-portfolio-summary-layout
+- assertVisible:
+    id: metal-portfolio-rates-section
+- assertVisible: "Your items"
+- assertVisible:
+    id: metal-portfolio-empty-state
+- assertVisible:
+    id: metal-empty-illustration
+- assertNotVisible:
+    id: metal-portfolio-filter-bar
+- assertVisible:
+    id: metal-portfolio-recent-history
+# No terminal events: the existing History empty meaning remains available.
+- assertVisible:
+    id: metal-portfolio-recent-history-empty
+- tapOn:
+    id: metal-empty-add
+- extendedWaitUntil:
+    visible:
+      id: metal-holding-add-screen
+    timeout: 30000
+# MISSING/BLOCKED: repeat with a Disposed/Sold terminal fixture while no
+# active holdings remain to assert recent History survives with View all.
+# MISSING/BLOCKED: 360px dark English visual vs local approved HTML, RTL,
+# light theme, enlarged font, low-rate/offline, and accessibility device QA.

@@ -161,7 +161,9 @@ function DisposeMetalHoldingForm({
     if (pendingDetailsRef.current) {
       const id = pendingDetailsRef.current;
       pendingDetailsRef.current = null;
-      router.replace({ pathname: "/metals/[id]", params: { id } });
+      // Return to the existing Details entry (Details → Dispose) rather than
+      // stacking a second Details; direct links replace Dispose as a fallback.
+      router.dismissTo({ pathname: "/metals/[id]", params: { id } });
       return;
     }
     if (pendingActionRef.current) {

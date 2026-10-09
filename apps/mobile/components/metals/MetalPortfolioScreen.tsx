@@ -21,10 +21,12 @@ import { useTranslation } from "react-i18next";
 import type {
   MetalPortfolioFilter,
   MetalPortfolioHoldingInput,
+  MetalRecentHistoryOutcome,
   MetalPortfolioPurityPriceTile,
   MetalPortfolioReadModel,
 } from "@/services/metal-portfolio-read-model-service";
 import { HoldingSeparator, MetalHoldingRow } from "./MetalPortfolioHoldingRow";
+import { MetalPortfolioEmptyState } from "./MetalPortfolioEmptyState";
 import {
   getPortfolioRateAccessibilityCopy,
   getPortfolioRateCompactLabel,
@@ -47,6 +49,7 @@ interface MetalPortfolioScreenProps {
   readonly currency: CurrencyType;
   readonly error: Error | null;
   readonly isLoading: boolean;
+  readonly onAddHoldingPress?: () => void;
   readonly onFilterChange: (filter: MetalPortfolioFilter) => void;
   readonly onHistoryPress: () => void;
   readonly onHoldingPress: (holdingId: string) => void;
@@ -65,6 +68,7 @@ export function MetalPortfolioScreen({
   currency,
   error,
   isLoading,
+  onAddHoldingPress,
   onFilterChange,
   onHistoryPress,
   onHoldingPress,
@@ -129,6 +133,7 @@ export function MetalPortfolioScreen({
           sectionReadiness.holdings ? (
             portfolio === null ? null : (
               <EmptyPortfolioContent
+                onAddPress={onAddHoldingPress}
                 portfolio={portfolio}
                 selectedFilter={selectedFilter}
               />
@@ -140,7 +145,9 @@ export function MetalPortfolioScreen({
         ListFooterComponent={
           sectionReadiness.recentHistory ? (
             displayedHistory === null ||
-            displayedHistory.length === 0 ? null : (
+            (displayedHistory.length === 0 &&
+              portfolio?.listState !== "PORTFOLIO_EMPTY")
+              ? null : (
               <RecentHistory
                 currency={currency}
                 holdings={displayedHistory}
@@ -269,27 +276,25 @@ function PortfolioHeader({
   return (
     <>
       {readiness.summary && portfolio !== null ? (
-        portfolio.listState === "PORTFOLIO_EMPTY" ? null : (
-          <PortfolioSummary
-            currency={currency}
-            portfolio={portfolio}
-            rateProviderObservedAt={rateProviderObservedAt}
-            realizedSaleReady={readiness.realizedSale}
-          />
-        )
+        <PortfolioSummary
+          currency={currency}
+          portfolio={portfolio}
+          rateProviderObservedAt={rateProviderObservedAt}
+          realizedSaleReady={readiness.realizedSale}
+        />
       ) : (
         <SummarySkeleton />
       )}
-      {readiness.holdings &&
-      portfolio !== null &&
-      portfolio.listState !== "PORTFOLIO_EMPTY" ? (
+      {readiness.holdings && portfolio !== null ? (
         <>
-          <FilterBar
-            activeHoldings={portfolio.activeHoldings}
-            selectedFilter={selectedFilter}
-            onFilterChange={onFilterChange}
-          />
-          {portfolio.listState === "POPULATED" ? <HoldingsHeader /> : null}
+          {portfolio.listState !== "PORTFOLIO_EMPTY" ? (
+            <FilterBar
+              activeHoldings={portfolio.activeHoldings}
+              selectedFilter={selectedFilter}
+              onFilterChange={onFilterChange}
+            />
+          ) : null}
+          {portfolio.listState !== "FILTER_EMPTY" ? <HoldingsHeader /> : null}
         </>
       ) : null}
       {error !== null &&
@@ -734,24 +739,17 @@ function HoldingsHeader(): React.JSX.Element {
 }
 
 function EmptyPortfolioContent({
+  onAddPress,
   portfolio,
   selectedFilter,
 }: {
+  readonly onAddPress?: () => void;
   readonly portfolio: MetalPortfolioReadModel;
   readonly selectedFilter: MetalPortfolioFilter;
 }): React.JSX.Element {
   const { t } = useTranslation("metals");
   if (portfolio.listState === "PORTFOLIO_EMPTY") {
-    return (
-      <View className="items-center py-10">
-        <Text className="text-base font-semibold text-text-primary dark:text-text-primary-dark">
-          {t("start_tracking_metals")}
-        </Text>
-        <Text className="mt-2 text-center text-sm text-text-secondary dark:text-text-secondary-dark">
-          {t("empty_metals_description")}
-        </Text>
-      </View>
-    );
+    return <MetalPortfolioEmptyState onAddPress={onAddPress} />;
   }
   return (
     <View className="items-center py-10">
@@ -780,7 +778,10 @@ function RecentHistory({
   const { t, i18n } = useTranslation("metals");
   const locale = resolveLocale(i18n?.resolvedLanguage);
   return (
-    <View className="mt-5 border-t border-slate-200 pb-2 pt-4 dark:border-slate-800">
+    <View
+      testID="metal-portfolio-recent-history"
+      className="mt-5 border-t border-slate-200 pb-2 pt-4 dark:border-slate-800"
+    >
       <View className="flex-row items-center justify-between">
         <Text className="text-xl font-medium text-text-primary dark:text-text-primary-dark">
           {t("portfolio.recent_history")}
@@ -803,8 +804,39 @@ function RecentHistory({
           />
         </Pressable>
       </View>
+      {holdings.length === 0 ? (
+        <Text
+          testID="metal-portfolio-recent-history-empty"
+          className="mt-3 text-sm text-text-secondary dark:text-text-secondary-dark"
+        >
+          {t("history.empty")}
+        </Text>
+      ) : null}
       {holdings.map((holding) => {
         const isSold = holding.status === "sold";
+        // A sale still waiting for evidence cannot claim a favorable outcome.
+        const outcome: MetalRecentHistoryOutcome =
+          isSold && !realizedSaleReady
+            ? "neutral"
+            : (holding.recentHistoryOutcome ?? "neutral");
+        const iconName =
+          outcome === "gain"
+            ? "trending-up-outline"
+            : outcome === "loss"
+              ? "trending-down-outline"
+              : "remove-outline";
+        const iconColor =
+          outcome === "gain"
+            ? palette.nileGreen[600]
+            : outcome === "loss"
+              ? palette.red[600]
+              : palette.slate[500];
+        const iconBackground =
+          outcome === "gain"
+            ? "bg-nileGreen-50 dark:bg-nileGreen-900"
+            : outcome === "loss"
+              ? "bg-red-100 dark:bg-red-900/30"
+              : "bg-slate-100 dark:bg-slate-800";
         return (
           <Pressable
             key={holding.id}
@@ -815,12 +847,11 @@ function RecentHistory({
             onPress={(): void => onHoldingPress(holding.id)}
             testID={`metal-portfolio-history-${holding.id}`}
           >
-            <View className="h-11 w-11 items-center justify-center rounded-xl bg-nileGreen-50 dark:bg-nileGreen-900">
-              <Ionicons
-                name="trending-up-outline"
-                size={22}
-                color={palette.nileGreen[600]}
-              />
+            <View
+              className={`h-11 w-11 items-center justify-center rounded-xl ${iconBackground}`}
+              testID={`metal-portfolio-history-icon-${holding.id}`}
+            >
+              <Ionicons name={iconName} size={22} color={iconColor} />
             </View>
             <View className="min-w-0 flex-1">
               <Text

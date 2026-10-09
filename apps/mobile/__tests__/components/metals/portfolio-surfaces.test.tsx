@@ -47,6 +47,8 @@ const mockTranslations: Record<string, string> = {
   "portfolio.since_purchase_label": "since purchase",
   "portfolio.holdings": "Holdings",
   "portfolio.view_all": "View all",
+  add_holding: "Add holding",
+  "history.empty": "No holdings here yet",
   "portfolio.bought_on": "Bought {{date}}",
   "portfolio.today": "today",
   "portfolio.rates_updated":
@@ -151,6 +153,17 @@ jest.mock("@expo/vector-icons", () => {
 
 jest.mock("@/context/ThemeContext", () => ({
   useTheme: (): { readonly isDark: boolean } => ({ isDark: false }),
+}));
+
+jest.mock("@/hooks/useUiPolishCopy", () => ({
+  useUiPolishCopy: () => ({
+    metals_empty: {
+      header: "My Metals",
+      title: "Start tracking your gold and silver",
+      body: "Add your first holding to follow its value over time.",
+      cta: "Add your first holding",
+    },
+  }),
 }));
 
 const currency: CurrencyType = "EGP";
@@ -312,6 +325,82 @@ describe("US1 portfolio surfaces", () => {
     ).toBeTruthy();
     expect(screen.queryByTestId("metal-portfolio-summary-skeleton")).toBeNull();
     expect(screen.queryByTestId("metal-portfolio-history-skeleton")).toBeNull();
+  });
+
+  it("keeps summary, Prices per gram, Your items, and empty History around the inline zero-active state", (): void => {
+    const onAddHoldingPress = jest.fn();
+    const onHistoryPress = jest.fn();
+    renderPortfolio({
+      onAddHoldingPress,
+      onHistoryPress,
+      portfolio: {
+        ...portfolio,
+        activeHoldings: [],
+        activeTotalDecimal: "0",
+        holdings: [],
+        listState: "PORTFOLIO_EMPTY",
+        recentHistory: [],
+      },
+    });
+
+    expect(screen.getByTestId("metal-portfolio-root")).toBeTruthy();
+    expect(screen.getByTestId("metal-portfolio-summary-layout")).toBeTruthy();
+    expect(screen.getByTestId("metal-portfolio-rates-section")).toBeTruthy();
+    expect(screen.getByText("Your items")).toBeTruthy();
+    expect(screen.getByTestId("metal-portfolio-empty-state")).toBeTruthy();
+    expect(screen.queryByTestId("metal-portfolio-filter-bar")).toBeNull();
+    expect(screen.getByTestId("metal-portfolio-recent-history")).toBeTruthy();
+    expect(screen.getByTestId("metal-portfolio-recent-history-empty")).toBeTruthy();
+    fireEvent.press(screen.getByTestId("metal-empty-add"));
+    expect(onAddHoldingPress).toHaveBeenCalledTimes(1);
+    fireEvent.press(screen.getByTestId("metal-portfolio-view-all"));
+    expect(onHistoryPress).toHaveBeenCalledTimes(1);
+  });
+
+  it("preserves latest terminal History when no active items remain", (): void => {
+    const disposed = {
+      ...portfolio.activeHoldings[0],
+      id: "disposed-only",
+      name: "Gift",
+      status: "disposed" as const,
+      recentHistoryOutcome: "neutral" as const,
+    };
+    renderPortfolio({
+      portfolio: {
+        ...portfolio,
+        activeHoldings: [],
+        activeTotalDecimal: "0",
+        holdings: [],
+        hasTerminalHistory: true,
+        listState: "PORTFOLIO_EMPTY",
+        recentHistory: [disposed],
+      },
+    });
+    expect(screen.getByTestId("metal-portfolio-empty-state")).toBeTruthy();
+    expect(screen.getByTestId("metal-portfolio-history-disposed-only")).toBeTruthy();
+    expect(screen.queryByTestId("metal-portfolio-recent-history-empty")).toBeNull();
+  });
+
+  it("keeps filters for a selected-filter empty state and skeletons unready summary values", (): void => {
+    renderPortfolio({
+      readiness: {
+        holdings: true,
+        rateCurrency: false,
+        recentHistory: false,
+        realizedSale: false,
+        summary: false,
+      },
+      portfolio: {
+        ...portfolio,
+        holdings: [],
+        listState: "FILTER_EMPTY",
+      },
+    });
+
+    expect(screen.getByTestId("metal-portfolio-filter-bar")).toBeTruthy();
+    expect(screen.queryByTestId("metal-portfolio-empty-state")).toBeNull();
+    expect(screen.getByTestId("metal-portfolio-summary-skeleton")).toBeTruthy();
+    expect(screen.getByTestId("metal-portfolio-history-skeleton")).toBeTruthy();
   });
 
   it("defaults to All, exposes Gold and Silver filters, and preserves exact holding identity", () => {
@@ -689,7 +778,7 @@ describe("US1 portfolio surfaces", () => {
         listState: "PORTFOLIO_EMPTY",
       },
     });
-    expect(screen.getByText("Start tracking your metals")).toBeTruthy();
+    expect(screen.getByText("Start tracking your gold and silver")).toBeTruthy();
     // An empty portfolio has no active purchase: no signed performance metric.
     expect(screen.queryByText("since purchase")).toBeNull();
 
@@ -938,7 +1027,7 @@ describe("US1 portfolio surfaces", () => {
     ).toBeNull();
   });
 
-  it("omits the rate-status line entirely for a portfolio with no active holdings", () => {
+  it("preserves an explicit missing-rate message alongside prices when active items are empty", () => {
     renderPortfolio({
       portfolio: {
         ...portfolio,
@@ -946,14 +1035,21 @@ describe("US1 portfolio surfaces", () => {
         holdings: [],
         activeTotalDecimal: null,
         currentPerformanceDecimal: null,
-        allocation: { gold: "0", silver: "0" },
+        allocation: { gold: null, silver: null },
         listState: "PORTFOLIO_EMPTY",
         rateStatus: { state: "missing", ageMs: null },
+        purityPriceTiles: portfolio.purityPriceTiles.map((tile) => ({
+          ...tile,
+          pricePerGramDecimal: null,
+          state: "missing" as const,
+        })),
       },
       rateProviderObservedAt: null,
     });
 
-    expect(screen.queryByTestId("metal-portfolio-rate-updated")).toBeNull();
+    expect(screen.getByTestId("metal-portfolio-rates-section")).toBeTruthy();
+    expect(screen.getByTestId("metal-portfolio-rate-updated")).toBeTruthy();
+    expect(screen.getByText(/current rate unavailable/i)).toBeTruthy();
     expect(screen.queryByText(/Prices last updated/i)).toBeNull();
   });
 

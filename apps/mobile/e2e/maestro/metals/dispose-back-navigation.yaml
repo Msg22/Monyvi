@@ -1,0 +1,45 @@
+appId: com.monyvi.app
+---
+# D16 / PR336 navigation regression — AUTHORED, BLOCKED.
+# Requires an authenticated current-user Active holding fixture
+# `holding-e2e-gold` and a runner-backed normal stack entry via My Metals.
+# This flow has NOT been run; do not claim Android/gesture/3-button evidence.
+- runFlow: ../helpers/setup.yaml
+- openLink: monyvi://metals
+- extendedWaitUntil:
+    visible:
+      id: metal-portfolio-root
+    timeout: 30000
+- tapOn:
+    id: metal-portfolio-holding-holding-e2e-gold
+- extendedWaitUntil:
+    visible:
+      id: metal-holding-detail-root
+    timeout: 30000
+- scrollUntilVisible:
+    element:
+      id: metal-holding-action-dispose
+    direction: DOWN
+- tapOn:
+    id: metal-holding-action-dispose
+- extendedWaitUntil:
+    visible:
+      id: metal-holding-dispose-screen
+    timeout: 30000
+- tapOn:
+    id: dispose-category-donated
+- tapOn:
+    id: dispose-submit
+- extendedWaitUntil:
+    visible:
+      id: metal-holding-detail-root
+    timeout: 30000
+- assertVisible: "Disposed holding"
+# Native Android Back must return to My Metals, not the duplicated Details.
+- pressKey: Back
+- extendedWaitUntil:
+    visible:
+      id: metal-portfolio-root
+    timeout: 30000
+- assertNotVisible:
+    id: metal-holding-detail-root
