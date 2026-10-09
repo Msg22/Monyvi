@@ -430,7 +430,9 @@ describe("approved active holding-detail fidelity", () => {
     );
 
     expect(screen.queryByText("How this value was calculated")).toBeNull();
-    expect(screen.queryByTestId("metal-detail-calculation-disclosure")).toBeNull();
+    expect(
+      screen.queryByTestId("metal-detail-calculation-disclosure")
+    ).toBeNull();
   });
 
   it("hides the calculation disclosure when no since-purchase total is available", () => {
@@ -765,7 +767,9 @@ describe("approved active holding-detail fidelity", () => {
     expect(screen.getByText("EGP 650.00 loss from this sale")).toBeTruthy();
     expect(screen.queryByText("Current value")).toBeNull();
     expect(screen.queryByText("How this value was calculated")).toBeNull();
-    expect(screen.queryByTestId("metal-detail-calculation-disclosure")).toBeNull();
+    expect(
+      screen.queryByTestId("metal-detail-calculation-disclosure")
+    ).toBeNull();
   });
 
   it("keeps exact sold proceeds visible when realized result evidence is unavailable", () => {

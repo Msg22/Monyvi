@@ -273,7 +273,7 @@ function payloadFor(
     rateSnapshots: input.rateSnapshots.map(
       (snapshot) => snapshot as unknown as RegisteredActionPayload
     ),
-  } as unknown as RegisteredActionPayload;
+  };
 }
 
 async function loadProjection(
@@ -525,10 +525,10 @@ function setPreparedId(model: Model, id: string): void {
 function assertOwnedRows(
   userId: string,
   holdingId: string,
-  rows: readonly {
+  rows: ReadonlyArray<{
     readonly table: string;
     readonly raw: Readonly<Model["_raw"]>;
-  }[]
+  }>
 ): void {
   const allowedTables = new Set([
     "metal_action_evidence",
@@ -563,7 +563,12 @@ function preparePlan(
   const evidence = dependencies.database
     .get<MetalActionEvidence>("metal_action_evidence")
     .prepareCreate((record): void => {
-      setPreparedId(record, input.actionEvidenceId);
+      // Server 068 (supabase/migrations/068_metals_domain.sql:1879-1884)
+      // inserts metal_action_evidence.id = action_id and enforces
+      // UNIQUE(user_id, action_id). The canonical local row MUST therefore use
+      // actionId so pull updates it in place instead of colliding. The legacy
+      // request field input.actionEvidenceId is intentionally ignored here.
+      setPreparedId(record, input.actionId);
       record.actionId = input.actionId;
       record.canonicalHoldingRevision = nextRevision;
       record.deleted = false;
@@ -577,7 +582,12 @@ function preparePlan(
   const event = dependencies.database
     .get<MetalLifecycleEvent>("metal_lifecycle_events")
     .prepareCreate((record): void => {
-      setPreparedId(record, input.lifecycleEventId);
+      // Server 068 (supabase/migrations/068_metals_domain.sql:1886-1896)
+      // inserts metal_lifecycle_events.id = action_id and enforces
+      // UNIQUE(user_id, action_id). The canonical local row MUST therefore use
+      // actionId so pull updates it in place instead of colliding. The legacy
+      // request field input.lifecycleEventId is intentionally ignored here.
+      setPreparedId(record, input.actionId);
       record.actionId = input.actionId;
       record.deleted = false;
       record.holdingId = input.holdingId;
@@ -625,7 +635,7 @@ function preparePlan(
         update: (model): void => {
           const state = model as MetalHoldingState;
           state.effectiveActionId = input.actionId;
-          state.effectiveEventId = input.lifecycleEventId;
+          state.effectiveEventId = input.actionId;
           state.financialRevision = nextRevision;
           state.reconciliationState = "sync_pending";
           state.status = "disposed";
@@ -664,7 +674,9 @@ export function createDisposeMetalHoldingCommandService(
       const result = await dependencies.commitFinancialActionGroupLocally({
         envelope,
         hashProvider: dependencies.hashProvider,
-        validationInput: { latestAllowedCalendarDate: input.latestAllowedCalendarDate },
+        validationInput: {
+          latestAllowedCalendarDate: input.latestAllowedCalendarDate,
+        },
         prepareLinkedOperationPlan: async () => {
           const projection = await loadProjection(dependencies, input);
           return preparePlan(dependencies, input, envelope, projection);

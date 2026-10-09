@@ -400,7 +400,7 @@ describe("Dispose metal holding command SQLite lifecycle", () => {
       status: "disposed",
       isVisible: true,
       effectiveActionId: IDS.disposeAction,
-      effectiveEventId: IDS.disposeEvent,
+      effectiveEventId: IDS.disposeAction,
       financialRevision: "1",
       reconciliationState: "sync_pending",
     });
@@ -437,7 +437,7 @@ describe("Dispose metal holding command SQLite lifecycle", () => {
       history.find((event) => event.id === IDS.createdEvent)?.isEffective
     ).toBe(true);
     expect(
-      history.find((event) => event.id === IDS.disposeEvent)
+      history.find((event) => event.id === IDS.disposeAction)
     ).toMatchObject({
       actionId: IDS.disposeAction,
       holdingId: IDS.holding,
@@ -510,7 +510,7 @@ describe("Dispose metal holding command SQLite lifecycle", () => {
       status: "disposed",
       financialRevision: "1",
       effectiveActionId: IDS.disposeAction,
-      effectiveEventId: IDS.disposeEvent,
+      effectiveEventId: IDS.disposeAction,
     });
     const history = await database
       .get<MetalLifecycleEvent>("metal_lifecycle_events")

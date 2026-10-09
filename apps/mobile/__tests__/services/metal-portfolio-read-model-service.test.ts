@@ -56,7 +56,6 @@ jest.mock("@/services/user-data-access", () => ({
 
 import {
   buildMetalPortfolioReadModel,
-  classifyMetalRecentHistoryOutcome,
   observePortfolioAssets,
   observePortfolioHoldingStates,
   observePortfolioMetalSellGroups,
@@ -171,102 +170,6 @@ function buildRawAssetSnapshot(
     purchaseCurrency: "EGP",
     purchasePriceDecimal: "20000",
     ...overrides,
-  };
-}
-
-function disposalHistoryInput(
-  reason: string,
-  options: {
-    readonly omitGroup?: boolean;
-    readonly invalidGroupJson?: boolean;
-    readonly mismatchedEventReason?: string;
-    readonly foreignGroup?: boolean;
-  } = {}
-): ShapeMetalPortfolioHoldingsInput {
-  const userId = "018f0c7a-1234-7abc-8def-000000000001";
-  const holdingId = "018f0c7a-1234-7abc-8def-000000000002";
-  const predecessorEventId = "018f0c7a-1234-7abc-8def-000000000003";
-  const actionId = "018f0c7a-1234-7abc-8def-000000000004";
-  const eventId = "018f0c7a-1234-7abc-8def-000000000005";
-  const payload = {
-    disposalDate: "2026-08-24",
-    expectedHoldingRevision: "1",
-    holdingId,
-    notes: null,
-    predecessorEventId,
-    reason,
-    reversesEventId: null,
-  };
-  const envelope = {
-    accountGuards: [],
-    actionId,
-    domain: "metals",
-    domainReferenceId: holdingId,
-    envelopeVersion: "monyvi.financial-action/v1",
-    kind: "dispose",
-    occurredAt: "2026-08-24T12:00:00.000Z",
-    payload,
-    payloadVersion: "metals.dispose/v1",
-    userId,
-  };
-  const existing = shapeInput();
-  return {
-    ...existing,
-    actionEvidence: [{
-      actionId,
-      deleted: false,
-      holdingId,
-      kind: "dispose",
-      userId,
-    }],
-    actionGroups: options.omitGroup ? [] : [{
-      actionId,
-      deleted: false,
-      domain: "metals",
-      domainReferenceId: holdingId,
-      kind: "dispose",
-      outcomeJson: null,
-      payloadJson: options.invalidGroupJson ? "{bad JSON" : JSON.stringify(envelope),
-      rejectionCode: null,
-      serverOutcome: null,
-      state: "local_complete",
-      userId: options.foreignGroup ? "foreign-user" : userId,
-    }],
-    assetMetals: [{
-      ...existing.assetMetals[0],
-      assetId: holdingId,
-    }],
-    assets: [{
-      ...buildRawAssetSnapshot(),
-      id: holdingId,
-      userId,
-    }],
-    holdingStates: [{
-      deleted: false,
-      effectiveActionId: actionId,
-      effectiveEventId: eventId,
-      holdingId,
-      isVisible: true,
-      reconciliationState: "accepted",
-      status: "disposed",
-      userId,
-    }],
-    latestAllowedCalendarDate: "2026-09-01",
-    lifecycleEvents: [{
-      actionId,
-      deleted: false,
-      holdingId,
-      id: eventId,
-      isEffective: true,
-      kind: "dispose",
-      occurredAt: new Date("2026-08-24T12:00:00.000Z"),
-      payloadJson: JSON.stringify({
-        ...payload,
-        reason: options.mismatchedEventReason ?? reason,
-      }),
-      userId,
-    }],
-    userId,
   };
 }
 
@@ -419,58 +322,6 @@ describe("metal portfolio read model", () => {
       { kind: "sortBy", column: "occurred_at", value: "desc" }
     );
   });
-
-  it.each([
-    ["9007199254740993.123", "gain"],
-    ["-9007199254740993.123", "loss"],
-    ["0", "neutral"],
-    [null, "neutral"],
-    ["not-a-decimal", "neutral"],
-  ] as const)(
-    "classifies exact canonical realized sale result %s without JS number coercion",
-    (value, expected): void => {
-      expect(classifyMetalRecentHistoryOutcome("sold", value, null)).toBe(
-        expected
-      );
-    }
-  );
-
-  it.each([
-    ["lost_or_stolen", "loss"],
-    ["destroyed_or_damaged", "loss"],
-    ["other_write_off", "loss"],
-    ["given_away", "neutral"],
-    ["donated", "neutral"],
-    ["other_external_transfer", "neutral"],
-  ])(
-    "shapes recent-History disposition icon for validated %s as %s",
-    (reason, expected): void => {
-      const [holding] = shapeMetalPortfolioHoldings(
-        disposalHistoryInput(reason)
-      );
-      expect(holding).toMatchObject({
-        status: "disposed",
-        isEffective: true,
-        recentHistoryOutcome: expected,
-      });
-    }
-  );
-
-  it.each([
-    ["missing action group", { omitGroup: true }],
-    ["malformed group payload", { invalidGroupJson: true }],
-    ["event and group payload mismatch", { mismatchedEventReason: "donated" }],
-    ["foreign-user action group", { foreignGroup: true }],
-  ])(
-    "uses a neutral disposition icon for %s instead of inventing a loss",
-    (_label, options): void => {
-      const [holding] = shapeMetalPortfolioHoldings(
-        disposalHistoryInput("lost_or_stolen", options)
-      );
-      expect(holding?.recentHistoryOutcome).toBe("neutral");
-      expect(holding?.soldResultDecimal).toBeNull();
-    }
-  );
 
   it("defaults to All and limits active values/allocation to current-user effective visible active holdings", () => {
     const model = buildMetalPortfolioReadModel({

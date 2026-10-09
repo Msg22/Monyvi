@@ -137,7 +137,10 @@ describe("Metals EN/AR content contract", () => {
     );
     expect(arFlat["delete.consequence"]).toContain("«لم يعد لدي»");
 
-    const visibleCopy = [...Object.values(enFlat), ...Object.values(arFlat)].join(" ");
+    const visibleCopy = [
+      ...Object.values(enFlat),
+      ...Object.values(arFlat),
+    ].join(" ");
     expect(visibleCopy).not.toMatch(
       /no longer in (?:my |your )?possession|لم يعد بحوزتي|لم تعد بحوزتك/iu
     );

@@ -37,9 +37,10 @@ import {
   type LiveRatesTrustValue,
 } from "@/services/live-rates-trust-read-model-service";
 import {
-  shapeMetalDisposedEvidence,
-  type MetalDisposalTreatment,
-} from "./metal-disposed-evidence-service";
+  shapeMetalHistoryOutcome,
+  shapeSoldDisplayAmounts,
+  type MetalRecentHistoryOutcome,
+} from "./metal-portfolio-history-outcome-service";
 import {
   shapeMetalRealizedSaleEvidence,
   toMetalSellEventSnapshot,
@@ -48,7 +49,6 @@ import {
   type MetalSellRateReferenceSnapshot,
 } from "@/services/metal-realized-sale-read-model-service";
 import {
-  convertSoldAmountForPreferredDisplay,
   toPortfolioSaleGroup,
   toPortfolioSaleHolding,
 } from "@/services/metal-portfolio-sale-result-service";
@@ -56,7 +56,6 @@ import {
 const RECENT_HISTORY_LIMIT = 3;
 
 export type MetalPortfolioFilter = "ALL" | SupportedMetal;
-export type MetalRecentHistoryOutcome = "gain" | "loss" | "neutral";
 
 export interface PortfolioRateStatus {
   readonly ageMs: number | null;
@@ -420,65 +419,30 @@ export function shapeMetalPortfolioHoldings(
             userId: input.userId,
           })
         : null;
-    const soldValue =
-      soldEvidence !== null && soldEvidence.available
-        ? soldEvidence.value
-        : null;
+    const { soldDisplayCurrency, soldNetProceedsDecimal, soldResultDecimal } =
+      shapeSoldDisplayAmounts({
+        currentRates: input.currentRates,
+        preferredCurrency: input.preferredCurrency,
+        soldEvidence,
+      });
 
-    const soldNetProceedsDecimal =
-      soldValue === null
-        ? null
-        : convertSoldAmountForPreferredDisplay({
-            amountCurrency: soldValue.proceedsCurrency,
-            amountDecimal: soldValue.netProceedsDecimal,
-            currentRates: input.currentRates,
-            preferredCurrency: input.preferredCurrency,
-          });
-    const soldResultDecimal =
-      soldValue === null
-        ? null
-        : convertSoldAmountForPreferredDisplay({
-            amountCurrency: soldValue.purchaseCurrency,
-            amountDecimal: soldValue.combinedDecimal,
-            currentRates: input.currentRates,
-            preferredCurrency: input.preferredCurrency,
-          });
-    const soldDisplayCurrency = isSupportedMetalsIsoCurrencyCode(
-      input.preferredCurrency
-    )
-      ? input.preferredCurrency
-      : null;
-
-    // A disposal outcome comes only from accepted, matching immutable
-    // lifecycle + group evidence. Do not infer a write-off from market prices,
-    // current ownership, or missing/unsupported payloads.
-    const disposalEvidence =
-      status === "disposed"
-        ? shapeMetalDisposedEvidence({
-            event: toMetalSellEventSnapshot(effectiveEvent),
-            group: toPortfolioSaleGroup(effectiveEvent, groupsByActionId),
-            holding: {
-              effectiveActionId: state.effectiveActionId ?? null,
-              effectiveEventId: state.effectiveEventId,
-              holdingId: asset.id,
-              isVisible: state.isVisible,
-              reconciliationState: state.reconciliationState,
-              status,
-              userId: asset.userId,
-            },
-            latestAllowedCalendarDate: input.latestAllowedCalendarDate,
-            userId: input.userId,
-          })
-        : null;
-    const disposalTreatment =
-      disposalEvidence !== null && disposalEvidence.available
-        ? disposalEvidence.value.treatment
-        : null;
-    const recentHistoryOutcome = classifyMetalRecentHistoryOutcome(
-      status,
+    const recentHistoryOutcome = shapeMetalHistoryOutcome({
+      event: toMetalSellEventSnapshot(effectiveEvent),
+      group: toPortfolioSaleGroup(effectiveEvent, groupsByActionId),
+      holding: {
+        effectiveActionId: state.effectiveActionId ?? null,
+        effectiveEventId: state.effectiveEventId,
+        holdingId: asset.id,
+        isVisible: state.isVisible,
+        reconciliationState: state.reconciliationState,
+        status,
+        userId: asset.userId,
+      },
+      latestAllowedCalendarDate: input.latestAllowedCalendarDate,
       soldResultDecimal,
-      disposalTreatment
-    );
+      status,
+      userId: input.userId,
+    });
 
     return [
       {
@@ -516,35 +480,6 @@ export function shapeMetalPortfolioHoldings(
       },
     ];
   });
-}
-
-/**
- * Service-level classification of recorded terminal outcomes. Exact decimal
- * strings are never coerced to JavaScript numbers for sign comparison.
- */
-export function classifyMetalRecentHistoryOutcome(
-  status: MetalPortfolioHoldingInput["status"],
-  soldResultDecimal: string | null,
-  disposalTreatment: MetalDisposalTreatment | null
-): MetalRecentHistoryOutcome {
-  if (status === "disposed") {
-    return disposalTreatment === "write_off" ? "loss" : "neutral";
-  }
-  if (
-    status !== "sold" ||
-    soldResultDecimal === null ||
-    !hasCanonicalDecimalPrecision(soldResultDecimal)
-  ) {
-    return "neutral";
-  }
-  try {
-    const result = parseCanonicalDecimal(soldResultDecimal);
-    if (result.greaterThan("0")) return "gain";
-    if (result.lessThan("0")) return "loss";
-    return "neutral";
-  } catch {
-    return "neutral";
-  }
 }
 
 export function hasBoundEffectiveActionEvidence(

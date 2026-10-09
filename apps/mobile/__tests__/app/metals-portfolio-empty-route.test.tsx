@@ -19,7 +19,7 @@ jest.mock("@react-navigation/bottom-tabs", () => ({
 
 jest.mock("react-i18next", () => ({
   useTranslation: () => ({
-    t: (key: string): string => key === "my_metals" ? "My Metals" : key,
+    t: (key: string): string => (key === "my_metals" ? "My Metals" : key),
   }),
 }));
 
@@ -63,16 +63,20 @@ jest.mock("@/hooks/useMetalPortfolio", () => ({
 }));
 
 jest.mock("@/components/navigation/PageHeader", () => {
-  const { Text, View } = jest.requireActual<typeof import("react-native")>("react-native");
+  const { Text, View } =
+    jest.requireActual<typeof import("react-native")>("react-native");
   return {
     PageHeader: ({ title }: { readonly title: string }): React.JSX.Element => (
-      <View><Text>{title}</Text></View>
+      <View>
+        <Text>{title}</Text>
+      </View>
     ),
   };
 });
 
 jest.mock("@/components/metals/MetalPortfolioScreen", () => {
-  const { Pressable, Text, View } = jest.requireActual<typeof import("react-native")>("react-native");
+  const { Pressable, Text, View } =
+    jest.requireActual<typeof import("react-native")>("react-native");
   return {
     MetalPortfolioScreen: ({
       onAddHoldingPress,
@@ -86,10 +90,21 @@ jest.mock("@/components/metals/MetalPortfolioScreen", () => {
       readonly onRetry: () => void;
     }): React.JSX.Element => (
       <View testID="portfolio-inline-route">
-        <Pressable testID="route-add" onPress={onAddHoldingPress}><Text>Add</Text></Pressable>
-        <Pressable testID="route-history" onPress={onHistoryPress}><Text>History</Text></Pressable>
-        <Pressable testID="route-holding" onPress={() => onHoldingPress("disposed-1")}><Text>Holding</Text></Pressable>
-        <Pressable testID="route-retry" onPress={onRetry}><Text>Retry</Text></Pressable>
+        <Pressable testID="route-add" onPress={onAddHoldingPress}>
+          <Text>Add</Text>
+        </Pressable>
+        <Pressable testID="route-history" onPress={onHistoryPress}>
+          <Text>History</Text>
+        </Pressable>
+        <Pressable
+          testID="route-holding"
+          onPress={() => onHoldingPress("disposed-1")}
+        >
+          <Text>Holding</Text>
+        </Pressable>
+        <Pressable testID="route-retry" onPress={onRetry}>
+          <Text>Retry</Text>
+        </Pressable>
       </View>
     ),
   };

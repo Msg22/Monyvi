@@ -5,7 +5,10 @@ import {
   isTrueMetalPortfolioEmpty,
   type MetalPortfolioSectionReadiness,
 } from "@/hooks/metal-portfolio-readiness";
-import type { MetalPortfolioReadModel } from "@/services/metal-portfolio-read-model-service";
+import type {
+  MetalPortfolioHoldingInput,
+  MetalPortfolioReadModel,
+} from "@/services/metal-portfolio-read-model-service";
 import {
   getMetalEmptyStateLayout,
   MetalPortfolioEmptyState,
@@ -84,6 +87,28 @@ const emptyPortfolio = {
   recentHistory: [],
 } as unknown as MetalPortfolioReadModel;
 
+const activeHolding: MetalPortfolioHoldingInput = {
+  currentPerformanceDecimal: null,
+  currentValueDecimal: null,
+  id: "holding-1",
+  isEffective: true,
+  isVisible: true,
+  metalType: "GOLD",
+  name: "Wedding coin",
+  occurredAt: new Date("2026-08-20T10:00:00.000Z"),
+  physicalForm: "COIN",
+  purchaseCurrency: "EGP",
+  purchaseDate: new Date("2024-03-14T00:00:00.000Z"),
+  purchasePriceDecimal: "151278.20",
+  purityCatalogVersion: "1",
+  purityCode: "gold-999",
+  purityFactorDecimal: "0.999",
+  soldResultDecimal: null,
+  status: "active",
+  userId: "user-1",
+  weightGramsDecimal: "31.125",
+};
+
 describe("My Metals inline empty active-items state", () => {
   beforeEach((): void => {
     mockLanguage = "en";
@@ -92,18 +117,26 @@ describe("My Metals inline empty active-items state", () => {
   it("requires ready active-item evidence, not loading, a filter-empty state, or a missing portfolio", (): void => {
     expect(isTrueMetalPortfolioEmpty(emptyPortfolio, ready)).toBe(true);
     expect(
-      isTrueMetalPortfolioEmpty({
-        ...emptyPortfolio,
-        listState: "FILTER_EMPTY",
-      }, ready)
-    ).toBe(false);
-    expect(
       isTrueMetalPortfolioEmpty(
-        { ...emptyPortfolio, activeHoldings: [{ id: "holding-1" }] },
+        {
+          ...emptyPortfolio,
+          listState: "FILTER_EMPTY",
+        },
         ready
       )
     ).toBe(false);
-    expect(isTrueMetalPortfolioEmpty(emptyPortfolio, { ...ready, summary: false })).toBe(false);
+    expect(
+      isTrueMetalPortfolioEmpty(
+        {
+          ...emptyPortfolio,
+          activeHoldings: [activeHolding],
+        },
+        ready
+      )
+    ).toBe(false);
+    expect(
+      isTrueMetalPortfolioEmpty(emptyPortfolio, { ...ready, summary: false })
+    ).toBe(false);
     expect(isTrueMetalPortfolioEmpty(null, ready)).toBe(false);
   });
 
@@ -111,15 +144,21 @@ describe("My Metals inline empty active-items state", () => {
     const onAddPress = jest.fn();
     render(<MetalPortfolioEmptyState onAddPress={onAddPress} />);
 
-    const illustration = screen.getByTestId("metal-empty-illustration", {
-      includeHiddenElements: true,
-    });
-    expect(illustration).toHaveStyle({ width: 196, height: 141.12 });
-    expect(illustration).toHaveProp("accessible", false);
-    expect(illustration).toHaveProp(
-      "importantForAccessibility",
-      "no-hide-descendants"
-    );
+    expect(
+      screen.getByTestId("metal-empty-illustration", {
+        includeHiddenElements: true,
+      })
+    ).toHaveStyle({ width: 196, height: 141.12 });
+    expect(
+      screen.getByTestId("metal-empty-illustration", {
+        includeHiddenElements: true,
+      })
+    ).toHaveProp("accessible", false);
+    expect(
+      screen.getByTestId("metal-empty-illustration", {
+        includeHiddenElements: true,
+      })
+    ).toHaveProp("importantForAccessibility", "no-hide-descendants");
     expect(
       screen.getByTestId("metal-empty-silver-stack", {
         includeHiddenElements: true,
@@ -137,17 +176,28 @@ describe("My Metals inline empty active-items state", () => {
     expect(screen.queryByTestId("metal-empty-add-gradient")).toBeNull();
     expect(screen.queryByTestId("metal-empty-history")).toBeNull();
 
-    expect(screen.getByText("Start tracking your gold and silver")).toBeTruthy();
+    expect(
+      screen.getByText("Start tracking your gold and silver")
+    ).toBeTruthy();
     expect(
       screen.getByText("Add your first holding to follow its value over time.")
     ).toBeTruthy();
-    const add = screen.getByLabelText("Add holding");
-    expect(add).toHaveProp("className", expect.stringContaining("rounded-xl"));
-    expect(add).toHaveProp("className", expect.stringContaining("border-nileGreen-500"));
-    expect(add).toHaveProp("className", expect.stringContaining("min-h-11"));
+    const addLabel = "Add holding";
+    expect(screen.getByLabelText(addLabel)).toHaveProp(
+      "className",
+      expect.stringContaining("rounded-xl")
+    );
+    expect(screen.getByLabelText(addLabel)).toHaveProp(
+      "className",
+      expect.stringContaining("border-nileGreen-500")
+    );
+    expect(screen.getByLabelText(addLabel)).toHaveProp(
+      "className",
+      expect.stringContaining("min-h-11")
+    );
     expect(screen.getByTestId("icon-add")).toBeTruthy();
 
-    fireEvent.press(add);
+    fireEvent.press(screen.getByLabelText(addLabel));
     expect(onAddPress).toHaveBeenCalledTimes(1);
   });
 
