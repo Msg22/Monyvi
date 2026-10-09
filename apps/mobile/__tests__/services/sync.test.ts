@@ -135,7 +135,15 @@ function mockSupabaseTable(): void {
 
 const mockDatabaseStub = {
   adapter: {
-    getLocal: jest.fn().mockResolvedValue(undefined),
+    // Existing lifecycle cases start after this fixed repair completed.
+    getLocal: jest.fn(
+      (key: string): Promise<string | undefined> =>
+        Promise.resolve(
+          key === "__monyvi_sync_historical_recovery:issue255-v1:current-user"
+            ? "complete"
+            : undefined
+        )
+    ),
     setLocal: jest.fn().mockResolvedValue(undefined),
   },
   get: mockDatabaseGet,

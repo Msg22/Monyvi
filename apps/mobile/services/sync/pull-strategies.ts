@@ -1,4 +1,4 @@
-import { Q, type Database, type Model } from "@nozbe/watermelondb";
+import type { Database } from "@nozbe/watermelondb";
 import type {
   SyncPullResult,
   SyncTableChangeSet,
@@ -9,7 +9,12 @@ import { parseCanonicalDecimal } from "@monyvi/logic";
 
 import { assertCanonicalMetalRevision } from "../metal-financial-action-adapter";
 import { getCurrentUserId, supabase } from "../supabase";
-import { SNAPSHOT_RETENTION_DAYS, SYNCABLE_TABLES } from "./config";
+import { SYNCABLE_TABLES } from "./config";
+import {
+  normalizeFinancialEffectTimestamp,
+  shapeFinancialPullRecords,
+} from "./financial-pull-shaping";
+import { createSnapshotRetentionCutoffIso } from "./historical-recovery";
 import { createSyncTableError } from "./errors";
 import {
   PULL_PAGE_SIZE,
@@ -81,10 +86,6 @@ const METAL_DEDICATED_PULL_TABLES = [
   "metal_holding_states",
 ] as const;
 type MetalDedicatedPullTable = (typeof METAL_DEDICATED_PULL_TABLES)[number];
-
-interface FinancialActionRootModel extends Model {
-  readonly actionId: string;
-}
 
 export function protectMetalMetadataPullFragments(
   assetChanges: SyncTableChangeSet,
@@ -338,11 +339,15 @@ function normalizeDedicatedPullRecord(
       "accepted_account_revision",
       validateCanonicalAccountRevision
     );
-    return normalizeExactTextColumn(
+    const amount = normalizeExactTextColumn(
       revision,
       "amount_minor_units_text",
       "amount_minor_units",
       validateSignedMinorUnits
+    );
+    return normalizeFinancialEffectTimestamp(
+      amount,
+      SYNC_PULL_ERROR_CODES.INVALID_PULL_ROW
     );
   }
   if (table === "financial_action_groups") {
@@ -461,31 +466,6 @@ function pullSelect(
   return EXACT_TEXT_SELECTS[table as keyof typeof EXACT_TEXT_SELECTS] ?? "*";
 }
 
-async function remapFinancialActionRootIds(
-  records: readonly PulledRow[],
-  userId: string,
-  database?: Database
-): Promise<readonly PulledRow[]> {
-  if (!database || records.length === 0) return records;
-  const actionIds = records
-    .map((record) => record.action_id)
-    .filter((actionId): actionId is string => typeof actionId === "string");
-  if (actionIds.length !== records.length) {
-    throw new Error(SYNC_PULL_ERROR_CODES.INVALID_PULL_ROW);
-  }
-  const localRoots = await database
-    .get<FinancialActionRootModel>("financial_action_groups")
-    .query(Q.where("user_id", userId), Q.where("action_id", Q.oneOf(actionIds)))
-    .fetch();
-  const localIdsByAction = new Map(
-    localRoots.map((root) => [root.actionId, root.id])
-  );
-  return records.map((record) => ({
-    ...record,
-    id: localIdsByAction.get(record.action_id as string) ?? record.id,
-  }));
-}
-
 async function assertExpectedPullUser(expectedUserId: string): Promise<void> {
   const currentUserId = await getCurrentUserId();
   if (currentUserId !== expectedUserId) {
@@ -546,11 +526,8 @@ export async function pullMarketRateObservations(
 
   while (shouldPullNextPage) {
     const { data, error } = await supabase.rpc(METAL_OBSERVATION_RPC, {
-      // pull_metal_observations_page_v1 declares p_upper_watermark,
-      // p_after_created_at, and p_after_id as DEFAULT NULL, so omitting a
-      // cursor arg is equivalent to sending NULL. The SQL rejects a cursor
-      // where only one of p_after_created_at/p_after_id is present, so they are
-      // always omitted or sent together.
+      // Optional RPC arguments default to NULL. SQL requires both cursor
+      // fields together, so always omit or send the complete cursor.
       ...(cursor === null
         ? {}
         : { p_after_created_at: cursor.createdAt, p_after_id: cursor.id }),
@@ -592,19 +569,17 @@ export async function pullSnapshotTable(
   table: SnapshotTableName,
   userId: string,
   lastSyncDate: string | null,
-  upperWatermark: string
+  upperWatermark: string,
+  retentionCutoffIso = createSnapshotRetentionCutoffIso()
 ): Promise<SyncTableChangeSet> {
   try {
-    const cutoffDate = new Date();
-    cutoffDate.setDate(cutoffDate.getDate() - SNAPSHOT_RETENTION_DAYS);
-
     const data = await pullAllKeysetPages(
       async (cursor) => {
         let query = supabase
           .from(table)
           .select("*", { count: "exact" })
           .eq("user_id", userId)
-          .gt("created_at", cutoffDate.toISOString())
+          .gt("created_at", retentionCutoffIso)
           .lte("created_at", upperWatermark)
           .order("created_at", { ascending: true })
           .order("id", { ascending: true })
@@ -796,10 +771,12 @@ export async function pullMetalDedicatedTable(
 
   // PostgREST supports the exact-value `::text` projection above, but the
   // Supabase select-string type parser cannot infer rows containing casts.
-  const remappedRecords =
-    table === "financial_action_groups"
-      ? await remapFinancialActionRootIds(records, userId, database)
-      : records;
+  const remappedRecords = await shapeFinancialPullRecords(
+    table,
+    records,
+    userId,
+    database
+  );
   const deleted = remappedRecords
     .filter((record) => record.deleted === true)
     .map((record) => record.id);

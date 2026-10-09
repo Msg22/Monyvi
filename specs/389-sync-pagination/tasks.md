@@ -4,18 +4,18 @@
 plan.md, spec.md, research.md, data-model.md, contracts/sync-pull.md,
 quickstart.md
 
-**Tests**: Tests-first is MANDATORY here (constitution TDD overrides the
-optional default). New tests are AUTHORED first; execution happens ONLY at T018
-(user-authorized single batch) — authoring order must not be misread as interim
-execution gates. Proven Red journeys are REUSED (no new Red claims, no
-re-execution as new Red). No per-file checks.
+**Tests**: T001–T019 and their T018-only execution exception describe the
+historical PR381 core. For the continuation, reuse the executed b2 Red, author
+supplemental behavior tests before production, then run Mohamed’s single final
+batch. No additional per-file Red runs or response-only execution claims.
 
-**Organization**: Grouped by user story. MVP = User Story 1 only.
+**Organization**: Historical US1–US3 and continuation US4–US6. No MVP-only
+closure of the approved continuation. Lead retains orchestration.
 
 ## Format: `[ID] [P?] [Story] Description`
 
 - **[P]**: Genuinely parallelizable (different files, no dependencies)
-- **[Story]**: US1/US2/US3 for story phases only
+- **[Story]**: US1–US6 for story phases only
 
 ## Phase 1: Setup (Shared Infrastructure)
 
@@ -262,3 +262,93 @@ Transport-fixture extensions preserved behavioral assertions in:
 
 See quickstart.md and checklists/acceptance-coverage.md for scenario-level
 coverage and explicit manual exclusions.
+
+## Phase 7: Approved bounded continuation — C255-S
+
+Base/governance: b2ec0fd4bc81cf2bf504f86d3bb781f605b355fc. The current
+completion state below reflects local implementation and recorded verification,
+with independent QA and device/cloud exclusions kept explicit. T001–T019 must
+not be renumbered or reused to claim continuation completion.
+
+- [x] T020 Promote approved FR-013–FR-018 into spec/plan/business decisions,
+      reconcile contract/data-model/manual coverage references, and perform
+      read-only cross-artifact analysis before production changes. Record
+      receipt/storage bindings with the production owner. Do not run hooks. The
+      installed skills are read from the configured main-worktree catalog; the
+      active feature remains specs/389-sync-pagination. Reuse branch setup.
+
+- [x] T021 [US4/US5/US6] Complete deterministic coverage in H/E, preserving K.
+      Reuse the recorded 17-test Red; retain exact local output and test-file
+      revisions. Integrate the supplied E state-matrix/apply-retry snippets.
+      Bind receipt success/failure/reopen/A-B cases in the approved continuation
+      suites and minimal shared fixtures; author the snapshot vector from
+      quickstart.md. Include pending_local, immutable identity mismatch, state
+      protection independent of dirty status, and withheld-evidence completion.
+      Author before code; execute in the single final batch using the existing
+      genuine Red as baseline. Missing helper/storage contracts are explicit
+      blockers, not fabricated imports. Depends on T020.
+
+- [x] T022 [US5] Production owner implements active dedicated effect delivery,
+      strict compensation-time conversion and whole existing unresolved
+      root/effect protection with immutable identity checks. Preserve local
+      IDs/hashes/links and existing real reconciliation; no balance replay.
+      Depends on T020, T021 authoring and the reused genuine Red.
+
+- [x] T023 [US4/US6] Production owner implements the shared complete historical
+      pull, fixed owner-local post-success receipt and one-time clean snapshot
+      absent-set cleanup in the identical (cutoff,H] window. No receipt while
+      required canonical evidence remains withheld; preserve retry/restart
+      safety and all dirty/foreign/out-of-window records. Depends on T020, T021
+      authoring, reused genuine Red and T022.
+
+- [x] T024 [US4/US5/US6] Local successor runs affected real SDK/SQLite Green, K
+      controls, financial reconciliation controls, relevant existing 389
+      contracts, types, lint and formatting. Record actual per-test results; do
+      not carry the 17-test count forward after adding/parameterizing tests.
+      Verify actual apply failure and receipt-write failure separately. Depends
+      on T022–T023.
+
+- [x] T025 Local successor executes the owned-backend-085 runner plan:
+      above-effective-cap initial/incremental C/U/D, effect hydration and owner
+      isolation. Lower configured cap is optional without backend restart;
+      report any unexecuted route-level concurrency cases explicitly. Preserve
+      the synthetic source/ID/value manifests and capture checkpoints. Report
+      missing executable cases explicitly. Depends on T024.
+
+- [x] T026 Independent review of financial identity/state/retry, owner/receipt
+      safety, snapshot cleanup and evidence honesty. Route findings to the sole
+      production owner; rerun affected checks. No self-approval. Depends on T024
+      and available T025 evidence.
+
+- [x] T027 Reconcile every continuation coverage row as PASS/FAIL/BLOCKED with
+      evidence and source/build/backend identity. Physical upgrades/usability
+      remain BLOCKED until origin is known and device execution is authorized.
+      The lead’s 2026-10-08 06:05 UTC read-only cloud inventory records 78
+      migrations, max081, with082–085 absent; verified owned085 remains a
+      deployment gap. Code handoff is not issue closure, deployment approval or
+      verified upgrade completion. Depends on T025–T026; no
+      commit/push/merge/deploy action in this task.
+
+### Continuation traceability
+
+| Requirement                                          | Implementation                 | Tests / evidence               |
+| ---------------------------------------------------- | ------------------------------ | ------------------------------ |
+| FR-013 history independently of checkpoint/schema    | T023                           | T021, T024; C04                |
+| FR-014 receipt/retry/restart/owner/withheld evidence | T023                           | T021, T024; C05–C08, C10       |
+| FR-015 exact effect delivery and no balance replay   | T022                           | T021, T024–T025; C09           |
+| FR-016 unresolved identity and actual undo safety    | T022                           | T021, T024, T026; C10          |
+| FR-017 one-time scoped snapshot cleanup              | T023                           | T021, T024–T025; C11           |
+| FR-018 offline/upgrade/deployment boundaries         | T027                           | C12; explicit BLOCKED evidence |
+| Existing pagination/concurrency compatibility        | unchanged unless proven defect | T025; C01–C03, C13             |
+
+H/E/K and C01–C13 are defined in quickstart.md. This is a dependency list for
+the existing lead, not a second dispatch graph.
+
+T020 consistency analysis and T021 supplemental authoring completed on
+2026-10-08. See continuation-analysis.md. T021 records authorship. T022–T025 now
+have implementation and local evidence: 24/24 suites and218/218 tests by
+latest-per-suite aggregate, mobile types/scoped lint, owned live 2/2 and cap 4/4
+PASS. See quickstart.md. T026 final independent QA and T027 coverage-disposition
+handoff are complete. C02 lower configured cap is optional/unrun; C12 device
+upgrade/offline usability and C13 actual route-concurrency remain BLOCKED/unrun.
+Device/cloud acceptance, issue closure and deployment readiness are not claimed.

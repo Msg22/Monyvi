@@ -1550,6 +1550,50 @@ Business rules:
     pull advances no metadata; a later push failure keeps a good pull with
     retryable dirty groups. Financial behavior is unchanged.
 
+### Approved bounded historical recovery — #255/#367/#377
+
+The following four rules extend the PR381 core under the approved continuation.
+They record required behavior, not an assertion of implementation, deployment or
+successful upgrade validation.
+
+1. **Shared complete repair and owner receipt.** A due repair reuses normal
+   complete pulling without the lower checkpoint bound; it does not reset data,
+   change owner, rewrite server timestamps or fabricate historical values. Store
+   only `complete` at `__monyvi_sync_historical_recovery:issue255-v1:${userId}`
+   in existing database-local metadata, after successful SDK
+   synchronization/application and owner checks. If the attempt starts with any
+   canonical unresolved owned financial root, leave the receipt absent for that
+   entire attempt. After actual resolution, a subsequent full pull hydrates
+   withheld evidence before completion. Failed/skipped attempts remain
+   retryable; good pull/bad push preserves its applied checkpoint and dirty work
+   without completing repair.
+2. **Dedicated effect delivery.** Deliver owned account_financial_effects with
+   exact amount/revision strings and stable account/action/effect links, keeping
+   generic financial writes excluded. Preserve null compensated_at, convert a
+   valid server timestamp to local numeric time and reject malformed values.
+   Imported effects are evidence; never post their amounts to balance again.
+3. **Protect unresolved local financial work.** Preserve whole existing
+   unresolved roots and colliding effects after validating immutable identity.
+   Keep local persistence IDs, action IDs, canonical payload/hash, links, state
+   and optimistic recovery evidence until actual existing reconciliation.
+   Imported terminal/compensated flags do not prove local undo. Determine this
+   protection by canonical action state, independently of SDK dirty status.
+   Missing records retain normal hydration. Do not compensate during pull,
+   reinterpret financial evidence or strand withheld records behind a receipt.
+4. **One-time pre-journal snapshot cleanup.** Only during a complete due repair,
+   remove absent clean current-owner identities from daily_snapshot_balance,
+   daily_snapshot_assets and daily_snapshot_net_worth inside the same frozen
+   created_at interval (cutoff,H] used by their full pulls. Complete every
+   required page before buffered application and recheck ownership/cleanliness.
+   Preserve dirty/foreign/out-of-window records and pending deletion intent.
+   Normal retained-journal delivery and the 90-day policy remain unchanged.
+
+These rules require no schema bump, SQL migration or generic recovery registry.
+Broader #339 liveness, already-corrupted terminal actions and #382 frozen-clock
+work remain deferred. Unknown installed-build/backend origins are not evidence
+that upgrades are unnecessary; deployment and actual upgrade acceptance require
+their own verified evidence. Canonical details: specs/389-sync-pagination/.
+
 ## 11. Current Known Product And Documentation Gaps
 
 These are documented so future contributors keep product behavior aligned with

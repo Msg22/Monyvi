@@ -43,7 +43,15 @@ describe("syncDatabase dedicated rejection passthrough", () => {
   it("returns push rejected ids to Watermelon synchronize", async () => {
     const database = {
       adapter: {
-        getLocal: jest.fn().mockResolvedValue(undefined),
+        getLocal: jest.fn(
+          (key: string): Promise<string | undefined> =>
+            Promise.resolve(
+              key ===
+                "__monyvi_sync_historical_recovery:issue255-v1:current-user"
+                ? "complete"
+                : undefined
+            )
+        ),
         setLocal: jest.fn().mockResolvedValue(undefined),
       },
     } as unknown as Parameters<typeof syncDatabase>[0];
