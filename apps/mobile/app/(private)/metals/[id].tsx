@@ -1,6 +1,7 @@
 import { getHoldingDetailTitleKey } from "@/components/metals/holding-detail-presentation";
 import { MetalHoldingDetailScreen } from "@/components/metals/MetalHoldingDetailScreen";
 import { createDeleteHoldingActionDescriptor } from "@/components/metals/holding-actions/delete-action";
+import { createDisposeHoldingActionDescriptor } from "@/components/metals/holding-actions/dispose-action";
 import {
   getHoldingActionDescriptors,
   type HoldingActionDescriptor,
@@ -17,29 +18,43 @@ import { useTranslation } from "react-i18next";
 
 export default function MetalHoldingDetailRoute(): React.JSX.Element {
   const params = useLocalSearchParams<{ id?: string | string[] }>();
-  const holdingId = Array.isArray(params.id) ? params.id[0] : params.id;
+  const rawHoldingId = Array.isArray(params.id) ? params.id[0] : params.id;
+  // Normalize once: a whitespace-only param must behave like a missing one
+  // so action descriptors are never constructed with an empty ID during render.
+  const holdingId = rawHoldingId?.trim() ? rawHoldingId.trim() : undefined;
   const detail = useMetalHoldingDetail(holdingId);
   const { t } = useTranslation("metals");
   const handleEdit = useCallback((): void => {
     if (holdingId) router.push(getEditMetalHoldingHref(holdingId));
   }, [holdingId]);
 
-  // Only actions with a live implemented route are composed. Sell,
-  // Dispose, and Undo stay hidden until their own lanes land a route.
+  // Only actions with a live implemented route are composed. Sell
+  // and Undo stay hidden until their own lanes land a route.
   // Edit is a header action.
   const actions = useMemo<
     readonly HoldingActionDescriptor[]
   >((): readonly HoldingActionDescriptor[] => {
     if (!holdingId || detail.model === null) return [];
     const available = getHoldingActionDescriptors(detail.model);
-    if (!available.some((action) => action.id === "delete")) return [];
-    return [createDeleteHoldingActionDescriptor(holdingId)];
+    const hasDispose = available.some((action) => action.id === "dispose");
+    const hasDelete = available.some((action) => action.id === "delete");
+    if (!hasDispose || !hasDelete) return [];
+    return [
+      createDisposeHoldingActionDescriptor(holdingId),
+      createDeleteHoldingActionDescriptor(holdingId),
+    ];
   }, [detail.model, holdingId]);
 
   const handleAction = useCallback(
     (action: HoldingActionId): void => {
-      if (action !== "delete" || !holdingId) return;
-      router.push(createDeleteHoldingActionDescriptor(holdingId).href);
+      if (!holdingId) return;
+      if (action === "dispose") {
+        router.push(createDisposeHoldingActionDescriptor(holdingId).href);
+        return;
+      }
+      if (action === "delete") {
+        router.push(createDeleteHoldingActionDescriptor(holdingId).href);
+      }
     },
     [holdingId]
   );

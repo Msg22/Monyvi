@@ -25,6 +25,10 @@ import {
   type MetalDetailMetalInput,
   type MetalDetailRenderKey,
 } from "@/services/metal-detail-read-model-service";
+import {
+  toLegacyDisposalRevisionEvidence,
+  type LegacyDisposalRevisionEvidence,
+} from "@/services/metal-legacy-disposal-baseline-service";
 import { hasBoundEffectiveActionEvidence } from "@/services/metal-portfolio-read-model-service";
 import {
   toDetailAssetInput,
@@ -49,6 +53,9 @@ export interface MetalHistoryCounts {
 export interface MetalHistoryHoldingInput {
   readonly asset: MetalDetailAssetInput;
   readonly holdingState: MetalDetailHoldingStateInput;
+  readonly legacyDisposalRevisionEvidence?:
+    | readonly LegacyDisposalRevisionEvidence[]
+    | null;
   readonly lifecycleEvents: readonly MetalDetailLifecycleEventInput[];
   readonly metal: MetalDetailMetalInput;
   readonly terminalFacts?: MetalTerminalFacts | null;
@@ -362,6 +369,11 @@ function shapeReadHistoryHoldings(
       {
         asset: toDetailAssetInput(asset),
         holdingState: toDetailHoldingStateInput(state),
+        legacyDisposalRevisionEvidence: toLegacyDisposalRevisionEvidence(
+          dependencies.evidence.filter(
+            (candidate) => candidate.holdingId === state.holdingId
+          )
+        ),
         lifecycleEvents: shapeMetalDetailLifecycleEvents(
           holdingEvents,
           holdingEvidence
@@ -445,6 +457,7 @@ function toHistoryItem(
   const model = buildMetalDetailReadModel({
     asset: holding.asset,
     holdingState: holding.holdingState,
+    legacyDisposalRevisionEvidence: holding.legacyDisposalRevisionEvidence,
     lifecycleEvents: holding.lifecycleEvents,
     metal: holding.metal,
     rateReferences: [],

@@ -302,7 +302,7 @@
     "paid": "تم الدفع {{amount}}",
     "net_proceeds": "صافي حصيلة البيع",
     "no_longer_active": "لم يعد ضمن مقتنياتك من الذهب والفضة.",
-    "no_longer_possession": "لم يعد بحوزتي",
+    "no_longer_possession": "لم يعد لدي",
     "notes": "ملاحظات",
     "timeline_current_value": "القيمة الحالية في هذه المرحلة",
     "fact_accessibility": "{{label}} هو {{value}}",
@@ -337,7 +337,7 @@
   },
   "history": {
     "title": "السجل",
-    "subtitle": "المبيعات والمقتنيات التي لم تعد بحوزتك.",
+    "subtitle": "المبيعات والمقتنيات التي لم تعد ملكك.",
     "all": "الكل",
     "sold": "مباع",
     "disposed": "تم التخلّص منه",
@@ -359,8 +359,65 @@
     "treatment_write_off": "تسجيل خسارة",
     "treatment_external_transfer": "تسجيل خروجها من ملكيتك"
   },
+  "dispose": {
+    "title": "لم يعد لدي",
+    "intro": "استخدم هذا الخيار عندما لا تعود الحيازة ملكك ولم تبعها.",
+    "whatHappened": "ماذا حدث",
+    "affectsRecords": "كيف يؤثر ذلك على سجلاتك؟",
+    "categories": {
+      "lostOrStolen": "مفقودة أو مسروقة",
+      "destroyedOrDamaged": "مدمرة أو تالفة",
+      "givenAway": "تم إعطاؤها للغير",
+      "donated": "متبرع بها",
+      "other": "سبب آخر"
+    },
+    "treatments": {
+      "writeOff": "تسجيل خسارة",
+      "externalTransfer": "تسجيل خروجها من ملكيتك",
+      "writeOffDescription": "ستُسجَّل تكلفة شرائها كخسارة. لا تُضاف أموال بيع.",
+      "externalTransferDescription": "ستخرج من معادنك. لا يُسجَّل ربح أو خسارة من بيع."
+    },
+    "dateLabel": "التاريخ",
+    "notesLabel": "ملاحظات (اختياري)",
+    "notesTooLong": "اختصر ملاحظاتك وحاول مرة أخرى.",
+    "summaryTitle": "ما الذي سيحدث",
+    "writeOffSummary": "ستُسجَّل تكلفة شرائها كخسارة.",
+    "externalTransferSummary": "ستخرج من معادنك النشطة.",
+    "activeOwnershipSummary": "لن تعود هذه الحيازة نشطة.",
+    "historySummary": "سيظهر هذا التغيير في السجل.",
+    "noSaleMoneyOrAccountSummary": "لا توجد أموال بيع أو تغيّر في الحساب.",
+    "noSaleProfitLossSummary": "لا يوجد ربح أو خسارة من بيع.",
+    "rateEvidenceUnavailable": "تعذّر التحقق من الأسعار. حاول مرة أخرى.",
+    "ratePendingLabel": "جارٍ التحقق من الأسعار",
+    "submitLabel": "تسجيل التغيير",
+    "pendingLabel": "جارٍ تسجيل التغيير…",
+    "cancelLabel": "إلغاء",
+    "retryLabel": "إعادة المحاولة",
+    "loadError": "تعذر تحميل هذا المقتنى.",
+    "categoryRequired": "اختر السبب.",
+    "treatmentRequired": "اختر تسجيل خسارة أو تسجيل خروجها من ملكيتك.",
+    "dateRequired": "اختر تاريخاً صالحاً.",
+    "dateInvalid": "أدخل تاريخاً حقيقياً ليس في المستقبل.",
+    "dateBeforeAcquisition": "اختر تاريخاً في تاريخ الشراء أو بعده.",
+    "submitFailed": "لم يتم تسجيل التغيير. حاول مرة أخرى.",
+    "submitErrors": {
+      "holdingNotFound": "تعذّر العثور على هذا المقتنى.",
+      "holdingNotActive": "لم يعد هذا المقتنى نشطاً.",
+      "revisionConflict": "تغيّرت الحيازة على جهاز آخر.",
+      "authScopeChanged": "بدّلت الحساب. حاول مرة أخرى.",
+      "notEffectiveHolding": "جارٍ التحقق من هذا المقتنى. حاول مرة أخرى.",
+      "lifecycleConflict": "هذا المقتنى به تعارض يجب حله أولاً.",
+      "dateBeforeAcquisition": "اختر تاريخاً في تاريخ الشراء أو بعده.",
+      "recoveryRequired": "هذا الإجراء يحتاج إلى استعادة. حاول مرة أخرى."
+    },
+    "success": "تم تسجيل أن {{holdingName}} لم تعد ضمن معادنك.",
+    "exitTitle": "تجاهل التغييرات؟",
+    "exitMessage": "ستفقد التغييرات غير المحفوظة.",
+    "keepEditing": "متابعة التعديل",
+    "discardChanges": "تجاهل التغييرات"
+  },
   "delete": {
-    "consequence": "احذف المقتنى فقط إذا أُضيف عن طريق الخطأ. ستتم إزالته من محفظتك ومن السجل. البيع و«لم يعد بحوزتي» إجراءان منفصلان.",
+    "consequence": "احذف المقتنى فقط إذا أُضيف عن طريق الخطأ. ستتم إزالته من محفظتك ومن السجل. البيع و«لم يعد لدي» إجراءان منفصلان.",
     "performance": "منذ الشراء",
     "pending": "جارٍ حذف المقتنى…",
     "success": "تم حذف الحيازة.",
@@ -382,7 +439,7 @@
   "actions": {
     "sell": "بيع المقتنى",
     "edit": "تعديل",
-    "dispose": "لم يعد بحوزتي",
+    "dispose": "لم يعد لدي",
     "delete": "حذف المقتنى",
     "undo_sale": "التراجع عن البيع",
     "undo_disposal": "التراجع عن التخلّص"
@@ -393,7 +450,7 @@
     "change": "{{field}}: من {{before}} إلى {{after}}",
     "change_unavailable": "تفاصيل التغيير غير متاحة",
     "sell": "تم البيع",
-    "dispose": "لم يعد بحوزتي",
+    "dispose": "لم يعد لدي",
     "delete": "تم الحذف",
     "undo": "تمت الاستعادة"
   }

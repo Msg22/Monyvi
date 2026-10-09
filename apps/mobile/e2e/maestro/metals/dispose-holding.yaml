@@ -1,0 +1,77 @@
+appId: com.monyvi.app
+---
+# T107 Dispose category/Other/offline-restart coverage — AUTHORED, BLOCKED.
+# This flow is not runnable yet: the shared harness supplies no disposable
+# holding fixture under the slug below (a non-UUID placeholder, not a supplied
+# valid holding ID) and registers no dispose deep link, and there is no
+# runner-controlled offline profile. Do not claim a passing run until the
+# harness provides a disposable current-user Active Gold holding at
+# monyvi://metals/<holdingId>/dispose plus offline control, then replace this
+# header with the verified fixture reference.
+# The steps below are the authored journey contract for that fixture: real
+# direct form over the real Holding Details surface.
+- runFlow: ../helpers/setup.yaml
+- openLink: monyvi://metals/holding-e2e-gold/dispose
+- extendedWaitUntil:
+    visible:
+      id: metal-holding-dispose-screen
+    timeout: 30000
+
+# Approved Screen 12 is one direct live-summary form: exactly five
+# whole-holding reasons, no partial quantity, Review route, or confirmation.
+- assertVisible:
+    "Use this when you no longer own the holding and did not sell it."
+- assertVisible:
+    id: dispose-category-lost_or_stolen
+- assertVisible:
+    id: dispose-category-destroyed_or_damaged
+- assertVisible:
+    id: dispose-category-given_away
+- assertVisible:
+    id: dispose-category-donated
+- assertVisible:
+    id: dispose-category-other
+
+# Only Other reveals the plain treatment choice.
+- assertNotVisible:
+    id: dispose-treatment-group
+- tapOn:
+    id: dispose-category-other
+- assertVisible:
+    id: dispose-treatment-group
+- tapOn:
+    id: dispose-treatment-write_off
+- tapOn:
+    id: dispose-category-donated
+
+# Direct Record change commits once; duplicate taps cannot duplicate the group.
+- doubleTapOn:
+    id: dispose-submit
+    delay: 25
+- extendedWaitUntil:
+    visible:
+      id: metal-holding-detail-root
+    timeout: 30000
+- assertVisible: "Disposed holding"
+
+# Restart persistence contract, runnable only once the blocking fixture above
+# exists. This does not prove offline behavior until shared integration
+# establishes and verifies an offline profile before Dispose.
+- stopApp
+- launchApp:
+    clearState: false
+- openLink: monyvi://metals/holding-e2e-gold
+- extendedWaitUntil:
+    visible:
+      id: metal-holding-detail-root
+    timeout: 30000
+- assertVisible: "Disposed holding"
+- openLink: monyvi://metals/history
+- extendedWaitUntil:
+    visible:
+      id: metal-history-root
+    timeout: 30000
+# MISSING/BLOCKED: deterministic Sold and Disposed fixtures plus their live
+# detail routes must assert Undo recovery and absence of No Longer after integration.
+# MISSING/BLOCKED: runner-controlled offline profile must prove the offline
+# Record change journey before this flow can claim D10/D12 device evidence.

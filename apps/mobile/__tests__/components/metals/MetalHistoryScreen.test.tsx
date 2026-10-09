@@ -49,7 +49,7 @@ jest.mock("react-i18next", () => ({
         "history.offline": "Offline",
         "history.retry": "Try again",
         "history.sold": "Sold",
-        "history.subtitle": "Sales and holdings no longer in your possession.",
+        "history.subtitle": "Sales and holdings no longer owned.",
         "metal.gold": "Gold",
         "metal.silver": "Silver",
         purity_gold_999: "24K · 999",
@@ -249,7 +249,7 @@ describe("MetalHistoryScreen", () => {
     expect(screen.queryByTestId("metal-history-loading")).toBeNull();
     expect(screen.getByTestId("metal-history-root")).toBeTruthy();
     expect(
-      screen.getByText("Sales and holdings no longer in your possession.")
+      screen.getByText("Sales and holdings no longer owned.")
     ).toBeTruthy();
     expect(screen.getByTestId("metal-history-filter-all")).toBeTruthy();
     expect(screen.getByTestId("metal-history-filter-disposed")).toBeTruthy();

@@ -53,6 +53,10 @@ export interface LifecycleReductionResult {
   readonly rejectedEvents: readonly LifecycleRejectedEvent[];
 }
 
+export interface LegacyDisposalBaseline {
+  readonly terminalEventId: string;
+}
+
 interface ReductionState {
   readonly candidatesById: ReadonlyMap<string, LifecycleEvent>;
   readonly allIds: ReadonlySet<string>;
@@ -82,7 +86,8 @@ export function orderLifecycleEventsNewestFirst(
 }
 
 export function reduceMetalLifecycle(
-  events: readonly unknown[]
+  events: readonly unknown[],
+  legacyDisposalBaseline: LegacyDisposalBaseline | null = null
 ): LifecycleReductionResult {
   const prepared = prepareCandidates(events.map(snapshotEvent));
   const withCyclesRejected = rejectCycleEvents(
@@ -90,16 +95,25 @@ export function reduceMetalLifecycle(
     findCycleIds(prepared.candidatesById, prepared.rejectedIds)
   );
   const roots = [...withCyclesRejected.candidatesById.values()].filter(
-    (event) => !withCyclesRejected.rejectedIds.has(event.id) &&
-      event.kind === "created" && event.predecessorEventId === null
+    (event) =>
+      !withCyclesRejected.rejectedIds.has(event.id) &&
+      event.kind === "created" &&
+      event.predecessorEventId === null
   );
 
   const selectedRoot = selectCreationRoot(withCyclesRejected, roots);
   if (selectedRoot.event === null) {
-    return finalizeReduction(
-      [],
-      rejectRemaining(selectedRoot.state, [])
+    const legacyRoot = selectLegacyDisposalRoot(
+      selectedRoot.state,
+      legacyDisposalBaseline
     );
+    if (legacyRoot !== null) {
+      return finalizeReduction(
+        [legacyRoot],
+        rejectRemaining(selectedRoot.state, [legacyRoot])
+      );
+    }
+    return finalizeReduction([], rejectRemaining(selectedRoot.state, []));
   }
 
   const accepted: LifecycleEvent[] = [selectedRoot.event];
@@ -107,7 +121,8 @@ export function reduceMetalLifecycle(
   let current = selectedRoot.event;
   for (;;) {
     const successors = [...state.candidatesById.values()].filter(
-      (event) => !state.rejectedIds.has(event.id) &&
+      (event) =>
+        !state.rejectedIds.has(event.id) &&
         event.predecessorEventId === current.id &&
         !accepted.some(({ id }) => id === event.id)
     );
@@ -173,12 +188,14 @@ function isNonEmptyString(value: unknown): value is string {
 }
 
 function isLifecycleKind(value: unknown): value is LifecycleKind {
-  return value === "created" ||
+  return (
+    value === "created" ||
     value === "corrected" ||
     value === "sold" ||
     value === "disposed" ||
     value === "deleted" ||
-    value === "reversed";
+    value === "reversed"
+  );
 }
 
 function isValidOccurredAt(value: unknown): value is number {
@@ -265,37 +282,45 @@ function prepareCandidates(
 }
 
 function isAcceptedDeleteTombstone(event: LifecycleEvent): boolean {
-  return event.kind === "deleted" &&
+  return (
+    event.kind === "deleted" &&
     event.evidenceState === "ineffective" &&
-    event.canonicalCasStatus === "accepted";
+    event.canonicalCasStatus === "accepted"
+  );
 }
 
-function isLifecycleEvidenceState(value: unknown): value is LifecycleEvidenceState {
-  return value === "effective" || value === "ineffective" || value === "incomplete";
+function isLifecycleEvidenceState(
+  value: unknown
+): value is LifecycleEvidenceState {
+  return (
+    value === "effective" || value === "ineffective" || value === "incomplete"
+  );
 }
 
 function isCanonicalCasStatus(value: unknown): value is CanonicalCasStatus {
   return value === "accepted" || value === "rejected" || value === "unknown";
 }
 
-function sameLifecycleEvent(left: LifecycleEvent, right: LifecycleEvent): boolean {
-  return left.id === right.id &&
+function sameLifecycleEvent(
+  left: LifecycleEvent,
+  right: LifecycleEvent
+): boolean {
+  return (
+    left.id === right.id &&
     left.fingerprint === right.fingerprint &&
     left.kind === right.kind &&
     left.occurredAt === right.occurredAt &&
     left.predecessorEventId === right.predecessorEventId &&
     left.reversesEventId === right.reversesEventId &&
     left.evidenceState === right.evidenceState &&
-    left.canonicalCasStatus === right.canonicalCasStatus;
+    left.canonicalCasStatus === right.canonicalCasStatus
+  );
 }
 
 function groupById(
   snapshots: readonly SnapshottedLifecycleEvent[]
 ): ReadonlyMap<string, readonly SnapshottedLifecycleEvent[]> {
-  const grouped = new Map<
-    string,
-    readonly SnapshottedLifecycleEvent[]
-  >();
+  const grouped = new Map<string, readonly SnapshottedLifecycleEvent[]>();
   const sorted = [...snapshots].sort((left, right) =>
     compareEvents(left.event, right.event)
   );
@@ -327,7 +352,10 @@ function findCycleIds(
       return;
     }
     visiting.push(id);
-    if (event.predecessorEventId !== null && candidates.has(event.predecessorEventId)) {
+    if (
+      event.predecessorEventId !== null &&
+      candidates.has(event.predecessorEventId)
+    ) {
       visit(event.predecessorEventId);
     }
     visiting.pop();
@@ -347,10 +375,36 @@ function rejectCycleEvents(
   for (const id of [...cycleIds].sort()) {
     const event = state.candidatesById.get(id);
     if (event !== undefined) {
-      next = appendRejection(next, event, "cycle_detected", event.predecessorEventId, true);
+      next = appendRejection(
+        next,
+        event,
+        "cycle_detected",
+        event.predecessorEventId,
+        true
+      );
     }
   }
   return next;
+}
+
+function selectLegacyDisposalRoot(
+  state: ReductionState,
+  baseline: LegacyDisposalBaseline | null
+): LifecycleEvent | null {
+  if (baseline === null) return null;
+  const candidate = state.candidatesById.get(baseline.terminalEventId);
+  if (
+    candidate === undefined ||
+    state.rejectedIds.has(candidate.id) ||
+    candidate.kind !== "disposed" ||
+    candidate.predecessorEventId !== null ||
+    candidate.reversesEventId !== null ||
+    candidate.evidenceState !== "effective" ||
+    candidate.canonicalCasStatus !== "accepted"
+  ) {
+    return null;
+  }
+  return candidate;
 }
 
 function selectCreationRoot(
@@ -363,7 +417,8 @@ function selectCreationRoot(
   const canonical = roots.filter(
     ({ canonicalCasStatus }) => canonicalCasStatus === "accepted"
   );
-  const winner = canonical.length === 1 ? canonical[0] as LifecycleEvent : null;
+  const winner =
+    canonical.length === 1 ? (canonical[0] as LifecycleEvent) : null;
   let next = state;
   if (roots.length > 1) {
     for (const root of roots) {
@@ -379,7 +434,10 @@ function validateSuccessors(
   successors: readonly LifecycleEvent[],
   current: LifecycleEvent,
   state: ReductionState
-): { readonly valid: readonly LifecycleEvent[]; readonly state: ReductionState } {
+): {
+  readonly valid: readonly LifecycleEvent[];
+  readonly state: ReductionState;
+} {
   const valid: LifecycleEvent[] = [];
   let next = state;
   for (const successor of [...successors].sort(compareEvents)) {
@@ -407,7 +465,11 @@ function transitionRejectionReason(
       ? null
       : "invalid_reversal_target";
   }
-  if (current.kind === "sold" || current.kind === "disposed" || current.kind === "deleted") {
+  if (
+    current.kind === "sold" ||
+    current.kind === "disposed" ||
+    current.kind === "deleted"
+  ) {
     return "invalid_transition";
   }
   return successor.reversesEventId === null ? null : "invalid_transition";
@@ -435,7 +497,8 @@ function selectSuccessor(
   const canonical = candidates.filter(
     ({ canonicalCasStatus }) => canonicalCasStatus === "accepted"
   );
-  const winner = canonical.length === 1 ? canonical[0] as LifecycleEvent : null;
+  const winner =
+    canonical.length === 1 ? (canonical[0] as LifecycleEvent) : null;
   let next = state;
   for (const candidate of candidates) {
     if (winner === null || candidate.id !== winner.id) {
@@ -464,13 +527,37 @@ function rejectRemaining(
     }
     const predecessorId = event.predecessorEventId;
     if (predecessorId === null || !state.allIds.has(predecessorId)) {
-      next = appendRejection(next, event, "missing_predecessor", predecessorId, true);
+      next = appendRejection(
+        next,
+        event,
+        "missing_predecessor",
+        predecessorId,
+        true
+      );
     } else if (!acceptedIds.has(predecessorId)) {
-      next = appendRejection(next, event, "predecessor_not_accepted", predecessorId, true);
+      next = appendRejection(
+        next,
+        event,
+        "predecessor_not_accepted",
+        predecessorId,
+        true
+      );
     } else if (current?.id !== predecessorId) {
-      next = appendRejection(next, event, "predecessor_not_current", predecessorId, true);
+      next = appendRejection(
+        next,
+        event,
+        "predecessor_not_current",
+        predecessorId,
+        true
+      );
     } else {
-      next = appendRejection(next, event, "invalid_transition", predecessorId, true);
+      next = appendRejection(
+        next,
+        event,
+        "invalid_transition",
+        predecessorId,
+        true
+      );
     }
   }
   return next;
@@ -481,14 +568,19 @@ function finalizeReduction(
   state: ReductionState
 ): LifecycleReductionResult {
   const effective = accepted[accepted.length - 1];
-  const projection = effective === undefined
-    ? null
-    : Object.freeze({
-        status: statusForEvent(effective),
-        isVisible: effective.kind !== "deleted",
-        effectiveEventId: effective.id,
-        history: Object.freeze(effective.kind === "deleted" ? [] : orderLifecycleEventsNewestFirst(accepted)),
-      });
+  const projection =
+    effective === undefined
+      ? null
+      : Object.freeze({
+          status: statusForEvent(effective),
+          isVisible: effective.kind !== "deleted",
+          effectiveEventId: effective.id,
+          history: Object.freeze(
+            effective.kind === "deleted"
+              ? []
+              : orderLifecycleEventsNewestFirst(accepted)
+          ),
+        });
   return Object.freeze({
     projection,
     acceptedEvents: Object.freeze([...accepted]),
@@ -512,23 +604,32 @@ function appendRejection(
     rejectedIds,
     rejected: [
       ...state.rejected,
-      Object.freeze({ event, fingerprint: event.fingerprint, reasonCode, relatedEventId }),
+      Object.freeze({
+        event,
+        fingerprint: event.fingerprint,
+        reasonCode,
+        relatedEventId,
+      }),
     ],
   };
 }
 
 function compareEvents(left: LifecycleEvent, right: LifecycleEvent): number {
-  return left.occurredAt - right.occurredAt ||
+  return (
+    left.occurredAt - right.occurredAt ||
     compareText(left.id, right.id) ||
-    compareText(left.fingerprint, right.fingerprint);
+    compareText(left.fingerprint, right.fingerprint)
+  );
 }
 
 function compareRejections(
   left: LifecycleRejectedEvent,
   right: LifecycleRejectedEvent
 ): number {
-  return compareEvents(left.event, right.event) ||
-    compareText(left.reasonCode, right.reasonCode);
+  return (
+    compareEvents(left.event, right.event) ||
+    compareText(left.reasonCode, right.reasonCode)
+  );
 }
 
 function compareText(left: string, right: string): number {
@@ -545,12 +646,17 @@ function orderEqualTimeGroup(
   const predecessorsBySuccessor = new Map<string, readonly string[]>();
   const successorCounts = new Map(events.map((event) => [event.id, 0]));
   for (const event of events) {
-    const predecessorIds = [event.reversesEventId, event.predecessorEventId]
-      .filter((id): id is string => id !== null && eventsById.has(id));
+    const predecessorIds = [
+      event.reversesEventId,
+      event.predecessorEventId,
+    ].filter((id): id is string => id !== null && eventsById.has(id));
     const uniquePredecessorIds = [...new Set(predecessorIds)];
     predecessorsBySuccessor.set(event.id, uniquePredecessorIds);
     for (const predecessorId of uniquePredecessorIds) {
-      successorCounts.set(predecessorId, (successorCounts.get(predecessorId) ?? 0) + 1);
+      successorCounts.set(
+        predecessorId,
+        (successorCounts.get(predecessorId) ?? 0) + 1
+      );
     }
   }
   const readyIds = [...successorCounts.entries()]

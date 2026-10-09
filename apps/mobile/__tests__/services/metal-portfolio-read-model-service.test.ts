@@ -305,7 +305,7 @@ describe("metal portfolio read model", () => {
       mockSellGroupsCollection,
       "user-1",
       { kind: "where", column: "domain", value: "metals" },
-      { kind: "where", column: "kind", value: "sell" },
+      { kind: "where", column: "kind", value: { oneOf: ["sell", "dispose"] } },
       { kind: "where", column: "deleted", value: false }
     );
     expect(mockQueryOwned).toHaveBeenCalledWith(
