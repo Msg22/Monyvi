@@ -110,9 +110,10 @@ export function CategoryTile(props: {
         color={props.iconColor}
       />
       <Text
+        includeFontPadding={props.isSelected ? false : undefined}
         className={
           props.isSelected
-            ? "min-w-0 flex-1 text-sm font-semibold text-nileGreen-800 dark:text-nileGreen-400"
+            ? "min-w-0 flex-1 text-sm leading-5 font-semibold text-nileGreen-800 dark:text-nileGreen-400"
             : "min-w-0 flex-1 text-sm font-medium text-text-primary dark:text-text-primary-dark"
         }
       >
