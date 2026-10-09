@@ -579,6 +579,41 @@ describe("Dispose metal holding direct form", () => {
     ).toBeOnTheScreen();
   });
 
+  it.each([
+    [390, 1, false, null],
+    [390, 1, false, "lost_or_stolen"],
+    [320, 1, false, "lost_or_stolen"],
+    [390, 2, true, "lost_or_stolen"],
+  ] as const)(
+    "keeps the reason label vertically centered at width %s, scale %s, RTL %s, selection %s",
+    (width, fontScale, isRtl, category): void => {
+      renderScreen({
+        width,
+        fontScale,
+        isRtl,
+        category,
+        locale: isRtl ? "ar" : "en",
+      });
+      expect(screen.getByText(copy.categoryLabels.lost_or_stolen)).toHaveProp(
+        "style",
+        expect.objectContaining({
+          textAlignVertical: "center",
+          includeFontPadding: false,
+        })
+      );
+      expect(
+        screen.getByText(copy.categoryLabels.lost_or_stolen)
+      ).not.toHaveProp("includeFontPadding");
+      expect(
+        screen.getByText(copy.categoryLabels.lost_or_stolen)
+      ).not.toHaveProp("numberOfLines");
+      expect(screen.getByTestId("dispose-category-lost_or_stolen")).toHaveProp(
+        "accessibilityState",
+        expect.objectContaining({ selected: category === "lost_or_stolen" })
+      );
+    }
+  );
+
   it("uses the approved reason icon semantics and defined dark Nile Green tokens", (): void => {
     renderScreen({
       category: "other",
