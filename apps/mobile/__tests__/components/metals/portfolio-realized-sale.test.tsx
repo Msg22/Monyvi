@@ -1,4 +1,9 @@
-import { fireEvent, render, screen } from "@testing-library/react-native";
+import {
+  fireEvent,
+  render,
+  screen,
+  within,
+} from "@testing-library/react-native";
 import React from "react";
 
 import type { CurrencyType } from "@monyvi/db";
@@ -141,6 +146,71 @@ function renderPortfolio(
     />
   );
 }
+
+describe("portfolio realized-sale presentation", () => {
+  it.each([
+    ["sale gain", "sold", "gain", true, "trending-up-outline"],
+    ["sale loss", "sold", "loss", true, "trending-down-outline"],
+    ["sale break-even", "sold", "neutral", true, "remove-outline"],
+    ["sale unavailable", "sold", undefined, true, "remove-outline"],
+    ["sale evidence still loading", "sold", "gain", false, "remove-outline"],
+    ["write-off", "disposed", "loss", true, "trending-down-outline"],
+    ["external transfer", "disposed", "neutral", true, "remove-outline"],
+    [
+      "disposal without verified facts",
+      "disposed",
+      undefined,
+      true,
+      "remove-outline",
+    ],
+  ] as const)(
+    "uses the %s recent-History icon without inferring from holding values",
+    (
+      _scenario,
+      status,
+      recentHistoryOutcome,
+      realizedSale,
+      expectedIcon
+    ): void => {
+      const holdingId = "recent-outcome";
+      renderPortfolio({
+        portfolio: {
+          ...portfolio,
+          recentHistory: [
+            {
+              ...activeHolding,
+              id: holdingId,
+              status,
+              soldResultDecimal: "9007199254740993.123",
+              currentValueDecimal: "999999",
+              recentHistoryOutcome,
+            },
+          ],
+        },
+        readiness: {
+          holdings: true,
+          rateCurrency: true,
+          recentHistory: true,
+          realizedSale,
+          summary: true,
+        },
+      });
+
+      expect(
+        within(
+          screen.getByTestId(`metal-portfolio-history-${holdingId}`)
+        ).getByTestId(`icon-${expectedIcon}`)
+      ).toBeTruthy();
+      if (!realizedSale && status === "sold") {
+        expect(
+          screen.getByTestId(
+            `metal-portfolio-history-result-pending-${holdingId}`
+          )
+        ).toBeTruthy();
+      }
+    }
+  );
+});
 
 describe("portfolio realized-sale presentation", () => {
   it("uses loss language for negative sold results in summary and History", () => {

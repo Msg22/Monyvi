@@ -1,17 +1,13 @@
 import { METAL_RENDER_MANIFEST } from "@/assets/images/metals/manifest";
 import { palette } from "@/constants/colors";
-import {
-  getTabContentBottomClearance,
-  shouldUseCompactLayout,
-} from "@/constants/ui";
+import { shouldUseCompactLayout } from "@/constants/ui";
+import { useTheme } from "@/context/ThemeContext";
 import { useUiPolishCopy } from "@/hooks/useUiPolishCopy";
 import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
 import React from "react";
 import {
   Image,
   Pressable,
-  ScrollView,
   Text,
   useWindowDimensions,
   View,
@@ -19,114 +15,69 @@ import {
 import { useTranslation } from "react-i18next";
 
 interface MetalPortfolioEmptyStateProps {
-  readonly bottomInset?: number;
-  readonly hasHistory?: boolean;
-  readonly onAddPress: () => void;
-  readonly onHistoryPress?: () => void;
+  readonly onAddPress?: () => void;
 }
 
 export interface MetalEmptyStateLayout {
   readonly illustrationSize: number;
-  readonly isCompact: boolean;
-  readonly titleFontSize: number;
-  readonly titleLineHeight: number;
   readonly verticalGap: number;
 }
 
+/**
+ * Embedded below "Your items" in the same portfolio FlatList: rates, summary
+ * and permanent History remain visible when there are no active holdings.
+ */
 export function MetalPortfolioEmptyState({
-  bottomInset = 0,
-  hasHistory = false,
   onAddPress,
-  onHistoryPress,
 }: MetalPortfolioEmptyStateProps): React.JSX.Element {
   const copy = useUiPolishCopy();
-  const { t, i18n } = useTranslation("metals");
-  const isRtl =
-    typeof i18n.dir === "function"
-      ? i18n.dir(i18n.resolvedLanguage) === "rtl"
-      : i18n.resolvedLanguage === "ar";
+  const { t } = useTranslation("metals");
+  const { isDark } = useTheme();
   const { fontScale, width } = useWindowDimensions();
   const layout = getMetalEmptyStateLayout(width, fontScale);
+  const addHoldingLabel = t("add_holding");
 
   return (
-    <ScrollView
-      className="flex-1 bg-background dark:bg-background-dark"
-      contentContainerStyle={{
-        flexGrow: 1,
-        paddingBottom: getTabContentBottomClearance(bottomInset),
-      }}
-      showsVerticalScrollIndicator={false}
+    <View
+      className="w-full items-center py-5"
       testID="metal-portfolio-empty-state"
     >
-      <View className="flex-1 justify-center px-5 py-4">
-        <EmptyMetalsIllustration size={layout.illustrationSize} />
-
-        <View
-          className="items-center"
-          style={{ marginTop: layout.verticalGap }}
+      <EmptyMetalsIllustration size={layout.illustrationSize} />
+      <View
+        className="w-full items-center px-3"
+        style={{ marginTop: layout.verticalGap }}
+      >
+        <Text
+          accessibilityRole="header"
+          className="max-w-full text-center text-xl font-bold leading-7 text-text-primary dark:text-text-primary-dark"
+          testID="metal-empty-title"
         >
-          <Text
-            accessibilityRole="header"
-            className="text-center font-bold text-text-primary dark:text-text-primary-dark"
-            style={{
-              fontSize: layout.titleFontSize,
-              lineHeight: layout.titleLineHeight,
-            }}
-            testID="metal-empty-title"
-          >
-            {copy.metals_empty.title}
-          </Text>
-          <Text className="mt-4 text-center text-base leading-6 text-text-secondary dark:text-text-secondary-dark">
-            {copy.metals_empty.body}
-          </Text>
-        </View>
-
+          {copy.metals_empty.title}
+        </Text>
+        <Text className="mt-2 max-w-full text-center text-base leading-6 text-text-secondary dark:text-text-secondary-dark">
+          {copy.metals_empty.body}
+        </Text>
+      </View>
+      {onAddPress ? (
         <Pressable
           accessible
-          accessibilityLabel={copy.metals_empty.cta}
+          accessibilityLabel={addHoldingLabel}
           accessibilityRole="button"
-          className="mt-7 min-h-14 w-full overflow-hidden rounded-full"
+          className="mt-5 min-h-11 max-w-full flex-row flex-wrap items-center justify-center gap-2 self-center rounded-xl border border-nileGreen-500 bg-transparent px-4 py-2.5"
           onPress={onAddPress}
-          style={({ pressed }) => ({ opacity: pressed ? 0.78 : 1 })}
           testID="metal-empty-add"
         >
-          <LinearGradient
-            className="min-h-14 w-full flex-row items-center justify-center gap-4 rounded-full px-5 py-1.5"
-            colors={[palette.nileGreen[400], palette.nileGreen[500]]}
-            end={isRtl ? { x: 0, y: 0 } : { x: 1, y: 0 }}
-            start={isRtl ? { x: 1, y: 0 } : { x: 0, y: 0 }}
-            testID="metal-empty-add-gradient"
-          >
-            <View className="h-11 w-11 items-center justify-center rounded-full bg-nileGreen-900">
-              <Ionicons name="add" size={30} color={palette.slate[25]} />
-            </View>
-            <Text className="min-w-0 shrink text-center text-lg font-bold text-slate-900">
-              {copy.metals_empty.cta}
-            </Text>
-          </LinearGradient>
+          <Ionicons
+            name="add"
+            size={20}
+            color={isDark ? palette.nileGreen[400] : palette.nileGreen[700]}
+          />
+          <Text className="shrink text-center text-sm font-semibold text-nileGreen-700 dark:text-nileGreen-400">
+            {addHoldingLabel}
+          </Text>
         </Pressable>
-
-        {hasHistory && onHistoryPress ? (
-          <Pressable
-            accessibilityLabel={t("portfolio.recent_history")}
-            accessibilityRole="button"
-            className="mt-3 min-h-11 flex-row items-center justify-center gap-1"
-            onPress={onHistoryPress}
-            style={({ pressed }) => ({ opacity: pressed ? 0.72 : 1 })}
-            testID="metal-empty-history"
-          >
-            <Text className="text-sm font-semibold text-nileGreen-700 dark:text-nileGreen-400">
-              {t("portfolio.recent_history")}
-            </Text>
-            <Ionicons
-              name={isRtl ? "chevron-back" : "chevron-forward"}
-              size={18}
-              color={palette.nileGreen[600]}
-            />
-          </Pressable>
-        ) : null}
-      </View>
-    </ScrollView>
+      ) : null}
+    </View>
   );
 }
 
@@ -212,12 +163,13 @@ export function getMetalEmptyStateLayout(
   width: number,
   fontScale: number
 ): MetalEmptyStateLayout {
-  const isCompact = shouldUseCompactLayout(width, fontScale);
+  // Preserve the approved 196 × 141.12 reference at 360px. Only cap the
+  // illustration on narrower screens; let localized text wrap naturally.
+  const horizontalClearance = shouldUseCompactLayout(width, fontScale)
+    ? 48
+    : 64;
   return {
-    isCompact,
-    illustrationSize: isCompact ? 244 : 316,
-    verticalGap: isCompact ? 12 : 24,
-    titleFontSize: isCompact ? 20 : 22,
-    titleLineHeight: isCompact ? 26 : 28,
+    illustrationSize: Math.min(196, Math.max(0, width - horizontalClearance)),
+    verticalGap: 12,
   };
 }

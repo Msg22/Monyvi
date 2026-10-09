@@ -19,12 +19,16 @@ import {
   resolveMetalsCurrencyMinorUnits,
   serializeDecimal,
   validateAndNormalizeRateReference,
-  type LifecycleEvent,
   type NormalizedRateReference,
   type RateReferenceExpectation,
   type SupportedMetal,
 } from "@monyvi/logic";
 import { Q, type Query } from "@nozbe/watermelondb";
+import {
+  resolveLegacyDisposalBaseline,
+  toLegacyDisposalRevisionEvidence,
+  type LegacyDisposalRevisionEvidence,
+} from "@/services/metal-legacy-disposal-baseline-service";
 import { buildMetalDetailTerminalFacts } from "@/services/metal-terminal-display-service";
 import {
   getCurrentUserDataScope,
@@ -62,6 +66,7 @@ import {
   toMetalInstrumentCode,
   toPureGramsDecimal,
   toRateReferenceInput,
+  toReducerEvent,
   toRenderKey,
 } from "@/services/metal-detail-read-model-shaping";
 export { shapeMetalDetailLifecycleEvents } from "@/services/metal-detail-read-model-shaping";
@@ -117,6 +122,9 @@ export interface BuildMetalDetailReadModelInput {
   readonly asset: MetalDetailAssetInput;
   readonly currentRates?: LiveRatesTrustReadModel;
   readonly holdingState: MetalDetailHoldingStateInput;
+  readonly legacyDisposalRevisionEvidence?:
+    | readonly LegacyDisposalRevisionEvidence[]
+    | null;
   readonly lifecycleEvents: readonly MetalDetailLifecycleEventInput[];
   readonly metal: MetalDetailMetalInput;
   readonly preferredCurrency?: CurrencyType;
@@ -323,6 +331,7 @@ export async function readMetalDetailReadModel(
     asset: toDetailAssetInput(asset),
     currentRates: options.currentRates,
     holdingState: toDetailHoldingStateInput(holdingState),
+    legacyDisposalRevisionEvidence: toLegacyDisposalRevisionEvidence(evidence),
     lifecycleEvents: shapeMetalDetailLifecycleEvents(events, evidence),
     metal: toDetailMetalInput(metal, metalType),
     preferredCurrency: options.preferredCurrency,
@@ -445,7 +454,15 @@ export function buildMetalDetailReadModel(
   if (!isOwnedDetailInput(input)) return null;
 
   const reduced = reduceMetalLifecycle(
-    input.lifecycleEvents.map(toReducerEvent)
+    input.lifecycleEvents.map(toReducerEvent),
+    resolveLegacyDisposalBaseline({
+      assetId: input.asset.id,
+      userId: input.userId,
+      holdingState: input.holdingState,
+      lifecycleEvents: input.lifecycleEvents,
+      terminalFacts: input.terminalFacts ?? null,
+      revisionEvidence: input.legacyDisposalRevisionEvidence ?? null,
+    })
   );
   const projection = reduced.projection;
   if (
@@ -611,40 +628,6 @@ function conservativeObservedAt(
   return timestamps.length > 0 && timestamps.length === rates.length
     ? new Date(Math.min(...timestamps))
     : null;
-}
-
-function toReducerEvent(event: MetalDetailLifecycleEventInput): LifecycleEvent {
-  return {
-    canonicalCasStatus: event.actionState ?? "unknown",
-    evidenceState:
-      event.isEffective === false
-        ? "ineffective"
-        : event.actionState === "unknown"
-          ? "incomplete"
-          : "effective",
-    fingerprint: event.payloadJson ?? event.id,
-    id: event.id,
-    kind: toLifecycleKind(event.kind),
-    occurredAt: event.occurredAt.getTime(),
-    predecessorEventId: event.predecessorEventId,
-    reversesEventId: event.reversesEventId ?? null,
-  };
-}
-
-function toLifecycleKind(
-  kind: MetalDetailLifecycleEventInput["kind"]
-): LifecycleEvent["kind"] {
-  const mappedKinds: Readonly<
-    Record<MetalDetailLifecycleEventInput["kind"], LifecycleEvent["kind"]>
-  > = {
-    add: "created",
-    correct: "corrected",
-    delete: "deleted",
-    dispose: "disposed",
-    sell: "sold",
-    undo: "reversed",
-  };
-  return mappedKinds[kind];
 }
 
 function convertDetailValueForDisplay(

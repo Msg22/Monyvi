@@ -37,6 +37,11 @@ import {
   type LiveRatesTrustValue,
 } from "@/services/live-rates-trust-read-model-service";
 import {
+  shapeMetalHistoryOutcome,
+  shapeSoldDisplayAmounts,
+  type MetalRecentHistoryOutcome,
+} from "./metal-portfolio-history-outcome-service";
+import {
   shapeMetalRealizedSaleEvidence,
   toMetalSellEventSnapshot,
   type MetalRealizedSaleOutcome,
@@ -44,7 +49,6 @@ import {
   type MetalSellRateReferenceSnapshot,
 } from "@/services/metal-realized-sale-read-model-service";
 import {
-  convertSoldAmountForPreferredDisplay,
   toPortfolioSaleGroup,
   toPortfolioSaleHolding,
 } from "@/services/metal-portfolio-sale-result-service";
@@ -75,6 +79,7 @@ export interface MetalPortfolioHoldingInput {
   readonly purchaseCurrency: MetalsIsoCurrencyCode | null;
   readonly purchaseDate: Date | null;
   readonly purchasePriceDecimal: string | null;
+  readonly recentHistoryOutcome?: MetalRecentHistoryOutcome;
   readonly purityCatalogVersion: "1" | null;
   readonly purityCode: string | null;
   readonly purityFactorDecimal: string | null;
@@ -225,7 +230,9 @@ export function observePortfolioMetalSellGroups(
     database.get<FinancialActionGroup>("financial_action_groups"),
     userId,
     Q.where("domain", "metals"),
-    Q.where("kind", "sell"),
+    // Both terminal action groups are needed to classify recent History.
+    // Existing sale outcome shaping continues to validate sell groups alone.
+    Q.where("kind", Q.oneOf(["sell", "dispose"])),
     Q.where("deleted", false)
   );
 }
@@ -412,34 +419,30 @@ export function shapeMetalPortfolioHoldings(
             userId: input.userId,
           })
         : null;
-    const soldValue =
-      soldEvidence !== null && soldEvidence.available
-        ? soldEvidence.value
-        : null;
+    const { soldDisplayCurrency, soldNetProceedsDecimal, soldResultDecimal } =
+      shapeSoldDisplayAmounts({
+        currentRates: input.currentRates,
+        preferredCurrency: input.preferredCurrency,
+        soldEvidence,
+      });
 
-    const soldNetProceedsDecimal =
-      soldValue === null
-        ? null
-        : convertSoldAmountForPreferredDisplay({
-            amountCurrency: soldValue.proceedsCurrency,
-            amountDecimal: soldValue.netProceedsDecimal,
-            currentRates: input.currentRates,
-            preferredCurrency: input.preferredCurrency,
-          });
-    const soldResultDecimal =
-      soldValue === null
-        ? null
-        : convertSoldAmountForPreferredDisplay({
-            amountCurrency: soldValue.purchaseCurrency,
-            amountDecimal: soldValue.combinedDecimal,
-            currentRates: input.currentRates,
-            preferredCurrency: input.preferredCurrency,
-          });
-    const soldDisplayCurrency = isSupportedMetalsIsoCurrencyCode(
-      input.preferredCurrency
-    )
-      ? input.preferredCurrency
-      : null;
+    const recentHistoryOutcome = shapeMetalHistoryOutcome({
+      event: toMetalSellEventSnapshot(effectiveEvent),
+      group: toPortfolioSaleGroup(effectiveEvent, groupsByActionId),
+      holding: {
+        effectiveActionId: state.effectiveActionId ?? null,
+        effectiveEventId: state.effectiveEventId,
+        holdingId: asset.id,
+        isVisible: state.isVisible,
+        reconciliationState: state.reconciliationState,
+        status,
+        userId: asset.userId,
+      },
+      latestAllowedCalendarDate: input.latestAllowedCalendarDate,
+      soldResultDecimal,
+      status,
+      userId: input.userId,
+    });
 
     return [
       {
@@ -460,6 +463,7 @@ export function shapeMetalPortfolioHoldings(
         purchaseCurrency: exactFacts.purchaseCurrency,
         purchaseDate: copyValidDate(asset.purchaseDate),
         purchasePriceDecimal: exactFacts.purchasePriceDecimal,
+        recentHistoryOutcome,
         purityCatalogVersion: exactFacts.purityCatalogVersion,
         purityCode: exactFacts.purityCode,
         purityFactorDecimal: exactFacts.purityFactorDecimal,

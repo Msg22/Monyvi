@@ -118,6 +118,34 @@ describe("Metals EN/AR content contract", () => {
     }
   });
 
+  it("uses the approved No longer owned wording across navigation, details, timeline, and History", () => {
+    for (const key of [
+      "dispose.title",
+      "detail.no_longer_possession",
+      "actions.dispose",
+      "timeline.dispose",
+    ]) {
+      // Keep stable translation keys: only displayed strings change.
+      expect(enFlat[key]).toBe("No longer owned");
+      expect(arFlat[key]).toBe("لم يعد لدي");
+    }
+    expect(enFlat["history.subtitle"]).toBe(
+      "Sales and holdings no longer owned."
+    );
+    expect(arFlat["history.subtitle"]).toBe(
+      "المبيعات والمقتنيات التي لم تعد ملكك."
+    );
+    expect(arFlat["delete.consequence"]).toContain("«لم يعد لدي»");
+
+    const visibleCopy = [
+      ...Object.values(enFlat),
+      ...Object.values(arFlat),
+    ].join(" ");
+    expect(visibleCopy).not.toMatch(
+      /no longer in (?:my |your )?possession|لم يعد بحوزتي|لم تعد بحوزتك/iu
+    );
+  });
+
   it("uses exact provider-observation time copy without a customer-facing age threshold", () => {
     expect(enFlat).toMatchObject({
       "portfolio.rates_updated":

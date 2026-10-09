@@ -47,16 +47,19 @@ describe("approved pure lifecycle reduction", () => {
     ["numeric reversal", { ...ROOT, reversesEventId: 42 }],
     ["missing CAS status", { ...ROOT, canonicalCasStatus: undefined }],
     ["invalid CAS status", { ...ROOT, canonicalCasStatus: "pending" }],
-  ] as const)("retains malformed runtime event structure as incomplete: %s", (_case, rawEvent) => {
-    const result = reduceMetalLifecycle([rawEvent]);
+  ] as const)(
+    "retains malformed runtime event structure as incomplete: %s",
+    (_case, rawEvent) => {
+      const result = reduceMetalLifecycle([rawEvent]);
 
-    expect(result.projection).toBeNull();
-    expect(result.acceptedEvents).toEqual([]);
-    expect(result.rejectedEvents).toHaveLength(1);
-    expect(result.rejectedEvents[0]).toMatchObject({
-      reasonCode: "incomplete_evidence",
-    });
-  });
+      expect(result.projection).toBeNull();
+      expect(result.acceptedEvents).toEqual([]);
+      expect(result.rejectedEvents).toHaveLength(1);
+      expect(result.rejectedEvents[0]).toMatchObject({
+        reasonCode: "incomplete_evidence",
+      });
+    }
+  );
 
   it("keeps a valid projection while retaining a malformed successor as incomplete", () => {
     const malformedSuccessor: unknown = {
@@ -83,8 +86,15 @@ describe("approved pure lifecycle reduction", () => {
     [event("deleted", "deleted", "created"), "active", false],
   ] as const)("accepts the valid %s chain", (successor, status, isVisible) => {
     const result = reduceMetalLifecycle([successor, ROOT]);
-    expect(result.projection).toMatchObject({ status, isVisible, effectiveEventId: successor.id });
-    expect(result.acceptedEvents.map(({ id }) => id)).toEqual(["created", successor.id]);
+    expect(result.projection).toMatchObject({
+      status,
+      isVisible,
+      effectiveEventId: successor.id,
+    });
+    expect(result.acceptedEvents.map(({ id }) => id)).toEqual([
+      "created",
+      successor.id,
+    ]);
     expect(result.rejectedEvents).toEqual([]);
   });
 
@@ -172,8 +182,8 @@ describe("approved pure lifecycle reduction", () => {
       "deleted",
     ]);
     expect(
-      result.rejectedEvents.find(({ event: rejected }) =>
-        rejected.id === "correction"
+      result.rejectedEvents.find(
+        ({ event: rejected }) => rejected.id === "correction"
       )?.reasonCode
     ).toBe("conflicting_effective_successors");
   });
@@ -200,18 +210,41 @@ describe("approved pure lifecycle reduction", () => {
 
   it("accepts a reversal only when both references target the current terminal head", () => {
     const sold = event("sold", "sold", "created");
-    const reversal = event("undo", "reversed", "sold", { reversesEventId: "sold" });
+    const reversal = event("undo", "reversed", "sold", {
+      reversesEventId: "sold",
+    });
     const result = reduceMetalLifecycle([reversal, ROOT, sold]);
-    expect(result.projection).toMatchObject({ status: "active", isVisible: true, effectiveEventId: "undo" });
-    expect(result.acceptedEvents.map(({ id }) => id)).toEqual(["created", "sold", "undo"]);
+    expect(result.projection).toMatchObject({
+      status: "active",
+      isVisible: true,
+      effectiveEventId: "undo",
+    });
+    expect(result.acceptedEvents.map(({ id }) => id)).toEqual([
+      "created",
+      "sold",
+      "undo",
+    ]);
   });
 
   it.each([
     [event("missing", "corrected", "absent"), "missing_predecessor"],
     [event("bad-transition", "corrected", "sold"), "invalid_transition"],
-    [event("bad-undo", "reversed", "sold", { reversesEventId: "created" }), "invalid_reversal_target"],
-    [event("ineffective", "corrected", "created", { evidenceState: "ineffective" }), "ineffective_evidence"],
-    [event("incomplete", "corrected", "created", { evidenceState: "incomplete" }), "incomplete_evidence"],
+    [
+      event("bad-undo", "reversed", "sold", { reversesEventId: "created" }),
+      "invalid_reversal_target",
+    ],
+    [
+      event("ineffective", "corrected", "created", {
+        evidenceState: "ineffective",
+      }),
+      "ineffective_evidence",
+    ],
+    [
+      event("incomplete", "corrected", "created", {
+        evidenceState: "incomplete",
+      }),
+      "incomplete_evidence",
+    ],
   ] as const)("rejects unsafe evidence with %s", (unsafeEvent, reason) => {
     const sold = event("sold", "sold", "created");
     const result = reduceMetalLifecycle([ROOT, sold, unsafeEvent]);
@@ -221,11 +254,20 @@ describe("approved pure lifecycle reduction", () => {
   it("retains duplicate replay and conflicting duplicate evidence without applying it twice", () => {
     const correction = event("correction", "corrected", "created");
     const replay = { ...correction };
-    const conflict = { ...correction, fingerprint: "different", occurredAt: 2_000 };
+    const conflict = {
+      ...correction,
+      fingerprint: "different",
+      occurredAt: 2_000,
+    };
     const replayResult = reduceMetalLifecycle([ROOT, correction, replay]);
     const conflictResult = reduceMetalLifecycle([ROOT, correction, conflict]);
     expect(reasons(replayResult)).toContain("duplicate_event_id_replay");
-    expect(reasons(conflictResult)).toEqual(expect.arrayContaining(["duplicate_event_id_conflict", "duplicate_event_id_conflict"]));
+    expect(reasons(conflictResult)).toEqual(
+      expect.arrayContaining([
+        "duplicate_event_id_conflict",
+        "duplicate_event_id_conflict",
+      ])
+    );
     expect(conflictResult.projection?.effectiveEventId).toBe("created");
   });
 
@@ -359,38 +401,58 @@ describe("approved pure lifecycle reduction", () => {
     expect(result.projection).toBeNull();
     expect(result.acceptedEvents).toEqual([]);
     expect(result.rejectedEvents).toHaveLength(2);
-    expect(reasons(result)).toEqual(["invalid_transition", "invalid_transition"]);
+    expect(reasons(result)).toEqual([
+      "invalid_transition",
+      "invalid_transition",
+    ]);
   });
   it("rejects cycles and descendants of rejected predecessors", () => {
     const cycleA = event("cycle-a", "corrected", "cycle-b");
     const cycleB = event("cycle-b", "corrected", "cycle-a");
     const descendant = event("descendant", "sold", "cycle-a");
     const result = reduceMetalLifecycle([ROOT, cycleA, cycleB, descendant]);
-    expect(reasons(result)).toEqual(expect.arrayContaining(["cycle_detected", "predecessor_not_accepted"]));
+    expect(reasons(result)).toEqual(
+      expect.arrayContaining(["cycle_detected", "predecessor_not_accepted"])
+    );
     expect(result.projection?.effectiveEventId).toBe("created");
   });
 
   it("fails closed for competing successors without canonical CAS evidence", () => {
     const sold = event("sold", "sold", "created", { occurredAt: 2_000 });
-    const disposed = event("disposed", "disposed", "created", { occurredAt: 3_000 });
+    const disposed = event("disposed", "disposed", "created", {
+      occurredAt: 3_000,
+    });
     const result = reduceMetalLifecycle([ROOT, disposed, sold]);
     expect(result.projection?.effectiveEventId).toBe("created");
-    expect(reasons(result)).toEqual(["conflicting_effective_successors", "conflicting_effective_successors"]);
+    expect(reasons(result)).toEqual([
+      "conflicting_effective_successors",
+      "conflicting_effective_successors",
+    ]);
   });
 
   it("accepts only the authoritative CAS winner and rejects its competing sibling", () => {
-    const sold = event("sold", "sold", "created", { canonicalCasStatus: "accepted" });
-    const disposed = event("disposed", "disposed", "created", { canonicalCasStatus: "rejected" });
+    const sold = event("sold", "sold", "created", {
+      canonicalCasStatus: "accepted",
+    });
+    const disposed = event("disposed", "disposed", "created", {
+      canonicalCasStatus: "rejected",
+    });
     const result = reduceMetalLifecycle([disposed, ROOT, sold]);
     expect(result.projection?.effectiveEventId).toBe("sold");
     expect(reasons(result)).toContain("ineffective_evidence");
   });
 
   it("uses causality rather than time or ID for an equal-time chain", () => {
-    const correction = event("z-correction", "corrected", "created", { occurredAt: 1_000 });
+    const correction = event("z-correction", "corrected", "created", {
+      occurredAt: 1_000,
+    });
     const sold = event("a-sold", "sold", "z-correction", { occurredAt: 1_000 });
     const result = reduceMetalLifecycle([sold, ROOT, correction]);
-    expect(result.acceptedEvents.map(({ id }) => id)).toEqual(["created", "z-correction", "a-sold"]);
+    expect(result.acceptedEvents.map(({ id }) => id)).toEqual([
+      "created",
+      "z-correction",
+      "a-sold",
+    ]);
     expect(result.projection?.effectiveEventId).toBe("a-sold");
   });
 
@@ -415,7 +477,9 @@ describe("approved pure lifecycle reduction", () => {
   });
 
   it("is deterministic across shuffled input and restart replay", () => {
-    const correction = event("correction", "corrected", "created", { occurredAt: 2_000 });
+    const correction = event("correction", "corrected", "created", {
+      occurredAt: 2_000,
+    });
     const sold = event("sold", "sold", "correction", { occurredAt: 3_000 });
     const first = reduceMetalLifecycle([sold, ROOT, correction]);
     const replayed = reduceMetalLifecycle([correction, sold, ROOT]);
@@ -440,6 +504,40 @@ describe("approved pure lifecycle reduction", () => {
     expect(result.projection).toBeNull();
     expect(result.acceptedEvents).toEqual([]);
     expect(reasons(result)).toEqual(["invalid_transition"]);
+  });
+
+  it("keeps a verified legacy disposal terminal readable without fabricating its missing creation event", () => {
+    const legacyDisposed = event("legacy-disposed", "disposed", null, {
+      canonicalCasStatus: "accepted",
+    });
+
+    const result = reduceMetalLifecycle([legacyDisposed], {
+      terminalEventId: "legacy-disposed",
+    });
+
+    expect(result.projection).toMatchObject({
+      effectiveEventId: "legacy-disposed",
+      isVisible: true,
+      status: "disposed",
+    });
+    expect(result.acceptedEvents.map(({ id }) => id)).toEqual([
+      "legacy-disposed",
+    ]);
+    expect(result.rejectedEvents).toEqual([]);
+  });
+
+  it("rejects an undeclared lone terminal root even when a different legacy baseline is supplied", () => {
+    const undeclaredDisposed = event("undeclared-disposed", "disposed", null, {
+      canonicalCasStatus: "accepted",
+    });
+
+    const result = reduceMetalLifecycle([undeclaredDisposed], {
+      terminalEventId: "legacy-disposed",
+    });
+
+    expect(result.projection).toBeNull();
+    expect(result.acceptedEvents).toEqual([]);
+    expect(reasons(result)).toContain("missing_predecessor");
   });
 });
 
