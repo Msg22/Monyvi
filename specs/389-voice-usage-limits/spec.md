@@ -57,6 +57,26 @@ future subscription entitlements."
   same key may be admitted as new under current auth, consent, validation and
   quota gates. This is not lifetime replay protection.
 
+### Session 2026-10-10 — approved UI repair
+
+- The owner approved all five exact bindings in
+  `mockups/repair-binding-manifest.json`; see `reconciliation.md` for the
+  immutable manifest revision and approval receipt. These references supersede
+  the old two-reference layout for the repaired surfaces; historical images and
+  approvals remain unchanged.
+- Manual uses compact ordinary GroupedMoneyInput, a normal-width
+  account/category row and shared optional fields. Its custom calculator appears
+  only on amount focus, suppresses the native soft keyboard, and Done dismisses
+  without saving. Header Save preserves existing local validation/submission.
+  Transfer, recurring, currencies/conversion, balances, budgets and offline
+  behavior remain intact.
+- Manual has no Voice quota or availability-check failure surface. Voice keeps
+  the unboxed microphone, exact locale-specific idle/daily-limit compositions,
+  shared underline tabs and approved recovery states.
+- Standalone navigation, local-midnight reset and current financial/parsing
+  contracts remain authoritative. Held-reservation bug #384 remains deferred;
+  this repair does not change SQL, snapshots, sync or quota contracts.
+
 ## User Scenarios & Testing _(mandatory)_
 
 ### User Story 0 - Use One Unified Add Transaction Experience (Priority: P1)
@@ -81,7 +101,9 @@ underlying manual/voice transaction contracts.
    selected by default.
 2. **Given** Manual is selected, **When** the page renders, **Then** the
    existing manual transaction form and its current submission behavior are
-   presented inside the redesigned page.
+   presented in the approved compact layout inside the redesigned page. Amount
+   focus opens only the custom keypad; Done dismisses it without saving, and
+   header Save retains existing validation/local submission.
 3. **Given** the user switches to Voice, **When** Voice becomes active, **Then**
    the page matches the already-approved voice mockup and exposes the current
    voice transaction flow plus allowance state.
@@ -97,6 +119,12 @@ underlying manual/voice transaction contracts.
 7. **Given** the approved mockup differs from today's existing screens, **When**
    implementation is reviewed, **Then** the approved mockup is treated as the
    visual target rather than the current screen as the target.
+8. **Given** Voice is loading, exhausted, burst-limited or unavailable, **When**
+   Manual is selected, **Then** Manual shows no Voice quota/failure notice and
+   its ordinary amount input, required selectors and Save remain usable.
+9. **Given** the approved English and Arabic references differ, **When** each
+   Voice idle/daily state renders, **Then** its respective progress, examples,
+   alert and recovery composition is preserved rather than homogenized.
 
 ---
 
@@ -345,14 +373,19 @@ parsing contract or provider-specific implementation.
 - **FR-027**: Usage/availability telemetry MUST be privacy-safe and MUST NOT
   expose raw voice audio, transcript text, credentials, or financial transaction
   content solely for quota accounting.
-- **FR-028**: The feature MUST implement the already-approved Add Transaction /
-  Voice mockup as the target user-facing redesign; it MUST NOT generate,
-  substitute, or materially redesign that approved mockup without new product
-  approval.
+- **FR-028**: The feature MUST implement the exact approved Add Transaction
+  reference set identified by `mockups/repair-binding-manifest.json` and
+  `reconciliation.md`. Each active image/sidecar MUST pass the binding verifier.
+  Superseded references remain history; no substitution or material redesign is
+  permitted without renewed product approval.
 - **FR-029**: The app MUST expose one unified Add Transaction page containing
   Manual and Voice modes/tabs.
-- **FR-030**: Manual mode MUST render the existing manual transaction form and
-  preserve its existing transaction-entry/submission behavior.
+- **FR-030**: Manual mode MUST use the approved compact layout and preserve
+  existing financial transaction-entry/submission behavior, including transfer,
+  currencies/conversion, recurring and offline writes. Ordinary amount entry
+  MUST use GroupedMoneyInput; the custom keypad appears only during amount focus
+  with no native soft keyboard. Done applies existing equals behavior where
+  needed and dismisses without saving; header Save remains the save action.
 - **FR-031**: Voice mode MUST render the approved voice design and preserve the
   current voice provider/parsing transaction contract while integrating
   allowance/remaining/exhausted states.
@@ -361,10 +394,13 @@ parsing contract or provider-specific implementation.
 - **FR-033**: Switching between Manual and Voice MUST use one page/shell and
   MUST NOT require separate unrelated navigation destinations.
 - **FR-034**: Manual entry MUST remain available when Voice is exhausted,
-  burst-limited, or temporarily unavailable.
+  burst-limited, or temporarily unavailable. Voice quota and availability-check
+  failure notices MUST appear only in Voice and MUST NOT appear in Manual.
 - **FR-035**: The redesigned Add Transaction page MUST support English/LTR and
   Arabic/RTL behavior consistent with the approved mockup and existing
-  application localization standards.
+  application localization standards, preserving the approved locale-specific
+  progress, examples, daily alerts and actions. Shared primitives, required
+  markers, responsive reflow and bottom safe-area treatment remain mandatory.
 - **FR-036**: Any implementation-specific handling of mode switching during
   active recording/processing or partially completed manual entry MUST preserve
   current transaction safety and MUST be documented in planning before
@@ -482,10 +518,13 @@ parsing contract or provider-specific implementation.
 - **SC-013**: Manual-to-Voice and Voice-to-Manual switching tests use the same
   Add Transaction page and preserve the existing manual/voice transaction
   contracts.
-- **SC-014**: Approved-mockup review confirms the implemented Voice mode and
-  unified Add Transaction shell match the approved design in English/LTR and
-  Arabic/RTL, subject only to explicitly approved accessibility/responsive
-  adaptations.
+- **SC-014**: Rendered comparisons confirm Manual idle/focused, Voice idle and
+  daily-limit baselines match all five active approved references at their
+  declared contexts. Voice recovery/active states and English/LTR, Arabic/RTL,
+  light/dark, compact/ordinary/tablet/landscape and enlarged-text variants
+  preserve their approved composition. Separate accessibility evidence verifies
+  controls, focus and hidden-tree behavior; missing proof leaves completion
+  open.
 - **SC-015**: Exhausting or temporarily blocking Voice never prevents the user
   from switching to and using Manual entry.
 

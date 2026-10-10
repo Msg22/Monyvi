@@ -1,5 +1,76 @@
 # Planning reconciliation and approval package
 
+## UI repair authority — 10 October 2026
+
+Current worktree: `E:/Work/My Projects/Monyvi-issue347-ui-fidelity`; branch
+`codex/issue347-ui-fidelity`; source `ab15bcce6a23179a2d3735dc8b835f1933b99799`
+contains trusted main `3264eba2b67bcc66cddc95e3fbdb36e8705ee642`.
+
+Owner receipt: Mohamed on 2026-10-10, call_c386ef7634244cc3bee49c1eab3177dd
+item0, “Approve all five bindings”; exact manifest
+`sha256:4b06ef2ad901a13cceb06790e49149fb9b314e99c213080e941cce22859b34b8`.
+
+| Reference                        | Image revision                                                          | Binding Facts revision                                                  | Combined approval revision                                              |
+| -------------------------------- | ----------------------------------------------------------------------- | ----------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| transaction-voice-en             | sha256:740b0515fc223bb18b6797cbefb1a6de80591e93d2655ca4575f23cfcd3a4497 | sha256:7f2ea6f71cff0c2f95acac4691961fdfbdeb0680fdd41309dae01daa93ca9751 | sha256:f25efe58e6081f87b6432eded5d2d2cecce3e9ddc80d08864cd0e0faa5a117a1 |
+| transaction-voice-ar             | sha256:8be6e526a55dfdd8fd665496b87f8d33e0cf9d40d821f7714d7069b95c1a3654 | sha256:1612243d22ccfdbc37bf1dff05471becf9c43441843dd70f71a995b41ad61733 | sha256:714d9bd9309dbbc098f889922182a3231b1f17f0b3889721030ab715d22e7bf4 |
+| transaction-voice-daily-limit-en | sha256:00648dd6c27d73cff8c6738411a361782f3fff7c96877cea314445e756073ba9 | sha256:ba2ba4934ed42efba8944a541073fc629e0aa1a3708ead7eb0c12adf03cab267 | sha256:43e1f3022af1ddccd3c2eae9d602db6100852786e0e79a70515f110ed28f7948 |
+| transaction-voice-daily-limit-ar | sha256:327733b5d8317ae663599aea3cd04e42e75ba6ef68a9e9e0fa9bd3ddbb4abbdd | sha256:90127535cc572cee008dba7c169e715d0c7a3bfe93da8824fd29639d82f8ce97 | sha256:57b9ff0a7a2f1a9bc7b44e1faed1321ff4725089090ba79a23229cf2be68552f |
+| transaction-manual-compact-b     | sha256:035d1109c78eadc3d5eee2ff5a279ac04803a5a06e227c58740a7920e81cf3fd | sha256:205fa0d8624a01c8cb9a1ddd2d3fe7ccc6abe436f48a06689afd25244ca7f772 | sha256:d7f5addbdc219858bfb034d1a016e98ed9d58eabd20ffbe1ac8ff5c293f3d21b |
+
+All five exact PNGs, approved sidecars and identical manifest are in `mockups/`.
+Approval headers were recorded by lead; image bytes and Binding Facts stay
+frozen. Require each verifier before use. New package supersedes old
+two-reference layout for these repair surfaces, including old compact Manual
+allowance strip. Historical original bytes, revisions, approvals and dated
+evidence below remain unchanged.
+[UI contract](./contracts/add-transaction-ui-contract.md) is canonical
+state/shared-component/icon map; existing T001–T059 are finalized in place.
+
+Interpretations outside frozen facts: minimum48 dp calculator keys satisfy
+minimum44 visual and minimum48 interactive constraints. Common unavailable copy
+clause concerns availability-check failure body/short recovery heading,
+preserving explicit daily-limit labels/actions. Manual approved minus-circle
+visual maps to installed Ionicons remove-circle; income/transfer map to
+arrow-up-circle and swap-horizontal. Installed map verified all named glyphs;
+TypeTabs and OptionalSection are reused with approved glyph corrections.
+
+Lead owns frozen references/dispatch; exclusive planning worker owns authorized
+local doc reconciliation. Current owner authorization delegates autonomous
+in-scope technical recommendations and decisions within the existing
+security/data-sharing and artifact-ownership boundaries. Current worker order is
+Normal ChatGPT -> OpenCode -> Gemini/Antigravity -> justified native fallback.
+Current capability facts remain: the OpenCode free/Go route is blocked by a hard
+403/Go limit, and no Gemini/Antigravity (`agy`) runtime is available. Those
+unavailable pools are recorded rather than treated as permission to bypass
+ownership or evidence gates; native fallback is justified only when the earlier
+pools cannot safely and capably run the specific task. No external mutation or
+provider authority expands.
+
+Earlier direct-source exemption belongs only to its dated pass. Latest owner
+instruction now explicitly defers emulator/device testing: write unit/E2E tests,
+run focused unit/type/lint checks, then owner performs manual testing. No
+emulator, device, adb/Droidrun, E2E execution or rendered/accessibility capture
+is authorized. T034/T035/T049/T050 and visual/accessibility T058 remain
+unchecked/NOT RUN. This deferral does not claim fidelity, accessibility, device
+or merge readiness. Hand owner complete manual matrix; current work can complete
+authorized source and unit validation while those distinct acceptance statuses
+remain open.
+
+#384 held-reservation bug stays deferred; SQL/snapshot/quota/sync/financial
+contracts remain unchanged. Hosted availability function is absent; deployment
+is unauthorized. Controlled local state tests do not prove hosted Voice
+delivery.
+
+Fresh read-only analysis completed after canonical edits and approved-binding
+checks: 51/51 requirements covered, all 59 existing task IDs mapped, and zero
+critical/high findings. The current response carries the read-only report; no
+new analysis report file was generated. Before/after analyze optional commit
+hooks are inspected and skipped; use Git Bash with both explicit feature
+overrides and complete constitution/canonical trio.
+
+## Historical planning and approval record — preserved
+
 Reviewed locally on 2026-10-07. No implementation or worker assignments. The
 original T001–T059 checklist is preserved and refined in place.
 

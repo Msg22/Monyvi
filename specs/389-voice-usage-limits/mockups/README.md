@@ -1,5 +1,46 @@
 # Approved Add Transaction references
 
+## Active UI repair package — 10 October 2026
+
+Owner approved all five exact bindings: call_c386ef7634244cc3bee49c1eab3177dd
+item0, “Approve all five bindings”; manifest
+`sha256:4b06ef2ad901a13cceb06790e49149fb9b314e99c213080e941cce22859b34b8`.
+
+Read [repair-binding-manifest.json](./repair-binding-manifest.json) before
+dispatch. Current active images and immutable approved bindings:
+
+- [Voice idle EN](./transaction-voice-en.png) —
+  [binding](./transaction-voice-en.binding.md)
+- [Voice idle AR](./transaction-voice-ar.png) —
+  [binding](./transaction-voice-ar.binding.md)
+- [Daily limit EN](./transaction-voice-daily-limit-en.png) —
+  [binding](./transaction-voice-daily-limit-en.binding.md)
+- [Daily limit AR](./transaction-voice-daily-limit-ar.png) —
+  [binding](./transaction-voice-daily-limit-ar.binding.md)
+- [Manual B idle/focused](./transaction-manual-compact-b.png) —
+  [binding](./transaction-manual-compact-b.binding.md)
+
+Manifest records image/facts/combined revisions;
+[reconciliation](../reconciliation.md) records approval/history.
+[UI contract](../contracts/add-transaction-ui-contract.md) maps
+states/components/icons and minimum48 dp keypad/copy-scope interpretations
+outside frozen facts. Manual has no Voice quota/failure surface. Preserve
+deliberate EN/AR differences, standalone navigation and local-midnight reset.
+
+Run binding verifier separately for all five listed sidecars and require
+manifest agreement. Old bindings passing cannot establish current-package
+approval.
+
+Owner defers emulator/device/E2E execution and rendered/accessibility capture.
+T034/T035/T049/T050 and visual/accessibility T058 stay unchecked/NOT RUN for
+owner manual testing. Reference integrity and unit checks do not establish
+fidelity.
+
+## Historical two-reference package — superseded for repair surfaces
+
+Text below preserves original approval/provenance. Old image and binding bytes
+stay frozen. Old compact Manual allowance strip is superseded.
+
 These are unchanged original images from the approved 2026-09-27 product
 conversation. No image was generated, edited, resized or cropped for this
 feature handoff. The current owner request explicitly asks to save that approved

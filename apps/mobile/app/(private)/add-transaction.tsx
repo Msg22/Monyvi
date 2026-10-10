@@ -1,5 +1,3 @@
-import { useLocale } from "@/context/LocaleContext";
-import { formatLocalizedCount } from "@/utils/localized-number-display";
 import { PermissionRecoveryModal } from "@/components/permissions/PermissionRecoveryModal";
 import { AiProcessingConsentSheet } from "@/components/ai-consent/AiProcessingConsentSheet";
 import {
@@ -104,8 +102,8 @@ export default function AddTransaction(): React.JSX.Element {
     [params.originTabIndex]
   );
 
-  // Kept active for the whole unified route so Manual can show the approved
-  // compact Voice allowance strip. Failure here never blocks Manual behavior.
+  // Voice availability remains authoritative to the Voice surface only.
+  // Manual never renders quota/errors and remains usable when Voice is blocked.
   const voiceAvailability = useVoiceAiAvailability(true);
 
   const ensureAiProcessingConsent = useCallback(async (): Promise<boolean> => {
@@ -136,7 +134,7 @@ export default function AddTransaction(): React.JSX.Element {
   });
 
   const isModeSwitchLocked =
-    isVoiceStartPending || voiceFlow.isModeSwitchLocked;
+    isManualSubmitting || isVoiceStartPending || voiceFlow.isModeSwitchLocked;
 
   const invalidatePendingVoiceStart = useCallback((): void => {
     voiceStartGenerationRef.current += 1;
@@ -285,6 +283,9 @@ export default function AddTransaction(): React.JSX.Element {
   );
 
   const handleBack = useCallback(async (): Promise<void> => {
+    // The Manual entry owns the in-flight local-first write and its single
+    // post-save navigation. Back cannot race that pending submission.
+    if (isManualSubmitting) return;
     invalidatePendingVoiceStart();
 
     if (mode === "voice") {
@@ -294,7 +295,13 @@ export default function AddTransaction(): React.JSX.Element {
     if (isRouteMountedRef.current) {
       router.back();
     }
-  }, [invalidatePendingVoiceStart, mode, router, voiceFlow.discardRecording]);
+  }, [
+    invalidatePendingVoiceStart,
+    isManualSubmitting,
+    mode,
+    router,
+    voiceFlow.discardRecording,
+  ]);
 
   useEffect(() => {
     if (pendingModeFocusRef.current !== mode) {
@@ -493,15 +500,10 @@ export default function AddTransaction(): React.JSX.Element {
           >
             {t("add_transaction_mode_manual")}
           </Text>
-          <ManualVoiceAllowanceStrip
-            remaining={availability?.remaining ?? null}
-            dailyLimit={availability?.dailyLimit ?? null}
-            isUnavailable={voiceAvailability.error !== null}
-          />
-
           <View className="flex-1">
             <ManualTransactionEntry
               ref={manualEntryRef}
+              isActive={isManualMode}
               onSubmittingChange={setIsManualSubmitting}
             />
           </View>
@@ -646,56 +648,6 @@ export default function AddTransaction(): React.JSX.Element {
         onPrimaryPress={handleMicrophoneRecoveryPrimary}
         onCancel={handleMicrophoneRecoveryCancel}
       />
-    </View>
-  );
-}
-
-function ManualVoiceAllowanceStrip({
-  remaining,
-  dailyLimit,
-  isUnavailable,
-}: {
-  readonly remaining: number | null;
-  readonly dailyLimit: number | null;
-  readonly isUnavailable: boolean;
-}): React.JSX.Element | null {
-  const { t } = useTranslation("transactions");
-  const { language } = useLocale();
-
-  const hasMeteredAllowance = remaining !== null && dailyLimit !== null;
-
-  if (!hasMeteredAllowance && !isUnavailable) {
-    return null;
-  }
-
-  const formattedRemaining =
-    remaining === null ? null : formatLocalizedCount(remaining, language);
-  const formattedLimit =
-    dailyLimit === null ? null : formatLocalizedCount(dailyLimit, language);
-
-  return (
-    <View
-      className="mx-4 mb-1 mt-3 min-h-[68px] justify-center rounded-2xl border border-slate-200 bg-slate-25 px-4 py-3 dark:border-slate-700 dark:bg-slate-800"
-      accessibilityLiveRegion="polite"
-    >
-      {formattedRemaining !== null && formattedLimit !== null ? (
-        <>
-          <Text className="text-sm font-semibold text-slate-800 dark:text-slate-25">
-            {t("voice_limit_heading")}
-          </Text>
-
-          <Text className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
-            {t("voice_limit_remaining", {
-              remaining: formattedRemaining,
-              limit: formattedLimit,
-            })}
-          </Text>
-        </>
-      ) : (
-        <Text className="text-xs leading-5 text-slate-500 dark:text-slate-400">
-          {t("voice_limit_unavailable")}
-        </Text>
-      )}
     </View>
   );
 }

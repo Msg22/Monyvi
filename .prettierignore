@@ -6,7 +6,15 @@ coverage
 *.min.js
 *.bundle.js
 # Approved mockup binding bytes are hash-authoritative; do not reflow.
+specs/389-voice-usage-limits/mockups/repair-binding-manifest.json
+specs/389-voice-usage-limits/mockups/mockup-1.binding.md
+specs/389-voice-usage-limits/mockups/mockup-2.binding.md
 specs/321-email-verification/mockups/verification-flow-approved.binding.md
 specs/321-email-verification/mockups/verification-en-light.binding.md
 specs/321-email-verification/mockups/verification-en-dark.binding.md
 specs/321-email-verification/mockups/verification-ar-light.binding.md
+specs/389-voice-usage-limits/mockups/transaction-voice-en.binding.md
+specs/389-voice-usage-limits/mockups/transaction-voice-ar.binding.md
+specs/389-voice-usage-limits/mockups/transaction-voice-daily-limit-en.binding.md
+specs/389-voice-usage-limits/mockups/transaction-voice-daily-limit-ar.binding.md
+specs/389-voice-usage-limits/mockups/transaction-manual-compact-b.binding.md

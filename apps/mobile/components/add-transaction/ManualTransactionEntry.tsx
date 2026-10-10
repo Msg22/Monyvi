@@ -1,23 +1,20 @@
-import { AmountDisplay } from "@/components/add-transaction/AmountDisplay";
+import { GroupedMoneyInput } from "@/components/ui/GroupedMoneyInput";
+import { ManualAccountCategoryRow } from "@/components/add-transaction/manual-ui/ManualAccountCategoryRow";
 import {
   CalculatorKey,
   CalculatorKeypad,
 } from "@/components/add-transaction/CalculatorKeypad";
-import { CategoryPicker } from "@/components/add-transaction/CategoryPicker";
 import { OptionalSection } from "@/components/add-transaction/OptionalSection";
 import { TransferFields } from "@/components/add-transaction/TransferFields";
 import { TypeTabs } from "@/components/add-transaction/TypeTabs";
-import { CategoryIcon, IconLibrary } from "@/components/common/CategoryIcon";
 import { AccountSelectorModal } from "@/components/modals/AccountSelectorModal";
 import { CategorySelectorModal } from "@/components/modals/CategorySelectorModal";
 import { EmptyStateCard } from "@/components/ui/EmptyStateCard";
 import { useToast } from "@/components/ui/Toast";
-import { palette } from "@/constants/colors";
 import { useCategoryLookup } from "@/context/CategoriesContext";
-import { useTheme } from "@/context/ThemeContext";
+import { useLocale } from "@/context/LocaleContext";
 import { useAccounts } from "@/hooks/useAccounts";
 import { useCategories } from "@/hooks/useCategories";
-import { useCategoryChildren } from "@/hooks/useCategoryChildren";
 import { useFormScroll } from "@/hooks/useFormScroll";
 import { useMarketRates } from "@/hooks/useMarketRates";
 import {
@@ -47,20 +44,26 @@ import {
   evaluateAmountExpression,
   parsePositiveFiniteAmountInput,
 } from "@monyvi/logic";
-import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
 import {
   forwardRef,
   useEffect,
   useImperativeHandle,
-  useMemo,
   useRef,
   useState,
 } from "react";
-import { ScrollView, Text, TouchableOpacity, View } from "react-native";
+import {
+  Keyboard,
+  ScrollView,
+  Text,
+  type TextInput,
+  View,
+  useWindowDimensions,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { usePreferredCurrency } from "@/hooks/usePreferredCurrency";
+import { shouldUseDenseRowCompactLayout } from "@/constants/ui";
 const TRANSACTION_FIELD_ORDER: ReadonlyArray<
   keyof TransactionValidationErrors
 > = [
@@ -76,12 +79,13 @@ export interface ManualTransactionEntryHandle {
 }
 interface ManualTransactionEntryProps {
   readonly onSubmittingChange?: (isSubmitting: boolean) => void;
+  readonly isActive?: boolean;
 }
 export const ManualTransactionEntry = forwardRef<
   ManualTransactionEntryHandle,
   ManualTransactionEntryProps
 >(function ManualTransactionEntry(
-  { onSubmittingChange }: ManualTransactionEntryProps,
+  { onSubmittingChange, isActive = true }: ManualTransactionEntryProps,
   ref
 ): React.ReactNode {
   const router = useRouter();
@@ -89,6 +93,7 @@ export const ManualTransactionEntry = forwardRef<
   const budgetAlert = useBudgetAlert();
   const { t } = useTranslation("transactions");
   const { t: tCommon } = useTranslation("common");
+  const { fontFamily } = useLocale();
   const { accounts } = useAccounts();
   const [type, setType] = useState<TransactionType | "TRANSFER">("EXPENSE");
   const [amount, setAmount] = useState<string>("");
@@ -117,11 +122,18 @@ export const ManualTransactionEntry = forwardRef<
   const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const [activeAmountField, setActiveAmountField] = useState<
-    "amount" | "targetAmount"
-  >("amount");
+    "amount" | "targetAmount" | null
+  >(null);
+  const amountInputRef = useRef<TextInput>(null);
+  const targetAmountInputRef = useRef<TextInput>(null);
+  const isSaveInFlightRef = useRef(false);
   const hasInitializedAccountSelectionRef = useRef(false);
   const hasUserSelectedAccountRef = useRef(false);
-  const { isDark } = useTheme();
+  const { width, fontScale } = useWindowDimensions();
+  const shouldStackSelectorRow = shouldUseDenseRowCompactLayout(
+    width,
+    fontScale
+  );
   const {
     expenseCategories,
     incomeCategories,
@@ -148,17 +160,6 @@ export const ManualTransactionEntry = forwardRef<
     type === "EXPENSE" ? expenseCategories : incomeCategories;
   const categoryMap = useCategoryLookup();
   const selectedCategory = categoryMap.get(selectedCategoryId) ?? null;
-  const singleIncomeL1Id =
-    type === "INCOME" && incomeCategories.length === 1
-      ? incomeCategories[0].id
-      : null;
-  const { children: incomeL2Children } = useCategoryChildren(singleIncomeL1Id);
-  const chipCategories = useMemo(() => {
-    if (singleIncomeL1Id && incomeL2Children.length > 0) {
-      return incomeL2Children;
-    }
-    return relevantCategories;
-  }, [singleIncomeL1Id, incomeL2Children, relevantCategories]);
   const modalRootCategories = relevantCategories;
   const hasAccounts = accounts.length > 0;
   const canTransfer = accounts.length >= 2;
@@ -188,21 +189,66 @@ export const ManualTransactionEntry = forwardRef<
     if (!selectedCategoryId || typeChanged) {
       setSelectedCategoryId(relevantCategories[0].id);
     }
-    if (typeChanged && type !== "TRANSFER") {
-      setActiveAmountField("amount");
+    if (typeChanged) {
+      amountInputRef.current?.blur();
+      targetAmountInputRef.current?.blur();
+      setActiveAmountField(null);
     }
   }, [relevantCategories, selectedCategoryId, type]);
-  const handleKeyPress = async (key: CalculatorKey): Promise<void> => {
+
+  useEffect(() => {
+    if (isActive) return;
+    amountInputRef.current?.blur();
+    targetAmountInputRef.current?.blur();
+    Keyboard.dismiss();
+    setActiveAmountField(null);
+  }, [isActive]);
+
+  const dismissCalculator = (): void => {
+    if (activeAmountField === "targetAmount") {
+      targetAmountInputRef.current?.blur();
+    } else {
+      amountInputRef.current?.blur();
+    }
+    setActiveAmountField(null);
+  };
+
+  const focusAmountField = (field: "amount" | "targetAmount"): void => {
+    if (isOptionalExpanded) {
+      setIsOptionalExpanded(false);
+    }
+    setActiveAmountField(field);
+  };
+
+  const handleAmountChange = (value: string): void => {
     if (formErrors.amount) {
       setFormErrors((prev) => ({ ...prev, amount: undefined }));
     }
-    if (key === "DONE") {
-      await handleSave();
-      return;
+    setAmount(value);
+  };
+
+  const handleTargetAmountChange = (value: string): void => {
+    if (formErrors.amount) {
+      setFormErrors((prev) => ({ ...prev, amount: undefined }));
+    }
+    setTargetAmount(value);
+  };
+
+  const handleKeyPress = (key: CalculatorKey): void => {
+    if (formErrors.amount) {
+      setFormErrors((prev) => ({ ...prev, amount: undefined }));
     }
     const isTargetField = activeAmountField === "targetAmount";
     const currentValue = isTargetField ? targetAmount : amount;
     const setValue = isTargetField ? setTargetAmount : setAmount;
+    if (key === "DONE") {
+      const result = calculateResult(currentValue);
+      if (result !== null) {
+        setValue(Number(result.toFixed(10)).toString());
+      }
+      dismissCalculator();
+      return;
+    }
     if (key === "=") {
       const result = calculateResult(currentValue);
       if (result !== null) {
@@ -379,124 +425,134 @@ export const ManualTransactionEntry = forwardRef<
     });
   };
   const handleSave = async (): Promise<void> => {
-    setFormErrors({});
-    const evaluatedAmount = calculateResult(amount);
-    const amountForValidation =
-      evaluatedAmount === null ? amount : evaluatedAmount.toString();
-    const formData =
-      type === "TRANSFER"
-        ? {
-            amount: amountForValidation,
-            fromAccountId: selectedAccountId,
-            toAccountId,
-          }
-        : {
-            amount: amountForValidation,
-            accountId: selectedAccountId,
-            categoryId: selectedCategoryId,
-            isRecurring,
-            recurringName,
-          };
-    const { isValid, errors } = validateTransactionForm(
-      type,
-      formData,
-      {
-        amountRequired: t("amount_required"),
-        invalidAmount: t("invalid_amount"),
-        amountMustBePositive: t("amount_must_be_positive"),
-        amountMaximum: (maximum) =>
-          t("amount_maximum_error", {
-            maximum: maximum.toLocaleString("en-US"),
-          }),
-        amountPrecision: (precision) =>
-          t("amount_precision_error", { precision }),
-        accountRequired: t("please_select_an_account"),
-        sourceAccountRequired: t("please_select_source_account"),
-        destinationAccountRequired: t("please_select_destination_account"),
-        recurringNameRequired: tCommon("recurring_name_required"),
-      },
-      { currency: selectedAccount?.currency }
-    );
-    if (!isValid) {
-      setFormErrors(errors);
-      if (errors.recurringName) setIsOptionalExpanded(true);
-      return;
-    }
-    const finalAmount = evaluatedAmount;
-    if (finalAmount === null || finalAmount <= 0) {
-      setFormErrors({ amount: t("invalid_amount") });
-      return;
-    }
-    setIsSubmitting(true);
+    if (isSaveInFlightRef.current) return;
+    isSaveInFlightRef.current = true;
+
     try {
-      let alertTriggered = false;
-      if (type === "TRANSFER") {
-        if (!(await validateAndCreateTransfer(finalAmount))) return;
-      } else {
-        let createdRecurringPaymentId: string | undefined;
-        let linkedRecurringId: string | undefined;
-        if (isRecurring && selectedAccount) {
-          createdRecurringPaymentId = await createRecurring(
-            finalAmount,
-            type,
-            selectedAccount.currency
-          );
-          linkedRecurringId = createdRecurringPaymentId;
-        }
-        let tx: Transaction | undefined;
-        try {
-          tx = await validateAndCreateTransaction({
-            amount: finalAmount,
-            note,
-            type,
-            linkedRecurringId,
-          });
-        } catch (error: unknown) {
-          if (createdRecurringPaymentId) {
-            try {
-              await deleteRecurringPayment(createdRecurringPaymentId);
-            } catch (cleanupError: unknown) {
-              logger.error(
-                "Failed to remove recurring payment after transaction failure",
-                cleanupError,
-                { recurringPaymentId: createdRecurringPaymentId }
-              );
+      setFormErrors({});
+      const evaluatedAmount = calculateResult(amount);
+      const amountForValidation =
+        evaluatedAmount === null ? amount : evaluatedAmount.toString();
+      const formData =
+        type === "TRANSFER"
+          ? {
+              amount: amountForValidation,
+              fromAccountId: selectedAccountId,
+              toAccountId,
             }
-          }
-          throw error;
-        }
-        showToast({
-          type: "success",
-          title: t("transaction_created"),
-          message: t("transaction_created_message"),
-        });
-        if (tx && type === "EXPENSE") {
-          alertTriggered = await budgetAlert.checkAfterTransaction(tx);
-        }
-      }
-      if (!alertTriggered) {
-        router.back();
-      }
-    } catch (error: unknown) {
-      const recurringPaymentErrorMessage = getRecurringPaymentErrorMessage(
-        error,
-        t
+          : {
+              amount: amountForValidation,
+              accountId: selectedAccountId,
+              categoryId: selectedCategoryId,
+              isRecurring,
+              recurringName,
+            };
+      const { isValid, errors } = validateTransactionForm(
+        type,
+        formData,
+        {
+          amountRequired: t("amount_required"),
+          invalidAmount: t("invalid_amount"),
+          amountMustBePositive: t("amount_must_be_positive"),
+          amountMaximum: (maximum) =>
+            t("amount_maximum_error", {
+              maximum: maximum.toLocaleString("en-US"),
+            }),
+          amountPrecision: (precision) =>
+            t("amount_precision_error", { precision }),
+          accountRequired: t("please_select_an_account"),
+          sourceAccountRequired: t("please_select_source_account"),
+          destinationAccountRequired: t("please_select_destination_account"),
+          recurringNameRequired: tCommon("recurring_name_required"),
+        },
+        { currency: selectedAccount?.currency }
       );
-      if (recurringPaymentErrorMessage) {
-        showToast({
-          type: "error",
-          title: t("transaction_creation_failed"),
-          message: recurringPaymentErrorMessage,
-        });
-      } else if (type !== "TRANSFER") {
-        showToast({
-          type: "error",
-          title: t("update_error"),
-          message: t("transaction_creation_failed"),
-        });
+      if (!isValid) {
+        setFormErrors(errors);
+        if (errors.recurringName) {
+          dismissCalculator();
+          setIsOptionalExpanded(true);
+        }
+        return;
+      }
+      const finalAmount = evaluatedAmount;
+      if (finalAmount === null || finalAmount <= 0) {
+        setFormErrors({ amount: t("invalid_amount") });
+        return;
+      }
+      setIsSubmitting(true);
+      try {
+        let alertTriggered = false;
+        if (type === "TRANSFER") {
+          if (!(await validateAndCreateTransfer(finalAmount))) return;
+        } else {
+          let createdRecurringPaymentId: string | undefined;
+          let linkedRecurringId: string | undefined;
+          if (isRecurring && selectedAccount) {
+            createdRecurringPaymentId = await createRecurring(
+              finalAmount,
+              type,
+              selectedAccount.currency
+            );
+            linkedRecurringId = createdRecurringPaymentId;
+          }
+          let tx: Transaction | undefined;
+          try {
+            tx = await validateAndCreateTransaction({
+              amount: finalAmount,
+              note,
+              type,
+              linkedRecurringId,
+            });
+          } catch (error: unknown) {
+            if (createdRecurringPaymentId) {
+              try {
+                await deleteRecurringPayment(createdRecurringPaymentId);
+              } catch (cleanupError: unknown) {
+                logger.error(
+                  "Failed to remove recurring payment after transaction failure",
+                  cleanupError,
+                  { recurringPaymentId: createdRecurringPaymentId }
+                );
+              }
+            }
+            throw error;
+          }
+          showToast({
+            type: "success",
+            title: t("transaction_created"),
+            message: t("transaction_created_message"),
+          });
+          if (tx && type === "EXPENSE") {
+            alertTriggered = await budgetAlert.checkAfterTransaction(tx);
+          }
+        }
+        if (!alertTriggered) {
+          router.back();
+        }
+      } catch (error: unknown) {
+        const recurringPaymentErrorMessage = getRecurringPaymentErrorMessage(
+          error,
+          t
+        );
+        if (recurringPaymentErrorMessage) {
+          showToast({
+            type: "error",
+            title: t("transaction_creation_failed"),
+            message: recurringPaymentErrorMessage,
+          });
+        } else if (type !== "TRANSFER") {
+          showToast({
+            type: "error",
+            title: t("update_error"),
+            message: t("transaction_creation_failed"),
+          });
+        }
+      } finally {
+        setIsSubmitting(false);
       }
     } finally {
-      setIsSubmitting(false);
+      isSaveInFlightRef.current = false;
     }
   };
   useImperativeHandle(
@@ -514,21 +570,32 @@ export const ManualTransactionEntry = forwardRef<
         scrollEventThrottle={16}
         className="flex-1 bg-slate-50 dark:bg-slate-900"
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 40 }}
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
       >
-        {/* Type Tabs */}
-        <View className="mt-4">
-          <TypeTabs selectedType={type} onSelect={setType} />
-        </View>
-        {/* Amount Display — hidden when transfer has no valid accounts */}
-        {!(type === "TRANSFER" && !canTransfer) && (
-          <View ref={getFieldRef("amount")} collapsable={false}>
-            {/* Insufficient balance warning */}
-            {type === "EXPENSE" &&
+        <View className="w-full max-w-[560px] self-center">
+          <View className="mt-3">
+            <TypeTabs
+              compact
+              selectedType={type}
+              onSelect={(nextType) => {
+                dismissCalculator();
+                setType(nextType);
+              }}
+            />
+          </View>
+
+          {!(type === "TRANSFER" && !canTransfer) ? (
+            <View
+              ref={getFieldRef("amount")}
+              collapsable={false}
+              className="px-4"
+            >
+              {type === "EXPENSE" &&
               selectedAccount &&
               parsedAmount !== null &&
-              parsedAmount > selectedAccount.balance && (
-                <Text className="text-amber-500 text-xs font-medium text-center mb-1">
+              parsedAmount > selectedAccount.balance ? (
+                <Text className="mb-1 text-xs font-medium text-amber-500">
                   ⚠️ {t("warning_negative_balance")} -{" "}
                   {formatLocalizedMoneyAmount({
                     amount: parsedAmount - selectedAccount.balance,
@@ -538,308 +605,212 @@ export const ManualTransactionEntry = forwardRef<
                     maximumFractionDigits: 2,
                   })}
                 </Text>
-              )}
-            <AmountDisplay
-              amount={amount}
-              currency={selectedAccount?.currency ?? preferredCurrency}
-              type={type}
-              mainColor={selectedCategory?.color}
-              onPress={
-                isOptionalExpanded
-                  ? () => setIsOptionalExpanded(false)
-                  : activeAmountField === "targetAmount"
-                    ? () => setActiveAmountField("amount")
-                    : undefined
-              }
-            />
-            {formErrors.amount && (
-              <Text className="text-red-500 text-xs font-medium text-center mt-1">
-                {formErrors.amount}
-              </Text>
-            )}
-          </View>
-        )}
-        {/* Form Content */}
-        <View className="px-6 mt-">
-          {type === "TRANSFER" ? (
-            canTransfer ? (
-              <TransferFields
-                accounts={accounts}
-                fromAccountId={selectedAccountId}
-                toAccountId={toAccountId}
-                onSelectFrom={(id) => {
-                  hasUserSelectedAccountRef.current = true;
-                  setFormErrors((prev) => ({
-                    ...prev,
-                    fromAccountId: undefined,
-                  }));
-                  setSelectedAccountId(id);
-                }}
-                onSelectTo={(id) => {
-                  hasUserSelectedAccountRef.current = true;
-                  setFormErrors((prev) => ({
-                    ...prev,
-                    toAccountId: undefined,
-                  }));
-                  setToAccountId(id);
-                }}
-                amount={amount}
-                targetAmount={targetAmount}
-                onChangeTargetAmount={setTargetAmount}
-                fromAccountError={formErrors.fromAccountId}
-                toAccountError={formErrors.toAccountId}
-                fromAccountRef={getFieldRef("fromAccountId")}
-                toAccountRef={getFieldRef("toAccountId")}
-                exchangeRate={
-                  selectedAccount && toAccount
-                    ? (getSelectedCurrentCurrencyRate({
-                        fromCurrency: selectedAccount.currency,
-                        toCurrency: toAccount.currency,
-                        currentSnapshot: selectedSnapshot,
-                      }) ?? undefined)
-                    : undefined
+              ) : null}
+
+              <GroupedMoneyInput
+                testID="manual-amount-input"
+                label={t("amount")}
+                required
+                value={amount}
+                onCanonicalChange={handleAmountChange}
+                inputRef={amountInputRef}
+                showSoftInputOnFocus={false}
+                onFocus={() => focusAmountField("amount")}
+                onBlur={() =>
+                  setActiveAmountField((current) =>
+                    current === "amount" ? null : current
+                  )
                 }
-                isTargetAmountActive={activeAmountField === "targetAmount"}
-                onFocusTargetAmount={() => setActiveAmountField("targetAmount")}
-              />
-            ) : (
-              <View className="flex-1 items-center justify-center py-16">
-                <EmptyStateCard
-                  onPress={() => router.push("/add-account")}
-                  icon="swap-horizontal-outline"
-                  title={t("need_more_accounts")}
-                  description={t("need_more_accounts_description")}
-                  height={160}
-                  borderRadius={20}
-                  className="w-full"
-                />
-              </View>
-            )
-          ) : (
-            <>
-              <View className="flex-row gap-4 mb-4">
-                {/* Account Field */}
-                <View
-                  ref={getFieldRef("accountId")}
-                  collapsable={false}
-                  className="flex-1"
-                >
-                  <Text className="input-label">
-                    {t("account").toUpperCase()}
-                  </Text>
-                  {hasAccounts ? (
-                    <TouchableOpacity
-                      onPress={() => {
-                        setFormErrors((prev) => ({
-                          ...prev,
-                          accountId: undefined,
-                        }));
-                        setIsAccountModalOpen(true);
-                      }}
-                      activeOpacity={0.7}
-                      className="flex-row items-center bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700"
-                    >
-                      <View
-                        className="w-8 h-8 rounded-xl items-center justify-center me-2 bg-slate-100 dark:bg-slate-700/50"
-                        style={{
-                          backgroundColor: selectedCategory?.color
-                            ? `${selectedCategory.color}20`
-                            : undefined,
-                        }}
-                      >
-                        <Ionicons
-                          name={
-                            selectedAccount?.type === "BANK"
-                              ? "business-outline"
-                              : selectedAccount?.type === "DIGITAL_WALLET"
-                                ? "card-outline"
-                                : "wallet-outline"
-                          }
-                          size={18}
-                          color={
-                            selectedCategory?.color ||
-                            (isDark ? palette.slate[400] : palette.slate[500])
-                          }
-                        />
-                      </View>
-                      <Text
-                        numberOfLines={1}
-                        className="flex-1 text-sm font-semibold text-slate-900 dark:text-white"
-                      >
-                        {selectedAccount?.name || t("select")}
-                      </Text>
-                    </TouchableOpacity>
-                  ) : (
-                    <EmptyStateCard
-                      onPress={() => router.push("/add-account")}
-                      icon="wallet-outline"
-                      title={t("no_accounts_found")}
-                      description={t("tap_here_to_add_one")}
-                      height={56}
-                      borderRadius={16}
-                      className="mt-0.5"
-                    />
-                  )}
-                  {formErrors.accountId && (
-                    <Text className="text-red-500 text-xs font-medium mt-1">
-                      {formErrors.accountId}
-                    </Text>
-                  )}
-                </View>
-                {/* Category Field */}
-                <View
-                  ref={getFieldRef("categoryId")}
-                  collapsable={false}
-                  className="flex-1"
-                >
-                  <Text className="input-label">
-                    {t("category").toUpperCase()}
-                  </Text>
-                  <TouchableOpacity
-                    onPress={() => {
-                      setFormErrors((prev) => ({
-                        ...prev,
-                        categoryId: undefined,
-                      }));
-                      setIsCategoryModalOpen(true);
-                    }}
-                    activeOpacity={0.7}
-                    className="flex-row items-center bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700"
+                error={formErrors.amount}
+                placeholder="0.00"
+                className={`min-h-14 text-lg leading-7 ${
+                  activeAmountField === "amount"
+                    ? "border-nileGreen-500 dark:border-nileGreen-500"
+                    : ""
+                }`}
+                style={{ fontFamily: fontFamily.medium }}
+                labelClassName="mb-2 text-sm leading-5 font-normal text-text-secondary dark:text-text-secondary-dark"
+                labelStyle={{ fontFamily: fontFamily.regular }}
+                containerClassName="mb-3"
+                trailingAdornment={
+                  <Text
+                    className="text-sm font-medium text-text-secondary dark:text-text-secondary-dark"
+                    style={{ fontFamily: fontFamily.medium }}
                   >
-                    <View
-                      className="w-8 h-8 rounded-xl items-center justify-center me-2 bg-slate-100 dark:bg-slate-700/50"
-                      style={{
-                        backgroundColor: selectedCategory?.color
-                          ? `${selectedCategory.color}20`
-                          : undefined,
-                      }}
-                    >
-                      {selectedCategory ? (
-                        <CategoryIcon
-                          iconName={selectedCategory.icon}
-                          iconLibrary={
-                            selectedCategory.iconLibrary as IconLibrary
-                          }
-                          size={18}
-                          color={selectedCategory.color}
-                        />
-                      ) : (
-                        <Ionicons
-                          name="grid-outline"
-                          size={18}
-                          color={
-                            isDark ? palette.slate[400] : palette.slate[500]
-                          }
-                        />
-                      )}
-                    </View>
-                    <Text
-                      numberOfLines={1}
-                      className="flex-1 text-sm font-semibold text-slate-900 dark:text-white"
-                    >
-                      {selectedCategory?.displayName || t("select_category")}
-                    </Text>
-                  </TouchableOpacity>
-                  {formErrors.categoryId && (
-                    <Text className="text-red-500 text-xs font-medium mt-1">
-                      {formErrors.categoryId}
-                    </Text>
-                  )}
-                </View>
-              </View>
-              {/* Category Chips (2-row horizontal scroll grid) */}
-              <CategoryPicker
-                selectedCategory={selectedCategory}
-                categories={chipCategories}
-                onOpenPicker={() => setIsCategoryModalOpen(true)}
-                onSelectCategory={(cat) => setSelectedCategoryId(cat.id)}
-                hideMainSelector={true}
-              />
-            </>
-          )}
-          {/* Optional Section (expanded content) — hidden for transfers */}
-          {type !== "TRANSFER" && isOptionalExpanded && (
-            <OptionalSection
-              expanded={isOptionalExpanded}
-              onToggleExpand={() => setIsOptionalExpanded(false)}
-              transactionType={type}
-              recurringNameError={formErrors.recurringName}
-              recurringNameRef={getFieldRef("recurringName")}
-              fields={{
-                counterparty,
-                note,
-                date,
-                isRecurring,
-                recurringName,
-                recurringFrequency,
-                recurringAutoCreate,
-              }}
-              onChange={(updates) => {
-                if (updates.counterparty !== undefined)
-                  setCounterparty(updates.counterparty);
-                if (updates.note !== undefined) setNote(updates.note);
-                if (updates.date !== undefined) setDate(updates.date);
-                if (updates.isRecurring !== undefined)
-                  setIsRecurring(updates.isRecurring);
-                if (updates.recurringName !== undefined)
-                  setRecurringName(updates.recurringName);
-                if (updates.recurringFrequency !== undefined)
-                  setRecurringFrequency(updates.recurringFrequency);
-                if (updates.recurringAutoCreate !== undefined)
-                  setRecurringAutoCreate(updates.recurringAutoCreate);
-                if (
-                  updates.isRecurring === false ||
-                  (updates.recurringName !== undefined &&
-                    updates.recurringName.trim().length > 0)
-                ) {
-                  setFormErrors((previous) => ({
-                    ...previous,
-                    recurringName: undefined,
-                  }));
+                    {selectedAccount?.currency ?? preferredCurrency}
+                  </Text>
                 }
-              }}
-            />
-          )}
+              />
+            </View>
+          ) : null}
+
+          <View className="px-4">
+            {type === "TRANSFER" ? (
+              canTransfer ? (
+                <TransferFields
+                  accounts={accounts}
+                  fromAccountId={selectedAccountId}
+                  toAccountId={toAccountId}
+                  onSelectFrom={(id) => {
+                    dismissCalculator();
+                    hasUserSelectedAccountRef.current = true;
+                    setFormErrors((prev) => ({
+                      ...prev,
+                      fromAccountId: undefined,
+                    }));
+                    setSelectedAccountId(id);
+                  }}
+                  onSelectTo={(id) => {
+                    dismissCalculator();
+                    hasUserSelectedAccountRef.current = true;
+                    setFormErrors((prev) => ({
+                      ...prev,
+                      toAccountId: undefined,
+                    }));
+                    setToAccountId(id);
+                  }}
+                  amount={amount}
+                  targetAmount={targetAmount}
+                  onChangeTargetAmount={handleTargetAmountChange}
+                  targetAmountInputRef={targetAmountInputRef}
+                  compactTargetAmount
+                  fromAccountError={formErrors.fromAccountId}
+                  toAccountError={formErrors.toAccountId}
+                  fromAccountRef={getFieldRef("fromAccountId")}
+                  toAccountRef={getFieldRef("toAccountId")}
+                  exchangeRate={
+                    selectedAccount && toAccount
+                      ? (getSelectedCurrentCurrencyRate({
+                          fromCurrency: selectedAccount.currency,
+                          toCurrency: toAccount.currency,
+                          currentSnapshot: selectedSnapshot,
+                        }) ?? undefined)
+                      : undefined
+                  }
+                  isTargetAmountActive={activeAmountField === "targetAmount"}
+                  onFocusTargetAmount={() => focusAmountField("targetAmount")}
+                  onBlurTargetAmount={() =>
+                    setActiveAmountField((current) =>
+                      current === "targetAmount" ? null : current
+                    )
+                  }
+                />
+              ) : (
+                <View className="flex-1 items-center justify-center py-16">
+                  <EmptyStateCard
+                    onPress={() => router.push("/add-account")}
+                    icon="swap-horizontal-outline"
+                    title={t("need_more_accounts")}
+                    description={t("need_more_accounts_description")}
+                    height={160}
+                    borderRadius={20}
+                    className="w-full"
+                  />
+                </View>
+              )
+            ) : (
+              <ManualAccountCategoryRow
+                selectedAccount={selectedAccount}
+                selectedCategory={selectedCategory}
+                hasAccounts={hasAccounts}
+                isStacked={shouldStackSelectorRow}
+                accountError={formErrors.accountId}
+                categoryError={formErrors.categoryId}
+                accountFieldRef={getFieldRef("accountId")}
+                categoryFieldRef={getFieldRef("categoryId")}
+                onOpenAccount={() => {
+                  dismissCalculator();
+                  setFormErrors((prev) => ({
+                    ...prev,
+                    accountId: undefined,
+                  }));
+                  setIsAccountModalOpen(true);
+                }}
+                onOpenCategory={() => {
+                  dismissCalculator();
+                  setFormErrors((prev) => ({
+                    ...prev,
+                    categoryId: undefined,
+                  }));
+                  setIsCategoryModalOpen(true);
+                }}
+                onAddAccount={() => {
+                  dismissCalculator();
+                  router.push("/add-account");
+                }}
+              />
+            )}
+
+            {type !== "TRANSFER" ? (
+              <OptionalSection
+                compactCollapsed
+                expanded={isOptionalExpanded}
+                onToggleExpand={() => {
+                  dismissCalculator();
+                  setIsOptionalExpanded((current) => !current);
+                }}
+                transactionType={type}
+                recurringNameError={formErrors.recurringName}
+                recurringNameRef={getFieldRef("recurringName")}
+                fields={{
+                  counterparty,
+                  note,
+                  date,
+                  isRecurring,
+                  recurringName,
+                  recurringFrequency,
+                  recurringAutoCreate,
+                }}
+                onChange={(updates) => {
+                  if (updates.counterparty !== undefined)
+                    setCounterparty(updates.counterparty);
+                  if (updates.note !== undefined) setNote(updates.note);
+                  if (updates.date !== undefined) setDate(updates.date);
+                  if (updates.isRecurring !== undefined)
+                    setIsRecurring(updates.isRecurring);
+                  if (updates.recurringName !== undefined)
+                    setRecurringName(updates.recurringName);
+                  if (updates.recurringFrequency !== undefined)
+                    setRecurringFrequency(updates.recurringFrequency);
+                  if (updates.recurringAutoCreate !== undefined)
+                    setRecurringAutoCreate(updates.recurringAutoCreate);
+                  if (
+                    updates.isRecurring === false ||
+                    (updates.recurringName !== undefined &&
+                      updates.recurringName.trim().length > 0)
+                  ) {
+                    setFormErrors((previous) => ({
+                      ...previous,
+                      recurringName: undefined,
+                    }));
+                  }
+                }}
+              />
+            ) : null}
+          </View>
         </View>
       </ScrollView>
-      {/* "Add more details" bar — hidden for transfers */}
-      {type !== "TRANSFER" && !isOptionalExpanded && (
-        <TouchableOpacity
-          onPress={() => setIsOptionalExpanded(true)}
-          className="flex-row items-center justify-center border-t border-slate-200 bg-slate-50 py-2 dark:border-slate-800 dark:bg-slate-900"
-        >
-          <Ionicons
-            name="create-outline"
-            size={16}
-            color={isDark ? palette.nileGreen[400] : palette.nileGreen[600]}
+
+      {activeAmountField !== null &&
+      !isOptionalExpanded &&
+      !(type === "TRANSFER" && !canTransfer) ? (
+        <View className="w-full max-w-[560px] self-center">
+          <CalculatorKeypad
+            compact
+            onKeyPress={(key) => {
+              handleKeyPress(key);
+            }}
+            actionLabel={t("done")}
           />
-          <Text className="ms-1.5 text-sm font-bold text-nileGreen-600 dark:text-nileGreen-400">
-            {t("add_more_details")}
-          </Text>
-          <Ionicons
-            name="chevron-down"
-            size={14}
-            color={isDark ? palette.nileGreen[400] : palette.nileGreen[600]}
-            className="ms-1"
-          />
-        </TouchableOpacity>
-      )}
-      {/* Keypad - Fixed at bottom */}
-      {/* Hide keypad when optional section is expanded or when transfer has no accounts */}
-      {!(type === "TRANSFER" && !canTransfer) && (
-        <CalculatorKeypad
-          onKeyPress={handleKeyPress}
-          hide={isOptionalExpanded}
-        />
-      )}
-      {/* Bottom spacer for safe area if keypad is hidden */}
-      {isOptionalExpanded && <View style={{ height: insets.bottom }} />}
+        </View>
+      ) : null}
       {/* Modals */}
       <AccountSelectorModal
         visible={isAccountModalOpen}
         accounts={accounts}
         selectedId={selectedAccountId}
         onSelect={(id) => {
+          dismissCalculator();
           hasUserSelectedAccountRef.current = true;
           setSelectedAccountId(id);
         }}
@@ -851,7 +822,10 @@ export const ManualTransactionEntry = forwardRef<
           rootCategories={modalRootCategories}
           selectedId={selectedCategoryId}
           type={type}
-          onSelect={setSelectedCategoryId}
+          onSelect={(id) => {
+            dismissCalculator();
+            setSelectedCategoryId(id);
+          }}
           onClose={() => setIsCategoryModalOpen(false)}
         />
       )}

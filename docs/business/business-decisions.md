@@ -934,14 +934,26 @@ Business rules:
   Add Transaction FAB opens that page in Manual mode by default; the center
   microphone, onboarding voice entry, and voice-review retry flow open the same
   page in Voice mode.
-- Manual mode reuses the existing manual transaction form and preserves its
-  transaction-entry/submission behavior. Partially entered Manual state must not
-  be silently discarded by a safe switch to Voice and back.
+- Manual mode preserves existing financial entry, validation and submission
+  contracts while using the owner-approved compact layout. Its ordinary amount
+  field uses GroupedMoneyInput. The custom calculator appears only while an
+  amount field is focused; amount fields do not open the native soft keyboard.
+  Done applies existing calculator equals behavior where needed, then dismisses
+  the keypad without saving. Header Save remains the transaction save action.
+  Transfer source/target amounts, currencies/conversion, recurring entry,
+  optional fields, balance/budget feedback and offline local writes retain their
+  existing behavior. Partially entered Manual state must not be silently
+  discarded by a safe switch to Voice and back.
 - Voice mode uses the approved Add Transaction / Voice mockup as the visual
   target while preserving the existing Gemini parsing and review contract.
 - Manual/Voice switching is unavailable while voice recording, pause/finalize,
   or provider analysis is actively in progress. Voice exhaustion, burst
   limiting, or availability failure must never block Manual transaction entry.
+- Voice allowance, exhaustion and availability-check failure notices are scoped
+  to Voice. Manual contains no Voice quota or failure notice and remains usable
+  when Voice is blocked. The exact five-reference UI repair package was approved
+  on 10 October 2026; its immutable revisions and supersession history are in
+  `specs/389-voice-usage-limits/reconciliation.md`.
 - User-facing reset copy must match local-midnight daily semantics and must not
   claim the limit resets "at the same time tomorrow."
 

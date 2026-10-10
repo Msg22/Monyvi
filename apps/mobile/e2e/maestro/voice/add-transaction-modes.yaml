@@ -1,66 +1,70 @@
 appId: com.monyvi.app
 ---
-
-# T028: Unified Add Transaction Manual/Voice navigation.
-#
-# This flow intentionally exercises only user-visible navigation and idle UI.
-# It does not start recording, submit audio, call the provider, or enter review.
-#
-# Precondition: authenticated seeded E2E user with at least one account.
-
+# R05 / T028 — approved unified Add Transaction shell.
+# AUTHORED, NOT RUN. Requires authenticated local seeded account/category and
+# the Mobile-owned Manual B amount input testID "manual-amount-input".
+# Navigation, amount focus, Done and header Save are controllable; this flow
+# never records audio or invokes a paid voice provider.
 - runFlow: ../helpers/setup.yaml
 
-# Open Add Transaction through the existing public FAB interaction.
+# FAB always opens Manual. Bottom navigation in mockups is presentation-only.
 - tapOn:
     id: "fab-button"
-
-- waitForAnimationToEnd
-
 - tapOn:
     id: "fab-transaction"
-
 - waitForAnimationToEnd
-
-# Prove the existing route loaded before reaching the new mode behavior.
 - assertVisible: "New Transaction"
-- assertVisible: "EXPENSE"
+- assertVisible:
+    id: "add-transaction-mode-manual"
+- assertVisible:
+    id: "header-save"
+- assertNotVisible: "Limited free voice usage"
+- assertNotVisible: "Voice unavailable"
+- assertNotVisible: "Daily voice limit reached"
 
-# Create observable Manual state using the existing calculator.
-- tapOn: "1"
-- tapOn: "5"
-- tapOn: "0"
-
-- assertVisible: "150"
-
-# Behavioral Red against current production:
-# the unified Voice mode control does not exist yet.
-- tapOn: "Voice"
-
-# Approved binding copy for the idle Voice state.
-- assertVisible: "Tap and speak to add a transaction"
-
-# Manual remains available while Voice is idle.
-- assertVisible: "Manual"
-
-- tapOn: "Manual"
-
-# The existing Manual subtree must have remained mounted.
-- assertVisible: "150"
-
-# Return to the Transactions tab.
+# Approved compact Manual B: calculator does not appear before amount focus.
+- assertNotVisible: "Done"
 - tapOn:
-    id: "header-back"
+    id: "manual-amount-input"
+- assertVisible: "Done"
+- tapOn:
+    id: "calculator-key-1"
+- tapOn:
+    id: "calculator-key-5"
+- tapOn:
+    id: "calculator-key-0"
+- tapOn:
+    id: "calculator-key-done"
+# Done dismisses the calculator; it must not submit.
+- assertNotVisible: "Done"
+- assertVisible: "150"
+- assertVisible:
+    id: "header-save"
 
+# Safe switch preserves the mounted draft and keeps Manual content hidden.
+- tapOn:
+    id: "add-transaction-mode-voice"
+- assertNotVisible:
+    id: "header-save"
+- tapOn:
+    id: "add-transaction-mode-manual"
+- assertVisible: "150"
+- assertNotVisible: "Limited free voice usage"
+- assertNotVisible: "Voice unavailable"
+
+# Only header Save persists the transaction.
+- tapOn:
+    id: "header-save"
 - waitForAnimationToEnd
-
 - assertVisible: "Transactions"
 
-# Exercise the existing public center-mic accessibility interaction.
-# After implementation this must navigate to the idle unified Voice route.
-# It must NOT require recording to begin merely to prove navigation.
+# Existing center mic opens the same route in Voice mode, without auto-start.
 - tapOn: "Voice input - record a transaction"
-
 - waitForAnimationToEnd
+- assertVisible:
+    id: "add-transaction-mode-voice"
+- assertNotVisible:
+    id: "header-save"
 
-- assertVisible: "Voice"
-- assertVisible: "Tap and speak to add a transaction"
+# Native recording/pause/review and real permission journeys are MANUAL ONLY:
+# this harness has no deterministic Voice recording/provider double.

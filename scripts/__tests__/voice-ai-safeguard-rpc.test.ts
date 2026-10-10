@@ -5,7 +5,7 @@ import test from "node:test";
 
 const migrationPath = path.resolve(
   __dirname,
-  "../../supabase/migrations/086_voice_ai_usage_limits.sql"
+  "../../supabase/migrations/087_voice_ai_usage_limits.sql"
 );
 const migrationExists = existsSync(migrationPath);
 const requiresMigration = { skip: !migrationExists };
