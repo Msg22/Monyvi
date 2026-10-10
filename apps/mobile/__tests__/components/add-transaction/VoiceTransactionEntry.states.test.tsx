@@ -238,15 +238,35 @@ describe("VoiceTransactionEntry approved state compositions", () => {
   });
 
   it.each([
-    ["recording", "Stop", "Pause", "Discard"],
-    ["paused", "Resume", "Stop", "Discard"],
-  ] as const)("retains %s recorder actions", (state, first, second, third) => {
-    renderVoice({ state: state as VoiceTransactionEntryState, durationMs: 61_000 });
-    expect(screen.getByText("01:01")).toBeOnTheScreen();
-    for (const action of [first, second, third]) {
-      expect(screen.getAllByRole("button", { name: action }).length).toBeGreaterThan(0);
+    ["recording", "Stop", "Pause", "Discard", "voice-action-pause"],
+    ["paused", "Resume", "Stop", "Discard", "voice-action-resume"],
+  ] as const)(
+    "retains %s recorder actions and dispatches each to its own callback",
+    (state, first, second, third, distinctAction) => {
+      renderVoice({
+        state: state as VoiceTransactionEntryState,
+        durationMs: 61_000,
+      });
+      expect(screen.getByText("01:01")).toBeOnTheScreen();
+      for (const action of [first, second, third]) {
+        expect(screen.getAllByRole("button", { name: action }).length).toBeGreaterThan(0);
+      }
+
+      fireEvent.press(screen.getByTestId("voice-action-stop"));
+      fireEvent.press(screen.getByTestId(distinctAction));
+      fireEvent.press(screen.getByTestId("voice-action-discard"));
+
+      expect(callbacks.onSubmit).toHaveBeenCalledTimes(1);
+      expect(callbacks.onDiscard).toHaveBeenCalledTimes(1);
+      if (state === "recording") {
+        expect(callbacks.onPause).toHaveBeenCalledTimes(1);
+        expect(callbacks.onResume).not.toHaveBeenCalled();
+      } else {
+        expect(callbacks.onResume).toHaveBeenCalledTimes(1);
+        expect(callbacks.onPause).not.toHaveBeenCalled();
+      }
     }
-  });
+  );
 
   it("does not expose a second native permission prompt inside the passive Voice surface", () => {
     renderVoice({ state: "permission-explanation", remaining: null, dailyLimit: null });

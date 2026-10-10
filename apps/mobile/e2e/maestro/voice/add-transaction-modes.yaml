@@ -27,10 +27,14 @@ appId: com.monyvi.app
 - tapOn:
     id: "manual-amount-input"
 - assertVisible: "Done"
-- tapOn: "1"
-- tapOn: "5"
-- tapOn: "0"
-- tapOn: "Done"
+- tapOn:
+    id: "calculator-key-1"
+- tapOn:
+    id: "calculator-key-5"
+- tapOn:
+    id: "calculator-key-0"
+- tapOn:
+    id: "calculator-key-done"
 # Done dismisses the calculator; it must not submit.
 - assertNotVisible: "Done"
 - assertVisible: "150"

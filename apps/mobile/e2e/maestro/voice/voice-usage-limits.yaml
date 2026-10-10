@@ -55,9 +55,12 @@ appId: com.monyvi.app
 - assertNotVisible: "Voice unavailable"
 - tapOn:
     id: "manual-amount-input"
-- tapOn: "2"
-- tapOn: "5"
-- tapOn: "Done"
+- tapOn:
+    id: "calculator-key-2"
+- tapOn:
+    id: "calculator-key-5"
+- tapOn:
+    id: "calculator-key-done"
 - assertVisible: "25"
 - tapOn:
     id: "header-save"

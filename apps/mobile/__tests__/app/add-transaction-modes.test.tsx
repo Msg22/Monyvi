@@ -48,7 +48,8 @@ let mockVoiceFlowStatus:
   | "analyzing"
   | "error" = "idle";
 let mockVoiceModeSwitchLocked = false;
-let mockVoiceAvailabilityErrorKind: "network" | null = null;
+let mockVoiceAvailabilityErrorKind: "network" | "consent_required" | null = null;
+let mockVoiceAvailabilityLoading = false;
 let mockVoiceRefusalReason:
   | "daily_limit"
   | "burst_limit"
@@ -392,8 +393,10 @@ jest.mock("@/services/profile-service", () => ({
 
 jest.mock("@/hooks/useVoiceAiAvailability", () => ({
   useVoiceAiAvailability: () => ({
-    availability: mockVoiceAvailability,
-    isLoading: false,
+    availability: mockVoiceAvailabilityLoading
+      ? null
+      : mockVoiceAvailability,
+    isLoading: mockVoiceAvailabilityLoading,
     error: mockVoiceAvailabilityErrorKind === null
       ? null
       : { kind: mockVoiceAvailabilityErrorKind },
@@ -473,6 +476,7 @@ describe("AddTransaction unified mode intent", () => {
     mockVoiceFlowStatus = "idle";
     mockVoiceModeSwitchLocked = false;
     mockVoiceAvailabilityErrorKind = null;
+    mockVoiceAvailabilityLoading = false;
     mockVoiceRefusalReason = null;
     mockGrantConsent.mockReset().mockResolvedValue();
     mockVoiceStartFlow.mockReset().mockResolvedValue(undefined);
@@ -820,19 +824,22 @@ describe("AddTransaction unified mode intent", () => {
   );
 
   it.each([
-    ["available", 3, null, null],
-    ["exhausted", 0, "daily_limit", null],
-    ["burst-blocked", 3, "burst_limit", null],
-    ["availability-error", 3, null, "network"],
+    ["available", 3, null, null, false],
+    ["exhausted", 0, "daily_limit", null, false],
+    ["burst-blocked", 3, "burst_limit", null, false],
+    ["availability-error", 3, null, "network", false],
+    ["consent-required", 3, null, "consent_required", false],
+    ["null-loading", 3, null, null, true],
   ] as const)(
     "keeps all Voice counters and errors off the visible Manual form: %s",
-    (_label, remaining, reason, errorKind) => {
+    (_label, remaining, reason, errorKind, isLoading) => {
       mockVoiceAvailability = {
         ...mockVoiceAvailability,
         remaining,
         reason,
       };
       mockVoiceAvailabilityErrorKind = errorKind;
+      mockVoiceAvailabilityLoading = isLoading;
       renderRoute("manual");
 
       expect(screen.queryByText("VOICE_QUOTA_HEADING")).toBeNull();
