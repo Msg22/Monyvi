@@ -9,6 +9,7 @@ import {
 } from "../../test-utils/test-instance-props";
 
 import { AddTransactionModeTabs } from "@/components/add-transaction/AddTransactionModeTabs";
+import { palette } from "@/constants/colors";
 import { arabicFontFamily, fontFamily } from "@/constants/typography";
 
 let mockIsRTL = false;
@@ -92,6 +93,54 @@ describe("AddTransactionModeTabs approved underline contract", () => {
       expect.objectContaining({ selected: true })
     );
   });
+
+  it.each([
+    ["English", false, "Voice", "Manual"],
+    ["Arabic", true, "صوتي", "يدوي"],
+  ] as const)(
+    "resolves the selected Voice underline into native Pressable border styles in %s",
+    (_locale, rtl, voiceLabel, manualLabel) => {
+      mockIsRTL = rtl;
+      renderTabs("voice");
+      const selected: unknown = screen.getByRole("tab", { name: voiceLabel });
+      const unselected: unknown = screen.getByRole("tab", {
+        name: manualLabel,
+      });
+      const selectedStyle = getTestInstanceProps(selected).style;
+      const unselectedStyle = getTestInstanceProps(unselected).style;
+      if (
+        typeof selectedStyle !== "function" ||
+        typeof unselectedStyle !== "function"
+      ) {
+        throw new Error("Expected native Pressable stateful style callbacks");
+      }
+      // Class names cannot prove the selected underline survives native
+      // Pressable's style callback and NativeWind class-name translation.
+      const normal: unknown = selectedStyle({ pressed: false });
+      const pressed: unknown = selectedStyle({ pressed: true });
+      const inactive: unknown = unselectedStyle({ pressed: false });
+      expect(normal).toEqual(
+        expect.objectContaining({
+          borderBottomWidth: 2,
+          borderBottomColor: palette.nileGreen[600],
+          opacity: 1,
+        })
+      );
+      expect(pressed).toEqual(
+        expect.objectContaining({
+          borderBottomWidth: 2,
+          borderBottomColor: palette.nileGreen[600],
+          opacity: 0.72,
+        })
+      );
+      expect(inactive).toEqual(
+        expect.objectContaining({
+          borderBottomWidth: 2,
+          borderBottomColor: "transparent",
+        })
+      );
+    }
+  );
 
   it("keeps both tabs disabled while the Voice flow or consent start is locked", () => {
     const onModeChange = jest.fn();

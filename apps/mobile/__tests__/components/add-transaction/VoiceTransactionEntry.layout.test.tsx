@@ -5,7 +5,9 @@ import {
   getTestInstanceProps,
   getTestInstances,
 } from "../../test-utils/test-instance-props";
-import { ScrollView } from "react-native";
+import { ScrollView, type StyleProp, type ViewStyle } from "react-native";
+
+import { palette } from "@/constants/colors";
 
 import { VoiceTransactionEntry } from "@/components/add-transaction/VoiceTransactionEntry";
 
@@ -60,15 +62,23 @@ jest.mock("@expo/vector-icons", () => ({
   },
 }));
 
+// Native-gradient double forwards only style, never className. A class-only
+// gradient must not appear circular merely because the Jest mock supports CSS.
 jest.mock("expo-linear-gradient", () => ({
   LinearGradient: ({
     children,
+    style,
   }: {
     readonly children: React.ReactNode;
+    readonly style?: StyleProp<ViewStyle>;
   }): React.JSX.Element => {
     const { View } =
       jest.requireActual<typeof import("react-native")>("react-native");
-    return <View testID="voice-gradient">{children}</View>;
+    return (
+      <View testID="voice-gradient" style={style}>
+        {children}
+      </View>
+    );
   },
 }));
 
@@ -214,6 +224,65 @@ describe("VoiceTransactionEntry responsive, animation and unboxed layout", () =>
       screen.getByTestId("ionicon-mic", { includeHiddenElements: true })
     ).toBeOnTheScreen();
   });
+
+  it("gives the real Expo gradient native circular geometry and clips its clickable mask", () => {
+    renderLayout();
+    // The gradient double exposes only the actual native style prop. The
+    // previous className-only rendering was square on the owner's device.
+    const gradient: unknown = screen.getByTestId("voice-gradient");
+    expect(getTestInstanceProps(gradient).style).toEqual(
+      expect.objectContaining({
+        width: 104,
+        height: 104,
+        borderRadius: 52,
+        alignItems: "center",
+        justifyContent: "center",
+      })
+    );
+
+    const mic: unknown = screen.getByTestId("voice-mic-target");
+    expect(getTestInstanceProps(mic).accessibilityRole).toBe("button");
+    const micStyle = getTestInstanceProps(mic).style;
+    if (typeof micStyle !== "function") {
+      throw new Error("Expected native Pressable stateful style callback");
+    }
+    const normal: unknown = micStyle({ pressed: false });
+    const pressed: unknown = micStyle({ pressed: true });
+    expect(normal).toEqual(
+      expect.objectContaining({
+        width: 104,
+        height: 104,
+        borderRadius: 52,
+        overflow: "hidden",
+      })
+    );
+    expect(pressed).toEqual(expect.objectContaining({ overflow: "hidden" }));
+  });
+
+  it.each([
+    ["outer", 172, 86, palette.nileGreen[50]],
+    ["inner", 140, 70, palette.nileGreen[100]],
+  ] as const)(
+    "gives the %s idle halo native geometry and an actual visible token color",
+    (ring, size, radius, color) => {
+      renderLayout();
+      const halo: unknown = screen.getByTestId(`voice-halo-${ring}`, {
+        includeHiddenElements: true,
+      });
+      const props = getTestInstanceProps(halo);
+      expect(props.style).toEqual(
+        expect.objectContaining({
+          position: "absolute",
+          width: size,
+          height: size,
+          borderRadius: radius,
+          backgroundColor: color,
+        })
+      );
+      expect(props.pointerEvents).toBe("none");
+      expect(props.importantForAccessibility).toBe("no-hide-descendants");
+    }
+  );
 
   it("suppresses pulse when reduced motion is enabled and tears down on unmount", () => {
     mockReducedMotion = true;
