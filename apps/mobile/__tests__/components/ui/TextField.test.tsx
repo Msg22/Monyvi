@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react-native";
 import i18next, { type i18n } from "i18next";
 import React from "react";
-import { Pressable, Text } from "react-native";
+import { Pressable, Text, TextInput } from "react-native";
 import { I18nextProvider, initReactI18next } from "react-i18next";
 
 import { TextField } from "@/components/ui/TextField";
@@ -166,5 +166,32 @@ describe("TextField", () => {
       "accessibilityHint",
       enCommon.required_field
     );
+  });
+  it("forwards no-soft-keyboard, focus lifecycle, and the native input ref", () => {
+    const inputRef = React.createRef<TextInput>();
+    const onFocus = jest.fn();
+    const onBlur = jest.fn();
+
+    render(
+      <TextField
+        testID="focus-field"
+        label="Amount"
+        value="120"
+        inputRef={inputRef}
+        showSoftInputOnFocus={false}
+        onFocus={onFocus}
+        onBlur={onBlur}
+      />
+    );
+
+    const input = screen.getByTestId("focus-field");
+    expect(input).toHaveProp("showSoftInputOnFocus", false);
+    expect(inputRef.current).not.toBeNull();
+
+    fireEvent(input, "focus", {});
+    expect(onFocus).toHaveBeenCalledTimes(1);
+
+    fireEvent(input, "blur", {});
+    expect(onBlur).toHaveBeenCalledTimes(1);
   });
 });

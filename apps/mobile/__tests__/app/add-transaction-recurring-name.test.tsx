@@ -236,6 +236,10 @@ function enableRecurring(): void {
   fireEvent(screen.UNSAFE_getAllByType(Switch)[0], "valueChange", true);
 }
 
+function enterAmount(value: string): void {
+  fireEvent.changeText(screen.getByTestId("manual-amount-input"), value);
+}
+
 function enterRecurringName(name: string): void {
   fireEvent.changeText(
     screen.getByPlaceholderText("recurring_name_placeholder"),
@@ -313,7 +317,7 @@ describe("Add Transaction recurring-name QA", () => {
     "blocks both writes for blank recurring name %p",
     async (name) => {
       render(<AddTransaction />);
-      fireEvent.press(screen.getByTestId("key-1"));
+      enterAmount("1");
       enableRecurring();
       enterRecurringName(name);
       fireEvent.press(screen.getByTestId("header-save"));
@@ -336,7 +340,7 @@ describe("Add Transaction recurring-name QA", () => {
 
   it("clears the error after correction and creates a linked transaction exactly once", async () => {
     render(<AddTransaction />);
-    fireEvent.press(screen.getByTestId("key-1"));
+    enterAmount("1");
     enableRecurring();
     fireEvent.press(screen.getByTestId("header-save"));
     await waitFor(() =>
@@ -365,15 +369,15 @@ describe("Add Transaction recurring-name QA", () => {
     );
   });
 
-  it("reopens collapsed details when DONE finds a missing recurring name", async () => {
+  it("reopens collapsed details when header Save finds a missing recurring name", async () => {
     render(<AddTransaction />);
-    fireEvent.press(screen.getByTestId("key-1"));
+    enterAmount("1");
     enableRecurring();
     fireEvent.press(screen.getByText("hide_details"));
     expect(
       screen.queryByPlaceholderText("recurring_name_placeholder")
     ).toBeNull();
-    fireEvent.press(screen.getByTestId("key-done"));
+    fireEvent.press(screen.getByTestId("header-save"));
 
     await waitFor(() =>
       expect(screen.getByText("recurring_name_required")).toBeTruthy()
@@ -387,7 +391,7 @@ describe("Add Transaction recurring-name QA", () => {
 
   it("allows a normal unnamed transaction after recurring is disabled", async () => {
     render(<AddTransaction />);
-    fireEvent.press(screen.getByTestId("key-1"));
+    enterAmount("1");
     enableRecurring();
     fireEvent.press(screen.getByTestId("header-save"));
     await waitFor(() =>
@@ -422,7 +426,7 @@ describe("Add Transaction recurring-name QA", () => {
 
     it("scrolls to an offscreen recurring name after header Save, including repeated attempts", () => {
       renderScrollableForm();
-      fireEvent.press(screen.getByTestId("key-1"));
+      enterAmount("1");
       enableRecurring();
       fireEvent.press(screen.getByTestId("header-save"));
       measureField("recurringName", Dimensions.get("window").height + 100);
@@ -445,29 +449,26 @@ describe("Add Transaction recurring-name QA", () => {
       });
     });
 
-    it.each(["header-save", "key-done"])(
-      "reveals and scrolls to a collapsed recurring name after %s",
-      (button) => {
-        renderScrollableForm();
-        fireEvent.press(screen.getByTestId("key-1"));
-        enableRecurring();
-        fireEvent.press(screen.getByText("hide_details"));
-        fireEvent.press(screen.getByTestId(button));
-        measureField("recurringName", Dimensions.get("window").height + 100);
-        flushScrollFrames();
+    it("reveals and scrolls to a collapsed recurring name after header Save", () => {
+      renderScrollableForm();
+      enterAmount("1");
+      enableRecurring();
+      fireEvent.press(screen.getByText("hide_details"));
+      fireEvent.press(screen.getByTestId("header-save"));
+      measureField("recurringName", Dimensions.get("window").height + 100);
+      flushScrollFrames();
 
-        expect(
-          screen.getByPlaceholderText("recurring_name_placeholder")
-        ).toBeTruthy();
-        expect(screen.getByText("recurring_name_required")).toBeTruthy();
-        expect(mockNativeScrollTo).toHaveBeenCalledWith({
-          y: 224,
-          animated: true,
-        });
-        expect(recurring.createRecurringPayment).not.toHaveBeenCalled();
-        expect(transactions.createTransaction).not.toHaveBeenCalled();
-      }
-    );
+      expect(
+        screen.getByPlaceholderText("recurring_name_placeholder")
+      ).toBeTruthy();
+      expect(screen.getByText("recurring_name_required")).toBeTruthy();
+      expect(mockNativeScrollTo).toHaveBeenCalledWith({
+        y: 224,
+        animated: true,
+      });
+      expect(recurring.createRecurringPayment).not.toHaveBeenCalled();
+      expect(transactions.createTransaction).not.toHaveBeenCalled();
+    });
 
     it("scrolls to the earlier amount error rather than the later recurring name", () => {
       renderScrollableForm();
@@ -510,7 +511,7 @@ describe("Add Transaction recurring-name QA", () => {
 
     it("brings the error above a fixed footer using the actual scroll viewport", () => {
       renderScrollableForm();
-      fireEvent.press(screen.getByTestId("key-1"));
+      enterAmount("1");
       enableRecurring();
       fireEvent.press(screen.getByTestId("header-save"));
       measureField("recurringName", 550, { top: 120, height: 400 });
@@ -525,7 +526,7 @@ describe("Add Transaction recurring-name QA", () => {
 
     it("does not scroll when the invalid field is already visible or after correction", () => {
       renderScrollableForm();
-      fireEvent.press(screen.getByTestId("key-1"));
+      enterAmount("1");
       enableRecurring();
       fireEvent.press(screen.getByTestId("header-save"));
       measureField("recurringName", 100);

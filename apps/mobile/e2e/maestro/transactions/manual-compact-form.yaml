@@ -1,0 +1,69 @@
+appId: com.monyvi.app
+
+---
+
+# #347 Manual compact B authored journey.
+# Execution is intentionally deferred to the owner; this file is NOT device evidence.
+# Precondition: deterministic transaction E2E seed with E2E Cash as default account
+# and Food & Drinks as the first expense category.
+
+- runFlow: ../helpers/setup.yaml
+
+- tapOn:
+    id: "fab-button"
+- tapOn:
+    id: "fab-transaction"
+- waitForAnimationToEnd
+
+# Idle compact Manual: regular amount field, required selectors, no Voice warning,
+# and no calculator until Amount receives focus.
+- assertVisible: "New Transaction"
+- assertVisible:
+    id: "manual-amount-input"
+- assertVisible: "Account"
+- assertVisible: "Category"
+- assertVisible: "Add more details"
+- assertVisible: "Note, date, recurring"
+- assertNotVisible:
+    id: "calculator-key-1"
+- assertNotVisible: "We couldn't check your voice uses"
+
+# Calculator-only amount focus. Unit coverage verifies showSoftInputOnFocus=false.
+- tapOn:
+    id: "manual-amount-input"
+- assertVisible:
+    id: "calculator-key-1"
+- assertVisible:
+    id: "calculator-key-equals"
+- assertVisible:
+    id: "calculator-key-done"
+
+# Existing calculator grammar is preserved; Done evaluates and dismisses only.
+- tapOn:
+    id: "calculator-key-2"
+- tapOn:
+    id: "calculator-key-plus"
+- tapOn:
+    id: "calculator-key-3"
+- tapOn:
+    id: "calculator-key-done"
+
+- assertNotVisible:
+    id: "calculator-key-1"
+- assertVisible: "New Transaction"
+- assertVisible: "5"
+
+# Re-focusing reopens the same custom calculator without destroying the draft.
+- tapOn:
+    id: "manual-amount-input"
+- assertVisible:
+    id: "calculator-key-1"
+- assertVisible: "5"
+- tapOn:
+    id: "calculator-key-done"
+
+# Header Save remains the only persistence action.
+- tapOn:
+    id: "header-save"
+- waitForAnimationToEnd
+- assertVisible: "Transactions"

@@ -29,18 +29,39 @@ appId: com.monyvi.app
 - assertVisible: "E2E Cash"
 - assertVisible: "Food & Drinks"
 
-# Step 5: Enter 150 using the existing calculator keypad.
-- tapOn: "1"
-- tapOn: "5"
-- tapOn: "0"
+# Step 5: Manual B starts with the custom calculator hidden.
+- assertVisible:
+    id: "manual-amount-input"
+- assertNotVisible:
+    id: "calculator-key-1"
 
+# Focusing Amount opens only the custom calculator.
+- tapOn:
+    id: "manual-amount-input"
+- assertVisible:
+    id: "calculator-key-1"
+
+# Enter 150 through the approved calculator controls.
+- tapOn:
+    id: "calculator-key-1"
+- tapOn:
+    id: "calculator-key-5"
+- tapOn:
+    id: "calculator-key-0"
+
+# Done dismisses the calculator but MUST NOT save.
+- tapOn:
+    id: "calculator-key-done"
+- assertNotVisible:
+    id: "calculator-key-1"
+- assertVisible: "New Transaction"
 - assertVisible: "150"
 
 # Preserve the existing EXPENSE interaction from this journey.
 - tapOn:
     id: "type-tab-EXPENSE"
 
-# Step 6: Save.
+# Step 6: Header Save is the persistence action.
 - tapOn:
     id: "header-save"
 

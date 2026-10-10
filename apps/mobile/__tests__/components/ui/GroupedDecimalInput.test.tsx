@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react-native";
 import React from "react";
-import { I18nManager, Text } from "react-native";
+import { I18nManager, Text, TextInput } from "react-native";
 
 import { GroupedDecimalInput } from "@/components/ui/GroupedDecimalInput";
 import { GroupedMoneyInput } from "@/components/ui/GroupedMoneyInput";
@@ -286,5 +286,60 @@ describe("GroupedMoneyInput delegation", () => {
     );
 
     expect(screen.getByDisplayValue("47,800")).toBeTruthy();
+  });
+});
+
+
+describe("GroupedMoneyInput focus forwarding", () => {
+  interface FocusableMoneyProps
+    extends React.ComponentProps<typeof GroupedMoneyInput> {
+    readonly onFocus?: () => void;
+    readonly onBlur?: () => void;
+    readonly showSoftInputOnFocus?: boolean;
+  }
+
+  const FocusableGroupedMoneyInput =
+    GroupedMoneyInput as unknown as React.ComponentType<FocusableMoneyProps>;
+
+  it("forwards focus lifecycle and suppresses the native soft keyboard when requested", () => {
+    const onFocus = jest.fn();
+    const onBlur = jest.fn();
+
+    render(
+      <FocusableGroupedMoneyInput
+        testID="manual-money-input"
+        label="Amount"
+        value="120"
+        onCanonicalChange={jest.fn()}
+        onFocus={onFocus}
+        onBlur={onBlur}
+        showSoftInputOnFocus={false}
+      />
+    );
+
+    const input = screen.getByTestId("manual-money-input");
+    expect(input).toHaveProp("showSoftInputOnFocus", false);
+
+    fireEvent(input, "focus", {});
+    expect(onFocus).toHaveBeenCalledTimes(1);
+
+    fireEvent(input, "blur", {});
+    expect(onBlur).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps forwarding the shared native input ref", () => {
+    const inputRef = React.createRef<TextInput>();
+
+    render(
+      <GroupedMoneyInput
+        testID="manual-money-ref"
+        label="Amount"
+        value="120"
+        onCanonicalChange={jest.fn()}
+        inputRef={inputRef}
+      />
+    );
+
+    expect(inputRef.current).not.toBeNull();
   });
 });
