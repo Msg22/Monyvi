@@ -24,6 +24,111 @@ run focused unit/type/lint, and hand manual testing to owner.
 Visual/accessibility/ device evidence remains NOT RUN without completion claims.
 Fresh read-only analysis remains the production-assignment gate.
 
+## Approved Voice motion/interaction continuation — 10 October 2026
+
+This is a **planning overlay** to the finished 10 October UI repair; old plan/server
+history, 59 existing tasks, five frozen repair sidecars and image hashes remain
+unchanged. Owner approved the exact new five-image proposal
+`mockups/drafts/2026-10-10-voice-motion-r1/` on 2026-10-10; original manifest
+`sha256:7d91150571a3150e235a1b8ec63327cff4c19de6c292927cde76c40024c1c799`,
+proposal `sha256:06e5e987543d85a2c90c57aaad695569ca904cc122571da47bae7195d2b9f4b0`.
+Exact approval is in its immutable `approval.json`; the derived scope map is
+`mockups/voice-motion-binding-context.md`. This is **not** a sixth approved
+sidecar or a new arbitrary approval/verifier gate. Earlier five-image package
+`sha256:4b06ef2ad901a13cceb06790e49149fb9b314e99c213080e941cce22859b34b8`
+continues to govern baseline Manual, idle and daily-limit composition outside
+the new proposal's explicit deltas. Reconciliation and canonical requirements
+are updated; execute existing verifiers and fresh **read-only**
+`speckit.analyze` locally before implementation ownership is dispatched.
+
+**Scope decisions:**
+
+- Preserve standalone `PageHeader`, existing equal underline mode tabs,
+  responsive/safe-area, Manual B, all financial/offline/save rules, quota and
+  local-midnight semantics, Gemini provider/review, consent/privacy and
+  deferred #384. No extra hosted table, sync/migration or subscription plan.
+- Dark idle allowance/examples badge uses slate-700 and green icons; English
+  example restaurant/car/cafe glyphs gain registered orange/blue/gold props,
+  Arabic remains quotes without English glyphs. `ExamplesCard` has an
+  accessible dismiss target ≥48 dp and an authenticated **per-account,
+  per-device** durable hidden preference.
+- The account-scoped preference is a new local-only service/facade, **not**
+  `intro-flag-service` (its `intro-seen` keys are intentionally device-global).
+  Namespace by current authenticated user ID, default absent/error reads to
+  visible, clear in-memory old-user state on switch, guard late responses and
+  report write failure without fabricating durable success. Never sync/share.
+- Mic tap sets a synchronously observable `Starting` state before awaiting
+  fresh AI consent, authoritative availability or native preparation. Keep
+  an operation-generation lock against rapid taps/cancellation, invalidating
+  all late success/failure after Back, Manual, unmount or account change. Do
+  not count an allowance or tick elapsed time before actual native capture.
+  A granted mic skips permission explanation; an **unknown** async grant state
+  must be resolved or refreshed before considering permission missing.
+- `useVoiceRecorder.start` currently catches native preparation failures
+  without rethrowing. The implementation owner must restore an observable
+  error result/throw contract to `useVoiceTransactionFlow` before it can
+  transition to true Listening; tests prove no false recording on failure.
+  Do not alter authoritative provider-start accounting or error reason.
+- Replace the generic pre-native record-introduction **modal** with the
+  approved Voice-**inline** explanation only when permission genuinely missing;
+  keep the Monyvi custom explanation before the OS dialog and preserve the
+  separate `AiProcessingConsentSheet` and denied/revoked Settings/Manual path.
+- Recording uses cancelable Reanimated decorative ripple pair (~1.4 s,
+  stagger 700 ms) from existing 104 dp mic out to 172 dp region, activity
+  bars (~1.2 s), real recorder timer; paused freezes both activity/time;
+  resume restarts. Parsing `analyzing` renders a restrained ~1.6 s
+  waveform/dots → receipt loop with approved EN/AR copy, never a content
+  Skeleton, percentage or staged output claim. Native **finalizing** remains
+  distinct from actual parsing; genuine availability-fetch loading keeps the
+  existing Skeleton. Reduced motion uses static indicators.
+- Recording error Try again enters Starting without a visible idle state;
+  retained-audio submission retries use the **same** request identity and no
+  second recorder. Voice-unavailable Try again refreshes authoritative
+  allowance and continues automatically into Starting only when eligible.
+  Existing burst/daily/refusal/consent checks never become optimistic starts.
+
+### Cohesive future implementation ownership (not assigned in this wave)
+
+Single Voice interaction writer should own the coupled route
+`app/(private)/add-transaction.tsx`, `useVoiceTransactionFlow`,
+`useVoiceRecorder`, scoped Voice presentation (`VoiceTransactionEntry`,
+`voice-ui/*`), EN/AR copies, account-scoped local preference service/facade,
+and their in-scope unit/integration/E2E tests. **Do not** overlap Mobile's
+existing Manual/shared numeric/Transfer keyboard owner. Candidate structure
+reuses `AllowanceCard`, `ExamplesCard`, `VoiceStateActions`,
+`VoicePresentation`, `Skeleton`, the current `mic`/`bulb-outline`/
+`restaurant-outline`/`car-outline`/`cafe-outline` glyphs and registered
+NativeWind colors. Permission route currently imports
+`components/permissions/PermissionRecoveryModal.tsx` and availability
+`hooks/useVoiceAiAvailability.ts`; the similarly named user-supplied
+`components/ui/PermissionRecoveryModal.tsx` and
+`hooks/useVoiceAvailability.ts` do not exist. Inspect the actual two
+dependencies after explicit read-boundary expansion, **before** implementation;
+no broader source read was made by this author.
+
+### Test-first and owner evidence gates
+
+1. **T060/T061/T062**, including the 37-row complete plan at
+   `checklists/voice-motion-coverage.md`, author focused failing route/hook/
+   recorder/unit/integration tests and only honest runner-controllable Maestro
+   flows. Missing native module/fixture = setup blocker, not behavior Red.
+2. After root accepts real Red, T063/T064 implement the approved lifecycle,
+   preference and presentation atomically under one exclusive source owner.
+   Batch Green/type/lint/i18n and independent reviews under T065. Do not
+   change app code/tests in this planning wave.
+3. T066 hands the owner complete native timing, permissions, animations,
+   account restart, quota/replay and rendered EN/AR/dark/responsive/
+   enlarged-text/a11y matrix. T034/T035/T049/T050 and visual/a11y T058
+   remain **NOT RUN** until owner evidence; optional Speckit hooks require
+   separate conscious opt-in when locally invoked (`.specify/extensions.yml`
+   currently enables auto-executable Git commit hooks).
+4. The five **new** source PNGs are approved concept evidence (853×1844 pixels);
+   no new logical viewport or exact unmeasured geometry is inferred.
+   Root/owner must inspect the original image bytes and render comparisons
+   locally; this remote connector returned no inspectable base64 for the large
+   images. That is an evidence boundary, not permission to invent pixels.
+
+
 ## Summary
 
 Expand the current voice-limit work into the approved Add Transaction redesign

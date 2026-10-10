@@ -14,6 +14,40 @@ and run `node scripts/verify-mockup-binding.js <sidecar>` for each. Require exit
 zero and manifest agreement. Missing, ambiguous, unapproved or superseded
 fidelity inputs block governed implementation.
 
+## Owner-approved scoped Voice motion overlay (10 October 2026)
+
+See [voice-motion-binding-context.md](../mockups/voice-motion-binding-context.md)
+for the **derived** state/component/icon/locale map, and
+[voice-motion-coverage.md](../checklists/voice-motion-coverage.md) for the
+manual → unit/integration/E2E/owner-evidence matrix. Source
+`mockups/drafts/2026-10-10-voice-motion-r1/approval.json` records owner
+approval (“mockups approved” / “Approve the proposal”) for the five new
+conceptual images and their original `manifest.json` at
+`sha256:7d91150571a3150e235a1b8ec63327cff4c19de6c292927cde76c40024c1c799`.
+It supersedes **only** explicitly proposed interactions/appearance. The
+earlier five approved baseline/daily/Manual bindings **remain frozen and
+authoritative** for every unaffected fact. The derived map is not a competing
+sixth mockup/approval/verifier gate.
+
+| New state / event | Binding and component | Exact invariant |
+| --- | --- | --- |
+| Idle badge + examples | Existing EN/AR idle bindings; `AllowanceCard`, `ExamplesCard` | Dark mic and bulb badge slate-700/green; EN food orange/car blue/coffee gold, unchanged icons and copy; AR quoted no EN example icons; light badge unchanged; approved daily-only next-local-midnight reset |
+| Dismiss examples | `ExamplesCard` + new user-scoped **device-local** preference service/facade | Dismiss full card immediately; accessible EN “Dismiss examples” / AR “إخفاء الأمثلة”, ≥48 dp target (proposal min44, shared target min48); same account remains hidden across route/restart/theme/locale/sign-out; independent other accounts, no hosted/sync |
+| Starting | Unified route `isVoiceStartPending` and `useVoiceTransactionFlow` state → `VoiceTransactionEntry` | Immediate “Starting…” / “نجهّز التسجيل…” with approved body and Cancel **before** awaits; one in-flight start, no audio timer/Listening until `record()` succeeds, all cancellation generations checked |
+| Recording/paused | `VoiceActionSurface` + `useVoiceRecorder` | 104 dp mic, 140/172 dp existing halos; two thin ~1.4s outward ripple strokes, 700ms offset, non-volume activity bars ~1.2s; real timer starts with native capture, paused freezes time/motion, reduced-motion static; Stop/Pause/Resume/Discard and cleanup unchanged |
+| Parsing/analyzing | `VoiceTransactionEntry` + cohesive `voice-ui` illustration | ~1.6s looping waveform/dots → receipt, exact approved EN/AR title/body, no fake progress, financial details or Skeleton; real quota-fetch loading stays Skeleton |
+| Permission | Voice **inline** explanation, route/recorder | Only after genuinely missing native grant, with approved localized title/body/action; no generic recording-introduction modal; stale initial `hasPermission=false` is unknown, not denial; existing first-use AI Processing Consent Sheet still gates |
+| Errors and retries | `useVoiceTransactionFlow`, route `handleTryAgain`, recovery actions | Native recorder start failure has visible recovery. Recording Try again → Starting directly; retained-submission Try again uses same key/audio/no new capture; unavailable Try again refreshes and auto-starts only if authoritative availability eligible, respecting consent/daily/burst/cancel |
+| Exhausted/burst/unavailable/Manual | Frozen daily/Manual bindings and server contracts | No altered quota consumption, same-key 35-day replay retention, #384 deferred; exhausted EN/AR compositions/actions and Manual B preserved; no Voice notice in Manual |
+
+No new baseline geometry, font, palette, unverified icon-glyph identity or
+permission policy is inferred from export image framing. Existing 390×844 dp,
+48 dp shared interactive minimum, scroll/safe-area and responsive variants
+apply. Root still must run approved original binding checks and read-only
+Speckit analysis, then actual test Red before production. Device, rendered
+visual and separate accessibility verification remain **NOT RUN** and owner
+owned.
+
 ## Navigation and shared shell
 
 - Standalone `/add-transaction` remains one page; pictured bottom navigation is

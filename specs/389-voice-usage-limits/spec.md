@@ -77,6 +77,30 @@ future subscription entitlements."
   contracts remain authoritative. Held-reservation bug #384 remains deferred;
   this repair does not change SQL, snapshots, sync or quota contracts.
 
+### Session 2026-10-10 — approved Voice motion/interaction overlay
+
+- Owner explicitly approved `2026-10-10-voice-motion-r1` in
+  `mockups/drafts/2026-10-10-voice-motion-r1/approval.json`:
+  “mockups approved” / “Approve the proposal”,
+  `approvedManifestSha256:7d91150571a3150e235a1b8ec63327cff4c19de6c292927cde76c40024c1c799`,
+  `proposalSha256:06e5e987543d85a2c90c57aaad695569ca904cc122571da47bae7195d2b9f4b0`.
+  The overlay `mockups/voice-motion-binding-context.md` records scoped states,
+  copy, components and existing tokens; it is not a new approval gate.
+- The new approval applies **only** to dark idle badge/example icon colors,
+  account-scoped dismissible examples, immediate Starting/Cancel feedback,
+  decorative recording/parsing motion, native permission inline explanation and
+  direct/error/unavailable retry transitions. The earlier five original PNGs,
+  sidecars, manifest and Manual B remain frozen; server accounting, existing
+  Gemini review and 35-day replay retention remain unchanged; #384 deferred.
+- New source images are 853×1844 **raster pixels**, not replacement logical
+  viewport measurements. Existing normalized 390×844 dp, 104/140/172 dp mic,
+  48 dp shared interactive minimum, 16 dp gutters and responsive/RTL/dark
+  contract remain authoritative. The approved example dismiss proposal gives
+  ≥44 dp; the established ≥48 dp interactive target satisfies both.
+- The owner still owns device/rendered/accessibility evidence; no remote test
+  authoring, native/device runs or `speckit.analyze` are claimed by this
+  planning continuation.
+
 ## User Scenarios & Testing _(mandatory)_
 
 ### User Story 0 - Use One Unified Add Transaction Experience (Priority: P1)
@@ -125,6 +149,29 @@ underlying manual/voice transaction contracts.
 9. **Given** the approved English and Arabic references differ, **When** each
    Voice idle/daily state renders, **Then** its respective progress, examples,
    alert and recovery composition is preserved rather than homogenized.
+10. **Given** the user's current account has not dismissed examples, **When**
+    they tap the accessible dismiss control, **Then** the full card disappears
+    and stays hidden for that account on this device after route/restart/theme/
+    locale/sign-out/sign-in; another authenticated account's preference is
+    independent and no server data changes.
+11. **Given** Voice is ready, **When** they tap the mic once or rapidly again,
+    **Then** Starting/Cancel is immediately visible, exactly one valid recorder
+    start can occur, and a real recording timer/listening display begins only
+    after native capture starts.
+12. **Given** a pending start is canceled, native start fails, or microphone
+    permission is pending/denied, **When** the deferred work resolves, **Then**
+    it cannot resume stale recording or falsely show Listening. Missing native
+    permission uses the approved inline custom explanation, while genuine
+    first-use AI processing consent remains mandatory.
+13. **Given** recording is active, paused or parsing, **When** its state changes,
+    **Then** decorative ripple/bars or waveform/receipt motion matches the
+    approved state, paused time is frozen, reduced-motion substitutes a static
+    representation, and all loops/timers stop on discard/unmount/account change.
+14. **Given** a recording failure or authoritative availability check failure,
+    **When** Try again is tapped, **Then** it transitions directly to Starting
+    without an idle flash only if eligible. A retained-audio submission retry
+    reuses the existing request identity without starting a second microphone
+    recording; daily/burst/consent gates still hold.
 
 ---
 
@@ -406,6 +453,42 @@ parsing contract or provider-specific implementation.
   current transaction safety and MUST be documented in planning before
   implementation.
 
+- **FR-037**: The approved scoped Voice idle overlay MUST change the dark
+  allowance badge to a slate-700 field with green microphone glyph and retain
+  light appearance. EN example icons MUST retain restaurant/car/cafe identities
+  with orange/blue/gold registered colors; AR examples remain typographically
+  quoted and icon-free. Approved daily-reset copy remains next local midnight.
+- **FR-038**: The examples card MUST support immediate dismissal via a localized
+  accessible control with at least a 48 dp touch target; dismissal MUST persist
+  **per authenticated account on the same device** through route changes,
+  restart, theme/locale changes and sign-out/sign-in, without cross-account
+  leakage or hosted schema/sync. Absence/error defaults to examples visible.
+- **FR-039**: Mic initiation MUST show Starting/Cancel immediately, prevent
+  duplicate starts, and start Listening/elapsed time only after native capture
+  starts. Cancellation, account switch, stale async permission/allowance checks,
+  and native start failure MUST not leave false active recording or use an
+  unauthorized provider start.
+- **FR-040**: Recording MUST show two staggered outward decorative ripple
+  strokes (~1.4 s, +700 ms) and gently cycling activity bars (~1.2 s) over
+  existing geometry, with a true timer; paused stops activity and freezes time,
+  resume restores it, reduced-motion uses static indicators and lifecycle
+  cleanup cancels loops. Parsing/analyzing MUST replace its processing
+  skeleton with a restrained ~1.6 s waveform-to-receipt loop and exact approved
+  localized copy, no percentage, staged result claim or invented financial data.
+  True allowance-fetch loading MUST remain a separate Skeleton state.
+- **FR-041**: A genuinely missing native microphone permission MUST show the
+  approved **inline** custom explanation before the OS request, not a
+  record-introduction modal; granted users skip it and stale initial
+  `hasPermission=false` must not be mistaken for denial. Blocked/revoked
+  permission retains Settings/Manual recovery. The distinct first-use AI
+  processing consent sheet and privacy gate remain required.
+- **FR-042**: Recording-error Try again MUST go directly into Starting with no
+  visible idle detour. Availability-failure Try again MUST refresh
+  server-authoritative allowance and automatically enter Starting only if
+  eligible, without requiring a second mic tap. Retained-audio submission
+  retry MUST reuse the same logical request identity without recording anew
+  or double charging; #384 and all server policies stay unchanged.
+
 ### Key Entities
 
 - **Voice Entitlement Policy**: The active business allowance applicable to one
@@ -458,6 +541,9 @@ parsing contract or provider-specific implementation.
 - Automatic model/provider fallback.
 - Voice-quality benchmarking or ASR research.
 - Changing the voice transaction schema or transaction-review behavior.
+- Regenerating the frozen five binding images/sidecars, expanding the approved
+  motion proposal into a new Manual redesign, volume metering, hosted dismissal
+  sync, fabricated processing percentages or new voice permission policy.
 - Unrelated SMS AI provider work.
 - Database or sync changes not strictly required by the approved voice
   usage/accounting contract.
@@ -527,6 +613,19 @@ parsing contract or provider-specific implementation.
   open.
 - **SC-015**: Exhausting or temporarily blocking Voice never prevents the user
   from switching to and using Manual entry.
+- **SC-016**: Deterministic tests of Starting/Cancel, duplicate taps,
+  permission-granted/unknown/missing/denied, recorder start failure,
+  deferred cancellation and both retry types show no false Listening,
+  duplicate recording, unauthorized provider start or changed request identity.
+- **SC-017**: Device-local examples dismissal tests cover persistence across
+  route changes, app restart, language/theme, same-account sign-out/sign-in,
+  multi-account isolation, missing/corrupt preference and read/write failures;
+  no global/hosted record participates.
+- **SC-018**: Approved motion/permission/parsing/idle states match the new
+  scoped proposal while the five frozen references remain intact; rendered
+  EN/AR/light/dark/compact/ordinary/tablet/landscape/font-scale comparisons
+  and separate accessibility-tree evidence are required. Until owner captures
+  these, visual/accessibility completion is **NOT RUN**, not Green.
 
 ## Assumptions
 
