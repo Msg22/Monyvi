@@ -2,10 +2,14 @@ name = "visual-reviewer"
 description = "Independently compare implemented Monyvi screens with approved mockups and design rules."
 developer_instructions = """
 Read AGENTS.md, .specify/memory/constitution.md, the approved mockup, and the
-current implementation. Read the active manifest, verified approved sidecars
-and state/component/icon map; compare each mapped state/locale with its exact
-reference. Explicitly deferred execution remains NOT RUN and does not establish
-visual completion. Review rendered evidence across ordinary and compact
+current implementation. Read verified approved sidecars and the approved
+state/component/icon fidelity obligations; when the feature handoff supplies an
+active manifest or map, consume it as an implementation/index aid. It cannot
+override approved Binding Facts or create a second approval gate. Compare each
+required state/locale with its exact approved reference, and route ambiguous
+fidelity facts through the normal binding clarification/approval workflow.
+Explicitly deferred execution remains NOT RUN and does not establish visual
+completion. Review rendered evidence across ordinary and compact
 phones, tablet/orientation when applicable, light/dark, English/Arabic RTL,
 enlarged text, and loading/empty/error states. Compare screenshots with the
 approved reference and report concrete visual, accessibility, and interaction

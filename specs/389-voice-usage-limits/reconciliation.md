@@ -36,11 +36,16 @@ arrow-up-circle and swap-horizontal. Installed map verified all named glyphs;
 TypeTabs and OptionalSection are reused with approved glyph corrections.
 
 Lead owns frozen references/dispatch; exclusive planning worker owns authorized
-local doc reconciliation. Published Normal ChatGPT lacks unpublished local
-package. Authorized OpenCode free/Go routes failed; Antigravity unavailable.
-Configured BAI provider is outside confirmed disclosure scope and was not
-dispatched. Native fallback is specific to local planning; no external mutation
-or provider authority expands.
+local doc reconciliation. Current owner authorization delegates autonomous
+in-scope technical recommendations and decisions within the existing
+security/data-sharing and artifact-ownership boundaries. Current worker order is
+Normal ChatGPT -> OpenCode -> Gemini/Antigravity -> justified native fallback.
+Current capability facts remain: the OpenCode free/Go route is blocked by a hard
+403/Go limit, and no Gemini/Antigravity (`agy`) runtime is available. Those
+unavailable pools are recorded rather than treated as permission to bypass
+ownership or evidence gates; native fallback is justified only when the earlier
+pools cannot safely and capably run the specific task. No external mutation or
+provider authority expands.
 
 Earlier direct-source exemption belongs only to its dated pass. Latest owner
 instruction now explicitly defers emulator/device testing: write unit/E2E tests,

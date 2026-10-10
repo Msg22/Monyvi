@@ -29,12 +29,17 @@ Prepare the manual scenarios, write required failing tests, implement the
 minimum change, and run focused checks. Report device and visual evidence
 separately from automated checks.
 
-Inventory/read active reference manifest, approved sidecars and state/component/
-icon map; verify bindings and report missing/conflicting facts before code. At
-plan checkpoint, name exact reference revision and existing component/icon for
-each assigned state. Required rendered comparisons and separate accessibility
-proof establish visual completion. Explicitly deferred execution stays NOT RUN;
-author the allowed coverage and hand complete manual plan to owner.
+For every mockup-backed assignment, inventory/read the approved sidecars and
+state/component/icon fidelity obligations before code. When the approved feature
+handoff supplies an active manifest or map, consume it; otherwise no new
+manifest artifact is required. Treat any manifest/derived map as an
+implementation/index aid that cannot override approved Binding Facts or add a
+second approval gate. Route missing/conflicting fidelity facts through the
+normal binding clarification/approval workflow. At plan checkpoint, name the
+exact approved reference revision and existing component/icon for each assigned
+state. Required rendered comparisons and separate accessibility proof establish
+visual completion. Explicitly deferred execution stays NOT RUN; author the
+allowed coverage and hand complete manual plan to owner.
 
 ## Stop And Handoff
 
