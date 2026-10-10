@@ -31,9 +31,12 @@ Written implementation is not verified delivery; existing evidence and
 unfinished verification tasks stay intact. Changes remain uncommitted/unpushed
 until verification.
 
-**Current prepared main**: `b2ec0fd4bc81cf2bf504f86d3bb781f605b355fc`; Voice
-migration is now `086_voice_ai_usage_limits.sql`. The local main merge is
-prepared and remains uncommitted/unpublished under the verification deferral.
+**Current integration target main**: `3264eba2b67bcc66cddc95e3fbdb36e8705ee642`;
+main now owns `supabase/migrations/086_metals_dispose_rate_snapshots.sql`, so
+the byte-identical Voice migration is aligned to
+`supabase/migrations/087_voice_ai_usage_limits.sql`. This is a path-only
+numbering correction; Voice schema, accounting, retention and #384 behavior are
+unchanged. Local merge and validation remain lead-owned.
 
 **Direct source status — 8 October 2026**: Source for T015–T020, T029–T032 and
 T043–T047 is integrated locally, including the final bound layout details. Task
@@ -151,7 +154,7 @@ GitHub mutations are authorized by this checklist.
       identify emulator/audio/provider-double/clock capabilities,
       permission/restart/resume cases and manual-only blockers, and reserve the
       exact next migration filename
-      `supabase/migrations/086_voice_ai_usage_limits.sql` after rechecking
+      `supabase/migrations/087_voice_ai_usage_limits.sql` after rechecking
       migration numbering at assignment time. UI repair: map current scenarios
       below to unit/E2E authoring and owner manual-only validation; no
       emulator/device/E2E execution or captures.
@@ -266,7 +269,7 @@ success/error/timeout/invalid output and internal retries consume one.
 
 ### Implementation after accepted Red
 
-- [ ] T015 [US2] Implement `supabase/migrations/086_voice_ai_usage_limits.sql`
+- [ ] T015 [US2] Implement `supabase/migrations/087_voice_ai_usage_limits.sql`
       through the bounded bootstrap sequence below, with voice-only
       tables/indexes/checks, authenticated-user lock and accepted timezone
       window, atomic availability/reserve/start/release/complete RPCs, unique
@@ -325,7 +328,7 @@ success/error/timeout/invalid output and internal retries consume one.
       measured unchanged-success contract evidence in
       `specs/389-voice-usage-limits/tasks.md`.
 - [ ] T023 [US2] Obtain independent DB/security review of
-      `supabase/migrations/086_voice_ai_usage_limits.sql`, server
+      `supabase/migrations/087_voice_ai_usage_limits.sql`, server
       contract/services/endpoints and exclusion/type updates; record findings
       and corrected evidence in `specs/389-voice-usage-limits/tasks.md`,
       including grants, per-user locks, timezone boundary races, lease/cleanup
