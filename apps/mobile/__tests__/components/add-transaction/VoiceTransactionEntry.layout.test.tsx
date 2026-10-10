@@ -165,7 +165,12 @@ describe("VoiceTransactionEntry responsive, animation and unboxed layout", () =>
     mockWidth = 844;
     mockHeight = 390;
     view.rerender(<VoiceTransactionEntry {...baseProps} />);
-    expect(screen.UNSAFE_getByType(ScrollView)).toBeOnTheScreen();
+    const landscapeScroll = screen.UNSAFE_getByType(ScrollView);
+    expect(landscapeScroll.props.contentContainerStyle).toEqual(
+      expect.objectContaining({ paddingHorizontal: 16 })
+    );
+    expect(landscapeScroll.props.showsVerticalScrollIndicator).toBe(false);
+    expect(screen.getByTestId("voice-content")).toBeOnTheScreen();
   });
 
   it("keeps the 104dp mic and decorative 140/172dp halos in an unboxed Voice surface", () => {
@@ -174,13 +179,13 @@ describe("VoiceTransactionEntry responsive, animation and unboxed layout", () =>
     expect(String(area.props.className)).not.toMatch(/rounded-2xl border|bg-slate-25/);
     const mic = screen.getByTestId("voice-mic-target");
     expect(String(mic.props.className)).toContain("104px");
-    const outer = screen.getByTestId("voice-halo-outer");
-    const inner = screen.getByTestId("voice-halo-inner");
+    const outer = screen.getByTestId("voice-halo-outer", { includeHiddenElements: true });
+    const inner = screen.getByTestId("voice-halo-inner", { includeHiddenElements: true });
     expect(String(outer.props.className)).toContain("172px");
     expect(String(inner.props.className)).toContain("140px");
     expect(outer).toHaveProp("pointerEvents", "none");
     expect(inner).toHaveProp("pointerEvents", "none");
-    expect(screen.getByTestId("ionicon-mic")).toBeOnTheScreen();
+    expect(screen.getByTestId("ionicon-mic", { includeHiddenElements: true })).toBeOnTheScreen();
   });
 
   it("suppresses pulse when reduced motion is enabled and tears down on unmount", () => {
@@ -202,7 +207,7 @@ describe("VoiceTransactionEntry responsive, animation and unboxed layout", () =>
     renderLayout({ state: "daily-limit", remaining: 0, dailyLimit: 5 });
     const surface = screen.getByTestId("voice-action-surface");
     expect(String(surface.props.className)).not.toMatch(/rounded-2xl border/);
-    expect(screen.getByTestId("ionicon-mic")).toBeOnTheScreen();
+    expect(screen.getByTestId("ionicon-mic", { includeHiddenElements: true })).toBeOnTheScreen();
     expect(screen.queryByRole("button", { name: "voice_idle_title" })).toBeNull();
   });
 });

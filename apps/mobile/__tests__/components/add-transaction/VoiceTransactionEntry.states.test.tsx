@@ -106,12 +106,12 @@ describe("VoiceTransactionEntry approved state compositions", () => {
     expect(screen.getByText("Limited free voice usage")).toBeOnTheScreen();
     expect(screen.getByText("Tap and speak your transaction")).toBeOnTheScreen();
     expect(screen.getByText("Try saying something like")).toBeOnTheScreen();
-    expect(screen.getByTestId("ionicon-mic-outline")).toBeOnTheScreen();
-    expect(screen.getByTestId("ionicon-bulb-outline")).toBeOnTheScreen();
-    expect(screen.getByTestId("ionicon-restaurant-outline")).toBeOnTheScreen();
-    expect(screen.getByTestId("ionicon-car-outline")).toBeOnTheScreen();
-    expect(screen.getByTestId("ionicon-cafe-outline")).toBeOnTheScreen();
-    expect(screen.queryByTestId("ionicon-chatbubble-ellipses-outline")).toBeNull();
+    expect(screen.getByTestId("ionicon-mic-outline", { includeHiddenElements: true })).toBeOnTheScreen();
+    expect(screen.getByTestId("ionicon-bulb-outline", { includeHiddenElements: true })).toBeOnTheScreen();
+    expect(screen.getByTestId("ionicon-restaurant-outline", { includeHiddenElements: true })).toBeOnTheScreen();
+    expect(screen.getByTestId("ionicon-car-outline", { includeHiddenElements: true })).toBeOnTheScreen();
+    expect(screen.getByTestId("ionicon-cafe-outline", { includeHiddenElements: true })).toBeOnTheScreen();
+    expect(screen.queryByTestId("ionicon-chatbubble-ellipses-outline", { includeHiddenElements: true })).toBeNull();
     for (const example of [
       "I paid 120 pounds at Talabat for food",
       "50 pounds for Uber today",
@@ -141,11 +141,11 @@ describe("VoiceTransactionEntry approved state compositions", () => {
     expect(screen.getByText("اضغط وتحدث لإضافة معاملة")).toBeOnTheScreen();
     expect(screen.getByText("أمثلة على ما يمكنك قوله")).toBeOnTheScreen();
     expect(screen.getAllByTestId("voice-allowance-segment")).toHaveLength(5);
-    expect(screen.getByTestId("ionicon-bulb-outline")).toBeOnTheScreen();
-    expect(screen.queryByTestId("ionicon-restaurant-outline")).toBeNull();
-    expect(screen.queryByTestId("ionicon-car-outline")).toBeNull();
-    expect(screen.queryByTestId("ionicon-cafe-outline")).toBeNull();
-    expect(screen.queryByTestId("ionicon-chatbubble-ellipses-outline")).toBeNull();
+    expect(screen.getByTestId("ionicon-bulb-outline", { includeHiddenElements: true })).toBeOnTheScreen();
+    expect(screen.queryByTestId("ionicon-restaurant-outline", { includeHiddenElements: true })).toBeNull();
+    expect(screen.queryByTestId("ionicon-car-outline", { includeHiddenElements: true })).toBeNull();
+    expect(screen.queryByTestId("ionicon-cafe-outline", { includeHiddenElements: true })).toBeNull();
+    expect(screen.queryByTestId("ionicon-chatbubble-ellipses-outline", { includeHiddenElements: true })).toBeNull();
     for (const text of [
       "دفعت ٥٠ جنيه في كافيه ستاربكس",
       "اشتريت بقالة من كارفور بـ ٣٢٠ جنيه",
@@ -160,8 +160,8 @@ describe("VoiceTransactionEntry approved state compositions", () => {
     expect(screen.getByText("Daily voice limit reached")).toBeOnTheScreen();
     expect(screen.getByText("You used all 7 voice uses today")).toBeOnTheScreen();
     expect(screen.getByText("Voice recording unavailable")).toBeOnTheScreen();
-    expect(screen.getByTestId("ionicon-ban-outline")).toBeOnTheScreen();
-    expect(screen.getByTestId("ionicon-mic")).toBeOnTheScreen();
+    expect(screen.getByTestId("ionicon-ban-outline", { includeHiddenElements: true })).toBeOnTheScreen();
+    expect(screen.getByTestId("ionicon-mic", { includeHiddenElements: true })).toBeOnTheScreen();
     expect(String(screen.getByTestId("voice-daily-alert").props.className))
       .toContain("flex-row");
     const retry = screen.getByRole("button", { name: "Try again tomorrow" });
@@ -176,15 +176,15 @@ describe("VoiceTransactionEntry approved state compositions", () => {
     fireEvent.press(useManual);
     expect(callbacks.onUseManual).toHaveBeenCalledTimes(1);
     expect(screen.queryByText("Try saying something like")).toBeNull();
-    expect(screen.queryByTestId("ionicon-restaurant-outline")).toBeNull();
+    expect(screen.queryByTestId("ionicon-restaurant-outline", { includeHiddenElements: true })).toBeNull();
   });
 
   it("renders distinct Arabic exhaustion with reset strip and a single Manual action", () => {
     mockLanguage = "ar";
     renderVoice({ state: "daily-limit", remaining: 0, dailyLimit: 5 });
     expect(screen.getByText("تم الوصول إلى الحد اليومي للاستخدام الصوتي")).toBeOnTheScreen();
-    expect(screen.getByTestId("ionicon-ban-outline")).toBeOnTheScreen();
-    expect(screen.getByTestId("ionicon-calendar-outline")).toBeOnTheScreen();
+    expect(screen.getByTestId("ionicon-ban-outline", { includeHiddenElements: true })).toBeOnTheScreen();
+    expect(screen.getByTestId("ionicon-calendar-outline", { includeHiddenElements: true })).toBeOnTheScreen();
     expect(String(screen.getByTestId("voice-daily-alert").props.className))
       .toContain("items-center");
     expect(screen.getByText("إدخال صوتي غير متاح الآن")).toBeOnTheScreen();
@@ -215,7 +215,7 @@ describe("VoiceTransactionEntry approved state compositions", () => {
     expect(screen.queryByText("Daily voice limit reached")).toBeNull();
     expect(screen.queryByText("Limited free voice usage")).toBeNull();
     expect(screen.queryByText("Try saying something like")).toBeNull();
-    expect(screen.getByTestId("ionicon-cloud-offline-outline")).toBeOnTheScreen();
+    expect(screen.getByTestId("ionicon-cloud-offline-outline", { includeHiddenElements: true })).toBeOnTheScreen();
     fireEvent.press(screen.getByRole("button", { name: "Try again" }));
     fireEvent.press(screen.getByRole("button", { name: "Use Manual" }));
     expect(callbacks.onRefreshAvailability).toHaveBeenCalledTimes(1);

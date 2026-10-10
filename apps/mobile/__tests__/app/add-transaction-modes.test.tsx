@@ -15,47 +15,37 @@ const mockSetParams = jest.fn();
 const mockVoiceAvailabilityRefresh = jest.fn();
 const mockVoiceStartFlow = jest.fn();
 const mockVoiceDiscardRecording = jest.fn();
-type CreatedTransactionFixture = Pick<
-  Awaited<
-    ReturnType<
-      typeof import("@/services/transaction-service").createTransaction
-    >
-  >,
-  "id"
->;
+type CreateTransaction = typeof import("@/services/transaction-service").createTransaction;
+type CreatedTransactionFixture = Pick<Awaited<ReturnType<CreateTransaction>>, "id">;
 const mockCreateTransaction = jest.fn<
   Promise<CreatedTransactionFixture>,
-  Parameters<typeof import("@/services/transaction-service").createTransaction>
+  Parameters<CreateTransaction>
 >();
 const mockGrantConsent = jest.fn<Promise<void>, []>();
+const unconsentedStatus = {
+  consent: null,
+  isConsented: false,
+  userId: "user-1",
+} as const;
+type GetConsentStatus = typeof import("@/services/profile-service").getAiProcessingConsentStatus;
 const mockGetAiProcessingConsentStatus = jest.fn<
-  ReturnType<
-    typeof import("@/services/profile-service").getAiProcessingConsentStatus
-  >,
-  Parameters<
-    typeof import("@/services/profile-service").getAiProcessingConsentStatus
-  >
+  ReturnType<GetConsentStatus>,
+  Parameters<GetConsentStatus>
 >();
 let mockFocusCallback: (() => void) | null = null;
 let mockAiConsentLoading = false;
 let mockAiConsented = false;
 let mockVoiceHasPermission = true;
 let mockVoiceFlowStatus:
-  | "idle"
-  | "recording"
-  | "paused"
-  | "completed"
-  | "analyzing"
-  | "error" = "idle";
+  | "idle" | "recording" | "paused" | "completed" | "analyzing" | "error" =
+  "idle";
 let mockVoiceModeSwitchLocked = false;
 let mockVoiceAvailabilityErrorKind: "network" | "consent_required" | null = null;
 let mockVoiceAvailabilityLoading = false;
 let mockVoiceRefusalReason:
-  | "daily_limit"
-  | "burst_limit"
-  | "already_processed_result_unavailable"
-  | null = null;
-let mockVoiceAvailability = {
+  | "daily_limit" | "burst_limit" | "already_processed_result_unavailable" | null =
+  null;
+const initialVoiceAvailability = {
   serverNow: "2026-10-08T01:00:00.000Z",
   timeZone: "Africa/Cairo",
   dailyLimit: 5,
@@ -66,14 +56,10 @@ let mockVoiceAvailability = {
   burstAvailableAt: null as string | null,
   policyVersion: "test",
 };
+let mockVoiceAvailability = { ...initialVoiceAvailability };
 
 jest.mock("expo-router", () => ({
-  useRouter: (): {
-    readonly back: jest.Mock;
-    readonly push: jest.Mock;
-    readonly replace: jest.Mock;
-    readonly setParams: jest.Mock;
-  } => ({
+  useRouter: () => ({
     back: mockBack,
     push: mockPush,
     replace: mockReplace,
@@ -87,12 +73,7 @@ jest.mock("expo-router", () => ({
 }));
 
 jest.mock("react-native-safe-area-context", () => ({
-  useSafeAreaInsets: (): {
-    readonly top: number;
-    readonly right: number;
-    readonly bottom: number;
-    readonly left: number;
-  } => ({ top: 0, right: 0, bottom: 0, left: 0 }),
+  useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
 }));
 
 jest.mock("react-i18next", () => ({
@@ -235,18 +216,6 @@ jest.mock("@/components/navigation/PageHeader", () => ({
         {onBack ? <Pressable testID="header-back" onPress={onBack} /> : null}
       </View>
     );
-  },
-}));
-
-jest.mock("@/components/add-transaction/AmountDisplay", () => ({
-  AmountDisplay: ({
-    amount,
-  }: {
-    readonly amount: string;
-  }): React.JSX.Element => {
-    const { Text } =
-      jest.requireActual<typeof import("react-native")>("react-native");
-    return <Text testID="manual-amount">{amount}</Text>;
   },
 }));
 
@@ -465,6 +434,16 @@ function renderRoute(mode: string | undefined): ReturnType<typeof render> {
   return render(<AddTransaction />);
 }
 
+function expectTabState(
+  mode: "Manual" | "Voice",
+  expected: Readonly<{ selected?: boolean; disabled?: boolean }>
+): void {
+  expect(screen.getByRole("tab", { name: mode })).toHaveProp(
+    "accessibilityState",
+    expect.objectContaining(expected)
+  );
+}
+
 describe("AddTransaction unified mode intent", () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -487,17 +466,7 @@ describe("AddTransaction unified mode intent", () => {
       isConsented: true,
       userId: "user-1",
     });
-    mockVoiceAvailability = {
-      serverNow: "2026-10-08T01:00:00.000Z",
-      timeZone: "Africa/Cairo",
-      dailyLimit: 5,
-      remaining: 5,
-      resetAt: "2026-10-08T21:00:00.000Z",
-      reason: null,
-      availableAt: null,
-      burstAvailableAt: null,
-      policyVersion: "test",
-    };
+    mockVoiceAvailability = { ...initialVoiceAvailability };
   });
 
   it("uses one Add Transaction shell and selects Voice for mode=voice", () => {
@@ -505,24 +474,20 @@ describe("AddTransaction unified mode intent", () => {
 
     expect(screen.getAllByTestId("page-header")).toHaveLength(1);
 
-    expect(screen.getByRole("tab", { name: "Voice" })).toHaveProp(
-      "accessibilityState",
-      expect.objectContaining({ selected: true })
-    );
-    expect(screen.getByRole("tab", { name: "Manual" })).toHaveProp(
-      "accessibilityState",
-      expect.objectContaining({ selected: false })
-    );
+    expectTabState("Voice", { selected: true });
+    expectTabState("Manual", { selected: false });
   });
 
   it("preserves observable Manual amount state across safe mode switches", async (): Promise<void> => {
     renderRoute("manual");
 
+    expect(screen.queryByTestId("key-1")).toBeNull();
+    fireEvent(screen.getByTestId("manual-amount-input"), "focus");
     await act(async (): Promise<void> => {
       fireEvent.press(screen.getByTestId("key-1"));
       await Promise.resolve();
     });
-    expect(screen.getByTestId("manual-amount")).toHaveTextContent("1");
+    expect(screen.getByTestId("manual-amount-input")).toHaveProp("value", "1");
 
     await act(async (): Promise<void> => {
       fireEvent.press(screen.getByRole("tab", { name: "Voice" }));
@@ -533,18 +498,20 @@ describe("AddTransaction unified mode intent", () => {
       await Promise.resolve();
     });
 
-    expect(screen.getByTestId("manual-amount")).toHaveTextContent("1");
+    expect(screen.getByTestId("manual-amount-input")).toHaveProp("value", "1");
   });
 
   it("keeps the unified shell wired to the real Manual save contract", async () => {
     renderRoute("manual");
 
+    expect(screen.queryByTestId("key-1")).toBeNull();
+    fireEvent(screen.getByTestId("manual-amount-input"), "focus");
     await act(async (): Promise<void> => {
       fireEvent.press(screen.getByTestId("key-1"));
       await Promise.resolve();
     });
     await waitFor(() =>
-      expect(screen.getByTestId("manual-amount")).toHaveTextContent("1")
+      expect(screen.getByTestId("manual-amount-input")).toHaveProp("value", "1")
     );
 
     fireEvent.press(screen.getByTestId("header-save"));
@@ -563,11 +530,7 @@ describe("AddTransaction unified mode intent", () => {
   });
 
   it("locks mode switching while consent grant is pending", async () => {
-    mockGetAiProcessingConsentStatus.mockResolvedValueOnce({
-      consent: null,
-      isConsented: false,
-      userId: "user-1",
-    });
+    mockGetAiProcessingConsentStatus.mockResolvedValueOnce(unconsentedStatus);
     const grant = createDeferred<void>();
     mockGrantConsent.mockReturnValueOnce(grant.promise);
     renderRoute("voice");
@@ -579,24 +542,21 @@ describe("AddTransaction unified mode intent", () => {
 
     fireEvent.press(screen.getByTestId("voice-consent-continue"));
 
-    expect(screen.getByRole("tab", { name: "Manual" })).toHaveProp(
-      "accessibilityState",
-      expect.objectContaining({ disabled: true })
-    );
+    expectTabState("Manual", { disabled: true });
 
     await act(async (): Promise<void> => {
       grant.resolve(undefined);
       await grant.promise;
     });
+    // Consent continuation must finish before automatic RNTL cleanup.
+    await waitFor(() =>
+      expectTabState("Manual", { disabled: false })
+    );
   });
 
   it("does not start or show permission recovery after Back invalidates a pending grant", async () => {
     mockVoiceHasPermission = false;
-    mockGetAiProcessingConsentStatus.mockResolvedValueOnce({
-      consent: null,
-      isConsented: false,
-      userId: "user-1",
-    });
+    mockGetAiProcessingConsentStatus.mockResolvedValueOnce(unconsentedStatus);
     const grant = createDeferred<void>();
     mockGrantConsent.mockReturnValueOnce(grant.promise);
     renderRoute("voice");
@@ -621,11 +581,7 @@ describe("AddTransaction unified mode intent", () => {
   });
 
   it("grants consent once and hands successful start to the Voice hook once", async () => {
-    mockGetAiProcessingConsentStatus.mockResolvedValueOnce({
-      consent: null,
-      isConsented: false,
-      userId: "user-1",
-    });
+    mockGetAiProcessingConsentStatus.mockResolvedValueOnce(unconsentedStatus);
     const grant = createDeferred<void>();
     const hookStart = createDeferred<void>();
     mockGrantConsent.mockReturnValueOnce(grant.promise);
@@ -652,20 +608,14 @@ describe("AddTransaction unified mode intent", () => {
     expect(mockVoiceStartFlow).toHaveBeenCalledWith({
       skipAiProcessingConsent: true,
     });
-    expect(screen.getByRole("tab", { name: "Manual" })).toHaveProp(
-      "accessibilityState",
-      expect.objectContaining({ disabled: true })
-    );
+    expectTabState("Manual", { disabled: true });
 
     await act(async (): Promise<void> => {
       hookStart.resolve(undefined);
       await hookStart.promise;
     });
 
-    expect(screen.getByRole("tab", { name: "Manual" })).toHaveProp(
-      "accessibilityState",
-      expect.objectContaining({ disabled: false })
-    );
+    expectTabState("Manual", { disabled: false });
   });
 
   it("drops a stale daily refusal after authoritative availability becomes ready", () => {
@@ -694,11 +644,7 @@ describe("AddTransaction unified mode intent", () => {
   });
 
   it("reopens consent after returning from privacy details", async (): Promise<void> => {
-    mockGetAiProcessingConsentStatus.mockResolvedValueOnce({
-      consent: null,
-      isConsented: false,
-      userId: "user-1",
-    });
+    mockGetAiProcessingConsentStatus.mockResolvedValueOnce(unconsentedStatus);
     renderRoute("voice");
     fireEvent.press(screen.getByTestId("voice-start"));
     await waitFor((): void => {
@@ -711,14 +657,14 @@ describe("AddTransaction unified mode intent", () => {
       mockFocusCallback?.();
     });
     expect(screen.getByTestId("voice-privacy-details")).toBeTruthy();
+    // Privacy-return recovery must leave no pending start at teardown.
+    await waitFor(() =>
+      expectTabState("Manual", { disabled: false })
+    );
   });
 
   it("keeps consent visible when granting it fails", async (): Promise<void> => {
-    mockGetAiProcessingConsentStatus.mockResolvedValueOnce({
-      consent: null,
-      isConsented: false,
-      userId: "user-1",
-    });
+    mockGetAiProcessingConsentStatus.mockResolvedValueOnce(unconsentedStatus);
     mockGrantConsent.mockRejectedValueOnce(new Error("profile unavailable"));
     renderRoute("voice");
     fireEvent.press(screen.getByTestId("voice-start"));
@@ -731,15 +677,15 @@ describe("AddTransaction unified mode intent", () => {
     });
     expect(screen.getByTestId("voice-consent-continue")).toBeTruthy();
     expect(mockVoiceStartFlow).not.toHaveBeenCalled();
+    // Rejected consent is caught and the pending-start lock is released.
+    await waitFor(() =>
+      expectTabState("Manual", { disabled: false })
+    );
   });
 
   it("uses fresh profile consent when mounted consent is stale", async (): Promise<void> => {
     mockAiConsented = true;
-    mockGetAiProcessingConsentStatus.mockResolvedValueOnce({
-      consent: null,
-      isConsented: false,
-      userId: "user-1",
-    });
+    mockGetAiProcessingConsentStatus.mockResolvedValueOnce(unconsentedStatus);
     renderRoute("voice");
     fireEvent.press(screen.getByTestId("voice-start"));
     await waitFor((): void => {
@@ -747,6 +693,10 @@ describe("AddTransaction unified mode intent", () => {
     });
     expect(mockGetAiProcessingConsentStatus).toHaveBeenCalledTimes(1);
     expect(mockVoiceStartFlow).not.toHaveBeenCalled();
+    // The fresh-status rejection returns without a dangling pending start.
+    await waitFor(() =>
+      expectTabState("Manual", { disabled: false })
+    );
   });
 
   it("preserves retry intent until consent loading finishes", async (): Promise<void> => {
@@ -761,15 +711,16 @@ describe("AddTransaction unified mode intent", () => {
       expect(mockVoiceStartFlow).toHaveBeenCalledTimes(1);
     });
     expect(mockSetParams).toHaveBeenCalledWith({ retry: undefined });
+    // Wait for the request's finally cleanup, not only hook invocation,
+    // before automatic route teardown.
+    await waitFor(() =>
+      expectTabState("Manual", { disabled: false })
+    );
   });
 
   it("explains microphone access after consent and starts only from the custom action", async (): Promise<void> => {
     mockVoiceHasPermission = false;
-    mockGetAiProcessingConsentStatus.mockResolvedValueOnce({
-      consent: null,
-      isConsented: false,
-      userId: "user-1",
-    });
+    mockGetAiProcessingConsentStatus.mockResolvedValueOnce(unconsentedStatus);
     renderRoute("voice");
     fireEvent.press(screen.getByTestId("voice-start"));
     await waitFor((): void => {
@@ -814,10 +765,7 @@ describe("AddTransaction unified mode intent", () => {
     "defaults %s route intent to Manual without showing Voice quota",
     (requested) => {
       renderRoute(requested);
-      expect(screen.getByRole("tab", { name: "Manual" })).toHaveProp(
-        "accessibilityState",
-        expect.objectContaining({ selected: true })
-      );
+      expectTabState("Manual", { selected: true });
       expect(screen.getByTestId("header-save")).toBeOnTheScreen();
       expect(screen.queryByText("VOICE_QUOTA_HEADING")).toBeNull();
     }
@@ -845,29 +793,27 @@ describe("AddTransaction unified mode intent", () => {
       expect(screen.queryByText("VOICE_QUOTA_HEADING")).toBeNull();
       expect(screen.queryByText("VOICE_UNAVAILABLE_BODY")).toBeNull();
       expect(screen.getByTestId("header-save")).toBeOnTheScreen();
-      expect(screen.getByRole("tab", { name: "Manual" })).toHaveProp(
-        "accessibilityState",
-        expect.objectContaining({ selected: true })
-      );
+      expectTabState("Manual", { selected: true });
     }
   );
 
   it("passes active mode into the kept-mounted Manual entry without exposing the hidden subtree", () => {
     renderRoute("manual");
-    expect(screen.UNSAFE_getByType(ManualTransactionEntry)).toHaveProp(
-      "isActive",
+    expect(screen.UNSAFE_getByType(ManualTransactionEntry).props.isActive).toBe(
       true
     );
 
     fireEvent.press(screen.getByRole("tab", { name: "Voice" }));
 
-    expect(screen.UNSAFE_getByType(ManualTransactionEntry)).toHaveProp(
-      "isActive",
+    expect(screen.UNSAFE_getByType(ManualTransactionEntry).props.isActive).toBe(
       false
     );
     expect(screen.queryByTestId("header-save")).toBeNull();
 
-    const amount = screen.UNSAFE_getByProps({ testID: "manual-amount" });
+    expect(screen.queryByTestId("manual-amount-input")).toBeNull();
+    const amount = screen.getByTestId("manual-amount-input", {
+      includeHiddenElements: true,
+    });
     let container = amount.parent;
     while (container && container.props.accessibilityElementsHidden === undefined) {
       container = container.parent;
@@ -880,8 +826,7 @@ describe("AddTransaction unified mode intent", () => {
 
     fireEvent.press(screen.getByRole("tab", { name: "Manual" }));
 
-    expect(screen.UNSAFE_getByType(ManualTransactionEntry)).toHaveProp(
-      "isActive",
+    expect(screen.UNSAFE_getByType(ManualTransactionEntry).props.isActive).toBe(
       true
     );
     expect(screen.getByTestId("header-save")).toBeOnTheScreen();
@@ -915,10 +860,7 @@ describe("AddTransaction unified mode intent", () => {
         expect.objectContaining({ disabled: true })
       );
       fireEvent.press(manual);
-      expect(screen.getByRole("tab", { name: "Voice" })).toHaveProp(
-        "accessibilityState",
-        expect.objectContaining({ selected: true })
-      );
+      expectTabState("Voice", { selected: true });
     }
   );
 
