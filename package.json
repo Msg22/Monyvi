@@ -84,6 +84,7 @@
     "fn:deploy:parse-sms": "npx supabase functions deploy parse-sms --project-ref yulbcndyssdjicbpmlrk",
     "fn:deploy:enrich-sms-categories": "npx supabase functions deploy enrich-sms-categories --project-ref yulbcndyssdjicbpmlrk",
     "fn:deploy:sms-ai-availability": "npx supabase functions deploy sms-ai-availability --project-ref yulbcndyssdjicbpmlrk",
+    "fn:deploy:voice-ai-availability": "npx supabase functions deploy voice-ai-availability --project-ref yulbcndyssdjicbpmlrk",
     "fn:deploy:parse-voice": "npx supabase functions deploy parse-voice --project-ref yulbcndyssdjicbpmlrk",
     "e2e": "npm run e2e -w @monyvi/mobile",
     "e2e:ci": "npm run e2e:ci -w @monyvi/mobile",
