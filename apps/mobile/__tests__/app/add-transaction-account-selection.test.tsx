@@ -235,6 +235,8 @@ jest.mock("@/components/add-transaction/CategoryPicker", () => ({
 
 jest.mock("@/components/add-transaction/OptionalSection", () => ({
   OptionalSection: (props: {
+    readonly expanded: boolean;
+    readonly onToggleExpand: () => void;
     readonly onChange: (updates: {
       readonly isRecurring?: boolean;
       readonly recurringName?: string;
@@ -243,18 +245,31 @@ jest.mock("@/components/add-transaction/OptionalSection", () => ({
     const ReactNative =
       jest.requireActual<typeof import("react-native")>("react-native");
 
+    if (!props.expanded) {
+      return (
+        <ReactNative.Pressable onPress={props.onToggleExpand}>
+          <ReactNative.Text>add_more_details</ReactNative.Text>
+        </ReactNative.Pressable>
+      );
+    }
+
     return (
-      <ReactNative.Pressable
-        testID="enable-recurring"
-        onPress={() =>
-          props.onChange({
-            isRecurring: true,
-            recurringName: "Monthly food",
-          })
-        }
-      >
-        <ReactNative.Text>enable recurring</ReactNative.Text>
-      </ReactNative.Pressable>
+      <ReactNative.View>
+        <ReactNative.Pressable onPress={props.onToggleExpand}>
+          <ReactNative.Text>hide_details</ReactNative.Text>
+        </ReactNative.Pressable>
+        <ReactNative.Pressable
+          testID="enable-recurring"
+          onPress={() =>
+            props.onChange({
+              isRecurring: true,
+              recurringName: "Monthly food",
+            })
+          }
+        >
+          <ReactNative.Text>enable recurring</ReactNative.Text>
+        </ReactNative.Pressable>
+      </ReactNative.View>
     );
   },
 }));

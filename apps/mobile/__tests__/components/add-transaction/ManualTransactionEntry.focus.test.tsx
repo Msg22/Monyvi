@@ -186,7 +186,27 @@ jest.mock("@/components/add-transaction/CategoryPicker", () => ({
 }));
 
 jest.mock("@/components/add-transaction/OptionalSection", () => ({
-  OptionalSection: (): null => null,
+  OptionalSection: ({
+    expanded,
+    onToggleExpand,
+  }: {
+    readonly expanded: boolean;
+    readonly onToggleExpand: () => void;
+  }): React.JSX.Element => {
+    const Native =
+      jest.requireActual<typeof import("react-native")>("react-native");
+
+    return (
+      <Native.Pressable
+        testID="manual-optional-details-toggle"
+        onPress={onToggleExpand}
+      >
+        <Native.Text>
+          {expanded ? "hide_details" : "add_more_details"}
+        </Native.Text>
+      </Native.Pressable>
+    );
+  },
 }));
 
 jest.mock("@/components/common/CategoryIcon", () => ({
@@ -289,6 +309,19 @@ describe("ManualTransactionEntry compact focus contract", () => {
       false
     );
     expect(screen.queryByTestId("calculator-key-1")).toBeNull();
+  });
+
+  it("closes expanded details when Amount focus requests the calculator", () => {
+    render(<ManualTransactionEntry />);
+
+    fireEvent.press(screen.getByText("add_more_details"));
+    expect(screen.getByText("hide_details")).toBeTruthy();
+    expect(screen.queryByTestId("calculator-key-1")).toBeNull();
+
+    focusAmount();
+
+    expect(screen.getByText("add_more_details")).toBeTruthy();
+    expect(screen.getByTestId("calculator-key-1")).toBeTruthy();
   });
 
   it("keeps direct input and calculator edits synchronized while focused", async () => {

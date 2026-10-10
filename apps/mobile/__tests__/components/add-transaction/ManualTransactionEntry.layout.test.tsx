@@ -235,9 +235,10 @@ describe("ManualTransactionEntry compact B layout", () => {
   it("keeps required Account and Category on one normal-width row", () => {
     render(<ManualTransactionEntry />);
 
-    expect(screen.getByTestId("manual-account-category-row")).toHaveStyle({
-      flexDirection: "row",
-    });
+    expect(screen.getByTestId("manual-account-category-row")).toHaveProp(
+      "className",
+      expect.stringContaining("flex-row gap-3")
+    );
     expect(screen.getByText("Account *")).toBeTruthy();
     expect(screen.getByText("Category *")).toBeTruthy();
     expect(screen.getByTestId("manual-account-selector")).toHaveProp(
@@ -260,9 +261,10 @@ describe("ManualTransactionEntry compact B layout", () => {
 
     render(<ManualTransactionEntry />);
 
-    expect(screen.getByTestId("manual-account-category-row")).toHaveStyle({
-      flexDirection: "column",
-    });
+    expect(screen.getByTestId("manual-account-category-row")).toHaveProp(
+      "className",
+      expect.stringContaining("flex-col gap-3")
+    );
   });
 
   it("reflows the selector row for enlarged text without shrinking labels", () => {
@@ -275,9 +277,10 @@ describe("ManualTransactionEntry compact B layout", () => {
 
     render(<ManualTransactionEntry />);
 
-    expect(screen.getByTestId("manual-account-category-row")).toHaveStyle({
-      flexDirection: "column",
-    });
+    expect(screen.getByTestId("manual-account-category-row")).toHaveProp(
+      "className",
+      expect.stringContaining("flex-col gap-3")
+    );
   });
 
   it("uses the approved collapsed optional-details card with calendar helper copy", () => {
