@@ -6,10 +6,11 @@
 
 import { appSchema, tableSchema } from "@nozbe/watermelondb";
 
+import { METAL_HISTORICAL_RATE_CACHE_TABLES } from "./local-schema/metal-historical-rate-cache-schema";
 import { SMS_REVIEW_DRAFT_TABLES } from "./local-schema/sms-review-draft-schema";
 
 export const schema = appSchema({
-  version: 29,
+  version: 30,
   tables: [
     tableSchema({
       name: "account_financial_effects",
@@ -585,5 +586,6 @@ export const schema = appSchema({
       ],
     }),
     ...SMS_REVIEW_DRAFT_TABLES,
+    ...METAL_HISTORICAL_RATE_CACHE_TABLES,
   ],
 });

@@ -22,6 +22,7 @@ export { FinancialActionGroup } from "./models/FinancialActionGroup";
 export { MarketRate } from "./models/MarketRate";
 export { MarketRateObservation } from "./models/MarketRateObservation";
 export { MetalActionEvidence } from "./models/MetalActionEvidence";
+export { MetalHistoricalRateCache } from "./models/MetalHistoricalRateCache";
 export { MetalHoldingState } from "./models/MetalHoldingState";
 export { MetalLifecycleEvent } from "./models/MetalLifecycleEvent";
 export { MetalRateReference } from "./models/MetalRateReference";
