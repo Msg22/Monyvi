@@ -6,7 +6,7 @@ import {
   waitFor,
 } from "@testing-library/react-native";
 import React from "react";
-import { Keyboard, Pressable } from "react-native";
+import { Keyboard, Pressable, TextInput } from "react-native";
 
 const mockBack = jest.fn();
 const mockPush = jest.fn();
@@ -318,6 +318,10 @@ import {
   ManualTransactionEntry,
   type ManualTransactionEntryHandle,
 } from "@/components/add-transaction/ManualTransactionEntry";
+import {
+  getTestInstanceProps,
+  getTestInstances,
+} from "../../test-utils/test-instance-props";
 
 function ManualWithHeader({
   isActive = true,
@@ -341,6 +345,16 @@ function ManualWithHeader({
 
 function focusAmount(): void {
   fireEvent(screen.getByTestId("manual-amount-input"), "focus", {});
+}
+
+function getNativeInputProps(testID: string): Record<string, unknown> {
+  const input: unknown = getTestInstances(
+    screen.UNSAFE_getAllByType(TextInput)
+  ).find(
+    (candidate: unknown) => getTestInstanceProps(candidate).testID === testID
+  );
+  if (!input) throw new Error(`Native TextInput "${testID}" not found`);
+  return getTestInstanceProps(input);
 }
 
 interface Deferred<T> {
@@ -383,13 +397,12 @@ describe("ManualTransactionEntry compact focus contract", () => {
     mockDeleteRecurringPayment.mockResolvedValue(undefined);
   });
 
-  it("starts with a regular amount field and no calculator", () => {
+  it("starts with a regular amount field, native keyboard suppressed, and no calculator", () => {
     render(<ManualTransactionEntry />);
 
-    expect(screen.getByTestId("manual-amount-input")).toHaveProp(
-      "showSoftInputOnFocus",
-      false
-    );
+    const nativeProps = getNativeInputProps("manual-amount-input");
+    expect(nativeProps.showSoftInputOnFocus).toBe(false);
+    expect(nativeProps.inputMode).toBe("none");
     expect(screen.queryByTestId("calculator-key-1")).toBeNull();
   });
 
@@ -625,7 +638,11 @@ describe("ManualTransactionEntry compact focus contract", () => {
     const targetInput: unknown = await screen.findByTestId(
       "manual-transfer-target-amount-input"
     );
-    expect(targetInput).toHaveProp("showSoftInputOnFocus", false);
+    const targetNativeProps = getNativeInputProps(
+      "manual-transfer-target-amount-input"
+    );
+    expect(targetNativeProps.showSoftInputOnFocus).toBe(false);
+    expect(targetNativeProps.inputMode).toBe("none");
     expect(
       screen.getByTestId(
         "manual-transfer-target-amount-input-trailing-adornment"

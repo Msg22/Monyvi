@@ -28,11 +28,17 @@ appId: com.monyvi.app
     id: "calculator-key-1"
 - assertNotVisible: "We couldn't check your voice uses"
 
-# Calculator-only amount focus. Unit coverage verifies showSoftInputOnFocus=false.
+# Calculator-only amount focus. Do NOT add hideKeyboard here: calculator-controlled
+# amount focus must suppress the native soft keyboard itself. The bottom calculator
+# row staying visible/reachable is owner-run device evidence, not asserted as run here.
 - tapOn:
     id: "manual-amount-input"
 - assertVisible:
+    id: "manual-amount-input"
+- assertVisible:
     id: "calculator-key-1"
+- assertVisible:
+    id: "calculator-key-0"
 - assertVisible:
     id: "calculator-key-equals"
 - assertVisible:

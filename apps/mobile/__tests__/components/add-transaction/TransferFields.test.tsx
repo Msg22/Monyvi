@@ -1,6 +1,6 @@
 import { render, screen, within } from "@testing-library/react-native";
 import type { Account } from "@monyvi/db";
-import { Text as NativeText } from "react-native";
+import { Text as NativeText, TextInput } from "react-native";
 import {
   getTestInstanceProps,
   getTestInstances,
@@ -67,6 +67,16 @@ function getNativeTextProps(content: string): Record<string, unknown> {
   return getTestInstanceProps(node);
 }
 
+function getNativeInputProps(testID: string): Record<string, unknown> {
+  const node: unknown = getTestInstances(
+    screen.UNSAFE_getAllByType(TextInput)
+  ).find(
+    (candidate: unknown) => getTestInstanceProps(candidate).testID === testID
+  );
+  if (!node) throw new Error(`Native TextInput "${testID}" not found`);
+  return getTestInstanceProps(node);
+}
+
 describe("TransferFields", () => {
   beforeEach(() => {
     mockLocaleFontFamily = {
@@ -95,6 +105,31 @@ describe("TransferFields", () => {
 
     expect(screen.getByText("Source account is required")).toBeTruthy();
     expect(screen.getByText("Destination account is required")).toBeTruthy();
+  });
+
+  it("suppresses the native soft keyboard for the compact target amount", () => {
+    render(
+      <TransferFields
+        accounts={[
+          account("acc-egp", "Cash", "EGP"),
+          account("acc-usd", "USD Bank", "USD"),
+        ]}
+        fromAccountId="acc-egp"
+        toAccountId="acc-usd"
+        onSelectFrom={jest.fn()}
+        onSelectTo={jest.fn()}
+        amount="100"
+        targetAmount="2"
+        onChangeTargetAmount={jest.fn()}
+        compactTargetAmount
+      />
+    );
+
+    const nativeProps = getNativeInputProps(
+      "manual-transfer-target-amount-input"
+    );
+    expect(nativeProps.showSoftInputOnFocus).toBe(false);
+    expect(nativeProps.inputMode).toBe("none");
   });
 
   it("uses the active locale medium font for the compact target currency suffix", () => {
