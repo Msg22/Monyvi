@@ -184,7 +184,7 @@ describe("TextField", () => {
       />
     );
 
-    const input = screen.getByTestId("focus-field");
+    const input: unknown = screen.getByTestId("focus-field");
     expect(input).toHaveProp("showSoftInputOnFocus", false);
     expect(inputRef.current).not.toBeNull();
 

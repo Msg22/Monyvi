@@ -1,6 +1,10 @@
 import { fireEvent, render, screen } from "@testing-library/react-native";
 import React from "react";
 import { Text, TouchableOpacity, View } from "react-native";
+import {
+  getTestInstanceProps,
+  getTestInstances,
+} from "../../test-utils/test-instance-props";
 
 import {
   Dropdown,
@@ -58,27 +62,33 @@ const ACCOUNT_ITEMS: readonly DropdownItem<string>[] = [
 ];
 
 function getTouchableProps(testID: string): Record<string, unknown> {
-  const node = screen
-    .UNSAFE_getAllByType(TouchableOpacity)
-    .find((candidate) => candidate.props.testID === testID);
+  const node: unknown = getTestInstances(
+    screen.UNSAFE_getAllByType(TouchableOpacity)
+  ).find(
+    (candidate: unknown) => getTestInstanceProps(candidate).testID === testID
+  );
   if (!node) throw new Error(`Touchable ${testID} not found`);
-  return node.props as Record<string, unknown>;
+  return getTestInstanceProps(node);
 }
 
 function getViewProps(testID: string): Record<string, unknown> {
-  const node = screen
-    .UNSAFE_getAllByType(View)
-    .find((candidate) => candidate.props.testID === testID);
+  const node: unknown = getTestInstances(
+    screen.UNSAFE_getAllByType(View)
+  ).find(
+    (candidate: unknown) => getTestInstanceProps(candidate).testID === testID
+  );
   if (!node) throw new Error(`View ${testID} not found`);
-  return node.props as Record<string, unknown>;
+  return getTestInstanceProps(node);
 }
 
 function getNativeTextProps(content: string): Record<string, unknown> {
-  const node = screen
-    .UNSAFE_getAllByType(Text)
-    .find((candidate) => candidate.props.children === content);
+  const node: unknown = getTestInstances(
+    screen.UNSAFE_getAllByType(Text)
+  ).find(
+    (candidate: unknown) => getTestInstanceProps(candidate).children === content
+  );
   if (!node) throw new Error(`Native Text "${content}" not found`);
-  return node.props as Record<string, unknown>;
+  return getTestInstanceProps(node);
 }
 
 describe("Dropdown repair contract", () => {
@@ -142,7 +152,7 @@ describe("Dropdown repair contract", () => {
       />
     );
 
-    const selectedLabel = screen.getByText(longLabel);
+    const selectedLabel: unknown = screen.getByText(longLabel);
     expect(selectedLabel).toHaveProp("numberOfLines", 1);
     const selectedLabelClassName = getNativeTextProps(longLabel)
       .className as string;

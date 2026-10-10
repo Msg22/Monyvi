@@ -498,7 +498,7 @@ describe("ManualTransactionEntry compact focus contract", () => {
 
     fireEvent.press(screen.getByTestId("type-tab-TRANSFER"));
     fireEvent.changeText(screen.getByTestId("manual-amount-input"), "10");
-    const targetInput = await screen.findByTestId(
+    const targetInput: unknown = await screen.findByTestId(
       "manual-transfer-target-amount-input"
     );
     fireEvent.changeText(targetInput, "20");
@@ -571,7 +571,7 @@ describe("ManualTransactionEntry compact focus contract", () => {
     const view = render(<ManualTransactionEntry isActive />);
 
     fireEvent.press(screen.getByText("add_more_details"));
-    const noteInput = screen.getByTestId("manual-note-input");
+    const noteInput: unknown = screen.getByTestId("manual-note-input");
     fireEvent(noteInput, "focus", {});
     fireEvent.changeText(noteInput, "Coffee note");
 
@@ -615,7 +615,7 @@ describe("ManualTransactionEntry compact focus contract", () => {
 
     fireEvent.press(screen.getByTestId("type-tab-TRANSFER"));
 
-    const sourceInput = screen.getByTestId("manual-amount-input");
+    const sourceInput: unknown = screen.getByTestId("manual-amount-input");
     expect(
       screen.getByTestId("manual-amount-input-trailing-adornment")
     ).toHaveTextContent("EGP");
@@ -624,7 +624,7 @@ describe("ManualTransactionEntry compact focus contract", () => {
     fireEvent.changeText(sourceInput, "10");
     fireEvent.press(screen.getByTestId("calculator-key-done"));
 
-    const targetInput = await screen.findByTestId(
+    const targetInput: unknown = await screen.findByTestId(
       "manual-transfer-target-amount-input"
     );
     expect(targetInput).toHaveProp("showSoftInputOnFocus", false);

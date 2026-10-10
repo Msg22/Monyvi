@@ -1,15 +1,21 @@
 import { fireEvent, render, screen } from "@testing-library/react-native";
 import React from "react";
 import { Text as NativeText } from "react-native";
+import {
+  getTestInstanceProps,
+  getTestInstances,
+} from "../../test-utils/test-instance-props";
 
 import { TypeTabs } from "@/components/add-transaction/TypeTabs";
 
 function getNativeTextProps(content: string): Record<string, unknown> {
-  const node = screen
-    .UNSAFE_getAllByType(NativeText)
-    .find((candidate) => candidate.props.children === content);
+  const node: unknown = getTestInstances(
+    screen.UNSAFE_getAllByType(NativeText)
+  ).find(
+    (candidate: unknown) => getTestInstanceProps(candidate).children === content
+  );
   if (!node) throw new Error(`Native Text "${content}" not found`);
-  return node.props as Record<string, unknown>;
+  return getTestInstanceProps(node);
 }
 
 let mockLocaleFontFamily = {
@@ -88,7 +94,7 @@ describe("TypeTabs compact Manual selector", () => {
   it("uses approved compact tab typography with the active locale font family", () => {
     render(<TypeTabs compact selectedType="EXPENSE" onSelect={jest.fn()} />);
 
-    const expenseLabel = screen.getByText("Expense");
+    const expenseLabel: unknown = screen.getByText("Expense");
     expect(expenseLabel).toHaveStyle({
       fontFamily: "Inter_600SemiBold",
     });
@@ -109,7 +115,7 @@ describe("TypeTabs compact Manual selector", () => {
       <TypeTabs compact selectedType="EXPENSE" onSelect={jest.fn()} />
     );
 
-    const expenseLabel = screen.getByText("Expense");
+    const expenseLabel: unknown = screen.getByText("Expense");
     expect(expenseLabel).toHaveStyle({
       fontFamily: "NotoSansArabic_600SemiBold",
     });

@@ -7,6 +7,10 @@ import {
 } from "@testing-library/react-native";
 import React from "react";
 import { Dimensions, Pressable, ScrollView, Switch, View } from "react-native";
+import {
+  getTestInstanceProps,
+  getTestInstances,
+} from "../test-utils/test-instance-props";
 
 const mockBack = jest.fn();
 const mockShowToast = jest.fn();
@@ -350,18 +354,19 @@ describe("Add Transaction recurring-name QA", () => {
     render(<AddTransaction />);
     enableRecurring();
 
-    const recurringNameField = screen
-      .UNSAFE_getAllByType(TextField)
-      .find(
-        (node) =>
-          node.props.placeholder === "recurring_name_placeholder"
-      );
+    const recurringNameField: unknown = getTestInstances(
+      screen.UNSAFE_getAllByType(TextField)
+    ).find(
+      (node: unknown) =>
+        getTestInstanceProps(node).placeholder === "recurring_name_placeholder"
+    );
     if (!recurringNameField) {
       throw new Error("Recurring name TextField not found");
     }
+    const recurringNameProps = getTestInstanceProps(recurringNameField);
 
-    expect(recurringNameField.props.label).toBe("recurring_name_label");
-    expect(recurringNameField.props.required).toBe(true);
+    expect(recurringNameProps.label).toBe("recurring_name_label");
+    expect(recurringNameProps.required).toBe(true);
     expect(screen.getByText("recurring_name_label *")).toBeTruthy();
     expect(
       screen.getByPlaceholderText("recurring_name_placeholder")

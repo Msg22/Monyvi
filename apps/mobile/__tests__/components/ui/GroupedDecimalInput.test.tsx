@@ -1,6 +1,10 @@
 import { fireEvent, render, screen } from "@testing-library/react-native";
 import React from "react";
 import { I18nManager, Text, TextInput } from "react-native";
+import {
+  getTestInstanceProps,
+  getTestInstances,
+} from "../../test-utils/test-instance-props";
 
 import { GroupedDecimalInput } from "@/components/ui/GroupedDecimalInput";
 import { GroupedMoneyInput } from "@/components/ui/GroupedMoneyInput";
@@ -305,17 +309,21 @@ describe("GroupedMoneyInput typography forwarding", () => {
       />
     );
 
-    const textField = screen
-      .UNSAFE_getAllByType(TextField)
-      .find((node) => node.props.testID === "manual-money-typography");
+    const textField: unknown = getTestInstances(
+      screen.UNSAFE_getAllByType(TextField)
+    ).find(
+      (node: unknown) =>
+        getTestInstanceProps(node).testID === "manual-money-typography"
+    );
     if (!textField) throw new Error("Forwarded TextField not found");
+    const textFieldProps = getTestInstanceProps(textField);
 
-    expect(textField.props.className).toContain("text-lg leading-7");
-    expect(textField.props.style).toEqual({
+    expect(textFieldProps.className).toContain("text-lg leading-7");
+    expect(textFieldProps.style).toEqual({
       fontFamily: "Inter_500Medium",
     });
-    expect(textField.props.labelClassName).toBe("mb-2 text-sm");
-    expect(textField.props.labelStyle).toEqual({
+    expect(textFieldProps.labelClassName).toBe("mb-2 text-sm");
+    expect(textFieldProps.labelStyle).toEqual({
       fontFamily: "Inter_400Regular",
     });
   });
@@ -338,7 +346,7 @@ describe("GroupedMoneyInput focus forwarding", () => {
       />
     );
 
-    const input = screen.getByTestId("manual-money-input");
+    const input: unknown = screen.getByTestId("manual-money-input");
     expect(input).toHaveProp("showSoftInputOnFocus", false);
 
     fireEvent(input, "focus", {});

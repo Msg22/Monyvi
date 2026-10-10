@@ -236,7 +236,7 @@ export const ManualTransactionEntry = forwardRef<
     setTargetAmount(value);
   };
 
-  const handleKeyPress = async (key: CalculatorKey): Promise<void> => {
+  const handleKeyPress = (key: CalculatorKey): void => {
     if (formErrors.amount) {
       setFormErrors((prev) => ({ ...prev, amount: undefined }));
     }
@@ -802,7 +802,7 @@ export const ManualTransactionEntry = forwardRef<
           <CalculatorKeypad
             compact
             onKeyPress={(key) => {
-              void handleKeyPress(key);
+              handleKeyPress(key);
             }}
             actionLabel={t("done")}
           />

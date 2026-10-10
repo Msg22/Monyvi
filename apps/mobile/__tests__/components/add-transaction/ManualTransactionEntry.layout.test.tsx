@@ -1,16 +1,22 @@
 import { render, screen, within } from "@testing-library/react-native";
 import React from "react";
 import { Text as NativeText } from "react-native";
+import {
+  getTestInstanceProps,
+  getTestInstances,
+} from "../../test-utils/test-instance-props";
 
 import { Dropdown } from "@/components/ui/Dropdown";
 import { TextField } from "@/components/ui/TextField";
 
 function getNativeTextProps(content: string): Record<string, unknown> {
-  const node = screen
-    .UNSAFE_getAllByType(NativeText)
-    .find((candidate) => candidate.props.children === content);
+  const node: unknown = getTestInstances(
+    screen.UNSAFE_getAllByType(NativeText)
+  ).find(
+    (candidate: unknown) => getTestInstanceProps(candidate).children === content
+  );
   if (!node) throw new Error(`Native Text "${content}" not found`);
-  return node.props as Record<string, unknown>;
+  return getTestInstanceProps(node);
 }
 
 let mockWindowDimensions = {
@@ -333,18 +339,22 @@ describe("ManualTransactionEntry compact B layout", () => {
   it("uses the approved amount typography and 8dp field-label gap", () => {
     render(<ManualTransactionEntry />);
 
-    const amountField = screen
-      .UNSAFE_getAllByType(TextField)
-      .find((node) => node.props.testID === "manual-amount-input");
+    const amountField: unknown = getTestInstances(
+      screen.UNSAFE_getAllByType(TextField)
+    ).find(
+      (node: unknown) =>
+        getTestInstanceProps(node).testID === "manual-amount-input"
+    );
     if (!amountField) throw new Error("Manual amount TextField not found");
+    const amountFieldProps = getTestInstanceProps(amountField);
 
-    expect(amountField.props.className).toContain("text-lg");
-    expect(amountField.props.className).toContain("leading-7");
-    expect(amountField.props.labelClassName).toContain("mb-2");
-    expect(amountField.props.style).toEqual({
+    expect(amountFieldProps.className).toContain("text-lg");
+    expect(amountFieldProps.className).toContain("leading-7");
+    expect(amountFieldProps.labelClassName).toContain("mb-2");
+    expect(amountFieldProps.style).toEqual({
       fontFamily: "Inter_500Medium",
     });
-    expect(amountField.props.labelStyle).toEqual({
+    expect(amountFieldProps.labelStyle).toEqual({
       fontFamily: "Inter_400Regular",
     });
   });
@@ -382,21 +392,26 @@ describe("ManualTransactionEntry compact B layout", () => {
   it("applies locale fonts to selector values and compact Optional copy", () => {
     render(<ManualTransactionEntry />);
 
-    const dropdowns = screen.UNSAFE_getAllByType(Dropdown);
-    const accountDropdown = dropdowns.find(
-      (node) => node.props.testID === "manual-account-selector"
+    const dropdowns = getTestInstances(
+      screen.UNSAFE_getAllByType(Dropdown)
     );
-    const categoryDropdown = dropdowns.find(
-      (node) => node.props.testID === "manual-category-selector"
+    const accountDropdown: unknown = dropdowns.find(
+      (node: unknown) =>
+        getTestInstanceProps(node).testID === "manual-account-selector"
+    );
+    const categoryDropdown: unknown = dropdowns.find(
+      (node: unknown) =>
+        getTestInstanceProps(node).testID === "manual-category-selector"
     );
     if (!accountDropdown || !categoryDropdown) {
       throw new Error("Manual selector Dropdowns not found");
     }
 
     for (const dropdown of [accountDropdown, categoryDropdown]) {
-      expect(dropdown.props.selectedTextClassName).toContain("text-sm");
-      expect(dropdown.props.selectedTextClassName).toContain("leading-[22px]");
-      expect(dropdown.props.selectedTextStyle).toEqual({
+      const dropdownProps = getTestInstanceProps(dropdown);
+      expect(dropdownProps.selectedTextClassName).toContain("text-sm");
+      expect(dropdownProps.selectedTextClassName).toContain("leading-[22px]");
+      expect(dropdownProps.selectedTextStyle).toEqual({
         fontFamily: "Inter_400Regular",
       });
     }
@@ -432,20 +447,26 @@ describe("ManualTransactionEntry compact B layout", () => {
 
     render(<ManualTransactionEntry />);
 
-    const amountField = screen
-      .UNSAFE_getAllByType(TextField)
-      .find((node) => node.props.testID === "manual-amount-input");
-    const accountDropdown = screen
-      .UNSAFE_getAllByType(Dropdown)
-      .find((node) => node.props.testID === "manual-account-selector");
+    const amountField: unknown = getTestInstances(
+      screen.UNSAFE_getAllByType(TextField)
+    ).find(
+      (node: unknown) =>
+        getTestInstanceProps(node).testID === "manual-amount-input"
+    );
+    const accountDropdown: unknown = getTestInstances(
+      screen.UNSAFE_getAllByType(Dropdown)
+    ).find(
+      (node: unknown) =>
+        getTestInstanceProps(node).testID === "manual-account-selector"
+    );
     if (!amountField || !accountDropdown) {
       throw new Error("Arabic Manual typography targets not found");
     }
 
-    expect(amountField.props.style).toEqual({
+    expect(getTestInstanceProps(amountField).style).toEqual({
       fontFamily: "NotoSansArabic_500Medium",
     });
-    expect(accountDropdown.props.selectedTextStyle).toEqual({
+    expect(getTestInstanceProps(accountDropdown).selectedTextStyle).toEqual({
       fontFamily: "NotoSansArabic_400Regular",
     });
     expect(screen.getByText("Add more details")).toHaveStyle({

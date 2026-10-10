@@ -1,6 +1,10 @@
 import { fireEvent, render, screen } from "@testing-library/react-native";
 import React from "react";
 import { Text as NativeText } from "react-native";
+import {
+  getTestInstanceProps,
+  getTestInstances,
+} from "../../test-utils/test-instance-props";
 
 import {
   CalculatorKeypad,
@@ -46,11 +50,13 @@ jest.mock("@expo/vector-icons", () => ({
 }));
 
 function getNativeTextProps(content: string): Record<string, unknown> {
-  const node = screen
-    .UNSAFE_getAllByType(NativeText)
-    .find((candidate) => candidate.props.children === content);
+  const node: unknown = getTestInstances(
+    screen.UNSAFE_getAllByType(NativeText)
+  ).find(
+    (candidate: unknown) => getTestInstanceProps(candidate).children === content
+  );
   if (!node) throw new Error(`Native Text "${content}" not found`);
-  return node.props as Record<string, unknown>;
+  return getTestInstanceProps(node);
 }
 
 const KEY_IDS = [
@@ -112,14 +118,14 @@ describe("CalculatorKeypad compact Manual contract", () => {
     );
 
     for (const label of ["1", "÷", "="]) {
-      const text = screen.getByText(label);
+      const text: unknown = screen.getByText(label);
       expect(text).toHaveStyle({ fontFamily: "Inter_700Bold" });
       expect(getNativeTextProps(label).className as string).toContain(
         "text-xl"
       );
     }
 
-    const done = screen.getByText("Done");
+    const done: unknown = screen.getByText("Done");
     expect(done).toHaveStyle({ fontFamily: "Inter_700Bold" });
     expect(getNativeTextProps("Done").className as string).toContain(
       "text-base"

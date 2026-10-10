@@ -1,6 +1,10 @@
 import { render, screen, within } from "@testing-library/react-native";
 import type { Account } from "@monyvi/db";
 import { Text as NativeText } from "react-native";
+import {
+  getTestInstanceProps,
+  getTestInstances,
+} from "../../test-utils/test-instance-props";
 
 import { TransferFields } from "@/components/add-transaction/TransferFields";
 
@@ -55,11 +59,13 @@ function account(
 }
 
 function getNativeTextProps(content: string): Record<string, unknown> {
-  const node = screen
-    .UNSAFE_getAllByType(NativeText)
-    .find((candidate) => candidate.props.children === content);
+  const node: unknown = getTestInstances(
+    screen.UNSAFE_getAllByType(NativeText)
+  ).find(
+    (candidate: unknown) => getTestInstanceProps(candidate).children === content
+  );
   if (!node) throw new Error(`Native Text "${content}" not found`);
-  return node.props as Record<string, unknown>;
+  return getTestInstanceProps(node);
 }
 
 describe("TransferFields", () => {
