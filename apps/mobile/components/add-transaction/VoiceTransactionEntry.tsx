@@ -210,7 +210,7 @@ function VoiceActionSurface({
           className={`absolute h-[172px] w-[172px] rounded-[86px] ${
             isDailyLimit || isUnavailable
               ? "bg-slate-200/20 dark:bg-slate-700/25"
-              : "bg-nileGreen-50/60 dark:bg-nileGreen-900/50"
+              : "bg-nileGreen-50/60 dark:bg-nileGreen-50/25"
           }`}
         />
         {isRecording && !reducedMotion ? (
@@ -218,9 +218,17 @@ function VoiceActionSurface({
             accessible={false}
             pointerEvents="none"
             importantForAccessibility="no-hide-descendants"
-            className="absolute h-[172px] w-[172px] rounded-[86px] bg-nileGreen-100/60 dark:bg-nileGreen-900/50"
+            className="absolute h-[172px] w-[172px] rounded-[86px]"
             style={pulseStyle}
-          />
+          >
+            <View
+              testID="voice-halo-pulse"
+              accessible={false}
+              pointerEvents="none"
+              importantForAccessibility="no-hide-descendants"
+              className="h-[172px] w-[172px] rounded-[86px] bg-nileGreen-100/60 dark:bg-nileGreen-100/60"
+            />
+          </Animated.View>
         ) : null}
         <View
           testID="voice-halo-inner"
@@ -230,7 +238,7 @@ function VoiceActionSurface({
           className={`absolute h-[140px] w-[140px] rounded-[70px] ${
             isDailyLimit || isUnavailable
               ? "bg-slate-200/20 dark:bg-slate-700/30"
-              : "bg-nileGreen-100/50 dark:bg-nileGreen-900/60"
+              : "bg-nileGreen-100/50 dark:bg-nileGreen-100/40"
           }`}
         />
 
@@ -254,16 +262,23 @@ function VoiceActionSurface({
               elevation: 6,
             })}
           >
-            <LinearGradient
-              colors={[palette.nileGreen[500], palette.nileGreen[600]]}
-              className="h-[104px] w-[104px] items-center justify-center rounded-[52px]"
+            <View
+              testID="voice-mic-clip"
+              className="h-[104px] w-[104px] overflow-hidden rounded-[52px]"
+              accessible={false}
+              importantForAccessibility="no"
             >
-              <Ionicons
-                name={presentation.icon}
-                size={42}
-                color={palette.slate[25]}
-              />
-            </LinearGradient>
+              <LinearGradient
+                colors={[palette.nileGreen[500], palette.nileGreen[600]]}
+                style={{ flex: 1, alignItems: "center", justifyContent: "center" }}
+              >
+                <Ionicons
+                  name={presentation.icon}
+                  size={42}
+                  color={palette.slate[25]}
+                />
+              </LinearGradient>
+            </View>
           </Pressable>
         ) : (
           <View

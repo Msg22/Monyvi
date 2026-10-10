@@ -10,7 +10,7 @@ import * as path from "node:path";
 
 import { fireEvent, render, screen } from "@testing-library/react-native";
 import React from "react";
-import { StyleSheet, type StyleProp, type ViewStyle } from "react-native";
+import { processColor, StyleSheet, type StyleProp, type ViewStyle } from "react-native";
 import {
   colorScheme,
   registerCSS,
@@ -20,7 +20,6 @@ import {
 
 import {
   getTestInstanceChildren,
-  getTestInstanceParent,
   getTestInstanceProps,
   getTestInstances,
 } from "../../test-utils/test-instance-props";
@@ -88,25 +87,35 @@ describe("AddTransactionModeTabs approved underline contract", () => {
     expect(onModeChange).toHaveBeenCalledWith("voice");
   });
 
-  it("renders the selected tab as an underline, not as the old filled pill", () => {
+  it("renders an independent selected-only underline instead of a filled tab pill", () => {
     renderTabs("voice");
     const selected: unknown = screen.getByRole("tab", { name: "Voice" });
     const selectedProps = getTestInstanceProps(selected);
-    const selectedClassName = selectedProps.className;
-    const selectedStyle =
-      (typeof selectedClassName === "string" ? selectedClassName : "") +
-      JSON.stringify(selectedProps.style ?? {});
-    const tablistClassName = getTestInstanceProps(
-      getTestInstanceParent(selected)
-    ).className;
-    if (typeof tablistClassName !== "string") {
-      throw new Error("Expected mode tablist to expose a string className");
-    }
-
-    expect(selectedStyle).toMatch(/border-b-2|borderBottomWidth[^0-9]*2/);
-    expect(selectedStyle).not.toContain("rounded-xl");
-    expect(tablistClassName).not.toContain("rounded-2xl");
-    expect(getTestInstanceProps(selected).accessibilityState).toEqual(
+    expect(selectedProps.className).toEqual(
+      expect.stringContaining("relative")
+    );
+    expect(selectedProps.className).not.toEqual(
+      expect.stringContaining("rounded-xl")
+    );
+    const indicator: unknown = screen.getByTestId(
+      "add-transaction-mode-voice-indicator",
+      { includeHiddenElements: true }
+    );
+    const indicatorProps = getTestInstanceProps(indicator);
+    expect(indicatorProps.className).toEqual(
+      expect.stringContaining("h-[2px]")
+    );
+    expect(indicatorProps.pointerEvents).toBe("none");
+    expect(indicatorProps.accessible).toBe(false);
+    expect(indicatorProps.importantForAccessibility).toBe(
+      "no-hide-descendants"
+    );
+    expect(
+      screen.queryByTestId("add-transaction-mode-manual-indicator", {
+        includeHiddenElements: true,
+      })
+    ).toBeNull();
+    expect(selectedProps.accessibilityState).toEqual(
       expect.objectContaining({ selected: true })
     );
   });
@@ -204,24 +213,14 @@ function compiledModeTabCss(): string {
   const temporary = mkdtempSync(path.join(os.tmpdir(), "monyvi-tabs-css-"));
   try {
     const input = path.join(temporary, "input.css");
-    const fixture = path.join(temporary, "fixture.html");
+    const componentSource = path.join(
+      MOBILE_ROOT,
+      "components",
+      "add-transaction",
+      "AddTransactionModeTabs.tsx"
+    );
     const output = path.join(temporary, "output.css");
     writeFileSync(input, "@tailwind base;\n@tailwind utilities;\n", "utf8");
-    const classes = [
-        "min-h-12",
-        "flex-1",
-        "items-center",
-        "justify-center",
-        "border-b-2",
-        "px-4",
-        "border-nileGreen-600",
-        "dark:border-nileGreen-400",
-        "border-transparent",
-        "opacity-50",
-    ];
-    writeFileSync(
-      fixture, '<div class="' + classes.join(" ") + '"></div>\n', "utf8"
-    );
     execFileSync(
       process.execPath,
       [
@@ -233,7 +232,7 @@ function compiledModeTabCss(): string {
         "-o",
         output,
         "--content",
-        fixture,
+        componentSource,
       ],
       { cwd: REPOSITORY_ROOT, stdio: "pipe", env: { ...process.env, NATIVEWIND_OS: "android" } }
     );
@@ -262,26 +261,29 @@ function tabNativeStyle(node: unknown): ViewStyle {
   return StyleSheet.flatten(raw as StyleProp<ViewStyle>) ?? {};
 }
 
-function resolvedTabHasUnderline(node: unknown, expectedColor: string): boolean {
-  const style = tabNativeStyle(node);
-  const color = expectedColor.toLowerCase();
-  const borderColor = style.borderBottomColor ?? style.borderColor;
-  const nativeBorder =
-    style.borderBottomWidth === 2 &&
-    typeof borderColor === "string" &&
-    borderColor.toLowerCase() === color;
-  const nativeIndicator =
-    style.height === 2 &&
-    typeof style.backgroundColor === "string" &&
-    style.backgroundColor.toLowerCase() === color;
-  if (nativeBorder || nativeIndicator) return true;
-
-  for (const child of getTestInstanceChildren(node)) {
-    if (typeof child === "object" && child !== null) {
-      if (resolvedTabHasUnderline(child, expectedColor)) return true;
-    }
-  }
-  return false;
+function expectNativeSelectedIndicator(expectedColor: string): void {
+  const indicator: unknown = screen.getByTestId(
+    "add-transaction-mode-voice-indicator",
+    { includeHiddenElements: true }
+  );
+  const props = getTestInstanceProps(indicator);
+  const nativeStyle = tabNativeStyle(indicator);
+  expect(props.accessible).toBe(false);
+  expect(props.pointerEvents).toBe("none");
+  expect(props.importantForAccessibility).toBe("no-hide-descendants");
+  expect(nativeStyle).toEqual(
+    expect.objectContaining({
+      position: "absolute",
+      bottom: 0,
+      left: 0,
+      right: 0,
+      height: 2,
+    })
+  );
+  const actual = processColor(nativeStyle.backgroundColor);
+  const approved = processColor(expectedColor);
+  expect(typeof actual).toBe("number");
+  expect(actual).toBe(approved);
 }
 
 function resolvedTabOpacity(node: unknown): number | undefined {
@@ -337,29 +339,38 @@ describe("compiled NativeWind mode-tab underline regression", () => {
 
       const selected: unknown = screen.getByRole("tab", { name: voiceLabel });
       const other: unknown = screen.getByRole("tab", { name: manualLabel });
-      const green = theme === "dark"
-        ? palette.nileGreen[400]
-        : palette.nileGreen[600];
+      const green =
+        theme === "dark" ? palette.nileGreen[400] : palette.nileGreen[600];
 
       const selectedNode = (): unknown =>
         screen.getByRole("tab", { name: voiceLabel });
-      expect(resolvedTabHasUnderline(selected, green)).toBe(true);
-      expect(resolvedTabHasUnderline(other, green)).toBe(false);
+      expectNativeSelectedIndicator(green);
+      expect(
+        screen.queryByTestId("add-transaction-mode-manual-indicator", {
+          includeHiddenElements: true,
+        })
+      ).toBeNull();
       expect(getTestInstanceProps(selected).accessibilityState).toEqual(
         expect.objectContaining({ selected: true, disabled })
       );
-      expect(resolvedTabOpacity(selectedNode())).toBe(disabled ? 0.5 : 1);
+      expect(getTestInstanceProps(other).accessibilityState).toEqual(
+        expect.objectContaining({ selected: false, disabled })
+      );
+      // Normal native opacity may be omitted; the default is exactly 1.
+      expect(resolvedTabOpacity(selectedNode()) ?? 1).toBe(
+        disabled ? 0.5 : 1
+      );
 
-      // Exercise the real native Pressable event path; calling the style
-      // callback manually does not advance its rendered pressed state.
       fireEvent(screen.getByRole("tab", { name: voiceLabel }), "pressIn");
-      expect(resolvedTabHasUnderline(selectedNode(), green)).toBe(true);
-      expect(resolvedTabOpacity(selectedNode())).toBe(
+      expectNativeSelectedIndicator(green);
+      expect(resolvedTabOpacity(selectedNode()) ?? 1).toBe(
         disabled ? 0.5 : 0.72
       );
       fireEvent(screen.getByRole("tab", { name: voiceLabel }), "pressOut");
-      expect(resolvedTabHasUnderline(selectedNode(), green)).toBe(true);
-      expect(resolvedTabOpacity(selectedNode())).toBe(disabled ? 0.5 : 1);
+      expectNativeSelectedIndicator(green);
+      expect(resolvedTabOpacity(selectedNode()) ?? 1).toBe(
+        disabled ? 0.5 : 1
+      );
 
       if (!disabled) {
         fireEvent.press(screen.getByRole("tab", { name: manualLabel }));

@@ -283,31 +283,18 @@ function compiledVoiceCss(): string {
   const directory = mkdtempSync(path.join(os.tmpdir(), "monyvi-voice-css-"));
   try {
     const input = path.join(directory, "input.css");
-    const fixture = path.join(directory, "fixture.html");
-    const output = path.join(directory, "output.css");
-    const classes = [
-      "absolute", "h-[172px]", "w-[172px]", "rounded-[86px]",
-      "h-[140px]", "w-[140px]", "rounded-[70px]",
-      "h-[104px]", "w-[104px]", "rounded-[52px]",
-      "overflow-hidden", "items-center", "justify-center",
-      "bg-nileGreen-50/60", "dark:bg-nileGreen-900/50",
-      "bg-nileGreen-100/50", "dark:bg-nileGreen-900/60",
-      // Ensure the native compiler also recognizes the approved lighter
-      // dark-idle hierarchy and animated pulse candidates.
-      "dark:bg-nileGreen-50/20", "dark:bg-nileGreen-50/25",
-      "dark:bg-nileGreen-100/20", "dark:bg-nileGreen-100/25",
-      "dark:bg-nileGreen-100/30", "dark:bg-nileGreen-100/40",
-      "bg-slate-200/20", "dark:bg-slate-700/25",
-      "dark:bg-slate-700/30",
-    ];
-    writeFileSync(input, "@tailwind base;\n@tailwind utilities;\n", "utf8");
-    writeFileSync(
-      fixture, '<div class="' + classes.join(" ") + '"></div>\n', "utf8"
+    const componentSource = path.join(
+      MOBILE_ROOT,
+      "components",
+      "add-transaction",
+      "VoiceTransactionEntry.tsx"
     );
+    const output = path.join(directory, "output.css");
+    writeFileSync(input, "@tailwind base;\n@tailwind utilities;\n", "utf8");
     execFileSync(
       process.execPath,
       [TAILWIND_CLI, "-c", path.join(MOBILE_ROOT, "tailwind.config.js"),
-        "-i", input, "-o", output, "--content", fixture],
+        "-i", input, "-o", output, "--content", componentSource],
       { cwd: REPOSITORY_ROOT, stdio: "pipe", env: { ...process.env, NATIVEWIND_OS: "android" } }
     );
     cachedVoiceCss = readFileSync(output, "utf8");
@@ -345,7 +332,7 @@ function hasNativeCircularClip(gradient: unknown): boolean {
   return false;
 }
 
-function expectPaletteHalo(actual: unknown, paletteColor: string): void {
+function expectPaletteHalo(actual: unknown, paletteColor: string): number {
   if (typeof actual !== "string") {
     throw new Error("Expected native resolved halo color");
   }
@@ -358,6 +345,7 @@ function expectPaletteHalo(actual: unknown, paletteColor: string): void {
   const alpha = (native >>> 24) & 0xff;
   expect(alpha).toBeGreaterThan(0);
   expect(alpha).toBeLessThan(255);
+  return alpha / 255;
 }
 
 /** Native 172dp decorative circles, including the recording pulse, not CSS tokens. */
@@ -445,6 +433,7 @@ describe("real Tailwind/CSS Interop Voice native shape", () => {
           remaining={state === "daily-limit" ? 0 : 3}
         />
       );
+      const alphas: number[] = [];
       for (const [name, size, radius] of [
         ["outer", 172, 86],
         ["inner", 140, 70],
@@ -464,16 +453,36 @@ describe("real Tailwind/CSS Interop Voice native shape", () => {
           state === "daily-limit"
             ? theme === "dark" ? palette.slate[700] : palette.slate[200]
             : name === "outer" ? palette.nileGreen[50] : palette.nileGreen[100];
-        expectPaletteHalo(style.backgroundColor, approvedColor);
+        const alpha = expectPaletteHalo(style.backgroundColor, approvedColor);
+        alphas.push(alpha);
+        if (state === "idle" && theme === "dark") {
+          expect(alpha).toBeGreaterThanOrEqual(
+            name === "outer" ? 0.22 : 0.35
+          );
+        }
+        if (state === "daily-limit") {
+          // Keep gray disabled rings muted but not completely transparent.
+          expect(alpha).toBeGreaterThanOrEqual(0.15);
+          expect(alpha).toBeLessThan(0.45);
+        }
         const props = getTestInstanceProps(halo);
         expect(props.pointerEvents).toBe("none");
         expect(props.importantForAccessibility).toBe("no-hide-descendants");
+      }
+      if (state === "idle" && theme === "dark") {
+        // Inner light-green halo must remain visibly stronger than outer.
+        expect(alphas[1]).toBeGreaterThan(alphas[0]);
       }
       if (state === "daily-limit") {
         const disabled: unknown = screen.getByTestId("voice-mic-target", {
           includeHiddenElements: true,
         });
         expect(getTestInstanceProps(disabled).accessible).toBe(false);
+        const color = resolvedVoiceStyle(disabled).backgroundColor;
+        const expected = theme === "dark"
+          ? palette.slate[700]
+          : palette.slate[200];
+        expect(processColor(color)).toBe(processColor(expected));
       }
     }
   );
@@ -505,6 +514,33 @@ describe("real Tailwind/CSS Interop Voice native shape", () => {
       expect(outerCircles.some((style) =>
         matchesVisiblePaletteColor(style.backgroundColor, palette.nileGreen[100])
       )).toBe(true);
+
+      const pulse: unknown = screen.getByTestId("voice-halo-pulse", {
+        includeHiddenElements: true,
+      });
+      const pulseStyle = resolvedVoiceStyle(pulse);
+      expect(pulseStyle).toEqual(
+        expect.objectContaining({
+          width: 172,
+          height: 172,
+          borderRadius: 86,
+        })
+      );
+      const pulseAlpha = expectPaletteHalo(
+        pulseStyle.backgroundColor,
+        palette.nileGreen[100]
+      );
+      expect(pulseAlpha).toBeGreaterThanOrEqual(0.55);
+      if (theme === "dark") {
+        const outer: unknown = screen.getByTestId("voice-halo-outer", {
+          includeHiddenElements: true,
+        });
+        const outerAlpha = expectPaletteHalo(
+          resolvedVoiceStyle(outer).backgroundColor,
+          palette.nileGreen[50]
+        );
+        expect(pulseAlpha).toBeGreaterThan(outerAlpha);
+      }
     }
   );
 });

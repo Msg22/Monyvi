@@ -60,14 +60,9 @@ export function AddTransactionModeTabs({
               onPress={() => {
                 if (!isSelected) onModeChange(option.value);
               }}
-              className={`min-h-12 flex-1 items-center justify-center border-b-2 px-4 ${
-                isSelected
-                  ? "border-nileGreen-600 dark:border-nileGreen-400"
-                  : "border-transparent"
+              className={`relative min-h-12 flex-1 items-center justify-center px-4 ${
+                disabled ? "opacity-50" : "active:opacity-[0.72]"
               }`}
-              style={({ pressed }) => ({
-                opacity: disabled ? 0.5 : pressed ? 0.72 : 1,
-              })}
             >
               <Text
                 style={{ fontFamily: fontFamily.semiBold }}
@@ -79,6 +74,15 @@ export function AddTransactionModeTabs({
               >
                 {option.label}
               </Text>
+              {isSelected ? (
+                <View
+                  testID={`add-transaction-mode-${option.value}-indicator`}
+                  accessible={false}
+                  importantForAccessibility="no-hide-descendants"
+                  pointerEvents="none"
+                  className="absolute bottom-0 left-0 right-0 h-[2px] bg-nileGreen-600 dark:bg-nileGreen-400"
+                />
+              ) : null}
             </Pressable>
           );
         })}
