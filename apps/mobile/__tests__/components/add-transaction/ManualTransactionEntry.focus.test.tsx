@@ -1,4 +1,5 @@
 import {
+  act,
   fireEvent,
   render,
   screen,
@@ -194,8 +195,16 @@ jest.mock("@/components/add-transaction/OptionalSection", () => ({
   }: {
     readonly expanded: boolean;
     readonly onToggleExpand: () => void;
-    readonly fields: { readonly note?: string };
-    readonly onChange: (updates: { readonly note?: string }) => void;
+    readonly fields: {
+      readonly note?: string;
+      readonly isRecurring: boolean;
+      readonly recurringName?: string;
+    };
+    readonly onChange: (updates: {
+      readonly note?: string;
+      readonly isRecurring?: boolean;
+      readonly recurringName?: string;
+    }) => void;
   }): React.JSX.Element => {
     const Native =
       jest.requireActual<typeof import("react-native")>("react-native");
@@ -211,11 +220,24 @@ jest.mock("@/components/add-transaction/OptionalSection", () => ({
           </Native.Text>
         </Native.Pressable>
         {expanded ? (
-          <Native.TextInput
-            testID="manual-note-input"
-            value={fields.note ?? ""}
-            onChangeText={(note) => onChange({ note })}
-          />
+          <>
+            <Native.TextInput
+              testID="manual-note-input"
+              value={fields.note ?? ""}
+              onChangeText={(note) => onChange({ note })}
+            />
+            <Native.Pressable
+              testID="manual-enable-recurring"
+              onPress={() =>
+                onChange({
+                  isRecurring: true,
+                  recurringName: "Monthly food",
+                })
+              }
+            >
+              <Native.Text>enable recurring</Native.Text>
+            </Native.Pressable>
+          </>
         ) : null}
       </Native.View>
     );
@@ -303,6 +325,37 @@ function ManualWithHeader({
 
 function focusAmount(): void {
   fireEvent(screen.getByTestId("manual-amount-input"), "focus", {});
+}
+
+interface Deferred<T> {
+  readonly promise: Promise<T>;
+  readonly resolve: (value: T) => void;
+  readonly reject: (reason?: unknown) => void;
+}
+
+function createDeferred<T>(): Deferred<T> {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+
+  return { promise, resolve, reject };
+}
+
+function beginTwoSaves(
+  manualRef: React.RefObject<ManualTransactionEntryHandle | null>
+): Promise<void>[] {
+  const saves: Promise<void>[] = [];
+  act(() => {
+    if (!manualRef.current) {
+      throw new Error("Manual transaction handle is not mounted");
+    }
+    saves.push(manualRef.current.save());
+    saves.push(manualRef.current.save());
+  });
+  return saves;
 }
 
 describe("ManualTransactionEntry compact focus contract", () => {
@@ -397,6 +450,98 @@ describe("ManualTransactionEntry compact focus contract", () => {
         type: "EXPENSE",
       })
     );
+  });
+
+  it("coalesces rapid imperative ordinary transaction saves while the first write is pending", async () => {
+    const write = createDeferred<{ readonly id: string }>();
+    mockCreateTransaction.mockImplementation(() => write.promise);
+    const manualRef = React.createRef<ManualTransactionEntryHandle>();
+    render(<ManualTransactionEntry ref={manualRef} />);
+
+    fireEvent.changeText(screen.getByTestId("manual-amount-input"), "1");
+    const saves = beginTwoSaves(manualRef);
+
+    await waitFor(() => expect(mockCreateTransaction).toHaveBeenCalled());
+    await act(async () => {
+      write.resolve({ id: "transaction-1" });
+      await Promise.all(saves);
+    });
+
+    expect(mockCreateTransaction).toHaveBeenCalledTimes(1);
+  });
+
+  it("coalesces rapid imperative transfer saves while the first write is pending", async () => {
+    const write = createDeferred<void>();
+    mockCreateTransfer.mockImplementation(() => write.promise);
+    const manualRef = React.createRef<ManualTransactionEntryHandle>();
+    render(<ManualTransactionEntry ref={manualRef} />);
+
+    fireEvent.press(screen.getByTestId("type-tab-TRANSFER"));
+    fireEvent.changeText(screen.getByTestId("manual-amount-input"), "10");
+    const targetInput = await screen.findByTestId(
+      "manual-transfer-target-amount-input"
+    );
+    fireEvent.changeText(targetInput, "20");
+
+    const saves = beginTwoSaves(manualRef);
+
+    await waitFor(() => expect(mockCreateTransfer).toHaveBeenCalled());
+    await act(async () => {
+      write.resolve(undefined);
+      await Promise.all(saves);
+    });
+
+    expect(mockCreateTransfer).toHaveBeenCalledTimes(1);
+  });
+
+  it("coalesces recurring creation and its linked transaction during rapid imperative saves", async () => {
+    const recurringWrite = createDeferred<{ readonly id: string }>();
+    mockCreateRecurringPayment.mockImplementation(() => recurringWrite.promise);
+    const manualRef = React.createRef<ManualTransactionEntryHandle>();
+    render(<ManualTransactionEntry ref={manualRef} />);
+
+    fireEvent.changeText(screen.getByTestId("manual-amount-input"), "1");
+    fireEvent.press(screen.getByText("add_more_details"));
+    fireEvent.press(screen.getByTestId("manual-enable-recurring"));
+
+    const saves = beginTwoSaves(manualRef);
+
+    await waitFor(() =>
+      expect(mockCreateRecurringPayment).toHaveBeenCalled()
+    );
+    await act(async () => {
+      recurringWrite.resolve({ id: "recurring-1" });
+      await Promise.all(saves);
+    });
+
+    expect(mockCreateRecurringPayment).toHaveBeenCalledTimes(1);
+    expect(mockCreateTransaction).toHaveBeenCalledTimes(1);
+    expect(mockCreateTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({ linkedRecurringId: "recurring-1" })
+    );
+  });
+
+  it("releases the save lock after a rejected write so an explicit retry can succeed", async () => {
+    mockCreateTransaction
+      .mockRejectedValueOnce(new Error("transaction write failed"))
+      .mockResolvedValueOnce({ id: "transaction-2" });
+    const manualRef = React.createRef<ManualTransactionEntryHandle>();
+    render(<ManualTransactionEntry ref={manualRef} />);
+
+    fireEvent.changeText(screen.getByTestId("manual-amount-input"), "1");
+
+    await act(async () => {
+      await manualRef.current?.save();
+    });
+    expect(mockCreateTransaction).toHaveBeenCalledTimes(1);
+    expect(mockBack).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await manualRef.current?.save();
+    });
+
+    expect(mockCreateTransaction).toHaveBeenCalledTimes(2);
+    expect(mockBack).toHaveBeenCalledTimes(1);
   });
 
   it("dismisses the ordinary keyboard on deactivation while retaining the optional draft and never saving", async () => {

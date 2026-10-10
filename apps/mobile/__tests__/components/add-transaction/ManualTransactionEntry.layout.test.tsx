@@ -1,6 +1,23 @@
 import { render, screen } from "@testing-library/react-native";
 import React from "react";
-import * as ReactNative from "react-native";
+
+let mockWindowDimensions = {
+  width: 390,
+  height: 844,
+  scale: 1,
+  fontScale: 1,
+};
+
+jest.mock("react-native", () => {
+  const actual =
+    jest.requireActual<typeof import("react-native")>("react-native");
+
+  return {
+    ...actual,
+    useWindowDimensions: (): typeof mockWindowDimensions =>
+      mockWindowDimensions,
+  };
+});
 
 const mockBack = jest.fn();
 
@@ -215,21 +232,13 @@ jest.mock("@/services/transfer-service", () => ({
 import { ManualTransactionEntry } from "@/components/add-transaction/ManualTransactionEntry";
 
 describe("ManualTransactionEntry compact B layout", () => {
-  let dimensionsSpy: jest.SpyInstance;
-
   beforeEach(() => {
-    dimensionsSpy = jest
-      .spyOn(ReactNative, "useWindowDimensions")
-      .mockReturnValue({
-        width: 390,
-        height: 844,
-        scale: 1,
-        fontScale: 1,
-      });
-  });
-
-  afterEach(() => {
-    dimensionsSpy.mockRestore();
+    mockWindowDimensions = {
+      width: 390,
+      height: 844,
+      scale: 1,
+      fontScale: 1,
+    };
   });
 
   it("keeps required Account and Category on one normal-width row", () => {
@@ -252,12 +261,12 @@ describe("ManualTransactionEntry compact B layout", () => {
   });
 
   it("reflows the selector row on compact width", () => {
-    dimensionsSpy.mockReturnValue({
+    mockWindowDimensions = {
       width: 320,
       height: 640,
       scale: 1,
       fontScale: 1,
-    });
+    };
 
     render(<ManualTransactionEntry />);
 
@@ -268,12 +277,12 @@ describe("ManualTransactionEntry compact B layout", () => {
   });
 
   it("reflows the selector row for enlarged text without shrinking labels", () => {
-    dimensionsSpy.mockReturnValue({
+    mockWindowDimensions = {
       width: 390,
       height: 844,
       scale: 1,
       fontScale: 1.5,
-    });
+    };
 
     render(<ManualTransactionEntry />);
 

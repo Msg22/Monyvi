@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react-native";
 import React, { type ReactNode } from "react";
-import { Text, View } from "react-native";
+import { Text } from "react-native";
 
 import {
   Dropdown,
@@ -22,17 +22,35 @@ jest.mock("@/hooks/useModalBottomInset", () => ({
   useModalBottomInset: (): number => 0,
 }));
 
-jest.mock("expo-blur", () => ({
-  BlurView: ({ children }: { readonly children?: ReactNode }): React.JSX.Element => (
-    <View>{children}</View>
-  ),
-}));
+jest.mock("expo-blur", () => {
+  const ReactActual = jest.requireActual<typeof import("react")>("react");
+  const Native =
+    jest.requireActual<typeof import("react-native")>("react-native");
 
-jest.mock("@expo/vector-icons", () => ({
-  Ionicons: ({ name }: { readonly name: string }): React.JSX.Element => (
-    <Text testID={`dropdown-icon-${name}`}>{name}</Text>
-  ),
-}));
+  return {
+    BlurView: ({
+      children,
+    }: {
+      readonly children?: import("react").ReactNode;
+    }): React.JSX.Element =>
+      ReactActual.createElement(Native.View, null, children),
+  };
+});
+
+jest.mock("@expo/vector-icons", () => {
+  const ReactActual = jest.requireActual<typeof import("react")>("react");
+  const Native =
+    jest.requireActual<typeof import("react-native")>("react-native");
+
+  return {
+    Ionicons: ({ name }: { readonly name: string }): React.JSX.Element =>
+      ReactActual.createElement(
+        Native.Text,
+        { testID: `dropdown-icon-${name}` },
+        name
+      ),
+  };
+});
 
 interface RepairDropdownProps<T extends string | number> {
   readonly variant?: "default" | "outlined";
