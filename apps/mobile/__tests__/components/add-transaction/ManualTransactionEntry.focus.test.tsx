@@ -5,7 +5,7 @@ import {
   waitFor,
 } from "@testing-library/react-native";
 import React from "react";
-import { Pressable } from "react-native";
+import { Keyboard, Pressable } from "react-native";
 
 const mockBack = jest.fn();
 const mockPush = jest.fn();
@@ -189,22 +189,35 @@ jest.mock("@/components/add-transaction/OptionalSection", () => ({
   OptionalSection: ({
     expanded,
     onToggleExpand,
+    fields,
+    onChange,
   }: {
     readonly expanded: boolean;
     readonly onToggleExpand: () => void;
+    readonly fields: { readonly note?: string };
+    readonly onChange: (updates: { readonly note?: string }) => void;
   }): React.JSX.Element => {
     const Native =
       jest.requireActual<typeof import("react-native")>("react-native");
 
     return (
-      <Native.Pressable
-        testID="manual-optional-details-toggle"
-        onPress={onToggleExpand}
-      >
-        <Native.Text>
-          {expanded ? "hide_details" : "add_more_details"}
-        </Native.Text>
-      </Native.Pressable>
+      <Native.View>
+        <Native.Pressable
+          testID="manual-optional-details-toggle"
+          onPress={onToggleExpand}
+        >
+          <Native.Text>
+            {expanded ? "hide_details" : "add_more_details"}
+          </Native.Text>
+        </Native.Pressable>
+        {expanded ? (
+          <Native.TextInput
+            testID="manual-note-input"
+            value={fields.note ?? ""}
+            onChangeText={(note) => onChange({ note })}
+          />
+        ) : null}
+      </Native.View>
     );
   },
 }));
@@ -384,6 +397,32 @@ describe("ManualTransactionEntry compact focus contract", () => {
         type: "EXPENSE",
       })
     );
+  });
+
+  it("dismisses the ordinary keyboard on deactivation while retaining the optional draft and never saving", async () => {
+    const dismissSpy = jest
+      .spyOn(Keyboard, "dismiss")
+      .mockImplementation((): void => undefined);
+    const view = render(<ManualTransactionEntry isActive />);
+
+    fireEvent.press(screen.getByText("add_more_details"));
+    const noteInput = screen.getByTestId("manual-note-input");
+    fireEvent(noteInput, "focus", {});
+    fireEvent.changeText(noteInput, "Coffee note");
+
+    expect(noteInput).toHaveDisplayValue("Coffee note");
+
+    view.rerender(<ManualTransactionEntry isActive={false} />);
+
+    await waitFor(() => expect(dismissSpy).toHaveBeenCalledTimes(1));
+    expect(screen.getByTestId("manual-note-input")).toHaveDisplayValue(
+      "Coffee note"
+    );
+    expect(mockCreateTransaction).not.toHaveBeenCalled();
+    expect(mockCreateTransfer).not.toHaveBeenCalled();
+    expect(mockBack).not.toHaveBeenCalled();
+
+    dismissSpy.mockRestore();
   });
 
   it("dismisses focus when Manual deactivates without destroying the draft", async () => {
