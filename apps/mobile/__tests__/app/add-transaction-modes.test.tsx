@@ -40,6 +40,15 @@ let mockFocusCallback: (() => void) | null = null;
 let mockAiConsentLoading = false;
 let mockAiConsented = false;
 let mockVoiceHasPermission = true;
+let mockVoiceFlowStatus:
+  | "idle"
+  | "recording"
+  | "paused"
+  | "completed"
+  | "analyzing"
+  | "error" = "idle";
+let mockVoiceModeSwitchLocked = false;
+let mockVoiceAvailabilityErrorKind: "network" | null = null;
 let mockVoiceRefusalReason:
   | "daily_limit"
   | "burst_limit"
@@ -88,6 +97,8 @@ jest.mock("react-native-safe-area-context", () => ({
 jest.mock("react-i18next", () => ({
   useTranslation: (): { readonly t: (key: string) => string } => ({
     t: (key: string): string => {
+      if (key === "voice_limit_heading") return "VOICE_QUOTA_HEADING";
+      if (key === "voice_limit_unavailable") return "VOICE_UNAVAILABLE_BODY";
       const normalized = key.toLowerCase();
       if (normalized.includes("manual")) return "Manual";
       if (normalized.includes("voice")) return "Voice";
@@ -383,7 +394,9 @@ jest.mock("@/hooks/useVoiceAiAvailability", () => ({
   useVoiceAiAvailability: () => ({
     availability: mockVoiceAvailability,
     isLoading: false,
-    error: null,
+    error: mockVoiceAvailabilityErrorKind === null
+      ? null
+      : { kind: mockVoiceAvailabilityErrorKind },
     refresh: () => {
       mockVoiceAvailabilityRefresh();
       return Promise.resolve(mockVoiceAvailability);
@@ -394,13 +407,13 @@ jest.mock("@/hooks/useVoiceAiAvailability", () => ({
 
 jest.mock("@/hooks/useVoiceTransactionFlow", () => ({
   useVoiceTransactionFlow: () => ({
-    flowStatus: "idle",
+    flowStatus: mockVoiceFlowStatus,
     isOverlayVisible: false,
     durationMs: 0,
     errorMessage: null,
     isMicrophonePermissionError: false,
     hasPermission: mockVoiceHasPermission,
-    isModeSwitchLocked: false,
+    isModeSwitchLocked: mockVoiceModeSwitchLocked,
     isFinalizing: false,
     refusalReason: mockVoiceRefusalReason,
     canRetrySubmission: false,
@@ -442,6 +455,7 @@ jest.mock("@/services/transfer-service", () => ({
 }));
 
 import AddTransaction from "@/app/(private)/add-transaction";
+import { ManualTransactionEntry } from "@/components/add-transaction/ManualTransactionEntry";
 
 function renderRoute(mode: string | undefined): ReturnType<typeof render> {
   mockRouteParams = mode === undefined ? {} : { mode };
@@ -456,6 +470,9 @@ describe("AddTransaction unified mode intent", () => {
     mockAiConsentLoading = false;
     mockAiConsented = false;
     mockVoiceHasPermission = true;
+    mockVoiceFlowStatus = "idle";
+    mockVoiceModeSwitchLocked = false;
+    mockVoiceAvailabilityErrorKind = null;
     mockVoiceRefusalReason = null;
     mockGrantConsent.mockReset().mockResolvedValue();
     mockVoiceStartFlow.mockReset().mockResolvedValue(undefined);
@@ -789,6 +806,115 @@ describe("AddTransaction unified mode intent", () => {
     view.rerender(<AddTransaction />);
     expect(screen.getByTestId("voice-entry-state")).toHaveTextContent("idle");
   });
+  it.each([undefined, "manual", "invalid", "VOICE"])(
+    "defaults %s route intent to Manual without showing Voice quota",
+    (requested) => {
+      renderRoute(requested);
+      expect(screen.getByRole("tab", { name: "Manual" })).toHaveProp(
+        "accessibilityState",
+        expect.objectContaining({ selected: true })
+      );
+      expect(screen.getByTestId("header-save")).toBeOnTheScreen();
+      expect(screen.queryByText("VOICE_QUOTA_HEADING")).toBeNull();
+    }
+  );
+
+  it.each([
+    ["available", 3, null, null],
+    ["exhausted", 0, "daily_limit", null],
+    ["burst-blocked", 3, "burst_limit", null],
+    ["availability-error", 3, null, "network"],
+  ] as const)(
+    "keeps all Voice counters and errors off the visible Manual form: %s",
+    (_label, remaining, reason, errorKind) => {
+      mockVoiceAvailability = {
+        ...mockVoiceAvailability,
+        remaining,
+        reason,
+      };
+      mockVoiceAvailabilityErrorKind = errorKind;
+      renderRoute("manual");
+
+      expect(screen.queryByText("VOICE_QUOTA_HEADING")).toBeNull();
+      expect(screen.queryByText("VOICE_UNAVAILABLE_BODY")).toBeNull();
+      expect(screen.getByTestId("header-save")).toBeOnTheScreen();
+      expect(screen.getByRole("tab", { name: "Manual" })).toHaveProp(
+        "accessibilityState",
+        expect.objectContaining({ selected: true })
+      );
+    }
+  );
+
+  it("passes active mode into the kept-mounted Manual entry without exposing the hidden subtree", () => {
+    renderRoute("manual");
+    expect(screen.UNSAFE_getByType(ManualTransactionEntry)).toHaveProp(
+      "isActive",
+      true
+    );
+
+    fireEvent.press(screen.getByRole("tab", { name: "Voice" }));
+
+    expect(screen.UNSAFE_getByType(ManualTransactionEntry)).toHaveProp(
+      "isActive",
+      false
+    );
+    expect(screen.queryByTestId("header-save")).toBeNull();
+
+    const amount = screen.UNSAFE_getByProps({ testID: "manual-amount" });
+    let container = amount.parent;
+    while (container && container.props.accessibilityElementsHidden === undefined) {
+      container = container.parent;
+    }
+    expect(container).toHaveProp("accessibilityElementsHidden", true);
+    expect(container).toHaveProp(
+      "importantForAccessibility",
+      "no-hide-descendants"
+    );
+
+    fireEvent.press(screen.getByRole("tab", { name: "Manual" }));
+
+    expect(screen.UNSAFE_getByType(ManualTransactionEntry)).toHaveProp(
+      "isActive",
+      true
+    );
+    expect(screen.getByTestId("header-save")).toBeOnTheScreen();
+  });
+
+  it("keeps Voice unavailable, daily exhaustion, and burst failures nonblocking for Manual", () => {
+    mockVoiceAvailability = {
+      ...mockVoiceAvailability,
+      remaining: 0,
+      reason: "daily_limit",
+    };
+    renderRoute("voice");
+    expect(screen.getByTestId("voice-entry-state")).toHaveTextContent("daily-limit");
+    expect(screen.queryByTestId("header-save")).toBeNull();
+
+    fireEvent.press(screen.getByRole("tab", { name: "Manual" }));
+    expect(screen.getByTestId("header-save")).toBeOnTheScreen();
+    expect(screen.queryByText("VOICE_QUOTA_HEADING")).toBeNull();
+  });
+
+  it.each(["recording", "paused", "analyzing"] as const)(
+    "preserves the mode-switch lock during %s",
+    (status) => {
+      mockVoiceFlowStatus = status;
+      mockVoiceModeSwitchLocked = true;
+      renderRoute("voice");
+
+      const manual = screen.getByRole("tab", { name: "Manual" });
+      expect(manual).toHaveProp(
+        "accessibilityState",
+        expect.objectContaining({ disabled: true })
+      );
+      fireEvent.press(manual);
+      expect(screen.getByRole("tab", { name: "Voice" })).toHaveProp(
+        "accessibilityState",
+        expect.objectContaining({ selected: true })
+      );
+    }
+  );
+
 });
 
 function createDeferred<T>(): {

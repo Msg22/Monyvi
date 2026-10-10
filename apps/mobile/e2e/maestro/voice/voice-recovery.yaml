@@ -1,0 +1,62 @@
+appId: com.monyvi.app
+---
+# R05 / T042 — guarded recovery navigation; NO native audio/provider calls.
+# AUTHORED, NOT RUN. This flow does not manufacture an unavailable result and
+# does not claim a quota/permission recovery occurred unless that state appears.
+- runFlow: ../helpers/setup.yaml
+- tapOn:
+    id: "fab-button"
+- tapOn:
+    id: "fab-transaction"
+- tapOn:
+    id: "add-transaction-mode-voice"
+- waitForAnimationToEnd
+- assertVisible:
+    id: "add-transaction-mode-voice"
+
+# Refresh is only actionable if the real availability check failed. A healthy
+# server must not be forced into an error solely to satisfy a scripted branch.
+- runFlow:
+    when:
+      visible: "Voice unavailable"
+    commands:
+      - assertVisible: "Try again"
+      - tapOn: "Try again"
+      - waitForAnimationToEnd
+
+# Replay, burst and error alternatives retain a safe Manual path. A future
+# authenticated local HTTP fixture must deterministically cause each state.
+- runFlow:
+    when:
+      visible: "Use Manual"
+    commands:
+      - tapOn: "Use Manual"
+
+- runFlow:
+    when:
+      visible: "Use manual entry"
+    commands:
+      - tapOn: "Use manual entry"
+
+# If no recovery action was exposed, use the normal mode tab.
+- runFlow:
+    when:
+      visible:
+        id: "add-transaction-mode-voice"
+    commands:
+      - tapOn:
+          id: "add-transaction-mode-manual"
+
+- assertVisible:
+    id: "header-save"
+- assertNotVisible: "Voice unavailable"
+- assertNotVisible: "Daily voice limit reached"
+- assertNotVisible: "Limited free voice usage"
+- tapOn:
+    id: "header-back"
+- waitForAnimationToEnd
+- assertVisible: "Transactions"
+
+# MANUAL ONLY / NOT RUN: native permission denial/revocation and Settings,
+# stop/pause/discard/resume, held provider reservation (#384), replay identity,
+# background/restart, actual recording and review, locale/dark/device fidelity.
