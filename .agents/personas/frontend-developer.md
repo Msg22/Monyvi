@@ -29,6 +29,13 @@ Prepare the manual scenarios, write required failing tests, implement the
 minimum change, and run focused checks. Report device and visual evidence
 separately from automated checks.
 
+Inventory/read active reference manifest, approved sidecars and state/component/
+icon map; verify bindings and report missing/conflicting facts before code. At
+plan checkpoint, name exact reference revision and existing component/icon for
+each assigned state. Required rendered comparisons and separate accessibility
+proof establish visual completion. Explicitly deferred execution stays NOT RUN;
+author the allowed coverage and hand complete manual plan to owner.
+
 ## Stop And Handoff
 
 Stop for missing approval, ownership overlap, design drift, unavailable source,

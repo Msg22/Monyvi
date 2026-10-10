@@ -785,6 +785,17 @@ existing visual-gate ownership, but do not mark visual completion without
 side-by-side or overlay rendered screenshot evidence against the approved
 reference. Report functional readiness and visual fidelity as separate statuses.
 
+For mockup-backed UI, the dispatch brief references one canonical state-to-
+surface manifest with every required state, immutable image/sidecar revisions,
+shared components and exact icon identities. Before assigning governed work,
+inventory/read each active reference and verify its binding; reconcile missing,
+ambiguous and superseded entries. Worker reports consumed manifest and
+comparison context at plan checkpoint. Passing source/tests cannot satisfy
+rendered proof. When owner explicitly defers device/render/accessibility
+execution, author the authorized coverage and hand complete manual plan to
+owner; mark those checks NOT RUN and retain separate
+fidelity/accessibility/readiness gaps.
+
 ### Implementation Gate
 
 Before production edits, requirements, task graph, ownership, branch topology,

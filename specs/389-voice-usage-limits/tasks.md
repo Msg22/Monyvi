@@ -69,6 +69,46 @@ specification: **US0, US1, US2, US3**. US2 precedes US0/US1 in execution because
 server authority is a prerequisite for integrated client quota behavior; all
 three are P1.
 
+## Current UI repair authority — 10 October 2026
+
+This continuation finalizes the existing checklist in place; T001–T059 and the
+36 FR/15 SC identifiers remain intact. Repair branch
+`codex/issue347-ui-fidelity` starts at
+`ab15bcce6a23179a2d3735dc8b835f1933b99799`, containing trusted main
+`3264eba2b67bcc66cddc95e3fbdb36e8705ee642`. Five exact approved references in
+`mockups/repair-binding-manifest.json` supersede the old two-reference layout
+for repaired surfaces; `reconciliation.md` preserves history and receipt.
+`contracts/add-transaction-ui-contract.md` maps states/components/verified
+icons.
+
+Scope is compact Manual/focus keypad/Done/header Save, shared underline modes,
+Voice unboxed mic and locale-specific idle/daily/recovery presentation.
+Financial, transfer, recurring, offline, parsing, retention,
+SQL/snapshot/sync/quota contracts remain intact; #384 stays deferred. No schema
+or hosted deployment work is part of repair. Older full-feature server tasks
+stay as inherited unfinished work, not new repair assignments.
+
+Owner's latest scope: “please don't test on emulator, just write unit tests and
+e2e and i'll do manual testing after you finish”. Author unit and E2E coverage;
+execute focused unit/type/lint checks in batches before any separately
+authorized commit. No emulator/device/adb/Droidrun work, E2E execution or
+screenshot/ accessibility captures. E2E authoring is not execution evidence;
+required unit behavioral Red still precedes repair production code.
+
+T034/T035/T049/T050 and visual/accessibility T058 remain unchecked and NOT RUN
+pending owner manual testing. Hand owner complete manual matrix.
+Functional/source and unit-validation status can advance independently;
+visual/accessibility/device/ live-provider readiness stays unverified. Existing
+completion evidence requirements remain in force for future acceptance; do not
+claim visual completion or merge/ device readiness from source or unit results.
+
+Earlier direct-source verification deferral and dated approval/analysis below
+apply to their earlier pass, not fresh repair. Current T002 package integrity
+and T003 read-only analysis were reopened and completed for this scope. Planning
+docs are assigned to the exclusive worker; lead alone dispatches production
+after zero current critical/high analysis blockers. No hooks, commits, pushes or
+GitHub mutations are authorized by this checklist.
+
 ## Phase 1: Setup and blocking design gates
 
 - [x] T001 Verify the selected feature and immutable source, inspect existing
@@ -77,25 +117,27 @@ three are P1.
       `SPECIFY_FEATURE_DIRECTORY=specs/389-voice-usage-limits SPECIFY_FEATURE=389-voice-usage-limits`
       with `C:/Program Files/Git/bin/bash.exe` for
       `.specify/scripts/bash/check-prerequisites.sh`, inspect
-      `.specify/extensions.yml`, and do not run optional Git hooks.
-- [x] T002 Complete legacy metadata migration for
-      `specs/389-voice-usage-limits/mockups/mockup-1.binding.md` and
-      `specs/389-voice-usage-limits/mockups/mockup-2.binding.md`: verify
-      unchanged originals/provenance, resolve fidelity-affecting UNKNOWNs,
-      obtain explicit approval of each immutable combined revision, and require
-      `node scripts/verify-mockup-binding.js <sidecar>` exit 0 before governed
-      UI production tasks. Preserve image bytes and the already-authorized
-      local-midnight copy delta; never generate a replacement image.
+      `.specify/extensions.yml`, and do not run optional Git hooks. UI repair:
+      refresh repair source/feature selection; earlier source check stays
+      historical.
+- [x] T002 Verify all five active approved bindings listed in
+      `specs/389-voice-usage-limits/mockups/repair-binding-manifest.json`: read
+      exact images/sidecars, validate image/Binding Facts/combined revisions and
+      approval receipt, then require each binding verifier exit0. Preserve old
+      mockup-1/mockup-2 bytes and approvals as superseded history; no Manual
+      Voice allowance strip or regenerated reference.
 - [x] T003 Finalize inherited artifact reconciliation in
       `specs/389-voice-usage-limits/reconciliation.md`, then run read-only
       `.agent/workflows/speckit.analyze.md` against
       `specs/389-voice-usage-limits/spec.md`, `plan.md`, `tasks.md`,
-      `data-model.md` and every `contracts/` file. Current owner authorizes
-      lead-only local planning edits; do not delegate this phase. Canonical
-      choices: POST availability JSON, timezone 1–128 plus IANA validation,
-      auth/consent, required policyVersion, optional/empty callerLocalDate with
-      unchanged UTC-date fallback, snapshot daily/burst reason distinct from
-      replay refusal, and route-owned refresh. Endpoint contracts own shapes;
+      `data-model.md` and every `contracts/` file. Current repair authorizes
+      exclusive planning-worker doc reconciliation; lead retains dispatch.
+      Re-run analysis for the approved replacement package before production.
+      Existing contract choices remain unchanged. Canonical choices: POST
+      availability JSON, timezone 1–128 plus IANA validation, auth/consent,
+      required policyVersion, optional/empty callerLocalDate with unchanged
+      UTC-date fallback, snapshot daily/burst reason distinct from replay
+      refusal, and route-owned refresh. Endpoint contracts own shapes;
       `voice-ai.openapi.yaml` is a reference-only compatibility index. Current
       free launch is numeric metered; future null-triplet representation is
       controlled test-only compatibility, never a missing-config bypass or
@@ -110,7 +152,9 @@ three are P1.
       permission/restart/resume cases and manual-only blockers, and reserve the
       exact next migration filename
       `supabase/migrations/086_voice_ai_usage_limits.sql` after rechecking
-      migration numbering at assignment time.
+      migration numbering at assignment time. UI repair: map current scenarios
+      below to unit/E2E authoring and owner manual-only validation; no
+      emulator/device/E2E execution or captures.
 - [ ] T005 Run existing focused baseline commands for
       `apps/mobile/__tests__/services/ai-voice-parser-service.test.ts`,
       `apps/mobile/__tests__/hooks/useVoiceTransactionFlow.test.ts`,
@@ -310,7 +354,9 @@ Voice permits Manual. Compare governed rendered UI against approved bindings.
       state, hidden inactive accessibility subtree, mode locks for
       recording/paused/completed-finalizing/analyzing and safe
       error/idle/blocked switching; include duplicate route entry and
-      back/cancel cleanup without changing transaction contracts.
+      back/cancel cleanup without changing transaction contracts. UI repair:
+      assert no Voice notice in Manual for every availability state, Save action
+      ownership, focus/safe-switch cleanup and hidden keypad subtree.
 - [ ] T025 [P] [US0] Extend
       `apps/mobile/__tests__/components/fab/QuickActionFab.test.tsx`,
       `apps/mobile/__tests__/components/tab-bar/CustomBottomTabBar.test.tsx` and
@@ -328,21 +374,29 @@ Voice permits Manual. Compare governed rendered UI against approved bindings.
       IDs, optional/recurring fields, validation scrolling, budget alert and
       local-first save semantics through extraction; do not create a merchant
       schema or remove existing transfer/currency behavior based on illustrative
-      mockup fields.
+      mockup fields. UI repair: cover ordinary grouped input, focus-only
+      calculator/no native soft keyboard, transfer focus target, dismiss-only
+      Done and header Save; preserve invalid input and existing financial
+      behavior.
 - [ ] T027 [P] [US0] Add
       `apps/mobile/__tests__/components/add-transaction/AddTransactionModeTabs.test.tsx`
       and
       `apps/mobile/__tests__/components/add-transaction/VoiceTransactionEntry.layout.test.tsx`
       for selected/disabled semantics, central compact/ordinary responsive
       breakpoints, safe-area bottom inset and cleanup of animations, using
-      approved binding values only after T002.
-- [ ] T028 [US0] Write and run failing complete user journeys in
+      approved binding values only after T002. UI repair: cover approved
+      underline modes, unboxed mic and per-locale progress/examples/icons;
+      normal row versus shared compact/text-scale reflow, minimum48 dp keypad
+      keys and bottom inset.
+- [ ] T028 [US0] Author complete user journeys in
       `apps/mobile/e2e/maestro/voice/add-transaction-modes.yaml` and update
       `apps/mobile/e2e/maestro/transactions/create-transaction.yaml` before
-      UI/navigation code; cover FAB Manual save, partial form switch/return,
-      Voice entry/review Retry and active-mode lock only where an honest
-      recording/test harness exists, with blocked cases recorded in
-      `specs/389-voice-usage-limits/tasks.md`.
+      UI/navigation code; current owner defers E2E execution; cover FAB Manual
+      save, partial form switch/return, Voice entry/review Retry and active-mode
+      lock only where an honest recording/test harness exists, with blocked
+      cases recorded in `specs/389-voice-usage-limits/tasks.md`. UI repair:
+      author idle/focus/Done-no-save/header-Save/blocked-Voice-Manual journeys
+      and update affected selectors; execution stays NOT RUN for owner.
 
 ### Implementation after accepted Red and binding approval
 
@@ -352,7 +406,10 @@ Voice permits Manual. Compare governed rendered UI against approved bindings.
       T026 Red, preserving its current form/submission contract and scoped local
       services; keep it mounted across safe switches and exclude hidden form
       content from accessibility without rewriting mature behavior or copying
-      architectural debt.
+      architectural debt. UI repair: adopt compact B with existing
+      TypeTabs/GroupedMoneyInput/Dropdown/OptionalSection/CalculatorKeypad,
+      preserving all financial behavior and focus/no-soft-keyboard/Done
+      contract.
 - [ ] T030 [US0] Implement approved shell/mode controls in
       `apps/mobile/components/add-transaction/AddTransactionModeTabs.tsx`,
       `apps/mobile/components/add-transaction/VoiceTransactionEntry.tsx` and
@@ -360,6 +417,9 @@ Voice permits Manual. Compare governed rendered UI against approved bindings.
       and T002 verifier approval; resolve the bound route/bottom-bar scope
       before adding/removing navigation chrome, use
       NativeWind/theme/font/responsive tokens and preserve binding composition.
+      UI repair: consume active five-reference state/component/icon map; reuse
+      shared header and verified Ionicons names; preserve deliberate EN/AR
+      differences.
 - [ ] T031 [US0] Move voice orchestration/AI-consent recovery from
       `apps/mobile/app/(private)/(tabs)/_layout.tsx` into
       `apps/mobile/app/(private)/add-transaction.tsx` using existing
@@ -378,17 +438,21 @@ Voice permits Manual. Compare governed rendered UI against approved bindings.
       `apps/mobile/e2e/maestro/voice/add-transaction-modes.yaml` plus
       transaction-create flow; record exact Red-to-Green evidence and remaining
       native recording/permission/restart blockers in
-      `specs/389-voice-usage-limits/tasks.md`.
+      `specs/389-voice-usage-limits/tasks.md`. UI repair: current repair
+      executes focused unit checks and authors E2E; device/E2E execution remains
+      owner-deferred, no false Green.
 - [ ] T034 [US0] Capture rendered baseline side-by-side/overlay comparison for
       `apps/mobile/app/(private)/add-transaction.tsx`,
       `ManualTransactionEntry.tsx`, `AddTransactionModeTabs.tsx` and
-      `VoiceTransactionEntry.tsx` against both approved
-      `mockups/mockup-1.png`/`mockup-2.png` at declared contexts, then
+      `VoiceTransactionEntry.tsx` against all five active approved references in
+      `mockups/repair-binding-manifest.json` at declared contexts, then
       English/Arabic, light/dark, compact/ordinary phone, tablet, landscape and
       enlarged-text variants; record evidence paths and
       functional/visual-fidelity status separately in
       `specs/389-voice-usage-limits/tasks.md`, leaving missing renders
-      incomplete.
+      incomplete. UI repair: owner defers device/render/accessibility execution;
+      retain unchecked/NOT RUN and hand complete comparison/semantics plan to
+      owner.
 - [ ] T035 [US0] Collect separate accessibility-tree and screen-reader/automated
       evidence for `apps/mobile/app/(private)/add-transaction.tsx`,
       `AddTransactionModeTabs.tsx`, `ManualTransactionEntry.tsx` and
@@ -396,7 +460,9 @@ Voice permits Manual. Compare governed rendered UI against approved bindings.
       states, hidden-tree exclusion, focus order and active-work transitions;
       record exact references and accessibility status in
       `specs/389-voice-usage-limits/tasks.md`; screenshots never substitute for
-      semantics.
+      semantics. UI repair: owner defers device/render/accessibility execution;
+      retain unchecked/NOT RUN and hand complete comparison/semantics plan to
+      owner.
 
 ## Phase 5: US1 — Understand and Use the Daily Voice Allowance (P1)
 
@@ -447,15 +513,19 @@ English/Arabic states and user-visible recovery match the approved binding.
       available/count, recording/paused/finalizing/analyzing/error,
       exhausted/burst/unavailable states, Manual fallback, EN/AR local-midnight
       copy without timezone jargon or same-time-tomorrow wording, and limits
-      read from props rather than client policy literals.
-- [ ] T042 [US1] Write and run failing visible quota journeys in
+      read from props rather than client policy literals. UI repair: assert
+      short availability-check failure heading plus existing body only in Voice,
+      distinct daily/exhausted and locale-specific compositions, no invented
+      zero count.
+- [ ] T042 [US1] Author visible quota journeys in
       `apps/mobile/e2e/maestro/voice/voice-usage-limits.yaml` and
       `apps/mobile/e2e/maestro/voice/voice-recovery.yaml` before quota-client
-      implementation: allowed attempt/review, stale/exhausted/burst/unknown
-      states, Manual save during blocking, consent/permission recovery,
-      discard/retry/resume and account-switch isolation where supported. Use a
-      verified local HTTP/provider double, never a production bypass; explicitly
-      block uncontrolled recording/timezone/provider cases in
+      implementation; current owner defers E2E execution: allowed
+      attempt/review, stale/exhausted/burst/unknown states, Manual save during
+      blocking, consent/permission recovery, discard/retry/resume and
+      account-switch isolation where supported. Use a verified local
+      HTTP/provider double, never a production bypass; explicitly block
+      uncontrolled recording/timezone/provider cases in
       `specs/389-voice-usage-limits/tasks.md`.
 
 ### Implementation after accepted Red
@@ -487,7 +557,9 @@ English/Arabic states and user-visible recovery match the approved binding.
       `apps/mobile/locales/ar/common.json` after T041/T042 Red and T002
       approval; use shaped props, count/remaining from server, accurate next-day
       reset wording and existing recording/review actions without
-      paywall/provider changes.
+      paywall/provider changes. UI repair: implement approved per-locale state
+      composition and exact glyph map, isolate every Voice notice from Manual;
+      no SQL/snapshot/#384 change.
 - [ ] T048 [US1] Run service/hook/component/i18n regressions and actual
       `apps/mobile/e2e/maestro/voice/voice-usage-limits.yaml`/`voice-recovery.yaml`;
       record executed commands, Red-to-Green assertions, stale/multi-user
@@ -501,14 +573,18 @@ English/Arabic states and user-visible recovery match the approved binding.
       compact/ordinary/tablet/landscape/enlarged text; record evidence
       references and separate functional/visual-fidelity status in
       `specs/389-voice-usage-limits/tasks.md`; unrendered states stay
-      incomplete.
+      incomplete. UI repair: owner defers device/render/accessibility execution;
+      retain unchecked/NOT RUN and hand complete comparison/semantics plan to
+      owner.
 - [ ] T050 [US1] Collect independent accessibility-tree/screen-reader or
       automated evidence for
       `apps/mobile/components/add-transaction/VoiceTransactionEntry.tsx` and the
       unified route: count/status announcements, localized action
       names/roles/states, recovery focus and Manual availability while Voice is
       blocked; record exact evidence and accessibility status in
-      `specs/389-voice-usage-limits/tasks.md` separately from visual proof.
+      `specs/389-voice-usage-limits/tasks.md` separately from visual proof. UI
+      repair: owner defers device/render/accessibility execution; retain
+      unchecked/NOT RUN and hand complete comparison/semantics plan to owner.
 
 ## Phase 6: US3 — Prepare Voice Entitlements for Future Subscription Plans (P2)
 
@@ -558,14 +634,18 @@ paid names/prices/purchase/paywall UI ships.
       artifacts through one assigned documentation worker; preserve approved
       5/day + 2/min/local-midnight/pre-start-zero/post-start-one rules, route
       semantics and future-subscription exclusions, and never mark pending
-      mockup metadata approved on the owner's behalf.
+      mockup metadata approved on the owner's behalf. UI repair: record
+      active-package supersession, compact/focus/Done/Voice-only decisions and
+      current owner manual scope without rewriting historical evidence.
 - [ ] T056 Run final focused mobile/Edge/SQL/concurrency/exclusion/E2E
       regression, mobile TypeScript, actual ESLint, Prettier and i18n checks for
-      changed files, plus binding verifier for both
-      `specs/389-voice-usage-limits/mockups/*.binding.md`; record exact
-      commands/results and unrelated baseline limitations in
+      changed files, plus binding verifier for every active entry in
+      `specs/389-voice-usage-limits/mockups/repair-binding-manifest.json`;
+      record exact commands/results and unrelated baseline limitations in
       `specs/389-voice-usage-limits/tasks.md` without
-      environment-failure-as-pass claims.
+      environment-failure-as-pass claims. UI repair: current repair runs focused
+      unit/type/lint and doc/reference integrity checks; inherited server/full
+      E2E/device checks remain outside repair and unrun.
 - [ ] T057 Prepare only missing scoped local QA data for the owner-designated
       test user, verify local ledger/financial fixtures and successful QA-device
       sync where accessible, execute
@@ -574,20 +654,26 @@ paid names/prices/purchase/paywall UI ships.
       failure, pre-start refusal, reinstall and user switch; record what is
       automated/manual-only/blocked in `specs/389-voice-usage-limits/tasks.md`,
       preserving unrelated data and never resetting or reseeding without
-      authorization.
+      authorization. UI repair: current repair hands owner manual plan; no
+      device sync, seed, hosted data or emulator action by workers under latest
+      instruction.
 - [ ] T058 Obtain independent frontend/architecture/QA/visual/accessibility
       review of `apps/mobile/app/(private)/add-transaction.tsx`, voice
       services/hooks/components, server/accounting changes and every evidence
       reference; record closure/status in
       `specs/389-voice-usage-limits/tasks.md`, with functional, visual and
       accessibility readiness reported separately and no completion claim while
-      required proof is missing.
+      required proof is missing. UI repair: independent source/coverage review
+      may proceed; device/render/accessibility review remains unchecked/NOT RUN
+      pending owner, so no fidelity/merge-ready claim.
 - [ ] T059 Produce a reviewable local handoff from
       `specs/389-voice-usage-limits/tasks.md` with exact files/source revision,
       completed/unrun tasks, coverage matrix, server-only exclusions, design
       approvals and manual blockers; prepare deployment/rollback steps from
       `quickstart.md` as separately authorized follow-up, without applying
-      hosted policy, migrations or Edge deployments.
+      hosted policy, migrations or Edge deployments. UI repair: handoff includes
+      authored versus executed coverage and owner manual plan; no
+      emulator/E2E/device readiness claim.
 
 ## Dependencies and implementation waves
 
@@ -687,62 +773,62 @@ types or task/evidence ledger.
 
 ## Requirement traceability
 
-| Requirement | Tasks                                              |
-| ----------- | -------------------------------------------------- |
-| FR-001      | T005, T013, T020, T026, T033, T037, T043, T056     |
-| FR-002      | T009–T011, T015, T017, T020, T022                  |
-| FR-003      | T011, T017, T051, T053–T054                        |
-| FR-004      | T009–T011, T015, T017, T020, T022                  |
-| FR-005      | T007, T012, T015, T018–T020, T038–T046             |
-| FR-006      | T024, T037–T041, T043–T047, T052                   |
-| FR-007      | T009, T013–T015, T020, T022                        |
-| FR-008      | T009–T010, T013–T015, T020, T022                   |
-| FR-009      | T009–T010, T015, T039–T040, T057                   |
-| FR-010      | T009–T011, T013–T015, T018, T020, T037, T043       |
-| FR-011      | T005, T012–T014, T020, T024–T026, T031, T040, T046 |
-| FR-012      | T009, T011–T015, T018, T020, T022                  |
-| FR-013      | T009–T011, T013–T015, T018, T020, T022, T040       |
-| FR-014      | T041–T042, T046–T050                               |
-| FR-015      | T037, T039–T040, T043, T045–T048                   |
-| FR-016      | T002, T041, T047, T049, T052                       |
-| FR-017      | T002, T009, T015, T039–T042, T045–T050             |
-| FR-018      | T002, T027, T035, T041, T047, T049–T050, T056      |
-| FR-019      | T039–T040, T042, T045–T046, T048, T057             |
-| FR-020      | T003, T007, T011, T017, T051–T054                  |
-| FR-021      | T013, T017–T020, T051, T053–T054                   |
-| FR-022      | T003, T051–T054                                    |
-| FR-023      | T003, T017, T041, T047, T051–T055                  |
-| FR-024      | T005, T013, T020, T037, T043, T056                 |
-| FR-025      | T011, T017, T051–T054                              |
-| FR-026      | T007, T011–T014, T017–T020, T038–T040, T044–T046   |
-| FR-027      | T006, T009, T012–T015, T021–T023, T037–T038, T056  |
-| FR-028      | T002, T027, T030, T034–T035, T047, T049–T050       |
-| FR-029      | T024–T025, T028–T033                               |
-| FR-030      | T026, T028–T029, T033, T057                        |
-| FR-031      | T005, T013, T020, T030–T031, T037, T040–T050       |
-| FR-032      | T024–T025, T028, T030, T032–T033                   |
-| FR-033      | T024–T025, T028–T033                               |
-| FR-034      | T024, T028, T030–T033, T040–T042, T046–T050        |
-| FR-035      | T002, T027, T030, T034–T035, T041, T047, T049–T050 |
-| FR-036      | T024, T026–T033, T040, T046, T055                  |
+| Requirement | Tasks                                                |
+| ----------- | ---------------------------------------------------- |
+| FR-001      | T005, T008, T013, T020, T026, T033, T037, T043, T056 |
+| FR-002      | T009–T011, T015, T017, T020, T022                    |
+| FR-003      | T011, T017, T051, T053–T054                          |
+| FR-004      | T009–T011, T015, T017, T020, T022                    |
+| FR-005      | T007, T012, T015, T018–T020, T036, T038–T046         |
+| FR-006      | T024, T037–T041, T043–T047, T052                     |
+| FR-007      | T009, T013–T015, T020, T022                          |
+| FR-008      | T009–T010, T013–T015, T020, T022                     |
+| FR-009      | T009–T010, T015, T039–T040, T057                     |
+| FR-010      | T009–T011, T013–T015, T018, T020, T037, T043         |
+| FR-011      | T005, T012–T014, T020, T024–T026, T031, T040, T046   |
+| FR-012      | T009, T011–T015, T018, T020, T022                    |
+| FR-013      | T009–T011, T013–T015, T018, T020, T022, T040         |
+| FR-014      | T041–T042, T046–T050                                 |
+| FR-015      | T037, T039–T040, T043, T045–T048                     |
+| FR-016      | T002, T041, T047, T049, T052                         |
+| FR-017      | T002, T009, T015, T039–T042, T045–T050               |
+| FR-018      | T002, T027, T035, T041, T047, T049–T050, T056        |
+| FR-019      | T039–T040, T042, T045–T046, T048, T057               |
+| FR-020      | T003, T007, T011, T017, T051–T054                    |
+| FR-021      | T013, T017–T020, T051, T053–T054                     |
+| FR-022      | T003, T051–T054                                      |
+| FR-023      | T003, T017, T041, T047, T051–T055                    |
+| FR-024      | T005, T013, T020, T037, T043, T056                   |
+| FR-025      | T011, T017, T051–T054                                |
+| FR-026      | T007, T011–T014, T017–T020, T038–T040, T044–T046     |
+| FR-027      | T006, T009, T012–T016, T021–T023, T037–T038, T056    |
+| FR-028      | T001–T002, T027, T030, T034–T035, T047, T049–T050    |
+| FR-029      | T024–T025, T028–T033                                 |
+| FR-030      | T026–T029, T033, T057                                |
+| FR-031      | T005, T013, T020, T030–T031, T037, T040–T050         |
+| FR-032      | T024–T025, T028, T030, T032–T033                     |
+| FR-033      | T024–T025, T028–T033                                 |
+| FR-034      | T024, T028, T030–T033, T040–T042, T046–T050          |
+| FR-035      | T002, T027, T030, T034–T035, T041, T047, T049–T050   |
+| FR-036      | T024, T026–T033, T040, T046, T055                    |
 
-| Success criterion | Tasks / required evidence                                 |
-| ----------------- | --------------------------------------------------------- |
-| SC-001            | T009, T013–T015, T020, T022                               |
-| SC-002            | T009–T010, T013–T015, T020, T022                          |
-| SC-003            | T009, T011–T014, T018, T020, T022                         |
-| SC-004            | T009–T011, T013–T015, T018, T020, T022, T037, T043        |
-| SC-005            | T010, T015, T022–T023, T057                               |
-| SC-006            | T037–T040, T043–T048, T057                                |
-| SC-007            | T041, T047–T050, T056                                     |
-| SC-008            | T005, T013, T020, T026, T033, T037, T043, T048, T056–T057 |
-| SC-009            | T051–T054                                                 |
-| SC-010            | T011, T017, T051–T054                                     |
-| SC-011            | T006, T009, T012–T015, T021–T023, T037–T038, T056         |
-| SC-012            | T024–T025, T028, T030, T032–T033                          |
-| SC-013            | T024–T026, T028–T033, T040, T046, T048                    |
-| SC-014            | T002, T030, T034–T035, T047, T049–T050, T058              |
-| SC-015            | T024, T028, T030–T033, T040–T042, T046–T050, T057         |
+| Success criterion | Tasks / required evidence                                          |
+| ----------------- | ------------------------------------------------------------------ |
+| SC-001            | T009, T013–T015, T020, T022                                        |
+| SC-002            | T009–T010, T013–T015, T020, T022                                   |
+| SC-003            | T009, T011–T014, T018, T020, T022                                  |
+| SC-004            | T009–T011, T013–T015, T018, T020, T022, T037, T043                 |
+| SC-005            | T010, T015, T022–T023, T057                                        |
+| SC-006            | T037–T040, T043–T048, T057                                         |
+| SC-007            | T041, T047–T050, T056                                              |
+| SC-008            | T005, T013, T020, T026, T033, T037, T043, T048, T056–T057          |
+| SC-009            | T051–T054                                                          |
+| SC-010            | T011, T017, T051–T054                                              |
+| SC-011            | T006, T009, T012–T015, T021–T023, T037–T038, T056                  |
+| SC-012            | T024–T025, T028, T030, T032–T033                                   |
+| SC-013            | T024–T026, T028–T033, T040, T046, T048                             |
+| SC-014            | T002, T004, T026–T028, T030, T034–T035, T047, T049–T050, T058–T059 |
+| SC-015            | T024, T028, T030–T033, T040–T042, T046–T050, T057                  |
 
 ## Manual, E2E and evidence matrix
 
@@ -767,7 +853,41 @@ remain explicit.
 | Alternate entitlement, configured daily/burst change, no paid UX                                                           | T051/T052                                  | T054 controlled local HTTP/UI checks; no hosted policy changes                                                               |
 | Server-only tables/grants/privacy/cleanup                                                                                  | T006/T009/T016/T021/T022                   | Independent security review T023/T058; no sync payload/accounting-content leakage                                            |
 
-## Evidence and gate ledger
+## UI repair coverage and owner manual handoff — 10 October 2026
+
+| Scenario                                                                           | Unit / authored E2E task coverage | Owner manual validation                                            |
+| ---------------------------------------------------------------------------------- | --------------------------------- | ------------------------------------------------------------------ |
+| Manual idle: ordinary amount, required selectors, no keypad/Voice notice           | T024/T026/T027; T028              | Normal phone baseline, both languages/themes                       |
+| Amount focus: custom keypad only, no native soft keyboard; source/target amounts   | T026/T027; T028                   | Focus/blur, transfer target, Android keyboard visibility           |
+| Done applies existing equals and dismisses without save; header Save persists      | T026/T028/T029/T033               | No new record after Done, one local save after header Save         |
+| Account/category normal row and compact/text-scale reflow                          | T026/T027; T028                   | Compact/ordinary/tablet/landscape and font scales1.35/2            |
+| Shared optional fields, recurring/date/note/counterparty/validation/budget/balance | T026/T033; T028                   | Existing supported Manual paths, malformed input and feedback      |
+| Draft survives Manual/Voice switch; keypad dismissed; active Voice locks modes     | T024/T026/T040; T028/T042         | Real recording/pause/finalize, back/cancel/restart/resume          |
+| Voice idle EN continuous/examples icons, AR segments/quotes, unboxed mic           | T027/T041/T047; T042              | Side-by-side/overlay baseline per respective approved reference    |
+| Daily EN horizontal alert/two actions; AR centered alert/reset/single Manual       | T041/T047; T042                   | Respective daily-reference comparison and next-local-midnight copy |
+| Loading/burst/availability failure/replay/permissions/active states                | T040/T041/T048; T042              | Native permission/recovery/audio/provider/network cases            |
+| All Voice blocked states leave Manual free of Voice notices and usable offline     | T024/T040/T041/T048; T028/T042    | Local save under blocked/unavailable/offline Voice                 |
+| Required semantics, selected/disabled roles, hidden subtree, focus/recovery/keypad | T024/T026/T027/T041; T028/T042    | Separate tree/screen-reader proof T035/T050                        |
+| Light/dark, EN/AR, responsive contexts/enlarged text and bottom safe inset         | T027/T041; authored T028/T042     | Rendered T034/T049, separate accessibility T035/T050               |
+
+All E2E paths are authored coverage only until owner executes them. No emulator,
+device, E2E execution or captures in current scope. Existing unit/integration
+coverage for financial/provider/user-scope invariants is retained. Missing
+honest recording/provider/clock harness remains an explicit manual-only/blocked
+reason; do not infer it from existing SMS fixtures or mock state tests.
+
+| Repair gate                                       | Status at planning handoff                                                                               |
+| ------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| Five exact binding approvals                      | APPROVED; all five binding verifiers exit0 on 10 October 2026                                            |
+| Fresh artifact analysis                           | PASSED: 51/51 requirements, all 59 task IDs mapped, 0 critical/high findings; current read-only response |
+| Unit/E2E authoring and focused unit/type/lint     | NOT RUN by planning worker; assigned production/QA work                                                  |
+| E2E execution / emulator / device / live provider | NOT RUN; owner manual scope                                                                              |
+| Rendered visual fidelity T034/T049                | NOT RUN; owner manual validation                                                                         |
+| Accessibility T035/T050                           | NOT RUN; owner manual validation                                                                         |
+| Independent source/coverage review T058           | Pending source review; device/visual/accessibility portion remains deferred                              |
+| #384 / hosted deployment                          | DEFERRED separately / NOT AUTHORIZED                                                                     |
+
+## Historical evidence and gate ledger — preserved
 
 | Gate                                 | Current state        | Evidence / next action                                                                                                                                                                                         |
 | ------------------------------------ | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

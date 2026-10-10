@@ -46,6 +46,21 @@ fidelity-affecting `UNKNOWN`, pause for clarification before implementation.
   its approval record is missing/invalid, or a fidelity-affecting required fact
   remains `UNKNOWN`, pause before implementation and obtain clarification.
 
+Consume the canonical state-to-surface/shared-component/icon map alongside
+verified sidecars. Confirm each state/locale uses its intended immutable
+reference before editing; an older file retaining approval is not a substitute
+for the active set. Resolve missing fidelity values or ambiguous icon identities
+before implementation. If owner explicitly defers device/render/accessibility
+execution, keep those checks NOT RUN and hand complete manual plan to owner.
+This does not establish visual completion or waive the separate evidence
+acceptance boundary.
+
+Format draft metadata before requesting approval and computing the approval
+revision. Never autoformat approved Binding Facts: any byte change invalidates
+the exact approved tuple and requires renewed approval. Protect active approved
+sidecars with exact .prettierignore entries; the binding verifier remains
+authoritative even when formatting is skipped.
+
 ## Requirements
 
 - Implement the binding UI **exactly as defined by the approved mockup

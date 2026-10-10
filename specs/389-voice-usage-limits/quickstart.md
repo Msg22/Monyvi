@@ -119,7 +119,7 @@ terminal identities. Active work and current accounting are excluded; retained
 identities still protect replay until actual deletion. See data-model §3 and
 `reconciliation.md`.
 
-## 5. Approved mockup binding gate
+## 5. Active approved UI repair binding gate
 
 Do **not** create another mockup.
 
@@ -132,7 +132,11 @@ Before UI implementation:
 4. obtain explicit approval of the sidecar metadata + combined binding revision;
 5. run `node scripts/verify-mockup-binding.js <sidecar>`.
 
-The existing app screens are not the visual authority; the approved mockup is.
+The active five-reference `mockups/repair-binding-manifest.json` supersedes the
+old two-reference layout for repaired surfaces. Read every image/sidecar and
+verify each exact entry. The state/component/icon map and approved sizing/copy
+interpretations are in `contracts/add-transaction-ui-contract.md`; old bytes and
+approvals stay frozen history.
 
 ## 6. Planned route behavior
 
@@ -159,9 +163,20 @@ Update/add focused tests for:
 - EN/AR accessibility labels/roles/states;
 - existing representative voice parsing regression.
 
-## 8. Manual QA matrix
+## Current owner test scope — 10 October 2026
 
-After implementation and approved visual evidence:
+Author unit and E2E coverage; run focused unit/type/lint checks. Owner
+explicitly defers emulator/device/E2E execution and rendered/accessibility
+captures and will perform manual testing after source delivery. No
+adb/Droidrun/device operations. E2E authoring is not execution.
+T034/T035/T049/T050 and visual/accessibility T058 stay unchecked/NOT RUN. Hand
+the complete task/manual matrix to owner; do not claim visual completion or
+device/merge readiness.
+
+## 8. Owner manual QA matrix
+
+Owner validation after source/unit delivery; device/render/accessibility
+evidence is NOT RUN until the owner completes and records these checks:
 
 1. Fresh user shows 5 remaining.
 2. Complete five allowed voice submissions; remaining reaches zero.
@@ -196,16 +211,23 @@ quota gate while leaving UI claims active.
 
 ## 10. Add Transaction manual/voice QA additions
 
-| Scenario                                 | Expected                                     |
-| ---------------------------------------- | -------------------------------------------- |
-| FAB Add Transaction                      | unified page opens in Manual                 |
-| Center mic                               | unified page opens in Voice                  |
-| Partially fill Manual -> Voice -> Manual | Manual input remains                         |
-| Start recording                          | mode switching disabled until safe state     |
-| Voice exhausted -> Manual                | Manual remains fully usable                  |
-| Arabic                                   | approved RTL design + localized usage copy   |
-| English                                  | approved LTR design                          |
-| Voice-review Retry                       | unified page Voice mode resumes retry intent |
+| Scenario                                 | Expected                                                                                |
+| ---------------------------------------- | --------------------------------------------------------------------------------------- |
+| Manual idle/focus amount                 | ordinary grouped field; custom keypad only on focus; no native soft keyboard            |
+| Done versus header Save                  | Done resolves/dismisses without a save; header Save validates/persists once             |
+| Transfer amount focus                    | source/target amounts retain separate focus/currency/conversion behavior                |
+| Manual under every blocked Voice state   | no quota/failure notice; local offline save remains usable                              |
+| Locale-specific Voice idle/daily layouts | compare all five active references; preserve each locale composition                    |
+| Responsive and enlarged text             | compact/ordinary/tablet/landscape; font scales1.35/2; required markers and bottom inset |
+| Accessibility                            | separate roles/names/focus/hidden-tree/keypad/recovery proof; screenshot insufficient   |
+| FAB Add Transaction                      | unified page opens in Manual                                                            |
+| Center mic                               | unified page opens in Voice                                                             |
+| Partially fill Manual -> Voice -> Manual | Manual input remains                                                                    |
+| Start recording                          | mode switching disabled until safe state                                                |
+| Voice exhausted -> Manual                | Manual remains fully usable                                                             |
+| Arabic                                   | approved RTL design + localized usage copy                                              |
+| English                                  | approved LTR design                                                                     |
+| Voice-review Retry                       | unified page Voice mode resumes retry intent                                            |
 
 User-facing reset copy must match local-midnight semantics and must not say
 "tomorrow at the same time".

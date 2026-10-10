@@ -28,6 +28,12 @@ normal-width design and the required compact, tablet, orientation, enlarged
 font, RTL, and state variants. Obtain the workflow's mockup approval before
 implementation proceeds.
 
+Provide one state-to-surface manifest with immutable approved image/sidecar
+revisions, supersession history, shared components and exact installed library/
+export or shared-icon identities, including size, theme, placement and RTL/
+accessibility treatment. Resolve missing fidelity facts before implementation.
+Do not mistake a reference inventory for rendered implementation evidence.
+
 ## Stop And Handoff
 
 Stop for a missing product decision, an unapproved redesign, unavailable
