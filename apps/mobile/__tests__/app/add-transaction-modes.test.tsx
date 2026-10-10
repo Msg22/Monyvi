@@ -233,6 +233,7 @@ jest.mock("@/components/add-transaction/OptionalSection", () => ({
 
 jest.mock("@/components/common/CategoryIcon", () => ({
   CategoryIcon: (): null => null,
+  CategoryIconFromModel: (): null => null,
   IconLibrary: {},
 }));
 
