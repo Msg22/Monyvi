@@ -5,11 +5,22 @@ import {
   VoiceTransactionEntry,
   type VoiceTransactionEntryState,
 } from "@/components/add-transaction/VoiceTransactionEntry";
+import { arabicFontFamily, fontFamily } from "@/constants/typography";
 
 let mockLanguage: "en" | "ar" = "en";
 
 jest.mock("@/context/LocaleContext", () => ({
-  useLocale: () => ({ language: mockLanguage, isRTL: mockLanguage === "ar" }),
+  useLocale: () => {
+    const { arabicFontFamily, fontFamily } =
+      jest.requireActual<typeof import("@/constants/typography")>(
+        "@/constants/typography"
+      );
+    return {
+      language: mockLanguage,
+      isRTL: mockLanguage === "ar",
+      fontFamily: mockLanguage === "ar" ? arabicFontFamily : fontFamily,
+    };
+  },
 }));
 
 jest.mock("react-native-safe-area-context", () => ({
@@ -100,6 +111,70 @@ describe("VoiceTransactionEntry approved state compositions", () => {
     mockLanguage = "en";
     jest.clearAllMocks();
   });
+
+  it.each([
+    [
+      "English",
+      "en",
+      fontFamily,
+      "Limited free voice usage",
+      "Tap and speak your transaction",
+      "Try saying something like",
+      "Speak naturally. We’ll extract the details for you.",
+      "Daily voice limit reached",
+      "Voice recording unavailable",
+    ],
+    [
+      "Arabic",
+      "ar",
+      arabicFontFamily,
+      "الاستخدام الصوتي المجاني محدود",
+      "اضغط وتحدث لإضافة معاملة",
+      "أمثلة على ما يمكنك قوله",
+      "سنتعرف تلقائيًا على المبلغ والتاجر والتصنيف من ملاحظتك الصوتية.",
+      "تم الوصول إلى الحد اليومي للاستخدام الصوتي",
+      "إدخال صوتي غير متاح الآن",
+    ],
+  ] as const)(
+    "applies registered %s font weights to Voice idle and daily headings",
+    (
+      _label,
+      language,
+      families,
+      allowanceTitle,
+      idleTitle,
+      examplesHeading,
+      description,
+      dailyTitle,
+      unavailableTitle
+    ) => {
+      mockLanguage = language;
+      const view = renderVoice();
+
+      for (const heading of [allowanceTitle, idleTitle, examplesHeading]) {
+        expect(screen.getByText(heading)).toHaveStyle({
+          fontFamily: families.bold,
+        });
+      }
+      expect(screen.getByText(description)).toHaveStyle({
+        fontFamily: families.regular,
+      });
+
+      view.rerender(
+        <VoiceTransactionEntry
+          {...baseProps}
+          state="daily-limit"
+          remaining={0}
+          dailyLimit={5}
+        />
+      );
+      for (const heading of [dailyTitle, unavailableTitle]) {
+        expect(screen.getByText(heading)).toHaveStyle({
+          fontFamily: families.bold,
+        });
+      }
+    }
+  );
 
   it("renders EN idle with unboxed mic and exactly the ordered pictured glyphs", () => {
     renderVoice();

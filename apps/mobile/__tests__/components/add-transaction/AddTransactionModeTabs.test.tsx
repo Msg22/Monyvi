@@ -2,14 +2,22 @@ import { fireEvent, render, screen } from "@testing-library/react-native";
 import React from "react";
 
 import { AddTransactionModeTabs } from "@/components/add-transaction/AddTransactionModeTabs";
+import { arabicFontFamily, fontFamily } from "@/constants/typography";
 
 let mockIsRTL = false;
 
 jest.mock("@/context/LocaleContext", () => ({
-  useLocale: () => ({
-    language: mockIsRTL ? "ar" : "en",
-    isRTL: mockIsRTL,
-  }),
+  useLocale: () => {
+    const { arabicFontFamily, fontFamily } =
+      jest.requireActual<typeof import("@/constants/typography")>(
+        "@/constants/typography"
+      );
+    return {
+      language: mockIsRTL ? "ar" : "en",
+      isRTL: mockIsRTL,
+      fontFamily: mockIsRTL ? arabicFontFamily : fontFamily,
+    };
+  },
 }));
 
 function renderTabs(
@@ -86,6 +94,42 @@ describe("AddTransactionModeTabs approved underline contract", () => {
     }
     expect(onModeChange).not.toHaveBeenCalled();
   });
+
+  it.each([
+    ["English", false, "Manual", "Voice", fontFamily.semiBold],
+    ["Arabic", true, "يدوي", "صوتي", arabicFontFamily.semiBold],
+  ] as const)(
+    "uses the declared %s semibold font for both tab labels",
+    (_locale, rtl, manual, voice, expectedFamily) => {
+      mockIsRTL = rtl;
+      renderTabs("manual");
+      expect(screen.getByText(manual)).toHaveStyle({
+        fontFamily: expectedFamily,
+      });
+      expect(screen.getByText(voice)).toHaveStyle({
+        fontFamily: expectedFamily,
+      });
+    }
+  );
+
+  it.each([false, true])(
+    "keeps 16dp outer gutters and centers the max-560dp tab row (RTL=%s)",
+    (rtl) => {
+      mockIsRTL = rtl;
+      renderTabs("voice");
+      const voiceLabel = rtl ? "صوتي" : "Voice";
+      const tab = screen.getByRole("tab", { name: voiceLabel });
+      const tablist = tab.parent;
+      const outerFrame = tablist?.parent;
+
+      expect(String(tablist?.props.className ?? "")).toContain(
+        "max-w-[560px]"
+      );
+      expect(String(tablist?.props.className ?? "")).toContain("self-center");
+      expect(String(outerFrame?.props.className ?? "")).toContain("px-4");
+      expect(String(outerFrame?.props.className ?? "")).toContain("w-full");
+    }
+  );
 
   it("reverses visual/accessible order for Arabic while preserving selection", () => {
     mockIsRTL = true;
