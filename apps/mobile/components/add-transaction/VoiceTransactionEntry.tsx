@@ -1,7 +1,6 @@
 import { useLocale } from "@/context/LocaleContext";
 import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Pressable,
   ScrollView,
@@ -27,6 +26,7 @@ import { shouldUseCompactLayout } from "@/constants/ui";
 import { AllowanceCard } from "./voice-ui/AllowanceCard";
 import { DailyLimitNotice } from "./voice-ui/DailyLimitNotice";
 import { ExamplesCard } from "./voice-ui/ExamplesCard";
+import { VoiceGradient } from "./voice-ui/VoiceGradient";
 import {
   ActionButton,
   PassiveStateActions,
@@ -144,6 +144,8 @@ function VoiceActionSurface({
     tCommon
   );
 
+  const [isMicPressed, setIsMicPressed] = useState(false);
+
   const isRecording = props.state === "recording";
   const isPaused = props.state === "paused";
   const isCompleted = props.state === "completed";
@@ -210,7 +212,7 @@ function VoiceActionSurface({
           className={`absolute h-[172px] w-[172px] rounded-[86px] ${
             isDailyLimit || isUnavailable
               ? "bg-slate-200/20 dark:bg-slate-700/25"
-              : "bg-nileGreen-50/60 dark:bg-nileGreen-900/50"
+              : "bg-nileGreen-50/60 dark:bg-nileGreen-50/25"
           }`}
         />
         {isRecording && !reducedMotion ? (
@@ -218,9 +220,17 @@ function VoiceActionSurface({
             accessible={false}
             pointerEvents="none"
             importantForAccessibility="no-hide-descendants"
-            className="absolute h-[172px] w-[172px] rounded-[86px] bg-nileGreen-100/60 dark:bg-nileGreen-900/50"
+            className="absolute h-[172px] w-[172px] rounded-[86px]"
             style={pulseStyle}
-          />
+          >
+            <View
+              testID="voice-halo-pulse"
+              accessible={false}
+              pointerEvents="none"
+              importantForAccessibility="no-hide-descendants"
+              className="h-[172px] w-[172px] rounded-[86px] bg-nileGreen-100/60 dark:bg-nileGreen-100/60"
+            />
+          </Animated.View>
         ) : null}
         <View
           testID="voice-halo-inner"
@@ -230,7 +240,7 @@ function VoiceActionSurface({
           className={`absolute h-[140px] w-[140px] rounded-[70px] ${
             isDailyLimit || isUnavailable
               ? "bg-slate-200/20 dark:bg-slate-700/30"
-              : "bg-nileGreen-100/50 dark:bg-nileGreen-900/60"
+              : "bg-nileGreen-100/50 dark:bg-nileGreen-100/40"
           }`}
         />
 
@@ -244,26 +254,39 @@ function VoiceActionSurface({
             accessibilityRole="button"
             accessibilityLabel={presentation.centralLabel}
             onPress={centralAction}
+            onPressIn={() => {
+              setIsMicPressed(true);
+            }}
+            onPressOut={() => {
+              setIsMicPressed(false);
+            }}
             className="h-[104px] w-[104px] rounded-[52px]"
-            style={({ pressed }) => ({
-              opacity: pressed ? 0.88 : 1,
+            style={{
+              opacity: isMicPressed ? 0.88 : 1,
               shadowColor: palette.nileGreen[500],
               shadowOffset: { width: 0, height: 4 },
               shadowOpacity: 0.24,
               shadowRadius: 8,
               elevation: 6,
-            })}
+            }}
           >
-            <LinearGradient
-              colors={[palette.nileGreen[500], palette.nileGreen[600]]}
-              className="h-[104px] w-[104px] items-center justify-center rounded-[52px]"
+            <View
+              testID="voice-mic-clip"
+              className="h-[104px] w-[104px] overflow-hidden rounded-[52px]"
+              accessible={false}
+              importantForAccessibility="no"
             >
-              <Ionicons
-                name={presentation.icon}
-                size={42}
-                color={palette.slate[25]}
-              />
-            </LinearGradient>
+              <VoiceGradient
+                colors={[palette.nileGreen[500], palette.nileGreen[600]]}
+                className="flex-1 items-center justify-center"
+              >
+                <Ionicons
+                  name={presentation.icon}
+                  size={42}
+                  color={palette.slate[25]}
+                />
+              </VoiceGradient>
+            </View>
           </Pressable>
         ) : (
           <View

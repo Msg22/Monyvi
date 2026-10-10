@@ -25,6 +25,12 @@ appId: com.monyvi.app
       - assertVisible: "Tap and speak your transaction"
       - assertVisible: "Try saying something like"
       - assertVisible: "Resets tomorrow."
+      - assertVisible:
+          id: "voice-mic-target"
+      # Screenshot is visual evidence for owner comparison, NOT a pixel-level
+      # automated pass: verify round 104dp gradient, 140/172dp halos, and
+      # selected green 2dp underline against the frozen idle binding.
+      - takeScreenshot: voice-idle-gradient-halos-tab-underline
 
 # Exhausted: conditional only; deterministic exhaustion requires seeded server
 # state or an approved authenticated HTTP double, neither present here.
@@ -35,6 +41,9 @@ appId: com.monyvi.app
       - assertVisible: "Voice recording unavailable"
       - assertVisible: "Use manual entry"
       - assertNotVisible: "Try saying something like"
+      # Verify native disabled circular mic/gray halos and selected underline
+      # against the EN/AR daily bindings; this does not force server exhaustion.
+      - takeScreenshot: voice-daily-limit-disabled-mic-tab-underline
 
 # Availability check failure != exhaustion.
 - runFlow:
