@@ -71,11 +71,9 @@ jest.mock("expo-router", () => ({
     mockFocusCallback = callback;
   },
 }));
-
 jest.mock("react-native-safe-area-context", () => ({
   useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
 }));
-
 jest.mock("react-i18next", () => ({
   useTranslation: (): { readonly t: (key: string) => string } => ({
     t: (key: string): string => {
@@ -88,7 +86,6 @@ jest.mock("react-i18next", () => ({
     },
   }),
 }));
-
 jest.mock("@/hooks/useAccounts", () => ({
   useAccounts: () => ({
     accounts: [
@@ -103,7 +100,6 @@ jest.mock("@/hooks/useAccounts", () => ({
     ],
   }),
 }));
-
 jest.mock("@/hooks/useCategories", () => ({
   useCategories: () => ({
     categories: [],
@@ -120,19 +116,15 @@ jest.mock("@/hooks/useCategories", () => ({
     isLoading: false,
   }),
 }));
-
 jest.mock("@/hooks/useCategoryChildren", () => ({
   useCategoryChildren: () => ({ children: [] }),
 }));
-
 jest.mock("@/hooks/useMarketRates", () => ({
   useMarketRates: () => ({ selectedSnapshot: null }),
 }));
-
 jest.mock("@/hooks/usePreferredCurrency", () => ({
   usePreferredCurrency: () => ({ preferredCurrency: "EGP" }),
 }));
-
 jest.mock("@/hooks/useBudgetAlert", () => ({
   useBudgetAlert: () => ({
     alert: null,
@@ -142,7 +134,6 @@ jest.mock("@/hooks/useBudgetAlert", () => ({
     viewBudget: jest.fn(),
   }),
 }));
-
 jest.mock("@/hooks/useFormScroll", () => {
   const ReactActual = jest.requireActual<typeof import("react")>("react");
   return {
@@ -158,11 +149,9 @@ jest.mock("@/hooks/useFormScroll", () => {
 jest.mock("@/components/ui/Toast", () => ({
   useToast: () => ({ showToast: jest.fn() }),
 }));
-
 jest.mock("@/context/ThemeContext", () => ({
   useTheme: () => ({ isDark: false }),
 }));
-
 jest.mock("@/context/LocaleContext", () => ({
   useLocale: () => ({
     language: "en",
@@ -175,7 +164,6 @@ jest.mock("@/context/LocaleContext", () => ({
     },
   }),
 }));
-
 jest.mock("@/context/CategoriesContext", () => ({
   useCategoryLookup: () =>
     new Map([
@@ -191,7 +179,6 @@ jest.mock("@/context/CategoriesContext", () => ({
       ],
     ]),
 }));
-
 jest.mock("@/components/navigation/PageHeader", () => ({
   PageHeader: ({
     title,
@@ -218,7 +205,6 @@ jest.mock("@/components/navigation/PageHeader", () => ({
     );
   },
 }));
-
 jest.mock("@/components/add-transaction/CalculatorKeypad", () => ({
   CalculatorKeypad: ({
     onKeyPress,
@@ -238,15 +224,12 @@ jest.mock("@/components/add-transaction/CalculatorKeypad", () => ({
 jest.mock("@/components/add-transaction/TypeTabs", () => ({
   TypeTabs: (): null => null,
 }));
-
 jest.mock("@/components/add-transaction/CategoryPicker", () => ({
   CategoryPicker: (): null => null,
 }));
-
 jest.mock("@/components/add-transaction/TransferFields", () => ({
   TransferFields: (): null => null,
 }));
-
 jest.mock("@/components/add-transaction/OptionalSection", () => ({
   OptionalSection: (): null => null,
 }));
@@ -259,11 +242,9 @@ jest.mock("@/components/common/CategoryIcon", () => ({
 jest.mock("@/components/modals/AccountSelectorModal", () => ({
   AccountSelectorModal: (): null => null,
 }));
-
 jest.mock("@/components/modals/CategorySelectorModal", () => ({
   CategorySelectorModal: (): null => null,
 }));
-
 jest.mock("@/components/ui/EmptyStateCard", () => ({
   EmptyStateCard: (): null => null,
 }));
@@ -352,12 +333,8 @@ jest.mock("@/hooks/useAiProcessingConsent", () => ({
 
 jest.mock("@/services/profile-service", () => ({
   getAiProcessingConsentStatus: (
-    ...args: Parameters<
-      typeof import("@/services/profile-service").getAiProcessingConsentStatus
-    >
-  ): ReturnType<
-    typeof import("@/services/profile-service").getAiProcessingConsentStatus
-  > => mockGetAiProcessingConsentStatus(...args),
+    ...args: Parameters<GetConsentStatus>
+  ): ReturnType<GetConsentStatus> => mockGetAiProcessingConsentStatus(...args),
 }));
 
 jest.mock("@/hooks/useVoiceAiAvailability", () => ({
@@ -416,9 +393,7 @@ jest.mock("@/services/recurring-payment-service", () => ({
 
 jest.mock("@/services/transaction-service", () => ({
   createTransaction: (
-    ...args: Parameters<
-      typeof import("@/services/transaction-service").createTransaction
-    >
+    ...args: Parameters<CreateTransaction>
   ): Promise<CreatedTransactionFixture> => mockCreateTransaction(...args),
 }));
 
@@ -442,6 +417,16 @@ function expectTabState(
     "accessibilityState",
     expect.objectContaining(expected)
   );
+}
+
+async function enterOneManualUnit(): Promise<void> {
+  expect(screen.queryByTestId("key-1")).toBeNull();
+  fireEvent(screen.getByTestId("manual-amount-input"), "focus");
+  await act(async () => {
+    fireEvent.press(screen.getByTestId("key-1"));
+    await Promise.resolve();
+  });
+  expect(screen.getByTestId("manual-amount-input")).toHaveProp("value", "1");
 }
 
 describe("AddTransaction unified mode intent", () => {
@@ -481,13 +466,7 @@ describe("AddTransaction unified mode intent", () => {
   it("preserves observable Manual amount state across safe mode switches", async (): Promise<void> => {
     renderRoute("manual");
 
-    expect(screen.queryByTestId("key-1")).toBeNull();
-    fireEvent(screen.getByTestId("manual-amount-input"), "focus");
-    await act(async (): Promise<void> => {
-      fireEvent.press(screen.getByTestId("key-1"));
-      await Promise.resolve();
-    });
-    expect(screen.getByTestId("manual-amount-input")).toHaveProp("value", "1");
+    await enterOneManualUnit();
 
     await act(async (): Promise<void> => {
       fireEvent.press(screen.getByRole("tab", { name: "Voice" }));
@@ -504,15 +483,7 @@ describe("AddTransaction unified mode intent", () => {
   it("keeps the unified shell wired to the real Manual save contract", async () => {
     renderRoute("manual");
 
-    expect(screen.queryByTestId("key-1")).toBeNull();
-    fireEvent(screen.getByTestId("manual-amount-input"), "focus");
-    await act(async (): Promise<void> => {
-      fireEvent.press(screen.getByTestId("key-1"));
-      await Promise.resolve();
-    });
-    await waitFor(() =>
-      expect(screen.getByTestId("manual-amount-input")).toHaveProp("value", "1")
-    );
+    await enterOneManualUnit();
 
     fireEvent.press(screen.getByTestId("header-save"));
 
@@ -527,6 +498,38 @@ describe("AddTransaction unified mode intent", () => {
         type: "EXPENSE",
       })
     );
+  });
+
+  it("blocks Voice and Back while a Manual save is pending, then navigates once", async () => {
+    const pending = createDeferred<CreatedTransactionFixture>();
+    mockCreateTransaction.mockReturnValueOnce(pending.promise);
+    renderRoute("manual");
+    await enterOneManualUnit();
+    fireEvent.press(screen.getByTestId("header-save"));
+    await waitFor(() => expect(mockCreateTransaction).toHaveBeenCalledTimes(1));
+
+    const voiceTab = screen.getByRole("tab", { name: "Voice" });
+    const disabledDuringSave = voiceTab.props.accessibilityState?.disabled;
+    fireEvent.press(voiceTab);
+    fireEvent.press(screen.getByTestId("header-back"));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    const manualSelectedWhilePending =
+      screen.getByRole("tab", { name: "Manual" }).props.accessibilityState?.selected;
+    const navigationCountWhilePending = mockBack.mock.calls.length;
+
+    await act(async () => {
+      pending.resolve({ id: "tx-1" });
+      await pending.promise;
+      await Promise.resolve();
+    });
+
+    expect(disabledDuringSave).toBe(true);
+    expect(manualSelectedWhilePending).toBe(true);
+    expect(navigationCountWhilePending).toBe(0);
+    expect(mockCreateTransaction).toHaveBeenCalledTimes(1);
+    expect(mockBack).toHaveBeenCalledTimes(1);
   });
 
   it("locks mode switching while consent grant is pending", async () => {
