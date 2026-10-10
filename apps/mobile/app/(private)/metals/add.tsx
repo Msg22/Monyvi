@@ -31,12 +31,14 @@ import {
 import {
   MetalHoldingForm,
   type MetalHoldingFormCopy,
+  type MetalHoldingFormField,
 } from "@/components/metals/MetalHoldingForm";
 import {
   useAddMetalHoldingForm,
   useMetalAddPreviewRates,
 } from "@/hooks/useAddMetalHolding";
 import { usePreferredCurrency } from "@/hooks/usePreferredCurrency";
+import { useMetalHistoricalPurchasePriceEstimate } from "@/hooks/useMetalHistoricalPurchasePriceEstimate";
 import { useToast } from "@/components/ui/Toast";
 import { addMetalHoldingFromForm } from "@/services/add-metal-holding-facade-service";
 
@@ -59,7 +61,6 @@ export default function AddMetalHoldingRoute(): React.JSX.Element {
     ? preferredCurrency
     : "EGP";
   const today = useMemo(getCairoTodayDate, []);
-  const copy = useMemo(() => createCopy(t), [t]);
   const form = useAddMetalHoldingForm({
     locale,
     preferredCurrency: initialCurrency,
@@ -72,6 +73,38 @@ export default function AddMetalHoldingRoute(): React.JSX.Element {
     createId: Crypto.randomUUID,
     addHolding: addMetalHoldingFromForm,
   });
+  const setEstimatedPurchasePrice = useCallback(
+    (value: string): void => form.updateField("purchasePrice", value),
+    [form.updateField]
+  );
+  const historicalPurchasePrice =
+    useMetalHistoricalPurchasePriceEstimate({
+      metal: form.values.metal,
+      weightGrams: form.values.weightGrams,
+      purityCode: form.values.purityCode,
+      purchaseCurrency: form.values.purchaseCurrency,
+      purchaseDate: form.values.purchaseDate,
+      purchasePrice: form.values.purchasePrice,
+      onPurchasePriceChange: setEstimatedPurchasePrice,
+    });
+  const copy = useMemo(
+    () =>
+      createCopy(
+        t,
+        historicalPurchasePrice.ownership === "estimated"
+      ),
+    [historicalPurchasePrice.ownership, t]
+  );
+  const handleFormChange = useCallback(
+    (field: MetalHoldingFormField, value: string | null): void => {
+      if (field === "purchasePrice" && value !== null) {
+        historicalPurchasePrice.onPurchasePriceUserChange(value);
+        return;
+      }
+      form.updateField(field, value);
+    },
+    [form.updateField, historicalPurchasePrice.onPurchasePriceUserChange]
+  );
   const currencyOptions = useMemo(
     () =>
       SUPPORTED_CURRENCIES.filter(({ code }) =>
@@ -158,7 +191,7 @@ export default function AddMetalHoldingRoute(): React.JSX.Element {
         }
         unusualValueAcknowledged={form.unusualValueAcknowledged}
         onAcknowledgeUnusualValue={form.acknowledgeUnusualValue}
-        onChange={form.updateField}
+        onChange={handleFormChange}
         onSubmit={submit}
         onRequestExit={requestExit}
       />
@@ -250,7 +283,8 @@ function DirtyExitGuard({
 }
 
 function createCopy(
-  t: ReturnType<typeof useTranslation<"metals">>["t"]
+  t: ReturnType<typeof useTranslation<"metals">>["t"],
+  hasHistoricalEstimate: boolean = false
 ): MetalHoldingFormCopy {
   return {
     title: t("add.submit"),
@@ -263,7 +297,11 @@ function createCopy(
     weight: t("add.weight"),
     purity: t("add.karat"),
     purchasePrice: t("add.total_purchase_price"),
-    purchasePriceHint: t("add.purchase_price_hint"),
+    purchasePriceHint: t(
+      hasHistoricalEstimate
+        ? "add.purchase_price_estimate_hint"
+        : "add.purchase_price_hint"
+    ),
     purchaseCurrency: t("add.purchase_currency"),
     purchaseDate: t("purchase_date"),
     physicalForm: t("add.physical_form"),

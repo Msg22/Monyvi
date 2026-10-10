@@ -477,6 +477,7 @@ function ValueJourney({
                   })}
                 </Text>
               )}
+              <PurchaseDateMarketRateFact model={model} locale={locale} />
             </View>
           ) : null}
           {hasCurrentValue ? (
@@ -497,6 +498,63 @@ function ValueJourney({
   );
 }
 
+function PurchaseDateMarketRateFact({
+  locale,
+  model,
+}: {
+  readonly locale: string;
+  readonly model: MetalDetailReadModel;
+}): React.JSX.Element | null {
+  const { t } = useTranslation("metals");
+  const { isDark } = useTheme();
+  const { width, fontScale } = useWindowDimensions();
+  const reference = model.purchaseDateMarketReference ?? null;
+  if (reference === null) return null;
+
+  const value =
+    reference.status === "available"
+      ? `${displayAmount(
+          reference.selectedPurityPerGramDecimal,
+          reference.purchaseCurrency,
+          locale
+        )} ${t("portfolio.per_gram")}`
+      : t("detail.value_unavailable");
+  const label = t("detail.market_rate_on_purchase_date");
+  const iconColor = isDark ? palette.slate[300] : palette.slate[500];
+  const isCompact = shouldUseCompactLayout(width, fontScale);
+
+  return (
+    <View
+      testID="metal-holding-purchase-date-market-rate"
+      accessible
+      accessibilityLabel={t("detail.fact_accessibility", { label, value })}
+      className={`mt-2 gap-2 border-t border-slate-200 pt-2 dark:border-slate-800 ${
+        isCompact ? "flex-col items-start" : "flex-row items-center"
+      }`}
+    >
+      <Ionicons
+        accessibilityElementsHidden
+        importantForAccessibility="no"
+        name="pricetag-outline"
+        size={18}
+        color={iconColor}
+      />
+      <Text className="min-w-0 flex-1 text-sm text-text-secondary dark:text-text-secondary-dark">
+        {label}
+      </Text>
+      <Text
+        className="text-sm font-medium text-text-primary dark:text-text-primary-dark"
+        style={{
+          writingDirection: locale.toLowerCase().startsWith("ar")
+            ? "rtl"
+            : "ltr",
+        }}
+      >
+        {value}
+      </Text>
+    </View>
+  );
+}
 function CalculationDisclosure({
   expanded,
   onPress,

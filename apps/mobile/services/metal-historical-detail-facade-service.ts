@@ -14,6 +14,7 @@ import {
 export interface HistoricalMetalDetailInput {
   readonly purchaseDate: string;
   readonly metal: SupportedMetal;
+  readonly purityCode: string;
   readonly purityFactorDecimal: string;
   readonly purchaseCurrency: string;
   readonly acquisitionMetalReference?: RawObservedRateReference;
@@ -74,6 +75,7 @@ function toDetailReference(
   }
 
   const pricePerGram = calculateHistoricalPurityGramPriceDecimal({
+    purityCode: input.purityCode,
     purityFactorDecimal: input.purityFactorDecimal,
     pair: resolution.value,
   });

@@ -196,7 +196,7 @@ describe("historical metal rate contract", () => {
     ).toBeNull();
   });
 
-  it("keeps historical gold-999 on the stored 0.999 factor instead of the current-quote exception", () => {
+  it("uses the approved quoted 24K rate directly for historical gold-999", () => {
     const pair = selectHistoricalDailyRatePair({
       record: dailyRecord({
         goldUsdPerTroyOunceDecimal: "3110.34768",
@@ -212,17 +212,50 @@ describe("historical metal rate contract", () => {
 
     expect(
       calculateHistoricalPurityGramPriceDecimal({
+        purityCode: "gold-999",
         purityFactorDecimal: "0.999",
         pair,
       })
-    ).toBe("99.9");
+    ).toBe("100");
     expect(
       calculateHistoricalPurchaseEstimateDecimal({
         weightGramsDecimal: "10",
+        purityCode: "gold-999",
         purityFactorDecimal: "0.999",
         pair,
       })
-    ).toBe("999");
+    ).toBe("1000");
+  });
+
+  it("keeps lower Gold karats on their stored catalog factors", () => {
+    const pair = selectHistoricalDailyRatePair({
+      record: dailyRecord({
+        goldUsdPerTroyOunceDecimal: "3110.34768",
+        goldUsdPerPureGramDecimal: "100",
+        currenciesUsdPerUnit: { USD: "1" },
+      }),
+      purchaseDate: "2026-10-10",
+      metal: "GOLD",
+      purchaseCurrency: "USD",
+    });
+    expect(pair).not.toBeNull();
+    if (!pair) return;
+
+    expect(
+      calculateHistoricalPurityGramPriceDecimal({
+        purityCode: "gold-875",
+        purityFactorDecimal: "0.875",
+        pair,
+      })
+    ).toBe("87.5");
+    expect(
+      calculateHistoricalPurchaseEstimateDecimal({
+        weightGramsDecimal: "10",
+        purityCode: "gold-875",
+        purityFactorDecimal: "0.875",
+        pair,
+      })
+    ).toBe("875");
   });
 
   it("rejects tampered normalized gram values and non-identity USD", () => {

@@ -238,6 +238,7 @@ export function useMetalHoldingDetail(
     void readMetalDetailReadModel({
       currentRates,
       holdingId,
+      includePurchaseDateMarketReference: true,
       snapshotId: selectedSnapshot?.snapshotId ?? null,
       preferredCurrency,
       userId,

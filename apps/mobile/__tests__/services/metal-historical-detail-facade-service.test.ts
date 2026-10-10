@@ -38,6 +38,7 @@ describe("#355 historical Details facade", () => {
       {
         purchaseDate: DATE,
         metal: "GOLD",
+        purityCode: "gold-999",
         purityFactorDecimal: "0.999",
         purchaseCurrency: "USD",
       },
@@ -52,7 +53,7 @@ describe("#355 historical Details facade", () => {
       status: "available",
       rateDate: DATE,
       purchaseCurrency: "USD",
-      selectedPurityPerGramDecimal: "99.9",
+      selectedPurityPerGramDecimal: "100",
       origin: "daily_history",
     });
     expect(result).not.toHaveProperty("source");
@@ -65,6 +66,7 @@ describe("#355 historical Details facade", () => {
       {
         purchaseDate: DATE,
         metal: "GOLD",
+        purityCode: "gold-999",
         purityFactorDecimal: "0.999",
         purchaseCurrency: "EGP",
         allowNetwork: false,

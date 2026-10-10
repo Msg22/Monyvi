@@ -189,6 +189,7 @@ export function useMetalHistoricalPurchasePriceEstimate(
 
     const estimate = calculateHistoricalPurchaseEstimateDecimal({
       weightGramsDecimal: input.weightGrams,
+      purityCode: purity.entry.code,
       purityFactorDecimal: purity.entry.factorDecimal,
       pair: reference,
     });

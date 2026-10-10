@@ -110,12 +110,29 @@ describe("Metals EN/AR content contract", () => {
       "detail.follow_value",
       "detail.calculation_disclosure",
       "detail.paid",
+      "detail.market_rate_on_purchase_date",
       "detail.timeline_current_value",
+      "add.purchase_price_estimate_hint",
       "detail.fact_accessibility",
     ]) {
       expect(enFlat[key]).toEqual(expect.any(String));
       expect(arFlat[key]).toEqual(expect.any(String));
     }
+  });
+
+  it("keeps the approved #355 microcopy exact in English with Arabic parity", () => {
+    expect(enFlat["detail.market_rate_on_purchase_date"]).toBe(
+      "Market rate on purchase date"
+    );
+    expect(enFlat["add.purchase_price_estimate_hint"]).toBe(
+      "Estimated from the purchase-date market rate. You can change it to what you paid."
+    );
+    expect(arFlat["detail.market_rate_on_purchase_date"]).toBe(
+      "سعر السوق في تاريخ الشراء"
+    );
+    expect(arFlat["add.purchase_price_estimate_hint"]).toBe(
+      "مُقدَّر من سعر السوق في تاريخ الشراء. يمكنك تغييره إلى المبلغ الذي دفعته."
+    );
   });
 
   it("uses the approved No longer owned wording across navigation, details, timeline, and History", () => {

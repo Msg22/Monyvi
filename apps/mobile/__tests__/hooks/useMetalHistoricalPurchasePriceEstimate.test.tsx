@@ -51,7 +51,7 @@ function input(
 }
 
 describe("#355 Add-only historical purchase-price estimator", () => {
-  it("prefills from verified history using stored gold-999 factor and currency precision", async () => {
+  it("prefills approved gold-999 from the quoted 24K rate and currency precision", async () => {
     const onChange = jest.fn();
     const resolver = jest.fn(() => Promise.resolve(available()));
     const { result } = renderHook(() =>
@@ -61,7 +61,7 @@ describe("#355 Add-only historical purchase-price estimator", () => {
     );
 
     await waitFor(() => {
-      expect(onChange).toHaveBeenCalledWith("999.00");
+      expect(onChange).toHaveBeenCalledWith("1000.00");
       expect(result.current.ownership).toBe("estimated");
     });
   });
@@ -77,14 +77,14 @@ describe("#355 Add-only historical purchase-price estimator", () => {
       { initialProps: { weight: "10", purchasePrice: "" } }
     );
 
-    await waitFor(() => expect(onChange).toHaveBeenCalledWith("999.00"));
+    await waitFor(() => expect(onChange).toHaveBeenCalledWith("1000.00"));
     expect(resolver).toHaveBeenCalledTimes(1);
     onChange.mockClear();
 
-    rerender({ weight: "20", purchasePrice: "999.00" });
+    rerender({ weight: "20", purchasePrice: "1000.00" });
 
     await waitFor(() => {
-      expect(onChange).toHaveBeenCalledWith("1998.00");
+      expect(onChange).toHaveBeenCalledWith("2000.00");
     });
     expect(resolver).toHaveBeenCalledTimes(1);
   });
@@ -103,7 +103,7 @@ describe("#355 Add-only historical purchase-price estimator", () => {
     await waitFor(() => expect(resolver).toHaveBeenCalledTimes(1));
     rerender({
       weight: "10",
-      purchasePrice: "999.00",
+      purchasePrice: "1000.00",
       purchaseDate: "2026-10-11",
     });
 
@@ -124,7 +124,7 @@ describe("#355 Add-only historical purchase-price estimator", () => {
       { initialProps: { weight: "10", purchasePrice: "" } }
     );
 
-    await waitFor(() => expect(onChange).toHaveBeenCalledWith("999.00"));
+    await waitFor(() => expect(onChange).toHaveBeenCalledWith("1000.00"));
     onChange.mockClear();
 
     act(() => {

@@ -2,7 +2,10 @@ import {
   parseCanonicalDecimal,
   serializeDecimal,
 } from "./decimal";
-import type { SupportedMetal } from "./purity-catalog";
+import {
+  resolvePuritySelection,
+  type SupportedMetal,
+} from "./purity-catalog";
 import {
   isSupportedMetalsIsoCurrencyCode,
   validateAndNormalizeRateReference,
@@ -292,11 +295,14 @@ export function selectHistoricalDailyRatePair(input: {
 }
 
 export function calculateHistoricalPurityGramPriceDecimal(input: {
+  readonly purityCode: string;
   readonly purityFactorDecimal: string;
   readonly pair: PurchaseDateHistoricalRatePair;
 }): string | null {
+  const purityFactorDecimal = resolveHistoricalQuotedPurityFactor(input);
+  if (purityFactorDecimal === null) return null;
   return calculatePurityGramPriceDecimal({
-    purityFactorDecimal: input.purityFactorDecimal,
+    purityFactorDecimal,
     metalUsdPerPureGramDecimal: input.pair.metalUsdPerPureGramDecimal,
     currencyUsdPerUnitDecimal:
       input.pair.purchaseCurrencyUsdPerUnitDecimal,
@@ -305,17 +311,41 @@ export function calculateHistoricalPurityGramPriceDecimal(input: {
 
 export function calculateHistoricalPurchaseEstimateDecimal(input: {
   readonly weightGramsDecimal: string;
+  readonly purityCode: string;
   readonly purityFactorDecimal: string;
   readonly pair: PurchaseDateHistoricalRatePair;
 }): string | null {
+  const purityFactorDecimal = resolveHistoricalQuotedPurityFactor(input);
+  if (purityFactorDecimal === null) return null;
   const result = calculateMetalReferenceValue({
     weightGramsDecimal: input.weightGramsDecimal,
-    purityFactorDecimal: input.purityFactorDecimal,
+    purityFactorDecimal,
     metalUsdPerPureGramDecimal: input.pair.metalUsdPerPureGramDecimal,
     currencyUsdPerUnitDecimal:
       input.pair.purchaseCurrencyUsdPerUnitDecimal,
   });
   return result.available ? result.valueDecimal : null;
+}
+
+function resolveHistoricalQuotedPurityFactor(input: {
+  readonly purityCode: string;
+  readonly purityFactorDecimal: string;
+  readonly pair: PurchaseDateHistoricalRatePair;
+}): string | null {
+  const purity = resolvePuritySelection(input.pair.metal, input.purityCode);
+  if (
+    !purity.available ||
+    purity.entry.factorDecimal !== input.purityFactorDecimal
+  ) {
+    return null;
+  }
+
+  // Approved app-wide quoted 24K rule: gold-999 displays/estimates against
+  // the quoted 24K gram price directly, while the stored 0.999 evidence stays
+  // unchanged for immutable FR-050/P&L accounting.
+  return input.pair.metal === "GOLD" && input.purityCode === "gold-999"
+    ? "1"
+    : input.purityFactorDecimal;
 }
 
 function readPositiveDecimal(value: unknown): string | null {

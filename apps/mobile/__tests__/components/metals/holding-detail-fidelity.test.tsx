@@ -83,8 +83,10 @@ const translations: Readonly<Record<string, string>> = {
   "detail.holding_story": "Holding story",
   "portfolio.rates_updated":
     "Prices last updated {{date}} at {{time}}. They may have changed since then.",
+  "portfolio.per_gram": "/ g",
   "detail.history": "History",
   "detail.metal_movement": "Metal movement",
+  "detail.market_rate_on_purchase_date": "Market rate on purchase date",
   "detail.offline": "Offline mode",
   "detail.paid": "{{amount}} paid",
   "detail.net_proceeds": "Net proceeds",
@@ -118,6 +120,7 @@ const translations: Readonly<Record<string, string>> = {
     "Changes are still being checked. The last complete state remains active.",
   "detail.since_purchase": "{{amount}} since purchase",
   "detail.timeline_current_value": "Current value",
+  "detail.value_unavailable": "Value unavailable",
   "form.bar": "Bar",
   "form.coin": "Coin",
   "form.jewelry": "Jewelry",
@@ -215,6 +218,7 @@ function activeDetail(
     purchaseCurrency: "EGP",
     purchaseDate: new Date("2024-03-14T00:00:00.000Z"),
     purchasePriceDecimal: "151278.20",
+    purchaseDateMarketReference: null,
     purityCatalogVersion: "1",
     purityCode: "gold-999",
     purityFactorDecimal: "0.999",
@@ -284,6 +288,55 @@ describe("approved active holding-detail fidelity", () => {
     expect(screen.getByText("Coin")).toBeTruthy();
     expect(screen.getByText("History")).toBeTruthy();
     expect(screen.getByText(/Details updated/)).toBeTruthy();
+  });
+
+  it("shows the purchase-date market-rate fact beside Date/Paid without provenance metadata", () => {
+    render(
+      <MetalHoldingDetailScreen
+        actions={[]}
+        error={null}
+        isLoading={false}
+        isOffline={false}
+        model={activeDetail({
+          purchaseDateMarketReference: {
+            status: "available",
+            rateDate: "2024-03-14",
+            purchaseCurrency: "EGP",
+            selectedPurityPerGramDecimal: "5225.5",
+            origin: "daily_history",
+          },
+        })}
+        onRetry={jest.fn()}
+      />
+    );
+
+    expect(screen.getByText("Market rate on purchase date")).toBeTruthy();
+    expect(screen.getByText("EGP 5,225.50 / g")).toBeTruthy();
+    expect(screen.queryByText("daily_history")).toBeNull();
+    expect(screen.queryByText(/metals\.dev/i)).toBeNull();
+    expect(screen.queryByText(/source/i)).toBeNull();
+    expect(screen.queryByText(/trust/i)).toBeNull();
+  });
+
+  it("keeps the purchase-date market-rate fact visible as unavailable when exact history is missing", () => {
+    render(
+      <MetalHoldingDetailScreen
+        actions={[]}
+        error={null}
+        isLoading={false}
+        isOffline={false}
+        model={activeDetail({
+          purchaseDateMarketReference: {
+            status: "unavailable",
+            reason: "date_unavailable",
+          },
+        })}
+        onRetry={jest.fn()}
+      />
+    );
+
+    expect(screen.getByText("Market rate on purchase date")).toBeTruthy();
+    expect(screen.getByText("Value unavailable")).toBeTruthy();
   });
 
   it("formats canonical amounts exactly before localized display", () => {
