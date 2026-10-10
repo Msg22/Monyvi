@@ -1,0 +1,146 @@
+{
+  "purpose": "Read-only exact pixel transport for GitHub connector under 1MB binary limit. Original approved PNGs and bindings remain authority. Tiles are unscaled spatial windows; concatenate by top coordinates to reconstruct exact decoded RGBA.",
+  "approvedManifest": "sha256:4b06ef2ad901a13cceb06790e49149fb9b314e99c213080e941cce22859b34b8",
+  "images": [
+    {
+      "source": "transaction-voice-en.png",
+      "sourceSha256": "740b0515fc223bb18b6797cbefb1a6de80591e93d2655ca4575f23cfcd3a4497",
+      "sourceWidth": 941,
+      "sourceHeight": 1672,
+      "reconstructedRgbaSha256": "6d8ffd476c38b177b309576fdfa51170802f8f3b8e09bac4832557fb67339d3a",
+      "exactRgbaEquality": true,
+      "tiles": [
+        {
+          "filename": "transaction-voice-en-part1.png",
+          "left": 0,
+          "top": 0,
+          "width": 941,
+          "height": 836,
+          "bytes": 568973,
+          "sha256": "acc2166b20040bfdee52177d3ea3cb0792695fab5f4be7652acd59179ec58f7d"
+        },
+        {
+          "filename": "transaction-voice-en-part2.png",
+          "left": 0,
+          "top": 836,
+          "width": 941,
+          "height": 836,
+          "bytes": 620077,
+          "sha256": "01996fd9f3af11473edbdeaa809b3c07c8a6dee0da1302ecc27765eff6fecb2e"
+        }
+      ]
+    },
+    {
+      "source": "transaction-voice-ar.png",
+      "sourceSha256": "8be6e526a55dfdd8fd665496b87f8d33e0cf9d40d821f7714d7069b95c1a3654",
+      "sourceWidth": 941,
+      "sourceHeight": 1672,
+      "reconstructedRgbaSha256": "96fa2ad332d15eb681157b7e9f27828cec7eed48b2f6ef29529430f2f64d0bfa",
+      "exactRgbaEquality": true,
+      "tiles": [
+        {
+          "filename": "transaction-voice-ar-part1.png",
+          "left": 0,
+          "top": 0,
+          "width": 941,
+          "height": 836,
+          "bytes": 586501,
+          "sha256": "4af3b40f0da3774dcec5cdfee1734b03703ad302511cbe696832d3a97edfb030"
+        },
+        {
+          "filename": "transaction-voice-ar-part2.png",
+          "left": 0,
+          "top": 836,
+          "width": 941,
+          "height": 836,
+          "bytes": 618927,
+          "sha256": "faf66006843d28d85af5981b7304ef72675120b9338a1649d5dbdbec1960ba42"
+        }
+      ]
+    },
+    {
+      "source": "transaction-voice-daily-limit-en.png",
+      "sourceSha256": "00648dd6c27d73cff8c6738411a361782f3fff7c96877cea314445e756073ba9",
+      "sourceWidth": 941,
+      "sourceHeight": 1672,
+      "reconstructedRgbaSha256": "8ed488e79e97d4d853ab5b855b45d0ab431d859bbd281114d71c7db069f755c1",
+      "exactRgbaEquality": true,
+      "tiles": [
+        {
+          "filename": "transaction-voice-daily-limit-en-part1.png",
+          "left": 0,
+          "top": 0,
+          "width": 941,
+          "height": 836,
+          "bytes": 619021,
+          "sha256": "f77347ef700daab36fd628e426b6fb9617d704a1e772ec5e809ad42423019f69"
+        },
+        {
+          "filename": "transaction-voice-daily-limit-en-part2.png",
+          "left": 0,
+          "top": 836,
+          "width": 941,
+          "height": 836,
+          "bytes": 614298,
+          "sha256": "b84d7ef62727ab2378fdb75bfb1dfd7d6273f91b18b2f79e8ed4dda8d5ad52af"
+        }
+      ]
+    },
+    {
+      "source": "transaction-voice-daily-limit-ar.png",
+      "sourceSha256": "327733b5d8317ae663599aea3cd04e42e75ba6ef68a9e9e0fa9bd3ddbb4abbdd",
+      "sourceWidth": 941,
+      "sourceHeight": 1672,
+      "reconstructedRgbaSha256": "04ebf56d32dfc3b6d2642850c645218fb3dfa2510808c20fa2bb95cbe28df2a6",
+      "exactRgbaEquality": true,
+      "tiles": [
+        {
+          "filename": "transaction-voice-daily-limit-ar-part1.png",
+          "left": 0,
+          "top": 0,
+          "width": 941,
+          "height": 836,
+          "bytes": 597485,
+          "sha256": "9ff3c41f4449526fc37dfe119c596dbcb39c6f565d60604c70df1ee2b3746efb"
+        },
+        {
+          "filename": "transaction-voice-daily-limit-ar-part2.png",
+          "left": 0,
+          "top": 836,
+          "width": 941,
+          "height": 836,
+          "bytes": 622120,
+          "sha256": "c4429cf4301f90e911deecc5e60e0045ce9489b68634236f7eac140c1670ff9f"
+        }
+      ]
+    },
+    {
+      "source": "transaction-manual-compact-b.png",
+      "sourceSha256": "035d1109c78eadc3d5eee2ff5a279ac04803a5a06e227c58740a7920e81cf3fd",
+      "sourceWidth": 1536,
+      "sourceHeight": 1024,
+      "reconstructedRgbaSha256": "67d2e1a60ba76924c9afe0f6db48f1f1b3c85a6d72c80f8997cc6f74b427e5d3",
+      "exactRgbaEquality": true,
+      "tiles": [
+        {
+          "filename": "transaction-manual-compact-b-part1.png",
+          "left": 0,
+          "top": 0,
+          "width": 1536,
+          "height": 512,
+          "bytes": 730187,
+          "sha256": "c0d9aa30da341a7825b0fbe7bf2c84301f781c03ca12d8d49aabd0420afc24c2"
+        },
+        {
+          "filename": "transaction-manual-compact-b-part2.png",
+          "left": 0,
+          "top": 512,
+          "width": 1536,
+          "height": 512,
+          "bytes": 668557,
+          "sha256": "b9de5721a4b00e1a5e2e72a3bf49fcedf9833b6222c24f858ac6e367d4de731a"
+        }
+      ]
+    }
+  ]
+}
