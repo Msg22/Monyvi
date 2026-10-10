@@ -31,7 +31,7 @@ jest.mock("@expo/vector-icons", () => {
 
 describe("TypeTabs compact Manual selector", () => {
   it("uses the approved labels, icons and selected tab semantics", () => {
-    render(<TypeTabs selectedType="EXPENSE" onSelect={jest.fn()} />);
+    render(<TypeTabs compact selectedType="EXPENSE" onSelect={jest.fn()} />);
 
     expect(screen.getByRole("tab", { name: "Expense" })).toHaveProp(
       "accessibilityState",
@@ -53,7 +53,7 @@ describe("TypeTabs compact Manual selector", () => {
 
   it("keeps selection delegated to the parent", () => {
     const onSelect = jest.fn();
-    render(<TypeTabs selectedType="EXPENSE" onSelect={onSelect} />);
+    render(<TypeTabs compact selectedType="EXPENSE" onSelect={onSelect} />);
 
     fireEvent.press(screen.getByRole("tab", { name: "Income" }));
 

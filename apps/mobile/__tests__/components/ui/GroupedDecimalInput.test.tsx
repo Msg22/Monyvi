@@ -291,22 +291,12 @@ describe("GroupedMoneyInput delegation", () => {
 
 
 describe("GroupedMoneyInput focus forwarding", () => {
-  interface FocusableMoneyProps
-    extends React.ComponentProps<typeof GroupedMoneyInput> {
-    readonly onFocus?: () => void;
-    readonly onBlur?: () => void;
-    readonly showSoftInputOnFocus?: boolean;
-  }
-
-  const FocusableGroupedMoneyInput =
-    GroupedMoneyInput as unknown as React.ComponentType<FocusableMoneyProps>;
-
   it("forwards focus lifecycle and suppresses the native soft keyboard when requested", () => {
     const onFocus = jest.fn();
     const onBlur = jest.fn();
 
     render(
-      <FocusableGroupedMoneyInput
+      <GroupedMoneyInput
         testID="manual-money-input"
         label="Amount"
         value="120"

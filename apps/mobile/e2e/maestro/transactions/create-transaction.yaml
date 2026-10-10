@@ -22,7 +22,8 @@ appId: com.monyvi.app
 
 # Step 4: Verify the existing Manual transaction surface loaded.
 - assertVisible: "New Transaction"
-- assertVisible: "EXPENSE"
+- assertVisible:
+    id: "type-tab-EXPENSE"
 
 # The E2E seed makes E2E Cash the default account and the first top-level
 # expense category is Food & Drinks.

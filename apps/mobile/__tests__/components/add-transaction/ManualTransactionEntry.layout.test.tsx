@@ -240,6 +240,14 @@ describe("ManualTransactionEntry compact B layout", () => {
     });
     expect(screen.getByText("Account *")).toBeTruthy();
     expect(screen.getByText("Category *")).toBeTruthy();
+    expect(screen.getByTestId("manual-account-selector")).toHaveProp(
+      "accessibilityHint",
+      "required_field"
+    );
+    expect(screen.getByTestId("manual-category-selector")).toHaveProp(
+      "accessibilityHint",
+      "required_field"
+    );
   });
 
   it("reflows the selector row on compact width", () => {

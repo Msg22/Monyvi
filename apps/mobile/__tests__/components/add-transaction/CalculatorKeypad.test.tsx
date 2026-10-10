@@ -49,7 +49,7 @@ const KEY_IDS = [
 
 describe("CalculatorKeypad compact Manual contract", () => {
   it("keeps every calculator action at least 48dp high", () => {
-    render(<CalculatorKeypad onKeyPress={jest.fn()} actionLabel="Done" />);
+    render(<CalculatorKeypad compact onKeyPress={jest.fn()} actionLabel="Done" />);
 
     for (const testID of KEY_IDS) {
       expect(screen.getByTestId(testID)).toHaveStyle({ height: 48 });
@@ -57,7 +57,7 @@ describe("CalculatorKeypad compact Manual contract", () => {
   });
 
   it("adds the actual bottom inset plus the approved 12dp keypad clearance", () => {
-    render(<CalculatorKeypad onKeyPress={jest.fn()} actionLabel="Done" />);
+    render(<CalculatorKeypad compact onKeyPress={jest.fn()} actionLabel="Done" />);
 
     expect(screen.getByTestId("calculator-keypad")).toHaveStyle({
       paddingBottom: 36,
@@ -66,7 +66,7 @@ describe("CalculatorKeypad compact Manual contract", () => {
 
   it("keeps operators, equals, delete and Done as distinct calculator actions", () => {
     const onKeyPress = jest.fn<void, [CalculatorKey]>();
-    render(<CalculatorKeypad onKeyPress={onKeyPress} actionLabel="Done" />);
+    render(<CalculatorKeypad compact onKeyPress={onKeyPress} actionLabel="Done" />);
 
     fireEvent.press(screen.getByTestId("calculator-key-plus"));
     fireEvent.press(screen.getByTestId("calculator-key-del"));

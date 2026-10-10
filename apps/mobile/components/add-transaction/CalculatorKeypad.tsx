@@ -29,11 +29,13 @@ export type CalculatorKey =
 interface CalculatorKeypadProps {
   readonly onKeyPress: (key: CalculatorKey) => void;
   readonly hide?: boolean;
+  readonly compact?: boolean;
   /** Label for the primary action button. Defaults to "Done". */
   readonly actionLabel?: string;
 }
 
 const KEY_HEIGHT = 44;
+const COMPACT_KEY_HEIGHT = 48;
 
 /** Acceleration curve for long-press DEL (ms between deletions) */
 const DEL_INITIAL_DELAY = 200;
@@ -74,6 +76,7 @@ const Key = ({
   onLongPress,
   onPressOut,
   className = "",
+  compact = false,
 }: {
   label: string | React.ReactNode;
   value: CalculatorKey;
@@ -81,11 +84,12 @@ const Key = ({
   onLongPress?: () => void;
   onPressOut?: () => void;
   className?: string;
+  compact?: boolean;
 }): React.JSX.Element => (
   <TouchableOpacity
     testID={getCalculatorKeyTestId(value)}
     className={`items-center justify-center rounded-2xl mx-1 active:opacity-70 flex-1 bg-slate-100 dark:bg-slate-800/50 ${className}`}
-    style={{ height: KEY_HEIGHT }}
+    style={{ height: compact ? COMPACT_KEY_HEIGHT : KEY_HEIGHT }}
     onPress={() => {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(
         console.error
@@ -110,15 +114,17 @@ const OperationKey = ({
   label,
   value,
   onPress,
+  compact = false,
 }: {
   label: string;
   value: CalculatorKey;
   onPress: (value: CalculatorKey) => void;
+  compact?: boolean;
 }): React.JSX.Element => (
   <TouchableOpacity
     testID={getCalculatorKeyTestId(value)}
     className="items-center justify-center rounded-2xl mx-1 active:opacity-70 flex-1 bg-nileGreen-500/10 dark:bg-nileGreen-500/10"
-    style={{ height: KEY_HEIGHT }}
+    style={{ height: compact ? COMPACT_KEY_HEIGHT : KEY_HEIGHT }}
     onPress={() => {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(
         console.error
@@ -135,6 +141,7 @@ const OperationKey = ({
 export function CalculatorKeypad({
   onKeyPress,
   hide,
+  compact = false,
   actionLabel = "Done",
 }: CalculatorKeypadProps): React.JSX.Element | null {
   const insets = useSafeAreaInsets();
@@ -190,37 +197,41 @@ export function CalculatorKeypad({
 
   return (
     <View
+      testID="calculator-keypad"
       className="bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 shadow-2xl"
-      style={{ paddingBottom: insets.bottom + 4, paddingTop: 10 }}
+      style={{
+        paddingBottom: insets.bottom + (compact ? 12 : 4),
+        paddingTop: compact ? 12 : 10,
+      }}
     >
       {/* Row 1: 1 2 3 ÷ */}
       <View className="flex-row mb-2 px-3">
-        <Key label="1" value="1" onPress={onKeyPress} />
-        <Key label="2" value="2" onPress={onKeyPress} />
-        <Key label="3" value="3" onPress={onKeyPress} />
-        <OperationKey label="÷" value="/" onPress={onKeyPress} />
+        <Key label="1" value="1" onPress={onKeyPress} compact={compact} />
+        <Key label="2" value="2" onPress={onKeyPress} compact={compact} />
+        <Key label="3" value="3" onPress={onKeyPress} compact={compact} />
+        <OperationKey label="÷" value="/" onPress={onKeyPress} compact={compact} />
       </View>
 
       {/* Row 2: 4 5 6 × */}
       <View className="flex-row mb-2 px-3">
-        <Key label="4" value="4" onPress={onKeyPress} />
-        <Key label="5" value="5" onPress={onKeyPress} />
-        <Key label="6" value="6" onPress={onKeyPress} />
-        <OperationKey label="×" value="*" onPress={onKeyPress} />
+        <Key label="4" value="4" onPress={onKeyPress} compact={compact} />
+        <Key label="5" value="5" onPress={onKeyPress} compact={compact} />
+        <Key label="6" value="6" onPress={onKeyPress} compact={compact} />
+        <OperationKey label="×" value="*" onPress={onKeyPress} compact={compact} />
       </View>
 
       {/* Row 3: 7 8 9 - */}
       <View className="flex-row mb-2 px-3">
-        <Key label="7" value="7" onPress={onKeyPress} />
-        <Key label="8" value="8" onPress={onKeyPress} />
-        <Key label="9" value="9" onPress={onKeyPress} />
-        <OperationKey label="-" value="-" onPress={onKeyPress} />
+        <Key label="7" value="7" onPress={onKeyPress} compact={compact} />
+        <Key label="8" value="8" onPress={onKeyPress} compact={compact} />
+        <Key label="9" value="9" onPress={onKeyPress} compact={compact} />
+        <OperationKey label="-" value="-" onPress={onKeyPress} compact={compact} />
       </View>
 
       {/* Row 4: . 0 ⌫ + */}
       <View className="flex-row mb-2 px-3">
-        <Key label="." value="." onPress={onKeyPress} />
-        <Key label="0" value="0" onPress={onKeyPress} />
+        <Key label="." value="." onPress={onKeyPress} compact={compact} />
+        <Key label="0" value="0" onPress={onKeyPress} compact={compact} />
         <Key
           label={
             <Ionicons
@@ -231,10 +242,11 @@ export function CalculatorKeypad({
           }
           value="DEL"
           onPress={onKeyPress}
+          compact={compact}
           onLongPress={startAcceleratingDelete}
           onPressOut={clearDeleteInterval}
         />
-        <OperationKey label="+" value="+" onPress={onKeyPress} />
+        <OperationKey label="+" value="+" onPress={onKeyPress} compact={compact} />
       </View>
 
       {/* Bottom Row: = and Action Button (side by side) */}
@@ -242,7 +254,7 @@ export function CalculatorKeypad({
         <TouchableOpacity
           testID={getCalculatorKeyTestId("DONE")}
           className="flex-1 items-center justify-center rounded-2xl mx-1 bg-nileGreen-500 active:opacity-80 shadow-md"
-          style={{ height: KEY_HEIGHT + 4 }}
+          style={{ height: compact ? COMPACT_KEY_HEIGHT : KEY_HEIGHT + 4 }}
           onPress={() => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(
               console.error
@@ -258,7 +270,7 @@ export function CalculatorKeypad({
         <TouchableOpacity
           testID={getCalculatorKeyTestId("=")}
           className="flex-1 items-center justify-center rounded-2xl mx-1 active:opacity-70 bg-nileGreen-500/15 dark:bg-nileGreen-500/15"
-          style={{ height: KEY_HEIGHT + 4 }}
+          style={{ height: compact ? COMPACT_KEY_HEIGHT : KEY_HEIGHT + 4 }}
           onPress={() => onKeyPress("=")}
         >
           <Text className="text-xl font-extrabold text-nileGreen-600 dark:text-nileGreen-400">

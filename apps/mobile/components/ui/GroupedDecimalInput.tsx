@@ -1,6 +1,6 @@
 import { formatAmountInput, resolveAmountInputChange } from "@monyvi/logic";
 import { useCallback, type ReactNode, type Ref } from "react";
-import type { TextInput } from "react-native";
+import type { TextInput, TextInputProps } from "react-native";
 
 import { TextField } from "./TextField";
 
@@ -22,6 +22,10 @@ export interface GroupedDecimalInputProps {
   readonly placeholder?: string;
   readonly containerClassName?: string;
   readonly maxLength?: number;
+  readonly className?: string;
+  readonly onFocus?: TextInputProps["onFocus"];
+  readonly onBlur?: TextInputProps["onBlur"];
+  readonly showSoftInputOnFocus?: boolean;
 }
 
 /**
@@ -50,6 +54,10 @@ export function GroupedDecimalInput({
   placeholder,
   containerClassName,
   maxLength,
+  className,
+  onFocus,
+  onBlur,
+  showSoftInputOnFocus,
 }: GroupedDecimalInputProps): React.JSX.Element {
   const handleChangeText = useCallback(
     (text: string): void => {
@@ -79,7 +87,11 @@ export function GroupedDecimalInput({
       trailingAdornment={trailingAdornment}
       placeholder={placeholder}
       containerClassName={containerClassName}
+      className={className}
       maxLength={maxLength}
+      onFocus={onFocus}
+      onBlur={onBlur}
+      showSoftInputOnFocus={showSoftInputOnFocus}
     />
   );
 }

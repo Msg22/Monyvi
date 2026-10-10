@@ -1,11 +1,11 @@
 import {
-  act,
   fireEvent,
   render,
   screen,
   waitFor,
 } from "@testing-library/react-native";
 import React from "react";
+import { Pressable } from "react-native";
 
 const mockBack = jest.fn();
 const mockPush = jest.fn();
@@ -248,12 +248,25 @@ import {
   type ManualTransactionEntryHandle,
 } from "@/components/add-transaction/ManualTransactionEntry";
 
-interface ActivityAwareManualProps {
+function ManualWithHeader({
+  isActive = true,
+}: {
   readonly isActive?: boolean;
-}
+}): React.JSX.Element {
+  const manualRef = React.useRef<ManualTransactionEntryHandle>(null);
 
-const ActivityAwareManualTransactionEntry =
-  ManualTransactionEntry as unknown as React.ComponentType<ActivityAwareManualProps>;
+  return (
+    <>
+      <Pressable
+        testID="header-save"
+        onPress={() => {
+          void manualRef.current?.save();
+        }}
+      />
+      <ManualTransactionEntry ref={manualRef} isActive={isActive} />
+    </>
+  );
+}
 
 function focusAmount(): void {
   fireEvent(screen.getByTestId("manual-amount-input"), "focus", {});
@@ -319,18 +332,15 @@ describe("ManualTransactionEntry compact focus contract", () => {
     expect(mockBack).not.toHaveBeenCalled();
   });
 
-  it("keeps imperative header Save as the only persistence action", async () => {
-    const manualRef = React.createRef<ManualTransactionEntryHandle>();
-    render(<ManualTransactionEntry ref={manualRef} />);
+  it("keeps header Save as the only persistence action", async () => {
+    render(<ManualWithHeader />);
 
     fireEvent.changeText(screen.getByTestId("manual-amount-input"), "1");
+    fireEvent.press(screen.getByTestId("header-save"));
 
-    await act(async (): Promise<void> => {
-      await Promise.resolve();
-      await manualRef.current?.save();
-    });
-
-    expect(mockCreateTransaction).toHaveBeenCalledTimes(1);
+    await waitFor(() =>
+      expect(mockCreateTransaction).toHaveBeenCalledTimes(1)
+    );
     expect(mockCreateTransaction).toHaveBeenCalledWith(
       expect.objectContaining({
         amount: 1,
@@ -344,31 +354,35 @@ describe("ManualTransactionEntry compact focus contract", () => {
   });
 
   it("dismisses focus when Manual deactivates without destroying the draft", async () => {
-    const view = render(<ActivityAwareManualTransactionEntry isActive />);
+    const view = render(<ManualTransactionEntry isActive />);
 
     focusAmount();
     fireEvent.changeText(screen.getByTestId("manual-amount-input"), "12");
     expect(screen.getByTestId("calculator-key-1")).toBeTruthy();
 
-    view.rerender(<ActivityAwareManualTransactionEntry isActive={false} />);
+    view.rerender(<ManualTransactionEntry isActive={false} />);
 
     await waitFor(() =>
       expect(screen.queryByTestId("calculator-key-1")).toBeNull()
     );
     expect(screen.getByTestId("manual-amount-input")).toHaveDisplayValue("12");
 
-    view.rerender(<ActivityAwareManualTransactionEntry isActive />);
+    view.rerender(<ManualTransactionEntry isActive />);
 
     expect(screen.getByTestId("manual-amount-input")).toHaveDisplayValue("12");
     expect(screen.queryByTestId("calculator-key-1")).toBeNull();
   });
 
-  it("keeps source and target transfer amounts as independent focus targets", async () => {
-    render(<ManualTransactionEntry />);
+  it("keeps source and target transfer focus independent and saves the edited conversion", async () => {
+    render(<ManualWithHeader />);
 
     fireEvent.press(screen.getByTestId("type-tab-TRANSFER"));
 
     const sourceInput = screen.getByTestId("manual-amount-input");
+    expect(
+      screen.getByTestId("manual-amount-input-trailing-adornment")
+    ).toHaveTextContent("EGP");
+
     fireEvent(sourceInput, "focus", {});
     fireEvent.changeText(sourceInput, "10");
     fireEvent.press(screen.getByTestId("calculator-key-done"));
@@ -377,6 +391,11 @@ describe("ManualTransactionEntry compact focus contract", () => {
       "manual-transfer-target-amount-input"
     );
     expect(targetInput).toHaveProp("showSoftInputOnFocus", false);
+    expect(
+      screen.getByTestId(
+        "manual-transfer-target-amount-input-trailing-adornment"
+      )
+    ).toHaveTextContent("USD");
 
     fireEvent(targetInput, "focus", {});
     fireEvent.press(screen.getByTestId("calculator-key-2"));
@@ -386,5 +405,19 @@ describe("ManualTransactionEntry compact focus contract", () => {
     await waitFor(() => expect(targetInput).toHaveDisplayValue("20"));
     expect(sourceInput).toHaveDisplayValue("10");
     expect(mockCreateTransfer).not.toHaveBeenCalled();
+
+    fireEvent.press(screen.getByTestId("header-save"));
+
+    await waitFor(() => expect(mockCreateTransfer).toHaveBeenCalledTimes(1));
+    expect(mockCreateTransfer).toHaveBeenCalledWith(
+      expect.objectContaining({
+        amount: 10,
+        currency: "EGP",
+        fromAccountId: "cash-1",
+        toAccountId: "usd-1",
+        convertedAmount: 20,
+        exchangeRate: 2,
+      })
+    );
   });
 });
