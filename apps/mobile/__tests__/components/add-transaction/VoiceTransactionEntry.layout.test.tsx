@@ -4,7 +4,7 @@ import React from "react";
 import {
   getTestInstanceProps,
   getTestInstances,
-} from "@/test-utils/test-instance-props";
+} from "@/__tests__/test-utils/test-instance-props";
 import { ScrollView } from "react-native";
 
 import { VoiceTransactionEntry } from "@/components/add-transaction/VoiceTransactionEntry";
@@ -156,9 +156,9 @@ describe("VoiceTransactionEntry responsive, animation and unboxed layout", () =>
     renderLayout({ state: "unavailable", remaining: null, dailyLimit: null });
     const scroll: unknown = screen.UNSAFE_getByType(ScrollView);
     const scrollProps = getTestInstanceProps(scroll);
-    expect(
-      getTestInstanceProps(scrollProps.contentContainerStyle).paddingHorizontal
-    ).toBe(12);
+    expect(scrollProps.contentContainerStyle).toEqual(
+      expect.objectContaining({ paddingHorizontal: 12 })
+    );
     expect(getTestInstances(screen.getAllByRole("button"))).toHaveLength(2);
     for (const control of getTestInstances(screen.getAllByRole("button"))) {
       const props = getTestInstanceProps(control);
@@ -173,11 +173,9 @@ describe("VoiceTransactionEntry responsive, animation and unboxed layout", () =>
     mockHeight = 1024;
     const view = renderLayout();
     expect(
-      getTestInstanceProps(
-        getTestInstanceProps(screen.UNSAFE_getByType(ScrollView))
-          .contentContainerStyle
-      ).paddingHorizontal
-    ).toBe(16);
+      getTestInstanceProps(screen.UNSAFE_getByType(ScrollView))
+        .contentContainerStyle
+    ).toEqual(expect.objectContaining({ paddingHorizontal: 16 }));
     expect(getTestInstanceProps(screen.getByTestId("voice-content")).className)
       .toEqual(expect.stringContaining("max-w-[560px]"));
 

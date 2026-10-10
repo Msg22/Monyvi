@@ -6,7 +6,7 @@ import {
   getTestInstanceParent,
   getTestInstanceProps,
   getTestInstances,
-} from "@/test-utils/test-instance-props";
+} from "@/__tests__/test-utils/test-instance-props";
 
 import { AddTransactionModeTabs } from "@/components/add-transaction/AddTransactionModeTabs";
 import { arabicFontFamily, fontFamily } from "@/constants/typography";

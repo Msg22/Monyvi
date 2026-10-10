@@ -10,7 +10,7 @@ import React from "react";
 import {
   getTestInstanceParent,
   getTestInstanceProps,
-} from "@/test-utils/test-instance-props";
+} from "@/__tests__/test-utils/test-instance-props";
 
 let mockRouteParams: Readonly<Record<string, string | undefined>> = {};
 const mockBack = jest.fn();
@@ -512,19 +512,15 @@ describe("AddTransaction unified mode intent", () => {
     await waitFor(() => expect(mockCreateTransaction).toHaveBeenCalledTimes(1));
 
     const voiceTab: unknown = screen.getByRole("tab", { name: "Voice" });
-    const disabledDuringSave = getTestInstanceProps(
-      getTestInstanceProps(voiceTab).accessibilityState
-    ).disabled;
+    const disabledDuringSave = getTestInstanceProps(voiceTab).accessibilityState;
     fireEvent.press(screen.getByRole("tab", { name: "Voice" }));
     fireEvent.press(screen.getByTestId("header-back"));
     await act(async () => {
       await Promise.resolve();
     });
     const manualSelectedWhilePending = getTestInstanceProps(
-      getTestInstanceProps(
-        screen.getByRole("tab", { name: "Manual" })
-      ).accessibilityState
-    ).selected;
+      screen.getByRole("tab", { name: "Manual" })
+    ).accessibilityState;
     const navigationCountWhilePending = mockBack.mock.calls.length;
 
     await act(async () => {
@@ -533,8 +529,12 @@ describe("AddTransaction unified mode intent", () => {
       await Promise.resolve();
     });
 
-    expect(disabledDuringSave).toBe(true);
-    expect(manualSelectedWhilePending).toBe(true);
+    expect(disabledDuringSave).toEqual(
+      expect.objectContaining({ disabled: true })
+    );
+    expect(manualSelectedWhilePending).toEqual(
+      expect.objectContaining({ selected: true })
+    );
     expect(navigationCountWhilePending).toBe(0);
     expect(mockCreateTransaction).toHaveBeenCalledTimes(1);
     expect(mockBack).toHaveBeenCalledTimes(1);
