@@ -1,0 +1,22 @@
+openapi: 3.1.0
+info:
+  title: Monyvi Voice Usage and Parse Contracts
+  version: 1.0.0
+  description: >
+    Compatibility index for feature 389. Endpoint-specific files own the
+    canonical paths and schemas; this index must not redefine them. The
+    successful parse-voice financial response remains the existing runtime
+    contract, with no quota fields added.
+paths:
+  /functions/v1/voice-ai-availability:
+    $ref: "voice-ai-availability.openapi.yaml#/paths/~1functions~1v1~1voice-ai-availability"
+  /functions/v1/parse-voice:
+    $ref: "parse-voice-quota.openapi.yaml#/paths/~1functions~1v1~1parse-voice"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+  schemas:
+    VoiceAvailability:
+      $ref: "voice-ai-availability.openapi.yaml#/components/schemas/VoiceAvailability"

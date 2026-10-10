@@ -63,7 +63,7 @@ const QUICK_ACTIONS: readonly QuickAction[] = [
     id: "transaction",
     iconName: "add-circle",
     label: "Add Transaction",
-    route: "/add-transaction",
+    route: "/add-transaction?mode=manual",
     color: palette.nileGreen[500],
   },
 ];

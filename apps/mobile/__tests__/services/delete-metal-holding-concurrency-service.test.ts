@@ -31,11 +31,13 @@ function mockDatabase(
   }>
 ): Database {
   return {
-    get: (table: string): {
+    get: (
+      table: string
+    ): {
       readonly table: string;
-      readonly query: (
-        ...clauses: unknown[]
-      ) => { readonly fetch: () => Promise<unknown> };
+      readonly query: (...clauses: unknown[]) => {
+        readonly fetch: () => Promise<unknown>;
+      };
     } => ({
       table,
       query: (...clauses: unknown[]) => ({

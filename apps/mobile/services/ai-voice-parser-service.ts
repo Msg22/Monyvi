@@ -18,6 +18,7 @@
 
 import { supabase } from "./supabase";
 import { z } from "zod";
+import { t } from "i18next";
 import { logger } from "@/utils/logger";
 
 import type { Category, CurrencyType } from "@monyvi/db";
@@ -30,6 +31,8 @@ import {
   parseCategory,
   buildCategoryMap,
   MAX_TRANSACTION_AMOUNT,
+  voiceQuotaRefusalSchema,
+  type VoiceQuotaRefusal,
   type ParsedVoiceTransaction,
   type ReviewableTransaction,
   type VoiceParserError,
@@ -50,6 +53,8 @@ const AI_TIMEOUT_MS = 30_000;
 const VOICE_ANALYSIS_NETWORK_ERROR_MESSAGE =
   "We couldn't reach voice analysis right now. Please check your connection and try again.";
 const AI_CONSENT_REQUIRED_STATUS = 403;
+const VOICE_QUOTA_REFUSAL_STATUS = 429;
+const VOICE_AMBIGUOUS_SERVER_STATUS = 503;
 
 // ---------------------------------------------------------------------------
 // Types
@@ -64,6 +69,12 @@ interface AccountInput {
 interface ParseVoiceOptions {
   /** Audio file URI */
   readonly audioUri: string;
+  /** Stable opaque identity for this logical voice submission. */
+  readonly requestKey: string;
+  /** Current validated device IANA timezone context. */
+  readonly callerTimeZone: string;
+  /** Cancels this logical transport attempt when its owning flow becomes stale. */
+  readonly signal?: AbortSignal;
   /** User's category tree (L1/L2 format) */
   readonly categories: string;
   /** User's accounts for AI matching */
@@ -80,6 +91,20 @@ interface ParseVoiceResult {
   readonly originalTranscript: string;
   readonly detectedLanguage: string;
 }
+
+export interface VoiceQuotaParserError {
+  readonly kind: VoiceQuotaRefusal["reason"];
+  readonly message: string;
+  readonly availability: VoiceQuotaRefusal["availability"];
+}
+
+export interface VoiceParserTransportFailure extends VoiceParserError {
+  readonly retryableSameRequest?: boolean;
+}
+
+export type VoiceParserFailure =
+  | VoiceParserTransportFailure
+  | VoiceQuotaParserError;
 
 // ---------------------------------------------------------------------------
 // Schemas — AI response validation
@@ -128,6 +153,59 @@ const ParseVoiceResponseSchema = z.object({
 // Removed — normalizeType and parseAiDate are now imported from @monyvi/logic
 // ---------------------------------------------------------------------------
 
+function getEdgeFunctionResponse(error: unknown): Response | null {
+  if (typeof error !== "object" || error === null || !("context" in error)) {
+    return null;
+  }
+
+  return error.context instanceof Response ? error.context : null;
+}
+
+function parseQuotaRefusalBody(bodyText: string): VoiceQuotaRefusal | null {
+  try {
+    const raw: unknown = JSON.parse(bodyText);
+    const parsed = voiceQuotaRefusalSchema.safeParse(raw);
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
+}
+
+function quotaRefusalMessage(reason: VoiceQuotaRefusal["reason"]): string {
+  switch (reason) {
+    case "daily_limit":
+      return t("transactions:voice_limit_exhausted");
+    case "burst_limit":
+      return t("transactions:voice_limit_burst");
+    case "already_processed_result_unavailable":
+      return t("transactions:voice_replay_unavailable");
+  }
+}
+
+function linkAbortSignal(
+  source: AbortSignal | undefined,
+  target: AbortController
+): () => void {
+  if (!source) return () => {};
+
+  const abortTarget = (): void => {
+    target.abort();
+  };
+
+  if (source.aborted) {
+    target.abort();
+    return () => {};
+  }
+
+  source.addEventListener("abort", abortTarget, {
+    once: true,
+  });
+
+  return () => {
+    source.removeEventListener("abort", abortTarget);
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -145,14 +223,19 @@ const ParseVoiceResponseSchema = z.object({
  */
 export async function parseVoiceWithAi(
   options: ParseVoiceOptions
-): Promise<ParseVoiceResult | VoiceParserError> {
+): Promise<ParseVoiceResult | VoiceParserFailure> {
   // Compute caller's local date in YYYY-MM-DD format for relative date resolution
   const now = new Date();
   const callerLocalDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 
   // FR-024: 30-second client-side timeout via AbortController
   const abortController = new AbortController();
+  let didClientTimeout = false;
+
+  const detachExternalAbort = linkAbortSignal(options.signal, abortController);
+
   const timeoutId = setTimeout(() => {
+    didClientTimeout = true;
     abortController.abort();
   }, AI_TIMEOUT_MS);
 
@@ -189,36 +272,50 @@ export async function parseVoiceWithAi(
         formData.append("accounts", JSON.stringify(options.accounts));
       }
       formData.append("callerLocalDate", callerLocalDate);
+      formData.append("requestKey", options.requestKey);
+      formData.append("callerTimeZone", options.callerTimeZone);
 
       response = await supabase.functions.invoke("parse-voice", {
         body: formData,
         signal: abortController.signal,
       });
     } else {
-      clearTimeout(timeoutId);
       return {
         kind: "unknown",
         message: "audioUri must be provided.",
       };
     }
 
-    clearTimeout(timeoutId);
-
     if (response.error) {
-      // PII/privacy: do NOT log the response body; provider errors may echo
-      // transcript-derived content or account names.
-      let status: number | undefined;
-      let bodyLength: number | undefined;
-      const ctx = (response.error as { context?: unknown }).context;
-      if (ctx instanceof Response) {
-        status = ctx.status;
-        try {
-          bodyLength = (await ctx.clone().text()).length;
-        } catch {
-          bodyLength = undefined;
-        }
+      const context = getEdgeFunctionResponse(response.error);
+      const status = context?.status;
+
+      if (options.signal?.aborted) {
+        return {
+          kind: "network",
+          message: VOICE_ANALYSIS_NETWORK_ERROR_MESSAGE,
+          retryableSameRequest: false,
+        };
       }
 
+      // Supabase returns fetch aborts as FunctionsFetchError, rather than throwing.
+      if (context === null && didClientTimeout) {
+        return {
+          kind: "timeout",
+          message:
+            "Analysis took too long. Please check your connection and try again.",
+          retryableSameRequest: true,
+        };
+      }
+
+      const retryableSameRequest =
+        context === null || status === VOICE_AMBIGUOUS_SERVER_STATUS;
+      let bodyLength: number | undefined;
+
+      /*
+       * Existing consent behavior wins before quota-envelope parsing.
+       * Only HTTP 429 is allowed to carry the canonical quota refusal.
+       */
       if (status === AI_CONSENT_REQUIRED_STATUS) {
         return {
           kind: "consent_required",
@@ -226,7 +323,33 @@ export async function parseVoiceWithAi(
         };
       }
 
+      if (status === VOICE_QUOTA_REFUSAL_STATUS && context !== null) {
+        try {
+          const bodyText = await context.clone().text();
+          bodyLength = bodyText.length;
+
+          const refusal = parseQuotaRefusalBody(bodyText);
+
+          if (refusal !== null) {
+            return {
+              kind: refusal.reason,
+              message: quotaRefusalMessage(refusal.reason),
+              availability: refusal.availability,
+            };
+          }
+        } catch {
+          bodyLength = undefined;
+        }
+      } else if (context !== null) {
+        try {
+          bodyLength = (await context.clone().text()).length;
+        } catch {
+          bodyLength = undefined;
+        }
+      }
+
       const sanitizedError = new Error(response.error.message);
+
       if (response.error instanceof Error) {
         sanitizedError.name = response.error.name;
       }
@@ -234,11 +357,16 @@ export async function parseVoiceWithAi(
       logger.error(
         "[ai-voice-parser] parse-voice Edge Function error",
         sanitizedError,
-        { status, bodyLength }
+        {
+          status,
+          bodyLength,
+        }
       );
+
       return {
         kind: "network",
         message: VOICE_ANALYSIS_NETWORK_ERROR_MESSAGE,
+        retryableSameRequest,
       };
     }
 
@@ -409,14 +537,21 @@ export async function parseVoiceWithAi(
       detectedLanguage,
     };
   } catch (err: unknown) {
-    clearTimeout(timeoutId);
-
     // FR-024: Handle timeout specifically
     if (err instanceof Error && err.name === "AbortError") {
+      if (didClientTimeout) {
+        return {
+          kind: "timeout",
+          message:
+            "Analysis took too long. Please check your connection and try again.",
+          retryableSameRequest: true,
+        };
+      }
+
       return {
-        kind: "timeout",
-        message:
-          "Analysis took too long. Please check your connection and try again.",
+        kind: "network",
+        message: VOICE_ANALYSIS_NETWORK_ERROR_MESSAGE,
+        retryableSameRequest: false,
       };
     }
 
@@ -426,6 +561,9 @@ export async function parseVoiceWithAi(
       kind: "unknown",
       message,
     };
+  } finally {
+    clearTimeout(timeoutId);
+    detachExternalAbort();
   }
 }
 
@@ -433,7 +571,18 @@ export async function parseVoiceWithAi(
  * Type guard to check if a result is an error.
  */
 export function isVoiceParserError(
-  result: ParseVoiceResult | VoiceParserError
-): result is VoiceParserError {
+  result: ParseVoiceResult | VoiceParserFailure
+): result is VoiceParserFailure {
   return "kind" in result;
+}
+
+export function isVoiceQuotaParserError(
+  result: ParseVoiceResult | VoiceParserFailure
+): result is VoiceQuotaParserError {
+  return (
+    "availability" in result &&
+    (result.kind === "daily_limit" ||
+      result.kind === "burst_limit" ||
+      result.kind === "already_processed_result_unavailable")
+  );
 }

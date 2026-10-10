@@ -1,0 +1,70 @@
+appId: com.monyvi.app
+---
+# R05 / T028 — approved unified Add Transaction shell.
+# AUTHORED, NOT RUN. Requires authenticated local seeded account/category and
+# the Mobile-owned Manual B amount input testID "manual-amount-input".
+# Navigation, amount focus, Done and header Save are controllable; this flow
+# never records audio or invokes a paid voice provider.
+- runFlow: ../helpers/setup.yaml
+
+# FAB always opens Manual. Bottom navigation in mockups is presentation-only.
+- tapOn:
+    id: "fab-button"
+- tapOn:
+    id: "fab-transaction"
+- waitForAnimationToEnd
+- assertVisible: "New Transaction"
+- assertVisible:
+    id: "add-transaction-mode-manual"
+- assertVisible:
+    id: "header-save"
+- assertNotVisible: "Limited free voice usage"
+- assertNotVisible: "Voice unavailable"
+- assertNotVisible: "Daily voice limit reached"
+
+# Approved compact Manual B: calculator does not appear before amount focus.
+- assertNotVisible: "Done"
+- tapOn:
+    id: "manual-amount-input"
+- assertVisible: "Done"
+- tapOn:
+    id: "calculator-key-1"
+- tapOn:
+    id: "calculator-key-5"
+- tapOn:
+    id: "calculator-key-0"
+- tapOn:
+    id: "calculator-key-done"
+# Done dismisses the calculator; it must not submit.
+- assertNotVisible: "Done"
+- assertVisible: "150"
+- assertVisible:
+    id: "header-save"
+
+# Safe switch preserves the mounted draft and keeps Manual content hidden.
+- tapOn:
+    id: "add-transaction-mode-voice"
+- assertNotVisible:
+    id: "header-save"
+- tapOn:
+    id: "add-transaction-mode-manual"
+- assertVisible: "150"
+- assertNotVisible: "Limited free voice usage"
+- assertNotVisible: "Voice unavailable"
+
+# Only header Save persists the transaction.
+- tapOn:
+    id: "header-save"
+- waitForAnimationToEnd
+- assertVisible: "Transactions"
+
+# Existing center mic opens the same route in Voice mode, without auto-start.
+- tapOn: "Voice input - record a transaction"
+- waitForAnimationToEnd
+- assertVisible:
+    id: "add-transaction-mode-voice"
+- assertNotVisible:
+    id: "header-save"
+
+# Native recording/pause/review and real permission journeys are MANUAL ONLY:
+# this harness has no deterministic Voice recording/provider double.

@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
+import type { ReactNode } from "react";
 import {
   Modal,
   ScrollView,
@@ -7,6 +8,8 @@ import {
   TouchableOpacity,
   TouchableWithoutFeedback,
   View,
+  type StyleProp,
+  type TextStyle,
 } from "react-native";
 import { useTranslation } from "react-i18next";
 import { palette } from "@/constants/colors";
@@ -31,12 +34,19 @@ interface DropdownBaseProps<T> {
   required?: boolean;
   accessibilityHint?: string;
   items: ReadonlyArray<DropdownItem<T>>;
-  value: T;
+  value: T | null;
   onChange: (value: T) => void;
   className?: string;
   placeholder?: string;
   disabled?: boolean;
   testID?: string;
+  error?: string;
+  selectedAdornment?: ReactNode;
+  triggerClassName?: string;
+  labelClassName?: string;
+  labelStyle?: StyleProp<TextStyle>;
+  selectedTextClassName?: string;
+  selectedTextStyle?: StyleProp<TextStyle>;
 }
 
 interface DropdownInlineProps<T> extends DropdownBaseProps<T> {
@@ -81,10 +91,16 @@ function DropdownItemRow<T extends string | number>({
       testID={testID}
       onPress={onPress}
       activeOpacity={0.6}
-      className={`flex-row items-center p-4 ${
+      className={`relative flex-row items-center p-4 ${
         !isLast ? "border-b border-slate-50 dark:border-slate-700/50" : ""
-      } ${isSelected ? "bg-nileGreen-50/50 dark:bg-nileGreen-900/10" : ""}`}
+      }`}
     >
+      {isSelected ? (
+        <View
+          pointerEvents="none"
+          className="absolute inset-0 bg-nileGreen-50/50 dark:bg-nileGreen-900/10"
+        />
+      ) : null}
       {item.icon && (
         <View className="me-3 w-8 items-center">
           {item.iconType === "ionicons" ? (
@@ -138,7 +154,7 @@ function DropdownItemRow<T extends string | number>({
 interface DropdownModalViewProps<T> {
   label: string;
   items: ReadonlyArray<DropdownItem<T>>;
-  value: T;
+  value: T | null;
   isOpen: boolean;
   isDark: boolean;
   onChange: (value: T) => void;
@@ -176,7 +192,6 @@ function DropdownModalView<T extends string | number>({
             <View className="absolute inset-0 bg-white/95 dark:bg-slate-900/95" />
 
             <View style={{ paddingBottom: bottomInset }}>
-              {/* Header */}
               <View className="flex-row justify-between items-center px-6 py-5 border-b border-slate-200 dark:border-slate-800">
                 <Text className="text-xl font-bold text-slate-800 dark:text-slate-100">
                   {label}
@@ -190,7 +205,6 @@ function DropdownModalView<T extends string | number>({
                 </TouchableOpacity>
               </View>
 
-              {/* Items */}
               <ScrollView
                 testID={testID ? `${testID}-options-scroll` : undefined}
                 className="max-h-80"
@@ -229,11 +243,13 @@ function DropdownModalView<T extends string | number>({
 
 /**
  * A generic, reusable dropdown component with support for icons and descriptions.
- * Follows the project's premium design language.
  *
  * Supports two modes:
- * - **Inline** (default): Expands items below the trigger.
- * - **Modal**: Shows items in a bottom-sheet modal (set `useModal={true}`).
+ * - Inline (default): expands items below the trigger.
+ * - Modal: shows items in a bottom-sheet modal.
+ *
+ * A null value represents a true missing selection. Callers that own a separate
+ * selector modal may keep isOpen=false and use onToggle to open that workflow.
  */
 export function Dropdown<T extends string | number>({
   label,
@@ -244,38 +260,65 @@ export function Dropdown<T extends string | number>({
   isOpen,
   onToggle,
   className = "",
-  variant = "default",
   placeholder = "Select...",
   useModal = false,
   disabled = false,
   testID,
   accessibilityHint,
+  error,
+  selectedAdornment,
+  triggerClassName,
+  labelClassName,
+  labelStyle,
+  selectedTextClassName,
+  selectedTextStyle,
+  variant = "default",
 }: DropdownProps<T>): React.JSX.Element {
   const { t } = useTranslation("common");
   const { isDark } = useTheme();
   const selectedItem = items.find((item) => item.value === value);
+  const resolvedLabelClassName =
+    labelClassName ??
+    (variant === "outlined"
+      ? "mb-1 text-sm font-normal text-text-secondary dark:text-text-secondary-dark"
+      : "input-label mb-2");
+  const resolvedSelectedTextClassName = `min-w-0 flex-1 ${
+    selectedTextClassName ??
+    `text-base ${
+      variant === "outlined" ? "font-normal" : "font-medium"
+    } text-slate-900 dark:text-white`
+  }`;
+  const resolvedTriggerClassName =
+    variant === "outlined"
+      ? `${triggerClassName ?? "min-h-11"} justify-center px-3 py-2`
+      : `p-4 ${triggerClassName ?? ""}`.trim();
 
   return (
     <View
       collapsable={false}
-      className={`${variant === "outlined" ? "" : "mb-3"} ${className ?? ""} ${disabled ? "opacity-50" : ""}`.trim()}
+      className={`${variant === "outlined" ? "" : "mb-3"} ${className} ${
+        disabled ? "opacity-50" : ""
+      }`.trim()}
     >
-      <Text
-        className={
-          variant === "outlined"
-            ? "mb-1 text-sm font-normal text-text-secondary dark:text-text-secondary-dark"
-            : "input-label mb-2"
-        }
-      >
+      <Text className={resolvedLabelClassName} style={labelStyle}>
         {label}
         {required ? <Text className="text-red-500">{" *"}</Text> : null}
       </Text>
 
       <View
+        testID={testID ? `${testID}-control` : undefined}
         className={
           variant === "outlined"
-            ? "rounded-lg border border-slate-200 bg-slate-25 dark:border-slate-700 dark:bg-slate-900 overflow-hidden"
-            : "rounded-2xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800 overflow-hidden shadow-sm"
+            ? `overflow-hidden rounded-lg border bg-slate-25 dark:bg-slate-900 ${
+                error
+                  ? "border-red-500"
+                  : "border-slate-200 dark:border-slate-700"
+              }`
+            : `overflow-hidden rounded-2xl border bg-white shadow-sm dark:bg-slate-800 ${
+                error
+                  ? "border-red-500"
+                  : "border-slate-200 dark:border-slate-700"
+              }`
         }
       >
         <TouchableOpacity
@@ -286,13 +329,13 @@ export function Dropdown<T extends string | number>({
           accessibilityHint={
             accessibilityHint ?? (required ? t("required_field") : undefined)
           }
-          className={
-            variant === "outlined" ? "min-h-11 justify-center px-3 py-2" : "p-4"
-          }
+          className={resolvedTriggerClassName}
         >
           <View className="flex-row items-center justify-between">
-            <View className="flex-row items-center">
-              {selectedItem?.icon && (
+            <View className="min-w-0 flex-1 flex-row items-center">
+              {selectedItem && selectedAdornment ? (
+                <View className="me-3">{selectedAdornment}</View>
+              ) : selectedItem?.icon ? (
                 <View className="me-3 w-8 items-center">
                   {selectedItem.iconType === "ionicons" ? (
                     <Ionicons
@@ -306,9 +349,11 @@ export function Dropdown<T extends string | number>({
                     <Text className="text-xl">{selectedItem.icon}</Text>
                   )}
                 </View>
-              )}
+              ) : null}
               <Text
-                className={`text-base ${variant === "outlined" ? "font-normal" : "font-medium"} text-slate-900 dark:text-white`}
+                numberOfLines={1}
+                className={resolvedSelectedTextClassName}
+                style={selectedTextStyle}
               >
                 {selectedItem?.label || placeholder}
               </Text>
@@ -321,7 +366,6 @@ export function Dropdown<T extends string | number>({
           </View>
         </TouchableOpacity>
 
-        {/* Inline expansion (non-modal mode) */}
         {!useModal && isOpen && (
           <View className="border-t border-slate-100 dark:border-slate-700 max-h-60">
             {items.map((item, index) => (
@@ -344,7 +388,17 @@ export function Dropdown<T extends string | number>({
         )}
       </View>
 
-      {/* Modal expansion */}
+      {error ? (
+        <Text
+          testID={testID ? `${testID}-error` : undefined}
+          accessibilityRole="alert"
+          accessibilityLabel={error}
+          className="input-error"
+        >
+          {error}
+        </Text>
+      ) : null}
+
       {useModal && (
         <DropdownModalView
           label={label}

@@ -1735,6 +1735,87 @@ export type Database = {
           },
         ];
       };
+      voice_ai_usage_windows: {
+        Row: {
+          created_at: string;
+          local_date: string;
+          policy_version: string;
+          time_zone: string;
+          updated_at: string;
+          user_id: string;
+          window_ends_at: string;
+          window_started_at: string;
+        };
+        Insert: {
+          created_at?: string;
+          local_date: string;
+          policy_version: string;
+          time_zone: string;
+          updated_at?: string;
+          user_id: string;
+          window_ends_at: string;
+          window_started_at: string;
+        };
+        Update: {
+          created_at?: string;
+          local_date?: string;
+          policy_version?: string;
+          time_zone?: string;
+          updated_at?: string;
+          user_id?: string;
+          window_ends_at?: string;
+          window_started_at?: string;
+        };
+        Relationships: [];
+      };
+      voice_ai_work_requests: {
+        Row: {
+          available_at: string | null;
+          created_at: string;
+          decision_code: string;
+          id: string;
+          provider_started_at: string | null;
+          request_key: string;
+          reservation_expires_at: string | null;
+          status: string;
+          time_zone: string;
+          updated_at: string;
+          user_id: string;
+          window_ends_at: string;
+          window_started_at: string;
+        };
+        Insert: {
+          available_at?: string | null;
+          created_at?: string;
+          decision_code: string;
+          id?: string;
+          provider_started_at?: string | null;
+          request_key: string;
+          reservation_expires_at?: string | null;
+          status: string;
+          time_zone: string;
+          updated_at?: string;
+          user_id: string;
+          window_ends_at: string;
+          window_started_at: string;
+        };
+        Update: {
+          available_at?: string | null;
+          created_at?: string;
+          decision_code?: string;
+          id?: string;
+          provider_started_at?: string | null;
+          request_key?: string;
+          reservation_expires_at?: string | null;
+          status?: string;
+          time_zone?: string;
+          updated_at?: string;
+          user_id?: string;
+          window_ends_at?: string;
+          window_started_at?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: {
       [_ in never]: never;
@@ -1967,6 +2048,105 @@ export type Database = {
         };
         Returns: {
           accepted_scan_started_at: string;
+        }[];
+      };
+      voice_ai_cleanup_expired_requests: {
+        Args: { p_limit?: number };
+        Returns: number;
+      };
+      voice_ai_complete_work: {
+        Args: {
+          p_completed_with_provider_error: boolean;
+          p_decision_code: string;
+          p_request_id: string;
+          p_user_id: string;
+        };
+        Returns: boolean;
+      };
+      voice_ai_get_availability: {
+        Args: {
+          p_burst_limit: number;
+          p_burst_window_seconds: number;
+          p_daily_limit?: number;
+          p_mode: string;
+          p_policy_version: string;
+          p_time_zone: string;
+          p_user_id: string;
+        };
+        Returns: {
+          available_at: string;
+          burst_available_at: string;
+          daily_limit: number;
+          policy_version: string;
+          reason: string;
+          remaining: number;
+          reset_at: string;
+          server_now: string;
+          time_zone: string;
+          window_ends_at: string;
+          window_started_at: string;
+        }[];
+      };
+      voice_ai_mark_provider_started: {
+        Args: {
+          p_burst_limit: number;
+          p_burst_window_seconds: number;
+          p_daily_limit?: number;
+          p_mode: string;
+          p_policy_version: string;
+          p_request_id: string;
+          p_time_zone: string;
+          p_user_id: string;
+        };
+        Returns: {
+          available_at: string;
+          burst_available_at: string;
+          daily_limit: number;
+          decision_code: string;
+          is_replay: boolean;
+          policy_version: string;
+          remaining: number;
+          request_id: string;
+          reset_at: string;
+          server_now: string;
+          started: boolean;
+          time_zone: string;
+        }[];
+      };
+      voice_ai_release_work: {
+        Args: {
+          p_decision_code: string;
+          p_request_id: string;
+          p_user_id: string;
+        };
+        Returns: boolean;
+      };
+      voice_ai_reserve_work: {
+        Args: {
+          p_burst_limit: number;
+          p_burst_window_seconds: number;
+          p_daily_limit?: number;
+          p_mode: string;
+          p_policy_version: string;
+          p_request_key: string;
+          p_reservation_lease_seconds: number;
+          p_time_zone: string;
+          p_user_id: string;
+        };
+        Returns: {
+          accepted: boolean;
+          available_at: string;
+          burst_available_at: string;
+          daily_limit: number;
+          decision_code: string;
+          is_replay: boolean;
+          policy_version: string;
+          remaining: number;
+          request_id: string;
+          reservation_expires_at: string;
+          reset_at: string;
+          server_now: string;
+          time_zone: string;
         }[];
       };
     };

@@ -21,6 +21,7 @@ interface MockVoiceFunctionResponse {
 
 interface MockVoiceFunctionOptions {
   readonly body: unknown;
+  readonly signal?: AbortSignal;
 }
 
 const mockInvoke = jest.fn<
@@ -87,6 +88,7 @@ import {
   isVoiceParserError,
 } from "@/services/ai-voice-parser-service";
 import type { Category } from "@monyvi/db";
+import { FunctionsFetchError } from "@supabase/supabase-js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -103,6 +105,9 @@ function makeDefaultOptions(overrides: Record<string, unknown> = {}): {
   categories: string;
   accounts: ReadonlyArray<{ id: string; name: string; currency: string }>;
   categoryRecords: readonly Category[];
+  requestKey: string;
+  callerTimeZone: string;
+  signal?: AbortSignal;
 } {
   return {
     audioUri: "file:///tmp/recording.m4a",
@@ -110,6 +115,8 @@ function makeDefaultOptions(overrides: Record<string, unknown> = {}): {
     categories: "Food > Coffee",
     accounts: [{ id: "acc-1", name: "Cash EGP", currency: "EGP" }],
     categoryRecords: [] as Category[],
+    requestKey: "voice-request-default",
+    callerTimeZone: "Africa/Cairo",
     ...overrides,
   };
 }
@@ -201,6 +208,13 @@ describe("ai-voice-parser-service", () => {
       return audioCall?.[1];
     }
 
+    function getAppendedStringValues(field: string): readonly string[] {
+      return appendSpy.mock.calls
+        .filter((call: unknown[]) => call[0] === field)
+        .map((call: unknown[]) => call[1])
+        .filter((value: unknown): value is string => typeof value === "string");
+    }
+
     it("should return parsed transactions for valid response", async () => {
       const tx = makeValidTransaction();
       mockInvoke.mockResolvedValueOnce(makeSuccessResponse([tx]));
@@ -288,6 +302,41 @@ describe("ai-voice-parser-service", () => {
       ) as [string, string] | undefined;
       expect(accountsCall).toBeDefined();
       expect(accountsCall?.[1]).toBe(JSON.stringify(opts.accounts));
+    });
+
+    it("submits the same caller-provided request key for the same logical replay", async () => {
+      const requestKey = "voice-logical-request-347";
+      const opts = makeDefaultOptions({ requestKey });
+
+      mockInvoke
+        .mockResolvedValueOnce(makeSuccessResponse([makeValidTransaction()]))
+        .mockResolvedValueOnce(makeSuccessResponse([makeValidTransaction()]));
+
+      await parseVoiceWithAi(opts);
+      await parseVoiceWithAi(opts);
+
+      // Preserve the existing relative-date context while adding logical
+      // request identity. This is expected to remain Green in the Red run.
+      expect(getAppendedStringValues("callerLocalDate")).toHaveLength(2);
+      expect(getAppendedStringValues("requestKey")).toEqual([
+        requestKey,
+        requestKey,
+      ]);
+    });
+
+    it("submits the caller-provided device timezone independently", async () => {
+      const callerTimeZone = "Africa/Cairo";
+      const opts = makeDefaultOptions({ callerTimeZone });
+
+      mockInvoke.mockResolvedValueOnce(
+        makeSuccessResponse([makeValidTransaction()])
+      );
+
+      await parseVoiceWithAi(opts);
+
+      expect(getAppendedStringValues("callerTimeZone")).toEqual([
+        callerTimeZone,
+      ]);
     });
 
     it("should return multiple parsed transactions", async () => {
@@ -471,12 +520,75 @@ describe("ai-voice-parser-service", () => {
       const result = await parseVoiceWithAi(makeDefaultOptions());
 
       expect(isVoiceParserError(result)).toBe(true);
-      if (isVoiceParserError(result)) {
+      expect(result).toEqual(
+        expect.objectContaining({ kind: "network", retryableSameRequest: true })
+      );
+      if (isVoiceParserError(result) && !("availability" in result)) {
         expect(result.kind).toBe("network");
         expect(result.message).not.toContain("Edge Function");
         expect(result.message).toBe(
           "We couldn't reach voice analysis right now. Please check your connection and try again."
         );
+        expect(result.retryableSameRequest).toBe(true);
+      }
+    });
+
+    it("keeps the same request retryable for an ambiguous authoritative 503", async () => {
+      const errorWithContext = new Error("FunctionsHttpError") as Error & {
+        context: Response;
+      };
+      errorWithContext.context = new Response(
+        JSON.stringify({
+          error: "Authoritative voice availability unavailable",
+          code: 503,
+        }),
+        { status: 503 }
+      );
+      mockInvoke.mockResolvedValueOnce({
+        data: null,
+        error: errorWithContext,
+      });
+
+      const result = await parseVoiceWithAi(makeDefaultOptions());
+
+      expect(isVoiceParserError(result)).toBe(true);
+      expect(result).toEqual(
+        expect.objectContaining({ kind: "network", retryableSameRequest: true })
+      );
+      if (isVoiceParserError(result) && !("availability" in result)) {
+        expect(result.kind).toBe("network");
+        expect(result.retryableSameRequest).toBe(true);
+      }
+    });
+
+    it("does not reuse the same request key after a confirmed HTTP 500", async () => {
+      const errorWithContext = new Error("FunctionsHttpError") as Error & {
+        context: Response;
+      };
+      errorWithContext.context = new Response(
+        JSON.stringify({
+          error: "Internal server error",
+          code: 500,
+        }),
+        { status: 500 }
+      );
+      mockInvoke.mockResolvedValueOnce({
+        data: null,
+        error: errorWithContext,
+      });
+
+      const result = await parseVoiceWithAi(makeDefaultOptions());
+
+      expect(isVoiceParserError(result)).toBe(true);
+      expect(result).toEqual(
+        expect.objectContaining({
+          kind: "network",
+          retryableSameRequest: false,
+        })
+      );
+      if (isVoiceParserError(result) && !("availability" in result)) {
+        expect(result.kind).toBe("network");
+        expect(result.retryableSameRequest).toBe(false);
       }
     });
 
@@ -593,17 +705,97 @@ describe("ai-voice-parser-service", () => {
       }
     });
 
-    it("should return 'timeout' error on AbortError", async () => {
-      const abortError = new Error("Aborted");
-      abortError.name = "AbortError";
-      mockInvoke.mockRejectedValueOnce(abortError);
+    it("returns retryable timeout when the SDK returns a fetch error after the owned timer", async () => {
+      jest.useFakeTimers();
 
-      const result = await parseVoiceWithAi(makeDefaultOptions());
+      try {
+        mockInvoke.mockImplementationOnce(
+          (
+            _name: string,
+            options: MockVoiceFunctionOptions
+          ): Promise<MockVoiceFunctionResponse> =>
+            new Promise<MockVoiceFunctionResponse>((resolve) => {
+              options.signal?.addEventListener(
+                "abort",
+                (): void => {
+                  const abortError = new Error("Aborted");
+                  abortError.name = "AbortError";
+                  resolve({
+                    data: null,
+                    error: new FunctionsFetchError(abortError),
+                  });
+                },
+                { once: true }
+              );
+            })
+        );
+
+        const resultPromise = parseVoiceWithAi(makeDefaultOptions());
+
+        jest.advanceTimersByTime(30_000);
+        await Promise.resolve();
+
+        const result = await resultPromise;
+
+        expect(isVoiceParserError(result)).toBe(true);
+        expect(result).toEqual(
+          expect.objectContaining({
+            kind: "timeout",
+            retryableSameRequest: true,
+          })
+        );
+        if (isVoiceParserError(result) && !("availability" in result)) {
+          expect(result.kind).toBe("timeout");
+          expect(result.message).toContain("took too long");
+          expect(result.retryableSameRequest).toBe(true);
+        }
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it("does not retain a request when the SDK returns a fetch error after external cancellation", async () => {
+      const operationController = new AbortController();
+      mockInvoke.mockImplementationOnce(
+        (
+          _name: string,
+          options: MockVoiceFunctionOptions
+        ): Promise<MockVoiceFunctionResponse> =>
+          new Promise<MockVoiceFunctionResponse>((resolve) => {
+            options.signal?.addEventListener(
+              "abort",
+              (): void => {
+                const abortError = new Error("Aborted");
+                abortError.name = "AbortError";
+                resolve({
+                  data: null,
+                  error: new FunctionsFetchError(abortError),
+                });
+              },
+              { once: true }
+            );
+          })
+      );
+
+      const resultPromise = parseVoiceWithAi(
+        makeDefaultOptions({
+          signal: operationController.signal,
+        })
+      );
+
+      operationController.abort();
+      const result = await resultPromise;
 
       expect(isVoiceParserError(result)).toBe(true);
-      if (isVoiceParserError(result)) {
-        expect(result.kind).toBe("timeout");
-        expect(result.message).toContain("took too long");
+      expect(result).toEqual(
+        expect.objectContaining({
+          kind: "network",
+          retryableSameRequest: false,
+        })
+      );
+      if (isVoiceParserError(result) && !("availability" in result)) {
+        expect(result.kind).toBe("network");
+        expect(result.retryableSameRequest).toBe(false);
       }
     });
   });

@@ -246,3 +246,32 @@ test("excludes private cutover quarantine tables from the local schema", () => {
 
   assert.deepEqual(parsed.createTables, {});
 });
+
+test("excludes voice AI operational tables while preserving ordinary public schema changes", () => {
+  const parsed = parseSql(`
+    CREATE TABLE public.sms_ai_work_requests (
+      id uuid PRIMARY KEY,
+      user_id uuid NOT NULL,
+      request_key text NOT NULL
+    );
+    CREATE TABLE public.voice_ai_usage_windows (
+      user_id uuid PRIMARY KEY,
+      time_zone text NOT NULL
+    );
+    CREATE TABLE public.voice_ai_work_requests (
+      id uuid PRIMARY KEY,
+      user_id uuid NOT NULL,
+      request_key text NOT NULL
+    );
+    ALTER TABLE public.voice_ai_work_requests
+      ADD COLUMN provider_started_at timestamptz;
+    CREATE TABLE public.local_control_table (
+      id uuid PRIMARY KEY,
+      name text NOT NULL
+    );
+  `);
+
+  assert.deepEqual(Object.keys(parsed.createTables), ["local_control_table"]);
+  assert.deepEqual(parsed.addColumns, {});
+  assert.equal(parsed.createTables.local_control_table[0].name, "name");
+});

@@ -1,12 +1,14 @@
 import { palette } from "@/constants/colors";
-import { Account } from "@monyvi/db";
+import type { Account } from "@monyvi/db";
 import { Ionicons } from "@expo/vector-icons";
-import { Text, TouchableOpacity, View } from "react-native";
-import { useEffect, useMemo, useState, type RefObject } from "react";
+import { Text, TouchableOpacity, View, type TextInput } from "react-native";
+import { useEffect, useMemo, useState, type Ref, type RefObject } from "react";
 import { AccountSelectorModal } from "../modals/AccountSelectorModal";
 import { formatAmountInput } from "@monyvi/logic";
 import { formatLocalizedMoneyAmount } from "@/utils/localized-money-display";
 import { useTranslation } from "react-i18next";
+import { GroupedMoneyInput } from "@/components/ui/GroupedMoneyInput";
+import { useLocale } from "@/context/LocaleContext";
 
 interface TransferFieldsProps {
   accounts: Account[];
@@ -17,17 +19,37 @@ interface TransferFieldsProps {
   amount: string;
   targetAmount: string;
   onChangeTargetAmount: (amount: string) => void;
+  readonly targetAmountInputRef?: Ref<TextInput>;
+  readonly compactTargetAmount?: boolean;
   exchangeRate?: number;
   /** Whether the target amount field is the active keypad target */
   isTargetAmountActive?: boolean;
-  /** Called when user taps the target amount to switch keypad focus */
+  /** Called when user focuses the target amount to switch keypad focus */
   onFocusTargetAmount?: () => void;
+  readonly onBlurTargetAmount?: () => void;
   /** Source account validation message, shown after submit attempts */
   fromAccountError?: string;
   /** Destination account validation message, shown after submit attempts */
   toAccountError?: string;
   readonly fromAccountRef?: RefObject<View | null>;
   readonly toAccountRef?: RefObject<View | null>;
+}
+
+function CompactCurrencySuffix({
+  currency,
+}: {
+  readonly currency?: string;
+}): React.JSX.Element {
+  const { fontFamily } = useLocale();
+
+  return (
+    <Text
+      className="text-sm font-medium text-text-secondary dark:text-text-secondary-dark"
+      style={{ fontFamily: fontFamily.medium }}
+    >
+      {currency}
+    </Text>
+  );
 }
 
 export function TransferFields({
@@ -37,10 +59,13 @@ export function TransferFields({
   onSelectFrom,
   onSelectTo,
   targetAmount,
-  onChangeTargetAmount: _onChangeTargetAmount,
+  onChangeTargetAmount,
+  targetAmountInputRef,
+  compactTargetAmount = false,
   exchangeRate,
   isTargetAmountActive,
   onFocusTargetAmount,
+  onBlurTargetAmount,
   fromAccountError,
   toAccountError,
   fromAccountRef,
@@ -90,6 +115,9 @@ export function TransferFields({
         <View ref={fromAccountRef} collapsable={false} className="flex-1">
           <Text className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-2 px-1 uppercase tracking-wider">
             {t("from_label").toUpperCase()}
+            {compactTargetAmount ? (
+              <Text className="text-red-500">{" *"}</Text>
+            ) : null}
           </Text>
           <TouchableOpacity
             onPress={() => setIsFromModalOpen(true)}
@@ -138,6 +166,9 @@ export function TransferFields({
         <View ref={toAccountRef} collapsable={false} className="flex-1">
           <Text className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-2 px-1 uppercase tracking-wider">
             {t("to_label")}
+            {compactTargetAmount ? (
+              <Text className="text-red-500">{" *"}</Text>
+            ) : null}
           </Text>
           <TouchableOpacity
             onPress={() => setIsToModalOpen(true)}
@@ -186,13 +217,64 @@ export function TransferFields({
       />
 
       {/* Multi-currency Target Amount Section */}
-      {isMultiCurrency && (
+      {isMultiCurrency && compactTargetAmount ? (
+        <View className="mt-4 rounded-2xl border border-blue-100 bg-blue-50/50 p-4 dark:border-blue-900/30 dark:bg-blue-900/10">
+          {exchangeRate && fromAccount && toAccount ? (
+            <Text className="mb-2 text-xs font-medium text-slate-500 dark:text-slate-400">
+              {formatLocalizedMoneyAmount({
+                amount: 1,
+                currency: fromAccount.currency,
+                language,
+                englishPresentation: "code-suffix",
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 0,
+              })}{" "}
+              ≈{" "}
+              {formatLocalizedMoneyAmount({
+                amount: exchangeRate,
+                currency: toAccount.currency,
+                language,
+                englishPresentation: "code-suffix",
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}
+            </Text>
+          ) : null}
+
+          <GroupedMoneyInput
+            testID="manual-transfer-target-amount-input"
+            label={t("target_amount", { currency: toAccount?.currency })}
+            required
+            value={targetAmount}
+            onCanonicalChange={onChangeTargetAmount}
+            inputRef={targetAmountInputRef}
+            showSoftInputOnFocus={false}
+            onFocus={onFocusTargetAmount}
+            onBlur={onBlurTargetAmount}
+            placeholder="0.00"
+            className={`min-h-14 text-lg ${
+              isTargetAmountActive
+                ? "border-nileGreen-500 dark:border-nileGreen-500"
+                : ""
+            }`}
+            trailingAdornment={
+              <CompactCurrencySuffix currency={toAccount?.currency} />
+            }
+          />
+
+          <Text className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+            {t("confirm_amount_received", { currency: toAccount?.currency })}
+          </Text>
+        </View>
+      ) : null}
+
+      {isMultiCurrency && !compactTargetAmount ? (
         <View className="mt-4 mx-2 bg-blue-50/50 dark:bg-blue-900/10 p-5 rounded-3xl border border-blue-100 dark:border-blue-900/30">
           <View className="flex-row items-center justify-between mb-3">
             <Text className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">
               {t("target_amount", { currency: toAccount?.currency })}
             </Text>
-            {exchangeRate && fromAccount && toAccount && (
+            {exchangeRate && fromAccount && toAccount ? (
               <Text className="text-[10px] text-slate-400 font-bold dark:text-slate-500">
                 {formatLocalizedMoneyAmount({
                   amount: 1,
@@ -212,7 +294,7 @@ export function TransferFields({
                   maximumFractionDigits: 2,
                 })}
               </Text>
-            )}
+            ) : null}
           </View>
 
           <TouchableOpacity
@@ -242,7 +324,7 @@ export function TransferFields({
             {t("confirm_amount_received", { currency: toAccount?.currency })}
           </Text>
         </View>
-      )}
+      ) : null}
     </View>
   );
 }

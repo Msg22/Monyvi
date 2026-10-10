@@ -785,6 +785,22 @@ existing visual-gate ownership, but do not mark visual completion without
 side-by-side or overlay rendered screenshot evidence against the approved
 reference. Report functional readiness and visual fidelity as separate statuses.
 
+For mockup-backed UI, every dispatch brief must identify the approved references
+and the required state/shared-component/icon fidelity obligations. When the
+approved feature handoff defines a canonical manifest or state-to-surface map,
+the brief MUST reference and consume it with the verified sidecars; otherwise no
+new manifest artifact is required. Any manifest or derived map is an
+implementation/index aid and MUST NOT override approved Binding Facts, replace
+the binding verifier, or create a second approval gate. Before assigning
+governed work, inventory/read the active approved references, verify their
+bindings, and route missing or ambiguous fidelity facts through the normal
+binding clarification/approval workflow. Worker reports the exact references,
+mapping source, and comparison context at plan checkpoint. Passing source/tests
+cannot satisfy rendered proof. When owner explicitly defers
+device/render/accessibility execution, author the authorized coverage and hand
+complete manual plan to owner; mark those checks NOT RUN and retain separate
+fidelity/accessibility/readiness gaps.
+
 ### Implementation Gate
 
 Before production edits, requirements, task graph, ownership, branch topology,

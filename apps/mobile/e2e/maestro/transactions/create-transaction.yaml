@@ -2,47 +2,103 @@ appId: com.monyvi.app
 
 ---
 
-# T031: Create a new expense transaction
-# Precondition: At least one account exists in the app
+# T031: Create and reopen a persisted expense transaction.
+# Precondition: deterministic E2E seed with E2E Cash as the default account.
 
-# Step 1: Launch app and navigate to Transactions
+# Step 1: Navigate to Transactions.
 - runFlow: ../helpers/setup.yaml
 
-# Step 2: Tap the FAB to open quick actions
+# Step 2: Open the quick-action FAB.
 - tapOn:
     id: "fab-button"
 
 - waitForAnimationToEnd
 
-# Step 3: Tap "Add Transaction" action
+# Step 3: Open Add Transaction.
 - tapOn:
     id: "fab-transaction"
 
 - waitForAnimationToEnd
 
-# Step 4: Verify we're on the New Transaction screen
+# Step 4: Verify the existing Manual transaction surface loaded.
 - assertVisible: "New Transaction"
+- assertVisible:
+    id: "type-tab-EXPENSE"
 
-# Step 5: EXPENSE tab should be selected by default
-- assertVisible: "EXPENSE"
+# The E2E seed makes E2E Cash the default account and the first top-level
+# expense category is Food & Drinks.
+- assertVisible: "E2E Cash"
+- assertVisible: "Food & Drinks"
 
-# Step 6: Enter amount using calculator keypad
-- tapOn: "1"
-- tapOn: "5"
-- tapOn: "0"
+# Step 5: Manual B starts with the custom calculator hidden.
+- assertVisible:
+    id: "manual-amount-input"
+- assertNotVisible:
+    id: "calculator-key-1"
 
-# Step 7: Select first category (tap first available chip)
+# Focusing Amount opens only the custom calculator.
+- tapOn:
+    id: "manual-amount-input"
+- assertVisible:
+    id: "calculator-key-1"
+
+# Enter 150 through the approved calculator controls.
+- tapOn:
+    id: "calculator-key-1"
+- tapOn:
+    id: "calculator-key-5"
+- tapOn:
+    id: "calculator-key-0"
+
+# Done dismisses the calculator but MUST NOT save.
+- tapOn:
+    id: "calculator-key-done"
+- assertNotVisible:
+    id: "calculator-key-1"
+- assertVisible: "New Transaction"
+- assertVisible: "150"
+
+# Preserve the existing EXPENSE interaction from this journey.
 - tapOn:
     id: "type-tab-EXPENSE"
-# Categories should be visible as chips below the amount
 
-# Step 8: Tap Save
+# Step 6: Header Save is the persistence action.
 - tapOn:
     id: "header-save"
 
 - waitForAnimationToEnd
 
-# Step 9: Verify navigation back or success indicator
-# After save, the app navigates back — we should be on some screen
-# A toast "Transaction created" should appear
+# Step 7: Verify navigation returned to Transactions.
 - assertVisible: "Transactions"
+
+# Step 8: Filter by the unique created amount so assertions and the subsequent
+# card tap target the transaction created by this journey rather than a seeded
+# row with the same date.
+- tapOn:
+    id: "search-input"
+
+- inputText: "150"
+- pressKey: Back
+
+- extendedWaitUntil:
+    visible: "-150 EGP"
+    timeout: 30000
+
+# Verify persisted list presentation: category, account, and amount.
+- assertVisible: "Food & Drinks"
+- assertVisible: "E2E Cash"
+- assertVisible: "-150 EGP"
+
+# Step 9: Reopen the persisted transaction through the real current card
+# selector. The 150 filter leaves the newly-created transaction as the match.
+- tapOn:
+    id: "transaction-card-.*"
+    index: 0
+
+- waitForAnimationToEnd
+
+# Step 10: Verify persisted values on the real Edit Transaction screen.
+- assertVisible: "Edit Transaction"
+- assertVisible: "150"
+- assertVisible: "E2E Cash"
+- assertVisible: "Food & Drinks"

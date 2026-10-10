@@ -46,6 +46,27 @@ fidelity-affecting `UNKNOWN`, pause for clarification before implementation.
   its approval record is missing/invalid, or a fidelity-affecting required fact
   remains `UNKNOWN`, pause before implementation and obtain clarification.
 
+Every mockup-backed implementation MUST compare each required state, shared
+component treatment, and icon identity against the approved Binding Facts and
+later rendered evidence. When the approved feature handoff defines an active
+state-to-surface/shared-component/icon manifest or map, consume it alongside
+verified sidecars and confirm each state/locale uses its intended immutable
+reference. That manifest/map is an implementation/index aid only: it MUST NOT
+override approved Binding Facts, replace the binding verifier, or create a
+second approval gate. When no feature-specific manifest exists, do not invent
+one solely for workflow compliance; use the approved sidecars/handoff directly.
+Resolve missing or ambiguous fidelity facts through the normal binding
+clarification/approval workflow before implementation. If owner explicitly
+defers device/render/accessibility execution, keep those checks NOT RUN and hand
+complete manual plan to owner. This does not establish visual completion or
+waive the separate evidence acceptance boundary.
+
+Format draft metadata before requesting approval and computing the approval
+revision. Never autoformat approved Binding Facts: any byte change invalidates
+the exact approved tuple and requires renewed approval. Protect active approved
+sidecars with exact .prettierignore entries; the binding verifier remains
+authoritative even when formatting is skipped.
+
 ## Requirements
 
 - Implement the binding UI **exactly as defined by the approved mockup

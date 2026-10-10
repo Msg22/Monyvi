@@ -182,9 +182,7 @@ function createRecorder(): AudioRecorder {
   // Cast: the flattened options match the native RecordingOptions structure
   // (with android/ios fields merged to top-level), which differs from the
   // TypeScript RecordingOptions type (nested android/ios sub-objects).
-  return new AudioModule.AudioRecorder(
-    platformOptions as Partial<RecordingOptions>
-  );
+  return new AudioModule.AudioRecorder(platformOptions);
 }
 
 // ---------------------------------------------------------------------------
@@ -203,6 +201,8 @@ export function useVoiceRecorder(): VoiceRecorderResult {
   const [durationMs, setDurationMs] = useState(0);
   const [audioUri, setAudioUri] = useState<string | null>(null);
   const [hasPermission, setHasPermission] = useState(false);
+  const audioUriRef = useRef<string | null>(null);
+  audioUriRef.current = audioUri;
 
   // Refs for timer management
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -228,6 +228,9 @@ export function useVoiceRecorder(): VoiceRecorderResult {
    * clears state while start()'s stabilization delay is still pending.
    */
   const nativeStartPromiseRef = useRef<Promise<void> | null>(null);
+  const nativeStopPromiseRef = useRef<Promise<string | null> | null>(null);
+  const cleanupPromiseRef = useRef<Promise<void> | null>(null);
+  const discardPromiseRef = useRef<Promise<void> | null>(null);
 
   /**
    * AbortController aborted on unmount to cancel any in-flight
@@ -304,16 +307,39 @@ export function useVoiceRecorder(): VoiceRecorderResult {
     }
   }, []);
 
-  // Clean up timer, abort pending polls, and release recorder on unmount
+  const stopNativeRecorder = useCallback(
+    async (recorder: AudioRecorder): Promise<string | null> => {
+      const existingStop = nativeStopPromiseRef.current;
+      if (existingStop !== null) {
+        return existingStop;
+      }
+
+      nativeReadyRef.current = false;
+      const stopPromise = (async (): Promise<string | null> => {
+        await recorder.stop();
+        return recorder.uri ?? null;
+      })();
+      nativeStopPromiseRef.current = stopPromise;
+
+      try {
+        return await stopPromise;
+      } finally {
+        if (nativeStopPromiseRef.current === stopPromise) {
+          nativeStopPromiseRef.current = null;
+        }
+      }
+    },
+    []
+  );
+
+  // Stop timers and pending readiness polls before native teardown runs.
   useEffect(() => {
     const abortController = unmountAbortRef.current;
     return () => {
       stopTimer();
       abortController.abort();
-      // Release on unmount — reuse the existing lifecycle helper
-      releaseRecorder();
     };
-  }, [stopTimer, releaseRecorder]);
+  }, [stopTimer]);
 
   // ---------------------------------------------------------------------------
   // Auto-stop at 60 seconds (FR-004: does NOT auto-submit)
@@ -332,21 +358,20 @@ export function useVoiceRecorder(): VoiceRecorderResult {
 
         try {
           stopTimer();
-          nativeReadyRef.current = false;
           statusRef.current = "completed";
-          await recorder.stop();
-          setAudioUri(recorder.uri ?? null);
+          const uri = await stopNativeRecorder(recorder);
+          setAudioUri(uri);
           setStatus("completed");
         } catch (err: unknown) {
           console.error("[useVoiceRecorder] Auto-stop failed:", err);
           // Recover: mark as completed anyway since we hit the limit
           nativeReadyRef.current = false;
-          setAudioUri(recorder.uri ?? null);
+          setAudioUri(null);
           setStatus("completed");
         }
       })();
     }
-  }, [status, durationMs, stopTimer]);
+  }, [durationMs, status, stopNativeRecorder, stopTimer]);
 
   // ---------------------------------------------------------------------------
   // Recording controls
@@ -355,6 +380,16 @@ export function useVoiceRecorder(): VoiceRecorderResult {
   const start = useCallback(async (): Promise<void> => {
     const startPromise = (async (): Promise<void> => {
       try {
+        const pendingDiscard = discardPromiseRef.current;
+        if (pendingDiscard !== null) {
+          await pendingDiscard;
+        }
+
+        const pendingCleanup = cleanupPromiseRef.current;
+        if (pendingCleanup !== null) {
+          await pendingCleanup;
+        }
+
         // Set audio mode for recording
         await setAudioModeAsync({
           playsInSilentMode: true,
@@ -411,7 +446,7 @@ export function useVoiceRecorder(): VoiceRecorderResult {
     } finally {
       nativeStartPromiseRef.current = null;
     }
-  }, [startTimer, releaseRecorder]);
+  }, [releaseRecorder, startTimer]);
 
   const pause = useCallback((): void => {
     if (statusRef.current !== "recording") return;
@@ -497,10 +532,8 @@ export function useVoiceRecorder(): VoiceRecorderResult {
 
     try {
       stopTimer();
-      nativeReadyRef.current = false;
       statusRef.current = "completed";
-      await recorder.stop();
-      const uri = recorder.uri;
+      const uri = await stopNativeRecorder(recorder);
       if (!uri) return null;
 
       setAudioUri(uri);
@@ -513,7 +546,7 @@ export function useVoiceRecorder(): VoiceRecorderResult {
       setStatus("idle");
       return null;
     }
-  }, [stopTimer]);
+  }, [stopNativeRecorder, stopTimer]);
 
   // ---------------------------------------------------------------------------
   // Cleanup (FR-021: temp file MUST be deleted)
@@ -530,59 +563,101 @@ export function useVoiceRecorder(): VoiceRecorderResult {
     }
   }, []);
 
-  const discard = useCallback(async (): Promise<void> => {
-    try {
+  const cleanupRecorderResources = useCallback((): Promise<void> => {
+    const existingCleanup = cleanupPromiseRef.current;
+    if (existingCleanup !== null) {
+      return existingCleanup;
+    }
+
+    const cleanupPromise = (async (): Promise<void> => {
       stopTimer();
 
-      // Await any in-flight start() so the stabilization delay doesn't
-      // flip nativeReadyRef back to true after we've cleared state.
-      if (nativeStartPromiseRef.current) {
+      if (nativeStartPromiseRef.current !== null) {
         try {
           await nativeStartPromiseRef.current;
         } catch {
-          // Start failed — proceed with cleanup anyway
+          // Start failed; continue releasing any partial native resources.
         }
       }
+
+      // Setup may have started the duration timer while cleanup awaited it.
+      stopTimer();
 
       const recorder = recorderRef.current;
+      let stoppedUri: string | null = null;
 
-      // Stop recording only if native recorder is ready (active)
-      if (recorder && nativeReadyRef.current) {
-        nativeReadyRef.current = false;
-        try {
-          await recorder.stop();
-        } catch (stopErr: unknown) {
-          // Swallow stop errors during discard — we're cleaning up anyway
-          console.warn(
-            "[useVoiceRecorder] Stop during discard failed:",
-            stopErr
-          );
+      try {
+        if (nativeStopPromiseRef.current !== null) {
+          stoppedUri = await nativeStopPromiseRef.current;
+        } else if (
+          recorder !== null &&
+          (nativeReadyRef.current ||
+            statusRef.current === "recording" ||
+            statusRef.current === "paused")
+        ) {
+          stoppedUri = await stopNativeRecorder(recorder);
         }
+      } catch (stopErr: unknown) {
+        console.warn("[useVoiceRecorder] Stop during cleanup failed:", stopErr);
       }
 
-      // Delete the temp file (FR-021)
-      const uri = recorder?.uri ?? audioUri;
+      const uri = stoppedUri ?? audioUriRef.current ?? recorder?.uri ?? null;
       if (uri) {
         await deleteAudioFile(uri);
       }
 
-      // Release the native recorder
       releaseRecorder();
-
-      // Reset state
       accumulatedMsRef.current = 0;
       nativeReadyRef.current = false;
-      statusRef.current = "idle";
-      setDurationMs(0);
-      setAudioUri(null);
-      setStatus("idle");
-    } catch (err: unknown) {
-      console.error("[useVoiceRecorder] Discard failed:", err);
-      releaseRecorder();
-      statusRef.current = "idle";
-      setStatus("idle");
+    })();
+
+    cleanupPromiseRef.current = cleanupPromise;
+
+    return cleanupPromise.finally((): void => {
+      if (cleanupPromiseRef.current === cleanupPromise) {
+        cleanupPromiseRef.current = null;
+      }
+    });
+  }, [deleteAudioFile, releaseRecorder, stopNativeRecorder, stopTimer]);
+
+  const cleanupRecorderResourcesRef = useRef(cleanupRecorderResources);
+  cleanupRecorderResourcesRef.current = cleanupRecorderResources;
+
+  useEffect(() => {
+    return () => {
+      void cleanupRecorderResourcesRef.current();
+    };
+  }, []);
+
+  const discard = useCallback((): Promise<void> => {
+    const existingDiscard = discardPromiseRef.current;
+    if (existingDiscard !== null) {
+      return existingDiscard;
     }
-  }, [audioUri, stopTimer, deleteAudioFile, releaseRecorder]);
+
+    const discardPromise = (async (): Promise<void> => {
+      try {
+        await cleanupRecorderResources();
+        statusRef.current = "idle";
+        setDurationMs(0);
+        setAudioUri(null);
+        setStatus("idle");
+      } catch (err: unknown) {
+        console.error("[useVoiceRecorder] Discard failed:", err);
+        releaseRecorder();
+        statusRef.current = "idle";
+        setStatus("idle");
+      }
+    })();
+
+    discardPromiseRef.current = discardPromise;
+
+    return discardPromise.finally((): void => {
+      if (discardPromiseRef.current === discardPromise) {
+        discardPromiseRef.current = null;
+      }
+    });
+  }, [cleanupRecorderResources, releaseRecorder]);
 
   /**
    * Reset recorder back to idle. If the recorder is in an active state
