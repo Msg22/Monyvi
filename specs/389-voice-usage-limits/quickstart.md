@@ -173,6 +173,12 @@ T034/T035/T049/T050 and visual/accessibility T058 stay unchecked/NOT RUN. Hand
 the complete task/manual matrix to owner; do not claim visual completion or
 device/merge readiness.
 
+The current source-to-test/manual coverage ledger is
+[checklists/ui-repair-coverage.md](./checklists/ui-repair-coverage.md). It records
+exact current test case names, authored-but-unrun Maestro journeys, in-flight
+unit gaps and the owner-only device/provider/visual/accessibility plan. It is an
+evidence map, not new product authority, and final Green remains pending.
+
 ## 8. Owner manual QA matrix
 
 Owner validation after source/unit delivery; device/render/accessibility
@@ -197,6 +203,12 @@ evidence is NOT RUN until the owner completes and records these checks:
 ## 9. Deployment/rollback
 
 Deployment is not part of planning.
+
+Current read-only hosted observation: configured project
+`yulbcndyssdjicbpmlrk` does not list `voice-ai-availability` while the older
+`parse-voice` function is present. If the app uses that project, this is a
+likely availability-warning deployment gap; the exact phone HTTP exchange is
+unverified. No deployment or hosted mutation was performed.
 
 When implementation is later approved and verified:
 
