@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 
-import { render, screen } from "@testing-library/react-native";
+import { fireEvent, render, screen } from "@testing-library/react-native";
 import React from "react";
 import { processColor, StyleSheet, type StyleProp, type ViewStyle } from "react-native";
 import {
@@ -11,6 +11,7 @@ import {
 } from "react-native-css-interop/test";
 
 import {
+  getTestInstanceChildren,
   getTestInstanceParent,
   getTestInstanceProps,
   getTestInstances,
@@ -291,6 +292,11 @@ function compiledVoiceCss(): string {
       "overflow-hidden", "items-center", "justify-center",
       "bg-nileGreen-50/60", "dark:bg-nileGreen-900/50",
       "bg-nileGreen-100/50", "dark:bg-nileGreen-900/60",
+      // Ensure the native compiler also recognizes the approved lighter
+      // dark-idle hierarchy and animated pulse candidates.
+      "dark:bg-nileGreen-50/20", "dark:bg-nileGreen-50/25",
+      "dark:bg-nileGreen-100/20", "dark:bg-nileGreen-100/25",
+      "dark:bg-nileGreen-100/30", "dark:bg-nileGreen-100/40",
       "bg-slate-200/20", "dark:bg-slate-700/25",
       "dark:bg-slate-700/30",
     ];
@@ -312,25 +318,24 @@ function compiledVoiceCss(): string {
 }
 
 /** NativeWind CSS must be actually registered and translated, not string-matched. */
-function resolvedVoiceStyle(node: unknown, pressed = false): ViewStyle {
+function resolvedVoiceStyle(node: unknown): ViewStyle {
   const raw: unknown = getTestInstanceProps(node).style;
-  const evaluated: unknown =
-    typeof raw === "function" ? raw({ pressed }) : raw;
-  if (
-    evaluated !== undefined &&
-    evaluated !== null &&
-    typeof evaluated !== "object"
-  ) {
-    throw new Error("Expected a native style object or array");
+  if (typeof raw === "function") {
+    // Only native flattened props can prove clipping. Do not call the
+    // Pressable callback with a fabricated pressed state.
+    return {};
   }
-  return StyleSheet.flatten(evaluated as StyleProp<ViewStyle>) ?? {};
+  if (raw !== undefined && raw !== null && typeof raw !== "object") {
+    throw new Error("Expected a resolved native style object or array");
+  }
+  return StyleSheet.flatten(raw as StyleProp<ViewStyle>) ?? {};
 }
 
-function hasNativeCircularClip(gradient: unknown, pressed: boolean): boolean {
+function hasNativeCircularClip(gradient: unknown): boolean {
   let current: unknown = getTestInstanceParent(gradient);
   for (let i = 0; i < 12 && current !== null; i++) {
     if (typeof current !== "object") break;
-    const style = resolvedVoiceStyle(current, pressed);
+    const style = resolvedVoiceStyle(current);
     if (style.overflow === "hidden" && style.width === 104 &&
         style.height === 104 && style.borderRadius === 52) {
       return true;
@@ -355,6 +360,37 @@ function expectPaletteHalo(actual: unknown, paletteColor: string): void {
   expect(alpha).toBeLessThan(255);
 }
 
+/** Native 172dp decorative circles, including the recording pulse, not CSS tokens. */
+function nativeOuterCircleStyles(node: unknown): ViewStyle[] {
+  if (typeof node !== "object" || node === null) return [];
+  const props = getTestInstanceProps(node);
+  const style = resolvedVoiceStyle(node);
+  const own =
+    props.importantForAccessibility === "no-hide-descendants" &&
+    style.width === 172 &&
+    style.height === 172 &&
+    style.borderRadius === 86
+      ? [style]
+      : [];
+  const children = getTestInstanceChildren(node).flatMap((child) =>
+    nativeOuterCircleStyles(child)
+  );
+  return [...own, ...children];
+}
+
+function matchesVisiblePaletteColor(
+  actual: unknown,
+  expectedPaletteColor: string
+): boolean {
+  if (typeof actual !== "string") return false;
+  const native = processColor(actual);
+  const target = processColor(expectedPaletteColor);
+  if (typeof native !== "number" || typeof target !== "number") return false;
+  const alpha = (native >>> 24) & 0xff;
+  return (native & 0xffffff) === (target & 0xffffff) &&
+    alpha > 0 && alpha < 255;
+}
+
 describe("real Tailwind/CSS Interop Voice native shape", () => {
   beforeAll(() => setupAllComponents());
   beforeEach(() => registerCSS(compiledVoiceCss(), {
@@ -371,21 +407,24 @@ describe("real Tailwind/CSS Interop Voice native shape", () => {
       mockLanguage = language;
       colorScheme.set(theme);
       renderWithInterop(<VoiceTransactionEntry {...baseProps} />);
-      const gradient: unknown = screen.getByTestId("voice-gradient");
-      const style = resolvedVoiceStyle(gradient);
-      const roundedGradient =
-        style.width === 104 && style.height === 104 &&
-        style.borderRadius === 52;
-      // Either converted Expo gradient styles or an actual clipped
-      // ancestor (BudgetPrimaryAction pattern) prevents square gradients.
-      expect(
-        roundedGradient ||
-        (hasNativeCircularClip(gradient, false) &&
-         hasNativeCircularClip(gradient, true))
-      ).toBe(true);
+      // Requery on every native event. A static pre-press circle must
+      // not hide a clipped-to-square regression while the control is held.
+      const nativeMaskIsPresent = (): boolean => {
+        const gradient: unknown = screen.getByTestId("voice-gradient");
+        const style = resolvedVoiceStyle(gradient);
+        const roundedGradient =
+          style.width === 104 && style.height === 104 &&
+          style.borderRadius === 52;
+        return roundedGradient || hasNativeCircularClip(gradient);
+      };
       expect(getTestInstanceProps(
         screen.getByTestId("voice-mic-target")
       ).accessibilityRole).toBe("button");
+      expect(nativeMaskIsPresent()).toBe(true);
+      fireEvent(screen.getByTestId("voice-mic-target"), "pressIn");
+      expect(nativeMaskIsPresent()).toBe(true);
+      fireEvent(screen.getByTestId("voice-mic-target"), "pressOut");
+      expect(nativeMaskIsPresent()).toBe(true);
     }
   );
 
@@ -418,10 +457,12 @@ describe("real Tailwind/CSS Interop Voice native shape", () => {
           position: "absolute", width: size, height: size,
           borderRadius: radius,
         }));
+        // A registered light-green RGB hierarchy must stay visible over
+        // slate-900. Dark nileGreen-900 was the observed invisible-halo defect;
+        // NativeWind may adapt alpha, not replace these with dark RGB values.
         const approvedColor =
           state === "daily-limit"
             ? theme === "dark" ? palette.slate[700] : palette.slate[200]
-            : theme === "dark" ? palette.nileGreen[900]
             : name === "outer" ? palette.nileGreen[50] : palette.nileGreen[100];
         expectPaletteHalo(style.backgroundColor, approvedColor);
         const props = getTestInstanceProps(halo);
@@ -434,6 +475,36 @@ describe("real Tailwind/CSS Interop Voice native shape", () => {
         });
         expect(getTestInstanceProps(disabled).accessible).toBe(false);
       }
+    }
+  );
+
+  it.each([
+    ["en", "light"], ["ar", "light"],
+    ["en", "dark"], ["ar", "dark"],
+  ] as const)(
+    "keeps recording halo pulse lighter than the page in %s %s",
+    (language, theme) => {
+      mockLanguage = language;
+      mockReducedMotion = false;
+      colorScheme.set(theme);
+      renderWithInterop(
+        <VoiceTransactionEntry {...baseProps} state="recording" />
+      );
+      expect(mockWithRepeat).toHaveBeenCalled();
+      const voiceSurface: unknown = screen.getByTestId(
+        "voice-action-surface"
+      );
+      const outerCircles = nativeOuterCircleStyles(voiceSurface);
+
+      // The stationary outer ring uses 50; the separate animated ring uses
+      // 100. A dark-900 pulse can pass a class-string test but is invisible.
+      expect(outerCircles.length).toBeGreaterThanOrEqual(2);
+      expect(outerCircles.some((style) =>
+        matchesVisiblePaletteColor(style.backgroundColor, palette.nileGreen[50])
+      )).toBe(true);
+      expect(outerCircles.some((style) =>
+        matchesVisiblePaletteColor(style.backgroundColor, palette.nileGreen[100])
+      )).toBe(true);
     }
   );
 });

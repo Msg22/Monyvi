@@ -244,26 +244,26 @@ function compiledModeTabCss(): string {
   }
 }
 
-function tabNativeStyle(node: unknown, pressed: boolean): ViewStyle {
-  const raw = getTestInstanceProps(node).style;
-  const resolved: unknown =
-    typeof raw === "function" ? raw({ pressed }) : raw;
-  if (
-    resolved !== undefined &&
-    resolved !== null &&
-    typeof resolved !== "object"
-  ) {
-    throw new Error("Expected a native style object or array");
+/** Observe styles already resolved on native nodes, never fabricate pressed=true. */
+function tabNativeStyle(node: unknown): ViewStyle {
+  const raw: unknown = getTestInstanceProps(node).style;
+  if (typeof raw === "function") {
+    // A Pressable callback is not itself evidence of native styling.
+    // Continue into its rendered native View descendants.
+    return {};
   }
-  return StyleSheet.flatten(resolved as StyleProp<ViewStyle>) ?? {};
+  if (
+    raw !== undefined &&
+    raw !== null &&
+    typeof raw !== "object"
+  ) {
+    throw new Error("Expected a resolved native style object or array");
+  }
+  return StyleSheet.flatten(raw as StyleProp<ViewStyle>) ?? {};
 }
 
-function resolvedTabHasUnderline(
-  node: unknown,
-  expectedColor: string,
-  pressed: boolean
-): boolean {
-  const style = tabNativeStyle(node, pressed);
+function resolvedTabHasUnderline(node: unknown, expectedColor: string): boolean {
+  const style = tabNativeStyle(node);
   const color = expectedColor.toLowerCase();
   const borderColor = style.borderBottomColor ?? style.borderColor;
   const nativeBorder =
@@ -278,10 +278,22 @@ function resolvedTabHasUnderline(
 
   for (const child of getTestInstanceChildren(node)) {
     if (typeof child === "object" && child !== null) {
-      if (resolvedTabHasUnderline(child, expectedColor, pressed)) return true;
+      if (resolvedTabHasUnderline(child, expectedColor)) return true;
     }
   }
   return false;
+}
+
+function resolvedTabOpacity(node: unknown): number | undefined {
+  const style = tabNativeStyle(node);
+  if (typeof style.opacity === "number") return style.opacity;
+  for (const child of getTestInstanceChildren(node)) {
+    if (typeof child === "object" && child !== null) {
+      const childOpacity = resolvedTabOpacity(child);
+      if (childOpacity !== undefined) return childOpacity;
+    }
+  }
+  return undefined;
 }
 
 describe("compiled NativeWind mode-tab underline regression", () => {
@@ -329,16 +341,25 @@ describe("compiled NativeWind mode-tab underline regression", () => {
         ? palette.nileGreen[400]
         : palette.nileGreen[600];
 
-      expect(resolvedTabHasUnderline(selected, green, false)).toBe(true);
-      expect(resolvedTabHasUnderline(selected, green, true)).toBe(true);
-      expect(resolvedTabHasUnderline(other, green, false)).toBe(false);
+      const selectedNode = (): unknown =>
+        screen.getByRole("tab", { name: voiceLabel });
+      expect(resolvedTabHasUnderline(selected, green)).toBe(true);
+      expect(resolvedTabHasUnderline(other, green)).toBe(false);
       expect(getTestInstanceProps(selected).accessibilityState).toEqual(
         expect.objectContaining({ selected: true, disabled })
       );
-      expect(tabNativeStyle(selected, false).opacity).toBe(disabled ? 0.5 : 1);
-      expect(tabNativeStyle(selected, true).opacity).toBe(
+      expect(resolvedTabOpacity(selectedNode())).toBe(disabled ? 0.5 : 1);
+
+      // Exercise the real native Pressable event path; calling the style
+      // callback manually does not advance its rendered pressed state.
+      fireEvent(screen.getByRole("tab", { name: voiceLabel }), "pressIn");
+      expect(resolvedTabHasUnderline(selectedNode(), green)).toBe(true);
+      expect(resolvedTabOpacity(selectedNode())).toBe(
         disabled ? 0.5 : 0.72
       );
+      fireEvent(screen.getByRole("tab", { name: voiceLabel }), "pressOut");
+      expect(resolvedTabHasUnderline(selectedNode(), green)).toBe(true);
+      expect(resolvedTabOpacity(selectedNode())).toBe(disabled ? 0.5 : 1);
 
       if (!disabled) {
         fireEvent.press(screen.getByRole("tab", { name: manualLabel }));
