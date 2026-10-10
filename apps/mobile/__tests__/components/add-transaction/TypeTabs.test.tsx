@@ -1,7 +1,16 @@
 import { fireEvent, render, screen } from "@testing-library/react-native";
 import React from "react";
+import { Text as NativeText } from "react-native";
 
 import { TypeTabs } from "@/components/add-transaction/TypeTabs";
+
+function getNativeTextProps(content: string): Record<string, unknown> {
+  const node = screen
+    .UNSAFE_getAllByType(NativeText)
+    .find((candidate) => candidate.props.children === content);
+  if (!node) throw new Error(`Native Text "${content}" not found`);
+  return node.props as Record<string, unknown>;
+}
 
 let mockLocaleFontFamily = {
   regular: "Inter_400Regular",
@@ -83,14 +92,9 @@ describe("TypeTabs compact Manual selector", () => {
     expect(expenseLabel).toHaveStyle({
       fontFamily: "Inter_600SemiBold",
     });
-    expect(expenseLabel).toHaveProp(
-      "className",
-      expect.stringContaining("text-base")
-    );
-    expect(expenseLabel).toHaveProp(
-      "className",
-      expect.stringContaining("leading-[26px]")
-    );
+    const expenseClassName = getNativeTextProps("Expense").className as string;
+    expect(expenseClassName).toContain("text-base");
+    expect(expenseClassName).toContain("leading-[26px]");
   });
 
   it("switches compact tab typography to Noto Sans Arabic without changing the legacy variant", () => {
@@ -109,14 +113,9 @@ describe("TypeTabs compact Manual selector", () => {
     expect(expenseLabel).toHaveStyle({
       fontFamily: "NotoSansArabic_600SemiBold",
     });
-    expect(expenseLabel).toHaveProp(
-      "className",
-      expect.stringContaining("text-base")
-    );
-    expect(expenseLabel).toHaveProp(
-      "className",
-      expect.stringContaining("leading-[26px]")
-    );
+    const expenseClassName = getNativeTextProps("Expense").className as string;
+    expect(expenseClassName).toContain("text-base");
+    expect(expenseClassName).toContain("leading-[26px]");
 
     rerender(<TypeTabs selectedType="EXPENSE" onSelect={jest.fn()} />);
     expect(screen.getByText("EXPENSE")).toBeTruthy();

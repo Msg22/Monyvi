@@ -391,7 +391,10 @@ describe("ManualTransactionEntry compact focus contract", () => {
     expect(screen.queryByTestId("calculator-key-1")).toBeNull();
   });
 
-  it("closes expanded details when Amount focus requests the calculator", () => {
+  it("keeps amount focus active without dismissing the native keyboard, while closing expanded details", () => {
+    const dismissSpy = jest
+      .spyOn(Keyboard, "dismiss")
+      .mockImplementation((): void => undefined);
     render(<ManualTransactionEntry />);
 
     fireEvent.press(screen.getByText("add_more_details"));
@@ -400,8 +403,11 @@ describe("ManualTransactionEntry compact focus contract", () => {
 
     focusAmount();
 
+    expect(dismissSpy).not.toHaveBeenCalled();
     expect(screen.getByText("add_more_details")).toBeTruthy();
     expect(screen.getByTestId("calculator-key-1")).toBeTruthy();
+
+    dismissSpy.mockRestore();
   });
 
   it("keeps direct input and calculator edits synchronized while focused", async () => {

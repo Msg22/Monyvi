@@ -73,6 +73,14 @@ function getViewProps(testID: string): Record<string, unknown> {
   return node.props as Record<string, unknown>;
 }
 
+function getNativeTextProps(content: string): Record<string, unknown> {
+  const node = screen
+    .UNSAFE_getAllByType(Text)
+    .find((candidate) => candidate.props.children === content);
+  if (!node) throw new Error(`Native Text "${content}" not found`);
+  return node.props as Record<string, unknown>;
+}
+
 describe("Dropdown repair contract", () => {
   it("represents a required missing entity with null and the placeholder", () => {
     render(
@@ -115,6 +123,32 @@ describe("Dropdown repair contract", () => {
 
     expect(screen.getByTestId("selected-account-icon")).toBeTruthy();
     expect(screen.getByText("Cash")).toBeTruthy();
+  });
+
+  it("keeps a long selected label shrinkable so the chevron remains visible", () => {
+    const longLabel =
+      "Very long account name that must truncate before the dropdown chevron";
+
+    render(
+      <Dropdown
+        variant="outlined"
+        label="Account"
+        items={[{ value: "long-account", label: longLabel }]}
+        value="long-account"
+        onChange={jest.fn()}
+        isOpen={false}
+        onToggle={jest.fn()}
+        testID="long-account-dropdown"
+      />
+    );
+
+    const selectedLabel = screen.getByText(longLabel);
+    expect(selectedLabel).toHaveProp("numberOfLines", 1);
+    const selectedLabelClassName = getNativeTextProps(longLabel)
+      .className as string;
+    expect(selectedLabelClassName).toContain("min-w-0");
+    expect(selectedLabelClassName).toContain("flex-1");
+    expect(screen.getByTestId("dropdown-icon-chevron-down")).toBeTruthy();
   });
 
   it("accepts the approved 56dp trigger geometry without changing the default variant", () => {

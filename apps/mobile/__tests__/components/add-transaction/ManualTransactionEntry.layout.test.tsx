@@ -1,8 +1,17 @@
-import { render, screen } from "@testing-library/react-native";
+import { render, screen, within } from "@testing-library/react-native";
 import React from "react";
+import { Text as NativeText } from "react-native";
 
 import { Dropdown } from "@/components/ui/Dropdown";
 import { TextField } from "@/components/ui/TextField";
+
+function getNativeTextProps(content: string): Record<string, unknown> {
+  const node = screen
+    .UNSAFE_getAllByType(NativeText)
+    .find((candidate) => candidate.props.children === content);
+  if (!node) throw new Error(`Native Text "${content}" not found`);
+  return node.props as Record<string, unknown>;
+}
 
 let mockWindowDimensions = {
   width: 390,
@@ -340,6 +349,36 @@ describe("ManualTransactionEntry compact B layout", () => {
     });
   });
 
+  it("uses the active locale medium font for the main amount currency suffix", () => {
+    const { rerender } = render(<ManualTransactionEntry />);
+
+    const suffix = within(
+      screen.getByTestId("manual-amount-input-trailing-adornment")
+    ).getByText("EGP");
+    expect(suffix).toHaveStyle({
+      fontFamily: "Inter_500Medium",
+    });
+    expect(
+      getNativeTextProps("EGP").className as string
+    ).toContain("text-sm");
+
+    mockLocaleFontFamily = {
+      regular: "NotoSansArabic_400Regular",
+      medium: "NotoSansArabic_500Medium",
+      semiBold: "NotoSansArabic_600SemiBold",
+      bold: "NotoSansArabic_700Bold",
+    };
+
+    rerender(<ManualTransactionEntry />);
+
+    const arabicSuffix = within(
+      screen.getByTestId("manual-amount-input-trailing-adornment")
+    ).getByText("EGP");
+    expect(arabicSuffix).toHaveStyle({
+      fontFamily: "NotoSansArabic_500Medium",
+    });
+  });
+
   it("applies locale fonts to selector values and compact Optional copy", () => {
     render(<ManualTransactionEntry />);
 
@@ -366,19 +405,21 @@ describe("ManualTransactionEntry compact B layout", () => {
     expect(optionalHeading).toHaveStyle({
       fontFamily: "Inter_700Bold",
     });
-    expect(optionalHeading).toHaveProp(
-      "className",
-      expect.stringContaining("text-lg")
-    );
-    expect(optionalHeading).toHaveProp(
-      "className",
-      expect.stringContaining("leading-7")
-    );
-    expect(screen.getByText("Note, date, recurring")).toHaveStyle({
+    const optionalHeadingClassName = getNativeTextProps(
+      "Add more details"
+    ).className as string;
+    expect(optionalHeadingClassName).toContain("text-lg");
+    expect(optionalHeadingClassName).toContain("leading-7");
+
+    const optionalHelper = screen.getByText("Note, date, recurring");
+    expect(optionalHelper).toHaveStyle({
       fontFamily: "Inter_400Regular",
-      fontSize: 12,
-      lineHeight: 20,
     });
+    const optionalHelperClassName = getNativeTextProps(
+      "Note, date, recurring"
+    ).className as string;
+    expect(optionalHelperClassName).toContain("text-xs");
+    expect(optionalHelperClassName).toContain("leading-5");
   });
 
   it("switches compact Manual typography to Noto Sans Arabic", () => {

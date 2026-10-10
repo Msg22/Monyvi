@@ -220,6 +220,7 @@ import {
   ManualTransactionEntry,
   type ManualTransactionEntryHandle,
 } from "@/components/add-transaction/ManualTransactionEntry";
+import { TextField } from "@/components/ui/TextField";
 
 function AddTransaction(): React.JSX.Element {
   const manualEntryRef = React.useRef<ManualTransactionEntryHandle>(null);
@@ -345,10 +346,26 @@ describe("Add Transaction recurring-name QA", () => {
     }
   );
 
-  it("marks the visible recurring name as required", () => {
+  it("marks the recurring name required through the shared TextField contract", () => {
     render(<AddTransaction />);
     enableRecurring();
+
+    const recurringNameField = screen
+      .UNSAFE_getAllByType(TextField)
+      .find(
+        (node) =>
+          node.props.placeholder === "recurring_name_placeholder"
+      );
+    if (!recurringNameField) {
+      throw new Error("Recurring name TextField not found");
+    }
+
+    expect(recurringNameField.props.label).toBe("recurring_name_label");
+    expect(recurringNameField.props.required).toBe(true);
     expect(screen.getByText("recurring_name_label *")).toBeTruthy();
+    expect(
+      screen.getByPlaceholderText("recurring_name_placeholder")
+    ).toHaveProp("accessibilityHint", "required_field");
   });
 
   it("clears the error after correction and creates a linked transaction exactly once", async () => {
