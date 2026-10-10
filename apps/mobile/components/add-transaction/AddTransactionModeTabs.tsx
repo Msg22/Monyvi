@@ -29,6 +29,8 @@ export function AddTransactionModeTabs({
   voiceLabel,
 }: AddTransactionModeTabsProps): React.JSX.Element {
   const { isRTL, fontFamily } = useLocale();
+  const [pressedMode, setPressedMode] =
+    React.useState<AddTransactionMode | null>(null);
   const manual: ModeOption = { value: "manual", label: manualLabel };
   const voice: ModeOption = { value: "voice", label: voiceLabel };
   const options: readonly ModeOption[] = isRTL
@@ -60,14 +62,20 @@ export function AddTransactionModeTabs({
               onPress={() => {
                 if (!isSelected) onModeChange(option.value);
               }}
-              className={`min-h-12 flex-1 items-center justify-center border-b-2 px-4 ${
-                isSelected
-                  ? "border-nileGreen-600 dark:border-nileGreen-400"
-                  : "border-transparent"
-              }`}
-              style={({ pressed }) => ({
-                opacity: disabled ? 0.5 : pressed ? 0.72 : 1,
-              })}
+              onPressIn={() => {
+                if (!disabled) setPressedMode(option.value);
+              }}
+              onPressOut={() => {
+                setPressedMode(null);
+              }}
+              className="relative min-h-12 flex-1 items-center justify-center px-4"
+              style={{
+                opacity: disabled
+                  ? 0.5
+                  : pressedMode === option.value
+                    ? 0.72
+                    : 1,
+              }}
             >
               <Text
                 style={{ fontFamily: fontFamily.semiBold }}
@@ -79,6 +87,15 @@ export function AddTransactionModeTabs({
               >
                 {option.label}
               </Text>
+              {isSelected ? (
+                <View
+                  testID={`add-transaction-mode-${option.value}-indicator`}
+                  accessible={false}
+                  importantForAccessibility="no-hide-descendants"
+                  pointerEvents="none"
+                  className="absolute bottom-0 left-0 right-0 h-[2px] bg-nileGreen-600 dark:bg-nileGreen-400"
+                />
+              ) : null}
             </Pressable>
           );
         })}
