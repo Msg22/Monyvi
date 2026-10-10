@@ -1,21 +1,18 @@
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { router } from "expo-router";
-import React, { useCallback, useMemo } from "react";
+import React, { useCallback } from "react";
 import { View } from "react-native";
 import { useTranslation } from "react-i18next";
 
-import { MetalPortfolioEmptyState } from "@/components/metals/MetalPortfolioEmptyState";
 import { MetalPortfolioScreen } from "@/components/metals/MetalPortfolioScreen";
 import { PageHeader } from "@/components/navigation/PageHeader";
 import { isTrueMetalPortfolioEmpty } from "@/hooks/metal-portfolio-readiness";
 import { useMetalPortfolio } from "@/hooks/useMetalPortfolio";
 import { usePreferredCurrency } from "@/hooks/usePreferredCurrency";
 import { useSuppressQuickActionFabWhenFocused } from "@/hooks/useQuickActionFabVisibility";
-import { useUiPolishCopy } from "@/hooks/useUiPolishCopy";
 
 export default function MyMetalsRoute(): React.JSX.Element {
   const { t } = useTranslation("metals");
-  const copy = useUiPolishCopy();
   const tabBarHeight = useBottomTabBarHeight();
   const { preferredCurrency } = usePreferredCurrency();
   const {
@@ -32,13 +29,6 @@ export default function MyMetalsRoute(): React.JSX.Element {
 
   const isPortfolioEmpty =
     error === null && isTrueMetalPortfolioEmpty(portfolio, readiness);
-  const hasHistory = useMemo(
-    () =>
-      Boolean(portfolio?.hasTerminalHistory) ||
-      (recentHistory ?? portfolio?.recentHistory ?? []).length > 0,
-    [portfolio?.hasTerminalHistory, portfolio?.recentHistory, recentHistory]
-  );
-
   useSuppressQuickActionFabWhenFocused(isPortfolioEmpty);
 
   const openAddHolding = useCallback((): void => {
@@ -54,7 +44,7 @@ export default function MyMetalsRoute(): React.JSX.Element {
   return (
     <View className="flex-1 bg-background dark:bg-background-dark">
       <PageHeader
-        title={isPortfolioEmpty ? copy.metals_empty.header : t("my_metals")}
+        title={t("my_metals")}
         rightAction={{
           icon: "add",
           accessibilityLabel: t("add_metal_item"),
@@ -62,30 +52,22 @@ export default function MyMetalsRoute(): React.JSX.Element {
           onPress: openAddHolding,
         }}
       />
-      {isPortfolioEmpty ? (
-        <MetalPortfolioEmptyState
-          bottomInset={tabBarHeight}
-          hasHistory={hasHistory}
-          onAddPress={openAddHolding}
-          onHistoryPress={openHistory}
-        />
-      ) : (
-        <MetalPortfolioScreen
-          bottomInset={tabBarHeight}
-          currency={preferredCurrency}
-          error={error}
-          isLoading={isLoading}
-          onFilterChange={onFilterChange}
-          onHistoryPress={openHistory}
-          onHoldingPress={openHolding}
-          onRetry={refresh}
-          portfolio={portfolio}
-          rateProviderObservedAt={rateProviderObservedAt}
-          readiness={readiness}
-          recentHistory={recentHistory}
-          selectedFilter={selectedFilter}
-        />
-      )}
+      <MetalPortfolioScreen
+        bottomInset={tabBarHeight}
+        currency={preferredCurrency}
+        error={error}
+        isLoading={isLoading}
+        onAddHoldingPress={openAddHolding}
+        onFilterChange={onFilterChange}
+        onHistoryPress={openHistory}
+        onHoldingPress={openHolding}
+        onRetry={refresh}
+        portfolio={portfolio}
+        rateProviderObservedAt={rateProviderObservedAt}
+        readiness={readiness}
+        recentHistory={recentHistory}
+        selectedFilter={selectedFilter}
+      />
     </View>
   );
 }

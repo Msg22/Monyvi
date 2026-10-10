@@ -7,6 +7,23 @@
 **Note**: This plan is produced through the repository's `speckit.plan`
 workflow. It stops before task generation or production implementation.
 
+## UI repair continuation — 10 October 2026
+
+The initial plan and server work below remain historical feature context. The
+current bounded repair uses branch `codex/issue347-ui-fidelity`, source
+`ab15bcce6a23179a2d3735dc8b835f1933b99799`, containing trusted main
+`3264eba2b67bcc66cddc95e3fbdb36e8705ee642`. Existing T001–T059 are finalized in
+place. The five exact approved references supersede the older two-reference
+layout for these surfaces; `reconciliation.md` records approval and history. No
+server/schema/sync, parsing, retention or financial contract changes belong to
+this repair. #384 remains separately deferred. Earlier direct-source
+verification deferral applies only to its dated pass; it does not waive fresh
+repair testing or evidence reporting. Current owner explicitly defers emulator/
+device/E2E execution and rendered/accessibility captures: author unit/E2E tests,
+run focused unit/type/lint, and hand manual testing to owner.
+Visual/accessibility/ device evidence remains NOT RUN without completion claims.
+Fresh read-only analysis remains the production-assignment gate.
+
 ## Summary
 
 Expand the current voice-limit work into the approved Add Transaction redesign
@@ -15,8 +32,8 @@ while preserving all existing transaction/business behavior.
 The user-facing result is one `/add-transaction` page with **Manual** and
 **Voice** modes:
 
-- Manual reuses the existing transaction form and remains the default when
-  opened from the Add Transaction FAB.
+- Manual preserves existing transaction form behavior in the approved compact
+  layout and remains the default when opened from the Add Transaction FAB.
 - Voice uses the already-approved mockup and reuses the existing Gemini voice
   parsing/review flow.
 - The center microphone, onboarding voice entry, and voice-review Retry navigate
@@ -199,6 +216,18 @@ The unified page keeps this component mounted and hides it
 visually/accessibility-wise when Voice is selected. This preserves partial
 Manual state without introducing persistent drafts.
 
+The approved compact Manual presentation uses ordinary GroupedMoneyInput,
+required account/category Dropdowns on one row when shared width/text-scale
+constraints fit, and OptionalSection below core fields. Use existing TypeTabs
+and financial defaults. An amount field opens the existing custom calculator
+only while focused and suppresses the native soft keyboard; ordinary text fields
+retain their native keyboard. Done applies existing equals behavior when needed,
+then dismisses without saving. Header Save retains validation/local submission.
+Switching to Voice blurs/dismisses the calculator but preserves draft values.
+Transfer source/target amounts keep their own focus target and existing
+currency/conversion contract. No Voice quota/failure surface is rendered in
+Manual.
+
 ### Voice mode
 
 Voice mode composes existing behavior rather than reimplementing parsing:
@@ -232,7 +261,13 @@ Before any governed UI implementation:
 4. obtain explicit approval of the binding metadata + combined revision;
 5. run `node scripts/verify-mockup-binding.js <sidecar>`.
 
-No recreated screenshot or regenerated image is a substitute.
+The active reference inventory is `mockups/repair-binding-manifest.json`;
+`contracts/add-transaction-ui-contract.md` maps states, existing shared
+components and verified icon identities. Read all five exact active images and
+sidecars and verify their approved revisions before governed implementation or
+review. Do not consume superseded mockup-1/mockup-2 as current repair targets.
+Missing or ambiguous fidelity facts block implementation. No recreated
+screenshot or regenerated image is a substitute.
 
 [contracts/add-transaction-ui-contract.md](./contracts/add-transaction-ui-contract.md)
 defines the non-visual navigation/mode behavior.
@@ -639,11 +674,16 @@ Do not introduce client-synced quota tables.
 
 ## Verification Gates
 
-Implementation is not complete until all are true:
+Full feature/device/visual acceptance requires the evidence below. Current UI
+repair source delivery is owner-scoped to unit/E2E authoring and focused
+unit/type/ lint execution; device/E2E/render/accessibility execution is deferred
+to owner and reported NOT RUN. Those acceptance statuses remain open until
+evidence exists:
 
 ### Mockup/UI
 
-- exact approved image is persisted unchanged;
+- all five active approved images are persisted unchanged and mapped to their
+  respective states/locales;
 - binding sidecar is explicitly approved and verifier passes;
 - rendered visual evidence matches the approved design at declared binding
   context;
@@ -653,7 +693,12 @@ Implementation is not complete until all are true:
 - center mic/onboarding/review retry open Voice;
 - Manual state survives safe Manual -> Voice -> Manual switch;
 - active Voice disables mode switch;
-- exhausted/burst/unavailable Voice still allows Manual.
+- exhausted/burst/unavailable Voice still allows Manual with no Voice notice;
+- Manual idle has no keypad, amount focus has only the custom keypad, Done
+  dismisses without a save, and header Save preserves local submission;
+- 48 dp minimum calculator keys satisfy both approved sizing minimums;
+- every locale-specific composition and verified icon matches its mapped
+  reference; availability-check failure is distinct from daily exhaustion.
 
 ### Server/accounting
 
@@ -688,7 +733,8 @@ This is sequencing guidance for the later `speckit.tasks` workflow; no
 implementation occurs in this command.
 
 1. Complete exact mockup binding approval/verifier and planning reconciliation/
-   analyze; these approvals already exist and must be preserved.
+   analyze; the new five-reference approval and earlier historical approvals
+   must be preserved, with supersession explicit.
 2. Author exclusion, contract, SQL/race and existing parse-voice HTTP tests.
    Execute T006 and actual existing-handler quota/replay/input Red through
    test-only SDK doubles. Missing imports/functions never count as Red.

@@ -1,0 +1,71 @@
+appId: com.monyvi.app
+---
+# R05 / T042 — honest UI visibility and Manual fallback checks.
+# AUTHORED, NOT RUN. Requires authenticated seeded E2E account.
+# No fixture here can force an authenticated server daily/burst refusal.
+# Conditional branches assert only states actually returned by the server;
+# they MUST NOT be reported as evidence for a daily-limit/burst quota race.
+- runFlow: ../helpers/setup.yaml
+- tapOn:
+    id: "fab-button"
+- tapOn:
+    id: "fab-transaction"
+- tapOn:
+    id: "add-transaction-mode-voice"
+- waitForAnimationToEnd
+- assertVisible:
+    id: "add-transaction-mode-voice"
+
+# Available: EN approved idle composition, progress based on live authoritative
+# values (not hard-coded 3/5, no local quota arithmetic).
+- runFlow:
+    when:
+      visible: "Limited free voice usage"
+    commands:
+      - assertVisible: "Tap and speak your transaction"
+      - assertVisible: "Try saying something like"
+      - assertVisible: "Resets tomorrow."
+
+# Exhausted: conditional only; deterministic exhaustion requires seeded server
+# state or an approved authenticated HTTP double, neither present here.
+- runFlow:
+    when:
+      visible: "Daily voice limit reached"
+    commands:
+      - assertVisible: "Voice recording unavailable"
+      - assertVisible: "Use manual entry"
+      - assertNotVisible: "Try saying something like"
+
+# Availability check failure != exhaustion.
+- runFlow:
+    when:
+      visible: "Voice unavailable"
+    commands:
+      - assertVisible: "Try again"
+      - assertVisible: "Use Manual"
+      - assertNotVisible: "Daily voice limit reached"
+
+# Manual is usable regardless of actual quota/error/availability.
+- tapOn:
+    id: "add-transaction-mode-manual"
+- assertVisible:
+    id: "header-save"
+- assertNotVisible: "Limited free voice usage"
+- assertNotVisible: "Daily voice limit reached"
+- assertNotVisible: "Voice unavailable"
+- tapOn:
+    id: "manual-amount-input"
+- tapOn:
+    id: "calculator-key-2"
+- tapOn:
+    id: "calculator-key-5"
+- tapOn:
+    id: "calculator-key-done"
+- assertVisible: "25"
+- tapOn:
+    id: "header-save"
+- waitForAnimationToEnd
+- assertVisible: "Transactions"
+
+# Daily/burst 5th/6th and 2nd/3rd starts, reservation races, provider start
+# consumption, local midnight, AR/dark/screen readers need owner verification.

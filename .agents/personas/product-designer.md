@@ -28,6 +28,18 @@ normal-width design and the required compact, tablet, orientation, enlarged
 font, RTL, and state variants. Obtain the workflow's mockup approval before
 implementation proceeds.
 
+Provide a state-to-surface/shared-component/icon mapping sufficient to compare
+every required state against approved Binding Facts, including size, theme,
+placement, RTL/accessibility treatment and exact installed-library/export or
+shared-icon identities. When the approved feature handoff requires a canonical
+manifest artifact, populate it with immutable image/sidecar revisions and
+supersession history; otherwise do not invent a new manifest or approval gate
+solely for workflow compliance. Any manifest or derived map is an
+implementation/index aid and MUST NOT override approved Binding Facts. Resolve
+missing fidelity facts through the normal binding clarification/approval
+workflow before implementation. Do not mistake a reference inventory for
+rendered implementation evidence.
+
 ## Stop And Handoff
 
 Stop for a missing product decision, an unapproved redesign, unavailable

@@ -1,3 +1,4 @@
+import { useLocale } from "@/context/LocaleContext";
 import React from "react";
 import { Pressable, Text, View } from "react-native";
 
@@ -16,6 +17,10 @@ interface ModeOption {
   readonly label: string;
 }
 
+/**
+ * Two equal-width, flat underline tabs. The visible/accessible order is
+ * mirrored with the locale, without relying on translated labels for identity.
+ */
 export function AddTransactionModeTabs({
   mode,
   onModeChange,
@@ -23,62 +28,61 @@ export function AddTransactionModeTabs({
   manualLabel,
   voiceLabel,
 }: AddTransactionModeTabsProps): React.JSX.Element {
-  const options: readonly ModeOption[] = [
-    {
-      value: "manual",
-      label: manualLabel,
-    },
-    {
-      value: "voice",
-      label: voiceLabel,
-    },
-  ];
+  const { isRTL, fontFamily } = useLocale();
+  const manual: ModeOption = { value: "manual", label: manualLabel };
+  const voice: ModeOption = { value: "voice", label: voiceLabel };
+  const options: readonly ModeOption[] = isRTL
+    ? [voice, manual]
+    : [manual, voice];
 
   return (
-    <View
-      accessibilityRole="tablist"
-      className="mx-4 min-h-11 flex-row rounded-2xl bg-slate-100 p-1 dark:bg-slate-800"
-    >
-      {options.map((option) => {
-        const isSelected = mode === option.value;
+    <View testID="add-transaction-modes-frame" className="w-full px-4">
+      <View
+        testID="add-transaction-modes-tablist"
+        accessibilityRole="tablist"
+        className="min-h-12 w-full max-w-[560px] self-center flex-row border-b border-slate-200 dark:border-slate-700"
+        style={{ direction: "ltr" }}
+      >
+        {options.map((option) => {
+          const isSelected = mode === option.value;
 
-        return (
-          <Pressable
-            key={option.value}
-            testID={`add-transaction-mode-${option.value}`}
-            accessibilityRole="tab"
-            accessibilityLabel={option.label}
-            accessibilityState={{
-              selected: isSelected,
-              disabled,
-            }}
-            disabled={disabled}
-            onPress={() => {
-              if (!isSelected) {
-                onModeChange(option.value);
-              }
-            }}
-            className={`min-h-12 flex-1 items-center justify-center rounded-xl px-4 ${
-              isSelected
-                ? "bg-nileGreen-50 dark:bg-nileGreen-900"
-                : "bg-transparent"
-            }`}
-            style={({ pressed }) => ({
-              opacity: disabled ? 0.5 : pressed ? 0.7 : 1,
-            })}
-          >
-            <Text
-              className={`text-base font-semibold ${
+          return (
+            <Pressable
+              key={option.value}
+              testID={`add-transaction-mode-${option.value}`}
+              accessibilityRole="tab"
+              accessibilityLabel={option.label}
+              accessibilityState={{
+                selected: isSelected,
+                disabled,
+              }}
+              disabled={disabled}
+              onPress={() => {
+                if (!isSelected) onModeChange(option.value);
+              }}
+              className={`min-h-12 flex-1 items-center justify-center border-b-2 px-4 ${
                 isSelected
-                  ? "text-nileGreen-700 dark:text-nileGreen-400"
-                  : "text-text-secondary dark:text-text-secondary-dark"
+                  ? "border-nileGreen-600 dark:border-nileGreen-400"
+                  : "border-transparent"
               }`}
+              style={({ pressed }) => ({
+                opacity: disabled ? 0.5 : pressed ? 0.72 : 1,
+              })}
             >
-              {option.label}
-            </Text>
-          </Pressable>
-        );
-      })}
+              <Text
+                style={{ fontFamily: fontFamily.semiBold }}
+                className={`text-base font-semibold leading-[26px] ${
+                  isSelected
+                    ? "text-nileGreen-700 dark:text-nileGreen-400"
+                    : "text-text-secondary dark:text-text-secondary-dark"
+                }`}
+              >
+                {option.label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
     </View>
   );
 }

@@ -5,6 +5,7 @@ import {
   waitFor,
 } from "@testing-library/react-native";
 import React from "react";
+import { Pressable } from "react-native";
 import { completeFixtureA } from "../fixtures/market-rate-snapshot";
 import {
   selectMarketRateSnapshot,
@@ -118,6 +119,19 @@ jest.mock("@/components/ui/Toast", () => ({
 
 jest.mock("@/context/ThemeContext", () => ({
   useTheme: (): { readonly isDark: false } => ({ isDark: false }),
+}));
+
+jest.mock("@/context/LocaleContext", () => ({
+  useLocale: () => ({
+    language: "en",
+    isRTL: false,
+    fontFamily: {
+      regular: "Inter_400Regular",
+      medium: "Inter_500Medium",
+      semiBold: "Inter_600SemiBold",
+      bold: "Inter_700Bold",
+    },
+  }),
 }));
 
 jest.mock("@/context/CategoriesContext", () => ({
@@ -234,6 +248,8 @@ jest.mock("@/components/add-transaction/CategoryPicker", () => ({
 
 jest.mock("@/components/add-transaction/OptionalSection", () => ({
   OptionalSection: (props: {
+    readonly expanded: boolean;
+    readonly onToggleExpand: () => void;
     readonly onChange: (updates: {
       readonly isRecurring?: boolean;
       readonly recurringName?: string;
@@ -242,24 +258,38 @@ jest.mock("@/components/add-transaction/OptionalSection", () => ({
     const ReactNative =
       jest.requireActual<typeof import("react-native")>("react-native");
 
+    if (!props.expanded) {
+      return (
+        <ReactNative.Pressable onPress={props.onToggleExpand}>
+          <ReactNative.Text>add_more_details</ReactNative.Text>
+        </ReactNative.Pressable>
+      );
+    }
+
     return (
-      <ReactNative.Pressable
-        testID="enable-recurring"
-        onPress={() =>
-          props.onChange({
-            isRecurring: true,
-            recurringName: "Monthly food",
-          })
-        }
-      >
-        <ReactNative.Text>enable recurring</ReactNative.Text>
-      </ReactNative.Pressable>
+      <ReactNative.View>
+        <ReactNative.Pressable onPress={props.onToggleExpand}>
+          <ReactNative.Text>hide_details</ReactNative.Text>
+        </ReactNative.Pressable>
+        <ReactNative.Pressable
+          testID="enable-recurring"
+          onPress={() =>
+            props.onChange({
+              isRecurring: true,
+              recurringName: "Monthly food",
+            })
+          }
+        >
+          <ReactNative.Text>enable recurring</ReactNative.Text>
+        </ReactNative.Pressable>
+      </ReactNative.View>
     );
   },
 }));
 
 jest.mock("@/components/common/CategoryIcon", () => ({
   CategoryIcon: (): React.JSX.Element => mockView("category-icon"),
+  CategoryIconFromModel: (): React.JSX.Element => mockView("category-icon"),
   IconLibrary: {},
 }));
 
@@ -325,7 +355,26 @@ jest.mock("@/services/transfer-service", () => ({
   createTransfer: jest.fn(),
 }));
 
-import { ManualTransactionEntry as AddTransaction } from "@/components/add-transaction/ManualTransactionEntry";
+import {
+  ManualTransactionEntry,
+  type ManualTransactionEntryHandle,
+} from "@/components/add-transaction/ManualTransactionEntry";
+
+function AddTransaction(): React.JSX.Element {
+  const manualEntryRef = React.useRef<ManualTransactionEntryHandle>(null);
+
+  return (
+    <>
+      <Pressable
+        testID="header-save"
+        onPress={() => {
+          void manualEntryRef.current?.save();
+        }}
+      />
+      <ManualTransactionEntry ref={manualEntryRef} />
+    </>
+  );
+}
 
 interface RecurringPaymentServiceMocks {
   readonly createRecurringPayment: jest.Mock;
@@ -357,19 +406,25 @@ function account(id: string, name: string, isDefault: boolean): MockAccount {
   };
 }
 
+function enterAmount(value: string): void {
+  fireEvent.changeText(screen.getByTestId("manual-amount-input"), value);
+}
+
+function focusAmount(): void {
+  fireEvent(screen.getByTestId("manual-amount-input"), "focus", {});
+}
+
 describe("AddTransaction account selection", () => {
   it("shows the expense balance warning only for a parsed amount above the balance", () => {
     mockAccounts = [account("cash-1", "Cash", true)];
     render(<AddTransaction />);
-    fireEvent.press(screen.getByTestId("key-2"));
+    enterAmount("2");
     expect(screen.queryByText(/warning_negative_balance/)).toBeNull();
-    fireEvent.press(screen.getByTestId("key-2"));
-    fireEvent.press(screen.getByTestId("key-2"));
-    fireEvent.press(screen.getByTestId("key-2"));
+    enterAmount("2222");
     expect(screen.getByText(/warning_negative_balance/)).toHaveTextContent(
       /- 1,222\.00 EGP/
     );
-    fireEvent.press(screen.getByTestId("key-plus"));
+    enterAmount("2222+");
     expect(screen.queryByText(/warning_negative_balance/)).toBeNull();
   });
 
@@ -401,7 +456,7 @@ describe("AddTransaction account selection", () => {
     const view = render(<AddTransaction />);
     fireEvent.press(screen.getByTestId("choose-transfer"));
     fireEvent.press(screen.getByTestId("to-usd"));
-    fireEvent.press(screen.getByTestId("key-2"));
+    enterAmount("2");
     await waitFor(() =>
       expect(screen.getByTestId("transfer-target")).not.toHaveTextContent(/^$/)
     );
@@ -414,7 +469,7 @@ describe("AddTransaction account selection", () => {
       readonly createTransfer: jest.Mock;
     }>("@/services/transfer-service");
     createTransfer.mockClear();
-    fireEvent.press(screen.getByTestId("key-done"));
+    fireEvent.press(screen.getByTestId("header-save"));
     await waitFor(() => expect(createTransfer).not.toHaveBeenCalled());
     expect(mockBack).not.toHaveBeenCalled();
   });
@@ -439,12 +494,12 @@ describe("AddTransaction account selection", () => {
     render(<AddTransaction />);
     fireEvent.press(screen.getByTestId("choose-transfer"));
     fireEvent.press(screen.getByTestId("to-usd"));
-    fireEvent.press(screen.getByTestId("key-2"));
+    enterAmount("2");
     await waitFor(() =>
       expect(screen.getByTestId("transfer-target")).not.toHaveTextContent(/^$/)
     );
     fireEvent.press(screen.getByTestId("to-egp"));
-    fireEvent.press(screen.getByTestId("key-done"));
+    fireEvent.press(screen.getByTestId("header-save"));
     await waitFor(() =>
       expect(createTransfer).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -473,7 +528,7 @@ describe("AddTransaction account selection", () => {
   it("keeps a manually selected account when a default arrives later", async () => {
     const { rerender } = render(<AddTransaction />);
 
-    fireEvent.press(screen.getByText("select"));
+    fireEvent.press(screen.getByTestId("manual-account-selector-trigger"));
     fireEvent.press(screen.getByTestId("account-option-bank-1"));
 
     await waitFor(() => expect(screen.getByText("Bank")).toBeTruthy());
@@ -487,7 +542,7 @@ describe("AddTransaction account selection", () => {
     await waitFor(() => expect(screen.getByText("Bank")).toBeTruthy());
   });
 
-  it("submits a supported calculator expression when DONE is pressed before equals", async () => {
+  it("submits a supported calculator expression through header Save before equals", async () => {
     mockAccounts = [account("cash-1", "Cash", true)];
     transactionServiceMocks().createTransaction.mockResolvedValueOnce({
       id: "transaction-1",
@@ -495,10 +550,11 @@ describe("AddTransaction account selection", () => {
     render(<AddTransaction />);
 
     await waitFor(() => expect(screen.getByText("Cash")).toBeTruthy());
+    focusAmount();
     fireEvent.press(screen.getByTestId("key-2"));
     fireEvent.press(screen.getByTestId("key-plus"));
     fireEvent.press(screen.getByTestId("key-3"));
-    fireEvent.press(screen.getByTestId("key-done"));
+    fireEvent.press(screen.getByTestId("header-save"));
 
     await waitFor(() => {
       expect(transactionServiceMocks().createTransaction).toHaveBeenCalledWith(
@@ -518,10 +574,10 @@ describe("AddTransaction account selection", () => {
     render(<AddTransaction />);
 
     await waitFor(() => expect(screen.getByText("Cash")).toBeTruthy());
-    fireEvent.press(screen.getByTestId("key-1"));
+    enterAmount("1");
     fireEvent.press(screen.getByText("add_more_details"));
     fireEvent.press(screen.getByTestId("enable-recurring"));
-    fireEvent.press(screen.getByTestId("key-done"));
+    fireEvent.press(screen.getByTestId("header-save"));
 
     await waitFor(() => {
       expect(mockShowToast).toHaveBeenCalledWith(
@@ -548,10 +604,10 @@ describe("AddTransaction account selection", () => {
     render(<AddTransaction />);
 
     await waitFor(() => expect(screen.getByText("Cash")).toBeTruthy());
-    fireEvent.press(screen.getByTestId("key-1"));
+    enterAmount("1");
     fireEvent.press(screen.getByText("add_more_details"));
     fireEvent.press(screen.getByTestId("enable-recurring"));
-    fireEvent.press(screen.getByTestId("key-done"));
+    fireEvent.press(screen.getByTestId("header-save"));
 
     await waitFor(() => {
       expect(
