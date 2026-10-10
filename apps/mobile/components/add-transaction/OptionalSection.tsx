@@ -269,7 +269,8 @@ export function OptionalSection({
                 {/* Recurring logic will be implemented here later or simply show basic name/frequency for now as placeholders */}
                 <View ref={recurringNameRef} collapsable={false}>
                   <TextField
-                    label={`${t("recurring_name_label")} *`}
+                    label={t("recurring_name_label")}
+                    required
                     placeholder={t("recurring_name_placeholder")}
                     value={fields.recurringName}
                     onChangeText={(t) => onChange({ recurringName: t })}

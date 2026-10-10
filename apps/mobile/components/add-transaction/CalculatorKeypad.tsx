@@ -1,5 +1,6 @@
 import { palette } from "@/constants/colors";
 import { useTheme } from "@/context/ThemeContext";
+import { useLocale } from "@/context/LocaleContext";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import * as React from "react";
@@ -69,6 +70,42 @@ function getCalculatorKeyTestId(value: CalculatorKey): string {
   return `calculator-key-${keyNames[value]}`;
 }
 
+function CompactCalculatorText({
+  children,
+  className,
+}: {
+  readonly children: React.ReactNode;
+  readonly className: string;
+}): React.JSX.Element {
+  const { fontFamily } = useLocale();
+
+  return (
+    <Text className={className} style={{ fontFamily: fontFamily.bold }}>
+      {children}
+    </Text>
+  );
+}
+
+function CalculatorText({
+  children,
+  className,
+  compact,
+}: {
+  readonly children: React.ReactNode;
+  readonly className: string;
+  readonly compact: boolean;
+}): React.JSX.Element {
+  if (compact) {
+    return (
+      <CompactCalculatorText className={className}>
+        {children}
+      </CompactCalculatorText>
+    );
+  }
+
+  return <Text className={className}>{children}</Text>;
+}
+
 const Key = ({
   label,
   value,
@@ -106,9 +143,12 @@ const Key = ({
       className="absolute inset-0 rounded-2xl bg-slate-100 dark:bg-slate-800/50"
     />
     {typeof label === "string" ? (
-      <Text className="text-xl font-bold text-slate-900 dark:text-white">
+      <CalculatorText
+        compact={compact}
+        className="text-xl font-bold text-slate-900 dark:text-white"
+      >
         {label}
-      </Text>
+      </CalculatorText>
     ) : (
       label
     )}
@@ -142,9 +182,12 @@ const OperationKey = ({
       pointerEvents="none"
       className="absolute inset-0 rounded-2xl bg-nileGreen-500/10 dark:bg-nileGreen-500/10"
     />
-    <Text className="text-xl font-bold text-nileGreen-600 dark:text-nileGreen-400">
+    <CalculatorText
+      compact={compact}
+      className="text-xl font-bold text-nileGreen-600 dark:text-nileGreen-400"
+    >
       {label}
-    </Text>
+    </CalculatorText>
   </TouchableOpacity>
 );
 
@@ -277,9 +320,12 @@ export function CalculatorKeypad({
             pointerEvents="none"
             className="absolute inset-0 rounded-2xl bg-nileGreen-500 shadow-md"
           />
-          <Text className="text-white font-extrabold text-base">
+          <CalculatorText
+            compact={compact}
+            className="text-white font-extrabold text-base"
+          >
             {actionLabel}
-          </Text>
+          </CalculatorText>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -293,9 +339,12 @@ export function CalculatorKeypad({
             pointerEvents="none"
             className="absolute inset-0 rounded-2xl bg-nileGreen-500/15 dark:bg-nileGreen-500/15"
           />
-          <Text className="text-xl font-extrabold text-nileGreen-600 dark:text-nileGreen-400">
+          <CalculatorText
+            compact={compact}
+            className="text-xl font-extrabold text-nileGreen-600 dark:text-nileGreen-400"
+          >
             =
-          </Text>
+          </CalculatorText>
         </TouchableOpacity>
       </View>
     </View>

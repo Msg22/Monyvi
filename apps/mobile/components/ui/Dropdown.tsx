@@ -282,11 +282,12 @@ export function Dropdown<T extends string | number>({
     (variant === "outlined"
       ? "mb-1 text-sm font-normal text-text-secondary dark:text-text-secondary-dark"
       : "input-label mb-2");
-  const resolvedSelectedTextClassName =
+  const resolvedSelectedTextClassName = `min-w-0 flex-1 ${
     selectedTextClassName ??
     `text-base ${
       variant === "outlined" ? "font-normal" : "font-medium"
-    } text-slate-900 dark:text-white`;
+    } text-slate-900 dark:text-white`
+  }`;
   const resolvedTriggerClassName =
     variant === "outlined"
       ? `${triggerClassName ?? "min-h-11"} justify-center px-3 py-2`

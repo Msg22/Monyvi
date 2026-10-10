@@ -216,7 +216,6 @@ export const ManualTransactionEntry = forwardRef<
   const focusAmountField = (
     field: "amount" | "targetAmount"
   ): void => {
-    Keyboard.dismiss();
     if (isOptionalExpanded) {
       setIsOptionalExpanded(false);
     }
@@ -636,7 +635,10 @@ export const ManualTransactionEntry = forwardRef<
                 labelStyle={{ fontFamily: fontFamily.regular }}
                 containerClassName="mb-3"
                 trailingAdornment={
-                  <Text className="text-sm font-medium text-text-secondary dark:text-text-secondary-dark">
+                  <Text
+                    className="text-sm font-medium text-text-secondary dark:text-text-secondary-dark"
+                    style={{ fontFamily: fontFamily.medium }}
+                  >
                     {selectedAccount?.currency ?? preferredCurrency}
                   </Text>
                 }

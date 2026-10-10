@@ -14,6 +14,7 @@ import { formatAmountInput } from "@monyvi/logic";
 import { formatLocalizedMoneyAmount } from "@/utils/localized-money-display";
 import { useTranslation } from "react-i18next";
 import { GroupedMoneyInput } from "@/components/ui/GroupedMoneyInput";
+import { useLocale } from "@/context/LocaleContext";
 
 interface TransferFieldsProps {
   accounts: Account[];
@@ -38,6 +39,23 @@ interface TransferFieldsProps {
   toAccountError?: string;
   readonly fromAccountRef?: RefObject<View | null>;
   readonly toAccountRef?: RefObject<View | null>;
+}
+
+function CompactCurrencySuffix({
+  currency,
+}: {
+  readonly currency?: string;
+}): React.JSX.Element {
+  const { fontFamily } = useLocale();
+
+  return (
+    <Text
+      className="text-sm font-medium text-text-secondary dark:text-text-secondary-dark"
+      style={{ fontFamily: fontFamily.medium }}
+    >
+      {currency}
+    </Text>
+  );
 }
 
 export function TransferFields({
@@ -246,9 +264,7 @@ export function TransferFields({
                 : ""
             }`}
             trailingAdornment={
-              <Text className="text-sm font-medium text-text-secondary dark:text-text-secondary-dark">
-                {toAccount?.currency}
-              </Text>
+              <CompactCurrencySuffix currency={toAccount?.currency} />
             }
           />
 
