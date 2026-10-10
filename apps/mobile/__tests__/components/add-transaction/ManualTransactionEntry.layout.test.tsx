@@ -362,11 +362,18 @@ describe("ManualTransactionEntry compact B layout", () => {
       });
     }
 
-    expect(screen.getByText("Add more details")).toHaveStyle({
+    const optionalHeading = screen.getByText("Add more details");
+    expect(optionalHeading).toHaveStyle({
       fontFamily: "Inter_700Bold",
-      fontSize: 18,
-      lineHeight: 28,
     });
+    expect(optionalHeading).toHaveProp(
+      "className",
+      expect.stringContaining("text-lg")
+    );
+    expect(optionalHeading).toHaveProp(
+      "className",
+      expect.stringContaining("leading-7")
+    );
     expect(screen.getByText("Note, date, recurring")).toHaveStyle({
       fontFamily: "Inter_400Regular",
       fontSize: 12,

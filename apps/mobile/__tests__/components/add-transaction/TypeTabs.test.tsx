@@ -79,11 +79,18 @@ describe("TypeTabs compact Manual selector", () => {
   it("uses approved compact tab typography with the active locale font family", () => {
     render(<TypeTabs compact selectedType="EXPENSE" onSelect={jest.fn()} />);
 
-    expect(screen.getByText("Expense")).toHaveStyle({
+    const expenseLabel = screen.getByText("Expense");
+    expect(expenseLabel).toHaveStyle({
       fontFamily: "Inter_600SemiBold",
-      fontSize: 16,
-      lineHeight: 26,
     });
+    expect(expenseLabel).toHaveProp(
+      "className",
+      expect.stringContaining("text-base")
+    );
+    expect(expenseLabel).toHaveProp(
+      "className",
+      expect.stringContaining("leading-[26px]")
+    );
   });
 
   it("switches compact tab typography to Noto Sans Arabic without changing the legacy variant", () => {
@@ -98,11 +105,18 @@ describe("TypeTabs compact Manual selector", () => {
       <TypeTabs compact selectedType="EXPENSE" onSelect={jest.fn()} />
     );
 
-    expect(screen.getByText("Expense")).toHaveStyle({
+    const expenseLabel = screen.getByText("Expense");
+    expect(expenseLabel).toHaveStyle({
       fontFamily: "NotoSansArabic_600SemiBold",
-      fontSize: 16,
-      lineHeight: 26,
     });
+    expect(expenseLabel).toHaveProp(
+      "className",
+      expect.stringContaining("text-base")
+    );
+    expect(expenseLabel).toHaveProp(
+      "className",
+      expect.stringContaining("leading-[26px]")
+    );
 
     rerender(<TypeTabs selectedType="EXPENSE" onSelect={jest.fn()} />);
     expect(screen.getByText("EXPENSE")).toBeTruthy();
