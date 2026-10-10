@@ -121,7 +121,7 @@ describe("TransferFields", () => {
       />
     );
 
-    const suffix = within(
+    const suffix: unknown = within(
       screen.getByTestId(
         "manual-transfer-target-amount-input-trailing-adornment"
       )
@@ -154,7 +154,7 @@ describe("TransferFields", () => {
       />
     );
 
-    const arabicSuffix = within(
+    const arabicSuffix: unknown = within(
       screen.getByTestId(
         "manual-transfer-target-amount-input-trailing-adornment"
       )

@@ -362,7 +362,7 @@ describe("ManualTransactionEntry compact B layout", () => {
   it("uses the active locale medium font for the main amount currency suffix", () => {
     const { rerender } = render(<ManualTransactionEntry />);
 
-    const suffix = within(
+    const suffix: unknown = within(
       screen.getByTestId("manual-amount-input-trailing-adornment")
     ).getByText("EGP");
     expect(suffix).toHaveStyle({
@@ -381,7 +381,7 @@ describe("ManualTransactionEntry compact B layout", () => {
 
     rerender(<ManualTransactionEntry />);
 
-    const arabicSuffix = within(
+    const arabicSuffix: unknown = within(
       screen.getByTestId("manual-amount-input-trailing-adornment")
     ).getByText("EGP");
     expect(arabicSuffix).toHaveStyle({
@@ -416,7 +416,7 @@ describe("ManualTransactionEntry compact B layout", () => {
       });
     }
 
-    const optionalHeading = screen.getByText("Add more details");
+    const optionalHeading: unknown = screen.getByText("Add more details");
     expect(optionalHeading).toHaveStyle({
       fontFamily: "Inter_700Bold",
     });
@@ -426,7 +426,7 @@ describe("ManualTransactionEntry compact B layout", () => {
     expect(optionalHeadingClassName).toContain("text-lg");
     expect(optionalHeadingClassName).toContain("leading-7");
 
-    const optionalHelper = screen.getByText("Note, date, recurring");
+    const optionalHelper: unknown = screen.getByText("Note, date, recurring");
     expect(optionalHelper).toHaveStyle({
       fontFamily: "Inter_400Regular",
     });
