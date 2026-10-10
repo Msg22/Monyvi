@@ -1,16 +1,27 @@
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
+
 import { render, screen } from "@testing-library/react-native";
 import React from "react";
+import { processColor, StyleSheet, type StyleProp, type ViewStyle } from "react-native";
+import {
+  colorScheme, registerCSS, render as renderWithInterop, setupAllComponents,
+} from "react-native-css-interop/test";
 
 import {
+  getTestInstanceParent,
   getTestInstanceProps,
   getTestInstances,
 } from "../../test-utils/test-instance-props";
-import { ScrollView, type StyleProp, type ViewStyle } from "react-native";
+import { ScrollView } from "react-native";
 
 import { palette } from "@/constants/colors";
 
 import { VoiceTransactionEntry } from "@/components/add-transaction/VoiceTransactionEntry";
 
+let mockLanguage: "en" | "ar" = "en";
 let mockWidth = 390;
 let mockHeight = 844;
 let mockFontScale = 1;
@@ -39,13 +50,16 @@ jest.mock("react-native-safe-area-context", () => ({
 }));
 
 jest.mock("@/context/LocaleContext", () => ({
-  useLocale: () => ({
-    language: "en",
-    isRTL: false,
-    fontFamily: jest.requireActual<typeof import("@/constants/typography")>(
+  useLocale: () => {
+    const fonts = jest.requireActual<typeof import("@/constants/typography")>(
       "@/constants/typography"
-    ).fontFamily,
-  }),
+    );
+    return {
+      language: mockLanguage,
+      isRTL: mockLanguage === "ar",
+      fontFamily: mockLanguage === "ar" ? fonts.arabicFontFamily : fonts.fontFamily,
+    };
+  },
 }));
 
 jest.mock("react-i18next", () => ({
@@ -128,6 +142,7 @@ function renderLayout(
 
 describe("VoiceTransactionEntry responsive, animation and unboxed layout", () => {
   beforeEach(() => {
+    mockLanguage = "en";
     mockWidth = 390;
     mockHeight = 844;
     mockFontScale = 1;
@@ -225,65 +240,6 @@ describe("VoiceTransactionEntry responsive, animation and unboxed layout", () =>
     ).toBeOnTheScreen();
   });
 
-  it("gives the real Expo gradient native circular geometry and clips its clickable mask", () => {
-    renderLayout();
-    // The gradient double exposes only the actual native style prop. The
-    // previous className-only rendering was square on the owner's device.
-    const gradient: unknown = screen.getByTestId("voice-gradient");
-    expect(getTestInstanceProps(gradient).style).toEqual(
-      expect.objectContaining({
-        width: 104,
-        height: 104,
-        borderRadius: 52,
-        alignItems: "center",
-        justifyContent: "center",
-      })
-    );
-
-    const mic: unknown = screen.getByTestId("voice-mic-target");
-    expect(getTestInstanceProps(mic).accessibilityRole).toBe("button");
-    const micStyle = getTestInstanceProps(mic).style;
-    if (typeof micStyle !== "function") {
-      throw new Error("Expected native Pressable stateful style callback");
-    }
-    const normal: unknown = micStyle({ pressed: false });
-    const pressed: unknown = micStyle({ pressed: true });
-    expect(normal).toEqual(
-      expect.objectContaining({
-        width: 104,
-        height: 104,
-        borderRadius: 52,
-        overflow: "hidden",
-      })
-    );
-    expect(pressed).toEqual(expect.objectContaining({ overflow: "hidden" }));
-  });
-
-  it.each([
-    ["outer", 172, 86, palette.nileGreen[50]],
-    ["inner", 140, 70, palette.nileGreen[100]],
-  ] as const)(
-    "gives the %s idle halo native geometry and an actual visible token color",
-    (ring, size, radius, color) => {
-      renderLayout();
-      const halo: unknown = screen.getByTestId(`voice-halo-${ring}`, {
-        includeHiddenElements: true,
-      });
-      const props = getTestInstanceProps(halo);
-      expect(props.style).toEqual(
-        expect.objectContaining({
-          position: "absolute",
-          width: size,
-          height: size,
-          borderRadius: radius,
-          backgroundColor: color,
-        })
-      );
-      expect(props.pointerEvents).toBe("none");
-      expect(props.importantForAccessibility).toBe("no-hide-descendants");
-    }
-  );
-
   it("suppresses pulse when reduced motion is enabled and tears down on unmount", () => {
     mockReducedMotion = true;
     const reduced = renderLayout({ state: "recording" });
@@ -312,4 +268,172 @@ describe("VoiceTransactionEntry responsive, animation and unboxed layout", () =>
       screen.queryByRole("button", { name: "voice_idle_title" })
     ).toBeNull();
   });
+});
+
+const MOBILE_ROOT = path.resolve(__dirname, "../../..");
+const REPOSITORY_ROOT = path.resolve(MOBILE_ROOT, "../..");
+const TAILWIND_CLI = require.resolve("tailwindcss/lib/cli/index.js", {
+  paths: [MOBILE_ROOT, REPOSITORY_ROOT],
+});
+let cachedVoiceCss: string | null = null;
+
+function compiledVoiceCss(): string {
+  if (cachedVoiceCss !== null) return cachedVoiceCss;
+  const directory = mkdtempSync(path.join(os.tmpdir(), "monyvi-voice-css-"));
+  try {
+    const input = path.join(directory, "input.css");
+    const fixture = path.join(directory, "fixture.html");
+    const output = path.join(directory, "output.css");
+    const classes = [
+      "absolute", "h-[172px]", "w-[172px]", "rounded-[86px]",
+      "h-[140px]", "w-[140px]", "rounded-[70px]",
+      "h-[104px]", "w-[104px]", "rounded-[52px]",
+      "overflow-hidden", "items-center", "justify-center",
+      "bg-nileGreen-50/60", "dark:bg-nileGreen-900/50",
+      "bg-nileGreen-100/50", "dark:bg-nileGreen-900/60",
+      "bg-slate-200/20", "dark:bg-slate-700/25",
+      "dark:bg-slate-700/30",
+    ];
+    writeFileSync(input, "@tailwind base;\n@tailwind utilities;\n", "utf8");
+    writeFileSync(
+      fixture, '<div class="' + classes.join(" ") + '"></div>\n', "utf8"
+    );
+    execFileSync(
+      process.execPath,
+      [TAILWIND_CLI, "-c", path.join(MOBILE_ROOT, "tailwind.config.js"),
+        "-i", input, "-o", output, "--content", fixture],
+      { cwd: REPOSITORY_ROOT, stdio: "pipe", env: { ...process.env, NATIVEWIND_OS: "android" } }
+    );
+    cachedVoiceCss = readFileSync(output, "utf8");
+    return cachedVoiceCss;
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+}
+
+/** NativeWind CSS must be actually registered and translated, not string-matched. */
+function resolvedVoiceStyle(node: unknown, pressed = false): ViewStyle {
+  const raw: unknown = getTestInstanceProps(node).style;
+  const evaluated: unknown =
+    typeof raw === "function" ? raw({ pressed }) : raw;
+  if (
+    evaluated !== undefined &&
+    evaluated !== null &&
+    typeof evaluated !== "object"
+  ) {
+    throw new Error("Expected a native style object or array");
+  }
+  return StyleSheet.flatten(evaluated as StyleProp<ViewStyle>) ?? {};
+}
+
+function hasNativeCircularClip(gradient: unknown, pressed: boolean): boolean {
+  let current: unknown = getTestInstanceParent(gradient);
+  for (let i = 0; i < 12 && current !== null; i++) {
+    if (typeof current !== "object") break;
+    const style = resolvedVoiceStyle(current, pressed);
+    if (style.overflow === "hidden" && style.width === 104 &&
+        style.height === 104 && style.borderRadius === 52) {
+      return true;
+    }
+    current = getTestInstanceParent(current);
+  }
+  return false;
+}
+
+function expectPaletteHalo(actual: unknown, paletteColor: string): void {
+  if (typeof actual !== "string") {
+    throw new Error("Expected native resolved halo color");
+  }
+  const native = processColor(actual);
+  const expected = processColor(paletteColor);
+  if (typeof native !== "number" || typeof expected !== "number") {
+    throw new Error("Expected valid React Native color values");
+  }
+  expect(native & 0xffffff).toBe(expected & 0xffffff);
+  const alpha = (native >>> 24) & 0xff;
+  expect(alpha).toBeGreaterThan(0);
+  expect(alpha).toBeLessThan(255);
+}
+
+describe("real Tailwind/CSS Interop Voice native shape", () => {
+  beforeAll(() => setupAllComponents());
+  beforeEach(() => registerCSS(compiledVoiceCss(), {
+    grouping: ["^group(/.*)?"],
+    ignorePropertyWarningRegex: ["^--tw-"],
+  }));
+
+  it.each([
+    ["en", "light"], ["ar", "light"],
+    ["en", "dark"], ["ar", "dark"],
+  ] as const)(
+    "renders a genuine 104dp circular mic in %s %s",
+    (language, theme) => {
+      mockLanguage = language;
+      colorScheme.set(theme);
+      renderWithInterop(<VoiceTransactionEntry {...baseProps} />);
+      const gradient: unknown = screen.getByTestId("voice-gradient");
+      const style = resolvedVoiceStyle(gradient);
+      const roundedGradient =
+        style.width === 104 && style.height === 104 &&
+        style.borderRadius === 52;
+      // Either converted Expo gradient styles or an actual clipped
+      // ancestor (BudgetPrimaryAction pattern) prevents square gradients.
+      expect(
+        roundedGradient ||
+        (hasNativeCircularClip(gradient, false) &&
+         hasNativeCircularClip(gradient, true))
+      ).toBe(true);
+      expect(getTestInstanceProps(
+        screen.getByTestId("voice-mic-target")
+      ).accessibilityRole).toBe("button");
+    }
+  );
+
+  it.each([
+    ["en", "light", "idle"], ["ar", "light", "idle"],
+    ["en", "dark", "idle"], ["ar", "dark", "idle"],
+    ["en", "light", "daily-limit"], ["ar", "light", "daily-limit"],
+    ["en", "dark", "daily-limit"], ["ar", "dark", "daily-limit"],
+  ] as const)(
+    "resolves %s %s %s halos through native theme styles",
+    (language, theme, state) => {
+      mockLanguage = language;
+      colorScheme.set(theme);
+      renderWithInterop(
+        <VoiceTransactionEntry
+          {...baseProps}
+          state={state}
+          remaining={state === "daily-limit" ? 0 : 3}
+        />
+      );
+      for (const [name, size, radius] of [
+        ["outer", 172, 86],
+        ["inner", 140, 70],
+      ] as const) {
+        const halo: unknown = screen.getByTestId("voice-halo-" + name, {
+          includeHiddenElements: true,
+        });
+        const style = resolvedVoiceStyle(halo);
+        expect(style).toEqual(expect.objectContaining({
+          position: "absolute", width: size, height: size,
+          borderRadius: radius,
+        }));
+        const approvedColor =
+          state === "daily-limit"
+            ? theme === "dark" ? palette.slate[700] : palette.slate[200]
+            : theme === "dark" ? palette.nileGreen[900]
+            : name === "outer" ? palette.nileGreen[50] : palette.nileGreen[100];
+        expectPaletteHalo(style.backgroundColor, approvedColor);
+        const props = getTestInstanceProps(halo);
+        expect(props.pointerEvents).toBe("none");
+        expect(props.importantForAccessibility).toBe("no-hide-descendants");
+      }
+      if (state === "daily-limit") {
+        const disabled: unknown = screen.getByTestId("voice-mic-target", {
+          includeHiddenElements: true,
+        });
+        expect(getTestInstanceProps(disabled).accessible).toBe(false);
+      }
+    }
+  );
 });

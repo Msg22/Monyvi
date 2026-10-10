@@ -1,5 +1,22 @@
+import { execFileSync } from "node:child_process";
+import {
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
+
 import { fireEvent, render, screen } from "@testing-library/react-native";
 import React from "react";
+import { StyleSheet, type StyleProp, type ViewStyle } from "react-native";
+import {
+  colorScheme,
+  registerCSS,
+  render as renderWithInterop,
+  setupAllComponents,
+} from "react-native-css-interop/test";
 
 import {
   getTestInstanceChildren,
@@ -94,54 +111,6 @@ describe("AddTransactionModeTabs approved underline contract", () => {
     );
   });
 
-  it.each([
-    ["English", false, "Voice", "Manual"],
-    ["Arabic", true, "صوتي", "يدوي"],
-  ] as const)(
-    "resolves the selected Voice underline into native Pressable border styles in %s",
-    (_locale, rtl, voiceLabel, manualLabel) => {
-      mockIsRTL = rtl;
-      renderTabs("voice");
-      const selected: unknown = screen.getByRole("tab", { name: voiceLabel });
-      const unselected: unknown = screen.getByRole("tab", {
-        name: manualLabel,
-      });
-      const selectedStyle = getTestInstanceProps(selected).style;
-      const unselectedStyle = getTestInstanceProps(unselected).style;
-      if (
-        typeof selectedStyle !== "function" ||
-        typeof unselectedStyle !== "function"
-      ) {
-        throw new Error("Expected native Pressable stateful style callbacks");
-      }
-      // Class names cannot prove the selected underline survives native
-      // Pressable's style callback and NativeWind class-name translation.
-      const normal: unknown = selectedStyle({ pressed: false });
-      const pressed: unknown = selectedStyle({ pressed: true });
-      const inactive: unknown = unselectedStyle({ pressed: false });
-      expect(normal).toEqual(
-        expect.objectContaining({
-          borderBottomWidth: 2,
-          borderBottomColor: palette.nileGreen[600],
-          opacity: 1,
-        })
-      );
-      expect(pressed).toEqual(
-        expect.objectContaining({
-          borderBottomWidth: 2,
-          borderBottomColor: palette.nileGreen[600],
-          opacity: 0.72,
-        })
-      );
-      expect(inactive).toEqual(
-        expect.objectContaining({
-          borderBottomWidth: 2,
-          borderBottomColor: "transparent",
-        })
-      );
-    }
-  );
-
   it("keeps both tabs disabled while the Voice flow or consent start is locked", () => {
     const onModeChange = jest.fn();
     renderTabs("voice", true, onModeChange);
@@ -217,4 +186,168 @@ describe("AddTransactionModeTabs approved underline contract", () => {
         .accessibilityState
     ).toEqual(expect.objectContaining({ selected: true }));
   });
+});
+
+/**
+ * Compile the real mobile Tailwind config, then let the pinned CSS Interop
+ * runtime convert that output to native styles. No manually invented rules.
+ */
+const MOBILE_ROOT = path.resolve(__dirname, "../../..");
+const REPOSITORY_ROOT = path.resolve(MOBILE_ROOT, "../..");
+const TAILWIND_CLI = require.resolve("tailwindcss/lib/cli/index.js", {
+  paths: [MOBILE_ROOT, REPOSITORY_ROOT],
+});
+let cachedModeTabCss: string | null = null;
+
+function compiledModeTabCss(): string {
+  if (cachedModeTabCss !== null) return cachedModeTabCss;
+  const temporary = mkdtempSync(path.join(os.tmpdir(), "monyvi-tabs-css-"));
+  try {
+    const input = path.join(temporary, "input.css");
+    const fixture = path.join(temporary, "fixture.html");
+    const output = path.join(temporary, "output.css");
+    writeFileSync(input, "@tailwind base;\n@tailwind utilities;\n", "utf8");
+    const classes = [
+        "min-h-12",
+        "flex-1",
+        "items-center",
+        "justify-center",
+        "border-b-2",
+        "px-4",
+        "border-nileGreen-600",
+        "dark:border-nileGreen-400",
+        "border-transparent",
+        "opacity-50",
+    ];
+    writeFileSync(
+      fixture, '<div class="' + classes.join(" ") + '"></div>\n', "utf8"
+    );
+    execFileSync(
+      process.execPath,
+      [
+        TAILWIND_CLI,
+        "-c",
+        path.join(MOBILE_ROOT, "tailwind.config.js"),
+        "-i",
+        input,
+        "-o",
+        output,
+        "--content",
+        fixture,
+      ],
+      { cwd: REPOSITORY_ROOT, stdio: "pipe", env: { ...process.env, NATIVEWIND_OS: "android" } }
+    );
+    cachedModeTabCss = readFileSync(output, "utf8");
+    return cachedModeTabCss;
+  } finally {
+    rmSync(temporary, { recursive: true, force: true });
+  }
+}
+
+function tabNativeStyle(node: unknown, pressed: boolean): ViewStyle {
+  const raw = getTestInstanceProps(node).style;
+  const resolved: unknown =
+    typeof raw === "function" ? raw({ pressed }) : raw;
+  if (
+    resolved !== undefined &&
+    resolved !== null &&
+    typeof resolved !== "object"
+  ) {
+    throw new Error("Expected a native style object or array");
+  }
+  return StyleSheet.flatten(resolved as StyleProp<ViewStyle>) ?? {};
+}
+
+function resolvedTabHasUnderline(
+  node: unknown,
+  expectedColor: string,
+  pressed: boolean
+): boolean {
+  const style = tabNativeStyle(node, pressed);
+  const color = expectedColor.toLowerCase();
+  const borderColor = style.borderBottomColor ?? style.borderColor;
+  const nativeBorder =
+    style.borderBottomWidth === 2 &&
+    typeof borderColor === "string" &&
+    borderColor.toLowerCase() === color;
+  const nativeIndicator =
+    style.height === 2 &&
+    typeof style.backgroundColor === "string" &&
+    style.backgroundColor.toLowerCase() === color;
+  if (nativeBorder || nativeIndicator) return true;
+
+  for (const child of getTestInstanceChildren(node)) {
+    if (typeof child === "object" && child !== null) {
+      if (resolvedTabHasUnderline(child, expectedColor, pressed)) return true;
+    }
+  }
+  return false;
+}
+
+describe("compiled NativeWind mode-tab underline regression", () => {
+  beforeAll(() => {
+    setupAllComponents();
+  });
+
+  beforeEach(() => {
+    registerCSS(compiledModeTabCss(), {
+      grouping: ["^group(/.*)?"],
+      ignorePropertyWarningRegex: ["^--tw-"],
+    });
+  });
+
+  it.each([
+    ["English", false, "light", false],
+    ["English", false, "light", true],
+    ["English", false, "dark", false],
+    ["English", false, "dark", true],
+    ["Arabic", true, "light", false],
+    ["Arabic", true, "light", true],
+    ["Arabic", true, "dark", false],
+    ["Arabic", true, "dark", true],
+  ] as const)(
+    "keeps %s Voice underline native (RTL=%s, theme=%s, disabled=%s)",
+    (_language, rtl, theme, disabled) => {
+      mockIsRTL = rtl;
+      colorScheme.set(theme);
+      const voiceLabel = rtl ? "صوتي" : "Voice";
+      const manualLabel = rtl ? "يدوي" : "Manual";
+      const onModeChange = jest.fn();
+      renderWithInterop(
+        <AddTransactionModeTabs
+          mode="voice"
+          disabled={disabled}
+          manualLabel={manualLabel}
+          voiceLabel={voiceLabel}
+          onModeChange={onModeChange}
+        />
+      );
+
+      const selected: unknown = screen.getByRole("tab", { name: voiceLabel });
+      const other: unknown = screen.getByRole("tab", { name: manualLabel });
+      const green = theme === "dark"
+        ? palette.nileGreen[400]
+        : palette.nileGreen[600];
+
+      expect(resolvedTabHasUnderline(selected, green, false)).toBe(true);
+      expect(resolvedTabHasUnderline(selected, green, true)).toBe(true);
+      expect(resolvedTabHasUnderline(other, green, false)).toBe(false);
+      expect(getTestInstanceProps(selected).accessibilityState).toEqual(
+        expect.objectContaining({ selected: true, disabled })
+      );
+      expect(tabNativeStyle(selected, false).opacity).toBe(disabled ? 0.5 : 1);
+      expect(tabNativeStyle(selected, true).opacity).toBe(
+        disabled ? 0.5 : 0.72
+      );
+
+      if (!disabled) {
+        fireEvent.press(screen.getByRole("tab", { name: manualLabel }));
+        expect(onModeChange).toHaveBeenCalledTimes(1);
+        expect(onModeChange).toHaveBeenCalledWith("manual");
+      } else {
+        fireEvent.press(screen.getByRole("tab", { name: manualLabel }));
+        expect(onModeChange).not.toHaveBeenCalled();
+      }
+    }
+  );
 });
