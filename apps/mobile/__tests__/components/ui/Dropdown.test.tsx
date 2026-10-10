@@ -137,10 +137,9 @@ describe("Dropdown repair contract", () => {
       />
     );
 
-    expect(screen.getByTestId("account-dropdown-trigger")).toHaveProp(
-      "className",
-      expect.stringContaining("min-h-14")
-    );
+    expect(screen.getByTestId("account-dropdown-trigger")).toHaveStyle({
+      minHeight: 56,
+    });
 
     rerender(
       <Dropdown
@@ -154,10 +153,9 @@ describe("Dropdown repair contract", () => {
       />
     );
 
-    expect(screen.getByTestId("legacy-dropdown-trigger")).toHaveProp(
-      "className",
-      "p-4"
-    );
+    expect(screen.getByTestId("legacy-dropdown-trigger")).not.toHaveStyle({
+      minHeight: 56,
+    });
   });
 
   it("renders shared inline error semantics and error border", () => {

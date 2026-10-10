@@ -1,6 +1,12 @@
 import { fireEvent, render, screen } from "@testing-library/react-native";
 import React from "react";
-import { I18nManager, Text, TextInput } from "react-native";
+import {
+  I18nManager,
+  Text,
+  TextInput,
+  type StyleProp,
+  type TextStyle,
+} from "react-native";
 
 import { GroupedDecimalInput } from "@/components/ui/GroupedDecimalInput";
 import { GroupedMoneyInput } from "@/components/ui/GroupedMoneyInput";
@@ -289,6 +295,50 @@ describe("GroupedMoneyInput delegation", () => {
   });
 });
 
+
+interface StyledMoneyProps
+  extends React.ComponentProps<typeof GroupedMoneyInput> {
+  readonly style?: StyleProp<TextStyle>;
+  readonly labelStyle?: StyleProp<TextStyle>;
+  readonly labelClassName?: string;
+}
+
+const StyledGroupedMoneyInput =
+  GroupedMoneyInput as unknown as React.ComponentType<StyledMoneyProps>;
+
+describe("GroupedMoneyInput typography forwarding", () => {
+  it("forwards input and label style props through the grouped numeric foundation", () => {
+    render(
+      <StyledGroupedMoneyInput
+        testID="manual-money-typography"
+        label="Amount"
+        value="120"
+        onCanonicalChange={jest.fn()}
+        style={{
+          fontFamily: "Inter_500Medium",
+          fontSize: 18,
+          lineHeight: 28,
+        }}
+        labelStyle={{
+          fontFamily: "Inter_400Regular",
+          marginBottom: 8,
+        }}
+        labelClassName="text-sm"
+      />
+    );
+
+    expect(screen.getByTestId("manual-money-typography")).toHaveStyle({
+      fontFamily: "Inter_500Medium",
+      fontSize: 18,
+      lineHeight: 28,
+    });
+    expect(screen.getByText("Amount")).toHaveStyle({
+      fontFamily: "Inter_400Regular",
+      marginBottom: 8,
+    });
+    expect(screen.getByText("Amount")).toHaveProp("className", "text-sm");
+  });
+});
 
 describe("GroupedMoneyInput focus forwarding", () => {
   it("forwards focus lifecycle and suppresses the native soft keyboard when requested", () => {

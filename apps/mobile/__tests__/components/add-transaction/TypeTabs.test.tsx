@@ -3,6 +3,22 @@ import React from "react";
 
 import { TypeTabs } from "@/components/add-transaction/TypeTabs";
 
+let mockLocaleFontFamily = {
+  regular: "Inter_400Regular",
+  medium: "Inter_500Medium",
+  semiBold: "Inter_600SemiBold",
+  bold: "Inter_700Bold",
+};
+
+jest.mock("@/context/LocaleContext", () => ({
+  useLocale: () => ({
+    language: "en",
+    isRTL: false,
+    fontFamily: mockLocaleFontFamily,
+  }),
+}));
+
+
 jest.mock("expo-haptics", () => ({
   ImpactFeedbackStyle: { Light: "Light" },
   impactAsync: jest.fn((): Promise<void> => Promise.resolve()),
@@ -49,6 +65,38 @@ describe("TypeTabs compact Manual selector", () => {
     expect(screen.getByTestId("type-icon-remove-circle")).toBeTruthy();
     expect(screen.getByTestId("type-icon-arrow-up-circle")).toBeTruthy();
     expect(screen.getByTestId("type-icon-swap-horizontal")).toBeTruthy();
+  });
+
+  it("uses approved compact tab typography with the active locale font family", () => {
+    render(<TypeTabs compact selectedType="EXPENSE" onSelect={jest.fn()} />);
+
+    expect(screen.getByText("Expense")).toHaveStyle({
+      fontFamily: "Inter_600SemiBold",
+      fontSize: 16,
+      lineHeight: 26,
+    });
+  });
+
+  it("switches compact tab typography to Noto Sans Arabic without changing the legacy variant", () => {
+    mockLocaleFontFamily = {
+      regular: "NotoSansArabic_400Regular",
+      medium: "NotoSansArabic_500Medium",
+      semiBold: "NotoSansArabic_600SemiBold",
+      bold: "NotoSansArabic_700Bold",
+    };
+
+    const { rerender } = render(
+      <TypeTabs compact selectedType="EXPENSE" onSelect={jest.fn()} />
+    );
+
+    expect(screen.getByText("Expense")).toHaveStyle({
+      fontFamily: "NotoSansArabic_600SemiBold",
+      fontSize: 16,
+      lineHeight: 26,
+    });
+
+    rerender(<TypeTabs selectedType="EXPENSE" onSelect={jest.fn()} />);
+    expect(screen.getByText("EXPENSE")).toBeTruthy();
   });
 
   it("keeps selection delegated to the parent", () => {

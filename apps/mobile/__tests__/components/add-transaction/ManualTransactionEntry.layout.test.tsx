@@ -11,13 +11,32 @@ let mockWindowDimensions = {
 jest.mock("react-native", () => {
   const actual =
     jest.requireActual<typeof import("react-native")>("react-native");
+  const mocked = {};
 
-  return {
-    ...actual,
-    useWindowDimensions: (): typeof mockWindowDimensions =>
-      mockWindowDimensions,
-  };
+  Object.defineProperties(mocked, Object.getOwnPropertyDescriptors(actual));
+  Object.defineProperty(mocked, "useWindowDimensions", {
+    configurable: true,
+    enumerable: true,
+    value: (): typeof mockWindowDimensions => mockWindowDimensions,
+  });
+
+  return mocked;
 });
+
+let mockLocaleFontFamily = {
+  regular: "Inter_400Regular",
+  medium: "Inter_500Medium",
+  semiBold: "Inter_600SemiBold",
+  bold: "Inter_700Bold",
+};
+
+jest.mock("@/context/LocaleContext", () => ({
+  useLocale: () => ({
+    language: "en",
+    isRTL: false,
+    fontFamily: mockLocaleFontFamily,
+  }),
+}));
 
 const mockBack = jest.fn();
 
@@ -239,6 +258,12 @@ describe("ManualTransactionEntry compact B layout", () => {
       scale: 1,
       fontScale: 1,
     };
+    mockLocaleFontFamily = {
+      regular: "Inter_400Regular",
+      medium: "Inter_500Medium",
+      semiBold: "Inter_600SemiBold",
+      bold: "Inter_700Bold",
+    };
   });
 
   it("keeps required Account and Category on one normal-width row", () => {
@@ -290,6 +315,66 @@ describe("ManualTransactionEntry compact B layout", () => {
       "className",
       expect.stringContaining("flex-col gap-3")
     );
+  });
+
+  it("uses the approved amount typography and 8dp field-label gap", () => {
+    render(<ManualTransactionEntry />);
+
+    expect(screen.getByTestId("manual-amount-input")).toHaveStyle({
+      fontFamily: "Inter_500Medium",
+      fontSize: 18,
+      lineHeight: 28,
+    });
+    expect(screen.getByText("Amount *")).toHaveStyle({
+      fontFamily: "Inter_400Regular",
+      marginBottom: 8,
+    });
+  });
+
+  it("applies locale fonts to selector values and compact Optional copy", () => {
+    render(<ManualTransactionEntry />);
+
+    expect(screen.getByText("Cash")).toHaveStyle({
+      fontFamily: "Inter_400Regular",
+      fontSize: 14,
+      lineHeight: 22,
+    });
+    expect(screen.getByText("Food")).toHaveStyle({
+      fontFamily: "Inter_400Regular",
+      fontSize: 14,
+      lineHeight: 22,
+    });
+    expect(screen.getByText("Add more details")).toHaveStyle({
+      fontFamily: "Inter_700Bold",
+      fontSize: 18,
+      lineHeight: 28,
+    });
+    expect(screen.getByText("Note, date, recurring")).toHaveStyle({
+      fontFamily: "Inter_400Regular",
+      fontSize: 12,
+      lineHeight: 20,
+    });
+  });
+
+  it("switches compact Manual typography to Noto Sans Arabic", () => {
+    mockLocaleFontFamily = {
+      regular: "NotoSansArabic_400Regular",
+      medium: "NotoSansArabic_500Medium",
+      semiBold: "NotoSansArabic_600SemiBold",
+      bold: "NotoSansArabic_700Bold",
+    };
+
+    render(<ManualTransactionEntry />);
+
+    expect(screen.getByTestId("manual-amount-input")).toHaveStyle({
+      fontFamily: "NotoSansArabic_500Medium",
+    });
+    expect(screen.getByText("Cash")).toHaveStyle({
+      fontFamily: "NotoSansArabic_400Regular",
+    });
+    expect(screen.getByText("Add more details")).toHaveStyle({
+      fontFamily: "NotoSansArabic_700Bold",
+    });
   });
 
   it("uses the approved collapsed optional-details card with calendar helper copy", () => {
