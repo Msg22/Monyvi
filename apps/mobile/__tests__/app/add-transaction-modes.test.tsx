@@ -10,7 +10,7 @@ import React from "react";
 import {
   getTestInstanceParent,
   getTestInstanceProps,
-} from "@/__tests__/test-utils/test-instance-props";
+} from "../test-utils/test-instance-props";
 
 let mockRouteParams: Readonly<Record<string, string | undefined>> = {};
 const mockBack = jest.fn();

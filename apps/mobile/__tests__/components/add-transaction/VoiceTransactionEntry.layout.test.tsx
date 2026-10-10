@@ -4,7 +4,7 @@ import React from "react";
 import {
   getTestInstanceProps,
   getTestInstances,
-} from "@/__tests__/test-utils/test-instance-props";
+} from "../../test-utils/test-instance-props";
 import { ScrollView } from "react-native";
 
 import { VoiceTransactionEntry } from "@/components/add-transaction/VoiceTransactionEntry";
