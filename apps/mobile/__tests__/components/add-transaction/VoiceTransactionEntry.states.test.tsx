@@ -12,6 +12,15 @@ jest.mock("@/context/LocaleContext", () => ({
   useLocale: () => ({ language: mockLanguage, isRTL: mockLanguage === "ar" }),
 }));
 
+jest.mock("react-native-safe-area-context", () => ({
+  useSafeAreaInsets: () => ({
+    top: 24,
+    right: 0,
+    bottom: 34,
+    left: 0,
+  }),
+}));
+
 jest.mock("react-i18next", () => ({
   useTranslation: (namespace: "common" | "transactions") => ({
     t: (key: string, values?: Readonly<Record<string, string | number>>): string => {
