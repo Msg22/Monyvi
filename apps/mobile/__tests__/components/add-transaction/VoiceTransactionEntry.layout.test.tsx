@@ -162,8 +162,8 @@ describe("VoiceTransactionEntry responsive, animation and unboxed layout", () =>
     expect(getTestInstances(screen.getAllByRole("button"))).toHaveLength(2);
     for (const control of getTestInstances(screen.getAllByRole("button"))) {
       const props = getTestInstanceProps(control);
-      const shape = String(props.className ?? "") +
-        JSON.stringify(props.style ?? {});
+      const className = typeof props.className === "string" ? props.className : "";
+      const shape = className + JSON.stringify(props.style ?? {});
       expect(shape).toMatch(/min-h-12|minHeight[^0-9]*48/);
     }
   });

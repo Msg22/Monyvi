@@ -75,15 +75,20 @@ describe("AddTransactionModeTabs approved underline contract", () => {
     renderTabs("voice");
     const selected: unknown = screen.getByRole("tab", { name: "Voice" });
     const selectedProps = getTestInstanceProps(selected);
-    const selectedStyle = String(selectedProps.className ?? "") +
+    const selectedClassName = selectedProps.className;
+    const selectedStyle =
+      (typeof selectedClassName === "string" ? selectedClassName : "") +
       JSON.stringify(selectedProps.style ?? {});
-    const tablistStyle = String(
-      getTestInstanceProps(getTestInstanceParent(selected)).className ?? ""
-    );
+    const tablistClassName = getTestInstanceProps(
+      getTestInstanceParent(selected)
+    ).className;
+    if (typeof tablistClassName !== "string") {
+      throw new Error("Expected mode tablist to expose a string className");
+    }
 
     expect(selectedStyle).toMatch(/border-b-2|borderBottomWidth[^0-9]*2/);
     expect(selectedStyle).not.toContain("rounded-xl");
-    expect(tablistStyle).not.toContain("rounded-2xl");
+    expect(tablistClassName).not.toContain("rounded-2xl");
     expect(getTestInstanceProps(selected).accessibilityState).toEqual(
       expect.objectContaining({ selected: true })
     );
@@ -135,11 +140,11 @@ describe("AddTransactionModeTabs approved underline contract", () => {
       expect(tablistProps.accessibilityRole).toBe("tablist");
       expect(getTestInstanceChildren(tablist).length).toBeGreaterThan(0);
       expect(getTestInstanceProps(tab).accessibilityLabel).toBe(voiceLabel);
-      expect(String(tablistProps.className ?? "")).toContain("max-w-[560px]");
-      expect(String(tablistProps.className ?? "")).toContain("self-center");
-      expect(String(tablistProps.className ?? "")).toContain("w-full");
-      expect(String(outerProps.className ?? "")).toContain("px-4");
-      expect(String(outerProps.className ?? "")).toContain("w-full");
+      expect(tablistProps.className).toEqual(expect.stringContaining("max-w-[560px]"));
+      expect(tablistProps.className).toEqual(expect.stringContaining("self-center"));
+      expect(tablistProps.className).toEqual(expect.stringContaining("w-full"));
+      expect(outerProps.className).toEqual(expect.stringContaining("px-4"));
+      expect(outerProps.className).toEqual(expect.stringContaining("w-full"));
     }
   );
 
