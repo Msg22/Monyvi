@@ -134,7 +134,7 @@ export default function AddTransaction(): React.JSX.Element {
   });
 
   const isModeSwitchLocked =
-    isVoiceStartPending || voiceFlow.isModeSwitchLocked;
+    isManualSubmitting || isVoiceStartPending || voiceFlow.isModeSwitchLocked;
 
   const invalidatePendingVoiceStart = useCallback((): void => {
     voiceStartGenerationRef.current += 1;
@@ -283,6 +283,9 @@ export default function AddTransaction(): React.JSX.Element {
   );
 
   const handleBack = useCallback(async (): Promise<void> => {
+    // The Manual entry owns the in-flight local-first write and its single
+    // post-save navigation. Back cannot race that pending submission.
+    if (isManualSubmitting) return;
     invalidatePendingVoiceStart();
 
     if (mode === "voice") {
@@ -292,7 +295,13 @@ export default function AddTransaction(): React.JSX.Element {
     if (isRouteMountedRef.current) {
       router.back();
     }
-  }, [invalidatePendingVoiceStart, mode, router, voiceFlow.discardRecording]);
+  }, [
+    invalidatePendingVoiceStart,
+    isManualSubmitting,
+    mode,
+    router,
+    voiceFlow.discardRecording,
+  ]);
 
   useEffect(() => {
     if (pendingModeFocusRef.current !== mode) {

@@ -1,3 +1,4 @@
+import { useLocale } from "@/context/LocaleContext";
 import { Ionicons } from "@expo/vector-icons";
 import React from "react";
 import { Text, View } from "react-native";
@@ -11,6 +12,7 @@ export function ExamplesCard({
   readonly isArabic: boolean;
 }): React.JSX.Element {
   const { t: tCommon } = useTranslation("common");
+  const { fontFamily } = useLocale();
 
   const examples = [
     tCommon("voice_ui_example_first"),
@@ -39,7 +41,7 @@ export function ExamplesCard({
             color={palette.nileGreen[600]}
           />
         </View>
-        <Text
+        <Text style={{ fontFamily: fontFamily.bold }}
           accessibilityRole="header"
           className={`min-w-0 flex-1 text-lg font-bold leading-7 text-slate-900 dark:text-slate-25 ${
             isArabic ? "text-right" : "text-left"
@@ -68,7 +70,7 @@ export function ExamplesCard({
                 />
               </View>
             ) : null}
-            <Text
+            <Text style={{ fontFamily: fontFamily.regular }}
               className={`min-w-0 flex-1 text-sm leading-[22px] text-slate-700 dark:text-slate-200 ${
                 isArabic ? "text-right" : "text-left"
               }`}

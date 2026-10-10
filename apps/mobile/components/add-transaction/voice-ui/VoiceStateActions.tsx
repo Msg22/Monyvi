@@ -1,3 +1,4 @@
+import { useLocale } from "@/context/LocaleContext";
 import { Ionicons } from "@expo/vector-icons";
 import React from "react";
 import { Pressable, Text } from "react-native";
@@ -129,6 +130,7 @@ export function ActionButton({
   readonly fullWidth?: boolean;
   readonly variant?: ActionVariant;
 }): React.JSX.Element {
+  const { fontFamily } = useLocale();
   const base = variant === "primary"
     ? "border-nileGreen-500 bg-nileGreen-500"
     : variant === "disabled"
@@ -161,7 +163,7 @@ export function ActionButton({
       })}
     >
       <Ionicons name={icon} size={20} color={iconColor} />
-      <Text
+      <Text style={{ fontFamily: fontFamily.semiBold }}
         className={`min-w-0 text-center text-sm font-semibold leading-[22px] ${labelColor}`}
       >
         {label}

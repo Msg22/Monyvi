@@ -32,7 +32,13 @@ jest.mock("react-native-safe-area-context", () => ({
 }));
 
 jest.mock("@/context/LocaleContext", () => ({
-  useLocale: () => ({ language: "en", isRTL: false }),
+  useLocale: () => ({
+    language: "en",
+    isRTL: false,
+    fontFamily: jest.requireActual<
+      typeof import("@/constants/typography")
+    >("@/constants/typography").fontFamily,
+  }),
 }));
 
 jest.mock("react-i18next", () => ({

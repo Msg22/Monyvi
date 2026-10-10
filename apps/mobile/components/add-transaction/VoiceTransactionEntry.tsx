@@ -126,6 +126,7 @@ function VoiceActionSurface({
 }): React.JSX.Element {
   const { t } = useTranslation("transactions");
   const { t: tCommon } = useTranslation("common");
+  const { fontFamily } = useLocale();
   const presentation = getPresentation(
     props.state,
     props.errorMessage,
@@ -271,13 +272,13 @@ function VoiceActionSurface({
       </View>
 
       {(isRecording || isPaused || isCompleted) ? (
-        <Text className="mt-1 text-2xl font-bold text-slate-800 dark:text-slate-25">
+        <Text style={{ fontFamily: fontFamily.bold }} className="mt-1 text-2xl font-bold text-slate-800 dark:text-slate-25">
           {formatDuration(props.durationMs)}
         </Text>
       ) : null}
 
       {presentation.title ? (
-        <Text
+        <Text style={{ fontFamily: fontFamily.bold }}
           accessibilityRole="header"
           className="mt-3 text-center text-lg font-bold leading-7 text-slate-900 dark:text-slate-25"
         >
@@ -285,7 +286,7 @@ function VoiceActionSurface({
         </Text>
       ) : null}
       {presentation.description ? (
-        <Text className="mt-2 text-center text-sm leading-[22px] text-slate-600 dark:text-slate-300">
+        <Text style={{ fontFamily: fontFamily.regular }} className="mt-2 text-center text-sm leading-[22px] text-slate-600 dark:text-slate-300">
           {presentation.description}
         </Text>
       ) : null}
@@ -369,7 +370,7 @@ function VoiceActionSurface({
             size={20}
             color={palette.slate[400]}
           />
-          <Text className="flex-1 text-right text-xs leading-5 text-slate-600 dark:text-slate-300">
+          <Text style={{ fontFamily: fontFamily.regular }} className="flex-1 text-right text-xs leading-5 text-slate-600 dark:text-slate-300">
             {tCommon("voice_ui_daily_reset_strip")}
           </Text>
         </View>

@@ -156,12 +156,9 @@ jest.mock("@/context/LocaleContext", () => ({
   useLocale: () => ({
     language: "en",
     isRTL: false,
-    fontFamily: {
-      regular: "System",
-      medium: "System",
-      semiBold: "System",
-      bold: "System",
-    },
+    fontFamily: jest.requireActual<
+      typeof import("@/constants/typography")
+    >("@/constants/typography").fontFamily,
   }),
 }));
 jest.mock("@/context/CategoriesContext", () => ({

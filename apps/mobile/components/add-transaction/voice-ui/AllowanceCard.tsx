@@ -19,7 +19,7 @@ export function AllowanceCard({
   readonly isCompact: boolean;
 }): React.JSX.Element {
   const { t: tCommon } = useTranslation("common");
-  const { language } = useLocale();
+  const { language, fontFamily } = useLocale();
 
   const safeLimit = Math.max(0, Math.floor(dailyLimit));
   const safeRemaining = Math.min(safeLimit, Math.max(0, Math.floor(remaining)));
@@ -45,7 +45,7 @@ export function AllowanceCard({
           />
         </View>
         <View className="min-w-0 flex-1">
-          <Text
+          <Text style={{ fontFamily: fontFamily.bold }}
             accessibilityRole="header"
             className={`text-lg font-bold leading-7 text-slate-900 dark:text-slate-25 ${
               isArabic ? "text-right" : "text-left"
@@ -53,7 +53,7 @@ export function AllowanceCard({
           >
             {tCommon("voice_ui_limited_heading")}
           </Text>
-          <Text
+          <Text style={{ fontFamily: fontFamily.regular }}
             className={`mt-1 text-sm leading-[22px] text-slate-600 dark:text-slate-300 ${
               isArabic ? "text-right" : "text-left"
             }`}
@@ -84,7 +84,7 @@ export function AllowanceCard({
                   />
                 ))}
               </View>
-              <Text className="mt-3 text-right text-xs leading-5 text-slate-500 dark:text-slate-400">
+              <Text style={{ fontFamily: fontFamily.regular }} className="mt-3 text-right text-xs leading-5 text-slate-500 dark:text-slate-400">
                 {tCommon("voice_ui_reset")}
               </Text>
             </>
@@ -108,11 +108,11 @@ export function AllowanceCard({
                     style={{ width: `${progress * 100}%` }}
                   />
                 </View>
-                <Text className="shrink-0 text-sm font-semibold text-slate-700 dark:text-slate-200">
+                <Text style={{ fontFamily: fontFamily.semiBold }} className="shrink-0 text-sm font-semibold text-slate-700 dark:text-slate-200">
                   {formattedRemaining} / {formattedLimit}
                 </Text>
               </View>
-              <Text className="mt-2 text-xs leading-5 text-slate-500 dark:text-slate-400">
+              <Text style={{ fontFamily: fontFamily.regular }} className="mt-2 text-xs leading-5 text-slate-500 dark:text-slate-400">
                 {tCommon("voice_ui_reset")}
               </Text>
             </>

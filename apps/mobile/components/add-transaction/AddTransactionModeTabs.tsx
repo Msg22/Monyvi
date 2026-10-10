@@ -28,7 +28,7 @@ export function AddTransactionModeTabs({
   manualLabel,
   voiceLabel,
 }: AddTransactionModeTabsProps): React.JSX.Element {
-  const { isRTL } = useLocale();
+  const { isRTL, fontFamily } = useLocale();
   const manual: ModeOption = { value: "manual", label: manualLabel };
   const voice: ModeOption = { value: "voice", label: voiceLabel };
   const options: readonly ModeOption[] = isRTL
@@ -37,10 +37,15 @@ export function AddTransactionModeTabs({
 
   return (
     <View
-      accessibilityRole="tablist"
-      className="mx-4 min-h-12 flex-row border-b border-slate-200 dark:border-slate-700"
-      style={{ direction: "ltr" }}
+      testID="add-transaction-modes-frame"
+      className="w-full px-4"
     >
+      <View
+        testID="add-transaction-modes-tablist"
+        accessibilityRole="tablist"
+        className="min-h-12 w-full max-w-[560px] self-center flex-row border-b border-slate-200 dark:border-slate-700"
+        style={{ direction: "ltr" }}
+      >
       {options.map((option) => {
         const isSelected = mode === option.value;
 
@@ -68,6 +73,7 @@ export function AddTransactionModeTabs({
             })}
           >
             <Text
+              style={{ fontFamily: fontFamily.semiBold }}
               className={`text-base font-semibold leading-[26px] ${
                 isSelected
                   ? "text-nileGreen-700 dark:text-nileGreen-400"
@@ -79,6 +85,7 @@ export function AddTransactionModeTabs({
           </Pressable>
         );
       })}
+      </View>
     </View>
   );
 }

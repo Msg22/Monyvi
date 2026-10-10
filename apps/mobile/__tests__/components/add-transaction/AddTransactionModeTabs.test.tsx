@@ -119,15 +119,17 @@ describe("AddTransactionModeTabs approved underline contract", () => {
       renderTabs("voice");
       const voiceLabel = rtl ? "صوتي" : "Voice";
       const tab = screen.getByRole("tab", { name: voiceLabel });
-      const tablist = tab.parent;
-      const outerFrame = tablist?.parent;
+      const tablist = screen.getByTestId("add-transaction-modes-tablist");
+      const outerFrame = screen.getByTestId("add-transaction-modes-frame");
 
-      expect(String(tablist?.props.className ?? "")).toContain(
-        "max-w-[560px]"
-      );
-      expect(String(tablist?.props.className ?? "")).toContain("self-center");
-      expect(String(outerFrame?.props.className ?? "")).toContain("px-4");
-      expect(String(outerFrame?.props.className ?? "")).toContain("w-full");
+      expect(tablist).toHaveProp("accessibilityRole", "tablist");
+      expect(tablist.props.children).toBeTruthy();
+      expect(tab.props.accessibilityLabel).toBe(voiceLabel);
+      expect(String(tablist.props.className ?? "")).toContain("max-w-[560px]");
+      expect(String(tablist.props.className ?? "")).toContain("self-center");
+      expect(String(tablist.props.className ?? "")).toContain("w-full");
+      expect(String(outerFrame.props.className ?? "")).toContain("px-4");
+      expect(String(outerFrame.props.className ?? "")).toContain("w-full");
     }
   );
 
