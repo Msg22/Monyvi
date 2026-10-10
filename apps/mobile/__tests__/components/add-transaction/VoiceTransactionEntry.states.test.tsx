@@ -2,6 +2,11 @@ import { fireEvent, render, screen } from "@testing-library/react-native";
 import React from "react";
 
 import {
+  getTestInstanceProps,
+  getTestInstances,
+} from "@/test-utils/test-instance-props";
+
+import {
   VoiceTransactionEntry,
   type VoiceTransactionEntryState,
 } from "@/components/add-transaction/VoiceTransactionEntry";
@@ -202,8 +207,8 @@ describe("VoiceTransactionEntry approved state compositions", () => {
     renderVoice({ remaining: 1, dailyLimit: 7 });
     expect(screen.getByText(/1 voice uses left today/)).toBeOnTheScreen();
     expect(screen.getByText("1 / 7")).toBeOnTheScreen();
-    const progress = screen.getByTestId("voice-allowance-progress-fill");
-    const width = JSON.stringify(progress.props.style);
+    const progress: unknown = screen.getByTestId("voice-allowance-progress-fill");
+    const width = JSON.stringify(getTestInstanceProps(progress).style);
     expect(width).toMatch(/14\.28/);
     expect(screen.getByText(/Resets tomorrow/)).toBeOnTheScreen();
     expect(screen.queryByText(/same time|24 hours/i)).toBeNull();
@@ -215,7 +220,9 @@ describe("VoiceTransactionEntry approved state compositions", () => {
     expect(screen.getByText("الاستخدام الصوتي المجاني محدود")).toBeOnTheScreen();
     expect(screen.getByText("اضغط وتحدث لإضافة معاملة")).toBeOnTheScreen();
     expect(screen.getByText("أمثلة على ما يمكنك قوله")).toBeOnTheScreen();
-    expect(screen.getAllByTestId("voice-allowance-segment")).toHaveLength(5);
+    expect(
+      getTestInstances(screen.getAllByTestId("voice-allowance-segment"))
+    ).toHaveLength(5);
     expect(screen.getByTestId("ionicon-bulb-outline", { includeHiddenElements: true })).toBeOnTheScreen();
     expect(screen.queryByTestId("ionicon-restaurant-outline", { includeHiddenElements: true })).toBeNull();
     expect(screen.queryByTestId("ionicon-car-outline", { includeHiddenElements: true })).toBeNull();
@@ -237,18 +244,23 @@ describe("VoiceTransactionEntry approved state compositions", () => {
     expect(screen.getByText("Voice recording unavailable")).toBeOnTheScreen();
     expect(screen.getByTestId("ionicon-ban-outline", { includeHiddenElements: true })).toBeOnTheScreen();
     expect(screen.getByTestId("ionicon-mic", { includeHiddenElements: true })).toBeOnTheScreen();
-    expect(String(screen.getByTestId("voice-daily-alert").props.className))
+    expect(String(getTestInstanceProps(screen.getByTestId("voice-daily-alert")).className))
       .toContain("flex-row");
-    const retry = screen.getByRole("button", { name: "Try again tomorrow" });
-    expect(retry).toHaveProp(
-      "accessibilityState",
+    const retry: unknown = screen.getByRole("button", {
+      name: "Try again tomorrow",
+    });
+    expect(getTestInstanceProps(retry).accessibilityState).toEqual(
       expect.objectContaining({ disabled: true })
     );
-    fireEvent.press(retry);
+    fireEvent.press(screen.getByRole("button", { name: "Try again tomorrow" }));
     expect(callbacks.onTryAgain).not.toHaveBeenCalled();
-    const useManual = screen.getByRole("button", { name: "Use manual entry" });
-    expect(String(useManual.props.className)).not.toContain("bg-nileGreen-500");
-    fireEvent.press(useManual);
+    const useManual: unknown = screen.getByRole("button", {
+      name: "Use manual entry",
+    });
+    expect(String(getTestInstanceProps(useManual).className)).not.toContain(
+      "bg-nileGreen-500"
+    );
+    fireEvent.press(screen.getByRole("button", { name: "Use manual entry" }));
     expect(callbacks.onUseManual).toHaveBeenCalledTimes(1);
     expect(screen.queryByText("Try saying something like")).toBeNull();
     expect(screen.queryByTestId("ionicon-restaurant-outline", { includeHiddenElements: true })).toBeNull();
@@ -260,22 +272,34 @@ describe("VoiceTransactionEntry approved state compositions", () => {
     expect(screen.getByText("تم الوصول إلى الحد اليومي للاستخدام الصوتي")).toBeOnTheScreen();
     expect(screen.getByTestId("ionicon-ban-outline", { includeHiddenElements: true })).toBeOnTheScreen();
     expect(screen.getByTestId("ionicon-calendar-outline", { includeHiddenElements: true })).toBeOnTheScreen();
-    expect(String(screen.getByTestId("voice-daily-alert").props.className))
+    expect(String(getTestInstanceProps(screen.getByTestId("voice-daily-alert")).className))
       .toContain("items-center");
     expect(screen.getByText("إدخال صوتي غير متاح الآن")).toBeOnTheScreen();
     expect(screen.getByText(/سيكون الإدخال الصوتي متاحًا غدًا/)).toBeOnTheScreen();
     expect(screen.queryByRole("button", { name: "Try again tomorrow" })).toBeNull();
-    expect(screen.getAllByRole("button", { name: "استخدم الإدخال اليدوي" })).toHaveLength(1);
-    const useManual = screen.getByRole("button", { name: "استخدم الإدخال اليدوي" });
-    expect(String(useManual.props.className)).toContain("bg-nileGreen-500");
-    fireEvent.press(useManual);
+    expect(
+      getTestInstances(
+        screen.getAllByRole("button", { name: "استخدم الإدخال اليدوي" })
+      )
+    ).toHaveLength(1);
+    const useManual: unknown = screen.getByRole("button", {
+      name: "استخدم الإدخال اليدوي",
+    });
+    expect(String(getTestInstanceProps(useManual).className)).toContain(
+      "bg-nileGreen-500"
+    );
+    fireEvent.press(
+      screen.getByRole("button", { name: "استخدم الإدخال اليدوي" })
+    );
     expect(callbacks.onUseManual).toHaveBeenCalledTimes(1);
     expect(screen.queryByText("أمثلة على ما يمكنك قوله")).toBeNull();
   });
 
   it("renders loading skeletons without claiming zero or a guessed allowance", () => {
     renderVoice({ state: "loading", remaining: null, dailyLimit: null });
-    expect(screen.getAllByTestId("voice-loading-skeleton").length).toBeGreaterThan(0);
+    expect(
+      getTestInstances(screen.getAllByTestId("voice-loading-skeleton")).length
+    ).toBeGreaterThan(0);
     expect(screen.queryByText("0 / 5")).toBeNull();
     expect(screen.queryByText("Daily voice limit reached")).toBeNull();
     expect(screen.queryByText("Limited free voice usage")).toBeNull();
@@ -324,7 +348,10 @@ describe("VoiceTransactionEntry approved state compositions", () => {
       });
       expect(screen.getByText("01:01")).toBeOnTheScreen();
       for (const action of [first, second, third]) {
-        expect(screen.getAllByRole("button", { name: action }).length).toBeGreaterThan(0);
+        expect(
+          getTestInstances(screen.getAllByRole("button", { name: action }))
+            .length
+        ).toBeGreaterThan(0);
       }
 
       fireEvent.press(screen.getByTestId("voice-action-stop"));

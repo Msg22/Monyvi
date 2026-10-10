@@ -1,6 +1,13 @@
 import { fireEvent, render, screen } from "@testing-library/react-native";
 import React from "react";
 
+import {
+  getTestInstanceChildren,
+  getTestInstanceParent,
+  getTestInstanceProps,
+  getTestInstances,
+} from "@/test-utils/test-instance-props";
+
 import { AddTransactionModeTabs } from "@/components/add-transaction/AddTransactionModeTabs";
 import { arabicFontFamily, fontFamily } from "@/constants/typography";
 
@@ -46,36 +53,38 @@ describe("AddTransactionModeTabs approved underline contract", () => {
     const onModeChange = jest.fn();
     renderTabs("manual", false, onModeChange);
 
-    const manual = screen.getByRole("tab", { name: "Manual" });
-    const voice = screen.getByRole("tab", { name: "Voice" });
+    const manual: unknown = screen.getByRole("tab", { name: "Manual" });
+    const voice: unknown = screen.getByRole("tab", { name: "Voice" });
 
-    expect(manual).toHaveProp("accessibilityState", {
+    expect(getTestInstanceProps(manual).accessibilityState).toEqual({
       selected: true,
       disabled: false,
     });
-    expect(voice).toHaveProp("accessibilityState", {
+    expect(getTestInstanceProps(voice).accessibilityState).toEqual({
       selected: false,
       disabled: false,
     });
-    fireEvent.press(manual);
+    fireEvent.press(screen.getByRole("tab", { name: "Manual" }));
     expect(onModeChange).not.toHaveBeenCalled();
-    fireEvent.press(voice);
+    fireEvent.press(screen.getByRole("tab", { name: "Voice" }));
     expect(onModeChange).toHaveBeenCalledTimes(1);
     expect(onModeChange).toHaveBeenCalledWith("voice");
   });
 
   it("renders the selected tab as an underline, not as the old filled pill", () => {
     renderTabs("voice");
-    const selected = screen.getByRole("tab", { name: "Voice" });
-    const selectedStyle = String(selected.props.className ?? "") +
-      JSON.stringify(selected.props.style ?? {});
-    const tablistStyle = String(selected.parent?.props.className ?? "");
+    const selected: unknown = screen.getByRole("tab", { name: "Voice" });
+    const selectedProps = getTestInstanceProps(selected);
+    const selectedStyle = String(selectedProps.className ?? "") +
+      JSON.stringify(selectedProps.style ?? {});
+    const tablistStyle = String(
+      getTestInstanceProps(getTestInstanceParent(selected)).className ?? ""
+    );
 
     expect(selectedStyle).toMatch(/border-b-2|borderBottomWidth[^0-9]*2/);
     expect(selectedStyle).not.toContain("rounded-xl");
     expect(tablistStyle).not.toContain("rounded-2xl");
-    expect(selected).toHaveProp(
-      "accessibilityState",
+    expect(getTestInstanceProps(selected).accessibilityState).toEqual(
       expect.objectContaining({ selected: true })
     );
   });
@@ -85,12 +94,11 @@ describe("AddTransactionModeTabs approved underline contract", () => {
     renderTabs("voice", true, onModeChange);
 
     for (const label of ["Manual", "Voice"]) {
-      const tab = screen.getByRole("tab", { name: label });
-      expect(tab).toHaveProp(
-        "accessibilityState",
+      const tab: unknown = screen.getByRole("tab", { name: label });
+      expect(getTestInstanceProps(tab).accessibilityState).toEqual(
         expect.objectContaining({ disabled: true })
       );
-      fireEvent.press(tab);
+      fireEvent.press(screen.getByRole("tab", { name: label }));
     }
     expect(onModeChange).not.toHaveBeenCalled();
   });
@@ -118,29 +126,34 @@ describe("AddTransactionModeTabs approved underline contract", () => {
       mockIsRTL = rtl;
       renderTabs("voice");
       const voiceLabel = rtl ? "صوتي" : "Voice";
-      const tab = screen.getByRole("tab", { name: voiceLabel });
-      const tablist = screen.getByTestId("add-transaction-modes-tablist");
-      const outerFrame = screen.getByTestId("add-transaction-modes-frame");
+      const tab: unknown = screen.getByRole("tab", { name: voiceLabel });
+      const tablist: unknown = screen.getByTestId("add-transaction-modes-tablist");
+      const outerFrame: unknown = screen.getByTestId("add-transaction-modes-frame");
 
-      expect(tablist).toHaveProp("accessibilityRole", "tablist");
-      expect(tablist.props.children).toBeTruthy();
-      expect(tab.props.accessibilityLabel).toBe(voiceLabel);
-      expect(String(tablist.props.className ?? "")).toContain("max-w-[560px]");
-      expect(String(tablist.props.className ?? "")).toContain("self-center");
-      expect(String(tablist.props.className ?? "")).toContain("w-full");
-      expect(String(outerFrame.props.className ?? "")).toContain("px-4");
-      expect(String(outerFrame.props.className ?? "")).toContain("w-full");
+      const tablistProps = getTestInstanceProps(tablist);
+      const outerProps = getTestInstanceProps(outerFrame);
+      expect(tablistProps.accessibilityRole).toBe("tablist");
+      expect(getTestInstanceChildren(tablist).length).toBeGreaterThan(0);
+      expect(getTestInstanceProps(tab).accessibilityLabel).toBe(voiceLabel);
+      expect(String(tablistProps.className ?? "")).toContain("max-w-[560px]");
+      expect(String(tablistProps.className ?? "")).toContain("self-center");
+      expect(String(tablistProps.className ?? "")).toContain("w-full");
+      expect(String(outerProps.className ?? "")).toContain("px-4");
+      expect(String(outerProps.className ?? "")).toContain("w-full");
     }
   );
 
   it("reverses visual/accessible order for Arabic while preserving selection", () => {
     mockIsRTL = true;
     renderTabs("voice");
-    expect(screen.getAllByRole("tab").map((tab) => tab.props.accessibilityLabel))
-      .toEqual(["صوتي", "يدوي"]);
-    expect(screen.getByRole("tab", { name: "صوتي" })).toHaveProp(
-      "accessibilityState",
-      expect.objectContaining({ selected: true })
-    );
+    expect(
+      getTestInstances(screen.getAllByRole("tab")).map(
+        (tab) => getTestInstanceProps(tab).accessibilityLabel
+      )
+    ).toEqual(["صوتي", "يدوي"]);
+    expect(
+      getTestInstanceProps(screen.getByRole("tab", { name: "صوتي" }))
+        .accessibilityState
+    ).toEqual(expect.objectContaining({ selected: true }));
   });
 });

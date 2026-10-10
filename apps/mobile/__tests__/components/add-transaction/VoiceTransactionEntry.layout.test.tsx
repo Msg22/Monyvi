@@ -1,5 +1,10 @@
 import { render, screen } from "@testing-library/react-native";
 import React from "react";
+
+import {
+  getTestInstanceProps,
+  getTestInstances,
+} from "@/test-utils/test-instance-props";
 import { ScrollView } from "react-native";
 
 import { VoiceTransactionEntry } from "@/components/add-transaction/VoiceTransactionEntry";
@@ -124,11 +129,12 @@ describe("VoiceTransactionEntry responsive, animation and unboxed layout", () =>
 
   it("uses one actual bottom safe inset plus content gutter at 390×844", () => {
     renderLayout();
-    const scroll = screen.UNSAFE_getByType(ScrollView);
-    expect(scroll.props.contentContainerStyle).toEqual(
+    const scroll: unknown = screen.UNSAFE_getByType(ScrollView);
+    const scrollProps = getTestInstanceProps(scroll);
+    expect(scrollProps.contentContainerStyle).toEqual(
       expect.objectContaining({ paddingHorizontal: 16, paddingBottom: 58 })
     );
-    expect(scroll.props.showsVerticalScrollIndicator).toBe(false);
+    expect(scrollProps.showsVerticalScrollIndicator).toBe(false);
   });
 
   it("scrolls compact 320×640 without shrinking text, and keeps content above the inset", () => {
@@ -136,23 +142,28 @@ describe("VoiceTransactionEntry responsive, animation and unboxed layout", () =>
     mockHeight = 640;
     mockBottomInset = 22;
     renderLayout();
-    const scroll = screen.UNSAFE_getByType(ScrollView);
-    expect(scroll.props.contentContainerStyle).toEqual(
+    const scroll: unknown = screen.UNSAFE_getByType(ScrollView);
+    const scrollProps = getTestInstanceProps(scroll);
+    expect(scrollProps.contentContainerStyle).toEqual(
       expect.objectContaining({ paddingHorizontal: 12, paddingBottom: 46 })
     );
-    expect(scroll.props.className).toContain("flex-1");
+    expect(scrollProps.className).toContain("flex-1");
   });
 
   it("reflows at font scale 2 while retaining scroll and 48dp recovery targets", () => {
     mockFontScale = 2;
     mockWidth = 390;
     renderLayout({ state: "unavailable", remaining: null, dailyLimit: null });
-    const scroll = screen.UNSAFE_getByType(ScrollView);
-    expect(scroll.props.contentContainerStyle.paddingHorizontal).toBe(12);
-    expect(screen.getAllByRole("button")).toHaveLength(2);
-    for (const control of screen.getAllByRole("button")) {
-      const shape = String(control.props.className ?? "") +
-        JSON.stringify(control.props.style ?? {});
+    const scroll: unknown = screen.UNSAFE_getByType(ScrollView);
+    const scrollProps = getTestInstanceProps(scroll);
+    expect(
+      getTestInstanceProps(scrollProps.contentContainerStyle).paddingHorizontal
+    ).toBe(12);
+    expect(getTestInstances(screen.getAllByRole("button"))).toHaveLength(2);
+    for (const control of getTestInstances(screen.getAllByRole("button"))) {
+      const props = getTestInstanceProps(control);
+      const shape = String(props.className ?? "") +
+        JSON.stringify(props.style ?? {});
       expect(shape).toMatch(/min-h-12|minHeight[^0-9]*48/);
     }
   });
@@ -161,36 +172,45 @@ describe("VoiceTransactionEntry responsive, animation and unboxed layout", () =>
     mockWidth = 768;
     mockHeight = 1024;
     const view = renderLayout();
-    expect(screen.UNSAFE_getByType(ScrollView).props.contentContainerStyle.paddingHorizontal)
-      .toBe(16);
-    expect(screen.getByTestId("voice-content")).toHaveProp(
-      "className",
-      expect.stringContaining("max-w-[560px]")
-    );
+    expect(
+      getTestInstanceProps(
+        getTestInstanceProps(screen.UNSAFE_getByType(ScrollView))
+          .contentContainerStyle
+      ).paddingHorizontal
+    ).toBe(16);
+    expect(getTestInstanceProps(screen.getByTestId("voice-content")).className)
+      .toEqual(expect.stringContaining("max-w-[560px]"));
 
     mockWidth = 844;
     mockHeight = 390;
     view.rerender(<VoiceTransactionEntry {...baseProps} />);
-    const landscapeScroll = screen.UNSAFE_getByType(ScrollView);
-    expect(landscapeScroll.props.contentContainerStyle).toEqual(
+    const landscapeScroll: unknown = screen.UNSAFE_getByType(ScrollView);
+    const landscapeProps = getTestInstanceProps(landscapeScroll);
+    expect(landscapeProps.contentContainerStyle).toEqual(
       expect.objectContaining({ paddingHorizontal: 16 })
     );
-    expect(landscapeScroll.props.showsVerticalScrollIndicator).toBe(false);
+    expect(landscapeProps.showsVerticalScrollIndicator).toBe(false);
     expect(screen.getByTestId("voice-content")).toBeOnTheScreen();
   });
 
   it("keeps the 104dp mic and decorative 140/172dp halos in an unboxed Voice surface", () => {
     renderLayout();
-    const area = screen.getByTestId("voice-action-surface");
-    expect(String(area.props.className)).not.toMatch(/rounded-2xl border|bg-slate-25/);
-    const mic = screen.getByTestId("voice-mic-target");
-    expect(String(mic.props.className)).toContain("104px");
-    const outer = screen.getByTestId("voice-halo-outer", { includeHiddenElements: true });
-    const inner = screen.getByTestId("voice-halo-inner", { includeHiddenElements: true });
-    expect(String(outer.props.className)).toContain("172px");
-    expect(String(inner.props.className)).toContain("140px");
-    expect(outer).toHaveProp("pointerEvents", "none");
-    expect(inner).toHaveProp("pointerEvents", "none");
+    const area: unknown = screen.getByTestId("voice-action-surface");
+    expect(String(getTestInstanceProps(area).className)).not.toMatch(
+      /rounded-2xl border|bg-slate-25/
+    );
+    const mic: unknown = screen.getByTestId("voice-mic-target");
+    expect(String(getTestInstanceProps(mic).className)).toContain("104px");
+    const outer: unknown = screen.getByTestId("voice-halo-outer", {
+      includeHiddenElements: true,
+    });
+    const inner: unknown = screen.getByTestId("voice-halo-inner", {
+      includeHiddenElements: true,
+    });
+    expect(String(getTestInstanceProps(outer).className)).toContain("172px");
+    expect(String(getTestInstanceProps(inner).className)).toContain("140px");
+    expect(getTestInstanceProps(outer).pointerEvents).toBe("none");
+    expect(getTestInstanceProps(inner).pointerEvents).toBe("none");
     expect(screen.getByTestId("ionicon-mic", { includeHiddenElements: true })).toBeOnTheScreen();
   });
 
@@ -211,8 +231,10 @@ describe("VoiceTransactionEntry responsive, animation and unboxed layout", () =>
 
   it("renders disabled daily-limit status unboxed, never as an interactive recording target", () => {
     renderLayout({ state: "daily-limit", remaining: 0, dailyLimit: 5 });
-    const surface = screen.getByTestId("voice-action-surface");
-    expect(String(surface.props.className)).not.toMatch(/rounded-2xl border/);
+    const surface: unknown = screen.getByTestId("voice-action-surface");
+    expect(String(getTestInstanceProps(surface).className)).not.toMatch(
+      /rounded-2xl border/
+    );
     expect(screen.getByTestId("ionicon-mic", { includeHiddenElements: true })).toBeOnTheScreen();
     expect(screen.queryByRole("button", { name: "voice_idle_title" })).toBeNull();
   });

@@ -7,6 +7,11 @@ import {
 } from "@testing-library/react-native";
 import React from "react";
 
+import {
+  getTestInstanceParent,
+  getTestInstanceProps,
+} from "@/test-utils/test-instance-props";
+
 let mockRouteParams: Readonly<Record<string, string | undefined>> = {};
 const mockBack = jest.fn();
 const mockPush = jest.fn();
@@ -411,8 +416,8 @@ function expectTabState(
   mode: "Manual" | "Voice",
   expected: Readonly<{ selected?: boolean; disabled?: boolean }>
 ): void {
-  expect(screen.getByRole("tab", { name: mode })).toHaveProp(
-    "accessibilityState",
+  const tab: unknown = screen.getByRole("tab", { name: mode });
+  expect(getTestInstanceProps(tab).accessibilityState).toEqual(
     expect.objectContaining(expected)
   );
 }
@@ -506,15 +511,20 @@ describe("AddTransaction unified mode intent", () => {
     fireEvent.press(screen.getByTestId("header-save"));
     await waitFor(() => expect(mockCreateTransaction).toHaveBeenCalledTimes(1));
 
-    const voiceTab = screen.getByRole("tab", { name: "Voice" });
-    const disabledDuringSave = voiceTab.props.accessibilityState?.disabled;
-    fireEvent.press(voiceTab);
+    const voiceTab: unknown = screen.getByRole("tab", { name: "Voice" });
+    const disabledDuringSave = getTestInstanceProps(
+      getTestInstanceProps(voiceTab).accessibilityState
+    ).disabled;
+    fireEvent.press(screen.getByRole("tab", { name: "Voice" }));
     fireEvent.press(screen.getByTestId("header-back"));
     await act(async () => {
       await Promise.resolve();
     });
-    const manualSelectedWhilePending =
-      screen.getByRole("tab", { name: "Manual" }).props.accessibilityState?.selected;
+    const manualSelectedWhilePending = getTestInstanceProps(
+      getTestInstanceProps(
+        screen.getByRole("tab", { name: "Manual" })
+      ).accessibilityState
+    ).selected;
     const navigationCountWhilePending = mockBack.mock.calls.length;
 
     await act(async () => {
@@ -800,34 +810,37 @@ describe("AddTransaction unified mode intent", () => {
 
   it("passes active mode into the kept-mounted Manual entry without exposing the hidden subtree", () => {
     renderRoute("manual");
-    expect(screen.UNSAFE_getByType(ManualTransactionEntry).props.isActive).toBe(
+    expect(getTestInstanceProps(screen.UNSAFE_getByType(ManualTransactionEntry)).isActive).toBe(
       true
     );
 
     fireEvent.press(screen.getByRole("tab", { name: "Voice" }));
 
-    expect(screen.UNSAFE_getByType(ManualTransactionEntry).props.isActive).toBe(
+    expect(getTestInstanceProps(screen.UNSAFE_getByType(ManualTransactionEntry)).isActive).toBe(
       false
     );
     expect(screen.queryByTestId("header-save")).toBeNull();
 
     expect(screen.queryByTestId("manual-amount-input")).toBeNull();
-    const amount = screen.getByTestId("manual-amount-input", {
+    const amount: unknown = screen.getByTestId("manual-amount-input", {
       includeHiddenElements: true,
     });
-    let container = amount.parent;
-    while (container && container.props.accessibilityElementsHidden === undefined) {
-      container = container.parent;
+    let container: unknown = getTestInstanceParent(amount);
+    while (
+      container !== null &&
+      container !== undefined &&
+      getTestInstanceProps(container).accessibilityElementsHidden === undefined
+    ) {
+      container = getTestInstanceParent(container);
     }
-    expect(container).toHaveProp("accessibilityElementsHidden", true);
-    expect(container).toHaveProp(
-      "importantForAccessibility",
+    expect(getTestInstanceProps(container).accessibilityElementsHidden).toBe(true);
+    expect(getTestInstanceProps(container).importantForAccessibility).toBe(
       "no-hide-descendants"
     );
 
     fireEvent.press(screen.getByRole("tab", { name: "Manual" }));
 
-    expect(screen.UNSAFE_getByType(ManualTransactionEntry).props.isActive).toBe(
+    expect(getTestInstanceProps(screen.UNSAFE_getByType(ManualTransactionEntry)).isActive).toBe(
       true
     );
     expect(screen.getByTestId("header-save")).toBeOnTheScreen();
@@ -855,12 +868,11 @@ describe("AddTransaction unified mode intent", () => {
       mockVoiceModeSwitchLocked = true;
       renderRoute("voice");
 
-      const manual = screen.getByRole("tab", { name: "Manual" });
-      expect(manual).toHaveProp(
-        "accessibilityState",
+      const manual: unknown = screen.getByRole("tab", { name: "Manual" });
+      expect(getTestInstanceProps(manual).accessibilityState).toEqual(
         expect.objectContaining({ disabled: true })
       );
-      fireEvent.press(manual);
+      fireEvent.press(screen.getByRole("tab", { name: "Manual" }));
       expectTabState("Voice", { selected: true });
     }
   );
