@@ -3,14 +3,14 @@
 <!-- prettier-ignore -->
 - Approved reference image: permission-en.png
 - Approved reference image revision: sha256:694975a39066e9a9856824c1e87703c872eee815dd4c4d803bbea0c6d5e066e9
-- Binding metadata approval: DERIVED_FROM_APPROVED_CONCEPT
+- Binding metadata approval: APPROVED
 - Binding metadata revision: sha256:498ab263e294db7d0097e352b00a572f1065459375638d5ef4678935171a3d43
-- Approved binding metadata revision: PENDING
+- Approved binding metadata revision: sha256:498ab263e294db7d0097e352b00a572f1065459375638d5ef4678935171a3d43
 - Binding approval revision: sha256:77fbfc16eaf95c2ebb0bb9e7f8c34937955c5fc5c30d0aa3d3c9615bcf4de0ed
-- Approved binding approval revision: PENDING
-- Binding metadata approval evidence/reference: Owner concept approval on 2026-10-10 recorded in approval.json: thread 01a11606-3a5e-7420-a9d7-0ea491bde802, question call_WNqHZ69cvzQQG09hJY0sXedd:0, receipt "mockups approved" + "Approve the proposal"; immutable source manifest sha256:7d91150571a3150e235a1b8ec63327cff4c19de6c292927cde76c40024c1c799 with proposal sha256:06e5e987543d85a2c90c57aaad695569ca904cc122571da47bae7195d2b9f4b0. This receipt does not separately approve the newly computed derivative binding-metadata or combined revision.
+- Approved binding approval revision: sha256:77fbfc16eaf95c2ebb0bb9e7f8c34937955c5fc5c30d0aa3d3c9615bcf4de0ed
+- Binding metadata approval evidence/reference: Original owner-approved five-image manifest sha256:7d91150571a3150e235a1b8ec63327cff4c19de6c292927cde76c40024c1c799 and proposal sha256:06e5e987543d85a2c90c57aaad695569ca904cc122571da47bae7195d2b9f4b0, as recorded in approval.json (owner receipt "mockups approved" and "Approve the proposal", thread 01a11606-3a5e-7420-a9d7-0ea491bde802, question call_WNqHZ69cvzQQG09hJY0sXedd:0). Owner delegated continuation ("don't wait for my approval on any thing, you are free to continue until you finish"; "you are free to recommend and apply your recommendations"). On 2026-10-10 the root explicitly ACCEPTED all five exact derivative Binding Facts and computed revisions, including this combined revision sha256:77fbfc16eaf95c2ebb0bb9e7f8c34937955c5fc5c30d0aa3d3c9615bcf4de0ed, under that delegated authority. This is root delegated acceptance, NOT a claim that the owner separately saw or approved this new SHA.
 - Legacy metadata migration: no
-- Derivation status: Concept and immutable original image approved; derivative fact digest computed for audit, NOT separately owner-approved.
+- Derivation status: APPROVED scoped transcription by root on 2026-10-10 under owner-delegated authority; original concept/image owner-approved, new derivative SHA not individually presented to owner.
 
 ## Binding Facts
 
@@ -37,6 +37,6 @@ This sidecar transcribes only the approved `2026-10-10-voice-motion-r1` proposal
 
 The exact image is `permission-en.png` in this folder and its SHA-256 is from the immutable approved source manifest. The export's 853 × 1844 pixel frame is **not** a second physical or logical UI layout. Original approved images and their independent binding fingerprints are still governed by `../../repair-binding-manifest.json`; the active motion crosswalk is `../../voice-motion-binding-context.md`.
 
-The `Binding metadata revision` and `Binding approval revision` above are **computed identifiers only**; no owner-approved revision was invented. The original owner approval covers the five-image manifest and approved proposal, not a new standalone sidecar-revision gate. Thus `scripts/verify-mockup-binding.js` is **not expected to report APPROVED for this derivative record** (its exact-revision approval fields are deliberately PENDING). This does not reopen the approved concept or create a second product gate. Implementation still depends on root-owned canonical prerequisite/read-only analysis, existing binding checks, TDD and owner rendered/accessibility evidence.
+The `Binding metadata revision` and `Binding approval revision` remain the exact computed fingerprints of the **unchanged** Binding Facts and approved source image. The original owner approval covers the five-image manifest and proposal; the root additionally accepted this specific derivative transcription and combined revision `sha256:77fbfc16eaf95c2ebb0bb9e7f8c34937955c5fc5c30d0aa3d3c9615bcf4de0ed` on 2026-10-10 using the owner's explicit delegated continuation authority. The owner was **not** separately presented with or asked to approve this SHA value. The `APPROVED` fields record delegated root acceptance, so `scripts/verify-mockup-binding.js` should verify these exact revisions against unchanged image/facts bytes. This metadata update does not reopen the concept or create a second product gate. Root-owned read-only analysis remains required before implementation; TDD and owner rendered/accessibility evidence remain separate gates.
 
 Unmeasured shape/motion micro-details must be implemented with existing registered tokens and the approved purpose, then compared against the owner-held new images; any genuinely material undocumented design choice returns for clarification instead of a fabricated fact. Device/E2E/render/accessibility checks are **NOT RUN** by this documentation worker.
