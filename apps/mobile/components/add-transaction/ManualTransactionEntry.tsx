@@ -12,6 +12,7 @@ import { CategorySelectorModal } from "@/components/modals/CategorySelectorModal
 import { EmptyStateCard } from "@/components/ui/EmptyStateCard";
 import { useToast } from "@/components/ui/Toast";
 import { useCategoryLookup } from "@/context/CategoriesContext";
+import { useLocale } from "@/context/LocaleContext";
 import { useAccounts } from "@/hooks/useAccounts";
 import { useCategories } from "@/hooks/useCategories";
 import { useFormScroll } from "@/hooks/useFormScroll";
@@ -53,6 +54,7 @@ import {
   useState,
 } from "react";
 import {
+  Keyboard,
   ScrollView,
   Text,
   type TextInput,
@@ -91,6 +93,7 @@ export const ManualTransactionEntry = forwardRef<
   const budgetAlert = useBudgetAlert();
   const { t } = useTranslation("transactions");
   const { t: tCommon } = useTranslation("common");
+  const { fontFamily } = useLocale();
   const { accounts } = useAccounts();
   const [type, setType] = useState<TransactionType | "TRANSFER">("EXPENSE");
   const [amount, setAmount] = useState<string>("");
@@ -123,6 +126,7 @@ export const ManualTransactionEntry = forwardRef<
   >(null);
   const amountInputRef = useRef<TextInput>(null);
   const targetAmountInputRef = useRef<TextInput>(null);
+  const isSaveInFlightRef = useRef(false);
   const hasInitializedAccountSelectionRef = useRef(false);
   const hasUserSelectedAccountRef = useRef(false);
   const { width, fontScale } = useWindowDimensions();
@@ -196,6 +200,7 @@ export const ManualTransactionEntry = forwardRef<
     if (isActive) return;
     amountInputRef.current?.blur();
     targetAmountInputRef.current?.blur();
+    Keyboard.dismiss();
     setActiveAmountField(null);
   }, [isActive]);
 
@@ -206,6 +211,16 @@ export const ManualTransactionEntry = forwardRef<
       amountInputRef.current?.blur();
     }
     setActiveAmountField(null);
+  };
+
+  const focusAmountField = (
+    field: "amount" | "targetAmount"
+  ): void => {
+    Keyboard.dismiss();
+    if (isOptionalExpanded) {
+      setIsOptionalExpanded(false);
+    }
+    setActiveAmountField(field);
   };
 
   const handleAmountChange = (value: string): void => {
@@ -413,7 +428,11 @@ export const ManualTransactionEntry = forwardRef<
     });
   };
   const handleSave = async (): Promise<void> => {
-    setFormErrors({});
+    if (isSaveInFlightRef.current) return;
+    isSaveInFlightRef.current = true;
+
+    try {
+      setFormErrors({});
     const evaluatedAmount = calculateResult(amount);
     const amountForValidation =
       evaluatedAmount === null ? amount : evaluatedAmount.toString();
@@ -535,6 +554,9 @@ export const ManualTransactionEntry = forwardRef<
     } finally {
       setIsSubmitting(false);
     }
+    } finally {
+      isSaveInFlightRef.current = false;
+    }
   };
   useImperativeHandle(
     ref,
@@ -596,7 +618,7 @@ export const ManualTransactionEntry = forwardRef<
                 onCanonicalChange={handleAmountChange}
                 inputRef={amountInputRef}
                 showSoftInputOnFocus={false}
-                onFocus={() => setActiveAmountField("amount")}
+                onFocus={() => focusAmountField("amount")}
                 onBlur={() =>
                   setActiveAmountField((current) =>
                     current === "amount" ? null : current
@@ -604,11 +626,14 @@ export const ManualTransactionEntry = forwardRef<
                 }
                 error={formErrors.amount}
                 placeholder="0.00"
-                className={`min-h-14 text-lg ${
+                className={`min-h-14 text-lg leading-7 ${
                   activeAmountField === "amount"
                     ? "border-nileGreen-500 dark:border-nileGreen-500"
                     : ""
                 }`}
+                style={{ fontFamily: fontFamily.medium }}
+                labelClassName="mb-2 text-sm leading-5 font-normal text-text-secondary dark:text-text-secondary-dark"
+                labelStyle={{ fontFamily: fontFamily.regular }}
                 containerClassName="mb-3"
                 trailingAdornment={
                   <Text className="text-sm font-medium text-text-secondary dark:text-text-secondary-dark">
@@ -664,7 +689,7 @@ export const ManualTransactionEntry = forwardRef<
                   }
                   isTargetAmountActive={activeAmountField === "targetAmount"}
                   onFocusTargetAmount={() =>
-                    setActiveAmountField("targetAmount")
+                    focusAmountField("targetAmount")
                   }
                   onBlurTargetAmount={() =>
                     setActiveAmountField((current) =>

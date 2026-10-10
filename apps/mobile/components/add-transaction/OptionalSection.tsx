@@ -5,6 +5,7 @@ import { Switch, Text, TouchableOpacity, View } from "react-native";
 // Will use DatePicker modal later, simplified for now
 import { palette } from "@/constants/colors";
 import { useTheme } from "@/context/ThemeContext";
+import { useLocale } from "@/context/LocaleContext";
 import { formatToLocalDateString } from "@/utils/dateHelpers";
 import type { RecurringFrequency } from "@monyvi/db";
 import { TextField } from "../ui/TextField";
@@ -38,6 +39,57 @@ interface OptionalSectionProps {
   readonly compactCollapsed?: boolean;
   readonly recurringNameError?: string;
   readonly recurringNameRef?: React.RefObject<View | null>;
+}
+
+function CompactCollapsedOptional({
+  onToggleExpand,
+  isDark,
+  heading,
+  helper,
+}: {
+  readonly onToggleExpand: () => void;
+  readonly isDark: boolean;
+  readonly heading: string;
+  readonly helper: string;
+}): React.JSX.Element {
+  const { fontFamily } = useLocale();
+
+  return (
+    <TouchableOpacity
+      testID="manual-optional-details-toggle"
+      accessibilityRole="button"
+      onPress={onToggleExpand}
+      activeOpacity={0.7}
+      className="min-h-14 flex-row items-center rounded-2xl border border-slate-200 bg-slate-25 px-4 py-3 dark:border-slate-700 dark:bg-slate-900"
+    >
+      <View className="me-3 h-9 w-9 items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-800">
+        <Ionicons
+          name="calendar-outline"
+          size={20}
+          color={isDark ? palette.slate[300] : palette.slate[600]}
+        />
+      </View>
+      <View className="min-w-0 flex-1">
+        <Text
+          className="text-lg leading-7 font-bold text-slate-900 dark:text-slate-25"
+          style={{ fontFamily: fontFamily.bold }}
+        >
+          {heading}
+        </Text>
+        <Text
+          className="mt-0.5 text-xs leading-5 text-text-secondary dark:text-text-secondary-dark"
+          style={{ fontFamily: fontFamily.regular }}
+        >
+          {helper}
+        </Text>
+      </View>
+      <Ionicons
+        name="chevron-down"
+        size={18}
+        color={isDark ? palette.slate[400] : palette.slate[500]}
+      />
+    </TouchableOpacity>
+  );
 }
 
 export function OptionalSection({
@@ -75,34 +127,12 @@ export function OptionalSection({
   if (!expanded) {
     if (compactCollapsed) {
       return (
-        <TouchableOpacity
-          testID="manual-optional-details-toggle"
-          accessibilityRole="button"
-          onPress={onToggleExpand}
-          activeOpacity={0.7}
-          className="min-h-14 flex-row items-center rounded-2xl border border-slate-200 bg-slate-25 px-4 py-3 dark:border-slate-700 dark:bg-slate-900"
-        >
-          <View className="me-3 h-9 w-9 items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-800">
-            <Ionicons
-              name="calendar-outline"
-              size={20}
-              color={isDark ? palette.slate[300] : palette.slate[600]}
-            />
-          </View>
-          <View className="min-w-0 flex-1">
-            <Text className="text-base font-semibold text-slate-900 dark:text-slate-25">
-              {t("add_more_details")}
-            </Text>
-            <Text className="mt-0.5 text-xs leading-5 text-text-secondary dark:text-text-secondary-dark">
-              {t("add_more_details_helper")}
-            </Text>
-          </View>
-          <Ionicons
-            name="chevron-down"
-            size={18}
-            color={isDark ? palette.slate[400] : palette.slate[500]}
-          />
-        </TouchableOpacity>
+        <CompactCollapsedOptional
+          onToggleExpand={onToggleExpand}
+          isDark={isDark}
+          heading={t("add_more_details")}
+          helper={t("add_more_details_helper")}
+        />
       );
     }
 

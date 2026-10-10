@@ -46,6 +46,15 @@ jest.mock("@expo/vector-icons", () => {
 });
 
 describe("TypeTabs compact Manual selector", () => {
+  beforeEach(() => {
+    mockLocaleFontFamily = {
+      regular: "Inter_400Regular",
+      medium: "Inter_500Medium",
+      semiBold: "Inter_600SemiBold",
+      bold: "Inter_700Bold",
+    };
+  });
+
   it("uses the approved labels, icons and selected tab semantics", () => {
     render(<TypeTabs compact selectedType="EXPENSE" onSelect={jest.fn()} />);
 

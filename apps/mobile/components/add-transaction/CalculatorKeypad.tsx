@@ -88,8 +88,9 @@ const Key = ({
 }): React.JSX.Element => (
   <TouchableOpacity
     testID={getCalculatorKeyTestId(value)}
-    className={`items-center justify-center rounded-2xl mx-1 active:opacity-70 flex-1 bg-slate-100 dark:bg-slate-800/50 ${className}`}
+    className={`relative items-center justify-center rounded-2xl mx-1 flex-1 ${className}`}
     style={{ height: compact ? COMPACT_KEY_HEIGHT : KEY_HEIGHT }}
+    activeOpacity={0.7}
     onPress={() => {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(
         console.error
@@ -100,6 +101,10 @@ const Key = ({
     onPressOut={onPressOut}
     delayLongPress={400}
   >
+    <View
+      pointerEvents="none"
+      className="absolute inset-0 rounded-2xl bg-slate-100 dark:bg-slate-800/50"
+    />
     {typeof label === "string" ? (
       <Text className="text-xl font-bold text-slate-900 dark:text-white">
         {label}
@@ -123,8 +128,9 @@ const OperationKey = ({
 }): React.JSX.Element => (
   <TouchableOpacity
     testID={getCalculatorKeyTestId(value)}
-    className="items-center justify-center rounded-2xl mx-1 active:opacity-70 flex-1 bg-nileGreen-500/10 dark:bg-nileGreen-500/10"
+    className="relative items-center justify-center rounded-2xl mx-1 flex-1"
     style={{ height: compact ? COMPACT_KEY_HEIGHT : KEY_HEIGHT }}
+    activeOpacity={0.7}
     onPress={() => {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(
         console.error
@@ -132,6 +138,10 @@ const OperationKey = ({
       onPress(value);
     }}
   >
+    <View
+      pointerEvents="none"
+      className="absolute inset-0 rounded-2xl bg-nileGreen-500/10 dark:bg-nileGreen-500/10"
+    />
     <Text className="text-xl font-bold text-nileGreen-600 dark:text-nileGreen-400">
       {label}
     </Text>
@@ -253,8 +263,9 @@ export function CalculatorKeypad({
       <View className="flex-row mt-1 px-3">
         <TouchableOpacity
           testID={getCalculatorKeyTestId("DONE")}
-          className="flex-1 items-center justify-center rounded-2xl mx-1 bg-nileGreen-500 active:opacity-80 shadow-md"
+          className="relative flex-1 items-center justify-center rounded-2xl mx-1"
           style={{ height: compact ? COMPACT_KEY_HEIGHT : KEY_HEIGHT + 4 }}
+          activeOpacity={0.8}
           onPress={() => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(
               console.error
@@ -262,6 +273,10 @@ export function CalculatorKeypad({
             onKeyPress("DONE");
           }}
         >
+          <View
+            pointerEvents="none"
+            className="absolute inset-0 rounded-2xl bg-nileGreen-500 shadow-md"
+          />
           <Text className="text-white font-extrabold text-base">
             {actionLabel}
           </Text>
@@ -269,10 +284,15 @@ export function CalculatorKeypad({
 
         <TouchableOpacity
           testID={getCalculatorKeyTestId("=")}
-          className="flex-1 items-center justify-center rounded-2xl mx-1 active:opacity-70 bg-nileGreen-500/15 dark:bg-nileGreen-500/15"
+          className="relative flex-1 items-center justify-center rounded-2xl mx-1"
           style={{ height: compact ? COMPACT_KEY_HEIGHT : KEY_HEIGHT + 4 }}
+          activeOpacity={0.7}
           onPress={() => onKeyPress("=")}
         >
+          <View
+            pointerEvents="none"
+            className="absolute inset-0 rounded-2xl bg-nileGreen-500/15 dark:bg-nileGreen-500/15"
+          />
           <Text className="text-xl font-extrabold text-nileGreen-600 dark:text-nileGreen-400">
             =
           </Text>

@@ -1,6 +1,9 @@
 import { render, screen } from "@testing-library/react-native";
 import React from "react";
 
+import { Dropdown } from "@/components/ui/Dropdown";
+import { TextField } from "@/components/ui/TextField";
+
 let mockWindowDimensions = {
   width: 390,
   height: 844,
@@ -193,6 +196,7 @@ jest.mock("@/components/add-transaction/CategoryPicker", () => ({
 
 jest.mock("@/components/common/CategoryIcon", () => ({
   CategoryIcon: (): null => null,
+  CategoryIconFromModel: (): null => null,
   IconLibrary: {},
 }));
 
@@ -275,11 +279,11 @@ describe("ManualTransactionEntry compact B layout", () => {
     );
     expect(screen.getByText("Account *")).toBeTruthy();
     expect(screen.getByText("Category *")).toBeTruthy();
-    expect(screen.getByTestId("manual-account-selector")).toHaveProp(
+    expect(screen.getByTestId("manual-account-selector-trigger")).toHaveProp(
       "accessibilityHint",
       "required_field"
     );
-    expect(screen.getByTestId("manual-category-selector")).toHaveProp(
+    expect(screen.getByTestId("manual-category-selector-trigger")).toHaveProp(
       "accessibilityHint",
       "required_field"
     );
@@ -320,30 +324,44 @@ describe("ManualTransactionEntry compact B layout", () => {
   it("uses the approved amount typography and 8dp field-label gap", () => {
     render(<ManualTransactionEntry />);
 
-    expect(screen.getByTestId("manual-amount-input")).toHaveStyle({
+    const amountField = screen
+      .UNSAFE_getAllByType(TextField)
+      .find((node) => node.props.testID === "manual-amount-input");
+    if (!amountField) throw new Error("Manual amount TextField not found");
+
+    expect(amountField.props.className).toContain("text-lg");
+    expect(amountField.props.className).toContain("leading-7");
+    expect(amountField.props.labelClassName).toContain("mb-2");
+    expect(amountField.props.style).toEqual({
       fontFamily: "Inter_500Medium",
-      fontSize: 18,
-      lineHeight: 28,
     });
-    expect(screen.getByText("Amount *")).toHaveStyle({
+    expect(amountField.props.labelStyle).toEqual({
       fontFamily: "Inter_400Regular",
-      marginBottom: 8,
     });
   });
 
   it("applies locale fonts to selector values and compact Optional copy", () => {
     render(<ManualTransactionEntry />);
 
-    expect(screen.getByText("Cash")).toHaveStyle({
-      fontFamily: "Inter_400Regular",
-      fontSize: 14,
-      lineHeight: 22,
-    });
-    expect(screen.getByText("Food")).toHaveStyle({
-      fontFamily: "Inter_400Regular",
-      fontSize: 14,
-      lineHeight: 22,
-    });
+    const dropdowns = screen.UNSAFE_getAllByType(Dropdown);
+    const accountDropdown = dropdowns.find(
+      (node) => node.props.testID === "manual-account-selector"
+    );
+    const categoryDropdown = dropdowns.find(
+      (node) => node.props.testID === "manual-category-selector"
+    );
+    if (!accountDropdown || !categoryDropdown) {
+      throw new Error("Manual selector Dropdowns not found");
+    }
+
+    for (const dropdown of [accountDropdown, categoryDropdown]) {
+      expect(dropdown.props.selectedTextClassName).toContain("text-sm");
+      expect(dropdown.props.selectedTextClassName).toContain("leading-[22px]");
+      expect(dropdown.props.selectedTextStyle).toEqual({
+        fontFamily: "Inter_400Regular",
+      });
+    }
+
     expect(screen.getByText("Add more details")).toHaveStyle({
       fontFamily: "Inter_700Bold",
       fontSize: 18,
@@ -366,10 +384,20 @@ describe("ManualTransactionEntry compact B layout", () => {
 
     render(<ManualTransactionEntry />);
 
-    expect(screen.getByTestId("manual-amount-input")).toHaveStyle({
+    const amountField = screen
+      .UNSAFE_getAllByType(TextField)
+      .find((node) => node.props.testID === "manual-amount-input");
+    const accountDropdown = screen
+      .UNSAFE_getAllByType(Dropdown)
+      .find((node) => node.props.testID === "manual-account-selector");
+    if (!amountField || !accountDropdown) {
+      throw new Error("Arabic Manual typography targets not found");
+    }
+
+    expect(amountField.props.style).toEqual({
       fontFamily: "NotoSansArabic_500Medium",
     });
-    expect(screen.getByText("Cash")).toHaveStyle({
+    expect(accountDropdown.props.selectedTextStyle).toEqual({
       fontFamily: "NotoSansArabic_400Regular",
     });
     expect(screen.getByText("Add more details")).toHaveStyle({

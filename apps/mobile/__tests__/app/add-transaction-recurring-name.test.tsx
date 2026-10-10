@@ -53,6 +53,18 @@ jest.mock("@react-native-community/datetimepicker", () => ({
 jest.mock("@/context/ThemeContext", () => ({
   useTheme: (): { readonly isDark: false } => ({ isDark: false }),
 }));
+jest.mock("@/context/LocaleContext", () => ({
+  useLocale: () => ({
+    language: "en",
+    isRTL: false,
+    fontFamily: {
+      regular: "Inter_400Regular",
+      medium: "Inter_500Medium",
+      semiBold: "Inter_600SemiBold",
+      bold: "Inter_700Bold",
+    },
+  }),
+}));
 jest.mock("@/hooks/useAccounts", () => {
   const accounts = [
     {
@@ -175,6 +187,7 @@ jest.mock("@/components/add-transaction/TransferFields", () => ({
 }));
 jest.mock("@/components/common/CategoryIcon", () => ({
   CategoryIcon: (): null => null,
+  CategoryIconFromModel: (): null => null,
 }));
 jest.mock("@/components/modals/AccountSelectorModal", () => ({
   AccountSelectorModal: (): null => null,

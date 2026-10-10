@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react-native";
-import React, { type ReactNode } from "react";
-import { Text } from "react-native";
+import React from "react";
+import { Text, TouchableOpacity, View } from "react-native";
 
 import {
   Dropdown,
@@ -52,36 +52,31 @@ jest.mock("@expo/vector-icons", () => {
   };
 });
 
-interface RepairDropdownProps<T extends string | number> {
-  readonly variant?: "default" | "outlined";
-  readonly label: string;
-  readonly required?: boolean;
-  readonly accessibilityHint?: string;
-  readonly items: ReadonlyArray<DropdownItem<T>>;
-  readonly value: T | null;
-  readonly onChange: (value: T) => void;
-  readonly isOpen: boolean;
-  readonly onToggle: () => void;
-  readonly placeholder?: string;
-  readonly testID?: string;
-  readonly selectedAdornment?: ReactNode;
-  readonly triggerClassName?: string;
-  readonly error?: string;
-}
-
-const RepairDropdown = Dropdown as unknown as <T extends string | number>(
-  props: RepairDropdownProps<T>
-) => React.JSX.Element;
-
 const ACCOUNT_ITEMS: readonly DropdownItem<string>[] = [
   { value: "cash-1", label: "Cash" },
   { value: "bank-1", label: "Bank" },
 ];
 
+function getTouchableProps(testID: string): Record<string, unknown> {
+  const node = screen
+    .UNSAFE_getAllByType(TouchableOpacity)
+    .find((candidate) => candidate.props.testID === testID);
+  if (!node) throw new Error(`Touchable ${testID} not found`);
+  return node.props as Record<string, unknown>;
+}
+
+function getViewProps(testID: string): Record<string, unknown> {
+  const node = screen
+    .UNSAFE_getAllByType(View)
+    .find((candidate) => candidate.props.testID === testID);
+  if (!node) throw new Error(`View ${testID} not found`);
+  return node.props as Record<string, unknown>;
+}
+
 describe("Dropdown repair contract", () => {
   it("represents a required missing entity with null and the placeholder", () => {
     render(
-      <RepairDropdown
+      <Dropdown
         variant="outlined"
         label="Account"
         required
@@ -105,7 +100,7 @@ describe("Dropdown repair contract", () => {
 
   it("renders a typed selected adornment without replacing the selected label", () => {
     render(
-      <RepairDropdown
+      <Dropdown
         variant="outlined"
         label="Account"
         items={ACCOUNT_ITEMS}
@@ -124,7 +119,7 @@ describe("Dropdown repair contract", () => {
 
   it("accepts the approved 56dp trigger geometry without changing the default variant", () => {
     const { rerender } = render(
-      <RepairDropdown
+      <Dropdown
         variant="outlined"
         label="Account"
         items={ACCOUNT_ITEMS}
@@ -137,9 +132,9 @@ describe("Dropdown repair contract", () => {
       />
     );
 
-    expect(screen.getByTestId("account-dropdown-trigger")).toHaveStyle({
-      minHeight: 56,
-    });
+    expect(
+      getTouchableProps("account-dropdown-trigger").className as string
+    ).toContain("min-h-14");
 
     rerender(
       <Dropdown
@@ -153,14 +148,17 @@ describe("Dropdown repair contract", () => {
       />
     );
 
-    expect(screen.getByTestId("legacy-dropdown-trigger")).not.toHaveStyle({
-      minHeight: 56,
-    });
+    expect(
+      getTouchableProps("legacy-dropdown-trigger").className as string
+    ).toContain("p-4");
+    expect(
+      getTouchableProps("legacy-dropdown-trigger").className as string
+    ).not.toContain("min-h-14");
   });
 
   it("renders shared inline error semantics and error border", () => {
     render(
-      <RepairDropdown
+      <Dropdown
         variant="outlined"
         label="Account"
         required
@@ -177,10 +175,9 @@ describe("Dropdown repair contract", () => {
     expect(
       screen.getByRole("alert", { name: "Account is required" })
     ).toBeTruthy();
-    expect(screen.getByTestId("account-dropdown-control")).toHaveProp(
-      "className",
-      expect.stringContaining("border-red-500")
-    );
+    expect(
+      getViewProps("account-dropdown-control").className as string
+    ).toContain("border-red-500");
   });
 
   it("preserves existing inline selection and toggle behavior", () => {

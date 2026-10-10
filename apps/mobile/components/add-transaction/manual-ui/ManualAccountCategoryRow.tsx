@@ -1,13 +1,15 @@
 import { Ionicons } from "@expo/vector-icons";
 import type { Account, Category } from "@monyvi/db";
 import React, { type RefObject } from "react";
-import { Text, TouchableOpacity, View } from "react-native";
-import { useTranslation } from "react-i18next";
+import { Text, View } from "react-native";
 
-import { CategoryIcon, type IconLibrary } from "@/components/common/CategoryIcon";
+import { CategoryIconFromModel } from "@/components/common/CategoryIcon";
+import { Dropdown, type DropdownItem } from "@/components/ui/Dropdown";
 import { EmptyStateCard } from "@/components/ui/EmptyStateCard";
 import { palette } from "@/constants/colors";
+import { useLocale } from "@/context/LocaleContext";
 import { useTheme } from "@/context/ThemeContext";
+import { useTranslation } from "react-i18next";
 
 interface ManualAccountCategoryRowProps {
   readonly selectedAccount: Account | undefined;
@@ -37,8 +39,20 @@ export function ManualAccountCategoryRow({
   onAddAccount,
 }: ManualAccountCategoryRowProps): React.JSX.Element {
   const { t } = useTranslation("transactions");
-  const { t: tCommon } = useTranslation("common");
   const { isDark } = useTheme();
+  const { fontFamily } = useLocale();
+
+  const accountItems: readonly DropdownItem<string>[] = selectedAccount
+    ? [{ value: selectedAccount.id, label: selectedAccount.name }]
+    : [];
+  const categoryItems: readonly DropdownItem<string>[] = selectedCategory
+    ? [{ value: selectedCategory.id, label: selectedCategory.displayName }]
+    : [];
+
+  const labelClassName =
+    "mb-2 text-sm leading-5 font-normal text-text-secondary dark:text-text-secondary-dark";
+  const selectedTextClassName =
+    "text-sm leading-[22px] font-normal text-slate-900 dark:text-white";
 
   return (
     <View
@@ -50,65 +64,62 @@ export function ManualAccountCategoryRow({
         collapsable={false}
         className={isStacked ? "w-full" : "flex-1"}
       >
-        <Text className="mb-1 text-sm font-normal text-text-secondary dark:text-text-secondary-dark">
-          {t("account")}
-          <Text className="text-red-500">{" *"}</Text>
-        </Text>
-
         {hasAccounts ? (
-          <TouchableOpacity
+          <Dropdown
+            variant="outlined"
+            label={t("account")}
+            required
+            items={accountItems}
+            value={selectedAccount?.id ?? null}
+            onChange={() => undefined}
+            isOpen={false}
+            onToggle={onOpenAccount}
+            placeholder={t("select")}
             testID="manual-account-selector"
-            accessibilityRole="button"
-            accessibilityLabel={t("account")}
-            accessibilityHint={tCommon("required_field")}
-            onPress={onOpenAccount}
-            activeOpacity={0.7}
-            className={`min-h-14 flex-row items-center rounded-lg border bg-slate-25 px-3 dark:bg-slate-900 ${
-              accountError
-                ? "border-red-500"
-                : "border-slate-200 dark:border-slate-700"
-            }`}
-          >
-            <View className="me-2 h-8 w-8 items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-800">
-              <Ionicons
-                name={
-                  selectedAccount?.type === "BANK"
-                    ? "business-outline"
-                    : selectedAccount?.type === "DIGITAL_WALLET"
-                      ? "card-outline"
-                      : "wallet-outline"
-                }
-                size={18}
-                color={isDark ? palette.slate[300] : palette.slate[600]}
-              />
-            </View>
-            <Text
-              numberOfLines={1}
-              className="flex-1 text-base font-normal text-slate-900 dark:text-slate-25"
-            >
-              {selectedAccount?.name ?? t("select")}
-            </Text>
-            <Ionicons
-              name="chevron-down"
-              size={18}
-              color={isDark ? palette.slate[400] : palette.slate[500]}
-            />
-          </TouchableOpacity>
-        ) : (
-          <EmptyStateCard
-            onPress={onAddAccount}
-            icon="wallet-outline"
-            title={t("no_accounts_found")}
-            description={t("tap_here_to_add_one")}
-            height={56}
-            borderRadius={8}
-            className="mt-0.5"
+            error={accountError}
+            triggerClassName="min-h-14"
+            labelClassName={labelClassName}
+            labelStyle={{ fontFamily: fontFamily.regular }}
+            selectedTextClassName={selectedTextClassName}
+            selectedTextStyle={{ fontFamily: fontFamily.regular }}
+            selectedAdornment={
+              selectedAccount ? (
+                <View className="h-8 w-8 items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-800">
+                  <Ionicons
+                    name={
+                      selectedAccount.type === "BANK"
+                        ? "business-outline"
+                        : selectedAccount.type === "DIGITAL_WALLET"
+                          ? "card-outline"
+                          : "wallet-outline"
+                    }
+                    size={18}
+                    color={isDark ? palette.slate[300] : palette.slate[600]}
+                  />
+                </View>
+              ) : undefined
+            }
           />
+        ) : (
+          <>
+            <Text
+              className={labelClassName}
+              style={{ fontFamily: fontFamily.regular }}
+            >
+              {t("account")}
+              <Text className="text-red-500">{" *"}</Text>
+            </Text>
+            <EmptyStateCard
+              onPress={onAddAccount}
+              icon="wallet-outline"
+              title={t("no_accounts_found")}
+              description={t("tap_here_to_add_one")}
+              height={56}
+              borderRadius={8}
+              className="mt-0.5"
+            />
+          </>
         )}
-
-        {accountError ? (
-          <Text className="input-error">{accountError}</Text>
-        ) : null}
       </View>
 
       <View
@@ -116,55 +127,31 @@ export function ManualAccountCategoryRow({
         collapsable={false}
         className={isStacked ? "w-full" : "flex-1"}
       >
-        <Text className="mb-1 text-sm font-normal text-text-secondary dark:text-text-secondary-dark">
-          {t("category")}
-          <Text className="text-red-500">{" *"}</Text>
-        </Text>
-        <TouchableOpacity
+        <Dropdown
+          variant="outlined"
+          label={t("category")}
+          required
+          items={categoryItems}
+          value={selectedCategory?.id ?? null}
+          onChange={() => undefined}
+          isOpen={false}
+          onToggle={onOpenCategory}
+          placeholder={t("select_category")}
           testID="manual-category-selector"
-          accessibilityRole="button"
-          accessibilityLabel={t("category")}
-          accessibilityHint={tCommon("required_field")}
-          onPress={onOpenCategory}
-          activeOpacity={0.7}
-          className={`min-h-14 flex-row items-center rounded-lg border bg-slate-25 px-3 dark:bg-slate-900 ${
-            categoryError
-              ? "border-red-500"
-              : "border-slate-200 dark:border-slate-700"
-          }`}
-        >
-          <View className="me-2 h-8 w-8 items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-800">
-            {selectedCategory ? (
-              <CategoryIcon
-                iconName={selectedCategory.icon}
-                iconLibrary={selectedCategory.iconLibrary as IconLibrary}
-                size={18}
-                color={selectedCategory.color}
-              />
-            ) : (
-              <Ionicons
-                name="grid-outline"
-                size={18}
-                color={isDark ? palette.slate[400] : palette.slate[500]}
-              />
-            )}
-          </View>
-          <Text
-            numberOfLines={1}
-            className="flex-1 text-base font-normal text-slate-900 dark:text-slate-25"
-          >
-            {selectedCategory?.displayName ?? t("select_category")}
-          </Text>
-          <Ionicons
-            name="chevron-down"
-            size={18}
-            color={isDark ? palette.slate[400] : palette.slate[500]}
-          />
-        </TouchableOpacity>
-
-        {categoryError ? (
-          <Text className="input-error">{categoryError}</Text>
-        ) : null}
+          error={categoryError}
+          triggerClassName="min-h-14"
+          labelClassName={labelClassName}
+          labelStyle={{ fontFamily: fontFamily.regular }}
+          selectedTextClassName={selectedTextClassName}
+          selectedTextStyle={{ fontFamily: fontFamily.regular }}
+          selectedAdornment={
+            selectedCategory ? (
+              <View className="h-8 w-8 items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-800">
+                <CategoryIconFromModel category={selectedCategory} size={18} />
+              </View>
+            ) : undefined
+          }
+        />
       </View>
     </View>
   );

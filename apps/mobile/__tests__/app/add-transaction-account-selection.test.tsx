@@ -121,6 +121,19 @@ jest.mock("@/context/ThemeContext", () => ({
   useTheme: (): { readonly isDark: false } => ({ isDark: false }),
 }));
 
+jest.mock("@/context/LocaleContext", () => ({
+  useLocale: () => ({
+    language: "en",
+    isRTL: false,
+    fontFamily: {
+      regular: "Inter_400Regular",
+      medium: "Inter_500Medium",
+      semiBold: "Inter_600SemiBold",
+      bold: "Inter_700Bold",
+    },
+  }),
+}));
+
 jest.mock("@/context/CategoriesContext", () => ({
   useCategoryLookup: (): ReadonlyMap<string, Record<string, unknown>> =>
     new Map([
@@ -276,6 +289,7 @@ jest.mock("@/components/add-transaction/OptionalSection", () => ({
 
 jest.mock("@/components/common/CategoryIcon", () => ({
   CategoryIcon: (): React.JSX.Element => mockView("category-icon"),
+  CategoryIconFromModel: (): React.JSX.Element => mockView("category-icon"),
   IconLibrary: {},
 }));
 
@@ -514,7 +528,7 @@ describe("AddTransaction account selection", () => {
   it("keeps a manually selected account when a default arrives later", async () => {
     const { rerender } = render(<AddTransaction />);
 
-    fireEvent.press(screen.getByText("select"));
+    fireEvent.press(screen.getByTestId("manual-account-selector-trigger"));
     fireEvent.press(screen.getByTestId("account-option-bank-1"));
 
     await waitFor(() => expect(screen.getByText("Bank")).toBeTruthy());

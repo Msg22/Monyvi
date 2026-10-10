@@ -1,12 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react-native";
 import React from "react";
-import {
-  I18nManager,
-  Text,
-  TextInput,
-  type StyleProp,
-  type TextStyle,
-} from "react-native";
+import { I18nManager, Text, TextInput } from "react-native";
 
 import { GroupedDecimalInput } from "@/components/ui/GroupedDecimalInput";
 import { GroupedMoneyInput } from "@/components/ui/GroupedMoneyInput";
@@ -296,47 +290,34 @@ describe("GroupedMoneyInput delegation", () => {
 });
 
 
-interface StyledMoneyProps
-  extends React.ComponentProps<typeof GroupedMoneyInput> {
-  readonly style?: StyleProp<TextStyle>;
-  readonly labelStyle?: StyleProp<TextStyle>;
-  readonly labelClassName?: string;
-}
-
-const StyledGroupedMoneyInput =
-  GroupedMoneyInput as unknown as React.ComponentType<StyledMoneyProps>;
-
 describe("GroupedMoneyInput typography forwarding", () => {
-  it("forwards input and label style props through the grouped numeric foundation", () => {
+  it("forwards input, label style and label class props through the grouped numeric foundation", () => {
     render(
-      <StyledGroupedMoneyInput
+      <GroupedMoneyInput
         testID="manual-money-typography"
         label="Amount"
         value="120"
         onCanonicalChange={jest.fn()}
-        style={{
-          fontFamily: "Inter_500Medium",
-          fontSize: 18,
-          lineHeight: 28,
-        }}
-        labelStyle={{
-          fontFamily: "Inter_400Regular",
-          marginBottom: 8,
-        }}
-        labelClassName="text-sm"
+        className="text-lg leading-7"
+        style={{ fontFamily: "Inter_500Medium" }}
+        labelStyle={{ fontFamily: "Inter_400Regular" }}
+        labelClassName="mb-2 text-sm"
       />
     );
 
-    expect(screen.getByTestId("manual-money-typography")).toHaveStyle({
+    const textField = screen
+      .UNSAFE_getAllByType(TextField)
+      .find((node) => node.props.testID === "manual-money-typography");
+    if (!textField) throw new Error("Forwarded TextField not found");
+
+    expect(textField.props.className).toContain("text-lg leading-7");
+    expect(textField.props.style).toEqual({
       fontFamily: "Inter_500Medium",
-      fontSize: 18,
-      lineHeight: 28,
     });
-    expect(screen.getByText("Amount")).toHaveStyle({
+    expect(textField.props.labelClassName).toBe("mb-2 text-sm");
+    expect(textField.props.labelStyle).toEqual({
       fontFamily: "Inter_400Regular",
-      marginBottom: 8,
     });
-    expect(screen.getByText("Amount")).toHaveProp("className", "text-sm");
   });
 });
 
