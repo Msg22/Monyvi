@@ -1,0 +1,73 @@
+# Voice interaction proposal — revision 1
+
+Status: DRAFT, awaiting Mohamed's requested visual approval. Generated personally by the delivery lead using built-in imagegen. No application code, tests, existing approved images or bindings were changed.
+
+## Proposed screens
+
+| State | Mockup | Intended behavior |
+| --- | --- | --- |
+| Idle | [idle-en.png](idle-en.png) | Neutral dark-mode allowance badge, colorful example icons, permanent dismiss button |
+| Starting | [starting-en.png](starting-en.png) | Immediate tap feedback while checks and native preparation run; Cancel remains available |
+| Recording | [recording-en.png](recording-en.png) | Two outward listening ripples, activity bars, real timer, existing Stop/Pause/Discard |
+| Parsing | [parsing-en.png](parsing-en.png) | Waveform flowing toward a receipt, explanatory copy, no skeleton or fake progress |
+| First-use permission | [permission-en.png](permission-en.png) | Inline explanation before native permission; no record-introduction modal |
+
+## Scope and interaction decisions proposed for approval
+
+- Keep the existing shared PageHeader, underline mode tabs, standalone route, design tokens and responsive layout patterns.
+- Dark allowance badge uses slate-700 with green microphone glyph, matching the examples heading badge. Light-mode badge retains its existing approved treatment.
+- English example glyphs keep their existing identities: orange restaurant, blue car, gold coffee. Existing Arabic reference-specific example copy and icon presence remain unchanged; any visible example glyph uses its matching category color.
+- Examples card gets a 44dp minimum close target; accessibility label: Dismiss examples / إخفاء الأمثلة. Dismissal removes the whole card immediately and persists per authenticated account on this device, across route changes, app restart, language/theme changes, and sign-out/sign-in. Other accounts keep their own preference. No hosted schema or sync change is proposed.
+- Mic tap shows Starting immediately, before awaiting allowance refresh or recorder preparation. Listening and elapsed recording time begin only after native capture starts. Repeated taps cannot start duplicate captures.
+- Suggested motion: two thin ripple strokes expanding from the mic boundary to the existing outer listening region over 1.4 seconds, staggered by 700ms; activity bars cycle gently over 1.2 seconds. This is a recording activity indicator, not a measured volume claim.
+- Paused stops motion and freezes time; resume restarts activity. Reduced-motion mode shows static indicators. Unmount, discard, cancellation and account changes stop animation and recording work.
+- Parsing uses a restrained 1.6-second waveform/dots/receipt loop, no percentage, staged completion claims or invented financial details. Reduced-motion mode uses a static illustration. Actual allowance/loading-fetch skeletons remain distinct from this processing activity state.
+- Replace the record-introduction/permission modal with an inline permission explanation only when native permission is genuinely missing. Granted users start directly on mic tap. Refresh native permission when appropriate so a stale default false cannot show an unnecessary prompt.
+- First-use AI processing consent remains required; this proposal does not remove its existing privacy consent sheet.
+- Blocked microphone permission uses inline recovery and the existing Settings/Manual actions.
+- Recording-error Try again enters Starting directly, with no visible idle detour. Retained-audio submission retries still resend the same request identity rather than start another recording or charge.
+- Unavailable-state Try again is proposed to refresh allowance and continue into Starting automatically when eligible, instead of requiring a second mic tap. Daily-limit and burst-limit enforcement still apply.
+- Recorder-start errors must surface recovery rather than leave a false Listening screen.
+
+## Proposed new or revised copy
+
+| Purpose | English | Arabic |
+| --- | --- | --- |
+| Daily reset | Your limits reset tomorrow. | يتجدد حد استخدامك غدًا. |
+| Starting title | Starting… | نجهّز التسجيل… |
+| Starting description | Getting ready to listen… | لحظة ونكون جاهزين لسماعك… |
+| Starting cancel | Cancel | إلغاء |
+| Parsing title | Turning your words into a transaction | نحوّل كلامك إلى معاملة |
+| Parsing description | Getting the details ready… | نجهّز التفاصيل… |
+| Permission title | Allow your microphone | اسمح باستخدام الميكروفون |
+| Permission description | Monyvi needs access to your microphone to record your transaction. | يحتاج Monyvi إلى الميكروفون لتسجيل معاملتك. |
+| Permission action | Allow microphone | السماح بالميكروفون |
+| Examples dismiss accessibility label | Dismiss examples | إخفاء الأمثلة |
+
+## Binding boundary
+
+These are scoped visual concepts for the requested interaction changes at a proposed 390×844 logical baseline. Generated screen context is illustrative outside those changes: existing shared header/tabs, token colors, fonts, and established card/form patterns remain authoritative. Do not copy generated texture, accidental type scaling, or altered spacing into shared components.
+
+Source images and proposal revision are immutable and fingerprinted in manifest.json. Approval of this concept does not imply unmeasured metadata or unseen native renders were verified. Exact component geometry, scoped EN/AR/light/dark bindings and existing tasks.md reconciliation must be finalized and speckit.analyze must pass before implementation assignments. Do not regenerate tasks.md.
+
+## Verified diagnosis at d45745a5c8a13db082eab24e12c2cc072e26c124
+
+- add-transaction.tsx sets isVoiceStartPending, but voiceState does not render it.
+- useVoiceTransactionFlow.startFlow waits for availability refresh before switching visible flow state.
+- retryRecording sets idle before awaiting startFlow, permitting an idle flash.
+- PermissionRecoveryModal is rendered for the pre-native microphone explanation, using generic recording-introduction copy.
+- useVoiceRecorder initializes hasPermission=false and resolves the actual permission asynchronously.
+- VoiceTransactionEntry's recording pulse exists but uses low-opacity treatment; parsing renders a circular Skeleton.
+- ExamplesCard has no dismiss callback or durable hidden preference and uses slate-colored English example glyphs.
+- useVoiceRecorder.start catches preparation failures without rethrowing; caller can retain recording flow state after failure.
+
+## Delivery and validation plan after approval
+
+1. Reconcile existing canonical spec/plan/tasks and exact approved bindings; run speckit.analyze.
+2. One Voice interaction implementation owner for route, flow/recorder hooks, presentation, preference service/facade, copy and related tests. These files are tightly coupled; concurrent production writers would raise conflict risk.
+3. Reuse eligible user-created Normal ChatGPT lane first; local verification successor follows OpenCode then Gemini/Antigravity, with native fallback only if justified. Independent review remains separate.
+4. Unit/integration coverage: immediate pending feedback, actual capture readiness, start failure, rapid duplicate taps, cancel during each await, granted/missing/revoked permission, direct recording retry, retained-submission identity, unavailable retry, paused/resumed/reduced-motion cleanup, persistent account-scoped dismissal and storage failure.
+5. Author Maestro E2E journeys for dismiss/reopen, immediate starting, record/pause/resume/discard/retry and permission recovery where controllable. No emulator execution, per owner request. Actual native timing, permissions, animation and rendered fidelity remain owner-device checks.
+6. Run relevant checks at TDD Red and precommit checkpoints, not after every file; independent review, hooks and CI before final handoff.
+
+No workers assigned or source changes made in this design phase. No hosted deployment, migrations or issue #384 accounting changes are included.

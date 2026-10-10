@@ -1,0 +1,38 @@
+{
+  "status": "draft-awaiting-concept-approval",
+  "revision": "2026-10-10-voice-motion-r1",
+  "base": "d45745a5c8a13db082eab24e12c2cc072e26c124",
+  "images": [
+    {
+      "name": "idle-en.png",
+      "sha256": "3589cd5e76aa060fc88dbc91982d04de2678b0475ff5603a8af3b49285a3fa10",
+      "width": 853,
+      "height": 1844
+    },
+    {
+      "name": "starting-en.png",
+      "sha256": "513857c54c32e69cdedbc8767663f7f97d87aa59b82115d07ce236d6522592ec",
+      "width": 853,
+      "height": 1844
+    },
+    {
+      "name": "recording-en.png",
+      "sha256": "cd668d390af5f6b8f1227dc753217fd9a46c1f1abaa7c8d8e6d0efe828e77d28",
+      "width": 853,
+      "height": 1844
+    },
+    {
+      "name": "parsing-en.png",
+      "sha256": "9c69656bbd95103beab3b660f972204de42604940d7fba94c769b70d0c58587d",
+      "width": 853,
+      "height": 1844
+    },
+    {
+      "name": "permission-en.png",
+      "sha256": "694975a39066e9a9856824c1e87703c872eee815dd4c4d803bbea0c6d5e066e9",
+      "width": 853,
+      "height": 1844
+    }
+  ],
+  "proposalSha256": "06e5e987543d85a2c90c57aaad695569ca904cc122571da47bae7195d2b9f4b0"
+}
