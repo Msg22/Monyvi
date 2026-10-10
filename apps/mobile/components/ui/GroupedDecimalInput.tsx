@@ -19,7 +19,7 @@ export interface GroupedDecimalInputProps {
   readonly error?: string;
   readonly autoFocus?: boolean;
   readonly keyboardType?: "decimal-pad" | "numeric" | "numbers-and-punctuation";
-  readonly inputMode?: "decimal" | "numeric" | "text";
+  readonly inputMode?: "decimal" | "numeric" | "text" | "none";
   readonly leadingAdornment?: ReactNode;
   readonly trailingAdornment?: ReactNode;
   readonly inputRef?: Ref<TextInput>;
@@ -77,6 +77,8 @@ export function GroupedDecimalInput({
     },
     [onCanonicalChange, value]
   );
+  const resolvedInputMode =
+    showSoftInputOnFocus === false ? "none" : inputMode;
 
   return (
     <TextField
@@ -93,7 +95,7 @@ export function GroupedDecimalInput({
       error={error}
       autoFocus={autoFocus}
       keyboardType={keyboardType}
-      inputMode={inputMode}
+      inputMode={resolvedInputMode}
       leadingAdornment={leadingAdornment}
       trailingAdornment={trailingAdornment}
       placeholder={placeholder}
