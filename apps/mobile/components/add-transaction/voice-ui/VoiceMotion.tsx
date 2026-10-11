@@ -176,6 +176,7 @@ export function ParsingIllustration({
     <View
       testID="voice-parsing-illustration"
       accessible={false}
+      accessibilityElementsHidden
       pointerEvents="none"
       importantForAccessibility="no-hide-descendants"
       className={`h-[172px] w-[172px] items-center justify-center gap-3 ${isArabic ? "flex-row-reverse" : "flex-row"}`}
@@ -198,6 +199,7 @@ export function ParsingIllustration({
           name="receipt-outline"
           size={36}
           color={palette.nileGreen[600]}
+          accessible={false}
         />
       </Animated.View>
     </View>

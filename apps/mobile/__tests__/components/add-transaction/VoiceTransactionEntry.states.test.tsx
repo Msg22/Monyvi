@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react-native";
 import React from "react";
 
 import {
+  getTestInstanceParent,
   getTestInstanceProps,
   getTestInstances,
 } from "../../test-utils/test-instance-props";
@@ -54,10 +55,31 @@ jest.mock("react-i18next", () => ({
 }));
 
 jest.mock("@expo/vector-icons", () => ({
-  Ionicons: ({ name }: { readonly name: string }): React.JSX.Element => {
-    const { View } =
+  Ionicons: ({
+    name,
+    accessible,
+    accessibilityElementsHidden,
+    importantForAccessibility,
+  }: {
+    readonly name: string;
+    readonly accessible?: boolean;
+    readonly accessibilityElementsHidden?: boolean;
+    readonly importantForAccessibility?:
+      | "auto"
+      | "yes"
+      | "no"
+      | "no-hide-descendants";
+  }): React.JSX.Element => {
+    const { Text } =
       jest.requireActual<typeof import("react-native")>("react-native");
-    return <View testID={"ionicon-" + name} />;
+    return (
+      <Text
+        testID={"ionicon-" + name}
+        accessible={accessible}
+        accessibilityElementsHidden={accessibilityElementsHidden}
+        importantForAccessibility={importantForAccessibility}
+      />
+    );
   },
 }));
 
@@ -109,6 +131,18 @@ function renderVoice(
   props: Partial<React.ComponentProps<typeof VoiceTransactionEntry>> = {}
 ): ReturnType<typeof render> {
   return render(<VoiceTransactionEntry {...baseProps} {...props} />);
+}
+
+function findDecorativeAncestor(start: unknown): unknown {
+  let current: unknown = start;
+  while (current !== null && current !== undefined) {
+    const props = getTestInstanceProps(current);
+    if (props.importantForAccessibility === "no-hide-descendants") {
+      return current;
+    }
+    current = getTestInstanceParent(current);
+  }
+  throw new Error("Expected a no-hide-descendants decorative ancestor");
 }
 
 jest.mock("@/services/reduced-motion-service", () => ({
@@ -171,6 +205,41 @@ describe("VoiceTransactionEntry approved state compositions", () => {
       expect(screen.queryByRole("button", { name: "Discard" })).toBeNull();
     }
   );
+
+  it("hides the starting mic decoration from both platform a11y trees while title and Cancel stay accessible", (): void => {
+    renderVoice({ state: "starting" });
+    const mic: unknown = screen.getByTestId("ionicon-mic", {
+      includeHiddenElements: true,
+    });
+    const wrapper = findDecorativeAncestor(mic);
+    const wrapperProps = getTestInstanceProps(wrapper);
+    expect(wrapperProps.accessible).toBe(false);
+    expect(wrapperProps.accessibilityElementsHidden).toBe(true);
+    expect(wrapperProps.importantForAccessibility).toBe("no-hide-descendants");
+    expect(screen.getByText("Starting…")).toBeOnTheScreen();
+    expect(screen.getByText("Getting ready to listen…")).toBeOnTheScreen();
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeOnTheScreen();
+  });
+
+  it("hides the parsing illustration and receipt glyph from both platform a11y trees while the title stays accessible", (): void => {
+    renderVoice({ state: "processing" });
+    const illustration: unknown = screen.getByTestId(
+      "voice-parsing-illustration",
+      { includeHiddenElements: true }
+    );
+    const wrapperProps = getTestInstanceProps(illustration);
+    expect(wrapperProps.accessible).toBe(false);
+    expect(wrapperProps.accessibilityElementsHidden).toBe(true);
+    expect(wrapperProps.importantForAccessibility).toBe("no-hide-descendants");
+    const receipt: unknown = screen.getByTestId("ionicon-receipt-outline", {
+      includeHiddenElements: true,
+    });
+    expect(getTestInstanceProps(receipt).accessible).toBe(false);
+    expect(
+      screen.getByText("Turning your words into a transaction")
+    ).toBeOnTheScreen();
+    expect(screen.getByText("Getting the details ready…")).toBeOnTheScreen();
+  });
 
   it.each([
     ["en", "Your limits reset tomorrow."],

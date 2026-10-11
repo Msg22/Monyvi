@@ -964,35 +964,38 @@ visual/accessibility evidence remain unfinished.
 ## Owner-approved Voice motion R1 continuation — append-only (10 October 2026)
 
 Owner approved `mockups/drafts/2026-10-10-voice-motion-r1/` five-image
-concept/interaction proposal (“mockups approved”; “Approve the proposal”),
-as recorded in `approval.json`; original manifest
+concept/interaction proposal (“mockups approved”; “Approve the proposal”), as
+recorded in `approval.json`; original manifest
 `sha256:7d91150571a3150e235a1b8ec63327cff4c19de6c292927cde76c40024c1c799`,
-proposal `sha256:06e5e987543d85a2c90c57aaad695569ca904cc122571da47bae7195d2b9f4b0`.
-The **derived** `mockups/voice-motion-binding-context.md` and
-`checklists/voice-motion-coverage.md` map this *scoped* approval.
-No second binding approval/verifier is introduced. All five previously approved
-source images, Binding Facts, combined revisions and prior T001–T059/history
-remain unchanged. New requirements are FR-037–FR-042 and SC-016–SC-018.
-These seven additional tasks are **unchecked, not executed** and do not imply
-assignment. Speckit prerequisites, the five existing binding verifiers and
-read-only `speckit.analyze` remain root-owned pre-implementation gates.
+proposal
+`sha256:06e5e987543d85a2c90c57aaad695569ca904cc122571da47bae7195d2b9f4b0`. The
+**derived** `mockups/voice-motion-binding-context.md` and
+`checklists/voice-motion-coverage.md` map this _scoped_ approval. No second
+binding approval/verifier is introduced. All five previously approved source
+images, Binding Facts, combined revisions and prior T001–T059/history remain
+unchanged. New requirements are FR-037–FR-042 and SC-016–SC-018. At original
+planning time these seven additional tasks were **unchecked, not executed** and
+did not imply assignment (historical planning state; current per-task status is
+carried by each checkbox and the motion-slice evidence section below). Speckit
+prerequisites, the five existing binding verifiers and read-only
+`speckit.analyze` remain root-owned pre-implementation gates.
 
 ### Tests and runner-controllable E2E authorship before production
 
-- [ ] T060 [P] [US0] [US1] **Voice lifecycle Red**: Extend actual
+- [x] T060 [P] [US0] [US1] **Voice lifecycle Red**: Extend actual
       `apps/mobile/__tests__/app/add-transaction-modes.test.tsx`,
       `apps/mobile/__tests__/hooks/useVoiceTransactionFlow.test.ts` and
       `apps/mobile/__tests__/hooks/useVoiceRecorder.test.ts` (or focused
       companions) for immediate Starting/Cancel before every consent,
       authoritative-availability and native-preparation await; rapid duplicate
-      taps, generation guards, Back/manual/cancel/unmount/account switch,
-      actual recorder-start readiness/error propagation and timer start/pause,
+      taps, generation guards, Back/manual/cancel/unmount/account switch, actual
+      recorder-start readiness/error propagation and timer start/pause,
       granted/unknown/missing/denied/revoked native permission, separate AI
       consent, direct recording-error retry, eligible unavailable auto-start,
       daily/burst/refusal fail closed and retained-audio same-key resubmission.
       Assert meaningful existing entry-point behavior Red, not invented modules,
       import failures, unavailable host/audio mocks or paid provider requests.
-- [ ] T061 [P] [US0] **Account-scoped dismissal Red**: Add focused
+- [x] T061 [P] [US0] **Account-scoped dismissal Red**: Add focused
       `apps/mobile/__tests__/services/voice-examples-preference-service.test.ts`
       and route/ExamplesCard facade tests for whole-card immediate dismiss,
       localized accessible ≥48 dp control, per-authenticated-user/device
@@ -1000,18 +1003,18 @@ read-only `speckit.analyze` remain root-owned pre-implementation gates.
       cross-account isolation with delayed reads, repeat idempotence, corrupted/
       absent key default-visible and read/write failure. Prefer the existing
       local async-storage pattern without reusing global intro-seen keys or
-      introducing Watermelon/Supabase sync. A missing proposed module is a
-      setup blocker; tests target an approved existing boundary first.
-- [ ] T062 [P] [US0] [US1] **Motion/presentation Red + honest E2E authoring**:
+      introducing Watermelon/Supabase sync. A missing proposed module is a setup
+      blocker; tests target an approved existing boundary first.
+- [x] T062 [P] [US0] [US1] **Motion/presentation Red + honest E2E authoring**:
       Extend current `VoiceTransactionEntry.states/layout.test.tsx`,
       `AddTransactionModeTabs.test.tsx`, EN/AR i18n and focused ExamplesCard
       tests for approved dark slate-700 allowance/examples badges, EN
       orange/blue/gold glyphs and Arabic quote-only rows, scoped daily-reset
-      copy, Starting versus true loading, permission inline explanation,
-      two staggered ~1.4-second decorative ripples with 700 ms offset,
-      ~1.2-second activity bars and true timer, paused/resume/reduced-motion
-      cleanup, ~1.6-second parsing waveform → receipt with exact copy,
-      no parsing Skeleton/percent/fictional details, and responsive/RTL/dark/
+      copy, Starting versus true loading, permission inline explanation, two
+      staggered ~1.4-second decorative ripples with 700 ms offset, ~1.2-second
+      activity bars and true timer, paused/resume/reduced-motion cleanup,
+      ~1.6-second parsing waveform → receipt with exact copy, no parsing
+      Skeleton/percent/fictional details, and responsive/RTL/dark/
       large-font/accessibility semantics. Author updates to existing
       `apps/mobile/e2e/maestro/voice/{add-transaction-modes,voice-recovery,voice-usage-limits}.yaml`
       only for honestly controllable user journeys; mark real OS permission,
@@ -1020,24 +1023,24 @@ read-only `speckit.analyze` remain root-owned pre-implementation gates.
 
 ### Implementation only after root accepts genuine Red
 
-- [ ] T063 [US0] **Voice transition/permission/retry implementation** after
-      T060 accepted Red: one exclusive Voice-interaction writer owns coherent
-      route `app/(private)/add-transaction.tsx`, `useVoiceTransactionFlow`,
+- [x] T063 [US0] **Voice transition/permission/retry implementation** after T060
+      accepted Red: one exclusive Voice-interaction writer owns coherent route
+      `app/(private)/add-transaction.tsx`, `useVoiceTransactionFlow`,
       `useVoiceRecorder`, native-permission readiness/explanation/recovery,
-      actual-capture timer and generation/cancellation cleanup. Visible
-      Starting precedes awaits; native preparation failures cannot leave
-      false Listening. Preserve current first-use AI Processing Consent Sheet,
-      request identities, one provider start, existing server quota gates,
-      same-key retained submission retry, Manual and navigation locks.
-- [ ] T064 [US0] **Presentation and local preference implementation** after
-      T061/T062 accepted Red: the same exclusive Voice writer updates the
-      scoped Voice UI/EN-AR translations, user-scoped device-only preference
+      actual-capture timer and generation/cancellation cleanup. Visible Starting
+      precedes awaits; native preparation failures cannot leave false Listening.
+      Preserve current first-use AI Processing Consent Sheet, request
+      identities, one provider start, existing server quota gates, same-key
+      retained submission retry, Manual and navigation locks.
+- [x] T064 [US0] **Presentation and local preference implementation** after
+      T061/T062 accepted Red: the same exclusive Voice writer updates the scoped
+      Voice UI/EN-AR translations, user-scoped device-only preference
       service/facade and cancelable Reanimated motion (or static reduced-motion
       variants). Reuse existing 104/140/172 dp geometry, 48 dp interaction
-      minimum, `AllowanceCard`, `ExamplesCard`, current Ionicons and
-      registered tokens; avoid altering Manual B/TypeTabs/financial fields,
-      fake volume or fabricated parsed details.
-- [ ] T065 [US0] [US1] **Integration and review** after T063/T064: root/local
+      minimum, `AllowanceCard`, `ExamplesCard`, current Ionicons and registered
+      tokens; avoid altering Manual B/TypeTabs/financial fields, fake volume or
+      fabricated parsed details.
+- [x] T065 [US0] [US1] **Integration and review** after T063/T064: root/local
       successor runs focused and combined actual Jest/integration Green,
       TypeScript/lint/i18n and governed Git checks at bounded checkpoints,
       retains financial/provider/quota/35-day replay positive controls, and
@@ -1046,33 +1049,83 @@ read-only `speckit.analyze` remain root-owned pre-implementation gates.
 - [ ] T066 [US0] **Owner evidence and final handoff** after accepted source:
       run/record existing five binding verifiers, approved motion source
       fingerprint verification and exact rendered side-by-side/overlay at
-      baseline 390×844 dp plus compact320×640, tablet768×1024,
-      landscape844×390, EN/AR, light/dark, font scale1.35/2; capture actual
-      native permission/Starting/motion/retry/time/device-account/cold-restart
-      journeys and separate screen-reader/accessibility-tree proof. Existing
-      T034/T035/T049/T050 and visual/accessibility T058 **remain unchecked /
-      NOT RUN** until owner provides evidence. If a source/visual mismatch
+      baseline 390×844 dp plus compact320×640, tablet768×1024, landscape844×390,
+      EN/AR, light/dark, font scale1.35/2; capture actual native
+      permission/Starting/motion/retry/time/device-account/cold-restart journeys
+      and separate screen-reader/accessibility-tree proof. Existing
+      T034/T035/T049/T050 and visual/accessibility T058 **remain unchecked / NOT
+      RUN** until owner provides evidence. If a source/visual mismatch
       materially exceeds approved facts, return to owner approval rather than
-      generate or edit original mockups. No hosted deployment/PR/merge
-      authority transfers with this task.
+      generate or edit original mockups. No hosted deployment/PR/merge authority
+      transfers with this task.
+
+### Motion-slice status and execution evidence (append-only, 11 Oct 2026)
+
+- **Red chronology preserved:** T060/T062 were genuine lifecycle/motion Reds
+  authored against existing entry-point boundaries. T061's initial
+  missing-module probe was a structural setup failure, not a behavioral Red; the
+  behavioral dismissal Red came from the existing-route companion, which root
+  accepted at 6 failed / 1 passed / 0 runtime errors **before** preference
+  restoration and route wiring; that acceptance is Red only.
+- **T060-T064 complete** for authored tests and implementation. Coverage
+  exceptions remain explicit in `checklists/voice-motion-manual-plan.md`: all 37
+  scenarios keep their unit/E2E/manual mapping; device, visual,
+  accessibility-tree, live-provider and native-recording journeys stay
+  manual-only.
+- **Executed unit evidence (root publication batch, 11 Oct 2026):** 25 suites /
+  368 tests all PASS with zero runtime errors; full mobile `tsc` exit 0;
+  changed-file ESLint exit 0 with 6 warnings (not zero warnings); all 10 binding
+  verifiers PASS; approved R1 original manifest, proposal and 5 PNG hashes
+  unchanged.
+- **Commit hooks DONE:** source commit
+  `b4934f9f3a204cb436c8644805af960b7c22f9fb` carries actual ESLint/prettier/i18n
+  hooks PASS with 34 file hashes unchanged; worker branch push/privacy PASS.
+  Compiled native-prop unit checks were executed by root.
+- **T065 source/unit/type/lint/review portion COMPLETE (checked above).**
+  Corrected 2 suites / 66 tests ALL PASS, 0 runtime errors at 06:54:10Z;
+  combined 25 suites / 371 cases final pass = original 23 suites / 305 tests +
+  corrected 2 / 66. The original batch was 369 pass / 2 new harness failures;
+  the fixes were translation-key and uncapped-ancestor-traversal corrections
+  only - no weakened assertions. Full type/lint final rerun: lint PASS at
+  06:55:35Z with 6 warnings; full type check PASS at 06:56:20Z. The independent
+  native reviewer's conditional acceptance is now satisfied (corrected
+  source/tests ACCEPTED, no additional findings). Review routing history
+  retained: Normal review + bounded recovery ended in systemError with no
+  artifact; OpenCode request failed 403 FreeTier; Gemini known 401; justified
+  native independent review produced the two findings (accessibility + YAML
+  comment) that were corrected. **Still pending under this task's publication
+  portion:** root final commit/push and PR with exact CI. Remaining tracked
+  separately, not part of this source/unit slice: owner device/manual evidence
+  (T066), live server quota/clock QA and any server/SQL work. No deployed
+  changes.
+- **T066 remains unchecked / NOT RUN:** device renders, side-by-side/overlay
+  proof, native permission/Starting/recording/retry journeys and separate
+  screen-reader/accessibility-tree capture are owner-only. Maestro E2E remains
+  AUTHORED / NOT RUN (no emulator execution in this slice).
+- **Delivery identity (no false claims):** source worker identity Normal ->
+  OpenCode -> Gemini (401) -> authorized native source fallback; OpenCode ran
+  bounded test/E2E authoring parts only. No physical-device, rendered or
+  live-provider verification and no remote CI result is claimed by this entry
+  (compiled native-prop unit checks above were executed by root). T001-T059 and
+  all historical evidence are preserved unchanged.
 
 ### Append-only requirement and evidence coverage
 
-| Requirement / success criterion | Motion tasks (original tasks retained) |
-| --- | --- |
-| FR-037 scoped idle badge/colors/copy | T062, T064, T066 |
-| FR-038 per-account device-local dismissal | T061, T064–T066 |
-| FR-039 Starting/native readiness/cancel/duplicate prevention | T060, T063, T065 |
-| FR-040 recording/parsing/reduced-motion | T060, T062, T064–T066 |
-| FR-041 native-permission inline + retained AI consent | T060, T062–T063, T065 |
-| FR-042 direct/identity-safe/eligible retries | T060, T063, T065 |
-| SC-016 Start/retry gates | T060, T063, T065 |
-| SC-017 durable scoped dismissal | T061, T064–T066 |
-| SC-018 scoped motion visual/a11y evidence | T062, T064–T066, existing T034/T035/T049/T050/T058 |
+| Requirement / success criterion                              | Motion tasks (original tasks retained)             |
+| ------------------------------------------------------------ | -------------------------------------------------- |
+| FR-037 scoped idle badge/colors/copy                         | T062, T064, T066                                   |
+| FR-038 per-account device-local dismissal                    | T061, T064–T066                                    |
+| FR-039 Starting/native readiness/cancel/duplicate prevention | T060, T063, T065                                   |
+| FR-040 recording/parsing/reduced-motion                      | T060, T062, T064–T066                              |
+| FR-041 native-permission inline + retained AI consent        | T060, T062–T063, T065                              |
+| FR-042 direct/identity-safe/eligible retries                 | T060, T063, T065                                   |
+| SC-016 Start/retry gates                                     | T060, T063, T065                                   |
+| SC-017 durable scoped dismissal                              | T061, T064–T066                                    |
+| SC-018 scoped motion visual/a11y evidence                    | T062, T064–T066, existing T034/T035/T049/T050/T058 |
 
-The 37 manual → unit/integration → honestly controllable Maestro →
-owner-only evidence scenarios are maintained in
-`checklists/voice-motion-coverage.md`. That matrix does not add an extra
-approval gate or claim any executed tests, device checks, audio, live provider,
-hosted quota or rendered evidence. #384 stays separately deferred. No new
-commercial entitlement/SQL/migration/sync/finance work is authorized.
+The 37 manual → unit/integration → honestly controllable Maestro → owner-only
+evidence scenarios are maintained in `checklists/voice-motion-coverage.md`. That
+matrix does not add an extra approval gate or claim any executed tests, device
+checks, audio, live provider, hosted quota or rendered evidence. #384 stays
+separately deferred. No new commercial entitlement/SQL/migration/sync/finance
+work is authorized.

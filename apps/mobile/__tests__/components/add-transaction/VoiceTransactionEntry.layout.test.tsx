@@ -105,6 +105,7 @@ interface MockIoniconsRender {
   readonly name: string;
   readonly size?: number;
   readonly color?: string;
+  readonly accessible?: boolean;
 }
 
 const mockIoniconsRenders: MockIoniconsRender[] = [];
@@ -114,15 +115,32 @@ jest.mock("@expo/vector-icons", () => ({
     name,
     size,
     color,
+    accessible,
+    accessibilityElementsHidden,
+    importantForAccessibility,
   }: {
     readonly name: string;
     readonly size?: number;
     readonly color?: string;
+    readonly accessible?: boolean;
+    readonly accessibilityElementsHidden?: boolean;
+    readonly importantForAccessibility?:
+      | "auto"
+      | "yes"
+      | "no"
+      | "no-hide-descendants";
   }): React.JSX.Element => {
-    mockIoniconsRenders.push({ name, size, color });
-    const { View } =
+    mockIoniconsRenders.push({ name, size, color, accessible });
+    const { Text } =
       jest.requireActual<typeof import("react-native")>("react-native");
-    return <View testID={"ionicon-" + name} />;
+    return (
+      <Text
+        testID={"ionicon-" + name}
+        accessible={accessible}
+        accessibilityElementsHidden={accessibilityElementsHidden}
+        importantForAccessibility={importantForAccessibility}
+      />
+    );
   },
 }));
 
@@ -352,6 +370,23 @@ describe("VoiceTransactionEntry responsive, animation and unboxed layout", () =>
     jest.clearAllMocks();
     view.unmount();
     expect(mockCancelAnimation).toHaveBeenCalled();
+  });
+
+  it("hides the parsing illustration from both platform a11y trees and marks the receipt glyph non-accessible", (): void => {
+    renderLayout({ state: "processing" });
+    const illustration: unknown = screen.getByTestId(
+      "voice-parsing-illustration",
+      { includeHiddenElements: true }
+    );
+    const wrapperProps = getTestInstanceProps(illustration);
+    expect(wrapperProps.accessible).toBe(false);
+    expect(wrapperProps.accessibilityElementsHidden).toBe(true);
+    expect(wrapperProps.importantForAccessibility).toBe("no-hide-descendants");
+    const receipt: unknown = screen.getByTestId("ionicon-receipt-outline", {
+      includeHiddenElements: true,
+    });
+    expect(getTestInstanceProps(receipt).accessible).toBe(false);
+    expect(screen.getByText("voice_ui_parsing_title")).toBeOnTheScreen();
   });
 
   it.each(["recording", "processing"] as const)(

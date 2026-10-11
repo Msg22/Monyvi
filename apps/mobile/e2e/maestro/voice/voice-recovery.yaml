@@ -6,8 +6,9 @@ appId: com.monyvi.app
 # "Try again" (r1 retry auto-enters Starting and can begin real native
 # capture), never taps any permission control, and never submits to a paid
 # provider. On a granted-microphone device a single mic tap can start native
-# recording and the 60 s cap may auto-submit, so no scripted step may start
-# capture. Starting, native permission, recording, parsing and retry execution
+# recording; no actual native capture or automatic provider request is
+# assumed here, so no scripted step may start capture. Starting, native
+# permission, recording, parsing and retry execution
 # are UNIT/MANUAL ONLY: no deterministic native Voice audio/permission/provider
 # fixture exists.
 # Retained central IDs: voice-mic-target, voice-action-try-again,
@@ -28,8 +29,9 @@ appId: com.monyvi.app
 
 # Availability check failure state: recovery actions must be VISIBLE and the
 # Manual path must stay reachable. "Try again" is asserted, never tapped: with
-# r1 auto-start an unconditional tap can begin authentic capture, hold the
-# Manual tab, and risk a provider submission at the cap. Direct retry start is
+# r1 auto-start an unconditional tap can begin authentic capture and hold
+# the Manual tab; no actual native capture or automatic provider request is
+# assumed. Direct retry start is
 # unit/manual-only (no deterministic native audio/provider fixture exists).
 - runFlow:
     when:

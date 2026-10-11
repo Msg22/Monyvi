@@ -202,6 +202,7 @@ function VoiceActionSurface({
           {isStarting ? (
             <View
               accessible={false}
+              accessibilityElementsHidden
               importantForAccessibility="no-hide-descendants"
               className="h-[104px] w-[104px] overflow-hidden rounded-[52px]"
             >
