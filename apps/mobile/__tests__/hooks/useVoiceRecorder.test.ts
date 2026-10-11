@@ -22,6 +22,23 @@ import {
   resetRecorderRelease,
 } from "./voice-recorder-fixtures";
 
+type MicrophoneStatus = "granted" | "denied" | "blocked" | "unknown";
+
+interface TypedPermissionRequest {
+  readonly requestPermissionStatus: () => Promise<MicrophoneStatus>;
+}
+
+function supportsTypedPermissionRequest(
+  value: unknown
+): value is TypedPermissionRequest {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "requestPermissionStatus" in value &&
+    typeof value.requestPermissionStatus === "function"
+  );
+}
+
 describe("useVoiceRecorder", () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -153,6 +170,61 @@ describe("useVoiceRecorder", () => {
 
       expect(granted).toBe(false);
       expect(unwrap(result).hasPermission).toBe(false);
+    });
+  });
+
+  describe("typed explicit OS permission result (same native request)", () => {
+    it.each([
+      [{ granted: true, canAskAgain: true }, "granted"],
+      [{ granted: false, canAskAgain: true }, "denied"],
+      [{ granted: false, canAskAgain: false }, "blocked"],
+    ] as const)(
+      "reports actual OS response %s as %s without a second native get",
+      async (nativeAnswer, expected): Promise<void> => {
+        mockRequestPermissions.mockResolvedValueOnce(nativeAnswer);
+        const { result } = renderHook(() => useVoiceRecorder());
+        await actAsync(async (): Promise<void> => {
+          await Promise.resolve();
+        });
+        const hook = unwrap(result);
+        expect(supportsTypedPermissionRequest(hook)).toBe(true);
+        if (!supportsTypedPermissionRequest(hook)) {
+          throw new Error("Recorder must expose typed OS request status");
+        }
+        const initialReadCalls = mockGetPermissions.mock.calls.length;
+        let status: MicrophoneStatus = "unknown";
+        await actAsync(async (): Promise<void> => {
+          status = await hook.requestPermissionStatus();
+        });
+        expect(status).toBe(expected);
+        expect(unwrap(result).permissionStatus).toBe(expected);
+        expect(mockRequestPermissions).toHaveBeenCalledTimes(1);
+        expect(mockGetPermissions).toHaveBeenCalledTimes(initialReadCalls);
+      }
+    );
+
+    it("reports an OS request failure as unknown without a follow-up permission get", async (): Promise<void> => {
+      mockRequestPermissions.mockRejectedValueOnce(
+        new Error("OS permission failed")
+      );
+      const { result } = renderHook(() => useVoiceRecorder());
+      await actAsync(async (): Promise<void> => {
+        await Promise.resolve();
+      });
+      const hook = unwrap(result);
+      expect(supportsTypedPermissionRequest(hook)).toBe(true);
+      if (!supportsTypedPermissionRequest(hook)) {
+        throw new Error("Recorder must expose typed OS request status");
+      }
+      const initialReadCalls = mockGetPermissions.mock.calls.length;
+      let status: MicrophoneStatus = "granted";
+      await actAsync(async (): Promise<void> => {
+        status = await hook.requestPermissionStatus();
+      });
+      expect(status).toBe("unknown");
+      expect(unwrap(result).permissionStatus).toBe("unknown");
+      expect(mockRequestPermissions).toHaveBeenCalledTimes(1);
+      expect(mockGetPermissions).toHaveBeenCalledTimes(initialReadCalls);
     });
   });
 
@@ -747,10 +819,10 @@ describe("useVoiceRecorder", () => {
   });
 
   // =========================================================================
-  // Auto-stop at 60 seconds (FR-004)
+  // Active-capture cap at 30 seconds (FR-045)
   // =========================================================================
-  describe("auto-stop at 60 seconds", () => {
-    it("should auto-stop recording when elapsed time reaches 60s", async () => {
+  describe("active-capture cap at 30 seconds", () => {
+    it("should finalize recording when active time reaches 30s", async () => {
       mockRequestPermissions.mockResolvedValueOnce({ granted: true });
       const { result } = renderHook(() => useVoiceRecorder());
 
@@ -758,10 +830,10 @@ describe("useVoiceRecorder", () => {
       await startRecordingWithFlush(result);
       expect(unwrap(result).status).toBe("recording");
 
-      // 2. Advance past the 60s limit; the hook's 100ms interval
-      //    will accumulate durationMs which triggers the auto-stop useEffect
+      // 2. Advance past the 30s active cap; the one-shot cap deadline
+      //    finalizes the capture exactly once and retains the URI
       actSync(() => {
-        jest.advanceTimersByTime(60_000);
+        jest.advanceTimersByTime(30_000);
       });
 
       // 3. Flush microtasks so the auto-stop async IIFE

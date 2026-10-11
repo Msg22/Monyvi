@@ -2,16 +2,10 @@ import { randomUUID } from "expo-crypto";
 import { router } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Linking } from "react-native";
-import type { Category } from "@monyvi/db";
-import {
-  voiceRequestKeySchema,
-  type VoiceQuotaRefusal,
-  type VoiceAvailabilitySnapshot,
-} from "@monyvi/logic";
+import { voiceRequestKeySchema } from "@monyvi/logic";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
-import type { UseVoiceAiAvailabilityResult } from "@/hooks/useVoiceAiAvailability";
 import { useVoiceRecorder } from "@/hooks/useVoiceRecorder";
-import type { MicrophonePermissionStatus } from "./useMicrophonePermission";
+import type * as Flow from "./voice-transaction-flow-types";
 import {
   emptyVoiceResultError,
   isAvailabilityBlocked,
@@ -30,88 +24,17 @@ import {
 import { getAiProcessingConsentStatus } from "@/services/profile-service";
 import { getDeviceTimeZone } from "@/utils/device-time-zone";
 import { logger } from "@/utils/logger";
-export type VoiceFlowStatus =
-  | "idle"
-  | "starting"
-  | "recording"
-  | "paused"
-  | "completed"
-  | "analyzing"
-  | "success"
-  | "error";
-type FlowErrorKind = "microphone-permission" | "generic";
-interface ParserContextSnapshot {
-  readonly preferredCurrency: string;
-  readonly categories: string;
-  readonly accounts: ReadonlyArray<{
-    readonly id: string;
-    readonly name: string;
-    readonly currency: string;
-  }>;
-  readonly categoryRecords: readonly Category[];
-}
-interface RetainedSubmission extends ParserContextSnapshot {
-  readonly ownerUserId: string;
-  readonly audioUri: string;
-  readonly requestKey: string;
-  readonly callerTimeZone: string;
-}
-interface FlowOperation {
-  readonly generation: number;
-  readonly userId: string;
-  readonly signal: AbortSignal;
-}
-export interface VoiceTransactionFlowResult {
-  readonly flowStatus: VoiceFlowStatus;
-  readonly isOverlayVisible: boolean;
-  readonly durationMs: number;
-  readonly errorMessage: string | null;
-  readonly isMicrophonePermissionError: boolean;
-  readonly hasPermission: boolean;
-  readonly permissionStatus: MicrophonePermissionStatus;
-  readonly refreshPermission: () => Promise<MicrophonePermissionStatus>;
-  readonly isModeSwitchLocked: boolean;
-  readonly isFinalizing: boolean;
-  readonly refusalReason: VoiceQuotaRefusal["reason"] | null;
-  readonly canRetrySubmission: boolean;
-  readonly startFlow: (options?: StartFlowOptions) => Promise<void>;
-  readonly pauseRecording: () => void;
-  readonly resumeRecording: () => void;
-  readonly submitRecording: () => Promise<void>;
-  readonly retrySubmission: () => Promise<void>;
-  readonly discardRecording: () => Promise<void>;
-  readonly retryRecording: () => Promise<void>;
-  readonly openMicrophoneSettings: () => Promise<void>;
-}
-interface FlowConfig {
-  readonly preferredCurrency: string;
-  readonly categories: string;
-  readonly accounts: ReadonlyArray<{
-    readonly id: string;
-    readonly name: string;
-    readonly currency: string;
-  }>;
-  readonly categoryRecords: readonly Category[];
-  readonly originTabIndex?: number;
-  readonly autoStart?: boolean;
-  readonly canAutoStart?: boolean;
-  readonly ensureAiProcessingConsent?: () => boolean | Promise<boolean>;
-  readonly hasFreshAiProcessingConsent?: () => boolean | Promise<boolean>;
-  readonly onAiProcessingConsentRequired?: () => void | Promise<void>;
-  readonly voiceAvailability: UseVoiceAiAvailabilityResult;
-}
-interface StartFlowOptions {
-  readonly skipAiProcessingConsent?: boolean;
-  readonly requestMicrophonePermission?: boolean;
-  readonly retryRecording?: boolean;
-  readonly availabilitySnapshot?: VoiceAvailabilitySnapshot;
-}
+export type {
+  VoiceFlowStatus,
+  VoiceStartResult,
+  VoiceTransactionFlowResult,
+} from "./voice-transaction-flow-types";
 function createRequestKey(): string {
   return voiceRequestKeySchema.parse(randomUUID());
 }
 export function useVoiceTransactionFlow(
-  config: FlowConfig
-): VoiceTransactionFlowResult {
+  config: Flow.FlowConfig
+): Flow.VoiceTransactionFlowResult {
   const {
     originTabIndex: cfgOriginTabIndex,
     hasFreshAiProcessingConsent: cfgHasFreshAiProcessingConsent,
@@ -132,13 +55,13 @@ export function useVoiceTransactionFlow(
 
   const recorder = useVoiceRecorder();
   const { userId, isResolvingUser } = useCurrentUser();
-  const [flowStatus, setFlowStatus] = useState<VoiceFlowStatus>("idle");
+  const [flowStatus, setFlowStatus] = useState<Flow.VoiceFlowStatus>("idle");
   const [isOverlayVisible, setIsOverlayVisible] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [errorKind, setErrorKind] = useState<FlowErrorKind | null>(null);
-  const [refusalReason, setRefusalReason] = useState<
-    VoiceQuotaRefusal["reason"] | null
-  >(null);
+  const [errorKind, setErrorKind] = useState<Flow.FlowErrorKind | null>(null);
+  const [refusalReason, setRefusalReason] = useState<Flow.RefusalReason | null>(
+    null
+  );
   const [canRetrySubmission, setCanRetrySubmission] = useState(false);
   const [isFinalizing, setIsFinalizing] = useState(false);
   const [isStartPending, setIsStartPending] = useState(false);
@@ -151,15 +74,16 @@ export function useVoiceTransactionFlow(
   const operationAbortRef = useRef<AbortController | null>(null);
   const startPendingGenerationRef = useRef<number | null>(null);
   const submissionPendingGenerationRef = useRef<number | null>(null);
-  const flowStatusRef = useRef<VoiceFlowStatus>("idle");
+  const resumePendingRef = useRef<Flow.ResumePermissionOperation | null>(null);
+  const flowStatusRef = useRef<Flow.VoiceFlowStatus>("idle");
   const originTabIndexRef = useRef(cfgOriginTabIndex ?? 0);
   const requestKeyRef = useRef<string | null>(null);
   const requestOwnerUserIdRef = useRef<string | null>(null);
   const callerTimeZoneRef = useRef<string | null>(null);
-  const retainedSubmissionRef = useRef<RetainedSubmission | null>(null);
+  const retainedSubmissionRef = useRef<Flow.RetainedSubmission | null>(null);
   const discardRef = useRef(recorder.discard);
   discardRef.current = recorder.discard;
-  const updateFlowStatus = useCallback((next: VoiceFlowStatus): void => {
+  const updateFlowStatus = useCallback((next: Flow.VoiceFlowStatus): void => {
     flowStatusRef.current = next;
     setFlowStatus(next);
   }, []);
@@ -175,7 +99,7 @@ export function useVoiceTransactionFlow(
     operationAbortRef.current?.abort();
     operationAbortRef.current = null;
   }, []);
-  const beginOperation = useCallback((): FlowOperation | null => {
+  const beginOperation = useCallback((): Flow.FlowOperation | null => {
     const expectedUserId = userId;
     if (
       !mountedRef.current ||
@@ -196,12 +120,20 @@ export function useVoiceTransactionFlow(
     };
   }, [invalidateOperations, userId]);
   const isOperationCurrent = useCallback(
-    (operation: FlowOperation): boolean =>
+    (operation: Flow.FlowOperation): boolean =>
       mountedRef.current &&
       !operation.signal.aborted &&
       !isResolvingUserRef.current &&
       currentUserIdRef.current === operation.userId &&
       operationGenerationRef.current === operation.generation,
+    []
+  );
+  const getStaleStartResult = useCallback(
+    (operation: Flow.FlowOperation): Flow.VoiceStartResult =>
+      currentUserIdRef.current !== operation.userId ||
+      isResolvingUserRef.current
+        ? { kind: "not-started", reason: "actor-changed" }
+        : { kind: "not-started", reason: "cancelled" },
     []
   );
   const previousActorRef = useRef({
@@ -254,10 +186,31 @@ export function useVoiceTransactionFlow(
     if (
       recorder.status === "completed" &&
       flowStatusRef.current === "recording"
-    ) {
+    )
       updateFlowStatus("completed");
+    if (
+      recorder.status === "error" &&
+      recorder.audioUri === null &&
+      userId !== null &&
+      !isResolvingUser &&
+      requestOwnerUserIdRef.current === userId &&
+      submissionPendingGenerationRef.current === null &&
+      ["recording", "paused", "completed"].includes(flowStatusRef.current)
+    ) {
+      clearSubmissionIdentity();
+      setErrorMessage(recordingFinalizeError());
+      setErrorKind("generic");
+      setIsOverlayVisible(true);
+      updateFlowStatus("error");
     }
-  }, [recorder.status, updateFlowStatus]);
+  }, [
+    recorder.status,
+    recorder.audioUri,
+    userId,
+    isResolvingUser,
+    clearSubmissionIdentity,
+    updateFlowStatus,
+  ]);
   const hasFreshAiProcessingConsent =
     useCallback(async (): Promise<boolean> => {
       if (cfgHasFreshAiProcessingConsent) {
@@ -272,14 +225,14 @@ export function useVoiceTransactionFlow(
       }
     }, [cfgHasFreshAiProcessingConsent]);
   const discardForOperation = useCallback(
-    async (operation: FlowOperation): Promise<boolean> => {
+    async (operation: Flow.FlowOperation): Promise<boolean> => {
       await recorder.discard();
       return isOperationCurrent(operation);
     },
     [isOperationCurrent, recorder]
   );
   const stopForConsentLoss = useCallback(
-    async (operation: FlowOperation): Promise<boolean> => {
+    async (operation: Flow.FlowOperation): Promise<boolean> => {
       if (!cfgEnsureAiProcessingConsent) {
         return false;
       }
@@ -311,7 +264,7 @@ export function useVoiceTransactionFlow(
     ]
   );
   const refreshBeforeProvider = useCallback(
-    async (operation: FlowOperation): Promise<boolean> => {
+    async (operation: Flow.FlowOperation): Promise<boolean> => {
       if (!isOperationCurrent(operation)) {
         return false;
       }
@@ -323,23 +276,29 @@ export function useVoiceTransactionFlow(
     [refreshVoiceAvailability, isOperationCurrent]
   );
   const startFlow = useCallback(
-    async (options?: StartFlowOptions): Promise<void> => {
+    async (options?: Flow.StartFlowOptions): Promise<Flow.VoiceStartResult> => {
       if (
         (flowStatusRef.current !== "idle" &&
           !(options?.retryRecording && flowStatusRef.current === "error")) ||
         startPendingGenerationRef.current !== null ||
         submissionPendingGenerationRef.current !== null
       ) {
-        return;
+        return { kind: "not-started", reason: "cancelled" };
       }
       const operation = beginOperation();
-      if (operation === null) return;
+      if (operation === null) {
+        return currentUserIdRef.current !== userId || isResolvingUserRef.current
+          ? { kind: "not-started", reason: "actor-changed" }
+          : { kind: "not-started", reason: "cancelled" };
+      }
       startPendingGenerationRef.current = operation.generation;
       setIsStartPending(true);
       updateFlowStatus("starting");
       try {
         if (options?.retryRecording) {
-          if (!(await discardForOperation(operation))) return;
+          if (!(await discardForOperation(operation))) {
+            return getStaleStartResult(operation);
+          }
           clearSubmissionIdentity();
           setErrorMessage(null);
           setErrorKind(null);
@@ -348,48 +307,49 @@ export function useVoiceTransactionFlow(
         if (!options?.skipAiProcessingConsent && cfgEnsureAiProcessingConsent) {
           const canUseAi = await cfgEnsureAiProcessingConsent();
           if (!isOperationCurrent(operation)) {
-            return;
+            return getStaleStartResult(operation);
           }
           if (!canUseAi) {
             updateFlowStatus("idle");
-            return;
+            return { kind: "not-started", reason: "consent" };
           }
         }
         const callerTimeZone = getDeviceTimeZone();
         if (!isOperationCurrent(operation)) {
-          return;
+          return getStaleStartResult(operation);
         }
         if (callerTimeZone === null) {
           updateFlowStatus("idle");
-          return;
+          return { kind: "not-started", reason: "availability" };
         }
         const availability =
           options?.availabilitySnapshot ?? (await refreshVoiceAvailability());
         if (!isOperationCurrent(operation)) {
-          return;
+          return getStaleStartResult(operation);
         }
         if (isAvailabilityBlocked(availability)) {
           setIsOverlayVisible(false);
           updateFlowStatus("idle");
-          return;
+          return { kind: "not-started", reason: "availability" };
         }
         const permission = await recorder.refreshPermission();
-        if (!isOperationCurrent(operation)) return;
-        if (permission !== "granted") {
-          const granted =
-            options?.requestMicrophonePermission && permission === "denied"
-              ? await recorder.requestPermission()
-              : false;
-          if (!isOperationCurrent(operation)) {
-            return;
-          }
-          if (!granted) {
-            setErrorMessage(microphonePermissionError());
-            setErrorKind("microphone-permission");
-            updateFlowStatus("error");
-            setIsOverlayVisible(true);
-            return;
-          }
+        if (!isOperationCurrent(operation)) {
+          return getStaleStartResult(operation);
+        }
+        const requestedStatus =
+          options?.requestMicrophonePermission === true &&
+          permission === "denied"
+            ? await recorder.requestPermissionStatus()
+            : permission;
+        if (!isOperationCurrent(operation)) {
+          return getStaleStartResult(operation);
+        }
+        if (requestedStatus !== "granted") {
+          setErrorMessage(null);
+          setErrorKind(null);
+          setIsOverlayVisible(false);
+          updateFlowStatus("idle");
+          return { kind: "permission", permissionStatus: requestedStatus };
         }
         const requestKey = createRequestKey();
         requestKeyRef.current = requestKey;
@@ -402,33 +362,49 @@ export function useVoiceTransactionFlow(
         setErrorKind(null);
         setIsOverlayVisible(true);
         originTabIndexRef.current = cfgOriginTabIndex ?? 0;
+        let didNativeRecordStart = false;
         try {
           await recorder.start({
             signal: operation.signal,
             onStarted: (): void => {
-              if (isOperationCurrent(operation)) updateFlowStatus("recording");
+              if (isOperationCurrent(operation)) {
+                didNativeRecordStart = true;
+                updateFlowStatus("recording");
+              }
             },
           });
         } catch {
           if (!isOperationCurrent(operation)) {
-            return;
+            return getStaleStartResult(operation);
           }
           clearSubmissionIdentity();
           setErrorMessage(recordingStartError());
           setErrorKind("generic");
           updateFlowStatus("error");
-          return;
+          return { kind: "not-started", reason: "start-failed" };
         }
         if (!isOperationCurrent(operation)) {
-          return;
+          return getStaleStartResult(operation);
         }
+        if (!didNativeRecordStart) {
+          clearSubmissionIdentity();
+          setErrorMessage(recordingStartError());
+          setErrorKind("generic");
+          updateFlowStatus("error");
+          await recorder.discard();
+          return { kind: "not-started", reason: "start-failed" };
+        }
+        return { kind: "started" };
       } catch (error: unknown) {
-        if (!isOperationCurrent(operation)) return;
+        if (!isOperationCurrent(operation)) {
+          return getStaleStartResult(operation);
+        }
         logger.error("voice.startFlow.failed", error);
         clearSubmissionIdentity();
         setErrorMessage(recordingStartError());
         setErrorKind("generic");
         updateFlowStatus("error");
+        return { kind: "not-started", reason: "start-failed" };
       } finally {
         if (startPendingGenerationRef.current === operation.generation) {
           startPendingGenerationRef.current = null;
@@ -444,11 +420,12 @@ export function useVoiceTransactionFlow(
       cfgEnsureAiProcessingConsent,
       cfgOriginTabIndex,
       refreshVoiceAvailability,
-      reconcileVoiceAvailability,
       discardForOperation,
+      getStaleStartResult,
       isOperationCurrent,
       recorder,
       updateFlowStatus,
+      userId,
     ]
   );
   const startFlowRef = useRef(startFlow);
@@ -501,12 +478,54 @@ export function useVoiceTransactionFlow(
     ) {
       return;
     }
-    if (recorder.resume()) updateFlowStatus("recording");
+    const pending = {
+      userId,
+      generation: operationGenerationRef.current,
+    };
+    if (
+      resumePendingRef.current?.userId === pending.userId &&
+      resumePendingRef.current.generation === pending.generation
+    ) {
+      return;
+    }
+    resumePendingRef.current = pending;
+    void (async (): Promise<void> => {
+      try {
+        const permission = await recorder.refreshPermission();
+        if (
+          !mountedRef.current ||
+          isResolvingUserRef.current ||
+          currentUserIdRef.current !== pending.userId ||
+          operationGenerationRef.current !== pending.generation ||
+          requestOwnerUserIdRef.current !== pending.userId ||
+          flowStatusRef.current !== "paused"
+        ) {
+          return;
+        }
+        if (permission === "unknown") {
+          return;
+        }
+        if (permission !== "granted") {
+          setErrorMessage(microphonePermissionError());
+          setErrorKind("microphone-permission");
+          setIsOverlayVisible(true);
+          updateFlowStatus("error");
+          return;
+        }
+        if (recorder.resume()) updateFlowStatus("recording");
+      } catch (error: unknown) {
+        logger.error("voice.resumePermission.failed", error);
+      } finally {
+        if (resumePendingRef.current === pending) {
+          resumePendingRef.current = null;
+        }
+      }
+    })();
   }, [recorder, updateFlowStatus, userId]);
   const processSubmission = useCallback(
     async (
-      operation: FlowOperation,
-      submission: RetainedSubmission,
+      operation: Flow.FlowOperation,
+      submission: Flow.RetainedSubmission,
       isRetainedRetry = false
     ): Promise<void> => {
       if (
@@ -594,7 +613,6 @@ export function useVoiceTransactionFlow(
           updateFlowStatus("error");
           return;
         }
-
         if (!(await discardForOperation(operation))) {
           return;
         }
@@ -614,11 +632,9 @@ export function useVoiceTransactionFlow(
         updateFlowStatus("error");
         return;
       }
-
       if (!(await discardForOperation(operation))) {
         return;
       }
-
       clearSubmissionIdentity();
       if (aiResult.transactions.length === 0) {
         setRefusalReason(null);
@@ -730,7 +746,7 @@ export function useVoiceTransactionFlow(
         updateFlowStatus("error");
         return;
       }
-      const submission: RetainedSubmission = {
+      const submission: Flow.RetainedSubmission = {
         ownerUserId: operation.userId,
         audioUri,
         requestKey,
@@ -827,10 +843,9 @@ export function useVoiceTransactionFlow(
     recorder,
     updateFlowStatus,
   ]);
-  const retryRecording = useCallback(
-    (): Promise<void> => startFlow({ retryRecording: true }),
-    [startFlow]
-  );
+  const retryRecording = useCallback(async (): Promise<void> => {
+    await startFlow({ retryRecording: true });
+  }, [startFlow]);
   const openMicrophoneSettings = useCallback(async (): Promise<void> => {
     const operation = beginOperation();
     if (operation === null) return;
@@ -855,10 +870,7 @@ export function useVoiceTransactionFlow(
   }, [beginOperation, isOperationCurrent, updateFlowStatus]);
   const isModeSwitchLocked =
     isStartPending ||
-    flowStatus === "recording" ||
-    flowStatus === "paused" ||
-    flowStatus === "completed" ||
-    flowStatus === "analyzing";
+    ["recording", "paused", "completed", "analyzing"].includes(flowStatus);
   return {
     flowStatus,
     isOverlayVisible,

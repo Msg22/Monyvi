@@ -1,14 +1,8 @@
-import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import * as os from "node:os";
-import * as path from "node:path";
-
 import { act, fireEvent, render, screen } from "@testing-library/react-native";
 import React from "react";
 import {
   processColor,
   ScrollView,
-  StyleSheet,
   type StyleProp,
   type ViewStyle,
 } from "react-native";
@@ -20,12 +14,20 @@ import {
 } from "react-native-css-interop/test";
 
 import {
-  getTestInstanceParent,
   getTestInstanceProps,
   getTestInstances,
 } from "../../test-utils/test-instance-props";
 
 import { palette } from "@/constants/colors";
+import {
+  compiledVoiceCss,
+  resolvedVoiceStyle,
+  resolvedActionLabelStyle,
+  expectRecorderActionColorBindings,
+  recorderActionRow,
+  hasNativeCircularClip,
+  expectPaletteHalo,
+} from "./voice-r2-native-style-test-helpers";
 
 import { VoiceTransactionEntry } from "@/components/add-transaction/VoiceTransactionEntry";
 
@@ -278,28 +280,38 @@ describe("VoiceTransactionEntry responsive, animation and unboxed layout", () =>
     expect(screen.getByTestId("voice-content")).toBeOnTheScreen();
   });
 
-  it("keeps the 104dp mic and decorative 140/172dp halos in an unboxed Voice surface", () => {
-    renderLayout();
-    const area: unknown = screen.getByTestId("voice-action-surface");
-    expect(String(getTestInstanceProps(area).className)).not.toMatch(
-      /rounded-2xl border|bg-slate-25/
-    );
-    const mic: unknown = screen.getByTestId("voice-mic-target");
-    expect(String(getTestInstanceProps(mic).className)).toContain("104px");
-    const outer: unknown = screen.getByTestId("voice-halo-outer", {
-      includeHiddenElements: true,
-    });
-    const inner: unknown = screen.getByTestId("voice-halo-inner", {
-      includeHiddenElements: true,
-    });
-    expect(String(getTestInstanceProps(outer).className)).toContain("172px");
-    expect(String(getTestInstanceProps(inner).className)).toContain("140px");
-    expect(getTestInstanceProps(outer).pointerEvents).toBe("none");
-    expect(getTestInstanceProps(inner).pointerEvents).toBe("none");
-    expect(
-      screen.getByTestId("ionicon-mic", { includeHiddenElements: true })
-    ).toBeOnTheScreen();
-  });
+  it.each(["idle", "starting", "recording", "paused"] as const)(
+    "keeps the clipped 104dp mic with no ordinary static filled halos in %s",
+    (state): void => {
+      renderLayout({ state });
+      const area: unknown = screen.getByTestId("voice-action-surface");
+      expect(String(getTestInstanceProps(area).className)).not.toMatch(
+        /rounded-2xl border|bg-slate-25/
+      );
+      const mic: unknown = screen.getByTestId("voice-mic-target", {
+        includeHiddenElements: true,
+      });
+      expect(String(getTestInstanceProps(mic).className)).toContain("104px");
+      // A transparent decorative wrapper is allowed; the former solid
+      // 140/172px background circles are not.
+      for (const id of ["voice-halo-outer", "voice-halo-inner"]) {
+        const halo: unknown = screen.queryByTestId(id, {
+          includeHiddenElements: true,
+        });
+        if (halo !== null) {
+          expect(String(getTestInstanceProps(halo).className)).not.toMatch(
+            /bg-nileGreen-|bg-slate-/
+          );
+        }
+      }
+      expect(
+        screen.getByTestId(
+          state === "paused" ? "ionicon-pause" : "ionicon-mic",
+          { includeHiddenElements: true }
+        )
+      ).toBeOnTheScreen();
+    }
+  );
 
   it("suppresses pulse when reduced motion is enabled and tears down on unmount", () => {
     mockReducedMotion = true;
@@ -446,109 +458,6 @@ describe("VoiceTransactionEntry responsive, animation and unboxed layout", () =>
   });
 });
 
-const MOBILE_ROOT = path.resolve(__dirname, "../../..");
-const REPOSITORY_ROOT = path.resolve(MOBILE_ROOT, "../..");
-const TAILWIND_CLI = require.resolve("tailwindcss/lib/cli/index.js", {
-  paths: [MOBILE_ROOT, REPOSITORY_ROOT],
-});
-let cachedVoiceCss: string | null = null;
-
-function compiledVoiceCss(): string {
-  if (cachedVoiceCss !== null) return cachedVoiceCss;
-  const directory = mkdtempSync(path.join(os.tmpdir(), "monyvi-voice-css-"));
-  try {
-    const input = path.join(directory, "input.css");
-    const componentSource = path.join(
-      MOBILE_ROOT,
-      "components",
-      "add-transaction",
-      "VoiceTransactionEntry.tsx"
-    );
-    const adapterSource = path.join(
-      MOBILE_ROOT,
-      "components",
-      "add-transaction",
-      "voice-ui",
-      "*.tsx"
-    );
-    const output = path.join(directory, "output.css");
-    writeFileSync(input, "@tailwind base;\n@tailwind utilities;\n", "utf8");
-    execFileSync(
-      process.execPath,
-      [
-        TAILWIND_CLI,
-        "-c",
-        path.join(MOBILE_ROOT, "tailwind.config.js"),
-        "-i",
-        input,
-        "-o",
-        output,
-        "--content",
-        componentSource + "," + adapterSource,
-      ],
-      {
-        cwd: REPOSITORY_ROOT,
-        stdio: "pipe",
-        env: { ...process.env, NATIVEWIND_OS: "android" },
-      }
-    );
-    cachedVoiceCss = readFileSync(output, "utf8");
-    return cachedVoiceCss;
-  } finally {
-    rmSync(directory, { recursive: true, force: true });
-  }
-}
-
-/** NativeWind CSS must be actually registered and translated, not string-matched. */
-function resolvedVoiceStyle(node: unknown): ViewStyle {
-  const raw: unknown = getTestInstanceProps(node).style;
-  if (typeof raw === "function") {
-    // Only native flattened props can prove clipping. Do not call the
-    // Pressable callback with a fabricated pressed state.
-    return {};
-  }
-  if (raw !== undefined && raw !== null && typeof raw !== "object") {
-    throw new Error("Expected a resolved native style object or array");
-  }
-  return StyleSheet.flatten(raw) ?? {};
-}
-
-function hasNativeCircularClip(gradient: unknown): boolean {
-  let current: unknown = getTestInstanceParent(gradient);
-  for (let i = 0; i < 12 && current !== null; i++) {
-    if (typeof current !== "object") break;
-    const style = resolvedVoiceStyle(current);
-    if (
-      style.overflow === "hidden" &&
-      style.width === 104 &&
-      style.height === 104 &&
-      style.borderRadius === 52
-    ) {
-      return true;
-    }
-    current = getTestInstanceParent(current);
-  }
-  return false;
-}
-
-function expectPaletteHalo(actual: unknown, paletteColor: string): number {
-  if (typeof actual !== "string") {
-    throw new Error("Expected native resolved halo color");
-  }
-  const native = processColor(actual);
-  const expected = processColor(paletteColor);
-  if (typeof native !== "number" || typeof expected !== "number") {
-    throw new Error("Expected valid React Native color values");
-  }
-  const nativeUint = ((native % 4294967296) + 4294967296) % 4294967296;
-  const expectedUint = ((expected % 4294967296) + 4294967296) % 4294967296;
-  expect(nativeUint % 16777216).toBe(expectedUint % 16777216);
-  const alpha = Math.floor(nativeUint / 16777216);
-  expect(alpha).toBeGreaterThan(0);
-  expect(alpha).toBeLessThan(255);
-  return alpha / 255;
-}
-
 describe("real Tailwind/CSS Interop Voice native shape", () => {
   it("reflows at font scale 2 while retaining scroll and 48dp recovery targets", () => {
     mockFontScale = 2;
@@ -595,7 +504,7 @@ describe("real Tailwind/CSS Interop Voice native shape", () => {
   it.each([
     ["starting", "voice-starting-cancel"],
     ["permission-explanation", "voice-permission-primary"],
-    ["recording", "voice-action-stop"],
+    ["recording", "voice-action-submit"],
   ] as const)(
     "gives %s action an actual native 48dp minimum height",
     (state, id): void => {
@@ -746,23 +655,52 @@ describe("real Tailwind/CSS Interop Voice native shape", () => {
     ["ar", "light", "idle"],
     ["en", "dark", "idle"],
     ["ar", "dark", "idle"],
-    ["en", "light", "daily-limit"],
-    ["ar", "light", "daily-limit"],
-    ["en", "dark", "daily-limit"],
-    ["ar", "dark", "daily-limit"],
+    ["en", "light", "starting"],
+    ["ar", "dark", "starting"],
+    ["en", "light", "recording"],
+    ["ar", "dark", "recording"],
+    ["en", "light", "paused"],
+    ["ar", "dark", "paused"],
   ] as const)(
-    "resolves %s %s %s halos through native theme styles",
-    (language, theme, state) => {
+    "R2 %s %s %s has no resolved opaque ordinary mic halo",
+    (language, theme, state): void => {
       mockLanguage = language;
       colorScheme.set(theme);
+      renderWithInterop(<VoiceTransactionEntry {...baseProps} state={state} />);
+      for (const id of ["voice-halo-outer", "voice-halo-inner"]) {
+        const halo: unknown = screen.queryByTestId(id, {
+          includeHiddenElements: true,
+        });
+        if (halo === null) continue;
+        const native = resolvedVoiceStyle(halo);
+        const background = native.backgroundColor;
+        if (background !== undefined) {
+          const rgba = processColor(background);
+          expect(rgba).toBe(processColor("transparent"));
+        }
+      }
+      // The native-clipped mic is intentionally hidden from the a11y tree
+      // while Starting/recording/paused. Inspect the rendered decoration.
+      expect(
+        screen.getByTestId("voice-gradient", {
+          includeHiddenElements: true,
+        })
+      ).toBeOnTheScreen();
+    }
+  );
+
+  it.each(["daily-limit", "unavailable"] as const)(
+    "preserves original disabled mic 140/172 gray artwork for %s",
+    (state): void => {
+      colorScheme.set("dark");
       renderWithInterop(
         <VoiceTransactionEntry
           {...baseProps}
           state={state}
-          remaining={state === "daily-limit" ? 0 : 3}
+          remaining={state === "daily-limit" ? 0 : null}
+          dailyLimit={state === "daily-limit" ? 5 : null}
         />
       );
-      const alphas: number[] = [];
       for (const [name, size, radius] of [
         ["outer", 172, 86],
         ["inner", 140, 70],
@@ -770,54 +708,122 @@ describe("real Tailwind/CSS Interop Voice native shape", () => {
         const halo: unknown = screen.getByTestId("voice-halo-" + name, {
           includeHiddenElements: true,
         });
-        const style = resolvedVoiceStyle(halo);
-        expect(style).toEqual(
+        expect(resolvedVoiceStyle(halo)).toEqual(
           expect.objectContaining({
-            position: "absolute",
             width: size,
             height: size,
             borderRadius: radius,
+            position: "absolute",
           })
         );
-        // A registered light-green RGB hierarchy must stay visible over
-        // slate-900. Dark nileGreen-900 was the observed invisible-halo defect;
-        // NativeWind may adapt alpha, not replace these with dark RGB values.
-        const approvedColor =
-          state === "daily-limit"
-            ? theme === "dark"
-              ? palette.slate[700]
-              : palette.slate[200]
-            : name === "outer"
-              ? palette.nileGreen[50]
-              : palette.nileGreen[100];
-        const alpha = expectPaletteHalo(style.backgroundColor, approvedColor);
-        alphas.push(alpha);
-        if (state === "idle" && theme === "dark") {
-          expect(alpha).toBeGreaterThanOrEqual(name === "outer" ? 0.22 : 0.35);
-        }
-        if (state === "daily-limit") {
-          // Keep gray disabled rings muted but not completely transparent.
-          expect(alpha).toBeGreaterThanOrEqual(0.15);
-          expect(alpha).toBeLessThan(0.45);
-        }
-        const props = getTestInstanceProps(halo);
-        expect(props.pointerEvents).toBe("none");
-        expect(props.importantForAccessibility).toBe("no-hide-descendants");
+        const alpha = expectPaletteHalo(
+          resolvedVoiceStyle(halo).backgroundColor,
+          palette.slate[700]
+        );
+        expect(alpha).toBeGreaterThanOrEqual(0.15);
+        expect(alpha).toBeLessThan(0.45);
       }
-      if (state === "idle" && theme === "dark") {
-        // Inner light-green halo must remain visibly stronger than outer.
-        expect(alphas[1]).toBeGreaterThan(alphas[0]);
+      const target: unknown = screen.getByTestId("voice-mic-target", {
+        includeHiddenElements: true,
+      });
+      expect(getTestInstanceProps(target).accessible).toBe(false);
+      expect(processColor(resolvedVoiceStyle(target).backgroundColor)).toBe(
+        processColor(palette.slate[700])
+      );
+    }
+  );
+
+  it.each(["recording", "paused", "completed"] as const)(
+    "resolves approved R2 green/gray/red 20dp actions in real native styles (%s)",
+    (state): void => {
+      mockWidth = 390;
+      mockFontScale = 1;
+      mockLanguage = "en";
+      colorScheme.set("light");
+      renderWithInterop(
+        <VoiceTransactionEntry
+          {...baseProps}
+          state={state}
+          durationMs={30_000}
+        />
+      );
+      const submit: unknown = screen.getByTestId("voice-action-submit");
+      const center: unknown = screen.getByTestId(
+        state === "paused" ? "voice-action-resume" : "voice-action-pause"
+      );
+      const discard: unknown = screen.getByTestId("voice-action-discard");
+      for (const action of [submit, center, discard]) {
+        const style = resolvedVoiceStyle(action);
+        expect(style.minHeight).toBeGreaterThanOrEqual(48);
+        expect(style.borderWidth).toBeGreaterThanOrEqual(1);
       }
-      if (state === "daily-limit") {
-        const disabled: unknown = screen.getByTestId("voice-mic-target", {
-          includeHiddenElements: true,
-        });
-        expect(getTestInstanceProps(disabled).accessible).toBe(false);
-        const color = resolvedVoiceStyle(disabled).backgroundColor;
-        const expected =
-          theme === "dark" ? palette.slate[700] : palette.slate[200];
-        expect(processColor(color)).toBe(processColor(expected));
+
+      for (const action of [submit, center, discard]) {
+        const label = resolvedActionLabelStyle(action);
+        expect(label.fontSize).toBe(14);
+        expect(label.lineHeight).toBe(22);
+        expect(label.fontWeight).toBe("600");
       }
+      expectRecorderActionColorBindings(submit, center, discard);
+      expect(getTestInstanceProps(center).accessibilityState).toEqual(
+        expect.objectContaining({ disabled: state === "completed" })
+      );
+      expect(mockIoniconsRenders.find((icon) => icon.name === "send")).toEqual({
+        name: "send",
+        size: 20,
+        color: palette.slate[25],
+        accessible: undefined,
+      });
+      expect(
+        mockIoniconsRenders.find(
+          (icon) => icon.name === (state === "paused" ? "play" : "pause")
+        )?.size
+      ).toBe(20);
+      expect(
+        mockIoniconsRenders.find((icon) => icon.name === "close")?.size
+      ).toBe(20);
+      const row = recorderActionRow(submit, center, discard);
+      expect(resolvedVoiceStyle(row).flexDirection).toBe("row");
+      expect(resolvedVoiceStyle(row).direction).toBe("ltr");
+    }
+  );
+
+  it.each([320, 390] as const)(
+    "keeps responsive R2 controls accessible without font shrinking at %sdp",
+    (width): void => {
+      mockWidth = width;
+      mockHeight = width === 320 ? 640 : 844;
+      mockFontScale = 2;
+      mockBottomInset = width === 320 ? 22 : 34;
+      renderWithInterop(
+        <VoiceTransactionEntry
+          {...baseProps}
+          state="completed"
+          durationMs={30_000}
+        />
+      );
+      const scroll: unknown = screen.UNSAFE_getByType(ScrollView);
+      expect(
+        resolvedVoiceStyle(screen.getByTestId("voice-action-surface")).minHeight
+      ).toBeGreaterThanOrEqual(260);
+      expect(getTestInstanceProps(scroll).contentContainerStyle).toEqual(
+        expect.objectContaining({
+          paddingBottom: mockBottomInset + 24,
+          paddingHorizontal: 12,
+        })
+      );
+      for (const id of [
+        "voice-action-submit",
+        "voice-action-pause",
+        "voice-action-discard",
+      ]) {
+        const control: unknown = screen.getByTestId(id);
+        expect(resolvedVoiceStyle(control).minHeight).toBeGreaterThanOrEqual(
+          48
+        );
+        expect(resolvedActionLabelStyle(control).fontSize).toBe(14);
+      }
+      expect(screen.getByText("00:30 / 00:30")).toBeOnTheScreen();
     }
   );
 

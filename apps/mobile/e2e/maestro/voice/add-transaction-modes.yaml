@@ -1,6 +1,6 @@
 appId: com.monyvi.app
 ---
-# R05 / T028 - approved unified Add Transaction shell (#347 Voice motion r1).
+# R05 / T028 + R2 T069 - approved unified Add Transaction shell (#347).
 # AUTHORED, NOT RUN. Requires authenticated local seeded account/category and
 # the Mobile-owned Manual B amount input testID "manual-amount-input".
 # Navigation, amount focus, Done and header Save are controllable; this flow
@@ -42,7 +42,8 @@ appId: com.monyvi.app
 - assertVisible:
     id: "header-save"
 
-# Safe switch preserves the mounted draft and keeps Manual content hidden.
+# Safe switch preserves the already-mounted Manual draft; direct Voice-first
+# lazy first mount is asserted in route unit tests, NOT inferred from visibility.
 - tapOn:
     id: "add-transaction-mode-voice"
 - assertNotVisible:
@@ -50,7 +51,7 @@ appId: com.monyvi.app
 # Switching to Voice must not auto-start capture (FR-039).
 - assertNotVisible: "Starting…"
 - assertNotVisible:
-    id: "voice-action-stop"
+    id: "voice-action-submit"
 - assertNotVisible:
     id: "voice-starting-cancel"
 - tapOn:
@@ -74,10 +75,36 @@ appId: com.monyvi.app
     id: "header-save"
 - assertNotVisible: "Starting…"
 - assertNotVisible:
-    id: "voice-action-stop"
+    id: "voice-action-submit"
+# R2 regression selector guard: toggling into Voice never shows the new
+# Submit/Pause/Discard controls unless capture genuinely started.
 # Native recording/pause/review, real permission journeys, Voice retry
 # auto-start, unmount/account-change cleanup and locale/dark/RTL fidelity are
 # MANUAL ONLY: this harness has no deterministic Voice audio/permission/
 # provider fixture. See voice-recovery.yaml (recovery-action visibility +
 # Manual fallback only; no mic/retry/permission tap) and
 # voice-motion-manual-plan.md for the full scenario map.
+
+# R2 T069: Only safe mode navigation is runner-controllable here.
+# This existing voice-first entry came from the home mic; first Manual choice
+# must present normal amount and Save WITHOUT starting audio or requesting OS
+# permission. Component mount-count and draft preservation are separate Jest
+# assertions, not something Maestro visibility can prove.
+- tapOn:
+    id: "add-transaction-mode-manual"
+- assertVisible:
+    id: "manual-amount-input"
+- assertVisible:
+    id: "header-save"
+- tapOn:
+    id: "add-transaction-mode-voice"
+- assertNotVisible:
+    id: "header-save"
+- assertNotVisible:
+    id: "voice-action-submit"
+- assertNotVisible:
+    id: "voice-action-pause"
+- assertNotVisible: "Starting…"
+# AUTHORED, NOT RUN. Real native 30s cap, recorded/paused/completed controls,
+# OS permission and consent, provider, timing, RTL and actual screenshots are
+# owner manual-only without controllable fixtures.

@@ -19,7 +19,10 @@ import { usePreferredCurrency } from "@/hooks/usePreferredCurrency";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useVoiceAiAvailability } from "@/hooks/useVoiceAiAvailability";
 import { useVoiceExamplesPreference } from "@/hooks/useVoiceExamplesPreference";
-import { useVoiceTransactionFlow } from "@/hooks/useVoiceTransactionFlow";
+import {
+  useVoiceTransactionFlow,
+  type VoiceStartResult,
+} from "@/hooks/useVoiceTransactionFlow";
 import { getAiProcessingConsentStatus } from "@/services/profile-service";
 import { toCategoryTreeSources } from "@/utils/category-tree-source";
 import { logger } from "@/utils/logger";
@@ -57,6 +60,11 @@ export default function AddTransaction(): React.JSX.Element {
 
   const requestedMode = resolveMode(params.mode);
   const [mode, setMode] = useState<AddTransactionMode>(requestedMode);
+  // Voice-first navigation does not construct the expensive hidden Manual
+  // form. Once selected, Manual stays mounted so its unsaved draft survives.
+  const [hasMountedManual, setHasMountedManual] = useState(
+    requestedMode === "manual"
+  );
   const [isManualSubmitting, setIsManualSubmitting] = useState(false);
   const [isVoiceConsentVisible, setIsVoiceConsentVisible] = useState(false);
   const [isVoiceStartPending, setIsVoiceStartPending] = useState(false);
@@ -153,13 +161,11 @@ export default function AddTransaction(): React.JSX.Element {
     permissionStatus: flowPermissionStatus,
     isMicrophonePermissionError: flowIsMicrophonePermissionError,
     discardRecording: flowDiscardRecording,
-    refreshPermission: flowRefreshPermission,
     startFlow: flowStartFlow,
     openMicrophoneSettings: flowOpenMicrophoneSettings,
     flowStatus: flowFlowStatus,
     canRetrySubmission: flowCanRetrySubmission,
     retrySubmission: flowRetrySubmission,
-    retryRecording: flowRetryRecording,
     isFinalizing: flowIsFinalizing,
     refusalReason: flowRefusalReason,
     durationMs: flowDurationMs,
@@ -241,6 +247,23 @@ export default function AddTransaction(): React.JSX.Element {
     flowDiscardRecording,
   ]);
 
+  const applyVoiceStartResult = useCallback(
+    (result: VoiceStartResult): void => {
+      if (result.kind === "permission") {
+        setMicrophoneRecoveryMode(
+          result.permissionStatus === "blocked"
+            ? "blocked"
+            : result.permissionStatus === "denied"
+              ? "request"
+              : null
+        );
+      } else {
+        setMicrophoneRecoveryMode(null);
+      }
+    },
+    []
+  );
+
   const requestVoiceStart = useCallback(
     async (options?: {
       readonly requestPermission?: boolean;
@@ -285,21 +308,8 @@ export default function AddTransaction(): React.JSX.Element {
           return;
         }
 
-        const permission = await flowRefreshPermission();
-        if (!isCurrent()) return;
-        if (
-          permission !== "granted" &&
-          !(options?.requestPermission && permission === "denied")
-        ) {
-          if (permission !== "unknown")
-            setMicrophoneRecoveryMode(
-              permission === "blocked" ? "blocked" : "request"
-            );
-          return;
-        }
         setMicrophoneRecoveryMode(null);
-
-        await flowStartFlow({
+        const result = await flowStartFlow({
           skipAiProcessingConsent: true,
           ...(options?.requestPermission
             ? { requestMicrophonePermission: true }
@@ -307,6 +317,8 @@ export default function AddTransaction(): React.JSX.Element {
           ...(options?.retryRecording ? { retryRecording: true } : {}),
           ...(availabilitySnapshot ? { availabilitySnapshot } : {}),
         });
+        if (!isCurrent()) return;
+        applyVoiceStartResult(result);
       } catch (error: unknown) {
         logger.error("voice.routeStart.failed", error);
       } finally {
@@ -321,8 +333,8 @@ export default function AddTransaction(): React.JSX.Element {
     },
     [
       aiConsent.isLoading,
+      applyVoiceStartResult,
       ensureAiProcessingConsent,
-      flowRefreshPermission,
       flowIsModeSwitchLocked,
       flowStartFlow,
       refreshVoiceAvailability,
@@ -373,6 +385,7 @@ export default function AddTransaction(): React.JSX.Element {
       }
 
       setMicrophoneRecoveryMode(null);
+      if (nextMode === "manual") setHasMountedManual(true);
       pendingModeFocusRef.current = nextMode;
       setMode(nextMode);
     },
@@ -444,7 +457,6 @@ export default function AddTransaction(): React.JSX.Element {
   }, [
     microphoneRecoveryMode,
     flowOpenMicrophoneSettings,
-    flowStartFlow,
     flowFlowStatus,
     requestVoiceStart,
   ]);
@@ -460,17 +472,13 @@ export default function AddTransaction(): React.JSX.Element {
       return;
     }
 
-    if (flowFlowStatus === "error") {
-      await flowRetryRecording();
-      return;
-    }
-
-    await requestVoiceStart();
+    await requestVoiceStart({
+      ...(flowFlowStatus === "error" ? { retryRecording: true } : {}),
+    });
   }, [
     requestVoiceStart,
     flowCanRetrySubmission,
     flowFlowStatus,
-    flowRetryRecording,
     flowRetrySubmission,
   ]);
 
@@ -570,6 +578,12 @@ export default function AddTransaction(): React.JSX.Element {
   ]);
 
   const isManualMode = mode === "manual";
+  const shouldMountManual = hasMountedManual || isManualMode;
+  // Also latch route-parameter changes that select Manual after Voice-first
+  // navigation; no form or financial internals need restructuring.
+  useEffect(() => {
+    if (isManualMode && !hasMountedManual) setHasMountedManual(true);
+  }, [hasMountedManual, isManualMode]);
   const availability = voiceAvailability.availability;
 
   return (
@@ -622,11 +636,13 @@ export default function AddTransaction(): React.JSX.Element {
             {t("add_transaction_mode_manual")}
           </Text>
           <View className="flex-1">
-            <ManualTransactionEntry
-              ref={manualEntryRef}
-              isActive={isManualMode}
-              onSubmittingChange={setIsManualSubmitting}
-            />
+            {shouldMountManual ? (
+              <ManualTransactionEntry
+                ref={manualEntryRef}
+                isActive={isManualMode}
+                onSubmittingChange={setIsManualSubmitting}
+              />
+            ) : null}
           </View>
         </View>
 
@@ -720,19 +736,11 @@ export default function AddTransaction(): React.JSX.Element {
             shouldResumeConsentAfterPrivacyRef.current = false;
             setIsVoiceConsentVisible(false);
 
-            const permission = await flowRefreshPermission();
-            if (!isCurrent()) return;
-            if (permission !== "granted") {
-              if (permission !== "unknown")
-                setMicrophoneRecoveryMode(
-                  permission === "blocked" ? "blocked" : "request"
-                );
-              return;
-            }
-
-            await flowStartFlow({
+            setMicrophoneRecoveryMode(null);
+            const result = await flowStartFlow({
               skipAiProcessingConsent: true,
             });
+            if (isCurrent()) applyVoiceStartResult(result);
           } catch {
             if (!isCurrent()) {
               return;
