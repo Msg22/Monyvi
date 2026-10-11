@@ -6,9 +6,10 @@ export interface FieldFeedback {
   readonly helperText?: string;
 }
 
-export type PrimaryFieldMessage =
-  | { readonly kind: "error" | "warning" | "helper"; readonly text: string }
-  | null;
+export type PrimaryFieldMessage = {
+  readonly kind: "error" | "warning" | "helper";
+  readonly text: string;
+} | null;
 
 /** Empty and whitespace-only messages fall through to the next priority. */
 export function selectPrimaryFieldMessage({
@@ -37,7 +38,9 @@ export function FieldMessage({
 
   return (
     <Text
-      testID={message.kind === "error" && testID ? testID + "-error" : undefined}
+      testID={
+        message.kind === "error" && testID ? testID + "-error" : undefined
+      }
       accessibilityRole={message.kind === "error" ? "alert" : undefined}
       accessibilityLabel={message.kind === "error" ? message.text : undefined}
       className={

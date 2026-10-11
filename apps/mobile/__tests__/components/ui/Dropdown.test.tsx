@@ -401,7 +401,9 @@ describe("T007 Dropdown required names and feedback precedence", () => {
         onChange={onChange}
         isOpen
         onToggle={jest.fn()}
-        selectedAdornment={<Text testID="foundation-selected-icon">wallet</Text>}
+        selectedAdornment={
+          <Text testID="foundation-selected-icon">wallet</Text>
+        }
         testID="typed-selector"
       />
     );
@@ -517,7 +519,9 @@ describe("T007 Q1/Q2/Q5 complete Dropdown accessibility contract", () => {
         testID="value-aware-selector"
       />
     );
-    const unselected: unknown = screen.getByTestId("value-aware-selector-trigger");
+    const unselected: unknown = screen.getByTestId(
+      "value-aware-selector-trigger"
+    );
     expect(unselected).toHaveProp("accessibilityRole", "button");
     expect(unselected).toHaveProp(
       "accessibilityLabel",
@@ -540,16 +544,31 @@ describe("T007 Q1/Q2/Q5 complete Dropdown accessibility contract", () => {
         testID="value-aware-selector"
       />
     );
-    const selected: unknown = screen.getByTestId("value-aware-selector-trigger");
-    expect(selected).toHaveProp("accessibilityLabel", "Account, Required field");
+    const selected: unknown = screen.getByTestId(
+      "value-aware-selector-trigger"
+    );
+    expect(selected).toHaveProp(
+      "accessibilityLabel",
+      "Account, Required field"
+    );
     expect(selected).toHaveProp("accessibilityValue", { text: "Cash" });
     expect(screen.getByText("Cash")).toBeTruthy();
   });
 
   it.each([
-    ["en", "Account", "Required field help", "Required field help, Required field"],
+    [
+      "en",
+      "Account",
+      "Required field help",
+      "Required field help, Required field",
+    ],
     ["en", "Account", "UnRequired field", "UnRequired field, Required field"],
-    ["ar", "الحساب", "معلومات حقل مطلوب إضافية", "معلومات حقل مطلوب إضافية، حقل مطلوب"],
+    [
+      "ar",
+      "الحساب",
+      "معلومات حقل مطلوب إضافية",
+      "معلومات حقل مطلوب إضافية، حقل مطلوب",
+    ],
   ] as const)(
     "appends a complete required qualifier when %s override only contains ordinary phrase text",
     async (locale, label, override, expectedName): Promise<void> => {
@@ -620,8 +639,9 @@ describe("T007 Q1/Q2/Q5 complete Dropdown accessibility contract", () => {
           testID="optional-override-selector"
         />
       );
-      expect(screen.getByTestId("optional-override-selector-trigger"))
-        .toHaveProp("accessibilityLabel", override);
+      expect(
+        screen.getByTestId("optional-override-selector-trigger")
+      ).toHaveProp("accessibilityLabel", override);
       expect(screen.queryByText(label + " *")).toBeNull();
     }
   );
@@ -691,8 +711,9 @@ describe("T007 Q1/Q2/Q5 complete Dropdown accessibility contract", () => {
         testID="fallback-selector"
       />
     );
-    expect(screen.getByRole("alert", { name: "Select a valid account" }))
-      .toBeTruthy();
+    expect(
+      screen.getByRole("alert", { name: "Select a valid account" })
+    ).toBeTruthy();
     expect(screen.getByTestId("fallback-selector-trigger")).toHaveProp(
       "aria-invalid",
       true

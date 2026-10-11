@@ -34,25 +34,19 @@ type StrictAmountParser = (
   options?: StrictAmountParseOptions
 ) => StrictAmountParseResult;
 
-const parseControlledAmountInput = parseAmountInput as (
-  text: string,
-  previousValue?: string
-) => string;
+const parseControlledAmountInput = parseAmountInput;
 
 function getStrictAmountParser(): StrictAmountParser {
   const candidate = Reflect.get(AmountHelpers, "parseStrictAmountInput");
   expect(typeof candidate).toBe("function");
-  return candidate as StrictAmountParser;
+  return candidate;
 }
 
 describe("currency-aware numeric amount validation", () => {
   it("enforces the shared maximum and the existing currency precision contract", () => {
     const candidate = Reflect.get(AmountHelpers, "isValidCurrencyAmount");
     expect(typeof candidate).toBe("function");
-    const isValidCurrencyAmount = candidate as (
-      amount: number,
-      currency: import("@monyvi/db").CurrencyType
-    ) => boolean;
+    const isValidCurrencyAmount = candidate;
 
     expect(isValidCurrencyAmount(1_000_000_000, "EGP")).toBe(true);
     expect(isValidCurrencyAmount(1_000_000_000.01, "EGP")).toBe(false);
@@ -168,9 +162,9 @@ describe("amount helpers", () => {
     it("canonicalizes valid grouped input and preserves safe intermediate decimals", () => {
       expect(parseControlledAmountInput("1,234.50", "")).toBe("1234.50");
       expect(parseControlledAmountInput("12.", "12")).toBe("12.");
-      expect(formatAmountInput(parseControlledAmountInput("1,234.50", ""))).toBe(
-        "1,234.50"
-      );
+      expect(
+        formatAmountInput(parseControlledAmountInput("1,234.50", ""))
+      ).toBe("1,234.50");
     });
 
     it("supports a one-character edit against the formatted display", () => {
@@ -241,10 +235,10 @@ type EditableInputResolver = (
   options?: EditableInputTestOptions
 ) => EditableInputTestResolution;
 
-type EditableDisplay = {
+interface EditableDisplay {
   readonly kind: "groupable" | "raw";
   readonly text: string;
-};
+}
 
 type EditableDisplaySelector = (
   value: string,
@@ -261,7 +255,10 @@ function getEditableInputResolver(): EditableInputResolver {
 }
 
 function getEditableDisplaySelector(): EditableDisplaySelector {
-  const candidate: unknown = Reflect.get(AmountHelpers, "getEditableAmountDisplay");
+  const candidate: unknown = Reflect.get(
+    AmountHelpers,
+    "getEditableAmountDisplay"
+  );
   expect(typeof candidate).toBe("function");
   return candidate as EditableDisplaySelector;
 }
@@ -283,19 +280,15 @@ describe("T006 editable amount foundation contract", () => {
     }
   );
 
-  it.each([
-    "abc12345",
-    "12..34",
-    "12,34",
-    "1,23,456",
-    "--1234",
-    "1e3",
-  ])("preserves malformed entry %s verbatim on display", (raw) => {
-    expect(getEditableDisplaySelector()(raw)).toEqual({
-      kind: "raw",
-      text: raw,
-    });
-  });
+  it.each(["abc12345", "12..34", "12,34", "1,23,456", "--1234", "1e3"])(
+    "preserves malformed entry %s verbatim on display",
+    (raw) => {
+      expect(getEditableDisplaySelector()(raw)).toEqual({
+        kind: "raw",
+        text: raw,
+      });
+    }
+  );
 
   it.each([
     ["-1234.567", "-1,234.567"],
@@ -341,47 +334,56 @@ describe("T006 editable amount foundation contract", () => {
     const resolve = getEditableInputResolver();
     let previousValue = "";
     for (const value of ["-", "-1", "-12.", "-12.30", "-12.3000"]) {
-      expect(
-        resolve(value, previousValue, { allowNegative: true })
-      ).toEqual({ accepted: true, value });
+      expect(resolve(value, previousValue, { allowNegative: true })).toEqual({
+        accepted: true,
+        value,
+      });
       previousValue = value;
     }
   });
 
   it("canonicalizes signed grouped paste without adding a precision limit", () => {
     const resolve = getEditableInputResolver();
-    expect(
-      resolve("-1,234.567", "-1234.56", { allowNegative: true })
-    ).toEqual({ accepted: true, value: "-1234.567" });
-    expect(
-      resolve("-1.123456", "-1.12345", { allowNegative: true })
-    ).toEqual({ accepted: true, value: "-1.123456" });
-    expect(
-      resolve("-0.000", "-", { allowNegative: true })
-    ).toEqual({ accepted: true, value: "-0.000" });
+    expect(resolve("-1,234.567", "-1234.56", { allowNegative: true })).toEqual({
+      accepted: true,
+      value: "-1234.567",
+    });
+    expect(resolve("-1.123456", "-1.12345", { allowNegative: true })).toEqual({
+      accepted: true,
+      value: "-1.123456",
+    });
+    expect(resolve("-0.000", "-", { allowNegative: true })).toEqual({
+      accepted: true,
+      value: "-0.000",
+    });
   });
 
   it("resolves a one-character edit inside a signed grouped display", () => {
     const resolve = getEditableInputResolver();
-    expect(
-      resolve("-1,2345", "-1234", { allowNegative: true })
-    ).toEqual({ accepted: true, value: "-12345" });
-    expect(
-      resolve("-1,294.50", "-1234.50", { allowNegative: true })
-    ).toEqual({ accepted: true, value: "-1294.50" });
+    expect(resolve("-1,2345", "-1234", { allowNegative: true })).toEqual({
+      accepted: true,
+      value: "-12345",
+    });
+    expect(resolve("-1,294.50", "-1234.50", { allowNegative: true })).toEqual({
+      accepted: true,
+      value: "-1294.50",
+    });
   });
 
   it("permits sign removal and grouped separator deletion in signed mode", () => {
     const resolve = getEditableInputResolver();
-    expect(
-      resolve("-1234.50", "-1234.50", { allowNegative: true })
-    ).toEqual({ accepted: true, value: "-1234.50" });
-    expect(
-      resolve("1,234.50", "-1234.50", { allowNegative: true })
-    ).toEqual({ accepted: true, value: "1234.50" });
-    expect(
-      resolve("1234.50", "-1234.50", { allowNegative: true })
-    ).toEqual({ accepted: true, value: "1234.50" });
+    expect(resolve("-1234.50", "-1234.50", { allowNegative: true })).toEqual({
+      accepted: true,
+      value: "-1234.50",
+    });
+    expect(resolve("1,234.50", "-1234.50", { allowNegative: true })).toEqual({
+      accepted: true,
+      value: "1234.50",
+    });
+    expect(resolve("1234.50", "-1234.50", { allowNegative: true })).toEqual({
+      accepted: true,
+      value: "1234.50",
+    });
   });
 
   it("marks malformed input as rejected without silently repairing it", () => {

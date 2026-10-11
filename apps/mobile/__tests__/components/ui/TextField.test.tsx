@@ -225,7 +225,11 @@ describe("T007 TextField required names and feedback", () => {
       const expectedName = label + separator + requiredText;
       const input: unknown = screen.getByTestId("localized-required-text");
       expect(input).toHaveProp("accessibilityLabel", expectedName);
-      expect((getTestInstanceProps(input).accessibilityLabel as string).split(requiredText)).toHaveLength(2);
+      expect(
+        (getTestInstanceProps(input).accessibilityLabel as string).split(
+          requiredText
+        )
+      ).toHaveLength(2);
       expect(input).not.toHaveProp("accessibilityHint", requiredText);
       expect(screen.getByText(label + " *")).toBeOnTheScreen();
     }
@@ -398,8 +402,9 @@ describe("T007 TextField required names and feedback", () => {
     const initialClass = getTestInstanceProps(input).className as string;
 
     fireEvent(input, "focus", {});
-    expect(getTestInstanceProps(screen.getByTestId("error-focus")).className)
-      .toBe(initialClass);
+    expect(
+      getTestInstanceProps(screen.getByTestId("error-focus")).className
+    ).toBe(initialClass);
     expect(screen.getByText("Incorrect amount")).toBeOnTheScreen();
 
     rerender(
@@ -416,9 +421,19 @@ describe("T007 TextField required names and feedback", () => {
 });
 describe("T007 Q2/Q5 required qualifier boundaries and feedback fallback", () => {
   it.each([
-    ["en", "Amount", "Required field help", "Required field help, Required field"],
+    [
+      "en",
+      "Amount",
+      "Required field help",
+      "Required field help, Required field",
+    ],
     ["en", "Amount", "UnRequired field", "UnRequired field, Required field"],
-    ["ar", "الرصيد", "معلومات حقل مطلوب إضافية", "معلومات حقل مطلوب إضافية، حقل مطلوب"],
+    [
+      "ar",
+      "الرصيد",
+      "معلومات حقل مطلوب إضافية",
+      "معلومات حقل مطلوب إضافية، حقل مطلوب",
+    ],
   ] as const)(
     "does not mistake a partial/ordinary required phrase for a complete qualifier in %s",
     async (locale, label, override, expectedName) => {

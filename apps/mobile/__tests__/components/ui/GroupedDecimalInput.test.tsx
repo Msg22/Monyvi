@@ -402,8 +402,12 @@ describe("T007 grouped numeric opt-in and raw display", () => {
 
     const input: unknown = screen.getByTestId("legacy-weight-shape");
     expect(input).toHaveDisplayValue("1,250.755");
-    expect(getTestInstanceProps(input).className as string).toContain("rounded-lg");
-    expect(getTestInstanceProps(input).className as string).toContain("min-h-11");
+    expect(getTestInstanceProps(input).className as string).toContain(
+      "rounded-lg"
+    );
+    expect(getTestInstanceProps(input).className as string).toContain(
+      "min-h-11"
+    );
   });
 
   it("uses the existing default field surface only when explicitly opted in", () => {
@@ -419,7 +423,9 @@ describe("T007 grouped numeric opt-in and raw display", () => {
 
     const input: unknown = screen.getByTestId("default-grouped-input");
     expect(input).toHaveDisplayValue("12,345.678");
-    expect(getTestInstanceProps(input).className as string).toContain("rounded-2xl");
+    expect(getTestInstanceProps(input).className as string).toContain(
+      "rounded-2xl"
+    );
     expect(getTestInstanceProps(input).className as string).toContain("p-4");
   });
 
@@ -507,7 +513,9 @@ describe("T007 grouped numeric opt-in and raw display", () => {
     for (const entry of ["-", "-1", "-12.", "-12.30", "-12.3000"]) {
       fireEvent.changeText(screen.getByTestId("signed-intermediate"), entry);
       expect(onCanonicalChange).toHaveBeenLastCalledWith(entry);
-      expect(screen.getByTestId("signed-intermediate")).toHaveDisplayValue(entry);
+      expect(screen.getByTestId("signed-intermediate")).toHaveDisplayValue(
+        entry
+      );
     }
   });
 
@@ -623,7 +631,9 @@ describe("T007 grouped numeric opt-in and raw display", () => {
     expect(input).toHaveProp("inputMode", "none");
     expect(input).toHaveProp("showSoftInputOnFocus", false);
     expect(input).toHaveProp("keyboardType", "numbers-and-punctuation");
-    expect(getTestInstanceProps(input).className as string).toContain("text-lg");
+    expect(getTestInstanceProps(input).className as string).toContain(
+      "text-lg"
+    );
     expect(input).toHaveStyle({ fontFamily: "Inter_500Medium" });
     expect(screen.getByTestId("signed-unit")).toBeOnTheScreen();
     expect(inputRef.current).not.toBeNull();
@@ -670,8 +680,9 @@ describe("T007 grouped numeric opt-in and raw display", () => {
     const input: unknown = screen.getByTestId("numeric-error");
     fireEvent(input, "focus", {});
     expect(input).toHaveDisplayValue("abc12345");
-    expect(screen.getByRole("alert", { name: "Enter a valid amount" }))
-      .toBeOnTheScreen();
+    expect(
+      screen.getByRole("alert", { name: "Enter a valid amount" })
+    ).toBeOnTheScreen();
     expect(screen.queryByText("Advisory only")).toBeNull();
     expect(screen.queryByText("Secondary help")).toBeNull();
   });
@@ -735,8 +746,9 @@ describe("T007 Q3/Q4 unsigned and controlled draft preservation", () => {
 
     fireEvent.changeText(field(), "abc12345");
     expect(observedChanges).toEqual(["abc12345"]);
-    expect(screen.getByTestId("grouped-current-canonical"))
-      .toHaveTextContent("abc12345");
+    expect(screen.getByTestId("grouped-current-canonical")).toHaveTextContent(
+      "abc12345"
+    );
     expect(field()).toHaveDisplayValue("abc12345");
 
     // Same canonical value, unrelated parent render: do not discard the draft.
@@ -765,8 +777,9 @@ describe("T007 Q3/Q4 unsigned and controlled draft preservation", () => {
     fireEvent(field(), "blur", {});
     fireEvent(field(), "focus", {});
     expect(field()).toHaveDisplayValue("12,945.678");
-    expect(screen.getByTestId("grouped-current-canonical"))
-      .toHaveTextContent("12945.678");
+    expect(screen.getByTestId("grouped-current-canonical")).toHaveTextContent(
+      "12945.678"
+    );
     expect(observedChanges).toEqual([
       "abc12345",
       "12,34",

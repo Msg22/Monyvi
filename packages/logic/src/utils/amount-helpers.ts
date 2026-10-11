@@ -10,11 +10,9 @@ export const MAX_TRANSACTION_AMOUNT = 1_000_000_000;
 export const MAX_BUDGET_AMOUNT = 999_999_999.99;
 
 const COMPLETE_UNGROUPED_AMOUNT_PATTERN = /^(?:\d+(?:\.\d+)?|\.\d+)$/;
-const COMPLETE_GROUPED_AMOUNT_PATTERN =
-  /^\d{1,3}(?:,\d{3})+(?:\.\d+)?$/;
+const COMPLETE_GROUPED_AMOUNT_PATTERN = /^\d{1,3}(?:,\d{3})+(?:\.\d+)?$/;
 const INTERMEDIATE_UNGROUPED_AMOUNT_PATTERN = /^(?:\d*(?:\.\d*)?|\.\d*)$/;
-const INTERMEDIATE_GROUPED_AMOUNT_PATTERN =
-  /^\d{1,3}(?:,\d{3})+(?:\.\d*)?$/;
+const INTERMEDIATE_GROUPED_AMOUNT_PATTERN = /^\d{1,3}(?:,\d{3})+(?:\.\d*)?$/;
 const NEGATIVE_AMOUNT_PATTERN = /^-(?:\d+(?:\.\d+)?|\.\d+)$/;
 const STRICT_BUDGET_AMOUNT_PATTERN = /^(?:\d+(?:\.\d{1,2})?|\.\d{1,2})$/;
 const ARABIC_INDIC_DIGITS = "٠١٢٣٤٥٦٧٨٩";
@@ -290,7 +288,10 @@ export function resolveEditableAmountInputChange(
     return { accepted: true, value: text.replace(/,/g, "") };
   }
 
-  if (previousValue.length > 0 && !isEditableAmountIntermediate(previousValue, true)) {
+  if (
+    previousValue.length > 0 &&
+    !isEditableAmountIntermediate(previousValue, true)
+  ) {
     return { accepted: false, value: text };
   }
 
