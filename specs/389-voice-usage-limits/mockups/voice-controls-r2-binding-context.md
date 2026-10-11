@@ -1,15 +1,15 @@
 # Voice controls R2 — scoped binding context (accepted exact revision 2026-10-11)
 
-**Feature:** #347 / `389-voice-usage-limits`  
-**Source audited:** `0e7ee55abf6fb18af37e29e4f2e48ba45604a31e`  
-**Planning branch:** `codex/issue347-voice-controls-r2`  
+**Feature:** #347 / `389-voice-usage-limits`<br>
+**Source audited:** `0e7ee55abf6fb18af37e29e4f2e48ba45604a31e`<br>
+**Planning branch:** `codex/issue347-voice-controls-r2`<br>
 **Approved PNG:** `voice-controls-r2-green-gray-proposal.png`, published in
 image-only commit `b00b7ae07a7f75008f21ff2c9f8680f735153901`, Git blob
-`caceb8d1cade9e4e9c574e95fc0e603a39e766de`  
+`caceb8d1cade9e4e9c574e95fc0e603a39e766de`<br>
 **Verified image:**
 `sha256:3c1d098090cfac539c834634f2dfb1db29dc75b8afc9f479d61d17af09680281`;
 **1832 × 858 pixels**, **1470108 bytes** (local executor verified exact bytes
-and matching Git blob)  
+and matching Git blob)<br>
 **Owner concept approval:** “latest mockups approved” (green/gray/red); root
 faithful review accepts AR `إرسال` and `التسجيل مكتمل`. The exact corrected
 sidecar metadata was accepted on 2026-10-11 under delegated root authority
