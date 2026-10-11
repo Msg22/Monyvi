@@ -80,10 +80,19 @@ jest.mock("@/components/metals/MetalHoldingDetailScreen", () => {
   };
 });
 
-it("keeps Dispose and Delete as body actions while Edit remains the header action", () => {
+it("keeps Sell, Dispose, and Delete as body actions while Edit remains the header action", () => {
   render(<MetalHoldingDetailRoute />);
 
   expect(mockCapturedActions).toEqual([
+    {
+      id: "sell",
+      labelKey: "actions.sell",
+      tone: "primary",
+      href: {
+        pathname: "/(private)/metals/[holdingId]/sell",
+        params: { holdingId: "holding-123" },
+      },
+    },
     {
       id: "dispose",
       labelKey: "actions.dispose",
@@ -103,9 +112,7 @@ it("keeps Dispose and Delete as body actions while Edit remains the header actio
       },
     },
   ]);
-  expect(mockCapturedActions.some((action) => action.id === "sell")).toBe(
-    false
-  );
+  expect(mockCapturedActions.some((action) => action.id === "sell")).toBe(true);
   expect(mockCapturedActions.some((action) => action.id === "undo")).toBe(
     false
   );

@@ -114,6 +114,7 @@ describe("Detail No Longer production wiring", () => {
   it("exposes Dispose beside Delete for an effective active holding and preserves Edit", (): void => {
     render(<MetalHoldingDetailRoute />);
     expect(mockCapturedActions.map((action) => action.id)).toEqual([
+      "sell",
       "dispose",
       "delete",
     ]);

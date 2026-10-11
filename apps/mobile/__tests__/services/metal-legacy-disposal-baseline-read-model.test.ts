@@ -413,6 +413,33 @@ describe("legacy disposal baseline read model (issue #338)", () => {
     expect(buildMetalDetailReadModel(invalid)).toBeNull();
   });
 
+  it("requires original Dispose proof to satisfy the command calendar-day bound", (): void => {
+    const input = legacyActiveAfterUndoDetailInput();
+    const original = baselineSource(input);
+    expect(
+      resolveLegacyDisposalBaseline({
+        ...original,
+        latestAllowedCalendarDate: "2026-08-22",
+      })
+    ).toBeNull();
+    expect(
+      resolveLegacyDisposalBaseline({
+        ...original,
+        latestAllowedCalendarDate: "2026-08-23",
+      })
+    ).toEqual({
+      terminalEventId: "018f0c7a-1234-7abc-8def-000000000005",
+    });
+    expect(
+      resolveLegacyDisposalBaseline({
+        ...original,
+        latestAllowedCalendarDate: "2026-10-11",
+      })
+    ).toEqual({
+      terminalEventId: "018f0c7a-1234-7abc-8def-000000000005",
+    });
+  });
+
   it("supports raw owned persistence snapshots for restored legacy command eligibility", (): void => {
     const input = legacyActiveAfterUndoDetailInput();
     expect(

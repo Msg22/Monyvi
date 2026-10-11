@@ -108,8 +108,10 @@ profit/loss."
   failure/retry and missing-pair behavior unchanged. This exception supersedes
   the No Longer portions of the older FR-075 screen-disclosure wording, the
   Sell/No Longer state-matrix acknowledgment entry, and SC-006 acknowledgment
-  requirement only; Add, material correction, and Sell retain their approved
-  trust/acknowledgment behavior.
+  requirement only; Add and material correction retain their approved
+  trust/acknowledgment behavior, while current same-currency Sell requires no
+  rate acknowledgment because proceeds are locked to the holding's trusted
+  purchase currency.
 - The No Longer header is `No longer owned` in English and `لم يعد لدي` in
   Arabic, without the holding name.
 
@@ -423,55 +425,54 @@ dynamic direct-save behavior, atomic commit, locked-metal, and recovery paths.
 
 ### User Story 5 - Sell a Whole Holding (Priority: P1)
 
-As a user, I want to record selling an entire holding, including fees and
-optional account credit, so ownership, proceeds, and realized performance remain
-accurate without treating principal as ordinary income.
+As a user, I want to record selling an entire active holding in its purchase
+currency, including optional fees, so ownership, net proceeds, and realized
+performance remain accurate without crediting an account or treating principal
+as ordinary income.
 
 **Why this priority**: A portfolio that cannot record an exit cannot provide
 truthful current ownership or lifetime performance.
 
-**Independent Test**: Sell a complete holding with and without fees and
-same-currency account credit, online and offline, then verify active totals,
-history, attribution, account balance, analytics exclusion, and atomic failure
-behavior.
+**Independent Test**: Sell a complete active holding with and without fees in
+its trusted purchase currency, online and offline, then verify active totals,
+history, attribution, no account balance effect, and atomic failure behavior.
 
 **Acceptance Scenarios**:
 
 1. **Given** an active holding, **When** the user chooses Sell, **Then** the
-   flow makes clear that V1 sells the whole holding and does not offer a partial
-   weight.
-2. **Given** the user enters sale date, sale amount, sale currency, optional
-   fees, notes, and optional account credit, **When** any of those facts
-   changes, **Then** the editable sale form updates its live `What will happen`
-   summary with net proceeds, realized profit/loss, Sold status, exact account
-   effect or no-account effect, exclusion from ordinary/budget income and earned
-   cashflow, and the History entry; fees use sale currency without a separate
-   currency choice.
-3. **Given** an optional fee is entered, **When** realized performance is
-   calculated, **Then** the fee is shown separately and deducted from realized
-   performance.
+   flow makes clear that V1 sells the whole ACTIVE holding and does not offer a
+   partial weight.
+2. **Given** the user enters sale date, sale amount (gross proceeds), optional
+   fees, and optional notes, **When** any of those facts changes, **Then** the
+   editable sale form updates its live `What will happen` summary with net
+   proceeds, realized profit/loss, Sold status, removal from active metals, and
+   the History entry; the sale currency is locked to the holding's trusted
+   `purchaseCurrency` with no cross-currency selection, and no account credit is
+   applied.
+3. **Given** an optional fee is entered, **When** net proceeds and realized
+   performance are calculated, **Then** the fee uses the holding's purchase
+   currency, is shown separately, and is deducted from gross proceeds.
 4. **Given** trustworthy acquisition and sale references exist, **When**
    attribution is expanded, **Then** metal movement, currency movement, purchase
    premium/cost, difference between actual sale price and reference value, and
    fees reconcile to authoritative realized P/L under the approved
-   normal-display-precision rounding contract.
-5. **Given** a matching eligible default account exists, **When** the sale
-   currency is selected, **Then** account credit is enabled and that account is
-   preselected; the user can disable credit or choose another matching eligible
-   account.
-6. **Given** only accounts in another currency are available, **When** the user
-   considers account credit, **Then** V1 does not perform an automatic
-   conversion, clears any mismatched selection after a currency change, and
-   allows the sale to be recorded without an account credit.
+   normal-display-precision rounding contract (with FR-050 and FR-051 remaining
+   unchanged).
+5. **Given** the sale is in the holding's trusted `purchaseCurrency`, **When**
+   the form is displayed, **Then** no exchange-rate risk exists and no rate
+   acknowledgment is required.
+6. **Given** the sale is recorded, **When** `Record sale` commits, **Then** it
+   creates no account credit and has no effect on account balances.
 7. **Given** the sale succeeds locally while offline, **When** the user returns
    to Metals, **Then** the holding is Sold, no longer contributes active value,
    and remains in permanent history.
-8. **Given** any part of the sale or linked account credit cannot be completed
-   safely, **When** confirmation fails, **Then** neither the terminal transition
-   nor the account balance effect is partially applied.
-9. **Given** issue #242 is not merged and verified, **When** the user records a
-   sale, **Then** optional account credit is unavailable while the sale remains
-   recordable without it.
+8. **Given** any part of the sale cannot be completed safely, **When** commit
+   fails, **Then** the terminal transition is not applied and no partial
+   financial state remains.
+9. **Given** issue #242 is an independent prerequisite for future account-credit
+   features, **When** the current Sell journey is used, **Then** it operates
+   strictly without account credit while preserving historical read and reversal
+   compatibility for any legacy credited sales.
 
 ---
 
@@ -911,40 +912,44 @@ explicit outcome, retained facts, and one resulting action.
 
 - **FR-025**: Sell and Dispose MUST apply to the whole active holding in V1;
   partial weights and partial ownership MUST NOT be offered.
-- **FR-026**: Sell MUST provide one editable sale form requiring a non-future
-  date that is not before acquisition, positive sale amount, and sale currency,
-  while allowing optional fees, notes, and account credit. It MUST show a live
-  `What will happen` summary when sale amount, currency, fee, or account choice
-  changes.
-- **FR-027**: Sale fees MUST use the proceeds currency with no separate
-  fee-currency choice, be non-negative and no greater than gross proceeds, be
-  displayed separately, and be deducted to produce net proceeds and realized
-  P/L.
-- **FR-028**: The live sale summary immediately above `Record sale` MUST show
-  net proceeds, realized profit/loss, Sold status, exact selected-account
-  net-credit effect or no account change, exclusion from ordinary income, budget
-  income, and earned cashflow, and History effect. It is the complete pre-action
-  consequence disclosure. After validation and required acknowledgments,
-  `Record sale` MUST commit directly with no confirmation sheet, review route,
-  or second confirmation.
+- **FR-026**: Sell MUST apply to the whole ACTIVE holding only, sold in its
+  trusted `purchaseCurrency` ONLY (same currency; the user cannot choose a
+  cross-currency). It MUST provide one editable sale form requiring a non-future
+  date that is not before acquisition, positive gross proceeds in the holding's
+  `purchaseCurrency`, same-currency optional fees, and optional notes. Sell
+  creates no account credit (no account balance side-effect). It MUST show a
+  live `What will happen` summary updating with net proceeds, realized
+  profit/loss (or unavailable if purchase cost was not recorded), Sold status,
+  removal from active metals, and History effect.
+- **FR-027**: Sale fees MUST use the proceeds currency (locked to the holding's
+  `purchaseCurrency`) with no separate fee-currency choice, be non-negative and
+  no greater than gross proceeds, be displayed separately, and be deducted from
+  gross proceeds to produce net proceeds.
+- **FR-028**: Canonical realized profit or loss for a current same-currency sale
+  MUST equal exact net same-currency proceeds minus paid purchase cost
+  (`netProceeds - purchaseCost`); if purchase cost is missing or unrecorded,
+  realized profit or loss is unavailable. The live sale summary immediately
+  above `Record sale` MUST show net proceeds, realized profit/loss (or
+  unavailable), Sold status, removal from active metals, and History effect; no
+  account credit is offered or applied. No rate acknowledgment is required for a
+  current same-currency sale. After validation, `Record sale` MUST commit
+  directly with no confirmation sheet, review route, or second confirmation.
 - **FR-029**: A completed sale MUST remove the holding from active value and
   unrealized P/L, add it to permanent Sold history, and include it in lifetime
   realized sale P/L when trustworthy.
-- **FR-030**: The `Receive money in` account credit is optional and may credit
-  exact net sale proceeds only to an account whose currency matches sale
-  currency. When an active eligible matching default account exists, it MUST be
-  preselected with credit enabled; mismatched defaults MUST never be selected or
-  auto-converted. Changing sale currency MUST revalidate and clear a mismatched
-  selection and MAY preselect the eligible matching default. Sale account
-  credit, Undo of a credited sale, and account compensation or replacement
-  credit MUST remain disabled until issue #242 satisfies its revision/CAS,
-  writer-guard, sync, cutover, and regression contract. Sale without credit and
-  Undo of a sale that created no account effect MUST remain available.
-- **FR-031**: An account credit MUST be linked to the sale, classified as
-  asset-sale proceeds, and excluded from ordinary income, budget-income, and
-  earned-cashflow analytics while still increasing the selected account balance.
-- **FR-032**: Cross-currency automatic account credit MUST NOT be offered in V1;
-  the sale MUST remain recordable without account credit.
+- **FR-030**: The current Sell write contract creates no account credit. Issue
+  #242 remains an independent prerequisite for any future optional sale account
+  credit; current sales operate strictly without account credit. For historical
+  read and reversal compatibility, Undo of any legacy credited sale continues to
+  reverse its linked account effect.
+- **FR-031**: When historical or future linked account credit is present, it is
+  classified as asset-sale proceeds and excluded from ordinary income,
+  budget-income, and earned-cashflow analytics while still increasing the
+  selected account balance. Current same-currency sales create no account
+  records.
+- **FR-032**: Cross-currency sale and automatic cross-currency account credit
+  MUST NOT be offered in V1; the sale is locked to the holding's trusted
+  `purchaseCurrency` only.
 - **FR-033**: No Longer MUST provide exactly `Lost or stolen`,
   `Destroyed or damaged`, `Given away`, `Donated`, and `Other`, with optional
   notes and valid date. Known loss/stolen/destroyed/damaged reasons auto-map to
@@ -1020,7 +1025,9 @@ explicit outcome, retained facts, and one resulting action.
 - **FR-048**: Trustworthy unrealized P/L MUST compare current market value with
   the total purchase price actually paid.
 - **FR-049**: Trustworthy realized sale P/L MUST compare net sale proceeds after
-  fees with the total purchase price actually paid.
+  fees with the total purchase price actually paid in the same currency
+  (`netProceeds - purchaseCost`); if purchase cost is missing or unrecorded,
+  realized P/L is unavailable.
 - **FR-050**: The holding's purchase currency `P` MUST be the canonical
   calculation and reporting basis. With acquisition time `a`, current or
   terminal valuation time `v`, and all-in purchase cost `K`: acquisition
@@ -1342,9 +1349,10 @@ explicit outcome, retained facts, and one resulting action.
   fields of this holding, not a separate purchase entity or journey.
 - **Lifecycle Event**: A permanent dated record of creation, material
   correction, sale, disposal, or reversal associated with one holding.
-- **Sale Event**: A whole-holding exit with gross proceeds, currency, optional
-  fee and notes, net proceeds, optional same-currency account credit, and
-  realized-performance evidence.
+- **Sale Event**: A whole-holding exit in its trusted purchase currency only,
+  with gross proceeds, same-currency optional fee and notes, net proceeds, no
+  account credit, and realized-performance evidence (exact net proceeds minus
+  purchase cost; unavailable if cost missing).
 - **Disposal Event**: A whole-holding non-sale exit categorized as Lost or
   stolen, Destroyed or damaged, Given away, Donated, or Other, with optional
   notes and a required Write-off or External transfer meaning; Other requires
@@ -1383,8 +1391,9 @@ explicit outcome, retained facts, and one resulting action.
   minor units of the authoritative combined result solely because of rounding,
   which requires a visible understandable explanation and no hidden balancing
   component.
-- **Asset-Sale Proceeds Credit**: An optional same-currency account increase
-  linked to a sale and excluded from ordinary-income analytics.
+- **Asset-Sale Proceeds Credit**: A same-currency account increase linked to a
+  historical or future credited sale under #242, excluded from ordinary-income
+  analytics. The current Sell write contract creates no account credit.
 
 ### Scope Boundaries
 

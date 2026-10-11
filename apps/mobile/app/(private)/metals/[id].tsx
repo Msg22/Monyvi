@@ -2,6 +2,7 @@ import { getHoldingDetailTitleKey } from "@/components/metals/holding-detail-pre
 import { MetalHoldingDetailScreen } from "@/components/metals/MetalHoldingDetailScreen";
 import { createDeleteHoldingActionDescriptor } from "@/components/metals/holding-actions/delete-action";
 import { createDisposeHoldingActionDescriptor } from "@/components/metals/holding-actions/dispose-action";
+import { createSellHoldingActionDescriptor } from "@/components/metals/holding-actions/sell-action";
 import {
   getHoldingActionDescriptors,
   type HoldingActionDescriptor,
@@ -113,10 +114,12 @@ export default function MetalHoldingDetailRoute(): React.JSX.Element {
         ? [undo]
         : [];
     }
+    const hasSell = available.some((action) => action.id === "sell");
     const hasDispose = available.some((action) => action.id === "dispose");
     const hasDelete = available.some((action) => action.id === "delete");
-    if (!hasDispose || !hasDelete) return [];
+    if (!hasSell || !hasDispose || !hasDelete) return [];
     return [
+      createSellHoldingActionDescriptor(holdingId),
       createDisposeHoldingActionDescriptor(holdingId),
       createDeleteHoldingActionDescriptor(holdingId),
     ];
@@ -142,6 +145,10 @@ export default function MetalHoldingDetailRoute(): React.JSX.Element {
             context: restoreContext.context,
           });
         }
+        return;
+      }
+      if (action === "sell") {
+        router.push(createSellHoldingActionDescriptor(holdingId).href);
         return;
       }
       if (action === "dispose") {

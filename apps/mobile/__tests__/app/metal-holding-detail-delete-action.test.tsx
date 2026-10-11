@@ -107,12 +107,21 @@ describe("metal holding detail implemented action composition", () => {
     capturedOnAction = undefined;
   });
 
-  it("exposes only the implemented Dispose and Delete actions for an eligible active holding", () => {
+  it("exposes only the implemented Sell, Dispose, and Delete actions for an eligible active holding", () => {
     mockModel = activeModel();
 
     render(<MetalHoldingDetailRoute />);
 
     expect(capturedActions).toEqual([
+      {
+        id: "sell",
+        labelKey: "actions.sell",
+        tone: "primary",
+        href: {
+          pathname: "/(private)/metals/[holdingId]/sell",
+          params: { holdingId: "holding-1" },
+        },
+      },
       {
         id: "dispose",
         labelKey: "actions.dispose",
@@ -132,9 +141,9 @@ describe("metal holding detail implemented action composition", () => {
         },
       },
     ]);
+    expect(screen.getByTestId("detail-action-sell")).toBeTruthy();
     expect(screen.getByTestId("detail-action-dispose")).toBeTruthy();
     expect(screen.getByTestId("detail-action-delete")).toBeTruthy();
-    expect(screen.queryByTestId("detail-action-sell")).toBeNull();
     expect(screen.queryByTestId("detail-action-edit")).toBeNull();
     expect(screen.queryByTestId("detail-action-undo")).toBeNull();
   });

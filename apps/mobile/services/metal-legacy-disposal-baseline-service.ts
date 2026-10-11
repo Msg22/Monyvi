@@ -109,6 +109,7 @@ export interface ResolveLegacyDisposalBaselineInput {
   readonly terminalFacts: MetalTerminalFacts | null;
   readonly revisionEvidence: readonly LegacyDisposalRevisionEvidence[] | null;
   readonly actionEvidence?: readonly LegacyDisposalActionEvidence[] | null;
+  readonly latestAllowedCalendarDate?: string;
 }
 
 export function toLegacyDisposalRevisionEvidence(
@@ -148,6 +149,7 @@ function hasOwnedOriginalDisposalProof(
     group,
     holdingId: input.assetId,
     userId: input.userId,
+    latestAllowedCalendarDate: input.latestAllowedCalendarDate,
   });
   if (!proof.available) return false;
   const payload = proof.envelope.payload;
