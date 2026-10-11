@@ -5,6 +5,7 @@ import { Pressable, Text, TextInput } from "react-native";
 import { I18nextProvider, initReactI18next } from "react-i18next";
 
 import { TextField } from "@/components/ui/TextField";
+import { getTestInstanceProps } from "../../test-utils/test-instance-props";
 import arCommon from "@/locales/ar/common.json";
 import enCommon from "@/locales/en/common.json";
 
@@ -224,7 +225,7 @@ describe("T007 TextField required names and feedback", () => {
       const expectedName = label + separator + requiredText;
       const input = screen.getByTestId("localized-required-text");
       expect(input).toHaveProp("accessibilityLabel", expectedName);
-      expect((input.props.accessibilityLabel as string).split(requiredText)).toHaveLength(2);
+      expect((getTestInstanceProps(input).accessibilityLabel as string).split(requiredText)).toHaveLength(2);
       expect(input).not.toHaveProp("accessibilityHint", requiredText);
       expect(screen.getByText(label + " *")).toBeOnTheScreen();
     }
@@ -394,10 +395,11 @@ describe("T007 TextField required names and feedback", () => {
       />
     );
     const input = screen.getByTestId("error-focus");
-    const initialClass = input.props.className as string;
+    const initialClass = getTestInstanceProps(input).className as string;
 
     fireEvent(input, "focus", {});
-    expect(screen.getByTestId("error-focus").props.className).toBe(initialClass);
+    expect(getTestInstanceProps(screen.getByTestId("error-focus")).className)
+      .toBe(initialClass);
     expect(screen.getByText("Incorrect amount")).toBeOnTheScreen();
 
     rerender(
