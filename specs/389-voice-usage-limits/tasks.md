@@ -1129,3 +1129,65 @@ matrix does not add an extra approval gate or claim any executed tests, device
 checks, audio, live provider, hosted quota or rendered evidence. #384 stays
 separately deferred. No new commercial entitlement/SQL/migration/sync/finance
 work is authorized.
+
+
+## Owner-approved Voice controls R2 continuation — append-only (11 October 2026)
+
+The owner approved the revised
+`mockups/voice-controls-r2-green-gray-proposal.png` (“latest mockups
+approved”), published at `b00b7ae07a7f75008f21ff2c9f8680f735153901`
+(blob `caceb8d1cade9e4e9c574e95fc0e603a39e766de`). These tasks append to
+T001–T066; nothing is regenerated. The new sidecar remains DRAFT pending root
+review/fingerprints, so production remains blocked.
+
+- [x] **T067 [P] [US0] R2 planning reconciliation package:** append FR-043–
+      FR-047 and SC-019–SC-022; document scoped precedence, source conflicts,
+      30-second client-only cap, server-enforcement/issue-391 honesty, latency
+      dependency and manual evidence boundaries. Create the DRAFT R2 binding
+      sidecar/context/manifest plus analysis, coverage and manual-plan files.
+      No tests or implementation are executed by this planning task.
+- [ ] **T068 [US0] R2 binding metadata/root approval gate:** root computes the
+      exact PNG SHA-256 from the published bytes, verifies/reviews the exact
+      Binding Facts, computes official metadata/combined revisions, records the
+      approval tuple without altering old R1/original binding bytes, and runs
+      applicable binding verification. Owner image approval is already recorded;
+      do not fabricate metadata approval.
+- [ ] **T069 [P] [US0] R2 deterministic Red + E2E authorship:** extend existing
+      recorder/flow/presentation/i18n tests for fixed controls, semantic colors,
+      30-second active-time cap, paused-time exclusion, elapsed/max timer,
+      auto-stop retaining audio with zero automatic parse/provider call,
+      cap/action/cancel/unmount/account races, halo removal and preserved
+      recording waves/daily-unavailable artwork. Author only honestly
+      controllable Maestro journeys; mark native/OS/provider/visual journeys
+      manual-only. Preserve existing Manual, R1 identity/consent/quota positive
+      controls.
+- [ ] **T070 [US0] Recorder/flow 30-second implementation after accepted Red:**
+      implement the named 30-second local active-capture cap in the existing
+      recorder lifecycle, retain finalized audio at cap, and make cap/explicit
+      Submit/Discard/cancel/unmount/account-change races idempotent. Do not
+      auto-submit at the cap; do not weaken consent, authoritative availability,
+      request identity or same-key retained retry.
+- [ ] **T071 [US0] R2 presentation implementation after accepted Red:** implement
+      fixed physical Submit/Pause-or-Resume/Discard positions and
+      green/gray/red registered-token treatments, elapsed/max timer and removal
+      of ordinary static filled halos while keeping recording waves. Preserve
+      prior daily-limit/unavailable artwork, responsive/RTL semantics and ≥48 dp
+      targets. Use the binding-approved AR Submit label.
+- [ ] **T072 [P] [US0] Regression integration gate:** run focused then combined
+      unit/integration, full mobile TypeScript, changed-file lint/i18n and
+      governed hooks at bounded checkpoints. Include Manual regression, R1
+      Starting/permission/retry/dismissal, recorder start/pause/resume/failure,
+      identity-safe retry and quota/consent positive controls. No source writer
+      self-approves.
+- [ ] **T073 [US0] Independent review/semantic gate:** root runs the canonical
+      read-only `speckit.analyze` prerequisite/semantic gate and independent
+      TypeScript → behavior/cancellation/account isolation → style/binding →
+      QA/security-as-needed review against the exact published source/test SHA.
+      Resolve valid findings before handoff.
+- [ ] **T074 [US0] Owner-only native/render/a11y evidence:** execute actual
+      device/native audio and OS permission journeys, cap/pause/resume/Submit/
+      Discard races, cold restart/account changes, EN/AR light/dark,
+      320×640/390×844/768×1024/844×390, font scales 1.35/2, reduced motion and
+      separate screen-reader/accessibility-tree proof. Maestro/device/provider
+      execution is NOT performed by this planning worker. Server duration and
+      empty/speechless handling remain issue #391, not proof from this task.

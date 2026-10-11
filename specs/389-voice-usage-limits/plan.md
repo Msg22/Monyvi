@@ -875,3 +875,75 @@ implementation occurs in this command.
 ## Complexity Tracking
 
 No constitutional violations require justification.
+
+
+## Voice controls R2 — DRAFT implementation plan (owner image approved; binding metadata pending)
+
+### Source reconciliation at `0e7ee55abf6fb18af37e29e4f2e48ba45604a31e`
+
+- `useVoiceRecorder.ts` currently declares a 60-second local cap and auto-stop.
+  It already accumulates only active recording time because Pause stops the
+  timer and Resume restarts it; R2 changes the approved cap to 30 seconds while
+  preserving the no-auto-submit intent.
+- `VoiceTransactionEntry.tsx` currently labels explicit submission as Stop and
+  changes control order while paused. R2 replaces that presentation with fixed
+  Submit / Pause-or-Resume / Discard physical positions.
+- Current ordinary Voice composition still includes static filled halo circles
+  around the mic; R2 removes those backgrounds from idle/Starting/recording/
+  paused only and retains R1 recording waves.
+- Current timer presentation is elapsed-only. R2 requires
+  `mm:ss / 00:30`.
+- Start latency has concrete source candidates (route-level permission refresh
+  plus flow-level permission refresh, and availability refreshes tied to
+  focus/start), but no native timing was measured. A separate Voice UI
+  read-only latency addendum owns the optimization analysis. This R2 plan does
+  not delete gates or promise a latency number.
+- Issue #391 independently owns empty/speechless-audio and authoritative server
+  duration research. No server/API/migration task is created by this R2 plan.
+
+### Intended mobile boundaries after binding approval and accepted Red
+
+1. **Presentation:** update the existing Voice recording/paused/completed
+   presentation only as required by the approved R2 binding. Reuse current
+   NativeWind tokens, `ActionButton`, responsive helpers, locale fonts and
+   accessibility patterns. Do not change Manual or quota surfaces.
+2. **Recorder lifecycle:** replace the local 60-second constant with one named
+   30-second constant and keep active-time accounting pause-aware. Auto-stop
+   must expose a finalized retained-audio state without calling the submission
+   path.
+3. **Flow orchestration:** keep request-key creation, consent, authoritative
+   availability, retained same-key retry and actor scoping unchanged. Explicit
+   Submit is the only new user-facing label/trigger entering the existing
+   submit path; cap auto-stop never invokes it.
+4. **Race safety:** prove one native stop/finalize under cap vs Submit/Discard,
+   no resume after cap, no late timer/cap callback after cancel/unmount/account
+   switch, and no provider start before explicit Submit.
+5. **Copy/i18n:** EN labels are Submit / Pause / Resume / Discard. Existing AR
+   Pause/Resume/Discard strings remain `إيقاف مؤقت` / `متابعة` / `تجاهل`.
+   Draft binding proposes `إرسال` for Submit and requires root binding review
+   before implementation. Timer remains the owner-specified slash-separated
+   clock form.
+6. **Responsive/RTL:** keep centralized compact/reflow rules. The control row is
+   a stable physical action row: Submit left, Pause/Resume center, Discard right
+   in both locales; Arabic text/labels remain RTL/localized, but action meaning
+   is not mirrored or swapped.
+
+### TDD and evidence gate
+
+- Author deterministic unit/integration Red for R2 before changing production.
+- Batch Red/Green at meaningful integration checkpoints; do not churn checks
+  per file.
+- Maestro flows may be authored for controllable journeys, but this remote
+  planning lane runs no E2E/device/emulator.
+- Native audio, OS permission, exact motion, visual comparison, accessibility
+  tree, cold restart and live-provider/server duration behavior remain manual
+  owner evidence unless a deterministic harness is separately proven.
+- Binding implementation stays blocked until root accepts the exact DRAFT R2
+  sidecar/revisions. The owner-approved PNG alone does not approve invented
+  binding facts.
+
+### No-scope boundaries
+
+No SQL, migration, OpenAPI, hosted provider, quota-accounting, #384, Manual,
+financial or subscription changes. No claim that client duration metadata
+authoritatively prevents >30-second server input.

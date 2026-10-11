@@ -1,0 +1,36 @@
+{
+  "status": "owner-image-approved-binding-metadata-draft",
+  "revision": "2026-10-11-voice-controls-r2",
+  "base": "0e7ee55abf6fb18af37e29e4f2e48ba45604a31e",
+  "imageCommit": "b00b7ae07a7f75008f21ff2c9f8680f735153901",
+  "images": [
+    {
+      "name": "voice-controls-r2-green-gray-proposal.png",
+      "gitBlobSha": "caceb8d1cade9e4e9c574e95fc0e603a39e766de",
+      "sha256": null,
+      "width": null,
+      "height": null,
+      "ownerApproval": "latest mockups approved"
+    }
+  ],
+  "binding": {
+    "file": "voice-controls-r2-green-gray-proposal.binding.md",
+    "status": "DRAFT",
+    "informationalBindingFactsSha256": "df43f3bf25f7ac747f85497f29373f64875e55cc13cc83ba8f5301f10cb1971c",
+    "bindingMetadataRevision": null,
+    "combinedRevision": null,
+    "approvalEvidence": "Owner approved the revised PNG; exact sidecar/fingerprint tuple awaits root review."
+  },
+  "precedence": {
+    "supersedes": [
+      "recording/paused control labels/colors/fixed physical positions",
+      "elapsed/max timer and local 30-second active-capture cap",
+      "ordinary static filled halos in idle/starting/recording/paused"
+    ],
+    "preserves": [
+      "R1 motion/permission/dismissal/retry facts outside those overrides",
+      "all five original repair bindings",
+      "Manual/quota/consent/request identity/provider contracts"
+    ]
+  }
+}

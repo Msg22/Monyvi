@@ -1007,6 +1007,32 @@ Business rules:
   the last request or burst-reset time.
 
 
+
+### Voice recording controls R2 (approved 2026-10-11)
+
+- The local Voice recorder caps **active captured audio at 30 seconds**. Time
+  spent paused does not consume the 30-second capture budget.
+- Recording/paused UI shows elapsed/max clock text such as
+  `00:12 / 00:30`; the cap reads `00:30 / 00:30`.
+- Reaching 30 seconds automatically stops/finalizes the local recording and
+  retains the audio for user choice. It does **not** automatically send audio to
+  Gemini/`parse-voice`, consume a provider-start allowance, or navigate to
+  review. The user explicitly chooses Submit or Discard.
+- The recording control layout keeps Submit physically left,
+  Pause-or-Resume center and Discard right; pausing does not swap action
+  positions. This stable physical order is preserved in Arabic while labels and
+  text remain localized/RTL.
+- Ordinary idle/Starting/recording/paused static filled mic halos are removed;
+  the approved recording waves remain. Existing daily-limit/unavailable disabled
+  artwork is unchanged.
+- This 30-second rule is a **client recording rule**, not proof of authoritative
+  server duration enforcement. Server duration validation/enforcement and
+  empty/speechless-audio handling remain separately tracked under issue #391.
+- Faster Voice startup is desired, but no duration SLA is approved or measured.
+  Auth, AI processing consent, authoritative availability and genuine native
+  microphone permission remain mandatory; the UI must not claim Listening
+  before native capture starts.
+
 ## 7. SMS Import And Live Detection
 
 SMS import has two product modes:

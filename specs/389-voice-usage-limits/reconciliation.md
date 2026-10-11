@@ -302,3 +302,61 @@ not a new retention or commercial rule. SQL tests must prove the job/batch
 configuration, per-user lock recheck, repeated backlog drainage and preservation
 of all active/current accounting. Protection lasts while identity is retained;
 reuse as new begins only after actual deletion.
+
+
+## Voice controls R2 — owner-approved image, DRAFT binding reconciliation (11 October 2026)
+
+**Published image:** `mockups/voice-controls-r2-green-gray-proposal.png` at
+`b00b7ae07a7f75008f21ff2c9f8680f735153901`, Git blob
+`caceb8d1cade9e4e9c574e95fc0e603a39e766de`.
+
+**Owner evidence:** the owner explicitly approved the revised PNG as “latest
+mockups approved”. This does **not** create an approved sidecar/fingerprint
+tuple. The new binding metadata remains DRAFT until root reviews the exact
+facts and computes/verifies the official image/metadata/combined revisions.
+
+### Scoped precedence
+
+If/when the R2 sidecar is approved, it supersedes R1 only for:
+
+1. recording/paused control label, color and fixed physical positions;
+2. elapsed/max timer and local 30-second active-capture cap;
+3. removal of ordinary static filled mic halo backgrounds in
+   idle/Starting/recording/paused while preserving recording waves.
+
+Everything else remains under R1 and the five original repaired bindings,
+including Manual, shared shell/tabs, allowance, daily/burst/unavailable,
+permission/AI consent, request identity, same-key retry, quota accounting,
+review flow, 104 dp mic geometry and owner-only visual/a11y evidence.
+
+### Concrete conflicts reconciled
+
+| Conflict | Existing source/planning at `0e7ee55…` | R2 disposition |
+| --- | --- | --- |
+| Recording duration | `useVoiceRecorder.ts` local cap is 60 s; R1 manual plan references 60 s | Owner-approved local cap is 30 s active capture; paused time excluded |
+| Stop vs Submit | Recording UI exposes `voice_action_stop` and submits from that action | Rename the explicit submission action to Submit; cap auto-stop does not submit |
+| Paused control order | Existing paused row puts Resume before Stop | Physical positions stay Submit left / Resume center / Discard right |
+| Static halos | R1 records 140/172 static halos in ordinary states | R2 removes ordinary filled halo backgrounds for idle/Starting/recording/paused; recording waves remain |
+| Timer | Current presentation formats elapsed only | R2 shows `elapsed / 00:30`; owner removed helper sentence |
+| Server duration | No authoritative 30 s server contract is evidenced | Do not claim one; issue #391 owns research/validation |
+| Faster start | Permission/availability work has possible redundant paths; no timings measured | Separate latency addendum owns optimization; preserve all gates and true native-start readiness |
+
+### Product/business invariants retained
+
+- Gemini/provider choice and parsed transaction contract unchanged.
+- Active AI processing consent remains mandatory before provider submission.
+- Authoritative quota/availability and 5/day, 2/min accounting unchanged.
+- Same-key retained-audio retry and 35×24-hour identity protection unchanged.
+- #384 remains outside this repair.
+- Manual/offline financial behavior unchanged.
+- No hosted deployment/schema/sync change.
+
+### Analyzer status
+
+The generated repo-local `.agents/skills/speckit-analyze/SKILL.md` is absent
+from Git at trusted main/source. The canonical command
+`.claude/commands/speckit.analyze.md` is present and was read. This planning
+author performed its semantic-model/detection logic manually and records the
+findings in `checklists/voice-controls-r2-analysis.md`; root owns the actual
+local prerequisite command and read-only analyzer execution on the final
+package.

@@ -160,3 +160,35 @@ manual validation. Existing rendered comparison and separate accessibility-proof
 requirements remain completion/reporting boundaries; passing unit checks or
 source inspection does not establish visual completion, device readiness or
 merge readiness.
+
+
+## Voice controls R2 — DRAFT scoped override
+
+The owner-approved R2 image is
+`../mockups/voice-controls-r2-green-gray-proposal.png`. Until its exact
+sidecar/fingerprint tuple is root-approved, this section is planning guidance
+only and does not authorize implementation.
+
+After binding approval, R2 overrides R1 only as follows:
+
+| Surface | R2 contract |
+| --- | --- |
+| Recording controls | Submit physically left, Pause center, Discard right; registered green / gray / red treatments; ≥48 dp targets |
+| Paused controls | Submit remains left, Resume occupies center, Discard remains right; no paused-state swap |
+| RTL/Arabic | Localize copy/font/direction but preserve the physical action positions; do not `row-reverse` semantic meaning |
+| Timer | `elapsed / 00:30` clock form; paused time excluded; cap display `00:30 / 00:30`; no helper sentence |
+| 30 s cap | Auto-stop/finalize local capture and retain audio; zero automatic AI/provider/submission/review navigation until explicit Submit |
+| Ordinary halos | Remove static filled halo backgrounds from idle/Starting/recording/paused; retain R1 recording waves |
+| Daily/unavailable | Existing disabled-mic artwork/composition unchanged |
+| Lifecycle | Cap, Submit, Pause/Resume, Discard, cancel, unmount and account change remain idempotent and actor-safe |
+| Server | No claim of authoritative 30 s enforcement; issue #391 remains separate |
+| Latency | No timing SLA; optimization may remove redundant work only after separate audit and must preserve gates/readiness |
+
+EN controls: **Submit / Pause / Resume / Discard**. Existing Arabic
+Pause/Resume/Discard remain **إيقاف مؤقت / متابعة / تجاهل**. Draft proposed AR
+Submit is **إرسال** and requires binding-metadata acceptance before
+implementation.
+
+All prior R1 Starting/permission/parsing/dismissal/retry facts, original
+EN/AR/daily/Manual bindings, quota/consent/request identity, responsive breakpoints
+and accessibility evidence gates remain authoritative.

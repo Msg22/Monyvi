@@ -649,3 +649,72 @@ parsing contract or provider-specific implementation.
   anti-abuse mechanics for timezone changes are planning details and must
   preserve server-authoritative accounting.
 - Exact paid subscription policies are intentionally deferred.
+
+
+## Session 2026-10-11 — owner-approved Voice controls R2
+
+The owner explicitly approved the revised Voice controls PNG
+`mockups/voice-controls-r2-green-gray-proposal.png` (“latest mockups
+approved”). The image is published on `codex/issue347-voice-controls-r2` at
+`b00b7ae07a7f75008f21ff2c9f8680f735153901`, Git blob
+`caceb8d1cade9e4e9c574e95fc0e603a39e766de`. Binding metadata remains DRAFT
+until root reviews the exact sidecar and records its verified fingerprint tuple.
+
+This is a narrow scoped override. The approved R1 motion package and the five
+original repair bindings remain immutable authority outside the exact R2 facts
+below.
+
+### Additive functional requirements
+
+- **FR-043 — Stable Voice controls:** While recording, the action row MUST keep
+  Submit physically left, Pause physically center, and Discard physically right.
+  While paused, Submit MUST remain left, Resume MUST occupy the same center
+  position, and Discard MUST remain right. The row MUST NOT swap when paused.
+  Submit uses the registered NileGreen primary treatment, Pause/Resume a
+  registered neutral/slate secondary treatment, and Discard the registered red
+  destructive treatment. Arabic localizes labels but preserves these physical
+  action positions.
+- **FR-044 — Ordinary mic decoration:** Idle, Starting, recording and paused
+  Voice states MUST NOT render the ordinary static filled 140/172 dp halo-circle
+  backgrounds. Recording keeps the approved R1 animated outward waves/ripples.
+  Daily-limit and unavailable disabled-mic artwork remain governed by their
+  prior approved bindings.
+- **FR-045 — 30-second active-capture timer:** Local native recording MUST cap
+  active captured time at 30,000 ms, excluding paused duration. Recording and
+  paused states MUST show elapsed/max clock text such as `00:12 / 00:30`; at
+  the cap it MUST show `00:30 / 00:30`. No ordinary helper sentence is added.
+- **FR-046 — Cap without automatic AI submission:** Reaching the local 30-second
+  cap MUST stop/finalize native capture and retain the audio for the user.
+  Auto-stop MUST NOT automatically call Gemini/`parse-voice`, start provider
+  work, consume a Voice allowance unit, or navigate to review. Explicit Submit
+  continues into the existing guarded submission/parsing path. Submit,
+  auto-stop, Pause/Resume, Discard, cancel, unmount and authenticated-user
+  changes MUST remain idempotent/race-safe.
+- **FR-047 — Honest enforcement/latency boundary:** The 30-second rule is an
+  approved client recording cap, not evidence of authoritative server duration
+  enforcement. Server validation/enforcement and empty/speechless-audio
+  behavior remain research owned by issue #391. R2 requests a faster start path
+  but establishes no measured millisecond target; optimization MUST preserve
+  auth, AI consent, authoritative availability and genuine native-permission
+  gates and MUST NOT show Listening before native capture actually starts.
+
+### Additive success criteria
+
+- **SC-019:** Recording and paused controls preserve the fixed physical
+  left/center/right roles, ≥48 dp targets and green/gray/red semantic treatments
+  across EN/AR, light/dark and supported responsive layouts.
+- **SC-020:** Active capture advances `elapsed / 00:30`, Pause freezes elapsed
+  time, Resume continues it, and the native recorder finalizes at 30 seconds
+  without counting paused time.
+- **SC-021:** A 30-second auto-stop leaves retained audio awaiting explicit
+  Submit or Discard and performs zero automatic provider/submission work; races
+  with explicit actions, cancellation, unmount and account changes do not
+  duplicate or resurrect work.
+- **SC-022:** R2 removes ordinary static filled mic halos only in the scoped
+  idle/Starting/recording/paused states, keeps recording waves and prior
+  daily-limit/unavailable artwork, and preserves Manual, quota, consent,
+  request-identity and review contracts.
+
+The R2 screenshot is not itself evidence of device rendering, native timing,
+server duration enforcement or accessibility completion. Owner device/rendered
+evidence remains a separate gate.
