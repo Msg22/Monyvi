@@ -1,6 +1,6 @@
 # Shared-field foundation — source implementation checkpoint (PLAN ONLY)
 
-**Status:** **HOLD — NOT AUTHORIZED TO IMPLEMENT.** This is an implementation checklist transferred from the already completed read-only S1 review; publishing it does **not** grant source ownership, satisfy the root's outstanding native gate, authorize an Accounts migration, or claim Green. No tests, app code, mockups, business rules, Git PRs or device actions were changed for this plan.
+**Current disposition (2026-10-11):** Mohamed explicitly authorized an additional **3–5.5 hours** of foundation implementation (resumed **12:54 UTC**) and requested **direct implementation with unit tests deferred**. This latest instruction superseded the former strict TDD/T003/T008/T009 *pre-source* gates for this bounded wave only. The implemented source snapshot is §83572c8a5546bc4963055f25a9e847ec061d309a§. **All further writes now HOLD** pending root static checks and independent M1 review. All post-implementation tests and native checks are **DEFERRED / NOT RUN**, not PASS. The earlier checklist below is retained as historical constraints, not new implementation authority.
 
 ## Immutable authority and observed evidence
 
@@ -75,3 +75,31 @@ This is a **planning estimate**, not elapsed work, an implementation authorizati
 **Before any source writing:** root verifies exact branch/dependency and mockup revisions, accepts independently controlled **T003 harness**, actual public **T008** smoke/E2E evidence and overall **T009** meaningful Red, then grants exclusive file ownership. The observed Metals invalid-price Red is genuine and the old correction/Save/reopen baseline passes, but root expressly keeps the **production gate HOLD** while future Add/Edit Reds and runtime decisions continue. Passing unit Red or a baseline by itself is not enough to start. After authorized changes: record exact T010–T013 Green, seven consumer regressions, typecheck/lint/i18n and independent review; native visual/accessibility and all **35 Accounts** scenario IDs remain separate (**NOT RUN** here). Foundation PR base stays `389-voice-usage-limits` until PR #383 merges; no PR, merge or retarget action is authorized by this plan.
 
 **Checkpoint disposition:** PLAN RECORDED. **SOURCE/TEST WRITES HOLD.**
+
+## Source implementation snapshot — new authorization supersedes former pre-source HOLD
+
+**Source commit:** `83572c8a5546bc4963055f25a9e847ec061d309a` (parent plan-only `e992d747c3d900c3043a170d79274cbf3b594177`), branch `codex/ui-field-foundation`. **Implementation complete, validation deferred.** Root and M1 should review the exact published diff, not infer that previously failed assertions are now passing.
+
+### Exact source file and API disposition
+
+| File | Published scope |
+| --- | --- |
+| `packages/logic/src/utils/amount-helpers.ts` | Additive `EditableAmountInputOptions.allowNegative?`, `EditableAmountDisplay`, `resolveEditableAmountInputChange(text, previousValue, options?)` and `getEditableAmountDisplay(value, options?)`. Unsigned/default delegates to old resolver. Signed opt-in handles minus intermediate, negative grouping/paste, sign/comma/one-character edits. Recognized values group without coercion; malformed values remain byte-for-byte raw. |
+| `apps/mobile/components/ui/TextField.tsx` | Uses shared FieldLabel/FieldMessage, localized complete-qualifier required name once, preserves custom correction hints, applies error > warning > helper with focused error/alert and existing draft/ref/focus/adornment behavior. |
+| `apps/mobile/components/ui/Dropdown.tsx` | Keeps PR #383 nullable `T | null`, typed `onChange(T)`, adornments and modal/inline selection; adds button role, readable placeholder/selected `accessibilityValue.text`, localized name, invalid semantics and shared message priority. |
+| `apps/mobile/components/ui/GroupedDecimalInput.tsx` | `variant` defaults `outlined`, `allowNegative` defaults `false`; opt-in signed canonical changes and validity-aware display. Forwards existing PR #383 keyboard/ref/focus/blur/styles/adornments and numeric `syncWhileFocused`. |
+| **New** `apps/mobile/components/ui/FieldLabel.tsx` | Small shared visible required-star label and pure `composeFieldAccessibleName`; only complete final localized qualifiers count, preserving prequalified overrides and punctuation/whitespace. |
+| **New** `apps/mobile/components/ui/FieldMessage.tsx` | Small shared `selectPrimaryFieldMessage` and error alert/advisory `text-gold-600`/helper renderer; whitespace-only values fall through, no new warning business rule. |
+| `apps/mobile/components/ui/GroupedMoneyInput.tsx` | **Unchanged**. Existing `GroupedMoneyInputProps = GroupedDecimalInputProps` and delegate already forward new options; no separate money rules or wrapper patch required. |
+
+**Six authorized production paths changed: four modified, two new.** No Account routes, TypeSelector/locked controls/balance sheet, hooks/services, finance/domain validation, DB/schema/sync, test files, locale keys, barrel, global styling, dependencies, provider calls, mockup bytes, other branch, PR or issue changes. Existing legacy `formatAmountInput`, `resolveAmountInputChange`, `parseAmountInput` and validators remain unchanged; the new pure entry helpers use no `Number` or `parseFloat` and impose no precision/rounding limits.
+
+### Immutable constraints and test deferral
+
+- **Frozen contract:** `8fe1e021cc8ae393bd4c001d5e7901a880b1ae78`; authored strengthened tests: `6e51a4889da545f64d6de0a19f848ca764b3161f`. Previously verified **66 deterministic failures / 91 passes** were against pre-implementation source; they do **not** count as Green for this commit.
+- **Approved eight-image package:** `sha256:265cd15fefd32d9cece643179abbe4ed3843db82c74abe9c21b9dccc73dcf15e`, prior 8/8 bindings PASS. State-board `08`, Add/Edit `01/02`, AR/dark `03/04`, validation `05`, other sidecars and approved component/icon rules remain unchanged. Native visual/accessibility parity remains NOT RUN.
+- **Compatibility to verify later:** unsigned/outlined defaults; signed Edit only when opted in; malformed `abc12345` shown raw, valid `12345.678` displayed `12,345.678`, signed `-1234.567` displayed `-1,234.567`; arbitrary decimals/trailing zeros, Metals `1250.755` weight, Manual custom calculator and no-soft-keyboard, Transfer target focus, Recurring and TransactionEdit legacy format/parser, TextField focus-local drafts and typed Dropdown null selection. The Account preview and all actual Add/Edit routes are **not adopted** by this PR.
+- **Deferred at Mohamed's request:** Jest/unit/real-control Green, seven existing consumer regressions (old baseline **108 PASS**), TypeScript, lint, i18n checks, actual native/controlled smoke E2E, clipboard/caret/IME/TalkBack, pixel/RTL/tablet/landscape visual comparison. **NOT RUN after implementation**, not PASS. The native public Metals invalid-input Red and separate correction/Save/reopen baseline are earlier evidence only; future Add/Edit tests and all **35 Account QA** remain separate and NOT RUN.
+- **Next ownership:** Root alone runs authorized static checks/real hooks and commissions M1's independent source review at this immutable SHA. Any fixes require a fresh exact-head and explicit file ownership. No PR/merge/retarget or new source/test write is authorized by this document.
+
+**Current status: IMPLEMENTED SOURCE SNAPSHOT, UNVERIFIED; ALL WRITES HOLD.** Historical T003/T008/T009 pre-source blockers below were explicitly overridden for this bounded source delivery, not converted to test/quality/release PASS.
