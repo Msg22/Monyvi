@@ -93,6 +93,7 @@ const callbacks = {
   onOpenSettings: jest.fn(),
   onPermissionContinue: jest.fn(),
   onPermissionCancel: jest.fn(),
+  onDismissExamples: jest.fn(),
 };
 
 const baseProps: React.ComponentProps<typeof VoiceTransactionEntry> = {
@@ -110,11 +111,144 @@ function renderVoice(
   return render(<VoiceTransactionEntry {...baseProps} {...props} />);
 }
 
+jest.mock("@/services/reduced-motion-service", () => ({
+  readReducedMotion: (): Promise<boolean> => Promise.resolve(false),
+  subscribeReducedMotion: (): (() => void) => (): void => {},
+}));
+
 describe("VoiceTransactionEntry approved state compositions", () => {
   beforeEach(() => {
     mockLanguage = "en";
     jest.clearAllMocks();
   });
+
+  it.each([
+    ["en", "Starting…", "Getting ready to listen…", "Cancel"],
+    ["ar", "نجهّز التسجيل…", "لحظة ونكون جاهزين لسماعك…", "إلغاء"],
+  ] as const)(
+    "renders approved %s Starting without a false timer",
+    (language, title, body, cancel): void => {
+      mockLanguage = language;
+      render(
+        <VoiceTransactionEntry
+          {...baseProps}
+          {...{ state: "starting" as const }}
+        />
+      );
+      expect(screen.getByText(title)).toBeOnTheScreen();
+      expect(screen.getByText(body)).toBeOnTheScreen();
+      expect(screen.queryByText("00:00")).toBeNull();
+      expect(screen.queryByText("Listening")).toBeNull();
+      expect(screen.queryByText("Try saying something like")).toBeNull();
+      fireEvent.press(screen.getByRole("button", { name: cancel }));
+      expect(callbacks.onDiscard).toHaveBeenCalledTimes(1);
+    }
+  );
+
+  it.each([
+    [
+      "en",
+      "Turning your words into a transaction",
+      "Getting the details ready…",
+    ],
+    ["ar", "نحوّل كلامك إلى معاملة", "نجهّز التفاصيل…"],
+  ] as const)(
+    "renders %s parsing illustration without skeleton or fictitious results",
+    (language, title, body): void => {
+      mockLanguage = language;
+      renderVoice({ state: "processing" });
+      expect(screen.getByText(title)).toBeOnTheScreen();
+      expect(screen.getByText(body)).toBeOnTheScreen();
+      expect(screen.queryByTestId("voice-loading-skeleton")).toBeNull();
+      expect(
+        screen.getByTestId("voice-parsing-illustration", {
+          includeHiddenElements: true,
+        })
+      ).toBeTruthy();
+      expect(screen.queryByText(/\d+%/)).toBeNull();
+      expect(screen.queryByRole("button", { name: "Stop" })).toBeNull();
+      expect(screen.queryByRole("button", { name: "Pause" })).toBeNull();
+      expect(screen.queryByRole("button", { name: "Discard" })).toBeNull();
+    }
+  );
+
+  it.each([
+    ["en", "Your limits reset tomorrow."],
+    ["ar", "يتجدد حد استخدامك غدًا."],
+  ] as const)(
+    "uses approved %s reset copy only in daily context",
+    (language, text): void => {
+      mockLanguage = language;
+      renderVoice();
+      expect(screen.getByText(text)).toBeOnTheScreen();
+    }
+  );
+
+  it.each([
+    ["en", "Dismiss examples"],
+    ["ar", "إخفاء الأمثلة"],
+  ] as const)(
+    "provides localized %s dismissal and hides the entire examples surface",
+    (language, label): void => {
+      mockLanguage = language;
+      const view = render(
+        <VoiceTransactionEntry
+          {...baseProps}
+          {...{
+            onDismissExamples: callbacks.onDismissExamples,
+            showExamples: true,
+          }}
+        />
+      );
+      fireEvent.press(screen.getByRole("button", { name: label }));
+      expect(callbacks.onDismissExamples).toHaveBeenCalledTimes(1);
+      view.rerender(
+        <VoiceTransactionEntry
+          {...baseProps}
+          {...{
+            onDismissExamples: callbacks.onDismissExamples,
+            showExamples: false,
+          }}
+        />
+      );
+      expect(screen.queryByTestId("voice-examples-card")).toBeNull();
+      expect(
+        screen.queryByTestId("ionicon-restaurant-outline", {
+          includeHiddenElements: true,
+        })
+      ).toBeNull();
+      expect(screen.getByTestId("voice-allowance-card")).toBeOnTheScreen();
+    }
+  );
+
+  it.each([
+    [
+      "en",
+      "Allow your microphone",
+      "Monyvi needs access to your microphone to record your transaction.",
+      "Allow microphone",
+    ],
+    [
+      "ar",
+      "اسمح باستخدام الميكروفون",
+      "يحتاج Monyvi إلى الميكروفون لتسجيل معاملتك.",
+      "السماح بالميكروفون",
+    ],
+  ] as const)(
+    "renders approved inline %s permission explanation before native request",
+    (language, title, body, action): void => {
+      mockLanguage = language;
+      renderVoice({ state: "permission-explanation" });
+      expect(screen.getByText(title)).toBeOnTheScreen();
+      expect(screen.getByText(body)).toBeOnTheScreen();
+      expect(callbacks.onPermissionContinue).not.toHaveBeenCalled();
+      fireEvent.press(screen.getByRole("button", { name: action }));
+      expect(callbacks.onPermissionContinue).toHaveBeenCalledTimes(1);
+      expect(
+        screen.queryByText("Voice input - record a transaction")
+      ).toBeNull();
+    }
+  );
 
   it.each([
     [
@@ -235,7 +369,7 @@ describe("VoiceTransactionEntry approved state compositions", () => {
     );
     const width = JSON.stringify(getTestInstanceProps(progress).style);
     expect(width).toMatch(/14\.28/);
-    expect(screen.getByText(/Resets tomorrow/)).toBeOnTheScreen();
+    expect(screen.getByText("Your limits reset tomorrow.")).toBeOnTheScreen();
     expect(screen.queryByText(/same time|24 hours/i)).toBeNull();
   });
 

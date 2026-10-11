@@ -1,4 +1,3 @@
-import { PermissionRecoveryModal } from "@/components/permissions/PermissionRecoveryModal";
 import { AiProcessingConsentSheet } from "@/components/ai-consent/AiProcessingConsentSheet";
 import {
   AddTransactionModeTabs,
@@ -17,7 +16,9 @@ import { useAccounts } from "@/hooks/useAccounts";
 import { useAiProcessingConsent } from "@/hooks/useAiProcessingConsent";
 import { useCategories } from "@/hooks/useCategories";
 import { usePreferredCurrency } from "@/hooks/usePreferredCurrency";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useVoiceAiAvailability } from "@/hooks/useVoiceAiAvailability";
+import { useVoiceExamplesPreference } from "@/hooks/useVoiceExamplesPreference";
 import { useVoiceTransactionFlow } from "@/hooks/useVoiceTransactionFlow";
 import { getAiProcessingConsentStatus } from "@/services/profile-service";
 import { toCategoryTreeSources } from "@/utils/category-tree-source";
@@ -53,7 +54,6 @@ export default function AddTransaction(): React.JSX.Element {
     originTabIndex?: string;
   }>();
   const { t } = useTranslation("transactions");
-  const { t: tCommon } = useTranslation("common");
 
   const requestedMode = resolveMode(params.mode);
   const [mode, setMode] = useState<AddTransactionMode>(requestedMode);
@@ -74,6 +74,12 @@ export default function AddTransaction(): React.JSX.Element {
   const isRouteMountedRef = useRef(true);
   const voiceStartGenerationRef = useRef(0);
   const voiceStartPendingRef = useRef(false);
+  const { userId, isResolvingUser } = useCurrentUser();
+  const voiceExamplesPreference = useVoiceExamplesPreference(
+    isResolvingUser ? null : userId
+  );
+  const actorRef = useRef({ userId, isResolvingUser });
+  actorRef.current = { userId, isResolvingUser };
 
   const aiConsent = useAiProcessingConsent();
   const { preferredCurrency } = usePreferredCurrency();
@@ -105,18 +111,27 @@ export default function AddTransaction(): React.JSX.Element {
   // Voice availability remains authoritative to the Voice surface only.
   // Manual never renders quota/errors and remains usable when Voice is blocked.
   const voiceAvailability = useVoiceAiAvailability(true);
+  const { refresh: refreshVoiceAvailability } = voiceAvailability;
 
   const ensureAiProcessingConsent = useCallback(async (): Promise<boolean> => {
     if (aiConsent.isLoading) return false;
+    const generation = voiceStartGenerationRef.current;
+    const actor = actorRef.current.userId;
+    const isCurrent = (): boolean =>
+      isRouteMountedRef.current &&
+      generation === voiceStartGenerationRef.current &&
+      actor === actorRef.current.userId &&
+      !actorRef.current.isResolvingUser;
 
     try {
       const status = await getAiProcessingConsentStatus();
+      if (!isCurrent()) return false;
       if (status.isConsented) return true;
     } catch (error: unknown) {
       logger.error("voice.aiConsentFreshStatus.failed", error);
     }
 
-    setIsVoiceConsentVisible(true);
+    if (isCurrent()) setIsVoiceConsentVisible(true);
     return false;
   }, [aiConsent.isLoading]);
 
@@ -133,8 +148,29 @@ export default function AddTransaction(): React.JSX.Element {
     voiceAvailability,
   });
 
+  const {
+    isModeSwitchLocked: flowIsModeSwitchLocked,
+    permissionStatus: flowPermissionStatus,
+    isMicrophonePermissionError: flowIsMicrophonePermissionError,
+    discardRecording: flowDiscardRecording,
+    refreshPermission: flowRefreshPermission,
+    startFlow: flowStartFlow,
+    openMicrophoneSettings: flowOpenMicrophoneSettings,
+    flowStatus: flowFlowStatus,
+    canRetrySubmission: flowCanRetrySubmission,
+    retrySubmission: flowRetrySubmission,
+    retryRecording: flowRetryRecording,
+    isFinalizing: flowIsFinalizing,
+    refusalReason: flowRefusalReason,
+    durationMs: flowDurationMs,
+    errorMessage: flowErrorMessage,
+    pauseRecording: flowPauseRecording,
+    resumeRecording: flowResumeRecording,
+    submitRecording: flowSubmitRecording,
+  } = voiceFlow;
+
   const isModeSwitchLocked =
-    isManualSubmitting || isVoiceStartPending || voiceFlow.isModeSwitchLocked;
+    isManualSubmitting || isVoiceStartPending || flowIsModeSwitchLocked;
 
   const invalidatePendingVoiceStart = useCallback((): void => {
     voiceStartGenerationRef.current += 1;
@@ -154,6 +190,12 @@ export default function AddTransaction(): React.JSX.Element {
       voiceStartPendingRef.current = false;
     };
   }, []);
+
+  useEffect(() => {
+    invalidatePendingVoiceStart();
+    setMicrophoneRecoveryMode(null);
+    setIsVoiceConsentVisible(false);
+  }, [invalidatePendingVoiceStart, userId, isResolvingUser]);
 
   useEffect(() => {
     const previousRequestedMode = previousRequestedModeRef.current;
@@ -179,58 +221,113 @@ export default function AddTransaction(): React.JSX.Element {
   }, [isModeSwitchLocked, requestedMode]);
 
   useEffect(() => {
-    if (voiceFlow.isMicrophonePermissionError) {
-      setMicrophoneRecoveryMode("blocked");
-    }
-  }, [voiceFlow.isMicrophonePermissionError]);
-
-  const requestVoiceStart = useCallback(async (): Promise<void> => {
-    if (
-      voiceStartPendingRef.current ||
-      voiceFlow.isModeSwitchLocked ||
-      aiConsent.isLoading
-    ) {
+    if (isVoiceStartPending || flowIsModeSwitchLocked) return;
+    if (flowPermissionStatus === "granted") {
+      setMicrophoneRecoveryMode(null);
+      if (flowIsMicrophonePermissionError) void flowDiscardRecording();
       return;
     }
-
-    const generation = ++voiceStartGenerationRef.current;
-    voiceStartPendingRef.current = true;
-    setIsVoiceStartPending(true);
-
-    try {
-      const hasConsent = await ensureAiProcessingConsent();
-      if (
-        !isRouteMountedRef.current ||
-        generation !== voiceStartGenerationRef.current ||
-        !hasConsent
-      ) {
-        return;
-      }
-
-      if (!voiceFlow.hasPermission) {
+    if (flowIsMicrophonePermissionError) {
+      if (flowPermissionStatus === "denied")
         setMicrophoneRecoveryMode("request");
-        return;
-      }
-
-      await voiceFlow.startFlow({
-        skipAiProcessingConsent: true,
-      });
-    } finally {
-      if (
-        isRouteMountedRef.current &&
-        generation === voiceStartGenerationRef.current
-      ) {
-        voiceStartPendingRef.current = false;
-        setIsVoiceStartPending(false);
-      }
+      if (flowPermissionStatus === "blocked")
+        setMicrophoneRecoveryMode("blocked");
     }
   }, [
-    aiConsent.isLoading,
-    ensureAiProcessingConsent,
-    voiceFlow.hasPermission,
-    voiceFlow.isModeSwitchLocked,
-    voiceFlow.startFlow,
+    isVoiceStartPending,
+    flowIsModeSwitchLocked,
+    flowIsMicrophonePermissionError,
+    flowPermissionStatus,
+    flowDiscardRecording,
   ]);
+
+  const requestVoiceStart = useCallback(
+    async (options?: {
+      readonly requestPermission?: boolean;
+      readonly refreshAvailability?: boolean;
+      readonly retryRecording?: boolean;
+    }): Promise<void> => {
+      if (
+        voiceStartPendingRef.current ||
+        flowIsModeSwitchLocked ||
+        aiConsent.isLoading ||
+        actorRef.current.userId === null ||
+        actorRef.current.isResolvingUser
+      ) {
+        return;
+      }
+
+      const generation = ++voiceStartGenerationRef.current;
+      const actor = actorRef.current.userId;
+      const isCurrent = (): boolean =>
+        isRouteMountedRef.current &&
+        generation === voiceStartGenerationRef.current &&
+        actorRef.current.userId === actor &&
+        !actorRef.current.isResolvingUser;
+      voiceStartPendingRef.current = true;
+      setIsVoiceStartPending(true);
+
+      try {
+        const availabilitySnapshot = options?.refreshAvailability
+          ? await refreshVoiceAvailability()
+          : undefined;
+        if (!isCurrent()) return;
+        if (
+          options?.refreshAvailability &&
+          (availabilitySnapshot === null ||
+            availabilitySnapshot === undefined ||
+            availabilitySnapshot.reason !== null ||
+            availabilitySnapshot.remaining === 0)
+        )
+          return;
+        const hasConsent = await ensureAiProcessingConsent();
+        if (!isCurrent() || !hasConsent) {
+          return;
+        }
+
+        const permission = await flowRefreshPermission();
+        if (!isCurrent()) return;
+        if (
+          permission !== "granted" &&
+          !(options?.requestPermission && permission === "denied")
+        ) {
+          if (permission !== "unknown")
+            setMicrophoneRecoveryMode(
+              permission === "blocked" ? "blocked" : "request"
+            );
+          return;
+        }
+        setMicrophoneRecoveryMode(null);
+
+        await flowStartFlow({
+          skipAiProcessingConsent: true,
+          ...(options?.requestPermission
+            ? { requestMicrophonePermission: true }
+            : {}),
+          ...(options?.retryRecording ? { retryRecording: true } : {}),
+          ...(availabilitySnapshot ? { availabilitySnapshot } : {}),
+        });
+      } catch (error: unknown) {
+        logger.error("voice.routeStart.failed", error);
+      } finally {
+        if (
+          isRouteMountedRef.current &&
+          generation === voiceStartGenerationRef.current
+        ) {
+          voiceStartPendingRef.current = false;
+          setIsVoiceStartPending(false);
+        }
+      }
+    },
+    [
+      aiConsent.isLoading,
+      ensureAiProcessingConsent,
+      flowRefreshPermission,
+      flowIsModeSwitchLocked,
+      flowStartFlow,
+      refreshVoiceAvailability,
+    ]
+  );
 
   useEffect(() => {
     if (params.retry !== "true") {
@@ -289,7 +386,7 @@ export default function AddTransaction(): React.JSX.Element {
     invalidatePendingVoiceStart();
 
     if (mode === "voice") {
-      await voiceFlow.discardRecording();
+      await flowDiscardRecording();
     }
 
     if (isRouteMountedRef.current) {
@@ -300,7 +397,7 @@ export default function AddTransaction(): React.JSX.Element {
     isManualSubmitting,
     mode,
     router,
-    voiceFlow.discardRecording,
+    flowDiscardRecording,
   ]);
 
   useEffect(() => {
@@ -335,18 +432,21 @@ export default function AddTransaction(): React.JSX.Element {
     setMicrophoneRecoveryMode(null);
 
     if (recoveryMode === "blocked") {
-      void voiceFlow.openMicrophoneSettings();
+      void flowOpenMicrophoneSettings();
       return;
     }
 
     // This is the only path that reaches the native permission request.
-    void voiceFlow.startFlow({
-      skipAiProcessingConsent: true,
+    void requestVoiceStart({
+      requestPermission: true,
+      retryRecording: flowFlowStatus === "error",
     });
   }, [
     microphoneRecoveryMode,
-    voiceFlow.openMicrophoneSettings,
-    voiceFlow.startFlow,
+    flowOpenMicrophoneSettings,
+    flowStartFlow,
+    flowFlowStatus,
+    requestVoiceStart,
   ]);
 
   const handleMicrophoneRecoveryCancel = useCallback((): void => {
@@ -355,35 +455,50 @@ export default function AddTransaction(): React.JSX.Element {
   }, [handleModeChange]);
 
   const handleTryAgain = useCallback(async (): Promise<void> => {
-    if (voiceFlow.canRetrySubmission) {
-      await voiceFlow.retrySubmission();
+    if (flowCanRetrySubmission) {
+      await flowRetrySubmission();
       return;
     }
 
-    if (voiceFlow.flowStatus === "error") {
-      await voiceFlow.retryRecording();
+    if (flowFlowStatus === "error") {
+      await flowRetryRecording();
       return;
     }
 
     await requestVoiceStart();
   }, [
     requestVoiceStart,
-    voiceFlow.canRetrySubmission,
-    voiceFlow.flowStatus,
-    voiceFlow.retryRecording,
-    voiceFlow.retrySubmission,
+    flowCanRetrySubmission,
+    flowFlowStatus,
+    flowRetryRecording,
+    flowRetrySubmission,
   ]);
 
+  const handleVoiceCancel = useCallback(async (): Promise<void> => {
+    invalidatePendingVoiceStart();
+    setMicrophoneRecoveryMode(null);
+    setIsVoiceConsentVisible(false);
+    await flowDiscardRecording();
+  }, [invalidatePendingVoiceStart, flowDiscardRecording]);
+
   const voiceState = useMemo<VoiceTransactionEntryState>(() => {
+    if (
+      isVoiceStartPending &&
+      (flowFlowStatus === "idle" ||
+        flowFlowStatus === "error" ||
+        flowFlowStatus === "starting")
+    )
+      return "starting";
     if (microphoneRecoveryMode === "request") {
       return "permission-explanation";
     }
+    if (microphoneRecoveryMode === "blocked") return "permission-denied";
 
-    if (voiceFlow.isFinalizing) {
-      return "processing";
+    if (flowIsFinalizing) {
+      return "completed";
     }
 
-    switch (voiceFlow.flowStatus) {
+    switch (flowFlowStatus) {
       case "recording":
         return "recording";
       case "paused":
@@ -392,13 +507,17 @@ export default function AddTransaction(): React.JSX.Element {
         return "completed";
       case "analyzing":
         return "processing";
+      case "starting":
+        return "starting";
       case "error":
-        return voiceFlow.isMicrophonePermissionError
+        return flowIsMicrophonePermissionError &&
+          flowPermissionStatus !== "unknown"
           ? "permission-denied"
           : "error";
     }
+    if (isVoiceStartPending) return "starting";
 
-    if (voiceFlow.refusalReason === "already_processed_result_unavailable") {
+    if (flowRefusalReason === "already_processed_result_unavailable") {
       return "replay";
     }
 
@@ -411,7 +530,7 @@ export default function AddTransaction(): React.JSX.Element {
     if (
       voiceAvailability.availability?.reason === "daily_limit" ||
       voiceAvailability.availability?.remaining === 0 ||
-      (voiceFlow.refusalReason === "daily_limit" &&
+      (flowRefusalReason === "daily_limit" &&
         !hasReadyAuthoritativeAvailability)
     ) {
       return "daily-limit";
@@ -419,7 +538,7 @@ export default function AddTransaction(): React.JSX.Element {
 
     if (
       voiceAvailability.availability?.reason === "burst_limit" ||
-      (voiceFlow.refusalReason === "burst_limit" &&
+      (flowRefusalReason === "burst_limit" &&
         !hasReadyAuthoritativeAvailability)
     ) {
       return "burst-limit";
@@ -440,12 +559,14 @@ export default function AddTransaction(): React.JSX.Element {
     return "idle";
   }, [
     microphoneRecoveryMode,
+    isVoiceStartPending,
     voiceAvailability.availability,
     voiceAvailability.error,
-    voiceFlow.flowStatus,
-    voiceFlow.isFinalizing,
-    voiceFlow.isMicrophonePermissionError,
-    voiceFlow.refusalReason,
+    flowFlowStatus,
+    flowIsFinalizing,
+    flowIsMicrophonePermissionError,
+    flowPermissionStatus,
+    flowRefusalReason,
   ]);
 
   const isManualMode = mode === "manual";
@@ -528,20 +649,28 @@ export default function AddTransaction(): React.JSX.Element {
           </Text>
           <VoiceTransactionEntry
             state={voiceState}
+            showExamples={
+              !isManualMode &&
+              voiceExamplesPreference.isReady &&
+              !voiceExamplesPreference.hasDismissed
+            }
+            onDismissExamples={() => {
+              void voiceExamplesPreference.dismissExamples();
+            }}
             remaining={availability?.remaining ?? null}
             dailyLimit={availability?.dailyLimit ?? null}
-            durationMs={voiceFlow.durationMs}
-            errorMessage={voiceFlow.errorMessage}
+            durationMs={flowDurationMs}
+            errorMessage={flowErrorMessage}
             onStart={() => {
               void requestVoiceStart();
             }}
-            onPause={voiceFlow.pauseRecording}
-            onResume={voiceFlow.resumeRecording}
+            onPause={flowPauseRecording}
+            onResume={flowResumeRecording}
             onSubmit={() => {
-              void voiceFlow.submitRecording();
+              void flowSubmitRecording();
             }}
             onDiscard={() => {
-              void voiceFlow.discardRecording();
+              void handleVoiceCancel();
             }}
             onTryAgain={() => {
               void handleTryAgain();
@@ -550,10 +679,10 @@ export default function AddTransaction(): React.JSX.Element {
               handleModeChange("manual");
             }}
             onRefreshAvailability={() => {
-              void voiceAvailability.refresh();
+              void requestVoiceStart({ refreshAvailability: true });
             }}
             onOpenSettings={() => {
-              void voiceFlow.openMicrophoneSettings();
+              void flowOpenMicrophoneSettings();
             }}
             onPermissionContinue={handleMicrophoneRecoveryPrimary}
             onPermissionCancel={handleMicrophoneRecoveryCancel}
@@ -564,11 +693,18 @@ export default function AddTransaction(): React.JSX.Element {
       <AiProcessingConsentSheet
         visible={isVoiceConsentVisible}
         onContinue={async () => {
-          if (voiceStartPendingRef.current || voiceFlow.isModeSwitchLocked) {
+          if (voiceStartPendingRef.current || flowIsModeSwitchLocked) {
             return;
           }
 
           const generation = ++voiceStartGenerationRef.current;
+          const actor = actorRef.current.userId;
+          const isCurrent = (): boolean =>
+            isRouteMountedRef.current &&
+            generation === voiceStartGenerationRef.current &&
+            actor !== null &&
+            actor === actorRef.current.userId &&
+            !actorRef.current.isResolvingUser;
           voiceStartPendingRef.current = true;
           setIsVoiceStartPending(true);
           let didGrantConsent = false;
@@ -576,10 +712,7 @@ export default function AddTransaction(): React.JSX.Element {
           try {
             await aiConsent.grantConsent();
 
-            if (
-              !isRouteMountedRef.current ||
-              generation !== voiceStartGenerationRef.current
-            ) {
+            if (!isCurrent()) {
               return;
             }
 
@@ -587,19 +720,21 @@ export default function AddTransaction(): React.JSX.Element {
             shouldResumeConsentAfterPrivacyRef.current = false;
             setIsVoiceConsentVisible(false);
 
-            if (!voiceFlow.hasPermission) {
-              setMicrophoneRecoveryMode("request");
+            const permission = await flowRefreshPermission();
+            if (!isCurrent()) return;
+            if (permission !== "granted") {
+              if (permission !== "unknown")
+                setMicrophoneRecoveryMode(
+                  permission === "blocked" ? "blocked" : "request"
+                );
               return;
             }
 
-            await voiceFlow.startFlow({
+            await flowStartFlow({
               skipAiProcessingConsent: true,
             });
           } catch {
-            if (
-              !isRouteMountedRef.current ||
-              generation !== voiceStartGenerationRef.current
-            ) {
+            if (!isCurrent()) {
               return;
             }
 
@@ -616,6 +751,7 @@ export default function AddTransaction(): React.JSX.Element {
           }
         }}
         onNotNow={() => {
+          invalidatePendingVoiceStart();
           shouldResumeConsentAfterPrivacyRef.current = false;
           setIsVoiceConsentVisible(false);
         }}
@@ -624,29 +760,6 @@ export default function AddTransaction(): React.JSX.Element {
           setIsVoiceConsentVisible(false);
           router.push("/privacy-details");
         }}
-      />
-
-      <PermissionRecoveryModal
-        visible={microphoneRecoveryMode !== null}
-        icon={
-          microphoneRecoveryMode === "blocked"
-            ? "settings-outline"
-            : "mic-outline"
-        }
-        title={tCommon("voice_recording_label")}
-        message={
-          microphoneRecoveryMode === "blocked"
-            ? tCommon("voice_microphone_permission_error")
-            : tCommon("voice_recording_hint")
-        }
-        primaryLabel={
-          microphoneRecoveryMode === "blocked"
-            ? tCommon("open_settings")
-            : tCommon("continue")
-        }
-        cancelLabel={t("voice_action_use_manual")}
-        onPrimaryPress={handleMicrophoneRecoveryPrimary}
-        onCancel={handleMicrophoneRecoveryCancel}
       />
     </View>
   );

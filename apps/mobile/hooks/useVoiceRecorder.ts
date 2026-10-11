@@ -32,6 +32,11 @@ import {
 } from "expo-audio";
 import * as FileSystem from "expo-file-system";
 import { Platform } from "react-native";
+import {
+  useMicrophonePermission,
+  type MicrophonePermissionStatus,
+} from "./useMicrophonePermission";
+import { logger } from "@/utils/logger";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -77,12 +82,17 @@ interface VoiceRecorderResult {
   readonly audioUri: string | null;
   /** Whether microphone permission is granted */
   readonly hasPermission: boolean;
+  readonly permissionStatus: MicrophonePermissionStatus;
+  readonly refreshPermission: () => Promise<MicrophonePermissionStatus>;
   /** Start a new recording */
-  readonly start: () => Promise<void>;
+  readonly start: (options?: {
+    readonly signal?: AbortSignal;
+    readonly onStarted?: () => void;
+  }) => Promise<void>;
   /** Pause the current recording */
-  readonly pause: () => void;
+  readonly pause: () => boolean;
   /** Resume a paused recording */
-  readonly resume: () => void;
+  readonly resume: () => boolean;
   /** Stop the recording and finalize the audio file */
   readonly stop: () => Promise<{ uri: string; durationMs: number } | null>;
   /** Discard the recording and clean up temp files (FR-021) */
@@ -200,7 +210,15 @@ export function useVoiceRecorder(): VoiceRecorderResult {
   const [status, setStatus] = useState<RecorderStatus>("idle");
   const [durationMs, setDurationMs] = useState(0);
   const [audioUri, setAudioUri] = useState<string | null>(null);
-  const [hasPermission, setHasPermission] = useState(false);
+  const {
+    hasPermission,
+    permissionStatus,
+    refreshPermission,
+    requestPermission,
+  } = useMicrophonePermission();
+  const startGenerationRef = useRef(0);
+  const activeStartGenerationRef = useRef<number | null>(null);
+  const pendingPauseGenerationRef = useRef<number | null>(null);
   const audioUriRef = useRef<string | null>(null);
   audioUriRef.current = audioUri;
 
@@ -243,26 +261,6 @@ export function useVoiceRecorder(): VoiceRecorderResult {
   // Permission
   // ---------------------------------------------------------------------------
 
-  const requestPermission = useCallback(async (): Promise<boolean> => {
-    try {
-      const result = await AudioModule.requestRecordingPermissionsAsync();
-      setHasPermission(result.granted);
-      return result.granted;
-    } catch (err: unknown) {
-      console.error("[useVoiceRecorder] Permission request failed:", err);
-      return false;
-    }
-  }, []);
-
-  // Check permission on mount
-  useEffect(() => {
-    void AudioModule.getRecordingPermissionsAsync().then(
-      (result: { granted: boolean }) => {
-        setHasPermission(result.granted);
-      }
-    );
-  }, []);
-
   // ---------------------------------------------------------------------------
   // Timer helpers
   // ---------------------------------------------------------------------------
@@ -298,10 +296,7 @@ export function useVoiceRecorder(): VoiceRecorderResult {
       try {
         recorderRef.current.release();
       } catch (releaseErr: unknown) {
-        console.warn(
-          "[useVoiceRecorder] Failed to release recorder:",
-          releaseErr
-        );
+        logger.warn("voice.recorder.releaseFailed", { error: releaseErr });
       }
       recorderRef.current = null;
     }
@@ -336,6 +331,8 @@ export function useVoiceRecorder(): VoiceRecorderResult {
   useEffect(() => {
     const abortController = unmountAbortRef.current;
     return () => {
+      startGenerationRef.current += 1;
+      pendingPauseGenerationRef.current = null;
       stopTimer();
       abortController.abort();
     };
@@ -363,7 +360,7 @@ export function useVoiceRecorder(): VoiceRecorderResult {
           setAudioUri(uri);
           setStatus("completed");
         } catch (err: unknown) {
-          console.error("[useVoiceRecorder] Auto-stop failed:", err);
+          logger.error("voice.recorder.autoStopFailed", err);
           // Recover: mark as completed anyway since we hit the limit
           nativeReadyRef.current = false;
           setAudioUri(null);
@@ -377,116 +374,151 @@ export function useVoiceRecorder(): VoiceRecorderResult {
   // Recording controls
   // ---------------------------------------------------------------------------
 
-  const start = useCallback(async (): Promise<void> => {
-    const startPromise = (async (): Promise<void> => {
-      try {
-        const pendingDiscard = discardPromiseRef.current;
-        if (pendingDiscard !== null) {
-          await pendingDiscard;
-        }
-
-        const pendingCleanup = cleanupPromiseRef.current;
-        if (pendingCleanup !== null) {
-          await pendingCleanup;
-        }
-
-        // Set audio mode for recording
-        await setAudioModeAsync({
-          playsInSilentMode: true,
-          allowsRecording: true,
-        });
-
-        // Release any previous recorder before creating a new one
-        releaseRecorder();
-
-        // Create a fresh AudioRecorder for this recording session
-        const recorder = createRecorder();
-        recorderRef.current = recorder;
-
-        // Reset state
-        accumulatedMsRef.current = 0;
-        nativeReadyRef.current = false;
-        setDurationMs(0);
-        setAudioUri(null);
-
-        // Prepare and start recording
-        await recorder.prepareToRecordAsync();
-        recorder.record();
-
-        setStatus("recording");
-        statusRef.current = "recording";
-        startTimer();
-
-        // Allow the native MediaRecorder time to transition before
-        // accepting pause/stop commands. This prevents the
-        // IllegalStateException on Android when the user taps quickly.
-        await new Promise<void>((resolve) =>
-          setTimeout(resolve, NATIVE_STABILIZATION_DELAY_MS)
-        );
-
-        // Only set ready if we haven't been cancelled (discard during warmup)
-        if (
-          statusRef.current === "recording" ||
-          statusRef.current === "paused"
-        ) {
-          nativeReadyRef.current = true;
-        }
-      } catch (err: unknown) {
-        console.error("[useVoiceRecorder] Start failed:", err);
-        releaseRecorder();
-        nativeReadyRef.current = false;
-        statusRef.current = "idle";
-        setStatus("idle");
-      }
-    })();
-
-    nativeStartPromiseRef.current = startPromise;
-    try {
-      await startPromise;
-    } finally {
-      nativeStartPromiseRef.current = null;
-    }
-  }, [releaseRecorder, startTimer]);
-
-  const pause = useCallback((): void => {
-    if (statusRef.current !== "recording") return;
-
-    if (!nativeReadyRef.current) {
-      console.warn(
-        "[useVoiceRecorder] Ignoring pause — native recorder still initializing"
-      );
-      return;
-    }
-
+  const pauseSafely = useCallback((): boolean => {
     const recorder = recorderRef.current;
-    if (!recorder) return;
-
+    if (
+      statusRef.current !== "recording" ||
+      !nativeReadyRef.current ||
+      recorder === null
+    )
+      return false;
     try {
-      stopTimer();
       recorder.pause();
+      stopTimer();
       statusRef.current = "paused";
       setStatus("paused");
-    } catch (err: unknown) {
-      console.error("[useVoiceRecorder] Pause failed:", err);
-      // Don't change status — the recording may still be active natively
+      return true;
+    } catch (error: unknown) {
+      logger.error("voice.recorder.pauseFailed", error);
+      return false;
     }
   }, [stopTimer]);
 
-  const resume = useCallback((): void => {
-    if (statusRef.current !== "paused") return;
+  const start = useCallback(
+    async (options?: {
+      readonly signal?: AbortSignal;
+      readonly onStarted?: () => void;
+    }): Promise<void> => {
+      if (
+        nativeStartPromiseRef.current !== null &&
+        activeStartGenerationRef.current === startGenerationRef.current
+      )
+        return nativeStartPromiseRef.current;
+      const generation = ++startGenerationRef.current;
+      pendingPauseGenerationRef.current = null;
+      activeStartGenerationRef.current = generation;
+      const isCurrent = (): boolean =>
+        generation === startGenerationRef.current &&
+        !unmountAbortRef.current.signal.aborted &&
+        !options?.signal?.aborted;
+      const startPromise = (async (): Promise<void> => {
+        try {
+          const pendingDiscard = discardPromiseRef.current;
+          if (pendingDiscard !== null) {
+            await pendingDiscard;
+          }
+
+          const pendingCleanup = cleanupPromiseRef.current;
+          if (pendingCleanup !== null) {
+            await pendingCleanup;
+          }
+          if (!isCurrent()) return;
+
+          // Set audio mode for recording
+          await setAudioModeAsync({
+            playsInSilentMode: true,
+            allowsRecording: true,
+          });
+          if (!isCurrent()) return;
+
+          // Release any previous recorder before creating a new one
+          releaseRecorder();
+
+          // Create a fresh AudioRecorder for this recording session
+          const recorder = createRecorder();
+          recorderRef.current = recorder;
+
+          // Reset state
+          accumulatedMsRef.current = 0;
+          nativeReadyRef.current = false;
+          setDurationMs(0);
+          setAudioUri(null);
+
+          // Prepare and start recording
+          await recorder.prepareToRecordAsync();
+          if (!isCurrent()) return;
+          recorder.record();
+
+          setStatus("recording");
+          statusRef.current = "recording";
+          startTimer();
+          options?.onStarted?.();
+
+          // Allow the native MediaRecorder time to transition before
+          // accepting pause/stop commands. This prevents the
+          // IllegalStateException on Android when the user taps quickly.
+          await new Promise<void>((resolve) =>
+            setTimeout(resolve, NATIVE_STABILIZATION_DELAY_MS)
+          );
+
+          // Only set ready if we haven't been cancelled (discard during warmup)
+          if (
+            statusRef.current === "recording" ||
+            statusRef.current === "paused"
+          ) {
+            nativeReadyRef.current = true;
+          }
+          if (isCurrent() && pendingPauseGenerationRef.current === generation) {
+            pendingPauseGenerationRef.current = null;
+            pauseSafely();
+          }
+        } catch (err: unknown) {
+          logger.error("voice.recorderStart.failed", err);
+          releaseRecorder();
+          nativeReadyRef.current = false;
+          statusRef.current = "idle";
+          setStatus("idle");
+          throw err;
+        }
+      })();
+
+      nativeStartPromiseRef.current = startPromise;
+      try {
+        await startPromise;
+      } finally {
+        if (nativeStartPromiseRef.current === startPromise)
+          nativeStartPromiseRef.current = null;
+      }
+    },
+    [pauseSafely, releaseRecorder, startTimer]
+  );
+
+  const pause = useCallback((): boolean => {
+    if (statusRef.current !== "recording") return false;
+    if (!nativeReadyRef.current) {
+      pendingPauseGenerationRef.current = startGenerationRef.current;
+      return false;
+    }
+    return pauseSafely();
+  }, [pauseSafely]);
+
+  const resume = useCallback((): boolean => {
+    if (statusRef.current !== "paused") return false;
 
     const recorder = recorderRef.current;
-    if (!recorder) return;
+    if (!recorder) return false;
 
     try {
       recorder.record();
       statusRef.current = "recording";
       setStatus("recording");
       startTimer();
+      return true;
       // No stabilization delay needed for resume — MediaRecorder.resume()
       // transitions synchronously on Android
     } catch (err: unknown) {
-      console.error("[useVoiceRecorder] Resume failed:", err);
+      logger.error("voice.recorder.resumeFailed", err);
+      return false;
     }
   }, [startTimer]);
 
@@ -494,6 +526,7 @@ export function useVoiceRecorder(): VoiceRecorderResult {
     uri: string;
     durationMs: number;
   } | null> => {
+    pendingPauseGenerationRef.current = null;
     if (statusRef.current !== "recording" && statusRef.current !== "paused") {
       return null;
     }
@@ -520,9 +553,7 @@ export function useVoiceRecorder(): VoiceRecorderResult {
       );
 
       if (!ready) {
-        console.warn(
-          "[useVoiceRecorder] Stop timed out waiting for native readiness"
-        );
+        logger.warn("voice.recorder.stopReadinessTimeout");
         return null;
       }
     }
@@ -540,7 +571,7 @@ export function useVoiceRecorder(): VoiceRecorderResult {
       setStatus("completed");
       return { uri, durationMs: accumulatedMsRef.current };
     } catch (err: unknown) {
-      console.error("[useVoiceRecorder] Stop failed:", err);
+      logger.error("voice.recorder.stopFailed", err);
       nativeReadyRef.current = false;
       statusRef.current = "idle";
       setStatus("idle");
@@ -559,7 +590,7 @@ export function useVoiceRecorder(): VoiceRecorderResult {
         await FileSystem.deleteAsync(uri, { idempotent: true });
       }
     } catch (err: unknown) {
-      console.warn("[useVoiceRecorder] Failed to delete temp audio:", err);
+      logger.warn("voice.recorder.tempAudioDeleteFailed", { error: err });
     }
   }, []);
 
@@ -598,7 +629,7 @@ export function useVoiceRecorder(): VoiceRecorderResult {
           stoppedUri = await stopNativeRecorder(recorder);
         }
       } catch (stopErr: unknown) {
-        console.warn("[useVoiceRecorder] Stop during cleanup failed:", stopErr);
+        logger.warn("voice.recorder.cleanupStopFailed", { error: stopErr });
       }
 
       const uri = stoppedUri ?? audioUriRef.current ?? recorder?.uri ?? null;
@@ -630,6 +661,8 @@ export function useVoiceRecorder(): VoiceRecorderResult {
   }, []);
 
   const discard = useCallback((): Promise<void> => {
+    pendingPauseGenerationRef.current = null;
+    startGenerationRef.current += 1;
     const existingDiscard = discardPromiseRef.current;
     if (existingDiscard !== null) {
       return existingDiscard;
@@ -643,7 +676,7 @@ export function useVoiceRecorder(): VoiceRecorderResult {
         setAudioUri(null);
         setStatus("idle");
       } catch (err: unknown) {
-        console.error("[useVoiceRecorder] Discard failed:", err);
+        logger.error("voice.recorder.discardFailed", err);
         releaseRecorder();
         statusRef.current = "idle";
         setStatus("idle");
@@ -690,6 +723,8 @@ export function useVoiceRecorder(): VoiceRecorderResult {
     isRecording: status === "recording",
     audioUri,
     hasPermission,
+    permissionStatus,
+    refreshPermission,
     start,
     pause,
     resume,

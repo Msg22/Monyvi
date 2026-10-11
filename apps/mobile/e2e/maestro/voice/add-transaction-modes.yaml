@@ -1,10 +1,11 @@
 appId: com.monyvi.app
 ---
-# R05 / T028 — approved unified Add Transaction shell.
+# R05 / T028 - approved unified Add Transaction shell (#347 Voice motion r1).
 # AUTHORED, NOT RUN. Requires authenticated local seeded account/category and
 # the Mobile-owned Manual B amount input testID "manual-amount-input".
 # Navigation, amount focus, Done and header Save are controllable; this flow
-# never records audio or invokes a paid voice provider.
+# never records audio, never taps a Voice retry, never accepts an OS
+# permission prompt, and never invokes a paid voice provider.
 - runFlow: ../helpers/setup.yaml
 
 # FAB always opens Manual. Bottom navigation in mockups is presentation-only.
@@ -46,6 +47,12 @@ appId: com.monyvi.app
     id: "add-transaction-mode-voice"
 - assertNotVisible:
     id: "header-save"
+# Switching to Voice must not auto-start capture (FR-039).
+- assertNotVisible: "Starting…"
+- assertNotVisible:
+    id: "voice-action-stop"
+- assertNotVisible:
+    id: "voice-starting-cancel"
 - tapOn:
     id: "add-transaction-mode-manual"
 - assertVisible: "150"
@@ -65,6 +72,12 @@ appId: com.monyvi.app
     id: "add-transaction-mode-voice"
 - assertNotVisible:
     id: "header-save"
-
-# Native recording/pause/review and real permission journeys are MANUAL ONLY:
-# this harness has no deterministic Voice recording/provider double.
+- assertNotVisible: "Starting…"
+- assertNotVisible:
+    id: "voice-action-stop"
+# Native recording/pause/review, real permission journeys, Voice retry
+# auto-start, unmount/account-change cleanup and locale/dark/RTL fidelity are
+# MANUAL ONLY: this harness has no deterministic Voice audio/permission/
+# provider fixture. See voice-recovery.yaml (recovery-action visibility +
+# Manual fallback only; no mic/retry/permission tap) and
+# voice-motion-manual-plan.md for the full scenario map.

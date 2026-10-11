@@ -1,8 +1,20 @@
 appId: com.monyvi.app
 ---
-# R05 / T042 — guarded recovery navigation; NO native audio/provider calls.
-# AUTHORED, NOT RUN. This flow does not manufacture an unavailable result and
-# does not claim a quota/permission recovery occurred unless that state appears.
+# #347 Voice motion r1 / T062 - guarded recovery visibility + Manual fallback.
+# AUTHORED, NOT RUN. Requires authenticated seeded E2E account.
+# NO-CAPTURE DEFAULT BASELINE: this flow never taps the mic, never taps
+# "Try again" (r1 retry auto-enters Starting and can begin real native
+# capture), never taps any permission control, and never submits to a paid
+# provider. On a granted-microphone device a single mic tap can start native
+# recording and the 60 s cap may auto-submit, so no scripted step may start
+# capture. Starting, native permission, recording, parsing and retry execution
+# are UNIT/MANUAL ONLY: no deterministic native Voice audio/permission/provider
+# fixture exists.
+# Retained central IDs: voice-mic-target, voice-action-try-again,
+# voice-action-use-manual, add-transaction-mode-*.
+# Root-accepted selectors for unit/manual proof (never tapped here):
+# voice-starting-cancel, voice-permission-primary, voice-examples-dismiss.
+
 - runFlow: ../helpers/setup.yaml
 - tapOn:
     id: "fab-button"
@@ -14,15 +26,22 @@ appId: com.monyvi.app
 - assertVisible:
     id: "add-transaction-mode-voice"
 
-# Refresh is only actionable if the real availability check failed. A healthy
-# server must not be forced into an error solely to satisfy a scripted branch.
+# Availability check failure state: recovery actions must be VISIBLE and the
+# Manual path must stay reachable. "Try again" is asserted, never tapped: with
+# r1 auto-start an unconditional tap can begin authentic capture, hold the
+# Manual tab, and risk a provider submission at the cap. Direct retry start is
+# unit/manual-only (no deterministic native audio/provider fixture exists).
 - runFlow:
     when:
       visible: "Voice unavailable"
     commands:
       - assertVisible: "Try again"
-      - tapOn: "Try again"
-      - waitForAnimationToEnd
+      - assertVisible: "Use Manual"
+      - assertVisible:
+          id: "voice-action-try-again"
+      - assertVisible:
+          id: "voice-action-use-manual"
+      - assertNotVisible: "Daily voice limit reached"
 
 # Replay, burst and error alternatives retain a safe Manual path. A future
 # authenticated local HTTP fixture must deterministically cause each state.
@@ -52,11 +71,24 @@ appId: com.monyvi.app
 - assertNotVisible: "Voice unavailable"
 - assertNotVisible: "Daily voice limit reached"
 - assertNotVisible: "Limited free voice usage"
+# Mode entry must never auto-start capture. "Starting..." below matches the
+# approved EN product copy exactly (UTF-8 ellipsis) so the negative assertion
+# is meaningful, not vacuous.
+- assertNotVisible: "Starting…"
+- assertNotVisible:
+    id: "voice-action-stop"
 - tapOn:
     id: "header-back"
 - waitForAnimationToEnd
 - assertVisible: "Transactions"
-
-# MANUAL ONLY / NOT RUN: native permission denial/revocation and Settings,
-# stop/pause/discard/resume, held provider reservation (#384), replay identity,
-# background/restart, actual recording and review, locale/dark/device fidelity.
+# UNIT/MANUAL ONLY / NOT RUN (no mic, no permission, no retry tap in this
+# baseline): immediate Starting + Cancel, cancel during each awaited boundary,
+# rapid duplicate taps, first-use inline permission explanation and removed
+# record-intro modal, AI consent sheet interaction, native permission
+# granted/unknown/missing/denied/permanently denied/revoked plus Settings
+# recovery and resume refresh, recorder start failure, actual recording
+# audio/timer/ripples/pause/resume/stop/discard and 60 s cap behavior, Parsing
+# waveform-to-receipt, unmount/account-change cleanup, retained-audio same-key
+# retry, unavailable eligible auto-start retry, daily/burst/server refusal,
+# locale/dark/device fidelity and screen-reader semantics. SMS fixtures do not
+# control Voice audio or the provider. See voice-motion-manual-plan.md.

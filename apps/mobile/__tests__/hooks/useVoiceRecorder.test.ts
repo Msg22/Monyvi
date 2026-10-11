@@ -1,202 +1,51 @@
-/**
- * useVoiceRecorder.test.ts — T022
- *
- * Tests the useVoiceRecorder hook's state machine, permission flow,
- * and recording lifecycle.
- *
- * Mock Strategy:
- *   - expo-audio: mocked entirely to avoid native module dependencies
- *   - expo-file-system: mocked for temp file cleanup testing
- *   - React Native Testing Library renderHook for lifecycle assertions
- */
-
+import type { AppStateStatus } from "react-native";
 import {
   act,
-  renderHook as renderNativeHook,
-} from "@testing-library/react-native";
-
-// ---------------------------------------------------------------------------
-// React Native Testing Library act helpers
-// ---------------------------------------------------------------------------
-
-const actSync = act;
-const actAsync = act;
-
-// ---------------------------------------------------------------------------
-// Mock state tracking
-// ---------------------------------------------------------------------------
-
-const mockRecord = jest.fn();
-const mockPause = jest.fn();
-const mockStop = jest.fn().mockResolvedValue(undefined);
-const mockPrepareToRecordAsync = jest.fn().mockResolvedValue(undefined);
-let mockRecorderReleased = false;
-const mockRelease = jest.fn((): void => {
-  mockRecorderReleased = true;
-});
-const mockRequestPermissions = jest.fn().mockResolvedValue({ granted: true });
-const mockSetAudioModeAsync = jest.fn().mockResolvedValue(undefined);
-const mockDeleteAsync = jest.fn().mockResolvedValue(undefined);
-const mockGetInfoAsync = jest.fn().mockResolvedValue({ exists: true });
-
-const mockRecorder = {
-  record: mockRecord,
-  pause: mockPause,
-  stop: mockStop,
-  prepareToRecordAsync: mockPrepareToRecordAsync,
-  release: mockRelease,
-  getUri: jest.fn().mockReturnValue("file:///tmp/recording.m4a"),
-  get uri(): string {
-    if (mockRecorderReleased) {
-      throw new Error("Recorder URI accessed after release");
-    }
-    return "file:///tmp/recording.m4a";
-  },
-};
-
-jest.mock("expo-audio", () => ({
-  AudioModule: {
-    AudioRecorder: jest.fn(() => {
-      mockRecorderReleased = false;
-      return mockRecorder;
-    }),
-    requestRecordingPermissionsAsync: (...args: unknown[]): Promise<unknown> =>
-      mockRequestPermissions(...args) as Promise<unknown>,
-    getRecordingPermissionsAsync: (): Promise<{ granted: boolean }> =>
-      Promise.resolve({ granted: false }),
-  },
-  RecordingPresets: {
-    HIGH_QUALITY: {
-      extension: ".m4a",
-      sampleRate: 44100,
-      numberOfChannels: 2,
-      bitRate: 128000,
-      android: {
-        outputFormat: "mpeg4",
-        audioEncoder: "aac",
-      },
-    },
-  },
-  setAudioModeAsync: (...args: unknown[]): Promise<unknown> =>
-    mockSetAudioModeAsync(...args) as Promise<unknown>,
-}));
-
-jest.mock("expo-file-system", () => ({
-  deleteAsync: (...args: unknown[]): Promise<unknown> =>
-    mockDeleteAsync(...args) as Promise<unknown>,
-  getInfoAsync: (...args: unknown[]): Promise<unknown> =>
-    mockGetInfoAsync(...args) as Promise<unknown>,
-}));
-
-// ---------------------------------------------------------------------------
-// Import module under test — after mocks
-// ---------------------------------------------------------------------------
-
-import {
+  actSync,
+  actAsync,
+  AppState,
+  mockRecord,
+  mockPause,
+  mockStop,
+  mockPrepareToRecordAsync,
+  mockRelease,
+  mockRequestPermissions,
+  mockGetPermissions,
+  mockSetAudioModeAsync,
+  mockDeleteAsync,
+  mountedUnmounts,
+  unwrap,
+  renderHook,
+  startRecordingWithFlush,
   useVoiceRecorder,
   NATIVE_STABILIZATION_DELAY_MS,
-} from "@/hooks/useVoiceRecorder";
-
-// ---------------------------------------------------------------------------
-// Typed hook access and ordered cleanup
-// ---------------------------------------------------------------------------
-
-const mountedUnmounts: Array<() => void> = [];
-
-interface HookRef<T> {
-  current: T | null;
-}
-
-function unwrap<T>(ref: HookRef<T>): T {
-  if (ref.current === null) {
-    throw new Error("Hook ref is null — did the component render?");
-  }
-  return ref.current;
-}
-
-function renderHook<T>(hookFn: () => T): {
-  result: HookRef<T>;
-  rerender: () => void;
-  unmount: () => void;
-} {
-  const renderer = renderNativeHook(hookFn);
-  let isMounted = true;
-  const unmount = (): void => {
-    if (!isMounted) return;
-    isMounted = false;
-    renderer.unmount();
-  };
-
-  mountedUnmounts.push(unmount);
-
-  return {
-    result: renderer.result,
-    rerender: (): void => renderer.rerender(undefined),
-    unmount,
-  };
-}
-
-// ---------------------------------------------------------------------------
-// Helper: start recording with stabilization delay flush
-// When start() is called with jest.useFakeTimers(), the stabilization
-// setTimeout won't resolve until we advance timers. This helper handles
-// the full sequence: kick off start, advance timers, flush microtasks.
-// ---------------------------------------------------------------------------
-
-async function startRecordingWithFlush(
-  result: HookRef<ReturnType<typeof useVoiceRecorder>>
-): Promise<void> {
-  // start() internally does:
-  //   1. await setAudioModeAsync()      — async, resolves via microtask
-  //   2. await prepareToRecordAsync()   — async, resolves via microtask
-  //   3. record()                       — synchronous
-  //   4. setStatus("recording")         — synchronous
-  //   5. startTimer()                   — synchronous (schedules interval)
-  //   6. await setTimeout(NATIVE_STABILIZATION_DELAY_MS) — needs fake timer advance
-  //   7. nativeReadyRef.current = true  — after setTimeout resolves
-  //
-  // With fake timers we must:
-  //   a) Kick off start() (don't await — it will hang on step 6)
-  //   b) Flush microtasks so steps 1-5 complete and setTimeout is scheduled
-  //   c) Advance fake timers by the stabilization delay to fire the setTimeout
-  //   d) Flush microtasks again so step 7 completes
-
-  await actAsync(async () => {
-    const hook = unwrap(result);
-    const startPromise = hook.start(); // kick off, don't await
-
-    // Flush microtasks so prepareToRecordAsync + setAudioModeAsync resolve
-    await Promise.resolve();
-    await Promise.resolve();
-    await Promise.resolve();
-
-    // Now setTimeout is scheduled — advance fake timers
-    jest.advanceTimersByTime(NATIVE_STABILIZATION_DELAY_MS);
-
-    // Flush microtasks so the setTimeout callback (nativeReadyRef = true) runs
-    await Promise.resolve();
-
-    // Wait for start() to fully complete
-    await startPromise;
-  });
-}
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
+  resetRecorderRelease,
+} from "./voice-recorder-fixtures";
 
 describe("useVoiceRecorder", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockStop.mockReset().mockResolvedValue(undefined);
+    mockGetPermissions
+      .mockReset()
+      .mockResolvedValue({ granted: false, canAskAgain: true });
+    jest
+      .spyOn(AppState, "addEventListener")
+      .mockImplementation(() => ({ remove: jest.fn() }));
     jest.useFakeTimers();
-    mockRecorderReleased = false;
+    resetRecorderRelease();
   });
 
-  afterEach(() => {
+  afterEach(async (): Promise<void> => {
+    await actAsync(async (): Promise<void> => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
     mountedUnmounts.splice(0).forEach((fn) => fn());
-    jest.runOnlyPendingTimers();
-    jest.clearAllTimers();
+    actSync((): void => {
+      jest.runOnlyPendingTimers();
+      jest.clearAllTimers();
+    });
     jest.useRealTimers();
   });
 
@@ -204,6 +53,68 @@ describe("useVoiceRecorder", () => {
   // Initial state
   // =========================================================================
   describe("initial state", () => {
+    it("keeps permission unknown until the actual native check resolves", async (): Promise<void> => {
+      const permission = createDeferred<{
+        granted: boolean;
+        canAskAgain: boolean;
+      }>();
+      mockGetPermissions.mockReturnValueOnce(permission.promise);
+      const { result } = renderHook(() => useVoiceRecorder());
+      expect(unwrap(result).permissionStatus).toBe("unknown");
+      expect(mockRequestPermissions).not.toHaveBeenCalled();
+      await actAsync(async (): Promise<void> => {
+        permission.resolve({ granted: true, canAskAgain: true });
+        await permission.promise;
+      });
+      expect(unwrap(result).permissionStatus).toBe("granted");
+      expect(unwrap(result).hasPermission).toBe(true);
+    });
+
+    it.each([
+      [false, true, "denied"],
+      [false, false, "blocked"],
+      [true, false, "granted"],
+    ] as const)(
+      "classifies native grant=%s canAskAgain=%s as %s",
+      async (granted, canAskAgain, expected): Promise<void> => {
+        mockGetPermissions.mockResolvedValueOnce({ granted, canAskAgain });
+        const { result } = renderHook(() => useVoiceRecorder());
+        await actAsync(async (): Promise<void> => {
+          await Promise.resolve();
+        });
+        expect(unwrap(result).permissionStatus).toBe(expected);
+        expect(mockRequestPermissions).not.toHaveBeenCalled();
+      }
+    );
+
+    it("refreshes revoked permission on app resume and removes its subscription", async (): Promise<void> => {
+      const subscription = { remove: jest.fn() };
+      let onChange: ((state: AppStateStatus) => void) | undefined;
+      const listener = jest
+        .spyOn(AppState, "addEventListener")
+        .mockImplementation((_event, callback) => {
+          onChange = callback;
+          return subscription;
+        });
+      mockGetPermissions
+        .mockResolvedValueOnce({ granted: true, canAskAgain: true })
+        .mockResolvedValueOnce({ granted: false, canAskAgain: false });
+      const { result, unmount } = renderHook(() => useVoiceRecorder());
+      await actAsync(async (): Promise<void> => {
+        await Promise.resolve();
+      });
+      expect(unwrap(result).hasPermission).toBe(true);
+      await actAsync(async (): Promise<void> => {
+        onChange?.("active");
+        await Promise.resolve();
+      });
+      expect(unwrap(result).hasPermission).toBe(false);
+      expect(unwrap(result).permissionStatus).toBe("blocked");
+      unmount();
+      expect(subscription.remove).toHaveBeenCalledTimes(1);
+      listener.mockRestore();
+    });
+
     it("should start with idle status", () => {
       const { result } = renderHook(() => useVoiceRecorder());
       const hook = unwrap(result);
@@ -261,20 +172,101 @@ describe("useVoiceRecorder", () => {
       expect(mockRecord).toHaveBeenCalled();
     });
 
-    it("should fall back to idle if prepareToRecordAsync throws", async () => {
+    it("rejects preparation failure so the flow can show actionable recovery", async (): Promise<void> => {
       mockRequestPermissions.mockResolvedValueOnce({ granted: true });
       mockPrepareToRecordAsync.mockRejectedValueOnce(
         new Error("Native module error")
       );
       const { result } = renderHook(() => useVoiceRecorder());
 
-      await actAsync(async () => {
-        void unwrap(result).start();
-        jest.advanceTimersByTime(NATIVE_STABILIZATION_DELAY_MS);
-        await Promise.resolve();
-        await Promise.resolve();
+      await actAsync(async (): Promise<void> => {
+        await expect(unwrap(result).start()).rejects.toThrow(
+          "Native module error"
+        );
       });
 
+      expect(unwrap(result).status).toBe("idle");
+      expect(mockRecord).not.toHaveBeenCalled();
+    });
+
+    it.each(["audio-mode", "native-preparation"] as const)(
+      "does not tick or capture before %s settles",
+      async (stage): Promise<void> => {
+        const pending = createDeferred<void>();
+        (stage === "audio-mode"
+          ? mockSetAudioModeAsync
+          : mockPrepareToRecordAsync
+        ).mockReturnValueOnce(pending.promise);
+        const { result } = renderHook(() => useVoiceRecorder());
+        let start: Promise<void> | undefined;
+        await actAsync(async (): Promise<void> => {
+          start = unwrap(result).start();
+          await Promise.resolve();
+          await Promise.resolve();
+          jest.advanceTimersByTime(2000);
+        });
+        expect(mockRecord).not.toHaveBeenCalled();
+        expect(unwrap(result).durationMs).toBe(0);
+        expect(unwrap(result).isRecording).toBe(false);
+        await actAsync(async (): Promise<void> => {
+          pending.resolve(undefined);
+          for (let turn = 0; turn < 6; turn++) await Promise.resolve();
+          jest.advanceTimersByTime(NATIVE_STABILIZATION_DELAY_MS);
+          await start;
+        });
+        expect(mockRecord).toHaveBeenCalledTimes(1);
+        expect(unwrap(result).isRecording).toBe(true);
+      }
+    );
+
+    it.each([
+      ["audio-mode", "discard"],
+      ["native-preparation", "discard"],
+      ["audio-mode", "unmount"],
+      ["native-preparation", "unmount"],
+    ] as const)(
+      "prevents native record itself after %s is canceled by %s",
+      async (stage, cancellation): Promise<void> => {
+        const pending = createDeferred<void>();
+        (stage === "audio-mode"
+          ? mockSetAudioModeAsync
+          : mockPrepareToRecordAsync
+        ).mockReturnValueOnce(pending.promise);
+        const { result, unmount } = renderHook(() => useVoiceRecorder());
+        let start: Promise<void> | undefined;
+        let discard: Promise<void> | undefined;
+        await actAsync(async (): Promise<void> => {
+          start = unwrap(result)
+            .start()
+            .catch((): void => {});
+          for (let turn = 0; turn < 4; turn++) await Promise.resolve();
+        });
+        actSync((): void => {
+          if (cancellation === "unmount") unmount();
+          else discard = unwrap(result).discard();
+        });
+        await actAsync(async (): Promise<void> => {
+          pending.resolve(undefined);
+          for (let turn = 0; turn < 8; turn++) await Promise.resolve();
+          jest.advanceTimersByTime(NATIVE_STABILIZATION_DELAY_MS + 1000);
+          await start;
+          await discard;
+        });
+        expect(mockRecord).not.toHaveBeenCalled();
+      }
+    );
+
+    it("rejects audio-mode failure without creating a capture", async (): Promise<void> => {
+      mockSetAudioModeAsync.mockRejectedValueOnce(
+        new Error("audio unavailable")
+      );
+      const { result } = renderHook(() => useVoiceRecorder());
+      await actAsync(async (): Promise<void> => {
+        await expect(unwrap(result).start()).rejects.toThrow(
+          "audio unavailable"
+        );
+      });
+      expect(mockRecord).not.toHaveBeenCalled();
       expect(unwrap(result).status).toBe("idle");
     });
   });
@@ -283,6 +275,79 @@ describe("useVoiceRecorder", () => {
   // Pause / Resume
   // =========================================================================
   describe("pause and resume", () => {
+    it("preserves Paused and its timer when native resume fails", async (): Promise<void> => {
+      const { result } = renderHook(() => useVoiceRecorder());
+      await startRecordingWithFlush(result);
+      act((): void => {
+        unwrap(result).pause();
+      });
+      const pausedDuration = unwrap(result).durationMs;
+      mockRecord.mockImplementationOnce((): never => {
+        throw new Error("Native resume failed");
+      });
+      act((): void => {
+        expect(unwrap(result).resume()).toBe(false);
+      });
+      expect(unwrap(result).status).toBe("paused");
+      act((): void => {
+        jest.advanceTimersByTime(1000);
+      });
+      expect(unwrap(result).durationMs).toBe(pausedDuration);
+      expect(mockRelease).not.toHaveBeenCalled();
+    });
+
+    it("queues one warmup pause until native readiness and reports actual pause only then", async (): Promise<void> => {
+      const { result } = renderHook(() => useVoiceRecorder());
+      let pending: Promise<void> | undefined;
+      await actAsync(async (): Promise<void> => {
+        pending = unwrap(result).start();
+        for (let turn = 0; turn < 8; turn++) await Promise.resolve();
+      });
+      expect(mockRecord).toHaveBeenCalledTimes(1);
+      act((): void => {
+        expect(unwrap(result).pause()).toBe(false);
+      });
+      expect(mockPause).not.toHaveBeenCalled();
+      expect(unwrap(result).status).toBe("recording");
+      await actAsync(async (): Promise<void> => {
+        jest.advanceTimersByTime(NATIVE_STABILIZATION_DELAY_MS - 1);
+        await Promise.resolve();
+      });
+      expect(mockPause).not.toHaveBeenCalled();
+      await actAsync(async (): Promise<void> => {
+        jest.advanceTimersByTime(1);
+        await pending;
+      });
+      expect(mockPause).toHaveBeenCalledTimes(1);
+      expect(unwrap(result).status).toBe("paused");
+      const pausedDuration = unwrap(result).durationMs;
+      act((): void => {
+        jest.advanceTimersByTime(1000);
+      });
+      expect(unwrap(result).durationMs).toBe(pausedDuration);
+    });
+
+    it("invalidates a queued warmup pause when discarded", async (): Promise<void> => {
+      const { result } = renderHook(() => useVoiceRecorder());
+      let pending: Promise<void> | undefined;
+      let discard: Promise<void> | undefined;
+      await actAsync(async (): Promise<void> => {
+        pending = unwrap(result).start();
+        for (let turn = 0; turn < 8; turn++) await Promise.resolve();
+      });
+      act((): void => {
+        unwrap(result).pause();
+        discard = unwrap(result).discard();
+      });
+      await actAsync(async (): Promise<void> => {
+        jest.advanceTimersByTime(NATIVE_STABILIZATION_DELAY_MS);
+        await pending;
+        await discard;
+      });
+      expect(mockPause).not.toHaveBeenCalled();
+      expect(unwrap(result).status).toBe("idle");
+    });
+
     it("should transition to paused status on pause", async () => {
       mockRequestPermissions.mockResolvedValueOnce({ granted: true });
       const { result } = renderHook(() => useVoiceRecorder());
@@ -476,7 +541,8 @@ describe("useVoiceRecorder", () => {
           await Promise.resolve();
         });
 
-        expect(mockStop).toHaveBeenCalledTimes(1);
+        expect(mockRecord).not.toHaveBeenCalled();
+        expect(mockStop).not.toHaveBeenCalled();
         expect(mockRelease).toHaveBeenCalledTimes(1);
         expect(mockDeleteAsync).toHaveBeenCalledWith(
           "file:///tmp/recording.m4a",

@@ -3,6 +3,7 @@ import { Ionicons } from "@expo/vector-icons";
 export type VoiceTransactionEntryState =
   | "loading"
   | "idle"
+  | "starting"
   | "recording"
   | "paused"
   | "completed"
@@ -32,6 +33,8 @@ export interface VoiceTransactionEntryProps {
   readonly onOpenSettings: () => void;
   readonly onPermissionContinue: () => void;
   readonly onPermissionCancel: () => void;
+  readonly showExamples?: boolean;
+  readonly onDismissExamples?: () => void;
 }
 
 export interface StatePresentation {

@@ -16,6 +16,13 @@ export function getPresentation(
   tCommon: TFunction<"common">
 ): StatePresentation {
   switch (state) {
+    case "starting":
+      return {
+        title: tCommon("voice_ui_starting_title"),
+        description: tCommon("voice_ui_starting_description"),
+        icon: "mic",
+        centralLabel: tCommon("voice_ui_starting_title"),
+      };
     case "idle":
       return {
         title: tCommon("voice_ui_idle_title"),
@@ -46,10 +53,10 @@ export function getPresentation(
       };
     case "processing":
       return {
-        title: t("voice_processing_checking"),
-        description: null,
+        title: tCommon("voice_ui_parsing_title"),
+        description: tCommon("voice_ui_parsing_description"),
         icon: "hourglass-outline",
-        centralLabel: t("voice_processing_checking"),
+        centralLabel: tCommon("voice_ui_parsing_title"),
       };
     case "daily-limit":
       return {
@@ -81,8 +88,8 @@ export function getPresentation(
       };
     case "permission-explanation":
       return {
-        title: null,
-        description: null,
+        title: tCommon("voice_ui_permission_title"),
+        description: tCommon("voice_ui_permission_description"),
         icon: "mic-outline",
         centralLabel: tCommon("voice_recording_label"),
       };
