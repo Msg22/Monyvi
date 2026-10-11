@@ -292,7 +292,7 @@ function VoiceActionSurface({
           style={{ fontFamily: fontFamily.bold }}
           className="mt-1 text-2xl font-bold text-slate-800 dark:text-slate-25"
         >
-          {formatRecordingTimer(props.durationMs, isCompleted)}
+          {formatRecordingTimer(props.durationMs)}
         </Text>
       ) : null}
 

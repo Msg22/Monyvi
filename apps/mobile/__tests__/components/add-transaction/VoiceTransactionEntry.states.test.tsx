@@ -762,7 +762,9 @@ describe("VoiceTransactionEntry approved state compositions", () => {
   it.each([
     ["recording", 30_000, "00:30 / 00:30"],
     ["paused", 83_000, "00:30 / 00:30"],
-    ["completed", 2_500, "00:30 / 00:30"],
+    ["completed", 2_500, "00:02 / 00:30"],
+    ["completed", 8_000, "00:08 / 00:30"],
+    ["completed", 30_000, "00:30 / 00:30"],
   ] as const)(
     "clamps %s time from %sms and retains max-cap presentation",
     (state, durationMs, expectedTimer): void => {
@@ -771,6 +773,12 @@ describe("VoiceTransactionEntry approved state compositions", () => {
       expect(screen.queryByText("01:23")).toBeNull();
     }
   );
+
+  it("shows actual 8-second capture during finalization without falsely reporting the cap", (): void => {
+    renderVoice({ state: "completed", durationMs: 8_000 });
+    expect(screen.getByText("00:08 / 00:30")).toBeOnTheScreen();
+    expect(screen.queryByText("00:30 / 00:30")).toBeNull();
+  });
 
   it("keeps retained completed audio a presentation-only state until explicit Submit", (): void => {
     renderVoice({ state: "completed", durationMs: 30_000 });

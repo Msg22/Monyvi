@@ -12,13 +12,9 @@ export function formatDuration(durationMs: number): string {
 /** R2 active capture cap is UI-only, not a new server audio-duration policy. */
 const MAX_ACTIVE_RECORDING_MS = 30_000;
 
-export function formatRecordingTimer(
-  durationMs: number,
-  isCompleted: boolean
-): string {
-  const elapsedMs = isCompleted
-    ? MAX_ACTIVE_RECORDING_MS
-    : Math.max(0, Math.min(durationMs, MAX_ACTIVE_RECORDING_MS));
+export function formatRecordingTimer(durationMs: number): string {
+  // "completed" can mean an early user submission, not only the 30s cap.
+  const elapsedMs = Math.max(0, Math.min(durationMs, MAX_ACTIVE_RECORDING_MS));
   return `${formatDuration(elapsedMs)} / ${formatDuration(MAX_ACTIVE_RECORDING_MS)}`;
 }
 
