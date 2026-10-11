@@ -101,28 +101,25 @@ function isResolvedTextStyle(value: unknown): value is StyleProp<TextStyle> {
   );
 }
 
-/** Native styles must come from a rendered Text descendant, not class text. */
+/** Find the action's actual translated Text label, never the icon mock Text. */
 function findActionLabel(action: unknown): unknown {
-  for (const child of getTestInstanceChildren(action)) {
-    if (typeof child !== "object" || child === null) continue;
-    const props = getTestInstanceProps(child);
-    if (typeof props.children === "string" && props.children.length > 0) {
-      return child;
-    }
-    const descendant = findActionLabelOrNull(child);
-    if (descendant !== null) return descendant;
+  const label: unknown = getTestInstanceProps(action).accessibilityLabel;
+  if (typeof label !== "string" || label.length === 0) {
+    throw new Error("Recorder action requires a nonempty accessible label");
   }
-  throw new Error("Recorder control is missing a visible Text label");
+  const result = findActionLabelOrNull(action, label);
+  if (result === null) {
+    throw new Error("Recorder control is missing its matching visible Text label");
+  }
+  return result;
 }
 
-function findActionLabelOrNull(parent: unknown): unknown {
+function findActionLabelOrNull(parent: unknown, label: string): unknown {
   for (const child of getTestInstanceChildren(parent)) {
     if (typeof child !== "object" || child === null) continue;
     const props = getTestInstanceProps(child);
-    if (typeof props.children === "string" && props.children.length > 0) {
-      return child;
-    }
-    const found = findActionLabelOrNull(child);
+    if (props.children === label) return child;
+    const found = findActionLabelOrNull(child, label);
     if (found !== null) return found;
   }
   return null;

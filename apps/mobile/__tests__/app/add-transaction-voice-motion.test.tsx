@@ -107,6 +107,8 @@ describe("AddTransaction approved Voice motion and recovery", () => {
   });
 
   it("maps fresh blocked permission to Settings without issuing an OS request", async (): Promise<void> => {
+    mockRouteState.mockVoiceHasPermission = false;
+    mockRouteState.mockPermissionStatus = "blocked";
     mockVoiceStartFlow.mockResolvedValueOnce({
       kind: "permission",
       permissionStatus: "blocked",
@@ -165,6 +167,8 @@ describe("AddTransaction approved Voice motion and recovery", () => {
   });
 
   it("grants fresh AI consent before Flow's one permission read; only the inline action can request OS access", async (): Promise<void> => {
+    mockRouteState.mockVoiceHasPermission = false;
+    mockRouteState.mockPermissionStatus = "denied";
     mockGetAiProcessingConsentStatus.mockResolvedValueOnce(unconsentedStatus);
     mockVoiceStartFlow
       .mockResolvedValueOnce({ kind: "permission", permissionStatus: "denied" })

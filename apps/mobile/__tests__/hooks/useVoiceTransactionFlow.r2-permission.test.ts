@@ -23,6 +23,7 @@ const mockRecorderPause = jest.fn<boolean, []>();
 const mockRecorderResume = jest.fn<boolean, []>();
 const mockRecorderRefresh = jest.fn<Promise<PermissionStatus>, []>();
 const mockRecorderRequest = jest.fn<Promise<boolean>, []>();
+const mockRecorderRequestStatus = jest.fn<Promise<PermissionStatus>, []>();
 const mockRecorderDiscard = jest.fn<Promise<void>, []>();
 const mockRecorderStop = jest.fn();
 const mockAvailabilityRefresh = jest.fn<Promise<VoiceAvailabilitySnapshot>, []>();
@@ -84,6 +85,7 @@ jest.mock("@/hooks/useVoiceRecorder", () => ({
     ...recorderState,
     refreshPermission: mockRecorderRefresh,
     requestPermission: mockRecorderRequest,
+    requestPermissionStatus: mockRecorderRequestStatus,
     start: mockRecorderStart,
     pause: mockRecorderPause,
     resume: mockRecorderResume,
@@ -148,6 +150,7 @@ beforeEach((): void => {
   mockRecorderPause.mockReturnValue(true);
   mockRecorderResume.mockReturnValue(true);
   mockRecorderRequest.mockResolvedValue(false);
+  mockRecorderRequestStatus.mockReset().mockResolvedValue("denied");
   mockRecorderDiscard.mockResolvedValue(undefined);
   mockRecorderStop.mockResolvedValue(null);
   mockUUID.mockReturnValue("d741e457-4e2d-449d-b7ec-7ce355a00001");
@@ -245,9 +248,9 @@ describe("R2 typed single just-in-time microphone permission ownership", () => {
     expect(mockRecorderRequest).not.toHaveBeenCalled();
   });
 
-  it("requests OS permission only on explicit inline-Continue attempt and only after its one fresh read", async (): Promise<void> => {
+  it("requests OS permission only on explicit inline-Continue and uses that one typed response", async (): Promise<void> => {
     mockRecorderRefresh.mockResolvedValue("denied");
-    mockRecorderRequest.mockResolvedValue(true);
+    mockRecorderRequestStatus.mockResolvedValue("granted");
     const flow = renderFlow();
     let outcome: unknown;
     await act(async (): Promise<void> => {
@@ -257,11 +260,12 @@ describe("R2 typed single just-in-time microphone permission ownership", () => {
     });
     expect(outcome).toEqual({ kind: "started" });
     expect(mockRecorderRefresh).toHaveBeenCalledTimes(1);
-    expect(mockRecorderRequest).toHaveBeenCalledTimes(1);
+    expect(mockRecorderRequestStatus).toHaveBeenCalledTimes(1);
+    expect(mockRecorderRequest).not.toHaveBeenCalled();
     expect(mockRecorderRefresh.mock.invocationCallOrder[0]).toBeLessThan(
-      mockRecorderRequest.mock.invocationCallOrder[0]
+      mockRecorderRequestStatus.mock.invocationCallOrder[0]
     );
-    expect(mockRecorderRequest.mock.invocationCallOrder[0]).toBeLessThan(
+    expect(mockRecorderRequestStatus.mock.invocationCallOrder[0]).toBeLessThan(
       mockRecorderStart.mock.invocationCallOrder[0]
     );
   });
@@ -534,6 +538,115 @@ describe("R2 typed single just-in-time microphone permission ownership", () => {
       expect(mockUUID).toHaveBeenCalledTimes(1);
       expect(mockRecorderStart).toHaveBeenCalledTimes(1);
     });
+  });
+
+
+  it.each(["denied", "blocked", "unknown"] as const)(
+    "returns the ACTUAL %s OS response from explicit permission request without a second native read",
+    async (permissionStatus): Promise<void> => {
+      mockRecorderRefresh.mockResolvedValue("denied");
+      mockRecorderRequestStatus.mockResolvedValue(permissionStatus);
+      const flow = renderFlow();
+      let outcome: unknown;
+      await act(async (): Promise<void> => {
+        outcome = await flow.result.current.startFlow({
+          requestMicrophonePermission: true,
+        });
+      });
+      expect(outcome).toEqual({ kind: "permission", permissionStatus });
+      expect(mockRecorderRefresh).toHaveBeenCalledTimes(1);
+      expect(mockRecorderRequestStatus).toHaveBeenCalledTimes(1);
+      expect(mockRecorderRequest).not.toHaveBeenCalled();
+      expect(mockRecorderStart).not.toHaveBeenCalled();
+      expect(mockUUID).not.toHaveBeenCalled();
+      expect(mockProvider).not.toHaveBeenCalled();
+      expect(mockPush).not.toHaveBeenCalled();
+      expect(flow.result.current.flowStatus).toBe("idle");
+    }
+  );
+
+  it.each(["cancel", "actor"] as const)(
+    "ignores a late explicit OS permission result after %s invalidation",
+    async (invalidatedBy): Promise<void> => {
+      const pendingStatus = deferred<PermissionStatus>();
+      mockRecorderRefresh.mockResolvedValue("denied");
+      mockRecorderRequestStatus.mockReturnValueOnce(pendingStatus.promise);
+      const flow = renderFlow();
+      let pending: Promise<unknown> = Promise.resolve();
+      await act(async (): Promise<void> => {
+        pending = flow.result.current.startFlow({
+          requestMicrophonePermission: true,
+        });
+        for (let index = 0; index < 8; index += 1) {
+          await Promise.resolve();
+        }
+      });
+      expect(mockRecorderRefresh).toHaveBeenCalledTimes(1);
+      expect(mockRecorderRequestStatus).toHaveBeenCalledTimes(1);
+      expect(mockRecorderRequest).not.toHaveBeenCalled();
+      expect(mockRecorderStart).not.toHaveBeenCalled();
+      if (invalidatedBy === "cancel") {
+        await act(async (): Promise<void> => {
+          await flow.result.current.discardRecording();
+        });
+      } else {
+        mockUserId = "user-2";
+        flow.rerender(undefined);
+      }
+      let outcome: unknown;
+      await act(async (): Promise<void> => {
+        pendingStatus.resolve("granted");
+        outcome = await pending;
+      });
+      expect(outcome).toEqual({
+        kind: "not-started",
+        reason: invalidatedBy === "cancel" ? "cancelled" : "actor-changed",
+      });
+      expect(flow.result.current.flowStatus).toBe("idle");
+      expect(mockRecorderStart).not.toHaveBeenCalled();
+      expect(mockUUID).not.toHaveBeenCalled();
+      expect(mockProvider).not.toHaveBeenCalled();
+      expect(mockPush).not.toHaveBeenCalled();
+    }
+  );
+
+  it("surfaces a failed 30-second cap finalization as existing generic recovery, not Listening", async (): Promise<void> => {
+    const flow = renderFlow();
+    await act(async (): Promise<void> => {
+      expect(await flow.result.current.startFlow()).toEqual({ kind: "started" });
+    });
+    expect(flow.result.current.flowStatus).toBe("recording");
+    recorderState.status = "error";
+    recorderState.durationMs = 30_000;
+    recorderState.isRecording = false;
+    recorderState.audioUri = null;
+    flow.rerender(undefined);
+    expect(flow.result.current.flowStatus).toBe("error");
+    expect(flow.result.current.errorMessage).toBe(
+      "transactions:voice_recording_finalize_failed"
+    );
+    expect(flow.result.current.isMicrophonePermissionError).toBe(false);
+    expect(flow.result.current.isModeSwitchLocked).toBe(false);
+    expect(mockRecorderStop).not.toHaveBeenCalled();
+    expect(mockProvider).not.toHaveBeenCalled();
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  it("does not publish a late cap failure after the authenticated actor changes", async (): Promise<void> => {
+    const flow = renderFlow();
+    await act(async (): Promise<void> => {
+      await flow.result.current.startFlow();
+    });
+    mockUserId = "user-2";
+    flow.rerender(undefined);
+    expect(flow.result.current.flowStatus).toBe("idle");
+    recorderState.status = "error";
+    recorderState.audioUri = null;
+    flow.rerender(undefined);
+    expect(flow.result.current.flowStatus).toBe("idle");
+    expect(flow.result.current.errorMessage).toBeNull();
+    expect(mockProvider).not.toHaveBeenCalled();
+    expect(mockPush).not.toHaveBeenCalled();
   });
 
 });

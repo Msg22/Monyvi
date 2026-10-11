@@ -559,7 +559,7 @@ describe("useVoiceTransactionFlow", () => {
   it("locks mode switching while consent awaits and releases it after refusal", async (): Promise<void> => {
     const consent = createDeferred<boolean>();
     const flow = renderVoiceFlow(() => consent.promise);
-    let pending = Promise.resolve();
+    let pending: ReturnType<typeof flow.result.current.startFlow> | undefined;
     act((): void => {
       pending = flow.result.current.startFlow();
     });

@@ -302,7 +302,10 @@ describe("VoiceTransactionEntry responsive, animation and unboxed layout", () =>
         }
       }
       expect(
-        screen.getByTestId("ionicon-mic", { includeHiddenElements: true })
+        screen.getByTestId(
+          state === "paused" ? "ionicon-pause" : "ionicon-mic",
+          { includeHiddenElements: true }
+        )
       ).toBeOnTheScreen();
     }
   );
@@ -671,8 +674,13 @@ describe("real Tailwind/CSS Interop Voice native shape", () => {
           expect(rgba).toBe(processColor("transparent"));
         }
       }
-      // The 104dp gradient (or first-frame Starting gradient) must remain.
-      expect(screen.getByTestId("voice-gradient")).toBeOnTheScreen();
+      // The native-clipped mic is intentionally hidden from the a11y tree
+      // while Starting/recording/paused. Inspect the rendered decoration.
+      expect(
+        screen.getByTestId("voice-gradient", {
+          includeHiddenElements: true,
+        })
+      ).toBeOnTheScreen();
     }
   );
 
