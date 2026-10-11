@@ -1,5 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react-native";
+import i18next from "i18next";
 import React from "react";
+import { initReactI18next } from "react-i18next";
 import { Text, TouchableOpacity, View } from "react-native";
 import {
   getTestInstanceProps,
@@ -7,23 +9,26 @@ import {
 } from "../../test-utils/test-instance-props";
 
 import { Dropdown, type DropdownItem } from "@/components/ui/Dropdown";
+import enCommon from "@/locales/en/common.json";
+import arCommon from "@/locales/ar/common.json";
 
-let mockDropdownLocale: "en" | "ar" = "en";
+beforeAll(async (): Promise<void> => {
+  await i18next.use(initReactI18next).init({
+    lng: "en",
+    fallbackLng: "en",
+    ns: ["common"],
+    defaultNS: "common",
+    resources: {
+      en: { common: enCommon },
+      ar: { common: arCommon },
+    },
+    interpolation: { escapeValue: false },
+    react: { useSuspense: false },
+  });
+});
 
-jest.mock("react-i18next", () => ({
-  useTranslation: () => ({
-    i18n: { resolvedLanguage: mockDropdownLocale },
-    t: (key: string): string =>
-      key === "required_field"
-        ? mockDropdownLocale === "ar"
-          ? "حقل مطلوب"
-          : "Required field"
-        : key,
-  }),
-}));
-
-afterEach((): void => {
-  mockDropdownLocale = "en";
+afterEach(async (): Promise<void> => {
+  await i18next.changeLanguage("en");
 });
 
 jest.mock("@/context/ThemeContext", () => ({
@@ -264,8 +269,8 @@ describe("T007 Dropdown required names and feedback precedence", () => {
     ["ar", "الحساب", "الحساب، حقل مطلوب"],
   ] as const)(
     "exposes one required accessible name on the %s selection trigger",
-    (locale, label, expectedName) => {
-      mockDropdownLocale = locale;
+    async (locale, label, expectedName): Promise<void> => {
+      await i18next.changeLanguage(locale);
       render(
         <Dropdown
           label={label}
@@ -295,8 +300,8 @@ describe("T007 Dropdown required names and feedback precedence", () => {
     ["ar", "الحساب", "الحساب المخصص، حقل مطلوب"],
   ] as const)(
     "preserves a prequalified explicit accessible override once in %s",
-    (locale, label, override) => {
-      mockDropdownLocale = locale;
+    async (locale, label, override): Promise<void> => {
+      await i18next.changeLanguage(locale);
       render(
         <Dropdown
           label={label}
@@ -493,5 +498,209 @@ describe("T007 Dropdown required names and feedback precedence", () => {
     );
     fireEvent.press(screen.getByTestId("disabled-selector-trigger"));
     expect(onToggle).not.toHaveBeenCalled();
+  });
+});
+describe("T007 Q1/Q2/Q5 complete Dropdown accessibility contract", () => {
+  it("exposes null placeholder and selected value as readable trigger accessibilityValue text", () => {
+    const onChange = jest.fn();
+    const onToggle = jest.fn();
+    const { rerender } = render(
+      <Dropdown
+        label="Account"
+        required
+        placeholder="Select account"
+        items={ACCOUNT_ITEMS}
+        value={null}
+        onChange={onChange}
+        onToggle={onToggle}
+        isOpen={false}
+        testID="value-aware-selector"
+      />
+    );
+    const unselected = screen.getByTestId("value-aware-selector-trigger");
+    expect(unselected).toHaveProp("accessibilityRole", "button");
+    expect(unselected).toHaveProp(
+      "accessibilityLabel",
+      "Account, Required field"
+    );
+    expect(unselected).toHaveProp("accessibilityValue", {
+      text: "Select account",
+    });
+
+    rerender(
+      <Dropdown
+        label="Account"
+        required
+        placeholder="Select account"
+        items={ACCOUNT_ITEMS}
+        value="cash-1"
+        onChange={onChange}
+        onToggle={onToggle}
+        isOpen={false}
+        testID="value-aware-selector"
+      />
+    );
+    const selected = screen.getByTestId("value-aware-selector-trigger");
+    expect(selected).toHaveProp("accessibilityLabel", "Account, Required field");
+    expect(selected).toHaveProp("accessibilityValue", { text: "Cash" });
+    expect(screen.getByText("Cash")).toBeTruthy();
+  });
+
+  it.each([
+    ["en", "Account", "Required field help", "Required field help, Required field"],
+    ["en", "Account", "UnRequired field", "UnRequired field, Required field"],
+    ["ar", "الحساب", "معلومات حقل مطلوب إضافية", "معلومات حقل مطلوب إضافية، حقل مطلوب"],
+  ] as const)(
+    "appends a complete required qualifier when %s override only contains ordinary phrase text",
+    async (locale, label, override, expectedName): Promise<void> => {
+      await i18next.changeLanguage(locale);
+      render(
+        <Dropdown
+          label={label}
+          required
+          accessibilityLabel={override}
+          items={ACCOUNT_ITEMS}
+          value={null}
+          onChange={jest.fn()}
+          onToggle={jest.fn()}
+          isOpen={false}
+          testID="substring-selector"
+        />
+      );
+      expect(screen.getByTestId("substring-selector-trigger")).toHaveProp(
+        "accessibilityLabel",
+        expectedName
+      );
+    }
+  );
+
+  it.each([
+    ["en", "Account", "  Custom account, Required field  "],
+    ["ar", "الحساب", "  حساب مخصص، حقل مطلوب  "],
+  ] as const)(
+    "retains complete prequalified %s override with punctuation and whitespace",
+    async (locale, label, override): Promise<void> => {
+      await i18next.changeLanguage(locale);
+      render(
+        <Dropdown
+          label={label}
+          required
+          accessibilityLabel={override}
+          items={ACCOUNT_ITEMS}
+          value={null}
+          onChange={jest.fn()}
+          onToggle={jest.fn()}
+          isOpen={false}
+          testID="complete-selector"
+        />
+      );
+      expect(screen.getByTestId("complete-selector-trigger")).toHaveProp(
+        "accessibilityLabel",
+        override
+      );
+    }
+  );
+
+  it.each([
+    ["en", "Optional account", "Required field help"],
+    ["ar", "حساب اختياري", "معلومات حقل مطلوب إضافية"],
+  ] as const)(
+    "keeps optional %s override verbatim with real translated resources",
+    async (locale, label, override): Promise<void> => {
+      await i18next.changeLanguage(locale);
+      render(
+        <Dropdown
+          label={label}
+          accessibilityLabel={override}
+          items={ACCOUNT_ITEMS}
+          value={null}
+          onChange={jest.fn()}
+          onToggle={jest.fn()}
+          isOpen={false}
+          testID="optional-override-selector"
+        />
+      );
+      expect(screen.getByTestId("optional-override-selector-trigger"))
+        .toHaveProp("accessibilityLabel", override);
+      expect(screen.queryByText(label + " *")).toBeNull();
+    }
+  );
+
+  it("uses approved gold advisory, falls through empty feedback, and exposes invalid state only for an error", () => {
+    const onToggle = jest.fn();
+    const { rerender } = render(
+      <Dropdown
+        label="Account"
+        items={ACCOUNT_ITEMS}
+        value={null}
+        onChange={jest.fn()}
+        onToggle={onToggle}
+        isOpen={false}
+        error=""
+        warning="Review account selection"
+        helperText="Choose an account"
+        accessibilityHint="Select the right account"
+        testID="fallback-selector"
+      />
+    );
+
+    expect(screen.getByText("Review account selection")).toHaveProp(
+      "className",
+      expect.stringContaining("text-gold-600")
+    );
+    expect(screen.queryByText("Choose an account")).toBeNull();
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.getByTestId("fallback-selector-trigger")).toHaveProp(
+      "aria-invalid",
+      false
+    );
+    expect(screen.getByTestId("fallback-selector-trigger")).toHaveProp(
+      "accessibilityHint",
+      "Select the right account"
+    );
+
+    rerender(
+      <Dropdown
+        label="Account"
+        items={ACCOUNT_ITEMS}
+        value={null}
+        onChange={jest.fn()}
+        onToggle={onToggle}
+        isOpen={false}
+        error=""
+        warning=""
+        helperText="Choose an account"
+        testID="fallback-selector"
+      />
+    );
+    expect(screen.getByText("Choose an account")).toBeTruthy();
+    expect(screen.queryByText("Review account selection")).toBeNull();
+
+    rerender(
+      <Dropdown
+        label="Account"
+        items={ACCOUNT_ITEMS}
+        value={null}
+        onChange={jest.fn()}
+        onToggle={onToggle}
+        isOpen={false}
+        error="Select a valid account"
+        warning=""
+        helperText="Choose an account"
+        accessibilityHint="Correct the account selection"
+        testID="fallback-selector"
+      />
+    );
+    expect(screen.getByRole("alert", { name: "Select a valid account" }))
+      .toBeTruthy();
+    expect(screen.getByTestId("fallback-selector-trigger")).toHaveProp(
+      "aria-invalid",
+      true
+    );
+    expect(screen.getByTestId("fallback-selector-trigger")).toHaveProp(
+      "accessibilityHint",
+      "Correct the account selection"
+    );
+    expect(screen.queryByText("Choose an account")).toBeNull();
   });
 });
