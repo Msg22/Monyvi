@@ -31,7 +31,7 @@ import {
   type AudioRecorder,
   type RecordingOptions,
 } from "expo-audio";
-import * as FileSystem from "expo-file-system";
+import * as FileSystem from "expo-file-system/legacy";
 import { Platform } from "react-native";
 import {
   useMicrophonePermission,
