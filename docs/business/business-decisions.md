@@ -597,22 +597,31 @@ Business rules:
 - Effective holding state is Active, Sold, or Disposed. Creation, material
   correction, Sale, No Longer, and Undo are immutable lifecycle events. Terminal
   event facts are never edited in place.
-- Sell applies to the whole holding only. It records positive gross proceeds,
-  same-currency optional fees, net proceeds, sale date, optional notes, and
-  realized profit or loss. Partial sales are backlog.
-- Sell shows a complete live `What will happen` summary and commits directly
-  with `Record sale`; no second review or confirmation appears.
-- Sale may optionally credit one selected account in the sale currency. An
-  eligible matching default account may be preselected, but the user may change
-  or disable it. Cross-currency automatic credit is not allowed.
-- Issue #242 is a separate immediate implementation prerequisite only for sale
-  account credit, Undo of an actually credited sale, and account compensation or
-  replacement credit. Those effects remain disabled until #242 passes its
-  account revision, writer-guard, CAS, sync, cutover, and regression contract.
-  Sale without credit, uncredited Undo, and unrelated Metals work continue.
-- Sale credit equals exact net proceeds. It is a narrow linked Metals account
-  effect, increases the account balance, and is excluded from ordinary income,
-  budget-income, and earned-cashflow analytics.
+- Sell applies to the whole ACTIVE holding only, sold in its trusted
+  `purchaseCurrency` ONLY (same currency; the user cannot choose a
+  cross-currency). Partial sales are backlog.
+- It records positive gross proceeds, same-currency optional fees, net proceeds,
+  sale date, optional notes, and realized profit or loss.
+- Sell creates no account credit (no account balance side-effect). Sale proceeds
+  are recorded as metal lifecycle sale facts without crediting a cash account.
+- Canonical realized profit or loss is exact net same-currency proceeds minus
+  paid purchase cost (`netProceeds - purchaseCost`); if purchase cost is missing
+  or unrecorded, realized profit or loss is unavailable. Existing historical raw
+  rate reference capture, FR-050 attribution calculations, and FR-051
+  preferred-currency display conversions remain unchanged.
+- No rate acknowledgment is needed for a current same-currency sale because
+  proceeds use the holding's trusted purchase currency directly without exchange
+  rate risk.
+- Sell shows a complete live `What will happen` summary (net proceeds, realized
+  profit/loss, Sold status, removal from active metals, and History entry) and
+  commits directly with `Record sale`; no second review or confirmation appears.
+- Issue #242 remains a separate implementation prerequisite for any future
+  optional account credit, Undo of an actually credited historical sale, and
+  account compensation or replacement credit. Current sale operates without
+  credit.
+- When historical or future linked account credit is present, it is classified
+  as asset-sale proceeds, equals exact net proceeds, and is excluded from
+  ordinary income, budget-income, and earned-cashflow analytics.
 - No Longer applies to the whole holding and uses exactly: Lost or stolen,
   Destroyed or damaged, Given away, Donated, or Other. The first two are
   write-offs; Given away and Donated are external transfers. Other requires the
@@ -626,8 +635,9 @@ Business rules:
   purchase-currency snapshot pair is still captured internally when available,
   retained with its exact values/dates/IDs/provenance, pinned across ambiguous
   operational retry, refreshed after revision conflict, and rate-store failures
-  still fail visibly with retry. This exception is No Longer-only; Sell, Add,
-  and material correction trust/acknowledgment rules are unchanged.
+  still fail visibly with retry. This exception is No Longer-only; Add and
+  material correction trust/acknowledgment rules are unchanged, while current
+  same-currency Sell requires no rate acknowledgment.
 - Delete holding is only for an incorrect Active record. It creates no Sale,
   disposal, proceeds, profit/loss, write-off, or transfer. Complete hidden
   non-effective audit/sync evidence prevents the mistaken holding from
@@ -728,12 +738,13 @@ introduce a new calculation or product decision.
   `= G_P - V`; and fee component `= -F_P`. Trustworthy realized P/L equals metal
   movement plus currency movement plus purchase-cost component plus
   sale-difference component plus fee component, therefore `G_P - F_P - K`.
-- Fees use the sale-proceeds currency only, are non-negative, cannot exceed
-  gross proceeds, and are deducted from gross proceeds to produce net proceeds.
-  A sale without account credit remains valid. Optional account credit equals
-  exact net proceeds only, requires a matching-currency account, and creates
-  asset-sale proceeds excluded from ordinary income, budget-income, and
-  earned-cashflow analytics.
+- Fees use the sale-proceeds currency only (locked to the holding's trusted
+  `purchaseCurrency`), are non-negative, cannot exceed gross proceeds, and are
+  deducted from gross proceeds to produce net proceeds. The current Sell write
+  contract creates no account credit. When account credit is linked historically
+  or under #242, it equals exact net proceeds only, requires a matching-currency
+  account, and creates asset-sale proceeds excluded from ordinary income,
+  budget-income, and earned-cashflow analytics.
 - Preferred-currency presentation converts every canonical purchase-currency
   combined value and attribution component at current display time `d`. For
   preferred currency `D`, display canonical amount `Y_P` as

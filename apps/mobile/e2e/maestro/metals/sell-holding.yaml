@@ -1,0 +1,127 @@
+appId: com.monyvi.app
+env:
+  SELL_HOLDING_NAME: E2E Sell Coin
+---
+# AUTHORED / NOT RUN. Prerequisite: signed-in settled account; one owned ACTIVE
+# holding named SELL_HOLDING_NAME, purchase currency EGP, exact cost 100, and
+# purchase date <= today. Create it through Add or the approved lifecycle seed.
+# No private fixture endpoint, invented UUID, or missing setup helper is used.
+# Run once per fresh fixture. Offline runs require the runner/user to establish
+# airplane mode before launch; this flow itself does not claim network control.
+- launchApp:
+    clearState: false
+- openLink: monyvi://metals
+- extendedWaitUntil:
+    visible:
+      id: metal-portfolio-root
+    timeout: 30000
+- tapOn: ${SELL_HOLDING_NAME}
+- extendedWaitUntil:
+    visible:
+      id: metal-holding-detail-root
+    timeout: 30000
+- scrollUntilVisible:
+    element:
+      id: metal-holding-action-sell
+    direction: DOWN
+- tapOn:
+    id: metal-holding-action-sell
+- extendedWaitUntil:
+    visible:
+      id: metal-holding-sell-screen
+    timeout: 30000
+- assertVisible: This sells the whole holding. Partial sales are not available.
+- assertVisible:
+    id: metal-holding-sell-currency
+- tapOn:
+    id: metal-holding-sell-gross-field
+- inputText: "120"
+- hideKeyboard
+- scrollUntilVisible:
+    element:
+      id: metal-holding-sell-cancel
+    direction: DOWN
+- tapOn:
+    id: metal-holding-sell-cancel
+- assertVisible:
+    id: metal-holding-sell-exit-guard
+- tapOn: Keep editing
+- scrollUntilVisible:
+    element:
+      id: metal-holding-sell-fee-field
+    direction: UP
+- tapOn:
+    id: metal-holding-sell-fee-field
+- inputText: "121"
+- hideKeyboard
+- assertVisible: The fee cannot be more than the sale amount.
+- tapOn:
+    id: metal-holding-sell-fee-field
+- eraseText
+- inputText: "5"
+- hideKeyboard
+- scrollUntilVisible:
+    element:
+      id: metal-holding-sell-consequences
+    direction: DOWN
+- assertVisible: EGP 115.00
+- assertVisible: EGP 15.00
+- assertVisible: Profit from sale
+- assertNotVisible:
+    id: metal-holding-sell-review-screen
+- scrollUntilVisible:
+    element:
+      id: metal-holding-sell-submit
+    direction: DOWN
+- doubleTapOn:
+    id: metal-holding-sell-submit
+    delay: 25
+- extendedWaitUntil:
+    visible:
+      id: metal-holding-detail-root
+    timeout: 30000
+- assertVisible: Sold holding
+- scrollUntilVisible:
+    element:
+      id: metal-sold-net-proceeds
+    direction: DOWN
+- assertVisible: EGP 115.00
+- assertNotVisible:
+    id: metal-holding-action-sell
+- tapOn:
+    id: header-back
+- extendedWaitUntil:
+    visible:
+      id: metal-portfolio-root
+    timeout: 30000
+- assertNotVisible: ${SELL_HOLDING_NAME}
+- openLink: monyvi://metals/history
+- extendedWaitUntil:
+    visible:
+      id: metal-history-root
+    timeout: 30000
+- tapOn:
+    id: metal-history-filter-sold
+- assertVisible: ${SELL_HOLDING_NAME}
+- assertVisible: EGP 115.00
+- stopApp
+- launchApp:
+    clearState: false
+- openLink: monyvi://metals/history
+- extendedWaitUntil:
+    visible:
+      id: metal-history-root
+    timeout: 30000
+- tapOn:
+    id: metal-history-filter-sold
+- tapOn: ${SELL_HOLDING_NAME}
+- extendedWaitUntil:
+    visible:
+      id: metal-holding-detail-root
+    timeout: 30000
+- assertVisible: Sold holding
+- scrollUntilVisible:
+    element:
+      id: metal-sold-net-proceeds
+    direction: DOWN
+- assertVisible: EGP 115.00
