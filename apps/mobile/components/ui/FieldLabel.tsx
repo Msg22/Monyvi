@@ -32,7 +32,10 @@ export function composeFieldAccessibleName({
       prefix.endsWith("[") ||
       prefix.endsWith("{") ||
       prefix.endsWith('"') ||
-      prefix.endsWith("'");
+      prefix.endsWith("'") ||
+      prefix.endsWith("«") ||
+      prefix.endsWith("“") ||
+      prefix.endsWith("‘");
     if (hasCompleteBoundary) {
       return base;
     }
