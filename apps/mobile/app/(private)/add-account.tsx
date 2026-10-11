@@ -22,7 +22,10 @@ import { CurrencyPicker } from "@/components/currency/CurrencyPicker";
 import { PageHeader } from "@/components/navigation/PageHeader";
 import { TextField } from "@/components/ui/TextField";
 import { GroupedMoneyInput } from "@/components/ui/GroupedMoneyInput";
-import { FieldLabel, composeFieldAccessibleName } from "@/components/ui/FieldLabel";
+import {
+  FieldLabel,
+  composeFieldAccessibleName,
+} from "@/components/ui/FieldLabel";
 import { getCurrencyOptions } from "@/constants/accounts";
 import { palette } from "@/constants/colors";
 import { useTheme } from "@/context/ThemeContext";

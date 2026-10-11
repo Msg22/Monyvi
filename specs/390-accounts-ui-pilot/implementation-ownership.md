@@ -2,10 +2,25 @@
 
 ## Current separate Accounts migration — supersedes historical Foundation-only status below
 
-**2026-10-11:** Mohamed **authorized** the separate Accounts Add/Edit migration stacked on Foundation PR #390, with unit/integration/E2E tests deferred for later human manual verification. Root issued SOURCE GO at migration plan `488731442edfcaca96e680cbaf61d993805ce18c`. S1 Normal ChatGPT exclusively authored the four scoped UI files and the one approved uniqueness-document paragraph at source commit `0b780d05bda5e4d34c8e53e213502eda94316b47` on `codex/accounts-form-migration`; the Foundation base remains `b4a656e66263554a5dc001cee83a1431a3a9110b`. **Source owner released after handoff; root static hooks/typechecks and M1 independent source review remain pending.** No concurrent Foundation/Account source writer, review-branch overwrite, PR or merge action. `InstitutionProviderSection`, `SmsMatchingSection`, `BalanceChangedSheet`, tests, locales, hooks/services and mockups are unchanged. **All 35 Accounts manual QA cases NOT RUN.**
+**2026-10-11:** Mohamed **authorized** the separate Accounts Add/Edit migration
+stacked on Foundation PR #390, with unit/integration/E2E tests deferred for
+later human manual verification. Root issued SOURCE GO at migration plan
+`488731442edfcaca96e680cbaf61d993805ce18c`. S1 Normal ChatGPT exclusively
+authored the four scoped UI files and the one approved uniqueness-document
+paragraph at source commit `0b780d05bda5e4d34c8e53e213502eda94316b47` on
+`codex/accounts-form-migration`; the Foundation base remains
+`b4a656e66263554a5dc001cee83a1431a3a9110b`. **Source owner released after
+handoff; root static hooks/typechecks and M1 independent source review remain
+pending.** No concurrent Foundation/Account source writer, review-branch
+overwrite, PR or merge action. `InstitutionProviderSection`,
+`SmsMatchingSection`, `BalanceChangedSheet`, tests, locales, hooks/services and
+mockups are unchanged. **All 35 Accounts manual QA cases NOT RUN.**
 
-The subsequent Foundation-first worker table, T001–T013 gate text and older "production frozen" statements are retained as **dated historical evidence for the earlier Foundation wave**, **not current authorization status for this human-approved separate Accounts migration**. These do not expand future write ownership.
-
+The subsequent Foundation-first worker table, T001–T013 gate text and older
+"production frozen" statements are retained as **dated historical evidence for
+the earlier Foundation wave**, **not current authorization status for this
+human-approved separate Accounts migration**. These do not expand future write
+ownership.
 
 **Status, 2026-10-11:** Mohamed has **authorized foundation-first T001–T013 and
 its eventual PR**, with approved **4–6 hours** from **08:06:26 UTC**.

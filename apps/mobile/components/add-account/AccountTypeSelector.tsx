@@ -13,7 +13,10 @@ import {
 import { ACCOUNT_TYPES } from "@/constants/accounts";
 import { palette } from "@/constants/colors";
 import { useTheme } from "@/context/ThemeContext";
-import { FieldLabel, composeFieldAccessibleName } from "@/components/ui/FieldLabel";
+import {
+  FieldLabel,
+  composeFieldAccessibleName,
+} from "@/components/ui/FieldLabel";
 
 interface AccountTypeSelectorProps {
   readonly value: AccountType;
@@ -61,7 +64,11 @@ export function AccountTypeSelector({
       accessibilityRole="radiogroup"
       accessibilityLabel={groupAccessibleName}
     >
-      <FieldLabel label={typeLabel} required={required} className="input-label mb-2" />
+      <FieldLabel
+        label={typeLabel}
+        required={required}
+        className="input-label mb-2"
+      />
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
