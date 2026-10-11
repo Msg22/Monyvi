@@ -264,13 +264,19 @@ Business rules:
 - One account has exactly one currency.
 - Supported account currencies come from the generated `CurrencyType` enum and
   current market-rate support, not only EGP/USD/EUR.
-- For accounts without a known provider identity, account names must be unique
-  per user and currency, case-insensitive.
-- For accounts with a known provider identity, account names must be unique per
-  user, currency, and provider identity (`institution_id`), case-insensitive.
-- `accounts.name` is the user's account nickname. Bank or wallet provider
-  display text is separate account metadata (`provider_display_name`) and known
-  providers also store the stable registry identity (`institution_id`).
+- Among active (non-deleted) accounts, nicknames are unique after trimming and
+  case-insensitive comparison for the same user, currency, and provider identity.
+  Editing an account excludes that account from its own duplicate-name check.
+- Provider identity takes precedence from a non-empty `institution_id`
+  (trimmed and lowercased). Without one, a non-empty manually entered
+  `provider_display_name` (trimmed, internal whitespace collapsed, lowercased)
+  identifies the provider. With neither, accounts share one no-provider identity.
+  Known institution and manual-provider identities are distinct namespaces;
+  account type does not create an additional uniqueness dimension.
+- The same nickname and currency with manual providers `Bank A` versus
+  `Bank B` is allowed, while `Bank A` versus ` bank   a ` is a duplicate.
+  `accounts.name` remains the user's nickname, separate from provider display
+  metadata and a known provider's stable `institution_id`.
 - The first active account created for a user is marked default.
 - At most one active account per user should be default.
 - Users may intentionally have active accounts with no default account. The

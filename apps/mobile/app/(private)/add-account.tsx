@@ -21,6 +21,8 @@ import { SmsMatchingSection } from "@/components/add-account/SmsMatchingSection"
 import { CurrencyPicker } from "@/components/currency/CurrencyPicker";
 import { PageHeader } from "@/components/navigation/PageHeader";
 import { TextField } from "@/components/ui/TextField";
+import { GroupedMoneyInput } from "@/components/ui/GroupedMoneyInput";
+import { FieldLabel, composeFieldAccessibleName } from "@/components/ui/FieldLabel";
 import { getCurrencyOptions } from "@/constants/accounts";
 import { palette } from "@/constants/colors";
 import { useTheme } from "@/context/ThemeContext";
@@ -50,19 +52,26 @@ function CurrencySelectField({
   onChange,
   label,
 }: CurrencySelectFieldProps): React.JSX.Element {
+  const { t: tCommon } = useTranslation("common");
   const selectedCurrency = getCurrencyOptions().find(
     (currency) => currency.value === value
   );
+  const accessibleName = composeFieldAccessibleName({
+    label,
+    required: true,
+    requiredText: tCommon("required_field"),
+  });
 
   return (
     <View className="mb-3">
-      <Text className="input-label mb-2">{label}</Text>
+      <FieldLabel label={label} required className="input-label mb-2" />
       <View className="rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
         <TouchableOpacity
           onPress={onOpen}
           activeOpacity={0.7}
           accessibilityRole="button"
-          accessibilityLabel={label}
+          accessibilityLabel={accessibleName}
+          accessibilityValue={{ text: selectedCurrency?.label ?? value }}
           className="p-4"
         >
           <View className="flex-row items-center justify-between">
@@ -265,12 +274,14 @@ export default function AddAccount(): React.ReactNode {
           />
 
           <AccountTypeSelector
+            required
             value={formData.accountType}
             onChange={(accountType) => updateField("accountType", accountType)}
           />
 
           <TextField
             label={t("account_name")}
+            required
             testID="account-name-input"
             placeholder={
               formData.accountType === "BANK"
@@ -314,16 +325,19 @@ export default function AddAccount(): React.ReactNode {
           />
 
           <View ref={balanceFieldRef}>
-            <TextField
+            <GroupedMoneyInput
+              variant="default"
               label={t("initial_balance")}
+              required
               testID="initial-balance-input"
               placeholder="0"
               value={formData.balance}
-              onChangeText={(text) => {
+              onCanonicalChange={(text) => {
                 updateField("balance", text);
               }}
               error={errors.balance}
               keyboardType="numeric"
+              inputMode="numeric"
               onFocus={handleBalanceFieldFocus}
             />
           </View>

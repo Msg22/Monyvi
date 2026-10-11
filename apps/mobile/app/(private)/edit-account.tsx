@@ -22,6 +22,7 @@ import { DeleteAccountSheet } from "@/components/edit-account/DeleteAccountSheet
 import { ReadOnlyDropdown } from "@/components/edit-account/ReadOnlyDropdown";
 import { PageHeader } from "@/components/navigation/PageHeader";
 import { TextField } from "@/components/ui/TextField";
+import { GroupedMoneyInput } from "@/components/ui/GroupedMoneyInput";
 import { useToast } from "@/components/ui/Toast";
 import { getCurrencyOptions } from "@/constants/accounts";
 import { palette } from "@/constants/colors";
@@ -429,6 +430,7 @@ function EditAccountForm({
 
           <TextField
             label={t("account_name")}
+            required
             testID="account-name-input"
             placeholder={t("account_name_placeholder_bank")}
             value={formData.name}
@@ -456,16 +458,20 @@ function EditAccountForm({
           )}
 
           <View ref={balanceFieldRef}>
-            <TextField
+            <GroupedMoneyInput
+              variant="default"
+              allowNegative
               label={t("balance")}
+              required
               testID="initial-balance-input"
               placeholder="0"
               value={formData.balance}
-              onChangeText={(text) => {
+              onCanonicalChange={(text) => {
                 updateField("balance", text);
               }}
               error={errors.balance}
               keyboardType="numeric"
+              inputMode="numeric"
               onFocus={handleBalanceFieldFocus}
             />
           </View>
