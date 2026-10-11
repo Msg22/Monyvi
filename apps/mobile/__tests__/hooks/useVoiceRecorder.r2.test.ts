@@ -147,7 +147,12 @@ describe("useVoiceRecorder R2 active-duration cap", () => {
     "fails the 30-second cap with an explicit recoverable recorder state for %s",
     async (failure): Promise<void> => {
       if (failure === "missing-uri") {
-        setMockRecorderUri(null);
+        // Native exposes a partial URI before Stop, but loses it when Stop
+        // resolves. Failure teardown must remember and delete that known file.
+        mockStop.mockImplementationOnce((): Promise<void> => {
+          setMockRecorderUri(null);
+          return Promise.resolve();
+        });
       } else {
         mockStop.mockRejectedValueOnce(new Error("Native stop failed"));
       }
@@ -163,17 +168,37 @@ describe("useVoiceRecorder R2 active-duration cap", () => {
       expect(unwrap(result).audioUri).toBeNull();
       expect(unwrap(result).durationMs).toBe(ACTIVE_CAP_MS);
       expect(mockRecord).toHaveBeenCalledTimes(1);
+      // A generic error unlocks mode switching. The failed recorder must be
+      // stopped, its known partial audio deleted, and released NOW, before any
+      // user-initiated Discard/Retry/Manual switch.
+      expect(mockGetInfoAsync).toHaveBeenCalledWith(RETAINED_URI);
+      expect(mockDeleteAsync).toHaveBeenCalledTimes(1);
+      expect(mockDeleteAsync).toHaveBeenCalledWith(RETAINED_URI, {
+        idempotent: true,
+      });
+      expect(mockRelease).toHaveBeenCalledTimes(1);
+      expect(mockDeleteAsync.mock.invocationCallOrder[0]).toBeLessThan(
+        mockRelease.mock.invocationCallOrder[0]
+      );
+      expect(jest.getTimerCount()).toBe(0);
 
       await advanceActiveClock(1_500);
       expect(mockStop).toHaveBeenCalledTimes(1);
       expect(unwrap(result).status).toBe("error");
       expect(unwrap(result).audioUri).toBeNull();
+      expect(mockDeleteAsync).toHaveBeenCalledTimes(1);
+      expect(mockRelease).toHaveBeenCalledTimes(1);
+      expect(jest.getTimerCount()).toBe(0);
 
+      // Discard after automatic failure cleanup only clears recoverable UI
+      // state; it must never stop/delete/release the same native object again.
       await actAsync(async (): Promise<void> => {
         await unwrap(result).discard();
       });
       expect(unwrap(result).status).toBe("idle");
       expect(unwrap(result).audioUri).toBeNull();
+      expect(mockStop).toHaveBeenCalledTimes(1);
+      expect(mockDeleteAsync).toHaveBeenCalledTimes(1);
       expect(mockRelease).toHaveBeenCalledTimes(1);
     }
   );
@@ -215,6 +240,11 @@ describe("useVoiceRecorder R2 active-duration cap", () => {
     expect(unwrap(result).status).toBe("recording");
     expect(unwrap(result).isRecording).toBe(true);
     expect(unwrap(result).audioUri).toBeNull();
+    await advanceActiveClock(1_000);
+    expect(unwrap(result).status).toBe("recording");
+    expect(mockRelease).toHaveBeenCalledTimes(1);
+    expect(mockDeleteAsync).toHaveBeenCalledTimes(1);
+    expect(mockStop).toHaveBeenCalledTimes(1);
   });
 
   it("clamps elapsed after a large timer jump", async (): Promise<void> => {
