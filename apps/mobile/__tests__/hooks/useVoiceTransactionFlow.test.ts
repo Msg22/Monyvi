@@ -743,7 +743,131 @@ describe("useVoiceTransactionFlow", () => {
     expect(mockParseVoiceWithAi).toHaveBeenCalledTimes(1);
     expect(mockPush).not.toHaveBeenCalled();
   });
+
+  it("keeps cap audio without parsing until explicit Submit", async (): Promise<void> => {
+    const flow = renderVoiceFlow();
+    await prepareCappedRecording(flow);
+
+    expect(flow.result.current.flowStatus).toBe("completed");
+    expect(mockRefresh).toHaveBeenCalledTimes(1);
+    expect(mockParseVoiceWithAi).not.toHaveBeenCalled();
+    expect(mockRecorderStop).not.toHaveBeenCalled();
+    expect(mockPush).not.toHaveBeenCalled();
+
+    await act(async (): Promise<void> => {
+      await flow.result.current.submitRecording();
+    });
+    expect(mockRecorderStop).not.toHaveBeenCalled();
+    expect(mockParseVoiceWithAi).toHaveBeenCalledTimes(1);
+    expect(mockParseVoiceWithAi).toHaveBeenCalledWith(
+      expect.objectContaining({
+        audioUri: "file://capped.m4a",
+        requestKey: "11111111-1111-4111-8111-111111111111",
+      })
+    );
+    expect(mockRandomUUID).toHaveBeenCalledTimes(1);
+    expect(mockPush).toHaveBeenCalledTimes(1);
+  });
+
+  it("deduplicates repeated Submit while capped audio is in flight", async (): Promise<void> => {
+    const processing = createDeferred<unknown>();
+    mockParseVoiceWithAi.mockReturnValueOnce(processing.promise);
+    const flow = renderVoiceFlow();
+    await prepareCappedRecording(flow);
+
+    let first = Promise.resolve();
+    let second = Promise.resolve();
+    await act(async (): Promise<void> => {
+      first = flow.result.current.submitRecording();
+      second = flow.result.current.submitRecording();
+      for (let turn = 0; turn < 8; turn += 1) await Promise.resolve();
+    });
+    expect(mockParseVoiceWithAi).toHaveBeenCalledTimes(1);
+    expect(mockRecorderStop).not.toHaveBeenCalled();
+
+    await act(async (): Promise<void> => {
+      processing.resolve({
+        kind: "network",
+        message: "Retry the same request",
+        retryableSameRequest: true,
+      });
+      await Promise.all([first, second]);
+    });
+    expect(mockParseVoiceWithAi).toHaveBeenCalledTimes(1);
+    expect(flow.result.current.canRetrySubmission).toBe(true);
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  it.each(["discard", "actor-switch"] as const)(
+    "prevents cap audio submission after %s",
+    async (reason): Promise<void> => {
+      const flow = renderVoiceFlow();
+      await prepareCappedRecording(flow);
+      if (reason === "actor-switch") {
+        mockUserId = "user-2";
+        flow.rerender(undefined);
+      } else {
+        await act(async (): Promise<void> => {
+          await flow.result.current.discardRecording();
+        });
+      }
+      await act(async (): Promise<void> => {
+        await flow.result.current.submitRecording();
+      });
+      expect(mockRecorderDiscard).toHaveBeenCalledTimes(1);
+      expect(mockRecorderStop).not.toHaveBeenCalled();
+      expect(mockParseVoiceWithAi).not.toHaveBeenCalled();
+      expect(mockPush).not.toHaveBeenCalled();
+      expect(flow.result.current.flowStatus).toBe("idle");
+    }
+  );
+
+  it("rejects a late capped Submit after the actor switches during native stop", async (): Promise<void> => {
+    const nativeStop = createDeferred<{ readonly uri: string }>();
+    const flow = renderVoiceFlow();
+    recorderState.hasPermission = true;
+    flow.rerender(undefined);
+    await act(async (): Promise<void> => {
+      await flow.result.current.startFlow();
+    });
+    recorderState.status = "recording";
+    recorderState.durationMs = 30_000;
+    recorderState.audioUri = null;
+    flow.rerender(undefined);
+    mockRecorderStop.mockReturnValueOnce(nativeStop.promise);
+
+    let submitting = Promise.resolve();
+    act((): void => {
+      submitting = flow.result.current.submitRecording();
+    });
+    expect(flow.result.current.isFinalizing).toBe(true);
+    mockUserId = "user-2";
+    flow.rerender(undefined);
+
+    await act(async (): Promise<void> => {
+      nativeStop.resolve({ uri: "file://late-cap.m4a" });
+      await submitting;
+    });
+    expect(mockParseVoiceWithAi).not.toHaveBeenCalled();
+    expect(mockPush).not.toHaveBeenCalled();
+    expect(flow.result.current.canRetrySubmission).toBe(false);
+    expect(flow.result.current.flowStatus).toBe("idle");
+  });
 });
+
+async function prepareCappedRecording(
+  flow: ReturnType<typeof renderVoiceFlow>
+): Promise<void> {
+  recorderState.hasPermission = true;
+  flow.rerender(undefined);
+  await act(async (): Promise<void> => {
+    await flow.result.current.startFlow();
+  });
+  recorderState.status = "completed";
+  recorderState.durationMs = 30_000;
+  recorderState.audioUri = "file://capped.m4a";
+  flow.rerender(undefined);
+}
 
 async function prepareCompletedRecording(
   flow: ReturnType<typeof renderVoiceFlow>
