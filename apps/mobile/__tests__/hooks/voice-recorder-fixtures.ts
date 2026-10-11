@@ -46,6 +46,27 @@ const mockSetAudioModeAsync = jest.fn().mockResolvedValue(undefined);
 const mockDeleteAsync = jest.fn().mockResolvedValue(undefined);
 const mockGetInfoAsync = jest.fn().mockResolvedValue({ exists: true });
 
+// SDK 55 root async methods throw at runtime. Existing recorder-family tests
+// retain their previous simple doubles by default; the new filesystem suite
+// opts in to the deprecated-root behavior while /legacy stays functional.
+let mockSdk55RootAsyncMethodsThrow = false;
+const mockRootGetInfoAsync = jest.fn((...args: unknown[]): Promise<unknown> => {
+  if (mockSdk55RootAsyncMethodsThrow) {
+    throw new Error(
+      'Method getInfoAsync imported from "expo-file-system" is deprecated.'
+    );
+  }
+  return mockGetInfoAsync(...args) as Promise<unknown>;
+});
+const mockRootDeleteAsync = jest.fn((...args: unknown[]): Promise<unknown> => {
+  if (mockSdk55RootAsyncMethodsThrow) {
+    throw new Error(
+      'Method deleteAsync imported from "expo-file-system" is deprecated.'
+    );
+  }
+  return mockDeleteAsync(...args) as Promise<unknown>;
+});
+
 const mockRecorder = {
   record: mockRecord,
   pause: mockPause,
@@ -91,6 +112,13 @@ jest.mock("expo-audio", () => ({
 }));
 
 jest.mock("expo-file-system", () => ({
+  deleteAsync: (...args: unknown[]): Promise<unknown> =>
+    mockRootDeleteAsync(...args),
+  getInfoAsync: (...args: unknown[]): Promise<unknown> =>
+    mockRootGetInfoAsync(...args),
+}));
+
+jest.mock("expo-file-system/legacy", () => ({
   deleteAsync: (...args: unknown[]): Promise<unknown> =>
     mockDeleteAsync(...args) as Promise<unknown>,
   getInfoAsync: (...args: unknown[]): Promise<unknown> =>
@@ -198,6 +226,10 @@ export function resetRecorderRelease(): void {
   mockRecorderReleased = false;
   mockRecorderUri = DEFAULT_RECORDER_URI;
 }
+/** Opt in to the actual SDK 55 deprecated-root error in filesystem tests. */
+export function setMockSdk55RootAsyncMethodsThrow(value: boolean): void {
+  mockSdk55RootAsyncMethodsThrow = value;
+}
 /** Deterministic native stop() success with missing output URI. */
 export function setMockRecorderUri(uri: string | null): void {
   mockRecorderUri = uri;
@@ -217,6 +249,8 @@ export {
   mockSetAudioModeAsync,
   mockDeleteAsync,
   mockGetInfoAsync,
+  mockRootDeleteAsync,
+  mockRootGetInfoAsync,
   mountedUnmounts,
   unwrap,
   renderHook,

@@ -1,9 +1,9 @@
 # Feature Specification: #391 Voice Empty-Audio Validation and Recorder Cleanup
 
-**Feature Branch**: `codex/voice-empty-audio-guard`  
-**Date**: 2026-10-12  
-**Status**: PLANNING ONLY. The SDK 55 cleanup slice is READY for test-first authorization; authoritative speech validation is BLOCKED on feasibility and contract decisions. No implementation, benchmark or device run is implied.  
-**Published source basis**: Voice `f625183373e29d372b658c10b3848a217477400a`; stacked research branch `a7e1e00e118b4b8a989387d48181fdde0c821f3d` (preserves nine prototype/research files).  
+**Feature Branch**: `codex/voice-empty-audio-guard`<br>
+**Date**: 2026-10-12<br>
+**Status**: PLANNING ONLY. The SDK 55 cleanup slice is READY for test-first authorization; authoritative speech validation is BLOCKED on feasibility and contract decisions. No implementation, benchmark or device run is implied.<br>
+**Published source basis**: Voice `f625183373e29d372b658c10b3848a217477400a`; stacked research branch `a7e1e00e118b4b8a989387d48181fdde0c821f3d` (preserves nine prototype/research files).<br>
 **Authority**: [issue #391](https://github.com/Msg22/Monyvi/issues/391), [feature 389](../389-voice-usage-limits/spec.md), [business rules](../../docs/business/business-decisions.md), [existing research](../../docs/research/voice-empty-audio-guard.md), [nonproduction spike](../../scripts/voice-audio-validation-spike/README.md). This document does not rewrite approved 389 contracts.
 
 ## User Scenarios & Testing
@@ -28,7 +28,8 @@ A user who submits silence, noise-only audio or malformed bytes should not unnec
 1. **Given** missing/zero bytes, malformed media or an unsupported submitted container, **when** actual bytes are examined, **then** reject before provider start using an agreed response category.
 2. **Given** a valid supported container containing confidently demonstrated silence or non-speech, **when** approved high-recall validation completes, **then** no Gemini invocation/provider-start unit occurs and a known-not-started reservation is released only when authoritative SQL confirms that outcome.
 3. **Given** a quiet/short Arabic, English, code-switched or speech-over-noise clip, **when** validation is run, **then** a properly measured acceptable speech-evidence rule does not falsely block legitimate capture; semantic financial content remains Gemini/parser territory.
-4. **Given** inconclusive classification, unavailable decoder/model, lease expiry or failed release RPC, **when** validation cannot prove the intended outcome, **then** the user/accounting response follows the separately reconciled fail-closed retry contract. Never claim release/refund or start status without authoritative evidence.
+4. **Given** inconclusive speech classification, **when** decoded evidence cannot confidently distinguish speech from silence/noise, **then** accepting, rejecting, or escalating classification remains an explicit high-recall policy decision; inconclusive audio is **not automatically rejected**.
+5. **Given** an unavailable decoder/model, lease expiry, or failed/ambiguous release or provider-start RPC, **when** authoritative accounting state cannot be established, **then** provider work and charging remain fail-closed under the separately reconciled retry contract. Never claim release/refund or provider start without authoritative evidence.
 
 ### User Story 3 — Preserve user identity, safe retries and owner verification (Priority: P2; contract-gated)
 

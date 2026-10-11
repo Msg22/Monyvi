@@ -1,8 +1,8 @@
 # #391 Owner Manual / Honest E2E Validation Plan
 
-**Date:** 2026-10-12  
-**Status:** AUTHORING PLAN ONLY / **NOT RUN**. No device, native recording, microphone permission screen, emulator, Maestro, Deno/FFmpeg, decoder/model import, Edge benchmark or provider/Gemini execution by this lane.  
-**Branch:** `codex/voice-empty-audio-guard` stacked over published Voice `f625183373e29d372b658c10b3848a217477400a`.  
+**Date:** 2026-10-12<br>
+**Status:** AUTHORING PLAN ONLY / **NOT RUN**. No device, native recording, microphone permission screen, emulator, Maestro, Deno/FFmpeg, decoder/model import, Edge benchmark or provider/Gemini execution by this lane.<br>
+**Branch:** `codex/voice-empty-audio-guard` stacked over published Voice `f625183373e29d372b658c10b3848a217477400a`.<br>
 **Scope:** independent SDK55 cleanup plus future, BLOCKED speech/noise validator. The root's separate `codex/voice-startup-latency` owns tap-to-record latency/route/flow/availability and cannot be mutated here. Existing research/prototype and results template remain [UNMEASURED](../../../docs/research/voice-audio-validation-spike/results.template.json).
 
 ## Evidence rules

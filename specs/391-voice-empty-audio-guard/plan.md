@@ -1,8 +1,8 @@
 # Implementation Plan: #391 Voice Empty-Audio Validation and Cleanup
 
-**Branch**: `codex/voice-empty-audio-guard` | **Date**: 2026-10-12 | **Spec**: [spec.md](./spec.md)  
-**Input**: [issue #391](https://github.com/Msg22/Monyvi/issues/391), [existing authoritative source/constraints](../389-voice-usage-limits/spec.md), [current source research](../../docs/research/voice-empty-audio-guard.md).  
-**Planning authority**: `SPECIFY_FEATURE=391-voice-empty-audio-guard` on the **existing branch**, with automatic Git extensions/hooks disabled by root; no generated branch, broad codemap, issue mutation or production assignment is implied.  
+**Branch**: `codex/voice-empty-audio-guard` | **Date**: 2026-10-12 | **Spec**: [spec.md](./spec.md)<br>
+**Input**: [issue #391](https://github.com/Msg22/Monyvi/issues/391), [existing authoritative source/constraints](../389-voice-usage-limits/spec.md), [current source research](../../docs/research/voice-empty-audio-guard.md).<br>
+**Planning authority**: Root's actual correct-feature target requires **both** `SPECIFY_FEATURE=391-voice-empty-audio-guard` **and** `SPECIFY_FEATURE_DIRECTORY=specs/391-voice-empty-audio-guard`; `.specify/feature.json` otherwise selects feature 389. Existing #391 branch only; no generated branch, hooks, broad codemap, issue or production mutation.<br>
 **Status**: PLANNED / NOT EXECUTED. US1 cleanup is TDD-ready after root grant; US2 speech is BLOCKED. Startup latency/route/flow/availability belong exclusively to `codex/voice-startup-latency`.
 
 ## Summary
@@ -39,7 +39,7 @@ Deliver **two separable slices**. **Slice A (READY)** corrects Expo SDK 55 tempo
 | Security/privacy and sync | PASS for planning: raw media never persisted/logged; actor/consent/cancellation retained; no SQL, migration or sync changes without explicit decision. |
 | Mandatory RED → GREEN and independent review | PASS for planning only: rooted tasks enforce actual RED, accepted source grants and one final root quality batch; no checks were executed in this document lane. |
 
-**Pre-code gate:** root checks `.specify/extensions.yml` (automatic Git hooks are enabled in the repository), disables optional mutating hooks, runs correct-feature prerequisites with `SPECIFY_FEATURE=391-voice-empty-audio-guard`, and reviews canonical [read-only Speckit analysis](./checklists/analysis.md) after complete spec/plan/tasks. A connector-authored manual semantic analysis does **not** claim execution of shell prerequisite or the Speckit CLI. Root signs off the gates.
+**Root's actual pre-code receipt (2026-10-12):** With **both** feature environment variables above, root ran the correct-feature canonical prerequisite: **PASS**, `FEATURE_DIR=/mnt/e/Work/My Projects/Monyvi-voice-empty-audio-guard/specs/391-voice-empty-audio-guard`, `AVAILABLE_DOCS=contracts/,tasks.md`. Root independently ran canonical **READ-ONLY** Speckit analysis over the complete artifacts/constitution: **0 critical and 0 cleanup-blocking HIGH**, while speech gates **B1/B2/C1 remain 3 HIGH/BLOCKED**. It used an existing ignored `.git` administrative script for the permitted command because inline Bash `-c` is tool-blocked; this is evidence of root's completed run, **not authorization to retry or bypass**. WSL reported Git not detected and skipped branch validation; root independently verified native Git branch/tree/ancestry. No optional Git hooks ran. Root's measured lockfile-only and junction runtime checks both resolved `expo-file-system@55.0.23` without a package change. No cleanup RED or production GREEN has run at this documentation stage.
 
 ## Architecture and scope
 

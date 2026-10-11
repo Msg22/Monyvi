@@ -1,8 +1,8 @@
 # #391 Structured Speckit Cross-Artifact Analysis — READ-ONLY Semantic Pass
 
-**Date:** 2026-10-12  
-**Scope:** Completed authored `spec.md`, `plan.md`, `tasks.md`, `contracts/audio-validation-contract.md` and `checklists/manual-plan.md` on #391 research branch expected `a7e1e00e118b4b8a989387d48181fdde0c821f3d`, plus trusted constitution `3264eba2b67bcc66cddc95e3fbdb36e8705ee642` and published Voice `f625183373e29d372b658c10b3848a217477400a`.  
-**Method:** Full **structured read-only semantic pass** following the six detection categories and severity rubric of `.agent/workflows/speckit.analyze.md`: inventory → duplication → ambiguity → underspecification → constitution → coverage → inconsistency. The author inspected the five staged documents by their **unreferenced Git blobs** after spec/plan/tasks were complete; the branch was not mutated for analysis. No executable `/speckit.analyze` command, shell prerequisite, code/test run, Deno/FFmpeg, provider or device work occurred. Root alone runs local `SPECIFY_FEATURE=391-voice-empty-audio-guard` prerequisites and accepts/repeats the canonical analyzer before production.
+**Date:** 2026-10-12<br>
+**Scope:** Completed authored `spec.md`, `plan.md`, `tasks.md`, `contracts/audio-validation-contract.md` and `checklists/manual-plan.md` on #391 research branch expected `a7e1e00e118b4b8a989387d48181fdde0c821f3d`, plus trusted constitution `3264eba2b67bcc66cddc95e3fbdb36e8705ee642` and published Voice `f625183373e29d372b658c10b3848a217477400a`.<br>
+**Method:** Full **structured read-only semantic pass** following the six detection categories and severity rubric of `.agent/workflows/speckit.analyze.md`: inventory → duplication → ambiguity → underspecification → constitution → coverage → inconsistency. The author inspected the five staged documents by their **unreferenced Git blobs** after spec/plan/tasks were complete; the branch was not mutated for analysis. No executable `/speckit.analyze` command, shell prerequisite, code/test run, Deno/FFmpeg, provider or device work occurred. Root later ran local correct-feature prerequisites with **both** `SPECIFY_FEATURE=391-voice-empty-audio-guard` and `SPECIFY_FEATURE_DIRECTORY=specs/391-voice-empty-audio-guard`, and independently completed canonical read-only analysis. This document's initial pass remains a distinct ChatGPT **manual source-only** review; root's actual execution receipt is recorded below.
 
 ## Structured inventories and coverage
 
@@ -12,7 +12,7 @@
 | Functional requirements | **20**: FR-001–FR-020 | Sequential unique IDs; each has task coverage below |
 | Nonfunctional requirements | **6**: NFR-001–NFR-006 | Resource, false-negative quality, privacy, compatibility, cancellation, evidence |
 | Success criteria | **9**: SC-001–SC-009 | Each has an evidence owner and objective or explicit measured gate |
-| Tasks | **32**: T001–T032, all `- [ ]` | Sequential, no completion claimed; phases and dependencies coherent |
+| Tasks | **32**: T001–T032 | Sequential, root-verified readiness T001–T004 now checked; implementation T005–T032 remains unchecked |
 | Manual/owner cases | **19**: M391-01–M391-19, all NOT RUN/BLOCKED | Native + audio + runtime + account/race/latency boundaries distinguished |
 | Required documents | **6** exact new files | Spec, plan, tasks, proposed contract, this analysis, manual plan; no extra document artifact |
 | Research artifacts | **9**, already existing | Source-only prototype and templates linked, **not regenerated or executed** |
@@ -53,16 +53,16 @@
 | B1 | Ambiguity | **HIGH — GATED, not an unacknowledged doc gap** | `spec.md` FR-006, FR-010, FR-013–FR-015; proposed contract | Explicitly approve uncertain-vs-no-speech, HTTP/body/Retry/copy, codec compatibility, decoded duration/padding and short legitimate speech before server source |
 | B2 | Ambiguity | **HIGH — GATED** | SQL 087 `voice_ai_reserve_work_at` and `voice_ai_release_work`, `contract` and T018–T020 | Define released-terminal same-key retry, accepted replay concurrent VAD, lease expiry, false/unknown release and started-RPC ambiguity. Never silently edit SQL/#384 |
 | C1 | Underspecification | **HIGH — EXTERNAL FEASIBILITY BLOCKER** | Existing research/README, 19 missing corpus assets, no Deno/FFmpeg execution or Edge measurements; T011–T016 | Licensed quiet speech + synthetic/real negatives, pinned Rust/WASM/ONNX load, false negatives, CPU/wall/true peak memory/bundle and Edge headroom |
-| C2 | Underspecification | **MEDIUM — ROOT PRECHECK** | `apps/mobile/package.json` declares Expo ~55.0.27 and filesystem ~55.0.23; actual locked subdependency version not executed; T004 | Root verify lockfile-resolved API and meaningful SDK55 throwing-root/working-legacy RED; do not substitute a dummy mock assertion |
+| C2 | Underspecification | **CLOSED — root version proof** | SDK55, root's package-lock-only `npm ls` and actual junction runtime both establish `expo-file-system@55.0.23`; T004 completed | Mandatory meaningful deprecated-root vs working-/legacy **RED still NOT RUN**; no package or lockfile change |
 | D1 | Constitution alignment | **NO KNOWN VIOLATION in planned artifacts** | `plan.md` Constitution Check, FR-007/016/018/020 and tasks | Preserve auth, type safety, service layering, offline/financial boundaries, original provider, 35-day replay, privacy; any later deviation needs explicit approval |
 | E1 | Coverage gaps | **NONE in planned requirements** | Coverage table above + manual M391-01–19 | Do not convert planned traceability into tests passed/device acceptance; keep owner NOT RUN |
 | F1 | Inconsistency | **RESOLVED IN DOCUMENTS** | Historical research source 60s vs current #389 FR-045 30s **local**; client 1,500ms guard; `spec.md` FR-013/014 | Preserve current local 30s and avoid unsupported server duration/padding choice; no source edits |
 | F2 | Inconsistency | **RESOLVED IN TASK ORDER** | T005–T010 is independent of T011–T027; #391 branch includes current Voice parent; separate startup worker owns route/flow | Root can accept cleanup TDD while speech remains BLOCKED; no cross-branch overlap |
-| F3 | Operational gate | **MEDIUM — ROOT ACTION PENDING** | `.specify/extensions.yml` has auto-execute Git hooks, while planning ownership forbids hook/ref mutations; T002–T003 | Root uses existing `SPECIFY_FEATURE`, explicitly disables mutating hooks, runs actual local prerequisites and canonical analyzer; this ChatGPT lane cannot claim those executions |
+| F3 | Operational gate | **CLOSED — actual root preflight** | Correct target needs `SPECIFY_FEATURE=391-voice-empty-audio-guard` + `SPECIFY_FEATURE_DIRECTORY=specs/391-voice-empty-audio-guard` because `.specify/feature.json` points to 389 | Root local prerequisite PASS, canonical read-only analysis completed, optional Git hooks not invoked; WSL Git absent/branch validation skipped but native Git ancestry verified |
 
 ### Severity summary
 
-**0 critical constitution/coverage contradictions discovered.** There are **3 HIGH outstanding implementation-blocking gates** (B1/B2/C1), **2 MEDIUM root preflight/document-evidence gaps** (C2/F3), and **0 uncovered FR/NFR/SC**. HIGH gates are named and block server implementation; they do **not** block the independent cleanup RED slice because it does not depend on speech policy, a new server result or schema. This report is **not a Speckit CLI PASS certificate** or a binding/model acceptance. Root may identify further findings through its local prerequisite and independent analyzer.
+**Updated root evidence (2026-10-12):** **0 critical**, **0 cleanup-blocking HIGH**, **3 HIGH B1/B2/C1 exclusively BLOCKED server-speech gates**, **0 open C2/F3 version/prerequisite blockers**, and **0 uncovered FR/NFR/SC** in this reviewed plan. The earlier ChatGPT-only severity assessment is superseded by the root's actual canonical read-only analysis. This is **not** a speech-validator feasibility PASS; cleanup RED/GREEN and owner/native/device remain NOT RUN.
 
 ## Architecture and product decisions that remain open (server STOP)
 
@@ -79,7 +79,7 @@
 | G391-P1 Published research/source ancestry | `a7e1e00e…` merge includes `fe16f48…` + `f625183…`; only nine research/prototype files differ from Voice | READ-ONLY VERIFIED at planning kickoff |
 | G391-P2 Six canonical documents drafted | This author staged only the six requested markdown blobs; no production/test/issue/ref change before docs publication | DRAFTS COMPLETE; root review required |
 | G391-P3 This structured analysis | Source-informed six detection passes across complete proposed artifacts, traceability counted above | COMPLETE **manual read-only review**; no CLI execution |
-| G391-P4 Root local correct-feature prerequisite / canonical analyzer | `SPECIFY_FEATURE=391-voice-empty-audio-guard`, mutating optional hooks disabled | **NOT RUN** by this author; root owns |
+| G391-P4 Root local correct-feature prerequisite / canonical analyzer | `SPECIFY_FEATURE=391-voice-empty-audio-guard` **plus** `SPECIFY_FEATURE_DIRECTORY=specs/391-voice-empty-audio-guard` | Root reports prerequisite **PASS** with `FEATURE_DIR=/mnt/e/Work/My Projects/Monyvi-voice-empty-audio-guard/specs/391-voice-empty-audio-guard`, `AVAILABLE_DOCS=contracts/,tasks.md`; canonical read-only analyzer **0 critical/0 cleanup HIGH**, speech B1/B2/C1 HIGH remain BLOCKED. WSL Git check skipped, native Git independently verified. No hooks run; this worker did not execute any CLI. |
 | G391-C1 SDK55 cleanup test-only + accepted RED | Genuine SDK55 root-import runtime throw before minimal `/legacy` correction | **NOT RUN**; READY for separately authorized T005–T007 |
 | G391-C2 Cleanup source/GREEN | Only recorder + fixture + dedicated test, scope after root RED | **NOT RUN / NOT AUTHORIZED YET** |
 | G391-S Speech runtime + replay/response policy | No build/inference/corpus/Edge result or approved thresholds/copy | **BLOCKED** |

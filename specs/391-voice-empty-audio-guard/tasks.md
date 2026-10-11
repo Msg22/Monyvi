@@ -1,8 +1,8 @@
 # Tasks: #391 Voice Empty-Audio Guard and SDK55 Cleanup
 
-**Date**: 2026-10-12 | **Branch**: `codex/voice-empty-audio-guard` | **Status**: PLANNED, **NONE EXECUTED**.  
-**Prerequisites**: [spec](./spec.md), [plan](./plan.md), [proposed contract](./contracts/audio-validation-contract.md), [analysis](./checklists/analysis.md), [owner manual plan](./checklists/manual-plan.md), [existing research](../../docs/research/voice-empty-audio-guard.md).  
-**TDD gate**: root-only actual RED before production. **Owner of startup route/flow/availability:** another worker on `codex/voice-startup-latency`, inaccessible for writes here. Root alone mutates issue, root integration refs, feature push/PR and runs final checks. All checkboxes below remain unchecked; the published nine-file spike has **not** been run.
+**Date**: 2026-10-12 | **Branch**: `codex/voice-empty-audio-guard` | **Status**: Root readiness T001–T004 verified; source/test implementation **NOT EXECUTED**; speech implementation remains BLOCKED.<br>
+**Prerequisites**: [spec](./spec.md), [plan](./plan.md), [proposed contract](./contracts/audio-validation-contract.md), [analysis](./checklists/analysis.md), [owner manual plan](./checklists/manual-plan.md), [existing research](../../docs/research/voice-empty-audio-guard.md).<br>
+**TDD gate**: root-only actual RED before production. **Owner of startup route/flow/availability:** another worker on `codex/voice-startup-latency`, inaccessible for writes here. Root alone mutates issue, root integration refs, feature push/PR and runs final checks. T001–T004 readiness is root/source verified; **T005–T032 remain unchecked** and the published nine-file spike has **not** been run.
 
 ## Format and ownership
 
@@ -10,10 +10,10 @@ Task IDs are stable and sequential. `[P]` denotes an independent file lane **onl
 
 ## Phase 1: Setup and source/contract gates
 
-- [ ] **T001** Confirm remote `codex/voice-empty-audio-guard` pin `a7e1e00e118b4b8a989387d48181fdde0c821f3d` and exact Voice parent `f625183373e29d372b658c10b3848a217477400a`; preserve nine research/prototype files with only stacked branch changes, no #389/main/startup branch mutation.
-- [ ] **T002** Root selects `SPECIFY_FEATURE=391-voice-empty-audio-guard` on existing branch, inspects `.specify/extensions.yml` and disables optional auto-mutating Git hooks. Root runs local correct-feature `.specify/scripts/bash/check-prerequisites.sh --json --require-tasks --include-tasks` and records actual result; no command execution in this planning lane.
-- [ ] **T003** Root reviews `specs/391-voice-empty-audio-guard/{spec.md,plan.md,tasks.md,contracts/audio-validation-contract.md,checklists/analysis.md,checklists/manual-plan.md}` for constitution, separate implementation gates and no unapproved user-visible response. Perform/accept canonical **read-only** Speckit analysis before any production assignment.
-- [ ] **T004** Pin exact published `apps/mobile/package.json` / `package-lock.json` and Expo SDK55 root/legacy documentation; document that current `getInfoAsync`/`deleteAsync` root methods throw without changing package versions. Verify current `apps/mobile/hooks/useVoiceRecorder.ts` and its test fixture import boundaries.
+- [x] **T001** Root verified native Git branch/tree/ancestry: `codex/voice-empty-audio-guard` at planning pin `e1c8c86068da5a385bc45bbdb217f811b6f86a46`, stacked merge `a7e1e00e118b4b8a989387d48181fdde0c821f3d` includes Voice parent `f625183373e29d372b658c10b3848a217477400a` and nine unchanged research/prototype paths. WSL branch check was skipped because Git was undetected; native Git verification is the branch authority.
+- [x] **T002** Root used **both** `SPECIFY_FEATURE=391-voice-empty-audio-guard` and `SPECIFY_FEATURE_DIRECTORY=specs/391-voice-empty-audio-guard` because `.specify/feature.json` otherwise points to 389; correct-feature prerequisite **PASS**, `FEATURE_DIR=/mnt/e/Work/My Projects/Monyvi-voice-empty-audio-guard/specs/391-voice-empty-audio-guard`, `AVAILABLE_DOCS=contracts/,tasks.md`. Root used an existing ignored `.git` admin script due blocked Bash inline `-c`; **do not retry/bypass**. No optional Git hooks ran.
+- [x] **T003** Root independently ran canonical **read-only** Speckit analysis over all six `specs/391-voice-empty-audio-guard/` docs and constitution: **critical 0; cleanup-blocking HIGH 0**; speech **B1/B2/C1 remain three HIGH/BLOCKED**. Planned cleanup FR001–003 maps to T004–T010; no validator, SQL policy, server production or user-visible copy gate cleared. No optional hooks.
+- [x] **T004** Root verified `expo-file-system@55.0.23` via `npm ls` **package-lock-only** and the actual junction runtime; no installation or lockfile change. Published `useVoiceRecorder.ts` still imports deprecated root `getInfoAsync`/`deleteAsync`, and the existing fixture mocks them. SDK55 supports asynchronous `expo-file-system/legacy`. **Real RED has not yet run**.
 
 **Checkpoint A:** Cleanup has independent TDD authority after root approves exact paths. Speech feasibility and user-visible API remain blocked; do not make US1 wait for US2.
 

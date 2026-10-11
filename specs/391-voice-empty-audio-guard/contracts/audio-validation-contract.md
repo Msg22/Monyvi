@@ -1,7 +1,7 @@
 # #391 Audio Validation Contract — PROPOSED, NOT IMPLEMENTED
 
-**Date:** 2026-10-12. **Status:** DECISION GATES OPEN for speech; cleanup compatibility is ready for test-first implementation.  
-**Source:** published Voice `f625183373e29d372b658c10b3848a217477400a` on stacked research branch `a7e1e00e118b4b8a989387d48181fdde0c821f3d`.  
+**Date:** 2026-10-12. **Status:** DECISION GATES OPEN for speech; cleanup compatibility is ready for test-first implementation.<br>
+**Source:** published Voice `f625183373e29d372b658c10b3848a217477400a` on stacked research branch `a7e1e00e118b4b8a989387d48181fdde0c821f3d`.<br>
 **Canonical context:** [#391 spec](../spec.md), [#389 parse-voice quota OpenAPI](../../389-voice-usage-limits/contracts/parse-voice-quota.openapi.yaml), [original research](../../../docs/research/voice-empty-audio-guard.md). No request/response schema, HTTP response or backend policy is authorized to change through this proposed contract.
 
 ## Existing request and response authority (UNCHANGED)
@@ -19,7 +19,7 @@ The following are **conceptual discriminants**, not established runtime types or
 | `structural_invalid` | Missing/empty actual bytes, unsupported/truncated/malformed container after bounded actual-byte parser; reject before expensive validation/provider start. | Existing zero-byte behavior applies; expanded format policy/response needs reconciliation. |
 | `speech_detected` | High-recall decoder/VAD demonstrates speech with validated quiet Arabic/English/code-switch recall and appropriate confidence. Proceed to current provider-start gate, not a semantic/financial judgment. | BLOCKED until benchmark, policy and tests. |
 | `no_speech_proven` | Decoded actual media provides strong calibrated evidence of digital/room silence or noise-only audio. No provider mark or Gemini. If reservation exists, release only known-unstarted work. | BLOCKED until licensed corpus, thresholds, response/accounting approval. |
-| `inconclusive` | Valid media with uncertain evidence, quiet voice/noise overlap or inadequate classification confidence. Never silently reject true quiet speech; route by separately approved policy, not library defaults. | UNDECIDED; neither forced reject nor provider acceptance is approved. |
+| `inconclusive` | Valid media with uncertain evidence, quiet voice/noise overlap or inadequate classification confidence. This is **not a provable no-speech result**; accepting, rejecting or escalating remains undecided pending high-recall evidence. Never silently reject true quiet speech or apply accounting fail-closed as a speech-rejection decision. | UNDECIDED; neither forced reject nor provider acceptance is approved. |
 | `validator_error` | Decoder/model/CPU/timeout/unsupported input fails rather than classifies; no provider start in known-not-started path; reconcile retryable error and SQL release/lease outcomes. | BLOCKED on product/error/accounting contract. |
 | `provider_start_unknown` / `release_unknown` | The RPC outcome could be committed despite lost response. Do not claim a unit was refunded, consume another request or issue an automatic retry. | Existing fail-closed accounting wins pending reconciliation. |
 
