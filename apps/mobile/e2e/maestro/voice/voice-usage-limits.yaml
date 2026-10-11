@@ -155,4 +155,3 @@ appId: com.monyvi.app
 # require native audio/OS/provider fixtures this harness does not possess.
 # Never tap mic, Resume, Submit, OS permission or provider recovery here;
 # separately approved unit/owner-manual testing covers those boundaries.
-
