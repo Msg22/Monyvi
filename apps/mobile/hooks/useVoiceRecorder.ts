@@ -230,6 +230,7 @@ export function useVoiceRecorder(): VoiceRecorderResult {
   const activeStartGenerationRef = useRef<number | null>(null);
   const pendingPauseGenerationRef = useRef<number | null>(null);
   const audioUriRef = useRef<string | null>(null);
+  const stopAttemptUriRef = useRef<string | null>(null);
   audioUriRef.current = audioUri;
 
   /**
@@ -276,6 +277,9 @@ export function useVoiceRecorder(): VoiceRecorderResult {
   const nativeStartPromiseRef = useRef<Promise<void> | null>(null);
   const nativeStopPromiseRef = useRef<Promise<string | null> | null>(null);
   const cleanupPromiseRef = useRef<Promise<void> | null>(null);
+  const cleanupRecorderResourcesRef = useRef<
+    (knownUri?: string | null) => Promise<void>
+  >(() => Promise.resolve());
   const discardPromiseRef = useRef<Promise<void> | null>(null);
 
   /**
@@ -505,6 +509,7 @@ export function useVoiceRecorder(): VoiceRecorderResult {
           accumulatedMsRef.current = 0;
           nativeReadyRef.current = false;
           setDurationMs(0);
+          stopAttemptUriRef.current = null;
           applyAudioUri(null);
 
           // Prepare and start recording
@@ -592,8 +597,7 @@ export function useVoiceRecorder(): VoiceRecorderResult {
     uri: string;
     durationMs: number;
   } | null> => {
-    // A cap/manual Stop is already finalizing: Submit must await that same
-    // result instead of observing `completed` and losing the finalized audio.
+    // Cap and Submit share one in-flight native stop.
     const inFlightStop = stopResultRef.current;
     if (inFlightStop !== null) {
       return inFlightStop;
@@ -604,8 +608,7 @@ export function useVoiceRecorder(): VoiceRecorderResult {
       return null;
     }
 
-    // Captured before any await so Discard/Reset/unmount/new session, which
-    // bump the generation, can suppress publishing state for this capture.
+    // Guard against Discard, unmount and replacement generations.
     const sessionGeneration = startGenerationRef.current;
     const recorder = recorderRef.current;
     if (!recorder) return null;
@@ -613,25 +616,28 @@ export function useVoiceRecorder(): VoiceRecorderResult {
       sessionGeneration === startGenerationRef.current &&
       recorderRef.current === recorder &&
       !unmountAbortRef.current.signal.aborted;
+    const failFinalization = (): void => {
+      if (!isCurrentSession()) return;
+      nativeReadyRef.current = false;
+      statusRef.current = "error";
+      setStatus("error");
+      void cleanupRecorderResourcesRef.current(stopAttemptUriRef.current);
+    };
     const stopPromise = (async (): Promise<{
       uri: string;
       durationMs: number;
     } | null> => {
-      // If native recorder isn't ready yet (user tapped stop during warmup),
-      // wait for readiness rather than silently returning null.
+      // Early Stop waits for native stabilization.
       if (!nativeReadyRef.current) {
-        // First, await any in-flight start promise
         if (nativeStartPromiseRef.current) {
           try {
             await nativeStartPromiseRef.current;
           } catch {
-            // Start failed — nothing to stop
             return null;
           }
           if (!isCurrentSession()) return null;
         }
 
-        // Poll until nativeReadyRef becomes true or timeout
         const ready = await waitForCondition(
           () => isCurrentSession() && nativeReadyRef.current,
           STOP_READINESS_TIMEOUT_MS,
@@ -654,11 +660,15 @@ export function useVoiceRecorder(): VoiceRecorderResult {
         }
         stopTimer();
         statusRef.current = "completed";
+        try {
+          stopAttemptUriRef.current = recorder.uri ?? audioUriRef.current;
+        } catch (error: unknown) {
+          logger.warn("voice.recorder.captureUriFailed", { error });
+        }
         const uri = await stopNativeRecorder(recorder);
         if (!isCurrentSession()) return null;
         if (!uri) {
-          statusRef.current = "error";
-          setStatus("error");
+          failFinalization();
           return null;
         }
 
@@ -667,12 +677,7 @@ export function useVoiceRecorder(): VoiceRecorderResult {
         return { uri, durationMs: accumulatedMsRef.current };
       } catch (err: unknown) {
         logger.error("voice.recorder.stopFailed", err);
-        // A failure from a superseded session must not overwrite its
-        // replacement, which owns status and native readiness.
-        if (!isCurrentSession()) return null;
-        nativeReadyRef.current = false;
-        statusRef.current = "error";
-        setStatus("error");
+        failFinalization();
         return null;
       }
     })();
@@ -728,7 +733,7 @@ export function useVoiceRecorder(): VoiceRecorderResult {
     }
   }, []);
 
-  const cleanupRecorderResources = useCallback((): Promise<void> => {
+  const cleanupRecorderResources = useCallback((knownUri: string | null = null): Promise<void> => {
     const existingCleanup = cleanupPromiseRef.current;
     if (existingCleanup !== null) {
       return existingCleanup;
@@ -745,7 +750,6 @@ export function useVoiceRecorder(): VoiceRecorderResult {
         }
       }
 
-      // Setup may have started the duration timer while cleanup awaited it.
       stopTimer();
 
       const recorder = recorderRef.current;
@@ -766,12 +770,12 @@ export function useVoiceRecorder(): VoiceRecorderResult {
         logger.warn("voice.recorder.cleanupStopFailed", { error: stopErr });
       }
 
-      const uri = stoppedUri ?? audioUriRef.current ?? recorder?.uri ?? null;
-      if (uri) {
-        await deleteAudioFile(uri);
-      }
-
+      const uri =
+        stoppedUri ?? knownUri ?? audioUriRef.current ??
+        stopAttemptUriRef.current ?? recorder?.uri ?? null;
       releaseRecorder();
+      if (uri) await deleteAudioFile(uri);
+      stopAttemptUriRef.current = null;
       accumulatedMsRef.current = 0;
       nativeReadyRef.current = false;
     })();
@@ -785,7 +789,6 @@ export function useVoiceRecorder(): VoiceRecorderResult {
     });
   }, [deleteAudioFile, releaseRecorder, stopNativeRecorder, stopTimer]);
 
-  const cleanupRecorderResourcesRef = useRef(cleanupRecorderResources);
   cleanupRecorderResourcesRef.current = cleanupRecorderResources;
 
   useEffect(() => {

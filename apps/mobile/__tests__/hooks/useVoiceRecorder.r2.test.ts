@@ -168,17 +168,20 @@ describe("useVoiceRecorder R2 active-duration cap", () => {
       expect(unwrap(result).audioUri).toBeNull();
       expect(unwrap(result).durationMs).toBe(ACTIVE_CAP_MS);
       expect(mockRecord).toHaveBeenCalledTimes(1);
-      // A generic error unlocks mode switching. The failed recorder must be
-      // stopped, its known partial audio deleted, and released NOW, before any
-      // user-initiated Discard/Retry/Manual switch.
+      // Native capture must release before waiting for filesystem operations.
+      // The mock URI getter throws after release, so successful deletion proves
+      // the URI was captured while the native recorder still owned it.
+      expect(mockRelease).toHaveBeenCalledTimes(1);
       expect(mockGetInfoAsync).toHaveBeenCalledWith(RETAINED_URI);
       expect(mockDeleteAsync).toHaveBeenCalledTimes(1);
       expect(mockDeleteAsync).toHaveBeenCalledWith(RETAINED_URI, {
         idempotent: true,
       });
-      expect(mockRelease).toHaveBeenCalledTimes(1);
-      expect(mockDeleteAsync.mock.invocationCallOrder[0]).toBeLessThan(
-        mockRelease.mock.invocationCallOrder[0]
+      expect(mockRelease.mock.invocationCallOrder[0]).toBeLessThan(
+        mockGetInfoAsync.mock.invocationCallOrder[0]
+      );
+      expect(mockRelease.mock.invocationCallOrder[0]).toBeLessThan(
+        mockDeleteAsync.mock.invocationCallOrder[0]
       );
       expect(jest.getTimerCount()).toBe(0);
 
@@ -202,6 +205,41 @@ describe("useVoiceRecorder R2 active-duration cap", () => {
       expect(mockRelease).toHaveBeenCalledTimes(1);
     }
   );
+
+  it("waits for failed-cap audio deletion before starting a replacement", async (): Promise<void> => {
+    const info = deferred<{ exists: boolean }>();
+    mockGetInfoAsync.mockReturnValueOnce(info.promise);
+    mockStop.mockRejectedValueOnce(new Error("Native stop failed"));
+    const { result } = renderHook(() => useVoiceRecorder());
+    await approachCap(result);
+    await advanceActiveClock(100);
+
+    expect(unwrap(result).status).toBe("error");
+    expect(mockRelease).toHaveBeenCalledTimes(1);
+    expect(mockGetInfoAsync).toHaveBeenCalledWith(RETAINED_URI);
+    expect(mockDeleteAsync).not.toHaveBeenCalled();
+
+    let restart: Promise<void> = Promise.resolve();
+    actSync((): void => {
+      restart = unwrap(result).start();
+    });
+    await advanceActiveClock(500);
+    expect(mockRecord).toHaveBeenCalledTimes(1);
+    expect(mockStop).toHaveBeenCalledTimes(1);
+
+    await actAsync(async (): Promise<void> => {
+      info.resolve({ exists: true });
+      await info.promise;
+      for (let turn = 0; turn < 10; turn += 1) await Promise.resolve();
+      jest.advanceTimersByTime(NATIVE_STABILIZATION_DELAY_MS);
+      await restart;
+    });
+    expect(mockDeleteAsync).toHaveBeenCalledTimes(1);
+    expect(mockRelease).toHaveBeenCalledTimes(1);
+    expect(mockRecord).toHaveBeenCalledTimes(2);
+    expect(unwrap(result).status).toBe("recording");
+    expect(unwrap(result).audioUri).toBeNull();
+  });
 
   it("does not publish a failed old cap stop into the replacement after Discard/start", async (): Promise<void> => {
     const stopped = deferred<void>();
