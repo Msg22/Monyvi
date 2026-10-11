@@ -1,0 +1,101 @@
+appId: com.monyvi.app
+---
+# T008 future signed Accounts Edit journey — intentionally Red before adoption.
+# Published authoring only; NOT executed. Foundation alone does not wire Edit.
+# Preconditions:
+# - Runner preflight opened the normal authenticated/onboarded English/EGP UI.
+# - Clean current-user fixture has no "T008 Signed Cash" account. This flow
+#   creates a Cash account at the existing zero default through the public UI,
+#   not through DB seeding, private hooks or a synthetic test-only route.
+# - Driver can type a leading minus into the existing numeric TextInput;
+#   if the OS/driver rejects it, mark harness BLOCKED, not behavior Red.
+# - Native caret/IME/bidi, remote sync and adjustment-record counts are NOT proved.
+
+- openLink:
+    link: monyvi://accounts
+- extendedWaitUntil:
+    visible:
+      id: accounts-add-button
+    timeout: 30000
+- tapOn:
+    id: accounts-add-button
+- extendedWaitUntil:
+    visible: "Add Account"
+    timeout: 30000
+- tapOn:
+    id: account-name-input
+- inputText: "T008 Signed Cash"
+- hideKeyboard
+# Cash and EGP stay at existing defaults; untouched initial balance is zero.
+- tapOn:
+    id: header-save
+- extendedWaitUntil:
+    visible:
+      id: accounts-add-button
+    timeout: 30000
+- scrollUntilVisible:
+    element:
+      text: "T008 Signed Cash"
+    direction: DOWN
+    timeout: 60000
+- tapOn: "T008 Signed Cash"
+- extendedWaitUntil:
+    visible: "Edit Account"
+    timeout: 30000
+- assertVisible:
+    id: header-back
+
+# Edit alone opts into signed grouped input. Current Edit TextField displays
+# raw -1234.567 instead of the approved -1,234.567: intentional migration Red.
+- scrollUntilVisible:
+    element:
+      id: initial-balance-input
+    direction: DOWN
+    timeout: 30000
+- tapOn:
+    id: initial-balance-input
+- eraseText: 40
+- inputText: "-1234.567"
+- assertVisible: "-1,234.567"
+- hideKeyboard
+- scrollUntilVisible:
+    element:
+      text: "-1234.567"
+    direction: UP
+    timeout: 30000
+# The existing Account preview intentionally retains ungrouped raw text.
+- assertVisible: "-1234.567"
+
+# Existing changed-balance sheet: silent is the default. Do not select tracked.
+- tapOn:
+    id: header-save
+- extendedWaitUntil:
+    visible: "Balance Changed"
+    timeout: 30000
+- assertVisible: "Just update the balance"
+- assertVisible: "Track as transaction"
+- assertVisible: "Confirm balance change"
+- tapOn: "Confirm balance change"
+- extendedWaitUntil:
+    visible:
+      id: accounts-add-button
+    timeout: 30000
+
+# Public reopen confirms the signed editable presentation after normal Save.
+- scrollUntilVisible:
+    element:
+      text: "T008 Signed Cash"
+    direction: DOWN
+    timeout: 60000
+- tapOn: "T008 Signed Cash"
+- extendedWaitUntil:
+    visible: "Edit Account"
+    timeout: 30000
+- scrollUntilVisible:
+    element:
+      id: initial-balance-input
+    direction: DOWN
+    timeout: 30000
+- assertVisible: "-1,234.567"
+# No assertion of "zero adjustment transactions" from sheet radio text:
+# proving it needs separately controllable public History/command evidence.
