@@ -1,4 +1,7 @@
-import { formatAmountInput, resolveAmountInputChange } from "@monyvi/logic";
+import {
+  getEditableAmountDisplay,
+  resolveEditableAmountInputChange,
+} from "@monyvi/logic";
 import { useCallback, type ReactNode, type Ref } from "react";
 import type {
   StyleProp,
@@ -14,9 +17,13 @@ export interface GroupedDecimalInputProps {
   readonly onCanonicalChange: (value: string) => void;
   readonly label: string;
   readonly required?: boolean;
+  readonly variant?: "default" | "outlined";
+  readonly allowNegative?: boolean;
   readonly testID: string;
   readonly editable?: boolean;
   readonly error?: string;
+  readonly warning?: string;
+  readonly helperText?: string;
   readonly autoFocus?: boolean;
   readonly keyboardType?: "decimal-pad" | "numeric" | "numbers-and-punctuation";
   readonly inputMode?: "decimal" | "numeric" | "text" | "none";
@@ -24,6 +31,7 @@ export interface GroupedDecimalInputProps {
   readonly trailingAdornment?: ReactNode;
   readonly inputRef?: Ref<TextInput>;
   readonly accessibilityLabel?: string;
+  readonly accessibilityHint?: string;
   readonly placeholder?: string;
   readonly containerClassName?: string;
   readonly maxLength?: number;
@@ -39,19 +47,22 @@ export interface GroupedDecimalInputProps {
 /**
  * Shared grouped decimal input for numeric fields.
  *
- * Formats display with thousands commas using formatAmountInput while preserving
- * canonical state as plain dot-decimal without separators. Preserves full
- * decimal precision (e.g. 3-decimal gram weight) without rounding, and preserves
- * invalid intermediate text for form-level inline validation.
+ * Groups recognized decimal entry text and preserves malformed raw text for
+ * correction. Signed values are opt-in; existing outlined/unsigned consumers
+ * retain their callbacks, formatting, and form-specific validation.
  */
 export function GroupedDecimalInput({
   value,
   onCanonicalChange,
   label,
   required,
+  variant = "outlined",
+  allowNegative = false,
   testID,
   editable,
   error,
+  warning,
+  helperText,
   autoFocus,
   keyboardType = "decimal-pad",
   inputMode = "decimal",
@@ -59,6 +70,7 @@ export function GroupedDecimalInput({
   trailingAdornment,
   inputRef,
   accessibilityLabel,
+  accessibilityHint,
   placeholder,
   containerClassName,
   maxLength,
@@ -72,26 +84,34 @@ export function GroupedDecimalInput({
 }: GroupedDecimalInputProps): React.JSX.Element {
   const handleChangeText = useCallback(
     (text: string): void => {
-      const resolution = resolveAmountInputChange(text, value);
+      const resolution = resolveEditableAmountInputChange(text, value, {
+        allowNegative,
+      });
       onCanonicalChange(resolution.accepted ? resolution.value : text);
     },
-    [onCanonicalChange, value]
+    [allowNegative, onCanonicalChange, value]
   );
   const resolvedInputMode = showSoftInputOnFocus === false ? "none" : inputMode;
+  const displayValue = getEditableAmountDisplay(value, {
+    allowNegative,
+  }).text;
 
   return (
     <TextField
-      variant="outlined"
+      variant={variant}
       testID={testID}
       inputRef={inputRef}
       label={label}
       required={required}
-      accessibilityLabel={accessibilityLabel ?? label}
-      value={formatAmountInput(value)}
+      accessibilityLabel={accessibilityLabel}
+      accessibilityHint={accessibilityHint}
+      value={displayValue}
       syncWhileFocused
       editable={editable}
       onChangeText={handleChangeText}
       error={error}
+      warning={warning}
+      helperText={helperText}
       autoFocus={autoFocus}
       keyboardType={keyboardType}
       inputMode={resolvedInputMode}
