@@ -28,7 +28,10 @@ import {
   ActionButton,
   PassiveStateActions,
 } from "./voice-ui/VoiceStateActions";
-import { formatDuration, getPresentation } from "./voice-ui/VoicePresentation";
+import {
+  formatRecordingTimer,
+  getPresentation,
+} from "./voice-ui/VoicePresentation";
 import type { VoiceTransactionEntryProps } from "./voice-ui/types";
 
 export type { VoiceTransactionEntryState } from "./voice-ui/types";
@@ -154,14 +157,14 @@ function VoiceActionSurface({
   const isUnavailable = props.state === "unavailable";
   const isStarting = props.state === "starting";
 
-  const centralAction =
-    props.state === "idle"
-      ? props.onStart
-      : isRecording || isCompleted
-        ? props.onSubmit
-        : isPaused
-          ? props.onResume
-          : null;
+  // Only the idle microphone starts capture. R2 uses explicit actions while
+  // recording/paused/completed, so the circular microphone is decorative.
+  const hasInteractiveMic = props.state === "idle";
+  const hasDecorativeGradientMic =
+    isStarting || isRecording || isPaused || isCompleted;
+  const showStaticHalos = !(props.state === "idle" || hasDecorativeGradientMic);
+  // The explicit recorder action row uses direction="ltr" to preserve the
+  // owner's physical LEFT/CENTER/RIGHT order even in Arabic/RTL layouts.
 
   return (
     <View
@@ -173,52 +176,63 @@ function VoiceActionSurface({
         <ParsingIllustration isArabic={isArabic} />
       ) : (
         <View className="h-[172px] w-[172px] items-center justify-center">
-          <View
-            testID="voice-halo-outer"
-            accessible={false}
-            pointerEvents="none"
-            importantForAccessibility="no-hide-descendants"
-            className={`absolute h-[172px] w-[172px] rounded-[86px] ${
-              isDailyLimit || isUnavailable
-                ? "bg-slate-200/20 dark:bg-slate-700/25"
-                : "bg-nileGreen-50/60 dark:bg-nileGreen-50/25"
-            }`}
-          />
+          {showStaticHalos ? (
+            <View
+              testID="voice-halo-outer"
+              accessible={false}
+              pointerEvents="none"
+              importantForAccessibility="no-hide-descendants"
+              className={`absolute h-[172px] w-[172px] rounded-[86px] ${
+                isDailyLimit || isUnavailable
+                  ? "bg-slate-200/20 dark:bg-slate-700/25"
+                  : "bg-nileGreen-50/60 dark:bg-nileGreen-50/25"
+              }`}
+            />
+          ) : null}
           {isRecording || isPaused ? (
             <RecordingRipples isActive={isRecording} />
           ) : null}
-          <View
-            testID="voice-halo-inner"
-            accessible={false}
-            pointerEvents="none"
-            importantForAccessibility="no-hide-descendants"
-            className={`absolute h-[140px] w-[140px] rounded-[70px] ${
-              isDailyLimit || isUnavailable
-                ? "bg-slate-200/20 dark:bg-slate-700/30"
-                : "bg-nileGreen-100/50 dark:bg-nileGreen-100/40"
-            }`}
-          />
-
-          {isStarting ? (
+          {showStaticHalos ? (
             <View
+              testID="voice-halo-inner"
+              accessible={false}
+              pointerEvents="none"
+              importantForAccessibility="no-hide-descendants"
+              className={`absolute h-[140px] w-[140px] rounded-[70px] ${
+                isDailyLimit || isUnavailable
+                  ? "bg-slate-200/20 dark:bg-slate-700/30"
+                  : "bg-nileGreen-100/50 dark:bg-nileGreen-100/40"
+              }`}
+            />
+          ) : null}
+
+          {hasDecorativeGradientMic ? (
+            <View
+              testID="voice-mic-target"
               accessible={false}
               accessibilityElementsHidden
               importantForAccessibility="no-hide-descendants"
+              pointerEvents="none"
               className="h-[104px] w-[104px] overflow-hidden rounded-[52px]"
             >
               <VoiceGradient
                 colors={[palette.nileGreen[500], palette.nileGreen[600]]}
                 className="flex-1 items-center justify-center"
               >
-                <Ionicons name="mic" size={42} color={palette.slate[25]} />
+                <Ionicons
+                  name={presentation.icon}
+                  size={42}
+                  color={palette.slate[25]}
+                  accessible={false}
+                />
               </VoiceGradient>
             </View>
-          ) : centralAction !== null ? (
+          ) : hasInteractiveMic ? (
             <Pressable
               testID="voice-mic-target"
               accessibilityRole="button"
               accessibilityLabel={presentation.centralLabel}
-              onPress={centralAction}
+              onPress={props.onStart}
               onPressIn={() => {
                 setIsMicPressed(true);
               }}
@@ -279,7 +293,7 @@ function VoiceActionSurface({
           style={{ fontFamily: fontFamily.bold }}
           className="mt-1 text-2xl font-bold text-slate-800 dark:text-slate-25"
         >
-          {formatDuration(props.durationMs)}
+          {formatRecordingTimer(props.durationMs)}
         </Text>
       ) : null}
 
@@ -308,66 +322,35 @@ function VoiceActionSurface({
             : "flex-row flex-wrap justify-center gap-2"
         }`}
       >
-        {isRecording ? (
-          <>
+        {isRecording || isPaused || isCompleted ? (
+          <View
+            testID="voice-recorder-action-row"
+            className="w-full flex-row flex-wrap items-center justify-center gap-2"
+            style={{ direction: "ltr" }}
+          >
             <ActionButton
-              testID="voice-action-stop"
-              label={t("voice_action_stop")}
-              icon="stop"
+              testID="voice-action-submit"
+              label={t("voice_action_submit")}
+              icon="send"
               onPress={props.onSubmit}
               variant="primary"
             />
             <ActionButton
-              testID="voice-action-pause"
-              label={t("voice_action_pause")}
-              icon="pause"
-              onPress={props.onPause}
+              testID={isPaused ? "voice-action-resume" : "voice-action-pause"}
+              label={t(isPaused ? "voice_action_resume" : "voice_action_pause")}
+              icon={isPaused ? "play" : "pause"}
+              onPress={isPaused ? props.onResume : props.onPause}
+              variant="neutral-outline"
+              disabled={isCompleted}
             />
             <ActionButton
               testID="voice-action-discard"
               label={t("voice_action_discard")}
               icon="close"
               onPress={props.onDiscard}
+              variant="danger-outline"
             />
-          </>
-        ) : isPaused ? (
-          <>
-            <ActionButton
-              testID="voice-action-resume"
-              label={t("voice_action_resume")}
-              icon="play"
-              onPress={props.onResume}
-              variant="primary"
-            />
-            <ActionButton
-              testID="voice-action-stop"
-              label={t("voice_action_stop")}
-              icon="stop"
-              onPress={props.onSubmit}
-            />
-            <ActionButton
-              testID="voice-action-discard"
-              label={t("voice_action_discard")}
-              icon="close"
-              onPress={props.onDiscard}
-            />
-          </>
-        ) : isCompleted ? (
-          <>
-            <ActionButton
-              testID="voice-action-stop"
-              label={t("voice_action_stop")}
-              icon="checkmark"
-              onPress={props.onSubmit}
-              variant="primary"
-            />
-            <ActionButton
-              testID="voice-action-discard"
-              label={t("voice_action_discard")}
-              icon="close"
-              onPress={props.onDiscard}
-            />
-          </>
+          </View>
         ) : (
           <PassiveStateActions {...props} isArabic={isArabic} />
         )}

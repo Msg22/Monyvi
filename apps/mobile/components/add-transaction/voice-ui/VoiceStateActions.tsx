@@ -1,5 +1,6 @@
 import { useLocale } from "@/context/LocaleContext";
 import { Ionicons } from "@expo/vector-icons";
+import { useColorScheme } from "nativewind";
 import React from "react";
 import { Pressable, Text } from "react-native";
 import { useTranslation } from "react-i18next";
@@ -134,7 +135,12 @@ export function PassiveStateActions(
   }
 }
 
-type ActionVariant = "primary" | "outline" | "disabled";
+type ActionVariant =
+  | "primary"
+  | "outline"
+  | "neutral-outline"
+  | "danger-outline"
+  | "disabled";
 
 export function ActionButton({
   label,
@@ -154,24 +160,42 @@ export function ActionButton({
   readonly variant?: ActionVariant;
 }): React.JSX.Element {
   const { fontFamily } = useLocale();
+  const { colorScheme } = useColorScheme();
+  const isDark = colorScheme === "dark";
   const base =
     variant === "primary"
       ? "border-nileGreen-500 bg-nileGreen-500"
       : variant === "disabled"
         ? "border-slate-200 bg-slate-200 dark:border-slate-700 dark:bg-slate-700"
-        : "border-nileGreen-500 bg-transparent";
+        : variant === "neutral-outline"
+          ? "border-slate-400 bg-transparent dark:border-slate-400"
+          : variant === "danger-outline"
+            ? "border-red-500 bg-transparent dark:border-red-400"
+            : "border-nileGreen-500 bg-transparent";
   const labelColor =
     variant === "primary"
       ? "text-slate-25"
       : variant === "disabled"
         ? "text-slate-500 dark:text-slate-400"
-        : "text-nileGreen-700 dark:text-nileGreen-400";
+        : variant === "neutral-outline"
+          ? "text-slate-600 dark:text-slate-300"
+          : variant === "danger-outline"
+            ? "text-red-600 dark:text-red-400"
+            : "text-nileGreen-700 dark:text-nileGreen-400";
   const iconColor =
     variant === "primary"
       ? palette.slate[25]
       : variant === "disabled"
         ? palette.slate[400]
-        : palette.nileGreen[600];
+        : variant === "neutral-outline"
+          ? isDark
+            ? palette.slate[300]
+            : palette.slate[600]
+          : variant === "danger-outline"
+            ? isDark
+              ? palette.red[400]
+              : palette.red[600]
+            : palette.nileGreen[600];
 
   return (
     <Pressable
@@ -191,7 +215,7 @@ export function ActionButton({
       <Ionicons name={icon} size={20} color={iconColor} />
       <Text
         style={{ fontFamily: fontFamily.semiBold }}
-        className={`min-w-0 text-center text-sm font-semibold leading-[22px] ${labelColor}`}
+        className={`min-w-0 text-center text-[14px] font-semibold leading-[22px] ${labelColor}`}
       >
         {label}
       </Text>

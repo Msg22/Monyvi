@@ -42,6 +42,65 @@ describe("AddTransaction unified mode intent", () => {
     expectTabState("Manual", { selected: false });
   });
 
+  it("defers the FIRST expensive ManualTransactionEntry mount on direct Voice entry", (): void => {
+    renderRoute("voice");
+    expectTabState("Voice", { selected: true });
+    expect(screen.UNSAFE_queryByType(ManualTransactionEntry)).toBeNull();
+    expect(
+      screen.queryByTestId("manual-amount-input", {
+        includeHiddenElements: true,
+      })
+    ).toBeNull();
+    expect(screen.queryByTestId("header-save")).toBeNull();
+    // No measuring fabricated latency: this is a real mount/nonmount assertion.
+    expect(screen.getByTestId("voice-entry-state")).toBeOnTheScreen();
+  });
+
+  it("mounts Manual immediately for default route and preserves its normal Save/amount contract", (): void => {
+    renderRoute(undefined);
+    expectTabState("Manual", { selected: true });
+    expect(screen.UNSAFE_getByType(ManualTransactionEntry)).toBeTruthy();
+    expect(screen.getByTestId("manual-amount-input")).toBeOnTheScreen();
+    expect(screen.getByTestId("header-save")).toBeOnTheScreen();
+  });
+
+  it("Voice-first mounts Manual ONCE when selected, keeps it alive across switches and preserves the draft", async (): Promise<void> => {
+    renderRoute("voice");
+    expect(screen.UNSAFE_queryByType(ManualTransactionEntry)).toBeNull();
+
+    await act(async (): Promise<void> => {
+      fireEvent.press(screen.getByRole("tab", { name: "Manual" }));
+      await Promise.resolve();
+    });
+    expectTabState("Manual", { selected: true });
+    const originalManual: unknown = screen.UNSAFE_getByType(
+      ManualTransactionEntry
+    );
+    expect(getTestInstanceProps(originalManual).isActive).toBe(true);
+    await enterOneManualUnit();
+
+    await act(async (): Promise<void> => {
+      fireEvent.press(screen.getByRole("tab", { name: "Voice" }));
+      await Promise.resolve();
+    });
+    expect(screen.UNSAFE_getByType(ManualTransactionEntry)).toBe(
+      originalManual
+    );
+    expect(getTestInstanceProps(originalManual).isActive).toBe(false);
+    expect(screen.queryByTestId("header-save")).toBeNull();
+    expect(screen.queryByTestId("manual-amount-input")).toBeNull();
+
+    await act(async (): Promise<void> => {
+      fireEvent.press(screen.getByRole("tab", { name: "Manual" }));
+      await Promise.resolve();
+    });
+    expect(screen.UNSAFE_getByType(ManualTransactionEntry)).toBe(
+      originalManual
+    );
+    expect(screen.getByTestId("manual-amount-input")).toHaveProp("value", "1");
+    expect(screen.getByTestId("header-save")).toBeOnTheScreen();
+  });
+
   it("preserves observable Manual amount state across safe mode switches", async (): Promise<void> => {
     renderRoute("manual");
 

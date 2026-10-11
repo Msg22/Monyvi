@@ -1,6 +1,6 @@
 appId: com.monyvi.app
 ---
-# #347 Voice motion r1 / T062 - honest UI visibility, examples dismissal and
+# #347 Voice R1/T062 + R2/T069 - honest UI visibility, examples dismissal and
 # Manual fallback checks. AUTHORED, NOT RUN. Requires authenticated seeded E2E
 # account. No fixture here can force an authenticated server daily/burst
 # refusal, an OS permission change, or native audio capture.
@@ -33,10 +33,10 @@ appId: com.monyvi.app
       # recording controls, no elapsed timer.
       - assertNotVisible: "Starting…"
       - assertNotVisible:
-          id: "voice-action-stop"
-      # Screenshot is visual evidence for owner comparison, NOT a pixel-level
-      # automated pass: verify round 104dp gradient, 140/172dp halos, and
-      # selected green 2dp underline against the frozen idle binding.
+          id: "voice-action-submit"
+      # Screenshot is owner visual evidence, NOT an automated pixel pass:
+      # verify clipped 104dp gradient, NO ordinary filled 140/172dp halos,
+      # and selected 2dp underline against accepted R2/frozen idle.
       - takeScreenshot: voice-idle-gradient-halos-tab-underline
 
 # Examples card + per-account durable dismissal (FR-038). Conditional only: a
@@ -134,7 +134,6 @@ appId: com.monyvi.app
 - tapOn:
     id: "header-save"
 - waitForAnimationToEnd
-- assertVisible: "Transactions"
 # If the examples card was already dismissed for this seeded account, the
 # dismiss/reopen scenario above was skipped and was NOT validated in this run
 # (this flow never un-hides the card). The Manual save below ends on
@@ -147,3 +146,12 @@ appId: com.monyvi.app
 # examples and AR reset copy, EN/AR glyph color proof, 320/390/768/orientation
 # and font-scale 1.35/2 layouts, reduced motion, screen-reader semantics and
 # cold app restart persistence.
+
+# R2 T069: idle/Starting omit ordinary 140/172dp filled backgrounds,
+# while exhausted/unavailable keep the disabled artwork. Screenshot taking
+# is NOT an automated visual-fidelity pass or proof of production timing.
+# The three R2 recorded/paused/completed control states and explicit Submit
+# require native audio/OS/provider fixtures this harness does not possess.
+# Never tap mic, Resume, Submit, OS permission or provider recovery here;
+# separately approved unit/owner-manual testing covers those boundaries.
+- assertVisible: "Transactions"

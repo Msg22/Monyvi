@@ -80,8 +80,8 @@ future subscription entitlements."
 ### Session 2026-10-10 — approved Voice motion/interaction overlay
 
 - Owner explicitly approved `2026-10-10-voice-motion-r1` in
-  `mockups/drafts/2026-10-10-voice-motion-r1/approval.json`:
-  “mockups approved” / “Approve the proposal”,
+  `mockups/drafts/2026-10-10-voice-motion-r1/approval.json`: “mockups approved”
+  / “Approve the proposal”,
   `approvedManifestSha256:7d91150571a3150e235a1b8ec63327cff4c19de6c292927cde76c40024c1c799`,
   `proposalSha256:06e5e987543d85a2c90c57aaad695569ca904cc122571da47bae7195d2b9f4b0`.
   The overlay `mockups/voice-motion-binding-context.md` records scoped states,
@@ -93,10 +93,10 @@ future subscription entitlements."
   sidecars, manifest and Manual B remain frozen; server accounting, existing
   Gemini review and 35-day replay retention remain unchanged; #384 deferred.
 - New source images are 853×1844 **raster pixels**, not replacement logical
-  viewport measurements. Existing normalized 390×844 dp, 104/140/172 dp mic,
-  48 dp shared interactive minimum, 16 dp gutters and responsive/RTL/dark
-  contract remain authoritative. The approved example dismiss proposal gives
-  ≥44 dp; the established ≥48 dp interactive target satisfies both.
+  viewport measurements. Existing normalized 390×844 dp, 104/140/172 dp mic, 48
+  dp shared interactive minimum, 16 dp gutters and responsive/RTL/dark contract
+  remain authoritative. The approved example dismiss proposal gives ≥44 dp; the
+  established ≥48 dp interactive target satisfies both.
 - The owner still owns device/rendered/accessibility evidence; no remote test
   authoring, native/device runs or `speckit.analyze` are claimed by this
   planning continuation.
@@ -163,10 +163,11 @@ underlying manual/voice transaction contracts.
     it cannot resume stale recording or falsely show Listening. Missing native
     permission uses the approved inline custom explanation, while genuine
     first-use AI processing consent remains mandatory.
-13. **Given** recording is active, paused or parsing, **When** its state changes,
-    **Then** decorative ripple/bars or waveform/receipt motion matches the
-    approved state, paused time is frozen, reduced-motion substitutes a static
-    representation, and all loops/timers stop on discard/unmount/account change.
+13. **Given** recording is active, paused or parsing, **When** its state
+    changes, **Then** decorative ripple/bars or waveform/receipt motion matches
+    the approved state, paused time is frozen, reduced-motion substitutes a
+    static representation, and all loops/timers stop on discard/unmount/account
+    change.
 14. **Given** a recording failure or authoritative availability check failure,
     **When** Try again is tapped, **Then** it transitions directly to Starting
     without an idle flash only if eligible. A retained-audio submission retry
@@ -472,10 +473,10 @@ parsing contract or provider-specific implementation.
   strokes (~1.4 s, +700 ms) and gently cycling activity bars (~1.2 s) over
   existing geometry, with a true timer; paused stops activity and freezes time,
   resume restores it, reduced-motion uses static indicators and lifecycle
-  cleanup cancels loops. Parsing/analyzing MUST replace its processing
-  skeleton with a restrained ~1.6 s waveform-to-receipt loop and exact approved
-  localized copy, no percentage, staged result claim or invented financial data.
-  True allowance-fetch loading MUST remain a separate Skeleton state.
+  cleanup cancels loops. Parsing/analyzing MUST replace its processing skeleton
+  with a restrained ~1.6 s waveform-to-receipt loop and exact approved localized
+  copy, no percentage, staged result claim or invented financial data. True
+  allowance-fetch loading MUST remain a separate Skeleton state.
 - **FR-041**: A genuinely missing native microphone permission MUST show the
   approved **inline** custom explanation before the OS request, not a
   record-introduction modal; granted users skip it and stale initial
@@ -485,9 +486,9 @@ parsing contract or provider-specific implementation.
 - **FR-042**: Recording-error Try again MUST go directly into Starting with no
   visible idle detour. Availability-failure Try again MUST refresh
   server-authoritative allowance and automatically enter Starting only if
-  eligible, without requiring a second mic tap. Retained-audio submission
-  retry MUST reuse the same logical request identity without recording anew
-  or double charging; #384 and all server policies stay unchanged.
+  eligible, without requiring a second mic tap. Retained-audio submission retry
+  MUST reuse the same logical request identity without recording anew or double
+  charging; #384 and all server policies stay unchanged.
 
 ### Key Entities
 
@@ -614,18 +615,18 @@ parsing contract or provider-specific implementation.
 - **SC-015**: Exhausting or temporarily blocking Voice never prevents the user
   from switching to and using Manual entry.
 - **SC-016**: Deterministic tests of Starting/Cancel, duplicate taps,
-  permission-granted/unknown/missing/denied, recorder start failure,
-  deferred cancellation and both retry types show no false Listening,
-  duplicate recording, unauthorized provider start or changed request identity.
+  permission-granted/unknown/missing/denied, recorder start failure, deferred
+  cancellation and both retry types show no false Listening, duplicate
+  recording, unauthorized provider start or changed request identity.
 - **SC-017**: Device-local examples dismissal tests cover persistence across
   route changes, app restart, language/theme, same-account sign-out/sign-in,
   multi-account isolation, missing/corrupt preference and read/write failures;
   no global/hosted record participates.
 - **SC-018**: Approved motion/permission/parsing/idle states match the new
   scoped proposal while the five frozen references remain intact; rendered
-  EN/AR/light/dark/compact/ordinary/tablet/landscape/font-scale comparisons
-  and separate accessibility-tree evidence are required. Until owner captures
-  these, visual/accessibility completion is **NOT RUN**, not Green.
+  EN/AR/light/dark/compact/ordinary/tablet/landscape/font-scale comparisons and
+  separate accessibility-tree evidence are required. Until owner captures these,
+  visual/accessibility completion is **NOT RUN**, not Green.
 
 ## Assumptions
 
@@ -649,3 +650,128 @@ parsing contract or provider-specific implementation.
   anti-abuse mechanics for timezone changes are planning details and must
   preserve server-authoritative accounting.
 - Exact paid subscription policies are intentionally deferred.
+
+## Session 2026-10-11 — Voice controls R2, approved image / delegated-accepted exact binding revision
+
+The owner approved the latest green/gray/red PNG
+`mockups/voice-controls-r2-green-gray-proposal.png` (“latest mockups approved”),
+published in image-only commit `b00b7ae07a7f75008f21ff2c9f8680f735153901`, Git
+blob `caceb8d1cade9e4e9c574e95fc0e603a39e766de`. The root local executor
+verified
+**sha256:3c1d098090cfac539c834634f2dfb1db29dc75b8afc9f479d61d17af09680281**,
+1832×858 **raster pixels** and 1470108 bytes; this is a multi-panel composite,
+not the replacement 390×844 logical-dp app viewport. The owner concept approval
+and faithful root review accept the three panels and Arabic `إرسال` /
+`التسجيل مكتمل`. Exact corrected Binding Facts/combined SHA verification and
+truthful delegated root acceptance remain **pending**; no individual owner
+approval of those computed revisions is claimed.
+
+This is a narrow override of the approved R1 motion package. All previously
+approved images/Binding Facts, Manual B, quota/consent/permission, 35-day
+replay, Gemini parsing/review and deferred #384 remain authoritative outside the
+explicit new R2 facts.
+
+### Additive functional requirements
+
+- **FR-043 — Fixed physical recording/paused/completed controls:** Recording
+  MUST render physical **LEFT Submit (green/NileGreen), CENTER Pause
+  (gray/slate), RIGHT Discard (red)**. Paused MUST retain Submit LEFT and
+  Discard RIGHT, replacing only center Pause with Resume (gray); labels do not
+  reorder. After cap, **Recording complete / التسجيل مكتمل** MUST retain enabled
+  Submit LEFT (green) and Discard RIGHT (red) with **disabled gray Pause
+  CENTER** and **no Resume**. All interactive actions MUST be ≥48 dp; Arabic
+  labels (Submit `إرسال`, Pause `إيقاف مؤقت`, Resume `متابعة`, Discard `تجاهل`)
+  and RTL text MUST NOT reverse fixed physical positions.
+- **FR-044 — Ordinary mic decoration:** Idle, Starting, recording and paused
+  Voice states MUST remove ordinary static filled 140/172 dp halo-circle
+  backgrounds, preserve the existing 104 dp clipped mic and R1 animated outward
+  recording waves (paused/completed no active waves). Daily-limit and
+  unavailable disabled-mic artwork remains unchanged. Reduced-motion indicators
+  must be static and accessible.
+- **FR-045 — 30-second active elapsed/max capture:** Local native recording MUST
+  stop after at most 30,000 ms of **active capture**, excluding paused duration.
+  Recording and paused screens MUST show `mm:ss / 00:30`, such as
+  `00:12 / 00:30`; after cap show **`00:30 / 00:30`**, the localized Recording
+  complete title and no ordinary helper sentence. Timer MUST NOT advance or
+  claim Listening before native `record()` successfully starts.
+- **FR-046 — Retained audio/no cap auto-submit:** At cap, the local recorder
+  MUST stop/finalize **once**, retain audio/URI for explicit Submit or Discard,
+  and MUST NOT automatically invoke Gemini/`parse-voice`, consume an AI provider
+  allowance or navigate. Submit during recording/paused finalizes safely then
+  submits one logical request; after cap it submits the already finalized audio
+  only once. Discard cleans locally. Cap vs Submit/Discard, pause/resume,
+  back/cancel/unmount/account-switch races MUST NOT duplicate native
+  stop/provider calls or resurrect stale state. No Resume at cap.
+- **FR-047 — Honest server and latency boundary:** The 30-second cap is a client
+  recording limit, NOT evidence of authoritative server enforcement; issue #391
+  independently owns server duration and empty/speechless-audio research. Faster
+  startup is desired but **no measured millisecond target** is approved. Correct
+  the source-proven duplicate microphone permission checks by having **one fresh
+  just-in-time typed actor/generation-safe verification** while preserving the
+  existing inline missing/blocked permission response and OS prompt only after
+  explicit Allow microphone. On direct Voice entry, defer the **first** hidden
+  Manual form mount until Manual is actually selected, then keep it mounted
+  across safe switches to preserve the draft and Save/transfer/recurring
+  behavior. Preserve fresh authenticated **local** AI consent, authoritative
+  preattempt availability, native 300 ms early-command stabilization,
+  cancellation/revocation and no Listening until native `record()` succeeds. Do
+  not change availability in-flight/transport policy on hypotheses or claim
+  duration savings.
+
+### Additive success criteria
+
+- **SC-019:** Exact EN/AR recording, paused and Recording complete physical
+  LEFT/CENTER/RIGHT positions; green/gray/red semantic treatments, disabled
+  completed center, ≥48 dp targets and light/dark/responsive accessibility.
+- **SC-020:** Clock starts after native record, shows `elapsed / 00:30`, freezes
+  for Pause, continues for Resume and clamps to `00:30 / 00:30` when native cap
+  finalizes at 30 seconds of active audio.
+- **SC-021:** Cap retains audio/URI for explicit Submit or Discard, with zero
+  automatic AI/provider call; cap/Submit/Discard/cancel/unmount/account races
+  and resumed-paused behavior stay idempotent and user scoped.
+- **SC-022:** Scoped ordinary halo removal preserves R1 recording waves and
+  original daily-limit/unavailable artwork; original Manual/AI consent/quota and
+  request identity remain. Deterministic regression tests prove one just-in-time
+  microphone permission verification, no revoked-permission bypass, Voice-first
+  lazy initial Manual mount and unchanged Manual-draft retention. No
+  time-savings number is claimed without owner measurements.
+
+Before T069–T071 or source edits, the root MUST verify/approve exact R2 binding
+revisions with truthful delegated provenance, run correct-feature Speckit
+prerequisites and **read-only `speckit.analyze` on the final spec/plan/tasks**,
+and resolve critical/high discrepancies. T073 is a separate **independent
+postimplementation review**, not a substitute for this prerequisite. Device,
+native timing, visual comparison and accessibility proof remain owner-owned/NOT
+RUN.
+
+## Session 2026-10-11 — Voice controls R2 binding acceptance receipt (supersedes DRAFT status above)
+
+Superseding the earlier same-day DRAFT/pending framing without rewriting it:
+root verified the public verifier results and, under delegated authority,
+accepted binding metadata revision
+`sha256:78105dbc1254cb508429f417cf5e26c71324364c7e4e74447f7249735f282a0e` and
+combined approval revision
+`sha256:d06cfdf4f6bbc8c3bd7f12b5129115206a31c7f3c1dfb4a266977456252caa14` (both
+later superseded by the faithful-refinement receipt below); the R2 sidecar
+Binding metadata approval is APPROVED and the manifest status is accepted. Owner
+approval remains the image/concept only; no separate owner SHA review is
+claimed. That gate batch completed on 2026-10-11: final canonical binding
+verifier authoritative, correct-feature prerequisites exit 0 and canonical
+read-only Speckit analysis recorded (see tasks.md actual T068 receipt).
+FR-043–FR-047 and SC-019–SC-022 are unchanged.
+
+## Session 2026-10-11 — Voice controls R2 faithful-refinement receipt (supersedes prior same-day tuple)
+
+Root, under delegated authority, accepted the exact Color/theme facts refinement
+pinning filled registered NileGreen Submit with white label and paper-plane
+Ionicons send icon, transparent neutral-gray outlined Pause/Resume with matching
+gray label and pause/play glyph, transparent registered red outlined Discard
+with matching red label and close glyph, gray disabled completed center Pause
+with pause glyph, 20 dp action icons and 14/22 semibold labels. Current approved
+metadata revision is
+`sha256:72459993f2d82fe128fd9d64ce83c9646e60edef5e1f2d187f42354a48158c2b` and
+combined approval revision is
+`sha256:71906e40d73448a0767df14954bf7f1a239126dc894a64dbbe227e191f549a77` from
+the official verifier algorithm; PNG bytes, FR-043–FR-047, SC-019–SC-022 and all
+other facts are unchanged. Owner did not review the computed SHA. Final root
+T068 gate completed 2026-10-11 (see the actual receipt in tasks.md).
