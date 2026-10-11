@@ -19,6 +19,8 @@ import { useVoiceTransactionFlow } from "@/hooks/useVoiceTransactionFlow";
 type PermissionStatus = "granted" | "denied" | "blocked" | "unknown";
 
 const mockRecorderStart = jest.fn();
+const mockRecorderPause = jest.fn<boolean, []>();
+const mockRecorderResume = jest.fn<boolean, []>();
 const mockRecorderRefresh = jest.fn<Promise<PermissionStatus>, []>();
 const mockRecorderRequest = jest.fn<Promise<boolean>, []>();
 const mockRecorderDiscard = jest.fn<Promise<void>, []>();
@@ -78,8 +80,8 @@ jest.mock("@/hooks/useVoiceRecorder", () => ({
     refreshPermission: mockRecorderRefresh,
     requestPermission: mockRecorderRequest,
     start: mockRecorderStart,
-    pause: jest.fn(() => true),
-    resume: jest.fn(() => true),
+    pause: mockRecorderPause,
+    resume: mockRecorderResume,
     stop: mockRecorderStop,
     discard: mockRecorderDiscard,
     reset: jest.fn(() => Promise.resolve()),
@@ -138,6 +140,8 @@ beforeEach((): void => {
   recorderState.hasPermission = true;
   mockAvailabilityRefresh.mockResolvedValue(allowed);
   mockRecorderRefresh.mockResolvedValue("granted");
+  mockRecorderPause.mockReturnValue(true);
+  mockRecorderResume.mockReturnValue(true);
   mockRecorderRequest.mockResolvedValue(false);
   mockRecorderDiscard.mockResolvedValue(undefined);
   mockRecorderStop.mockResolvedValue(null);
@@ -332,4 +336,80 @@ describe("R2 typed single just-in-time microphone permission ownership", () => {
     expect(flow.result.current.flowStatus).not.toBe("recording");
     expect(mockProvider).not.toHaveBeenCalled();
   });
+
+  it("rechecks native permission before Resume and refuses a revoked microphone without restarting capture", async (): Promise<void> => {
+    const flow = renderFlow();
+    await act(async (): Promise<void> => {
+      await flow.result.current.startFlow();
+    });
+    act((): void => {
+      flow.result.current.pauseRecording();
+    });
+    expect(flow.result.current.flowStatus).toBe("paused");
+    mockRecorderRefresh.mockClear();
+    mockRecorderRefresh.mockResolvedValueOnce("denied");
+    act((): void => {
+      flow.result.current.resumeRecording();
+    });
+    await act(async (): Promise<void> => {
+      await Promise.resolve();
+    });
+    expect(mockRecorderRefresh).toHaveBeenCalledTimes(1);
+    expect(mockRecorderResume).not.toHaveBeenCalled();
+    expect(flow.result.current.flowStatus).toBe("error");
+    expect(flow.result.current.isMicrophonePermissionError).toBe(true);
+    expect(mockRecorderRequest).not.toHaveBeenCalled();
+    expect(mockProvider).not.toHaveBeenCalled();
+  });
+
+  it("allows Resume only after the new granted permission read, without allocating a new request key", async (): Promise<void> => {
+    const flow = renderFlow();
+    await act(async (): Promise<void> => {
+      await flow.result.current.startFlow();
+    });
+    act((): void => {
+      flow.result.current.pauseRecording();
+    });
+    mockRecorderRefresh.mockClear();
+    const pending = deferred<PermissionStatus>();
+    mockRecorderRefresh.mockReturnValueOnce(pending.promise);
+    act((): void => {
+      flow.result.current.resumeRecording();
+      flow.result.current.resumeRecording();
+    });
+    expect(flow.result.current.flowStatus).toBe("paused");
+    expect(mockRecorderResume).not.toHaveBeenCalled();
+    await act(async (): Promise<void> => {
+      pending.resolve("granted");
+      await pending.promise;
+    });
+    expect(mockRecorderRefresh).toHaveBeenCalledTimes(1);
+    expect(mockRecorderResume).toHaveBeenCalledTimes(1);
+    expect(flow.result.current.flowStatus).toBe("recording");
+    expect(mockUUID).toHaveBeenCalledTimes(1);
+  });
+
+  it("ignores a late granted Resume after Discard changes the operation generation", async (): Promise<void> => {
+    const flow = renderFlow();
+    await act(async (): Promise<void> => {
+      await flow.result.current.startFlow();
+    });
+    act((): void => {
+      flow.result.current.pauseRecording();
+    });
+    const pending = deferred<PermissionStatus>();
+    mockRecorderRefresh.mockReturnValueOnce(pending.promise);
+    act((): void => {
+      flow.result.current.resumeRecording();
+    });
+    await act(async (): Promise<void> => {
+      await flow.result.current.discardRecording();
+      pending.resolve("granted");
+      await pending.promise;
+    });
+    expect(mockRecorderResume).not.toHaveBeenCalled();
+    expect(flow.result.current.flowStatus).toBe("idle");
+    expect(mockProvider).not.toHaveBeenCalled();
+  });
+
 });

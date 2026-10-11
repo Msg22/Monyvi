@@ -524,7 +524,7 @@ export function resetRouteMocks(): void {
   mockVoiceAvailabilityLoading = false;
   mockVoiceRefusalReason = null;
   mockGrantConsent.mockReset().mockResolvedValue();
-  mockVoiceStartFlow.mockReset().mockResolvedValue(undefined);
+  mockVoiceStartFlow.mockReset().mockResolvedValue({ kind: "started" });
   mockVoiceDiscardRecording.mockReset().mockResolvedValue(undefined);
   mockVoiceOpenMicrophoneSettings.mockReset().mockResolvedValue(undefined);
   mockVoicePermissionRefresh

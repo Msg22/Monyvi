@@ -9,6 +9,19 @@ export function formatDuration(durationMs: number): string {
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
+/** R2 active capture cap is UI-only, not a new server audio-duration policy. */
+const MAX_ACTIVE_RECORDING_MS = 30_000;
+
+export function formatRecordingTimer(
+  durationMs: number,
+  isCompleted: boolean
+): string {
+  const elapsedMs = isCompleted
+    ? MAX_ACTIVE_RECORDING_MS
+    : Math.max(0, Math.min(durationMs, MAX_ACTIVE_RECORDING_MS));
+  return `${formatDuration(elapsedMs)} / ${formatDuration(MAX_ACTIVE_RECORDING_MS)}`;
+}
+
 export function getPresentation(
   state: VoiceTransactionEntryState,
   errorMessage: string | null,
@@ -35,7 +48,7 @@ export function getPresentation(
         title: tCommon("voice_listening"),
         description: null,
         icon: "mic",
-        centralLabel: t("voice_action_stop"),
+        centralLabel: t("voice_listening"),
       };
     case "paused":
       return {
@@ -46,10 +59,10 @@ export function getPresentation(
       };
     case "completed":
       return {
-        title: null,
+        title: t("voice_recording_complete"),
         description: null,
         icon: "checkmark",
-        centralLabel: t("voice_action_stop"),
+        centralLabel: t("voice_recording_complete"),
       };
     case "processing":
       return {

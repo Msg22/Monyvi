@@ -40,6 +40,23 @@ export type VoiceFlowStatus =
   | "success"
   | "error";
 type FlowErrorKind = "microphone-permission" | "generic";
+
+/** One actor-scoped permission answer for the route; no second route read. */
+export type VoiceStartResult =
+  | { readonly kind: "started" }
+  | {
+      readonly kind: "permission";
+      readonly permissionStatus: Exclude<MicrophonePermissionStatus, "granted">;
+    }
+  | {
+      readonly kind: "not-started";
+      readonly reason:
+        | "consent"
+        | "availability"
+        | "cancelled"
+        | "actor-changed"
+        | "start-failed";
+    };
 interface ParserContextSnapshot {
   readonly preferredCurrency: string;
   readonly categories: string;
@@ -74,7 +91,7 @@ export interface VoiceTransactionFlowResult {
   readonly isFinalizing: boolean;
   readonly refusalReason: VoiceQuotaRefusal["reason"] | null;
   readonly canRetrySubmission: boolean;
-  readonly startFlow: (options?: StartFlowOptions) => Promise<void>;
+  readonly startFlow: (options?: StartFlowOptions) => Promise<VoiceStartResult>;
   readonly pauseRecording: () => void;
   readonly resumeRecording: () => void;
   readonly submitRecording: () => Promise<void>;
@@ -151,6 +168,10 @@ export function useVoiceTransactionFlow(
   const operationAbortRef = useRef<AbortController | null>(null);
   const startPendingGenerationRef = useRef<number | null>(null);
   const submissionPendingGenerationRef = useRef<number | null>(null);
+  const resumePendingRef = useRef<{
+    readonly userId: string;
+    readonly generation: number;
+  } | null>(null);
   const flowStatusRef = useRef<VoiceFlowStatus>("idle");
   const originTabIndexRef = useRef(cfgOriginTabIndex ?? 0);
   const requestKeyRef = useRef<string | null>(null);
@@ -202,6 +223,14 @@ export function useVoiceTransactionFlow(
       !isResolvingUserRef.current &&
       currentUserIdRef.current === operation.userId &&
       operationGenerationRef.current === operation.generation,
+    []
+  );
+  const getStaleStartResult = useCallback(
+    (operation: FlowOperation): VoiceStartResult =>
+      currentUserIdRef.current !== operation.userId ||
+      isResolvingUserRef.current
+        ? { kind: "not-started", reason: "actor-changed" }
+        : { kind: "not-started", reason: "cancelled" },
     []
   );
   const previousActorRef = useRef({
@@ -323,74 +352,94 @@ export function useVoiceTransactionFlow(
     [refreshVoiceAvailability, isOperationCurrent]
   );
   const startFlow = useCallback(
-    async (options?: StartFlowOptions): Promise<void> => {
+    async (options?: StartFlowOptions): Promise<VoiceStartResult> => {
       if (
         (flowStatusRef.current !== "idle" &&
           !(options?.retryRecording && flowStatusRef.current === "error")) ||
         startPendingGenerationRef.current !== null ||
         submissionPendingGenerationRef.current !== null
       ) {
-        return;
+        return { kind: "not-started", reason: "cancelled" };
       }
       const operation = beginOperation();
-      if (operation === null) return;
+      if (operation === null) {
+        return currentUserIdRef.current !== userId || isResolvingUserRef.current
+          ? { kind: "not-started", reason: "actor-changed" }
+          : { kind: "not-started", reason: "cancelled" };
+      }
       startPendingGenerationRef.current = operation.generation;
       setIsStartPending(true);
       updateFlowStatus("starting");
       try {
         if (options?.retryRecording) {
-          if (!(await discardForOperation(operation))) return;
+          if (!(await discardForOperation(operation))) {
+            return getStaleStartResult(operation);
+          }
           clearSubmissionIdentity();
           setErrorMessage(null);
           setErrorKind(null);
           setRefusalReason(null);
         }
+
+        // Callers may already have completed fresh consent, but the flow
+        // continues to enforce its normal consent boundary for other callers.
         if (!options?.skipAiProcessingConsent && cfgEnsureAiProcessingConsent) {
           const canUseAi = await cfgEnsureAiProcessingConsent();
           if (!isOperationCurrent(operation)) {
-            return;
+            return getStaleStartResult(operation);
           }
           if (!canUseAi) {
             updateFlowStatus("idle");
-            return;
+            return { kind: "not-started", reason: "consent" };
           }
         }
+
         const callerTimeZone = getDeviceTimeZone();
         if (!isOperationCurrent(operation)) {
-          return;
+          return getStaleStartResult(operation);
         }
         if (callerTimeZone === null) {
           updateFlowStatus("idle");
-          return;
+          return { kind: "not-started", reason: "availability" };
         }
+
+        // The authoritative availability gate precedes all native permission
+        // work. A caller may supply a freshly checked snapshot exactly once.
         const availability =
           options?.availabilitySnapshot ?? (await refreshVoiceAvailability());
         if (!isOperationCurrent(operation)) {
-          return;
+          return getStaleStartResult(operation);
         }
         if (isAvailabilityBlocked(availability)) {
           setIsOverlayVisible(false);
           updateFlowStatus("idle");
-          return;
+          return { kind: "not-started", reason: "availability" };
         }
+
+        // Authoritative permission decision lives HERE, once per attempt.
+        // Neither cached hasPermission nor route metadata can bypass this read.
         const permission = await recorder.refreshPermission();
-        if (!isOperationCurrent(operation)) return;
+        if (!isOperationCurrent(operation)) {
+          return getStaleStartResult(operation);
+        }
         if (permission !== "granted") {
           const granted =
-            options?.requestMicrophonePermission && permission === "denied"
+            options?.requestMicrophonePermission === true &&
+            permission === "denied"
               ? await recorder.requestPermission()
               : false;
           if (!isOperationCurrent(operation)) {
-            return;
+            return getStaleStartResult(operation);
           }
           if (!granted) {
-            setErrorMessage(microphonePermissionError());
-            setErrorKind("microphone-permission");
-            updateFlowStatus("error");
-            setIsOverlayVisible(true);
-            return;
+            setErrorMessage(null);
+            setErrorKind(null);
+            setIsOverlayVisible(false);
+            updateFlowStatus("idle");
+            return { kind: "permission", permissionStatus: permission };
           }
         }
+
         const requestKey = createRequestKey();
         requestKeyRef.current = requestKey;
         requestOwnerUserIdRef.current = operation.userId;
@@ -402,33 +451,52 @@ export function useVoiceTransactionFlow(
         setErrorKind(null);
         setIsOverlayVisible(true);
         originTabIndexRef.current = cfgOriginTabIndex ?? 0;
+
+        let didNativeRecordStart = false;
         try {
           await recorder.start({
             signal: operation.signal,
             onStarted: (): void => {
-              if (isOperationCurrent(operation)) updateFlowStatus("recording");
+              if (isOperationCurrent(operation)) {
+                didNativeRecordStart = true;
+                updateFlowStatus("recording");
+              }
             },
           });
         } catch {
           if (!isOperationCurrent(operation)) {
-            return;
+            return getStaleStartResult(operation);
           }
           clearSubmissionIdentity();
           setErrorMessage(recordingStartError());
           setErrorKind("generic");
           updateFlowStatus("error");
-          return;
+          return { kind: "not-started", reason: "start-failed" };
         }
         if (!isOperationCurrent(operation)) {
-          return;
+          return getStaleStartResult(operation);
         }
+        if (!didNativeRecordStart) {
+          // Resolving an async native promise is not sufficient evidence that
+          // AudioRecorder.record() ran; onStarted is the authoritative signal.
+          clearSubmissionIdentity();
+          setErrorMessage(recordingStartError());
+          setErrorKind("generic");
+          updateFlowStatus("error");
+          await recorder.discard();
+          return { kind: "not-started", reason: "start-failed" };
+        }
+        return { kind: "started" };
       } catch (error: unknown) {
-        if (!isOperationCurrent(operation)) return;
+        if (!isOperationCurrent(operation)) {
+          return getStaleStartResult(operation);
+        }
         logger.error("voice.startFlow.failed", error);
         clearSubmissionIdentity();
         setErrorMessage(recordingStartError());
         setErrorKind("generic");
         updateFlowStatus("error");
+        return { kind: "not-started", reason: "start-failed" };
       } finally {
         if (startPendingGenerationRef.current === operation.generation) {
           startPendingGenerationRef.current = null;
@@ -444,11 +512,12 @@ export function useVoiceTransactionFlow(
       cfgEnsureAiProcessingConsent,
       cfgOriginTabIndex,
       refreshVoiceAvailability,
-      reconcileVoiceAvailability,
       discardForOperation,
+      getStaleStartResult,
       isOperationCurrent,
       recorder,
       updateFlowStatus,
+      userId,
     ]
   );
   const startFlowRef = useRef(startFlow);
@@ -501,7 +570,52 @@ export function useVoiceTransactionFlow(
     ) {
       return;
     }
-    if (recorder.resume()) updateFlowStatus("recording");
+    const pending = {
+      userId,
+      generation: operationGenerationRef.current,
+    };
+    if (
+      resumePendingRef.current?.userId === pending.userId &&
+      resumePendingRef.current.generation === pending.generation
+    ) {
+      return;
+    }
+    resumePendingRef.current = pending;
+    // Native permission can be revoked between Pause and Resume. Resume
+    // is never allowed to rely on a cached hasPermission flag.
+    void (async (): Promise<void> => {
+      try {
+        const permission = await recorder.refreshPermission();
+        if (
+          !mountedRef.current ||
+          isResolvingUserRef.current ||
+          currentUserIdRef.current !== pending.userId ||
+          operationGenerationRef.current !== pending.generation ||
+          requestOwnerUserIdRef.current !== pending.userId ||
+          flowStatusRef.current !== "paused"
+        ) {
+          return;
+        }
+        if (permission === "unknown") {
+          // A failed permission lookup is not a confirmed OS denial.
+          return;
+        }
+        if (permission !== "granted") {
+          setErrorMessage(microphonePermissionError());
+          setErrorKind("microphone-permission");
+          setIsOverlayVisible(true);
+          updateFlowStatus("error");
+          return;
+        }
+        if (recorder.resume()) updateFlowStatus("recording");
+      } catch (error: unknown) {
+        logger.error("voice.resumePermission.failed", error);
+      } finally {
+        if (resumePendingRef.current === pending) {
+          resumePendingRef.current = null;
+        }
+      }
+    })();
   }, [recorder, updateFlowStatus, userId]);
   const processSubmission = useCallback(
     async (
@@ -828,7 +942,9 @@ export function useVoiceTransactionFlow(
     updateFlowStatus,
   ]);
   const retryRecording = useCallback(
-    (): Promise<void> => startFlow({ retryRecording: true }),
+    async (): Promise<void> => {
+      await startFlow({ retryRecording: true });
+    },
     [startFlow]
   );
   const openMicrophoneSettings = useCallback(async (): Promise<void> => {

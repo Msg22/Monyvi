@@ -33,7 +33,7 @@ appId: com.monyvi.app
       # recording controls, no elapsed timer.
       - assertNotVisible: "Starting…"
       - assertNotVisible:
-          id: "voice-action-stop"
+          id: "voice-action-submit"
       # Screenshot is owner visual evidence, NOT an automated pixel pass:
       # verify clipped 104dp gradient, NO ordinary filled 140/172dp halos,
       # and selected 2dp underline against accepted R2/frozen idle.

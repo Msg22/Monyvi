@@ -51,7 +51,7 @@ appId: com.monyvi.app
 # Switching to Voice must not auto-start capture (FR-039).
 - assertNotVisible: "Starting…"
 - assertNotVisible:
-    id: "voice-action-stop"
+    id: "voice-action-submit"
 - assertNotVisible:
     id: "voice-starting-cancel"
 - tapOn:
@@ -75,7 +75,7 @@ appId: com.monyvi.app
     id: "header-save"
 - assertNotVisible: "Starting…"
 - assertNotVisible:
-    id: "voice-action-stop"
+    id: "voice-action-submit"
 # R2 regression selector guard: toggling into Voice never shows the new
 # Submit/Pause/Discard controls unless capture genuinely started.
 # Native recording/pause/review, real permission journeys, Voice retry

@@ -659,7 +659,7 @@ describe("real Tailwind/CSS Interop Voice native shape", () => {
   it.each([
     ["starting", "voice-starting-cancel"],
     ["permission-explanation", "voice-permission-primary"],
-    ["recording", "voice-action-stop"],
+    ["recording", "voice-action-submit"],
   ] as const)(
     "gives %s action an actual native 48dp minimum height",
     (state, id): void => {
@@ -957,6 +957,7 @@ describe("real Tailwind/CSS Interop Voice native shape", () => {
       expect(mockIoniconsRenders.find((icon) => icon.name === "close")?.size).toBe(20);
       const row = recorderActionRow(submit, center, discard);
       expect(resolvedVoiceStyle(row).flexDirection).toBe("row");
+      expect(resolvedVoiceStyle(row).direction).toBe("ltr");
     }
   );
 

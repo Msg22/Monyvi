@@ -179,6 +179,9 @@ function expectPhysicalRecorderOrder(
   expect(String(getTestInstanceProps(common).className)).not.toContain(
     "flex-row-reverse"
   );
+  expect(getTestInstanceProps(common).style).toEqual(
+    expect.objectContaining({ direction: "ltr" })
+  );
 }
 
 jest.mock("@/services/reduced-motion-service", () => ({
@@ -665,7 +668,7 @@ describe("VoiceTransactionEntry approved state compositions", () => {
       language: "en",
       state: "recording",
       durationMs: 12_750,
-      title: "Listening...",
+      title: "Listening",
       second: "Pause",
       secondId: "voice-action-pause",
     },
@@ -689,7 +692,7 @@ describe("VoiceTransactionEntry approved state compositions", () => {
       language: "ar",
       state: "recording",
       durationMs: 12_750,
-      title: "جاري الاستماع...",
+      title: "جاري الاستماع",
       second: "إيقاف مؤقت",
       secondId: "voice-action-pause",
     },

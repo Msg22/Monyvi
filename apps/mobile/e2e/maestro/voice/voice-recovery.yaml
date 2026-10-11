@@ -78,7 +78,7 @@ appId: com.monyvi.app
 # is meaningful, not vacuous.
 - assertNotVisible: "Starting…"
 - assertNotVisible:
-    id: "voice-action-stop"
+    id: "voice-action-submit"
 - tapOn:
     id: "header-back"
 - waitForAnimationToEnd
