@@ -77,7 +77,7 @@ const READINESS_POLL_INTERVAL_MS = 50;
 // Types
 // ---------------------------------------------------------------------------
 
-type RecorderStatus = "idle" | "recording" | "paused" | "completed";
+type RecorderStatus = "idle" | "recording" | "paused" | "completed" | "error";
 
 interface VoiceRecorderResult {
   /** Current recording status */
@@ -92,6 +92,7 @@ interface VoiceRecorderResult {
   readonly hasPermission: boolean;
   readonly permissionStatus: MicrophonePermissionStatus;
   readonly refreshPermission: () => Promise<MicrophonePermissionStatus>;
+  readonly requestPermissionStatus: () => Promise<MicrophonePermissionStatus>;
   /** Start a new recording */
   readonly start: (options?: {
     readonly signal?: AbortSignal;
@@ -222,6 +223,7 @@ export function useVoiceRecorder(): VoiceRecorderResult {
     hasPermission,
     permissionStatus,
     refreshPermission,
+    requestPermissionStatus,
     requestPermission,
   } = useMicrophonePermission();
   const startGenerationRef = useRef(0);
@@ -653,8 +655,12 @@ export function useVoiceRecorder(): VoiceRecorderResult {
         stopTimer();
         statusRef.current = "completed";
         const uri = await stopNativeRecorder(recorder);
-        if (!uri) return null;
         if (!isCurrentSession()) return null;
+        if (!uri) {
+          statusRef.current = "error";
+          setStatus("error");
+          return null;
+        }
 
         applyAudioUri(uri);
         setStatus("completed");
@@ -665,8 +671,8 @@ export function useVoiceRecorder(): VoiceRecorderResult {
         // replacement, which owns status and native readiness.
         if (!isCurrentSession()) return null;
         nativeReadyRef.current = false;
-        statusRef.current = "idle";
-        setStatus("idle");
+        statusRef.current = "error";
+        setStatus("error");
         return null;
       }
     })();
@@ -828,7 +834,7 @@ export function useVoiceRecorder(): VoiceRecorderResult {
   const reset = useCallback(async (): Promise<void> => {
     const currentStatus = statusRef.current;
 
-    if (currentStatus === "recording" || currentStatus === "paused") {
+    if (currentStatus === "recording" || currentStatus === "paused" || currentStatus === "error") {
       // Active state — must do proper native teardown + file cleanup
       await discard();
       return;
@@ -867,6 +873,7 @@ export function useVoiceRecorder(): VoiceRecorderResult {
     hasPermission,
     permissionStatus,
     refreshPermission,
+    requestPermissionStatus,
     start,
     pause,
     resume,
