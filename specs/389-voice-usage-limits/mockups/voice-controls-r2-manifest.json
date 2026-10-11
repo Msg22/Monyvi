@@ -1,5 +1,5 @@
 {
-  "status": "owner-image-approved-binding-metadata-draft",
+  "status": "owner-image-approved-binding-metadata-approved",
   "revision": "2026-10-11-voice-controls-r2",
   "base": "0e7ee55abf6fb18af37e29e4f2e48ba45604a31e",
   "imageCommit": "b00b7ae07a7f75008f21ff2c9f8680f735153901",
@@ -16,12 +16,12 @@
   ],
   "binding": {
     "file": "voice-controls-r2-green-gray-proposal.binding.md",
-    "status": "DRAFT",
+    "status": "APPROVED",
     "bindingMetadataRevision": "sha256:78105dbc1254cb508429f417cf5e26c71324364c7e4e74447f7249735f282a0e",
     "combinedRevision": "sha256:d06cfdf4f6bbc8c3bd7f12b5129115206a31c7f3c1dfb4a266977456252caa14",
-    "approvedBindingMetadataRevision": null,
-    "approvedCombinedRevision": null,
-    "approvalEvidence": "Owner approved latest green/gray/red PNG; local executor verified image SHA, 1832x858 pixels, 1470108 bytes and matching Git blob. Root faithful review accepts scoped visual facts/AR labels, but final corrected Binding Facts and exact revision require local verification and delegated root acceptance. No separate owner SHA approval is claimed."
+    "approvedBindingMetadataRevision": "sha256:78105dbc1254cb508429f417cf5e26c71324364c7e4e74447f7249735f282a0e",
+    "approvedCombinedRevision": "sha256:d06cfdf4f6bbc8c3bd7f12b5129115206a31c7f3c1dfb4a266977456252caa14",
+    "approvalEvidence": "Owner approved the latest green/gray/red PNG concept. Root/local executor verified exact image revision sha256:3c1d098090cfac539c834634f2dfb1db29dc75b8afc9f479d61d17af09680281, Binding Facts revision sha256:78105dbc1254cb508429f417cf5e26c71324364c7e4e74447f7249735f282a0e, and combined revision sha256:d06cfdf4f6bbc8c3bd7f12b5129115206a31c7f3c1dfb4a266977456252caa14; on 2026-10-11 root explicitly ACCEPTED ALL THREE exact revisions under owner-delegated autonomy after faithful 15-key/three-panel/Arabic review. Owner was not individually shown the computed SHA values. Final official binding verifier PASS and read-only Speckit analysis remain pending under unchecked T068."
   },
   "precedence": {
     "supersedes": [

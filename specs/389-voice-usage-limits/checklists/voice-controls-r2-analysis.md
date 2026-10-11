@@ -22,7 +22,7 @@ and **before T069–T071**. Resolve actual analyzer findings separately.
 | I3 | Completed third panel absent | HIGH | R2 image + source lacks explicit capped completion panel | FR-043–046: **Recording complete / التسجيل مكتمل**, `00:30 / 00:30`, enabled LEFT Submit, **disabled gray CENTER Pause**, enabled RIGHT Discard, **no Resume/waves/helper**, retained audio until explicit action |
 | I4 | UI precedent | HIGH | R1 ordinary 140/172 filled halos | FR-044, T069/T071: remove only ordinary filled backgrounds in idle/Starting/recording/paused; preserve R1 waves and daily/unavailable disabled artwork |
 | I5 | Server boundary | MEDIUM | Local client cap does not establish server enforcement | FR-047/#391: no claim of server duration rejection or empty/speechless handling |
-| I6 | Binding compatibility | BLOCKING | Draft sidecar lacked official image field and 15 verifier keys | Corrected `Approved reference image`, real image SHA, 15 required labels; computed draft metadata `sha256:78105dbc1254cb508429f417cf5e26c71324364c7e4e74447f7249735f282a0e`, combined `sha256:d06cfdf4f6bbc8c3bd7f12b5129115206a31c7f3c1dfb4a266977456252caa14`; root checks exact values then records delegated revision acceptance |
+| I6 | Binding compatibility | BLOCKING | Draft sidecar lacked official image field and 15 verifier keys | Corrected `Approved reference image`, real image SHA, 15 required labels; computed draft metadata `sha256:78105dbc1254cb508429f417cf5e26c71324364c7e4e74447f7249735f282a0e`, combined `sha256:d06cfdf4f6bbc8c3bd7f12b5129115206a31c7f3c1dfb4a266977456252caa14`; root verified all three exact values and delegated-accepted them on 2026-10-11; final canonical verifier/analyzer remain pending |
 | I7 | Arabic/localization | RESOLVED | Owner/lead accepts faithful translations | Submit **إرسال** and completed title **التسجيل مكتمل**; no new approval ambiguity; physical order not mirrored |
 | I8 | Stale touched source comment | LOW | Current 60 s comment incorrectly references FR-004 (burst) | T070 updates only if touching corresponding duration constant/comment, no R1 history rewrite |
 | I9 | Proven duplicate native permission check | HIGH | Route `add-transaction.tsx:288`, flow `useVoiceTransactionFlow.ts:376` | FR-047/T069–T070: **one** fresh just-in-time native check with typed current-actor generation-safe missing/blocked/unknown/granted result, inline recovery and explicit-only OS permission request; no consent/quota bypass |
@@ -51,12 +51,15 @@ preattempt server quota, provider/replay identity, 35-day retention, native
 300 ms early-command stabilization, Manual draft, responsive/RTL/dark,
 reduced-motion and separate rendered/a11y proof stay mandatory.
 
-**Owner approval covers the R2 image/concept.** The root's faithful design
-review accepts specified facts/Arabic wording, but local verification of
-the corrected exact 15-key Binding Facts and combined SHA **precedes**
-truthful delegated *revision* acceptance. This draft has not passed its
-binding verifier (no run here); do not change status to APPROVED or invent an
-owner fingerprint/timestamp.
+**Owner approval covers the R2 image/concept.** On 2026-10-11 root verified all
+15 exact Binding Facts and image revision sha256:3c1d098090cfac539c834634f2dfb1db29dc75b8afc9f479d61d17af09680281, metadata revision
+sha256:78105dbc1254cb508429f417cf5e26c71324364c7e4e74447f7249735f282a0e, and combined revision
+sha256:d06cfdf4f6bbc8c3bd7f12b5129115206a31c7f3c1dfb4a266977456252caa14. Root expressly ACCEPTED these
+exact revisions under the owner's delegated authority; metadata now records
+APPROVED without suggesting the owner personally reviewed SHA values. The
+official *final* verifier PASS on updated metadata and the fresh read-only
+Speckit analysis are still pending under T068; this planning author ran
+neither.
 
 ## Execution boundary
 

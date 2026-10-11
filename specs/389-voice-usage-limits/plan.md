@@ -877,15 +877,18 @@ implementation occurs in this command.
 No constitutional violations require justification.
 
 
-## Voice controls R2 — DRAFT binding, preimplementation analysis and execution plan
+## Voice controls R2 — delegated-accepted binding, preimplementation analysis pending
 
 **Source audited:** `0e7ee55abf6fb18af37e29e4f2e48ba45604a31e`. **Owner image approved:** latest green/gray/red R2 PNG, Git blob
 `caceb8d1cade9e4e9c574e95fc0e603a39e766de`; local executor
 verified `sha256:3c1d098090cfac539c834634f2dfb1db29dc75b8afc9f479d61d17af09680281`,
 1832×858 raster pixels, 1470108 bytes. The sidecar now contains all 15
-required official Binding Facts keys and computed *draft* metadata/combined
-revisions; root must verify and record delegated exact-revision acceptance
-before marking approved. Do not invent owner approval of the computed SHA.
+required official Binding Facts keys, verified metadata revision sha256:78105dbc1254cb508429f417cf5e26c71324364c7e4e74447f7249735f282a0e
+and combined revision sha256:d06cfdf4f6bbc8c3bd7f12b5129115206a31c7f3c1dfb4a266977456252caa14. On 2026-10-11
+root/lead expressly ACCEPTED these exact values plus image sha256:3c1d098090cfac539c834634f2dfb1db29dc75b8afc9f479d61d17af09680281 under
+owner-delegated autonomy. This is not personal owner review of computed SHA
+values. Final official verifier PASS and fresh read-only Speckit analysis remain
+root-owned and pending.
 
 ### Scoped source conflicts and approved three-panel states
 

@@ -304,7 +304,7 @@ of all active/current accounting. Protection lasts while identity is retained;
 reuse as new begins only after actual deletion.
 
 
-## Voice controls R2 — approved image, exact-binding DRAFT (11 October 2026)
+## Voice controls R2 — approved image and delegated-accepted exact binding (11 October 2026)
 
 **Published image:** `mockups/voice-controls-r2-green-gray-proposal.png`,
 image-only commit `b00b7ae07a7f75008f21ff2c9f8680f735153901`,
@@ -318,13 +318,17 @@ green/gray/red image/concept**. Root faithfully reviewed and accepts the
 scoped green/gray/red control order, no helper sentence, slash clock, local
 30-second retention and Arabic Submit **إرسال** and completed title
 **التسجيل مكتمل**. The corrected R2 sidecar carries all **15 official
-Binding Facts** keys and computed DRAFT metadata/combined identifiers:
+Binding Facts** keys and computed and delegated-accepted metadata/combined identifiers:
 `sha256:78105dbc1254cb508429f417cf5e26c71324364c7e4e74447f7249735f282a0e`
 and
 `sha256:d06cfdf4f6bbc8c3bd7f12b5129115206a31c7f3c1dfb4a266977456252caa14`.
-**Root must independently verify those exact bytes/digests and record
-delegated exact-revision acceptance** before changing DRAFT fields to
-APPROVED; do not claim that the owner was separately shown either SHA.
+**Delegated exact-revision acceptance (2026-10-11):** root reviewed all 15
+Binding Facts and verified the image sha256:3c1d098090cfac539c834634f2dfb1db29dc75b8afc9f479d61d17af09680281, metadata sha256:78105dbc1254cb508429f417cf5e26c71324364c7e4e74447f7249735f282a0e,
+and combined revision sha256:d06cfdf4f6bbc8c3bd7f12b5129115206a31c7f3c1dfb4a266977456252caa14. Root explicitly
+ACCEPTED ALL THREE EXACT REVISIONS under owner-delegated autonomy; this does
+not claim personal owner review of computed SHA values. Approval fields are
+updated; final official verifier PASS and read-only Speckit analysis remain
+pending under unchecked T068.
 
 ### Narrow R2 precedence
 

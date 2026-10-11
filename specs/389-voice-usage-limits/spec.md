@@ -651,7 +651,7 @@ parsing contract or provider-specific implementation.
 - Exact paid subscription policies are intentionally deferred.
 
 
-## Session 2026-10-11 — Voice controls R2, approved image / DRAFT binding revision
+## Session 2026-10-11 — Voice controls R2, approved image / delegated-accepted exact binding revision
 
 The owner approved the latest green/gray/red PNG
 `mockups/voice-controls-r2-green-gray-proposal.png` (“latest mockups
@@ -662,9 +662,13 @@ executor verified **sha256:3c1d098090cfac539c834634f2dfb1db29dc75b8afc9f479d61d1
 1832×858 **raster pixels** and 1470108 bytes; this is a multi-panel
 composite, not the replacement 390×844 logical-dp app viewport. The owner
 concept approval and faithful root review accept the three panels and Arabic
-`إرسال` / `التسجيل مكتمل`. Exact corrected Binding Facts/combined SHA
-verification and truthful delegated root acceptance remain **pending**; no
-individual owner approval of those computed revisions is claimed.
+`إرسال` / `التسجيل مكتمل`. On 2026-10-11 root verified and expressly ACCEPTED the exact image revision
+sha256:3c1d098090cfac539c834634f2dfb1db29dc75b8afc9f479d61d17af09680281, 15-key metadata
+revision sha256:78105dbc1254cb508429f417cf5e26c71324364c7e4e74447f7249735f282a0e and combined
+revision sha256:d06cfdf4f6bbc8c3bd7f12b5129115206a31c7f3c1dfb4a266977456252caa14 under
+owner-delegated autonomy. This is not individual owner approval of the computed
+SHA values. Final official verifier PASS and read-only Speckit analysis remain
+pending under unchecked T068.
 
 This is a narrow override of the approved R1 motion package. All previously
 approved images/Binding Facts, Manual B, quota/consent/permission,

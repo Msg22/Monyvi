@@ -1,6 +1,6 @@
 # Voice controls R2 — planned coverage matrix
 
-**Status:** PLANNED / NOT RUN. Owner R2 image approved; exact corrected sidecar remains DRAFT until root verifies computed revisions and records delegated approval. Unit/integration entries
+**Status:** PLANNED / NOT RUN. Owner R2 image approved; root verified and delegated-accepted the exact image/metadata/combined revisions on 2026-10-11. Final binding verifier PASS and fresh read-only Speckit analysis remain pending under T068. Unit/integration entries
 are required deterministic coverage; Maestro entries are authorable journeys
 only. All device/native/visual/provider/E2E execution is owner-manual unless an
 approved deterministic harness is later proven.
@@ -56,7 +56,7 @@ their assertions; do not replace them with R2-only snapshots.
 1. **T068 before any T069–T071 work:** root verifies image
    sha256:3c1d098090cfac539c834634f2dfb1db29dc75b8afc9f479d61d17af09680281
    (1832×858 pixels, 1470108 bytes), exact 15-key Binding Facts,
-   metadata/combined hashes and truthful delegated approval; then executes
+   metadata/combined hashes already accepted on 2026-10-11 and still executes final official verifier; then executes
    correct-feature prerequisites and canonical **read-only Speckit analysis**.
 2. T069 deterministic Red, then T070/T071 narrowly owned implementation
    only after pin/accepted Red, T072 real Green/type/lint,

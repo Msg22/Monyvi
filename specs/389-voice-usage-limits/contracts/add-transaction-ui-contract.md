@@ -162,7 +162,7 @@ source inspection does not establish visual completion, device readiness or
 merge readiness.
 
 
-## Voice controls R2 — owner-approved image; exact binding DRAFT
+## Voice controls R2 — owner-approved image; delegated-accepted exact binding
 
 Read the exact `../mockups/voice-controls-r2-green-gray-proposal.binding.md`
 with its **15 official required Binding Facts**, and
@@ -170,12 +170,14 @@ with its **15 official required Binding Facts**, and
 green/gray/red image (Git blob
 `caceb8d1cade9e4e9c574e95fc0e603a39e766de`); local executor
 verified image `sha256:3c1d098090cfac539c834634f2dfb1db29dc75b8afc9f479d61d17af09680281`,
-1832×858 pixels, 1470108 bytes. Root must still verify the corrected
-computed metadata/combined SHA and record honest delegated acceptance.
-No new owner SHA approval is presumed. Root's faithful design review
+1832×858 pixels, 1470108 bytes. On 2026-10-11 root verified metadata sha256:78105dbc1254cb508429f417cf5e26c71324364c7e4e74447f7249735f282a0e
+and combined sha256:d06cfdf4f6bbc8c3bd7f12b5129115206a31c7f3c1dfb4a266977456252caa14, and
+accepted those exact revisions plus image sha256:3c1d098090cfac539c834634f2dfb1db29dc75b8afc9f479d61d17af09680281 under owner-delegated
+autonomy, without claiming the owner personally reviewed the SHA values.
+Final verifier PASS and fresh read-only Speckit analysis remain pending T068. Root's faithful design review
 accepts Arabic Submit **إرسال** and Recording complete **التسجيل مكتمل**.
 
-After exact binding approval, the R2 narrow override is:
+Under the exact R2 binding accepted by delegated root/lead authority, the narrow override is:
 
 | State/surface | Binding treatment and behavior |
 | --- | --- |

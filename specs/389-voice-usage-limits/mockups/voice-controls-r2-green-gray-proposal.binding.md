@@ -7,12 +7,12 @@
 - Verified image dimensions: 1832 × 858 pixels
 - Verified image file size: 1470108 bytes
 - Owner image/concept approval: APPROVED — “latest mockups approved”
-- Binding metadata approval: DRAFT
+- Binding metadata approval: APPROVED
 - Binding metadata revision: sha256:78105dbc1254cb508429f417cf5e26c71324364c7e4e74447f7249735f282a0e
-- Approved binding metadata revision: PENDING
+- Approved binding metadata revision: sha256:78105dbc1254cb508429f417cf5e26c71324364c7e4e74447f7249735f282a0e
 - Binding approval revision: sha256:d06cfdf4f6bbc8c3bd7f12b5129115206a31c7f3c1dfb4a266977456252caa14
-- Approved binding approval revision: PENDING
-- Binding metadata approval evidence/reference: Owner approved the latest green/gray/red PNG; the local executor verified its exact image SHA-256, 1832 × 858 pixel dimensions, 1470108-byte size and matching published Git blob. Root's faithful review accepts the scoped visual facts, fixed physical action order, removal of ordinary helper copy, slash timer, 30-second retention, Arabic Submit إرسال and completed title التسجيل مكتمل. The final corrected Binding Facts and computed combined revision still require root verification and delegated exact-revision acceptance; do not attribute these new fingerprints to separate owner review.
+- Approved binding approval revision: sha256:d06cfdf4f6bbc8c3bd7f12b5129115206a31c7f3c1dfb4a266977456252caa14
+- Binding metadata approval evidence/reference: Owner approved the latest green/gray/red PNG concept. On 2026-10-11 the root/lead faithfully reviewed all 15 exact Binding Facts, including the three-panel controls, local 30-second cap, no helper sentence, physical RTL positions and Arabic إرسال / التسجيل مكتمل; the local executor verified image sha256:3c1d098090cfac539c834634f2dfb1db29dc75b8afc9f479d61d17af09680281, metadata sha256:78105dbc1254cb508429f417cf5e26c71324364c7e4e74447f7249735f282a0e and combined revision sha256:d06cfdf4f6bbc8c3bd7f12b5129115206a31c7f3c1dfb4a266977456252caa14. The root explicitly ACCEPTED THESE EXACT THREE REVISIONS on 2026-10-11 under the owner's delegated autonomy. This is delegated lead acceptance, NOT a claim that the owner personally saw or approved these computed SHA values. Final verifier PASS and fresh read-only Speckit analysis remain pending under T068.
 - Legacy metadata migration: no
 
 ## Binding Facts
@@ -38,10 +38,12 @@
 The owner approved the latest image concept. The root's faithful review accepts the
 fixed positions/colors, elapsed/max slash timer, no helper sentence, retained
 audio after the local 30-second cap and the Arabic Submit/completed wording.
-The exact Binding Facts and their combined SHA remain **DRAFT** pending root's
-verifier calculation and delegated exact-revision acceptance. The root may then
-update only the binding approval metadata using actual computed revisions and
-truthful delegated provenance; do not claim the owner personally saw a new SHA.
+On 2026-10-11 root verified and accepted the exact image revision sha256:3c1d098090cfac539c834634f2dfb1db29dc75b8afc9f479d61d17af09680281,
+Binding Facts revision sha256:78105dbc1254cb508429f417cf5e26c71324364c7e4e74447f7249735f282a0e, and combined revision sha256:d06cfdf4f6bbc8c3bd7f12b5129115206a31c7f3c1dfb4a266977456252caa14
+under owner-delegated autonomy. Metadata approval reflects that exact lead
+acceptance, not individual owner SHA review. The final official binding verifier
+and correct-feature read-only Speckit analysis remain root-owned and pending
+before T069/source work.
 
 R2 supersedes R1 only for the specified ordinary recording/paused/completed
 controls, elapsed/max local cap and static filled halo removal. It preserves the

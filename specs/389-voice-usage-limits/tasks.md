@@ -1139,9 +1139,12 @@ The owner approved `mockups/voice-controls-r2-green-gray-proposal.png`
 `caceb8d1cade9e4e9c574e95fc0e603a39e766de`,
 SHA-256 `3c1d098090cfac539c834634f2dfb1db29dc75b8afc9f479d61d17af09680281`,
 1832×858 image pixels, 1470108 bytes verified locally. R2 exact
-15-key sidecar and computed revision tuple remain **DRAFT until root
-independently verifies and accepts those exact hashes** under delegated
-owner authority; do not claim a separate owner SHA approval.
+15-key sidecar revisions have been verified and expressly ACCEPTED by root on
+2026-10-11 under delegated owner authority: image sha256:3c1d098090cfac539c834634f2dfb1db29dc75b8afc9f479d61d17af09680281,
+metadata sha256:78105dbc1254cb508429f417cf5e26c71324364c7e4e74447f7249735f282a0e, combined
+sha256:d06cfdf4f6bbc8c3bd7f12b5129115206a31c7f3c1dfb4a266977456252caa14. No separate owner personal SHA
+review is claimed. Final official verifier PASS and fresh read-only Speckit
+analysis remain pending: **T068 stays unchecked**.
 
 These T067–T074 update in place: existing T001–T066, R1 and original
 source/approval/evidence history are preserved unchanged. In particular,

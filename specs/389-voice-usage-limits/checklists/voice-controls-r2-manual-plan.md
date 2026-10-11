@@ -3,10 +3,11 @@
 **Status:** MANUAL PLAN ONLY / **NOT RUN**. This document is not native,
 E2E, latency, screenshot-fidelity or accessibility evidence.
 
-Before any implementation, root must verify the exact 15-key R2 binding
-metadata and combined revisions, record **delegated** exact-revision
-acceptance (owner approved image/concept, not each new SHA) and run the
-official verifier; then run correct-feature Speckit prerequisites and
+Root verified all 15 exact R2 Binding Facts and accepted image/metadata/
+combined revisions on 2026-10-11 under delegated owner authority (owner
+approved the concept, not each new SHA). Before implementation, root must still
+run the final official binding verifier on updated approval metadata, plus fresh
+correct-feature Speckit prerequisites and
 **READ-ONLY `speckit.analyze` before T069 Red and T070/T071 code**.
 T073 later independent review is not this prerequisite.
 

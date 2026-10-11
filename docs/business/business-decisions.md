@@ -1013,9 +1013,13 @@ Business rules:
 - The owner approved the latest green/gray/red Voice controls image. Its exact
   PNG bytes are verified (`sha256:3c1d098090cfac539c834634f2dfb1db29dc75b8afc9f479d61d17af09680281`,
   1832×858 pixels, 1470108 bytes, Git blob
-  `caceb8d1cade9e4e9c574e95fc0e603a39e766de`). Final **Binding Facts
-  metadata/combined revision acceptance** remains a root verification gate;
-  do not imply the owner personally approved a new SHA.
+  `caceb8d1cade9e4e9c574e95fc0e603a39e766de`). On 2026-10-11 root/lead verified and expressly ACCEPTED the exact 15-key
+  metadata revision `sha256:78105dbc1254cb508429f417cf5e26c71324364c7e4e74447f7249735f282a0e` and combined revision
+  `sha256:d06cfdf4f6bbc8c3bd7f12b5129115206a31c7f3c1dfb4a266977456252caa14` alongside the verified
+  image `sha256:3c1d098090cfac539c834634f2dfb1db29dc75b8afc9f479d61d17af09680281`, under explicit
+  owner-delegated autonomy. This is not a claim that the owner personally
+  reviewed the new computed SHA values. Final official verifier PASS and fresh
+  read-only Speckit analysis remain pending under unchecked T068.
 - The local Voice recorder caps **active captured audio at 30 seconds**;
   paused wall time does not consume the capture budget. Recording/paused
   displays elapsed/max clock text such as `00:12 / 00:30`.

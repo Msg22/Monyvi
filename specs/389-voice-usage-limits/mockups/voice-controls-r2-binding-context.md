@@ -1,11 +1,11 @@
-# Voice controls R2 — scoped binding context (DRAFT exact revision)
+# Voice controls R2 — scoped binding context (delegated exact revision accepted)
 
 **Feature:** #347 / `389-voice-usage-limits`  
 **Source audited:** `0e7ee55abf6fb18af37e29e4f2e48ba45604a31e`  
 **Planning branch:** `codex/issue347-voice-controls-r2`  
 **Approved PNG:** `voice-controls-r2-green-gray-proposal.png`, published in image-only commit `b00b7ae07a7f75008f21ff2c9f8680f735153901`, Git blob `caceb8d1cade9e4e9c574e95fc0e603a39e766de`  
 **Verified image:** `sha256:3c1d098090cfac539c834634f2dfb1db29dc75b8afc9f479d61d17af09680281`; **1832 × 858 pixels**, **1470108 bytes** (local executor verified exact bytes and matching Git blob)  
-**Owner concept approval:** “latest mockups approved” (green/gray/red); root faithful review accepts AR `إرسال` and `التسجيل مكتمل`. The exact corrected sidecar metadata is still **DRAFT** pending root computed-revision verification and delegated acceptance, not new owner SHA approval.
+**Owner concept approval:** “latest mockups approved” (green/gray/red); root faithful review accepts AR `إرسال` and `التسجيل مكتمل`. On 2026-10-11 root verified the exact metadata revision sha256:78105dbc1254cb508429f417cf5e26c71324364c7e4e74447f7249735f282a0e and combined revision sha256:d06cfdf4f6bbc8c3bd7f12b5129115206a31c7f3c1dfb4a266977456252caa14, then accepted these and image sha256:3c1d098090cfac539c834634f2dfb1db29dc75b8afc9f479d61d17af09680281 under owner-delegated autonomy. This is not personal owner review of newly computed SHA fingerprints; final verifier PASS and fresh read-only Speckit analysis remain pending.
 
 ## Authority and precedence
 
@@ -41,7 +41,7 @@ Other auth/startup/provider/transport hypotheses remain **unmeasured**. Do **not
 
 ## Required ordering and evidence boundary
 
-1. The root verifies the **exact PNG bytes + computed R2 Binding Facts/combined revision**, accepts the exact sidecar through truthful delegated authority and runs the canonical verifier. Owner approval is of the image/concept, not a claimed owner review of a new hash.
+1. The root verified the exact PNG, 15-key Binding Facts and revision tuple sha256:78105dbc1254cb508429f417cf5e26c71324364c7e4e74447f7249735f282a0e / sha256:d06cfdf4f6bbc8c3bd7f12b5129115206a31c7f3c1dfb4a266977456252caa14, accepted under delegated authority on 2026-10-11, and must now run the final canonical verifier on approved metadata. Owner approval is of the image/concept, not a claimed owner review of a new hash.
 2. **BEFORE T069–T071 implementation or tests:** root runs `.specify/scripts/bash/check-prerequisites.sh --json --require-tasks --include-tasks` with the correct feature selection, then **read-only `.claude/commands/speckit.analyze.md`** over final spec/plan/tasks. Resolve critical/high findings and log outcome. This is preimplementation, **not** T073 after code.
 3. Only on a new explicit lead pin and accepted meaningful Red may source implementation start. T073 is independent **postimplementation** TypeScript → behavior/actor/cancellation → style/binding → QA/security-if-touched review; T072 owns Green/type/lint checks.
 4. Device/native/render/accessibility evidence remains owner-owned and **NOT RUN**. Compare actual owner image against 390×844 and 320×640, tablet 768×1024, landscape 844×390, light/dark, EN/AR, font scales 1.35/2 and reduced motion. The image fingerprint or unit Green does not prove visual or native timing.
