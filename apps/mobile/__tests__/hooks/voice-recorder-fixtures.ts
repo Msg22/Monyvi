@@ -52,16 +52,20 @@ const mockGetInfoAsync = jest.fn().mockResolvedValue({ exists: true });
 let mockSdk55RootAsyncMethodsThrow = false;
 const mockRootGetInfoAsync = jest.fn((...args: unknown[]): Promise<unknown> => {
   if (mockSdk55RootAsyncMethodsThrow) {
-    throw new Error(
-      'Method getInfoAsync imported from "expo-file-system" is deprecated.'
+    return Promise.reject(
+      new Error(
+        'Method getInfoAsync imported from "expo-file-system" is deprecated.'
+      )
     );
   }
   return mockGetInfoAsync(...args) as Promise<unknown>;
 });
 const mockRootDeleteAsync = jest.fn((...args: unknown[]): Promise<unknown> => {
   if (mockSdk55RootAsyncMethodsThrow) {
-    throw new Error(
-      'Method deleteAsync imported from "expo-file-system" is deprecated.'
+    return Promise.reject(
+      new Error(
+        'Method deleteAsync imported from "expo-file-system" is deprecated.'
+      )
     );
   }
   return mockDeleteAsync(...args) as Promise<unknown>;

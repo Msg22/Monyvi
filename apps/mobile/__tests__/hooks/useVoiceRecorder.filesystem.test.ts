@@ -121,10 +121,10 @@ describe("#391 SDK55 temporary recording filesystem adapter", () => {
       "expo-file-system/legacy"
     );
 
-    expect(() => root.getInfoAsync(KNOWN_URI)).toThrow(/deprecated/i);
-    expect(() =>
+    await expect(root.getInfoAsync(KNOWN_URI)).rejects.toThrow(/deprecated/i);
+    await expect(
       root.deleteAsync(KNOWN_URI, { idempotent: true })
-    ).toThrow(/deprecated/i);
+    ).rejects.toThrow(/deprecated/i);
     expect(await legacy.getInfoAsync(KNOWN_URI)).toEqual({ exists: true });
     await legacy.deleteAsync(KNOWN_URI, { idempotent: true });
     expect(existingFiles.has(KNOWN_URI)).toBe(false);
