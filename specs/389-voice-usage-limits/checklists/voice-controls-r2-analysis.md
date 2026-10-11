@@ -99,3 +99,86 @@ No Jest, TypeScript, lint, Maestro, Speckit prerequisite/analyze, native audio,
 OS permission, provider, deployment, image generation, UI screenshot,
 accessibility tree or device timer measurement ran in this planning leaf.
 Latency hypotheses require owner measurements; no promised 1–2 s target.
+
+## 2026-10-11 final R2 source, tests and independent-review receipt
+
+**Current status supersedes historical planning and "source NOT STARTED"
+sections above**, which are retained verbatim for provenance. T068's
+**pre-code canonical READ-ONLY Speckit analysis** remains recorded as
+47 FR + 22 SC = **69** requirements, **74** unique tasks,
+100% **PLANNED** traceability, **0 critical/high/ambiguity**. It was completed
+before implementation and was not rerun by this documentation writer.
+The root's binding verifier reported `isAuthoritative: true` and `errors: []`
+using unchanged image SHA
+`3c1d098090cfac539c834634f2dfb1db29dc75b8afc9f479d61d17af09680281`,
+Binding Facts SHA
+`72459993f2d82fe128fd9d64ce83c9646e60edef5e1f2d187f42354a48158c2b`,
+combined SHA
+`71906e40d73448a0767df14954bf7f1a239126dc894a64dbbe227e191f549a77`.
+No approval or binding/PNG/sidecar/manifest change is made here.
+
+**Root's actual test/implementation evidence** (this author did not execute
+it):
+
+- Meaningful accepted RED progression: UI 5 suites **50 failed / 92 passed /
+  142 total**; initial recorder **12 failed / 68 passed / 80 total**;
+  actor/stop-generation **2 failed / 16 skipped / 18 total**; typed native
+  permission/cap-finalization **18 failed / 133 passed / 151 total**; eager
+  failed-cap teardown **2 failed / 19 passed / 21 total**. Repaired in
+  bounded source/test lanes.
+- Published UI pin `34a698fdfb3496dcb559a4dab4adeff9151c110b`;
+  recorder head `2552577f499abc9019fc6a3c1f16416d8304b2ea`
+  (last recorder correction test-only, production
+  `bb64e19f5a811bafb0ec8920e5d1bd92130679ff`).
+- Final root staged evidence: **25 Jest suites / 390 tests ALL PASS
+  (30.777s)**, mobile `tsc --noEmit` PASS, `git diff --check` PASS,
+  `npx lint-staged` PASS (19 TS / 2 JSON in 24 staged files).
+  Configured `.husky/_` precommit ESLint `--fix`/Prettier PASS and i18n
+  key parity/Arabic sanity/hardcoded-string checks PASS. A direct hook
+  invocation initially failed on Windows for a missing shebang; correct
+  configured shim subsequently succeeded with **no bypass**, and no
+  assertion-altering autofix. Posthook tree equals tested tree
+  `7f0dca9a886d452ca937464764fdcee4e1450dfd`.
+- Root integration commit `df00c9e3d4c9ca624d55935b9bf3f5d3364be7ce`
+  is **LOCAL ONLY / NOT PUBLISHED ON GITHUB**; its tree is
+  `7f0dca9a886d452ca937464764fdcee4e1450dfd` and parents are
+  `0396159f448a9298f9b241afae027543e0ec6b52`, UI pin and recorder
+  head. No feature remote/CI result is inferred. The separate pre-push
+  privacy check was **RUNNING** at handoff, outcome **UNKNOWN**.
+- Three safe Maestro scripts in
+  `apps/mobile/e2e/maestro/voice/`
+  (`add-transaction-modes.yaml`, `voice-recovery.yaml`,
+  `voice-usage-limits.yaml`) passed root's Prettier `--check` but are
+  **AUTHORED / NOT EXECUTED**.
+
+**Independent postimplementation T073 review:** Root's independent
+read-only review, separate from both source implementers, checked
+**TypeScript/async → logic/requirements → style/architecture →
+security/performance → test honesty/coverage → exact source/binding**.
+It confirmed or resolved NativeWind default inline REM 14 causing
+`text-sm` 12.25dp instead of approved 14dp (corrected with scoped
+`text-[14px]`; original line-height 22/weight 600 retained), true
+denied/blocked/unknown OS permission outcomes without second native read,
+30s active cap/paused fractions/retained successful URI/explicit-only parse,
+Stop rejection/null-URI recovery, partial URI captured before eager native
+release (ahead of asynchronous filesystem deletion), restart waiting on
+cleanup, stale-generation safeguards, and recorder-timer-specific assertions
+rather than unrelated Jest/React timer counts. Ordinary static filled halos
+absent; 104dp circular clip/R1 moving recording waves and original
+daily-limit/unavailable disabled graphic remain. Voice-first Manual latch,
+default Manual Save/draft, actor/consent/availability/quota/retry keys retained.
+**No remaining actionable source blocker after final PASS**; this does not
+constitute rendered native/device/a11y/provider approval.
+
+**Completed vs outstanding:** T069–T073 completed at source/test/review
+level; **T074 remains unchecked, OWNER MANUAL / NOT RUN**, including native
+audio/OS sheets, real device active cap, screenshots at
+320×640/390×844/tablet/landscape, EN/AR RTL, dark/light, font 1.35/2,
+screen reader, reduced motion, keyboard and cold/warm latency. R235
+is **UNMEASURED**, with no 1–2-second promise. R229 server 30s
+and silent/empty-audio authority **NOT IMPLEMENTED** by R2 (#391
+research/harness only). #384 remains held; 35-day replay behavior unchanged.
+For all **R201–R235** test-file mapping, partial coverage and honest
+Maestro/manual status see `voice-controls-r2-coverage.md`; owner scenarios
+are in `voice-controls-r2-manual-plan.md`. No live provider call,
+deployment, new product decision or feature push is asserted.

@@ -1191,7 +1191,7 @@ T070/T071 production**; independent T073 review is afterward.
       combined
       sha256:71906e40d73448a0767df14954bf7f1a239126dc894a64dbbe227e191f549a77.
       Source/tests/E2E remain NOT STARTED.
-- [ ] **T069 [P] [US0] R2 deterministic behavioral Red + honest E2E authoring:**
+- [x] **T069 [P] [US0] R2 deterministic behavioral Red + honest E2E authoring:**
       add actual recorder/flow/presentation/route/i18n tests for three panels
       (Recording, Paused, **Recording complete / التسجيل مكتمل**), fixed
       physical LEFT Submit green / CENTER Pause-or-Resume gray / RIGHT Discard
@@ -1209,7 +1209,7 @@ T070/T071 production**; independent T073 review is afterward.
       _authorship_ only for controllable fixtures; native audio/provider/OS
       permission/rendering stays manual-only. Missing module/test setup is
       structural, not Red.
-- [ ] **T070 [US0] Recorder/flow/route 30 s + single-permission repair only
+- [x] **T070 [US0] Recorder/flow/route 30 s + single-permission repair only
       after accepted Red:** update named active-capture cap to 30 s;
       auto-stop/finalize once and keep file/URI for explicit Submit or Discard;
       no provider, review or quota consumption at cap. Preserve native **300 ms
@@ -1221,7 +1221,7 @@ T070/T071 production**; independent T073 review is afterward.
       only for genuinely missing grant, request OS permission only from explicit
       action. Do not alter availability transport or in-flight refresh
       coordination.
-- [ ] **T071 [US0] R2 UI + narrow Voice-first Manual mount only after accepted
+- [x] **T071 [US0] R2 UI + narrow Voice-first Manual mount only after accepted
       Red:** render fixed physical three-control order and approved
       green/gray/red treatments (Arabic Submit **إرسال**); explicit third panel
       **Recording complete / التسجيل مكتمل** at `00:30 / 00:30` with enabled
@@ -1234,11 +1234,11 @@ T070/T071 production**; independent T073 review is afterward.
       calculator focus, Save/transfer/ recurring semantics; initial Manual route
       unchanged. Preserve ≥48 dp actions, Arabic physical positioning, dark/RTL
       and responsive/reduced-motion contracts. No other Manual edits.
-- [ ] **T072 [P] [US0] Batched integration/Green:** root runs actual
+- [x] **T072 [P] [US0] Batched integration/Green:** root runs actual
       focused/combined Jest, TS, lint/i18n, hook checks and retained
       R1/Manual/consent/quota/retry/cancellation positive controls. Source-only
       review is not device performance or native proof.
-- [ ] **T073 [US0] Independent POSTIMPLEMENTATION review:** after accepted
+- [x] **T073 [US0] Independent POSTIMPLEMENTATION review:** after accepted
       T070/T071 source and T072 checks, reviewers assess TypeScript, logical
       race/idempotence and actor/cancellation, accessibility and NativeWind
       binding, regression/QA and security if touched. Resolve findings. This
@@ -1252,3 +1252,56 @@ T070/T071 production**; independent T073 review is afterward.
       time separately; make no unmeasured 1–2 s promise. #391 server and
       empty/speechless research is independent. Device/Metro/E2E/provider NOT
       RUN by this planning worker.
+
+## 2026-10-11 R2 final implementation and root execution receipt
+
+**Current status superseding the historical pre-code "NOT STARTED" text
+above:** T069–T073 are complete at the tested source level; T074 remains
+**UNCHECKED / OWNER MANUAL NOT RUN**. The original T001–T068, earlier Red,
+R1, Speckit and approval histories remain intact. This documentation writer
+did not run checks or approve device/UI rendering.
+
+| Task | Root-accepted outcome and provenance |
+| --- | --- |
+| **T069 [x] — meaningful Red, safe Maestro authorship** | Actual RED: UI **5 suites, 50 failed / 92 passed / 142 total**; initial recorder **12 failed / 68 passed / 80 total**; actor/stop generation **2 failed / 16 skipped / 18 total**; typed permission/cap failure **18 failed / 133 passed / 151 total**; automatic failed-cap cleanup **2 failed / 19 passed / 21 total**. The distinct failures were subsequently repaired. Three safe Maestro scripts authored but **NOT EXECUTED**. |
+| **T070 [x] — recorder/permission/flow** | Published recorder final `2552577f499abc9019fc6a3c1f16416d8304b2ea`, recorder production `bb64e19f5a811bafb0ec8920e5d1bd92130679ff` and UI/flow source pin below. 30,000ms **active** cap, fraction-preserving pauses, one native finalization, URI held for explicit Submit/Discard, no auto-provider; native record-onStarted/300ms stabilization, one fresh consent/quota-gated microphone check, typed same-native-OS-request result with boolean compatibility, actor and same-key replay guards. Failed cap Stop/null URI uses existing error feedback; partial URI captured before native release, release before async filesystem delete, no stale replacement release or extra Stop. |
+| **T071 [x] — three panels/Manual mount** | UI final published `34a698fdfb3496dcb559a4dab4adeff9151c110b`. LEFT filled green Submit, CENTER outlined gray Pause/Resume (disabled Pause at completed), RIGHT outlined red Discard; physical order holds in EN/AR. Scoped native 14px text (not inherited rem), 22px line-height, semibold labels, 20dp glyphs, ≥48dp targets. Ordinary filled halos removed, 104dp circle clipping/R1 waves retained, daily/unavailable graphics unchanged. Voice-first hidden Manual deferred until selected, then mounted to preserve draft; default Manual and Save remain. |
+| **T072 [x] — root actual combined Green** | Final staged **25 suites / 390 tests ALL PASS (30.777s)**; mobile `tsc --noEmit` **PASS**; `git diff --check` **PASS**; root `npx lint-staged` (19 TypeScript / 2 JSON across 24 staged files) **PASS**; configured `.husky/_` precommit ESLint `--fix`/Prettier **PASS**; i18n key parity, Arabic sanity and hardcoded-string checks **PASS**. An earlier direct `.husky` attempt failed on Windows (missing shebang); correct configured shim later succeeded **without hook bypass** or assertion-changing formatting. Tested tree and posthook tree exactly `7f0dca9a886d452ca937464764fdcee4e1450dfd`. |
+| **T073 [x] — independent read-only review** | Root, independently of both implementing writers, reviewed **TypeScript/async → logic → style/architecture → security/performance → coverage → source binding**. Resolved native font 12.25dp vs approved 14, same-response OS denied/blocked/unknown, cap Stop failure and eager native release/known partial-URI cleanup, new-start cleanup barrier, actor/stop-generation safety, recorder-specific timer test (not Jest/React aggregate queue), stale-Start release-first test oracle. No remaining actionable **source** blocker after final checks. This is **not** owner visual/device acceptance. |
+| **T074 [ ] — owner manual evidence** | **NOT RUN:** native capture/OS sheets, real provider/paid requests, actual 30s audio boundary, rendered responsive/EN/AR/dark/text1.35/2, accessibility screen reader, reduced-motion native, keyboard, true cold/warm stage timings or Maestro execution. See `checklists/voice-controls-r2-manual-plan.md`. |
+
+**Root's exact executed unit command:**
+
+`npm run test -w @monyvi/mobile -- --runInBand --testPathPattern='(add-transaction|AddTransaction|CalculatorKeypad|ManualTransactionEntry|TransferFields|TypeTabs|VoiceTransactionEntry|useVoice|voice-review-navigation|voice-usage-limits|ai-voice-parser-service|AiProcessingConsentSheet|tab-layout-ai-consent)'`
+
+**Publication boundary:** Root's integrated commit
+`df00c9e3d4c9ca624d55935b9bf3f5d3364be7ce` is **LOCAL ONLY, NOT YET ON
+GITHUB**. It has tree `7f0dca9a886d452ca937464764fdcee4e1450dfd`
+and parents `0396159f448a9298f9b241afae027543e0ec6b52`,
+UI `34a698fdfb3496dcb559a4dab4adeff9151c110b`, recorder
+`2552577f499abc9019fc6a3c1f16416d8304b2ea`. Do not infer published
+remote CI. Root's pre-push privacy check was **RUNNING** at this handoff; no
+result supplied, so do **not** mark it PASS. No feature push is claimed.
+
+**Exact existing binding tuple, unchanged:** root official verifier
+`isAuthoritative: true`, `errors: []`; image SHA-256
+`3c1d098090cfac539c834634f2dfb1db29dc75b8afc9f479d61d17af09680281`,
+Binding Facts
+`72459993f2d82fe128fd9d64ce83c9646e60edef5e1f2d187f42354a48158c2b`,
+combined
+`71906e40d73448a0767df14954bf7f1a239126dc894a64dbbe227e191f549a77`.
+The **preimplementation** T068 READ-ONLY analysis (47 FR + 22 SC =
+69 requirements, 74 tasks, 100% **PLANNED** mapping, 0 critical/high) is
+historical and not rerun here.
+
+**Maestro boundary:** `apps/mobile/e2e/maestro/voice/add-transaction-modes.yaml`,
+`voice-recovery.yaml` and `voice-usage-limits.yaml` each passed root's
+Prettier `--check` but are **AUTHORED / NOT EXECUTED**, never evidence of
+actual audio, native OS permission, paid provider or E2E timing. See the
+35-row source-backed execution map in
+`checklists/voice-controls-r2-coverage.md`.
+
+**Not included:** R229 server-side 30s/empty/speechless rejection is
+**NOT IMPLEMENTED** (#391 separate research/harness, no native measurements).
+#384 reservation/recovery UX remains deferred; 35-day replay semantics
+unchanged. R235 cold/warm latency is **UNMEASURED**; no 1–2s promise.

@@ -18,6 +18,18 @@ recorded; see tasks.md actual T068 receipt). T069 Red and T070/T071 code still
 require a new explicit lead pin and accepted meaningful Red; T073 later
 independent review is not this prerequisite.
 
+
+**Current implementation/checkpoint (2026-10-11):** The historical
+preimplementation T069/T070/T071 wording above is superseded: R2 UI
+`34a698fdfb3496dcb559a4dab4adeff9151c110b` and recorder
+`2552577f499abc9019fc6a3c1f16416d8304b2ea` (production recorder
+`bb64e19f5a811bafb0ec8920e5d1bd92130679ff`) were integrated in
+root's **local-only, not GitHub-published** commit; actual root
+**25 suites / 390 tests PASS**, mobile TypeScript, lint-staged/Husky and i18n
+**PASS**. T069–T073 are complete at source/test review level (see
+`../tasks.md`). **T074, this entire owner manual plan, native/OS/provider,
+rendered, accessibility, Maestro and actual timing execution: NOT RUN.**
+
 **Reference:** latest owner-approved green/gray/red R2 PNG, image SHA
 `3c1d098090cfac539c834634f2dfb1db29dc75b8afc9f479d61d17af09680281`, 1832×858
 pixels, 1470108 bytes, Git blob `caceb8d1cade9e4e9c574e95fc0e603a39e766de`. Use
@@ -93,6 +105,47 @@ stay authoritative. Owner image exports are not 390×844 logical dp measurements
 - Daily/burst/availability checks remain authoritative and fail closed; retries
   preserve same-key held-audio identity and 35-day replay retention. Do not rely
   on a stale in-flight availability HTTP result. #384 deferred, #391 separate.
+
+## Native finalization failure and cleanup — additional owner cases (NOT RUN)
+
+The root's deterministic Stop-failure/null-URI and generation tests are PASS,
+but **no native, OS, device or real audio failure injection has been executed**.
+For each scenario collect redacted device/log evidence; don't infer these
+results from mocked recorder behavior.
+
+1. At/near 30,000 ms **active** time, inject/observe native Stop rejection,
+   then a separate Stop that finishes without a usable URI. Require the
+   **existing generic recording-finalization recovery**, a capped elapsed
+   display, **no infinite Listening**, no fake §Recording complete§ file and
+   **zero automatic provider/Gemini/quota/review work**. Confirm that ordinary
+   early user Submit still displays its *actual* elapsed time (e.g.
+   §00:08 / 00:30§), not a fictitious full 30 seconds.
+2. When the generic error unlocks the Manual tab, switch to Manual
+   immediately. Verify failed native capture is **released before the screen
+   can conceal any still-owned recorder**; the mic must not continue capturing
+   behind Manual.
+3. If a partial URI exists, verify it is captured **before recorder release**,
+   native release occurs **before** potentially slow file lookup/delete, and
+   cleanup deletes that file exactly once. No post-release URI access, duplicate
+   native Stop, retained orphan file or reactivated active timer.
+4. Delay file deletion, then request Retry/new Voice capture or switch
+   accounts/unmount. The new capture must wait for failed-file cleanup; stale
+   completion must neither publish to nor release the replacement. Validate
+   once-only release/delete across Discard, Reset and Back.
+5. Control case: let healthy native cap complete, **wait without pressing**
+   Submit/Discard. Finalized local audio remains available with §00:30 / 00:30§,
+   gray **disabled center Pause**, no Resume or moving waves, and **no automatic
+   parse/provider/navigation**. Explicit Submit sends once with original
+   retained URI/request identity; double taps remain one logical request.
+   Repeat and use Discard: URI deleted with zero provider work.
+
+**Owner evidence template — all cases PENDING / NOT RUN:** note device, OS,
+development/release build, current theme/locale/text scale, setup, actual
+active/paused elapsed, action, observed visual/accessible state, native
+stop/release and redacted file deletion observations, permitted provider/
+navigation counters if measurable, screenshot/clip/log location and
+**PASS / FAIL / BLOCKED** with a short reason. Do not record raw media,
+transcripts, user/account IDs, financial data, tokens or credentials.
 
 ## Voice-first navigation and Manual-draft regression
 
