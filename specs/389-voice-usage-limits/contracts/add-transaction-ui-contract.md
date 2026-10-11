@@ -16,37 +16,37 @@ fidelity inputs block governed implementation.
 
 ## Owner-approved scoped Voice motion overlay (10 October 2026)
 
-See [voice-motion-binding-context.md](../mockups/voice-motion-binding-context.md)
+See
+[voice-motion-binding-context.md](../mockups/voice-motion-binding-context.md)
 for the **derived** state/component/icon/locale map, and
 [voice-motion-coverage.md](../checklists/voice-motion-coverage.md) for the
 manual → unit/integration/E2E/owner-evidence matrix. Source
-`mockups/drafts/2026-10-10-voice-motion-r1/approval.json` records owner
-approval (“mockups approved” / “Approve the proposal”) for the five new
-conceptual images and their original `manifest.json` at
-`sha256:7d91150571a3150e235a1b8ec63327cff4c19de6c292927cde76c40024c1c799`.
-It supersedes **only** explicitly proposed interactions/appearance. The
-earlier five approved baseline/daily/Manual bindings **remain frozen and
-authoritative** for every unaffected fact. The derived map is not a competing
-sixth mockup/approval/verifier gate.
+`mockups/drafts/2026-10-10-voice-motion-r1/approval.json` records owner approval
+(“mockups approved” / “Approve the proposal”) for the five new conceptual images
+and their original `manifest.json` at
+`sha256:7d91150571a3150e235a1b8ec63327cff4c19de6c292927cde76c40024c1c799`. It
+supersedes **only** explicitly proposed interactions/appearance. The earlier
+five approved baseline/daily/Manual bindings **remain frozen and authoritative**
+for every unaffected fact. The derived map is not a competing sixth
+mockup/approval/verifier gate.
 
-| New state / event | Binding and component | Exact invariant |
-| --- | --- | --- |
-| Idle badge + examples | Existing EN/AR idle bindings; `AllowanceCard`, `ExamplesCard` | Dark mic and bulb badge slate-700/green; EN food orange/car blue/coffee gold, unchanged icons and copy; AR quoted no EN example icons; light badge unchanged; approved daily-only next-local-midnight reset |
-| Dismiss examples | `ExamplesCard` + new user-scoped **device-local** preference service/facade | Dismiss full card immediately; accessible EN “Dismiss examples” / AR “إخفاء الأمثلة”, ≥48 dp target (proposal min44, shared target min48); same account remains hidden across route/restart/theme/locale/sign-out; independent other accounts, no hosted/sync |
-| Starting | Unified route `isVoiceStartPending` and `useVoiceTransactionFlow` state → `VoiceTransactionEntry` | Immediate “Starting…” / “نجهّز التسجيل…” with approved body and Cancel **before** awaits; one in-flight start, no audio timer/Listening until `record()` succeeds, all cancellation generations checked |
-| Recording/paused | `VoiceActionSurface` + `useVoiceRecorder` | 104 dp mic, 140/172 dp existing halos; two thin ~1.4s outward ripple strokes, 700ms offset, non-volume activity bars ~1.2s; real timer starts with native capture, paused freezes time/motion, reduced-motion static; Stop/Pause/Resume/Discard and cleanup unchanged |
-| Parsing/analyzing | `VoiceTransactionEntry` + cohesive `voice-ui` illustration | ~1.6s looping waveform/dots → receipt, exact approved EN/AR title/body, no fake progress, financial details or Skeleton; real quota-fetch loading stays Skeleton |
-| Permission | Voice **inline** explanation, route/recorder | Only after genuinely missing native grant, with approved localized title/body/action; no generic recording-introduction modal; stale initial `hasPermission=false` is unknown, not denial; existing first-use AI Processing Consent Sheet still gates |
-| Errors and retries | `useVoiceTransactionFlow`, route `handleTryAgain`, recovery actions | Native recorder start failure has visible recovery. Recording Try again → Starting directly; retained-submission Try again uses same key/audio/no new capture; unavailable Try again refreshes and auto-starts only if authoritative availability eligible, respecting consent/daily/burst/cancel |
-| Exhausted/burst/unavailable/Manual | Frozen daily/Manual bindings and server contracts | No altered quota consumption, same-key 35-day replay retention, #384 deferred; exhausted EN/AR compositions/actions and Manual B preserved; no Voice notice in Manual |
+| New state / event                  | Binding and component                                                                             | Exact invariant                                                                                                                                                                                                                                                                                   |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Idle badge + examples              | Existing EN/AR idle bindings; `AllowanceCard`, `ExamplesCard`                                     | Dark mic and bulb badge slate-700/green; EN food orange/car blue/coffee gold, unchanged icons and copy; AR quoted no EN example icons; light badge unchanged; approved daily-only next-local-midnight reset                                                                                       |
+| Dismiss examples                   | `ExamplesCard` + new user-scoped **device-local** preference service/facade                       | Dismiss full card immediately; accessible EN “Dismiss examples” / AR “إخفاء الأمثلة”, ≥48 dp target (proposal min44, shared target min48); same account remains hidden across route/restart/theme/locale/sign-out; independent other accounts, no hosted/sync                                     |
+| Starting                           | Unified route `isVoiceStartPending` and `useVoiceTransactionFlow` state → `VoiceTransactionEntry` | Immediate “Starting…” / “نجهّز التسجيل…” with approved body and Cancel **before** awaits; one in-flight start, no audio timer/Listening until `record()` succeeds, all cancellation generations checked                                                                                           |
+| Recording/paused                   | `VoiceActionSurface` + `useVoiceRecorder`                                                         | 104 dp mic, 140/172 dp existing halos; two thin ~1.4s outward ripple strokes, 700ms offset, non-volume activity bars ~1.2s; real timer starts with native capture, paused freezes time/motion, reduced-motion static; Stop/Pause/Resume/Discard and cleanup unchanged                             |
+| Parsing/analyzing                  | `VoiceTransactionEntry` + cohesive `voice-ui` illustration                                        | ~1.6s looping waveform/dots → receipt, exact approved EN/AR title/body, no fake progress, financial details or Skeleton; real quota-fetch loading stays Skeleton                                                                                                                                  |
+| Permission                         | Voice **inline** explanation, route/recorder                                                      | Only after genuinely missing native grant, with approved localized title/body/action; no generic recording-introduction modal; stale initial `hasPermission=false` is unknown, not denial; existing first-use AI Processing Consent Sheet still gates                                             |
+| Errors and retries                 | `useVoiceTransactionFlow`, route `handleTryAgain`, recovery actions                               | Native recorder start failure has visible recovery. Recording Try again → Starting directly; retained-submission Try again uses same key/audio/no new capture; unavailable Try again refreshes and auto-starts only if authoritative availability eligible, respecting consent/daily/burst/cancel |
+| Exhausted/burst/unavailable/Manual | Frozen daily/Manual bindings and server contracts                                                 | No altered quota consumption, same-key 35-day replay retention, #384 deferred; exhausted EN/AR compositions/actions and Manual B preserved; no Voice notice in Manual                                                                                                                             |
 
 No new baseline geometry, font, palette, unverified icon-glyph identity or
-permission policy is inferred from export image framing. Existing 390×844 dp,
-48 dp shared interactive minimum, scroll/safe-area and responsive variants
-apply. Root still must run approved original binding checks and read-only
-Speckit analysis, then actual test Red before production. Device, rendered
-visual and separate accessibility verification remain **NOT RUN** and owner
-owned.
+permission policy is inferred from export image framing. Existing 390×844 dp, 48
+dp shared interactive minimum, scroll/safe-area and responsive variants apply.
+Root still must run approved original binding checks and read-only Speckit
+analysis, then actual test Red before production. Device, rendered visual and
+separate accessibility verification remain **NOT RUN** and owner owned.
 
 ## Navigation and shared shell
 
@@ -160,3 +160,63 @@ manual validation. Existing rendered comparison and separate accessibility-proof
 requirements remain completion/reporting boundaries; passing unit checks or
 source inspection does not establish visual completion, device readiness or
 merge readiness.
+
+## Voice controls R2 — owner-approved image; exact binding accepted 2026-10-11
+
+Read the exact `../mockups/voice-controls-r2-green-gray-proposal.binding.md`
+with its **15 official required Binding Facts**, and
+`../mockups/voice-controls-r2-manifest.json`. Owner approved the green/gray/red
+image (Git blob `caceb8d1cade9e4e9c574e95fc0e603a39e766de`); local executor
+verified image
+`sha256:3c1d098090cfac539c834634f2dfb1db29dc75b8afc9f479d61d17af09680281`,
+1832×858 pixels, 1470108 bytes. Root verified the public verifier results and,
+on 2026-10-11 under delegated authority, accepted the exact computed
+metadata/combined SHAs (sidecar metadata APPROVED). Prior combined
+`sha256:d06cfdf4f6bbc8c3bd7f12b5129115206a31c7f3c1dfb4a266977456252caa14` is
+superseded by the faithful Color/theme facts refinement (filled NileGreen Submit
+with white label and paper-plane Ionicons send; transparent gray Pause/Resume
+outlined with pause/play glyph; transparent red Discard outlined with close
+glyph; gray disabled completed Pause with pause glyph; 20 dp icons; 14/22
+semibold labels); current approved combined
+`sha256:71906e40d73448a0767df14954bf7f1a239126dc894a64dbbe227e191f549a77`
+(metadata
+`sha256:72459993f2d82fe128fd9d64ce83c9646e60edef5e1f2d187f42354a48158c2b`) from
+the official verifier. No new owner SHA approval is presumed. Root's faithful
+design review accepts Arabic Submit **إرسال** and Recording complete **التسجيل
+مكتمل**. Final canonical verifier PASS, correct-feature prerequisites and
+read-only Speckit analysis remain root-owned before implementation.
+
+After exact binding approval, the R2 narrow override is:
+
+| State/surface                                        | Binding treatment and behavior                                                                                                                                                                                                                                                                                                                    |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Recording**                                        | **LEFT Submit GREEN** (`إرسال`), **CENTER Pause GRAY** (`إيقاف مؤقت`), **RIGHT Discard RED** (`تجاهل`); real active clock `mm:ss / 00:30`, e.g. `00:12 / 00:30`; existing outward waves continue                                                                                                                                                  |
+| **Paused**                                           | LEFT Submit GREEN unchanged, CENTER **Resume GRAY** (`متابعة`), RIGHT Discard RED unchanged; timer freezes, active waves stop                                                                                                                                                                                                                     |
+| **Recording complete / التسجيل مكتمل** (third panel) | Automatic native **local** stop at 30 seconds of active capture; `00:30 / 00:30`; **enabled Submit GREEN LEFT**, **disabled Pause GRAY CENTER**, **enabled Discard RED RIGHT**; **no Resume, active waves or helper sentence**; finalized audio retained until explicit Submit or Discard                                                         |
+| Ordinary idle/Starting/recording/paused mic          | Remove only **static filled** 140/172 dp halo backgrounds; retain 104 dp clipped mic and recording waves; reduced-motion static semantics preserved                                                                                                                                                                                               |
+| Daily-limit and unavailable                          | Existing disabled-mic artwork, EN/AR differences and actions unchanged                                                                                                                                                                                                                                                                            |
+| RTL/Arabic                                           | Translate labels and text/fonts, but **physical** LEFT/CENTER/RIGHT action identity does **not** row-reverse; controls ≥48 dp                                                                                                                                                                                                                     |
+| Server/AI                                            | Cap itself performs **no** provider request, Gemini parse, quota consumption or review navigation; explicit Submit uses existing consent, auth, authoritative availability, request identity/retry/review gates. #391 separately owns server duration and empty/speechless audio                                                                  |
+| Latency-minimum repair                               | Replace duplicate route/flow native permission reads with **one fresh just-in-time typed actor-safe permission outcome**, preserving inline rationale/blocked recovery and OS prompt only after explicit action; direct Voice entry skips **first** heavy hidden Manual mount, then keeps Manual mounted after first selection to preserve drafts |
+| Untouched                                            | Prior R1 Starting, permission, parsing, examples, replay and motion facts; original five frozen bindings; Manual B/financial, 35-day replay and #384                                                                                                                                                                                              |
+
+The timer is **elapsed / fixed maximum** rather than a guessed progress
+percentage. At cap, neither Pause nor Resume can restart recording; Submitted
+audio follows the existing single parse/review path. Native
+stop/pause/cap/Submit/Discard/unmount/account changes must be idempotent,
+race-safe and scoped to current authenticated user.
+
+Preserve the existing 390×844 dp normalized app context, 16 dp gutters, 12 dp
+gaps, 104 dp mic, ≥48 dp touch targets, scroll/safe-area once, 560 dp tablet
+maximum and responsive/RTL/dark/font1.35/2 behavior. The owner removed the
+ordinary helper sentence; do not invent a replacement.
+
+**Before T069 tests or T070/T071 source:** T068 must finish exact binding/root
+delegated revision approval and canonical verifier, then correct-feature
+prerequisites and **read-only Speckit analysis**. T073 remains independent
+**after implementation** review. Reproduction of owner-observed ~5-second
+navigation and ≥3-second Starting requires owner runtime stage measurements; no
+timed improvement is promised. Never skip fresh local AI consent, authoritative
+preattempt quota, native 300 ms early-command stabilization or successful
+`record()` before Listening. Do not modify HTTP in-flight availability policy
+without evidence. Device/native/render/a11y/E2E evidence stays NOT RUN.

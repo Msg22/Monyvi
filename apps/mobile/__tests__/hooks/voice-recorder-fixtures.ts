@@ -32,6 +32,9 @@ const mockPause = jest.fn();
 const mockStop = jest.fn().mockResolvedValue(undefined);
 const mockPrepareToRecordAsync = jest.fn().mockResolvedValue(undefined);
 let mockRecorderReleased = false;
+const DEFAULT_RECORDER_URI = "file:///tmp/recording.m4a";
+let mockRecorderUri: string | null = DEFAULT_RECORDER_URI;
+
 const mockRelease = jest.fn((): void => {
   mockRecorderReleased = true;
 });
@@ -49,12 +52,12 @@ const mockRecorder = {
   stop: mockStop,
   prepareToRecordAsync: mockPrepareToRecordAsync,
   release: mockRelease,
-  getUri: jest.fn().mockReturnValue("file:///tmp/recording.m4a"),
-  get uri(): string {
+  getUri: jest.fn((): string | null => mockRecorderUri),
+  get uri(): string | null {
     if (mockRecorderReleased) {
       throw new Error("Recorder URI accessed after release");
     }
-    return "file:///tmp/recording.m4a";
+    return mockRecorderUri;
   },
 };
 
@@ -193,6 +196,11 @@ async function startRecordingWithFlush(
 
 export function resetRecorderRelease(): void {
   mockRecorderReleased = false;
+  mockRecorderUri = DEFAULT_RECORDER_URI;
+}
+/** Deterministic native stop() success with missing output URI. */
+export function setMockRecorderUri(uri: string | null): void {
+  mockRecorderUri = uri;
 }
 export {
   act,

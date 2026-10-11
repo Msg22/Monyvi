@@ -13,6 +13,7 @@ export function useMicrophonePermission(): {
   readonly permissionStatus: MicrophonePermissionStatus;
   readonly hasPermission: boolean;
   readonly refreshPermission: () => Promise<MicrophonePermissionStatus>;
+  readonly requestPermissionStatus: () => Promise<MicrophonePermissionStatus>;
   readonly requestPermission: () => Promise<boolean>;
 } {
   const [permissionStatus, setPermissionStatus] =
@@ -42,9 +43,14 @@ export function useMicrophonePermission(): {
     (): Promise<MicrophonePermissionStatus> => updatePermission(false),
     [updatePermission]
   );
-  const requestPermission = useCallback(
-    async (): Promise<boolean> => (await updatePermission(true)) === "granted",
+  const requestPermissionStatus = useCallback(
+    (): Promise<MicrophonePermissionStatus> => updatePermission(true),
     [updatePermission]
+  );
+  const requestPermission = useCallback(
+    async (): Promise<boolean> =>
+      (await requestPermissionStatus()) === "granted",
+    [requestPermissionStatus]
   );
   useEffect(() => {
     mountedRef.current = true;
@@ -62,6 +68,7 @@ export function useMicrophonePermission(): {
     permissionStatus,
     hasPermission: permissionStatus === "granted",
     refreshPermission,
+    requestPermissionStatus,
     requestPermission,
   };
 }

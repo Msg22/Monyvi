@@ -13,6 +13,10 @@ const mockRecorderStop = jest.fn();
 const mockRecorderDiscard = jest.fn();
 const mockRecorderReset = jest.fn();
 const mockRequestPermission = jest.fn();
+const mockRequestPermissionStatus = jest.fn<
+  Promise<"granted" | "denied" | "blocked" | "unknown">,
+  []
+>();
 const mockParseVoiceWithAi = jest.fn<
   Promise<unknown>,
   Parameters<
@@ -101,6 +105,7 @@ jest.mock("@/hooks/useVoiceRecorder", () => ({
     discard: mockRecorderDiscardCallback,
     reset: mockRecorderReset,
     requestPermission: mockRequestPermission,
+    requestPermissionStatus: mockRequestPermissionStatus,
     permissionStatus: recorderState.hasPermission ? "granted" : "denied",
     refreshPermission: (): Promise<"granted" | "denied"> =>
       Promise.resolve(recorderState.hasPermission ? "granted" : "denied"),
@@ -193,6 +198,7 @@ beforeEach(() => {
   mockRecorderReset.mockResolvedValue(undefined);
   mockRecorderStop.mockResolvedValue({ uri: "file://stopped.m4a" });
   mockRequestPermission.mockResolvedValue(false);
+  mockRequestPermissionStatus.mockReset().mockResolvedValue("denied");
   mockOpenSettings.mockResolvedValue(undefined);
   mockActiveAiConsent();
   mockParseVoiceWithAi.mockResolvedValue({
@@ -227,14 +233,18 @@ describe("useVoiceTransactionFlow", () => {
     });
     expect(result.current.flowStatus).toBe("paused");
     mockRecorderResume.mockReturnValueOnce(false);
-    act((): void => {
+    await act(async (): Promise<void> => {
       result.current.resumeRecording();
+      await Promise.resolve();
     });
+    expect(mockRecorderResume).toHaveBeenCalledTimes(1);
     expect(result.current.flowStatus).toBe("paused");
     expect(mockRecorderDiscard).not.toHaveBeenCalled();
-    act((): void => {
+    await act(async (): Promise<void> => {
       result.current.resumeRecording();
+      await Promise.resolve();
     });
+    expect(mockRecorderResume).toHaveBeenCalledTimes(2);
     expect(result.current.flowStatus).toBe("recording");
   });
 
@@ -271,7 +281,7 @@ describe("useVoiceTransactionFlow", () => {
       if (stage === "native-start")
         mockRecorderStart.mockReturnValueOnce(capture.promise);
       const { result } = renderVoiceFlow(ensureConsent);
-      let pending: Promise<void> | undefined;
+      let pending: ReturnType<typeof result.current.startFlow> | undefined;
       await act(async (): Promise<void> => {
         pending = result.current.startFlow();
         for (let turn = 0; turn < 5; turn++) await Promise.resolve();
@@ -303,7 +313,7 @@ describe("useVoiceTransactionFlow", () => {
           ? (): Promise<boolean> => consent.promise
           : undefined
       );
-      let pending: Promise<void> | undefined;
+      let pending: ReturnType<typeof result.current.startFlow> | undefined;
       await act(async (): Promise<void> => {
         pending = result.current.startFlow();
         for (let turn = 0; turn < 5; turn++) await Promise.resolve();
@@ -324,7 +334,7 @@ describe("useVoiceTransactionFlow", () => {
     const availability = createDeferred<VoiceAvailabilitySnapshot>();
     mockRefresh.mockReturnValueOnce(availability.promise);
     const { result, rerender } = renderVoiceFlow();
-    let pending: Promise<void> | undefined;
+    let pending: ReturnType<typeof result.current.startFlow> | undefined;
     await act(async (): Promise<void> => {
       pending = result.current.startFlow();
       await Promise.resolve();
@@ -364,24 +374,41 @@ describe("useVoiceTransactionFlow", () => {
 
   it("does not start recording from retry when microphone permission is still denied", async (): Promise<void> => {
     const { result } = renderVoiceFlow();
+    let permissionOutcome:
+      | Awaited<ReturnType<typeof result.current.startFlow>>
+      | undefined;
 
-    await act(async () => {
-      await result.current.startFlow();
+    await act(async (): Promise<void> => {
+      permissionOutcome = await result.current.startFlow();
     });
 
-    expect(result.current.flowStatus).toBe("error");
-    expect(result.current.errorMessage).toContain("Microphone permission");
-    expect(result.current.isMicrophonePermissionError).toBe(true);
+    // The flow reports a fresh denied state for the route's inline rationale,
+    // without turning the refusal into a generic recorder error.
+    expect(permissionOutcome).toEqual({
+      kind: "permission",
+      permissionStatus: "denied",
+    });
+    expect(result.current.permissionStatus).toBe("denied");
+    expect(result.current.flowStatus).toBe("idle");
+    expect(result.current.errorMessage).toBeNull();
+    expect(result.current.isMicrophonePermissionError).toBe(false);
     expect(mockRecorderStart).not.toHaveBeenCalled();
+    expect(mockRequestPermission).not.toHaveBeenCalled();
+    expect(mockParseVoiceWithAi).not.toHaveBeenCalled();
+    expect(mockRandomUUID).not.toHaveBeenCalled();
 
-    await act(async () => {
+    await act(async (): Promise<void> => {
       await result.current.retryRecording();
     });
 
-    expect(result.current.flowStatus).toBe("error");
-    expect(result.current.errorMessage).toContain("Microphone permission");
-    expect(result.current.isMicrophonePermissionError).toBe(true);
+    expect(result.current.permissionStatus).toBe("denied");
+    expect(result.current.flowStatus).toBe("idle");
+    expect(result.current.errorMessage).toBeNull();
+    expect(result.current.isMicrophonePermissionError).toBe(false);
     expect(mockRecorderStart).not.toHaveBeenCalled();
+    expect(mockRequestPermission).not.toHaveBeenCalled();
+    expect(mockParseVoiceWithAi).not.toHaveBeenCalled();
+    expect(mockRandomUUID).not.toHaveBeenCalled();
   });
 
   it("opens device settings for microphone permission recovery", async (): Promise<void> => {
@@ -538,7 +565,7 @@ describe("useVoiceTransactionFlow", () => {
   it("locks mode switching while consent awaits and releases it after refusal", async (): Promise<void> => {
     const consent = createDeferred<boolean>();
     const flow = renderVoiceFlow(() => consent.promise);
-    let pending = Promise.resolve();
+    let pending: ReturnType<typeof flow.result.current.startFlow> | undefined;
     act((): void => {
       pending = flow.result.current.startFlow();
     });
@@ -743,7 +770,131 @@ describe("useVoiceTransactionFlow", () => {
     expect(mockParseVoiceWithAi).toHaveBeenCalledTimes(1);
     expect(mockPush).not.toHaveBeenCalled();
   });
+
+  it("keeps cap audio without parsing until explicit Submit", async (): Promise<void> => {
+    const flow = renderVoiceFlow();
+    await prepareCappedRecording(flow);
+
+    expect(flow.result.current.flowStatus).toBe("completed");
+    expect(mockRefresh).toHaveBeenCalledTimes(1);
+    expect(mockParseVoiceWithAi).not.toHaveBeenCalled();
+    expect(mockRecorderStop).not.toHaveBeenCalled();
+    expect(mockPush).not.toHaveBeenCalled();
+
+    await act(async (): Promise<void> => {
+      await flow.result.current.submitRecording();
+    });
+    expect(mockRecorderStop).not.toHaveBeenCalled();
+    expect(mockParseVoiceWithAi).toHaveBeenCalledTimes(1);
+    expect(mockParseVoiceWithAi).toHaveBeenCalledWith(
+      expect.objectContaining({
+        audioUri: "file://capped.m4a",
+        requestKey: "11111111-1111-4111-8111-111111111111",
+      })
+    );
+    expect(mockRandomUUID).toHaveBeenCalledTimes(1);
+    expect(mockPush).toHaveBeenCalledTimes(1);
+  });
+
+  it("deduplicates repeated Submit while capped audio is in flight", async (): Promise<void> => {
+    const processing = createDeferred<unknown>();
+    mockParseVoiceWithAi.mockReturnValueOnce(processing.promise);
+    const flow = renderVoiceFlow();
+    await prepareCappedRecording(flow);
+
+    let first = Promise.resolve();
+    let second = Promise.resolve();
+    await act(async (): Promise<void> => {
+      first = flow.result.current.submitRecording();
+      second = flow.result.current.submitRecording();
+      for (let turn = 0; turn < 8; turn += 1) await Promise.resolve();
+    });
+    expect(mockParseVoiceWithAi).toHaveBeenCalledTimes(1);
+    expect(mockRecorderStop).not.toHaveBeenCalled();
+
+    await act(async (): Promise<void> => {
+      processing.resolve({
+        kind: "network",
+        message: "Retry the same request",
+        retryableSameRequest: true,
+      });
+      await Promise.all([first, second]);
+    });
+    expect(mockParseVoiceWithAi).toHaveBeenCalledTimes(1);
+    expect(flow.result.current.canRetrySubmission).toBe(true);
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  it.each(["discard", "actor-switch"] as const)(
+    "prevents cap audio submission after %s",
+    async (reason): Promise<void> => {
+      const flow = renderVoiceFlow();
+      await prepareCappedRecording(flow);
+      if (reason === "actor-switch") {
+        mockUserId = "user-2";
+        flow.rerender(undefined);
+      } else {
+        await act(async (): Promise<void> => {
+          await flow.result.current.discardRecording();
+        });
+      }
+      await act(async (): Promise<void> => {
+        await flow.result.current.submitRecording();
+      });
+      expect(mockRecorderDiscard).toHaveBeenCalledTimes(1);
+      expect(mockRecorderStop).not.toHaveBeenCalled();
+      expect(mockParseVoiceWithAi).not.toHaveBeenCalled();
+      expect(mockPush).not.toHaveBeenCalled();
+      expect(flow.result.current.flowStatus).toBe("idle");
+    }
+  );
+
+  it("rejects a late capped Submit after the actor switches during native stop", async (): Promise<void> => {
+    const nativeStop = createDeferred<{ readonly uri: string }>();
+    const flow = renderVoiceFlow();
+    recorderState.hasPermission = true;
+    flow.rerender(undefined);
+    await act(async (): Promise<void> => {
+      await flow.result.current.startFlow();
+    });
+    recorderState.status = "recording";
+    recorderState.durationMs = 30_000;
+    recorderState.audioUri = null;
+    flow.rerender(undefined);
+    mockRecorderStop.mockReturnValueOnce(nativeStop.promise);
+
+    let submitting = Promise.resolve();
+    act((): void => {
+      submitting = flow.result.current.submitRecording();
+    });
+    expect(flow.result.current.isFinalizing).toBe(true);
+    mockUserId = "user-2";
+    flow.rerender(undefined);
+
+    await act(async (): Promise<void> => {
+      nativeStop.resolve({ uri: "file://late-cap.m4a" });
+      await submitting;
+    });
+    expect(mockParseVoiceWithAi).not.toHaveBeenCalled();
+    expect(mockPush).not.toHaveBeenCalled();
+    expect(flow.result.current.canRetrySubmission).toBe(false);
+    expect(flow.result.current.flowStatus).toBe("idle");
+  });
 });
+
+async function prepareCappedRecording(
+  flow: ReturnType<typeof renderVoiceFlow>
+): Promise<void> {
+  recorderState.hasPermission = true;
+  flow.rerender(undefined);
+  await act(async (): Promise<void> => {
+    await flow.result.current.startFlow();
+  });
+  recorderState.status = "completed";
+  recorderState.durationMs = 30_000;
+  recorderState.audioUri = "file://capped.m4a";
+  flow.rerender(undefined);
+}
 
 async function prepareCompletedRecording(
   flow: ReturnType<typeof renderVoiceFlow>
