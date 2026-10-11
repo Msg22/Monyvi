@@ -71,7 +71,7 @@ describe("AddTransaction unified mode intent", () => {
       await Promise.resolve();
     });
     expectTabState("Manual", { selected: true });
-    const originalManual = screen.UNSAFE_getByType(ManualTransactionEntry);
+    const originalManual: unknown = screen.UNSAFE_getByType(ManualTransactionEntry);
     expect(getTestInstanceProps(originalManual).isActive).toBe(true);
     await enterOneManualUnit();
 

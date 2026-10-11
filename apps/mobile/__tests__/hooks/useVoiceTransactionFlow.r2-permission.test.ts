@@ -26,7 +26,7 @@ const mockRecorderRequest = jest.fn<Promise<boolean>, []>();
 const mockRecorderDiscard = jest.fn<Promise<void>, []>();
 const mockRecorderStop = jest.fn();
 const mockAvailabilityRefresh = jest.fn<Promise<VoiceAvailabilitySnapshot>, []>();
-const mockProvider = jest.fn();
+const mockProvider = jest.fn<Promise<unknown>, unknown[]>();
 const mockPush = jest.fn();
 const mockUUID = jest.fn<string, []>();
 let mockUserId: string | null = "user-1";
@@ -180,21 +180,22 @@ async function startAndCompleteAtCap(): Promise<ReturnType<typeof renderFlow>> {
 describe("R2 typed single just-in-time microphone permission ownership", () => {
   it("starts only after consent and authoritative availability, reading permission once", async (): Promise<void> => {
     const stages: string[] = [];
-    const ensureConsent = jest.fn(async (): Promise<boolean> => {
+    const ensureConsent = jest.fn((): Promise<boolean> => {
       stages.push("consent");
-      return true;
+      return Promise.resolve(true);
     });
-    mockAvailabilityRefresh.mockImplementation(async () => {
+    mockAvailabilityRefresh.mockImplementation((): Promise<VoiceAvailabilitySnapshot> => {
       stages.push("availability");
-      return allowed;
+      return Promise.resolve(allowed);
     });
-    mockRecorderRefresh.mockImplementation(async () => {
+    mockRecorderRefresh.mockImplementation((): Promise<PermissionStatus> => {
       stages.push("permission");
-      return "granted";
+      return Promise.resolve("granted");
     });
-    mockRecorderStart.mockImplementation(async (options: { readonly onStarted?: () => void }): Promise<void> => {
+    mockRecorderStart.mockImplementation((options: { readonly onStarted?: () => void }): Promise<void> => {
       stages.push("native-record");
       options.onStarted?.();
+      return Promise.resolve();
     });
     const flow = renderFlow(ensureConsent);
     let outcome: unknown;
@@ -268,7 +269,7 @@ describe("R2 typed single just-in-time microphone permission ownership", () => {
   it.each(["consent", "availability"] as const)(
     "short-circuits %s before the native permission read",
     async (stage): Promise<void> => {
-      const ensureConsent = () => stage !== "consent";
+      const ensureConsent = (): boolean => stage !== "consent";
       if (stage === "availability") {
         mockAvailabilityRefresh.mockResolvedValue({
           ...allowed,

@@ -1,16 +1,9 @@
-import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import * as os from "node:os";
-import * as path from "node:path";
-
 import { act, fireEvent, render, screen } from "@testing-library/react-native";
 import React from "react";
 import {
   processColor,
   ScrollView,
-  StyleSheet,
   type StyleProp,
-  type TextStyle,
   type ViewStyle,
 } from "react-native";
 import {
@@ -21,13 +14,19 @@ import {
 } from "react-native-css-interop/test";
 
 import {
-  getTestInstanceParent,
   getTestInstanceProps,
-  getTestInstanceChildren,
   getTestInstances,
 } from "../../test-utils/test-instance-props";
 
 import { palette } from "@/constants/colors";
+import {
+  compiledVoiceCss,
+  resolvedVoiceStyle,
+  resolvedActionLabelStyle,
+  recorderActionRow,
+  hasNativeCircularClip,
+  expectPaletteHalo,
+} from "./voice-r2-native-style-test-helpers";
 
 import { VoiceTransactionEntry } from "@/components/add-transaction/VoiceTransactionEntry";
 
@@ -284,18 +283,18 @@ describe("VoiceTransactionEntry responsive, animation and unboxed layout", () =>
     "keeps the clipped 104dp mic with no ordinary static filled halos in %s",
     (state): void => {
       renderLayout({ state });
-      const area = screen.getByTestId("voice-action-surface");
+      const area: unknown = screen.getByTestId("voice-action-surface");
       expect(String(getTestInstanceProps(area).className)).not.toMatch(
         /rounded-2xl border|bg-slate-25/
       );
-      const mic = screen.getByTestId("voice-mic-target", {
+      const mic: unknown = screen.getByTestId("voice-mic-target", {
         includeHiddenElements: true,
       });
       expect(String(getTestInstanceProps(mic).className)).toContain("104px");
       // A transparent decorative wrapper is allowed; the former solid
       // 140/172px background circles are not.
       for (const id of ["voice-halo-outer", "voice-halo-inner"]) {
-        const halo = screen.queryByTestId(id, { includeHiddenElements: true });
+        const halo: unknown = screen.queryByTestId(id, { includeHiddenElements: true });
         if (halo !== null) {
           expect(String(getTestInstanceProps(halo).className)).not.toMatch(
             /bg-nileGreen-|bg-slate-/
@@ -452,166 +451,6 @@ describe("VoiceTransactionEntry responsive, animation and unboxed layout", () =>
     ).toBeNull();
   });
 });
-
-const MOBILE_ROOT = path.resolve(__dirname, "../../..");
-const REPOSITORY_ROOT = path.resolve(MOBILE_ROOT, "../..");
-const TAILWIND_CLI = require.resolve("tailwindcss/lib/cli/index.js", {
-  paths: [MOBILE_ROOT, REPOSITORY_ROOT],
-});
-let cachedVoiceCss: string | null = null;
-
-function compiledVoiceCss(): string {
-  if (cachedVoiceCss !== null) return cachedVoiceCss;
-  const directory = mkdtempSync(path.join(os.tmpdir(), "monyvi-voice-css-"));
-  try {
-    const input = path.join(directory, "input.css");
-    const componentSource = path.join(
-      MOBILE_ROOT,
-      "components",
-      "add-transaction",
-      "VoiceTransactionEntry.tsx"
-    );
-    const adapterSource = path.join(
-      MOBILE_ROOT,
-      "components",
-      "add-transaction",
-      "voice-ui",
-      "*.tsx"
-    );
-    const output = path.join(directory, "output.css");
-    writeFileSync(input, "@tailwind base;\n@tailwind utilities;\n", "utf8");
-    execFileSync(
-      process.execPath,
-      [
-        TAILWIND_CLI,
-        "-c",
-        path.join(MOBILE_ROOT, "tailwind.config.js"),
-        "-i",
-        input,
-        "-o",
-        output,
-        "--content",
-        componentSource + "," + adapterSource,
-      ],
-      {
-        cwd: REPOSITORY_ROOT,
-        stdio: "pipe",
-        env: { ...process.env, NATIVEWIND_OS: "android" },
-      }
-    );
-    cachedVoiceCss = readFileSync(output, "utf8");
-    return cachedVoiceCss;
-  } finally {
-    rmSync(directory, { recursive: true, force: true });
-  }
-}
-
-/** NativeWind CSS must be actually registered and translated, not string-matched. */
-function resolvedVoiceStyle(node: unknown): ViewStyle {
-  const raw: unknown = getTestInstanceProps(node).style;
-  if (typeof raw === "function") {
-    // Only native flattened props can prove clipping. Do not call the
-    // Pressable callback with a fabricated pressed state.
-    return {};
-  }
-  if (raw !== undefined && raw !== null && typeof raw !== "object") {
-    throw new Error("Expected a resolved native style object or array");
-  }
-  return StyleSheet.flatten(raw) ?? {};
-}
-
-/** Native styles must come from a rendered Text descendant, not class text. */
-function findActionLabel(action: unknown): unknown {
-  for (const child of getTestInstanceChildren(action)) {
-    if (typeof child !== "object" || child === null) continue;
-    const props = getTestInstanceProps(child);
-    if (typeof props.children === "string" && props.children.length > 0) {
-      return child;
-    }
-    const descendant = findActionLabelOrNull(child);
-    if (descendant !== null) return descendant;
-  }
-  throw new Error("Recorder control is missing a visible Text label");
-}
-
-function findActionLabelOrNull(parent: unknown): unknown | null {
-  for (const child of getTestInstanceChildren(parent)) {
-    if (typeof child !== "object" || child === null) continue;
-    const props = getTestInstanceProps(child);
-    if (typeof props.children === "string" && props.children.length > 0) {
-      return child;
-    }
-    const found = findActionLabelOrNull(child);
-    if (found !== null) return found;
-  }
-  return null;
-}
-
-function resolvedActionLabelStyle(action: unknown): TextStyle {
-  const raw: unknown = getTestInstanceProps(findActionLabel(action)).style;
-  if (raw === null || raw === undefined) return {};
-  if (typeof raw !== "object") {
-    throw new Error("Expected NativeWind-resolved Text style");
-  }
-  return StyleSheet.flatten(raw as StyleProp<TextStyle>) ?? {};
-}
-
-function recorderActionRow(submit: unknown, center: unknown, discard: unknown): unknown {
-  const ancestors = (value: unknown): readonly unknown[] => {
-    const chain: unknown[] = [];
-    let node: unknown = value;
-    while (node !== null && node !== undefined) {
-      chain.push(node);
-      node = getTestInstanceParent(node);
-    }
-    return chain;
-  };
-  const middle = ancestors(center);
-  const right = ancestors(discard);
-  const row = ancestors(submit).find(
-    (node) => middle.includes(node) && right.includes(node)
-  );
-  if (row === undefined) {
-    throw new Error("R2 action buttons must share one physical row");
-  }
-  return row;
-}
-
-function hasNativeCircularClip(gradient: unknown): boolean {
-  let current: unknown = getTestInstanceParent(gradient);
-  for (let i = 0; i < 12 && current !== null; i++) {
-    if (typeof current !== "object") break;
-    const style = resolvedVoiceStyle(current);
-    if (
-      style.overflow === "hidden" &&
-      style.width === 104 &&
-      style.height === 104 &&
-      style.borderRadius === 52
-    ) {
-      return true;
-    }
-    current = getTestInstanceParent(current);
-  }
-  return false;
-}
-
-function expectPaletteHalo(actual: unknown, paletteColor: string): number {
-  if (typeof actual !== "string") {
-    throw new Error("Expected native resolved halo color");
-  }
-  const native = processColor(actual);
-  const expected = processColor(paletteColor);
-  if (typeof native !== "number" || typeof expected !== "number") {
-    throw new Error("Expected valid React Native color values");
-  }
-  const nativeUint = ((native % 4294967296) + 4294967296) % 4294967296;
-  const expectedUint = ((expected % 4294967296) + 4294967296) % 4294967296;
-  expect(nativeUint % 16777216).toBe(expectedUint % 16777216);
-  const alpha = Math.floor(nativeUint / 16777216);
-  expect(alpha).toBeGreaterThan(0);
-  expect(alpha).toBeLessThan(255);
-  return alpha / 255;
-}
 
 describe("real Tailwind/CSS Interop Voice native shape", () => {
   it("reflows at font scale 2 while retaining scroll and 48dp recovery targets", () => {
@@ -823,7 +662,7 @@ describe("real Tailwind/CSS Interop Voice native shape", () => {
       colorScheme.set(theme);
       renderWithInterop(<VoiceTransactionEntry {...baseProps} state={state} />);
       for (const id of ["voice-halo-outer", "voice-halo-inner"]) {
-        const halo = screen.queryByTestId(id, { includeHiddenElements: true });
+        const halo: unknown = screen.queryByTestId(id, { includeHiddenElements: true });
         if (halo === null) continue;
         const native = resolvedVoiceStyle(halo);
         const background = native.backgroundColor;
@@ -853,7 +692,7 @@ describe("real Tailwind/CSS Interop Voice native shape", () => {
         ["outer", 172, 86],
         ["inner", 140, 70],
       ] as const) {
-        const halo = screen.getByTestId("voice-halo-" + name, {
+        const halo: unknown = screen.getByTestId("voice-halo-" + name, {
           includeHiddenElements: true,
         });
         expect(resolvedVoiceStyle(halo)).toEqual(
@@ -871,7 +710,7 @@ describe("real Tailwind/CSS Interop Voice native shape", () => {
         expect(alpha).toBeGreaterThanOrEqual(0.15);
         expect(alpha).toBeLessThan(0.45);
       }
-      const target = screen.getByTestId("voice-mic-target", {
+      const target: unknown = screen.getByTestId("voice-mic-target", {
         includeHiddenElements: true,
       });
       expect(getTestInstanceProps(target).accessible).toBe(false);
@@ -889,11 +728,11 @@ describe("real Tailwind/CSS Interop Voice native shape", () => {
       mockLanguage = "en";
       colorScheme.set("light");
       renderWithInterop(<VoiceTransactionEntry {...baseProps} state={state} durationMs={30_000} />);
-      const submit = screen.getByTestId("voice-action-submit");
-      const center = screen.getByTestId(
+      const submit: unknown = screen.getByTestId("voice-action-submit");
+      const center: unknown = screen.getByTestId(
         state === "paused" ? "voice-action-resume" : "voice-action-pause"
       );
-      const discard = screen.getByTestId("voice-action-discard");
+      const discard: unknown = screen.getByTestId("voice-action-discard");
       for (const action of [submit, center, discard]) {
         const style = resolvedVoiceStyle(action);
         expect(style.minHeight).toBeGreaterThanOrEqual(48);
@@ -969,7 +808,7 @@ describe("real Tailwind/CSS Interop Voice native shape", () => {
       mockFontScale = 2;
       mockBottomInset = width === 320 ? 22 : 34;
       renderWithInterop(<VoiceTransactionEntry {...baseProps} state="completed" durationMs={30_000} />);
-      const scroll = screen.UNSAFE_getByType(ScrollView);
+      const scroll: unknown = screen.UNSAFE_getByType(ScrollView);
       expect(resolvedVoiceStyle(screen.getByTestId("voice-action-surface")).minHeight)
         .toBeGreaterThanOrEqual(260);
       expect(getTestInstanceProps(scroll).contentContainerStyle).toEqual(
@@ -979,7 +818,7 @@ describe("real Tailwind/CSS Interop Voice native shape", () => {
         })
       );
       for (const id of ["voice-action-submit", "voice-action-pause", "voice-action-discard"]) {
-        const control = screen.getByTestId(id);
+        const control: unknown = screen.getByTestId(id);
         expect(resolvedVoiceStyle(control).minHeight).toBeGreaterThanOrEqual(48);
         expect(resolvedActionLabelStyle(control).fontSize).toBe(14);
       }

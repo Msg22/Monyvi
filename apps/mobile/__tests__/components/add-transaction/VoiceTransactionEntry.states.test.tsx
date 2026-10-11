@@ -8,10 +8,7 @@ import {
   getTestInstances,
 } from "../../test-utils/test-instance-props";
 
-import {
-  VoiceTransactionEntry,
-  type VoiceTransactionEntryState,
-} from "@/components/add-transaction/VoiceTransactionEntry";
+import { VoiceTransactionEntry } from "@/components/add-transaction/VoiceTransactionEntry";
 import { arabicFontFamily, fontFamily } from "@/constants/typography";
 
 let mockLanguage: "en" | "ar" = "en";
@@ -728,9 +725,9 @@ describe("VoiceTransactionEntry approved state compositions", () => {
       expect(screen.queryByRole("button", { name: "Stop" })).toBeNull();
       expect(screen.queryByTestId("voice-action-stop")).toBeNull();
 
-      const submit = screen.getByTestId("voice-action-submit");
-      const center = screen.getByTestId(secondId);
-      const discard = screen.getByTestId("voice-action-discard");
+      const submit: unknown = screen.getByTestId("voice-action-submit");
+      const center: unknown = screen.getByTestId(secondId);
+      const discard: unknown = screen.getByTestId("voice-action-discard");
       // React tree order (not translated flex-row-reverse) proves the stable
       // physical LEFT/CENTER/RIGHT identity even for RTL content.
       expectPhysicalRecorderOrder(submit, center, discard);
