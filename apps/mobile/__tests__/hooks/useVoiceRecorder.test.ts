@@ -747,10 +747,10 @@ describe("useVoiceRecorder", () => {
   });
 
   // =========================================================================
-  // Auto-stop at 60 seconds (FR-004)
+  // Active-capture cap at 30 seconds (FR-045)
   // =========================================================================
-  describe("auto-stop at 60 seconds", () => {
-    it("should auto-stop recording when elapsed time reaches 60s", async () => {
+  describe("active-capture cap at 30 seconds", () => {
+    it("should finalize recording when active time reaches 30s", async () => {
       mockRequestPermissions.mockResolvedValueOnce({ granted: true });
       const { result } = renderHook(() => useVoiceRecorder());
 
@@ -758,10 +758,10 @@ describe("useVoiceRecorder", () => {
       await startRecordingWithFlush(result);
       expect(unwrap(result).status).toBe("recording");
 
-      // 2. Advance past the 60s limit; the hook's 100ms interval
-      //    will accumulate durationMs which triggers the auto-stop useEffect
+      // 2. Advance past the 30s active cap; the one-shot cap deadline
+      //    finalizes the capture exactly once and retains the URI
       actSync(() => {
-        jest.advanceTimersByTime(60_000);
+        jest.advanceTimersByTime(30_000);
       });
 
       // 3. Flush microtasks so the auto-stop async IIFE

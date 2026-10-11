@@ -14,7 +14,6 @@ import {
   mockStop,
   mockPrepareToRecordAsync,
   mockRelease,
-  mockRequestPermissions,
   mockGetPermissions,
   mockSetAudioModeAsync,
   mockDeleteAsync,
@@ -34,16 +33,25 @@ const RETAINED_URI = "file:///tmp/recording.m4a";
 interface Deferred<T> {
   readonly promise: Promise<T>;
   readonly resolve: (value: T) => void;
+  readonly reject: (error: Error) => void;
 }
 
 function deferred<T>(): Deferred<T> {
   let resolvePromise: (value: T) => void = () => {
     throw new Error("Deferred promise was not initialized");
   };
-  const promise = new Promise<T>((resolve) => {
+  let rejectPromise: (error: Error) => void = () => {
+    throw new Error("Deferred promise was not initialized");
+  };
+  const promise = new Promise<T>((resolve, reject) => {
     resolvePromise = resolve;
+    rejectPromise = reject;
   });
-  return { promise, resolve: (value: T): void => resolvePromise(value) };
+  return {
+    promise,
+    resolve: (value: T): void => resolvePromise(value),
+    reject: (error: Error): void => rejectPromise(error),
+  };
 }
 
 /** Fake clock advances inside real RNTL act, then flushes recorder effects. */
@@ -382,6 +390,9 @@ describe("useVoiceRecorder R2 active-duration cap", () => {
       idempotent: true,
     });
     expect(mockRelease).toHaveBeenCalledTimes(1);
+    actSync((): void => {
+      jest.advanceTimersByTime(0);
+    });
     expect(jest.getTimerCount()).toBe(0);
   });
 
@@ -448,5 +459,201 @@ describe("useVoiceRecorder R2 active-duration cap", () => {
     await advanceActiveClock(1_000);
     expect(unwrap(result).status).toBe("recording");
     expect(mockStop).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns the in-flight cap result when Submit stops during finalization", async (): Promise<void> => {
+    const stopped = deferred<void>();
+    mockStop.mockImplementationOnce((): Promise<void> => stopped.promise);
+    const { result } = renderHook(() => useVoiceRecorder());
+    await approachCap(result);
+    await advanceActiveClock(100);
+    expect(mockStop).toHaveBeenCalledTimes(1);
+    expect(unwrap(result).audioUri).toBeNull();
+
+    const submission = {
+      settled: false,
+      value: null as { uri: string; durationMs: number } | null,
+    };
+    actSync((): void => {
+      void unwrap(result)
+        .stop()
+        .then((value): void => {
+          submission.value = value;
+          submission.settled = true;
+        });
+    });
+    await advanceActiveClock(100);
+    expect(submission.settled).toBe(false);
+    expect(mockStop).toHaveBeenCalledTimes(1);
+
+    await actAsync(async (): Promise<void> => {
+      stopped.resolve(undefined);
+      await stopped.promise;
+      for (let index = 0; index < 20 && !submission.settled; index += 1) {
+        await Promise.resolve();
+      }
+    });
+    expect(submission.settled).toBe(true);
+    expect(mockStop).toHaveBeenCalledTimes(1);
+    expect(submission.value).not.toBeNull();
+    expect(submission.value?.uri).toBe(RETAINED_URI);
+    expect(submission.value?.durationMs).toBe(ACTIVE_CAP_MS);
+    expect(unwrap(result).status).toBe("completed");
+    expect(unwrap(result).audioUri).toBe(RETAINED_URI);
+  });
+
+  it("deletes retained cap audio when reset runs after finalization", async (): Promise<void> => {
+    const { result } = renderHook(() => useVoiceRecorder());
+    await approachCap(result);
+    await advanceActiveClock(100);
+    const stopCallsAtCap = mockStop.mock.calls.length;
+    expect(stopCallsAtCap).toBe(1);
+    expect(unwrap(result).audioUri).toBe(RETAINED_URI);
+    expect(unwrap(result).status).toBe("completed");
+
+    await actAsync(async (): Promise<void> => {
+      await unwrap(result).reset();
+    });
+    expect(mockStop).toHaveBeenCalledTimes(stopCallsAtCap);
+    expect(mockDeleteAsync).toHaveBeenCalledTimes(1);
+    expect(mockDeleteAsync).toHaveBeenCalledWith(RETAINED_URI, {
+      idempotent: true,
+    });
+    expect(mockRelease).toHaveBeenCalledTimes(1);
+    expect(unwrap(result).status).toBe("idle");
+    expect(unwrap(result).audioUri).toBeNull();
+    expect(unwrap(result).durationMs).toBe(0);
+
+    await advanceActiveClock(5_000);
+    expect(unwrap(result).status).toBe("idle");
+    expect(unwrap(result).audioUri).toBeNull();
+    expect(mockStop).toHaveBeenCalledTimes(stopCallsAtCap);
+    expect(mockDeleteAsync).toHaveBeenCalledTimes(1);
+  });
+
+  it("suppresses a discarded session completion from its pending cap stop", async (): Promise<void> => {
+    const stopped = deferred<void>();
+    mockStop.mockImplementationOnce((): Promise<void> => stopped.promise);
+    const cleanupGate = deferred<void>();
+    mockGetInfoAsync.mockImplementationOnce(
+      (): Promise<{ exists: boolean }> =>
+        cleanupGate.promise.then((): { exists: boolean } => ({ exists: true }))
+    );
+    const { result } = renderHook(() => useVoiceRecorder());
+    await approachCap(result);
+    await advanceActiveClock(100);
+    expect(mockStop).toHaveBeenCalledTimes(1);
+    expect(unwrap(result).audioUri).toBeNull();
+
+    let discarding: Promise<void> = Promise.resolve();
+    actSync((): void => {
+      discarding = unwrap(result).discard();
+    });
+    await advanceActiveClock(100);
+    expect(mockDeleteAsync).not.toHaveBeenCalled();
+
+    await actAsync(async (): Promise<void> => {
+      stopped.resolve(undefined);
+      await stopped.promise;
+      for (let index = 0; index < 8; index += 1) {
+        await Promise.resolve();
+      }
+    });
+    expect(unwrap(result).audioUri).toBeNull();
+    expect(unwrap(result).status).not.toBe("completed");
+
+    await actAsync(async (): Promise<void> => {
+      cleanupGate.resolve(undefined);
+      await discarding;
+    });
+    expect(mockStop).toHaveBeenCalledTimes(1);
+    expect(mockDeleteAsync).toHaveBeenCalledWith(RETAINED_URI, {
+      idempotent: true,
+    });
+    expect(mockRelease).toHaveBeenCalledTimes(1);
+    expect(unwrap(result).status).toBe("idle");
+    expect(unwrap(result).audioUri).toBeNull();
+    expect(unwrap(result).durationMs).toBe(0);
+  });
+  it("abandons a warmup Stop before native cleanup when Discard supersedes it", async (): Promise<void> => {
+    const stopped = deferred<void>();
+    mockStop.mockReturnValueOnce(stopped.promise);
+    const { result } = renderHook(() => useVoiceRecorder());
+    let starting: Promise<void> = Promise.resolve();
+    actSync((): void => {
+      starting = unwrap(result).start();
+    });
+    await advanceActiveClock(0);
+    expect(mockRecord).toHaveBeenCalledTimes(1);
+
+    const submission = { settled: false };
+    let stopping: Promise<{ uri: string; durationMs: number } | null> =
+      Promise.resolve(null);
+    let discarding: Promise<void> = Promise.resolve();
+    actSync((): void => {
+      stopping = unwrap(result).stop();
+      void stopping.then((): void => {
+        submission.settled = true;
+      });
+      discarding = unwrap(result).discard();
+    });
+    await advanceActiveClock(NATIVE_STABILIZATION_DELAY_MS);
+    expect(submission.settled).toBe(true);
+    expect(unwrap(result).status).not.toBe("completed");
+    expect(mockStop).toHaveBeenCalledTimes(1);
+
+    await actAsync(async (): Promise<void> => {
+      stopped.resolve(undefined);
+      await starting;
+      expect(await stopping).toBeNull();
+      await discarding;
+    });
+    expect(unwrap(result).status).toBe("idle");
+    expect(mockRelease).toHaveBeenCalledTimes(1);
+  });
+
+  it("leaves superseded failed Start resources for the pending cleanup", async (): Promise<void> => {
+    const prepare = deferred<void>();
+    const cleanupGate = deferred<void>();
+    mockPrepareToRecordAsync.mockReturnValueOnce(prepare.promise);
+    mockGetInfoAsync.mockImplementationOnce(
+      async (): Promise<{ exists: boolean }> => {
+        await cleanupGate.promise;
+        return { exists: true };
+      }
+    );
+    const { result } = renderHook(() => useVoiceRecorder());
+    const failure = new Error("Superseded preparation failed");
+    let starting: Promise<void> = Promise.resolve();
+    let failureResult: Promise<unknown> = Promise.resolve();
+    actSync((): void => {
+      starting = unwrap(result).start();
+      failureResult = starting.catch((error: unknown): unknown => error);
+    });
+    await advanceActiveClock(0);
+    expect(mockPrepareToRecordAsync).toHaveBeenCalledTimes(1);
+    let discarding: Promise<void> = Promise.resolve();
+    actSync((): void => {
+      discarding = unwrap(result).discard();
+    });
+    await actAsync(async (): Promise<void> => {
+      prepare.reject(failure);
+      expect(await failureResult).toBe(failure);
+      for (let index = 0; index < 8; index += 1) {
+        await Promise.resolve();
+      }
+    });
+    expect(mockGetInfoAsync).toHaveBeenCalledWith(RETAINED_URI);
+    expect(mockRelease).not.toHaveBeenCalled();
+    expect(mockRecord).not.toHaveBeenCalled();
+
+    await actAsync(async (): Promise<void> => {
+      cleanupGate.resolve(undefined);
+      await discarding;
+    });
+    expect(mockDeleteAsync).toHaveBeenCalledTimes(1);
+    expect(mockRelease).toHaveBeenCalledTimes(1);
+    expect(unwrap(result).status).toBe("idle");
+    expect(unwrap(result).audioUri).toBeNull();
   });
 });
