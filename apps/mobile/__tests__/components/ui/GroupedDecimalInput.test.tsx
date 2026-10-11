@@ -402,8 +402,8 @@ describe("T007 grouped numeric opt-in and raw display", () => {
 
     const input = screen.getByTestId("legacy-weight-shape");
     expect(input).toHaveDisplayValue("1,250.755");
-    expect(input.props.className as string).toContain("rounded-lg");
-    expect(input.props.className as string).toContain("min-h-11");
+    expect(getTestInstanceProps(input).className as string).toContain("rounded-lg");
+    expect(getTestInstanceProps(input).className as string).toContain("min-h-11");
   });
 
   it("uses the existing default field surface only when explicitly opted in", () => {
@@ -419,8 +419,8 @@ describe("T007 grouped numeric opt-in and raw display", () => {
 
     const input = screen.getByTestId("default-grouped-input");
     expect(input).toHaveDisplayValue("12,345.678");
-    expect(input.props.className as string).toContain("rounded-2xl");
-    expect(input.props.className as string).toContain("p-4");
+    expect(getTestInstanceProps(input).className as string).toContain("rounded-2xl");
+    expect(getTestInstanceProps(input).className as string).toContain("p-4");
   });
 
   it("shows invalid raw text verbatim after a controlled rerender and groups valid correction", () => {
@@ -623,7 +623,7 @@ describe("T007 grouped numeric opt-in and raw display", () => {
     expect(input).toHaveProp("inputMode", "none");
     expect(input).toHaveProp("showSoftInputOnFocus", false);
     expect(input).toHaveProp("keyboardType", "numbers-and-punctuation");
-    expect(input.props.className as string).toContain("text-lg");
+    expect(getTestInstanceProps(input).className as string).toContain("text-lg");
     expect(input).toHaveStyle({ fontFamily: "Inter_500Medium" });
     expect(screen.getByTestId("signed-unit")).toBeOnTheScreen();
     expect(inputRef.current).not.toBeNull();
