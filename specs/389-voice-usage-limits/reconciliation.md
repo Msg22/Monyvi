@@ -304,59 +304,81 @@ of all active/current accounting. Protection lasts while identity is retained;
 reuse as new begins only after actual deletion.
 
 
-## Voice controls R2 — owner-approved image, DRAFT binding reconciliation (11 October 2026)
+## Voice controls R2 — approved image, exact-binding DRAFT (11 October 2026)
 
-**Published image:** `mockups/voice-controls-r2-green-gray-proposal.png` at
-`b00b7ae07a7f75008f21ff2c9f8680f735153901`, Git blob
-`caceb8d1cade9e4e9c574e95fc0e603a39e766de`.
+**Published image:** `mockups/voice-controls-r2-green-gray-proposal.png`,
+image-only commit `b00b7ae07a7f75008f21ff2c9f8680f735153901`,
+Git blob `caceb8d1cade9e4e9c574e95fc0e603a39e766de`.
+Local executor verified exact **SHA-256
+`3c1d098090cfac539c834634f2dfb1db29dc75b8afc9f479d61d17af09680281`**,
+**1832 × 858 pixels**, **1470108 bytes**, matching that Git blob.
 
-**Owner evidence:** the owner explicitly approved the revised PNG as “latest
-mockups approved”. This does **not** create an approved sidecar/fingerprint
-tuple. The new binding metadata remains DRAFT until root reviews the exact
-facts and computes/verifies the official image/metadata/combined revisions.
+**Approval provenance:** owner explicitly approved the **latest
+green/gray/red image/concept**. Root faithfully reviewed and accepts the
+scoped green/gray/red control order, no helper sentence, slash clock, local
+30-second retention and Arabic Submit **إرسال** and completed title
+**التسجيل مكتمل**. The corrected R2 sidecar carries all **15 official
+Binding Facts** keys and computed DRAFT metadata/combined identifiers:
+`sha256:78105dbc1254cb508429f417cf5e26c71324364c7e4e74447f7249735f282a0e`
+and
+`sha256:d06cfdf4f6bbc8c3bd7f12b5129115206a31c7f3c1dfb4a266977456252caa14`.
+**Root must independently verify those exact bytes/digests and record
+delegated exact-revision acceptance** before changing DRAFT fields to
+APPROVED; do not claim that the owner was separately shown either SHA.
 
-### Scoped precedence
+### Narrow R2 precedence
 
-If/when the R2 sidecar is approved, it supersedes R1 only for:
+R2 overrides owner-approved R1 only for:
 
-1. recording/paused control label, color and fixed physical positions;
-2. elapsed/max timer and local 30-second active-capture cap;
-3. removal of ordinary static filled mic halo backgrounds in
-   idle/Starting/recording/paused while preserving recording waves.
+1. physical Submit GREEN **LEFT**, Pause/Resume GRAY **CENTER** and
+   Discard RED **RIGHT** in recording/paused, all languages;
+2. the explicit **third panel Recording complete / التسجيل مكتمل**,
+   `00:30 / 00:30`, enabled LEFT Submit, **disabled gray CENTER Pause**
+   (no Resume), enabled RIGHT Discard, no helper sentence or active waves;
+3. active elapsed/max timer and local **30,000 ms** cap, with paused wall
+   time excluded; local auto-stop retains finalized audio until **explicit
+   Submit/Discard** and starts no provider/allowance/review by itself;
+4. removing ordinary static filled mic halos from idle/Starting/
+   recording/paused while retaining R1 active ripples and original
+   daily-limit/unavailable disabled artwork.
 
-Everything else remains under R1 and the five original repaired bindings,
-including Manual, shared shell/tabs, allowance, daily/burst/unavailable,
-permission/AI consent, request identity, same-key retry, quota accounting,
-review flow, 104 dp mic geometry and owner-only visual/a11y evidence.
+Prior R1 and original five image, Binding Facts and approval revisions
+remain byte-for-byte history; current Manual, header/tabs, permission/AI
+consent, authoritative allowance, provider choice, same-key retry and
+35-day replay accounting are unchanged. Issue #384 remains deferred.
+Issue #391 separately owns server authoritative 30 s duration and
+empty/speechless audio research. The 1832×858 composite is image pixels,
+**not** an app viewport; retain normalized 390×844 dp, 104 dp mic and
+48 dp minimum targets.
 
-### Concrete conflicts reconciled
+### Exact source defects and bounded latency correction
 
-| Conflict | Existing source/planning at `0e7ee55…` | R2 disposition |
-| --- | --- | --- |
-| Recording duration | `useVoiceRecorder.ts` local cap is 60 s; R1 manual plan references 60 s | Owner-approved local cap is 30 s active capture; paused time excluded |
-| Stop vs Submit | Recording UI exposes `voice_action_stop` and submits from that action | Rename the explicit submission action to Submit; cap auto-stop does not submit |
-| Paused control order | Existing paused row puts Resume before Stop | Physical positions stay Submit left / Resume center / Discard right |
-| Static halos | R1 records 140/172 static halos in ordinary states | R2 removes ordinary filled halo backgrounds for idle/Starting/recording/paused; recording waves remain |
-| Timer | Current presentation formats elapsed only | R2 shows `elapsed / 00:30`; owner removed helper sentence |
-| Server duration | No authoritative 30 s server contract is evidenced | Do not claim one; issue #391 owns research/validation |
-| Faster start | Permission/availability work has possible redundant paths; no timings measured | Separate latency addendum owns optimization; preserve all gates and true native-start readiness |
+| Source-proven observation | R2 minimum-safe disposition |
+| --- | --- |
+| Existing recorder cap 60 s; paused timing excludes wall time | T069 Red and T070 30 s active cap, idempotent local finalization and retained audio; leave native 300 ms post-record stabilization |
+| Existing recording Stop/paused order and elapsed-only formatter | T069/071 fixed three-panel Submit/Pause-or-Resume/Discard and elapsed/max clock with enabled/disabled semantics |
+| Existing ordinary static filled mic halos | T069/071 remove only those ordinary backgrounds, preserve R1 waves and disabled daily/unavailable |
+| Route `add-transaction.tsx:288` awaits microphone permission and flow `useVoiceTransactionFlow.ts:376` checks again | T069 typed permission/actor/revocation Red, T070 one fresh just-in-time native check + inline recovery; no early OS permission request |
+| Direct Voice route mounts hidden 861-line Manual form immediately | T069 proves no initial Manual mount and draft retention after first Manual; T071 defers only first mount then keeps mounted across safe switches, no internal Manual refactor |
+| Availability focus and start refresh may overlap/cancel | Preserve authoritative preattempt gate and present cancellation; do not change HTTP inflight behavior without timing evidence |
+| Owner ~5 s route and ≥3 s Starting observations | Runtime stage attribution NOT measured; no promised speedup or fabricated benchmark |
 
-### Product/business invariants retained
+### Ordered gates (preimplementation analyzer corrected)
 
-- Gemini/provider choice and parsed transaction contract unchanged.
-- Active AI processing consent remains mandatory before provider submission.
-- Authoritative quota/availability and 5/day, 2/min accounting unchanged.
-- Same-key retained-audio retry and 35×24-hour identity protection unchanged.
-- #384 remains outside this repair.
-- Manual/offline financial behavior unchanged.
-- No hosted deployment/schema/sync change.
+**T068, before T069–T071:** root verifies exact image + Binding Facts and
+official revisions, records truthful delegated exact tuple acceptance and
+requires canonical binding verifier PASS. Then run correct-feature
+`.specify/scripts/bash/check-prerequisites.sh --json --require-tasks --include-tasks`
+and **READ-ONLY** `.claude/commands/speckit.analyze.md` on final
+spec/plan/tasks; resolve critical/high findings before any Red or
+implementation. Optional Git hooks must not turn read-only analysis into a
+mutation. The manual semantic detection report
+`checklists/voice-controls-r2-analysis.md` is **not** actual analyzer
+execution.
 
-### Analyzer status
-
-The generated repo-local `.agents/skills/speckit-analyze/SKILL.md` is absent
-from Git at trusted main/source. The canonical command
-`.claude/commands/speckit.analyze.md` is present and was read. This planning
-author performed its semantic-model/detection logic manually and records the
-findings in `checklists/voice-controls-r2-analysis.md`; root owns the actual
-local prerequisite command and read-only analyzer execution on the final
-package.
+**T069:** write and prove meaningful Red; **T070/T071:** only after a
+new explicit pin and lead-approved Red, implement minimal owned changes;
+**T072:** batched Green/type/lint; **T073:** independent **postimplementation
+review** (not the first Speckit gate); **T074:** owner native/device/render,
+responsive/dark/RTL/enlarged-text and separate a11y proof. No device,
+provider, server, Metro or E2E execution by this planning worker.

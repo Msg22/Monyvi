@@ -877,73 +877,122 @@ implementation occurs in this command.
 No constitutional violations require justification.
 
 
-## Voice controls R2 — DRAFT implementation plan (owner image approved; binding metadata pending)
+## Voice controls R2 — DRAFT binding, preimplementation analysis and execution plan
 
-### Source reconciliation at `0e7ee55abf6fb18af37e29e4f2e48ba45604a31e`
+**Source audited:** `0e7ee55abf6fb18af37e29e4f2e48ba45604a31e`. **Owner image approved:** latest green/gray/red R2 PNG, Git blob
+`caceb8d1cade9e4e9c574e95fc0e603a39e766de`; local executor
+verified `sha256:3c1d098090cfac539c834634f2dfb1db29dc75b8afc9f479d61d17af09680281`,
+1832×858 raster pixels, 1470108 bytes. The sidecar now contains all 15
+required official Binding Facts keys and computed *draft* metadata/combined
+revisions; root must verify and record delegated exact-revision acceptance
+before marking approved. Do not invent owner approval of the computed SHA.
 
-- `useVoiceRecorder.ts` currently declares a 60-second local cap and auto-stop.
-  It already accumulates only active recording time because Pause stops the
-  timer and Resume restarts it; R2 changes the approved cap to 30 seconds while
-  preserving the no-auto-submit intent.
-- `VoiceTransactionEntry.tsx` currently labels explicit submission as Stop and
-  changes control order while paused. R2 replaces that presentation with fixed
-  Submit / Pause-or-Resume / Discard physical positions.
-- Current ordinary Voice composition still includes static filled halo circles
-  around the mic; R2 removes those backgrounds from idle/Starting/recording/
-  paused only and retains R1 recording waves.
-- Current timer presentation is elapsed-only. R2 requires
-  `mm:ss / 00:30`.
-- Start latency has concrete source candidates (route-level permission refresh
-  plus flow-level permission refresh, and availability refreshes tied to
-  focus/start), but no native timing was measured. A separate Voice UI
-  read-only latency addendum owns the optimization analysis. This R2 plan does
-  not delete gates or promise a latency number.
-- Issue #391 independently owns empty/speechless-audio and authoritative server
-  duration research. No server/API/migration task is created by this R2 plan.
+### Scoped source conflicts and approved three-panel states
 
-### Intended mobile boundaries after binding approval and accepted Red
+- `useVoiceRecorder.ts` currently caps native active recording at 60 s;
+  R2 requires **30 s active capture**, excluding pause; retain audio on
+  auto-stop but do not automatically submit to Gemini/parse-voice. Keep the
+  existing native **300 ms post-record early-command stabilization**.
+- `VoiceTransactionEntry.tsx` uses Stop and a different paused control
+  order; replace with fixed **Submit LEFT green / Pause or Resume CENTER
+  gray / Discard RIGHT red** while active or paused. Arabic Submit is
+  **إرسال** and physical positions do not RTL-mirror.
+- At auto-cap render the explicit **third panel**:
+  **Recording complete / التسجيل مكتمل**, `00:30 / 00:30`, enabled
+  **Submit GREEN LEFT**, **disabled Pause GRAY CENTER**, enabled
+  **Discard RED RIGHT**. No Resume, active recording waves, helper sentence
+  or automatic provider request. The finalized audio remains until explicit
+  Submit/Discard; one effective stop/submit/cleanup across cap races.
+- R2 ordinary idle/Starting/recording/paused static **filled** mic halos
+  are removed; R1 recording waves, 104 dp circular mic, reduced-motion,
+  existing daily-limit/unavailable disabled artwork and all unaffected
+  original visual bindings remain.
+- `voice-ui/VoicePresentation.ts` formats elapsed-only time; R2 uses
+  readable `mm:ss / 00:30`, capped at `00:30 / 00:30`.
+- Client cap does not prove server enforcement. #391 independently owns
+  authoritative server-duration and empty/speechless audio investigation.
 
-1. **Presentation:** update the existing Voice recording/paused/completed
-   presentation only as required by the approved R2 binding. Reuse current
-   NativeWind tokens, `ActionButton`, responsive helpers, locale fonts and
-   accessibility patterns. Do not change Manual or quota surfaces.
-2. **Recorder lifecycle:** replace the local 60-second constant with one named
-   30-second constant and keep active-time accounting pause-aware. Auto-stop
-   must expose a finalized retained-audio state without calling the submission
-   path.
-3. **Flow orchestration:** keep request-key creation, consent, authoritative
-   availability, retained same-key retry and actor scoping unchanged. Explicit
-   Submit is the only new user-facing label/trigger entering the existing
-   submit path; cap auto-stop never invokes it.
-4. **Race safety:** prove one native stop/finalize under cap vs Submit/Discard,
-   no resume after cap, no late timer/cap callback after cancel/unmount/account
-   switch, and no provider start before explicit Submit.
-5. **Copy/i18n:** EN labels are Submit / Pause / Resume / Discard. Existing AR
-   Pause/Resume/Discard strings remain `إيقاف مؤقت` / `متابعة` / `تجاهل`.
-   Draft binding proposes `إرسال` for Submit and requires root binding review
-   before implementation. Timer remains the owner-specified slash-separated
-   clock form.
-6. **Responsive/RTL:** keep centralized compact/reflow rules. The control row is
-   a stable physical action row: Submit left, Pause/Resume center, Discard right
-   in both locales; Arabic text/labels remain RTL/localized, but action meaning
-   is not mirrored or swapped.
+### Accepted read-only latency diagnosis — smallest safe concrete repair
 
-### TDD and evidence gate
+The earlier audit closed the parent mic navigation callback: it calls
+`router.push` synchronously with `mode=voice` and origin tab, with
+**no awaited mic-handler work**. Startup delay is not attributed to that
+handler. There is no measured 1–2 s savings target.
 
-- Author deterministic unit/integration Red for R2 before changing production.
-- Batch Red/Green at meaningful integration checkpoints; do not churn checks
-  per file.
-- Maestro flows may be authored for controllable journeys, but this remote
-  planning lane runs no E2E/device/emulator.
-- Native audio, OS permission, exact motion, visual comparison, accessibility
-  tree, cold restart and live-provider/server duration behavior remain manual
-  owner evidence unless a deterministic harness is separately proven.
-- Binding implementation stays blocked until root accepts the exact DRAFT R2
-  sidecar/revisions. The owner-approved PNG alone does not approve invented
-  binding facts.
+1. **Remove one redundant permission check, not the permission gate.**
+   The route currently awaits `flowRefreshPermission()`, and the Voice
+   flow separately awaits `recorder.refreshPermission()` shortly before
+   native prepare. Design a **typed** permission/readiness result from the
+   flow (granted, needs inline rationale, blocked/revoked, unknown, stale
+   actor/cancelled); route renders approved inline recovery from that result.
+   Perform **one fresh just-in-time native verification for the current
+   authenticated actor** before preparation. Only an explicit
+   `Allow microphone` action may ask the OS. Preserve fresh LOCAL
+   `getAiProcessingConsentStatus()` lookup, generation/actor invalidation,
+   authoritative preattempt availability, unknown/granted/revoked
+   distinctions and no Listening until native `record()` succeeds.
+   T069 authors both positive and negative tests; T070 implements narrowly
+   across route/flow/permission facade.
+2. **Defer the first hidden Manual component mount on Voice-first
+   navigation.** `add-transaction.tsx` currently mounts its
+   `ManualTransactionEntry` even with Voice selected, initializing
+   account/category/market/currency/budget/form hooks and modals. On direct
+   Voice entry skip the FIRST mount; on Manual selection mount immediately,
+   then **latch mounted=true for this route instance** across subsequent
+   safe switches, preserving partially entered Manual drafts, Save, transfer,
+   recurring, calculator blur and accessibility-hidden mode semantics.
+   Initial Manual route remains unchanged. This improves the amount of
+   startup work in principle but no milliseconds are measured. T069 authors
+   route/draft positive controls; T071 implements the narrow route mount
+   condition, NOT a Manual internal, financial or dynamic-import refactor.
+3. **No speculative network policy edit.** `useVoiceAiAvailability`
+   refreshes on focus/app active and a start can supersede an in-flight
+   refresh; `voice-ai-availability-service` forwards AbortSignal to its
+   authenticated wrapper. Retain the current authoritative preattempt
+   quota gate, actor scoping and existing cancellation semantics.
+   In-flight HTTP deduplication/transport refactoring needs measurements
+   and separate approval, not this R2 work.
 
-### No-scope boundaries
+### Mandatory ordered delivery gates — do not move analysis after code
 
-No SQL, migration, OpenAPI, hosted provider, quota-accounting, #384, Manual,
-financial or subscription changes. No claim that client duration metadata
-authoritatively prevents >30-second server input.
+1. **T068 BEFORE T069–T071:** root confirms image and exact corrected
+   Binding Facts, verifies computed official metadata/combined revisions,
+   records truthful delegated lead acceptance of those exact hashes
+   (without claiming the owner saw them) and runs
+   `scripts/verify-mockup-binding.js` against the approved R2 sidecar.
+   **Then** run the correct-feature
+   `.specify/scripts/bash/check-prerequisites.sh --json --require-tasks --include-tasks`
+   followed by canonical **READ-ONLY** `.claude/commands/speckit.analyze.md`
+   over final `spec.md`/`plan.md`/`tasks.md`. Resolve blocking
+   inconsistencies and record truthful results. This is NOT T073.
+2. **T069:** write deterministic existing-boundary failing unit/integration
+   tests, covering 3 panels, disabled cap center, timer/pause, cap/Submit/
+   Discard/unmount/account races, saved URI, no automatic provider work,
+   ordinary halos and daily/unavailable visual positives, and **one
+   just-in-time permission call** plus **Voice-first deferred Manual initial
+   mount with durable draft after first Manual use**. Native-only/E2E journeys
+   stay manual unless a deterministic harness is proven. Setup/import
+   failures are not meaningful Red.
+3. **T070/T071 only after root accepts Red and pins an exact new source
+   revision:** T070 owns recorder/flow/route typed permission and 30 s
+   lifecycle; T071 owns action/timer/halo UI and narrow first Manual mount
+   gating. Preserve source-ownership separation and external #391 lane.
+4. **T072:** batched focused/combined Green, TS, lint, i18n, hooks,
+   Manual/R1 regression positive controls. **T073:** independent
+   POSTIMPLEMENTATION TypeScript/actor/cancellation/behavior/style/binding/
+   QA/security-if-affected review; do not treat this as the first Speckit
+   analysis. **T074:** owner native/device/rendered/RTL/dark/large-text and
+   separate accessibility evidence NOT RUN.
+
+### Safe observability for owner measurements only
+
+Propose non-identifying monotonic stage durations:
+`bottomMic.press → router.push → addTransaction.firstFrame`;
+`voice.tap → consent.localFresh → authoritativeAvailability → permission.singleFresh → audioMode → prepareToRecord → record.invoked → recording.firstFrame`.
+Record stage names/durations and a transient random trace correlation only;
+never user IDs, audio, transcripts, transaction/financial data or credentials.
+Source hypotheses cannot be presented as measured causes or guaranteed savings.
+
+No new server/API/SQL/hosted, provider, financial, Manual schema, E2E/device
+execution, unapproved responsive treatment or old image/sidecar change is
+authorized by this document.

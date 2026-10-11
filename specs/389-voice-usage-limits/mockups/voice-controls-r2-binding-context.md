@@ -1,95 +1,49 @@
-# Voice controls R2 — DRAFT binding context
+# Voice controls R2 — scoped binding context (DRAFT exact revision)
 
 **Feature:** #347 / `389-voice-usage-limits`  
-**Source snapshot audited:** `0e7ee55abf6fb18af37e29e4f2e48ba45604a31e`  
-**Published planning branch:** `codex/issue347-voice-controls-r2`  
-**PNG commit/blob:** `b00b7ae07a7f75008f21ff2c9f8680f735153901` /
-`caceb8d1cade9e4e9c574e95fc0e603a39e766de`  
-**Owner image approval:** “latest mockups approved”  
-**Binding metadata:** DRAFT pending root exact review/fingerprints
+**Source audited:** `0e7ee55abf6fb18af37e29e4f2e48ba45604a31e`  
+**Planning branch:** `codex/issue347-voice-controls-r2`  
+**Approved PNG:** `voice-controls-r2-green-gray-proposal.png`, published in image-only commit `b00b7ae07a7f75008f21ff2c9f8680f735153901`, Git blob `caceb8d1cade9e4e9c574e95fc0e603a39e766de`  
+**Verified image:** `sha256:3c1d098090cfac539c834634f2dfb1db29dc75b8afc9f479d61d17af09680281`; **1832 × 858 pixels**, **1470108 bytes** (local executor verified exact bytes and matching Git blob)  
+**Owner concept approval:** “latest mockups approved” (green/gray/red); root faithful review accepts AR `إرسال` and `التسجيل مكتمل`. The exact corrected sidecar metadata is still **DRAFT** pending root computed-revision verification and delegated acceptance, not new owner SHA approval.
 
-## Precedence
+## Authority and precedence
 
-R2 is a narrow override layered on the owner-approved R1 motion package and the
-five original repaired bindings. Once the R2 sidecar itself is approved, it
-overrides only:
+Use [the R2 sidecar](./voice-controls-r2-green-gray-proposal.binding.md) with its **15 official required Binding Facts keys** and [R2 manifest](./voice-controls-r2-manifest.json). The image has verified bytes; a 1832×858 composite raster is **not** an app logical-dp viewport. Existing owner-approved comparison baseline remains 390×844 logical dp (font scale 1; fixture insets 24 top/34 bottom; actual safe area once), with 16 dp gutters, 12 dp section gaps, 104 dp clipped mic, unboxed Voice section, ≥48 dp interactive targets and centered max 560 dp tablet width. Exact per-panel raster coordinates/easing and material reflow choices not specified by the owner are not inferred.
 
-- recording/paused action label/color/fixed physical positions;
-- elapsed/max timer plus the local 30-second active-capture cap;
-- ordinary static filled mic halos in idle/Starting/recording/paused.
+R2 supersedes R1 **only** for the recording/paused/completed action labels/colors and fixed physical positions, elapsed/max local 30-second active cap including completed-state retention and no helper sentence, and removal of **ordinary static filled** mic halos from idle/Starting/recording/paused. R1 retains recording ripple/wave motion, reduced-motion static substitutes, permission/consent explanation, examples, retry, parsing, localization and cleanup. The five original repair references retain Manual B, daily-limit, unavailable, quota/allowance and all unaffected visuals. No old image/sidecar/manifest/history bytes change here.
 
-R1 remains authoritative for Starting, permission explanation, examples
-dismissal, recording waves, parsing, retry identity, reduced motion and cleanup.
-Original bindings remain authoritative for allowance, daily/burst/unavailable,
-Manual, shell/tabs, quota semantics and unaffected geometry.
+## Explicit three-panel state and action binding
 
-## Source facts that implementation must reconcile
+| R2 approved panel | Physical LEFT | Physical CENTER | Physical RIGHT | Timer and microphone treatment |
+| --- | --- | --- | --- | --- |
+| **Recording** | **Submit**, green/NileGreen; AR **إرسال** | **Pause**, gray/slate; AR **إيقاف مؤقت** | **Discard**, red; AR **تجاهل** | Elapsed / `00:30` (example `00:12 / 00:30`); active R1 outward waves, no static filled halos |
+| **Paused** | **Submit**, same green; AR **إرسال** | **Resume**, gray/slate; AR **متابعة** | **Discard**, same red; AR **تجاهل** | Active elapsed time frozen; no active recording waves, no static filled halos |
+| **Recording complete / التسجيل مكتمل** (third panel) | **Submit**, green and enabled for retained audio | **Pause**, **gray and disabled**; **no Resume** | **Discard**, red and enabled | **`00:30 / 00:30`** exactly; native auto-stop/finalized retained audio, no active waves |
 
-- `hooks/useVoiceRecorder.ts:45-49` currently defines a 60-second maximum.
-  `342-371` auto-stops without auto-submitting. Pause stops the timer and
-  Resume restarts it, so paused time is already excluded by the timer model.
-- `components/add-transaction/VoiceTransactionEntry.tsx:311-353` currently
-  renders Stop/Pause/Discard while recording and Resume/Stop/Discard while
-  paused. R2 changes only the user-facing submit label/order/treatment.
-- The same component currently renders ordinary static halo backgrounds around
-  the mic; R2 removes them from idle/Starting/recording/paused while retaining
-  R1 recording waves and existing daily/unavailable disabled artwork.
-- `voice-ui/VoicePresentation.ts:5-10` formats only elapsed time. R2 requires
-  elapsed/max.
-- `app/(private)/add-transaction.tsx:288` refreshes microphone permission
-  before calling `flowStartFlow`; `useVoiceTransactionFlow.ts:376` refreshes
-  it again. `useVoiceAiAvailability` also refreshes on focus/app-active, and
-  the route may refresh before a retry/start. These are latency candidates only;
-  no measured timing or safe-removal conclusion is asserted here.
-- Genuine capture readiness remains native `record()` success. Starting may be
-  immediate, but Listening/timer must not precede capture.
+Physical LEFT/CENTER/RIGHT positions are intentionally stable in English and Arabic; do **not** mirror action identities with `row-reverse`. Preserve normal RTL text, localized font and all R1 Arabic-specific allowance/examples. Every enabled action has ≥48 dp touch area. The central disabled Pause remains visibly neutral gray with disabled accessibility state. The owner removed the ordinary helper sentence: **none appears in any three R2 panels**.
 
-## Control and copy map
+## Recorder and submit lifecycle
 
-| State | LEFT | CENTER | RIGHT |
-| --- | --- | --- | --- |
-| Recording | Submit — green/NileGreen | Pause — gray/slate | Discard — red |
-| Paused | Submit — green/NileGreen | Resume — gray/slate | Discard — red |
+- The local cap is **30,000 ms active recorded audio**, excluding paused time; native capture begins only after successful `record()` invocation and the real recording timer starts then. Keep the existing **300 ms native stabilization** after record for early pause/stop safety; it is **not** a separate 300 ms requirement before showing Listening.
+- At cap, automatically stop/finalize **locally**, clamp the displayed clock to `00:30 / 00:30`, retain the completed audio/URI, show `Recording complete` / `التسجيل مكتمل` and **wait for explicit Submit or Discard**. Do not automatically call Gemini, `parse-voice`, consume a provider allowance or navigate to review.
+- Submit while still recording/paused must safely stop and submit one logical request; Submit after cap uses the existing retained file without a second native stop. Discard always cleans up and submits nothing. Race-safe atomic effective outcomes are mandatory for cap vs Submit/Discard, unmount/back/cancel, user switch and delayed native callbacks. No Resume at/after cap.
+- R2 is **not** a server-side 30-second duration policy. Issue #391 separately owns authoritative server duration and empty/speechless-audio research; this planning branch does not inspect or alter those APIs.
 
-EN: Submit / Pause / Resume / Discard.  
-AR existing: إيقاف مؤقت / متابعة / تجاهل.  
-AR Submit DRAFT proposal: إرسال; requires root binding review.
+## Minimum safe latency correction mapped to T069–T071
 
-The physical positions remain stable in Arabic; locale direction affects text
-and surrounding locale-aware composition, not action identity.
+The accepted read-only source audit found **two concrete avoidable operations**, but measured time contribution is unknown.
 
-## Timer and cap
+1. **Duplicate native permission reads:** `app/(private)/add-transaction.tsx:288` refreshes before `useVoiceTransactionFlow.startFlow` refreshes the same permission again at `hooks/useVoiceTransactionFlow.ts:376`. T069 must author deterministic Red proving a **single fresh just-in-time native verification** per normal attempt and typed actor/generation-scoped permission outcome. T070 owns the minimal route/flow repair: route preserves inline permission explanation, with native OS request **only after explicit Allow microphone**. The flow owns fresh revocation-safe permission validation close to capture. Consent and server-authoritative preattempt quota remain; no guessed cache TTL, no early OS request and no Listening before real native record.
+2. **Unnecessary initial Manual mount on a direct Voice route:** `add-transaction.tsx:625` mounts the hidden `ManualTransactionEntry` immediately, creating account/category/market/currency/budget subscriptions even when Voice selected. T069 proves lazy **first** Manual mount for Voice-first entry and **kept-mounted once selected** to preserve draft, Save/transfer/recurring and current mode/Back behavior. T071 owns this narrow conditional-first-mount composition change, not a financial/Manual internal rewrite. Default Manual route still mounts immediately. This need not defer eager JS module imports without separate evidence.
 
-- Active-capture maximum: 30,000 ms.
-- Paused duration excluded.
-- Display: `00:12 / 00:30`; capped: `00:30 / 00:30`.
-- No helper sentence.
-- At cap: stop/finalize locally, retain audio, wait for explicit Submit or
-  Discard.
-- Zero automatic Gemini/`parse-voice` invocation, allowance consumption or
-  review navigation at the cap.
-- Cap/Submit/Discard/cancel/unmount/user-switch races require one effective
-  finalize/cleanup outcome and no stale resurrection.
+Other auth/startup/provider/transport hypotheses remain **unmeasured**. Do **not** alter Voice availability focus/start HTTP cancellation or in-flight coordination without stronger native/network evidence. Author timing markers for owner measurements only: bottom mic tap → navigation dispatch → route mount/first frame; Starting → fresh **local** consent → authoritative availability → one permission result → native audio mode/prepare → `record()` → first Recording frame. Log only monotonic duration, stage and transient non-identifying trace correlation; never audio, financial/transcript data, user ID or credentials. **No 1–2 s promise.**
 
-## Visual/responsive map
+## Required ordering and evidence boundary
 
-- Preserve 104 dp mic and existing unboxed Voice area.
-- Remove ordinary filled static halo backgrounds in
-  idle/Starting/recording/paused.
-- Preserve recording waves/ripples inside the existing area.
-- Preserve daily-limit/unavailable artwork.
-- Reuse registered tokens; no hardcoded color.
-- Baseline and owner evidence matrix remains 390×844 plus 320×640 compact,
-  768×1024 tablet, 844×390 landscape, EN/AR, light/dark, font scales 1.35/2,
-  reduced motion and separate a11y proof.
-- Three action targets remain ≥48 dp. Do not shrink text to preserve one row;
-  use existing responsive rules and return any material unbound reflow choice to
-  root/owner.
+1. The root verifies the **exact PNG bytes + computed R2 Binding Facts/combined revision**, accepts the exact sidecar through truthful delegated authority and runs the canonical verifier. Owner approval is of the image/concept, not a claimed owner review of a new hash.
+2. **BEFORE T069–T071 implementation or tests:** root runs `.specify/scripts/bash/check-prerequisites.sh --json --require-tasks --include-tasks` with the correct feature selection, then **read-only `.claude/commands/speckit.analyze.md`** over final spec/plan/tasks. Resolve critical/high findings and log outcome. This is preimplementation, **not** T073 after code.
+3. Only on a new explicit lead pin and accepted meaningful Red may source implementation start. T073 is independent **postimplementation** TypeScript → behavior/actor/cancellation → style/binding → QA/security-if-touched review; T072 owns Green/type/lint checks.
+4. Device/native/render/accessibility evidence remains owner-owned and **NOT RUN**. Compare actual owner image against 390×844 and 320×640, tablet 768×1024, landscape 844×390, light/dark, EN/AR, font scales 1.35/2 and reduced motion. The image fingerprint or unit Green does not prove visual or native timing.
 
-## Server and adjacent-lane boundaries
-
-The local 30-second cap is approved product behavior. No authoritative server
-duration enforcement is claimed. Issue #391 separately owns server-duration and
-empty/speechless-audio research. The separate Voice UI lane owns a latency
-addendum; this package records source candidates but does not duplicate that
-analysis or promise a timing target.
+No additional product approval gate is created by this index. No SQL, provider, hosted, other workers' branches or R1/original images are changed.

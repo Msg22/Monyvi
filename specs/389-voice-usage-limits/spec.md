@@ -651,70 +651,95 @@ parsing contract or provider-specific implementation.
 - Exact paid subscription policies are intentionally deferred.
 
 
-## Session 2026-10-11 — owner-approved Voice controls R2
+## Session 2026-10-11 — Voice controls R2, approved image / DRAFT binding revision
 
-The owner explicitly approved the revised Voice controls PNG
+The owner approved the latest green/gray/red PNG
 `mockups/voice-controls-r2-green-gray-proposal.png` (“latest mockups
-approved”). The image is published on `codex/issue347-voice-controls-r2` at
+approved”), published in image-only commit
 `b00b7ae07a7f75008f21ff2c9f8680f735153901`, Git blob
-`caceb8d1cade9e4e9c574e95fc0e603a39e766de`. Binding metadata remains DRAFT
-until root reviews the exact sidecar and records its verified fingerprint tuple.
+`caceb8d1cade9e4e9c574e95fc0e603a39e766de`. The root local
+executor verified **sha256:3c1d098090cfac539c834634f2dfb1db29dc75b8afc9f479d61d17af09680281**,
+1832×858 **raster pixels** and 1470108 bytes; this is a multi-panel
+composite, not the replacement 390×844 logical-dp app viewport. The owner
+concept approval and faithful root review accept the three panels and Arabic
+`إرسال` / `التسجيل مكتمل`. Exact corrected Binding Facts/combined SHA
+verification and truthful delegated root acceptance remain **pending**; no
+individual owner approval of those computed revisions is claimed.
 
-This is a narrow scoped override. The approved R1 motion package and the five
-original repair bindings remain immutable authority outside the exact R2 facts
-below.
+This is a narrow override of the approved R1 motion package. All previously
+approved images/Binding Facts, Manual B, quota/consent/permission,
+35-day replay, Gemini parsing/review and deferred #384 remain authoritative
+outside the explicit new R2 facts.
 
 ### Additive functional requirements
 
-- **FR-043 — Stable Voice controls:** While recording, the action row MUST keep
-  Submit physically left, Pause physically center, and Discard physically right.
-  While paused, Submit MUST remain left, Resume MUST occupy the same center
-  position, and Discard MUST remain right. The row MUST NOT swap when paused.
-  Submit uses the registered NileGreen primary treatment, Pause/Resume a
-  registered neutral/slate secondary treatment, and Discard the registered red
-  destructive treatment. Arabic localizes labels but preserves these physical
-  action positions.
+- **FR-043 — Fixed physical recording/paused/completed controls:** Recording
+  MUST render physical **LEFT Submit (green/NileGreen), CENTER Pause
+  (gray/slate), RIGHT Discard (red)**. Paused MUST retain Submit LEFT and
+  Discard RIGHT, replacing only center Pause with Resume (gray); labels do
+  not reorder. After cap, **Recording complete / التسجيل مكتمل** MUST retain
+  enabled Submit LEFT (green) and Discard RIGHT (red) with **disabled gray Pause
+  CENTER** and **no Resume**. All interactive actions MUST be ≥48 dp; Arabic
+  labels (Submit `إرسال`, Pause `إيقاف مؤقت`, Resume `متابعة`,
+  Discard `تجاهل`) and RTL text MUST NOT reverse fixed physical positions.
 - **FR-044 — Ordinary mic decoration:** Idle, Starting, recording and paused
-  Voice states MUST NOT render the ordinary static filled 140/172 dp halo-circle
-  backgrounds. Recording keeps the approved R1 animated outward waves/ripples.
-  Daily-limit and unavailable disabled-mic artwork remain governed by their
-  prior approved bindings.
-- **FR-045 — 30-second active-capture timer:** Local native recording MUST cap
-  active captured time at 30,000 ms, excluding paused duration. Recording and
-  paused states MUST show elapsed/max clock text such as `00:12 / 00:30`; at
-  the cap it MUST show `00:30 / 00:30`. No ordinary helper sentence is added.
-- **FR-046 — Cap without automatic AI submission:** Reaching the local 30-second
-  cap MUST stop/finalize native capture and retain the audio for the user.
-  Auto-stop MUST NOT automatically call Gemini/`parse-voice`, start provider
-  work, consume a Voice allowance unit, or navigate to review. Explicit Submit
-  continues into the existing guarded submission/parsing path. Submit,
-  auto-stop, Pause/Resume, Discard, cancel, unmount and authenticated-user
-  changes MUST remain idempotent/race-safe.
-- **FR-047 — Honest enforcement/latency boundary:** The 30-second rule is an
-  approved client recording cap, not evidence of authoritative server duration
-  enforcement. Server validation/enforcement and empty/speechless-audio
-  behavior remain research owned by issue #391. R2 requests a faster start path
-  but establishes no measured millisecond target; optimization MUST preserve
-  auth, AI consent, authoritative availability and genuine native-permission
-  gates and MUST NOT show Listening before native capture actually starts.
+  Voice states MUST remove ordinary static filled 140/172 dp halo-circle
+  backgrounds, preserve the existing 104 dp clipped mic and R1 animated
+  outward recording waves (paused/completed no active waves). Daily-limit and
+  unavailable disabled-mic artwork remains unchanged. Reduced-motion
+  indicators must be static and accessible.
+- **FR-045 — 30-second active elapsed/max capture:** Local native recording
+  MUST stop after at most 30,000 ms of **active capture**, excluding paused
+  duration. Recording and paused screens MUST show `mm:ss / 00:30`, such
+  as `00:12 / 00:30`; after cap show **`00:30 / 00:30`**, the localized
+  Recording complete title and no ordinary helper sentence. Timer MUST NOT
+  advance or claim Listening before native `record()` successfully starts.
+- **FR-046 — Retained audio/no cap auto-submit:** At cap, the local recorder
+  MUST stop/finalize **once**, retain audio/URI for explicit Submit or Discard,
+  and MUST NOT automatically invoke Gemini/`parse-voice`, consume an AI
+  provider allowance or navigate. Submit during recording/paused finalizes
+  safely then submits one logical request; after cap it submits the already
+  finalized audio only once. Discard cleans locally. Cap vs Submit/Discard,
+  pause/resume, back/cancel/unmount/account-switch races MUST NOT duplicate
+  native stop/provider calls or resurrect stale state. No Resume at cap.
+- **FR-047 — Honest server and latency boundary:** The 30-second cap is a
+  client recording limit, NOT evidence of authoritative server enforcement;
+  issue #391 independently owns server duration and empty/speechless-audio
+  research. Faster startup is desired but **no measured millisecond target**
+  is approved. Correct the source-proven duplicate microphone permission
+  checks by having **one fresh just-in-time typed actor/generation-safe
+  verification** while preserving the existing inline missing/blocked
+  permission response and OS prompt only after explicit Allow microphone.
+  On direct Voice entry, defer the **first** hidden Manual form mount until
+  Manual is actually selected, then keep it mounted across safe switches to
+  preserve the draft and Save/transfer/recurring behavior. Preserve fresh
+  authenticated **local** AI consent, authoritative preattempt availability,
+  native 300 ms early-command stabilization, cancellation/revocation and no
+  Listening until native `record()` succeeds. Do not change availability
+  in-flight/transport policy on hypotheses or claim duration savings.
 
 ### Additive success criteria
 
-- **SC-019:** Recording and paused controls preserve the fixed physical
-  left/center/right roles, ≥48 dp targets and green/gray/red semantic treatments
-  across EN/AR, light/dark and supported responsive layouts.
-- **SC-020:** Active capture advances `elapsed / 00:30`, Pause freezes elapsed
-  time, Resume continues it, and the native recorder finalizes at 30 seconds
-  without counting paused time.
-- **SC-021:** A 30-second auto-stop leaves retained audio awaiting explicit
-  Submit or Discard and performs zero automatic provider/submission work; races
-  with explicit actions, cancellation, unmount and account changes do not
-  duplicate or resurrect work.
-- **SC-022:** R2 removes ordinary static filled mic halos only in the scoped
-  idle/Starting/recording/paused states, keeps recording waves and prior
-  daily-limit/unavailable artwork, and preserves Manual, quota, consent,
-  request-identity and review contracts.
+- **SC-019:** Exact EN/AR recording, paused and Recording complete physical
+  LEFT/CENTER/RIGHT positions; green/gray/red semantic treatments, disabled
+  completed center, ≥48 dp targets and light/dark/responsive accessibility.
+- **SC-020:** Clock starts after native record, shows `elapsed / 00:30`,
+  freezes for Pause, continues for Resume and clamps to `00:30 / 00:30`
+  when native cap finalizes at 30 seconds of active audio.
+- **SC-021:** Cap retains audio/URI for explicit Submit or Discard, with zero
+  automatic AI/provider call; cap/Submit/Discard/cancel/unmount/account races
+  and resumed-paused behavior stay idempotent and user scoped.
+- **SC-022:** Scoped ordinary halo removal preserves R1 recording waves and
+  original daily-limit/unavailable artwork; original Manual/AI consent/quota
+  and request identity remain. Deterministic regression tests prove one
+  just-in-time microphone permission verification, no revoked-permission
+  bypass, Voice-first lazy initial Manual mount and unchanged Manual-draft
+  retention. No time-savings number is claimed without owner measurements.
 
-The R2 screenshot is not itself evidence of device rendering, native timing,
-server duration enforcement or accessibility completion. Owner device/rendered
-evidence remains a separate gate.
+Before T069–T071 or source edits, the root MUST verify/approve exact R2
+binding revisions with truthful delegated provenance, run correct-feature
+Speckit prerequisites and **read-only `speckit.analyze` on the final
+spec/plan/tasks**, and resolve critical/high discrepancies. T073 is a
+separate **independent postimplementation review**, not a substitute for
+this prerequisite. Device, native timing, visual comparison and
+accessibility proof remain owner-owned/NOT RUN.

@@ -162,33 +162,51 @@ source inspection does not establish visual completion, device readiness or
 merge readiness.
 
 
-## Voice controls R2 — DRAFT scoped override
+## Voice controls R2 — owner-approved image; exact binding DRAFT
 
-The owner-approved R2 image is
-`../mockups/voice-controls-r2-green-gray-proposal.png`. Until its exact
-sidecar/fingerprint tuple is root-approved, this section is planning guidance
-only and does not authorize implementation.
+Read the exact `../mockups/voice-controls-r2-green-gray-proposal.binding.md`
+with its **15 official required Binding Facts**, and
+`../mockups/voice-controls-r2-manifest.json`. Owner approved the
+green/gray/red image (Git blob
+`caceb8d1cade9e4e9c574e95fc0e603a39e766de`); local executor
+verified image `sha256:3c1d098090cfac539c834634f2dfb1db29dc75b8afc9f479d61d17af09680281`,
+1832×858 pixels, 1470108 bytes. Root must still verify the corrected
+computed metadata/combined SHA and record honest delegated acceptance.
+No new owner SHA approval is presumed. Root's faithful design review
+accepts Arabic Submit **إرسال** and Recording complete **التسجيل مكتمل**.
 
-After binding approval, R2 overrides R1 only as follows:
+After exact binding approval, the R2 narrow override is:
 
-| Surface | R2 contract |
+| State/surface | Binding treatment and behavior |
 | --- | --- |
-| Recording controls | Submit physically left, Pause center, Discard right; registered green / gray / red treatments; ≥48 dp targets |
-| Paused controls | Submit remains left, Resume occupies center, Discard remains right; no paused-state swap |
-| RTL/Arabic | Localize copy/font/direction but preserve the physical action positions; do not `row-reverse` semantic meaning |
-| Timer | `elapsed / 00:30` clock form; paused time excluded; cap display `00:30 / 00:30`; no helper sentence |
-| 30 s cap | Auto-stop/finalize local capture and retain audio; zero automatic AI/provider/submission/review navigation until explicit Submit |
-| Ordinary halos | Remove static filled halo backgrounds from idle/Starting/recording/paused; retain R1 recording waves |
-| Daily/unavailable | Existing disabled-mic artwork/composition unchanged |
-| Lifecycle | Cap, Submit, Pause/Resume, Discard, cancel, unmount and account change remain idempotent and actor-safe |
-| Server | No claim of authoritative 30 s enforcement; issue #391 remains separate |
-| Latency | No timing SLA; optimization may remove redundant work only after separate audit and must preserve gates/readiness |
+| **Recording** | **LEFT Submit GREEN** (`إرسال`), **CENTER Pause GRAY** (`إيقاف مؤقت`), **RIGHT Discard RED** (`تجاهل`); real active clock `mm:ss / 00:30`, e.g. `00:12 / 00:30`; existing outward waves continue |
+| **Paused** | LEFT Submit GREEN unchanged, CENTER **Resume GRAY** (`متابعة`), RIGHT Discard RED unchanged; timer freezes, active waves stop |
+| **Recording complete / التسجيل مكتمل** (third panel) | Automatic native **local** stop at 30 seconds of active capture; `00:30 / 00:30`; **enabled Submit GREEN LEFT**, **disabled Pause GRAY CENTER**, **enabled Discard RED RIGHT**; **no Resume, active waves or helper sentence**; finalized audio retained until explicit Submit or Discard |
+| Ordinary idle/Starting/recording/paused mic | Remove only **static filled** 140/172 dp halo backgrounds; retain 104 dp clipped mic and recording waves; reduced-motion static semantics preserved |
+| Daily-limit and unavailable | Existing disabled-mic artwork, EN/AR differences and actions unchanged |
+| RTL/Arabic | Translate labels and text/fonts, but **physical** LEFT/CENTER/RIGHT action identity does **not** row-reverse; controls ≥48 dp |
+| Server/AI | Cap itself performs **no** provider request, Gemini parse, quota consumption or review navigation; explicit Submit uses existing consent, auth, authoritative availability, request identity/retry/review gates. #391 separately owns server duration and empty/speechless audio |
+| Latency-minimum repair | Replace duplicate route/flow native permission reads with **one fresh just-in-time typed actor-safe permission outcome**, preserving inline rationale/blocked recovery and OS prompt only after explicit action; direct Voice entry skips **first** heavy hidden Manual mount, then keeps Manual mounted after first selection to preserve drafts |
+| Untouched | Prior R1 Starting, permission, parsing, examples, replay and motion facts; original five frozen bindings; Manual B/financial, 35-day replay and #384 |
 
-EN controls: **Submit / Pause / Resume / Discard**. Existing Arabic
-Pause/Resume/Discard remain **إيقاف مؤقت / متابعة / تجاهل**. Draft proposed AR
-Submit is **إرسال** and requires binding-metadata acceptance before
-implementation.
+The timer is **elapsed / fixed maximum** rather than a guessed progress
+percentage. At cap, neither Pause nor Resume can restart recording;
+Submitted audio follows the existing single parse/review path. Native
+stop/pause/cap/Submit/Discard/unmount/account changes must be idempotent,
+race-safe and scoped to current authenticated user.
 
-All prior R1 Starting/permission/parsing/dismissal/retry facts, original
-EN/AR/daily/Manual bindings, quota/consent/request identity, responsive breakpoints
-and accessibility evidence gates remain authoritative.
+Preserve the existing 390×844 dp normalized app context, 16 dp gutters,
+12 dp gaps, 104 dp mic, ≥48 dp touch targets, scroll/safe-area once,
+560 dp tablet maximum and responsive/RTL/dark/font1.35/2 behavior.
+The owner removed the ordinary helper sentence; do not invent a replacement.
+
+**Before T069 tests or T070/T071 source:** T068 must finish exact
+binding/root delegated revision approval and canonical verifier,
+then correct-feature prerequisites and **read-only Speckit analysis**.
+T073 remains independent **after implementation** review. Reproduction
+of owner-observed ~5-second navigation and ≥3-second Starting requires
+owner runtime stage measurements; no timed improvement is promised.
+Never skip fresh local AI consent, authoritative preattempt quota,
+native 300 ms early-command stabilization or successful `record()`
+before Listening. Do not modify HTTP in-flight availability policy
+without evidence. Device/native/render/a11y/E2E evidence stays NOT RUN.

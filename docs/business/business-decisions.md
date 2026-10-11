@@ -1008,30 +1008,52 @@ Business rules:
 
 
 
-### Voice recording controls R2 (approved 2026-10-11)
+### Voice recording controls R2 (owner concept approved 2026-10-11)
 
-- The local Voice recorder caps **active captured audio at 30 seconds**. Time
-  spent paused does not consume the 30-second capture budget.
-- Recording/paused UI shows elapsed/max clock text such as
-  `00:12 / 00:30`; the cap reads `00:30 / 00:30`.
-- Reaching 30 seconds automatically stops/finalizes the local recording and
-  retains the audio for user choice. It does **not** automatically send audio to
-  Gemini/`parse-voice`, consume a provider-start allowance, or navigate to
-  review. The user explicitly chooses Submit or Discard.
-- The recording control layout keeps Submit physically left,
-  Pause-or-Resume center and Discard right; pausing does not swap action
-  positions. This stable physical order is preserved in Arabic while labels and
-  text remain localized/RTL.
-- Ordinary idle/Starting/recording/paused static filled mic halos are removed;
-  the approved recording waves remain. Existing daily-limit/unavailable disabled
-  artwork is unchanged.
-- This 30-second rule is a **client recording rule**, not proof of authoritative
-  server duration enforcement. Server duration validation/enforcement and
-  empty/speechless-audio handling remain separately tracked under issue #391.
-- Faster Voice startup is desired, but no duration SLA is approved or measured.
-  Auth, AI processing consent, authoritative availability and genuine native
-  microphone permission remain mandatory; the UI must not claim Listening
-  before native capture starts.
+- The owner approved the latest green/gray/red Voice controls image. Its exact
+  PNG bytes are verified (`sha256:3c1d098090cfac539c834634f2dfb1db29dc75b8afc9f479d61d17af09680281`,
+  1832×858 pixels, 1470108 bytes, Git blob
+  `caceb8d1cade9e4e9c574e95fc0e603a39e766de`). Final **Binding Facts
+  metadata/combined revision acceptance** remains a root verification gate;
+  do not imply the owner personally approved a new SHA.
+- The local Voice recorder caps **active captured audio at 30 seconds**;
+  paused wall time does not consume the capture budget. Recording/paused
+  displays elapsed/max clock text such as `00:12 / 00:30`.
+- Reaching the cap automatically stops/finalizes native recording, retaining
+  the audio for an explicit choice. The **Recording complete /
+  التسجيل مكتمل** state displays `00:30 / 00:30` and keeps physical
+  LEFT Submit (green, enabled), CENTER Pause (gray, **disabled**), RIGHT
+  Discard (red, enabled). It has no Resume, active recording waves or helper
+  sentence. Auto-stop does **not** send to Gemini/`parse-voice`, consume a
+  provider allowance or navigate to review. Only explicit Submit / إرسال
+  enters the existing guarded submission; Discard clears the retained audio.
+- During recording, Submit remains LEFT/green, Pause CENTER/gray and Discard
+  RIGHT/red. During pause, Resume replaces Pause at CENTER, with Submit/Discard
+  unchanged. Those **physical** positions do not mirror in Arabic, although
+  text/fonts remain localized/RTL. Controls meet the existing 48 dp minimum.
+- Remove only ordinary idle/Starting/recording/paused **static filled** mic
+  halo backgrounds; retain R1 recording waves/reduced-motion/cleanup and
+  existing daily-limit/unavailable disabled artwork. Do not change the
+  104 dp mic target or invent a responsive breakpoint.
+- This is a **client** cap, not server duration validation. Issue #391 separately
+  owns authoritative server duration and empty/speechless audio research.
+  Existing Manual draft, AI consent, authenticated actor, fresh server quota,
+  35-day replay identity and #384 deferral remain unchanged.
+- The accepted read-only latency audit identifies two safe-minimum repairs to
+  test before changing source: consolidate duplicate route/flow native
+  microphone permission refreshes into **one fresh just-in-time actor-safe
+  typed result**, retaining inline permission recovery and OS prompting only
+  after explicit user action; and defer the **first** hidden Manual component
+  mount on a Voice-first route, then keep it mounted after Manual selection so
+  drafts persist. Do not remove fresh local AI consent, authoritative
+  preattempt availability, cancellation generations, native 300 ms
+  early-command stabilization or true record-before-Listening readiness.
+  Do not alter availability HTTP in-flight coordination without evidence.
+- Startup is desired to be faster, but **no elapsed-time target or savings**
+  is approved or measured. Owner-local device timing must distinguish
+  navigation/first frame, consent, quota, permission and native prepare/record
+  stages; do not log audio, transcripts, financial content, identifiers or
+  credentials.
 
 ## 7. SMS Import And Live Detection
 

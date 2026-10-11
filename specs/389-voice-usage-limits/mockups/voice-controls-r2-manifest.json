@@ -7,30 +7,34 @@
     {
       "name": "voice-controls-r2-green-gray-proposal.png",
       "gitBlobSha": "caceb8d1cade9e4e9c574e95fc0e603a39e766de",
-      "sha256": null,
-      "width": null,
-      "height": null,
-      "ownerApproval": "latest mockups approved"
+      "sha256": "3c1d098090cfac539c834634f2dfb1db29dc75b8afc9f479d61d17af09680281",
+      "width": 1832,
+      "height": 858,
+      "ownerApproval": "latest mockups approved",
+      "sizeBytes": 1470108
     }
   ],
   "binding": {
     "file": "voice-controls-r2-green-gray-proposal.binding.md",
     "status": "DRAFT",
-    "informationalBindingFactsSha256": "df43f3bf25f7ac747f85497f29373f64875e55cc13cc83ba8f5301f10cb1971c",
-    "bindingMetadataRevision": null,
-    "combinedRevision": null,
-    "approvalEvidence": "Owner approved the revised PNG; exact sidecar/fingerprint tuple awaits root review."
+    "bindingMetadataRevision": "sha256:78105dbc1254cb508429f417cf5e26c71324364c7e4e74447f7249735f282a0e",
+    "combinedRevision": "sha256:d06cfdf4f6bbc8c3bd7f12b5129115206a31c7f3c1dfb4a266977456252caa14",
+    "approvedBindingMetadataRevision": null,
+    "approvedCombinedRevision": null,
+    "approvalEvidence": "Owner approved latest green/gray/red PNG; local executor verified image SHA, 1832x858 pixels, 1470108 bytes and matching Git blob. Root faithful review accepts scoped visual facts/AR labels, but final corrected Binding Facts and exact revision require local verification and delegated root acceptance. No separate owner SHA approval is claimed."
   },
   "precedence": {
     "supersedes": [
-      "recording/paused control labels/colors/fixed physical positions",
-      "elapsed/max timer and local 30-second active-capture cap",
-      "ordinary static filled halos in idle/starting/recording/paused"
+      "recording/paused/completed physical Submit-left, Pause-or-Resume-center and Discard-right controls, semantics and labels",
+      "Recording complete / التسجيل مكتمل after 30-second auto-stop, with 00:30 / 00:30 clock, enabled Submit/Discard and disabled gray Pause",
+      "active elapsed/max timer and local 30-second cap with retained finalized audio awaiting explicit Submit",
+      "ordinary static filled halos in idle/starting/recording/paused; recording waves preserved"
     ],
     "preserves": [
-      "R1 motion/permission/dismissal/retry facts outside those overrides",
-      "all five original repair bindings",
-      "Manual/quota/consent/request identity/provider contracts"
+      "R1 motion/permission/dismissal/retry facts outside narrow overrides",
+      "all five original repair image/binding revisions and prior R1 source",
+      "Manual/AI consent/authoritative quota/permission/request identity/provider contracts",
+      "Android 300 ms native stabilization and owner device/render/a11y evidence"
     ]
   }
 }
