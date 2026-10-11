@@ -27,6 +27,7 @@ const mockRecorderDiscard = jest.fn<Promise<void>, []>();
 const mockRecorderStop = jest.fn();
 const mockAvailabilityRefresh = jest.fn<Promise<VoiceAvailabilitySnapshot>, []>();
 const mockProvider = jest.fn();
+const mockPush = jest.fn();
 const mockUUID = jest.fn<string, []>();
 let mockUserId: string | null = "user-1";
 let mockIsResolvingUser = false;
@@ -63,7 +64,11 @@ jest.mock("expo-crypto", () => ({
   randomUUID: (): string => mockUUID(),
 }));
 jest.mock("expo-router", () => ({
-  router: { push: jest.fn() },
+  router: {
+    push: (...args: readonly unknown[]): void => {
+      mockPush(...args);
+    },
+  },
 }));
 jest.mock("@/hooks/useCurrentUser", () => ({
   useCurrentUser: () => ({
@@ -153,6 +158,24 @@ beforeEach((): void => {
     }
   );
 });
+
+/** Native auto-cap outcome: finalized URI is retained, never parsed by the cap. */
+async function startAndCompleteAtCap(): Promise<ReturnType<typeof renderFlow>> {
+  const flow = renderFlow();
+  await act(async (): Promise<void> => {
+    expect(await flow.result.current.startFlow()).toEqual({ kind: "started" });
+  });
+  expect(flow.result.current.flowStatus).toBe("recording");
+  expect(mockRecorderStart).toHaveBeenCalledTimes(1);
+
+  recorderState.status = "completed";
+  recorderState.durationMs = 30_000;
+  recorderState.isRecording = false;
+  recorderState.audioUri = "file://r2-cap-retained.m4a";
+  flow.rerender(undefined);
+  expect(flow.result.current.flowStatus).toBe("completed");
+  return flow;
+}
 
 describe("R2 typed single just-in-time microphone permission ownership", () => {
   it("starts only after consent and authoritative availability, reading permission once", async (): Promise<void> => {
@@ -410,6 +433,106 @@ describe("R2 typed single just-in-time microphone permission ownership", () => {
     expect(mockRecorderResume).not.toHaveBeenCalled();
     expect(flow.result.current.flowStatus).toBe("idle");
     expect(mockProvider).not.toHaveBeenCalled();
+  });
+
+
+  describe("R218 / FR046 — retained audio at the native 30-second cap", () => {
+    it("stays completed and mode-locked without provider or navigation until Submit", async (): Promise<void> => {
+      const flow = await startAndCompleteAtCap();
+
+      expect(flow.result.current.durationMs).toBe(30_000);
+      expect(flow.result.current.isModeSwitchLocked).toBe(true);
+      expect(mockRecorderStart).toHaveBeenCalledTimes(1);
+      expect(mockRecorderStop).not.toHaveBeenCalled();
+      expect(mockRecorderDiscard).not.toHaveBeenCalled();
+      expect(mockUUID).toHaveBeenCalledTimes(1);
+      expect(mockProvider).not.toHaveBeenCalled();
+      expect(mockPush).not.toHaveBeenCalled();
+
+      await act(async (): Promise<void> => {
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      expect(flow.result.current.flowStatus).toBe("completed");
+      expect(flow.result.current.isModeSwitchLocked).toBe(true);
+      expect(mockRecorderStart).toHaveBeenCalledTimes(1);
+      expect(mockProvider).not.toHaveBeenCalled();
+      expect(mockPush).not.toHaveBeenCalled();
+    });
+
+    it("Submit twice concurrently parses the retained URI and original request key only once", async (): Promise<void> => {
+      const flow = await startAndCompleteAtCap();
+      const pendingParse = deferred<unknown>();
+      mockProvider.mockReturnValueOnce(pendingParse.promise);
+
+      let first: Promise<void> = Promise.resolve();
+      let second: Promise<void> = Promise.resolve();
+      await act(async (): Promise<void> => {
+        first = flow.result.current.submitRecording();
+        second = flow.result.current.submitRecording();
+        for (let index = 0; index < 10; index += 1) {
+          await Promise.resolve();
+        }
+      });
+
+      expect(mockProvider).toHaveBeenCalledTimes(1);
+      expect(mockProvider).toHaveBeenCalledWith(
+        expect.objectContaining({
+          audioUri: "file://r2-cap-retained.m4a",
+          requestKey: "d741e457-4e2d-449d-b7ec-7ce355a00001",
+          callerTimeZone: "Africa/Cairo",
+        })
+      );
+      expect(mockUUID).toHaveBeenCalledTimes(1);
+      expect(mockRecorderStart).toHaveBeenCalledTimes(1);
+      expect(mockRecorderStop).not.toHaveBeenCalled();
+      expect(mockPush).not.toHaveBeenCalled();
+
+      await act(async (): Promise<void> => {
+        pendingParse.resolve({
+          detectedLanguage: "en",
+          originalTranscript: "paid 20",
+          transcript: "paid 20",
+          transactions: [{ amount: 20, currency: "EGP", type: "EXPENSE" }],
+        });
+        await Promise.all([first, second]);
+      });
+
+      expect(mockProvider).toHaveBeenCalledTimes(1);
+      expect(mockPush).toHaveBeenCalledTimes(1);
+      expect(mockRecorderDiscard).toHaveBeenCalledTimes(1);
+      expect(mockRecorderStop).not.toHaveBeenCalled();
+      expect(mockUUID).toHaveBeenCalledTimes(1);
+
+      await act(async (): Promise<void> => {
+        await flow.result.current.submitRecording();
+      });
+      expect(mockProvider).toHaveBeenCalledTimes(1);
+      expect(mockPush).toHaveBeenCalledTimes(1);
+    });
+
+    it("Discard after the cap clears retained audio without provider or navigation", async (): Promise<void> => {
+      const flow = await startAndCompleteAtCap();
+      expect(mockProvider).not.toHaveBeenCalled();
+      expect(mockPush).not.toHaveBeenCalled();
+
+      await act(async (): Promise<void> => {
+        await flow.result.current.discardRecording();
+      });
+      expect(flow.result.current.flowStatus).toBe("idle");
+      expect(flow.result.current.isModeSwitchLocked).toBe(false);
+      expect(mockRecorderDiscard).toHaveBeenCalledTimes(1);
+      expect(mockRecorderStop).not.toHaveBeenCalled();
+
+      await act(async (): Promise<void> => {
+        await flow.result.current.submitRecording();
+      });
+      expect(mockProvider).not.toHaveBeenCalled();
+      expect(mockPush).not.toHaveBeenCalled();
+      expect(mockUUID).toHaveBeenCalledTimes(1);
+      expect(mockRecorderStart).toHaveBeenCalledTimes(1);
+    });
   });
 
 });

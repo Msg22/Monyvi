@@ -227,14 +227,18 @@ describe("useVoiceTransactionFlow", () => {
     });
     expect(result.current.flowStatus).toBe("paused");
     mockRecorderResume.mockReturnValueOnce(false);
-    act((): void => {
+    await act(async (): Promise<void> => {
       result.current.resumeRecording();
+      await Promise.resolve();
     });
+    expect(mockRecorderResume).toHaveBeenCalledTimes(1);
     expect(result.current.flowStatus).toBe("paused");
     expect(mockRecorderDiscard).not.toHaveBeenCalled();
-    act((): void => {
+    await act(async (): Promise<void> => {
       result.current.resumeRecording();
+      await Promise.resolve();
     });
+    expect(mockRecorderResume).toHaveBeenCalledTimes(2);
     expect(result.current.flowStatus).toBe("recording");
   });
 
@@ -271,7 +275,7 @@ describe("useVoiceTransactionFlow", () => {
       if (stage === "native-start")
         mockRecorderStart.mockReturnValueOnce(capture.promise);
       const { result } = renderVoiceFlow(ensureConsent);
-      let pending: Promise<void> | undefined;
+      let pending: ReturnType<typeof result.current.startFlow> | undefined;
       await act(async (): Promise<void> => {
         pending = result.current.startFlow();
         for (let turn = 0; turn < 5; turn++) await Promise.resolve();
@@ -303,7 +307,7 @@ describe("useVoiceTransactionFlow", () => {
           ? (): Promise<boolean> => consent.promise
           : undefined
       );
-      let pending: Promise<void> | undefined;
+      let pending: ReturnType<typeof result.current.startFlow> | undefined;
       await act(async (): Promise<void> => {
         pending = result.current.startFlow();
         for (let turn = 0; turn < 5; turn++) await Promise.resolve();
@@ -324,7 +328,7 @@ describe("useVoiceTransactionFlow", () => {
     const availability = createDeferred<VoiceAvailabilitySnapshot>();
     mockRefresh.mockReturnValueOnce(availability.promise);
     const { result, rerender } = renderVoiceFlow();
-    let pending: Promise<void> | undefined;
+    let pending: ReturnType<typeof result.current.startFlow> | undefined;
     await act(async (): Promise<void> => {
       pending = result.current.startFlow();
       await Promise.resolve();
@@ -364,24 +368,41 @@ describe("useVoiceTransactionFlow", () => {
 
   it("does not start recording from retry when microphone permission is still denied", async (): Promise<void> => {
     const { result } = renderVoiceFlow();
+    let permissionOutcome: Awaited<
+      ReturnType<typeof result.current.startFlow>
+    > | undefined;
 
-    await act(async () => {
-      await result.current.startFlow();
+    await act(async (): Promise<void> => {
+      permissionOutcome = await result.current.startFlow();
     });
 
-    expect(result.current.flowStatus).toBe("error");
-    expect(result.current.errorMessage).toContain("Microphone permission");
-    expect(result.current.isMicrophonePermissionError).toBe(true);
+    // The flow reports a fresh denied state for the route's inline rationale,
+    // without turning the refusal into a generic recorder error.
+    expect(permissionOutcome).toEqual({
+      kind: "permission",
+      permissionStatus: "denied",
+    });
+    expect(result.current.permissionStatus).toBe("denied");
+    expect(result.current.flowStatus).toBe("idle");
+    expect(result.current.errorMessage).toBeNull();
+    expect(result.current.isMicrophonePermissionError).toBe(false);
     expect(mockRecorderStart).not.toHaveBeenCalled();
+    expect(mockRequestPermission).not.toHaveBeenCalled();
+    expect(mockParseVoiceWithAi).not.toHaveBeenCalled();
+    expect(mockRandomUUID).not.toHaveBeenCalled();
 
-    await act(async () => {
+    await act(async (): Promise<void> => {
       await result.current.retryRecording();
     });
 
-    expect(result.current.flowStatus).toBe("error");
-    expect(result.current.errorMessage).toContain("Microphone permission");
-    expect(result.current.isMicrophonePermissionError).toBe(true);
+    expect(result.current.permissionStatus).toBe("denied");
+    expect(result.current.flowStatus).toBe("idle");
+    expect(result.current.errorMessage).toBeNull();
+    expect(result.current.isMicrophonePermissionError).toBe(false);
     expect(mockRecorderStart).not.toHaveBeenCalled();
+    expect(mockRequestPermission).not.toHaveBeenCalled();
+    expect(mockParseVoiceWithAi).not.toHaveBeenCalled();
+    expect(mockRandomUUID).not.toHaveBeenCalled();
   });
 
   it("opens device settings for microphone permission recovery", async (): Promise<void> => {
