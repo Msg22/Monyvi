@@ -4,15 +4,13 @@
 
 **Approval source:** `mockups/drafts/2026-10-10-voice-motion-r1/approval.json`,
 owner evidence “mockups approved” and “Approve the proposal”, recorded in thread
-`01a11606-3a5e-7420-a9d7-0ea491bde802` at
-`2026-10-10T14:39:19.262Z`, question
-`call_WNqHZ69cvzQQG09hJY0sXedd:0`.
-Original approved five-image manifest:
+`01a11606-3a5e-7420-a9d7-0ea491bde802` at `2026-10-10T14:39:19.262Z`, question
+`call_WNqHZ69cvzQQG09hJY0sXedd:0`. Original approved five-image manifest:
 `sha256:7d91150571a3150e235a1b8ec63327cff4c19de6c292927cde76c40024c1c799`;
 source `proposal-approved.txt`:
-`sha256:06e5e987543d85a2c90c57aaad695569ca904cc122571da47bae7195d2b9f4b0`.
-Draft manifest still says "awaiting" as **historical source bytes**; the
-separate immutable approval record supersedes that status without editing the
+`sha256:06e5e987543d85a2c90c57aaad695569ca904cc122571da47bae7195d2b9f4b0`. Draft
+manifest still says "awaiting" as **historical source bytes**; the separate
+immutable approval record supersedes that status without editing the
 draft/images. Do not amend these approved files.
 
 **Supersession boundary:**
@@ -21,40 +19,40 @@ draft/images. Do not amend these approved files.
   Voice idle badge treatment, EN example glyph coloring, per-account device
   dismissal, immediate Starting/Cancel, recording ripple/bars, parsing activity,
   native-permission inline explanation, and direct/eligible retry transitions.
-- The previously approved **five original** repaired states/images/sidecars
-  and `repair-binding-manifest.json`
+- The previously approved **five original** repaired states/images/sidecars and
+  `repair-binding-manifest.json`
   (`sha256:4b06ef2ad901a13cceb06790e49149fb9b314e99c213080e941cce22859b34b8`)
-  stay byte-identical and remain authority for all unchanged Manual B,
-  allowance counts/progress, exhausted EN/AR composition, shared geometry,
-  tabs, current local-midnight semantics and existing screen layout. The
-  proposal's new EN daily-reset wording applies **only** to daily reset
-  language, never burst availability. No other copy/geometry invention.
+  stay byte-identical and remain authority for all unchanged Manual B, allowance
+  counts/progress, exhausted EN/AR composition, shared geometry, tabs, current
+  local-midnight semantics and existing screen layout. The proposal's new EN
+  daily-reset wording applies **only** to daily reset language, never burst
+  availability. No other copy/geometry invention.
 - New `mockups/voice-motion-binding-context.md` is a **derived approved-source
   crosswalk**, not a new image/sidecar, a sixth verifier or a renewed approval
   gate. `contracts/add-transaction-ui-contract.md` maps new states and
   `checklists/voice-motion-coverage.md` maps manual/automated/owner evidence.
 - Canonical additions: FR-037…FR-042 and SC-016…SC-018, mapped by new
-  **append-only** T060…T066. Original FR-001…FR-036, SC-001…SC-015 and
-  T001…T059 keep their IDs and old historical evidence; no task regeneration.
-- No changes to Gemini provider/transaction review, local financial forms,
-  5/day or 2/min provider-start accounting, 35×24-hour terminal identity
-  retention, server-only quota tables, migration, sync, hosted state, first-use
-  AI consent or deferred #384. Account-scoped dismissal is **device-local**
-  and cannot reuse the globally scoped intro flags.
+  **append-only** T060…T066. Original FR-001…FR-036, SC-001…SC-015 and T001…T059
+  keep their IDs and old historical evidence; no task regeneration.
+- No changes to Gemini provider/transaction review, local financial forms, 5/day
+  or 2/min provider-start accounting, 35×24-hour terminal identity retention,
+  server-only quota tables, migration, sync, hosted state, first-use AI consent
+  or deferred #384. Account-scoped dismissal is **device-local** and cannot
+  reuse the globally scoped intro flags.
 - Permission/retry implementation risk is already evidenced in the proposal:
   `isVoiceStartPending` is not shown by current route's presentation state;
   recorder initially reports false before its async grant check; recorder
-  catches start failures silently; retryRecording displays idle in the
-  middle. The new desired transitions require synchronous render state,
-  lifetime cancellation and an observable recorder-start failure. Planning
-  documents are not evidence of those behaviors being implemented.
+  catches start failures silently; retryRecording displays idle in the middle.
+  The new desired transitions require synchronous render state, lifetime
+  cancellation and an observable recorder-start failure. Planning documents are
+  not evidence of those behaviors being implemented.
 - 853×1844 source image **pixels** cannot establish a new viewport or arbitrary
   stroke/bar dimensions. The five large approved PNG payloads were not
-  independently inspectable through this remote connector (empty image
-  body); only the immutable source manifest and detailed approved proposal
-  were inspected. Root owns exact image verification and native rendered
-  comparisons. No missing material product decision was invented to fill
-  incidental raster differences.
+  independently inspectable through this remote connector (empty image body);
+  only the immutable source manifest and detailed approved proposal were
+  inspected. Root owns exact image verification and native rendered comparisons.
+  No missing material product decision was invented to fill incidental raster
+  differences.
 - Named paths `components/ui/PermissionRecoveryModal.tsx` and
   `hooks/useVoiceAvailability.ts` did not exist at target head; route's actual
   imports are `components/permissions/PermissionRecoveryModal.tsx` and
@@ -63,13 +61,13 @@ draft/images. Do not amend these approved files.
   later implementation; that does not block approved documentation.
 
 **Current planning status:** Only remote document authoring/publishing is
-authorized. Root will run existing five verifier commands, Speckit
-prerequisites and **read-only** `speckit.analyze` after this branch snapshot.
+authorized. Root will run existing five verifier commands, Speckit prerequisites
+and **read-only** `speckit.analyze` after this branch snapshot.
 `.specify/extensions.yml` has optional automatically executable git-commit
-hooks; root must explicitly choose not to run unauthorized hooks.
-No local validation, unit Red/Green, E2E/device/live-provider, visual captures
-or accessibility tree was executed in this wave. Existing T034/T035/T049/T050
-and visual/accessibility T058 remain **NOT RUN**.
+hooks; root must explicitly choose not to run unauthorized hooks. No local
+validation, unit Red/Green, E2E/device/live-provider, visual captures or
+accessibility tree was executed in this wave. Existing T034/T035/T049/T050 and
+visual/accessibility T058 remain **NOT RUN**.
 
 ## UI repair authority — 10 October 2026
 
@@ -303,69 +301,91 @@ configuration, per-user lock recheck, repeated backlog drainage and preservation
 of all active/current accounting. Protection lasts while identity is retained;
 reuse as new begins only after actual deletion.
 
-
 ## Voice controls R2 — approved image and delegated-accepted exact binding (11 October 2026)
 
 **Published image:** `mockups/voice-controls-r2-green-gray-proposal.png`,
-image-only commit `b00b7ae07a7f75008f21ff2c9f8680f735153901`,
-Git blob `caceb8d1cade9e4e9c574e95fc0e603a39e766de`.
-Local executor verified exact **SHA-256
-`3c1d098090cfac539c834634f2dfb1db29dc75b8afc9f479d61d17af09680281`**,
+image-only commit `b00b7ae07a7f75008f21ff2c9f8680f735153901`, Git blob
+`caceb8d1cade9e4e9c574e95fc0e603a39e766de`. Local executor verified exact
+**SHA-256 `3c1d098090cfac539c834634f2dfb1db29dc75b8afc9f479d61d17af09680281`**,
 **1832 × 858 pixels**, **1470108 bytes**, matching that Git blob.
 
-**Approval provenance:** owner explicitly approved the **latest
-green/gray/red image/concept**. Root faithfully reviewed and accepts the
-scoped green/gray/red control order, no helper sentence, slash clock, local
-30-second retention and Arabic Submit **إرسال** and completed title
-**التسجيل مكتمل**. The corrected R2 sidecar carries all **15 official
-Binding Facts** keys and computed and delegated-accepted metadata/combined identifiers:
-`sha256:78105dbc1254cb508429f417cf5e26c71324364c7e4e74447f7249735f282a0e`
-and
-`sha256:d06cfdf4f6bbc8c3bd7f12b5129115206a31c7f3c1dfb4a266977456252caa14`.
-**Delegated exact-revision acceptance (2026-10-11):** root reviewed all 15
-Binding Facts and verified the image sha256:3c1d098090cfac539c834634f2dfb1db29dc75b8afc9f479d61d17af09680281, metadata sha256:78105dbc1254cb508429f417cf5e26c71324364c7e4e74447f7249735f282a0e,
-and combined revision sha256:d06cfdf4f6bbc8c3bd7f12b5129115206a31c7f3c1dfb4a266977456252caa14. Root explicitly
-ACCEPTED ALL THREE EXACT REVISIONS under owner-delegated autonomy; this does
-not claim personal owner review of computed SHA values. Approval fields are
-updated; final official verifier PASS and read-only Speckit analysis remain
-pending under unchecked T068.
+**Approval provenance:** owner explicitly approved the **latest green/gray/red
+image/concept**. Root faithfully reviewed and accepts the scoped green/gray/red
+control order, no helper sentence, slash clock, local 30-second retention and
+Arabic Submit **إرسال** and completed title **التسجيل مكتمل**. The corrected R2
+sidecar carries all **15 official Binding Facts** keys; the originally computed
+identifiers
+`sha256:78105dbc1254cb508429f417cf5e26c71324364c7e4e74447f7249735f282a0e` and
+`sha256:d06cfdf4f6bbc8c3bd7f12b5129115206a31c7f3c1dfb4a266977456252caa14` were
+delegated-accepted and are now historical, superseded by the faithful
+Color/theme facts refinement; current approved identifiers are
+`sha256:72459993f2d82fe128fd9d64ce83c9646e60edef5e1f2d187f42354a48158c2b` and
+`sha256:71906e40d73448a0767df14954bf7f1a239126dc894a64dbbe227e191f549a77` (see
+superseding receipts below). Do not claim that the owner was separately shown
+either SHA.
+
+**Superseding acceptance receipt (2026-10-11):** Root verified the public
+verifier results and, under delegated authority, accepted the exact metadata
+revision
+`sha256:78105dbc1254cb508429f417cf5e26c71324364c7e4e74447f7249735f282a0e` and
+combined approval revision
+`sha256:d06cfdf4f6bbc8c3bd7f12b5129115206a31c7f3c1dfb4a266977456252caa14` (both
+later superseded by the faithful-refinement receipt below); the sidecar/manifest
+binding metadata is APPROVED/accepted. The owner was not separately shown either
+SHA. That gate batch completed on 2026-10-11: final canonical binding verifier
+authoritative with no errors, correct-feature prerequisites exit 0, and
+canonical read-only Speckit analysis recorded (see the actual T068 receipt in
+tasks.md and the gate report in checklists/voice-controls-r2-analysis.md).
+
+**Superseding faithful-refinement receipt (2026-10-11):** Root, under delegated
+authority, accepted the exact Color/theme facts refinement pinning filled
+registered NileGreen Submit with white label and paper-plane Ionicons send icon,
+transparent neutral-gray outlined Pause/Resume with matching gray label and
+pause/play glyph, transparent registered red outlined Discard with matching red
+label and close glyph, gray disabled completed center Pause with pause glyph, 20
+dp action icons and 14/22 semibold labels. Current approved metadata revision is
+`sha256:72459993f2d82fe128fd9d64ce83c9646e60edef5e1f2d187f42354a48158c2b` and
+combined approval revision is
+`sha256:71906e40d73448a0767df14954bf7f1a239126dc894a64dbbe227e191f549a77` from
+the official verifier; PNG bytes and all other facts are unchanged. Owner did
+not review the computed SHA. Final root T068 gate completed 2026-10-11 (see the
+actual receipt in tasks.md).
 
 ### Narrow R2 precedence
 
 R2 overrides owner-approved R1 only for:
 
-1. physical Submit GREEN **LEFT**, Pause/Resume GRAY **CENTER** and
-   Discard RED **RIGHT** in recording/paused, all languages;
+1. physical Submit GREEN **LEFT**, Pause/Resume GRAY **CENTER** and Discard RED
+   **RIGHT** in recording/paused, all languages;
 2. the explicit **third panel Recording complete / التسجيل مكتمل**,
-   `00:30 / 00:30`, enabled LEFT Submit, **disabled gray CENTER Pause**
-   (no Resume), enabled RIGHT Discard, no helper sentence or active waves;
-3. active elapsed/max timer and local **30,000 ms** cap, with paused wall
-   time excluded; local auto-stop retains finalized audio until **explicit
+   `00:30 / 00:30`, enabled LEFT Submit, **disabled gray CENTER Pause** (no
+   Resume), enabled RIGHT Discard, no helper sentence or active waves;
+3. active elapsed/max timer and local **30,000 ms** cap, with paused wall time
+   excluded; local auto-stop retains finalized audio until **explicit
    Submit/Discard** and starts no provider/allowance/review by itself;
 4. removing ordinary static filled mic halos from idle/Starting/
    recording/paused while retaining R1 active ripples and original
    daily-limit/unavailable disabled artwork.
 
-Prior R1 and original five image, Binding Facts and approval revisions
-remain byte-for-byte history; current Manual, header/tabs, permission/AI
-consent, authoritative allowance, provider choice, same-key retry and
-35-day replay accounting are unchanged. Issue #384 remains deferred.
-Issue #391 separately owns server authoritative 30 s duration and
-empty/speechless audio research. The 1832×858 composite is image pixels,
-**not** an app viewport; retain normalized 390×844 dp, 104 dp mic and
-48 dp minimum targets.
+Prior R1 and original five image, Binding Facts and approval revisions remain
+byte-for-byte history; current Manual, header/tabs, permission/AI consent,
+authoritative allowance, provider choice, same-key retry and 35-day replay
+accounting are unchanged. Issue #384 remains deferred. Issue #391 separately
+owns server authoritative 30 s duration and empty/speechless audio research. The
+1832×858 composite is image pixels, **not** an app viewport; retain normalized
+390×844 dp, 104 dp mic and 48 dp minimum targets.
 
 ### Exact source defects and bounded latency correction
 
-| Source-proven observation | R2 minimum-safe disposition |
-| --- | --- |
-| Existing recorder cap 60 s; paused timing excludes wall time | T069 Red and T070 30 s active cap, idempotent local finalization and retained audio; leave native 300 ms post-record stabilization |
-| Existing recording Stop/paused order and elapsed-only formatter | T069/071 fixed three-panel Submit/Pause-or-Resume/Discard and elapsed/max clock with enabled/disabled semantics |
-| Existing ordinary static filled mic halos | T069/071 remove only those ordinary backgrounds, preserve R1 waves and disabled daily/unavailable |
-| Route `add-transaction.tsx:288` awaits microphone permission and flow `useVoiceTransactionFlow.ts:376` checks again | T069 typed permission/actor/revocation Red, T070 one fresh just-in-time native check + inline recovery; no early OS permission request |
-| Direct Voice route mounts hidden 861-line Manual form immediately | T069 proves no initial Manual mount and draft retention after first Manual; T071 defers only first mount then keeps mounted across safe switches, no internal Manual refactor |
-| Availability focus and start refresh may overlap/cancel | Preserve authoritative preattempt gate and present cancellation; do not change HTTP inflight behavior without timing evidence |
-| Owner ~5 s route and ≥3 s Starting observations | Runtime stage attribution NOT measured; no promised speedup or fabricated benchmark |
+| Source-proven observation                                                                                           | R2 minimum-safe disposition                                                                                                                                                   |
+| ------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Existing recorder cap 60 s; paused timing excludes wall time                                                        | T069 Red and T070 30 s active cap, idempotent local finalization and retained audio; leave native 300 ms post-record stabilization                                            |
+| Existing recording Stop/paused order and elapsed-only formatter                                                     | T069/071 fixed three-panel Submit/Pause-or-Resume/Discard and elapsed/max clock with enabled/disabled semantics                                                               |
+| Existing ordinary static filled mic halos                                                                           | T069/071 remove only those ordinary backgrounds, preserve R1 waves and disabled daily/unavailable                                                                             |
+| Route `add-transaction.tsx:288` awaits microphone permission and flow `useVoiceTransactionFlow.ts:376` checks again | T069 typed permission/actor/revocation Red, T070 one fresh just-in-time native check + inline recovery; no early OS permission request                                        |
+| Direct Voice route mounts hidden 861-line Manual form immediately                                                   | T069 proves no initial Manual mount and draft retention after first Manual; T071 defers only first mount then keeps mounted across safe switches, no internal Manual refactor |
+| Availability focus and start refresh may overlap/cancel                                                             | Preserve authoritative preattempt gate and present cancellation; do not change HTTP inflight behavior without timing evidence                                                 |
+| Owner ~5 s route and ≥3 s Starting observations                                                                     | Runtime stage attribution NOT measured; no promised speedup or fabricated benchmark                                                                                           |
 
 ### Ordered gates (preimplementation analyzer corrected)
 
@@ -377,12 +397,11 @@ and **READ-ONLY** `.claude/commands/speckit.analyze.md` on final
 spec/plan/tasks; resolve critical/high findings before any Red or
 implementation. Optional Git hooks must not turn read-only analysis into a
 mutation. The manual semantic detection report
-`checklists/voice-controls-r2-analysis.md` is **not** actual analyzer
-execution.
+`checklists/voice-controls-r2-analysis.md` is **not** actual analyzer execution.
 
-**T069:** write and prove meaningful Red; **T070/T071:** only after a
-new explicit pin and lead-approved Red, implement minimal owned changes;
-**T072:** batched Green/type/lint; **T073:** independent **postimplementation
-review** (not the first Speckit gate); **T074:** owner native/device/render,
-responsive/dark/RTL/enlarged-text and separate a11y proof. No device,
-provider, server, Metro or E2E execution by this planning worker.
+**T069:** write and prove meaningful Red; **T070/T071:** only after a new
+explicit pin and lead-approved Red, implement minimal owned changes; **T072:**
+batched Green/type/lint; **T073:** independent **postimplementation review**
+(not the first Speckit gate); **T074:** owner native/device/render,
+responsive/dark/RTL/enlarged-text and separate a11y proof. No device, provider,
+server, Metro or E2E execution by this planning worker.

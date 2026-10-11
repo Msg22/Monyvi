@@ -26,13 +26,14 @@ Fresh read-only analysis remains the production-assignment gate.
 
 ## Approved Voice motion/interaction continuation — 10 October 2026
 
-This is a **planning overlay** to the finished 10 October UI repair; old plan/server
-history, 59 existing tasks, five frozen repair sidecars and image hashes remain
-unchanged. Owner approved the exact new five-image proposal
+This is a **planning overlay** to the finished 10 October UI repair; old
+plan/server history, 59 existing tasks, five frozen repair sidecars and image
+hashes remain unchanged. Owner approved the exact new five-image proposal
 `mockups/drafts/2026-10-10-voice-motion-r1/` on 2026-10-10; original manifest
 `sha256:7d91150571a3150e235a1b8ec63327cff4c19de6c292927cde76c40024c1c799`,
-proposal `sha256:06e5e987543d85a2c90c57aaad695569ca904cc122571da47bae7195d2b9f4b0`.
-Exact approval is in its immutable `approval.json`; the derived scope map is
+proposal
+`sha256:06e5e987543d85a2c90c57aaad695569ca904cc122571da47bae7195d2b9f4b0`. Exact
+approval is in its immutable `approval.json`; the derived scope map is
 `mockups/voice-motion-binding-context.md`. This is **not** a sixth approved
 sidecar or a new arbitrary approval/verifier gate. Earlier five-image package
 `sha256:4b06ef2ad901a13cceb06790e49149fb9b314e99c213080e941cce22859b34b8`
@@ -45,66 +46,66 @@ are updated; execute existing verifiers and fresh **read-only**
 
 - Preserve standalone `PageHeader`, existing equal underline mode tabs,
   responsive/safe-area, Manual B, all financial/offline/save rules, quota and
-  local-midnight semantics, Gemini provider/review, consent/privacy and
-  deferred #384. No extra hosted table, sync/migration or subscription plan.
+  local-midnight semantics, Gemini provider/review, consent/privacy and deferred
+  #384. No extra hosted table, sync/migration or subscription plan.
 - Dark idle allowance/examples badge uses slate-700 and green icons; English
   example restaurant/car/cafe glyphs gain registered orange/blue/gold props,
-  Arabic remains quotes without English glyphs. `ExamplesCard` has an
-  accessible dismiss target ≥48 dp and an authenticated **per-account,
-  per-device** durable hidden preference.
+  Arabic remains quotes without English glyphs. `ExamplesCard` has an accessible
+  dismiss target ≥48 dp and an authenticated **per-account, per-device** durable
+  hidden preference.
 - The account-scoped preference is a new local-only service/facade, **not**
   `intro-flag-service` (its `intro-seen` keys are intentionally device-global).
   Namespace by current authenticated user ID, default absent/error reads to
   visible, clear in-memory old-user state on switch, guard late responses and
   report write failure without fabricating durable success. Never sync/share.
-- Mic tap sets a synchronously observable `Starting` state before awaiting
-  fresh AI consent, authoritative availability or native preparation. Keep
-  an operation-generation lock against rapid taps/cancellation, invalidating
-  all late success/failure after Back, Manual, unmount or account change. Do
-  not count an allowance or tick elapsed time before actual native capture.
-  A granted mic skips permission explanation; an **unknown** async grant state
+- Mic tap sets a synchronously observable `Starting` state before awaiting fresh
+  AI consent, authoritative availability or native preparation. Keep an
+  operation-generation lock against rapid taps/cancellation, invalidating all
+  late success/failure after Back, Manual, unmount or account change. Do not
+  count an allowance or tick elapsed time before actual native capture. A
+  granted mic skips permission explanation; an **unknown** async grant state
   must be resolved or refreshed before considering permission missing.
-- `useVoiceRecorder.start` currently catches native preparation failures
-  without rethrowing. The implementation owner must restore an observable
-  error result/throw contract to `useVoiceTransactionFlow` before it can
-  transition to true Listening; tests prove no false recording on failure.
-  Do not alter authoritative provider-start accounting or error reason.
-- Replace the generic pre-native record-introduction **modal** with the
-  approved Voice-**inline** explanation only when permission genuinely missing;
-  keep the Monyvi custom explanation before the OS dialog and preserve the
-  separate `AiProcessingConsentSheet` and denied/revoked Settings/Manual path.
-- Recording uses cancelable Reanimated decorative ripple pair (~1.4 s,
-  stagger 700 ms) from existing 104 dp mic out to 172 dp region, activity
-  bars (~1.2 s), real recorder timer; paused freezes both activity/time;
-  resume restarts. Parsing `analyzing` renders a restrained ~1.6 s
-  waveform/dots → receipt loop with approved EN/AR copy, never a content
-  Skeleton, percentage or staged output claim. Native **finalizing** remains
-  distinct from actual parsing; genuine availability-fetch loading keeps the
-  existing Skeleton. Reduced motion uses static indicators.
+- `useVoiceRecorder.start` currently catches native preparation failures without
+  rethrowing. The implementation owner must restore an observable error
+  result/throw contract to `useVoiceTransactionFlow` before it can transition to
+  true Listening; tests prove no false recording on failure. Do not alter
+  authoritative provider-start accounting or error reason.
+- Replace the generic pre-native record-introduction **modal** with the approved
+  Voice-**inline** explanation only when permission genuinely missing; keep the
+  Monyvi custom explanation before the OS dialog and preserve the separate
+  `AiProcessingConsentSheet` and denied/revoked Settings/Manual path.
+- Recording uses cancelable Reanimated decorative ripple pair (~1.4 s, stagger
+  700 ms) from existing 104 dp mic out to 172 dp region, activity bars (~1.2 s),
+  real recorder timer; paused freezes both activity/time; resume restarts.
+  Parsing `analyzing` renders a restrained ~1.6 s waveform/dots → receipt loop
+  with approved EN/AR copy, never a content Skeleton, percentage or staged
+  output claim. Native **finalizing** remains distinct from actual parsing;
+  genuine availability-fetch loading keeps the existing Skeleton. Reduced motion
+  uses static indicators.
 - Recording error Try again enters Starting without a visible idle state;
   retained-audio submission retries use the **same** request identity and no
-  second recorder. Voice-unavailable Try again refreshes authoritative
-  allowance and continues automatically into Starting only when eligible.
-  Existing burst/daily/refusal/consent checks never become optimistic starts.
+  second recorder. Voice-unavailable Try again refreshes authoritative allowance
+  and continues automatically into Starting only when eligible. Existing
+  burst/daily/refusal/consent checks never become optimistic starts.
 
 ### Cohesive future implementation ownership (not assigned in this wave)
 
 Single Voice interaction writer should own the coupled route
 `app/(private)/add-transaction.tsx`, `useVoiceTransactionFlow`,
 `useVoiceRecorder`, scoped Voice presentation (`VoiceTransactionEntry`,
-`voice-ui/*`), EN/AR copies, account-scoped local preference service/facade,
-and their in-scope unit/integration/E2E tests. **Do not** overlap Mobile's
-existing Manual/shared numeric/Transfer keyboard owner. Candidate structure
-reuses `AllowanceCard`, `ExamplesCard`, `VoiceStateActions`,
-`VoicePresentation`, `Skeleton`, the current `mic`/`bulb-outline`/
+`voice-ui/*`), EN/AR copies, account-scoped local preference service/facade, and
+their in-scope unit/integration/E2E tests. **Do not** overlap Mobile's existing
+Manual/shared numeric/Transfer keyboard owner. Candidate structure reuses
+`AllowanceCard`, `ExamplesCard`, `VoiceStateActions`, `VoicePresentation`,
+`Skeleton`, the current `mic`/`bulb-outline`/
 `restaurant-outline`/`car-outline`/`cafe-outline` glyphs and registered
 NativeWind colors. Permission route currently imports
 `components/permissions/PermissionRecoveryModal.tsx` and availability
 `hooks/useVoiceAiAvailability.ts`; the similarly named user-supplied
-`components/ui/PermissionRecoveryModal.tsx` and
-`hooks/useVoiceAvailability.ts` do not exist. Inspect the actual two
-dependencies after explicit read-boundary expansion, **before** implementation;
-no broader source read was made by this author.
+`components/ui/PermissionRecoveryModal.tsx` and `hooks/useVoiceAvailability.ts`
+do not exist. Inspect the actual two dependencies after explicit read-boundary
+expansion, **before** implementation; no broader source read was made by this
+author.
 
 ### Test-first and owner evidence gates
 
@@ -114,20 +115,19 @@ no broader source read was made by this author.
    flows. Missing native module/fixture = setup blocker, not behavior Red.
 2. After root accepts real Red, T063/T064 implement the approved lifecycle,
    preference and presentation atomically under one exclusive source owner.
-   Batch Green/type/lint/i18n and independent reviews under T065. Do not
-   change app code/tests in this planning wave.
-3. T066 hands the owner complete native timing, permissions, animations,
-   account restart, quota/replay and rendered EN/AR/dark/responsive/
-   enlarged-text/a11y matrix. T034/T035/T049/T050 and visual/a11y T058
-   remain **NOT RUN** until owner evidence; optional Speckit hooks require
-   separate conscious opt-in when locally invoked (`.specify/extensions.yml`
-   currently enables auto-executable Git commit hooks).
+   Batch Green/type/lint/i18n and independent reviews under T065. Do not change
+   app code/tests in this planning wave.
+3. T066 hands the owner complete native timing, permissions, animations, account
+   restart, quota/replay and rendered EN/AR/dark/responsive/ enlarged-text/a11y
+   matrix. T034/T035/T049/T050 and visual/a11y T058 remain **NOT RUN** until
+   owner evidence; optional Speckit hooks require separate conscious opt-in when
+   locally invoked (`.specify/extensions.yml` currently enables auto-executable
+   Git commit hooks).
 4. The five **new** source PNGs are approved concept evidence (853×1844 pixels);
-   no new logical viewport or exact unmeasured geometry is inferred.
-   Root/owner must inspect the original image bytes and render comparisons
-   locally; this remote connector returned no inspectable base64 for the large
-   images. That is an evidence boundary, not permission to invent pixels.
-
+   no new logical viewport or exact unmeasured geometry is inferred. Root/owner
+   must inspect the original image bytes and render comparisons locally; this
+   remote connector returned no inspectable base64 for the large images. That is
+   an evidence boundary, not permission to invent pixels.
 
 ## Summary
 
@@ -876,116 +876,123 @@ implementation occurs in this command.
 
 No constitutional violations require justification.
 
+## Voice controls R2 — accepted binding, preimplementation analysis and execution plan
 
-## Voice controls R2 — delegated-accepted binding, preimplementation analysis pending
-
-**Source audited:** `0e7ee55abf6fb18af37e29e4f2e48ba45604a31e`. **Owner image approved:** latest green/gray/red R2 PNG, Git blob
-`caceb8d1cade9e4e9c574e95fc0e603a39e766de`; local executor
-verified `sha256:3c1d098090cfac539c834634f2dfb1db29dc75b8afc9f479d61d17af09680281`,
-1832×858 raster pixels, 1470108 bytes. The sidecar now contains all 15
-required official Binding Facts keys, verified metadata revision sha256:78105dbc1254cb508429f417cf5e26c71324364c7e4e74447f7249735f282a0e
-and combined revision sha256:d06cfdf4f6bbc8c3bd7f12b5129115206a31c7f3c1dfb4a266977456252caa14. On 2026-10-11
-root/lead expressly ACCEPTED these exact values plus image sha256:3c1d098090cfac539c834634f2dfb1db29dc75b8afc9f479d61d17af09680281 under
-owner-delegated autonomy. This is not personal owner review of computed SHA
-values. Final official verifier PASS and fresh read-only Speckit analysis remain
-root-owned and pending.
+**Source audited:** `0e7ee55abf6fb18af37e29e4f2e48ba45604a31e`. **Owner image
+approved:** latest green/gray/red R2 PNG, Git blob
+`caceb8d1cade9e4e9c574e95fc0e603a39e766de`; local executor verified
+`sha256:3c1d098090cfac539c834634f2dfb1db29dc75b8afc9f479d61d17af09680281`,
+1832×858 raster pixels, 1470108 bytes. The sidecar contains all 15 required
+official Binding Facts keys; on 2026-10-11 root verified the public verifier
+results and recorded delegated exact-revision acceptance (superseded by the
+faithful-refinement tuple below). Current approved metadata revision
+sha256:72459993f2d82fe128fd9d64ce83c9646e60edef5e1f2d187f42354a48158c2b and
+combined approval revision
+sha256:71906e40d73448a0767df14954bf7f1a239126dc894a64dbbe227e191f549a77 come
+from the official verifier after root's delegated acceptance of the faithful
+Color/theme facts refinement (filled NileGreen Submit with white label and
+paper-plane Ionicons send; transparent gray Pause/Resume outlined with
+pause/play glyph; transparent red Discard outlined with close glyph; gray
+disabled completed Pause with pause glyph; 20 dp icons; 14/22 semibold labels);
+sidecar metadata is APPROVED. Do not invent owner approval of the computed SHA.
+Final canonical verifier PASS, correct-feature prerequisites and read-only
+Speckit analysis remain root-owned (T068 stays unchecked until that batch
+completes).
 
 ### Scoped source conflicts and approved three-panel states
 
-- `useVoiceRecorder.ts` currently caps native active recording at 60 s;
-  R2 requires **30 s active capture**, excluding pause; retain audio on
-  auto-stop but do not automatically submit to Gemini/parse-voice. Keep the
-  existing native **300 ms post-record early-command stabilization**.
-- `VoiceTransactionEntry.tsx` uses Stop and a different paused control
-  order; replace with fixed **Submit LEFT green / Pause or Resume CENTER
-  gray / Discard RIGHT red** while active or paused. Arabic Submit is
-  **إرسال** and physical positions do not RTL-mirror.
-- At auto-cap render the explicit **third panel**:
-  **Recording complete / التسجيل مكتمل**, `00:30 / 00:30`, enabled
-  **Submit GREEN LEFT**, **disabled Pause GRAY CENTER**, enabled
-  **Discard RED RIGHT**. No Resume, active recording waves, helper sentence
-  or automatic provider request. The finalized audio remains until explicit
-  Submit/Discard; one effective stop/submit/cleanup across cap races.
-- R2 ordinary idle/Starting/recording/paused static **filled** mic halos
-  are removed; R1 recording waves, 104 dp circular mic, reduced-motion,
-  existing daily-limit/unavailable disabled artwork and all unaffected
-  original visual bindings remain.
-- `voice-ui/VoicePresentation.ts` formats elapsed-only time; R2 uses
-  readable `mm:ss / 00:30`, capped at `00:30 / 00:30`.
+- `useVoiceRecorder.ts` currently caps native active recording at 60 s; R2
+  requires **30 s active capture**, excluding pause; retain audio on auto-stop
+  but do not automatically submit to Gemini/parse-voice. Keep the existing
+  native **300 ms post-record early-command stabilization**.
+- `VoiceTransactionEntry.tsx` uses Stop and a different paused control order;
+  replace with fixed **Submit LEFT green / Pause or Resume CENTER gray / Discard
+  RIGHT red** while active or paused. Arabic Submit is **إرسال** and physical
+  positions do not RTL-mirror.
+- At auto-cap render the explicit **third panel**: **Recording complete /
+  التسجيل مكتمل**, `00:30 / 00:30`, enabled **Submit GREEN LEFT**, **disabled
+  Pause GRAY CENTER**, enabled **Discard RED RIGHT**. No Resume, active
+  recording waves, helper sentence or automatic provider request. The finalized
+  audio remains until explicit Submit/Discard; one effective stop/submit/cleanup
+  across cap races.
+- R2 ordinary idle/Starting/recording/paused static **filled** mic halos are
+  removed; R1 recording waves, 104 dp circular mic, reduced-motion, existing
+  daily-limit/unavailable disabled artwork and all unaffected original visual
+  bindings remain.
+- `voice-ui/VoicePresentation.ts` formats elapsed-only time; R2 uses readable
+  `mm:ss / 00:30`, capped at `00:30 / 00:30`.
 - Client cap does not prove server enforcement. #391 independently owns
   authoritative server-duration and empty/speechless audio investigation.
 
 ### Accepted read-only latency diagnosis — smallest safe concrete repair
 
 The earlier audit closed the parent mic navigation callback: it calls
-`router.push` synchronously with `mode=voice` and origin tab, with
-**no awaited mic-handler work**. Startup delay is not attributed to that
-handler. There is no measured 1–2 s savings target.
+`router.push` synchronously with `mode=voice` and origin tab, with **no awaited
+mic-handler work**. Startup delay is not attributed to that handler. There is no
+measured 1–2 s savings target.
 
-1. **Remove one redundant permission check, not the permission gate.**
-   The route currently awaits `flowRefreshPermission()`, and the Voice
-   flow separately awaits `recorder.refreshPermission()` shortly before
-   native prepare. Design a **typed** permission/readiness result from the
-   flow (granted, needs inline rationale, blocked/revoked, unknown, stale
-   actor/cancelled); route renders approved inline recovery from that result.
-   Perform **one fresh just-in-time native verification for the current
-   authenticated actor** before preparation. Only an explicit
-   `Allow microphone` action may ask the OS. Preserve fresh LOCAL
-   `getAiProcessingConsentStatus()` lookup, generation/actor invalidation,
-   authoritative preattempt availability, unknown/granted/revoked
-   distinctions and no Listening until native `record()` succeeds.
-   T069 authors both positive and negative tests; T070 implements narrowly
-   across route/flow/permission facade.
-2. **Defer the first hidden Manual component mount on Voice-first
-   navigation.** `add-transaction.tsx` currently mounts its
-   `ManualTransactionEntry` even with Voice selected, initializing
-   account/category/market/currency/budget/form hooks and modals. On direct
-   Voice entry skip the FIRST mount; on Manual selection mount immediately,
-   then **latch mounted=true for this route instance** across subsequent
-   safe switches, preserving partially entered Manual drafts, Save, transfer,
-   recurring, calculator blur and accessibility-hidden mode semantics.
-   Initial Manual route remains unchanged. This improves the amount of
-   startup work in principle but no milliseconds are measured. T069 authors
-   route/draft positive controls; T071 implements the narrow route mount
-   condition, NOT a Manual internal, financial or dynamic-import refactor.
-3. **No speculative network policy edit.** `useVoiceAiAvailability`
-   refreshes on focus/app active and a start can supersede an in-flight
-   refresh; `voice-ai-availability-service` forwards AbortSignal to its
-   authenticated wrapper. Retain the current authoritative preattempt
-   quota gate, actor scoping and existing cancellation semantics.
-   In-flight HTTP deduplication/transport refactoring needs measurements
-   and separate approval, not this R2 work.
+1. **Remove one redundant permission check, not the permission gate.** The route
+   currently awaits `flowRefreshPermission()`, and the Voice flow separately
+   awaits `recorder.refreshPermission()` shortly before native prepare. Design a
+   **typed** permission/readiness result from the flow (granted, needs inline
+   rationale, blocked/revoked, unknown, stale actor/cancelled); route renders
+   approved inline recovery from that result. Perform **one fresh just-in-time
+   native verification for the current authenticated actor** before preparation.
+   Only an explicit `Allow microphone` action may ask the OS. Preserve fresh
+   LOCAL `getAiProcessingConsentStatus()` lookup, generation/actor invalidation,
+   authoritative preattempt availability, unknown/granted/revoked distinctions
+   and no Listening until native `record()` succeeds. T069 authors both positive
+   and negative tests; T070 implements narrowly across route/flow/permission
+   facade.
+2. **Defer the first hidden Manual component mount on Voice-first navigation.**
+   `add-transaction.tsx` currently mounts its `ManualTransactionEntry` even with
+   Voice selected, initializing account/category/market/currency/budget/form
+   hooks and modals. On direct Voice entry skip the FIRST mount; on Manual
+   selection mount immediately, then **latch mounted=true for this route
+   instance** across subsequent safe switches, preserving partially entered
+   Manual drafts, Save, transfer, recurring, calculator blur and
+   accessibility-hidden mode semantics. Initial Manual route remains unchanged.
+   This improves the amount of startup work in principle but no milliseconds are
+   measured. T069 authors route/draft positive controls; T071 implements the
+   narrow route mount condition, NOT a Manual internal, financial or
+   dynamic-import refactor.
+3. **No speculative network policy edit.** `useVoiceAiAvailability` refreshes on
+   focus/app active and a start can supersede an in-flight refresh;
+   `voice-ai-availability-service` forwards AbortSignal to its authenticated
+   wrapper. Retain the current authoritative preattempt quota gate, actor
+   scoping and existing cancellation semantics. In-flight HTTP
+   deduplication/transport refactoring needs measurements and separate approval,
+   not this R2 work.
 
 ### Mandatory ordered delivery gates — do not move analysis after code
 
-1. **T068 BEFORE T069–T071:** root confirms image and exact corrected
-   Binding Facts, verifies computed official metadata/combined revisions,
-   records truthful delegated lead acceptance of those exact hashes
-   (without claiming the owner saw them) and runs
-   `scripts/verify-mockup-binding.js` against the approved R2 sidecar.
-   **Then** run the correct-feature
+1. **T068 BEFORE T069–T071:** root confirms image and exact corrected Binding
+   Facts, verifies computed official metadata/combined revisions, records
+   truthful delegated lead acceptance of those exact hashes (without claiming
+   the owner saw them) and runs `scripts/verify-mockup-binding.js` against the
+   approved R2 sidecar. **Then** run the correct-feature
    `.specify/scripts/bash/check-prerequisites.sh --json --require-tasks --include-tasks`
    followed by canonical **READ-ONLY** `.claude/commands/speckit.analyze.md`
-   over final `spec.md`/`plan.md`/`tasks.md`. Resolve blocking
-   inconsistencies and record truthful results. This is NOT T073.
+   over final `spec.md`/`plan.md`/`tasks.md`. Resolve blocking inconsistencies
+   and record truthful results. This is NOT T073.
 2. **T069:** write deterministic existing-boundary failing unit/integration
    tests, covering 3 panels, disabled cap center, timer/pause, cap/Submit/
    Discard/unmount/account races, saved URI, no automatic provider work,
-   ordinary halos and daily/unavailable visual positives, and **one
-   just-in-time permission call** plus **Voice-first deferred Manual initial
-   mount with durable draft after first Manual use**. Native-only/E2E journeys
-   stay manual unless a deterministic harness is proven. Setup/import
-   failures are not meaningful Red.
+   ordinary halos and daily/unavailable visual positives, and **one just-in-time
+   permission call** plus **Voice-first deferred Manual initial mount with
+   durable draft after first Manual use**. Native-only/E2E journeys stay manual
+   unless a deterministic harness is proven. Setup/import failures are not
+   meaningful Red.
 3. **T070/T071 only after root accepts Red and pins an exact new source
    revision:** T070 owns recorder/flow/route typed permission and 30 s
    lifecycle; T071 owns action/timer/halo UI and narrow first Manual mount
    gating. Preserve source-ownership separation and external #391 lane.
-4. **T072:** batched focused/combined Green, TS, lint, i18n, hooks,
-   Manual/R1 regression positive controls. **T073:** independent
-   POSTIMPLEMENTATION TypeScript/actor/cancellation/behavior/style/binding/
-   QA/security-if-affected review; do not treat this as the first Speckit
-   analysis. **T074:** owner native/device/rendered/RTL/dark/large-text and
-   separate accessibility evidence NOT RUN.
+4. **T072:** batched focused/combined Green, TS, lint, i18n, hooks, Manual/R1
+   regression positive controls. **T073:** independent POSTIMPLEMENTATION
+   TypeScript/actor/cancellation/behavior/style/binding/ QA/security-if-affected
+   review; do not treat this as the first Speckit analysis. **T074:** owner
+   native/device/rendered/RTL/dark/large-text and separate accessibility
+   evidence NOT RUN.
 
 ### Safe observability for owner measurements only
 

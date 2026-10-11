@@ -961,16 +961,16 @@ Business rules:
   interaction/appearance details to #347. Approval provenance, source hashes,
   immutable five-reference boundary and mapped UI states are in
   `specs/389-voice-usage-limits/reconciliation.md` and
-  `mockups/voice-motion-binding-context.md`; existing Manual, quota,
-  35-day replay retention and deferred #384 remain unchanged.
+  `mockups/voice-motion-binding-context.md`; existing Manual, quota, 35-day
+  replay retention and deferred #384 remain unchanged.
 - Dark idle Voice allowance/examples heading microphone and bulb badges use
   slate-700 surfaces with green glyphs; the light badge stays as approved.
   English example restaurant/car/coffee icons retain identities/copy and gain
   category orange/blue/gold colors; Arabic continues with quoted rows and no
   English example icons.
 - The examples card has an accessible "Dismiss examples" / "إخفاء الأمثلة"
-  control with the shared minimum 48 dp interactive target. Dismissal hides
-  the whole card immediately and persists **on this device for the currently
+  control with the shared minimum 48 dp interactive target. Dismissal hides the
+  whole card immediately and persists **on this device for the currently
   authenticated account**, including route changes, restart, language/theme
   changes and later sign-in. Other users have independent choices; no global
   device-intro flag, hosted schema, sync or network write. Missing/unreadable
@@ -979,82 +979,80 @@ Business rules:
   before consent/availability/native capture preparation settles. Rapid taps
   cannot create more than one start. Actual Listening and elapsed time begin
   only after native recording starts; canceled or stale work never starts
-  recording in the background. Native preparation failure shows recovery,
-  never a false Listening state.
+  recording in the background. Native preparation failure shows recovery, never
+  a false Listening state.
 - During real recording, the approved decoration uses two outward staggered
-  ripples (~1.4 s cycle, 700 ms apart) plus gentle activity bars (~1.2 s).
-  These are **not** measured volume indicators. Paused freezes time and
-  motion; resume continues, reduced-motion shows static indicators, and
-  account change/discard/unmount cancels active effects and recording.
+  ripples (~1.4 s cycle, 700 ms apart) plus gentle activity bars (~1.2 s). These
+  are **not** measured volume indicators. Paused freezes time and motion; resume
+  continues, reduced-motion shows static indicators, and account
+  change/discard/unmount cancels active effects and recording.
 - Actual analyzing/parsing uses an illustrative waveform flowing toward a
-  receipt (~1.6 s repeating), exact approved EN/AR title/body and no
-  percentage, fabricated completion or financial details. Availability-fetch
-  loading continues to show `Skeleton`; native finalizing does not falsely
-  claim parser progress.
-- A genuinely missing native microphone grant uses the approved **inline**
-  Voice explanation and Allow microphone action before the OS permission
-  prompt, replacing only the prior recording-introduction modal. Known-granted
-  users skip it; an initial asynchronous "unknown" is not a denial. Revoked/
-  blocked grants retain Settings/Manual recovery. Required first-use **AI
-  Processing Consent Sheet** and privacy consent gate are not removed.
+  receipt (~1.6 s repeating), exact approved EN/AR title/body and no percentage,
+  fabricated completion or financial details. Availability-fetch loading
+  continues to show `Skeleton`; native finalizing does not falsely claim parser
+  progress.
+- A genuinely missing native microphone grant uses the approved **inline** Voice
+  explanation and Allow microphone action before the OS permission prompt,
+  replacing only the prior recording-introduction modal. Known-granted users
+  skip it; an initial asynchronous "unknown" is not a denial. Revoked/ blocked
+  grants retain Settings/Manual recovery. Required first-use **AI Processing
+  Consent Sheet** and privacy consent gate are not removed.
 - Recording-error Try again goes straight to Starting without visible idle
   detour; the retained-audio submission retry preserves the same request key,
-  recording and accounting contract. Availability-error Try again refreshes
-  the server-authoritative state and automatically starts only when eligible;
+  recording and accounting contract. Availability-error Try again refreshes the
+  server-authoritative state and automatically starts only when eligible;
   daily/burst/consent/permission gates remain fail closed. User-facing reset
   copy in the new scoped daily contexts is "Your limits reset tomorrow." /
-  "يتجدد حد استخدامك غدًا.", still next local midnight, not 24 hours after
-  the last request or burst-reset time.
-
-
+  "يتجدد حد استخدامك غدًا.", still next local midnight, not 24 hours after the
+  last request or burst-reset time.
 
 ### Voice recording controls R2 (owner concept approved 2026-10-11)
 
 - The owner approved the latest green/gray/red Voice controls image. Its exact
-  PNG bytes are verified (`sha256:3c1d098090cfac539c834634f2dfb1db29dc75b8afc9f479d61d17af09680281`,
+  PNG bytes are verified
+  (`sha256:3c1d098090cfac539c834634f2dfb1db29dc75b8afc9f479d61d17af09680281`,
   1832×858 pixels, 1470108 bytes, Git blob
-  `caceb8d1cade9e4e9c574e95fc0e603a39e766de`). On 2026-10-11 root/lead verified and expressly ACCEPTED the exact 15-key
-  metadata revision `sha256:78105dbc1254cb508429f417cf5e26c71324364c7e4e74447f7249735f282a0e` and combined revision
-  `sha256:d06cfdf4f6bbc8c3bd7f12b5129115206a31c7f3c1dfb4a266977456252caa14` alongside the verified
-  image `sha256:3c1d098090cfac539c834634f2dfb1db29dc75b8afc9f479d61d17af09680281`, under explicit
-  owner-delegated autonomy. This is not a claim that the owner personally
-  reviewed the new computed SHA values. Final official verifier PASS and fresh
-  read-only Speckit analysis remain pending under unchecked T068.
-- The local Voice recorder caps **active captured audio at 30 seconds**;
-  paused wall time does not consume the capture budget. Recording/paused
-  displays elapsed/max clock text such as `00:12 / 00:30`.
-- Reaching the cap automatically stops/finalizes native recording, retaining
-  the audio for an explicit choice. The **Recording complete /
-  التسجيل مكتمل** state displays `00:30 / 00:30` and keeps physical
-  LEFT Submit (green, enabled), CENTER Pause (gray, **disabled**), RIGHT
-  Discard (red, enabled). It has no Resume, active recording waves or helper
-  sentence. Auto-stop does **not** send to Gemini/`parse-voice`, consume a
-  provider allowance or navigate to review. Only explicit Submit / إرسال
-  enters the existing guarded submission; Discard clears the retained audio.
+  `caceb8d1cade9e4e9c574e95fc0e603a39e766de`). On 2026-10-11 root verified the
+  public verifier results and recorded delegated acceptance of the exact
+  metadata/combined revisions (sidecar metadata APPROVED); do not imply the
+  owner personally approved a new SHA. Final canonical verifier PASS,
+  correct-feature prerequisites and read-only Speckit analysis remain root-owned
+  before implementation.
+- The local Voice recorder caps **active captured audio at 30 seconds**; paused
+  wall time does not consume the capture budget. Recording/paused displays
+  elapsed/max clock text such as `00:12 / 00:30`.
+- Reaching the cap automatically stops/finalizes native recording, retaining the
+  audio for an explicit choice. The **Recording complete / التسجيل مكتمل** state
+  displays `00:30 / 00:30` and keeps physical LEFT Submit (green, enabled),
+  CENTER Pause (gray, **disabled**), RIGHT Discard (red, enabled). It has no
+  Resume, active recording waves or helper sentence. Auto-stop does **not** send
+  to Gemini/`parse-voice`, consume a provider allowance or navigate to review.
+  Only explicit Submit / إرسال enters the existing guarded submission; Discard
+  clears the retained audio.
 - During recording, Submit remains LEFT/green, Pause CENTER/gray and Discard
   RIGHT/red. During pause, Resume replaces Pause at CENTER, with Submit/Discard
   unchanged. Those **physical** positions do not mirror in Arabic, although
   text/fonts remain localized/RTL. Controls meet the existing 48 dp minimum.
-- Remove only ordinary idle/Starting/recording/paused **static filled** mic
-  halo backgrounds; retain R1 recording waves/reduced-motion/cleanup and
-  existing daily-limit/unavailable disabled artwork. Do not change the
-  104 dp mic target or invent a responsive breakpoint.
-- This is a **client** cap, not server duration validation. Issue #391 separately
-  owns authoritative server duration and empty/speechless audio research.
-  Existing Manual draft, AI consent, authenticated actor, fresh server quota,
-  35-day replay identity and #384 deferral remain unchanged.
+- Remove only ordinary idle/Starting/recording/paused **static filled** mic halo
+  backgrounds; retain R1 recording waves/reduced-motion/cleanup and existing
+  daily-limit/unavailable disabled artwork. Do not change the 104 dp mic target
+  or invent a responsive breakpoint.
+- This is a **client** cap, not server duration validation. Issue #391
+  separately owns authoritative server duration and empty/speechless audio
+  research. Existing Manual draft, AI consent, authenticated actor, fresh server
+  quota, 35-day replay identity and #384 deferral remain unchanged.
 - The accepted read-only latency audit identifies two safe-minimum repairs to
   test before changing source: consolidate duplicate route/flow native
-  microphone permission refreshes into **one fresh just-in-time actor-safe
-  typed result**, retaining inline permission recovery and OS prompting only
-  after explicit user action; and defer the **first** hidden Manual component
-  mount on a Voice-first route, then keep it mounted after Manual selection so
-  drafts persist. Do not remove fresh local AI consent, authoritative
-  preattempt availability, cancellation generations, native 300 ms
-  early-command stabilization or true record-before-Listening readiness.
-  Do not alter availability HTTP in-flight coordination without evidence.
-- Startup is desired to be faster, but **no elapsed-time target or savings**
-  is approved or measured. Owner-local device timing must distinguish
+  microphone permission refreshes into **one fresh just-in-time actor-safe typed
+  result**, retaining inline permission recovery and OS prompting only after
+  explicit user action; and defer the **first** hidden Manual component mount on
+  a Voice-first route, then keep it mounted after Manual selection so drafts
+  persist. Do not remove fresh local AI consent, authoritative preattempt
+  availability, cancellation generations, native 300 ms early-command
+  stabilization or true record-before-Listening readiness. Do not alter
+  availability HTTP in-flight coordination without evidence.
+- Startup is desired to be faster, but **no elapsed-time target or savings** is
+  approved or measured. Owner-local device timing must distinguish
   navigation/first frame, consent, quota, permission and native prepare/record
   stages; do not log audio, transcripts, financial content, identifiers or
   credentials.

@@ -1,5 +1,5 @@
 {
-  "status": "owner-image-approved-binding-metadata-approved",
+  "status": "accepted",
   "revision": "2026-10-11-voice-controls-r2",
   "base": "0e7ee55abf6fb18af37e29e4f2e48ba45604a31e",
   "imageCommit": "b00b7ae07a7f75008f21ff2c9f8680f735153901",
@@ -17,11 +17,11 @@
   "binding": {
     "file": "voice-controls-r2-green-gray-proposal.binding.md",
     "status": "APPROVED",
-    "bindingMetadataRevision": "sha256:78105dbc1254cb508429f417cf5e26c71324364c7e4e74447f7249735f282a0e",
-    "combinedRevision": "sha256:d06cfdf4f6bbc8c3bd7f12b5129115206a31c7f3c1dfb4a266977456252caa14",
-    "approvedBindingMetadataRevision": "sha256:78105dbc1254cb508429f417cf5e26c71324364c7e4e74447f7249735f282a0e",
-    "approvedCombinedRevision": "sha256:d06cfdf4f6bbc8c3bd7f12b5129115206a31c7f3c1dfb4a266977456252caa14",
-    "approvalEvidence": "Owner approved the latest green/gray/red PNG concept. Root/local executor verified exact image revision sha256:3c1d098090cfac539c834634f2dfb1db29dc75b8afc9f479d61d17af09680281, Binding Facts revision sha256:78105dbc1254cb508429f417cf5e26c71324364c7e4e74447f7249735f282a0e, and combined revision sha256:d06cfdf4f6bbc8c3bd7f12b5129115206a31c7f3c1dfb4a266977456252caa14; on 2026-10-11 root explicitly ACCEPTED ALL THREE exact revisions under owner-delegated autonomy after faithful 15-key/three-panel/Arabic review. Owner was not individually shown the computed SHA values. Final official binding verifier PASS and read-only Speckit analysis remain pending under unchecked T068."
+    "bindingMetadataRevision": "sha256:72459993f2d82fe128fd9d64ce83c9646e60edef5e1f2d187f42354a48158c2b",
+    "combinedRevision": "sha256:71906e40d73448a0767df14954bf7f1a239126dc894a64dbbe227e191f549a77",
+    "approvedBindingMetadataRevision": "sha256:72459993f2d82fe128fd9d64ce83c9646e60edef5e1f2d187f42354a48158c2b",
+    "approvedCombinedRevision": "sha256:71906e40d73448a0767df14954bf7f1a239126dc894a64dbbe227e191f549a77",
+    "approvalEvidence": "Owner approved latest green/gray/red PNG; local executor verified image SHA, 1832x858 pixels, 1470108 bytes and matching Git blob. Root faithful review accepts scoped visual facts/AR labels. On 2026-10-11 root reviewed the public verifier results and, under delegated authority, accepted bindingMetadataRevision sha256:78105dbc1254cb508429f417cf5e26c71324364c7e4e74447f7249735f282a0e and combinedRevision sha256:d06cfdf4f6bbc8c3bd7f12b5129115206a31c7f3c1dfb4a266977456252caa14 as approved (superseded). Root then accepted the faithful Color/theme facts refinement (filled NileGreen Submit, white label, paper-plane Ionicons send; transparent gray Pause/Resume outlined with pause/play glyph; transparent red Discard outlined with close glyph; gray disabled completed Pause with pause glyph; 20 dp icons; 14/22 semibold labels), yielding current approved metadata sha256:72459993f2d82fe128fd9d64ce83c9646e60edef5e1f2d187f42354a48158c2b and combined sha256:71906e40d73448a0767df14954bf7f1a239126dc894a64dbbe227e191f549a77 from the official verifier. No separate owner SHA approval is claimed. Final canonical verifier PASS, correct-feature prerequisites and read-only Speckit analysis remain root-owned before implementation."
   },
   "precedence": {
     "supersedes": [

@@ -1130,109 +1130,125 @@ checks, audio, live provider, hosted quota or rendered evidence. #384 stays
 separately deferred. No new commercial entitlement/SQL/migration/sync/finance
 work is authorized.
 
-
 ## Owner-approved Voice controls R2 continuation — stable task IDs (11 October 2026)
 
-The owner approved `mockups/voice-controls-r2-green-gray-proposal.png`
-(“latest mockups approved”). Published image-only base
+The owner approved `mockups/voice-controls-r2-green-gray-proposal.png` (“latest
+mockups approved”). Published image-only base
 `b00b7ae07a7f75008f21ff2c9f8680f735153901`, Git blob
-`caceb8d1cade9e4e9c574e95fc0e603a39e766de`,
-SHA-256 `3c1d098090cfac539c834634f2dfb1db29dc75b8afc9f479d61d17af09680281`,
-1832×858 image pixels, 1470108 bytes verified locally. R2 exact
-15-key sidecar revisions have been verified and expressly ACCEPTED by root on
-2026-10-11 under delegated owner authority: image sha256:3c1d098090cfac539c834634f2dfb1db29dc75b8afc9f479d61d17af09680281,
-metadata sha256:78105dbc1254cb508429f417cf5e26c71324364c7e4e74447f7249735f282a0e, combined
-sha256:d06cfdf4f6bbc8c3bd7f12b5129115206a31c7f3c1dfb4a266977456252caa14. No separate owner personal SHA
-review is claimed. Final official verifier PASS and fresh read-only Speckit
-analysis remain pending: **T068 stays unchecked**.
+`caceb8d1cade9e4e9c574e95fc0e603a39e766de`, SHA-256
+`3c1d098090cfac539c834634f2dfb1db29dc75b8afc9f479d61d17af09680281`, 1832×858
+image pixels, 1470108 bytes verified locally. R2 exact 15-key sidecar and
+computed revision tuple were accepted on 2026-10-11 under delegated root
+authority (prior metadata
+`sha256:78105dbc1254cb508429f417cf5e26c71324364c7e4e74447f7249735f282a0e`,
+combined
+`sha256:d06cfdf4f6bbc8c3bd7f12b5129115206a31c7f3c1dfb4a266977456252caa14`, both
+superseded by the faithful Color/theme facts refinement); current approved
+metadata
+`sha256:72459993f2d82fe128fd9d64ce83c9646e60edef5e1f2d187f42354a48158c2b` and
+combined
+`sha256:71906e40d73448a0767df14954bf7f1a239126dc894a64dbbe227e191f549a77` from
+the official verifier; do not claim a separate owner SHA approval. T068 was
+completed on 2026-10-11 (see actual gate receipt below): final canonical binding
+verification authoritative, correct-feature prerequisites exit 0, read-only
+Speckit analysis recorded.
 
 These T067–T074 update in place: existing T001–T066, R1 and original
 source/approval/evidence history are preserved unchanged. In particular,
 **preimplementation read-only Speckit analysis MUST precede T069 Red and
 T070/T071 production**; independent T073 review is afterward.
 
-- [x] **T067 [P] [US0] R2 planning correction:** reconcile FR-043–FR-047
-      and SC-019–SC-022, owner-approved third completed panel, stable
-      physical controls/Arabic labels, local 30 s cap, R1 precedence,
-      verified image source identity, honest server #391 boundary,
-      one-permission and first-Manual-mount latency plan, binding context,
-      manual-to-unit/E2E matrix and owner-only evidence.
-      No source/test/E2E work authorized by T067.
-- [ ] **T068 [US0] R2 exact binding verification AND
-      PREIMPLEMENTATION Speckit gate (blocking):** root verifies SHA-256 of
-      exact R2 PNG and new official 15-key Binding Facts, computes/checks
-      official metadata and combined revisions, documents delegated
-      lead approval of exact revision (not fabricated owner review), and
-      requires the binding verifier PASS. **AFTER binding acceptance and
-      BEFORE any T069–T071 work**, root runs correct-feature
+- [x] **T067 [P] [US0] R2 planning correction:** reconcile FR-043–FR-047 and
+      SC-019–SC-022, owner-approved third completed panel, stable physical
+      controls/Arabic labels, local 30 s cap, R1 precedence, verified image
+      source identity, honest server #391 boundary, one-permission and
+      first-Manual-mount latency plan, binding context, manual-to-unit/E2E
+      matrix and owner-only evidence. No source/test/E2E work authorized by
+      T067.
+- [x] **T068 [US0] R2 exact binding verification AND PREIMPLEMENTATION Speckit
+      gate (blocking):** root verifies SHA-256 of exact R2 PNG and new official
+      15-key Binding Facts, computes/checks official metadata and combined
+      revisions, documents delegated lead approval of exact revision (not
+      fabricated owner review), and requires the binding verifier PASS. **AFTER
+      binding acceptance and BEFORE any T069–T071 work**, root runs
+      correct-feature
       `.specify/scripts/bash/check-prerequisites.sh --json --require-tasks --include-tasks`
-      and the canonical `.claude/commands/speckit.analyze.md` **READ-ONLY**
-      on final spec/plan/tasks, resolving critical/high findings. Do not
-      wait until T073 to analyze.
-- [ ] **T069 [P] [US0] R2 deterministic behavioral Red + honest E2E
-      authoring:** add actual recorder/flow/presentation/route/i18n tests
-      for three panels (Recording, Paused, **Recording complete /
-      التسجيل مكتمل**), fixed physical LEFT Submit green / CENTER
-      Pause-or-Resume gray / RIGHT Discard red, **cap-disabled gray Pause
-      and no Resume**, slash `elapsed / 00:30` and
-      `00:30 / 00:30`, no helper sentence, removed ordinary filled
-      halos with R1 recording waves retained, reduced motion, 30 s
-      **active-time** auto-stop/URI retention/no provider work and
-      cap/action/cancel/unmount/account races. Also prove the **one
-      fresh just-in-time native permission** check with typed
-      actor-safe missing/blocked/unknown/granted response and approved
-      inline recovery, valid consent and quota checks, plus **Voice-first
-      deferred first Manual mount** with Manual-form draft persisting
-      after first selection. Maintain positive denied/revoked, second
-      user, request identity, Manual Save/transfer/recurring and original
-      daily/unavailable cases. E2E *authorship* only for controllable
-      fixtures; native audio/provider/OS permission/rendering stays
-      manual-only. Missing module/test setup is structural, not Red.
-- [ ] **T070 [US0] Recorder/flow/route 30 s + single-permission repair
-      only after accepted Red:** update named active-capture cap to
-      30 s; auto-stop/finalize once and keep file/URI for explicit Submit
-      or Discard; no provider, review or quota consumption at cap.
-      Preserve native **300 ms post-record stabilization**, early
-      stop/pause coordination, generation/user-scope/consent/quota
-      gates, request identities, same-key retry, and native
-      record-before-Listening rule. Consolidate route/flow's redundant
-      native permission reads into **one just-in-time** typed,
-      generation/actor-safe result; render approved inline permission
-      prompt only for genuinely missing grant, request OS permission
-      only from explicit action. Do not alter availability transport
-      or in-flight refresh coordination.
-- [ ] **T071 [US0] R2 UI + narrow Voice-first Manual mount only after
-      accepted Red:** render fixed physical three-control order and
-      approved green/gray/red treatments (Arabic Submit **إرسال**);
-      explicit third panel **Recording complete / التسجيل مكتمل** at
-      `00:30 / 00:30` with enabled Submit/Discard, **disabled
-      gray center Pause**, no Resume/waves/helper; active and paused
-      clocks `elapsed / 00:30` and no helper. Remove only ordinary
-      filled halos while keeping R1 ripples and existing
+      and the canonical `.claude/commands/speckit.analyze.md` **READ-ONLY** on
+      final spec/plan/tasks, resolving critical/high findings. Do not wait until
+      T073 to analyze. **Actual receipt (2026-10-11):** root ran public
+      `inspect-r2-binding-admin.js` (authoritative true, errors []),
+      correct-feature prerequisites `--json --require-tasks --include-tasks`
+      with SPECIFY_FEATURE=389-voice-usage-limits (exit 0, FEATURE_DIR
+      `/e/Work/My Projects/Monyvi-issue347-ui-fidelity/specs/389-voice-usage-limits`),
+      and canonical read-only `speckit.analyze`: 47 FR + 22 SC = 69 entries, 74
+      unique tasks, 100% PLANNED traceability, 0 critical, 0 high, 0 ambiguity,
+      0 duplication, 0 unmapped; V1 MEDIUM owner-only native/ rendered/a11y
+      evidence NOT RUN (not a before-code blocker); S1 LOW superseded draft
+      status. Approved tuple image
+      sha256:3c1d098090cfac539c834634f2dfb1db29dc75b8afc9f479d61d17af09680281,
+      metadata
+      sha256:72459993f2d82fe128fd9d64ce83c9646e60edef5e1f2d187f42354a48158c2b,
+      combined
+      sha256:71906e40d73448a0767df14954bf7f1a239126dc894a64dbbe227e191f549a77.
+      Source/tests/E2E remain NOT STARTED.
+- [ ] **T069 [P] [US0] R2 deterministic behavioral Red + honest E2E authoring:**
+      add actual recorder/flow/presentation/route/i18n tests for three panels
+      (Recording, Paused, **Recording complete / التسجيل مكتمل**), fixed
+      physical LEFT Submit green / CENTER Pause-or-Resume gray / RIGHT Discard
+      red, **cap-disabled gray Pause and no Resume**, slash `elapsed / 00:30`
+      and `00:30 / 00:30`, no helper sentence, removed ordinary filled halos
+      with R1 recording waves retained, reduced motion, 30 s **active-time**
+      auto-stop/URI retention/no provider work and
+      cap/action/cancel/unmount/account races. Also prove the **one fresh
+      just-in-time native permission** check with typed actor-safe
+      missing/blocked/unknown/granted response and approved inline recovery,
+      valid consent and quota checks, plus **Voice-first deferred first Manual
+      mount** with Manual-form draft persisting after first selection. Maintain
+      positive denied/revoked, second user, request identity, Manual
+      Save/transfer/recurring and original daily/unavailable cases. E2E
+      _authorship_ only for controllable fixtures; native audio/provider/OS
+      permission/rendering stays manual-only. Missing module/test setup is
+      structural, not Red.
+- [ ] **T070 [US0] Recorder/flow/route 30 s + single-permission repair only
+      after accepted Red:** update named active-capture cap to 30 s;
+      auto-stop/finalize once and keep file/URI for explicit Submit or Discard;
+      no provider, review or quota consumption at cap. Preserve native **300 ms
+      post-record stabilization**, early stop/pause coordination,
+      generation/user-scope/consent/quota gates, request identities, same-key
+      retry, and native record-before-Listening rule. Consolidate route/flow's
+      redundant native permission reads into **one just-in-time** typed,
+      generation/actor-safe result; render approved inline permission prompt
+      only for genuinely missing grant, request OS permission only from explicit
+      action. Do not alter availability transport or in-flight refresh
+      coordination.
+- [ ] **T071 [US0] R2 UI + narrow Voice-first Manual mount only after accepted
+      Red:** render fixed physical three-control order and approved
+      green/gray/red treatments (Arabic Submit **إرسال**); explicit third panel
+      **Recording complete / التسجيل مكتمل** at `00:30 / 00:30` with enabled
+      Submit/Discard, **disabled gray center Pause**, no Resume/waves/helper;
+      active and paused clocks `elapsed / 00:30` and no helper. Remove only
+      ordinary filled halos while keeping R1 ripples and existing
       daily-limit/unavailable disabled graphics. Defer initial hidden
-      `ManualTransactionEntry` mount on direct Voice-first route,
-      then latch mounted once Manual selected across safe mode
-      switches to retain draft, calculator focus, Save/transfer/
-      recurring semantics; initial Manual route unchanged. Preserve
-      ≥48 dp actions, Arabic physical positioning, dark/RTL and
-      responsive/reduced-motion contracts. No other Manual edits.
+      `ManualTransactionEntry` mount on direct Voice-first route, then latch
+      mounted once Manual selected across safe mode switches to retain draft,
+      calculator focus, Save/transfer/ recurring semantics; initial Manual route
+      unchanged. Preserve ≥48 dp actions, Arabic physical positioning, dark/RTL
+      and responsive/reduced-motion contracts. No other Manual edits.
 - [ ] **T072 [P] [US0] Batched integration/Green:** root runs actual
       focused/combined Jest, TS, lint/i18n, hook checks and retained
-      R1/Manual/consent/quota/retry/cancellation positive controls.
-      Source-only review is not device performance or native proof.
-- [ ] **T073 [US0] Independent POSTIMPLEMENTATION review:** after
-      accepted T070/T071 source and T072 checks, reviewers assess
-      TypeScript, logical race/idempotence and actor/cancellation,
-      accessibility and NativeWind binding, regression/QA and
-      security if touched. Resolve findings. This cannot replace the
-      mandatory earlier T068 read-only Speckit gate.
-- [ ] **T074 [US0] Owner device/render/accessibility evidence:**
-      verify true 30 s active-native capture, cap/Submit/Discard
-      races, consent/permission/availability, screen-reader and
-      full 390×844/320×640/768×1024/844×390, EN/AR,
-      light/dark, font1.35/2, reduced-motion states and third completed
-      panel with separate native/display/a11y evidence. Measure
-      navigation and start-stage elapsed time separately; make no
-      unmeasured 1–2 s promise. #391 server and empty/speechless
-      research is independent. Device/Metro/E2E/provider NOT RUN
-      by this planning worker.
+      R1/Manual/consent/quota/retry/cancellation positive controls. Source-only
+      review is not device performance or native proof.
+- [ ] **T073 [US0] Independent POSTIMPLEMENTATION review:** after accepted
+      T070/T071 source and T072 checks, reviewers assess TypeScript, logical
+      race/idempotence and actor/cancellation, accessibility and NativeWind
+      binding, regression/QA and security if touched. Resolve findings. This
+      cannot replace the mandatory earlier T068 read-only Speckit gate.
+- [ ] **T074 [US0] Owner device/render/accessibility evidence:** verify true 30
+      s active-native capture, cap/Submit/Discard races,
+      consent/permission/availability, screen-reader and full
+      390×844/320×640/768×1024/844×390, EN/AR, light/dark, font1.35/2,
+      reduced-motion states and third completed panel with separate
+      native/display/a11y evidence. Measure navigation and start-stage elapsed
+      time separately; make no unmeasured 1–2 s promise. #391 server and
+      empty/speechless research is independent. Device/Metro/E2E/provider NOT
+      RUN by this planning worker.
