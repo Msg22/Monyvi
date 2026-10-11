@@ -25,6 +25,7 @@ import {
   useVoiceRecorder,
   NATIVE_STABILIZATION_DELAY_MS,
   resetRecorderRelease,
+  setMockRecorderUri,
 } from "./voice-recorder-fixtures";
 
 const ACTIVE_CAP_MS = 30_000;
@@ -139,6 +140,81 @@ describe("useVoiceRecorder R2 active-duration cap", () => {
     expect(mockStop).toHaveBeenCalledTimes(1);
     expect(unwrap(result).durationMs).toBe(ACTIVE_CAP_MS);
     expect(unwrap(result).audioUri).toBe(RETAINED_URI);
+  });
+
+
+  it.each(["missing-uri", "rejected-native-stop"] as const)(
+    "fails the 30-second cap with an explicit recoverable recorder state for %s",
+    async (failure): Promise<void> => {
+      if (failure === "missing-uri") {
+        setMockRecorderUri(null);
+      } else {
+        mockStop.mockRejectedValueOnce(new Error("Native stop failed"));
+      }
+      const { result } = renderHook(() => useVoiceRecorder());
+      await approachCap(result);
+      await advanceActiveClock(100);
+
+      expect(mockStop).toHaveBeenCalledTimes(1);
+      // The recorder must not leave the UI Listening indefinitely or pretend
+      // it has completed/retained valid audio when native finalization failed.
+      expect(unwrap(result).status).toBe("error");
+      expect(unwrap(result).isRecording).toBe(false);
+      expect(unwrap(result).audioUri).toBeNull();
+      expect(unwrap(result).durationMs).toBe(ACTIVE_CAP_MS);
+      expect(mockRecord).toHaveBeenCalledTimes(1);
+
+      await advanceActiveClock(1_500);
+      expect(mockStop).toHaveBeenCalledTimes(1);
+      expect(unwrap(result).status).toBe("error");
+      expect(unwrap(result).audioUri).toBeNull();
+
+      await actAsync(async (): Promise<void> => {
+        await unwrap(result).discard();
+      });
+      expect(unwrap(result).status).toBe("idle");
+      expect(unwrap(result).audioUri).toBeNull();
+      expect(mockRelease).toHaveBeenCalledTimes(1);
+    }
+  );
+
+  it("does not publish a failed old cap stop into the replacement after Discard/start", async (): Promise<void> => {
+    const stopped = deferred<void>();
+    mockStop.mockReturnValueOnce(stopped.promise);
+    const { result } = renderHook(() => useVoiceRecorder());
+    await approachCap(result);
+    await advanceActiveClock(100);
+    expect(mockStop).toHaveBeenCalledTimes(1);
+
+    let discarding: Promise<void> = Promise.resolve();
+    let replacing: Promise<void> = Promise.resolve();
+    actSync((): void => {
+      discarding = unwrap(result).discard();
+      replacing = unwrap(result).start();
+    });
+    await advanceActiveClock(100);
+    expect(mockRecord).toHaveBeenCalledTimes(1);
+    expect(mockRelease).not.toHaveBeenCalled();
+
+    await actAsync(async (): Promise<void> => {
+      stopped.reject(new Error("Superseded native stop failure"));
+      for (let index = 0; index < 10; index += 1) {
+        await Promise.resolve();
+      }
+      await discarding;
+      for (let index = 0; index < 8; index += 1) {
+        await Promise.resolve();
+      }
+      jest.advanceTimersByTime(NATIVE_STABILIZATION_DELAY_MS);
+      await replacing;
+    });
+
+    expect(mockStop).toHaveBeenCalledTimes(1);
+    expect(mockRelease).toHaveBeenCalledTimes(1);
+    expect(mockRecord).toHaveBeenCalledTimes(2);
+    expect(unwrap(result).status).toBe("recording");
+    expect(unwrap(result).isRecording).toBe(true);
+    expect(unwrap(result).audioUri).toBeNull();
   });
 
   it("clamps elapsed after a large timer jump", async (): Promise<void> => {

@@ -22,6 +22,23 @@ import {
   resetRecorderRelease,
 } from "./voice-recorder-fixtures";
 
+type MicrophoneStatus = "granted" | "denied" | "blocked" | "unknown";
+
+interface TypedPermissionRequest {
+  readonly requestPermissionStatus: () => Promise<MicrophoneStatus>;
+}
+
+function supportsTypedPermissionRequest(
+  value: unknown
+): value is TypedPermissionRequest {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "requestPermissionStatus" in value &&
+    typeof value.requestPermissionStatus === "function"
+  );
+}
+
 describe("useVoiceRecorder", () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -153,6 +170,59 @@ describe("useVoiceRecorder", () => {
 
       expect(granted).toBe(false);
       expect(unwrap(result).hasPermission).toBe(false);
+    });
+  });
+
+  describe("typed explicit OS permission result (same native request)", () => {
+    it.each([
+      [{ granted: true, canAskAgain: true }, "granted"],
+      [{ granted: false, canAskAgain: true }, "denied"],
+      [{ granted: false, canAskAgain: false }, "blocked"],
+    ] as const)(
+      "reports actual OS response %s as %s without a second native get",
+      async (nativeAnswer, expected): Promise<void> => {
+        mockRequestPermissions.mockResolvedValueOnce(nativeAnswer);
+        const { result } = renderHook(() => useVoiceRecorder());
+        await actAsync(async (): Promise<void> => {
+          await Promise.resolve();
+        });
+        const hook = unwrap(result);
+        expect(supportsTypedPermissionRequest(hook)).toBe(true);
+        if (!supportsTypedPermissionRequest(hook)) {
+          throw new Error("Recorder must expose typed OS request status");
+        }
+        const initialReadCalls = mockGetPermissions.mock.calls.length;
+        let status: MicrophoneStatus = "unknown";
+        await actAsync(async (): Promise<void> => {
+          status = await hook.requestPermissionStatus();
+        });
+        expect(status).toBe(expected);
+        expect(unwrap(result).permissionStatus).toBe(expected);
+        expect(mockRequestPermissions).toHaveBeenCalledTimes(1);
+        expect(mockGetPermissions).toHaveBeenCalledTimes(initialReadCalls);
+      }
+    );
+
+    it("reports an OS request failure as unknown without a follow-up permission get", async (): Promise<void> => {
+      mockRequestPermissions.mockRejectedValueOnce(new Error("OS permission failed"));
+      const { result } = renderHook(() => useVoiceRecorder());
+      await actAsync(async (): Promise<void> => {
+        await Promise.resolve();
+      });
+      const hook = unwrap(result);
+      expect(supportsTypedPermissionRequest(hook)).toBe(true);
+      if (!supportsTypedPermissionRequest(hook)) {
+        throw new Error("Recorder must expose typed OS request status");
+      }
+      const initialReadCalls = mockGetPermissions.mock.calls.length;
+      let status: MicrophoneStatus = "granted";
+      await actAsync(async (): Promise<void> => {
+        status = await hook.requestPermissionStatus();
+      });
+      expect(status).toBe("unknown");
+      expect(unwrap(result).permissionStatus).toBe("unknown");
+      expect(mockRequestPermissions).toHaveBeenCalledTimes(1);
+      expect(mockGetPermissions).toHaveBeenCalledTimes(initialReadCalls);
     });
   });
 
