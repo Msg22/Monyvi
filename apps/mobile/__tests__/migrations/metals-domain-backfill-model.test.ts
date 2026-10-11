@@ -159,7 +159,18 @@ describe("068 Metals domain migration and persisted models", () => {
     const database = source("packages/db/src/database.ts");
     const index = source("packages/db/src/index.ts");
 
-    expect(schema).toContain("version: 29");
+    const schemaVersionMatch = schema.match(/version:\s*(\d+)/);
+    const schemaVersion = schemaVersionMatch
+      ? Number(schemaVersionMatch[1])
+      : 0;
+    const migrationVersions = Array.from(
+      migrations.matchAll(/toVersion:\s*(\d+)/g),
+      (match) => Number(match[1])
+    );
+    const highestMigrationVersion = Math.max(...migrationVersions);
+
+    expect(schemaVersion).toBeGreaterThanOrEqual(29);
+    expect(schemaVersion).toBe(highestMigrationVersion);
     expect(migrations).toContain("toVersion: 27");
     expect(migrations).toContain("toVersion: 28");
     expect(migrations).toContain("toVersion: 29");
