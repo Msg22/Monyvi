@@ -27,6 +27,8 @@ export interface GroupedDecimalInputProps {
   readonly autoFocus?: boolean;
   readonly keyboardType?: "decimal-pad" | "numeric" | "numbers-and-punctuation";
   readonly inputMode?: "decimal" | "numeric" | "text" | "none";
+  /** Opt in to native keyboardType precedence when no inputMode is supplied. */
+  readonly preserveKeyboardType?: boolean;
   readonly leadingAdornment?: ReactNode;
   readonly trailingAdornment?: ReactNode;
   readonly inputRef?: Ref<TextInput>;
@@ -65,7 +67,8 @@ export function GroupedDecimalInput({
   helperText,
   autoFocus,
   keyboardType = "decimal-pad",
-  inputMode = "decimal",
+  inputMode,
+  preserveKeyboardType = false,
   leadingAdornment,
   trailingAdornment,
   inputRef,
@@ -91,7 +94,12 @@ export function GroupedDecimalInput({
     },
     [allowNegative, onCanonicalChange, value]
   );
-  const resolvedInputMode = showSoftInputOnFocus === false ? "none" : inputMode;
+  const resolvedInputMode =
+    showSoftInputOnFocus === false
+      ? "none"
+      : preserveKeyboardType && inputMode === undefined
+        ? undefined
+        : (inputMode ?? "decimal");
   const displayValue = getEditableAmountDisplay(value, {
     allowNegative,
   }).text;

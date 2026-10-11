@@ -340,7 +340,7 @@ export default function AddAccount(): React.ReactNode {
               }}
               error={errors.balance}
               keyboardType="numeric"
-              inputMode="numeric"
+              preserveKeyboardType
               onFocus={handleBalanceFieldFocus}
             />
           </View>

@@ -471,7 +471,7 @@ function EditAccountForm({
               }}
               error={errors.balance}
               keyboardType="numeric"
-              inputMode="numeric"
+              preserveKeyboardType
               onFocus={handleBalanceFieldFocus}
             />
           </View>
