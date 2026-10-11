@@ -657,7 +657,7 @@ describe("Metals reconciliation, sync, rates, and metadata", () => {
     ]);
   });
 
-  it("submits complete Metals roots before metadata and acknowledges only accepted RPC groups", async () => {
+  it("submits complete Metals roots without replaying coalesced metadata fragments", async () => {
     const commitMetadataOutcome = jest.fn().mockResolvedValue(undefined);
     const rpc = jest
       .fn()
@@ -774,22 +774,11 @@ describe("Metals reconciliation, sync, rates, and metadata", () => {
       acknowledgeAllDedicatedRows: true,
       acknowledgedActionIds: new Set([ACTION_ID]),
     });
-    expect(commitMetadataOutcome).toHaveBeenCalledTimes(1);
+    expect(commitMetadataOutcome).not.toHaveBeenCalled();
+    expect(rpc).toHaveBeenCalledTimes(1);
     expect(rpc).toHaveBeenNthCalledWith(1, "apply_metal_action_v1", {
       p_payload_hash: HASH,
       p_payload_json: payloadJson,
-    });
-    expect(rpc).toHaveBeenNthCalledWith(2, "apply_metal_metadata_patch_v1", {
-      p_holding_id: HOLDING_ID,
-      p_patch: {
-        fields: {
-          name: {
-            value: "Renamed",
-            writtenAt: 1_788_229_200_000,
-            writerId: "018f0c7a-1234-7abc-8def-000000000020",
-          },
-        },
-      },
     });
   });
 
@@ -833,24 +822,9 @@ describe("Metals reconciliation, sync, rates, and metadata", () => {
     expect(rpc).not.toHaveBeenCalled();
   });
 
-  it("acknowledges a metadata-only Metals patch after the dedicated RPC accepts it", async () => {
-    const commitMetadataOutcome = jest.fn().mockResolvedValue(undefined);
-    const rpc = jest.fn().mockResolvedValueOnce({
-      data: {
-        status: "applied",
-        holdingId: HOLDING_ID,
-        canonicalMetadata: {
-          name: {
-            value: "Canonical name",
-            writtenAt: 1_788_229_200_001,
-            writerId: HOLDING_ACTION_ID,
-          },
-          notes: null,
-        },
-      },
-      error: null,
-    });
-
+  it("fails closed on unsynced legacy metadata without durable request identity", async () => {
+    const rpc = jest.fn();
+    const commitMetadataOutcome = jest.fn();
     await expect(
       pushMetalDedicatedChanges(
         createMockDatabase(),
@@ -864,13 +838,14 @@ describe("Metals reconciliation, sync, rates, and metadata", () => {
                 effective_action_id: ACTION_ID,
                 name_written_at: 1_788_229_200_000,
                 name_writer_id: "018f0c7a-1234-7abc-8def-000000000020",
+                user_id: USER_ID,
               },
             ],
             deleted: [],
           },
           assets: {
             created: [],
-            updated: [{ id: HOLDING_ID, type: "METAL", name: "Renamed" }],
+            updated: [{ id: HOLDING_ID, type: "METAL", name: "Legacy rename" }],
             deleted: [],
           },
         },
@@ -880,34 +855,11 @@ describe("Metals reconciliation, sync, rates, and metadata", () => {
         commitMetadataOutcome
       )
     ).resolves.toEqual({
-      acknowledgeAllDedicatedRows: true,
+      acknowledgeAllDedicatedRows: false,
       acknowledgedActionIds: new Set<string>(),
     });
-    expect(commitMetadataOutcome).toHaveBeenCalledWith({
-      canonicalMetadata: {
-        name: {
-          value: "Canonical name",
-          writtenAt: 1_788_229_200_001,
-          writerId: HOLDING_ACTION_ID,
-        },
-        notes: null,
-      },
-      holdingId: HOLDING_ID,
-      status: "applied",
-    });
-    expect(rpc).toHaveBeenCalledTimes(1);
-    expect(rpc).toHaveBeenCalledWith("apply_metal_metadata_patch_v1", {
-      p_holding_id: HOLDING_ID,
-      p_patch: {
-        fields: {
-          name: {
-            value: "Renamed",
-            writtenAt: 1_788_229_200_000,
-            writerId: "018f0c7a-1234-7abc-8def-000000000020",
-          },
-        },
-      },
-    });
+    expect(rpc).not.toHaveBeenCalled();
+    expect(commitMetadataOutcome).not.toHaveBeenCalled();
   });
 
   it("propagates pull failures without advancing the watermark", async () => {

@@ -1121,6 +1121,65 @@ export type Database = {
           },
         ];
       };
+      metal_metadata_edit_outcomes: {
+        Row: {
+          action_id: string | null;
+          applied_changes_json: Json;
+          canonical_metadata_json: Json;
+          created_at: string;
+          deleted: boolean;
+          holding_id: string;
+          id: string;
+          local_applied_changes_json: string;
+          occurred_at: string;
+          payload_hash: string;
+          request_json: string;
+          status: string;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          action_id?: string | null;
+          applied_changes_json?: Json;
+          canonical_metadata_json?: Json;
+          created_at?: string;
+          deleted?: boolean;
+          holding_id: string;
+          id: string;
+          local_applied_changes_json?: string;
+          occurred_at: string;
+          payload_hash: string;
+          request_json: string;
+          status: string;
+          updated_at?: string;
+          user_id: string;
+        };
+        Update: {
+          action_id?: string | null;
+          applied_changes_json?: Json;
+          canonical_metadata_json?: Json;
+          created_at?: string;
+          deleted?: boolean;
+          holding_id?: string;
+          id?: string;
+          local_applied_changes_json?: string;
+          occurred_at?: string;
+          payload_hash?: string;
+          request_json?: string;
+          status?: string;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "metal_metadata_edit_outcomes_user_id_holding_id_fkey";
+            columns: ["user_id", "holding_id"];
+            isOneToOne: false;
+            referencedRelation: "assets";
+            referencedColumns: ["user_id", "id"];
+          },
+        ];
+      };
       metal_rate_references: {
         Row: {
           action_id: string;
@@ -1746,6 +1805,10 @@ export type Database = {
       };
       apply_metal_action_v1: {
         Args: { p_payload_hash: string; p_payload_json: string };
+        Returns: Json;
+      };
+      apply_metal_metadata_edit_v1: {
+        Args: { p_request_hash: string; p_request_json: string };
         Returns: Json;
       };
       apply_metal_metadata_patch_v1: {

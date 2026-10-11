@@ -13,6 +13,7 @@ import { MetalActionEvidence } from "../../../../packages/db/src/models/MetalAct
 import { MetalHoldingState } from "../../../../packages/db/src/models/MetalHoldingState";
 import { MetalLifecycleEvent } from "../../../../packages/db/src/models/MetalLifecycleEvent";
 import { MetalRateReference } from "../../../../packages/db/src/models/MetalRateReference";
+import { MetalMetadataEdit } from "../../../../packages/db/src/models/MetalMetadataEdit";
 import {
   METAL_ACTION_KINDS,
   assertCanonicalMetalRevision,
@@ -59,6 +60,7 @@ jest.mock("../../services/supabase", () => ({
 }));
 
 const MODEL_CLASSES: Array<typeof Model> = [
+  MetalMetadataEdit,
   Asset,
   AssetMetal,
   FinancialActionGroup,

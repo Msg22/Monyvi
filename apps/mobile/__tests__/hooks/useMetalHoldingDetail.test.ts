@@ -83,11 +83,25 @@ const mockObserveMetalDetailRateReferences = jest.fn<
   MockLocalQuery,
   [string, string]
 >(() => mockCreateLocalQuery());
+const mockObserveMetalDetailMetadata = jest.fn<
+  MockLocalQuery,
+  [string, string]
+>(() => mockCreateLocalQuery());
+const mockObserveMetalDetailMetadataRoots = jest.fn<
+  MockLocalQuery,
+  [string, string]
+>(() => mockCreateLocalQuery());
 const mockReadMetalDetailReadModel = jest.fn<Promise<unknown>, [unknown]>();
 const mockReadHistoricalReference = jest.fn<Promise<unknown>, [unknown]>();
 const mockSyncDatabase = jest.fn<Promise<void>, [unknown]>(() =>
   Promise.resolve()
 );
+
+jest.mock("@monyvi/db", () => ({
+  database: {
+    get: jest.fn(),
+  },
+}));
 
 jest.mock("@react-navigation/native", () => ({
   useIsFocused: (): boolean => mockIsFocused,
@@ -152,6 +166,13 @@ jest.mock("react-native", () => {
 jest.mock("@/services/metal-action-evidence-observer-service", () => ({
   observeMetalDetailActionEvidence: (...args: [string, string]) =>
     mockObserveMetalDetailActionEvidence(...args),
+}));
+
+jest.mock("@/services/metal-metadata-history-read-model-service", () => ({
+  observeMetalDetailMetadata: (...args: [string, string]) =>
+    mockObserveMetalDetailMetadata(...args),
+  observeMetalDetailMetadataRoots: (...args: [string, string]) =>
+    mockObserveMetalDetailMetadataRoots(...args),
 }));
 
 jest.mock("@/services/metal-detail-read-model-service", () => ({
@@ -268,7 +289,15 @@ describe("useMetalHoldingDetail", () => {
       "user-1",
       "holding-1"
     );
-    expect(mockLocalObservers).toHaveLength(5);
+    expect(mockObserveMetalDetailMetadata).toHaveBeenCalledWith(
+      "user-1",
+      "holding-1"
+    );
+    expect(mockObserveMetalDetailMetadataRoots).toHaveBeenCalledWith(
+      "user-1",
+      "holding-1"
+    );
+    expect(mockLocalObservers).toHaveLength(7);
 
     act(() => {
       mockLocalObservers[3]?.next();
@@ -301,6 +330,8 @@ describe("useMetalHoldingDetail", () => {
     ["lifecycle event", 2],
     ["action evidence", 3],
     ["rate reference", 4],
+    ["metadata", 5],
+    ["metadata roots", 6],
   ] as const)(
     "invalidates stale detail and recovers after a %s subscription error",
     async (_dependency, observerIndex) => {
@@ -325,7 +356,7 @@ describe("useMetalHoldingDetail", () => {
         result.current.retry();
       });
 
-      await waitFor(() => expect(mockLocalObservers).toHaveLength(10));
+      await waitFor(() => expect(mockLocalObservers).toHaveLength(14));
       act(() => {
         emitMarketRates({ selectedSnapshot: selectedSnapshot(initialRates) });
       });

@@ -186,6 +186,8 @@
     "keep_editing": "Keep editing",
     "discard": "Discard changes",
     "fields": {
+      "name": "Name",
+      "notes": "Notes",
       "weight": "Weight",
       "purity": "Purity",
       "purchasePrice": "Purchase price",
@@ -441,6 +443,7 @@
   "timeline": {
     "add": "Added",
     "correct": "Details updated",
+    "metadata": "Details updated",
     "change": "{{field}}: {{before}} → {{after}}",
     "change_unavailable": "Change details unavailable",
     "sell": "Sold",

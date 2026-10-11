@@ -190,6 +190,8 @@
     "keep_editing": "متابعة التعديل",
     "discard": "تجاهل التغييرات",
     "fields": {
+      "name": "الاسم",
+      "notes": "ملاحظات",
       "weight": "الوزن",
       "purity": "النقاء",
       "purchasePrice": "سعر الشراء",
@@ -449,6 +451,7 @@
   "timeline": {
     "add": "تمت الإضافة",
     "correct": "تم تحديث التفاصيل",
+    "metadata": "تم تحديث التفاصيل",
     "change": "{{field}}: من {{before}} إلى {{after}}",
     "change_unavailable": "تفاصيل التغيير غير متاحة",
     "sell": "تم البيع",

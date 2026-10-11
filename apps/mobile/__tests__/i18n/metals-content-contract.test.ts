@@ -224,3 +224,18 @@ describe("Metals EN/AR content contract", () => {
     }
   });
 });
+
+describe("#363 metadata History copy", () => {
+  it("keeps Name/Notes and Details updated labels available in both languages", () => {
+    expect(flatten(en)).toMatchObject({
+      "timeline.metadata": "Details updated",
+      "edit.fields.name": "Name",
+      "edit.fields.notes": "Notes",
+    });
+    expect(flatten(ar)).toMatchObject({
+      "timeline.metadata": "تم تحديث التفاصيل",
+      "edit.fields.name": "الاسم",
+      "edit.fields.notes": "ملاحظات",
+    });
+  });
+});

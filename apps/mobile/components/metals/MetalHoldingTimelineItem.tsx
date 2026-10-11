@@ -27,7 +27,8 @@ export function MetalHoldingTimelineItem({
   const locale = resolveLocale(i18n.resolvedLanguage);
 
   const changeLines =
-    item.kind === "correct" && item.correctionChanges
+    (item.kind === "correct" || item.kind === "metadata") &&
+    item.correctionChanges
       ? item.correctionChanges.map((change) => {
           const before = formatCorrectionValue(change, "before", locale, t);
           const after = formatCorrectionValue(change, "after", locale, t);
@@ -43,12 +44,19 @@ export function MetalHoldingTimelineItem({
 
   const verifiedLines =
     changeLines?.length && changeLines.every((line) => line !== null)
-      ? (changeLines as string[])
+      ? changeLines
       : null;
 
   const details =
-    item.kind === "correct"
-      ? (verifiedLines ?? [t("timeline.change_unavailable")])
+    item.kind === "correct" || item.kind === "metadata"
+      ? verifiedLines
+        ? [
+            ...(item.hasUnavailableMaterialChanges
+              ? [t("timeline.change_unavailable")]
+              : []),
+            ...verifiedLines,
+          ]
+        : [t("timeline.change_unavailable")]
       : [];
 
   return (
@@ -99,6 +107,7 @@ function formatCorrectionValue(
 ): string | null {
   const value = change[side];
   if (value === null) return t("edit.not_recorded");
+  if (change.field === "name" || change.field === "notes") return value;
   if (change.field === "weight") {
     const formatted = formatWeight(value, locale, t("weight_unit"));
     return formatted === "—" ? null : formatted;

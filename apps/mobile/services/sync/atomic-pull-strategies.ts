@@ -34,6 +34,7 @@ const METAL_DEDICATED_PULL_TABLES = [
   "financial_action_groups",
   "metal_action_evidence",
   "metal_lifecycle_events",
+  "metal_metadata_edit_outcomes",
   "metal_rate_references",
   "metal_holding_states",
 ] as const;

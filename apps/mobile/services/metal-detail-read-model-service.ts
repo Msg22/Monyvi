@@ -33,6 +33,17 @@ import { buildMetalDetailTerminalFacts } from "@/services/metal-terminal-display
 import { composeHistoricalMetalDetailReference } from "@/services/metal-historical-detail-composition-service";
 import type { HistoricalMetalDetailReference } from "@/services/metal-historical-detail-facade-service";
 import {
+  combineMetalDetailMetadataTimeline,
+  readAppliedMetalMetadataHistory,
+  type MetalDetailTimelineItem,
+} from "@/services/metal-metadata-history-read-model-service";
+export type {
+  MetalDetailCorrectionField,
+  MetalDetailCorrectionChange,
+  MetalDetailTimelineItem,
+} from "@/services/metal-metadata-history-read-model-service";
+import type { MetalMetadataHistoryEvent } from "@/services/metal-metadata-evidence";
+import {
   createHistoricalContextKey,
   createHistoricalDetailContext,
 } from "@/services/metal-detail-historical-reference-service";
@@ -133,35 +144,12 @@ export interface BuildMetalDetailReadModelInput {
     | readonly LegacyDisposalRevisionEvidence[]
     | null;
   readonly lifecycleEvents: readonly MetalDetailLifecycleEventInput[];
+  readonly metadataHistory?: readonly MetalMetadataHistoryEvent[];
   readonly metal: MetalDetailMetalInput;
   readonly preferredCurrency?: CurrencyType;
   readonly rateReferences: readonly unknown[];
   readonly terminalFacts?: MetalTerminalFacts | null;
   readonly userId: string;
-}
-
-export type MetalDetailCorrectionField =
-  | "weight"
-  | "purity"
-  | "physicalForm"
-  | "purchasePrice"
-  | "purchaseCurrency"
-  | "purchaseDate";
-
-export interface MetalDetailCorrectionChange {
-  readonly field: MetalDetailCorrectionField;
-  readonly before: string | null;
-  readonly after: string | null;
-  readonly beforeCurrency?: string | null;
-  readonly afterCurrency?: string | null;
-}
-
-export interface MetalDetailTimelineItem {
-  readonly id: string;
-  readonly kind: MetalDetailLifecycleEventInput["kind"];
-  readonly occurredAt: Date;
-  // null means the event exists, but exact before/after changes cannot be read.
-  readonly correctionChanges?: readonly MetalDetailCorrectionChange[] | null;
 }
 
 export interface MetalDetailAttribution {
@@ -338,12 +326,18 @@ export async function readMetalDetailReadModel(
   });
 
   const rateReferenceInputs = rateReferences.map(toRateReferenceInput);
+  const metadataHistory = await readAppliedMetalMetadataHistory(
+    database,
+    asset.id,
+    scope.userId
+  );
   const model = buildMetalDetailReadModel({
     asset: toDetailAssetInput(asset),
     currentRates: options.currentRates,
     holdingState: toDetailHoldingStateInput(holdingState),
     legacyDisposalRevisionEvidence: toLegacyDisposalRevisionEvidence(evidence),
     lifecycleEvents: shapeMetalDetailLifecycleEvents(events, evidence),
+    metadataHistory,
     metal: toDetailMetalInput(metal, metalType),
     preferredCurrency: options.preferredCurrency,
     rateReferences: rateReferenceInputs,
@@ -562,10 +556,13 @@ export function buildMetalDetailReadModel(
     renderKey: toRenderKey(input.metal.metalType, itemForm),
     status,
     terminalFacts: buildMetalDetailTerminalFacts(input, status),
-    timeline:
+    timeline: combineMetalDetailMetadataTimeline(
       projection === null
         ? []
         : buildTimeline(reduced.acceptedEvents, input.lifecycleEvents),
+      input.metadataHistory ?? [],
+      input.lifecycleEvents
+    ),
     totalGainDecimal: attribution?.totalGainDecimal ?? null,
     unavailableExactFacts,
     weightGramsDecimal: input.metal.weightGramsDecimal,

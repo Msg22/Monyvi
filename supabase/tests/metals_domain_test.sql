@@ -1204,6 +1204,27 @@ select payload_json, payload_hash, null::jsonb as outcome
 from input;
 grant select, update on pg_temp.metal_add_rpc to authenticated;
 
+create temp table pg_temp.issue363_metadata_request as
+with edit_json as (
+  select private.financial_action_encode_jsonb_v1(
+    jsonb_build_object(
+      'editId','018f0c7a-1234-7abc-8def-000000000040',
+      'fields',jsonb_build_object('name',jsonb_build_object(
+        'value','Remote rename','writtenAt','1788229200000',
+        'writerId','018f0c7a-1234-7abc-8def-000000000040'
+      )),
+      'holdingId','018f0c7a-1234-7abc-8def-000000000034',
+      'linkedActionId',NULL,
+      'occurredAt','2026-08-31T10:15:30.123Z',
+      'userId','018f0c7a-1234-7abc-8def-000000000003'
+    )
+  ) request_json
+)
+select request_json,
+  encode(extensions.digest(convert_to(request_json,'UTF8'),'sha256'),'hex')
+    as request_hash from edit_json;
+grant select on pg_temp.issue363_metadata_request to authenticated;
+
 set local role authenticated;
 update pg_temp.metal_add_rpc
 set outcome =
@@ -1241,19 +1262,16 @@ select is(
     from pg_temp.metal_add_rpc),
   'PAYLOAD_HASH_MISMATCH', 'same action ID with a different hash is terminal'
 );
+
 select is(
-  public.apply_metal_metadata_patch_v1(
-    '018f0c7a-1234-7abc-8def-000000000034',
-    '{"fields":{"name":{"value":"Remote rename","writtenAt":1788229200000,"writerId":"018f0c7a-1234-7abc-8def-000000000040"}}}'::jsonb
-  ) ->> 'status',
-  'applied', 'first metadata write wins the null baseline'
+  (select public.apply_metal_metadata_edit_v1(request_json,request_hash) ->> 'status'
+   from pg_temp.issue363_metadata_request),
+  'applied', 'durable edit RPC captures first metadata clock winner'
 );
 select is(
-  public.apply_metal_metadata_patch_v1(
-    '018f0c7a-1234-7abc-8def-000000000034',
-    '{"fields":{"name":{"value":"Remote rename","writtenAt":1788229200000,"writerId":"018f0c7a-1234-7abc-8def-000000000040"}}}'::jsonb
-  ) ->> 'status',
-  'idempotent', 'metadata retry reuses the stable writer tuple'
+  (select public.apply_metal_metadata_edit_v1(request_json,request_hash) ->> 'status'
+   from pg_temp.issue363_metadata_request),
+  'applied', 'same edit ID/hash replay returns the stable stored outcome'
 );
 select is(
   (select financial_revision::text || ':' || effective_action_id::text

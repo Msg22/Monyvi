@@ -37,6 +37,7 @@ jest.mock("@monyvi/db", () => ({
       metal_holding_states: {},
       metal_action_evidence: {},
       metal_lifecycle_events: {},
+      metal_metadata_edit_outcomes: {},
       metal_rate_references: {},
       daily_snapshot_balance: {},
       categories: {},
@@ -212,67 +213,86 @@ beforeEach(() => {
                 ],
                 error: null,
               }
-            : table === "metal_rate_references"
+            : table === "metal_metadata_edit_outcomes"
               ? {
                   data: [
                     {
-                      id: "11111111-1111-4111-8111-000000000004",
-                      action_id: "action-1",
+                      id: "11111111-1111-4111-8111-000000000090",
                       user_id: "current-user",
-                      value_decimal_text: "3510.500000000000000001",
+                      holding_id: "11111111-1111-4111-8111-000000000007",
+                      action_id: null,
+                      applied_changes_json_text:
+                        '{"name":{"before":"A","after":"B"}}',
+                      canonical_metadata_json_text:
+                        '{"name":{"value":"B","writtenAt":123,"writerId":"11111111-1111-4111-8111-000000000090"},"notes":null}',
                       deleted: false,
                       updated_at: "2026-05-18T08:02:00.000Z",
                     },
                   ],
                   error: null,
                 }
-              : table === "assets"
+              : table === "metal_rate_references"
                 ? {
                     data: [
                       {
-                        id: "11111111-1111-4111-8111-000000000007",
+                        id: "11111111-1111-4111-8111-000000000004",
+                        action_id: "action-1",
+                        user_id: "current-user",
+                        value_decimal_text: "3510.500000000000000001",
                         deleted: false,
-                        purchase_currency: "EGP",
                         updated_at: "2026-05-18T08:02:00.000Z",
-                        purchase_price_decimal_text: "100000.125",
-                        acquisition_action_id: "action-1",
                       },
                     ],
                     error: null,
                   }
-                : table === "asset_metals"
+                : table === "assets"
                   ? {
                       data: [
                         {
-                          id: "11111111-1111-4111-8111-000000000005",
-                          asset_id: "11111111-1111-4111-8111-000000000007",
+                          id: "11111111-1111-4111-8111-000000000007",
                           deleted: false,
-                          weight_grams_decimal_text: "10.125",
+                          purchase_currency: "EGP",
                           updated_at: "2026-05-18T08:02:00.000Z",
-                          sync_owner: { user_id: "current-user" },
-                          purity_factor_decimal_text: "0.999",
+                          purchase_price_decimal_text: "100000.125",
+                          acquisition_action_id: "action-1",
                         },
                       ],
                       error: null,
                     }
-                  : table === "metal_holding_states"
+                  : table === "asset_metals"
                     ? {
                         data: [
                           {
-                            id: "11111111-1111-4111-8111-000000000006",
-                            user_id: "current-user",
-                            holding_id: "11111111-1111-4111-8111-000000000007",
-                            financial_revision_text: "9223372036854775807",
+                            id: "11111111-1111-4111-8111-000000000005",
+                            asset_id: "11111111-1111-4111-8111-000000000007",
                             deleted: false,
-                            created_at: "2026-05-18T08:01:00.000Z",
+                            weight_grams_decimal_text: "10.125",
                             updated_at: "2026-05-18T08:02:00.000Z",
+                            sync_owner: { user_id: "current-user" },
+                            purity_factor_decimal_text: "0.999",
                           },
                         ],
                         error: null,
                       }
-                    : table === "market_rates"
-                      ? { data: [VALID_MARKET_RATE], error: null }
-                      : { data: [], error: null };
+                    : table === "metal_holding_states"
+                      ? {
+                          data: [
+                            {
+                              id: "11111111-1111-4111-8111-000000000006",
+                              user_id: "current-user",
+                              holding_id:
+                                "11111111-1111-4111-8111-000000000007",
+                              financial_revision_text: "9223372036854775807",
+                              deleted: false,
+                              created_at: "2026-05-18T08:01:00.000Z",
+                              updated_at: "2026-05-18T08:02:00.000Z",
+                            },
+                          ],
+                          error: null,
+                        }
+                      : table === "market_rates"
+                        ? { data: [VALID_MARKET_RATE], error: null }
+                        : { data: [], error: null };
     const chain = makeSelectChain(result);
     const chains = tableChains.get(table) ?? [];
     chains.push(chain);
@@ -379,6 +399,7 @@ describe("pullChanges", () => {
       "financial_action_groups",
       "metal_action_evidence",
       "metal_lifecycle_events",
+      "metal_metadata_edit_outcomes",
       "metal_rate_references",
     ]) {
       expect(getFirstChain(table).eq).toHaveBeenCalledWith(
@@ -421,6 +442,12 @@ describe("pullChanges", () => {
     expect(changes.metal_lifecycle_events?.updated[0]).toMatchObject({
       payload_json: '{"holdingId":"11111111-1111-4111-8111-000000000007"}',
     });
+    expect(changes.metal_metadata_edit_outcomes?.updated[0]).toMatchObject({
+      applied_changes_json: '{"name":{"before":"A","after":"B"}}',
+    });
+    expect(
+      changes.metal_metadata_edit_outcomes?.updated[0]?.canonical_metadata_json
+    ).toContain('"value":"B"');
     expect(changes.metal_rate_references?.updated[0]).toMatchObject({
       value_decimal: "3510.500000000000000001",
     });

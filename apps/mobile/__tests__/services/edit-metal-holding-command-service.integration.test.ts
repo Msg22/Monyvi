@@ -114,6 +114,7 @@ jest.mock("@monyvi/db", () => {
     "MetalActionEvidence",
     "MetalHoldingState",
     "MetalLifecycleEvent",
+    "MetalMetadataEdit",
     "MetalRateReference",
   ].map(
     (name) =>
@@ -427,14 +428,17 @@ describe("Edit metal holding command SQLite atomicity", () => {
     expect(stateAfterMetadata.nameWrittenAt).toBe(
       new Date("2026-09-01T10:15:30.123Z").getTime()
     );
-    expect(stateAfterMetadata.nameWriterId).toBe(IDS.user);
+    expect(stateAfterMetadata.nameWriterId).toBe(IDS.correctionAction);
     expect(stateAfterMetadata.notesWrittenAt).toBe(
       new Date("2026-09-01T10:15:30.123Z").getTime()
     );
-    expect(stateAfterMetadata.notesWriterId).toBe(IDS.user);
+    expect(stateAfterMetadata.notesWriterId).toBe(IDS.correctionAction);
     expect(
       await database.get<Model>("metal_action_evidence").query().fetch()
     ).toHaveLength(0);
+    expect(
+      await database.get<Model>("metal_metadata_edit_outcomes").query().fetch()
+    ).toHaveLength(1);
   });
   it("keeps blank correction reason as an empty string and exact before/after evidence", async (): Promise<void> => {
     await seedHolding();
@@ -474,6 +478,7 @@ describe("Edit metal holding command SQLite atomicity", () => {
         materialFacts: null,
         correctionReason: null,
         metadata: { name: "Older Name", notes: "Older Note" },
+        actionId: "018f0c7a-1234-7abc-8def-000000000099",
         occurredAt: "2026-09-01T11:00:00.000Z",
       })
     );
@@ -501,11 +506,11 @@ describe("Edit metal holding command SQLite atomicity", () => {
     expect(state.nameWrittenAt).toBe(
       new Date("2026-09-01T12:00:00.000Z").getTime()
     );
-    expect(state.nameWriterId).toBe(IDS.user);
+    expect(state.nameWriterId).toBe(IDS.correctionAction);
     expect(state.notesWrittenAt).toBe(
       new Date("2026-09-01T12:00:00.000Z").getTime()
     );
-    expect(state.notesWriterId).toBe(IDS.user);
+    expect(state.notesWriterId).toBe(IDS.correctionAction);
 
     const nextCmd = command({
       actionId: "018f0c7a-1234-7abc-8def-000000000091",

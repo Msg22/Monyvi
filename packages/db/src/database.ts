@@ -28,6 +28,7 @@ import { MetalActionEvidence } from "./models/MetalActionEvidence";
 import { MetalHistoricalRateCache } from "./models/MetalHistoricalRateCache";
 import { MetalHoldingState } from "./models/MetalHoldingState";
 import { MetalLifecycleEvent } from "./models/MetalLifecycleEvent";
+import { MetalMetadataEdit } from "./models/MetalMetadataEdit";
 import { MetalRateReference } from "./models/MetalRateReference";
 import { Profile } from "./models/Profile";
 import { RecurringPayment } from "./models/RecurringPayment";
@@ -130,6 +131,7 @@ export const database = new Database({
     MetalHistoricalRateCache,
     MetalHoldingState,
     MetalLifecycleEvent,
+    MetalMetadataEdit,
     MetalRateReference,
     RecurringPayment,
     SmsAiNegativeOutcome,
