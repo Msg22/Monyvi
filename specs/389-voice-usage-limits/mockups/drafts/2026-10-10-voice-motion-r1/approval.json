@@ -1,0 +1,10 @@
+{
+  "status": "approved-concepts-and-interactions",
+  "approvedManifestSha256": "7d91150571a3150e235a1b8ec63327cff4c19de6c292927cde76c40024c1c799",
+  "owner": "Mohamed",
+  "threadId": "01a11606-3a5e-7420-a9d7-0ea491bde802",
+  "evidence": ["mockups approved", "Approve the proposal"],
+  "questionItemId": "call_WNqHZ69cvzQQG09hJY0sXedd:0",
+  "recordedAt": "2026-10-10T14:39:19.262Z",
+  "remainingGate": "exact scoped bindings and canonical reconciliation plus speckit.analyze before production"
+}

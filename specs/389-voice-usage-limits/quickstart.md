@@ -244,3 +244,52 @@ quota gate while leaving UI claims active.
 
 User-facing reset copy must match local-midnight semantics and must not say
 "tomorrow at the same time".
+
+## 11. Approved Voice motion R1 — implementation-ready owner validation
+
+Owner concept approval is recorded in
+`mockups/drafts/2026-10-10-voice-motion-r1/approval.json`
+(original five-image manifest
+`sha256:7d91150571a3150e235a1b8ec63327cff4c19de6c292927cde76c40024c1c799`;
+approved proposal
+`sha256:06e5e987543d85a2c90c57aaad695569ca904cc122571da47bae7195d2b9f4b0`).
+The **derived** binding/interaction overlay is
+[voice-motion-binding-context.md](./mockups/voice-motion-binding-context.md),
+and its full **37-scenario** manual/automation matrix is
+[voice-motion-coverage.md](./checklists/voice-motion-coverage.md). The five
+older approved repair sidecars/images remain frozen; no new verifier or
+reapproval is implied. First rerun existing five binding verifiers and then
+read-only Speckit prerequisites/analyze against the updated
+`spec.md`/`plan.md`/`tasks.md`. The root owns those executions; this remote
+planning author has not run them. `.specify/extensions.yml` allows optional
+automatically executable commit hooks, which must not be invoked without
+separate authorization.
+
+**Before assigning implementation:** T060–T062 must author and execute
+meaningful existing-boundary Red in local unit/integration tests, plus
+controllable Maestro scripts (not device execution). Red→Green production
+T063/T064 follows only lead acceptance; root runs integration/independent
+review T065. T066 is later owner-device/visual/a11y evidence; all new task
+checkboxes remain unchecked.
+
+| Owner manual scenario (all NOT RUN here) | Expected oracle / coverage |
+| --- | --- |
+| 1. EN/AR idle light/dark and quota presentation | Frozen dynamic allowance/progress and per-locale examples unchanged; dark badge slate-700 with green mic; EN restaurant/car/cafe category colors, AR quotes/no EN icons; new **daily** next-midnight wording |
+| 2. Dismiss examples, reopen route, restart app, change locale/theme | Dismiss whole card through localized ≥48 dp control; same-account choice retained after restart/language/theme; missing/corrupt preference shows examples |
+| 3. Sign out A → sign in B → A | Different device-local preference per authenticated user; no cross-user flash/reads, no global intro flag/network write |
+| 4. Tap mic rapidly, cancel during each await and navigate Back | Starting visible immediately, only one capture, Cancel/Back invalidate pending work; never false Listening, duplicate capture or second navigation |
+| 5. Permission granted/missing/denied/revoked; AI consent separately | Granted skips explanation; genuinely missing shows approved inline EN/AR Monyvi rationale BEFORE OS dialog; blocked Settings/Manual recovery; first-use AI sheet remains mandatory |
+| 6. Native preparation error and actual recording start | Start error recovers, no stuck Listening; elapsed timer starts only after native capture, not during Starting; no paid provider triggered by preparation |
+| 7. Record/Pause/Resume/Discard/Stop and reduced motion | Two thin 1.4s ripples 700ms apart, ~1.2s decorative bars, real paused timer; reduced static, no lingering native capture/effects on discard/unmount/account switch |
+| 8. Stop/finalize/analyzing | Real parsing shows ~1.6s waveform/dots → receipt with approved EN/AR copy, no skeleton, fictitious progress/transaction; actual quota-fetch loading still Skeleton |
+| 9. Error Try again / unavailable Try again / retained submission retry | Record-error direct Starting without idle flash; unavailable refresh auto-starts only eligible; retained audio resubmits same request key and audio without re-recording or second quota unit |
+| 10. Regression, device variants and semantics | Manual B/transfer/recurring/local-first saves untouched; native quota5/6, burst2/3, 35-day replay and #384 unchanged. Compare 390×844,320×640,768×1024,844×390, font1.35/2, EN/AR/light/dark and **separate** screen-reader tree |
+
+**Evidence boundary:** E2E journeys are only planned until a real Voice/native
+runner controls audio/OS permissions and is actually executed. Recorder timing,
+account restart, server-clock/quota/provider starts and OS permission recovery
+cannot be credited from mock screenshots. Owner will capture real native
+screen recording, screenshot overlays against both the **five frozen** and
+scoped new concepts, and separate accessibility evidence. Existing T034/T035/
+T049/T050 and visual/accessibility T058 remain **NOT RUN**, not waived. No
+hosted policy/migration/deployment or PR/merge authorized.

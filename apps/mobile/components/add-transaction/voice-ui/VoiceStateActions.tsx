@@ -14,6 +14,15 @@ export function PassiveStateActions(
   const { t: tCommon } = useTranslation("common");
 
   switch (props.state) {
+    case "starting":
+      return (
+        <ActionButton
+          testID="voice-starting-cancel"
+          label={tCommon("cancel")}
+          icon="close"
+          onPress={props.onDiscard}
+        />
+      );
     case "daily-limit":
       return props.isArabic ? (
         <ActionButton
@@ -84,10 +93,24 @@ export function PassiveStateActions(
           />
         </>
       );
-    // The route, not this passive Voice surface, owns the custom pre-native
-    // permission explanation and the real permission/Settings action.
     case "permission-explanation":
-      return null;
+      return (
+        <>
+          <ActionButton
+            testID="voice-permission-primary"
+            label={tCommon("voice_ui_permission_action")}
+            icon="mic-outline"
+            onPress={props.onPermissionContinue}
+            variant="primary"
+          />
+          <ActionButton
+            testID="voice-action-use-manual"
+            label={t("voice_action_use_manual")}
+            icon="create-outline"
+            onPress={props.onUseManual}
+          />
+        </>
+      );
     case "permission-denied":
       return (
         <>
@@ -158,7 +181,7 @@ export function ActionButton({
       accessibilityState={{ disabled }}
       disabled={disabled}
       onPress={onPress}
-      className={`min-h-12 flex-row items-center justify-center gap-2 rounded-xl border px-4 py-2 ${
+      className={`min-h-[48px] flex-row items-center justify-center gap-2 rounded-xl border px-4 py-2 ${
         fullWidth ? "w-full" : ""
       } ${base}`}
       style={({ pressed }) => ({

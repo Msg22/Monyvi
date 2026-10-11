@@ -101,6 +101,9 @@ jest.mock("@/hooks/useVoiceRecorder", () => ({
     discard: mockRecorderDiscardCallback,
     reset: mockRecorderReset,
     requestPermission: mockRequestPermission,
+    permissionStatus: recorderState.hasPermission ? "granted" : "denied",
+    refreshPermission: (): Promise<"granted" | "denied"> =>
+      Promise.resolve(recorderState.hasPermission ? "granted" : "denied"),
   }),
 }));
 
@@ -176,7 +179,16 @@ beforeEach(() => {
   recorderState.isRecording = false;
   recorderState.audioUri = null;
   recorderState.hasPermission = false;
-  mockRecorderStart.mockResolvedValue(undefined);
+  mockRecorderStart
+    .mockReset()
+    .mockImplementation(
+      (options?: { readonly onStarted?: () => void }): Promise<void> => {
+        options?.onStarted?.();
+        return Promise.resolve();
+      }
+    );
+  mockRecorderPause.mockReset().mockReturnValue(true);
+  mockRecorderResume.mockReset().mockReturnValue(true);
   mockRecorderDiscard.mockResolvedValue(undefined);
   mockRecorderReset.mockResolvedValue(undefined);
   mockRecorderStop.mockResolvedValue({ uri: "file://stopped.m4a" });
@@ -204,6 +216,152 @@ beforeEach(() => {
 });
 
 describe("useVoiceTransactionFlow", () => {
+  it("keeps Paused when native resume fails, then records only after real success", async (): Promise<void> => {
+    recorderState.hasPermission = true;
+    const { result } = renderVoiceFlow();
+    await act(async (): Promise<void> => {
+      await result.current.startFlow();
+    });
+    act((): void => {
+      result.current.pauseRecording();
+    });
+    expect(result.current.flowStatus).toBe("paused");
+    mockRecorderResume.mockReturnValueOnce(false);
+    act((): void => {
+      result.current.resumeRecording();
+    });
+    expect(result.current.flowStatus).toBe("paused");
+    expect(mockRecorderDiscard).not.toHaveBeenCalled();
+    act((): void => {
+      result.current.resumeRecording();
+    });
+    expect(result.current.flowStatus).toBe("recording");
+  });
+
+  it("does not claim Paused during native warmup and follows the actual queued pause", async (): Promise<void> => {
+    recorderState.hasPermission = true;
+    mockRecorderPause.mockReturnValue(false);
+    const { result, rerender } = renderVoiceFlow();
+    await act(async (): Promise<void> => {
+      await result.current.startFlow();
+    });
+    act((): void => {
+      result.current.pauseRecording();
+    });
+    expect(mockRecorderPause).toHaveBeenCalledTimes(1);
+    expect(result.current.flowStatus).toBe("recording");
+    recorderState.status = "paused";
+    rerender(undefined);
+    expect(result.current.flowStatus).toBe("paused");
+  });
+
+  it.each(["consent", "availability", "native-start"] as const)(
+    "exposes Starting before awaited %s and never claims capture early",
+    async (stage): Promise<void> => {
+      recorderState.hasPermission = true;
+      const consent = createDeferred<boolean>();
+      const availability = createDeferred<VoiceAvailabilitySnapshot>();
+      const capture = createDeferred<void>();
+      const ensureConsent =
+        stage === "consent"
+          ? (): Promise<boolean> => consent.promise
+          : undefined;
+      if (stage === "availability")
+        mockRefresh.mockReturnValueOnce(availability.promise);
+      if (stage === "native-start")
+        mockRecorderStart.mockReturnValueOnce(capture.promise);
+      const { result } = renderVoiceFlow(ensureConsent);
+      let pending: Promise<void> | undefined;
+      await act(async (): Promise<void> => {
+        pending = result.current.startFlow();
+        for (let turn = 0; turn < 5; turn++) await Promise.resolve();
+      });
+      expect(result.current.flowStatus).toBe("starting");
+      expect(result.current.durationMs).toBe(0);
+      expect(result.current.isModeSwitchLocked).toBe(true);
+      expect(mockParseVoiceWithAi).not.toHaveBeenCalled();
+      await act(async (): Promise<void> => {
+        consent.resolve(true);
+        availability.resolve(alwaysAvailableSnapshot);
+        capture.resolve(undefined);
+        await pending;
+      });
+      expect(mockRecorderStart).toHaveBeenCalledTimes(1);
+    }
+  );
+
+  it.each(["consent", "availability"] as const)(
+    "cancels pending %s without late native capture or identity allocation",
+    async (stage): Promise<void> => {
+      recorderState.hasPermission = true;
+      const consent = createDeferred<boolean>();
+      const availability = createDeferred<VoiceAvailabilitySnapshot>();
+      if (stage === "availability")
+        mockRefresh.mockReturnValueOnce(availability.promise);
+      const { result } = renderVoiceFlow(
+        stage === "consent"
+          ? (): Promise<boolean> => consent.promise
+          : undefined
+      );
+      let pending: Promise<void> | undefined;
+      await act(async (): Promise<void> => {
+        pending = result.current.startFlow();
+        for (let turn = 0; turn < 5; turn++) await Promise.resolve();
+        await result.current.discardRecording();
+        consent.resolve(true);
+        availability.resolve(alwaysAvailableSnapshot);
+        await pending;
+      });
+      expect(result.current.flowStatus).toBe("idle");
+      expect(mockRecorderStart).not.toHaveBeenCalled();
+      expect(mockRandomUUID).not.toHaveBeenCalled();
+      expect(mockParseVoiceWithAi).not.toHaveBeenCalled();
+    }
+  );
+
+  it("keeps actor-switch protection while availability is pending", async (): Promise<void> => {
+    recorderState.hasPermission = true;
+    const availability = createDeferred<VoiceAvailabilitySnapshot>();
+    mockRefresh.mockReturnValueOnce(availability.promise);
+    const { result, rerender } = renderVoiceFlow();
+    let pending: Promise<void> | undefined;
+    await act(async (): Promise<void> => {
+      pending = result.current.startFlow();
+      await Promise.resolve();
+    });
+    mockUserId = "user-2";
+    rerender(undefined);
+    await act(async (): Promise<void> => {
+      availability.resolve(alwaysAvailableSnapshot);
+      await pending;
+    });
+    expect(mockRecorderStart).not.toHaveBeenCalled();
+    expect(mockRandomUUID).not.toHaveBeenCalled();
+    expect(result.current.flowStatus).toBe("idle");
+  });
+
+  it("recording-error retry enters Starting before discarded audio settles", async (): Promise<void> => {
+    recorderState.hasPermission = true;
+    mockRecorderStart.mockRejectedValueOnce(new Error("recorder failed"));
+    const { result } = renderVoiceFlow();
+    await act(async (): Promise<void> => {
+      await result.current.startFlow();
+    });
+    expect(result.current.flowStatus).toBe("error");
+    const discarded = createDeferred<void>();
+    mockRecorderDiscard.mockReturnValueOnce(discarded.promise);
+    let retry: Promise<void> | undefined;
+    act((): void => {
+      retry = result.current.retryRecording();
+    });
+    expect(result.current.flowStatus).toBe("starting");
+    await act(async (): Promise<void> => {
+      discarded.resolve(undefined);
+      await retry;
+    });
+    expect(mockRecorderStart).toHaveBeenCalledTimes(2);
+  });
+
   it("does not start recording from retry when microphone permission is still denied", async (): Promise<void> => {
     const { result } = renderVoiceFlow();
 

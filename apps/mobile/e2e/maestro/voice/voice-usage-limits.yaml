@@ -1,10 +1,13 @@
 appId: com.monyvi.app
 ---
-# R05 / T042 — honest UI visibility and Manual fallback checks.
-# AUTHORED, NOT RUN. Requires authenticated seeded E2E account.
-# No fixture here can force an authenticated server daily/burst refusal.
+# #347 Voice motion r1 / T062 - honest UI visibility, examples dismissal and
+# Manual fallback checks. AUTHORED, NOT RUN. Requires authenticated seeded E2E
+# account. No fixture here can force an authenticated server daily/burst
+# refusal, an OS permission change, or native audio capture.
 # Conditional branches assert only states actually returned by the server;
 # they MUST NOT be reported as evidence for a daily-limit/burst quota race.
+# Dismissal is per-account and durable on this device, so the examples branch
+# runs only while the card is actually visible.
 - runFlow: ../helpers/setup.yaml
 - tapOn:
     id: "fab-button"
@@ -23,14 +26,71 @@ appId: com.monyvi.app
       visible: "Limited free voice usage"
     commands:
       - assertVisible: "Tap and speak your transaction"
-      - assertVisible: "Try saying something like"
-      - assertVisible: "Resets tomorrow."
+      - assertVisible: "Your limits reset tomorrow."
       - assertVisible:
           id: "voice-mic-target"
+      # Entering Voice mode must never auto-start capture: no Starting, no
+      # recording controls, no elapsed timer.
+      - assertNotVisible: "Starting…"
+      - assertNotVisible:
+          id: "voice-action-stop"
       # Screenshot is visual evidence for owner comparison, NOT a pixel-level
       # automated pass: verify round 104dp gradient, 140/172dp halos, and
       # selected green 2dp underline against the frozen idle binding.
       - takeScreenshot: voice-idle-gradient-halos-tab-underline
+
+# Examples card + per-account durable dismissal (FR-038). Conditional only: a
+# previously dismissed account hides the card permanently on this device, and
+# this flow MUST NOT un-hide it. Cold app restart, sign-out/sign-in and
+# cross-account isolation remain manual-only.
+- runFlow:
+    when:
+      visible: "Try saying something like"
+    commands:
+      - assertVisible:
+          id: "voice-examples-card"
+      # EN glyph identities stay restaurant orange / car blue / coffee gold;
+      # Arabic stays quote-only. Static screenshots cannot prove colors.
+      - takeScreenshot: voice-examples-card-before-dismiss
+      - tapOn:
+          id: "voice-examples-dismiss"
+      # Whole card disappears immediately; the mic target is unaffected.
+      - assertNotVisible:
+          id: "voice-examples-card"
+      - assertNotVisible: "Try saying something like"
+      - assertVisible:
+          id: "voice-mic-target"
+      # In-route remount keeps the card hidden for this account/device.
+      - tapOn:
+          id: "add-transaction-mode-manual"
+      - tapOn:
+          id: "add-transaction-mode-voice"
+      - waitForAnimationToEnd
+      - assertNotVisible:
+          id: "voice-examples-card"
+      - assertNotVisible: "Try saying something like"
+      - assertVisible:
+          id: "voice-mic-target"
+      # Real route exit and re-open (not a tab toggle): leaving to
+      # Transactions and re-entering through FAB -> transaction -> Voice must
+      # keep the card hidden. No mic/retry/permission tap happens here.
+      - tapOn:
+          id: "header-back"
+      - waitForAnimationToEnd
+      - assertVisible: "Transactions"
+      - tapOn:
+          id: "fab-button"
+      - tapOn:
+          id: "fab-transaction"
+      - waitForAnimationToEnd
+      - tapOn:
+          id: "add-transaction-mode-voice"
+      - waitForAnimationToEnd
+      - assertNotVisible:
+          id: "voice-examples-card"
+      - assertNotVisible: "Try saying something like"
+      - assertVisible:
+          id: "voice-mic-target"
 
 # Exhausted: conditional only; deterministic exhaustion requires seeded server
 # state or an approved authenticated HTTP double, neither present here.
@@ -75,6 +135,15 @@ appId: com.monyvi.app
     id: "header-save"
 - waitForAnimationToEnd
 - assertVisible: "Transactions"
+# If the examples card was already dismissed for this seeded account, the
+# dismiss/reopen scenario above was skipped and was NOT validated in this run
+# (this flow never un-hides the card). The Manual save below ends on
+# Transactions, where the card is always absent by construction, so no
+# assertion is made there.
 
-# Daily/burst 5th/6th and 2nd/3rd starts, reservation races, provider start
-# consumption, local midnight, AR/dark/screen readers need owner verification.
+# MANUAL ONLY / NOT RUN: daily/burst 5th/6th and 2nd/3rd starts, reservation
+# races, provider start consumption, local midnight reset, 35-day retention,
+# #384 deferral, dark mode slate-700 allowance badge, Arabic quote-only
+# examples and AR reset copy, EN/AR glyph color proof, 320/390/768/orientation
+# and font-scale 1.35/2 layouts, reduced motion, screen-reader semantics and
+# cold app restart persistence.

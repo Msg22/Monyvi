@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react-native";
 import React from "react";
 
 import {
+  getTestInstanceParent,
   getTestInstanceProps,
   getTestInstances,
 } from "../../test-utils/test-instance-props";
@@ -54,10 +55,31 @@ jest.mock("react-i18next", () => ({
 }));
 
 jest.mock("@expo/vector-icons", () => ({
-  Ionicons: ({ name }: { readonly name: string }): React.JSX.Element => {
-    const { View } =
+  Ionicons: ({
+    name,
+    accessible,
+    accessibilityElementsHidden,
+    importantForAccessibility,
+  }: {
+    readonly name: string;
+    readonly accessible?: boolean;
+    readonly accessibilityElementsHidden?: boolean;
+    readonly importantForAccessibility?:
+      | "auto"
+      | "yes"
+      | "no"
+      | "no-hide-descendants";
+  }): React.JSX.Element => {
+    const { Text } =
       jest.requireActual<typeof import("react-native")>("react-native");
-    return <View testID={"ionicon-" + name} />;
+    return (
+      <Text
+        testID={"ionicon-" + name}
+        accessible={accessible}
+        accessibilityElementsHidden={accessibilityElementsHidden}
+        importantForAccessibility={importantForAccessibility}
+      />
+    );
   },
 }));
 
@@ -93,6 +115,7 @@ const callbacks = {
   onOpenSettings: jest.fn(),
   onPermissionContinue: jest.fn(),
   onPermissionCancel: jest.fn(),
+  onDismissExamples: jest.fn(),
 };
 
 const baseProps: React.ComponentProps<typeof VoiceTransactionEntry> = {
@@ -110,11 +133,191 @@ function renderVoice(
   return render(<VoiceTransactionEntry {...baseProps} {...props} />);
 }
 
+function findDecorativeAncestor(start: unknown): unknown {
+  let current: unknown = start;
+  while (current !== null && current !== undefined) {
+    const props = getTestInstanceProps(current);
+    if (props.importantForAccessibility === "no-hide-descendants") {
+      return current;
+    }
+    current = getTestInstanceParent(current);
+  }
+  throw new Error("Expected a no-hide-descendants decorative ancestor");
+}
+
+jest.mock("@/services/reduced-motion-service", () => ({
+  readReducedMotion: (): Promise<boolean> => Promise.resolve(false),
+  subscribeReducedMotion: (): (() => void) => (): void => {},
+}));
+
 describe("VoiceTransactionEntry approved state compositions", () => {
   beforeEach(() => {
     mockLanguage = "en";
     jest.clearAllMocks();
   });
+
+  it.each([
+    ["en", "Starting…", "Getting ready to listen…", "Cancel"],
+    ["ar", "نجهّز التسجيل…", "لحظة ونكون جاهزين لسماعك…", "إلغاء"],
+  ] as const)(
+    "renders approved %s Starting without a false timer",
+    (language, title, body, cancel): void => {
+      mockLanguage = language;
+      render(
+        <VoiceTransactionEntry
+          {...baseProps}
+          {...{ state: "starting" as const }}
+        />
+      );
+      expect(screen.getByText(title)).toBeOnTheScreen();
+      expect(screen.getByText(body)).toBeOnTheScreen();
+      expect(screen.queryByText("00:00")).toBeNull();
+      expect(screen.queryByText("Listening")).toBeNull();
+      expect(screen.queryByText("Try saying something like")).toBeNull();
+      fireEvent.press(screen.getByRole("button", { name: cancel }));
+      expect(callbacks.onDiscard).toHaveBeenCalledTimes(1);
+    }
+  );
+
+  it.each([
+    [
+      "en",
+      "Turning your words into a transaction",
+      "Getting the details ready…",
+    ],
+    ["ar", "نحوّل كلامك إلى معاملة", "نجهّز التفاصيل…"],
+  ] as const)(
+    "renders %s parsing illustration without skeleton or fictitious results",
+    (language, title, body): void => {
+      mockLanguage = language;
+      renderVoice({ state: "processing" });
+      expect(screen.getByText(title)).toBeOnTheScreen();
+      expect(screen.getByText(body)).toBeOnTheScreen();
+      expect(screen.queryByTestId("voice-loading-skeleton")).toBeNull();
+      expect(
+        screen.getByTestId("voice-parsing-illustration", {
+          includeHiddenElements: true,
+        })
+      ).toBeTruthy();
+      expect(screen.queryByText(/\d+%/)).toBeNull();
+      expect(screen.queryByRole("button", { name: "Stop" })).toBeNull();
+      expect(screen.queryByRole("button", { name: "Pause" })).toBeNull();
+      expect(screen.queryByRole("button", { name: "Discard" })).toBeNull();
+    }
+  );
+
+  it("hides the starting mic decoration from both platform a11y trees while title and Cancel stay accessible", (): void => {
+    renderVoice({ state: "starting" });
+    const mic: unknown = screen.getByTestId("ionicon-mic", {
+      includeHiddenElements: true,
+    });
+    const wrapper = findDecorativeAncestor(mic);
+    const wrapperProps = getTestInstanceProps(wrapper);
+    expect(wrapperProps.accessible).toBe(false);
+    expect(wrapperProps.accessibilityElementsHidden).toBe(true);
+    expect(wrapperProps.importantForAccessibility).toBe("no-hide-descendants");
+    expect(screen.getByText("Starting…")).toBeOnTheScreen();
+    expect(screen.getByText("Getting ready to listen…")).toBeOnTheScreen();
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeOnTheScreen();
+  });
+
+  it("hides the parsing illustration and receipt glyph from both platform a11y trees while the title stays accessible", (): void => {
+    renderVoice({ state: "processing" });
+    const illustration: unknown = screen.getByTestId(
+      "voice-parsing-illustration",
+      { includeHiddenElements: true }
+    );
+    const wrapperProps = getTestInstanceProps(illustration);
+    expect(wrapperProps.accessible).toBe(false);
+    expect(wrapperProps.accessibilityElementsHidden).toBe(true);
+    expect(wrapperProps.importantForAccessibility).toBe("no-hide-descendants");
+    const receipt: unknown = screen.getByTestId("ionicon-receipt-outline", {
+      includeHiddenElements: true,
+    });
+    expect(getTestInstanceProps(receipt).accessible).toBe(false);
+    expect(
+      screen.getByText("Turning your words into a transaction")
+    ).toBeOnTheScreen();
+    expect(screen.getByText("Getting the details ready…")).toBeOnTheScreen();
+  });
+
+  it.each([
+    ["en", "Your limits reset tomorrow."],
+    ["ar", "يتجدد حد استخدامك غدًا."],
+  ] as const)(
+    "uses approved %s reset copy only in daily context",
+    (language, text): void => {
+      mockLanguage = language;
+      renderVoice();
+      expect(screen.getByText(text)).toBeOnTheScreen();
+    }
+  );
+
+  it.each([
+    ["en", "Dismiss examples"],
+    ["ar", "إخفاء الأمثلة"],
+  ] as const)(
+    "provides localized %s dismissal and hides the entire examples surface",
+    (language, label): void => {
+      mockLanguage = language;
+      const view = render(
+        <VoiceTransactionEntry
+          {...baseProps}
+          {...{
+            onDismissExamples: callbacks.onDismissExamples,
+            showExamples: true,
+          }}
+        />
+      );
+      fireEvent.press(screen.getByRole("button", { name: label }));
+      expect(callbacks.onDismissExamples).toHaveBeenCalledTimes(1);
+      view.rerender(
+        <VoiceTransactionEntry
+          {...baseProps}
+          {...{
+            onDismissExamples: callbacks.onDismissExamples,
+            showExamples: false,
+          }}
+        />
+      );
+      expect(screen.queryByTestId("voice-examples-card")).toBeNull();
+      expect(
+        screen.queryByTestId("ionicon-restaurant-outline", {
+          includeHiddenElements: true,
+        })
+      ).toBeNull();
+      expect(screen.getByTestId("voice-allowance-card")).toBeOnTheScreen();
+    }
+  );
+
+  it.each([
+    [
+      "en",
+      "Allow your microphone",
+      "Monyvi needs access to your microphone to record your transaction.",
+      "Allow microphone",
+    ],
+    [
+      "ar",
+      "اسمح باستخدام الميكروفون",
+      "يحتاج Monyvi إلى الميكروفون لتسجيل معاملتك.",
+      "السماح بالميكروفون",
+    ],
+  ] as const)(
+    "renders approved inline %s permission explanation before native request",
+    (language, title, body, action): void => {
+      mockLanguage = language;
+      renderVoice({ state: "permission-explanation" });
+      expect(screen.getByText(title)).toBeOnTheScreen();
+      expect(screen.getByText(body)).toBeOnTheScreen();
+      expect(callbacks.onPermissionContinue).not.toHaveBeenCalled();
+      fireEvent.press(screen.getByRole("button", { name: action }));
+      expect(callbacks.onPermissionContinue).toHaveBeenCalledTimes(1);
+      expect(
+        screen.queryByText("Voice input - record a transaction")
+      ).toBeNull();
+    }
+  );
 
   it.each([
     [
@@ -235,7 +438,7 @@ describe("VoiceTransactionEntry approved state compositions", () => {
     );
     const width = JSON.stringify(getTestInstanceProps(progress).style);
     expect(width).toMatch(/14\.28/);
-    expect(screen.getByText(/Resets tomorrow/)).toBeOnTheScreen();
+    expect(screen.getByText("Your limits reset tomorrow.")).toBeOnTheScreen();
     expect(screen.queryByText(/same time|24 hours/i)).toBeNull();
   });
 

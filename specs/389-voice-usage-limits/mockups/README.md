@@ -1,5 +1,41 @@
 # Approved Add Transaction references
 
+## Owner-approved Voice motion/interaction R1 overlay — 10 October 2026
+
+The owner separately approved the **five exact new interaction concepts** in
+[drafts/2026-10-10-voice-motion-r1/approval.json](./drafts/2026-10-10-voice-motion-r1/approval.json):
+“mockups approved” and “Approve the proposal” (thread
+`01a11606-3a5e-7420-a9d7-0ea491bde802`, question
+`call_WNqHZ69cvzQQG09hJY0sXedd:0`). The
+[original five-image manifest](./drafts/2026-10-10-voice-motion-r1/manifest.json)
+remains byte-identical at approved
+`sha256:7d91150571a3150e235a1b8ec63327cff4c19de6c292927cde76c40024c1c799`.
+The [source proposal](./drafts/2026-10-10-voice-motion-r1/proposal-approved.txt)
+is `sha256:06e5e987543d85a2c90c57aaad695569ca904cc122571da47bae7195d2b9f4b0`.
+The original draft README/manifest's "awaiting" status is historical; the
+separately recorded approval supersedes it without mutating source bytes.
+
+| Approved immutable image | Scoped concept only |
+| --- | --- |
+| [idle-en.png](./drafts/2026-10-10-voice-motion-r1/idle-en.png) | Dark badge/example glyph colors and per-account dismiss |
+| [starting-en.png](./drafts/2026-10-10-voice-motion-r1/starting-en.png) | Immediate Starting and Cancel |
+| [recording-en.png](./drafts/2026-10-10-voice-motion-r1/recording-en.png) | Two ripple strokes, bars, real timer and pause |
+| [parsing-en.png](./drafts/2026-10-10-voice-motion-r1/parsing-en.png) | Waveform to receipt, restrained parsing loop |
+| [permission-en.png](./drafts/2026-10-10-voice-motion-r1/permission-en.png) | Inline native microphone rationale, not a new AI-consent bypass |
+
+Read the **[derived scoped binding/interaction map](./voice-motion-binding-context.md)**,
+the canonical [UI contract](../contracts/add-transaction-ui-contract.md), and
+[manual/test coverage](../checklists/voice-motion-coverage.md). The new concept
+**only supersedes its explicitly scoped deltas**; it does not replace or
+reinterpret the five old approved EN/AR idle/daily/Manual B bindings listed
+below. This derived overlay is **not** another image sidecar, verifier,
+approval gate or an invented pixel-metadata source. Original source images and
+all frozen binding revision tuples remain unchanged. Root owns source-image
+inspection and Speckit/read-only analysis. New visual/accessibility/native
+captures are **NOT RUN** until owner verification.
+
+
+
 ## Active UI repair package — 10 October 2026
 
 Owner approved all five exact bindings: call_c386ef7634244cc3bee49c1eab3177dd

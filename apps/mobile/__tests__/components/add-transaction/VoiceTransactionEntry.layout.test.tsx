@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 
-import { fireEvent, render, screen } from "@testing-library/react-native";
+import { act, fireEvent, render, screen } from "@testing-library/react-native";
 import React from "react";
 import {
   processColor,
@@ -20,7 +20,6 @@ import {
 } from "react-native-css-interop/test";
 
 import {
-  getTestInstanceChildren,
   getTestInstanceParent,
   getTestInstanceProps,
   getTestInstances,
@@ -38,6 +37,30 @@ let mockBottomInset = 34;
 let mockReducedMotion = false;
 const mockCancelAnimation = jest.fn();
 const mockWithRepeat = jest.fn((animation: unknown): unknown => animation);
+const mockWithTiming = jest.fn(
+  (value: number, _config?: { readonly duration?: number }): number => value
+);
+const mockWithDelay = jest.fn(
+  (_delay: number, animation: unknown): unknown => animation
+);
+const mockReduceMotionListeners = new Set<(enabled: boolean) => void>();
+const mockReduceMotionRemove = jest.fn();
+
+beforeEach(() => {
+  mockReduceMotionListeners.clear();
+});
+jest.mock("@/services/reduced-motion-service", () => ({
+  readReducedMotion: (): Promise<boolean> => Promise.resolve(mockReducedMotion),
+  subscribeReducedMotion: (
+    callback: (enabled: boolean) => void
+  ): (() => void) => {
+    mockReduceMotionListeners.add(callback);
+    return (): void => {
+      mockReduceMotionListeners.delete(callback);
+      mockReduceMotionRemove();
+    };
+  },
+}));
 
 jest.mock("react-native/Libraries/Utilities/useWindowDimensions", () => ({
   __esModule: true,
@@ -82,6 +105,7 @@ interface MockIoniconsRender {
   readonly name: string;
   readonly size?: number;
   readonly color?: string;
+  readonly accessible?: boolean;
 }
 
 const mockIoniconsRenders: MockIoniconsRender[] = [];
@@ -91,15 +115,32 @@ jest.mock("@expo/vector-icons", () => ({
     name,
     size,
     color,
+    accessible,
+    accessibilityElementsHidden,
+    importantForAccessibility,
   }: {
     readonly name: string;
     readonly size?: number;
     readonly color?: string;
+    readonly accessible?: boolean;
+    readonly accessibilityElementsHidden?: boolean;
+    readonly importantForAccessibility?:
+      | "auto"
+      | "yes"
+      | "no"
+      | "no-hide-descendants";
   }): React.JSX.Element => {
-    mockIoniconsRenders.push({ name, size, color });
-    const { View } =
+    mockIoniconsRenders.push({ name, size, color, accessible });
+    const { Text } =
       jest.requireActual<typeof import("react-native")>("react-native");
-    return <View testID={"ionicon-" + name} />;
+    return (
+      <Text
+        testID={"ionicon-" + name}
+        accessible={accessible}
+        accessibilityElementsHidden={accessibilityElementsHidden}
+        importantForAccessibility={importantForAccessibility}
+      />
+    );
   },
 }));
 
@@ -142,6 +183,12 @@ jest.mock("react-native-reanimated", () => ({
   ),
   useReducedMotion: () => mockReducedMotion,
   withRepeat: (...args: readonly unknown[]): unknown => mockWithRepeat(args[0]),
+  withTiming: (
+    value: number,
+    config?: { readonly duration?: number }
+  ): number => mockWithTiming(value, config),
+  withDelay: (delay: number, animation: unknown): unknown =>
+    mockWithDelay(delay, animation),
   cancelAnimation: (...args: readonly unknown[]): void => {
     mockCancelAnimation(...args);
   },
@@ -164,6 +211,7 @@ const baseProps: React.ComponentProps<typeof VoiceTransactionEntry> = {
   onOpenSettings: jest.fn(),
   onPermissionContinue: jest.fn(),
   onPermissionCancel: jest.fn(),
+  onDismissExamples: jest.fn(),
 };
 
 function renderLayout(
@@ -204,25 +252,6 @@ describe("VoiceTransactionEntry responsive, animation and unboxed layout", () =>
       expect.objectContaining({ paddingHorizontal: 12, paddingBottom: 46 })
     );
     expect(scrollProps.className).toContain("flex-1");
-  });
-
-  it("reflows at font scale 2 while retaining scroll and 48dp recovery targets", () => {
-    mockFontScale = 2;
-    mockWidth = 390;
-    renderLayout({ state: "unavailable", remaining: null, dailyLimit: null });
-    const scroll: unknown = screen.UNSAFE_getByType(ScrollView);
-    const scrollProps = getTestInstanceProps(scroll);
-    expect(scrollProps.contentContainerStyle).toEqual(
-      expect.objectContaining({ paddingHorizontal: 12 })
-    );
-    expect(getTestInstances(screen.getAllByRole("button"))).toHaveLength(2);
-    for (const control of getTestInstances(screen.getAllByRole("button"))) {
-      const props = getTestInstanceProps(control);
-      const className =
-        typeof props.className === "string" ? props.className : "";
-      const shape = className + JSON.stringify(props.style ?? {});
-      expect(shape).toMatch(/min-h-12|minHeight[^0-9]*48/);
-    }
   });
 
   it("centers content at tablet 768×1024 and remains scrollable in landscape", () => {
@@ -287,6 +316,121 @@ describe("VoiceTransactionEntry responsive, animation and unboxed layout", () =>
     expect(mockCancelAnimation).toHaveBeenCalled();
   });
 
+  it("recording uses two staggered outward ripples and decorative activity bars", (): void => {
+    const view = renderLayout({ state: "recording" });
+    for (const id of [
+      "voice-recording-ripple-first",
+      "voice-recording-ripple-second",
+      "voice-recording-activity",
+    ]) {
+      const decoration: unknown = screen.getByTestId(id, {
+        includeHiddenElements: true,
+      });
+      expect(getTestInstanceProps(decoration).importantForAccessibility).toBe(
+        "no-hide-descendants"
+      );
+      expect(getTestInstanceProps(decoration).pointerEvents).toBe("none");
+    }
+    expect(mockWithTiming).toHaveBeenCalledWith(
+      expect.any(Number),
+      expect.objectContaining({ duration: 1400 })
+    );
+    expect(mockWithTiming).toHaveBeenCalledWith(
+      expect.any(Number),
+      expect.objectContaining({ duration: 1200 })
+    );
+    expect(mockWithDelay).toHaveBeenCalledWith(700, expect.anything());
+    expect(mockWithRepeat).toHaveBeenCalled();
+    jest.clearAllMocks();
+    view.rerender(<VoiceTransactionEntry {...baseProps} state="paused" />);
+    expect(mockWithRepeat).not.toHaveBeenCalled();
+    expect(mockCancelAnimation).toHaveBeenCalled();
+    expect(
+      screen.getByTestId("voice-recording-activity", {
+        includeHiddenElements: true,
+      })
+    ).toBeTruthy();
+  });
+
+  it("parsing animates toward a blank receipt and cancels every loop on unmount", (): void => {
+    const view = renderLayout({ state: "processing" });
+    const illustration: unknown = screen.getByTestId(
+      "voice-parsing-illustration",
+      { includeHiddenElements: true }
+    );
+    expect(getTestInstanceProps(illustration).importantForAccessibility).toBe(
+      "no-hide-descendants"
+    );
+    expect(mockWithTiming).toHaveBeenCalledWith(
+      expect.any(Number),
+      expect.objectContaining({ duration: 1600 })
+    );
+    expect(mockWithRepeat).toHaveBeenCalled();
+    expect(screen.queryByTestId("voice-loading-skeleton")).toBeNull();
+    jest.clearAllMocks();
+    view.unmount();
+    expect(mockCancelAnimation).toHaveBeenCalled();
+  });
+
+  it("hides the parsing illustration from both platform a11y trees and marks the receipt glyph non-accessible", (): void => {
+    renderLayout({ state: "processing" });
+    const illustration: unknown = screen.getByTestId(
+      "voice-parsing-illustration",
+      { includeHiddenElements: true }
+    );
+    const wrapperProps = getTestInstanceProps(illustration);
+    expect(wrapperProps.accessible).toBe(false);
+    expect(wrapperProps.accessibilityElementsHidden).toBe(true);
+    expect(wrapperProps.importantForAccessibility).toBe("no-hide-descendants");
+    const receipt: unknown = screen.getByTestId("ionicon-receipt-outline", {
+      includeHiddenElements: true,
+    });
+    expect(getTestInstanceProps(receipt).accessible).toBe(false);
+    expect(screen.getByText("voice_ui_parsing_title")).toBeOnTheScreen();
+  });
+
+  it.each(["recording", "processing"] as const)(
+    "keeps %s decoration static under reduced motion",
+    (state): void => {
+      mockReducedMotion = true;
+      renderLayout({ state });
+      expect(mockWithRepeat).not.toHaveBeenCalled();
+      expect(
+        screen.getByTestId(
+          state === "recording"
+            ? "voice-recording-activity"
+            : "voice-parsing-illustration",
+          { includeHiddenElements: true }
+        )
+      ).toBeTruthy();
+    }
+  );
+
+  it.each(["recording", "processing"] as const)(
+    "reacts to real reduced-motion setting events during %s and removes listeners",
+    async (state): Promise<void> => {
+      const view = renderLayout({ state });
+      await act(async (): Promise<void> => {
+        await Promise.resolve();
+      });
+      expect(mockWithRepeat).toHaveBeenCalled();
+      expect(mockReduceMotionListeners.size).toBeGreaterThan(0);
+      jest.clearAllMocks();
+      act((): void => {
+        mockReduceMotionListeners.forEach((listener) => listener(true));
+      });
+      expect(mockCancelAnimation).toHaveBeenCalled();
+      expect(mockWithRepeat).not.toHaveBeenCalled();
+      act((): void => {
+        mockReduceMotionListeners.forEach((listener) => listener(false));
+      });
+      expect(mockWithRepeat).toHaveBeenCalled();
+      view.unmount();
+      expect(mockReduceMotionListeners.size).toBe(0);
+      expect(mockReduceMotionRemove).toHaveBeenCalled();
+    }
+  );
+
   it("renders disabled daily-limit status unboxed, never as an interactive recording target", () => {
     renderLayout({ state: "daily-limit", remaining: 0, dailyLimit: 5 });
     const surface: unknown = screen.getByTestId("voice-action-surface");
@@ -325,7 +469,7 @@ function compiledVoiceCss(): string {
       "components",
       "add-transaction",
       "voice-ui",
-      "VoiceGradient.tsx"
+      "*.tsx"
     );
     const output = path.join(directory, "output.css");
     writeFileSync(input, "@tailwind base;\n@tailwind utilities;\n", "utf8");
@@ -405,49 +549,111 @@ function expectPaletteHalo(actual: unknown, paletteColor: string): number {
   return alpha / 255;
 }
 
-/** Native 172dp decorative circles, including the recording pulse, not CSS tokens. */
-function nativeOuterCircleStyles(node: unknown): ViewStyle[] {
-  if (typeof node !== "object" || node === null) return [];
-  const props = getTestInstanceProps(node);
-  const style = resolvedVoiceStyle(node);
-  const own =
-    props.importantForAccessibility === "no-hide-descendants" &&
-    style.width === 172 &&
-    style.height === 172 &&
-    style.borderRadius === 86
-      ? [style]
-      : [];
-  const children = getTestInstanceChildren(node).flatMap((child) =>
-    nativeOuterCircleStyles(child)
-  );
-  return [...own, ...children];
-}
-
-function matchesVisiblePaletteColor(
-  actual: unknown,
-  expectedPaletteColor: string
-): boolean {
-  if (typeof actual !== "string") return false;
-  const native = processColor(actual);
-  const target = processColor(expectedPaletteColor);
-  if (typeof native !== "number" || typeof target !== "number") return false;
-  const nativeUint = ((native % 4294967296) + 4294967296) % 4294967296;
-  const targetUint = ((target % 4294967296) + 4294967296) % 4294967296;
-  const alpha = Math.floor(nativeUint / 16777216);
-  return (
-    nativeUint % 16777216 === targetUint % 16777216 && alpha > 0 && alpha < 255
-  );
-}
-
 describe("real Tailwind/CSS Interop Voice native shape", () => {
+  it("reflows at font scale 2 while retaining scroll and 48dp recovery targets", () => {
+    mockFontScale = 2;
+    mockWidth = 390;
+    renderWithInterop(
+      <VoiceTransactionEntry
+        {...baseProps}
+        state="unavailable"
+        remaining={null}
+        dailyLimit={null}
+      />
+    );
+    const scroll: unknown = screen.UNSAFE_getByType(ScrollView);
+    const scrollProps = getTestInstanceProps(scroll);
+    expect(scrollProps.contentContainerStyle).toEqual(
+      expect.objectContaining({ paddingHorizontal: 12 })
+    );
+    expect(getTestInstances(screen.getAllByRole("button"))).toHaveLength(2);
+    for (const control of getTestInstances(screen.getAllByRole("button"))) {
+      expect(resolvedVoiceStyle(control).minHeight).toBeGreaterThanOrEqual(48);
+    }
+  });
+
   beforeAll(() => setupAllComponents());
   beforeEach(() => {
+    mockFontScale = 1;
     mockIoniconsRenders.length = 0;
     mockGradientRenders.length = 0;
     registerCSS(compiledVoiceCss(), {
       grouping: ["^group(/.*)?"],
       ignorePropertyWarningRegex: ["^--tw-"],
     });
+  });
+
+  it("gives examples dismissal an actual native 48dp minimum target", (): void => {
+    renderWithInterop(<VoiceTransactionEntry {...baseProps} />);
+    const style = resolvedVoiceStyle(
+      screen.getByTestId("voice-examples-dismiss")
+    );
+    expect(style.minHeight).toBeGreaterThanOrEqual(48);
+    expect(style.minWidth).toBeGreaterThanOrEqual(48);
+  });
+
+  it.each([
+    ["starting", "voice-starting-cancel"],
+    ["permission-explanation", "voice-permission-primary"],
+    ["recording", "voice-action-stop"],
+  ] as const)(
+    "gives %s action an actual native 48dp minimum height",
+    (state, id): void => {
+      renderWithInterop(<VoiceTransactionEntry {...baseProps} state={state} />);
+      expect(
+        resolvedVoiceStyle(screen.getByTestId(id)).minHeight
+      ).toBeGreaterThanOrEqual(48);
+    }
+  );
+
+  it.each(["light", "dark"] as const)(
+    "resolves approved allowance mic badge in %s theme",
+    (theme): void => {
+      colorScheme.set(theme);
+      renderWithInterop(<VoiceTransactionEntry {...baseProps} />);
+      const badgeStyle = resolvedVoiceStyle(
+        screen.getByTestId("voice-allowance-icon-badge", {
+          includeHiddenElements: true,
+        })
+      );
+      expect(processColor(badgeStyle.backgroundColor)).toBe(
+        processColor(
+          theme === "dark" ? palette.slate[700] : palette.nileGreen[100]
+        )
+      );
+      expect(
+        mockIoniconsRenders.find((icon) => icon.name === "mic-outline")?.color
+      ).toBe(palette.nileGreen[600]);
+    }
+  );
+
+  it.each(["light", "dark"] as const)(
+    "retains colorful English example glyphs in %s theme",
+    (theme): void => {
+      colorScheme.set(theme);
+      renderWithInterop(<VoiceTransactionEntry {...baseProps} />);
+      for (const [name, color] of [
+        ["restaurant-outline", palette.orange[500]],
+        ["car-outline", palette.blue[500]],
+        ["cafe-outline", palette.gold[500]],
+      ] as const) {
+        expect(
+          mockIoniconsRenders.find((icon) => icon.name === name)?.color
+        ).toBe(color);
+      }
+    }
+  );
+
+  it("keeps Arabic examples quote-only after the colorful English change", (): void => {
+    mockLanguage = "ar";
+    renderWithInterop(<VoiceTransactionEntry {...baseProps} />);
+    expect(
+      mockIoniconsRenders.some((icon) =>
+        ["restaurant-outline", "car-outline", "cafe-outline"].includes(
+          icon.name
+        )
+      )
+    ).toBe(false);
   });
 
   it.each([
@@ -621,7 +827,7 @@ describe("real Tailwind/CSS Interop Voice native shape", () => {
     ["en", "dark"],
     ["ar", "dark"],
   ] as const)(
-    "keeps recording halo pulse lighter than the page in %s %s",
+    "resolves two thin outward recording rings through native styles in %s %s",
     (language, theme) => {
       mockLanguage = language;
       mockReducedMotion = false;
@@ -630,54 +836,29 @@ describe("real Tailwind/CSS Interop Voice native shape", () => {
         <VoiceTransactionEntry {...baseProps} state="recording" />
       );
       expect(mockWithRepeat).toHaveBeenCalled();
-      const voiceSurface: unknown = screen.getByTestId("voice-action-surface");
-      const outerCircles = nativeOuterCircleStyles(voiceSurface);
-
-      // The stationary outer ring uses 50; the separate animated ring uses
-      // 100. A dark-900 pulse can pass a class-string test but is invisible.
-      expect(outerCircles.length).toBeGreaterThanOrEqual(2);
-      expect(
-        outerCircles.some((style) =>
-          matchesVisiblePaletteColor(
-            style.backgroundColor,
-            palette.nileGreen[50]
-          )
-        )
-      ).toBe(true);
-      expect(
-        outerCircles.some((style) =>
-          matchesVisiblePaletteColor(
-            style.backgroundColor,
-            palette.nileGreen[100]
-          )
-        )
-      ).toBe(true);
-
-      const pulse: unknown = screen.getByTestId("voice-halo-pulse", {
-        includeHiddenElements: true,
-      });
-      const pulseStyle = resolvedVoiceStyle(pulse);
-      expect(pulseStyle).toEqual(
-        expect.objectContaining({
-          width: 172,
-          height: 172,
-          borderRadius: 86,
-        })
-      );
-      const pulseAlpha = expectPaletteHalo(
-        pulseStyle.backgroundColor,
-        palette.nileGreen[100]
-      );
-      expect(pulseAlpha).toBeGreaterThanOrEqual(0.55);
-      if (theme === "dark") {
-        const outer: unknown = screen.getByTestId("voice-halo-outer", {
+      for (const id of [
+        "voice-recording-ripple-first",
+        "voice-recording-ripple-second",
+      ]) {
+        const ring: unknown = screen.getByTestId(id, {
           includeHiddenElements: true,
         });
-        const outerAlpha = expectPaletteHalo(
-          resolvedVoiceStyle(outer).backgroundColor,
-          palette.nileGreen[50]
+        const style = resolvedVoiceStyle(ring);
+        expect(style).toEqual(
+          expect.objectContaining({
+            width: 104,
+            height: 104,
+            borderRadius: 52,
+            borderWidth: 1,
+          })
         );
-        expect(pulseAlpha).toBeGreaterThan(outerAlpha);
+        expect(processColor(style.borderColor)).toBe(
+          processColor(palette.nileGreen[500])
+        );
+        expect(getTestInstanceProps(ring).pointerEvents).toBe("none");
+        expect(getTestInstanceProps(ring).importantForAccessibility).toBe(
+          "no-hide-descendants"
+        );
       }
     }
   );

@@ -1,6 +1,6 @@
 import { useLocale } from "@/context/LocaleContext";
 import { Ionicons } from "@expo/vector-icons";
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import {
   Pressable,
   ScrollView,
@@ -8,14 +8,6 @@ import {
   View,
   useWindowDimensions,
 } from "react-native";
-import Animated, {
-  cancelAnimation,
-  useAnimatedStyle,
-  useReducedMotion,
-  useSharedValue,
-  withRepeat,
-  withTiming,
-} from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTranslation } from "react-i18next";
 
@@ -27,6 +19,11 @@ import { AllowanceCard } from "./voice-ui/AllowanceCard";
 import { DailyLimitNotice } from "./voice-ui/DailyLimitNotice";
 import { ExamplesCard } from "./voice-ui/ExamplesCard";
 import { VoiceGradient } from "./voice-ui/VoiceGradient";
+import {
+  ParsingIllustration,
+  RecordingActivity,
+  RecordingRipples,
+} from "./voice-ui/VoiceMotion";
 import {
   ActionButton,
   PassiveStateActions,
@@ -92,8 +89,11 @@ export function VoiceTransactionEntry(
               />
             ) : null}
             <VoiceActionSurface {...props} isArabic={isArabic} />
-            {props.state === "idle" ? (
-              <ExamplesCard isArabic={isArabic} />
+            {props.state === "idle" && props.showExamples !== false ? (
+              <ExamplesCard
+                isArabic={isArabic}
+                onDismiss={props.onDismissExamples}
+              />
             ) : null}
           </>
         )}
@@ -152,41 +152,7 @@ function VoiceActionSurface({
   const isProcessing = props.state === "processing";
   const isDailyLimit = props.state === "daily-limit";
   const isUnavailable = props.state === "unavailable";
-
-  const pulseScale = useSharedValue(1);
-  const pulseOpacity = useSharedValue(0);
-  const reducedMotion = useReducedMotion();
-
-  useEffect(() => {
-    if (!isRecording || reducedMotion) {
-      cancelAnimation(pulseScale);
-      cancelAnimation(pulseOpacity);
-      pulseScale.value = 1;
-      pulseOpacity.value = 0;
-      return;
-    }
-
-    pulseScale.value = withRepeat(
-      withTiming(1.2, { duration: 1000 }),
-      -1,
-      true
-    );
-    pulseOpacity.value = withRepeat(
-      withTiming(0.15, { duration: 1000 }),
-      -1,
-      true
-    );
-
-    return () => {
-      cancelAnimation(pulseScale);
-      cancelAnimation(pulseOpacity);
-    };
-  }, [isRecording, pulseOpacity, pulseScale, reducedMotion]);
-
-  const pulseStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: pulseScale.value }],
-    opacity: pulseOpacity.value,
-  }));
+  const isStarting = props.state === "starting";
 
   const centralAction =
     props.state === "idle"
@@ -203,106 +169,110 @@ function VoiceActionSurface({
       accessibilityLiveRegion="polite"
       className="min-h-[260px] items-center justify-center py-4"
     >
-      <View className="h-[172px] w-[172px] items-center justify-center">
-        <View
-          testID="voice-halo-outer"
-          accessible={false}
-          pointerEvents="none"
-          importantForAccessibility="no-hide-descendants"
-          className={`absolute h-[172px] w-[172px] rounded-[86px] ${
-            isDailyLimit || isUnavailable
-              ? "bg-slate-200/20 dark:bg-slate-700/25"
-              : "bg-nileGreen-50/60 dark:bg-nileGreen-50/25"
-          }`}
-        />
-        {isRecording && !reducedMotion ? (
-          <Animated.View
+      {isProcessing ? (
+        <ParsingIllustration isArabic={isArabic} />
+      ) : (
+        <View className="h-[172px] w-[172px] items-center justify-center">
+          <View
+            testID="voice-halo-outer"
             accessible={false}
             pointerEvents="none"
             importantForAccessibility="no-hide-descendants"
-            className="absolute h-[172px] w-[172px] rounded-[86px]"
-            style={pulseStyle}
-          >
-            <View
-              testID="voice-halo-pulse"
-              accessible={false}
-              pointerEvents="none"
-              importantForAccessibility="no-hide-descendants"
-              className="h-[172px] w-[172px] rounded-[86px] bg-nileGreen-100/60 dark:bg-nileGreen-100/60"
-            />
-          </Animated.View>
-        ) : null}
-        <View
-          testID="voice-halo-inner"
-          accessible={false}
-          pointerEvents="none"
-          importantForAccessibility="no-hide-descendants"
-          className={`absolute h-[140px] w-[140px] rounded-[70px] ${
-            isDailyLimit || isUnavailable
-              ? "bg-slate-200/20 dark:bg-slate-700/30"
-              : "bg-nileGreen-100/50 dark:bg-nileGreen-100/40"
-          }`}
-        />
+            className={`absolute h-[172px] w-[172px] rounded-[86px] ${
+              isDailyLimit || isUnavailable
+                ? "bg-slate-200/20 dark:bg-slate-700/25"
+                : "bg-nileGreen-50/60 dark:bg-nileGreen-50/25"
+            }`}
+          />
+          {isRecording || isPaused ? (
+            <RecordingRipples isActive={isRecording} />
+          ) : null}
+          <View
+            testID="voice-halo-inner"
+            accessible={false}
+            pointerEvents="none"
+            importantForAccessibility="no-hide-descendants"
+            className={`absolute h-[140px] w-[140px] rounded-[70px] ${
+              isDailyLimit || isUnavailable
+                ? "bg-slate-200/20 dark:bg-slate-700/30"
+                : "bg-nileGreen-100/50 dark:bg-nileGreen-100/40"
+            }`}
+          />
 
-        {isProcessing ? (
-          <View className="h-[104px] w-[104px] overflow-hidden rounded-[52px]">
-            <Skeleton width="100%" height={104} borderRadius={52} />
-          </View>
-        ) : centralAction !== null ? (
-          <Pressable
-            testID="voice-mic-target"
-            accessibilityRole="button"
-            accessibilityLabel={presentation.centralLabel}
-            onPress={centralAction}
-            onPressIn={() => {
-              setIsMicPressed(true);
-            }}
-            onPressOut={() => {
-              setIsMicPressed(false);
-            }}
-            className="h-[104px] w-[104px] rounded-[52px]"
-            style={{
-              opacity: isMicPressed ? 0.88 : 1,
-              shadowColor: palette.nileGreen[500],
-              shadowOffset: { width: 0, height: 4 },
-              shadowOpacity: 0.24,
-              shadowRadius: 8,
-              elevation: 6,
-            }}
-          >
+          {isStarting ? (
             <View
-              testID="voice-mic-clip"
-              className="h-[104px] w-[104px] overflow-hidden rounded-[52px]"
               accessible={false}
-              importantForAccessibility="no"
+              accessibilityElementsHidden
+              importantForAccessibility="no-hide-descendants"
+              className="h-[104px] w-[104px] overflow-hidden rounded-[52px]"
             >
               <VoiceGradient
                 colors={[palette.nileGreen[500], palette.nileGreen[600]]}
                 className="flex-1 items-center justify-center"
               >
-                <Ionicons
-                  name={presentation.icon}
-                  size={42}
-                  color={palette.slate[25]}
-                />
+                <Ionicons name="mic" size={42} color={palette.slate[25]} />
               </VoiceGradient>
             </View>
-          </Pressable>
-        ) : (
-          <View
-            testID="voice-mic-target"
-            accessible={false}
-            importantForAccessibility="no-hide-descendants"
-            className="h-[104px] w-[104px] items-center justify-center rounded-[52px] bg-slate-200 dark:bg-slate-700"
-          >
-            <Ionicons
-              name={presentation.icon}
-              size={42}
-              color={palette.slate[400]}
-            />
-          </View>
-        )}
-      </View>
+          ) : centralAction !== null ? (
+            <Pressable
+              testID="voice-mic-target"
+              accessibilityRole="button"
+              accessibilityLabel={presentation.centralLabel}
+              onPress={centralAction}
+              onPressIn={() => {
+                setIsMicPressed(true);
+              }}
+              onPressOut={() => {
+                setIsMicPressed(false);
+              }}
+              className="h-[104px] w-[104px] rounded-[52px]"
+              style={{
+                opacity: isMicPressed ? 0.88 : 1,
+                shadowColor: palette.nileGreen[500],
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.24,
+                shadowRadius: 8,
+                elevation: 6,
+              }}
+            >
+              <View
+                testID="voice-mic-clip"
+                className="h-[104px] w-[104px] overflow-hidden rounded-[52px]"
+                accessible={false}
+                importantForAccessibility="no"
+              >
+                <VoiceGradient
+                  colors={[palette.nileGreen[500], palette.nileGreen[600]]}
+                  className="flex-1 items-center justify-center"
+                >
+                  <Ionicons
+                    name={presentation.icon}
+                    size={42}
+                    color={palette.slate[25]}
+                  />
+                </VoiceGradient>
+              </View>
+            </Pressable>
+          ) : (
+            <View
+              testID="voice-mic-target"
+              accessible={false}
+              importantForAccessibility="no-hide-descendants"
+              className="h-[104px] w-[104px] items-center justify-center rounded-[52px] bg-slate-200 dark:bg-slate-700"
+            >
+              <Ionicons
+                name={presentation.icon}
+                size={42}
+                color={palette.slate[400]}
+              />
+            </View>
+          )}
+        </View>
+      )}
+
+      {isRecording || isPaused ? (
+        <RecordingActivity isActive={isRecording} />
+      ) : null}
 
       {isRecording || isPaused || isCompleted ? (
         <Text

@@ -35,8 +35,9 @@ export function AllowanceCard({
     >
       <View className="flex-row items-start" style={{ direction: "ltr" }}>
         <View
+          testID="voice-allowance-icon-badge"
           importantForAccessibility="no-hide-descendants"
-          className="mr-3 h-12 w-12 items-center justify-center rounded-full bg-nileGreen-100 dark:bg-nileGreen-900"
+          className="mr-3 h-12 w-12 items-center justify-center rounded-full bg-nileGreen-100 dark:bg-slate-700"
         >
           <Ionicons
             name="mic-outline"

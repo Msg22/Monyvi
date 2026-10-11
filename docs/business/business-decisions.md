@@ -957,6 +957,56 @@ Business rules:
 - User-facing reset copy must match local-midnight daily semantics and must not
   claim the limit resets "at the same time tomorrow."
 
+- Owner-approved Voice motion proposal R1 (10 October 2026) adds only scoped
+  interaction/appearance details to #347. Approval provenance, source hashes,
+  immutable five-reference boundary and mapped UI states are in
+  `specs/389-voice-usage-limits/reconciliation.md` and
+  `mockups/voice-motion-binding-context.md`; existing Manual, quota,
+  35-day replay retention and deferred #384 remain unchanged.
+- Dark idle Voice allowance/examples heading microphone and bulb badges use
+  slate-700 surfaces with green glyphs; the light badge stays as approved.
+  English example restaurant/car/coffee icons retain identities/copy and gain
+  category orange/blue/gold colors; Arabic continues with quoted rows and no
+  English example icons.
+- The examples card has an accessible "Dismiss examples" / "إخفاء الأمثلة"
+  control with the shared minimum 48 dp interactive target. Dismissal hides
+  the whole card immediately and persists **on this device for the currently
+  authenticated account**, including route changes, restart, language/theme
+  changes and later sign-in. Other users have independent choices; no global
+  device-intro flag, hosted schema, sync or network write. Missing/unreadable
+  local preference defaults visible; a failed write cannot claim durability.
+- Mic tap immediately displays the localized **Starting** state and Cancel,
+  before consent/availability/native capture preparation settles. Rapid taps
+  cannot create more than one start. Actual Listening and elapsed time begin
+  only after native recording starts; canceled or stale work never starts
+  recording in the background. Native preparation failure shows recovery,
+  never a false Listening state.
+- During real recording, the approved decoration uses two outward staggered
+  ripples (~1.4 s cycle, 700 ms apart) plus gentle activity bars (~1.2 s).
+  These are **not** measured volume indicators. Paused freezes time and
+  motion; resume continues, reduced-motion shows static indicators, and
+  account change/discard/unmount cancels active effects and recording.
+- Actual analyzing/parsing uses an illustrative waveform flowing toward a
+  receipt (~1.6 s repeating), exact approved EN/AR title/body and no
+  percentage, fabricated completion or financial details. Availability-fetch
+  loading continues to show `Skeleton`; native finalizing does not falsely
+  claim parser progress.
+- A genuinely missing native microphone grant uses the approved **inline**
+  Voice explanation and Allow microphone action before the OS permission
+  prompt, replacing only the prior recording-introduction modal. Known-granted
+  users skip it; an initial asynchronous "unknown" is not a denial. Revoked/
+  blocked grants retain Settings/Manual recovery. Required first-use **AI
+  Processing Consent Sheet** and privacy consent gate are not removed.
+- Recording-error Try again goes straight to Starting without visible idle
+  detour; the retained-audio submission retry preserves the same request key,
+  recording and accounting contract. Availability-error Try again refreshes
+  the server-authoritative state and automatically starts only when eligible;
+  daily/burst/consent/permission gates remain fail closed. User-facing reset
+  copy in the new scoped daily contexts is "Your limits reset tomorrow." /
+  "يتجدد حد استخدامك غدًا.", still next local midnight, not 24 hours after
+  the last request or burst-reset time.
+
+
 ## 7. SMS Import And Live Detection
 
 SMS import has two product modes:

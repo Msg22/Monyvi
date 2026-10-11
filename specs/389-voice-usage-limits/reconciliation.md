@@ -1,5 +1,76 @@
 # Planning reconciliation and approval package
 
+## Voice motion revision 1 — owner-approved scoped continuation (10 October 2026)
+
+**Approval source:** `mockups/drafts/2026-10-10-voice-motion-r1/approval.json`,
+owner evidence “mockups approved” and “Approve the proposal”, recorded in thread
+`01a11606-3a5e-7420-a9d7-0ea491bde802` at
+`2026-10-10T14:39:19.262Z`, question
+`call_WNqHZ69cvzQQG09hJY0sXedd:0`.
+Original approved five-image manifest:
+`sha256:7d91150571a3150e235a1b8ec63327cff4c19de6c292927cde76c40024c1c799`;
+source `proposal-approved.txt`:
+`sha256:06e5e987543d85a2c90c57aaad695569ca904cc122571da47bae7195d2b9f4b0`.
+Draft manifest still says "awaiting" as **historical source bytes**; the
+separate immutable approval record supersedes that status without editing the
+draft/images. Do not amend these approved files.
+
+**Supersession boundary:**
+
+- The approved R1 source images/interaction proposal supersede **only** dark
+  Voice idle badge treatment, EN example glyph coloring, per-account device
+  dismissal, immediate Starting/Cancel, recording ripple/bars, parsing activity,
+  native-permission inline explanation, and direct/eligible retry transitions.
+- The previously approved **five original** repaired states/images/sidecars
+  and `repair-binding-manifest.json`
+  (`sha256:4b06ef2ad901a13cceb06790e49149fb9b314e99c213080e941cce22859b34b8`)
+  stay byte-identical and remain authority for all unchanged Manual B,
+  allowance counts/progress, exhausted EN/AR composition, shared geometry,
+  tabs, current local-midnight semantics and existing screen layout. The
+  proposal's new EN daily-reset wording applies **only** to daily reset
+  language, never burst availability. No other copy/geometry invention.
+- New `mockups/voice-motion-binding-context.md` is a **derived approved-source
+  crosswalk**, not a new image/sidecar, a sixth verifier or a renewed approval
+  gate. `contracts/add-transaction-ui-contract.md` maps new states and
+  `checklists/voice-motion-coverage.md` maps manual/automated/owner evidence.
+- Canonical additions: FR-037…FR-042 and SC-016…SC-018, mapped by new
+  **append-only** T060…T066. Original FR-001…FR-036, SC-001…SC-015 and
+  T001…T059 keep their IDs and old historical evidence; no task regeneration.
+- No changes to Gemini provider/transaction review, local financial forms,
+  5/day or 2/min provider-start accounting, 35×24-hour terminal identity
+  retention, server-only quota tables, migration, sync, hosted state, first-use
+  AI consent or deferred #384. Account-scoped dismissal is **device-local**
+  and cannot reuse the globally scoped intro flags.
+- Permission/retry implementation risk is already evidenced in the proposal:
+  `isVoiceStartPending` is not shown by current route's presentation state;
+  recorder initially reports false before its async grant check; recorder
+  catches start failures silently; retryRecording displays idle in the
+  middle. The new desired transitions require synchronous render state,
+  lifetime cancellation and an observable recorder-start failure. Planning
+  documents are not evidence of those behaviors being implemented.
+- 853×1844 source image **pixels** cannot establish a new viewport or arbitrary
+  stroke/bar dimensions. The five large approved PNG payloads were not
+  independently inspectable through this remote connector (empty image
+  body); only the immutable source manifest and detailed approved proposal
+  were inspected. Root owns exact image verification and native rendered
+  comparisons. No missing material product decision was invented to fill
+  incidental raster differences.
+- Named paths `components/ui/PermissionRecoveryModal.tsx` and
+  `hooks/useVoiceAvailability.ts` did not exist at target head; route's actual
+  imports are `components/permissions/PermissionRecoveryModal.tsx` and
+  `hooks/useVoiceAiAvailability.ts`. This worker did **not** widen its read
+  boundary. Lead must explicitly authorize inspection of the real files for
+  later implementation; that does not block approved documentation.
+
+**Current planning status:** Only remote document authoring/publishing is
+authorized. Root will run existing five verifier commands, Speckit
+prerequisites and **read-only** `speckit.analyze` after this branch snapshot.
+`.specify/extensions.yml` has optional automatically executable git-commit
+hooks; root must explicitly choose not to run unauthorized hooks.
+No local validation, unit Red/Green, E2E/device/live-provider, visual captures
+or accessibility tree was executed in this wave. Existing T034/T035/T049/T050
+and visual/accessibility T058 remain **NOT RUN**.
+
 ## UI repair authority — 10 October 2026
 
 Current worktree: `E:/Work/My Projects/Monyvi-issue347-ui-fidelity`; branch
