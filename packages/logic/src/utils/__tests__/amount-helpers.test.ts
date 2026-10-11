@@ -406,3 +406,28 @@ describe("T006 editable amount foundation contract", () => {
     });
   });
 });
+describe("T006 Q3 immutable legacy unsigned resolver outputs", () => {
+  it.each([
+    ["1,234.50", "", true, "1234.50"],
+    ["1,2345", "1234", true, "12345"],
+    ["1,23", "1234", true, "123"],
+    ["abc12345", "42", false, "42"],
+    ["1..2", "42", false, "42"],
+    ["-1,234.50", "42", false, "42"],
+  ] as const)(
+    "retains legacy accepted/value result for %s with previous %s",
+    (input, previous, accepted, value) => {
+      expect(AmountHelpers.resolveAmountInputChange(input, previous)).toEqual({
+        accepted,
+        value,
+      });
+      expect(parseAmountInput(input, previous)).toBe(value);
+    }
+  );
+
+  it("retains the existing unsigned formatter independent of the new display classifier", () => {
+    expect(formatAmountInput("abc12345")).toBe("abc12,345");
+    expect(formatAmountInput("-1234.567")).toBe("-1,234.567");
+    expect(formatAmountInput("1250.7550")).toBe("1,250.7550");
+  });
+});
