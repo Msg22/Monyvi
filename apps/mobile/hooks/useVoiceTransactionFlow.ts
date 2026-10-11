@@ -183,13 +183,25 @@ export function useVoiceTransactionFlow(
     };
   }, [invalidateOperations]);
   useEffect(() => {
-    if (
-      recorder.status === "completed" &&
-      flowStatusRef.current === "recording"
-    ) {
+    if (recorder.status === "completed" && flowStatusRef.current === "recording")
       updateFlowStatus("completed");
+    if (
+      recorder.status === "error" &&
+      recorder.audioUri === null &&
+      userId !== null &&
+      !isResolvingUser &&
+      requestOwnerUserIdRef.current === userId &&
+      submissionPendingGenerationRef.current === null &&
+      ["recording", "paused", "completed"].includes(flowStatusRef.current)
+    ) {
+      clearSubmissionIdentity();
+      setErrorMessage(recordingFinalizeError());
+      setErrorKind("generic");
+      setIsOverlayVisible(true);
+      updateFlowStatus("error");
     }
-  }, [recorder.status, updateFlowStatus]);
+  }, [recorder.status, recorder.audioUri, userId, isResolvingUser,
+    clearSubmissionIdentity, updateFlowStatus]);
   const hasFreshAiProcessingConsent =
     useCallback(async (): Promise<boolean> => {
       if (cfgHasFreshAiProcessingConsent) {
@@ -283,7 +295,6 @@ export function useVoiceTransactionFlow(
           setErrorKind(null);
           setRefusalReason(null);
         }
-
         if (!options?.skipAiProcessingConsent && cfgEnsureAiProcessingConsent) {
           const canUseAi = await cfgEnsureAiProcessingConsent();
           if (!isOperationCurrent(operation)) {
@@ -294,7 +305,6 @@ export function useVoiceTransactionFlow(
             return { kind: "not-started", reason: "consent" };
           }
         }
-
         const callerTimeZone = getDeviceTimeZone();
         if (!isOperationCurrent(operation)) {
           return getStaleStartResult(operation);
@@ -303,7 +313,6 @@ export function useVoiceTransactionFlow(
           updateFlowStatus("idle");
           return { kind: "not-started", reason: "availability" };
         }
-
         const availability =
           options?.availabilitySnapshot ?? (await refreshVoiceAvailability());
         if (!isOperationCurrent(operation)) {
@@ -314,29 +323,25 @@ export function useVoiceTransactionFlow(
           updateFlowStatus("idle");
           return { kind: "not-started", reason: "availability" };
         }
-
         const permission = await recorder.refreshPermission();
         if (!isOperationCurrent(operation)) {
           return getStaleStartResult(operation);
         }
-        if (permission !== "granted") {
-          const granted =
-            options?.requestMicrophonePermission === true &&
-            permission === "denied"
-              ? await recorder.requestPermission()
-              : false;
-          if (!isOperationCurrent(operation)) {
-            return getStaleStartResult(operation);
-          }
-          if (!granted) {
-            setErrorMessage(null);
-            setErrorKind(null);
-            setIsOverlayVisible(false);
-            updateFlowStatus("idle");
-            return { kind: "permission", permissionStatus: permission };
-          }
+        const requestedStatus =
+          options?.requestMicrophonePermission === true &&
+          permission === "denied"
+            ? await recorder.requestPermissionStatus()
+            : permission;
+        if (!isOperationCurrent(operation)) {
+          return getStaleStartResult(operation);
         }
-
+        if (requestedStatus !== "granted") {
+          setErrorMessage(null);
+          setErrorKind(null);
+          setIsOverlayVisible(false);
+          updateFlowStatus("idle");
+          return { kind: "permission", permissionStatus: requestedStatus };
+        }
         const requestKey = createRequestKey();
         requestKeyRef.current = requestKey;
         requestOwnerUserIdRef.current = operation.userId;
@@ -348,7 +353,6 @@ export function useVoiceTransactionFlow(
         setErrorKind(null);
         setIsOverlayVisible(true);
         originTabIndexRef.current = cfgOriginTabIndex ?? 0;
-
         let didNativeRecordStart = false;
         try {
           await recorder.start({
@@ -490,7 +494,6 @@ export function useVoiceTransactionFlow(
           return;
         }
         if (permission === "unknown") {
-          // A failed permission lookup is not a confirmed OS denial.
           return;
         }
         if (permission !== "granted") {
@@ -601,7 +604,6 @@ export function useVoiceTransactionFlow(
           updateFlowStatus("error");
           return;
         }
-
         if (!(await discardForOperation(operation))) {
           return;
         }
@@ -621,11 +623,9 @@ export function useVoiceTransactionFlow(
         updateFlowStatus("error");
         return;
       }
-
       if (!(await discardForOperation(operation))) {
         return;
       }
-
       clearSubmissionIdentity();
       if (aiResult.transactions.length === 0) {
         setRefusalReason(null);
@@ -864,10 +864,7 @@ export function useVoiceTransactionFlow(
   }, [beginOperation, isOperationCurrent, updateFlowStatus]);
   const isModeSwitchLocked =
     isStartPending ||
-    flowStatus === "recording" ||
-    flowStatus === "paused" ||
-    flowStatus === "completed" ||
-    flowStatus === "analyzing";
+    ["recording", "paused", "completed", "analyzing"].includes(flowStatus);
   return {
     flowStatus,
     isOverlayVisible,

@@ -13,6 +13,10 @@ const mockRecorderStop = jest.fn();
 const mockRecorderDiscard = jest.fn();
 const mockRecorderReset = jest.fn();
 const mockRequestPermission = jest.fn();
+const mockRequestPermissionStatus = jest.fn<
+  Promise<"granted" | "denied" | "blocked" | "unknown">,
+  []
+>();
 const mockParseVoiceWithAi = jest.fn<
   Promise<unknown>,
   Parameters<
@@ -101,6 +105,7 @@ jest.mock("@/hooks/useVoiceRecorder", () => ({
     discard: mockRecorderDiscardCallback,
     reset: mockRecorderReset,
     requestPermission: mockRequestPermission,
+    requestPermissionStatus: mockRequestPermissionStatus,
     permissionStatus: recorderState.hasPermission ? "granted" : "denied",
     refreshPermission: (): Promise<"granted" | "denied"> =>
       Promise.resolve(recorderState.hasPermission ? "granted" : "denied"),
@@ -193,6 +198,7 @@ beforeEach(() => {
   mockRecorderReset.mockResolvedValue(undefined);
   mockRecorderStop.mockResolvedValue({ uri: "file://stopped.m4a" });
   mockRequestPermission.mockResolvedValue(false);
+  mockRequestPermissionStatus.mockReset().mockResolvedValue("denied");
   mockOpenSettings.mockResolvedValue(undefined);
   mockActiveAiConsent();
   mockParseVoiceWithAi.mockResolvedValue({

@@ -117,10 +117,15 @@ function findActionLabel(action: unknown): unknown {
 function findActionLabelOrNull(parent: unknown, label: string): unknown {
   for (const child of getTestInstanceChildren(parent)) {
     if (typeof child !== "object" || child === null) continue;
-    const props = getTestInstanceProps(child);
-    if (props.children === label) return child;
-    const found = findActionLabelOrNull(child, label);
-    if (found !== null) return found;
+    const nativeDescendant = findActionLabelOrNull(child, label);
+    if (nativeDescendant !== null) return nativeDescendant;
+    if (
+      "type" in child &&
+      typeof child.type === "string" &&
+      getTestInstanceProps(child).children === label
+    ) {
+      return child;
+    }
   }
   return null;
 }
