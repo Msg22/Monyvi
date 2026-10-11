@@ -1336,7 +1336,7 @@ after fresh consent.
       analyze Git hooks were not invoked.
 - [ ] **T077 [P] [US0] Deterministic startup Red:** author one focused
       `useVoiceAiAvailability.startup.test.tsx` plus bounded additions to
-      `useVoiceTransactionFlow.test.ts` and
+      `useVoiceTransactionFlow.startup.test.ts` and
       `app/add-transaction-modes.test.tsx`. Prove same-context concurrent
       refresh/focus/foreground joins one service call; different actor/timezone/
       context cancels; failed/aborted work clears; consent completes before
@@ -1387,4 +1387,35 @@ after fresh consent.
       consent revocation/fail-closed semantics. T083 is a blocking Red alongside
       T077 before T078/T079; it does not renumber or change T075–T082.
 
+### S2-FIX root RED classification and repaired test-contract handoff (12 October 2026)
 
+Root tested exactly startup branch `aea6e6526058359ac739a4571634669a837c14b8`
+with separate focused verbose runs: availability **2F/8P/10 (3.122s)**;
+flow **5F/3P/8 (1.865s)**; route modes **2F/33P/35 (5.549s)**.
+The initial combined command timed out at 60s. Coalescing, simultaneous
+permission/availability and first-use consent supersede failures are genuine
+RED. The unavailable-retry `ReferenceError` only reflects an omitted test
+import of `mockVoiceAvailabilityRefresh`, already exported in route fixtures
+at line 666, and is **NOT accepted RED**.
+
+T077/T083 remain **UNCHECKED pending root's repaired meaningful RED**;
+T075/T076 and all T001–T074 historical completion flags/approvals remain
+unchanged. The bounded follow-up grants **only test writing** in:
+- `apps/mobile/__tests__/app/add-transaction-modes.test.tsx` — import
+  the existing exported refresh mock and put new deferred fixture resolutions
+  in RNTL `act` without weakening the one-refresh/fresh-snapshot test;
+- `apps/mobile/__tests__/hooks/useVoiceAiAvailability.startup.test.tsx` —
+  verify public `refresh({ supersedePending: true })` explicitly replaces a
+  matching pre-consent in-flight request, and two joined callers return `null`
+  after blur/background/unmount, with no late stale result;
+- `apps/mobile/__tests__/hooks/useVoiceTransactionFlow.startup.test.ts` —
+  require separate `availability`/`permission` plus combined
+  `availability_permission` and `native_start` numeric monotonic telemetry
+  stages; `voice.startupTiming` payload is exclusively `{ stage, durationMs }`;
+  an optional logger failure cannot prevent eligible native capture.
+
+The existing `useVoiceTransactionFlow.test.ts` and its retained same-key
+assertions are **read-only**. No production/startup source edits yet;
+#391 recorder/filesystem source/tests/docs are frozen separately. Root must
+accept focused repaired RED before T078/T079 and owns eventual T080 final
+batch, independent review and owner native/manual checks.

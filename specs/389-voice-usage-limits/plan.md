@@ -1141,7 +1141,7 @@ batched Green/integration gate after T078/T079.
 - **New focused companion:** `apps/mobile/__tests__/hooks/useVoiceAiAvailability.startup.test.tsx`
   for same-context coalescing, focus/foreground collision, failure reset and
   actor/timezone/background/unmount cancellation.
-- **Existing:** `apps/mobile/__tests__/hooks/useVoiceTransactionFlow.test.ts`
+- **New focused companion:** `apps/mobile/__tests__/hooks/useVoiceTransactionFlow.startup.test.ts`
   for post-consent concurrency, duplicate starts, stale actor/cancel, permission
   states, unavailable retry, native-start truth and same-key retained retry.
 - **Existing:** `apps/mobile/__tests__/app/add-transaction-modes.test.tsx`
@@ -1196,8 +1196,9 @@ the missing consent-transition freshness Red tracked as T083.
 - Startup timing Red is against existing route/flow/logger behavior, not a
   missing helper import. Structured records use event
   `voice.startupTiming` and payload keys **only**
-  `{ stage, durationMs }`. Planned stages are `consent`,
-  `availability_permission` and `native_start`; durations are monotonic,
+  `{ stage, durationMs }`. Planned stages are `consent`, separate
+  `availability` and `permission`, combined `availability_permission`,
+  and `native_start`; durations are monotonic,
   numeric and add no artificial wait. `native_start` is captured at recorder
   `onStarted`, before the recorder-owned 300 ms stabilization.
 - No user/account/timezone/request identifiers, tokens, audio URI/content,
@@ -1225,3 +1226,33 @@ the missing consent-transition freshness Red tracked as T083.
 T077 plus T083 Red must be accepted by root before T078/T079 production work.
 No test execution is claimed by this GitHub-only authoring commit.
 
+### S2-FIX repaired focused RED handoff (12 October 2026)
+
+Root's actual S2 RED on startup commit `aea6e6526058359ac739a4571634669a837c14b8`:
+availability companion **2 failed / 8 passed / 10 total (3.122 s)**;
+flow companion **5 failed / 3 passed / 8 total (1.865 s)**;
+route modes **2 failed / 33 passed / 35 total (5.549 s)**. The
+unavailable-retry failure was a `ReferenceError` for an **already exported**
+`mockVoiceAvailabilityRefresh` in
+`add-transaction-route-fixtures.tsx:666`, not meaningful RED. The other route
+failure demands first-use consent supersede; focused coalescing and flow
+concurrency/timing failures were meaningful. An initial combined command
+timed out at 60 s; independent focused commands established the evidence.
+
+Test-only S2-FIX corrects the import and uses RNTL `act` to settle new
+consent/grant deferred fixtures, retaining original assertions. The public
+`refresh({ supersedePending: true })` control must abort and replace a matching
+pre-consent request after grant; its late result never publishes. The
+blur/background/unmount checks must exercise **two joined callers** and show
+both stale outcomes `null`. Startup diagnostics require separate
+`availability` and `permission` numeric monotonic durations in addition
+to `availability_permission` and `native_start`, each
+`voice.startupTiming` payload exactly `{ stage, durationMs }`. A throwing
+diagnostic logger must not prevent eligible capture, invent a wait or change
+`onStarted` truth.
+
+Ownership is strictly tests and the five startup planning documents until
+root reruns/accepts meaningful RED. Production route, flow and availability
+remain byte-unchanged; recorder and #391 branch untouched. No local Jest,
+TypeScript, device, native audio, provider or performance execution by this
+successor; S3 remains root-gated.

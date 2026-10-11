@@ -15,6 +15,7 @@ import {
   mockPush,
   mockSetParams,
   mockVoiceStartFlow,
+  mockVoiceAvailabilityRefresh,
   mockCreateTransaction,
   mockGrantConsent,
   unconsentedStatus,
@@ -506,10 +507,14 @@ describe("AddTransaction Voice startup S2 Red", () => {
     expect(screen.getByTestId("voice-entry-state")).toHaveTextContent("starting");
     expect(mockVoiceStartFlow).not.toHaveBeenCalled();
 
-    consentStatus.resolve({
-      consent: null,
-      isConsented: false,
-      userId: "user-1",
+    await act(async (): Promise<void> => {
+      consentStatus.resolve({
+        consent: null,
+        isConsented: false,
+        userId: "user-1",
+      });
+      await consentStatus.promise;
+      await Promise.resolve();
     });
     await waitFor((): void => {
       expect(screen.getByTestId("voice-consent-continue")).toBeTruthy();
@@ -529,7 +534,11 @@ describe("AddTransaction Voice startup S2 Red", () => {
     });
     fireEvent.press(screen.getByTestId("voice-consent-continue"));
 
-    grant.resolve(undefined);
+    await act(async (): Promise<void> => {
+      grant.resolve(undefined);
+      await grant.promise;
+      await Promise.resolve();
+    });
     await waitFor((): void => {
       expect(mockVoiceStartFlow).toHaveBeenCalledTimes(1);
     });
@@ -572,10 +581,14 @@ describe("AddTransaction Voice startup S2 Red", () => {
     expect(mockVoiceAvailabilityRefresh).not.toHaveBeenCalled();
     expect(mockVoiceStartFlow).not.toHaveBeenCalled();
 
-    consentStatus.resolve({
-      consent: null,
-      isConsented: true,
-      userId: "user-1",
+    await act(async (): Promise<void> => {
+      consentStatus.resolve({
+        consent: null,
+        isConsented: true,
+        userId: "user-1",
+      });
+      await consentStatus.promise;
+      await Promise.resolve();
     });
 
     await waitFor((): void => {

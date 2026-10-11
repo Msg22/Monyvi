@@ -421,7 +421,34 @@ describe("useVoiceTransactionFlow startup ordering", () => {
       stages.add(String(payload.stage));
     }
 
+    // Separate monotonic durations identify whether network or native permission
+    // dominates Starting; the combined gate still measures their parallel span.
+    expect(stages.has("availability")).toBe(true);
+    expect(stages.has("permission")).toBe(true);
     expect(stages.has("availability_permission")).toBe(true);
     expect(stages.has("native_start")).toBe(true);
+  });
+
+  it("does not block native recording when optional startup timing logging throws", async (): Promise<void> => {
+    mockLoggerInfo.mockImplementation((): void => {
+      throw new Error("Startup diagnostic sink unavailable");
+    });
+    const flow = renderStartupFlow(() => true);
+
+    let result:
+      | Awaited<ReturnType<typeof flow.result.current.startFlow>>
+      | undefined;
+    await act(async (): Promise<void> => {
+      result = await flow.result.current.startFlow();
+    });
+
+    expect(result).toEqual({ kind: "started" });
+    expect(flow.result.current.flowStatus).toBe("recording");
+    expect(mockAvailabilityRefresh).toHaveBeenCalledTimes(1);
+    expect(mockRefreshPermission).toHaveBeenCalledTimes(1);
+    expect(mockRecorderStart).toHaveBeenCalledTimes(1);
+    // The diagnostics path is actually exercised; merely omitting logging
+    // would not satisfy this positive safety control.
+    expect(mockLoggerInfo).toHaveBeenCalled();
   });
 });

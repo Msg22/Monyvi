@@ -28,6 +28,8 @@ For each cold/warm attempt record, when diagnostics are available:
 | --- | ---: |
 | tap → pending/Starting visible | ___ ms |
 | pending → fresh consent complete | ___ ms |
+| authoritative availability begin → result | ___ ms |
+| fresh non-prompting permission read begin → result | ___ ms |
 | availability+permission begin → both resolved | ___ ms |
 | gates resolved → recorder start begin | ___ ms |
 | recorder start begin → native record/onStarted | ___ ms |
@@ -88,3 +90,23 @@ native-start duration ends at recorder `onStarted`, before the recorder-owned
 request key, token, audio, transcript, financial or provider content. Unit Red/
 Green is not device timing proof.
 
+### S2-FIX owner instrumentation and consent freshness (12 October 2026)
+
+Root's separate unit RED at `aea6e6526058359ac739a4571634669a837c14b8`
+was **2F/8P** availability, **5F/3P** flow and **2F/33P** route
+(one route error was an undefined existing exported mock, **not RED**).
+These are not measured owner cold/warm times. Existing M01–M28 remain
+unchanged, **NOT RUN** on device.
+
+For future `voice.startupTiming` records, collect only `stage` and
+finite numeric monotonic `durationMs`. Stages must distinguish individual
+`availability`, `permission`, combined `availability_permission`, and
+`native_start` ending at recorder `onStarted`. Logging failure must not
+delay or prevent native capture, and the 300ms recorder stabilization
+remains *after* onStarted. First-use consent must supersede an old
+matching pre-consent availability request; already-consented pending
+work may join only while unresolved. Never claim an elapsed-duration
+improvement without owner device evidence, and never include account/
+user/timezone/request identity, audio URI, transcript, financial data,
+tokens or provider payloads. This is manual-plan authorship, no native,
+Maestro, provider or hosted execution.

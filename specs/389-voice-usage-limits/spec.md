@@ -901,3 +901,41 @@ reused. This clarification adds FR-053 without renumbering FR-048–FR-052 or
 changing R1/R2 UI, quota, request-identity, permission, recorder or Manual
 contracts.
 
+### S2-FIX focused Red repair and diagnostic boundaries (12 October 2026)
+
+The existing **FR-048–FR-053** and **SC-023–SC-027** remain unchanged, as do
+R1/R2 approvals and the client 30-second cap. Root's actual source-pinned
+S2 RED is described below; test authoring updates do not constitute a new
+source/UX/server authorization.
+
+The verified companion test paths are
+`apps/mobile/__tests__/hooks/useVoiceAiAvailability.startup.test.tsx`,
+`apps/mobile/__tests__/hooks/useVoiceTransactionFlow.startup.test.ts` and
+`apps/mobile/__tests__/app/add-transaction-modes.test.tsx`. A direct
+`refresh({ supersedePending: true })` must abort a matching *pre-consent*
+request even when ordinary same-context work would coalesce. Two joined
+callers on focus blur, background and unmount must receive **null**, with
+no late stale availability. First-use consent passes the supersede marker;
+already-consented attempts still join equivalent *unresolved* work.
+
+Diagnostic evidence requires separate monotonic `availability` and
+`permission` stage durations plus the overall parallel
+`availability_permission` and `native_start` durations, each logged as
+`voice.startupTiming` with **only** `{ stage, durationMs }`. Diagnostic
+logging failure must not delay or prevent native capture; no artificial
+wait, user IDs, request IDs, audio, transcript, timezone, token or financial
+payload is permitted. No owner device timing result exists.
+
+**Root's actual staged S2 RED (2026-10-12, baseline `aea6e6526058359ac739a4571634669a837c14b8`):**
+availability companion **2 failed / 8 passed / 10 total (3.122 s)**;
+flow companion **5 failed / 3 passed / 8 total (1.865 s)**;
+route modes **2 failed / 33 passed / 35 total (5.549 s)**.
+Coalescing, concurrent non-prompting permission and first-use consent
+supersede failures were meaningful. One route failure was only an undefined
+`mockVoiceAvailabilityRefresh` import (export already present at
+`add-transaction-route-fixtures.tsx:666`) and **does not count as RED**.
+The initial combined command timed out after 60 seconds; the individual
+focused verbose runs provide the actual accepted evidence. Root must run the
+repaired focused RED before any startup production grant. Neither this test
+writer nor this documentation correction executed Jest, TypeScript, native
+timing or provider work.

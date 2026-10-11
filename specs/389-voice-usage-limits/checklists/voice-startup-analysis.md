@@ -144,3 +144,37 @@ semantic findings after this reconciliation: **0 / 0**. Root must accept the
 actual T077/T083 Red results before T078/T079 production; this GitHub authoring
 lane claims no test execution.
 
+## S2-FIX — actual root RED and test-seam audit (12 October 2026)
+
+**Source:** startup `aea6e6526058359ac739a4571634669a837c14b8`.
+Root's actual separate focused RED:
+- Availability **2 failed / 8 passed / 10 total (3.122s)**:
+  repeated same-context refresh restarts a matching request.
+- Flow **5 failed / 3 passed / 8 total (1.865s)**:
+  native permission still waits for availability and approved timing stages
+  are not emitted; duplicate native start/onStarted controls passed.
+- Route modes **2 failed / 33 passed / 35 total (5.549s)**:
+  post-first-use-consent supersede is meaningful RED, but an unavailable
+  retry failure is only `mockVoiceAvailabilityRefresh` ReferenceError,
+  **NOT valid RED**; export exists in
+  `apps/mobile/__tests__/app/add-transaction-route-fixtures.tsx:666`.
+- Original combined command timed out at 60s; only these individual
+  focused results were observed. No GREEN or device measurement claimed.
+
+**Test-only correction:** import the existing route mock and resolve newly
+deferred grant/consent fixtures in RNTL `act` without weakening either route
+assertion. Exercise public `refresh({ supersedePending: true })` with one
+matching pre-consent request: old request aborts, fresh result wins, late
+old result cannot publish. Blur/background/unmount must abort **two**
+joined callers and both return `null`; the normal same-context pending
+case still joins. Timing tests require individual `availability` and
+`permission` durations plus `availability_permission` and
+`native_start` under `voice.startupTiming`, with **only**
+`{ stage, durationMs }` (finite nonnegative monotonic duration).
+An optional diagnostic logger error cannot prevent eligible native start
+or add artificial waiting.
+
+Historical FR-048–FR-053 / SC-023–SC-027 and T075–T083 remain intact.
+No startup source changes, S3 approval, measured performance, native/OS/
+provider/hosted checks, or local Jest execution by this successor. Root
+must accept repaired focused RED before T078/T079 production.

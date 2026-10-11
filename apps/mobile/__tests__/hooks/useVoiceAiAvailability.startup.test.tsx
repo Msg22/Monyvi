@@ -216,6 +216,48 @@ describe("useVoiceAiAvailability startup coalescing", () => {
     expect(mockLoggerWarn).toHaveBeenCalledTimes(1);
   });
 
+  it("explicit post-consent supersede aborts matching pre-consent work and ignores its late result", async (): Promise<void> => {
+    const preConsent = createDeferred<VoiceAvailabilitySnapshot>();
+    const postConsent = createDeferred<VoiceAvailabilitySnapshot>();
+    mockGetVoiceAiAvailability
+      .mockReturnValueOnce(preConsent.promise)
+      .mockReturnValueOnce(postConsent.promise);
+    const hook = renderHook(() => useVoiceAiAvailability(true));
+
+    let initial: Promise<VoiceAvailabilitySnapshot | null> | undefined;
+    act((): void => {
+      initial = hook.result.current.refresh();
+    });
+    expect(mockGetVoiceAiAvailability).toHaveBeenCalledTimes(1);
+    expect(serviceSignal(0)?.aborted).toBe(false);
+
+    let superseding: Promise<VoiceAvailabilitySnapshot | null> | undefined;
+    act((): void => {
+      superseding = hook.result.current.refresh({ supersedePending: true });
+    });
+    expect(mockGetVoiceAiAvailability).toHaveBeenCalledTimes(2);
+    expect(serviceSignal(0)?.aborted).toBe(true);
+    expect(serviceSignal(1)?.aborted).toBe(false);
+
+    const fresh = snapshot("Africa/Cairo", 3);
+    let freshResult: VoiceAvailabilitySnapshot | null | undefined;
+    await act(async (): Promise<void> => {
+      postConsent.resolve(fresh);
+      freshResult = await superseding;
+    });
+    expect(freshResult).toEqual(fresh);
+    expect(hook.result.current.availability).toEqual(fresh);
+
+    let oldResult: VoiceAvailabilitySnapshot | null | undefined;
+    await act(async (): Promise<void> => {
+      preConsent.resolve(snapshot("Africa/Cairo", 5));
+      oldResult = await initial;
+    });
+    expect(oldResult).toBeNull();
+    expect(hook.result.current.availability).toEqual(fresh);
+    expect(mockGetVoiceAiAvailability).toHaveBeenCalledTimes(2);
+  });
+
   it("does not join across a timezone freshness boundary and aborts the older request", async (): Promise<void> => {
     const cairo = createDeferred<VoiceAvailabilitySnapshot>();
     const utc = createDeferred<VoiceAvailabilitySnapshot>();
@@ -290,7 +332,7 @@ describe("useVoiceAiAvailability startup coalescing", () => {
   });
 
   it.each(["blur", "background", "unmount"] as const)(
-    "aborts joined startup work on %s",
+    "aborts both joined startup callers on %s without publishing a late result",
     async (boundary): Promise<void> => {
       const pending = createDeferred<VoiceAvailabilitySnapshot>();
       mockGetVoiceAiAvailability.mockReturnValue(pending.promise);
@@ -303,6 +345,17 @@ describe("useVoiceAiAvailability startup coalescing", () => {
       });
       expect(mockGetVoiceAiAvailability).toHaveBeenCalledTimes(1);
 
+      let firstJoined: Promise<VoiceAvailabilitySnapshot | null> | undefined;
+      let secondJoined: Promise<VoiceAvailabilitySnapshot | null> | undefined;
+      act((): void => {
+        firstJoined = hook.result.current.refresh();
+        secondJoined = hook.result.current.refresh();
+      });
+      // The focused automatic request and both explicit callers share one
+      // unresolved service operation, including its abort lifecycle.
+      expect(mockGetVoiceAiAvailability).toHaveBeenCalledTimes(1);
+      expect(serviceSignal(0)?.aborted).toBe(false);
+
       act((): void => {
         if (boundary === "blur" && typeof blur === "function") blur();
         if (boundary === "background") mockAppStateListener?.("background");
@@ -310,9 +363,19 @@ describe("useVoiceAiAvailability startup coalescing", () => {
       });
 
       expect(serviceSignal(0)?.aborted).toBe(true);
-      pending.resolve(snapshot());
-      await flush();
-      if (boundary !== "unmount") hook.unmount();
+      let firstResult: VoiceAvailabilitySnapshot | null | undefined;
+      let secondResult: VoiceAvailabilitySnapshot | null | undefined;
+      await act(async (): Promise<void> => {
+        pending.resolve(snapshot("Africa/Cairo", 4));
+        firstResult = await firstJoined;
+        secondResult = await secondJoined;
+      });
+      expect(firstResult).toBeNull();
+      expect(secondResult).toBeNull();
+      if (boundary !== "unmount") {
+        expect(hook.result.current.availability).toBeNull();
+        hook.unmount();
+      }
     }
   );
 
