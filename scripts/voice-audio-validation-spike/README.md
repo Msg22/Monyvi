@@ -1,33 +1,39 @@
-# Issue #391: local audio feasibility spike
+# #391: AAC/M4A speech-validation feasibility harness — NONPRODUCTION
 
-**NONPRODUCTION.** This folder is isolated research, not an Edge service, mobile package, product validator, or authorization for deployment. Nothing here calls Gemini. No runtime CPU, build or speech-accuracy results have yet been observed.
+**Current outcome: BLOCKED BY LOCAL EXECUTION POLICY; ALL RESULTS UNMEASURED.** This worktree's mandatory lean-ctx tool allowlist permanently blocks `deno.exe` and FFmpeg. **Do not reattempt them, bypass protections, reconfigure tool permission checks, launch through wrappers, install substitutes, deploy, or call Gemini.** The commands below are **documentation of the corrected bootstrap protocol only**, not an instruction to execute in the blocked local environment. A separate actually authorized future verification assignment would be needed to change this status. No executions or measurements occurred in this ChatGPT lane.
 
-## Selected candidate and provenance
+This research folder is not a Supabase Edge service, mobile dependency, production speech classifier, or product filtering rule. The source alone cannot establish that WASM compiles or that model inference is accurate.
 
-- Decode only **AAC-LC inside ISO BMFF/M4A** from the actual bytes: Symphonia **0.6.1** built into Rust/WASM with explicit `aac` and `isomp4` features, **MPL-2.0**. Its documented decoding support does **not** establish a working wasm32 build or Supabase Edge support. AAC patent/distribution review and bundled license notices must precede shipping. https://docs.rs/symphonia/0.6.1/symphonia/ ; https://github.com/pdeljanov/Symphonia
-- Downmix to mono and resample to 16 kHz PCM; current Rust spike uses *linear* resampling only for research and does not compensate AAC padding. It is **not** a high-quality or validated production resampler. Compare decoded samples and length with offline FFmpeg reference.
-- Infer speech with the **MIT-licensed Silero-VAD ONNX** asset pinned to upstream commit `60b7ffa243625ebdc1070275a29f18c87843786a` (v6.2.2), using 16 kHz/512 samples, 64-sample context and a fresh 2x1x128 recurrent state for each recording. https://github.com/snakers4/silero-vad ; https://raw.githubusercontent.com/snakers4/silero-vad/60b7ffa243625ebdc1070275a29f18c87843786a/src/silero_vad/data/silero_vad.onnx
-- Run with Microsoft **ONNX Runtime Web 1.22.0 WASM** (MIT), one thread. Module compatibility, WASM integration, model output names and memory footprint are **UNVERIFIED**. https://onnxruntime.ai/docs/tutorials/web/deploy.html
-- WebRTC VAD is a small frame-based comparison baseline, **not** selected as authoritative. It still needs decoded PCM and may reject quiet Arabic/English. FFmpeg native binaries are only used offline to generate/check fixtures, never in Edge.
+## Selected candidate / primary source evidence
 
-The license of the *different* `snakers4/silero-models` repository is not the source license of this pinned `snakers4/silero-vad` model. Record artifact SHA256, originating version, full license and redistribution review before a deployment proposal.
+| Part | Version and actual upstream API | Feasibility evidence missing |
+| --- | --- | --- |
+| ISO BMFF/M4A AAC-LC decode | [Symphonia 0.6.1](https://docs.rs/symphonia/0.6.1/symphonia/) requires opt-in `aac` + `isomp4`; [MPL-2.0](https://github.com/pdeljanov/Symphonia). Versioned [`FormatReader::next_packet() -> Result<Option<Packet>>`](https://docs.rs/symphonia-core/0.6.1/symphonia_core/formats/trait.FormatReader.html), [`CodecRegistry::make_audio_decoder`](https://docs.rs/symphonia-core/0.6.1/symphonia_core/codecs/registry/struct.CodecRegistry.html), [`GenericAudioBufferRef::copy_to_slice_interleaved`](https://docs.rs/symphonia-core/0.6.1/symphonia_core/audio/enum.GenericAudioBufferRef.html). | `wasm32-unknown-unknown` compile; AAC support on actual Expo M4A; codec/distribution review; memory; real decoded duration; reference PCM quality. Symphonia explicitly does **not** claim MP4/AAC gapless support. |
+| WASM glue | Current [wasm-pack `--target deno` is supported](https://wasm-bindgen.github.io/wasm-pack/book/commands/build.html); unknown installed version means no local support claim. To remove implicit Deno-generated binary loading, **this probe chooses `--target web`** (also documented). [wasm-bindgen's web target default ES-module initializer](https://wasm-bindgen.github.io/wasm-bindgen/examples/without-a-bundler.html) accepts WASM bytes/module. `benchmark.ts` must `await decoder.default(decoderWasmBytes)` **before calling** the named export. | Build/toolchain availability, generated `pkg/` signature and correct init under Deno and Supabase Edge are UNMEASURED. Web-compatible glue does **not** prove Edge runtime compatibility. |
+| Voice VAD | [Silero VAD](https://github.com/snakers4/silero-vad), ONNX file pinned to [commit `60b7ffa243625ebdc1070275a29f18c87843786a`](https://github.com/snakers4/silero-vad/tree/60b7ffa243625ebdc1070275a29f18c87843786a); MIT. [Upstream ONNX Python reference](https://github.com/snakers4/silero-vad/blob/60b7ffa243625ebdc1070275a29f18c87843786a/src/silero_vad/utils_vad.py) uses 16 kHz ×512 samples, 64-sample context, recurrent state `[2,1,128]`, and **scalar int64 `sr`** (`np.array(sr, dtype='int64')`). Outputs named `output` and `stateN`. | Actual pinned binary tensor metadata, correct runtime load/inference, quiet Egyptian Arabic/English/code-switched recall, model/binary hash and license origin remain UNMEASURED. The full model is *not* Silero's `half` model. |
+| Inference | [ONNX Runtime Web v1.22.0](https://onnxruntime.ai/docs/tutorials/web/deploy.html) single-thread WASM; MIT. [`ort.env.wasm.wasmBinary`](https://onnxruntime.ai/docs/api/js/interfaces/Env.WebAssemblyFlags.html) takes `Uint8Array`. Probe validates session input/output names and per-frame tensor shape/type; resets state per fixture, zero-pads final partial frame (as upstream `audio_forward` does). | Deno `npm:` import+ORT binary match, CPU/memory, cold/warm init, active Edge CPU, function bundle size and Edge worker concurrency all UNMEASURED. |
+| Edge constraints | [Supabase WASM support](https://supabase.com/docs/guides/functions/wasm) and [runtime resource limits](https://supabase.com/docs/guides/functions/limits) (approx. 2s active CPU per request and 256 MiB memory) are separate from Deno `process.cpuUsage` / wall time. | Actual Edge CPU with model/decode, true memory peak, bundle packaging and load headroom. None measured. Function config/hosted changes forbidden. |
 
-## Sanctioned local executor bootstrap (PowerShell)
+The Rust research adapter uses a bounded compressed input, verified signature, documented v0.6.1 `default_track(TrackType::Audio)`, codec creation, typed audio samples, source rate consistency and explicit EOS. Stereo downmix and **linear resampling** remain an accuracy limitation, not a validated resampler. No production speech threshold or 30-second decoded-duration enforcement is selected.
 
-The existing worktree has linked root node_modules; **do not run npm install/ci, edit package.json or any lockfile, or deploy**. Tool prerequisites are pre-existing Deno 2, FFmpeg with AAC encoder, Rust/Cargo, wasm32 target, wasm-pack and tar. Record versions and STOP with the exact failure if any is missing; no unsanctioned toolchain install. **These commands have not been run by Normal ChatGPT.**
+**Important discrepancy in older draft:** The older README called `--target deno` potentially unsupported. Official upstream *current* wasm-pack actually exposes that target. There is **no observed installed wasm-pack version here** and no compatibility claim. The documented `--target web` + explicit `await init(bytes)` route is selected only as a deterministic prototype contract.
+
+## Corrected PowerShell bootstrap — REFERENCE ONLY; DO NOT EXECUTE UNDER CURRENT lean-ctx PROTECTION
+
+No `npm install` / `npm ci` / lockfile / native config / provider / deployment commands belong in this spike. Prerequisites would need to **already exist** in a separately eligible environment; this project's blocked executor MUST NOT run any command below to circumvent its allowlist. The commands have **NOT BEEN RUN**.
 
 ```powershell
+# DOCUMENTATION ONLY; current local executor is permanently BLOCKED.
 Set-Location 'E:\Work\My Projects\Monyvi-voice-empty-audio-guard'
-git rev-parse HEAD       # must equal coordinator's published artifact SHA
+$revision = (git rev-parse HEAD).Trim()     # caller proves checkout is exactly published commit
 deno --version
 ffmpeg -version
 rustc --version
 cargo --version
 wasm-pack --version
-rustup target list --installed     # wasm32-unknown-unknown required
-
+rustup target list --installed             # must list wasm32-unknown-unknown
 Set-Location 'scripts/voice-audio-validation-spike/decoder'
-wasm-pack build --release --target deno --out-dir pkg
+wasm-pack build --release --target web --out-dir pkg  # supported ESM + explicit init
 Set-Location '..'
 New-Item -ItemType Directory -Force -Path 'local', 'local/ort' | Out-Null
 Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/snakers4/silero-vad/60b7ffa243625ebdc1070275a29f18c87843786a/src/silero_vad/data/silero_vad.onnx' -OutFile 'local/silero_vad.onnx'
@@ -37,34 +43,35 @@ Copy-Item 'local/ort/package/dist/ort-wasm-simd-threaded.wasm' 'local/ort-wasm-s
 Get-FileHash -Algorithm SHA256 'local/silero_vad.onnx'
 Get-FileHash -Algorithm SHA256 'local/ort-wasm-simd-threaded.wasm'
 Get-FileHash -Algorithm SHA256 'decoder/pkg/voice_decoder_bg.wasm'
-
-Set-Location '../..'       # Monyvi project root
+Set-Location '../..'  # project root
 deno run --allow-run=ffmpeg --allow-read --allow-write=scripts/voice-audio-validation-spike/local scripts/voice-audio-validation-spike/prepare-fixtures.ts
-deno run --no-check --allow-read --allow-write=scripts/voice-audio-validation-spike/local --allow-net=registry.npmjs.org scripts/voice-audio-validation-spike/benchmark.ts --include=silence-05
-# After successful bootstrap, remove --include to examine all generated negatives.
+deno run --no-check --allow-read --allow-write=scripts/voice-audio-validation-spike/local --allow-net=registry.npmjs.org scripts/voice-audio-validation-spike/benchmark.ts "--source-revision=$revision" --include=silence-05
+# Omit --include for complete matrix only when fixtures exist and execution is authorized.
 ```
 
-The npm: specifier used by Deno resolves its package to Deno's own cache, not the repository's package.json; if an existing workspace policy prohibits that download, STOP rather than install anything. `--no-check` is intentionally marked: compilation/typechecking is NOT claimed. On a missing binary, Rust type/API error, ORT WASM mismatch, model output/state mismatch or Deno/Edge runtime failure, record exact first failing command and stderr; report BLOCKED. Do not substitute an unpinned artifact.
+The explicit `--source-revision` replaces the **incorrect hardcoded research parent `1a208…`**. Always provide the **actual published checkout SHA**, not a guessed parent. Results template uses `sourceRevision:null` until a verified run. `--no-check` means TypeScript checking was not performed and cannot be represented as a passed check.
 
-## Fixtures / local-only evidence
+If any tool, model download, pinned dependency, Rust API, Deno import, `wasm-pack` binary or ONNX output fails in a *permitted* future environment: record first actual command/stderr and stop instead of substituting unpinned media/codecs or claiming a passing run. Current blocker is already final: **lean-ctx disallows `deno.exe` and FFmpeg; no retries allowed**.
 
-`prepare-fixtures.ts` generates a local manifest and AAC-LC/M4A cases of 5, 15 and 30 seconds: digital silence, *pink fan-proxy noise*, *white traffic-proxy noise*, and malformed bytes. The noise is synthetic proxy data, **not real field noise**. It writes nine `status=missing` valid-speech placeholders: quiet Egyptian Arabic, quiet English and Arabic/English code switching at **5/15/30 seconds**. Do not claim speech-preservation coverage before replacing each placeholder with an independently synthetic or explicitly redistribution-licensed, non-customer/non-private recording, a recorded license/origin, exact SHA256, decoded speech intervals and quiet/noisy sublabels. Do not commit those audio files (local directory is gitignored). Required manifest layout: `docs/research/voice-audio-validation-spike/fixtures.template.json`.
+## Manifest and fixture boundary
 
-Add reference cases for handling/taps, actual room/fan/traffic/breathing noise where license allows. False negatives on valid quiet speech are the primary safety metric. Silence/noise should be rejected only when the measured decision is sufficiently reliable. The 1.5s existing client guard is not speech proof.
+`prepare-fixtures.ts` is source-only and not executed. If ever run in an explicitly permitted environment, it would generate:
+- 5/15/30-second local synthetic AAC-LC/M4A **digital silence**, **pink fan-proxy**, **white traffic-proxy**; these are *not actual room/fan/road recordings*.
+- Known malformed bytes (`unknown-bytes.bin`).
+- Nine deliberately missing speech positives across **quiet Egyptian Arabic, quiet English and Arabic/English code-switch × 5/15/30 seconds**.
 
-No production VAD probability threshold/minimum duration is chosen. Passing optional `--threshold=... --minimum-speech-ms=...` is an **exploratory** classifier only and requires human-labeled licensed positives plus a confusion matrix. A model VAD does not prove transaction meaning. Do not choose 0.5 or 250ms solely from library defaults.
+It now uses Node's standard `fileURLToPath` for Windows-safe FFmpeg filenames (important because this worktree path contains spaces). `benchmark.ts` accepts **no manifest/asset path overrides**, and validates the entire fixed ID taxonomy, duplicates, expected classes/durations, local basenames, SHA-256 and nonempty license/origin. A missing fixture must remain `status:"missing"` with null path/hash/license. A ready positive is evidence of bytes/provenance only, **not accuracy**; it still needs measured decoded audio and labeled speech. Media must be synthetic or explicitly licensed, never customer/private raw recordings. Media/model binaries and measured results belong in ignored `local/`, not Git.
 
-## Outputs and mandatory interpretation
+Additional complete-coverage evidence (still missing) is genuine independently licensed quiet Arabic/English code-switch, short utterances, varied speakers, speech-over-noise and representative handling/breathing/room/traffic sounds. Synthetic noise generator output cannot establish field performance. No arbitrary VAD threshold or min-voiced duration is approved; optional parameters are exploratory only. A sample-level VAD never determines whether speech contains a financial transaction.
 
-A successful local `benchmark.ts` run generates ignored `scripts/voice-audio-validation-spike/local/results.json` with the expected structure in `docs/research/voice-audio-validation-spike/results.template.json`:
-- Captures tool/platform versions, model/decoder/ORT WASM bytes and SHA256, single initialization wall time, per-case decode/VAD/total wall time, Deno process CPU proxy, RSS at checkpoints (NOT true peak), decoded frames/duration (including padding), probability aggregate (no logged PCM or transcript), and missing positives.
-- Local Deno timing excludes process spawn, isolate cold startup and actual hosted Supabase Edge measurements. One process uses one ONNX session (warm per-case); the harness does **not** directly produce a full Edge cold/warm matrix. Re-run each 5/15/30-second case across at least three **new processes** (cold proxy) and repeated iterations in one warm session, separately capturing process CPU, wall and OS-sampled *actual* memory peak; document the wrapper methodology. Local cold proxy is NOT Edge cold CPU.
-- **UNMEASURED** must remain for Edge active CPU/request, true peak RSS, complete function bundle bytes, actual local/hosted cold/warm latency, quiet speech accuracy and user/device validation until instrumentation produces those exact observations. `edgeCpuAndBundleGatePassed` remains false in template. Supabase's limits are roughly **2s active CPU**, **256MiB** and deployment bundle limitations; actual headroom must be established rather than comparing only total wall time. https://supabase.com/docs/guides/functions/limits
+## Output contract and status
 
-For an authoritative Edge result, the owner must separately authorize a non-hosted **isolated Edge-runtime** experiment with identical WASM+model+fixture bytes and bundle-size measurement. The official WASM packaging path requires static-file configuration, which is **not** authorized here: https://supabase.com/docs/guides/functions/wasm . No production source/config or remote deployment is permitted in #391 feasibility work.
+The bounded source-only parser would write `local/results.json` if its full init and actual measurement succeed in a permitted environment. `docs/research/voice-audio-validation-spike/results.template.json` is explicitly **UNMEASURED**, not a generated report. Benchmark result `sourceRevision` comes from required CLI `--source-revision=<actual Git SHA>` and should be independently compared to `git rev-parse HEAD`. Report `results[]` aligns with template (previous template mistakenly used `cases[]`).
 
-## Server policy for later implementation (not implemented here)
+Measurements **NOT available** here: Rust/WASM compilation, import+model init, locally generated files, 5/15/30 decode and VAD wall/CPU, cross-process cold or session-warm comparisons, true peak memory, full Edge function bundle bytes, hosted Edge active CPU or cold/warm latency, and quiet-speech accuracy. Deno process CPU, `Deno.memoryUsage().rss` at checkpoints, and local wall time (if ever gathered elsewhere) must not be presented as hosted Edge metrics or true peak memory.
 
-Auth + active AI consent → cheap actual-byte/size/M4A structural checks → validated request identity/timezone → resolve entitlement/reserve capacity → bounded decode/VAD before provider start → **known** no-speech: release reservation only when confirmed never started → agreed unusable-audio response; validator failure: release known-not-started then retryable failure, retained audio and same request key. If release outcome is ambiguous, fail closed and reconcile lease; do NOT assert a refund. Preserve replay and #384 accounting concerns. Later runtime must not trust MIME/client duration/hasSpeech or interpret container timing metadata as verified actual decoded length, and must not enforce 30s duration absent joined owner/SpecKit policy.
+## Preserve accounting boundaries for later, not implemented by this task
 
-**Required next approvals:** license/security of binary/model/runtime, exhaustive audio corpus and representative Android quiet-speech results, measured Edge resource fit with headroom, product rejection copy, explicit duration/lease policy, TDD proof of behavioral RED and SQL release semantics. Until then, production feasibility **BLOCKED/UNMEASURED**.
+Server must use auth, active consent, cheap actual-byte/container checks, validated request-key/timezone and policy, reservation **before** expensive validation, then never mark provider start for a proven no-speech clip. A known-not-started rejection may release the reservation; uncertain start/release must fail closed. Keep replay, cancellation, #384 lease caveats, same-key retries and Manual. Metadata, loudness, unverified `hasSpeech` or a duration claim do not prove speech. The current 60s recorder vs R2 30s direction is separate; no max-duration rule is changed in this prototype.
+
+**Concrete missing evidence before any production source assignment:** a real compiling/initialized pinned decoder+ORT+Silero pipeline, provenance/checksums, licensed quiet-speech positives, measured FNR/FPR across 5/15/30s and representative noise, local and Edge resource/headroom data, exact decoded-duration treatment, and deterministic tests of the agreed unusable-audio HTTP/release/provider-start contract. Those are factual gaps, **not new approval requests or a request to change the already approved scope**. No production changes are authorized here.

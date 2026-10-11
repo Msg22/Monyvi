@@ -3,6 +3,8 @@
  * Requires an existing local FFmpeg binary. No package or provider calls.
  * Valid human speech is intentionally NOT generated or mislabeled.
  */
+import { fileURLToPath } from "node:url";
+
 interface Fixture {
   readonly id: string;
   readonly relativePath: string | null;
@@ -56,7 +58,9 @@ async function main(): Promise<void> {
         "-t", String(duration),
         "-ac", "2", "-ar", "44100",
         "-c:a", "aac", "-profile:a", "aac_low", "-b:a", "128k",
-        file.pathname.replace(/^\/([A-Za-z]:\/)/, "$1"),
+        // URL.pathname leaves spaces percent-encoded on Windows; FFmpeg
+        // requires the OS-native decoded path. fileURLToPath also handles drives.
+        fileURLToPath(file),
       ]);
       const digest = await checksum(await Deno.readFile(file));
       fixtures.push({

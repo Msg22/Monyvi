@@ -74,11 +74,16 @@ pub fn decode_m4a_to_pcm16k(bytes: &[u8]) -> Result<JsValue, JsValue> {
         let decoded = decoder
             .decode(&packet)
             .map_err(|_| invalid("Failed to decode AAC packet"))?;
+        // v0.6.1 GenericAudioBufferRef has spec(), frames(), and
+        // copy_to_slice_interleaved(); these are the documented APIs.
+        if decoded.spec().rate() != source_rate {
+            return Err(invalid("Decoded sample rate differs from track parameters"));
+        }
         let channels = decoded.spec().channels().count();
         if channels == 0 || channels > 2 {
             return Err(invalid("Unsupported channel count"));
         }
-        if mono.len() + decoded.samples_interleaved() / channels > max_frames {
+        if decoded.frames() > max_frames.saturating_sub(mono.len()) {
             return Err(invalid("Decoded audio exceeded nonproduction safety cap"));
         }
         let mut interleaved = vec![0.0_f32; decoded.samples_interleaved()];

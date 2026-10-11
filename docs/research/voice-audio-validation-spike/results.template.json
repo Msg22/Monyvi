@@ -1,7 +1,8 @@
 {
   "schemaVersion": 1,
   "mode": "TEMPLATE_UNEXECUTED",
-  "sourceRevision": "1a208d72750fb457933070f76669f7ae95975864",
+  "sourceRevision": null,
+  "sourceRevisionEvidence": "UNMEASURED; must be exact checkout git SHA passed to --source-revision, not research parent",
   "generatedAt": null,
   "metadata": {
     "repository": "Msg22/Monyvi",
@@ -48,7 +49,7 @@
     "minimumSpeechMs": null,
     "status": "NOT APPROVED"
   },
-  "cases": [
+  "results": [
     {
       "id": "silence-05",
       "expectedClass": "no_speech",
