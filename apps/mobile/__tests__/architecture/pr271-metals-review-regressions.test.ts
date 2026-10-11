@@ -71,7 +71,7 @@ describe("PR #271 validated Metals review regressions", () => {
     expect(service).toContain("input.accountsValueDecimal === null");
   });
 
-  it("publishes only the implemented Dispose and Delete detail actions", () => {
+  it("publishes only the implemented Dispose, Delete, and Undo detail actions", () => {
     const value = source("app/(private)/metals/[id].tsx");
     expect(value).toContain("createDisposeHoldingActionDescriptor");
     expect(value).toContain("createDeleteHoldingActionDescriptor");
@@ -81,10 +81,11 @@ describe("PR #271 validated Metals review regressions", () => {
     expect(value).toContain(
       'available.some((action) => action.id === "delete")'
     );
+    expect(value).toContain('action.id === "undo"');
     expect(value).toContain('if (action === "dispose")');
     expect(value).toContain('if (action === "delete")');
+    expect(value).toContain('if (action === "undo")');
     expect(value).not.toContain('action === "sell"');
-    expect(value).not.toContain('action === "undo"');
     expect(value).toContain("actions={actions}");
   });
 
