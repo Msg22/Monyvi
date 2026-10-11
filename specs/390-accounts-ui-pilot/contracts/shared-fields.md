@@ -125,3 +125,20 @@ Proposed state sheet: empty/filled/focused/invalid/helper/warning/disabled/locke
 Actual calibrated mockups under docs/mockups/accounts-ui-pilot/ are APPROVED for package sha256:265cd15fefd32d9cece643179abbe4ed3843db82c74abe9c21b9dccc73dcf15e; all eight canonical sidecars passed integrity verification. Native fidelity remains NOT RUN. Immutable binding records must identify image hashes, source revision, viewport/UI surface, known exact facts and explicit unknowns. Hardware frame/outer canvas is nonbinding unless expressly declared.
 
 No plan/tasks/implementation artifacts generated here. Before implementation: approve visuals; reconcile PR383; settle exclusive files; discover existing tests; write/run meaningful failing deterministic and runner-controllable journey coverage, then implement. Preserve manual/native gaps separately from CI or source-level assertions.
+
+## AKB-01 native keyboard precedence — compatible grouped-input option
+
+**Effective additive source:** `GroupedDecimalInputProps` now has `readonly preserveKeyboardType?: boolean` (**default `false`**), inherited without edits by `GroupedMoneyInputProps = GroupedDecimalInputProps`. It does not affect canonical parsing, currency precision, signed opt-in, display formatting, focus/blur, or validation.
+
+| Precedence | Forwarded `inputMode` | `keyboardType` behavior |
+| --- | --- | --- |
+| `showSoftInputOnFocus === false` (any options) | `"none"` | Existing no-soft-keyboard path retained, even if caller explicitly supplied a mode |
+| Otherwise, caller supplied explicit `inputMode` | The explicit value | Native RN inputMode precedence intentionally retained |
+| Otherwise, `preserveKeyboardType === true` | `undefined` | RN consumes the caller's native `keyboardType` instead of silently mapping a default decimal inputMode |
+| Otherwise (default `preserveKeyboardType === false`) | `"decimal"` | **Legacy grouped-input mode unchanged** for all unmodified callers |
+
+The old Accounts ordinary `TextField` passed `keyboardType="numeric"` and **no** inputMode. In installed RN `0.83.6`, new route `inputMode="numeric"` would map to `number-pad`, overriding that keyboardType; simply omitting it would make the original grouped default select `decimal-pad`. Both differ from Android `numeric`, which requests **decimal and signed** flags. The Accounts Add/Edit routes explicitly opt into `preserveKeyboardType` and retain `keyboardType="numeric"`, with no explicit mode. There is no global keyboardType-based heuristic; a grouped-input caller opting out keeps decimal inputMode. The opt-in affects only native keyboard-prop forwarding, **not** Add unsigned / Edit signed grammar or any transaction/Metals rule.
+
+**Verified read-only production caller inventory:** Add/Edit (new opt-in); ManualTransactionEntry and TransferFields (no opt-in, native soft keyboard suppressed); MetalHoldingForm weight (no opt-in, explicit decimal mode) and purchase price (no opt-in, default decimal mode); GroupedMoneyInput wrapper (unchanged delegation). RecurringPaymentFormFields and TransactionEditModal use separate existing text inputs. Actual Android/iOS keypad, minus/dot keys, clipboard/caret/IME and TalkBack remain **NOT RUN**.
+
+**Authorization:** AKB-01 correction only on `codex/accounts-form-migration`, parent `f6e2d88c6134bc823ea3cd833dc10ecfab5f004b`, source commit `67616c2f080541c1ae922d24e0ed987d8f9a7aeb`. No new shared amount rules, locales, tests, components or Foundation-branch writes. Unit/E2E tests remain deferred; root repeats actual static checks and M1 reviews the corrected immutable source.

@@ -55,3 +55,13 @@ Tablet/landscape must produce measured rendered evidence, not copied guessed coo
 ## Handoff acceptance
 
 Foundation publishes exact compatible API and Green regressions before Account adoption. Adopted routes then pass real-control integration and complete controllable Maestro journeys. Mandatory35-case coverage remains linked; native/manual gaps are explicit. Reverify eight immutable sidecars at use time; report functional, visual, accessibility and CI results independently.
+
+## AKB-01 — Account numeric keypad compatibility (approved technical correction)
+
+The previous Account balances used native `TextField keyboardType="numeric"` with no inputMode. At React Native `0.83.6`, truthy `inputMode` overrides keyboardType: `"numeric"` selects Android `number-pad` (no signed/decimal flags); the grouped field's implicit `"decimal"` selects `decimal-pad` (decimal but not signed). Neither reproduces native `keyboardType="numeric"` flags.
+
+**Minimum default-safe API:** `GroupedDecimalInputProps.preserveKeyboardType?: boolean` defaults to **false**. After existing `showSoftInputOnFocus === false → "none"` suppression, an explicitly supplied inputMode always takes precedence; when the new opt-in is **true** and inputMode is **omitted**, forward `inputMode={undefined}` and let RN use the retained `keyboardType`. Otherwise keep existing grouped default `inputMode="decimal"`. `GroupedMoneyInput` passes the option through unchanged. Both Account routes now use `keyboardType="numeric" preserveKeyboardType` with **no explicit inputMode**. Add stays unsigned, Edit signed via its independent `allowNegative` opt-in.
+
+**Scope and consumers:** Only Add/Edit opt in. ManualTransactionEntry and TransferFields retain calculator keyboard suppression; MetalHoldingForm weight retains explicit `decimal`, purchase-price retains grouped `decimal` default. All other unchanged grouped consumers remain on the default-false path; RecurringPaymentFormFields and TransactionEditModal use their own inputs. No numeric grammar, validation, precision, formatting, dirty detection, save-time conversion or finance behavior changes.
+
+**Evidence/limits:** Source correction `67616c2f080541c1ae922d24e0ed987d8f9a7aeb` on `codex/accounts-form-migration`; independent AKB-01 report `3cf399f35cedb0ff63b5e2065605ed6495f02674`. RN 0.83.6 mapping is primary-source/configuration evidence; it is **not** a native keyboard PASS. Root's earlier hook/typecheck PASS applied to pre-fix `f6e2d88...`, so the corrected head needs fresh real static checks and focused M1 re-review. Mohamed's deferred unit/E2E and manual-native testing policy remains in force; 35 Account QA cases NOT RUN in this lane.

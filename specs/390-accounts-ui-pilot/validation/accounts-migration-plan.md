@@ -274,3 +274,26 @@ verified.
 **Source handoff completed; writer ownership released.** No further writes, PR
 creation, merge, retarget or test/device action without a fresh explicit
 assignment.
+
+## AKB-01 — React Native 0.83.6 keyboard-type preservation correction (2026-10-11)
+
+**Root-authorized source correction:** `67616c2f080541c1ae922d24e0ed987d8f9a7aeb`, parent `f6e2d88c6134bc823ea3cd833dc10ecfab5f004b`, **only** `apps/mobile/app/(private)/{add-account,edit-account}.tsx` and `apps/mobile/components/ui/GroupedDecimalInput.tsx`. Foundation #390 remains at `b4a656e66263554a5dc001cee83a1431a3a9110b`; PR #393 stays a separate draft stacked on Foundation. Independent AKB-01 review source: `specs/390-accounts-ui-pilot/validation/accounts-migration-review.md` on `codex/accounts-form-migration-review` at `3cf399f35cedb0ff63b5e2065605ed6495f02674`. The review is diagnostic evidence, not native execution.
+
+**Confirmed problem and minimal solution:** Installed and locked React Native `0.83.6` gives a truthy `inputMode` precedence over `keyboardType`. `inputMode="numeric"` selects `number-pad`, which lacks the Android decimal/signed input flags of the old Accounts `keyboardType="numeric"`. Simply removing the route's `inputMode` would still inherit the grouped component's `inputMode="decimal"` (`decimal-pad`, no signed flag). The correction adds an **explicit opt-in** `preserveKeyboardType?: boolean` to `GroupedDecimalInputProps`, default `false`, inherited by the existing `GroupedMoneyInputProps` alias. Both Accounts grouped balances remove `inputMode="numeric"`, retain `keyboardType="numeric"` and pass `preserveKeyboardType`. When opted in with no explicit mode, `GroupedDecimalInput` forwards `inputMode={undefined}` so React Native respects `keyboardType`. If `inputMode` is explicitly provided, it wins; `showSoftInputOnFocus={false}` still forces `"none"` for soft-keyboard suppression.
+
+**Read-only current production caller inventory at source parent `f6e2d88...`:**
+
+| Caller | Input | Current/proposed mode after this correction |
+| --- | --- | --- |
+| `app/(private)/add-account.tsx` | `GroupedMoneyInput` | **New opt-in**, `keyboardType="numeric"`, no explicit `inputMode`; old Account number keyboard flags requested; Add amount remains unsigned by validation. |
+| `app/(private)/edit-account.tsx` | `GroupedMoneyInput` | **New opt-in**, `keyboardType="numeric"`, no explicit `inputMode`; preserve signed/decimal-capable Android configuration, Edit amount grammar stays explicitly signed. |
+| `components/add-transaction/ManualTransactionEntry.tsx` | `GroupedMoneyInput` | No opt-in; existing `showSoftInputOnFocus={false}` continues `inputMode="none"` for custom calculator. |
+| `components/add-transaction/TransferFields.tsx` | `GroupedMoneyInput` | No opt-in; existing custom calculator target also suppresses the native keyboard with `inputMode="none"`. |
+| `components/metals/MetalHoldingForm.tsx` | `GroupedDecimalInput` weight; `GroupedMoneyInput` purchase price | No opt-in; weight still explicitly passes `inputMode="decimal"` and `keyboardType="decimal-pad"`; purchase price keeps default `"decimal"` mode. Metals three-decimal weight remains unchanged. |
+| `components/ui/GroupedMoneyInput.tsx` | Delegating wrapper | **Unchanged source**; already spreads props, so it inherits `preserveKeyboardType` automatically. |
+
+The existing shared component tests also instantiate grouped controls without the new opt-in, which retains the prior decimal inputMode default. `RecurringPaymentFormFields` and `TransactionEditModal` use their separate text inputs / legacy amount parsing, not this grouped wrapper, and are untouched. This inventory uses published source at the immutable migration parent plus the source correction; it does not claim physical keyboard observation.
+
+**No scope expansion:** Existing unsigned/signed numeric resolver, canonical text callbacks, input precision/trailing zeros, account validation/save conversion, visual variant, focus, refs, keyboard callbacks, error handling, provider/SMS, default/silent/tracked sheet, Locale, shared wrapper, tests and mockups are unchanged. No global fallback based on `keyboardType === "numeric"`, no casting or `null`/empty mode sentinels.
+
+**Post-correction gates:** Root must rerun real formatting/lint/hooks, full mobile and logic typechecks, and privacy/static checks against the corrected final HEAD, since the previous PASS record applies only to pre-correction `f6e2d88...`. M1 must independently re-review this focused native-prop contract. Unit/Jest/integration/E2E/Maestro and device/IME execution remain **DEFERRED** by Mohamed. **All 35 Accounts manual QA scenarios remain NOT RUN in this worker lane.** The source demonstrates requested native input configuration, **not** a measured Android/iOS keyboard PASS. After source/docs handoff this worker **HOLDS all writes** pending root review.
