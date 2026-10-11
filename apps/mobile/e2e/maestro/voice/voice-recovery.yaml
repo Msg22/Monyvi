@@ -1,6 +1,6 @@
 appId: com.monyvi.app
 ---
-# #347 Voice motion r1 / T062 - guarded recovery visibility + Manual fallback.
+# #347 R1/T062 + R2/T069 - guarded recovery visibility + Manual fallback.
 # AUTHORED, NOT RUN. Requires authenticated seeded E2E account.
 # NO-CAPTURE DEFAULT BASELINE: this flow never taps the mic, never taps
 # "Try again" (r1 retry auto-enters Starting and can begin real native
@@ -89,8 +89,14 @@ appId: com.monyvi.app
 # record-intro modal, AI consent sheet interaction, native permission
 # granted/unknown/missing/denied/permanently denied/revoked plus Settings
 # recovery and resume refresh, recorder start failure, actual recording
-# audio/timer/ripples/pause/resume/stop/discard and 60 s cap behavior, Parsing
+# audio/timer/ripples/pause/resume/explicit Submit/discard and 30 s active
+# capture cap/retained completed audio, Parsing
 # waveform-to-receipt, unmount/account-change cleanup, retained-audio same-key
 # retry, unavailable eligible auto-start retry, daily/burst/server refusal,
 # locale/dark/device fidelity and screen-reader semantics. SMS fixtures do not
 # control Voice audio or the provider. See voice-motion-manual-plan.md.
+
+# R2 status: author-only visibility and Manual navigation. No native/OS/
+# provider harness exists; the three R2 recording-state action surfaces and
+# inline one-fresh-permission count have Jest-only RED plus owner manual evidence.
+# No step here requests OS permission or uses Voice's Try again/start action.

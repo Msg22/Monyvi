@@ -29,6 +29,7 @@ const mockVoiceAvailabilityRefresh = jest.fn();
 const mockVoiceStartFlow = jest.fn();
 const mockVoiceDiscardRecording = jest.fn();
 const mockVoicePermissionRefresh = jest.fn();
+const mockVoiceOpenMicrophoneSettings = jest.fn();
 type CreateTransaction =
   typeof import("@/services/transaction-service").createTransaction;
 type CreatedTransactionFixture = Pick<
@@ -60,6 +61,7 @@ let mockPermissionStatus: "granted" | "denied" | "blocked" | "unknown" | null =
   null;
 let mockVoiceFlowStatus:
   | "idle"
+  | "starting"
   | "recording"
   | "paused"
   | "completed"
@@ -293,6 +295,7 @@ jest.mock("@/components/add-transaction/VoiceTransactionEntry", () => ({
     onDiscard,
     onRefreshAvailability,
     onPermissionContinue,
+    onOpenSettings,
     showExamples = true,
     onDismissExamples,
   }: {
@@ -301,6 +304,7 @@ jest.mock("@/components/add-transaction/VoiceTransactionEntry", () => ({
     readonly onDiscard: () => void;
     readonly onRefreshAvailability: () => void;
     readonly onPermissionContinue: () => void;
+    readonly onOpenSettings: () => void;
     readonly showExamples?: boolean;
     readonly onDismissExamples?: () => void;
   }): React.JSX.Element => {
@@ -328,6 +332,9 @@ jest.mock("@/components/add-transaction/VoiceTransactionEntry", () => ({
           testID="voice-permission-primary"
           onPress={onPermissionContinue}
         />
+        {state === "permission-denied" ? (
+          <Pressable testID="voice-action-settings" onPress={onOpenSettings} />
+        ) : null}
       </View>
     );
   },
@@ -432,7 +439,7 @@ jest.mock("@/hooks/useVoiceTransactionFlow", () => ({
     retrySubmission: jest.fn(),
     discardRecording: mockVoiceDiscardRecording,
     retryRecording: jest.fn(),
-    openMicrophoneSettings: jest.fn(),
+    openMicrophoneSettings: mockVoiceOpenMicrophoneSettings,
   }),
 }));
 
@@ -519,6 +526,7 @@ export function resetRouteMocks(): void {
   mockGrantConsent.mockReset().mockResolvedValue();
   mockVoiceStartFlow.mockReset().mockResolvedValue(undefined);
   mockVoiceDiscardRecording.mockReset().mockResolvedValue(undefined);
+  mockVoiceOpenMicrophoneSettings.mockReset().mockResolvedValue(undefined);
   mockVoicePermissionRefresh
     .mockReset()
     .mockImplementation(() =>
@@ -659,6 +667,7 @@ export {
   mockVoiceStartFlow,
   mockVoiceDiscardRecording,
   mockVoicePermissionRefresh,
+  mockVoiceOpenMicrophoneSettings,
   mockCreateTransaction,
   mockGrantConsent,
   unconsentedStatus,

@@ -4,6 +4,7 @@ import React from "react";
 import {
   getTestInstanceParent,
   getTestInstanceProps,
+  getTestInstanceChildren,
   getTestInstances,
 } from "../../test-utils/test-instance-props";
 
@@ -143,6 +144,41 @@ function findDecorativeAncestor(start: unknown): unknown {
     current = getTestInstanceParent(current);
   }
   throw new Error("Expected a no-hide-descendants decorative ancestor");
+}
+
+function ancestry(value: unknown): readonly unknown[] {
+  const chain: unknown[] = [];
+  let current: unknown = value;
+  while (current !== null && current !== undefined) {
+    chain.push(current);
+    current = getTestInstanceParent(current);
+  }
+  return chain;
+}
+
+function expectPhysicalRecorderOrder(
+  submit: unknown,
+  center: unknown,
+  discard: unknown
+): void {
+  const branches = [submit, center, discard].map(ancestry);
+  const common = branches[0].find(
+    (candidate) =>
+      branches[1].includes(candidate) && branches[2].includes(candidate)
+  );
+  if (common === undefined) {
+    throw new Error("Expected the three recorder controls in a shared action row");
+  }
+  const children = getTestInstanceChildren(common);
+  const indices = branches.map((chain) =>
+    children.findIndex((child) => chain.includes(child))
+  );
+  expect(indices.every((index) => index >= 0)).toBe(true);
+  expect(indices[0]).toBeLessThan(indices[1]);
+  expect(indices[1]).toBeLessThan(indices[2]);
+  expect(String(getTestInstanceProps(common).className)).not.toContain(
+    "flex-row-reverse"
+  );
 }
 
 jest.mock("@/services/reduced-motion-service", () => ({
@@ -624,39 +660,132 @@ describe("VoiceTransactionEntry approved state compositions", () => {
     }
   });
 
-  it.each([
-    ["recording", "Stop", "Pause", "Discard", "voice-action-pause"],
-    ["paused", "Resume", "Stop", "Discard", "voice-action-resume"],
-  ] as const)(
-    "retains %s recorder actions and dispatches each to its own callback",
-    (state, first, second, third, distinctAction) => {
-      renderVoice({
-        state: state as VoiceTransactionEntryState,
-        durationMs: 61_000,
-      });
-      expect(screen.getByText("01:01")).toBeOnTheScreen();
-      for (const action of [first, second, third]) {
-        expect(
-          getTestInstances(screen.getAllByRole("button", { name: action }))
-            .length
-        ).toBeGreaterThan(0);
-      }
+  const panels = [
+    {
+      language: "en",
+      state: "recording",
+      durationMs: 12_750,
+      title: "Listening...",
+      second: "Pause",
+      secondId: "voice-action-pause",
+    },
+    {
+      language: "en",
+      state: "paused",
+      durationMs: 12_750,
+      title: "Recording paused",
+      second: "Resume",
+      secondId: "voice-action-resume",
+    },
+    {
+      language: "en",
+      state: "completed",
+      durationMs: 30_100,
+      title: "Recording complete",
+      second: "Pause",
+      secondId: "voice-action-pause",
+    },
+    {
+      language: "ar",
+      state: "recording",
+      durationMs: 12_750,
+      title: "جاري الاستماع...",
+      second: "إيقاف مؤقت",
+      secondId: "voice-action-pause",
+    },
+    {
+      language: "ar",
+      state: "paused",
+      durationMs: 12_750,
+      title: "التسجيل متوقف مؤقتًا",
+      second: "متابعة",
+      secondId: "voice-action-resume",
+    },
+    {
+      language: "ar",
+      state: "completed",
+      durationMs: 30_100,
+      title: "التسجيل مكتمل",
+      second: "إيقاف مؤقت",
+      secondId: "voice-action-pause",
+    },
+  ] as const;
 
-      fireEvent.press(screen.getByTestId("voice-action-stop"));
-      fireEvent.press(screen.getByTestId(distinctAction));
-      fireEvent.press(screen.getByTestId("voice-action-discard"));
+  it.each(panels)(
+    "uses physical Submit / $second / Discard for $language $state",
+    ({ language, state, durationMs, title, second, secondId }): void => {
+      mockLanguage = language;
+      renderVoice({ state, durationMs, remaining: 3 });
+      const submitLabel = language === "ar" ? "إرسال" : "Submit";
+      const discardLabel = language === "ar" ? "تجاهل" : "Discard";
+      expect(screen.getByText(title)).toBeOnTheScreen();
+      expect(screen.getByRole("button", { name: submitLabel })).toBeOnTheScreen();
+      expect(screen.getByRole("button", { name: second })).toBeOnTheScreen();
+      expect(screen.getByRole("button", { name: discardLabel })).toBeOnTheScreen();
+      expect(screen.queryByRole("button", { name: "Stop" })).toBeNull();
+      expect(screen.queryByTestId("voice-action-stop")).toBeNull();
 
+      const submit = screen.getByTestId("voice-action-submit");
+      const center = screen.getByTestId(secondId);
+      const discard = screen.getByTestId("voice-action-discard");
+      // React tree order (not translated flex-row-reverse) proves the stable
+      // physical LEFT/CENTER/RIGHT identity even for RTL content.
+      expectPhysicalRecorderOrder(submit, center, discard);
+
+      const completed = state === "completed";
+      expect(getTestInstanceProps(center).accessibilityState).toEqual(
+        expect.objectContaining({ disabled: completed })
+      );
+      expect(screen.queryByTestId("voice-action-resume")).toBe(
+        state === "paused" ? center : null
+      );
+      const timer = completed ? "00:30 / 00:30" : "00:12 / 00:30";
+      expect(screen.getByText(timer)).toBeOnTheScreen();
+      expect(screen.queryByText("01:01")).toBeNull();
+      expect(screen.queryByText(/tap to stop|keep speaking|speak now/i)).toBeNull();
+
+      fireEvent.press(submit);
+      fireEvent.press(center);
+      fireEvent.press(discard);
       expect(callbacks.onSubmit).toHaveBeenCalledTimes(1);
       expect(callbacks.onDiscard).toHaveBeenCalledTimes(1);
-      if (state === "recording") {
-        expect(callbacks.onPause).toHaveBeenCalledTimes(1);
-        expect(callbacks.onResume).not.toHaveBeenCalled();
-      } else {
-        expect(callbacks.onResume).toHaveBeenCalledTimes(1);
-        expect(callbacks.onPause).not.toHaveBeenCalled();
-      }
+      expect(callbacks.onPause).toHaveBeenCalledTimes(
+        state === "recording" ? 1 : 0
+      );
+      expect(callbacks.onResume).toHaveBeenCalledTimes(state === "paused" ? 1 : 0);
     }
   );
+
+  it.each([
+    ["recording", 30_000, "00:30 / 00:30"],
+    ["paused", 83_000, "00:30 / 00:30"],
+    ["completed", 2_500, "00:30 / 00:30"],
+  ] as const)(
+    "clamps %s time from %sms and retains max-cap presentation",
+    (state, durationMs, expectedTimer): void => {
+      renderVoice({ state, durationMs });
+      expect(screen.getByText(expectedTimer)).toBeOnTheScreen();
+      expect(screen.queryByText("01:23")).toBeNull();
+    }
+  );
+
+  it("keeps retained completed audio a presentation-only state until explicit Submit", (): void => {
+    renderVoice({ state: "completed", durationMs: 30_000 });
+    expect(screen.getByText("Recording complete")).toBeOnTheScreen();
+    expect(screen.queryByTestId("voice-recording-ripple-first", {
+      includeHiddenElements: true,
+    })).toBeNull();
+    expect(screen.queryByTestId("voice-recording-ripple-second", {
+      includeHiddenElements: true,
+    })).toBeNull();
+    expect(screen.queryByTestId("voice-recording-activity", {
+      includeHiddenElements: true,
+    })).toBeNull();
+    expect(screen.queryByTestId("voice-action-resume")).toBeNull();
+    expect(callbacks.onSubmit).not.toHaveBeenCalled();
+    fireEvent.press(screen.getByTestId("voice-action-submit"));
+    expect(callbacks.onSubmit).toHaveBeenCalledTimes(1);
+  });
 
   it("does not expose a second native permission prompt inside the passive Voice surface", () => {
     renderVoice({

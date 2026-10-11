@@ -10,6 +10,7 @@ import {
   ScrollView,
   StyleSheet,
   type StyleProp,
+  type TextStyle,
   type ViewStyle,
 } from "react-native";
 import {
@@ -22,6 +23,7 @@ import {
 import {
   getTestInstanceParent,
   getTestInstanceProps,
+  getTestInstanceChildren,
   getTestInstances,
 } from "../../test-utils/test-instance-props";
 
@@ -278,28 +280,33 @@ describe("VoiceTransactionEntry responsive, animation and unboxed layout", () =>
     expect(screen.getByTestId("voice-content")).toBeOnTheScreen();
   });
 
-  it("keeps the 104dp mic and decorative 140/172dp halos in an unboxed Voice surface", () => {
-    renderLayout();
-    const area: unknown = screen.getByTestId("voice-action-surface");
-    expect(String(getTestInstanceProps(area).className)).not.toMatch(
-      /rounded-2xl border|bg-slate-25/
-    );
-    const mic: unknown = screen.getByTestId("voice-mic-target");
-    expect(String(getTestInstanceProps(mic).className)).toContain("104px");
-    const outer: unknown = screen.getByTestId("voice-halo-outer", {
-      includeHiddenElements: true,
-    });
-    const inner: unknown = screen.getByTestId("voice-halo-inner", {
-      includeHiddenElements: true,
-    });
-    expect(String(getTestInstanceProps(outer).className)).toContain("172px");
-    expect(String(getTestInstanceProps(inner).className)).toContain("140px");
-    expect(getTestInstanceProps(outer).pointerEvents).toBe("none");
-    expect(getTestInstanceProps(inner).pointerEvents).toBe("none");
-    expect(
-      screen.getByTestId("ionicon-mic", { includeHiddenElements: true })
-    ).toBeOnTheScreen();
-  });
+  it.each(["idle", "starting", "recording", "paused"] as const)(
+    "keeps the clipped 104dp mic with no ordinary static filled halos in %s",
+    (state): void => {
+      renderLayout({ state });
+      const area = screen.getByTestId("voice-action-surface");
+      expect(String(getTestInstanceProps(area).className)).not.toMatch(
+        /rounded-2xl border|bg-slate-25/
+      );
+      const mic = screen.getByTestId("voice-mic-target", {
+        includeHiddenElements: true,
+      });
+      expect(String(getTestInstanceProps(mic).className)).toContain("104px");
+      // A transparent decorative wrapper is allowed; the former solid
+      // 140/172px background circles are not.
+      for (const id of ["voice-halo-outer", "voice-halo-inner"]) {
+        const halo = screen.queryByTestId(id, { includeHiddenElements: true });
+        if (halo !== null) {
+          expect(String(getTestInstanceProps(halo).className)).not.toMatch(
+            /bg-nileGreen-|bg-slate-/
+          );
+        }
+      }
+      expect(
+        screen.getByTestId("ionicon-mic", { includeHiddenElements: true })
+      ).toBeOnTheScreen();
+    }
+  );
 
   it("suppresses pulse when reduced motion is enabled and tears down on unmount", () => {
     mockReducedMotion = true;
@@ -511,6 +518,63 @@ function resolvedVoiceStyle(node: unknown): ViewStyle {
     throw new Error("Expected a resolved native style object or array");
   }
   return StyleSheet.flatten(raw) ?? {};
+}
+
+/** Native styles must come from a rendered Text descendant, not class text. */
+function findActionLabel(action: unknown): unknown {
+  for (const child of getTestInstanceChildren(action)) {
+    if (typeof child !== "object" || child === null) continue;
+    const props = getTestInstanceProps(child);
+    if (typeof props.children === "string" && props.children.length > 0) {
+      return child;
+    }
+    const descendant = findActionLabelOrNull(child);
+    if (descendant !== null) return descendant;
+  }
+  throw new Error("Recorder control is missing a visible Text label");
+}
+
+function findActionLabelOrNull(parent: unknown): unknown | null {
+  for (const child of getTestInstanceChildren(parent)) {
+    if (typeof child !== "object" || child === null) continue;
+    const props = getTestInstanceProps(child);
+    if (typeof props.children === "string" && props.children.length > 0) {
+      return child;
+    }
+    const found = findActionLabelOrNull(child);
+    if (found !== null) return found;
+  }
+  return null;
+}
+
+function resolvedActionLabelStyle(action: unknown): TextStyle {
+  const raw: unknown = getTestInstanceProps(findActionLabel(action)).style;
+  if (raw === null || raw === undefined) return {};
+  if (typeof raw !== "object") {
+    throw new Error("Expected NativeWind-resolved Text style");
+  }
+  return StyleSheet.flatten(raw as StyleProp<TextStyle>) ?? {};
+}
+
+function recorderActionRow(submit: unknown, center: unknown, discard: unknown): unknown {
+  const ancestors = (value: unknown): readonly unknown[] => {
+    const chain: unknown[] = [];
+    let node: unknown = value;
+    while (node !== null && node !== undefined) {
+      chain.push(node);
+      node = getTestInstanceParent(node);
+    }
+    return chain;
+  };
+  const middle = ancestors(center);
+  const right = ancestors(discard);
+  const row = ancestors(submit).find(
+    (node) => middle.includes(node) && right.includes(node)
+  );
+  if (row === undefined) {
+    throw new Error("R2 action buttons must share one physical row");
+  }
+  return row;
 }
 
 function hasNativeCircularClip(gradient: unknown): boolean {
@@ -746,78 +810,179 @@ describe("real Tailwind/CSS Interop Voice native shape", () => {
     ["ar", "light", "idle"],
     ["en", "dark", "idle"],
     ["ar", "dark", "idle"],
-    ["en", "light", "daily-limit"],
-    ["ar", "light", "daily-limit"],
-    ["en", "dark", "daily-limit"],
-    ["ar", "dark", "daily-limit"],
+    ["en", "light", "starting"],
+    ["ar", "dark", "starting"],
+    ["en", "light", "recording"],
+    ["ar", "dark", "recording"],
+    ["en", "light", "paused"],
+    ["ar", "dark", "paused"],
   ] as const)(
-    "resolves %s %s %s halos through native theme styles",
-    (language, theme, state) => {
+    "R2 %s %s %s has no resolved opaque ordinary mic halo",
+    (language, theme, state): void => {
       mockLanguage = language;
       colorScheme.set(theme);
+      renderWithInterop(<VoiceTransactionEntry {...baseProps} state={state} />);
+      for (const id of ["voice-halo-outer", "voice-halo-inner"]) {
+        const halo = screen.queryByTestId(id, { includeHiddenElements: true });
+        if (halo === null) continue;
+        const native = resolvedVoiceStyle(halo);
+        const background = native.backgroundColor;
+        if (background !== undefined) {
+          const rgba = processColor(background);
+          expect(rgba).toBe(processColor("transparent"));
+        }
+      }
+      // The 104dp gradient (or first-frame Starting gradient) must remain.
+      expect(screen.getByTestId("voice-gradient")).toBeOnTheScreen();
+    }
+  );
+
+  it.each(["daily-limit", "unavailable"] as const)(
+    "preserves original disabled mic 140/172 gray artwork for %s",
+    (state): void => {
+      colorScheme.set("dark");
       renderWithInterop(
         <VoiceTransactionEntry
           {...baseProps}
           state={state}
-          remaining={state === "daily-limit" ? 0 : 3}
+          remaining={state === "daily-limit" ? 0 : null}
+          dailyLimit={state === "daily-limit" ? 5 : null}
         />
       );
-      const alphas: number[] = [];
       for (const [name, size, radius] of [
         ["outer", 172, 86],
         ["inner", 140, 70],
       ] as const) {
-        const halo: unknown = screen.getByTestId("voice-halo-" + name, {
+        const halo = screen.getByTestId("voice-halo-" + name, {
           includeHiddenElements: true,
         });
-        const style = resolvedVoiceStyle(halo);
-        expect(style).toEqual(
+        expect(resolvedVoiceStyle(halo)).toEqual(
           expect.objectContaining({
-            position: "absolute",
             width: size,
             height: size,
             borderRadius: radius,
+            position: "absolute",
           })
         );
-        // A registered light-green RGB hierarchy must stay visible over
-        // slate-900. Dark nileGreen-900 was the observed invisible-halo defect;
-        // NativeWind may adapt alpha, not replace these with dark RGB values.
-        const approvedColor =
-          state === "daily-limit"
-            ? theme === "dark"
-              ? palette.slate[700]
-              : palette.slate[200]
-            : name === "outer"
-              ? palette.nileGreen[50]
-              : palette.nileGreen[100];
-        const alpha = expectPaletteHalo(style.backgroundColor, approvedColor);
-        alphas.push(alpha);
-        if (state === "idle" && theme === "dark") {
-          expect(alpha).toBeGreaterThanOrEqual(name === "outer" ? 0.22 : 0.35);
-        }
-        if (state === "daily-limit") {
-          // Keep gray disabled rings muted but not completely transparent.
-          expect(alpha).toBeGreaterThanOrEqual(0.15);
-          expect(alpha).toBeLessThan(0.45);
-        }
-        const props = getTestInstanceProps(halo);
-        expect(props.pointerEvents).toBe("none");
-        expect(props.importantForAccessibility).toBe("no-hide-descendants");
+        const alpha = expectPaletteHalo(
+          resolvedVoiceStyle(halo).backgroundColor,
+          palette.slate[700]
+        );
+        expect(alpha).toBeGreaterThanOrEqual(0.15);
+        expect(alpha).toBeLessThan(0.45);
       }
-      if (state === "idle" && theme === "dark") {
-        // Inner light-green halo must remain visibly stronger than outer.
-        expect(alphas[1]).toBeGreaterThan(alphas[0]);
+      const target = screen.getByTestId("voice-mic-target", {
+        includeHiddenElements: true,
+      });
+      expect(getTestInstanceProps(target).accessible).toBe(false);
+      expect(processColor(resolvedVoiceStyle(target).backgroundColor)).toBe(
+        processColor(palette.slate[700])
+      );
+    }
+  );
+
+  it.each(["recording", "paused", "completed"] as const)(
+    "resolves approved R2 green/gray/red 20dp actions in real native styles (%s)",
+    (state): void => {
+      mockWidth = 390;
+      mockFontScale = 1;
+      mockLanguage = "en";
+      colorScheme.set("light");
+      renderWithInterop(<VoiceTransactionEntry {...baseProps} state={state} durationMs={30_000} />);
+      const submit = screen.getByTestId("voice-action-submit");
+      const center = screen.getByTestId(
+        state === "paused" ? "voice-action-resume" : "voice-action-pause"
+      );
+      const discard = screen.getByTestId("voice-action-discard");
+      for (const action of [submit, center, discard]) {
+        const style = resolvedVoiceStyle(action);
+        expect(style.minHeight).toBeGreaterThanOrEqual(48);
+        expect(style.borderWidth).toBeGreaterThanOrEqual(1);
       }
-      if (state === "daily-limit") {
-        const disabled: unknown = screen.getByTestId("voice-mic-target", {
-          includeHiddenElements: true,
-        });
-        expect(getTestInstanceProps(disabled).accessible).toBe(false);
-        const color = resolvedVoiceStyle(disabled).backgroundColor;
-        const expected =
-          theme === "dark" ? palette.slate[700] : palette.slate[200];
-        expect(processColor(color)).toBe(processColor(expected));
+
+      for (const action of [submit, center, discard]) {
+        const label = resolvedActionLabelStyle(action);
+        expect(label.fontSize).toBe(14);
+        expect(label.lineHeight).toBe(22);
+        expect(label.fontWeight).toBe("600");
       }
+      expect(processColor(resolvedActionLabelStyle(submit).color)).toBe(
+        processColor(palette.slate[25])
+      );
+      const submitStyle = resolvedVoiceStyle(submit);
+      expect(processColor(submitStyle.backgroundColor)).toBe(
+        processColor(palette.nileGreen[500])
+      );
+      expect(processColor(submitStyle.borderColor)).toBe(
+        processColor(palette.nileGreen[500])
+      );
+      const centerStyle = resolvedVoiceStyle(center);
+      const gray = [palette.slate[400], palette.slate[500], palette.slate[600]];
+      expect(gray.map(processColor)).toContain(processColor(centerStyle.borderColor));
+      expect(gray.map(processColor)).toContain(
+        processColor(resolvedActionLabelStyle(center).color)
+      );
+      expect(
+        centerStyle.backgroundColor === undefined ||
+          processColor(centerStyle.backgroundColor) === processColor("transparent")
+      ).toBe(true);
+
+      const discardStyle = resolvedVoiceStyle(discard);
+      expect([palette.red[500], palette.red[600]].map(processColor)).toContain(
+        processColor(discardStyle.borderColor)
+      );
+      expect([palette.red[500], palette.red[600]].map(processColor)).toContain(
+        processColor(resolvedActionLabelStyle(discard).color)
+      );
+      expect(
+        discardStyle.backgroundColor === undefined ||
+          processColor(discardStyle.backgroundColor) === processColor("transparent")
+      ).toBe(true);
+      expect(getTestInstanceProps(center).accessibilityState).toEqual(
+        expect.objectContaining({ disabled: state === "completed" })
+      );
+      expect(
+        mockIoniconsRenders.find((icon) => icon.name === "send")
+      ).toEqual({
+        name: "send",
+        size: 20,
+        color: palette.slate[25],
+        accessible: undefined,
+      });
+      expect(
+        mockIoniconsRenders.find((icon) =>
+          icon.name === (state === "paused" ? "play" : "pause")
+        )?.size
+      ).toBe(20);
+      expect(mockIoniconsRenders.find((icon) => icon.name === "close")?.size).toBe(20);
+      const row = recorderActionRow(submit, center, discard);
+      expect(resolvedVoiceStyle(row).flexDirection).toBe("row");
+    }
+  );
+
+  it.each([320, 390] as const)(
+    "keeps responsive R2 controls accessible without font shrinking at %sdp",
+    (width): void => {
+      mockWidth = width;
+      mockHeight = width === 320 ? 640 : 844;
+      mockFontScale = 2;
+      mockBottomInset = width === 320 ? 22 : 34;
+      renderWithInterop(<VoiceTransactionEntry {...baseProps} state="completed" durationMs={30_000} />);
+      const scroll = screen.UNSAFE_getByType(ScrollView);
+      expect(resolvedVoiceStyle(screen.getByTestId("voice-action-surface")).minHeight)
+        .toBeGreaterThanOrEqual(260);
+      expect(getTestInstanceProps(scroll).contentContainerStyle).toEqual(
+        expect.objectContaining({
+          paddingBottom: mockBottomInset + 24,
+          paddingHorizontal: 12,
+        })
+      );
+      for (const id of ["voice-action-submit", "voice-action-pause", "voice-action-discard"]) {
+        const control = screen.getByTestId(id);
+        expect(resolvedVoiceStyle(control).minHeight).toBeGreaterThanOrEqual(48);
+        expect(resolvedActionLabelStyle(control).fontSize).toBe(14);
+      }
+      expect(screen.getByText("00:30 / 00:30")).toBeOnTheScreen();
     }
   );
 
