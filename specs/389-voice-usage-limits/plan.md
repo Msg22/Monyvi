@@ -1163,3 +1163,65 @@ consent/quota/permission gates; no auth/session bypass; no provider or hosted
 change; no recorder prewarm; no #391 work; no UI/copy/mockup change; no Manual
 financial change; no 1–2 second promise.
 
+
+## S2 Red reconciliation — consent freshness and timing contract (12 October 2026)
+
+Root independently completed the correct-feature prerequisite and canonical
+read-only Speckit analysis for the frozen S1 package at
+`b562426b5543a64c7df4d117007388c42029ae49`: the new S1 requirement mappings
+were complete and critical/high findings were zero. Optional analyze Git hooks
+were not invoked. This S2 append keeps T075–T082 meanings stable and adds only
+the missing consent-transition freshness Red tracked as T083.
+
+### Exact preproduction contract
+
+- `useVoiceAiAvailability.refresh` may coalesce one unresolved request only
+  for the same authenticated actor, device timezone, enablement/lifecycle
+  generation and unchanged consent context. Settled results are never cached
+  for the next pre-attempt gate.
+- The availability facade should gain one narrow optional supersede input
+  (planned name: `supersedePending`) that aborts/invalidates a matching
+  pending request instead of joining it. It is a freshness signal, not a quota
+  or caching policy.
+- `StartFlowOptions` should gain the route-to-flow marker
+  `supersedePendingAvailability?: boolean`. The first successful consent-sheet
+  Continue passes `true`; ordinary already-consented starts omit it.
+- After fresh consent, the authoritative availability request and the
+  non-prompting microphone-permission read start concurrently. Native OS
+  permission request remains serialized behind an eligible availability result
+  and the existing explicit Allow microphone action.
+- Availability-failure retry remains consent-first, then refreshes exactly once
+  and hands that fresh snapshot into the flow so the flow does not perform a
+  second availability request.
+- Startup timing Red is against existing route/flow/logger behavior, not a
+  missing helper import. Structured records use event
+  `voice.startupTiming` and payload keys **only**
+  `{ stage, durationMs }`. Planned stages are `consent`,
+  `availability_permission` and `native_start`; durations are monotonic,
+  numeric and add no artificial wait. `native_start` is captured at recorder
+  `onStarted`, before the recorder-owned 300 ms stabilization.
+- No user/account/timezone/request identifiers, tokens, audio URI/content,
+  transcript, parsed/financial payload or provider data may appear in timing
+  payloads.
+
+### S2 deterministic Red ownership
+
+- NEW `apps/mobile/__tests__/hooks/useVoiceAiAvailability.startup.test.tsx`:
+  same-context service-call coalescing; focus/foreground collision; settled and
+  failed slot clearing; timezone/actor split; blur/background/unmount abort;
+  authoritative reconciliation invalidation.
+- NEW `apps/mobile/__tests__/hooks/useVoiceTransactionFlow.startup.test.ts`:
+  consent-first ordering; simultaneous availability + permission reads;
+  explicit OS-prompt ordering; blocked availability; duplicate/stale actor
+  safety; truthful `onStarted`; start failure; privacy-safe timing shape.
+- BOUNDED `apps/mobile/__tests__/app/add-transaction-modes.test.tsx`:
+  immediate route Starting while consent is unresolved, existing-consent
+  control, first-use post-grant supersede marker, and consent-first unavailable
+  refresh handing one authoritative snapshot into the flow.
+- Existing retained-audio same-key tests in
+  `useVoiceTransactionFlow.test.ts` remain the positive control and are not
+  duplicated or weakened.
+
+T077 plus T083 Red must be accepted by root before T078/T079 production work.
+No test execution is claimed by this GitHub-only authoring commit.
+

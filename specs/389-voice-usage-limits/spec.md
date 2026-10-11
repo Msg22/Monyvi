@@ -855,6 +855,16 @@ empty-audio ownership.
   timing MUST add no sleep/artificial minimum and MUST NOT be presented as a
   measured product improvement until owner device evidence exists.
 
+- **FR-053 — Consent-transition freshness:** A first-use AI processing
+  consent grant or other explicit consent-transition continuation MUST NOT join
+  an authoritative availability request that began under the previous consent
+  context. That continuation MUST explicitly supersede the older pending
+  request and obtain a fresh authoritative result before native recording may
+  start. This is a pending-work freshness boundary only: already-consented
+  same-actor/same-timezone work may still coalesce while unresolved, completed
+  snapshots remain non-reusable, and existing consent revocation/fail-closed
+  behavior is unchanged.
+
 ### Additive success criteria
 
 - **SC-023:** Deterministic hook tests prove simultaneous same-context refreshes,
@@ -879,4 +889,15 @@ empty-audio ownership.
   separately and validates OS permission/capture behavior on device. Unit/source
   evidence alone MUST NOT be called a measured latency improvement, native
   timing proof, E2E execution or provider readiness.
+
+
+### S2 consent-transition clarification (12 October 2026)
+
+The S1 coalescing criterion is intentionally narrower than a cache. For
+**SC-023**, same-context pending work may join only while the consent context is
+unchanged. A first-use consent grant is an explicit freshness boundary and MUST
+force a new authoritative availability request; a completed snapshot is never
+reused. This clarification adds FR-053 without renumbering FR-048–FR-052 or
+changing R1/R2 UI, quota, request-identity, permission, recorder or Manual
+contracts.
 

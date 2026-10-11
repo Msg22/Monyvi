@@ -1323,12 +1323,17 @@ after fresh consent.
       coalescing, post-consent safe concurrency, privacy-safe monotonic timing,
       deterministic test matrix and owner manual plan. No source/tests/device/
       provider/deploy work in T075.
-- [ ] **T076 [US0] Blocking root prerequisite + read-only Speckit acceptance:**
+- [x] **T076 [US0] Blocking root prerequisite + read-only Speckit acceptance:**
       root runs the correct-feature prerequisite command and canonical
       `speckit.analyze` on the final spec/plan/tasks, confirms no
       critical/high constitution/security/coverage conflict and explicitly
       accepts the startup plan before T077. GitHub planning worker's semantic
       analysis is advisory because it cannot execute repo shell prerequisites.
+      T076 root receipt: correct-feature prerequisite PASS; canonical read-only
+      Speckit analysis completed with complete new-requirement mapping and
+      critical/high findings = 0. Native Git branch/tree/ancestry was
+      independently verified after the WSL branch check was skipped; optional
+      analyze Git hooks were not invoked.
 - [ ] **T077 [P] [US0] Deterministic startup Red:** author one focused
       `useVoiceAiAvailability.startup.test.tsx` plus bounded additions to
       `useVoiceTransactionFlow.test.ts` and
@@ -1374,4 +1379,12 @@ after fresh consent.
       post-start stabilization does not delay Listening, and no provider call is
       made before Submit. Device/Metro/Maestro/provider execution is NOT RUN by
       this planning worker.
+- [ ] **T083 [P] [US0] Consent-transition freshness Red:** add the bounded
+      route/startup assertion that a successful first-use consent grant passes
+      an explicit supersede marker into the flow so a pre-consent pending
+      availability request cannot be joined. Preserve the already-consented
+      control (normal pending coalescing), completed-snapshot non-reuse and
+      consent revocation/fail-closed semantics. T083 is a blocking Red alongside
+      T077 before T078/T079; it does not renumber or change T075–T082.
+
 

@@ -106,3 +106,41 @@ changes, TTL/cached allowance, permission prompting before eligibility/explicit
 action, removal of fresh consent/availability, UI/copy changes, provider/hosted
 work, or a measured performance promise without owner device evidence.
 
+
+## S2 consent-transition reconciliation and root T076 receipt
+
+Root independently completed the canonical correct-feature prerequisite and
+read-only Speckit analysis for the S1 package at
+`b562426b5543a64c7df4d117007388c42029ae49`. Reported result: complete S1
+requirement mapping, critical findings 0, high findings 0. The WSL native-branch
+check was skipped by that runner, then root independently verified the exact
+native Git branch/tree/ancestry. Optional analyze Git hooks were not invoked.
+This worker does not claim to have executed those commands.
+
+The narrow S2 reconciliation adds **FR-053** and **T083** without renumbering or
+changing FR-048–FR-052 / T075–T082:
+
+1. same-actor/same-timezone pending availability may join only while consent
+   context is unchanged;
+2. first-use consent grant explicitly supersedes any availability request that
+   began before that grant;
+3. completed snapshots remain non-reusable;
+4. consent revocation/fail-closed behavior is unchanged;
+5. the route Red requires an explicit post-grant supersede marker while the
+   already-consented control omits it.
+
+### Structured semantic analysis of the S2 clarification
+
+| ID | Category | Severity | Result |
+| --- | --- | --- | --- |
+| S2-C1 | Consistency | RESOLVED | FR-053 closes the coalescing-vs-first-consent ambiguity without weakening FR-048 fresh-authority semantics. |
+| S2-S1 | Security | PASS | Consent remains first; no pre-consent result can authorize recording after a grant; revocation remains fail-closed. |
+| S2-C2 | Coverage | PASS | FR-053 maps to T083 Red plus T079 implementation and T080/T081 Green/review; route tests include both first-use supersede and already-consented controls. |
+| S2-O1 | Ownership | PASS | No recorder/#391, shared-auth, provider, server, quota, UI/copy or binding ownership is added. |
+| S2-P1 | Privacy | PASS | Timing Red permits stage + numeric duration only and measures native-start readiness at `onStarted`; no identity/audio/payload fields. |
+
+Updated startup requirement mapping is **11 / 11 planned**. Critical/high
+semantic findings after this reconciliation: **0 / 0**. Root must accept the
+actual T077/T083 Red results before T078/T079 production; this GitHub authoring
+lane claims no test execution.
+

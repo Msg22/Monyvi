@@ -63,16 +63,28 @@ payload or actor identity.
 | M20 | Foreground focused route with automatic refresh then immediate mic tap | Equivalent request is coalesced; no abort/restart churn visible. |
 | M21 | Account switch during pending start | Old actor cannot start recorder or surface availability for the new actor. |
 | M22 | Native prepare/record failure | Error/retry state, never false Listening; subsequent retry still uses gates. |
-| M23 | Tap Pause/Stop immediately after Listening appears | Existing post-record stabilization safely queues/protects command; startup timing is not delayed by 300 ms. |
+| M23 | Tap Pause/Submit immediately after Listening appears | Existing post-record stabilization safely queues/protects Pause and the user-facing Submit action; Submit may invoke the recorder's native stop/finalize path, but startup timing is not delayed by the 300 ms post-start stabilization. |
 | M24 | Complete 30-second active cap then Submit | S1 has not altered cap/retained-audio/explicit Submit semantics. |
 | M25 | Retained-audio provider retry | No microphone restart; same logical request identity; no startup diagnostics leak request key. |
 | M26 | Arabic/English, light/dark | No UI/copy/binding changes from startup optimization. |
 | M27 | Voice-first → Manual → Voice | Existing lazy first Manual mount/draft retention remains unchanged. |
+
+| M28 | First-use consent grant while an older availability request is pending | The pre-consent request is superseded; one fresh post-grant authoritative request decides eligibility before capture. Already-consented same-context pending work may still join. |
 
 ## Manual completion boundary
 
 Owner evidence can validate native timing and behavior, but it does not replace
 server quota/security tests. #391 recorder/empty/speechless research remains
 separate. Do not mark startup performance complete until root T080/T081 are
-accepted and owner records M01–M27 as applicable.
+accepted and owner records M01–M28 as applicable.
+
+
+### S2 timing/privacy note
+
+When S3 diagnostics exist, owner evidence may record only the approved
+`stage` and numeric `durationMs` fields from `voice.startupTiming`. The
+native-start duration ends at recorder `onStarted`, before the recorder-owned
+300 ms stabilization. Do not copy log payloads containing identity, timezone,
+request key, token, audio, transcript, financial or provider content. Unit Red/
+Green is not device timing proof.
 

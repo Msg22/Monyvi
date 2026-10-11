@@ -487,3 +487,107 @@ describe("AddTransaction unified mode intent", () => {
     }
   );
 });
+
+
+describe("AddTransaction Voice startup S2 Red", () => {
+  beforeEach(resetRouteMocks);
+
+  it("renders Starting immediately while fresh consent status is unresolved", async (): Promise<void> => {
+    const consentStatus = createDeferred<{
+      readonly consent: null;
+      readonly isConsented: boolean;
+      readonly userId: string;
+    }>();
+    mockGetAiProcessingConsentStatus.mockReturnValueOnce(consentStatus.promise);
+    renderRoute("voice");
+
+    fireEvent.press(screen.getByTestId("voice-start"));
+
+    expect(screen.getByTestId("voice-entry-state")).toHaveTextContent("starting");
+    expect(mockVoiceStartFlow).not.toHaveBeenCalled();
+
+    consentStatus.resolve({
+      consent: null,
+      isConsented: false,
+      userId: "user-1",
+    });
+    await waitFor((): void => {
+      expect(screen.getByTestId("voice-consent-continue")).toBeTruthy();
+    });
+    await waitFor(() => expectTabState("Manual", { disabled: false }));
+  });
+
+  it("marks the first post-consent start as superseding pre-consent availability", async (): Promise<void> => {
+    mockGetAiProcessingConsentStatus.mockResolvedValueOnce(unconsentedStatus);
+    const grant = createDeferred<void>();
+    mockGrantConsent.mockReturnValueOnce(grant.promise);
+    renderRoute("voice");
+
+    fireEvent.press(screen.getByTestId("voice-start"));
+    await waitFor((): void => {
+      expect(screen.getByTestId("voice-consent-continue")).toBeTruthy();
+    });
+    fireEvent.press(screen.getByTestId("voice-consent-continue"));
+
+    grant.resolve(undefined);
+    await waitFor((): void => {
+      expect(mockVoiceStartFlow).toHaveBeenCalledTimes(1);
+    });
+
+    expect(mockVoiceStartFlow).toHaveBeenCalledWith({
+      skipAiProcessingConsent: true,
+      supersedePendingAvailability: true,
+    });
+  });
+
+  it("keeps an already-consented ordinary start on normal pending coalescing", async (): Promise<void> => {
+    renderRoute("voice");
+    fireEvent.press(screen.getByTestId("voice-start"));
+
+    await waitFor((): void => {
+      expect(mockVoiceStartFlow).toHaveBeenCalledTimes(1);
+    });
+
+    expect(mockVoiceStartFlow).toHaveBeenCalledWith({
+      skipAiProcessingConsent: true,
+    });
+  });
+
+  it("keeps unavailable retry consent-first, refreshes once, and hands that snapshot into flow", async (): Promise<void> => {
+    mockRouteState.mockVoiceAvailabilityErrorKind = "network";
+    const consentStatus = createDeferred<{
+      readonly consent: null;
+      readonly isConsented: boolean;
+      readonly userId: string;
+    }>();
+    mockGetAiProcessingConsentStatus.mockReturnValueOnce(consentStatus.promise);
+    renderRoute("voice");
+
+    expect(screen.getByTestId("voice-entry-state")).toHaveTextContent(
+      "unavailable"
+    );
+    fireEvent.press(screen.getByTestId("voice-unavailable-retry"));
+
+    expect(screen.getByTestId("voice-entry-state")).toHaveTextContent("starting");
+    expect(mockVoiceAvailabilityRefresh).not.toHaveBeenCalled();
+    expect(mockVoiceStartFlow).not.toHaveBeenCalled();
+
+    consentStatus.resolve({
+      consent: null,
+      isConsented: true,
+      userId: "user-1",
+    });
+
+    await waitFor((): void => {
+      expect(mockVoiceAvailabilityRefresh).toHaveBeenCalledTimes(1);
+      expect(mockVoiceStartFlow).toHaveBeenCalledTimes(1);
+    });
+    expect(mockVoiceStartFlow).toHaveBeenCalledWith({
+      skipAiProcessingConsent: true,
+      availabilitySnapshot: expect.objectContaining({
+        remaining: 5,
+        reason: null,
+      }),
+    });
+  });
+});
