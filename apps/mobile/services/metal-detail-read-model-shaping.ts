@@ -332,9 +332,29 @@ export function toDetailHoldingStateInput(
   };
 }
 
+export type MetalDetailLifecycleEventRecord = Pick<
+  MetalLifecycleEvent,
+  | "actionId"
+  | "deleted"
+  | "holdingId"
+  | "id"
+  | "isEffective"
+  | "isHistoryVisible"
+  | "kind"
+  | "occurredAt"
+  | "payloadJson"
+  | "predecessorEventId"
+  | "reversesEventId"
+  | "userId"
+>;
+type MetalDetailActionEvidenceRecord = Pick<
+  MetalActionEvidence,
+  "actionId" | "holdingId" | "kind" | "userId" | "deleted"
+>;
+
 export function toDetailLifecycleEventInput(
-  event: MetalLifecycleEvent,
-  evidence: readonly MetalActionEvidence[]
+  event: MetalDetailLifecycleEventRecord,
+  evidence: readonly MetalDetailActionEvidenceRecord[]
 ): MetalDetailLifecycleEventInput | null {
   const isLegacyAdd =
     event.kind === "created" &&
@@ -413,8 +433,8 @@ function toLifecycleKind(
 }
 
 export function shapeMetalDetailLifecycleEvents(
-  events: readonly MetalLifecycleEvent[],
-  evidence: readonly MetalActionEvidence[]
+  events: readonly MetalDetailLifecycleEventRecord[],
+  evidence: readonly MetalDetailActionEvidenceRecord[]
 ): readonly MetalDetailLifecycleEventInput[] {
   const canonicalAddActionIds = new Set(
     events

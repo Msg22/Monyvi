@@ -27,6 +27,8 @@ import { Q, type Query } from "@nozbe/watermelondb";
 import {
   resolveLegacyDisposalBaseline,
   toLegacyDisposalRevisionEvidence,
+  toLegacyDisposalActionEvidence,
+  type LegacyDisposalActionEvidence,
   type LegacyDisposalRevisionEvidence,
 } from "@/services/metal-legacy-disposal-baseline-service";
 import { buildMetalDetailTerminalFacts } from "@/services/metal-terminal-display-service";
@@ -122,6 +124,9 @@ export interface BuildMetalDetailReadModelInput {
   readonly asset: MetalDetailAssetInput;
   readonly currentRates?: LiveRatesTrustReadModel;
   readonly holdingState: MetalDetailHoldingStateInput;
+  readonly legacyDisposalActionEvidence?:
+    | readonly LegacyDisposalActionEvidence[]
+    | null;
   readonly legacyDisposalRevisionEvidence?:
     | readonly LegacyDisposalRevisionEvidence[]
     | null;
@@ -332,6 +337,10 @@ export async function readMetalDetailReadModel(
     currentRates: options.currentRates,
     holdingState: toDetailHoldingStateInput(holdingState),
     legacyDisposalRevisionEvidence: toLegacyDisposalRevisionEvidence(evidence),
+    legacyDisposalActionEvidence: toLegacyDisposalActionEvidence(
+      events,
+      groups
+    ),
     lifecycleEvents: shapeMetalDetailLifecycleEvents(events, evidence),
     metal: toDetailMetalInput(metal, metalType),
     preferredCurrency: options.preferredCurrency,
@@ -462,6 +471,7 @@ export function buildMetalDetailReadModel(
       lifecycleEvents: input.lifecycleEvents,
       terminalFacts: input.terminalFacts ?? null,
       revisionEvidence: input.legacyDisposalRevisionEvidence ?? null,
+      actionEvidence: input.legacyDisposalActionEvidence ?? null,
     })
   );
   const projection = reduced.projection;
