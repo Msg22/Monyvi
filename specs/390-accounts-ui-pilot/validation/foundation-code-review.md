@@ -1,6 +1,8 @@
 # Independent foundation code review — ordered static source inspection
 
-**Disposition: BLOCKING LOGIC FINDING; later style pass STOPPED.** This is an independent static review, not executed TypeScript, unit, E2E, device, fidelity, or accessibility evidence. Mohamed expressly deferred automated tests and owns manual validation; S1 retains exclusive correction ownership. The report is the **only** write in this lane.
+> **CURRENT RE-REVIEW (exact source `2df548762c6fbda841b26cc64453c83ea6b511fd`): FCR-01's original parenthesis/terminal-period examples are FIXED, but a narrower quoted-qualifier case remains BLOCKING (FCR-01R). TypeScript/React static pass has no confirmed blocker; logic pass stopped at FCR-01R; style/architecture pass NOT STARTED by mandatory ordering. See current addendum below. The original `83572c8a...` findings are retained as historical evidence, not assertions about the repaired code. No tests/device checks were run by this reviewer.
+
+**CURRENT DISPOSITION: FCR-01 PARTIALLY RESOLVED at `2df548762c6fbda841b26cc64453c83ea6b511fd`; residual FCR-01R BLOCKS LOGIC and style remains NOT STARTED.** Historical report below describes source `83572c8a...`; current evidence appears in the appended re-review. This is an independent static review, not executed TypeScript, unit, E2E, device, fidelity, or accessibility evidence. Mohamed expressly deferred automated tests and owns manual validation; S1 retains exclusive correction ownership. The report is the **only** write in this lane.
 
 ## Immutable scope / authority
 
@@ -69,3 +71,73 @@ Likewise, `"Amount, Required field."` returns `"Amount, Required field., Require
 
 **Recommendation:** **BLOCK source acceptance on FCR-01 until the approved name-qualifier behavior is corrected**. Root should grant only S1 a narrowly scoped code correction and arrange ordered re-review; do not infer that the unstarted style pass is clean. No testing deferral is reversed by this finding.
 
+---
+
+## Current ordered source re-review — `2df548762c6fbda841b26cc64453c83ea6b511fd`
+
+**Authority and revision:** Original independent report commit `ac3f1677ec36d596ae0289bb916108f221344509` at review branch parent `bf05b41e95207295854756c3a312e59f3c787290`; originally reviewed source `83572c8a5546bc4963055f25a9e847ec061d309a`. Corrected immutable source target `2df548762c6fbda841b26cc64453c83ea6b511fd` on S1's separate foundation branch. Its direct parent is `8d7d589ad38d629b5f6278968644c0a6254e2612`. GitHub's `8d7d..2df5` compare establishes **one production file modified** (`FieldLabel.tsx`); the intervening four-test-file annotation commit only adjusted reported unsafe-assignment typing, not assertions, per root's verified comparison. From original `83572c8a..2df5`, only `FieldLabel.tsx`, four test files, and the existing implementation-plan note changed. No other foundation production code changed.
+
+**Frozen review sources:** `validation/foundation-contract.md` as of `8fe1e021cc8ae393bd4c001d5e7901a880b1ae78`, governing `3264eba2b67bcc66cddc95e3fbdb36e8705ee642`, dependent PR #383 `0e7ee55abf6fb18af37e29e4f2e48ba45604a31e`, approved eight-reference binding package SHA-256 `265cd15fefd32d9cece643179abbe4ed3843db82c74abe9c21b9dccc73dcf15e`, authored tests `6e51a4889da545f64d6de0a19f848ca764b3161f`. S1 remains sole foundation code-fix owner. This reviewer owns only this report.
+
+### Ordered pass dispositions at corrected source
+
+| Pass | Disposition | Source-grounded explanation |
+| --- | --- | --- |
+| **1. TypeScript / React / async** | **STATIC INSPECTION COMPLETE — no confirmed blocker** | The sole new production delta is a pure string helper body at `FieldLabel.tsx:23–42`; it does not add async calls, React hooks, public prop signatures, locale dependencies, or component lifecycle work. The previously inspected `TextField` focus/draft and `GroupedDecimalInput` callbacks remain unchanged. Root **reports** mobile/logic typechecks passed at the prior source snapshot; this auditor did not run compilation, lint, tests, or native validation on `2df5`. |
+| **2. Logic / requirements** | **PARTIAL FCR-01 FIX, BLOCKED by FCR-01R** | Existing `(` plus closing `)` and trailing period cases are handled. But matching closing smart quotes/guillemets are stripped while their opening counterparts are not treated as valid whole-qualifier boundaries. See deterministic example below. Stop this pass on the valid, exact-once contract violation. |
+| **3. Style / architecture / accessibility consistency** | **NOT STARTED / NOT PASSED** | Ordered workflow prohibits advancing while valid logic blocker FCR-01R remains. Previously read NativeWind class and helper structure do not constitute a completed style audit. Native visual, bidi, TalkBack and accessibility-tree evidence remain unexecuted. |
+
+### FCR-01 resolution: verified for original report examples
+
+**Source:** [`FieldLabel.tsx:20–42` at `2df54876`](https://github.com/Msg22/Monyvi/blob/2df548762c6fbda841b26cc64453c83ea6b511fd/apps/mobile/components/ui/FieldLabel.tsx#L20-L42).
+
+The new `candidate = base.replace(/[\\s)...]/u, "")`-style final punctuation removal is actually implemented as `base.replace(/[\\s)\\]}'"»”’.,،؛:;!?؟]+$/u, "")`. This is **detection only**; the successful branch returns original `base` byte-for-byte (`FieldLabel.tsx:36–37`). Static control-flow cases:
+
+| Locale / input | Result implied by the new branch | Disposition |
+| --- | --- | --- |
+| EN `Amount (Required field)` | `Amount (Required field)` | Original FCR-01 counterexample **FIXED** |
+| EN `Amount, Required field.` | `Amount, Required field.` | Terminal punctuation **FIXED** |
+| AR `رصيد الحساب، حقل مطلوب.` | Same string, preserved | Arabic comma / terminal punctuation **FIXED** |
+| EN `Required field help` or `UnRequired field` | Adds `, Required field` as a distinct complete qualifier | Partial/subword false matches still avoided |
+| AR `معلومات حقل مطلوب إضافية` | Adds `، حقل مطلوب` | Partial phrase still distinct |
+| Optional `required: false` with any explicit override | Returns original `base` unchanged at line21 | Optional overrides preserved |
+
+These are **source-derived expected results, not executed unit assertions or TalkBack observations**.
+
+### FCR-01R — HIGH / BLOCKING: closing quote supported without its matching opening qualifier boundary
+
+**Location:** `apps/mobile/components/ui/FieldLabel.tsx:25–42`; [exact source](https://github.com/Msg22/Monyvi/blob/2df548762c6fbda841b26cc64453c83ea6b511fd/apps/mobile/components/ui/FieldLabel.tsx#L25-L42).
+
+**Frozen contract:** `validation/foundation-contract.md:122–133`: if an explicit override already contains an **equivalent complete** required qualifier, keep the caller's full text unchanged and do not repeat requiredness, in both EN/AR. This is not a test for unqualified partial phrases. The new source explicitly strips trailing closing guillemet `»` and smart quote `”` (line25) but its opening-boundary whitelist (lines28–35) omits `«`, `“`, and analogous opening `‘`.
+
+**Deterministic, source-inspected counterexamples:**
+
+```text
+AR base = "الرصيد «حقل مطلوب»", required=true, requiredText="حقل مطلوب"
+candidate after line25 = "الرصيد «حقل مطلوب"
+candidate.endsWith(requiredText) = true
+prefix at line27 = "الرصيد «"      // endsWith(«), not in complete-boundary set
+hasCompleteBoundary = false
+actual composed name = "الرصيد «حقل مطلوب»، حقل مطلوب"
+expected = "الرصيد «حقل مطلوب»"
+
+EN base = "Balance “Required field”", required=true, requiredText="Required field"
+candidate after line25 = "Balance “Required field"
+prefix = "Balance “"               // opening smart quote not accepted
+actual = "Balance “Required field”, Required field"
+expected = "Balance “Required field”"
+```
+
+This is a **confirmed code-path duplication for already-prequalified input**, not evidence that current Account screens supply these exact overrides, nor evidence of spoken duplication on an emulator. It is not a compiler/runtime crash claim. The broad class of FCR-01 is therefore **PARTIALLY RESOLVED**, not fully closed. Root may keep its original issue identifier; no separate issue/PR action is authorized.
+
+**Smallest S1-owned correction:** Apply a **symmetric complete-qualifier boundary** test to already-recognized closing quote pairs (at least `«/»`, `“/”`, and `‘/’`) without broad substring matching. Keep `required: false` early return and return the original untouched string when complete. Maintain required locale from `common.required_field`, not RTL settings. Do not normalize caller text, alter optional names, reinterpret partial phrases such as `UnRequired field`, introduce locale keys, or change other UI/financial code. Any future tests for these cases require renewed explicit permission; automated tests remain deferred.
+
+**Severity rationale:** The shared TextField and Dropdown consume this one helper. An already-complete localized required phrase can be announced twice as an accessibility name, directly violating the frozen exactly-once API. Fix is localized to one pure helper and does not require Account adoption. This is a code-path contract blocker despite its narrower input shape.
+
+### Execution, assumptions and handoff boundaries
+
+- **Root-reported:** Previous mobile and logic TypeScript checks passed at the S1 pre-fix production snapshot with authored tests; the intervening unsafe-assignment test annotations were repaired, but the reviewer did not independently rerun lint, types or i18n at corrected head. No source claim is promoted to an executed PASS.
+- **DEFERRED by Mohamed:** Unit/integration/E2E/real-hook checks, native/emulator, clipboard, caret, IME, visual fidelity, TalkBack/VoiceOver and complete Accounts journeys; 35 manual scenarios are human-owned and cannot be inferred from this report. Previously observed pre-implementation Red is not post-implementation Green.
+- **Scope:** No source, tests, YAML, approved mockup bytes, other docs, issues or PRs changed. This addendum modifies only `foundation-code-review.md` on the same isolated review branch. Review stops after confirmed logic blocker. Neither style nor release acceptance is granted.
+
+**Recommendation for root:** Ask S1 for one narrow helper fix addressing FCR-01R and return the next immutable source revision for ordered re-review. Do not use this addendum to demand automatic tests or new runtime setup. **Current overall static code-review acceptance: BLOCKED.**
