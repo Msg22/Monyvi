@@ -414,3 +414,142 @@ describe("T007 TextField required names and feedback", () => {
     expect(screen.getByText("Incorrect amount")).toBeOnTheScreen();
   });
 });
+describe("T007 Q2/Q5 required qualifier boundaries and feedback fallback", () => {
+  it.each([
+    ["en", "Amount", "Required field help", "Required field help, Required field"],
+    ["en", "Amount", "UnRequired field", "UnRequired field, Required field"],
+    ["ar", "الرصيد", "معلومات حقل مطلوب إضافية", "معلومات حقل مطلوب إضافية، حقل مطلوب"],
+  ] as const)(
+    "does not mistake a partial/ordinary required phrase for a complete qualifier in %s",
+    async (locale, label, override, expectedName) => {
+      const instance = await createTestI18n(locale);
+      render(
+        <I18nextProvider i18n={instance}>
+          <TextField
+            label={label}
+            required
+            accessibilityLabel={override}
+            testID="partial-required-phrase"
+          />
+        </I18nextProvider>
+      );
+
+      expect(screen.getByTestId("partial-required-phrase")).toHaveProp(
+        "accessibilityLabel",
+        expectedName
+      );
+    }
+  );
+
+  it.each([
+    ["en", "Amount", "  Custom amount, Required field  "],
+    ["ar", "الرصيد", "  رصيد الحساب، حقل مطلوب  "],
+  ] as const)(
+    "preserves complete prequalified %s override including punctuation and whitespace",
+    async (locale, label, override) => {
+      const instance = await createTestI18n(locale);
+      render(
+        <I18nextProvider i18n={instance}>
+          <TextField
+            label={label}
+            required
+            accessibilityLabel={override}
+            testID="padded-required-phrase"
+          />
+        </I18nextProvider>
+      );
+
+      expect(screen.getByTestId("padded-required-phrase")).toHaveProp(
+        "accessibilityLabel",
+        override
+      );
+    }
+  );
+
+  it.each([
+    ["en", "Notes", "Required field help"],
+    ["ar", "ملاحظات", "معلومات حقل مطلوب إضافية"],
+  ] as const)(
+    "preserves an optional %s override verbatim without requiredness",
+    async (locale, label, override) => {
+      const instance = await createTestI18n(locale);
+      render(
+        <I18nextProvider i18n={instance}>
+          <TextField
+            label={label}
+            accessibilityLabel={override}
+            testID="optional-override"
+          />
+        </I18nextProvider>
+      );
+
+      expect(screen.getByTestId("optional-override")).toHaveProp(
+        "accessibilityLabel",
+        override
+      );
+      expect(screen.queryByText(label + " *")).toBeNull();
+    }
+  );
+
+  it("falls through empty error/warning and uses approved advisory gold without marking invalid", () => {
+    const { rerender } = render(
+      <TextField
+        label="Amount"
+        testID="feedback-fallback"
+        value="12"
+        error=""
+        warning="Review this value"
+        helperText="Input guidance"
+      />
+    );
+
+    expect(screen.getByText("Review this value")).toHaveProp(
+      "className",
+      expect.stringContaining("text-gold-600")
+    );
+    expect(screen.queryByText("Input guidance")).toBeNull();
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.getByTestId("feedback-fallback")).toHaveProp(
+      "aria-invalid",
+      false
+    );
+
+    rerender(
+      <TextField
+        label="Amount"
+        testID="feedback-fallback"
+        value="12"
+        error=""
+        warning=""
+        helperText="Input guidance"
+      />
+    );
+    expect(screen.getByText("Input guidance")).toBeOnTheScreen();
+    expect(screen.queryByText("Review this value")).toBeNull();
+
+    rerender(
+      <TextField
+        label="Amount"
+        testID="feedback-fallback"
+        value="12"
+        error="Enter a valid amount"
+        warning=""
+        helperText="Input guidance"
+        accessibilityHint="Remove invalid characters"
+      />
+    );
+    fireEvent(screen.getByTestId("feedback-fallback"), "focus", {});
+    expect(
+      screen.getByRole("alert", { name: "Enter a valid amount" })
+    ).toBeOnTheScreen();
+    expect(screen.getByTestId("feedback-fallback")).toHaveProp(
+      "aria-invalid",
+      true
+    );
+    expect(screen.getByTestId("feedback-fallback")).toHaveProp(
+      "accessibilityHint",
+      "Remove invalid characters"
+    );
+    expect(screen.queryByText("Input guidance")).toBeNull();
+  });
+});
