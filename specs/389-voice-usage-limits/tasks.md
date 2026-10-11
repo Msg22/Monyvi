@@ -1306,3 +1306,72 @@ execution map in `checklists/voice-controls-r2-coverage.md`.
 IMPLEMENTED** (#391 separate research/harness, no native measurements). #384
 reservation/recovery UX remains deferred; 35-day replay semantics unchanged.
 R235 cold/warm latency is **UNMEASURED**; no 1–2s promise.
+
+## Voice startup optimization continuation — stable task IDs (12 October 2026)
+
+This append-only sequence preserves T001–T074 and every R1/R2 approval/evidence
+record. Source baseline is
+`f625183373e29d372b658c10b3848a217477400a`. Duplicate availability-hook
+instantiation was investigated and disproven: route owns the one hook and the
+flow consumes it. The source-proven performance targets are same-context
+in-flight refresh restart churn and the serial availability/permission reads
+after fresh consent.
+
+- [x] **T075 [P] [US0] Startup S1 planning/reconciliation:** audit route, flow,
+      availability, recorder-read-only and authenticated-edge boundaries;
+      reconcile FR-048–FR-052 / SC-023–SC-027; define same-context in-flight
+      coalescing, post-consent safe concurrency, privacy-safe monotonic timing,
+      deterministic test matrix and owner manual plan. No source/tests/device/
+      provider/deploy work in T075.
+- [ ] **T076 [US0] Blocking root prerequisite + read-only Speckit acceptance:**
+      root runs the correct-feature prerequisite command and canonical
+      `speckit.analyze` on the final spec/plan/tasks, confirms no
+      critical/high constitution/security/coverage conflict and explicitly
+      accepts the startup plan before T077. GitHub planning worker's semantic
+      analysis is advisory because it cannot execute repo shell prerequisites.
+- [ ] **T077 [P] [US0] Deterministic startup Red:** author one focused
+      `useVoiceAiAvailability.startup.test.tsx` plus bounded additions to
+      `useVoiceTransactionFlow.test.ts` and
+      `app/add-transaction-modes.test.tsx`. Prove same-context concurrent
+      refresh/focus/foreground joins one service call; different actor/timezone/
+      context cancels; failed/aborted work clears; consent completes before
+      concurrency; availability + non-prompting permission are simultaneously
+      in flight; blocked availability never opens OS permission; eligible
+      explicit permission recovery remains; duplicate/cancel/account/native-start
+      and same-key retry positives stay intact. Test setup/import failures do not
+      count as Red.
+- [ ] **T078 [US0] Availability coalescing implementation after accepted Red:**
+      update only `hooks/useVoiceAiAvailability.ts` to join one unresolved
+      same-user/same-timezone/current-context request. Preserve fresh server
+      response per attempt, owned-state generation guards, lifecycle/auth
+      cancellation, authoritative reconciliation and error mapping. No TTL/cache,
+      service/auth/server change.
+- [ ] **T079 [US0] Post-consent startup concurrency + optional safe timing after
+      accepted Red:** update only `hooks/useVoiceTransactionFlow.ts` and, if
+      needed for stage orchestration, `app/(private)/add-transaction.tsx`.
+      Keep fresh consent first; then overlap authoritative availability with the
+      non-prompting native permission read. Prompt the OS only from the existing
+      explicit action after eligible availability. Preserve actor/generation,
+      request identity, retry semantics, recorder `onStarted` truth, 30 s cap
+      and 300 ms post-record stabilization. Timing logs, if added, contain only
+      stage/duration and optional ephemeral attempt correlation.
+- [ ] **T080 [P] [US0] Batched Green/regression gate:** root runs the focused
+      startup tests plus retained Voice/R2/Manual/consent/quota/retry/cancellation
+      suites, full mobile TSC, changed lint/format/i18n/privacy checks. Existing
+      `authenticated-edge-function-service.test.ts` remains a positive control
+      for stable-session and 401 behavior. No device/performance claim from unit
+      Green.
+- [ ] **T081 [US0] Independent postimplementation review:** independently review
+      TypeScript/async ordering, same-context promise lifecycle, abort/actor
+      safety, explicit permission semantics, auth/security preservation,
+      no-Listening-before-record, request identity and test assertion strength.
+      Resolve actionable findings before integration.
+- [ ] **T082 [US0] Owner manual/native startup evidence:** on owner device,
+      capture separate cold/warm stage durations and validate granted/missing/
+      denied/blocked/revoked permission, slow/offline availability, rapid taps,
+      Back/Manual, foreground/background, account switch and unavailable retry.
+      Confirm actual capture starts only at native `record()`, the 300 ms
+      post-start stabilization does not delay Listening, and no provider call is
+      made before Submit. Device/Metro/Maestro/provider execution is NOT RUN by
+      this planning worker.
+

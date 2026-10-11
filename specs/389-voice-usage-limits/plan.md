@@ -1006,3 +1006,160 @@ Source hypotheses cannot be presented as measured causes or guaranteed savings.
 No new server/API/SQL/hosted, provider, financial, Manual schema, E2E/device
 execution, unapproved responsive treatment or old image/sidecar change is
 authorized by this document.
+
+## Voice startup optimization S1 — source-backed implementation plan (12 October 2026)
+
+**Pinned source:** `f625183373e29d372b658c10b3848a217477400a`.
+This section supersedes only the earlier R2 plan statement that availability
+in-flight coordination should remain untouched. The new owner instruction
+authorizes the minimum source-backed optimization below; all security, consent,
+quota, recorder, UI-binding and #391 boundaries remain.
+
+### Current startup chain
+
+```text
+Voice tap
+  -> route sets isVoiceStartPending / Starting immediately
+  -> fresh local AI consent read
+  -> flow enters starting
+  -> authoritative availability refresh
+       -> stable auth session
+       -> authenticated voice-ai-availability Edge Function
+       -> optional existing 401 refresh/retry
+  -> fresh non-prompting microphone permission read
+  -> create request identity
+  -> recorder.start()
+       -> audio mode
+       -> prepareToRecordAsync()
+       -> record()
+       -> onStarted => Listening/timer
+       -> existing 300 ms early Pause/Stop stabilization (post-start)
+```
+
+The flow consumes the route-provided availability hook. There is no second hook.
+The proven restart opportunity is inside `refresh()`: focus/foreground/start
+callers can abort and replace the same unresolved request.
+
+### Minimum production changes after accepted Red
+
+1. **`apps/mobile/hooks/useVoiceAiAvailability.ts` — same-context in-flight
+   coalescing only.**
+   - Track the unresolved request with an internal context key containing current
+     user ID, valid timezone and hook context/generation plus its promise and
+     AbortController.
+   - After normal actor/enablement/timezone validation and automatic-timer
+     clearing, return the existing unresolved promise when the key matches.
+   - Do not reuse `ownedState.availability` or any settled promise as a startup
+     cache; every start still obtains a response from an unresolved/new
+     authoritative request.
+   - Context/auth ownership change, invalid timezone, focus blur, background,
+     unmount and `reconcileAuthoritativeSnapshot` keep existing cancellation.
+     Different context cancels and replaces. Promise finalization clears only its
+     own slot.
+   - Keep existing owned-state/generation guards and error mapping; no new
+     server/API/TTL policy.
+
+2. **`apps/mobile/hooks/useVoiceTransactionFlow.ts` — overlap safe reads only
+   after fresh consent.**
+   - Keep `startPendingGenerationRef` duplicate-start prevention, operation
+     AbortController, actor checks, fresh consent and timezone checks in their
+     current order.
+   - After consent/timezone pass, start the authoritative availability promise
+     (or use an explicitly supplied fresh snapshot) and
+     `recorder.refreshPermission()` together. Await both, then re-check the
+     operation generation/actor before any state transition or recorder work.
+   - If availability is blocked/null, stop there. A completed permission read is
+     harmless local state and MUST NOT trigger the OS sheet.
+   - Only when availability is eligible may the existing explicit
+     `requestMicrophonePermission` option turn a fresh `denied` read into
+     `requestPermissionStatus()`. Blocked/unknown retain their current
+     recovery. No implicit permission prompt.
+   - Create request identity and call `recorder.start()` only after all gates
+     pass. Keep `onStarted` as the sole Listening transition and preserve
+     same-key retained submission retry.
+
+3. **`apps/mobile/app/(private)/add-transaction.tsx` — preserve route semantics;
+   add only narrow stage orchestration/diagnostics if needed.**
+   - Keep pending/Starting set before awaited consent.
+   - Keep fresh local `getAiProcessingConsentStatus()`, consent sheet,
+     generation/actor invalidation, unavailable refresh-and-auto-start and the
+     existing fresh-snapshot handoff.
+   - Do not add a second permission read or availability hook.
+   - If diagnostics are implemented here, use only monotonic stage durations and
+     privacy-safe stage labels; no IDs/audio/transcript/financial/auth data.
+
+4. **Transport/security boundaries — regression only, no production edit in S1.**
+   - `apps/mobile/services/voice-ai-availability-service.ts` continues to pass
+     AbortSignal and validate the authoritative response.
+   - `apps/mobile/services/authenticated-edge-function-service.ts` and its auth
+     coordinator retain stable-session lookup, Authorization replacement,
+     one-time 401 refresh/retry and local-session invalidation. Any future shared
+     auth optimization requires separate ownership/security review.
+   - `apps/mobile/hooks/useVoiceRecorder.ts` is read-only for this lane. Do not
+     prewarm audio mode/recorder, move `onStarted`, alter the 300 ms
+     stabilization, cap/finalization, URI cleanup or #391 behavior.
+
+### Privacy-safe latency evidence
+
+Use a monotonic clock such as `performance.now()` only if the runtime already
+supports it in the owned source path. Suggested attempt-local stages:
+
+```text
+tap -> pending-visible
+pending -> consent-fresh
+consent-fresh -> availability+permission-begin
+availability+permission-begin -> gates-resolved
+gates-resolved -> recorder-start-begin
+recorder-start-begin -> native-record-started/onStarted
+```
+
+Structured diagnostics contain stage + durationMs and, if correlation is
+necessary, an ephemeral random attempt token that is never persisted or reused
+as the Voice request key. No user/account IDs, timezone value, audio URI,
+transcript, amount/category/account data, provider payload, token or credential.
+
+### TDD and source ownership sequence
+
+- T075 (this planning package) reconciles source facts and the test/manual
+  matrix. No code/test execution is claimed.
+- T076 is a root-run blocking read-only prerequisite/Speckit acceptance on these
+  final artifacts.
+- T077 authors deterministic Red against existing boundaries before production.
+- T078 implements only availability coalescing.
+- T079 implements only post-consent concurrency and approved diagnostics/route
+  glue; recorder remains outside ownership.
+- T080 runs focused + retained regression Green/type/lint/i18n/privacy checks.
+- T081 performs independent TypeScript/async, actor/cancellation, logic,
+  security/performance and coverage review.
+- T082 is owner-only device/manual timing and native permission/audio evidence.
+
+No per-file check churn: run the focused Red batch once after T077, then one
+batched Green/integration gate after T078/T079.
+
+### Planned deterministic test files
+
+- **New focused companion:** `apps/mobile/__tests__/hooks/useVoiceAiAvailability.startup.test.tsx`
+  for same-context coalescing, focus/foreground collision, failure reset and
+  actor/timezone/background/unmount cancellation.
+- **Existing:** `apps/mobile/__tests__/hooks/useVoiceTransactionFlow.test.ts`
+  for post-consent concurrency, duplicate starts, stale actor/cancel, permission
+  states, unavailable retry, native-start truth and same-key retained retry.
+- **Existing:** `apps/mobile/__tests__/app/add-transaction-modes.test.tsx`
+  for immediate Starting, consent-first ordering, unavailable
+  refresh-and-auto-start, Back/Manual/account invalidation and Manual
+  regressions.
+- **Existing positive control:** `apps/mobile/__tests__/services/authenticated-edge-function-service.test.ts`
+  for stable auth/401 recovery semantics. Modify only if the startup change
+  actually changes its public contract (not planned).
+
+Maestro changes, if any, are authorship only and limited to deterministic UI
+journeys already supported by fixtures. No test may claim native permission
+sheet timing, audio readiness, real provider timing or E2E execution.
+
+### Explicit non-goals
+
+No TTL availability cache; no stale settled snapshot reuse; no removal of fresh
+consent/quota/permission gates; no auth/session bypass; no provider or hosted
+change; no recorder prewarm; no #391 work; no UI/copy/mockup change; no Manual
+financial change; no 1–2 second promise.
+

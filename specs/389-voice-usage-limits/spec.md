@@ -775,3 +775,108 @@ combined approval revision is
 the official verifier algorithm; PNG bytes, FR-043–FR-047, SC-019–SC-022 and all
 other facts are unchanged. Owner did not review the computed SHA. Final root
 T068 gate completed 2026-10-11 (see the actual receipt in tasks.md).
+
+## Session 2026-10-12 — Voice startup optimization S1 (owner-approved performance continuation)
+
+This additive session plans only the startup path from a valid Voice tap to true
+native capture readiness. It preserves all R1/R2 bindings, copy, controls,
+30-second active-capture behavior, explicit Submit, request identity, AI consent,
+server-authoritative quota/availability, Manual behavior and issue #391 recorder/
+empty-audio ownership.
+
+**Source audited:** `f625183373e29d372b658c10b3848a217477400a`.
+
+### Verified source facts and precedence
+
+- The route owns the single `useVoiceAiAvailability(true)` instance and passes
+  that result into `useVoiceTransactionFlow`; the flow does **not** instantiate
+  a duplicate availability hook. Any earlier duplicate-hook hypothesis is
+  disproven and MUST NOT be used as implementation rationale.
+- `requestVoiceStart` already marks the route pending before awaited work, so
+  approved Starting feedback can remain immediate while startup work proceeds.
+- A normal eligible start currently waits for fresh local AI consent, then the
+  flow performs a fresh authoritative availability request and a fresh native
+  microphone-permission read serially before recorder preparation.
+- `useVoiceAiAvailability.refresh()` currently cancels any in-flight request
+  and starts a replacement. Focus, foreground and explicit pre-start refreshes
+  can therefore restart equivalent same-actor/same-timezone work.
+- Authenticated availability uses `getStableAuthSession()` before Edge Function
+  invocation and retains the existing one-time 401 refresh/retry path. This
+  security behavior is not removed or bypassed by this optimization.
+- Recorder `record()` and `onStarted` occur before the existing 300 ms native
+  stabilization delay. That delay protects early Pause/Stop and is **not** part
+  of tap-to-capture startup latency; it remains unchanged and owned by the
+  recorder/#391 boundary.
+- FR-047 remains authoritative except for its earlier prohibition on changing
+  availability in-flight coordination on an unproven hypothesis. The owner has
+  now explicitly authorized a source-backed, same-context in-flight coalescing
+  plan. This does **not** authorize TTL caching, reuse of a settled snapshot or
+  transport/auth weakening.
+
+### Additive functional requirements
+
+- **FR-048 — Safe startup optimization without gate removal:** Voice startup
+  SHOULD eliminate proven redundant waits/work while preserving fresh local AI
+  consent, one fresh server-authoritative preattempt availability result,
+  current-actor/generation cancellation, one fresh native microphone permission
+  result, explicit OS permission request semantics, request identity, the local
+  30-second cap and no Listening before native `record()` succeeds. No fixed
+  millisecond SLA or artificial minimum delay is introduced.
+- **FR-049 — Same-context in-flight availability coalescing:** While one Voice
+  availability request is unresolved, another refresh for the same authenticated
+  actor, valid device timezone and current hook enablement/context generation
+  MUST join that same in-flight promise instead of aborting and restarting the
+  network request. A settled result MUST NOT be reused as a startup cache.
+  Actor/timezone/enablement change, focus loss, backgrounding, unmount and
+  authoritative reconciliation retain cancellation/stale-result protection.
+  Failure/abort MUST clear the coalescing slot so the next valid refresh can
+  start a new request.
+- **FR-050 — Post-consent availability/permission concurrency:** After fresh AI
+  consent is confirmed and the current actor/timezone remain valid, the flow MAY
+  perform the mandatory authoritative availability request and the
+  **non-prompting** native permission read concurrently. It MUST evaluate both
+  under the same operation generation before recorder preparation. A native OS
+  permission request remains allowed only from the existing explicit
+  `Allow microphone` action, only after availability is eligible, and never
+  from background/focus refresh. Blocked/denied/unknown/revoked handling remains
+  unchanged.
+- **FR-051 — Auth/security and retry semantics remain authoritative:** Startup
+  optimization MUST NOT bypass `getStableAuthSession`, authenticated
+  Edge-Function headers, 401 refresh/retry, server quota/consent enforcement,
+  actor scoping, retained-audio same-key retry, or fail-closed availability.
+  Availability-failure retry may join equivalent in-flight work but still
+  auto-starts only from a fresh eligible result. Retained-audio submission retry
+  does not restart microphone capture or allocate a new logical request key.
+- **FR-052 — Privacy-safe monotonic startup diagnostics:** If startup stage
+  timing is added, it MUST use a monotonic clock and record only stage names and
+  numeric durations (optionally one ephemeral per-attempt correlation token).
+  It MUST NOT log user/account/request IDs, audio/URI, transcripts, parsed or
+  financial content, auth tokens, provider payloads or credentials. Diagnostic
+  timing MUST add no sleep/artificial minimum and MUST NOT be presented as a
+  measured product improvement until owner device evidence exists.
+
+### Additive success criteria
+
+- **SC-023:** Deterministic hook tests prove simultaneous same-context refreshes,
+  including focus/foreground plus explicit start, produce exactly one
+  availability service call; different actor/timezone/context generations
+  cancel/replace safely, and settled/failed/aborted work is never reused.
+- **SC-024:** Deterministic flow tests prove fresh consent completes before
+  availability/permission work begins, then the availability request and
+  non-prompting permission read are both in flight before either must resolve.
+  Recorder preparation starts only after an eligible availability result and
+  granted permission; explicit OS permission never occurs for blocked
+  availability or without the approved user action.
+- **SC-025:** Cancellation, duplicate taps, Back/Manual switch/unmount,
+  backgrounding, account switch, denied/blocked/unknown/revoked permission,
+  recorder-start failure and unavailable retry never produce false Listening,
+  duplicate recorder starts, stale actor state or extra provider/request
+  identity. Existing retained-audio same-key retry remains unchanged.
+- **SC-026:** Authenticated-edge regression coverage retains stable-session use,
+  one 401 refresh/retry and fail-closed authentication behavior; this startup
+  slice requires no shared-auth production change.
+- **SC-027:** Owner manual evidence records cold/warm startup stage durations
+  separately and validates OS permission/capture behavior on device. Unit/source
+  evidence alone MUST NOT be called a measured latency improvement, native
+  timing proof, E2E execution or provider readiness.
+
