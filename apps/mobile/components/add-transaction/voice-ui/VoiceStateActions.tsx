@@ -215,7 +215,7 @@ export function ActionButton({
       <Ionicons name={icon} size={20} color={iconColor} />
       <Text
         style={{ fontFamily: fontFamily.semiBold }}
-        className={`min-w-0 text-center text-sm font-semibold leading-[22px] ${labelColor}`}
+        className={`min-w-0 text-center text-[14px] font-semibold leading-[22px] ${labelColor}`}
       >
         {label}
       </Text>

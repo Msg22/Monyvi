@@ -23,6 +23,7 @@ import {
   compiledVoiceCss,
   resolvedVoiceStyle,
   resolvedActionLabelStyle,
+  expectRecorderActionColorBindings,
   recorderActionRow,
   hasNativeCircularClip,
   expectPaletteHalo,
@@ -753,38 +754,7 @@ describe("real Tailwind/CSS Interop Voice native shape", () => {
         expect(label.lineHeight).toBe(22);
         expect(label.fontWeight).toBe("600");
       }
-      expect(processColor(resolvedActionLabelStyle(submit).color)).toBe(
-        processColor(palette.slate[25])
-      );
-      const submitStyle = resolvedVoiceStyle(submit);
-      expect(processColor(submitStyle.backgroundColor)).toBe(
-        processColor(palette.nileGreen[500])
-      );
-      expect(processColor(submitStyle.borderColor)).toBe(
-        processColor(palette.nileGreen[500])
-      );
-      const centerStyle = resolvedVoiceStyle(center);
-      const gray = [palette.slate[400], palette.slate[500], palette.slate[600]];
-      expect(gray.map(processColor)).toContain(processColor(centerStyle.borderColor));
-      expect(gray.map(processColor)).toContain(
-        processColor(resolvedActionLabelStyle(center).color)
-      );
-      expect(
-        centerStyle.backgroundColor === undefined ||
-          processColor(centerStyle.backgroundColor) === processColor("transparent")
-      ).toBe(true);
-
-      const discardStyle = resolvedVoiceStyle(discard);
-      expect([palette.red[500], palette.red[600]].map(processColor)).toContain(
-        processColor(discardStyle.borderColor)
-      );
-      expect([palette.red[500], palette.red[600]].map(processColor)).toContain(
-        processColor(resolvedActionLabelStyle(discard).color)
-      );
-      expect(
-        discardStyle.backgroundColor === undefined ||
-          processColor(discardStyle.backgroundColor) === processColor("transparent")
-      ).toBe(true);
+      expectRecorderActionColorBindings(submit, center, discard);
       expect(getTestInstanceProps(center).accessibilityState).toEqual(
         expect.objectContaining({ disabled: state === "completed" })
       );

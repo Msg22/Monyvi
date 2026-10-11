@@ -11,6 +11,8 @@ import {
   type ViewStyle,
 } from "react-native";
 
+import { palette } from "@/constants/colors";
+
 import {
   getTestInstanceParent,
   getTestInstanceProps,
@@ -199,3 +201,42 @@ export function expectPaletteHalo(actual: unknown, paletteColor: string): number
   return alpha / 255;
 }
 
+/** Assert approved native label, border and background colors for all R2 actions. */
+export function expectRecorderActionColorBindings(
+  submit: unknown,
+  center: unknown,
+  discard: unknown
+): void {
+  expect(processColor(resolvedActionLabelStyle(submit).color)).toBe(
+    processColor(palette.slate[25])
+  );
+  const submitStyle = resolvedVoiceStyle(submit);
+  expect(processColor(submitStyle.backgroundColor)).toBe(
+    processColor(palette.nileGreen[500])
+  );
+  expect(processColor(submitStyle.borderColor)).toBe(
+    processColor(palette.nileGreen[500])
+  );
+  const centerStyle = resolvedVoiceStyle(center);
+  const gray = [palette.slate[400], palette.slate[500], palette.slate[600]];
+  expect(gray.map(processColor)).toContain(processColor(centerStyle.borderColor));
+  expect(gray.map(processColor)).toContain(
+    processColor(resolvedActionLabelStyle(center).color)
+  );
+  expect(
+    centerStyle.backgroundColor === undefined ||
+      processColor(centerStyle.backgroundColor) === processColor("transparent")
+  ).toBe(true);
+
+  const discardStyle = resolvedVoiceStyle(discard);
+  expect([palette.red[500], palette.red[600]].map(processColor)).toContain(
+    processColor(discardStyle.borderColor)
+  );
+  expect([palette.red[500], palette.red[600]].map(processColor)).toContain(
+    processColor(resolvedActionLabelStyle(discard).color)
+  );
+  expect(
+    discardStyle.backgroundColor === undefined ||
+      processColor(discardStyle.backgroundColor) === processColor("transparent")
+  ).toBe(true);
+}
