@@ -87,13 +87,10 @@ jest.mock("@/hooks/useAddMetalHolding", () => ({
 }));
 
 const mockHistoricalManualPurchasePriceChange = jest.fn();
-let mockHistoricalEstimateOwnership:
-  | "unset"
-  | "estimated"
-  | "manual" = "unset";
-let mockHistoricalEstimateInput:
-  | { readonly onPurchasePriceChange: (value: string) => void }
-  | null = null;
+let mockHistoricalEstimateOwnership: "unset" | "estimated" | "manual" = "unset";
+let mockHistoricalEstimateInput: {
+  readonly onPurchasePriceChange: (value: string) => void;
+} | null = null;
 jest.mock("@/hooks/useMetalHistoricalPurchasePriceEstimate", () => ({
   useMetalHistoricalPurchasePriceEstimate: (input: {
     readonly onPurchasePriceChange: (value: string) => void;
@@ -480,9 +477,14 @@ describe("Add metal holding route", () => {
     const AddHoldingRoute = loadAddHoldingRoute();
     render(<AddHoldingRoute />);
 
-    const priceInput = screen.getByTestId("metal-holding-purchase-price-field");
-    fireEvent.changeText(priceInput, "1234");
-    fireEvent.changeText(priceInput, "");
+    fireEvent.changeText(
+      screen.getByTestId("metal-holding-purchase-price-field"),
+      "1234"
+    );
+    fireEvent.changeText(
+      screen.getByTestId("metal-holding-purchase-price-field"),
+      ""
+    );
 
     expect(mockHistoricalManualPurchasePriceChange).toHaveBeenNthCalledWith(
       1,

@@ -1,4 +1,5 @@
-import Decimal from "decimal.js";
+export { buildHistoricalSnapshotRateRecord } from "./historical-metal-rate-contract-remote.ts";
+import { Decimal } from "decimal.js";
 import { LosslessNumber, parse } from "lossless-json";
 
 import {
@@ -26,7 +27,10 @@ export interface HistoricalDailyRateRecordPayload {
   readonly contractVersion: 1;
   readonly providerKey: string;
   readonly rateDate: string;
-  readonly resolution: "daily";
+  readonly resolution: "daily" | "snapshot";
+  readonly snapshotId?: string;
+  readonly metalProviderObservedAt?: string;
+  readonly currencyProviderObservedAt?: string;
   readonly goldUsdPerTroyOunceDecimal: string;
   readonly silverUsdPerTroyOunceDecimal: string;
   readonly goldUsdPerPureGramDecimal: string;

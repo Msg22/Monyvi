@@ -12,7 +12,10 @@ export interface HistoricalMetalDetailCompositionInput {
   readonly purityCode: string | null;
   readonly purityFactorDecimal: string | null;
   readonly purchaseCurrency: string | null;
-  readonly rateReferences: readonly Readonly<Record<string, unknown>>[];
+  readonly rateReferences: ReadonlyArray<Readonly<Record<string, unknown>>>;
+  readonly allowNetwork?: boolean;
+  readonly expectedUserId?: string;
+  readonly signal?: AbortSignal;
 }
 
 export interface HistoricalMetalDetailCompositionDependencies {
@@ -25,8 +28,7 @@ const DEFAULT_DEPENDENCIES: HistoricalMetalDetailCompositionDependencies = {
 
 export async function composeHistoricalMetalDetailReference(
   input: HistoricalMetalDetailCompositionInput,
-  dependencies: HistoricalMetalDetailCompositionDependencies =
-    DEFAULT_DEPENDENCIES
+  dependencies: HistoricalMetalDetailCompositionDependencies = DEFAULT_DEPENDENCIES
 ): Promise<HistoricalMetalDetailReference | null> {
   if (
     input.purchaseDate === null ||
@@ -56,14 +58,17 @@ export async function composeHistoricalMetalDetailReference(
     purchaseCurrency: input.purchaseCurrency,
     acquisitionMetalReference,
     acquisitionCurrencyReference,
+    allowNetwork: input.allowNetwork ?? false,
+    expectedUserId: input.expectedUserId,
+    signal: input.signal,
   });
 }
 
 function findActionReference(
-  references: readonly Readonly<Record<string, unknown>>[],
+  references: ReadonlyArray<Readonly<Record<string, unknown>>>,
   actionId: string | null,
   role: "acquisition_metal" | "acquisition_purchase_currency"
-): RawObservedRateReference | undefined {
+): RawObservedRateReference {
   if (actionId === null) return undefined;
   return references.find(
     (reference) =>

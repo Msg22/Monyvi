@@ -829,9 +829,7 @@ end;`
           table: "recurring_payments",
           columns: [{ name: "financial_revision", type: "string" }],
         }),
-        unsafeExecuteSql(
-          ACCOUNT_FINANCIAL_EFFECTS_V29_BACKFILL_SQL
-        ),
+        unsafeExecuteSql(ACCOUNT_FINANCIAL_EFFECTS_V29_BACKFILL_SQL),
         createTable({
           name: "account_financial_effects",
           columns: [
@@ -881,6 +879,17 @@ end;`
               type: "string",
               isOptional: true,
             },
+            { name: "snapshot_id", type: "string", isOptional: true },
+            {
+              name: "metal_provider_observed_at",
+              type: "string",
+              isOptional: true,
+            },
+            {
+              name: "currency_provider_observed_at",
+              type: "string",
+              isOptional: true,
+            },
             { name: "fetched_at", type: "number" },
             { name: "response_digest", type: "string" },
             { name: "source", type: "string" },
@@ -891,7 +900,7 @@ end;`
           ],
         }),
         unsafeExecuteSql(
-          'create unique index if not exists "metal_historical_rate_cache_owner_provider_date_unique" on "metal_historical_rate_cache" ("user_id", "provider_key", "rate_date");'
+          'create unique index if not exists "metal_historical_rate_cache_owner_date_unique" on "metal_historical_rate_cache" ("user_id", "rate_date");'
         ),
       ],
     },

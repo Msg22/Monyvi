@@ -1,11 +1,11 @@
 import {
   HistoricalMetalRateContractError,
-  buildHistoricalDailyRateRecord,
+  buildHistoricalSnapshotRateRecord,
   type HistoricalMetalRateContractErrorCode,
 } from "../_shared/historical-metal-rate-contract.ts";
 import { withTimeout } from "../_shared/promise-timeout.ts";
 
-const PROVIDER_TIMEOUT_MS = 10_000;
+const REMOTE_TIMEOUT_MS = 10_000;
 
 const CORS_HEADERS: Readonly<Record<string, string>> = {
   "Access-Control-Allow-Origin": "*",
@@ -21,7 +21,7 @@ type HandlerErrorCode =
   | "internal_error"
   | "invalid_request"
   | "method_not_allowed"
-  | "provider_error";
+  | "remote_rate_error";
 
 class FetchHistoricalMetalRateHandlerError extends Error {
   public constructor(
@@ -33,10 +33,17 @@ class FetchHistoricalMetalRateHandlerError extends Error {
   }
 }
 
+export interface RemoteHistoricalRateRows {
+  readonly rawRootResponseText: string;
+  readonly rawObservationResponseText: string;
+}
+
 export interface FetchHistoricalMetalRateHandlerDependencies {
   readonly authenticate: (request: Request) => Promise<string | null>;
-  readonly getEnv: (name: string) => string | undefined;
-  readonly fetch: (url: string, signal: AbortSignal) => Promise<Response>;
+  readonly readRemoteRates: (
+    date: string,
+    signal: AbortSignal
+  ) => Promise<RemoteHistoricalRateRows>;
   readonly now: () => Date;
   readonly sha256Hex: (value: string) => Promise<string>;
 }
@@ -62,55 +69,41 @@ export function createFetchHistoricalMetalRateHandler(
       }
 
       const date = await readRequestDate(request);
-      const apiKey =
-        dependencies.getEnv("METALS.DEV_API_KEY") ??
-        dependencies.getEnv("METALS_DEV_API_KEY");
-      if (!apiKey) {
-        throw new FetchHistoricalMetalRateHandlerError(
-          "configuration_error",
-          500
-        );
-      }
-
-      const providerUrl = new URL("https://api.metals.dev/v1/timeseries");
-      providerUrl.searchParams.set("api_key", apiKey);
-      providerUrl.searchParams.set("start_date", date);
-      providerUrl.searchParams.set("end_date", date);
-
-      const rawResponseText = await withTimeout(
-        async (signal): Promise<string> => {
-          const response = await dependencies.fetch(
-            providerUrl.toString(),
-            signal
-          );
-          if (!response.ok) {
-            throw new FetchHistoricalMetalRateHandlerError(
-              "provider_error",
-              502
-            );
-          }
-          return response.text();
-        },
-        PROVIDER_TIMEOUT_MS
+      if (request.signal.aborted)
+        return jsonResponse({ success: false, code: "request_cancelled" }, 499);
+      const remote = await withTimeout(
+        (signal): Promise<RemoteHistoricalRateRows> =>
+          dependencies.readRemoteRates(date, signal),
+        REMOTE_TIMEOUT_MS,
+        request.signal
       );
+      if (request.signal.aborted)
+        return jsonResponse({ success: false, code: "request_cancelled" }, 499);
 
       const fetchedAtDate = dependencies.now();
       if (!Number.isFinite(fetchedAtDate.getTime())) {
         throw new FetchHistoricalMetalRateHandlerError("internal_error", 500);
       }
 
-      const responseDigest = await dependencies.sha256Hex(rawResponseText);
-      const record = buildHistoricalDailyRateRecord({
-        rawResponseText,
+      const responseDigest = await dependencies.sha256Hex(
+        JSON.stringify([
+          remote.rawRootResponseText,
+          remote.rawObservationResponseText,
+        ])
+      );
+      const record = buildHistoricalSnapshotRateRecord({
+        ...remote,
         requestedDate: date,
         fetchedAt: fetchedAtDate.toISOString(),
         responseDigest,
       });
 
+      if (request.signal.aborted)
+        return jsonResponse({ success: false, code: "request_cancelled" }, 499);
       return jsonResponse({ success: true, record }, 200);
     } catch (error: unknown) {
       if (error instanceof Error && error.name === "TimeoutError") {
-        return jsonResponse({ success: false, code: "provider_error" }, 504);
+        return jsonResponse({ success: false, code: "remote_rate_error" }, 504);
       }
       if (error instanceof FetchHistoricalMetalRateHandlerError) {
         return jsonResponse({ success: false, code: error.code }, error.status);
@@ -118,7 +111,9 @@ export function createFetchHistoricalMetalRateHandler(
       if (error instanceof HistoricalMetalRateContractError) {
         return historicalContractErrorResponse(error.code);
       }
-      return jsonResponse({ success: false, code: "internal_error" }, 500);
+      if (request.signal.aborted)
+        return jsonResponse({ success: false, code: "request_cancelled" }, 499);
+      return jsonResponse({ success: false, code: "remote_rate_error" }, 502);
     }
   };
 }
@@ -150,7 +145,7 @@ function historicalContractErrorResponse(
   if (code === "date_unavailable") {
     return jsonResponse({ success: false, code: "date_unavailable" }, 404);
   }
-  return jsonResponse({ success: false, code: "provider_error" }, 502);
+  return jsonResponse({ success: false, code: "remote_rate_error" }, 502);
 }
 
 function isExactCalendarDate(value: string): boolean {

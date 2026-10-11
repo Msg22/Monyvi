@@ -16,7 +16,9 @@ import {
 import {
   readHistoricalDailyRateCache,
   saveHistoricalDailyRateCache,
+  METAL_HISTORICAL_RATE_CACHE_ERROR_CODES,
 } from "./metal-historical-rate-cache-service";
+import { assertExpectedCurrentUser } from "./user-data-access";
 
 export type PurchaseDateHistoricalRateUnavailableReason =
   | "cache_miss"
@@ -46,6 +48,8 @@ export interface ResolvePurchaseDateHistoricalRateInput {
   readonly actionMetalReference?: RawObservedRateReference;
   readonly actionCurrencyReference?: RawObservedRateReference;
   readonly allowNetwork?: boolean;
+  readonly expectedUserId?: string;
+  readonly signal?: AbortSignal;
 }
 
 export interface PurchaseDateHistoricalRateDependencies {
@@ -64,6 +68,7 @@ export async function resolvePurchaseDateHistoricalRate(
   input: ResolvePurchaseDateHistoricalRateInput,
   dependencies: PurchaseDateHistoricalRateDependencies = DEFAULT_DEPENDENCIES
 ): Promise<PurchaseDateHistoricalRateResolution> {
+  const scopedDependencies = createScopedDependencies(input, dependencies);
   if (
     !isExactCalendarDate(input.purchaseDate) ||
     !isSupportedMetalsIsoCurrencyCode(input.purchaseCurrency)
@@ -89,7 +94,7 @@ export async function resolvePurchaseDateHistoricalRate(
 
   let cached;
   try {
-    cached = await dependencies.readCache(input.purchaseDate);
+    cached = await scopedDependencies.readCache(input.purchaseDate);
   } catch (error: unknown) {
     return {
       status: "fetch_failed",
@@ -112,14 +117,13 @@ export async function resolvePurchaseDateHistoricalRate(
   if (input.allowNetwork === false) {
     return {
       status: "unavailable",
-      reason:
-        cached === null ? "cache_miss" : "purchase_currency_unavailable",
+      reason: cached === null ? "cache_miss" : "purchase_currency_unavailable",
     };
   }
 
   try {
-    const fetched = await dependencies.fetchDaily(input.purchaseDate);
-    await dependencies.saveCache(fetched);
+    const fetched = await scopedDependencies.fetchDaily(input.purchaseDate);
+    await scopedDependencies.saveCache(fetched);
     const fetchedPair = selectHistoricalDailyRatePair({
       record: fetched,
       purchaseDate: input.purchaseDate,
@@ -144,4 +148,49 @@ export async function resolvePurchaseDateHistoricalRate(
       error: error instanceof Error ? error : new Error(String(error)),
     };
   }
+}
+
+function createScopedDependencies(
+  input: ResolvePurchaseDateHistoricalRateInput,
+  dependencies: PurchaseDateHistoricalRateDependencies
+): PurchaseDateHistoricalRateDependencies {
+  if (input.expectedUserId === undefined && input.signal === undefined)
+    return dependencies;
+  return {
+    readCache: (date): ReturnType<typeof readHistoricalDailyRateCache> =>
+      runScoped(input, () => dependencies.readCache(date)),
+    fetchDaily: (date): ReturnType<typeof fetchHistoricalDailyRate> =>
+      runScoped(input, () => dependencies.fetchDaily(date, input.signal)),
+    saveCache: (record): ReturnType<typeof saveHistoricalDailyRateCache> =>
+      runScoped(input, () =>
+        dependencies.saveCache(record, undefined, {
+          expectedUserId: input.expectedUserId,
+          signal: input.signal,
+        })
+      ),
+  };
+}
+
+async function runScoped<T>(
+  input: ResolvePurchaseDateHistoricalRateInput,
+  work: () => Promise<T>
+): Promise<T> {
+  await assertRequestCurrent(input);
+  const result = await work();
+  await assertRequestCurrent(input);
+  return result;
+}
+
+async function assertRequestCurrent(
+  input: ResolvePurchaseDateHistoricalRateInput
+): Promise<void> {
+  assertRequestNotCancelled(input.signal);
+  if (input.expectedUserId !== undefined)
+    await assertExpectedCurrentUser(input.expectedUserId);
+  assertRequestNotCancelled(input.signal);
+}
+
+function assertRequestNotCancelled(signal: AbortSignal | undefined): void {
+  if (signal?.aborted === true)
+    throw new Error(METAL_HISTORICAL_RATE_CACHE_ERROR_CODES.CANCELLED);
 }

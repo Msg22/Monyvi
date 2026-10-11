@@ -1,4 +1,6 @@
 import { act, renderHook, waitFor } from "@testing-library/react-native";
+import type { MetalDetailReadModel } from "@/services/metal-detail-read-model-service";
+import type { HistoricalMetalDetailReference } from "@/services/metal-historical-detail-facade-service";
 
 interface MockSubscription {
   readonly unsubscribe: jest.Mock<void, []>;
@@ -39,6 +41,7 @@ const mockAppStateRemove = jest.fn<void, []>();
 const mockLocalObservers: MockLocalObserver[] = [];
 let mockAppStateListener: ((state: string) => void) | null = null;
 let mockUserId: string | null = "user-1";
+let mockIsFocused = true;
 
 const mockCreateLocalQuery = jest.fn<MockLocalQuery, []>(() => {
   const source = {
@@ -81,12 +84,13 @@ const mockObserveMetalDetailRateReferences = jest.fn<
   [string, string]
 >(() => mockCreateLocalQuery());
 const mockReadMetalDetailReadModel = jest.fn<Promise<unknown>, [unknown]>();
+const mockReadHistoricalReference = jest.fn<Promise<unknown>, [unknown]>();
 const mockSyncDatabase = jest.fn<Promise<void>, [unknown]>(() =>
   Promise.resolve()
 );
 
 jest.mock("@react-navigation/native", () => ({
-  useIsFocused: (): boolean => true,
+  useIsFocused: (): boolean => mockIsFocused,
 }));
 
 jest.mock("@/hooks/useCurrentUser", () => ({
@@ -163,6 +167,8 @@ jest.mock("@/services/metal-detail-read-model-service", () => ({
     mockObserveMetalDetailRateReferences(...args),
   readMetalDetailReadModel: (...args: [unknown]) =>
     mockReadMetalDetailReadModel(...args),
+  readMetalDetailPurchaseDateMarketReference: (...args: [unknown]) =>
+    mockReadHistoricalReference(...args),
 }));
 
 jest.mock("@/services/sync", () => ({
@@ -213,9 +219,12 @@ function selectedSnapshot(
 describe("useMetalHoldingDetail", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockReadHistoricalReference.mockReset();
+    mockReadHistoricalReference.mockResolvedValue(null);
     mockLocalObservers.splice(0);
     mockAppStateListener = null;
     mockUserId = "user-1";
+    mockIsFocused = true;
     mockMarketRatesListeners.clear();
     mockMarketRatesState = {
       currentError: null,
@@ -375,6 +384,7 @@ describe("useMetalHoldingDetail", () => {
       expect(mockReadMetalDetailReadModel).toHaveBeenLastCalledWith({
         currentRates: updatedRates,
         holdingId: "holding-1",
+        includePurchaseDateMarketReference: true,
         preferredCurrency: "EGP",
         snapshotId: "snapshot-1",
         userId: "user-1",
@@ -540,4 +550,199 @@ describe("useMetalHoldingDetail", () => {
     await waitFor(() => expect(result.current.error).toBeNull());
     await waitFor(() => expect(result.current.model).toBe(model));
   });
+
+  it("renders local facts while independent historical enrichment is still pending", async () => {
+    let resolveHistory: ((value: unknown) => void) | null = null;
+    const localModel = historicalModel("2026-10-10");
+    mockReadMetalDetailReadModel.mockResolvedValue(localModel);
+    mockReadHistoricalReference.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveHistory = resolve;
+        })
+    );
+    const { result } = renderHook(() => useMetalHoldingDetail("holding-1"));
+    await waitFor(() => expect(result.current.model).toBe(localModel));
+    expect(result.current.isLoading).toBe(false);
+    await waitFor(() =>
+      expect(mockReadHistoricalReference).toHaveBeenCalledTimes(1)
+    );
+    act(() => {
+      resolveHistory?.(availableHistory);
+    });
+    await waitFor(() =>
+      expect(result.current.model?.purchaseDateMarketReference).toEqual(
+        availableHistory
+      )
+    );
+  });
+
+  it.each(["offline", "cached"] as const)(
+    "does not request history when %s",
+    async (scenario) => {
+      mockMarketRatesState = {
+        ...mockMarketRatesState,
+        isConnected: scenario !== "offline",
+      };
+      mockReadMetalDetailReadModel.mockResolvedValue(
+        scenario === "cached"
+          ? {
+              ...historicalModel("2026-10-10"),
+              purchaseDateMarketReference: availableHistory,
+            }
+          : historicalModel("2026-10-10")
+      );
+      const { result } = renderHook(() => useMetalHoldingDetail("holding-1"));
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+      expect(mockReadHistoricalReference).not.toHaveBeenCalled();
+    }
+  );
+
+  it("does not storm history on live-rate/local refreshes and permits explicit retry", async () => {
+    mockReadMetalDetailReadModel.mockResolvedValue(
+      historicalModel("2026-10-10")
+    );
+    mockReadHistoricalReference.mockResolvedValue({
+      status: "fetch_failed",
+      error: new Error("history unavailable"),
+    });
+    const { result } = renderHook(() => useMetalHoldingDetail("holding-1"));
+    await waitFor(() =>
+      expect(mockReadHistoricalReference).toHaveBeenCalledTimes(1)
+    );
+    act(() => {
+      emitMarketRates({
+        selectedSnapshot: {
+          ...initialSelectedSnapshot,
+          snapshotId: "snapshot-2",
+        },
+      });
+      mockLocalObservers[0]?.next();
+    });
+    await waitFor(() =>
+      expect(mockReadMetalDetailReadModel).toHaveBeenCalledTimes(2)
+    );
+    expect(mockReadHistoricalReference).toHaveBeenCalledTimes(1);
+    act(() => result.current.retry());
+    await waitFor(() =>
+      expect(mockReadHistoricalReference).toHaveBeenCalledTimes(2)
+    );
+  });
+
+  it.each(["date", "holding", "user"] as const)(
+    "cancels and ignores historical responses after %s changes",
+    async (change) => {
+      let resolveHistory: ((value: unknown) => void) | null = null;
+      mockReadMetalDetailReadModel.mockResolvedValue(
+        historicalModel("2026-10-10")
+      );
+      mockReadHistoricalReference.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveHistory = resolve;
+          })
+      );
+      const { result, rerender } = renderHook(
+        ({ id }: { id: string }) => useMetalHoldingDetail(id),
+        { initialProps: { id: "holding-1" } }
+      );
+      await waitFor(() =>
+        expect(mockReadHistoricalReference).toHaveBeenCalledTimes(1)
+      );
+      const firstOptions = mockReadHistoricalReference.mock.calls[0]?.[0];
+      const firstSignal =
+        typeof firstOptions === "object" &&
+        firstOptions !== null &&
+        "signal" in firstOptions
+          ? firstOptions.signal
+          : null;
+      const nextModel = historicalModel("2026-10-09");
+      mockReadMetalDetailReadModel.mockResolvedValue(nextModel);
+      if (change === "user") mockUserId = "user-2";
+      act(() => {
+        if (change === "date") mockLocalObservers[0]?.next();
+      });
+      rerender({ id: change === "holding" ? "holding-2" : "holding-1" });
+      await waitFor(() => expect(result.current.model).toBe(nextModel));
+      expect(firstSignal).toHaveProperty("aborted", true);
+      act(() => {
+        resolveHistory?.(availableHistory);
+      });
+      expect(result.current.model).toBe(nextModel);
+    }
+  );
+
+  it("cancels enrichment when Details unmounts", async () => {
+    mockReadMetalDetailReadModel.mockResolvedValue(
+      historicalModel("2026-10-10")
+    );
+    mockReadHistoricalReference.mockImplementationOnce(
+      () => new Promise(() => undefined)
+    );
+    const { unmount } = renderHook(() => useMetalHoldingDetail("holding-1"));
+    await waitFor(() =>
+      expect(mockReadHistoricalReference).toHaveBeenCalledTimes(1)
+    );
+    const options = mockReadHistoricalReference.mock.calls[0]?.[0];
+    unmount();
+    expect(options).toEqual(
+      expect.objectContaining({
+        signal: expect.objectContaining({ aborted: true }) as unknown,
+      })
+    );
+  });
+
+  it("cancels enrichment when Details loses focus and starts a fresh attempt on return", async () => {
+    mockReadMetalDetailReadModel.mockResolvedValue(
+      historicalModel("2026-10-10")
+    );
+    mockReadHistoricalReference.mockImplementation(
+      () => new Promise(() => undefined)
+    );
+    const { rerender } = renderHook(() => useMetalHoldingDetail("holding-1"));
+    await waitFor(() =>
+      expect(mockReadHistoricalReference).toHaveBeenCalledTimes(1)
+    );
+    const options = mockReadHistoricalReference.mock.calls[0]?.[0];
+    mockIsFocused = false;
+    rerender({});
+    expect(options).toEqual(
+      expect.objectContaining({
+        signal: expect.objectContaining({ aborted: true }) as unknown,
+      })
+    );
+    mockIsFocused = true;
+    rerender({});
+    await waitFor(() =>
+      expect(mockReadHistoricalReference).toHaveBeenCalledTimes(2)
+    );
+  });
 });
+
+const availableHistory: HistoricalMetalDetailReference = {
+  status: "available",
+  rateDate: "2026-10-10",
+  purchaseCurrency: "EGP",
+  selectedPurityPerGramDecimal: "5000",
+  origin: "daily_history",
+};
+
+function historicalModel(
+  contextKey: string
+): Pick<
+  MetalDetailReadModel,
+  | "id"
+  | "isActiveOwnership"
+  | "purchaseDateMarketReferenceContextKey"
+  | "purchaseDateMarketReference"
+> {
+  return {
+    id: "holding-1",
+    isActiveOwnership: true,
+    purchaseDateMarketReferenceContextKey: contextKey,
+    purchaseDateMarketReference: {
+      status: "unavailable",
+      reason: "cache_miss",
+    },
+  };
+}

@@ -20,6 +20,13 @@ export class MetalHistoricalRateCache extends Model {
   public currenciesUsdPerUnitJson!: string;
   @field("provider_response_timestamp")
   public providerResponseTimestamp!: string | null;
+  @field("snapshot_id") public snapshotId!: string | null;
+  @field("metal_provider_observed_at") public metalProviderObservedAt!:
+    | string
+    | null;
+  @field("currency_provider_observed_at") public currencyProviderObservedAt!:
+    | string
+    | null;
   @date("fetched_at") public fetchedAt!: Date;
   @field("response_digest") public responseDigest!: string;
   @field("source") public source!: string;

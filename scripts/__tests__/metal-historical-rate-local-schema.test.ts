@@ -16,36 +16,61 @@ describe("#355 local historical cache schema preservation", () => {
     expect(generator).toContain("...METAL_HISTORICAL_RATE_CACHE_TABLES");
   });
 
-  it("registers schema version 30 and its sequential local migration", () => {
+  it("preserves migration30 before the optional metadata migration31", () => {
     const schema = source("packages/db/src/schema.ts");
     const migrations = source("packages/db/src/migrations.ts");
-
-    expect(schema).toContain("version: 30");
+    const versionMatch = schema.match(/version:\s*(30|31)\b/);
+    expect(versionMatch).not.toBeNull();
     expect(schema).toContain("...METAL_HISTORICAL_RATE_CACHE_TABLES");
-    expect(migrations).toContain("toVersion: 30");
+    const historicalMigration = migrations.indexOf("toVersion: 30");
+    expect(historicalMigration).toBeGreaterThanOrEqual(0);
     expect(migrations).toContain('name: "metal_historical_rate_cache"');
     expect(migrations).toContain(
-      "metal_historical_rate_cache_owner_provider_date_unique"
+      "metal_historical_rate_cache_owner_date_unique"
     );
+    if (versionMatch?.[1] === "31") {
+      expect(migrations.indexOf("toVersion: 31")).toBeGreaterThan(
+        historicalMigration
+      );
+      expect(migrations).toContain('name: "metal_metadata_edit_outcomes"');
+    }
   });
 
-  it("registers one owner/provider/date uniqueness guard without adding a Supabase-generated table", () => {
-    const localSchemaSource = source(
+  it("registers owner/date uniqueness and nullable snapshot proof in schema and migration", () => {
+    const localSchema = source(
       "packages/db/src/local-schema/metal-historical-rate-cache-schema.ts"
     );
-    expect(localSchemaSource).toContain(
-      "metal_historical_rate_cache_owner_provider_date_unique"
-    );
-    expect(localSchemaSource).toContain(
-      '"user_id", "provider_key", "rate_date"'
-    );
+    const migrations = source("packages/db/src/migrations.ts");
+    for (const text of [localSchema, migrations]) {
+      expect(text).toContain("metal_historical_rate_cache_owner_date_unique");
+      expect(text).toContain('("user_id", "rate_date")');
+      expect(text).not.toContain(
+        "metal_historical_rate_cache_owner_provider_date_unique"
+      );
+      for (const field of [
+        "snapshot_id",
+        "metal_provider_observed_at",
+        "currency_provider_observed_at",
+      ]) {
+        expect(text).toMatch(
+          new RegExp(
+            'name: "' + field + '",\\s*type: "string",\\s*isOptional: true'
+          )
+        );
+      }
+    }
+  });
 
+  it("keeps the local cache outside the Supabase generated table declarations", () => {
     const transform = source("scripts/transform-schema.js");
     const excludedDeclaration = transform.match(
       /const EXCLUDED_TABLES = \[[\s\S]*?\];/
     );
+    expect(excludedDeclaration).not.toBeNull();
     expect(excludedDeclaration?.[0]).not.toContain(
       "metal_historical_rate_cache"
     );
+    const remoteTypes = source("packages/db/src/supabase-types.ts");
+    expect(remoteTypes).not.toContain("metal_historical_rate_cache:");
   });
 });

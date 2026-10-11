@@ -1,177 +1,133 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-
 import {
   createFetchHistoricalMetalRateHandler,
   type FetchHistoricalMetalRateHandlerDependencies,
 } from "./handler.ts";
+import {
+  DATE,
+  FETCHED_AT,
+  DIGEST,
+  root,
+  atoms,
+  raw,
+} from "./remote-fixture.test-data.ts";
 
-const DATE = "2026-10-10";
-const FETCHED_AT = "2026-10-10T15:00:00.000Z";
-const DIGEST =
-  "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
-const RAW = [
-  '{"status":"success","currency":"USD","unit":"toz",',
-  '"start_date":"2026-10-10","end_date":"2026-10-10",',
-  '"rates":{"2026-10-10":{"date":"2026-10-10",',
-  '"currencies":{"USD":1,"EGP":0.02},',
-  '"metals":{"gold":1932.12,"silver":23.45}}}}',
-].join("");
-
-interface Harness {
-  readonly dependencies: FetchHistoricalMetalRateHandlerDependencies;
-  readonly urls: string[];
-}
-
-function harness(options?: {
-  readonly authenticated?: boolean;
-  readonly apiKey?: string;
-  readonly providerResponse?: Response;
-}): Harness {
-  const urls: string[] = [];
-  const providerResponse =
-    options?.providerResponse ?? new Response(RAW, { status: 200 });
-  Object.defineProperty(providerResponse, "json", {
-    configurable: true,
-    value: (): never => {
-      throw new Error("provider response.json must not be authoritative");
+function harness(
+  options: {
+    authenticated?: boolean;
+    remoteError?: boolean;
+    empty?: boolean;
+  } = {}
+): {
+  dependencies: FetchHistoricalMetalRateHandlerDependencies;
+  calls: string[];
+} {
+  const calls: string[] = [];
+  const dependencies: FetchHistoricalMetalRateHandlerDependencies = {
+    authenticate: async (): Promise<string | null> =>
+      options.authenticated === false ? null : "user-1",
+    readRemoteRates: async (
+      date,
+      signal
+    ): Promise<{
+      rawRootResponseText: string;
+      rawObservationResponseText: string;
+    }> => {
+      calls.push(date);
+      assert.equal(signal.aborted, false);
+      if (options.remoteError) throw new Error("private database diagnostics");
+      return {
+        rawRootResponseText: raw(options.empty ? [] : [root()]),
+        rawObservationResponseText: raw(options.empty ? [] : atoms()),
+      };
     },
-  });
-
-  return {
-    urls,
-    dependencies: {
-      authenticate: async (): Promise<string | null> =>
-        options?.authenticated === false ? null : "user-1",
-      getEnv: (name): string | undefined =>
-        name === "METALS.DEV_API_KEY"
-          ? (options?.apiKey ?? "server-only-provider-key")
-          : undefined,
-      fetch: async (url): Promise<Response> => {
-        urls.push(url);
-        return providerResponse;
-      },
-      now: (): Date => new Date(FETCHED_AT),
-      sha256Hex: async (): Promise<string> => DIGEST,
-    },
+    now: (): Date => new Date(FETCHED_AT),
+    sha256Hex: async (): Promise<string> => DIGEST,
   };
+  return { dependencies, calls };
 }
 
 async function invoke(
-  testHarness: Harness,
-  body: unknown = { date: DATE },
-  method: string = "POST"
-): Promise<{ readonly response: Response; readonly body: Record<string, unknown> }> {
-  const response = await createFetchHistoricalMetalRateHandler(
-    testHarness.dependencies
-  )(
-    new Request("https://example.test/fetch-historical-metal-rate", {
-      method,
-      ...(method === "POST"
-        ? {
-            body: JSON.stringify(body),
-            headers: { "content-type": "application/json" },
-          }
-        : {}),
+  h: ReturnType<typeof harness>,
+  body: unknown = { date: DATE }
+): Promise<Response> {
+  return createFetchHistoricalMetalRateHandler(h.dependencies)(
+    new Request("https://example.test", {
+      method: "POST",
+      body: JSON.stringify(body),
+      headers: { "content-type": "application/json" },
     })
   );
-  const parsed = (await response.json()) as Record<string, unknown>;
-  return { response, body: parsed };
 }
 
-test("requests exactly one provider calendar date and returns normalized history", async () => {
+test("authenticated exact-date remote lookup requires no provider key or provider HTTP", async () => {
   const h = harness();
-  const result = await invoke(h);
-
-  assert.equal(result.response.status, 200);
-  assert.equal(result.body["success"], true);
-  assert.equal(h.urls.length, 1);
-  const url = new URL(h.urls[0]);
-  assert.equal(url.pathname, "/v1/timeseries");
-  assert.equal(url.searchParams.get("start_date"), DATE);
-  assert.equal(url.searchParams.get("end_date"), DATE);
-  assert.equal(url.searchParams.get("api_key"), "server-only-provider-key");
-
-  const record = result.body["record"] as Record<string, unknown>;
-  assert.equal(record["rateDate"], DATE);
-  assert.equal(record["providerKey"], "metals.dev");
-  assert.equal(record["responseDigest"], DIGEST);
-  assert.equal(JSON.stringify(result.body).includes("server-only-provider-key"), false);
+  const response = await invoke(h);
+  assert.equal(response.status, 200);
+  assert.deepEqual(h.calls, [DATE]);
+  const body: unknown = await response.json();
+  assert.ok(typeof body === "object" && body !== null && "record" in body);
+  const record = body.record;
+  assert.ok(
+    typeof record === "object" &&
+      record !== null &&
+      "resolution" in record &&
+      "source" in record
+  );
+  assert.equal(record.resolution, "snapshot");
+  assert.equal(record.source, "stored-provider");
 });
 
-test("rejects signed-out calls before provider access", async () => {
-  const h = harness({ authenticated: false });
-  const result = await invoke(h);
-
-  assert.equal(result.response.status, 401);
-  assert.equal(result.body["code"], "authentication_required");
-  assert.equal(h.urls.length, 0);
-});
-
-test("rejects invalid or extra request fields before provider access", async () => {
+test("authentication and date validation happen before remote reads", async () => {
+  const signedOut = harness({ authenticated: false });
+  assert.equal((await invoke(signedOut)).status, 401);
+  assert.equal(signedOut.calls.length, 0);
   for (const body of [
     { date: "2026-02-30" },
-    { date: "10/10/2026" },
     { date: DATE, nearest: true },
+    { date: "10/10/2026" },
   ]) {
     const h = harness();
-    const result = await invoke(h, body);
-    assert.equal(result.response.status, 400);
-    assert.equal(result.body["code"], "invalid_request");
-    assert.equal(h.urls.length, 0);
+    assert.equal((await invoke(h, body)).status, 400);
+    assert.equal(h.calls.length, 0);
   }
 });
 
-test("missing provider key fails without provider access", async () => {
-  const h = harness({ apiKey: "" });
-  const result = await invoke(h);
-
-  assert.equal(result.response.status, 500);
-  assert.equal(result.body["code"], "configuration_error");
-  assert.equal(h.urls.length, 0);
+test("remote absence and database failure remain honest unavailable/retry states", async () => {
+  assert.equal((await invoke(harness({ empty: true }))).status, 404);
+  const response = await invoke(harness({ remoteError: true }));
+  assert.equal(response.status, 502);
+  const body: unknown = await response.json();
+  assert.deepEqual(body, { success: false, code: "remote_rate_error" });
 });
 
-test("missing exact date is unavailable rather than substituted", async () => {
-  const h = harness({
-    providerResponse: new Response(
-      RAW.replace(
-        '"rates":{"2026-10-10":{"date":"2026-10-10"',
-        '"rates":{"2026-10-09":{"date":"2026-10-09"'
-      ),
-      { status: 200 }
-    ),
-  });
-  const result = await invoke(h);
-
-  assert.equal(result.response.status, 404);
-  assert.equal(result.body["code"], "date_unavailable");
-});
-
-test("provider failure returns an honest error without leaking body or key", async () => {
-  const h = harness({
-    providerResponse: new Response("provider diagnostic", { status: 503 }),
-  });
-  const result = await invoke(h);
-
-  assert.equal(result.response.status, 502);
-  assert.equal(result.body["code"], "provider_error");
-  assert.equal(JSON.stringify(result.body).includes("provider diagnostic"), false);
-  assert.equal(JSON.stringify(result.body).includes("server-only-provider-key"), false);
-});
-
-test("OPTIONS succeeds without auth or provider access", async () => {
+test("OPTIONS/unsupported method does no auth or remote work", async () => {
   const h = harness({ authenticated: false });
-  const response = await createFetchHistoricalMetalRateHandler(h.dependencies)(
-    new Request("https://example.test", { method: "OPTIONS" })
+  const handler = createFetchHistoricalMetalRateHandler(h.dependencies);
+  assert.equal(
+    (await handler(new Request("https://example.test", { method: "OPTIONS" })))
+      .status,
+    200
   );
-  assert.equal(response.status, 200);
-  assert.equal(h.urls.length, 0);
+  assert.equal(
+    (await handler(new Request("https://example.test"))).status,
+    405
+  );
+  assert.equal(h.calls.length, 0);
 });
 
-test("unsupported methods fail before auth/provider work", async () => {
+test("already aborted request does not begin remote read", async () => {
   const h = harness();
-  const result = await invoke(h, undefined, "GET");
-  assert.equal(result.response.status, 405);
-  assert.equal(result.body["code"], "method_not_allowed");
-  assert.equal(h.urls.length, 0);
+  const controller = new AbortController();
+  controller.abort();
+  const response = await createFetchHistoricalMetalRateHandler(h.dependencies)(
+    new Request("https://example.test", {
+      method: "POST",
+      body: JSON.stringify({ date: DATE }),
+      signal: controller.signal,
+    })
+  );
+  assert.equal(response.status, 499);
+  assert.equal(h.calls.length, 0);
 });

@@ -1,6 +1,7 @@
 import "edge-runtime";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
+import { readRemoteHistoricalRates } from "./remote-reader.ts";
 import type { Database } from "../../../packages/db/src/supabase-types.ts";
 import {
   createFetchHistoricalMetalRateHandler,
@@ -37,8 +38,22 @@ async function sha256Hex(value: string): Promise<string> {
 
 const dependencies: FetchHistoricalMetalRateHandlerDependencies = {
   authenticate,
-  getEnv: (name): string | undefined => Deno.env.get(name),
-  fetch: (url, signal): Promise<Response> => fetch(url, { signal }),
+  readRemoteRates: (
+    date,
+    signal
+  ): ReturnType<typeof readRemoteHistoricalRates> => {
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!supabaseUrl || !serviceRoleKey)
+      throw new Error("Supabase environment is not configured");
+    return readRemoteHistoricalRates({
+      date,
+      signal,
+      supabaseUrl,
+      serviceRoleKey,
+      fetch: (url, init): Promise<Response> => fetch(url, init),
+    });
+  },
   now: (): Date => new Date(),
   sha256Hex,
 };

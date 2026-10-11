@@ -20,6 +20,8 @@ export interface HistoricalMetalDetailInput {
   readonly acquisitionMetalReference?: RawObservedRateReference;
   readonly acquisitionCurrencyReference?: RawObservedRateReference;
   readonly allowNetwork?: boolean;
+  readonly expectedUserId?: string;
+  readonly signal?: AbortSignal;
 }
 
 export type HistoricalMetalDetailReference =
@@ -56,6 +58,8 @@ export async function readHistoricalMetalDetailReference(
       actionMetalReference: input.acquisitionMetalReference,
       actionCurrencyReference: input.acquisitionCurrencyReference,
       allowNetwork: input.allowNetwork,
+      expectedUserId: input.expectedUserId,
+      signal: input.signal,
     },
     dependencies
   );

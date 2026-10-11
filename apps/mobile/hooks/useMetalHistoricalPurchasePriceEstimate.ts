@@ -9,23 +9,15 @@ import {
   type PurchaseDateHistoricalRatePair,
   type SupportedMetal,
 } from "@monyvi/logic";
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   resolvePurchaseDateHistoricalRate,
   type PurchaseDateHistoricalRateResolution,
 } from "@/services/metal-purchase-date-reference-service";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 
-export type HistoricalPurchasePriceOwnership =
-  | "unset"
-  | "estimated"
-  | "manual";
+export type HistoricalPurchasePriceOwnership = "unset" | "estimated" | "manual";
 
 export interface UseMetalHistoricalPurchasePriceEstimateInput {
   readonly metal: SupportedMetal;
@@ -49,13 +41,13 @@ export interface UseMetalHistoricalPurchasePriceEstimateResult {
 export function useMetalHistoricalPurchasePriceEstimate(
   input: UseMetalHistoricalPurchasePriceEstimateInput
 ): UseMetalHistoricalPurchasePriceEstimateResult {
+  const { userId, isResolvingUser } = useCurrentUser();
   const resolver = input.resolveReference ?? resolvePurchaseDateHistoricalRate;
   const onPurchasePriceChange = input.onPurchasePriceChange;
   const initialOwnership: HistoricalPurchasePriceOwnership =
     input.purchasePrice.trim().length > 0 ? "manual" : "unset";
-  const ownershipRef = useRef<HistoricalPurchasePriceOwnership>(
-    initialOwnership
-  );
+  const ownershipRef =
+    useRef<HistoricalPurchasePriceOwnership>(initialOwnership);
   const [ownership, setOwnership] =
     useState<HistoricalPurchasePriceOwnership>(initialOwnership);
   const [reference, setReference] =
@@ -65,6 +57,14 @@ export function useMetalHistoricalPurchasePriceEstimate(
   const [retryIndex, setRetryIndex] = useState(0);
   const estimateKeyRef = useRef<string | null>(null);
   const requestSequenceRef = useRef(0);
+  const requestControllerRef = useRef<AbortController | null>(null);
+  const referenceIdentityRef = useRef<string | null>(null);
+  const referenceIdentity = JSON.stringify([
+    userId,
+    input.metal,
+    input.purchaseDate,
+    input.purchaseCurrency,
+  ]);
 
   const purity = useMemo(
     () => resolvePuritySelection(input.metal, input.purityCode),
@@ -93,6 +93,9 @@ export function useMetalHistoricalPurchasePriceEstimate(
   }, [onPurchasePriceChange, setOwnershipState]);
 
   useEffect(() => {
+    requestControllerRef.current?.abort();
+    requestControllerRef.current = null;
+    referenceIdentityRef.current = null;
     if (ownershipRef.current === "manual") {
       setIsLoading(false);
       return;
@@ -103,13 +106,14 @@ export function useMetalHistoricalPurchasePriceEstimate(
     setReference(null);
     clearOwnedEstimate();
 
-    if (!hasReferencePrerequisites) {
+    if (!hasReferencePrerequisites || isResolvingUser || userId === null) {
       setIsLoading(false);
       setError(null);
       return;
     }
 
-    let cancelled = false;
+    const controller = new AbortController();
+    requestControllerRef.current = controller;
     setIsLoading(true);
     setError(null);
 
@@ -117,10 +121,12 @@ export function useMetalHistoricalPurchasePriceEstimate(
       purchaseDate: input.purchaseDate,
       metal: input.metal,
       purchaseCurrency: input.purchaseCurrency,
+      expectedUserId: userId,
+      signal: controller.signal,
     })
       .then((resolution: PurchaseDateHistoricalRateResolution): void => {
         if (
-          cancelled ||
+          controller.signal.aborted === true ||
           sequence !== requestSequenceRef.current ||
           ownershipRef.current === "manual"
         ) {
@@ -130,13 +136,14 @@ export function useMetalHistoricalPurchasePriceEstimate(
           setError(resolution.error);
           return;
         }
+        referenceIdentityRef.current = referenceIdentity;
         setReference(
           resolution.status === "available" ? resolution.value : null
         );
       })
       .catch((cause: unknown): void => {
         if (
-          cancelled ||
+          controller.signal.aborted === true ||
           sequence !== requestSequenceRef.current ||
           ownershipRef.current === "manual"
         ) {
@@ -146,7 +153,7 @@ export function useMetalHistoricalPurchasePriceEstimate(
       })
       .finally((): void => {
         if (
-          !cancelled &&
+          controller.signal.aborted !== true &&
           sequence === requestSequenceRef.current &&
           ownershipRef.current !== "manual"
         ) {
@@ -155,7 +162,9 @@ export function useMetalHistoricalPurchasePriceEstimate(
       });
 
     return (): void => {
-      cancelled = true;
+      controller.abort();
+      if (requestControllerRef.current === controller)
+        requestControllerRef.current = null;
     };
   }, [
     clearOwnedEstimate,
@@ -165,12 +174,22 @@ export function useMetalHistoricalPurchasePriceEstimate(
     input.purchaseDate,
     resolver,
     retryIndex,
+    isResolvingUser,
+    userId,
+    referenceIdentity,
   ]);
 
   useEffect(() => {
     if (ownershipRef.current === "manual") return;
 
-    if (!reference || !purity.available || !hasWeight) {
+    if (
+      !reference ||
+      referenceIdentityRef.current !== referenceIdentity ||
+      isResolvingUser ||
+      userId === null ||
+      !purity.available ||
+      !hasWeight
+    ) {
       clearOwnedEstimate();
       return;
     }
@@ -227,10 +246,16 @@ export function useMetalHistoricalPurchasePriceEstimate(
     purity,
     reference,
     setOwnershipState,
+    referenceIdentity,
+    isResolvingUser,
+    userId,
   ]);
 
   const onPurchasePriceUserChange = useCallback(
     (value: string): void => {
+      requestControllerRef.current?.abort();
+      requestControllerRef.current = null;
+      referenceIdentityRef.current = null;
       requestSequenceRef.current += 1;
       estimateKeyRef.current = null;
       setReference(null);

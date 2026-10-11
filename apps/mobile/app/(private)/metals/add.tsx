@@ -73,37 +73,34 @@ export default function AddMetalHoldingRoute(): React.JSX.Element {
     createId: Crypto.randomUUID,
     addHolding: addMetalHoldingFromForm,
   });
+  const { updateField } = form;
   const setEstimatedPurchasePrice = useCallback(
-    (value: string): void => form.updateField("purchasePrice", value),
-    [form.updateField]
+    (value: string): void => updateField("purchasePrice", value),
+    [updateField]
   );
-  const historicalPurchasePrice =
-    useMetalHistoricalPurchasePriceEstimate({
-      metal: form.values.metal,
-      weightGrams: form.values.weightGrams,
-      purityCode: form.values.purityCode,
-      purchaseCurrency: form.values.purchaseCurrency,
-      purchaseDate: form.values.purchaseDate,
-      purchasePrice: form.values.purchasePrice,
-      onPurchasePriceChange: setEstimatedPurchasePrice,
-    });
+  const historicalPurchasePrice = useMetalHistoricalPurchasePriceEstimate({
+    metal: form.values.metal,
+    weightGrams: form.values.weightGrams,
+    purityCode: form.values.purityCode,
+    purchaseCurrency: form.values.purchaseCurrency,
+    purchaseDate: form.values.purchaseDate,
+    purchasePrice: form.values.purchasePrice,
+    onPurchasePriceChange: setEstimatedPurchasePrice,
+  });
   const copy = useMemo(
-    () =>
-      createCopy(
-        t,
-        historicalPurchasePrice.ownership === "estimated"
-      ),
+    () => createCopy(t, historicalPurchasePrice.ownership === "estimated"),
     [historicalPurchasePrice.ownership, t]
   );
+  const { onPurchasePriceUserChange } = historicalPurchasePrice;
   const handleFormChange = useCallback(
     (field: MetalHoldingFormField, value: string | null): void => {
       if (field === "purchasePrice" && value !== null) {
-        historicalPurchasePrice.onPurchasePriceUserChange(value);
+        onPurchasePriceUserChange(value);
         return;
       }
-      form.updateField(field, value);
+      updateField(field, value);
     },
-    [form.updateField, historicalPurchasePrice.onPurchasePriceUserChange]
+    [onPurchasePriceUserChange, updateField]
   );
   const currencyOptions = useMemo(
     () =>

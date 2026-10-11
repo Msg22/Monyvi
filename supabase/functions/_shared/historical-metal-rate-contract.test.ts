@@ -37,19 +37,10 @@ test("builds one exact daily record without inventing observation timestamps", (
   assert.equal(record.providerResponseTimestamp, null);
   assert.equal(record.source, "metals.dev");
   assert.equal(record.quality, "valid");
-  assert.equal(
-    record.goldUsdPerTroyOunceDecimal,
-    "1932.1234567890123456789"
-  );
+  assert.equal(record.goldUsdPerTroyOunceDecimal, "1932.1234567890123456789");
   assert.equal(record.currenciesUsdPerUnit["USD"], "1");
-  assert.equal(
-    record.currenciesUsdPerUnit["EGP"],
-    "0.020000000000000001"
-  );
-  assert.equal(
-    record.currenciesUsdPerUnit["EUR"],
-    "1.1000000000000001"
-  );
+  assert.equal(record.currenciesUsdPerUnit["EGP"], "0.020000000000000001");
+  assert.equal(record.currenciesUsdPerUnit["EUR"], "1.1000000000000001");
 });
 
 test("normalizes USD/troy-ounce to USD/pure-gram at 50-digit Decimal precision", () => {
@@ -120,10 +111,7 @@ test("contract source does not parse provider financial values through JSON.pars
   assert.equal(source.includes("parseFloat("), false);
 });
 
-function assertContractError(
-  action: () => unknown,
-  code: string
-): void {
+function assertContractError(action: () => unknown, code: string): void {
   assert.throws(action, (error: unknown) => {
     assert.ok(error instanceof HistoricalMetalRateContractError);
     assert.equal(error.code, code);

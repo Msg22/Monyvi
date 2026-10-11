@@ -13,6 +13,7 @@ import {
   observeMetalDetailHoldingState,
   observeMetalDetailRateReferences,
   readMetalDetailReadModel,
+  readMetalDetailPurchaseDateMarketReference,
   type MetalDetailReadModel,
 } from "@/services/metal-detail-read-model-service";
 import { observeMetalDetailActionEvidence } from "@/services/metal-action-evidence-observer-service";
@@ -105,10 +106,12 @@ export function useMetalHoldingDetail(
   const hasLoadedOnceRef = useRef(false);
   const detailIdentityRef = useRef(detailIdentity);
   const modelIdentityRef = useRef<string | null>(null);
+  const historicalAttemptRef = useRef<string | null>(null);
   if (detailIdentityRef.current !== detailIdentity) {
     detailIdentityRef.current = detailIdentity;
     modelIdentityRef.current = null;
     hasLoadedOnceRef.current = false;
+    historicalAttemptRef.current = null;
   }
 
   const retry = useCallback((): void => {
@@ -247,7 +250,24 @@ export function useMetalHoldingDetail(
         if (isCurrent && detailIdentityRef.current === detailIdentity) {
           hasLoadedOnceRef.current = true;
           modelIdentityRef.current = detailIdentity;
-          setModel(next);
+          setModel((previous) => {
+            if (
+              next !== null &&
+              previous !== null &&
+              next.purchaseDateMarketReferenceContextKey !== undefined &&
+              next.purchaseDateMarketReferenceContextKey ===
+                previous.purchaseDateMarketReferenceContextKey &&
+              previous.purchaseDateMarketReference?.status === "available" &&
+              next.purchaseDateMarketReference?.status !== "available"
+            ) {
+              return {
+                ...next,
+                purchaseDateMarketReference:
+                  previous.purchaseDateMarketReference,
+              };
+            }
+            return next;
+          });
         }
       })
       .catch((cause: unknown) => {
@@ -279,6 +299,89 @@ export function useMetalHoldingDetail(
     preferredCurrency,
     retryIndex,
     selectedSnapshot,
+    userId,
+  ]);
+
+  const historicalContextKey =
+    modelIdentityRef.current === detailIdentity
+      ? (model?.purchaseDateMarketReferenceContextKey ?? null)
+      : null;
+  const shouldEnrichHistory =
+    model?.isActiveOwnership === true &&
+    model.purchaseDateMarketReference?.status !== "available" &&
+    (model.purchaseDateMarketReference?.status === "fetch_failed" ||
+      (model.purchaseDateMarketReference?.status === "unavailable" &&
+        (model.purchaseDateMarketReference.reason === "cache_miss" ||
+          model.purchaseDateMarketReference.reason ===
+            "purchase_currency_unavailable")));
+
+  useEffect(() => {
+    if (
+      !isFocused ||
+      !isConnected ||
+      isResolvingUser ||
+      userId === null ||
+      holdingId === undefined ||
+      historicalContextKey === null ||
+      !shouldEnrichHistory ||
+      observationError !== null
+    )
+      return;
+    const attemptKey = JSON.stringify([
+      detailIdentity,
+      historicalContextKey,
+      retryIndex,
+    ]);
+    if (historicalAttemptRef.current === attemptKey) return;
+    historicalAttemptRef.current = attemptKey;
+    const controller = new AbortController();
+    let hasSettled = false;
+    void readMetalDetailPurchaseDateMarketReference({
+      holdingId,
+      userId,
+      contextKey: historicalContextKey,
+      signal: controller.signal,
+    })
+      .then((reference) => {
+        hasSettled = true;
+        if (
+          controller.signal.aborted ||
+          reference === null ||
+          detailIdentityRef.current !== detailIdentity
+        )
+          return;
+        setModel((previous) =>
+          previous !== null &&
+          previous.purchaseDateMarketReferenceContextKey ===
+            historicalContextKey
+            ? { ...previous, purchaseDateMarketReference: reference }
+            : previous
+        );
+      })
+      .catch((cause: unknown) => {
+        hasSettled = true;
+        if (!controller.signal.aborted) {
+          logger.error("metalHoldingDetail.history.failed", cause, {
+            holdingId,
+            redactedUserId: redactIdentifierForLog(userId),
+          });
+        }
+      });
+    return () => {
+      controller.abort();
+      if (!hasSettled && historicalAttemptRef.current === attemptKey)
+        historicalAttemptRef.current = null;
+    };
+  }, [
+    detailIdentity,
+    historicalContextKey,
+    holdingId,
+    isConnected,
+    isFocused,
+    isResolvingUser,
+    observationError,
+    retryIndex,
+    shouldEnrichHistory,
     userId,
   ]);
 

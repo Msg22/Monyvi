@@ -14,6 +14,21 @@ import {
 
 const DATE = "2026-10-10";
 const CAPTURED_AT = Date.parse("2026-10-10T12:00:00.000Z");
+const mockAssertExpectedCurrentUser = jest.fn<Promise<void>, [string]>(() =>
+  Promise.resolve()
+);
+jest.mock("@monyvi/db", () => ({
+  database: {
+    get: jest.fn(),
+    write: jest.fn(),
+  },
+  MetalHistoricalRateCache: class MetalHistoricalRateCache {},
+}));
+
+jest.mock("../../services/user-data-access", () => ({
+  assertExpectedCurrentUser: (userId: string): Promise<void> =>
+    mockAssertExpectedCurrentUser(userId),
+}));
 
 function daily(
   currencies: Readonly<Record<string, string>> = { USD: "1", EGP: "0.02" }
@@ -62,23 +77,54 @@ function actionReference(
   };
 }
 
+interface MockPurchaseDateHistoricalRateDependencies extends PurchaseDateHistoricalRateDependencies {
+  readonly readCache: jest.Mock<
+    ReturnType<PurchaseDateHistoricalRateDependencies["readCache"]>,
+    Parameters<PurchaseDateHistoricalRateDependencies["readCache"]>
+  >;
+  readonly saveCache: jest.Mock<
+    ReturnType<PurchaseDateHistoricalRateDependencies["saveCache"]>,
+    Parameters<PurchaseDateHistoricalRateDependencies["saveCache"]>
+  >;
+  readonly fetchDaily: jest.Mock<
+    ReturnType<PurchaseDateHistoricalRateDependencies["fetchDaily"]>,
+    Parameters<PurchaseDateHistoricalRateDependencies["fetchDaily"]>
+  >;
+}
+
 function dependencies(input?: {
   readonly cache?: HistoricalDailyRateRecord | null;
   readonly fetched?: HistoricalDailyRateRecord;
   readonly fetchError?: Error;
-}) {
+}): MockPurchaseDateHistoricalRateDependencies {
+  const readCache = jest.fn<
+    ReturnType<PurchaseDateHistoricalRateDependencies["readCache"]>,
+    Parameters<PurchaseDateHistoricalRateDependencies["readCache"]>
+  >(() => Promise.resolve(input?.cache ?? null));
+  const saveCache = jest.fn<
+    ReturnType<PurchaseDateHistoricalRateDependencies["saveCache"]>,
+    Parameters<PurchaseDateHistoricalRateDependencies["saveCache"]>
+  >((value: HistoricalDailyRateRecord) => Promise.resolve(value));
+  const fetchDaily = jest.fn<
+    ReturnType<PurchaseDateHistoricalRateDependencies["fetchDaily"]>,
+    Parameters<PurchaseDateHistoricalRateDependencies["fetchDaily"]>
+  >(() =>
+    input?.fetchError
+      ? Promise.reject(input.fetchError)
+      : Promise.resolve(input?.fetched ?? daily())
+  );
+
   return {
-    readCache: jest.fn(() => Promise.resolve(input?.cache ?? null)),
-    saveCache: jest.fn((value: HistoricalDailyRateRecord) => Promise.resolve(value)),
-    fetchDaily: jest.fn(() =>
-      input?.fetchError
-        ? Promise.reject(input.fetchError)
-        : Promise.resolve(input?.fetched ?? daily())
-    ),
-  } satisfies PurchaseDateHistoricalRateDependencies;
+    readCache,
+    saveCache,
+    fetchDaily,
+  };
 }
 
 describe("#355 purchase-date historical resolver", () => {
+  beforeEach(() => {
+    mockAssertExpectedCurrentUser.mockReset().mockResolvedValue(undefined);
+  });
   it("prefers a qualifying action-linked Add snapshot without cache or network", async () => {
     const deps = dependencies();
     const result = await resolvePurchaseDateHistoricalRate(
@@ -201,4 +247,75 @@ describe("#355 purchase-date historical resolver", () => {
     );
     expect(result.status).toBe("fetch_failed");
   });
+
+  it.each(["owner", "cancel"] as const)(
+    "does not cache a pending Add response after %s changes",
+    async (change) => {
+      const deps = dependencies();
+      const controller = new AbortController();
+      const dailyResponse = createDeferred<HistoricalDailyRateRecord>();
+      let started: (() => void) | null = null;
+      const fetchStarted = new Promise<void>((resolve) => {
+        started = resolve;
+      });
+      deps.fetchDaily.mockImplementation(() => {
+        started?.();
+        return dailyResponse.promise;
+      });
+      const pending = resolvePurchaseDateHistoricalRate(
+        {
+          purchaseDate: DATE,
+          metal: "GOLD",
+          purchaseCurrency: "EGP",
+          expectedUserId: "user-1",
+          signal: controller.signal,
+        },
+        deps
+      );
+      await fetchStarted;
+      expect(deps.fetchDaily).toHaveBeenCalledWith(DATE, controller.signal);
+      if (change === "owner")
+        mockAssertExpectedCurrentUser.mockRejectedValue(
+          new Error("auth_scope_changed")
+        );
+      else controller.abort();
+      dailyResponse.resolve(daily());
+      await expect(pending).resolves.toEqual(
+        expect.objectContaining({ status: "fetch_failed" })
+      );
+      expect(deps.saveCache).not.toHaveBeenCalled();
+    }
+  );
+
+  it("passes captured owner and cancellation into the final serialized cache write", async () => {
+    const deps = dependencies();
+    const controller = new AbortController();
+    await resolvePurchaseDateHistoricalRate(
+      {
+        purchaseDate: DATE,
+        metal: "GOLD",
+        purchaseCurrency: "EGP",
+        expectedUserId: "user-1",
+        signal: controller.signal,
+      },
+      deps
+    );
+    expect(deps.saveCache).toHaveBeenCalledWith(daily(), undefined, {
+      expectedUserId: "user-1",
+      signal: controller.signal,
+    });
+  });
 });
+
+function createDeferred<TValue>(): {
+  readonly promise: Promise<TValue>;
+  readonly resolve: (value: TValue) => void;
+} {
+  let complete: (value: TValue) => void = (): void => {
+    throw new Error("deferred_promise_not_initialized");
+  };
+  const promise = new Promise<TValue>((resolve): void => {
+    complete = resolve;
+  });
+  return { promise, resolve: complete };
+}

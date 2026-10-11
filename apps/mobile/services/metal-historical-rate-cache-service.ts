@@ -1,8 +1,5 @@
 import { Q, type Database } from "@nozbe/watermelondb";
-import {
-  database,
-  MetalHistoricalRateCache,
-} from "@monyvi/db";
+import { database, MetalHistoricalRateCache } from "@monyvi/db";
 import {
   isExactCalendarDate,
   parseHistoricalDailyRateRecord,
@@ -12,15 +9,16 @@ import {
 import {
   assertExpectedCurrentUser,
   getCurrentUserDataScope,
+  USER_DATA_ACCESS_ERROR_CODES,
 } from "./user-data-access";
 
 const CACHE_TABLE = "metal_historical_rate_cache";
-const PROVIDER_KEY = "metals.dev";
 
 export const METAL_HISTORICAL_RATE_CACHE_ERROR_CODES = {
   CORRUPT: "metal_historical_rate_cache_corrupt",
   INVALID_DATE: "metal_historical_rate_cache_invalid_date",
   INVALID_RECORD: "metal_historical_rate_cache_invalid_record",
+  CANCELLED: "metal_historical_detail_cancelled",
 } as const;
 
 export async function readHistoricalDailyRateCache(
@@ -34,12 +32,12 @@ export async function readHistoricalDailyRateCache(
   const rows = await scope
     .queryOwned(
       db.get<MetalHistoricalRateCache>(CACHE_TABLE),
-      Q.where("provider_key", PROVIDER_KEY),
       Q.where("rate_date", rateDate),
       Q.take(2)
     )
     .fetch();
 
+  await assertExpectedCurrentUser(scope.userId);
   if (rows.length > 1) {
     throw new Error(METAL_HISTORICAL_RATE_CACHE_ERROR_CODES.CORRUPT);
   }
@@ -48,32 +46,41 @@ export async function readHistoricalDailyRateCache(
 
 export async function saveHistoricalDailyRateCache(
   input: HistoricalDailyRateRecord,
-  db: Database = database
+  db: Database = database,
+  options: {
+    readonly expectedUserId?: string;
+    readonly signal?: AbortSignal;
+  } = {}
 ): Promise<HistoricalDailyRateRecord> {
   const record = parseHistoricalDailyRateRecord(input);
-  if (record === null || record.providerKey !== PROVIDER_KEY) {
+  if (record === null) {
     throw new Error(METAL_HISTORICAL_RATE_CACHE_ERROR_CODES.INVALID_RECORD);
   }
 
   const scope = await getCurrentUserDataScope();
-  const collection = db.get<MetalHistoricalRateCache>(CACHE_TABLE);
-  const existing = await scope
-    .queryOwned(
-      collection,
-      Q.where("provider_key", PROVIDER_KEY),
-      Q.where("rate_date", record.rateDate),
-      Q.take(2)
-    )
-    .fetch();
-
-  if (existing.length > 1) {
-    throw new Error(METAL_HISTORICAL_RATE_CACHE_ERROR_CODES.CORRUPT);
+  if (
+    options.expectedUserId !== undefined &&
+    options.expectedUserId !== scope.userId
+  ) {
+    throw new Error(USER_DATA_ACCESS_ERROR_CODES.AUTH_SCOPE_CHANGED);
   }
-
-  await assertExpectedCurrentUser(scope.userId);
+  const collection = db.get<MetalHistoricalRateCache>(CACHE_TABLE);
   const now = new Date();
 
   await db.write(async (): Promise<void> => {
+    assertCacheSaveNotCancelled(options.signal);
+    await assertExpectedCurrentUser(scope.userId);
+    const existing = await scope
+      .queryOwned(collection, Q.where("rate_date", record.rateDate), Q.take(2))
+      .fetch();
+
+    await assertExpectedCurrentUser(scope.userId);
+    assertCacheSaveNotCancelled(options.signal);
+
+    if (existing.length > 1) {
+      throw new Error(METAL_HISTORICAL_RATE_CACHE_ERROR_CODES.CORRUPT);
+    }
+
     const row = existing[0];
     if (row) {
       await row.update((draft): void => {
@@ -94,6 +101,11 @@ export async function saveHistoricalDailyRateCache(
   return record;
 }
 
+function assertCacheSaveNotCancelled(signal: AbortSignal | undefined): void {
+  if (signal?.aborted === true)
+    throw new Error(METAL_HISTORICAL_RATE_CACHE_ERROR_CODES.CANCELLED);
+}
+
 function applyRecord(
   row: MetalHistoricalRateCache,
   record: HistoricalDailyRateRecord
@@ -107,6 +119,9 @@ function applyRecord(
   row.silverUsdPerPureGramDecimal = record.silverUsdPerPureGramDecimal;
   row.currenciesUsdPerUnitJson = JSON.stringify(record.currenciesUsdPerUnit);
   row.providerResponseTimestamp = record.providerResponseTimestamp;
+  row.snapshotId = record.snapshotId ?? null;
+  row.metalProviderObservedAt = record.metalProviderObservedAt ?? null;
+  row.currencyProviderObservedAt = record.currencyProviderObservedAt ?? null;
   row.fetchedAt = new Date(record.fetchedAt);
   row.responseDigest = record.responseDigest;
   row.source = record.source;
@@ -114,9 +129,7 @@ function applyRecord(
   row.contractVersion = record.contractVersion;
 }
 
-function toRecord(
-  row: MetalHistoricalRateCache
-): HistoricalDailyRateRecord {
+function toRecord(row: MetalHistoricalRateCache): HistoricalDailyRateRecord {
   let currencies: unknown;
   try {
     currencies = JSON.parse(row.currenciesUsdPerUnitJson);
@@ -135,6 +148,17 @@ function toRecord(
     silverUsdPerPureGramDecimal: row.silverUsdPerPureGramDecimal,
     currenciesUsdPerUnit: currencies,
     providerResponseTimestamp: row.providerResponseTimestamp,
+    ...(row.snapshotId === null || row.snapshotId === undefined
+      ? {}
+      : { snapshotId: row.snapshotId }),
+    ...(row.metalProviderObservedAt === null ||
+    row.metalProviderObservedAt === undefined
+      ? {}
+      : { metalProviderObservedAt: row.metalProviderObservedAt }),
+    ...(row.currencyProviderObservedAt === null ||
+    row.currencyProviderObservedAt === undefined
+      ? {}
+      : { currencyProviderObservedAt: row.currencyProviderObservedAt }),
     fetchedAt: row.fetchedAt.toISOString(),
     responseDigest: row.responseDigest,
     source: row.source,

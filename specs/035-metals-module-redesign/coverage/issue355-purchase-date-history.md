@@ -5,8 +5,8 @@ Status: implementation authored against `main@3264eba2b67bcc66cddc95e3fbdb36e870
 ## Implemented core contract
 
 - Timestamped Add-time acquisition references qualify as purchase-date history only when both real provider timestamps resolve to the saved `YYYY-MM-DD` in IANA `Africa/Cairo`.
-- Otherwise resolution falls back to one exact provider daily key. No nearest-day, current-rate, later-rate, or mixed-date substitution exists.
-- Historical provider tokens are parsed losslessly. USD identity is exact `1`; Gold/Silver normalize from USD/troy-ounce using exact `31.1034768` grams/troy-ounce.
+- Otherwise resolution checks the owner-scoped local dated cache, then the authenticated remote stored-rate endpoint. Both provider timestamp legs must resolve to the exact purchase date in Africa/Cairo. No nearest-day, current-rate, later-rate, or mixed-date substitution exists.
+- Remote numeric JSON is parsed losslessly. Canonical observation atoms from one batch are preferred; an invalid/incomplete canonical batch never falls back to its legacy root quotes. Roots with no observation rows can use stored gram quotes only with both exact provider-date proofs. USD identity is exact `1`. Snapshot gram quotes remain authoritative; troy-ounce fields are derived compatibility values using exact `31.1034768`. Existing daily records remain supported.
 - Historical display/Add-estimate purity uses the approved app-wide quote rule: Gold `gold-999` uses the quoted 24K gram rate directly (effective factor `1`), while lower Gold karats and Silver use their stored factors. Persisted `gold-999 / 0.999` evidence and existing immutable FR-050/P&L accounting remain unchanged.
 - Cache is owner-scoped, installation-local WatermelonDB and excluded from sync. It stores exact normalized facts plus internal provider/date/fetch/digest/quality metadata.
 - Daily cache records do not become immutable acquisition action evidence and do not alter FR-050/P&L attribution.
@@ -18,8 +18,8 @@ Status: implementation authored against `main@3264eba2b67bcc66cddc95e3fbdb36e870
 | Contract | Test |
 | --- | --- |
 | Cairo calendar matching, mixed-date rejection, USD identity, exact historical purity math | `packages/logic/src/metals/__tests__/historical-rate.test.ts` |
-| Lossless provider daily shape, exact date, missing EGP, exact troy conversion | `supabase/functions/_shared/historical-metal-rate-contract.test.ts` |
-| Auth, one-day provider request, key secrecy, exact-date absence/error mapping | `supabase/functions/fetch-historical-metal-rate/handler.test.ts` |
+| Legacy daily compatibility: lossless shape, exact date, missing EGP, exact troy conversion | `supabase/functions/_shared/historical-metal-rate-contract.test.ts` |
+| Auth before remote lookup, date validation, cancellation, exact-date absence/remote error mapping | `supabase/functions/fetch-historical-metal-rate/handler.test.ts` |
 | Local-only schema preservation + v30 migration | `scripts/__tests__/metal-historical-rate-local-schema.test.ts` |
 | Explicit sync exclusion | `apps/mobile/__tests__/services/metal-historical-rate-cache-sync-exclusion.test.ts` |
 | Owner-scoped cache create/update/corruption behavior | `apps/mobile/__tests__/services/metal-historical-rate-cache-service.test.ts` |
@@ -27,6 +27,15 @@ Status: implementation authored against `main@3264eba2b67bcc66cddc95e3fbdb36e870
 | Action -> cache -> exact-date network resolver, offline miss, missing EGP | `apps/mobile/__tests__/services/metal-purchase-date-reference-service.test.ts` |
 | Presentation-safe Details historical facade | `apps/mobile/__tests__/services/metal-historical-detail-facade-service.test.ts` |
 | Add estimate ownership/manual-clear invariant | `apps/mobile/__tests__/hooks/useMetalHistoricalPurchasePriceEstimate.test.tsx` |
+
+## Remote-only source correction — 2026-10-11
+
+- The endpoint authenticates and validates the date before reading remote `market_rates` and matching `market_rate_observations`.
+- Both real provider timestamps prove the Cairo calendar date; `created_at` is used only to break ties between equally observed snapshots.
+- Eligible snapshots sort by newest complete provider pair, then other provider timestamp, creation tie, and root ID. Every returned metal/FX value belongs to that single snapshot.
+- Snapshot records carry `snapshotId`, `metalProviderObservedAt`, `currencyProviderObservedAt`, and truthful stored provenance. Canonical eligibility requires the complete atomic producer contract: Gold, Silver, all 35 supported fiat currencies, and BTC (38 unique valid observations). BTC is validated but omitted from historical fiat output. Legacy roots without observation rows may omit FX currencies; those currencies remain absent.
+- Tests authored: `historical-metal-rate-contract-remote.test.ts`, `remote-reader.test.ts`, rewritten `handler.test.ts`, and snapshot pure-parser tests. They cover high-precision raw numeric tokens, Cairo midnight, oldest/newest eligibility, the unchanged producer's full 38-row output, malformed BTC, newer partial batch versus older complete exact-date batch, canonical rejection, mixed batches, pagination, auth/date gates, remote errors, and request cancellation.
+- Cache/schema/model persistence is owned by the metadata correction author; source parser retains all approved proof fields. No gates were executed.
 
 ## Deferred integration boundary
 
@@ -41,9 +50,9 @@ Later integration should:
 
 ## Local final verification batch
 
-The local successor should run the project-standard focused test commands for the files above, Edge Node tests for the two historical provider suites, DB schema-generation stability, affected lint/type/format, then the normal pre-push aggregate. No pass is claimed here.
+The local successor should run the project-standard focused test commands for the files above, Edge Node tests for legacy daily compatibility, remote snapshot contract, remote reader, and remote handler suites, DB schema-generation stability, affected lint/type/format, then the normal pre-push aggregate. No pass is claimed here.
 
-Live provider evidence remains intentionally unverified in this remote lane: representative dated Gold/Silver/EGP/other-currency responses, quota behavior, and hosted endpoint deployment must be checked by the authorized local/deployment owner without exposing credentials.
+Remote-only lookup is approved. Metals.Dev HTTP fallback, provider API-key use, limiter/counter work, and remote migrations are deferred. Hosted endpoint deployment and real stored-rate read validation remain unverified; this author lane performed no remote DB/provider operations.
 
 
 ## Approved follow-on integration — 2026-10-10

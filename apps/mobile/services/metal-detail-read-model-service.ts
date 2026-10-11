@@ -30,11 +30,13 @@ import {
   type LegacyDisposalRevisionEvidence,
 } from "@/services/metal-legacy-disposal-baseline-service";
 import { buildMetalDetailTerminalFacts } from "@/services/metal-terminal-display-service";
-import {
-  composeHistoricalMetalDetailReference,
-} from "@/services/metal-historical-detail-composition-service";
+import { composeHistoricalMetalDetailReference } from "@/services/metal-historical-detail-composition-service";
 import type { HistoricalMetalDetailReference } from "@/services/metal-historical-detail-facade-service";
-import { formatMetalLocalCalendarDate } from "@/services/metal-financial-action-repository";
+import {
+  createHistoricalContextKey,
+  createHistoricalDetailContext,
+} from "@/services/metal-detail-historical-reference-service";
+export { readMetalDetailPurchaseDateMarketReference } from "@/services/metal-detail-historical-reference-service";
 import {
   getCurrentUserDataScope,
   queryChildrenOfOwnedParents,
@@ -204,6 +206,7 @@ export interface MetalDetailReadModel {
   readonly purchaseDate: Date | null;
   readonly purchasePriceDecimal: string | null;
   readonly purchaseDateMarketReference?: HistoricalMetalDetailReference | null;
+  readonly purchaseDateMarketReferenceContextKey?: string;
   readonly purityCatalogVersion: string | null;
   readonly purityCode: string | null;
   readonly purityFactorDecimal: string | null;
@@ -355,24 +358,27 @@ export async function readMetalDetailReadModel(
     return model;
   }
 
-  const purchaseDate = copyValidDate(asset.purchaseDate);
+  const historicalContext = createHistoricalDetailContext(
+    asset,
+    metal,
+    metalType,
+    rateReferenceInputs
+  );
   const purchaseDateMarketReference =
     await composeHistoricalMetalDetailReference({
-      acquisitionActionId: asset.acquisitionActionId,
-      purchaseDate:
-        purchaseDate === null
-          ? null
-          : formatMetalLocalCalendarDate(purchaseDate),
-      metal: metalType,
-      purityCode: metal.purityCode,
-      purityFactorDecimal: metal.purityFactorDecimal,
-      purchaseCurrency: asset.purchaseCurrency,
-      rateReferences: rateReferenceInputs,
+      ...historicalContext,
+      allowNetwork: false,
+      expectedUserId: scope.userId,
     });
 
   return Object.freeze({
     ...model,
     purchaseDateMarketReference,
+    purchaseDateMarketReferenceContextKey: createHistoricalContextKey(
+      scope.userId,
+      asset.id,
+      historicalContext
+    ),
   });
 }
 

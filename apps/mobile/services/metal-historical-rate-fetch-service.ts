@@ -18,8 +18,7 @@ export const METAL_HISTORICAL_RATE_FETCH_ERROR_CODES = {
 
 export class MetalHistoricalRateFetchError extends Error {
   public constructor(
-    public readonly code:
-      (typeof METAL_HISTORICAL_RATE_FETCH_ERROR_CODES)[keyof typeof METAL_HISTORICAL_RATE_FETCH_ERROR_CODES]
+    public readonly code: (typeof METAL_HISTORICAL_RATE_FETCH_ERROR_CODES)[keyof typeof METAL_HISTORICAL_RATE_FETCH_ERROR_CODES]
   ) {
     super(code);
     this.name = "MetalHistoricalRateFetchError";
@@ -27,11 +26,17 @@ export class MetalHistoricalRateFetchError extends Error {
 }
 
 export async function fetchHistoricalDailyRate(
-  rateDate: string
+  rateDate: string,
+  signal?: AbortSignal
 ): Promise<HistoricalDailyRateRecord> {
+  if (signal?.aborted === true) {
+    throw new MetalHistoricalRateFetchError(
+      METAL_HISTORICAL_RATE_FETCH_ERROR_CODES.FAILED
+    );
+  }
   const response = await invokeAuthenticatedEdgeFunction<unknown>(
     FUNCTION_NAME,
-    { body: { date: rateDate } }
+    { body: { date: rateDate }, ...(signal === undefined ? {} : { signal }) }
   );
 
   if (response.error !== null) {

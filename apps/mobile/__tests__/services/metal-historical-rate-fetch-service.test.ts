@@ -1,5 +1,8 @@
-const mockInvokeAuthenticatedEdgeFunction = jest.fn();
-const mockGetEdgeFunctionErrorStatus = jest.fn();
+const mockInvokeAuthenticatedEdgeFunction = jest.fn<
+  Promise<unknown>,
+  [string, unknown]
+>();
+const mockGetEdgeFunctionErrorStatus = jest.fn<number | undefined, [unknown]>();
 
 jest.mock("../../services/authenticated-edge-function-service", () => ({
   invokeAuthenticatedEdgeFunction: (
@@ -76,6 +79,28 @@ describe("#355 authenticated historical Edge fetch", () => {
       name: "MetalHistoricalRateFetchError",
       code: METAL_HISTORICAL_RATE_FETCH_ERROR_CODES.DATE_UNAVAILABLE,
     });
+  });
+
+  it("passes cancellation to the installed Edge invoke transport", async () => {
+    const controller = new AbortController();
+    mockInvokeAuthenticatedEdgeFunction.mockResolvedValue({
+      data: { success: true, record: record() },
+      error: null,
+    });
+    await fetchHistoricalDailyRate("2026-10-10", controller.signal);
+    expect(mockInvokeAuthenticatedEdgeFunction).toHaveBeenCalledWith(
+      "fetch-historical-metal-rate",
+      { body: { date: "2026-10-10" }, signal: controller.signal }
+    );
+  });
+
+  it("does not invoke the provider for an already cancelled request", async () => {
+    const controller = new AbortController();
+    controller.abort();
+    await expect(
+      fetchHistoricalDailyRate("2026-10-10", controller.signal)
+    ).rejects.toThrow();
+    expect(mockInvokeAuthenticatedEdgeFunction).not.toHaveBeenCalled();
   });
 
   it("rejects malformed or different-date response records", async () => {

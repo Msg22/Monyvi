@@ -1,11 +1,5 @@
-import {
-  parseCanonicalDecimal,
-  serializeDecimal,
-} from "./decimal";
-import {
-  resolvePuritySelection,
-  type SupportedMetal,
-} from "./purity-catalog";
+import { parseCanonicalDecimal, serializeDecimal } from "./decimal";
+import { resolvePuritySelection, type SupportedMetal } from "./purity-catalog";
 import {
   isSupportedMetalsIsoCurrencyCode,
   validateAndNormalizeRateReference,
@@ -31,7 +25,10 @@ export interface HistoricalDailyRateRecord {
   readonly contractVersion: 1;
   readonly providerKey: string;
   readonly rateDate: string;
-  readonly resolution: "daily";
+  readonly resolution: "daily" | "snapshot";
+  readonly snapshotId?: string;
+  readonly metalProviderObservedAt?: string;
+  readonly currencyProviderObservedAt?: string;
   readonly goldUsdPerTroyOunceDecimal: string;
   readonly silverUsdPerTroyOunceDecimal: string;
   readonly goldUsdPerPureGramDecimal: string;
@@ -118,13 +115,56 @@ export function normalizeHistoricalMetalTroyOunceToPureGramDecimal(
   }
 }
 
+function areHistoricalMetalQuotesConsistent(
+  resolution: unknown,
+  ounce: string,
+  gram: string
+): boolean {
+  return resolution === "snapshot"
+    ? serializeDecimal(
+        parseCanonicalDecimal(gram).times(TROY_OUNCE_GRAMS_DECIMAL)
+      ) === ounce
+    : normalizeHistoricalMetalTroyOunceToPureGramDecimal(ounce) === gram;
+}
+
+interface HistoricalSnapshotProof {
+  readonly snapshotId: string;
+  readonly metalProviderObservedAt: string;
+  readonly currencyProviderObservedAt: string;
+}
+
+function parseHistoricalSnapshotProof(
+  value: Readonly<Record<string, unknown>>
+): HistoricalSnapshotProof | null {
+  if (value["resolution"] !== "snapshot") return null;
+  const snapshotId = value["snapshotId"];
+  const metalProviderObservedAt = value["metalProviderObservedAt"];
+  const currencyProviderObservedAt = value["currencyProviderObservedAt"];
+  if (
+    typeof snapshotId !== "string" ||
+    snapshotId.trim().length === 0 ||
+    typeof metalProviderObservedAt !== "string" ||
+    typeof currencyProviderObservedAt !== "string" ||
+    !isProviderObservationTimestamp(metalProviderObservedAt) ||
+    !isProviderObservationTimestamp(currencyProviderObservedAt) ||
+    calendarDateForTimestamp(Date.parse(metalProviderObservedAt)) !==
+      value["rateDate"] ||
+    calendarDateForTimestamp(Date.parse(currencyProviderObservedAt)) !==
+      value["rateDate"] ||
+    value["providerKey"] !== value["source"] ||
+    value["providerResponseTimestamp"] !== null
+  )
+    return null;
+  return { snapshotId, metalProviderObservedAt, currencyProviderObservedAt };
+}
+
 export function parseHistoricalDailyRateRecord(
   value: unknown
 ): HistoricalDailyRateRecord | null {
   if (!isRecord(value)) return null;
   if (
     value["contractVersion"] !== 1 ||
-    value["resolution"] !== "daily" ||
+    (value["resolution"] !== "daily" && value["resolution"] !== "snapshot") ||
     value["quality"] !== "valid" ||
     typeof value["providerKey"] !== "string" ||
     value["providerKey"].trim().length === 0 ||
@@ -158,13 +198,22 @@ export function parseHistoricalDailyRateRecord(
     silverPerTroyOunce === null ||
     goldPerPureGram === null ||
     silverPerPureGram === null ||
-    normalizeHistoricalMetalTroyOunceToPureGramDecimal(goldPerTroyOunce) !==
-      goldPerPureGram ||
-    normalizeHistoricalMetalTroyOunceToPureGramDecimal(silverPerTroyOunce) !==
+    !areHistoricalMetalQuotesConsistent(
+      value["resolution"],
+      goldPerTroyOunce,
+      goldPerPureGram
+    ) ||
+    !areHistoricalMetalQuotesConsistent(
+      value["resolution"],
+      silverPerTroyOunce,
       silverPerPureGram
+    )
   ) {
     return null;
   }
+
+  const snapshotProof = parseHistoricalSnapshotProof(value);
+  if (value["resolution"] === "snapshot" && snapshotProof === null) return null;
 
   const rawCurrencies = value["currenciesUsdPerUnit"];
   if (!isRecord(rawCurrencies)) return null;
@@ -173,10 +222,7 @@ export function parseHistoricalDailyRateRecord(
     if (!isSupportedMetalsIsoCurrencyCode(code)) return null;
     const rate = readPositiveDecimal(rawRate);
     if (rate === null) return null;
-    if (
-      code === "USD" &&
-      !parseCanonicalDecimal(rate).minus("1").isZero()
-    ) {
+    if (code === "USD" && !parseCanonicalDecimal(rate).minus("1").isZero()) {
       return null;
     }
     currencies[code] = rate;
@@ -187,7 +233,8 @@ export function parseHistoricalDailyRateRecord(
     contractVersion: 1,
     providerKey: value["providerKey"],
     rateDate: value["rateDate"],
-    resolution: "daily",
+    resolution: value["resolution"],
+    ...(snapshotProof ?? {}),
     goldUsdPerTroyOunceDecimal: goldPerTroyOunce,
     silverUsdPerTroyOunceDecimal: silverPerTroyOunce,
     goldUsdPerPureGramDecimal: goldPerPureGram,
@@ -227,10 +274,10 @@ export function qualifyTimestampedAcquisitionRatePair(
   const currencyObservedAt = currency.value.providerObservedAt;
   if (metalObservedAt === null || currencyObservedAt === null) return null;
 
-  const timeZone =
-    input.calendarTimeZone ?? HISTORICAL_RATE_CALENDAR_TIME_ZONE;
+  const timeZone = input.calendarTimeZone ?? HISTORICAL_RATE_CALENDAR_TIME_ZONE;
   if (
-    calendarDateForTimestamp(metalObservedAt, timeZone) !== input.purchaseDate ||
+    calendarDateForTimestamp(metalObservedAt, timeZone) !==
+      input.purchaseDate ||
     calendarDateForTimestamp(currencyObservedAt, timeZone) !==
       input.purchaseDate ||
     metal.value.capturedAt !== currency.value.capturedAt ||
@@ -285,8 +332,14 @@ export function selectHistoricalDailyRatePair(input: {
         ? record.goldUsdPerPureGramDecimal
         : record.silverUsdPerPureGramDecimal,
     purchaseCurrencyUsdPerUnitDecimal: currency,
-    metalProviderObservedAt: null,
-    currencyProviderObservedAt: null,
+    metalProviderObservedAt:
+      record.metalProviderObservedAt === undefined
+        ? null
+        : Date.parse(record.metalProviderObservedAt),
+    currencyProviderObservedAt:
+      record.currencyProviderObservedAt === undefined
+        ? null
+        : Date.parse(record.currencyProviderObservedAt),
     capturedAt: null,
     fetchedAt: record.fetchedAt,
     source: record.source,
@@ -304,8 +357,7 @@ export function calculateHistoricalPurityGramPriceDecimal(input: {
   return calculatePurityGramPriceDecimal({
     purityFactorDecimal,
     metalUsdPerPureGramDecimal: input.pair.metalUsdPerPureGramDecimal,
-    currencyUsdPerUnitDecimal:
-      input.pair.purchaseCurrencyUsdPerUnitDecimal,
+    currencyUsdPerUnitDecimal: input.pair.purchaseCurrencyUsdPerUnitDecimal,
   });
 }
 
@@ -321,8 +373,7 @@ export function calculateHistoricalPurchaseEstimateDecimal(input: {
     weightGramsDecimal: input.weightGramsDecimal,
     purityFactorDecimal,
     metalUsdPerPureGramDecimal: input.pair.metalUsdPerPureGramDecimal,
-    currencyUsdPerUnitDecimal:
-      input.pair.purchaseCurrencyUsdPerUnitDecimal,
+    currencyUsdPerUnitDecimal: input.pair.purchaseCurrencyUsdPerUnitDecimal,
   });
   return result.available ? result.valueDecimal : null;
 }
@@ -362,6 +413,14 @@ function isPositiveCanonicalDecimal(value: string): boolean {
   } catch {
     return false;
   }
+}
+
+function isProviderObservationTimestamp(value: string): boolean {
+  return (
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(
+      value
+    ) && isTimestamp(value)
+  );
 }
 
 function isTimestamp(value: string): boolean {

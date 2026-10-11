@@ -5,7 +5,7 @@ export const METAL_HISTORICAL_RATE_CACHE_TABLES = [
     name: "metal_historical_rate_cache",
     unsafeSql: (sql: string): string =>
       sql +
-      'create unique index if not exists "metal_historical_rate_cache_owner_provider_date_unique" on "metal_historical_rate_cache" ("user_id", "provider_key", "rate_date");',
+      'create unique index if not exists "metal_historical_rate_cache_owner_date_unique" on "metal_historical_rate_cache" ("user_id", "rate_date");',
     columns: [
       { name: "user_id", type: "string", isIndexed: true },
       { name: "provider_key", type: "string", isIndexed: true },
@@ -18,6 +18,13 @@ export const METAL_HISTORICAL_RATE_CACHE_TABLES = [
       { name: "currencies_usd_per_unit_json", type: "string" },
       {
         name: "provider_response_timestamp",
+        type: "string",
+        isOptional: true,
+      },
+      { name: "snapshot_id", type: "string", isOptional: true },
+      { name: "metal_provider_observed_at", type: "string", isOptional: true },
+      {
+        name: "currency_provider_observed_at",
         type: "string",
         isOptional: true,
       },

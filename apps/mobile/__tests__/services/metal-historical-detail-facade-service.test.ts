@@ -3,6 +3,14 @@ import {
   type HistoricalDailyRateRecord,
 } from "@monyvi/logic";
 
+jest.mock("@monyvi/db", () => ({
+  database: {
+    get: jest.fn(),
+    write: jest.fn(),
+  },
+  MetalHistoricalRateCache: class MetalHistoricalRateCache {},
+}));
+
 import { readHistoricalMetalDetailReference } from "../../services/metal-historical-detail-facade-service";
 
 const DATE = "2026-10-10";
