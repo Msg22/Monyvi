@@ -1,5 +1,10 @@
 # Foundation readiness and execution boundary
 
+## Current Accounts source handoff — later approved migration (2026-10-11)
+
+Mohamed explicitly authorized a **separate Accounts form migration PR stacked on Foundation #390** and deferred unit/integration/E2E test authoring/execution; manual testing is his responsibility. Root gave SOURCE GO from `488731442edfcaca96e680cbaf61d993805ce18c` on `codex/accounts-form-migration`, which was branched from Foundation `b4a656e66263554a5dc001cee83a1431a3a9110b`. S1 published exactly four approved production UI files and one business-document paragraph at `0b780d05bda5e4d34c8e53e213502eda94316b47`; **source implementation is unverified by actual root static checks or independent M1 review**. The current migration is not a merge or release. All **35 Accounts QA cases remain NOT RUN**. Historic Foundation T003/T008/T009 blockers and T001–T013 table below are retained as period evidence and **do not revoke the later human-authorized Accounts source GO**. Root owns actual static hooks/typechecks; S1 did not execute tests, device checks or CI and source ownership is released after this handoff.
+
+
 **Status (2026-10-11):** Foundation-first PR **authorized by Mohamed**, but
 **production source remains frozen**. Tests-only T006/T007 and local
 deterministic Red are complete; **T003 authenticated public-path harness / T008

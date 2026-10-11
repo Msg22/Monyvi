@@ -1,7 +1,7 @@
 # Accounts pilot — manual test plan and coverage disposition
 
-**Status**: Planned; no unit, integration, Maestro, emulator, native-device, visual or screen-reader checks executed.
-**Sources**: Main 3264eba2b67bcc66cddc95e3fbdb36e8705ee642; pending PR #383 d45745a5c8a13db082eab24e12c2cc072e26c124.
+**Current status (2026-10-11):** Accounts migration source authored at `0b780d05bda5e4d34c8e53e213502eda94316b47` on `codex/accounts-form-migration` after explicit Mohamed authorization and root SOURCE GO. Unit/integration/E2E authoring/runs remain **DEFERRED** at Mohamed's direction and manual verification is his responsibility. **ALL 35 cases NOT RUN**; no functional, native, visual or accessibility PASS is inferred from source publication.
+**Sources**: Governing main `3264eba2b67bcc66cddc95e3fbdb36e8705ee642`, Foundation PR #390 base `b4a656e66263554a5dc001cee83a1431a3a9110b`, Accounts migration source `0b780d05bda5e4d34c8e53e213502eda94316b47`. Historical PR #383/d457 references in earlier planning are not current source acceptance evidence.
 **Requirements**: [spec.md](spec.md). This map carries the coordinator's corrected 35 scenarios without promoting source inspection to passed tests.
 **Visual approval**: Eight calibrated references and bindings approved on 2026-10-11, package sha256:265cd15fefd32d9cece643179abbe4ed3843db82c74abe9c21b9dccc73dcf15e; all eight canonical bindings passed integrity verification. Design approval does not change any NOT RUN execution status.
 
@@ -14,7 +14,7 @@
 - For offline create/edit/relaunch, use verified emulator network control and persistent seeded local data. Network-off does not justify querying cloud or bypassing current-user scope.
 - Discover existing tests across repository before adding new suites. Existing evidence below is limited to inspected artifacts and must be resolved to actual test IDs/results during canonical task planning.
 - Every case requires recorded result, screenshot/log where relevant and associated actual test ID or explicit manual/harness boundary. Current result for ALL 35 cases is NOT RUN.
-- Relevant unit/integration and reliably controllable full-journey E2E tests must be authored/run meaningfully Red before production changes, then Green after implementation. No tests are authorized in this specification/mockup stage.
+- **Current authorization override:** The earlier tests-first planning prerequisite was superseded for this bounded Accounts implementation by Mohamed's express instruction to defer unit/integration/E2E authoring and runs. These checks remain **NOT RUN**, not PASS, and this matrix still governs his later manual acceptance. No scenarios or evidence rows have been removed or marked complete.
 
 ## Concrete balance and identity fixtures
 

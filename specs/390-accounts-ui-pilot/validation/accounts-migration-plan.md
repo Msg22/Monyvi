@@ -1,6 +1,6 @@
 # Accounts form migration — SOURCE-GO checkpoint
 
-**Disposition (2026-10-11): PLAN ONLY — PRODUCTION HOLD until explicit root SOURCE GO.** Mohamed authorized a separate Accounts Add/Edit migration stacked on the delivered Foundation, with unit tests deferred and manual testing handled by him. This does not itself authorize code writes, test execution, a PR, a merge or branch retargeting. This file is the sole permitted write for the planning pass.
+**Current source handoff (2026-10-11): HUMAN AUTHORIZATION CONFIRMED; SOURCE GO EXECUTED.** Mohamed approved the Accounts Add/Edit migration in a **separate PR stacked on Foundation #390** and explicitly deferred unit/integration/E2E work for his later manual testing. The original production HOLD below was **coordinator sequencing before root SOURCE GO**, **not absence of human authorization**. Root authorized source from immutable plan `488731442edfcaca96e680cbaf61d993805ce18c`; S1 published source and business-doc correction at `0b780d05bda5e4d34c8e53e213502eda94316b47` on `codex/accounts-form-migration`. **Source complete but unverified by static hooks or independent code review. All further source writes HOLD pending root/M1.** No PR, merge or retarget action was performed.
 
 **Repository:** `Msg22/Monyvi`  
 **Owner:** S1 Normal ChatGPT / `.agents/personas/frontend-developer.md`, exclusive source lane after root GO. Independent review is owned by a different worker on a separate branch.  
@@ -77,3 +77,21 @@ Flags in design HTML are SVG stand-ins while app uses native emoji; do not repla
 **Human-approved test deferral:** Mohamed explicitly requested direct implementation while deferring unit tests, and will handle manual testing. Do not author, modify or execute Jest/unit/integration/E2E/Maestro, emulator/device/native/manual tests here. Existing authored suites remain unchanged. All **35 Accounts manual QA scenarios are NOT RUN** in this lane. Root may independently run actual static checks/hooks after GO; do not claim those PASS from this plan. An independent reviewer, not S1, verifies the actual source snapshot; functional, visual, accessibility and CI evidence remain separate.
 
 **Stop state:** This plan is the sole tracked artifact before root SOURCE GO. All production and business-document writes remain on **HOLD** pending a fresh exact-head source assignment.
+## Published source handoff — 2026-10-11
+
+**Source commit:** `0b780d05bda5e4d34c8e53e213502eda94316b47`, parent `488731442edfcaca96e680cbaf61d993805ce18c` (Foundation base `b4a656e66263554a5dc001cee83a1431a3a9110b`). This paragraph supersedes former "after SOURCE GO" sequencing text for this completed bounded implementation, without changing acceptance requirements.
+
+**Exactly four UI source files modified:**
+- `apps/mobile/app/(private)/add-account.tsx` — Add Name required; AccountTypeSelector required once at radiogroup; CurrencySelectField retains CurrencyPicker with FieldLabel plus localized required name and readable value; Initial Balance adopts `GroupedMoneyInput variant="default"` with unsigned canonical callback and existing testID/focus/error/native numeric keyboard. Preview remains fed by raw canonical form text.
+- `apps/mobile/app/(private)/edit-account.tsx` — Edit Name required; Balance adopts signed `GroupedMoneyInput variant="default" allowNegative`, original testID/focus/error/keyboard; no change to canonical hook dirty tracking, parse-at-save, PageHeader actions, confirmation sheet, default toggle, optional sections or Delete.
+- `apps/mobile/components/add-account/AccountTypeSelector.tsx` — Optional `required` prop with shared visible label and localized group accessible name, without adding required qualifiers to individual radios or changing horizontal cards/icons/selection.
+- `apps/mobile/components/edit-account/ReadOnlyDropdown.tsx` — Shared default label treatment and approved rounded-2xl/p-4 locked field geometry; preserved emoji/value, lock action and Tooltip, no required semantics.
+
+**Business documentation only:** `docs/business/business-decisions.md` Accounts nickname uniqueness paragraph aligned with existing service identity: case-insensitive trimmed nickname per user+currency+known institution (priority), else normalized manual provider display name, else shared no-provider; separate identity namespaces, type not dimension, Edit excludes self. No service/hook/schema/validator/DB modification.
+
+**Other paths unchanged:** InstitutionProviderSection, SmsMatchingSection, BalanceChangedSheet, locales, Foundation shared UI/amount helpers, AccountPreviewCard, CurrencyPicker, hooks, services, all tests/mockups, independent review reports. The approved eight-image package `sha256:265cd15fefd32d9cece643179abbe4ed3843db82c74abe9c21b9dccc73dcf15e` remains unchanged.
+
+**Static/evidence disposition:** This Normal ChatGPT source lane made read-only source/diff inspections and published GitHub code; **no actual TypeScript, lint, formatting/hook, i18n, Jest, integration, E2E, Maestro, emulator, native visual, manual or accessibility check executed**. Root owns genuine static hooks/typechecks; M1 owns independent ordered source review. **All 35 Accounts manual QA scenario IDs remain NOT RUN.** Human-deferred tests are not PASS. Edit negative-key availability, actual GroupedMoneyInput focus/caret, RTL, disabled/stale uniqueness, offline persistence, silent/tracked side effects, native layout and lock Tooltip remain manual/review dependencies, not claimed verified.
+
+**Source handoff completed; writer ownership released.** No further writes, PR creation, merge, retarget or test/device action without a fresh explicit assignment.
+

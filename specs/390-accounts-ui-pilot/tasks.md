@@ -1,7 +1,7 @@
 # Tasks: Accounts UI Pilot
 
 **Input**: spec.md, plan.md, research.md, data-model.md, contracts/ and approved mockup manifest.
-**Status**: Foundation-first delivery and PR authorized for T001–T013 only, subject to readiness.md gates and explicit file ownership; all tasks unchecked and all 35 QA cases NOT RUN. Accounts migration remains a separate later delivery.
+**Current handoff (2026-10-11):** Accounts Add/Edit migration was separately human-authorized, root SOURCE GO at `488731442edfcaca96e680cbaf61d993805ce18c`, and S1 has authored the **source portions** of T017 (Add/Type) and T023 (Edit/locked) at `0b780d05bda5e4d34c8e53e213502eda94316b47` on `codex/accounts-form-migration`; business-only uniqueness documentation aligned in the same commit. **Task checkboxes and existing coverage/acceptance requirements remain unchanged** because root static checks and independent review are pending, and Mohamed deferred unit/integration/E2E execution. This does not declare full T017/T023 acceptance or any validation PASS. All 35 Accounts QA scenarios remain **NOT RUN**. Older Foundation-first and test-first prerequisites below are historical and overridden *for this explicitly authorized source delivery only*.
 **Visual authority**: sha256:265cd15fefd32d9cece643179abbe4ed3843db82c74abe9c21b9dccc73dcf15e.
 **Tests**: Mandatory strict TDD overrides template optional-test guidance. Author and run meaningful unit/integration and controllable full-journey E2E Red before related production edits; setup failure is not Red.
 
