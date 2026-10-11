@@ -207,7 +207,10 @@ export function ActionButton({
       onPress={onPress}
       className={`min-h-[48px] flex-row items-center justify-center gap-2 rounded-xl border px-4 py-2 ${
         fullWidth ? "w-full" : ""
-      } ${base} ${disabled ? "opacity-50" : "active:opacity-80"}`}
+      } ${base}`}
+      style={({ pressed }) => ({
+        opacity: disabled ? 0.55 : pressed ? 0.8 : 1,
+      })}
     >
       <Ionicons name={icon} size={20} color={iconColor} />
       <Text
