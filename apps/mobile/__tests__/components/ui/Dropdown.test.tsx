@@ -284,7 +284,7 @@ describe("T007 Dropdown required names and feedback precedence", () => {
         />
       );
 
-      const trigger = screen.getByTestId("required-selector-trigger");
+      const trigger: unknown = screen.getByTestId("required-selector-trigger");
       expect(trigger).toHaveProp("accessibilityRole", "button");
       expect(trigger).toHaveProp("accessibilityLabel", expectedName);
       expect(trigger).not.toHaveProp(
@@ -338,7 +338,7 @@ describe("T007 Dropdown required names and feedback precedence", () => {
       />
     );
 
-    const trigger = screen.getByTestId("unqualified-selector-trigger");
+    const trigger: unknown = screen.getByTestId("unqualified-selector-trigger");
     expect(trigger).toHaveProp(
       "accessibilityLabel",
       "Choose source account, Required field"
@@ -361,7 +361,7 @@ describe("T007 Dropdown required names and feedback precedence", () => {
       />
     );
 
-    const trigger = screen.getByTestId("hint-selector-trigger");
+    const trigger: unknown = screen.getByTestId("hint-selector-trigger");
     expect(trigger).toHaveProp("accessibilityLabel", "Account, Required field");
     expect(trigger).toHaveProp(
       "accessibilityHint",
@@ -383,7 +383,7 @@ describe("T007 Dropdown required names and feedback precedence", () => {
       />
     );
 
-    const trigger = screen.getByTestId("optional-selector-trigger");
+    const trigger: unknown = screen.getByTestId("optional-selector-trigger");
     expect(trigger).toHaveProp("accessibilityRole", "button");
     expect(trigger).toHaveProp("accessibilityLabel", "Optional provider");
     expect(screen.getByText("Choose provider")).toBeTruthy();
@@ -517,7 +517,7 @@ describe("T007 Q1/Q2/Q5 complete Dropdown accessibility contract", () => {
         testID="value-aware-selector"
       />
     );
-    const unselected = screen.getByTestId("value-aware-selector-trigger");
+    const unselected: unknown = screen.getByTestId("value-aware-selector-trigger");
     expect(unselected).toHaveProp("accessibilityRole", "button");
     expect(unselected).toHaveProp(
       "accessibilityLabel",
@@ -540,7 +540,7 @@ describe("T007 Q1/Q2/Q5 complete Dropdown accessibility contract", () => {
         testID="value-aware-selector"
       />
     );
-    const selected = screen.getByTestId("value-aware-selector-trigger");
+    const selected: unknown = screen.getByTestId("value-aware-selector-trigger");
     expect(selected).toHaveProp("accessibilityLabel", "Account, Required field");
     expect(selected).toHaveProp("accessibilityValue", { text: "Cash" });
     expect(screen.getByText("Cash")).toBeTruthy();

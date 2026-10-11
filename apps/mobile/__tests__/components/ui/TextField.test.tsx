@@ -163,7 +163,7 @@ describe("TextField", () => {
     );
 
     expect(screen.getByText("Full Name *")).toBeOnTheScreen();
-    const requiredInput = screen.getByLabelText(
+    const requiredInput: unknown = screen.getByLabelText(
       "Full Name, " + enCommon.required_field
     );
     expect(requiredInput).toHaveProp(
@@ -223,7 +223,7 @@ describe("T007 TextField required names and feedback", () => {
       );
 
       const expectedName = label + separator + requiredText;
-      const input = screen.getByTestId("localized-required-text");
+      const input: unknown = screen.getByTestId("localized-required-text");
       expect(input).toHaveProp("accessibilityLabel", expectedName);
       expect((getTestInstanceProps(input).accessibilityLabel as string).split(requiredText)).toHaveLength(2);
       expect(input).not.toHaveProp("accessibilityHint", requiredText);
@@ -249,7 +249,7 @@ describe("T007 TextField required names and feedback", () => {
         </I18nextProvider>
       );
 
-      const input = screen.getByTestId("override-required-text");
+      const input: unknown = screen.getByTestId("override-required-text");
       expect(input).toHaveProp("accessibilityLabel", override);
       expect(screen.getByText(label + " *")).toBeOnTheScreen();
     }
@@ -319,7 +319,7 @@ describe("T007 TextField required names and feedback", () => {
       </I18nextProvider>
     );
 
-    const input = screen.getByTestId("required-with-hint");
+    const input: unknown = screen.getByTestId("required-with-hint");
     expect(input).toHaveProp("accessibilityLabel", "Amount, Required field");
     expect(input).toHaveProp(
       "accessibilityHint",
@@ -341,7 +341,7 @@ describe("T007 TextField required names and feedback", () => {
       />
     );
 
-    const input = screen.getByTestId("invalid-text-field");
+    const input: unknown = screen.getByTestId("invalid-text-field");
     fireEvent(input, "focus", {});
     expect(input).toHaveDisplayValue("abc12345");
     expect(input).toHaveProp("aria-invalid", true);
@@ -394,7 +394,7 @@ describe("T007 TextField required names and feedback", () => {
         value="bad"
       />
     );
-    const input = screen.getByTestId("error-focus");
+    const input: unknown = screen.getByTestId("error-focus");
     const initialClass = getTestInstanceProps(input).className as string;
 
     fireEvent(input, "focus", {});

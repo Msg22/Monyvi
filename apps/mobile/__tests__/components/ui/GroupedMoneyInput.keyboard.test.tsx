@@ -89,7 +89,7 @@ describe("T007 GroupedMoneyInput option compatibility", () => {
       />
     );
 
-    const input = screen.getByTestId("money-signed-default");
+    const input: unknown = screen.getByTestId("money-signed-default");
     expect(input).toHaveDisplayValue("-1,234.567");
     expect(getNativeInputProps("money-signed-default").className as string)
       .toContain("rounded-2xl");
@@ -120,7 +120,7 @@ describe("T007 GroupedMoneyInput option compatibility", () => {
       />
     );
 
-    const input = screen.getByTestId("money-forwarded-optin");
+    const input: unknown = screen.getByTestId("money-forwarded-optin");
     expect(input).toHaveDisplayValue("-1,250.755");
     expect(input).toHaveProp("showSoftInputOnFocus", false);
     expect(input).toHaveProp("inputMode", "none");

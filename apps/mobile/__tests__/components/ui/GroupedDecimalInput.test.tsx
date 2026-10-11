@@ -400,7 +400,7 @@ describe("T007 grouped numeric opt-in and raw display", () => {
       />
     );
 
-    const input = screen.getByTestId("legacy-weight-shape");
+    const input: unknown = screen.getByTestId("legacy-weight-shape");
     expect(input).toHaveDisplayValue("1,250.755");
     expect(getTestInstanceProps(input).className as string).toContain("rounded-lg");
     expect(getTestInstanceProps(input).className as string).toContain("min-h-11");
@@ -417,7 +417,7 @@ describe("T007 grouped numeric opt-in and raw display", () => {
       />
     );
 
-    const input = screen.getByTestId("default-grouped-input");
+    const input: unknown = screen.getByTestId("default-grouped-input");
     expect(input).toHaveDisplayValue("12,345.678");
     expect(getTestInstanceProps(input).className as string).toContain("rounded-2xl");
     expect(getTestInstanceProps(input).className as string).toContain("p-4");
@@ -446,7 +446,7 @@ describe("T007 grouped numeric opt-in and raw display", () => {
     }
 
     render(<ControlledMalformed />);
-    const input = screen.getByTestId("raw-amount");
+    const input: unknown = screen.getByTestId("raw-amount");
     fireEvent(input, "focus", {});
     fireEvent.changeText(input, "abc12345");
 
@@ -618,7 +618,7 @@ describe("T007 grouped numeric opt-in and raw display", () => {
       />
     );
 
-    const input = screen.getByTestId("signed-forwarded");
+    const input: unknown = screen.getByTestId("signed-forwarded");
     expect(input).toHaveDisplayValue("-1,234.567");
     expect(input).toHaveProp("inputMode", "none");
     expect(input).toHaveProp("showSoftInputOnFocus", false);
@@ -647,7 +647,7 @@ describe("T007 grouped numeric opt-in and raw display", () => {
         onCanonicalChange={jest.fn()}
       />
     );
-    const input = screen.getByTestId("arabic-money");
+    const input: unknown = screen.getByTestId("arabic-money");
     expect(input).toHaveProp("accessibilityLabel", "رصيد الحساب، حقل مطلوب");
     expect(input).not.toHaveProp("accessibilityHint", "حقل مطلوب");
     expect(input).toHaveDisplayValue("-1,234.567");
@@ -667,7 +667,7 @@ describe("T007 grouped numeric opt-in and raw display", () => {
       />
     );
 
-    const input = screen.getByTestId("numeric-error");
+    const input: unknown = screen.getByTestId("numeric-error");
     fireEvent(input, "focus", {});
     expect(input).toHaveDisplayValue("abc12345");
     expect(screen.getByRole("alert", { name: "Enter a valid amount" }))
