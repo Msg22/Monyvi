@@ -21,6 +21,7 @@ import { useTranslation } from "react-i18next";
 import { palette } from "@/constants/colors";
 import { useTheme } from "@/context/ThemeContext";
 import { Tooltip } from "@/components/ui/Tooltip";
+import { FieldLabel } from "@/components/ui/FieldLabel";
 
 // ---------------------------------------------------------------------------
 // Constants (tooltip config is now handled by the reusable Tooltip component)
@@ -76,12 +77,10 @@ export function ReadOnlyDropdown({
   return (
     <View className={`mb-4 ${className}`}>
       {/* Label */}
-      <Text className="text-sm font-semibold text-slate-500 dark:text-slate-400 mb-2">
-        {label}
-      </Text>
+      <FieldLabel label={label} className="input-label mb-2" />
 
       {/* Dropdown-like container */}
-      <View className="flex-row items-center justify-between px-4 py-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/50">
+      <View className="flex-row items-center justify-between rounded-2xl border border-slate-200 bg-slate-100 p-4 dark:border-slate-700 dark:bg-slate-800/50">
         {/* Left: Icon + Value */}
         <View className="flex-row items-center flex-1">
           {icon ? <Text className="text-lg me-2">{icon}</Text> : null}

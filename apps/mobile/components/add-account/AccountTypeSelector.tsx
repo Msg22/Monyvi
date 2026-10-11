@@ -13,11 +13,16 @@ import {
 import { ACCOUNT_TYPES } from "@/constants/accounts";
 import { palette } from "@/constants/colors";
 import { useTheme } from "@/context/ThemeContext";
+import {
+  FieldLabel,
+  composeFieldAccessibleName,
+} from "@/components/ui/FieldLabel";
 
 interface AccountTypeSelectorProps {
   readonly value: AccountType;
   readonly onChange: (value: AccountType) => void;
   readonly disabled?: boolean;
+  readonly required?: boolean;
 }
 
 const ACCOUNT_TYPE_LABEL_KEYS = {
@@ -41,14 +46,29 @@ export function AccountTypeSelector({
   value,
   onChange,
   disabled = false,
+  required = false,
 }: AccountTypeSelectorProps): JSX.Element {
   const { isDark } = useTheme();
   const { t } = useTranslation("accounts");
   const { t: tCommon } = useTranslation("common");
+  const typeLabel = t("account_type");
+  const groupAccessibleName = composeFieldAccessibleName({
+    label: typeLabel,
+    required,
+    requiredText: tCommon("required_field"),
+  });
 
   return (
-    <View className="mb-4" accessibilityRole="radiogroup">
-      <Text className="input-label mb-2">{t("account_type")}</Text>
+    <View
+      className="mb-4"
+      accessibilityRole="radiogroup"
+      accessibilityLabel={groupAccessibleName}
+    >
+      <FieldLabel
+        label={typeLabel}
+        required={required}
+        className="input-label mb-2"
+      />
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
