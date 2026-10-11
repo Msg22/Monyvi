@@ -676,3 +676,103 @@ describe("T007 grouped numeric opt-in and raw display", () => {
     expect(screen.queryByText("Secondary help")).toBeNull();
   });
 });
+describe("T007 Q3/Q4 unsigned and controlled draft preservation", () => {
+  it("emits an unsigned negative edit as exact raw text, never as accepted signed canonical", () => {
+    const onCanonicalChange = jest.fn();
+    render(
+      <GroupedDecimalInput
+        label="Unsigned amount"
+        testID="unsigned-negative-change"
+        value="1234"
+        onCanonicalChange={onCanonicalChange}
+      />
+    );
+
+    fireEvent.changeText(
+      screen.getByTestId("unsigned-negative-change"),
+      "-1,234.567"
+    );
+    expect(onCanonicalChange).toHaveBeenCalledTimes(1);
+    expect(onCanonicalChange).toHaveBeenCalledWith("-1,234.567");
+    expect(onCanonicalChange).not.toHaveBeenCalledWith("-1234.567");
+  });
+
+  it("keeps malformed raw drafts through unrelated rerender, blur/refocus, and a complete valid correction sequence", () => {
+    const observedChanges: string[] = [];
+
+    function ControlledNumeric({
+      revision,
+    }: {
+      readonly revision: number;
+    }): React.JSX.Element {
+      const [value, setValue] = React.useState("1234");
+      const onChange = (next: string): void => {
+        observedChanges.push(next);
+        setValue(next);
+      };
+
+      return (
+        <>
+          <GroupedDecimalInput
+            label="Amount"
+            testID="grouped-controlled-rerender"
+            value={value}
+            onCanonicalChange={onChange}
+          />
+          <Text testID="grouped-current-canonical">{value}</Text>
+          <Text testID="unrelated-revision">{revision}</Text>
+        </>
+      );
+    }
+
+    const { rerender } = render(<ControlledNumeric revision={0} />);
+    const field = (): ReturnType<typeof screen.getByTestId> =>
+      screen.getByTestId("grouped-controlled-rerender");
+
+    fireEvent(field(), "focus", {});
+    expect(field()).toHaveDisplayValue("1,234");
+    expect(observedChanges).toEqual([]);
+
+    fireEvent.changeText(field(), "abc12345");
+    expect(observedChanges).toEqual(["abc12345"]);
+    expect(screen.getByTestId("grouped-current-canonical"))
+      .toHaveTextContent("abc12345");
+    expect(field()).toHaveDisplayValue("abc12345");
+
+    // Same canonical value, unrelated parent render: do not discard the draft.
+    rerender(<ControlledNumeric revision={1} />);
+    expect(screen.getByTestId("unrelated-revision")).toHaveTextContent("1");
+    expect(field()).toHaveDisplayValue("abc12345");
+    expect(observedChanges).toEqual(["abc12345"]);
+
+    fireEvent(field(), "blur", {});
+    expect(field()).toHaveDisplayValue("abc12345");
+    fireEvent(field(), "focus", {});
+    expect(field()).toHaveDisplayValue("abc12345");
+
+    fireEvent.changeText(field(), "12,34");
+    expect(field()).toHaveDisplayValue("12,34");
+    fireEvent.changeText(field(), "12345.678");
+    expect(field()).toHaveDisplayValue("12,345.678");
+
+    // A public changeText simulates mid-string replacement; it does not prove
+    // native caret/IME/selection positioning on a device.
+    fireEvent.changeText(field(), "12,945.678");
+    expect(field()).toHaveDisplayValue("12,945.678");
+    fireEvent.changeText(field(), "12945.678");
+    expect(field()).toHaveDisplayValue("12,945.678");
+
+    fireEvent(field(), "blur", {});
+    fireEvent(field(), "focus", {});
+    expect(field()).toHaveDisplayValue("12,945.678");
+    expect(screen.getByTestId("grouped-current-canonical"))
+      .toHaveTextContent("12945.678");
+    expect(observedChanges).toEqual([
+      "abc12345",
+      "12,34",
+      "12345.678",
+      "12945.678",
+      "12945.678",
+    ]);
+  });
+});
