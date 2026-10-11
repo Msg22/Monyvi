@@ -143,8 +143,10 @@ it):
   is **LOCAL ONLY / NOT PUBLISHED ON GITHUB**; its tree is
   `7f0dca9a886d452ca937464764fdcee4e1450dfd` and parents are
   `0396159f448a9298f9b241afae027543e0ec6b52`, UI pin and recorder
-  head. No feature remote/CI result is inferred. The separate pre-push
-  privacy check was **RUNNING** at handoff, outcome **UNKNOWN**.
+  head. Root executed `npm run qa-sms:privacy-check`: **PASS** for
+  source-integration BASE `0e7ee55abf6fb18af37e29e4f2e48ba45604a31e` → HEAD `df00c9e3d4c9ca624d55935b9bf3f5d3364be7ce`.
+  The final post-documentation publication guard, feature push and new
+  feature-head CI remain **PENDING**; no remote CI result is inferred.
 - Three safe Maestro scripts in
   `apps/mobile/e2e/maestro/voice/`
   (`add-transaction-modes.yaml`, `voice-recovery.yaml`,

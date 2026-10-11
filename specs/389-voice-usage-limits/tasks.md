@@ -1280,8 +1280,10 @@ GITHUB**. It has tree `7f0dca9a886d452ca937464764fdcee4e1450dfd`
 and parents `0396159f448a9298f9b241afae027543e0ec6b52`,
 UI `34a698fdfb3496dcb559a4dab4adeff9151c110b`, recorder
 `2552577f499abc9019fc6a3c1f16416d8304b2ea`. Do not infer published
-remote CI. Root's pre-push privacy check was **RUNNING** at this handoff; no
-result supplied, so do **not** mark it PASS. No feature push is claimed.
+remote CI. Root executed `npm run qa-sms:privacy-check`: **PASS** for the
+source-integration range BASE `0e7ee55abf6fb18af37e29e4f2e48ba45604a31e` → HEAD `df00c9e3d4c9ca624d55935b9bf3f5d3364be7ce`.
+The final post-documentation publication guard remains **PENDING**, as do the
+feature push and new feature-head CI. No feature push or remote CI is claimed.
 
 **Exact existing binding tuple, unchanged:** root official verifier
 `isAuthoritative: true`, `errors: []`; image SHA-256

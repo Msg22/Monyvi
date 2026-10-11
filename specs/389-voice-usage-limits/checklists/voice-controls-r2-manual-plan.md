@@ -116,10 +116,10 @@ results from mocked recorder behavior.
 1. At/near 30,000 ms **active** time, inject/observe native Stop rejection,
    then a separate Stop that finishes without a usable URI. Require the
    **existing generic recording-finalization recovery**, a capped elapsed
-   display, **no infinite Listening**, no fake §Recording complete§ file and
+   display, **no infinite Listening**, no fake `Recording complete` file and
    **zero automatic provider/Gemini/quota/review work**. Confirm that ordinary
    early user Submit still displays its *actual* elapsed time (e.g.
-   §00:08 / 00:30§), not a fictitious full 30 seconds.
+   `00:08 / 00:30`), not a fictitious full 30 seconds.
 2. When the generic error unlocks the Manual tab, switch to Manual
    immediately. Verify failed native capture is **released before the screen
    can conceal any still-owned recorder**; the mic must not continue capturing
@@ -133,7 +133,7 @@ results from mocked recorder behavior.
    completion must neither publish to nor release the replacement. Validate
    once-only release/delete across Discard, Reset and Back.
 5. Control case: let healthy native cap complete, **wait without pressing**
-   Submit/Discard. Finalized local audio remains available with §00:30 / 00:30§,
+   Submit/Discard. Finalized local audio remains available with `00:30 / 00:30`,
    gray **disabled center Pause**, no Resume or moving waves, and **no automatic
    parse/provider/navigation**. Explicit Submit sends once with original
    retained URI/request identity; double taps remain one logical request.

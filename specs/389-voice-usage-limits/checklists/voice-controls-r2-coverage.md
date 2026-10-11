@@ -162,6 +162,8 @@ derive from the coordinator's actual execution receipts, **not this
 documentation writer's executions**. Final root local integration commit
 `df00c9e3d4c9ca624d55935b9bf3f5d3364be7ce` with tree
 `7f0dca9a886d452ca937464764fdcee4e1450dfd` was **NOT YET
-GITHUB-PUBLISHED** at handoff; pre-push privacy check **RUNNING**, no
-result/feature CI claim. See `../tasks.md` for full exact batch command and
+GITHUB-PUBLISHED** at handoff. Root ran `npm run qa-sms:privacy-check`
+**PASS** for source-integration BASE `0e7ee55abf6fb18af37e29e4f2e48ba45604a31e` → HEAD `df00c9e3d4c9ca624d55935b9bf3f5d3364be7ce`.
+Final post-documentation publication guard, feature push and new feature-head
+CI remain **PENDING**; no remote CI result is claimed. See `../tasks.md` for full exact batch command and
 review receipt, and `voice-controls-r2-manual-plan.md` for owner cases.
