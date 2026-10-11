@@ -70,7 +70,7 @@
 | **T008 YAML accounting at base `b4a656...`** | **Verified tracked: `accounts/egyptian-institution-presets.yaml` and `accounts/ui-pilot-foundation.yaml`; pilot create/edit YAML NOT tracked in this source snapshot** | Foundation smoke authored/tracked ≠ executed/integrated Account Create/Edit automation. Earlier pilot Create/Edit YAML was authored on a separate E2E review branch. ALL NOT RUN for migration. |
 | **Final hooked source tree** | **NOT PROVIDED YET** | If root's autofix/format/hook commit changes `0b780d05...` production bytes, obtain exact published commit+diff and do a focused independent recheck **before applying this verdict to the final tree**. No self-rebase/merge/fix. |
 
-**Conclusion for precisely `0b780d05bda5e4d34c8e53e213502eda94316b47`:** **No confirmed actionable source-review blocker, three ordered passes CLEAR.** Do **not** upgrade this statement to "migration tests PASS", "native mockup parity PASS", "manual 35 PASS", or "final hooked build PASS". Root is responsible for reconciling any subsequent source modifications and exact tree. Miguel/Mohamed remains owner of human native/manual validation (Mohamed as identified by the user). The reviewer has not made changes outside this report.
+**Conclusion for precisely `0b780d05bda5e4d34c8e53e213502eda94316b47`:** **No confirmed actionable source-review blocker, three ordered passes CLEAR.** Do **not** upgrade this statement to "migration tests PASS", "native mockup parity PASS", "manual 35 PASS", or "final hooked build PASS". Root is responsible for reconciling any subsequent source modifications and exact tree. Mohamed remains responsible for human native/manual validation. The reviewer has not made changes outside this report.
 
 ---
 
