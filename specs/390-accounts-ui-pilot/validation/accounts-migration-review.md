@@ -1,6 +1,69 @@
-# Accounts form migration — Phase 2 independent source review
+# Accounts Migration — final hooked-head source risk review
 
-**CURRENT DISPOSITION: STATIC SOURCE REVIEW CLEAR (no confirmed blockers) for the exact immutable migration source `0b780d05bda5e4d34c8e53e213502eda94316b47`.** All three mandated passes—(1) TypeScript/React/async, (2) logic/requirements and failure paths, (3) style/architecture/static accessibility—were completed against that exact published commit in order. **This is NOT test Green, an executed typecheck, native/visual/accessibility fidelity approval, final hooked tree approval, or release acceptance.** Root-run static hooks and final-tree reconciliation remain pending; Mohamed explicitly deferred Jest/unit/integration/E2E/Maestro and owns manual/native results.
+**CURRENT DISPOSITION: BLOCKED on AKB-01 (HIGH) at `f6e2d88c6134bc823ea3cd833dc10ecfab5f004b`.** Independent TypeScript/React/async source inspection established no new confirmed type/hook blocker. Ordered logic/requirements review **STOPS on a confirmed React Native keyboard-prop mapping regression**; earlier style/architecture clearance is historical and not a final full-review approval. This current disposition **supersedes the earlier `0b780d05...` CLEAR**. It is NOT native keyboard execution, an E2E failure, or an executed unit test.
+
+## F. Final source identity, provenance, and scope
+
+| Item | Exact evidence / status |
+| --- | --- |
+| Repository / final reviewed commit | `Msg22/Monyvi`; `codex/accounts-form-migration` at **`f6e2d88c6134bc823ea3cd833dc10ecfab5f004b`** |
+| Published final tree | **`7abe324d8dbc034de6f317a26aa0cc24b86fa1d9`** — same tree as root-reported actual hooked local `6afd1feae025ee0697f599e401d4b4c675c444be` |
+| Previous independent source review | `0b780d05bda5e4d34c8e53e213502eda94316b47`; original four-file source adoption and approved uniqueness amendment |
+| Confirmed final delta | `0b780d05..f6e2d88`: two commits ahead, zero behind. Among production, only `add-account.tsx` and `AccountTypeSelector.tsx` changed **import/JSX whitespace formatting**; `edit-account.tsx` and `ReadOnlyDropdown.tsx` have the exact prior blobs. Additional changes are approved/historical formatting and handoff-status docs, not a financial/provider/schema/service/locale/test/Foundation implementation change. Root reports identical emitted-runtime AST for all four production files. |
+| Root actual validation | Root reports **PASS**: ESLint/autofix, Prettier and i18n on local `04758`; docs ordinary hooks at `6afd1fe`; full mobile `tsc --noEmit` at 14:51:58 UTC; actual prepush QA_SMS/privacy at 14:52:59 UTC; approved binding package 8/8 integrity. **DB sync explicitly SKIPPED.** These results are root-reported, **not tests run by this reviewer**, and do not prove keyboard behavior. |
+| React Native installed version | `apps/mobile/package.json` pins **`react-native: 0.83.6`**; `package-lock.json:18812–18815` pins package `node_modules/react-native` **0.83.6** / `react-native-0.83.6.tgz`. |
+| Manual/automated boundaries | Unit/Jest/integration/E2E/Maestro authoring and execution **DEFERRED by Mohamed**; all **35 manual cases NOT RUN** here. Native screenshot, keyboard/IME/caret/RTL and TalkBack are Mohamed-owned and unverified. |
+
+## F.1 AKB-01 — HIGH / BLOCKER: explicit numeric inputMode changes selected keyboard
+
+**Changed Account source at final exact commit:**
+
+- [`add-account.tsx:342–343`](https://github.com/Msg22/Monyvi/blob/f6e2d88c6134bc823ea3cd833dc10ecfab5f004b/apps/mobile/app/%28private%29/add-account.tsx#L342-L343) now passes **both** `keyboardType="numeric"` and **new** `inputMode="numeric"` to the grouped Initial Balance.
+- [`edit-account.tsx:473–474`](https://github.com/Msg22/Monyvi/blob/f6e2d88c6134bc823ea3cd833dc10ecfab5f004b/apps/mobile/app/%28private%29/edit-account.tsx#L473-L474) passes the same pair to the grouped signed Edit Balance.
+- The pre-migration `b4a656e...` Add (`add-account.tsx:317–328`) and Edit (`edit-account.tsx:459–470`) both passed **only** `keyboardType="numeric"` to ordinary `TextField`, not `inputMode`.
+- `GroupedMoneyInput.tsx` delegates all props to `GroupedDecimalInput`; [`GroupedDecimalInput.tsx:67–68,94–117`](https://github.com/Msg22/Monyvi/blob/f6e2d88c6134bc823ea3cd833dc10ecfab5f004b/apps/mobile/components/ui/GroupedDecimalInput.tsx#L67-L117) **defaults `inputMode="decimal"`** and forwards a non-null resolved input mode to the shared `TextField`. Shared [`TextField.tsx:144–150`](https://github.com/Msg22/Monyvi/blob/f6e2d88c6134bc823ea3cd833dc10ecfab5f004b/apps/mobile/components/ui/TextField.tsx#L144-L150) spreads that through to native React Native `TextInput`.
+
+**React Native 0.83.6 PRIMARY SOURCE, verified at published immutable tag `v0.83.6`:**
+
+1. [`TextInput.js:811–820`](https://github.com/react/react-native/blob/v0.83.6/packages/react-native/Libraries/Components/TextInput/TextInput.js#L811-L820) defines `inputMode numeric → keyboardType number-pad`, and `inputMode decimal → keyboardType decimal-pad`.
+2. [`TextInput.js:928–933`](https://github.com/react/react-native/blob/v0.83.6/packages/react-native/Libraries/Components/TextInput/TextInput.js#L928-L933) assigns `keyboardType={inputMode ? inputModeToKeyboardTypeMap[inputMode] : keyboardType}`: a truthy `inputMode` therefore **wins** over the explicit `keyboardType="numeric"`. RN's public TextInput documentation confirms that precedence.
+3. [Android `ReactTextInputManager.kt:757–766`](https://github.com/react/react-native/blob/v0.83.6/packages/react-native/ReactAndroid/src/main/java/com/facebook/react/views/textinput/ReactTextInputManager.kt#L757-L766) selects different keyboard native flags for `numeric`, `number-pad`, `decimal-pad`.
+4. [Android `ReactTextInputManager.kt:1134–1138`](https://github.com/react/react-native/blob/v0.83.6/packages/react-native/ReactAndroid/src/main/java/com/facebook/react/views/textinput/ReactTextInputManager.kt#L1134-L1138): `number-pad` = `TYPE_CLASS_NUMBER`; `decimal-pad` = `TYPE_CLASS_NUMBER | TYPE_NUMBER_FLAG_DECIMAL`; `numeric` = **`TYPE_CLASS_NUMBER | TYPE_NUMBER_FLAG_DECIMAL | TYPE_NUMBER_FLAG_SIGNED`**.
+
+**Deterministic behavioral configuration difference:** Current migration routes request **`number-pad`** and therefore no Android decimal or signed input-type flags. The old Account `keyboardType="numeric"` requested **both decimal AND signed flags**, accommodating Add decimals and Edit negative values. This breaks the frozen requirement to preserve the prior Account keyboard behavior and is materially at odds with `spec.md FR-004–007`, `manual-test-plan.md` QA02/03/06–08/31, and the accepted migration plan's unchanged keyboard contract. It is a confirmed **native configuration regression**, not proof that any particular OEM keyboard physically lacks dot/minus, and no native app was executed by this reviewer.
+
+**Critical correction detail:** Merely removing the explicit `inputMode="numeric"` from the routes will **not** restore old behavior. With no mode prop, `GroupedDecimalInput` defaults to `inputMode="decimal"`; RN then chooses `decimal-pad`, which restores the decimal flag but **not** the signed flag. The supported RN inputMode enumeration does not provide a value mapping to `keyboardType="numeric"`. Unsafe casts or fabricated `null`/empty-string modes are not acceptable fixes.
+
+**Minimum source-fix request (MUST be root-authorized due to shared foundation ownership):**
+- Remove the newly explicit `inputMode="numeric"` from **both** Account balance routes while keeping their established `keyboardType="numeric"`.
+- Ask root to grant a tiny *separate* `GroupedDecimalInput` compatibility adjustment so that when a caller specifies `keyboardType="numeric"` **without an explicit inputMode**, the wrapper forwards `inputMode={undefined}` rather than silently defaulting to `"decimal"`. Preserve current default for other grouped decimal consumers and `showSoftInputOnFocus={false}` → `"none"` native suppression; do not change numeric grammar/rounding or financial policy. A conditional fallback confined to `keyboardType === "numeric"` is a reasonable candidate, subject to root's exact consumer analysis and approved allowlist.
+- Root reruns required real static checks/hooks at the corrected immutable source; independent reviewer rechecks the focused published delta. Mohamed remains owner of actual numeric/signed keyboard and IME/manual evidence. **This report author makes no code changes.**
+
+**Severity/stop:** A legitimate source-level regression can pass TypeScript and formatting gates. The previously claimed three-pass CLEAR on `0b780d05` did not inspect exact installed RN keyboard routing and is **withdrawn for final acceptance**. Stop after this valid HIGH logic blocker; style/architecture is not newly accepted.
+
+## F.2 Current ordered-review and validation matrix
+
+| Gate | Current result |
+| --- | --- |
+| TypeScript / React / async static recheck | No confirmed type/hook regressions in final import/JSX-format-only delta. Root's exact hooked-tree TypeScript/hook checks reported PASS. |
+| Logic / business / input behavior | **BLOCKED on AKB-01** (verified native keyboard mapping). No other newly confirmed business/financial issues raised. |
+| Style / architecture | Previous source-level review remains historically recorded; per ordered stop rule it is **NOT a final unconditional CLEAR** while logic blocker persists. |
+| Services/finance/provider/SMS/locale/tests/foundation | No production changes to those files in this migration/hooked delta. A narrowly authorized foundation compatibility change is needed for the keyboard fix. |
+| Jest/unit/integration/E2E/Maestro | Explicitly **DEFERRED**, no post-migration runs claimed. |
+| Manual UI/native/RTL/caret/IME/TalkBack/fidelity | **35/35 NOT RUN in this lane; UNKNOWN**, Mohamed-owned. |
+| Foundation PR #390 | Separate unchanged foundation `b4a656...`, issue #392 noted by root; no review-branch PR actions. |
+
+**FINAL RECOMMENDATION:** **BLOCK the Accounts migration source review at exact `f6e2d88c6134bc823ea3cd833dc10ecfab5f004b`** until AKB-01 is corrected under root-authorized exclusive source ownership and the corrected immutable revision receives a focused recheck. Existing checks remain valid within their reported scope but do not establish the native keyboard input-type contract. Do not lift Mohamed's test deferral or invent runtime evidence. **Only this one review Markdown file has been edited.**
+
+---
+
+## HISTORICAL Phase 2/Phase 1 audit (conclusions superseded where noted)
+
+**NOTE:** The earlier Phase 2 at `0b780d05...` reported CLEAR based on the four-file source/contract review; that verdict is **superseded** by AKB-01's new pinned RN 0.83.6 finding. Earlier clean TS/finance/style checks remain available for reference, but their CLEAR labels do **not** override the blocker. The prior 35-row manual matrix and YAML accounting still apply as NOT RUN.
+
+## Historical Phase 2 source review (prior conclusion SUPERSEDED)
+
+**PRIOR DISPOSITION (SUPERSEDED by AKB-01): STATIC SOURCE REVIEW CLEAR (no confirmed blockers) for the exact immutable migration source `0b780d05bda5e4d34c8e53e213502eda94316b47`.** All three mandated passes—(1) TypeScript/React/async, (2) logic/requirements and failure paths, (3) style/architecture/static accessibility—were completed against that exact published commit in order. **This is NOT test Green, an executed typecheck, native/visual/accessibility fidelity approval, final hooked tree approval, or release acceptance.** Root-run static hooks and final-tree reconciliation remain pending; Mohamed explicitly deferred Jest/unit/integration/E2E/Maestro and owns manual/native results.
 
 ## P2.1 — Exact source and ownership evidence
 
