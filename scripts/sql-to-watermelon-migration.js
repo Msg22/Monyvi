@@ -671,28 +671,80 @@ function escapeRegex(str) {
 }
 
 /**
- * Check whether a specific column addition already exists within an
- * addColumns block for the given table in the migrations content.
+ * Resolve content of local-schema modules directly imported by migrations.ts
+ * (e.g. from "./local-schema/...").
+ *
+ * @param {string} content
+ * @param {string} [baseDir]
+ * @returns {string[]} Array of source contents from referenced local-schema modules
  */
-function hasAddColumnInTable(content, table, colName) {
-  const blocks = [...content.matchAll(/addColumns\(\s*\{([\s\S]*?)\}\s*\)/g)];
-  return blocks.some(([, block]) => {
-    return (
-      new RegExp(`table:\\s*"${escapeRegex(table)}"`).test(block) &&
-      new RegExp(`name:\\s*"${escapeRegex(colName)}"`).test(block)
-    );
+function getReferencedLocalSchemaContents(
+  content,
+  baseDir = path.dirname(MIGRATIONS_TS_PATH)
+) {
+  const importMatches = [
+    ...content.matchAll(/from\s+["'](\.\/local-schema\/[^"']+)["']/g),
+  ];
+  const contents = [];
+
+  for (const [, relativeModulePath] of importMatches) {
+    for (const ext of [".ts", ".js", ""]) {
+      const candidate = path.resolve(baseDir, relativeModulePath + ext);
+      if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) {
+        contents.push(fs.readFileSync(candidate, "utf-8"));
+        break;
+      }
+    }
+  }
+
+  return contents;
+}
+
+/**
+ * Check whether a specific column addition already exists within an
+ * addColumns block for the given table in the migrations content or its
+ * referenced local-schema modules.
+ */
+function hasAddColumnInTable(
+  content,
+  table,
+  colName,
+  baseDir = path.dirname(MIGRATIONS_TS_PATH)
+) {
+  const sources = [
+    content,
+    ...getReferencedLocalSchemaContents(content, baseDir),
+  ];
+  return sources.some((src) => {
+    const blocks = [...src.matchAll(/addColumns\(\s*\{([\s\S]*?)\}\s*\)/g)];
+    return blocks.some(([, block]) => {
+      return (
+        new RegExp(`table:\\s*"${escapeRegex(table)}"`).test(block) &&
+        new RegExp(`name:\\s*"${escapeRegex(colName)}"`).test(block)
+      );
+    });
   });
 }
 
 /**
  * Check whether a createTable block for the given table already exists
- * in the migrations content.
+ * in the migrations content or its referenced local-schema modules.
  */
-function hasCreateTable(content, table) {
-  const blocks = [...content.matchAll(/createTable\(\s*\{([\s\S]*?)\}\s*\)/g)];
-  return blocks.some(([, block]) =>
-    new RegExp(`name:\\s*"${escapeRegex(table)}"`).test(block)
-  );
+function hasCreateTable(
+  content,
+  table,
+  baseDir = path.dirname(MIGRATIONS_TS_PATH)
+) {
+  const sources = [
+    content,
+    ...getReferencedLocalSchemaContents(content, baseDir),
+  ];
+  return sources.some((src) => {
+    const blocks = [...src.matchAll(/createTable\(\s*\{([\s\S]*?)\}\s*\)/g)];
+    return blocks.some(([, block]) =>
+      new RegExp(`name:\\s*"${escapeRegex(table)}"`).test(block)
+    );
+  });
 }
 
 /**
@@ -805,17 +857,22 @@ function filterSchemaChangesAlreadyInWatermelon(
   };
 }
 
-function isAlreadyMigrated(content, addColumnsData, createTablesData) {
+function isAlreadyMigrated(
+  content,
+  addColumnsData,
+  createTablesData,
+  baseDir = path.dirname(MIGRATIONS_TS_PATH)
+) {
   // Check addColumns — every table+column pair must exist in the SAME block
   for (const [table, columns] of Object.entries(addColumnsData)) {
     for (const col of columns) {
-      if (!hasAddColumnInTable(content, table, col.name)) return false;
+      if (!hasAddColumnInTable(content, table, col.name, baseDir)) return false;
     }
   }
 
   // Check createTables — table name must exist in a createTable block
   for (const table of Object.keys(createTablesData)) {
-    if (!hasCreateTable(content, table)) return false;
+    if (!hasCreateTable(content, table, baseDir)) return false;
   }
 
   return true;
@@ -980,5 +1037,6 @@ if (require.main === module) {
 
 module.exports = {
   filterSchemaChangesAlreadyInWatermelon,
+  isAlreadyMigrated,
   parseSql,
 };
