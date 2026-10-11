@@ -1,0 +1,110 @@
+{
+  "schemaVersion": 1,
+  "mode": "TEMPLATE_UNEXECUTED",
+  "sourceRevision": "1a208d72750fb457933070f76669f7ae95975864",
+  "generatedAt": null,
+  "metadata": {
+    "repository": "Msg22/Monyvi",
+    "issue": 391,
+    "worktree": "E:/Work/My Projects/Monyvi-voice-empty-audio-guard",
+    "mediaPrivacy": "synthetic or explicitly licensed only",
+    "noProviderRequests": true
+  },
+  "runtime": {
+    "deno": null,
+    "platform": null,
+    "architecture": null,
+    "rustc": null,
+    "wasmPack": null,
+    "ffmpeg": null,
+    "supabaseEdgeVersion": null
+  },
+  "artifacts": {
+    "model": {
+      "name": "Silero v6.2.2 ONNX",
+      "origin": "snakers4/silero-vad@60b7ffa243625ebdc1070275a29f18c87843786a",
+      "license": "MIT",
+      "sha256": null,
+      "bytes": null
+    },
+    "decoderWasm": {
+      "name": "local Symphonia 0.6.1 AAC+isomp4 Rust/WASM prototype",
+      "license": "MPL-2.0 dependency; proprietary-codec patent review pending",
+      "sha256": null,
+      "bytes": null
+    },
+    "ortWasm": {
+      "name": "ONNX Runtime Web 1.22.0",
+      "license": "MIT",
+      "sha256": null,
+      "bytes": null
+    },
+    "compiledSupabaseBundleBytes": null
+  },
+  "sessionInitializationWallMs": null,
+  "processColdCpuMsProxy": null,
+  "candidate": {
+    "threshold": null,
+    "minimumSpeechMs": null,
+    "status": "NOT APPROVED"
+  },
+  "cases": [
+    {
+      "id": "silence-05",
+      "expectedClass": "no_speech",
+      "status": "UNMEASURED",
+      "decodeWallMs": null,
+      "vadWallMs": null,
+      "totalWallMs": null,
+      "processCpuMsProxy": null,
+      "observedRssBytesAtCheckpoints": null,
+      "truePeakMemoryBytes": null,
+      "edgeActiveCpuMs": null,
+      "vadFeatures": null,
+      "exploratoryCandidateCorrect": null
+    },
+    {
+      "id": "quiet-eg-ar-05",
+      "expectedClass": "speech",
+      "status": "FIXTURE_MISSING_UNMEASURED",
+      "decodeWallMs": null,
+      "vadWallMs": null,
+      "totalWallMs": null,
+      "processCpuMsProxy": null,
+      "observedRssBytesAtCheckpoints": null,
+      "truePeakMemoryBytes": null,
+      "edgeActiveCpuMs": null,
+      "vadFeatures": null,
+      "exploratoryCandidateCorrect": null
+    }
+  ],
+  "coverage": {
+    "durationsSecondsRequired": [
+      5,
+      15,
+      30
+    ],
+    "mediaClassesRequired": [
+      "silence",
+      "fan-proxy",
+      "traffic-proxy",
+      "handling",
+      "breathing",
+      "quiet-eg-ar",
+      "quiet-en",
+      "code-switch",
+      "speech-over-noise"
+    ],
+    "speechFixtureShaAndLicenseVerified": false,
+    "completeSpeechCoverage": false,
+    "quietSpeechRecall": "UNMEASURED",
+    "falseNegatives": null,
+    "falsePositives": null,
+    "hostedEdgeCpu": "UNMEASURED",
+    "hostedEdgeColdWarmLatency": "UNMEASURED",
+    "hostedEdgeMemoryPeak": "UNMEASURED",
+    "hostedBundle": "UNMEASURED",
+    "edgeCpuAndBundleGatePassed": false
+  },
+  "reviewStatus": "BLOCKED_AWAITING_LOCAL_BOOTSTRAP_AND_RUN"
+}

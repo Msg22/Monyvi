@@ -1,0 +1,218 @@
+{
+  "schemaVersion": 1,
+  "purpose": "NONPRODUCTION ONLY; source provenance template, no audio assets or measured fixtures committed",
+  "expectedRecordingFormat": "AAC-LC/M4A nominal Expo HIGH_QUALITY 44.1k stereo",
+  "generation": "scripts/voice-audio-validation-spike/prepare-fixtures.ts",
+  "fixtureTemplateStatus": "ALL UNMEASURED until checked against actual local files",
+  "fixtures": [
+    {
+      "id": "silence-05",
+      "relativePath": null,
+      "durationBucketSeconds": 5,
+      "expectedClass": "no_speech",
+      "origin": "synthetic FFmpeg anullsrc",
+      "license": "synthetic generated via fixture script",
+      "sha256": null,
+      "status": "missing",
+      "notes": "Fill only after local byte generation/fixture license; never assert measurements from template."
+    },
+    {
+      "id": "silence-15",
+      "relativePath": null,
+      "durationBucketSeconds": 15,
+      "expectedClass": "no_speech",
+      "origin": "synthetic FFmpeg anullsrc",
+      "license": "synthetic generated via fixture script",
+      "sha256": null,
+      "status": "missing",
+      "notes": "Fill only after local byte generation/fixture license; never assert measurements from template."
+    },
+    {
+      "id": "silence-30",
+      "relativePath": null,
+      "durationBucketSeconds": 30,
+      "expectedClass": "no_speech",
+      "origin": "synthetic FFmpeg anullsrc",
+      "license": "synthetic generated via fixture script",
+      "sha256": null,
+      "status": "missing",
+      "notes": "Fill only after local byte generation/fixture license; never assert measurements from template."
+    },
+    {
+      "id": "fan-proxy-05",
+      "relativePath": null,
+      "durationBucketSeconds": 5,
+      "expectedClass": "no_speech",
+      "origin": "synthetic FFmpeg pink noise; not actual fan capture",
+      "license": "synthetic generated via fixture script",
+      "sha256": null,
+      "status": "missing",
+      "notes": "Fill only after local byte generation/fixture license; never assert measurements from template."
+    },
+    {
+      "id": "fan-proxy-15",
+      "relativePath": null,
+      "durationBucketSeconds": 15,
+      "expectedClass": "no_speech",
+      "origin": "synthetic FFmpeg pink noise; not actual fan capture",
+      "license": "synthetic generated via fixture script",
+      "sha256": null,
+      "status": "missing",
+      "notes": "Fill only after local byte generation/fixture license; never assert measurements from template."
+    },
+    {
+      "id": "fan-proxy-30",
+      "relativePath": null,
+      "durationBucketSeconds": 30,
+      "expectedClass": "no_speech",
+      "origin": "synthetic FFmpeg pink noise; not actual fan capture",
+      "license": "synthetic generated via fixture script",
+      "sha256": null,
+      "status": "missing",
+      "notes": "Fill only after local byte generation/fixture license; never assert measurements from template."
+    },
+    {
+      "id": "traffic-proxy-05",
+      "relativePath": null,
+      "durationBucketSeconds": 5,
+      "expectedClass": "no_speech",
+      "origin": "synthetic FFmpeg white noise; not actual traffic",
+      "license": "synthetic generated via fixture script",
+      "sha256": null,
+      "status": "missing",
+      "notes": "Fill only after local byte generation/fixture license; never assert measurements from template."
+    },
+    {
+      "id": "traffic-proxy-15",
+      "relativePath": null,
+      "durationBucketSeconds": 15,
+      "expectedClass": "no_speech",
+      "origin": "synthetic FFmpeg white noise; not actual traffic",
+      "license": "synthetic generated via fixture script",
+      "sha256": null,
+      "status": "missing",
+      "notes": "Fill only after local byte generation/fixture license; never assert measurements from template."
+    },
+    {
+      "id": "traffic-proxy-30",
+      "relativePath": null,
+      "durationBucketSeconds": 30,
+      "expectedClass": "no_speech",
+      "origin": "synthetic FFmpeg white noise; not actual traffic",
+      "license": "synthetic generated via fixture script",
+      "sha256": null,
+      "status": "missing",
+      "notes": "Fill only after local byte generation/fixture license; never assert measurements from template."
+    },
+    {
+      "id": "quiet-eg-ar-05",
+      "relativePath": null,
+      "durationBucketSeconds": 5,
+      "expectedClass": "speech",
+      "origin": "MISSING: licensed/synthetic quiet Egyptian Arabic",
+      "license": null,
+      "sha256": null,
+      "status": "missing",
+      "notes": "Fill only after local byte generation/fixture license; never assert measurements from template."
+    },
+    {
+      "id": "quiet-eg-ar-15",
+      "relativePath": null,
+      "durationBucketSeconds": 15,
+      "expectedClass": "speech",
+      "origin": "MISSING: licensed/synthetic quiet Egyptian Arabic",
+      "license": null,
+      "sha256": null,
+      "status": "missing",
+      "notes": "Fill only after local byte generation/fixture license; never assert measurements from template."
+    },
+    {
+      "id": "quiet-eg-ar-30",
+      "relativePath": null,
+      "durationBucketSeconds": 30,
+      "expectedClass": "speech",
+      "origin": "MISSING: licensed/synthetic quiet Egyptian Arabic",
+      "license": null,
+      "sha256": null,
+      "status": "missing",
+      "notes": "Fill only after local byte generation/fixture license; never assert measurements from template."
+    },
+    {
+      "id": "quiet-en-05",
+      "relativePath": null,
+      "durationBucketSeconds": 5,
+      "expectedClass": "speech",
+      "origin": "MISSING: licensed/synthetic quiet English",
+      "license": null,
+      "sha256": null,
+      "status": "missing",
+      "notes": "Fill only after local byte generation/fixture license; never assert measurements from template."
+    },
+    {
+      "id": "quiet-en-15",
+      "relativePath": null,
+      "durationBucketSeconds": 15,
+      "expectedClass": "speech",
+      "origin": "MISSING: licensed/synthetic quiet English",
+      "license": null,
+      "sha256": null,
+      "status": "missing",
+      "notes": "Fill only after local byte generation/fixture license; never assert measurements from template."
+    },
+    {
+      "id": "quiet-en-30",
+      "relativePath": null,
+      "durationBucketSeconds": 30,
+      "expectedClass": "speech",
+      "origin": "MISSING: licensed/synthetic quiet English",
+      "license": null,
+      "sha256": null,
+      "status": "missing",
+      "notes": "Fill only after local byte generation/fixture license; never assert measurements from template."
+    },
+    {
+      "id": "code-switch-05",
+      "relativePath": null,
+      "durationBucketSeconds": 5,
+      "expectedClass": "speech",
+      "origin": "MISSING: licensed/synthetic quiet Arabic-English code switch",
+      "license": null,
+      "sha256": null,
+      "status": "missing",
+      "notes": "Fill only after local byte generation/fixture license; never assert measurements from template."
+    },
+    {
+      "id": "code-switch-15",
+      "relativePath": null,
+      "durationBucketSeconds": 15,
+      "expectedClass": "speech",
+      "origin": "MISSING: licensed/synthetic quiet Arabic-English code switch",
+      "license": null,
+      "sha256": null,
+      "status": "missing",
+      "notes": "Fill only after local byte generation/fixture license; never assert measurements from template."
+    },
+    {
+      "id": "code-switch-30",
+      "relativePath": null,
+      "durationBucketSeconds": 30,
+      "expectedClass": "speech",
+      "origin": "MISSING: licensed/synthetic quiet Arabic-English code switch",
+      "license": null,
+      "sha256": null,
+      "status": "missing",
+      "notes": "Fill only after local byte generation/fixture license; never assert measurements from template."
+    },
+    {
+      "id": "unknown-bytes",
+      "relativePath": null,
+      "durationBucketSeconds": 0,
+      "expectedClass": "invalid",
+      "origin": "deterministic synthetic nonmedia bytes",
+      "license": "synthetic via script",
+      "sha256": null,
+      "status": "missing",
+      "notes": "Expected decoder rejection before provider start; never send to provider."
+    }
+  ]
+}

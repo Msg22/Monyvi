@@ -1,0 +1,4 @@
+/local/
+/decoder/pkg/
+/decoder/target/
+/decoder/Cargo.lock
