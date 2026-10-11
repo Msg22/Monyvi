@@ -28,6 +28,9 @@ appId: com.monyvi.app
 - assertVisible:
     id: initial-balance-input
 - assertVisible: "Initial Balance"
+# English/EGP fixture must be reflected by the visible preview before editing.
+- assertVisible:
+    text: '^EGP$'
 
 # Existing default Cash/EGP selection; Add begins at zero. Do not change
 # type, provider, currency, warning or financial validation rules.
@@ -47,18 +50,27 @@ appId: com.monyvi.app
 
 # Desired approved distinction: grouped editable field, raw dot-decimal preview.
 # Both are visible product text; no service/private canonical assertions.
-- assertVisible: "12,345.678"
+- assertVisible:
+    id: initial-balance-input
+    text: '^12,345\.678$'
 - hideKeyboard
 - scrollUntilVisible:
     element:
-      text: "12345.678"
+      text: '^12345\.678$'
     direction: UP
     timeout: 30000
-- assertVisible: "12345.678"
+- assertVisible:
+    text: '^12345\.678$'
 
 # Header Save is the only commit action; return through existing navigation.
+- extendedWaitUntil:
+    visible:
+      id: header-save
+      enabled: true
+    timeout: 30000
 - tapOn:
     id: header-save
+    enabled: true
 - extendedWaitUntil:
     visible:
       id: accounts-add-button
@@ -79,6 +91,8 @@ appId: com.monyvi.app
       id: initial-balance-input
     direction: DOWN
     timeout: 30000
-- assertVisible: "12,345.678"
+- assertVisible:
+    id: initial-balance-input
+    text: '^12,345\.678$'
 # Save-time conversion/precision and actual offline relaunch require the
 # separate Accounts migration's integration and local runtime evidence.

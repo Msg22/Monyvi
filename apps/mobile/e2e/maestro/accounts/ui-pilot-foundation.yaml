@@ -53,17 +53,24 @@ appId: com.monyvi.app
       id: metal-holding-purchase-price-field
     direction: DOWN
     timeout: 30000
+# The scoped fixture must expose EGP before entering any purchase amount.
+- assertVisible:
+    text: '^EGP$'
 - tapOn:
     id: metal-holding-purchase-price-field
 - eraseText: 40
 - inputText: "abc12345"
-- assertVisible: "abc12345"
+- assertVisible:
+    id: metal-holding-purchase-price-field
+    text: '^abc12345$'
 
 # Correct through the SAME real field. EGP price uses an existing valid
 # two-decimal fixture here; no new currency input precision rule is introduced.
 - eraseText: 40
 - inputText: "12345.67"
-- assertVisible: "12,345.67"
+- assertVisible:
+    id: metal-holding-purchase-price-field
+    text: '^12,345\.67$'
 - hideKeyboard
 
 # Retain existing picker and metal form workflow to complete a real public Save.
@@ -94,9 +101,17 @@ appId: com.monyvi.app
     id: metal-holding-submit
 - extendedWaitUntil:
     visible:
-      id: metal-holding-detail-screen
+      id: metal-holding-detail-root
     timeout: 30000
 - assertVisible: "T008 Foundation Gold"
+# Real acquisition timeline confirms the entered purchase amount, not just name.
+- scrollUntilVisible:
+    element:
+      text: '^Paid EGP 12,345\.67$'
+    direction: DOWN
+    timeout: 30000
+- assertVisible:
+    text: '^Paid EGP 12,345\.67$'
 
 # Reopen via the real portfolio route; no DB/private function assertions.
 - openLink:
@@ -113,8 +128,16 @@ appId: com.monyvi.app
 - tapOn: "T008 Foundation Gold"
 - extendedWaitUntil:
     visible:
-      id: metal-holding-detail-screen
+      id: metal-holding-detail-root
     timeout: 30000
 - assertVisible: "T008 Foundation Gold"
+# Real acquisition timeline confirms the entered purchase amount, not just name.
+- scrollUntilVisible:
+    element:
+      text: '^Paid EGP 12,345\.67$'
+    direction: DOWN
+    timeout: 30000
+- assertVisible:
+    text: '^Paid EGP 12,345\.67$'
 # Passing this never implies Account Add/Edit implementation, native clipboard,
 # signed caret, keyboard suppression, TalkBack, fidelity or all35QA PASS.

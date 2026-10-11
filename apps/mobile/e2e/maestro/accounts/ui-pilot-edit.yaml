@@ -22,13 +22,22 @@ appId: com.monyvi.app
 - extendedWaitUntil:
     visible: "Add Account"
     timeout: 30000
+# Cash zero-balance setup requires an already-settled EGP fixture.
+- assertVisible:
+    text: '^EGP$'
 - tapOn:
     id: account-name-input
 - inputText: "T008 Signed Cash"
 - hideKeyboard
 # Cash and EGP stay at existing defaults; untouched initial balance is zero.
+- extendedWaitUntil:
+    visible:
+      id: header-save
+      enabled: true
+    timeout: 30000
 - tapOn:
     id: header-save
+    enabled: true
 - extendedWaitUntil:
     visible:
       id: accounts-add-button
@@ -56,19 +65,28 @@ appId: com.monyvi.app
     id: initial-balance-input
 - eraseText: 40
 - inputText: "-1234.567"
-- assertVisible: "-1,234.567"
+- assertVisible:
+    id: initial-balance-input
+    text: '^-1,234\.567$'
 - hideKeyboard
 - scrollUntilVisible:
     element:
-      text: "-1234.567"
+      text: '^-1234\.567$'
     direction: UP
     timeout: 30000
 # The existing Account preview intentionally retains ungrouped raw text.
-- assertVisible: "-1234.567"
+- assertVisible:
+    text: '^-1234\.567$'
 
 # Existing changed-balance sheet: silent is the default. Do not select tracked.
+- extendedWaitUntil:
+    visible:
+      id: header-save
+      enabled: true
+    timeout: 30000
 - tapOn:
     id: header-save
+    enabled: true
 - extendedWaitUntil:
     visible: "Balance Changed"
     timeout: 30000
@@ -96,6 +114,8 @@ appId: com.monyvi.app
       id: initial-balance-input
     direction: DOWN
     timeout: 30000
-- assertVisible: "-1,234.567"
+- assertVisible:
+    id: initial-balance-input
+    text: '^-1,234\.567$'
 # No assertion of "zero adjustment transactions" from sheet radio text:
 # proving it needs separately controllable public History/command evidence.
