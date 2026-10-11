@@ -413,6 +413,9 @@ describe("useVoiceTransactionFlow startup ordering", () => {
       expect(Object.keys(payload).sort()).toEqual(["durationMs", "stage"]);
       expect(typeof payload.stage).toBe("string");
       expect(typeof payload.durationMs).toBe("number");
+      if (typeof payload.durationMs !== "number") {
+        throw new Error("Expected numeric startup timing duration");
+      }
       expect(Number.isFinite(payload.durationMs)).toBe(true);
       expect(payload.durationMs).toBeGreaterThanOrEqual(0);
       stages.add(String(payload.stage));
