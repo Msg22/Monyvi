@@ -156,9 +156,27 @@ describe("useVoiceRecorder R2 active-duration cap", () => {
       } else {
         mockStop.mockRejectedValueOnce(new Error("Native stop failed"));
       }
+      // Inspect the recorder's own timer handles, not the aggregate count
+      // of Jest/React scheduling work.
+      const intervalSpy = jest.spyOn(globalThis, "setInterval");
+      const clearIntervalSpy = jest.spyOn(globalThis, "clearInterval");
+      const timeoutSpy = jest.spyOn(globalThis, "setTimeout");
       const { result } = renderHook(() => useVoiceRecorder());
       await approachCap(result);
       await advanceActiveClock(100);
+
+      const recorderIntervals = intervalSpy.mock.calls.flatMap(
+        (call, index): number[] => (call[1] === 100 ? [index] : [])
+      );
+      expect(recorderIntervals).toHaveLength(1);
+      const recorderIntervalHandle: unknown =
+        intervalSpy.mock.results[recorderIntervals[0]]?.value;
+      expect(recorderIntervalHandle).toBeDefined();
+      expect(clearIntervalSpy).toHaveBeenCalledWith(recorderIntervalHandle);
+      // The active 30s timeout fired once and no new cap was scheduled.
+      expect(
+        timeoutSpy.mock.calls.filter((call) => call[1] === ACTIVE_CAP_MS)
+      ).toHaveLength(1);
 
       expect(mockStop).toHaveBeenCalledTimes(1);
       // The recorder must not leave the UI Listening indefinitely or pretend
@@ -183,15 +201,24 @@ describe("useVoiceRecorder R2 active-duration cap", () => {
       expect(mockRelease.mock.invocationCallOrder[0]).toBeLessThan(
         mockDeleteAsync.mock.invocationCallOrder[0]
       );
-      expect(jest.getTimerCount()).toBe(0);
-
       await advanceActiveClock(1_500);
       expect(mockStop).toHaveBeenCalledTimes(1);
       expect(unwrap(result).status).toBe("error");
       expect(unwrap(result).audioUri).toBeNull();
+      expect(unwrap(result).durationMs).toBe(ACTIVE_CAP_MS);
       expect(mockDeleteAsync).toHaveBeenCalledTimes(1);
       expect(mockRelease).toHaveBeenCalledTimes(1);
-      expect(jest.getTimerCount()).toBe(0);
+      expect(
+        clearIntervalSpy.mock.calls.filter(
+          (call) => call[0] === recorderIntervalHandle
+        )
+      ).toHaveLength(1);
+      expect(
+        intervalSpy.mock.calls.filter((call) => call[1] === 100)
+      ).toHaveLength(1);
+      expect(
+        timeoutSpy.mock.calls.filter((call) => call[1] === ACTIVE_CAP_MS)
+      ).toHaveLength(1);
 
       // Discard after automatic failure cleanup only clears recoverable UI
       // state; it must never stop/delete/release the same native object again.
@@ -788,16 +815,34 @@ describe("useVoiceRecorder R2 active-duration cap", () => {
       }
     });
     expect(mockGetInfoAsync).toHaveBeenCalledWith(RETAINED_URI);
-    expect(mockRelease).not.toHaveBeenCalled();
+    expect(mockRelease).toHaveBeenCalledTimes(1);
+    expect(mockDeleteAsync).not.toHaveBeenCalled();
+    expect(mockRelease.mock.invocationCallOrder[0]).toBeLessThan(
+      mockGetInfoAsync.mock.invocationCallOrder[0]
+    );
+    expect(mockRecord).not.toHaveBeenCalled();
+
+    let restarting: Promise<void> = Promise.resolve();
+    actSync((): void => {
+      restarting = unwrap(result).start();
+    });
+    await advanceActiveClock(100);
+    expect(mockPrepareToRecordAsync).toHaveBeenCalledTimes(1);
     expect(mockRecord).not.toHaveBeenCalled();
 
     await actAsync(async (): Promise<void> => {
       cleanupGate.resolve(undefined);
       await discarding;
+      for (let index = 0; index < 8; index += 1) {
+        await Promise.resolve();
+      }
+      jest.advanceTimersByTime(NATIVE_STABILIZATION_DELAY_MS);
+      await restarting;
     });
     expect(mockDeleteAsync).toHaveBeenCalledTimes(1);
     expect(mockRelease).toHaveBeenCalledTimes(1);
-    expect(unwrap(result).status).toBe("idle");
+    expect(mockRecord).toHaveBeenCalledTimes(1);
+    expect(unwrap(result).status).toBe("recording");
     expect(unwrap(result).audioUri).toBeNull();
   });
 });
