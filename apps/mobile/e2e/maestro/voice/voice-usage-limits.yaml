@@ -134,7 +134,6 @@ appId: com.monyvi.app
 - tapOn:
     id: "header-save"
 - waitForAnimationToEnd
-- assertVisible: "Transactions"
 # If the examples card was already dismissed for this seeded account, the
 # dismiss/reopen scenario above was skipped and was NOT validated in this run
 # (this flow never un-hides the card). The Manual save below ends on
@@ -155,3 +154,4 @@ appId: com.monyvi.app
 # require native audio/OS/provider fixtures this harness does not possess.
 # Never tap mic, Resume, Submit, OS permission or provider recovery here;
 # separately approved unit/owner-manual testing covers those boundaries.
+- assertVisible: "Transactions"
