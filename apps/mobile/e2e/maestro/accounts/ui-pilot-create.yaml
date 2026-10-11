@@ -1,0 +1,84 @@
+appId: com.monyvi.app
+---
+# T008 future Accounts Add journey — intentionally Red on the unchanged route.
+# Published authoring only; NOT executed. Account migration is a later PR.
+# Preconditions:
+# - Runner preflight has already opened the normal authenticated, onboarded app.
+# - Isolated current-user local fixture is English/EGP and has no account named
+#   "T008 Grouped Cash". No remote seed, auth bypass, or fixture mutation here.
+# - Maestro's numeric inputText driver has been verified by the runtime owner.
+# - This is driver entry, NOT native clipboard/caret/IME proof.
+# The unchanged Add TextField does not group the initial balance, so the first
+# 12,345.678 assertion is the intended product-behavior Red, not a missing ID.
+
+# Public Accounts navigation; the application's private-route auth gate remains.
+- openLink:
+    link: monyvi://accounts
+- extendedWaitUntil:
+    visible:
+      id: accounts-add-button
+    timeout: 30000
+- tapOn:
+    id: accounts-add-button
+- extendedWaitUntil:
+    visible: "Add Account"
+    timeout: 30000
+- assertVisible:
+    id: header-back
+- assertVisible:
+    id: initial-balance-input
+- assertVisible: "Initial Balance"
+
+# Existing default Cash/EGP selection; Add begins at zero. Do not change
+# type, provider, currency, warning or financial validation rules.
+- tapOn:
+    id: account-name-input
+- inputText: "T008 Grouped Cash"
+- hideKeyboard
+- scrollUntilVisible:
+    element:
+      id: initial-balance-input
+    direction: DOWN
+    timeout: 30000
+- tapOn:
+    id: initial-balance-input
+- eraseText: 40
+- inputText: "12345.678"
+
+# Desired approved distinction: grouped editable field, raw dot-decimal preview.
+# Both are visible product text; no service/private canonical assertions.
+- assertVisible: "12,345.678"
+- hideKeyboard
+- scrollUntilVisible:
+    element:
+      text: "12345.678"
+    direction: UP
+    timeout: 30000
+- assertVisible: "12345.678"
+
+# Header Save is the only commit action; return through existing navigation.
+- tapOn:
+    id: header-save
+- extendedWaitUntil:
+    visible:
+      id: accounts-add-button
+    timeout: 30000
+- scrollUntilVisible:
+    element:
+      text: "T008 Grouped Cash"
+    direction: DOWN
+    timeout: 60000
+- tapOn: "T008 Grouped Cash"
+- extendedWaitUntil:
+    visible: "Edit Account"
+    timeout: 30000
+
+# Reopen the persisted Account in the existing Edit form.
+- scrollUntilVisible:
+    element:
+      id: initial-balance-input
+    direction: DOWN
+    timeout: 30000
+- assertVisible: "12,345.678"
+# Save-time conversion/precision and actual offline relaunch require the
+# separate Accounts migration's integration and local runtime evidence.
