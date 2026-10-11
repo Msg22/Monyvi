@@ -233,6 +233,100 @@ export function parseAmountInput(
   return resolveAmountInputChange(text, previousValue).value;
 }
 
+/**
+ * Presentation-only grammar options. Signed entry is opt-in: existing unsigned
+ * resolver/parser callers retain their exact two-argument behavior.
+ */
+export interface EditableAmountInputOptions {
+  readonly allowNegative?: boolean;
+}
+
+export type EditableAmountDisplay =
+  | { readonly kind: "groupable"; readonly text: string }
+  | { readonly kind: "raw"; readonly text: string };
+
+const SIGNED_INTERMEDIATE_UNGROUPED_AMOUNT_PATTERN =
+  /^-?(?:\d*(?:\.\d*)?|\.\d*)$/;
+const SIGNED_INTERMEDIATE_GROUPED_AMOUNT_PATTERN =
+  /^-?\d{1,3}(?:,\d{3})+(?:\.\d*)?$/;
+
+function isEditableAmountIntermediate(
+  value: string,
+  allowNegative: boolean
+): boolean {
+  if (
+    INTERMEDIATE_UNGROUPED_AMOUNT_PATTERN.test(value) ||
+    INTERMEDIATE_GROUPED_AMOUNT_PATTERN.test(value)
+  ) {
+    return true;
+  }
+
+  return (
+    allowNegative &&
+    (SIGNED_INTERMEDIATE_UNGROUPED_AMOUNT_PATTERN.test(value) ||
+      SIGNED_INTERMEDIATE_GROUPED_AMOUNT_PATTERN.test(value))
+  );
+}
+
+/**
+ * Resolves an editable grouped string without changing legacy unsigned APIs.
+ * The caller forwards raw native text when accepted is false so malformed
+ * input remains visible for correction instead of being silently repaired.
+ */
+export function resolveEditableAmountInputChange(
+  text: string,
+  previousValue: string,
+  options: EditableAmountInputOptions = {}
+): AmountInputChangeResult {
+  if (!options.allowNegative) {
+    return resolveAmountInputChange(text, previousValue);
+  }
+
+  if (SIGNED_INTERMEDIATE_UNGROUPED_AMOUNT_PATTERN.test(text)) {
+    return { accepted: true, value: text };
+  }
+
+  if (SIGNED_INTERMEDIATE_GROUPED_AMOUNT_PATTERN.test(text)) {
+    return { accepted: true, value: text.replace(/,/g, "") };
+  }
+
+  if (previousValue.length > 0 && !isEditableAmountIntermediate(previousValue, true)) {
+    return { accepted: false, value: text };
+  }
+
+  const formattedPreviousValue = formatAmountInput(previousValue);
+  const ungroupedCandidate = text.replace(/,/g, "");
+
+  if (
+    formattedPreviousValue.includes(",") &&
+    isSingleTextEdit(formattedPreviousValue, text) &&
+    SIGNED_INTERMEDIATE_UNGROUPED_AMOUNT_PATTERN.test(ungroupedCandidate)
+  ) {
+    return { accepted: true, value: ungroupedCandidate };
+  }
+
+  return {
+    accepted: false,
+    value: previousValue.length > 0 ? previousValue : text,
+  };
+}
+
+/**
+ * Only recognized entry grammar receives thousands grouping. Invalid strings
+ * are displayed byte-for-byte; this does not validate a completed form amount,
+ * convert its value to a number, or impose currency/weight precision limits.
+ */
+export function getEditableAmountDisplay(
+  value: string,
+  options: EditableAmountInputOptions = {}
+): EditableAmountDisplay {
+  if (!isEditableAmountIntermediate(value, options.allowNegative === true)) {
+    return { kind: "raw", text: value };
+  }
+
+  return { kind: "groupable", text: formatAmountInput(value) };
+}
+
 export function parsePositiveFiniteAmountInput(value: string): number | null {
   const result = parseStrictAmountInput(value);
   return result.success ? result.amount : null;
