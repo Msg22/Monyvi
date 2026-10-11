@@ -20,10 +20,20 @@ export function composeFieldAccessibleName({
   const base = accessibilityLabel ?? label;
   if (!required || !requiredText) return base;
 
-  const checked = base.trimEnd();
-  if (checked.endsWith(requiredText)) {
-    const prefix = checked.slice(0, checked.length - requiredText.length);
-    if (prefix.length === 0 || /[\s,،:;.!?]$/u.test(prefix)) {
+  // Detect a complete final qualifier even when followed by closing punctuation.
+  // Never normalize or rewrite the caller's actual accessible name.
+  const candidate = base.replace(/[\s)\]}'"»”’.,،؛:;!?؟]+$/u, "");
+  if (candidate.endsWith(requiredText)) {
+    const prefix = candidate.slice(0, -requiredText.length);
+    const hasCompleteBoundary =
+      prefix.length === 0 ||
+      /[\s,،:;.!?؟]$/u.test(prefix) ||
+      prefix.endsWith("(") ||
+      prefix.endsWith("[") ||
+      prefix.endsWith("{") ||
+      prefix.endsWith('"') ||
+      prefix.endsWith("'");
+    if (hasCompleteBoundary) {
       return base;
     }
   }
