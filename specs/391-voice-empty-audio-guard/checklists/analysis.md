@@ -1,133 +1,60 @@
-# #391 Structured Speckit Cross-Artifact Analysis — READ-ONLY Semantic Pass
+# #391 Structured Speckit Cross-Artifact Analysis — Updated Retirement Review
 
-**Date:** 2026-10-12<br> **Scope:** Completed authored `spec.md`, `plan.md`,
-`tasks.md`, `contracts/audio-validation-contract.md` and
-`checklists/manual-plan.md` on #391 research branch expected
-`a7e1e00e118b4b8a989387d48181fdde0c821f3d`, plus trusted constitution
-`3264eba2b67bcc66cddc95e3fbdb36e8705ee642` and published Voice
-`f625183373e29d372b658c10b3848a217477400a`.<br> **Method:** Full **structured
-read-only semantic pass** following the six detection categories and severity
-rubric of `.agent/workflows/speckit.analyze.md`: inventory → duplication →
-ambiguity → underspecification → constitution → coverage → inconsistency. The
-author inspected the five staged documents by their **unreferenced Git blobs**
-after spec/plan/tasks were complete; the branch was not mutated for analysis. No
-executable `/speckit.analyze` command, shell prerequisite, code/test run,
-Deno/FFmpeg, provider or device work occurred. This document records the
-author's semantic cross-artifact analysis and documentation reconciliation
-(2026-10-12); it does not assert that a new canonical Speckit analyze run has
-been executed by the root orchestrator. Root will independently execute any
-formal tooling checks as needed.
+**Date:** 2026-10-12<br> **Scope:** Updated `spec.md`, `plan.md`, `tasks.md`,
+`contracts/audio-validation-contract.md` and `checklists/manual-plan.md` in
+`specs/391-voice-empty-audio-guard/`.<br> **Status:** US1 cleanup slice EXECUTED
+(RED → GREEN); server detector design explicitly ABANDONED and SUPERSEDED; 10
+prototype and research files deleted; conservative on-device metering approved
+as cost optimization (PENDING future implementation); server contracts preserved
+unchanged; server duration follow-up out of scope and not addressed. Review of
+revised retirement artifacts remains **pending root acceptance**.
 
-## Structured inventories and coverage
+## Structured Inventories and Coverage
 
-| Inventory                  |                                                                       Actual drafted count | Cross-check                                                                                                                                    |
-| -------------------------- | -----------------------------------------------------------------------------------------: | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| User stories               | **3**: US1 local cleanup EXECUTED (RED→GREEN), US2 speech BLOCKED, US3 identity/UX BLOCKED | Every story has independent Given/When/Then cases and a named gate                                                                             |
-| Functional requirements    |                                                                      **20**: FR-001–FR-020 | Sequential unique IDs; each has task coverage below                                                                                            |
-| Nonfunctional requirements |                                                                     **6**: NFR-001–NFR-006 | Resource, false-negative quality, privacy, compatibility, cancellation, evidence                                                               |
-| Success criteria           |                                                                       **9**: SC-001–SC-009 | Each has an evidence owner and objective or explicit measured gate                                                                             |
-| Tasks                      |                                                                          **32**: T001–T032 | Sequential, root-verified readiness T001–T004, US1 T005–T010, and US2 T011–T012 checked; T013–T032 unchecked (T013–T014 partial)               |
-| Manual/owner cases         |                                               **19**: M391-01–M391-19, all NOT RUN/BLOCKED | Native + audio + runtime + account/race/latency boundaries distinguished                                                                       |
-| Required documents         |                                                                      **6** exact new files | Spec, plan, tasks, proposed contract, this analysis, manual plan; no extra document artifact                                                   |
-| Research artifacts         |                                                                    **9**, already existing | Source-only prototype and templates linked; feasibility report added at `docs/research/voice-audio-validation-spike/feasibility-2026-10-12.md` |
+| Inventory                  |                   Count | Cross-check                                                                                                 |
+| -------------------------- | ----------------------: | ----------------------------------------------------------------------------------------------------------- |
+| User stories               |                   **3** | US1 cleanup EXECUTED; US2 server detector RETIRED, client metering PENDING; US3 integration PENDING         |
+| Functional requirements    |  **20** (FR-001–FR-020) | Sequential unique IDs preserved; server detector requirements superseded; client metering defined           |
+| Nonfunctional requirements | **6** (NFR-001–NFR-006) | Cost optimization, false-negative safety, privacy, compatibility, cancellation, evidence                    |
+| Success criteria           |   **9** (SC-001–SC-009) | SC-001/002 cleanup ATTAINED; SC-005/006/007 ATTAINED; SC-003/004/008/009 mapped to pending metering/review  |
+| Tasks                      |      **32** (T001–T032) | Sequential IDs preserved: T001–T010 executed, T011–T018 retired, T019–T032 pending (T019 depends on T020)   |
+| Manual/owner cases         |     **19** (M391-01–19) | Track A cleanup NOT RUN (owner-only); Track B updated to client metering (NOT RUN); server detector RETIRED |
+| Research spike files       |         **0 remaining** | 10 prototype and legacy research files DELETED                                                              |
 
-### Requirement-to-task traceability
+### Requirement-to-Task Traceability
 
-| Requirement IDs                                                                | Explicit task coverage                            | Status / independent boundary                                                                                                                                                                                             |
-| ------------------------------------------------------------------------------ | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| FR-001–FR-003 (SDK55 cleanup, idempotence, native/generation safety)           | T004–T010; T028–T031                              | EXECUTED: RED accepted (`392a26f7…`), import-only legacy source (`84696d74…`), focused GREEN; owner native proof pending                                                                                                  |
-| FR-004–FR-005 (actual bytes/container, no metadata speech proof)               | T017, T019, T021–T023                             | BLOCKED on supported-format/validator decision                                                                                                                                                                            |
-| FR-006 (quiet Arabic/English/code-switch high-recall speech)                   | T011–T016, T019, T021–T023, T026                  | BLOCKED: 0/9 licensed quiet speech positives acquired; see [feasibility report](../../../docs/research/voice-audio-validation-spike/feasibility-2026-10-12.md)                                                            |
-| FR-007–FR-010 (auth/consent, reservation/start, release and uncertain failure) | T017–T023, T026, T030                             | BLOCKED on HTTP/SQL lease and exact accounting contract                                                                                                                                                                   |
-| FR-011–FR-012 (35-day replay, released terminal, parallel same-key validators) | T018, T020–T023, T026, T030                       | BLOCKED; explicit SQL mismatch/race tests precede source                                                                                                                                                                  |
-| FR-013–FR-014 (30s local versus server; client <1.5s)                          | T017, T018, T024, T026                            | Client unchanged; BLOCKED on server duration/padding/short speech decisions                                                                                                                                               |
-| FR-015 (no invented refusal copy/HTTP body)                                    | T017, T024–T025, T027                             | BLOCKED on owner/product contract                                                                                                                                                                                         |
-| FR-016 (current provider/success/quota/Manual/#384)                            | T017–T023, T025–T026, T028–T030                   | Positive controls and independent review required                                                                                                                                                                         |
-| FR-017 (decoder/VAD Edge feasibility)                                          | T011–T016, T030                                   | EVALUATED/BLOCKED: Deno proxy passed; local Edge Runtime v1.76.2 probe rejected on shared memory policy (`TypeError: Creating a shared memory is not supported`)                                                          |
-| FR-018 (privacy/minimization)                                                  | T013–T016, T019–T020, T026, T030                  | Private data must not enter fixtures/logs                                                                                                                                                                                 |
-| FR-019 (actual RED/GREEN)                                                      | T005–T009, T019–T023, T029                        | Root mandatory RED and final batch EXECUTED for cleanup (T005–T010); server RED/batch still BLOCKED                                                                                                                       |
-| FR-020 (branch/source isolation)                                               | T001–T004, T028–T032                              | Startup worker/389/SQL untouched                                                                                                                                                                                          |
-| NFR-001 (resources)                                                            | T015–T016, T030                                   | EVALUATED: Deno proxy 30s cold init 812.78ms + audio 1996.13ms = 2808.91ms full wall; 4234ms host CPU proxy; 180.68MB/172.31MiB checkpoint RSS; not Edge CPU/peak; Edge Runtime probe rejected at WASM shared memory init |
-| NFR-002 (false negatives)                                                      | T013–T016, T026, T031                             | Licensed positive speech BLOCKED (0/9 available)                                                                                                                                                                          |
-| NFR-003 (privacy)                                                              | T013, T019–T020, T026, T030–T031                  | Owner and independent privacy proof                                                                                                                                                                                       |
-| NFR-004 (dependency/hosted compatibility)                                      | T004, T008, T012, T022, T028–T030                 | Edge Runtime v1.76.2 isolate forbids shared memory; candidate incompatible without non-shared WASM build                                                                                                                  |
-| NFR-005 (cancellation/resource safety)                                         | T006, T009, T018, T020, T026, T030                | SDK cleanup independently testable; server lease gated                                                                                                                                                                    |
-| NFR-006 (honest evidence/quality)                                              | T002–T003, T007, T009–T010, T021, T023, T029–T032 | Root-owned real tests/approval                                                                                                                                                                                            |
-| SC-001–SC-002 (cleanup)                                                        | T005–T010                                         | SDK55 RED → import-only source → focused GREEN                                                                                                                                                                            |
-| SC-003–SC-006 (actual validation, quiet recall, Edge viability, replay races)  | T011–T023, T026, T030                             | Feasibility evaluated: candidate BLOCKED on Edge Runtime; quiet speech 0/9 missing; server contracts remain open                                                                                                          |
-| SC-007–SC-009 (positive controls, manual evidence, final checks)               | T024–T032                                         | Owner/root remain responsible                                                                                                                                                                                             |
+| Requirement IDs                                                      | Explicit task coverage | Status / Disposition                                                                                                    |
+| -------------------------------------------------------------------- | ---------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| FR-001–FR-003 (SDK55 cleanup, idempotence, native/generation safety) | T004–T010; T028–T031   | **EXECUTED**: RED accepted (`392a26f7…`), import-only legacy (`84696d74…`), focused GREEN PASS                          |
+| FR-004 (Server MIME sniffing & structural checks)                    | Existing behavior      | **PRESERVED UNCHANGED**: Zero-byte checks and MIME detection in `parse-voice` remain intact; not a new validator        |
+| FR-005–FR-006 (Conservative on-device metering)                      | T019–T023              | **SUPERSEDES server VAD**: Approved cost optimization; acknowledges amplitude overlap; validation required; PENDING     |
+| FR-007–FR-010 (Server bypass & unchanged accounting)                 | T017–T018, T022–T023   | **SUPERSEDED server contracts**: Zero upload/reservation/provider charges for local reject; normal auth/sync unaffected |
+| FR-011–FR-012 (35-day replay, request-key identity)                  | Existing behavior      | **PRESERVED UNCHANGED**: Server identity contracts unmodified                                                           |
+| FR-013–FR-014 (30s local active cap; mobile <1500ms guard)           | Existing behavior      | **PRESERVED**: 30s local cap intact; server duration follow-up is out of scope and not addressed                        |
+| FR-015 (Approved proposed copy & UX)                                 | T024–T025              | User approved proposed copy `"We couldn’t hear anything. Please try recording again."`; translation/integration PENDING |
+| FR-016 (Current provider & quota compatibility)                      | Existing behavior      | **PRESERVED UNCHANGED**: Existing Gemini parsing and quota envelopes intact                                             |
+| FR-017 (Server feasibility benchmarking)                             | T011–T016              | **SUPERSEDED & RETIRED**: Prototype files deleted; benchmarks superseded                                                |
+| FR-018 (Privacy & data minimization)                                 | T026                   | **PRESERVED**: No raw audio, PCM, or metering logs persisted                                                            |
+| FR-019 (TDD discipline)                                              | T005–T009, T019–T023   | Cleanup TDD EXECUTED; client metering calibration (T020) and TDD (T019) PENDING                                         |
+| FR-020 (Isolation & no unauthorized mutation)                        | T001–T004, T028–T032   | **PRESERVED**: Documentation retirement only; no unapproved runtime edits                                               |
 
-**Coverage result:** 20/20 FR, 6/6 NFR, 9/9 SC have at least one mapped task;
-all 32 tasks fall into owned setup, US1, US2, US3 or root-only
-review/integration phases. This is **PLANNED traceability**, not executed test
-coverage or passed implementation.
+## Severity & Findings Disposition
 
-## Detection passes and findings
+- **Historical B1/B2/C1 findings (Server speech gates)**: SUPERSEDED & RETIRED.
+  Server detector abandoned and existing server contracts preserved unchanged.
+- **Cleanup Gates (G391-C1/C2)**: ATTAINED / EXECUTED (72 tests / 3 suites
+  PASS).
+- **Client Metering Implementation Gates**: PENDING future implementation under
+  strict TDD and owner physical device verification.
+- **Analysis Review Gate (T003)**: Historical analysis passed; current review of
+  revised retirement artifacts remains **pending root acceptance**.
 
-| ID  | Category               | Severity / disposition                          | Evidence                                                                                                                                                                                                                                              | Required action                                                                                                                                                                          |
-| --- | ---------------------- | ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A1  | Duplication            | **NONE actionable**                             | FR-009/FR-011/FR-012 intentionally distinguish usage accounting, replay identity and expensive validation concurrency; US1 and US2 are independent                                                                                                    | Preserve separate source/test lanes; no duplicate code task                                                                                                                              |
-| B1  | Ambiguity              | **HIGH — GATED, not an unacknowledged doc gap** | `spec.md` FR-006, FR-010, FR-013–FR-015; proposed contract                                                                                                                                                                                            | Explicitly approve uncertain-vs-no-speech, HTTP/body/Retry/copy, codec compatibility, decoded duration/padding and short legitimate speech before server source                          |
-| B2  | Ambiguity              | **HIGH — GATED**                                | SQL 087 `voice_ai_reserve_work_at` and `voice_ai_release_work`, `contract` and T018–T020                                                                                                                                                              | Define released-terminal same-key retry, accepted replay concurrent VAD, lease expiry, false/unknown release and started-RPC ambiguity. Never silently edit SQL/#384                     |
-| C1  | Underspecification     | **HIGH — EXTERNAL FEASIBILITY BLOCKER**         | Public templates retain 19 missing fixture assets; 10 synthetic negative/control cases evaluated locally on Deno proxy, but licensed quiet speech positives remain 0/9 acquired; local Edge Runtime probe rejected on shared memory policy; T011–T016 | Licensed quiet speech + synthetic/real negatives, pinned Rust/WASM/ONNX load, false negatives, CPU/wall/true peak memory/bundle and Edge headroom                                        |
-| C2  | Underspecification     | **CLOSED — root version proof**                 | SDK55, root's package-lock-only `npm ls` and actual junction runtime both establish `expo-file-system@55.0.23`; T004 completed                                                                                                                        | Meaningful deprecated-root vs working-/legacy **RED EXECUTED** (`392a26f7…`, 10 fail/1 pass/11 total, 7.836s) → import-only (`84696d74…`) → focused GREEN; no package or lockfile change |
-| D1  | Constitution alignment | **NO KNOWN VIOLATION in planned artifacts**     | `plan.md` Constitution Check, FR-007/016/018/020 and tasks                                                                                                                                                                                            | Preserve auth, type safety, service layering, offline/financial boundaries, original provider, 35-day replay, privacy; any later deviation needs explicit approval                       |
-| E1  | Coverage gaps          | **NONE in planned requirements**                | Coverage table above + manual M391-01–19                                                                                                                                                                                                              | Do not convert planned traceability into tests passed/device acceptance; keep owner NOT RUN                                                                                              |
-| F1  | Inconsistency          | **RESOLVED IN DOCUMENTS**                       | Historical research source 60s vs current #389 FR-045 30s **local**; client 1,500ms guard; `spec.md` FR-013/014                                                                                                                                       | Preserve current local 30s and avoid unsupported server duration/padding choice; no source edits                                                                                         |
-| F2  | Inconsistency          | **RESOLVED IN TASK ORDER**                      | T005–T010 is independent of T011–T027; #391 branch includes current Voice parent; separate startup worker owns route/flow                                                                                                                             | Root can accept cleanup TDD while speech remains BLOCKED; no cross-branch overlap                                                                                                        |
-| F3  | Operational gate       | **CLOSED — actual root preflight**              | Correct target needs `SPECIFY_FEATURE=391-voice-empty-audio-guard` + `SPECIFY_FEATURE_DIRECTORY=specs/391-voice-empty-audio-guard` because `.specify/feature.json` points to 389                                                                      | Root local prerequisite PASS, canonical read-only analysis completed, optional Git hooks not invoked; WSL Git absent/branch validation skipped but native Git ancestry verified          |
+## Gate Ledger / Updated Summary
 
-### Severity summary
-
-**Updated root evidence (2026-10-12):** **0 critical**, **0 cleanup-blocking
-HIGH**, **3 HIGH B1/B2/C1 exclusively BLOCKED server-speech gates**, **0 open
-C2/F3 version/prerequisite blockers**, and **0 uncovered FR/NFR/SC** in this
-reviewed plan. The earlier ChatGPT-only severity assessment is superseded by the
-root's actual canonical read-only analysis. This is **not** a speech-validator
-feasibility PASS; **cleanup RED/GREEN are now EXECUTED**, while
-owner/native/device remain NOT RUN.
-
-## Architecture and product decisions that remain open (server STOP)
-
-1. **G391-S1 — Runtime + licenses:** Offline compiler and local Deno evaluation
-   were executed on 2026-10-12 (pinned Symphonia AAC/MP4/WASM compiled exit 0,
-   10 synthetic negative/control cases evaluated on Deno proxy); however, Edge
-   Runtime v1.76.2 probe rejected `onnxruntime-web@1.22.0` on shared WebAssembly
-   memory policy, and licensed quiet speech positives remain 0/9 acquired.
-   Complete test suite and threshold decisions remain strictly BLOCKED; no
-   hosted deployment or unapproved wrappers.
-2. **G391-S2 — Quality and policy:** valid quiet Egyptian
-   Arabic/English/code-switch and short/speech-over-noise recall; no model
-   threshold/min speech/duration-padding tolerance approved; unknown classifier
-   outcome contract needed.
-3. **G391-S3 — Server and mobile UX:** no new HTTP error/status/copy until
-   product approval; preserve already-defined 400/401/403/413/429/503 and
-   success; avoid unapproved route/flow/availability work assigned to startup.
-4. **G391-S4 — SQL/idempotency:** `voice_ai_release_work` true only for
-   still-reserved non-started row, while released-terminal same-key replay
-   refuses; concurrent unexpired key may admit multiple validators. Test with
-   exact RPC semantics before proposing any schema/new decision. #384 is
-   separately deferred.
-5. **G391-S5 — Duration:** current 30-second native active-only limit, historic
-   research 60s, server decoded duration/padding unmeasured and current
-   1.5-second mobile minimum require a separate joined product decision.
-
-## Gate ledger / next actions
-
-| Gate                                                                 | Actual evidence                                                                                                                                                        | Status                                                                                                                                                                                                                                                                                                                                                                                              |
-| -------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| G391-P1 Published research/source ancestry                           | `a7e1e00e…` merge includes `fe16f48…` + `f625183…`; only nine research/prototype files differ from Voice                                                               | READ-ONLY VERIFIED at planning kickoff                                                                                                                                                                                                                                                                                                                                                              |
-| G391-P2 Six canonical documents drafted                              | This author staged only the six requested markdown blobs; no production/test/issue/ref change before docs publication                                                  | DRAFTS COMPLETE; root review required                                                                                                                                                                                                                                                                                                                                                               |
-| G391-P3 This structured analysis                                     | Source-informed six detection passes across complete proposed artifacts, traceability counted above                                                                    | COMPLETE **manual read-only review**; no CLI execution                                                                                                                                                                                                                                                                                                                                              |
-| G391-P4 Root local correct-feature prerequisite / canonical analyzer | `SPECIFY_FEATURE=391-voice-empty-audio-guard` **plus** `SPECIFY_FEATURE_DIRECTORY=specs/391-voice-empty-audio-guard`                                                   | Root reports prerequisite **PASS** with `FEATURE_DIR=/mnt/e/Work/My Projects/Monyvi-voice-empty-audio-guard/specs/391-voice-empty-audio-guard`, `AVAILABLE_DOCS=contracts/,tasks.md`; canonical read-only analyzer **0 critical/0 cleanup HIGH**, speech B1/B2/C1 HIGH remain BLOCKED. WSL Git check skipped, native Git independently verified. No hooks run; this worker did not execute any CLI. |
-| G391-C1 SDK55 cleanup test-only + accepted RED                       | Test-only `392a26f7…`; actual RED 10 fail / 1 pass / 11 total, 7.836s at the deprecated root import                                                                    | **EXECUTED** 2026-10-12                                                                                                                                                                                                                                                                                                                                                                             |
-| G391-C2 Cleanup source/GREEN                                         | Import-only legacy (`84696d74…`), async mock reconciliation (`7ad8ed52…`); root final GREEN 72 tests / 3 suites / 3.809s with tsc/ESLint/format/i18n/privacy/diff PASS | **EXECUTED** 2026-10-12; independent minimal-source review PASS                                                                                                                                                                                                                                                                                                                                     |
-| G391-S Speech runtime + replay/response policy                       | Offline compiler exit 0, Deno proxy measured 10 negative cases, but Edge Runtime probe failed on shared memory and quiet speech corpus is 0/9 missing                  | **BLOCKED**                                                                                                                                                                                                                                                                                                                                                                                         |
-| G391-F Owner device + root final integration                         | Native/QA/Maestro/PR/deployment open; root's cleanup-focused final batch PASS (72/3/3.809s)                                                                            | Owner **NOT RUN**; root cleanup batch **EXECUTED**                                                                                                                                                                                                                                                                                                                                                  |
-
-**Decision:** Cleanup-only TDD ownership was granted and executed under root's
-exact-path receipt (T005–T010); hold all decoder/VAD server source, SQL, UI
-copy, route/flow, provider/hosted and migration assignments until the gates
-above close. This analysis's own read-only lane invoked no executable, decoder
-benchmark, sample recording, test or analyzer CLI; root executed the recorded
-cleanup RED/GREEN separately.
+| Gate   | Scope                             | Status                                                                    |
+| ------ | --------------------------------- | ------------------------------------------------------------------------- |
+| G391-P | Specification & Architecture Plan | **UPDATED**: Server detector retired; client metering documented          |
+| G391-C | SDK55 Cleanup TDD & Regressions   | **EXECUTED**: Tests green (392a26f7… → 84696d74… → 72/3 PASS)             |
+| G391-S | Server Speech Detector & WASM     | **SUPERSEDED & RETIRED**: Spikes deleted; server contracts unchanged      |
+| G391-M | Conservative On-Device Metering   | **PENDING**: Threshold calibration, TDD, and device verification deferred |
+| G391-F | Owner Native Device Verification  | **NOT RUN / PENDING**: Physical device verification for owner             |

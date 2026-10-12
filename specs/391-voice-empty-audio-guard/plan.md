@@ -3,238 +3,182 @@
 **Branch**: `codex/voice-empty-audio-guard` | **Date**: 2026-10-12 | **Spec**:
 [spec.md](./spec.md)<br> **Input**:
 [issue #391](https://github.com/Msg22/Monyvi/issues/391),
-[existing authoritative source/constraints](../389-voice-usage-limits/spec.md),
-[current source research](../../docs/research/voice-empty-audio-guard.md).<br>
-**Planning authority**: Root's actual correct-feature target requires **both**
-`SPECIFY_FEATURE=391-voice-empty-audio-guard` **and**
-`SPECIFY_FEATURE_DIRECTORY=specs/391-voice-empty-audio-guard`;
-`.specify/feature.json` otherwise selects feature 389. Existing #391 branch
-only; no generated branch, hooks, broad codemap, issue or production
-mutation.<br> **Status**: US1 cleanup EXECUTED (TDD RED → import-only legacy →
-focused GREEN, root final batch PASS); US2 speech feasibility evaluated (local
-Deno proxy passed on synthetic negatives; containerized Edge Runtime probe
-failed at runtime due to shared memory policy rejection; 0/9 quiet speech
-positives acquired). See
-[feasibility report](../../docs/research/voice-audio-validation-spike/feasibility-2026-10-12.md).
-Startup latency/route/flow/availability belong exclusively to
-`codex/voice-startup-latency`.
+[existing authoritative source/constraints](../389-voice-usage-limits/spec.md).<br>
+**Planning authority**: Root's feature configuration
+`SPECIFY_FEATURE=391-voice-empty-audio-guard` and
+`SPECIFY_FEATURE_DIRECTORY=specs/391-voice-empty-audio-guard`.<br> **Status**:
+US1 cleanup EXECUTED (TDD RED → import-only legacy → focused GREEN, root final
+batch PASS); server decoder/VAD design explicitly ABANDONED and SUPERSEDED per
+user decision. Approved direction is conservative on-device metering as a
+pre-upload cost optimization (reject only clearly silent recordings with
+sufficient valid capture measurements; uncertain/missing measurements pass to
+server; zero recording upload, parse-voice submission, reservation, or
+provider-start attributable to a locally rejected recording). Normal auth,
+entitlement refresh, and sync can still make network requests. Runtime
+integration is NOT part of this slice; metering implementation, threshold
+calibration, and physical device testing remain pending. All prototype spike
+files have been deleted. Server API contracts remain completely unchanged;
+server duration follow-up is out of scope and not addressed.
 
 ## Summary
 
-Deliver **two separable slices**. **Slice A (EXECUTED)** corrected Expo SDK 55
-temporary-audio cleanup using the supported async `expo-file-system/legacy`
-import, after meaningful throwing-root versus working-legacy RED tests. It
-preserves native release-before-FS cleanup, known URI capture, missing-file
-idempotence, once-only disposal and generation/restart barriers.
+Deliver **three separable slices**:
 
-**Slice B (BLOCKED)** would validate actual uploaded media on the authoritative
-server before `voice_ai_mark_provider_started`/Gemini. Feasibility spike
-evaluated: Rust/WASM AAC decoder + Silero ONNX pipeline runs on local Deno
-proxy, but official `onnxruntime-web@1.22.0` threaded WebAssembly is rejected by
-Supabase Edge Runtime V8 isolates
-(`TypeError: Creating a shared memory is not supported`). Quiet speech positives
-remain 0/9 available. Authoritative server integration remains BLOCKED pending a
-non-shared Edge-compatible engine and licensed quiet speech fixtures.
+1. **Slice A — Cleanup Adapter (EXECUTED)**: Corrected Expo SDK 55
+   temporary-audio cleanup using the supported async `expo-file-system/legacy`
+   import, after meaningful throwing-root versus working-legacy RED tests.
+   Preserves native release-before-FS cleanup, known URI capture, missing-file
+   idempotence, once-only disposal, and generation/restart barriers. Root final
+   GREEN batch (72 tests / 3 suites / 3.809s) verified.
+
+2. **Slice B — Server Detector Retirement (SUPERSEDED & RETIRED)**: Server-side
+   WASM decoding and Silero ONNX speech detection pipeline is explicitly
+   ABANDONED. Edge Runtime shared memory isolate incompatibility, complexity,
+   and positive Egyptian speech corpus requirements are retired. Prototype files
+   in `scripts/voice-audio-validation-spike/` and
+   `docs/research/voice-audio-validation-spike/` have been deleted.
+
+3. **Slice C — Conservative On-Device Metering (APPROVED; PENDING)**: Approved
+   client-side cost optimization in `apps/mobile`. Rejects only clearly silent
+   recordings with sufficient valid capture measurements. Passes on missing or
+   uncertain measurements. Acknowledges that a loudness-only meter cannot
+   unconditionally distinguish quiet speech from ambient noise due to amplitude
+   overlap, requiring conservative thresholds and validation of representative
+   quiet, short, and noisy speech before shipping. On local silence rejection,
+   the client aborts submission before upload, invoking zero recording upload,
+   parse-voice submission, reservation, or provider-start. Runtime integration
+   is NOT implemented in this documentation retirement slice. Approved proposed
+   copy: `"We couldn’t hear anything. Please try recording again."`
 
 ## Technical Context
 
-| Concern         | Current verified boundary                                                                                                                                                                                       | Source                                                                                           |
-| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| Runtime         | React Native 0.83.6, Expo `~55.0.27`, `expo-file-system ~55.0.23`, `expo-audio ~55.0.15`                                                                                                                        | `apps/mobile/package.json` @ Voice `f625183…`                                                    |
-| Cleanup         | Voice `f625183…` baseline imported throwing root methods; `e288d12…` migrated to `expo-file-system/legacy`; `cleanupRecorderResources()` coordinates release before async deletion, stale generations and retry | Published `e288d12026bd7076682a6d89b6446bc13c228cab`                                             |
-| Upload          | `ai-voice-parser-service.ts` posts multipart local URI, stable request key, timezone, optional date, account/category context to `parse-voice`; 30-second network timeout is not recording length               | Current mobile service                                                                           |
-| Server          | `parse-voice/index.ts` checks zero bytes/5 MB and signature fallback; no decoded speech check; reserve → provider-start → Gemini; server success/quota structures already defined                               | `supabase/functions/parse-voice/index.ts`, `contracts/parse-voice-quota.openapi.yaml`            |
-| Accounting      | Existing SQL 087 scopes work by actor+key, provider start consumes allowance, release allowed only for reserved/non-started rows; 35-day replay identity remains                                                | `supabase/migrations/087_voice_ai_usage_limits.sql`                                              |
-| Local capture   | 30,000ms **active** cap; paused time excluded; `submitRecording` rejects under 1,500ms (not speech detection)                                                                                                   | #389 FR-045/FR-046 and current flow                                                              |
-| Runtime spike   | Symphonia 0.6.1 WASM (432 KB) + Silero ONNX + ORT Web 1.22.0 measured on local Deno proxy across 10 synthetic negatives/controls; 9 quiet positives missing; Edge Runtime probe rejected on shared memory       | [feasibility report](../../docs/research/voice-audio-validation-spike/feasibility-2026-10-12.md) |
-| Resource limits | Edge Runtime v1.76.2 probe: minimal eszip (14.30 MB / 13.64 MiB) fits 20 MB CLI limit (exceeds 5 MB server limit); isolate execution rejected at `WebAssembly.Memory(shared: true)` initialization              | [Supabase limits](https://supabase.com/docs/guides/functions/limits)                             |
-| Tool limitation | Permitted environment verified: Rust 1.97.1, MSVC 14.44, wasm-pack 0.15.0, Deno 2.9.7, FFmpeg 9.0.2; hosted deploy / external provider calls remain prohibited                                                  | Published `docs/research/voice-empty-audio-guard.md`                                             |
-
-**Language/testing**: TypeScript strict RN/Jest and Deno Edge/shared contracts;
-Rust/WASM prototype compiled and evaluated locally on Deno proxy. No new
-packages, lockfile edits, migrations, hosted changes, customer audio, secrets,
-provider calls or model artifacts in Git.
+| Concern         | Verified boundary / disposition                                                                                                                 | Source                                                                                |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| Runtime         | React Native 0.83.6, Expo `~55.0.27`, `expo-file-system ~55.0.23`, `expo-audio ~55.0.15`                                                        | `apps/mobile/package.json` @ Voice `f625183…`                                         |
+| Cleanup         | Migrated to `expo-file-system/legacy`; `cleanupRecorderResources()` coordinates release before async deletion, stale generations and retry      | Published `e288d12026bd7076682a6d89b6446bc13c228cab`                                  |
+| Server API      | `POST /functions/v1/parse-voice` UNCHANGED; structural zero-byte check preserved; no new server validation or error contracts                   | `supabase/functions/parse-voice/index.ts`, `contracts/parse-voice-quota.openapi.yaml` |
+| Accounting      | SQL 087 contracts UNCHANGED; client silence bypass causes zero recording upload or reservation, consuming zero quota/allowance                  | `supabase/migrations/087_voice_ai_usage_limits.sql`                                   |
+| Local capture   | 30,000ms active cap; client `durationMs < 1500` guard preserved; server duration follow-up is out of scope and not addressed                    | #389 FR-045/FR-046                                                                    |
+| Server detector | SUPERSEDED & RETIRED: Symphonia WASM, Silero ONNX, and Edge Runtime isolate shared-memory blockers retired; prototype files deleted             | Pinned feasibility findings superseded; scripts deleted                               |
+| Client metering | Approved direction: conservative metering in mobile app; reject only unambiguous silence with valid measurements; validate quiet/noisy; PENDING | User decision 2026-10-12                                                              |
 
 ## Constitution Check
 
-| Principle                                    | Plan disposition                                                                                                                                                                     |
-| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Offline-first and authenticated/user scope   | PASS for planning: financial writes/Manual untouched; Voice validation already uses authenticated server; no client state becomes authoritative.                                     |
-| Documented business logic                    | PASS for planning: #389 consent, 30-second local cap, 35-day replay, #384 deferral and provider start policy preserved; new rejection is explicitly undecided.                       |
-| Type safety and runtime validation           | PASS for planning: propose typed internal decisions and tested boundary parsing; no `any`, unsafe casts or unvalidated external data.                                                |
-| Service-layer separation                     | PASS for planning: recorder owns local cleanup; Edge/shared validator owns actual submitted audio, provider and quota remain separately accountable; startup worker owns route/flow. |
-| No premature visual deviation                | PASS for planning: no product UI/source/copy modifications; new refusal UI needs owner approval and rendered evidence if later assigned.                                             |
-| Security/privacy and sync                    | PASS for planning: raw media never persisted/logged; actor/consent/cancellation retained; no SQL, migration or sync changes without explicit decision.                               |
-| Mandatory RED → GREEN and independent review | PASS: cleanup slice RED→GREEN and independent minimal-source review EXECUTED by root on 2026-10-12 (see checkpoint below); speech gates unchanged and still gated.                   |
+| Principle                                    | Plan disposition                                                                                                                                          |
+| -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Offline-first and authenticated/user scope   | PASS: Local cleanup is fully on-device; client silence bypass saves local battery and network without altering authenticated server scope.                |
+| Documented business logic                    | PASS: Server contracts from #389 preserved unchanged; user decision abandoning server detection recorded; server duration follow-up noted as unaddressed. |
+| Type safety and runtime validation           | PASS: Strict TypeScript maintained; no `any` or unsafe assertions.                                                                                        |
+| Service-layer separation                     | PASS: Recorder owns local cleanup; future metering will reside in mobile services/hooks without mixing concerns.                                          |
+| No premature visual deviation                | PASS: No UI modifications made in this slice; approved proposed English copy recorded; translation/integration deferred.                                  |
+| Security/privacy and sync                    | PASS: No raw media or audio metrics persisted or logged; zero external provider calls attributable to locally rejected recordings.                        |
+| Mandatory RED → GREEN and independent review | PASS: Cleanup slice RED→GREEN EXECUTED (72 tests / 3 suites PASS); future metering TDD will follow strict tests-first rules.                              |
 
-**Root's actual pre-code receipt (2026-10-12):** With **both** feature
-environment variables above, root ran the correct-feature canonical
-prerequisite: **PASS**,
-`FEATURE_DIR=/mnt/e/Work/My Projects/Monyvi-voice-empty-audio-guard/specs/391-voice-empty-audio-guard`,
-`AVAILABLE_DOCS=contracts/,tasks.md`. Root independently ran canonical
-**READ-ONLY** Speckit analysis over the complete artifacts/constitution: **0
-critical and 0 cleanup-blocking HIGH**, while speech gates **B1/B2/C1 remain 3
-HIGH/BLOCKED**. It used an existing ignored `.git` administrative script for the
-permitted command because inline Bash `-c` is tool-blocked; this is evidence of
-root's completed run, **not authorization to retry or bypass**. WSL reported Git
-not detected and skipped branch validation; root independently verified native
-Git branch/tree/ancestry. No optional Git hooks ran. Root's measured
-lockfile-only and junction runtime checks both resolved
-`expo-file-system@55.0.23` without a package change. **Cleanup execution
-checkpoint (2026-10-12):** test-only RED
+**Cleanup execution checkpoint (2026-10-12):** Test-only RED
 `392a26f7bd6acdb94e2efe54d1587866d713d2b0` (10 fail / 1 pass / 11 total, 7.836s)
 → import-only production `84696d745bb8e0fdb37b079a6c76e75af18e7db6` → async mock
 reconciliation `7ad8ed5295f05a6f844f82ec2b2727af206fa906` → ESLint repair
 included in published `e288d12026bd7076682a6d89b6446bc13c228cab` → root final
 GREEN **72 tests / 3 suites / 3.809s** (filesystem, original, r2 recorder
 suites) with mobile `tsc`, changed ESLint autofix, formatting, i18n/privacy and
-diff PASS, plus a root independent minimal-source review PASS. Actual local
-offline inference was measured on Deno proxy; hosted production Edge deployment
-remains BLOCKED.
+diff PASS, plus a root independent minimal-source review PASS.
 
-## Architecture and scope
+## Architecture and Scope
 
-### A. Cleanup adapter: independent, no speech/UX dependencies
+### A. Cleanup Adapter (EXECUTED)
 
-Current control flow:
+Control flow:
 
 1. Native audio finalizes; recorder stores URI including partial URI
    pre-release.
 2. `cleanupRecorderResources` awaits any in-flight start/stop, captures known
-   URI, **releases native recorder before filesystem work**, serializes retries
-   with `cleanupPromiseRef`.
-3. Expo 55 root `FileSystem.getInfoAsync` / `deleteAsync` methods were replaced
-   with `expo-file-system/legacy` in `e288d12…`.
+   URI, **releases native recorder before filesystem work**, and serializes
+   retries with `cleanupPromiseRef`.
+3. Supported async `expo-file-system/legacy` `getInfoAsync` and `deleteAsync`
+   perform idempotent deletion without runtime throws.
 
-### B. Server actual-byte/speech validator: blocked on feasibility
+### B. Server Speech Detector (SUPERSEDED & RETIRED)
 
-Proposed sequence (requires accepted decisions, source test RED, and a dedicated
-future writable allowlist):
+Server-side decoding and Silero ONNX VAD are abandoned. The prototype harness in
+`scripts/voice-audio-validation-spike/` and research templates in
+`docs/research/voice-audio-validation-spike/` are deleted. All previous
+benchmark findings and Edge Runtime isolate shared-memory blockers are
+superseded. Server endpoints in `supabase/functions/parse-voice/` remain
+completely unchanged.
 
-`Auth + active consent → read bounded actual bytes / strict supported-media checks → validate key/timezone → resolve policy → reserveVoiceAiWork → measured decode/downmix/resample+speech VAD → [known unusable: verified pre-provider release] / [validator failure: reconciled fail-closed response] / [eligible speech: markVoiceAiProviderStarted → Gemini → existing complete]`.
+### C. Conservative On-Device Metering (APPROVED; PENDING)
 
-This is **not** a deployed or measured pipeline. Inconclusive speech, validator
-errors, concurrent same-key reservations, released terminal same-key replay,
-expiry and release RPC ambiguity require explicit contract decisions. No
-arbitrary threshold, minimum voiced time, AAC-padding tolerance or default
-`no_speech` response is selected.
+Future sequence upon implementation:
+`Audio capture with metering → evaluate measurements → [insufficient/missing metrics OR non-silent audio: proceed to upload/parse-voice] / [sufficient valid metrics proving clear silence: abort locally with friendly copy, zero recording upload, zero reservation, zero provider cost]`.
 
-### C. Existing request and accounting contracts
+Key invariants:
 
-[Proposed audio-validation contract](./contracts/audio-validation-contract.md)
-**only describes decision gates**; it does not add an OpenAPI status/JSON body.
-Successful parser and 429 quota outputs remain governed by
-[#389](../389-voice-usage-limits/contracts/parse-voice-quota.openapi.yaml).
+- **Cost optimization only**: Not authoritative speech proof or background-noise
+  filtering.
+- **Inherent amplitude limitations**: Loudness-only metering cannot
+  unconditionally distinguish quiet speech from noise. Amplitude overlap must be
+  accounted for by conservative threshold calibration and validation of
+  representative quiet, short, and noisy speech before shipping.
+- **Fail-open**: Missing, sparse, or uncertain metering data pass to the server.
+- **Zero server side-effects for silence**: Local rejection prevents recording
+  upload, parse-voice submission, work reservation, and Gemini provider
+  invocation. Normal auth, entitlement refresh, and sync network calls remain
+  unaffected.
+- **Approved proposed copy**: User approved
+  `"We couldn’t hear anything. Please try recording again."`
+- **Unimplemented in this slice**: Implementation, threshold calibration, and
+  device verification are deferred to future tasks.
 
-**Important SQL mismatch:** `private.voice_ai_reserve_work_at` returns
-`already_processed_result_unavailable` for a released terminal row's same key;
-reservation success on an already-active key may be `accepted` /
-`is_replay=true` and permit concurrent decoder execution;
-`voice_ai_release_work` acts only on `reserved` plus
-`provider_started_at IS NULL`. Before any server code, root must reconcile
-retry/terminal/lease behavior, duplicate expensive validation and unknown
-release/mark outcomes. #384 deferred reservation UX remains separate.
+### D. Server Contracts and Duration
 
-## Phase 0 — Preserve completed research, establish readiness
+Existing request and accounting contracts in
+`contracts/parse-voice-quota.openapi.yaml` and migration 087 remain
+authoritative and unchanged. Server duration enforcement follow-up is explicitly
+out of scope and identified as not addressed.
 
-Link, do not regenerate:
+## Phase 0 — Prototype Retirement (COMPLETED)
 
-- `docs/research/voice-empty-audio-guard.md` with historical 60s source and
-  later unexecuted candidate/harness correction.
-- `scripts/voice-audio-validation-spike/{README.md,benchmark.ts,prepare-fixtures.ts,decoder/}`
-  and
-  `docs/research/voice-audio-validation-spike/{fixtures.template.json,results.template.json}`
-  (original committed templates reflect historical unmeasured baseline; newer
-  actual 10 synthetic negative/control measurements are recorded in the
-  [feasibility report](../../docs/research/voice-audio-validation-spike/feasibility-2026-10-12.md);
-  production speech validation remains **BLOCKED**).
-- Official Expo SDK 55
-  [filesystem root](https://docs.expo.dev/versions/v55.0.0/sdk/filesystem/) and
-  [legacy](https://docs.expo.dev/versions/v55.0.0/sdk/filesystem-legacy/) docs,
-  proving root methods throw and asynchronous legacy compatibility exists.
-
-Root compares pinned `a7e1e00e…` branch head against `f625183…` and confirms
-only nine research/prototype files differ; root owns all future refs, merges,
-issue/PR updates and branch mutation outside this planning assignment.
+- Deleted 10 prototype and research files:
+  - `scripts/voice-audio-validation-spike/.gitignore`
+  - `scripts/voice-audio-validation-spike/README.md`
+  - `scripts/voice-audio-validation-spike/benchmark.ts`
+  - `scripts/voice-audio-validation-spike/prepare-fixtures.ts`
+  - `scripts/voice-audio-validation-spike/decoder/Cargo.toml`
+  - `scripts/voice-audio-validation-spike/decoder/src/lib.rs`
+  - `docs/research/voice-audio-validation-spike/fixtures.template.json`
+  - `docs/research/voice-audio-validation-spike/results.template.json`
+  - `docs/research/voice-audio-validation-spike/feasibility-2026-10-12.md`
+  - `docs/research/voice-empty-audio-guard.md`
+- Marked historical synthetic/VAD benchmark findings superseded.
 
 ## Phase 1 — Cleanup TDD (EXECUTED 2026-10-12)
 
-**Results:** test-only RED `392a26f7…` (10 fail / 1 pass / 11 total, 7.836s) →
+Results: test-only RED `392a26f7…` (10 fail / 1 pass / 11 total, 7.836s) →
 import-only production `84696d74…` → async mock reconciliation `7ad8ed52…` →
 root final GREEN 72 tests / 3 suites / 3.809s (filesystem, original, r2 recorder
 suites); mobile tsc, ESLint autofix, formatting, i18n/privacy and diff PASS;
 independent minimal-source review PASS. Owner native/device validation remains
 **NOT RUN**.
 
-1. **Test-only** adapter test in dedicated `useVoiceRecorder.filesystem.test.ts`
-   and existing fixture: root `getInfoAsync`/`deleteAsync` throw under SDK55,
-   legacy `getInfoAsync` reports existence/missing and legacy `deleteAsync` is
-   idempotent. Exercise success/failed stop/null URI, release-before-getInfo,
-   pending filesystem barrier, repeat discard, and real I/O warning. Ensure this
-   is not a mock-only 'function called' oracle.
-2. **Actual RED checkpoint** run by root; expected failure must be supported by
-   the observed deprecated import, not syntax/module setup.
-3. **Minimal production** import-only correction, no other code unless a
-   deterministically reproduced additional defect and root acceptance.
-4. Root executes focused GREEN (filesystem/recorder family), TypeScript/lint and
-   test seam review. Owner native/device validation remains **NOT RUN** until
-   later evidence.
+## Phase 2 — Server Speech Feasibility & Contracts (SUPERSEDED)
 
-## Phase 2 — Speech feasibility (PARTIAL feasibility; production BLOCKED)
+- Server-side WASM decoder, Silero VAD, Edge Runtime isolate shared-memory
+  workarounds, and positive Egyptian speech corpus requirements are RETIRED.
+- Proposed server-side `no_speech` and validator error contracts are REMOVED.
+- Server API contracts remain completely unchanged.
 
-1. A verified local toolchain (Rust 1.97.1, Cargo 1.97.1, MSVC 14.44, wasm-pack
-   0.15.0, Deno 2.9.7, FFmpeg 9.0.2) compiled and evaluated 10 synthetic
-   negative and invalid controls on the local Deno proxy on 2026-10-12;
-   remaining Edge-compatible engine and licensed quiet speech corpus gates
-   remain blocking; no individually blocked command retry or protection bypass.
-2. Verify Rust/Symphonia AAC-LC + ISO MP4 WASM compile; correct wasm-bindgen web
-   ES initializer; pinned Silero model + ORT 1.22.0 load, tensor shapes,
-   sample-rate context and per-clip state reset. Stop and record first real
-   stderr on failure.
-3. Build locally ignored synthetic digital silence/fan/traffic proxy and
-   malformed controls at 5/15/30s; obtain nine **licensed** quiet Egyptian
-   Arabic, English and code-switch positives plus representative varied
-   speakers, short words, real room/traffic/handling/breathing and
-   speech-over-noise. Research candidates ArzEn, FLEURS and Common Voice are
-   identified but **no licensed quiet/code-switch positive fixtures are
-   acquired**. No private/customer files.
-4. Validate actual decode/sample rate/mono/encoder padding, run a **candidate
-   threshold grid** (no production policy), report FNR/FPR with confidence,
-   cold/warm CPU and wall per stage, **true peak memory**, model/decoder/ORT
-   hashes/sizes and total Edge-bundled bytes. Hosted Edge CPU/memory/headroom
-   measurements must be separate from local Deno proxies.
-5. Root evaluates feasibility against actual Supabase resource limits and
-   quiet-speech preservation. If infeasible/missing corpus, server production
-   remains **BLOCKED**; alternative validator service demands separate
-   privacy/deployment approval, not an automatic substitution.
+## Phase 3 — Conservative On-Device Metering (PENDING FUTURE SLICE)
 
-## Phase 3 — Authoritative server RED → implementation (GATED)
-
-- Reconcile public unusable-audio and validator-error HTTP/body/copy,
-  uncertainty policy, supported formats, local <1.5s vs valid short speech,
-  decoded duration/padding, released-terminal same-key, in-flight same-key
-  validation concurrency and lease/failed release behavior. Record owner/root
-  decisions in canonical contract **before writing tests/source**.
-- Use `supabase/functions/parse-voice/index.test.ts` and scoped new validator
-  unit tests only after source ownership assigned; test mocked provider
-  invocations and exact SQL RPC order/decisions. No live Gemini, calls to hosted
-  Supabase, migrations or trials in blocked executor.
-- Root accepts meaningful RED, delegates only agreed source, runs focused GREEN;
-  maintain existing success parsing and provider accounting.
-- Any new localization/route/flow/UX and any SQL change requires separate scope
-  and owner decision. Root's startup branch owns route/flow/availability.
-
-## Phase 4 — Review, evidence and integration
-
-Root arranges independent TypeScript/async, security/privacy, SQL/lease/race and
-measured audio quality review. The [manual plan](./checklists/manual-plan.md)
-provides **owner-only** native/OS/audio/device and honestly controllable E2E
-cases; authoring is not execution.
-
-Root preserves **one final combined check batch before publication**, apart from
-the mandatory actual RED checkpoints and focused GREEN needed to justify work.
-No installation, deployment, emulator, provider call, feature push or root-owned
-PR/issue mutation is authorized here.
+- Define mobile metering threshold calibration against physical devices.
+- Author unit tests proving:
+  - Clear silence with sufficient valid measurements is rejected locally.
+  - Missing or uncertain metering samples pass to server.
+  - Representative quiet, short, and noisy speech within policy passes to
+    server.
+  - Zero recording upload, parse-voice submission, reservation, or
+    provider-start attributable to a locally rejected recording.
+- Execute TDD (RED → GREEN) in mobile services/hooks.
+- Verify owner manual testing on physical iOS and Android hardware.
 
 ## Project Structure
 
@@ -242,48 +186,17 @@ PR/issue mutation is authorized here.
 
 `specs/391-voice-empty-audio-guard/`
 
-- `spec.md` — prioritized scenarios, FR/NFR and gating outcomes
-- `plan.md` — this source-backed, separable design
-- `tasks.md` — sequential RED/GREEN/feasibility/review tasks
-- `contracts/audio-validation-contract.md` — **proposed** response/accounting
-  boundary, not a new API
-- `checklists/analysis.md` — read-only structured cross-artifact analysis after
-  docs
-- `checklists/manual-plan.md` — unexecuted owner evidence matrix
-
-### Existing code and research (linked, not changed by planning)
-
-`apps/mobile/hooks/useVoiceRecorder.ts` and its recorder tests/fixture;
-`apps/mobile/services/ai-voice-parser-service.ts`;
-`apps/mobile/hooks/useVoiceTransactionFlow.ts` (startup branch ownership, no
-#391 writes); `supabase/functions/parse-voice/index.ts` and its tests;
-`supabase/functions/_shared/voice-ai-*.ts`;
-`packages/logic/src/voice-ai-safeguard-contract.ts`;
-`supabase/migrations/087_voice_ai_usage_limits.sql` (read-only);
-research/harness listed above.
-
-## Dependency gates and estimate
-
-| Gate                                                                    | Cleanup slice               | Server speech slice                   |
-| ----------------------------------------------------------------------- | --------------------------- | ------------------------------------- |
-| Root approves canonical plan/ownership                                  | Required                    | Required                              |
-| Actual meaningful unit RED                                              | **Satisfied** (`392a26f7…`) | Required after feasibility + contract |
-| Licensed 5/15/30 fixtures, decoder/VAD compatibility, Edge measurements | **Not required**            | **BLOCKING**                          |
-| New public copy/response/lease policy                                   | **Not required**            | **BLOCKING**                          |
-| Device/OS/manual acceptance                                             | Owner afterward             | Owner afterward                       |
-| New migration/hosted/provider/package                                   | **Not permitted**           | **Not permitted by current grant**    |
-
-Provisional full remaining effort **8–14 hours only after feasibility inputs
-exist**: **2–4h** readiness/benchmark, **4–7h** approved implementation/tests
-(includes **30–60min** cleanup), **2–3h** independent review/root integration.
-Local permitted runtime prerequisite was fulfilled on 2026-10-12; missing
-licensed quiet speech positives and Edge-compatible non-shared WASM candidate
-prevent reliable scheduling of speech completion. Startup work was completed
-independently in published PR #383 (`213b392…`).
+- `spec.md` — prioritized scenarios, FR/NFR, and gating outcomes
+- `plan.md` — this updated architecture and retirement plan
+- `tasks.md` — sequential tasks with explicit superseded dispositions
+- `contracts/audio-validation-contract.md` — document client-only bypass and
+  preservation of unchanged existing server contracts
+- `checklists/analysis.md` — updated semantic cross-artifact analysis
+- `checklists/manual-plan.md` — owner manual evidence matrix (cleanup and
+  metering marked NOT RUN)
 
 ## Complexity Tracking
 
-No constitution exception or unexplained complexity authorized. WASM/ONNX
-components are **research-only** candidates; no source dependency, deployment,
-schema, third-party processor or new price/quota policy may be introduced until
-root explicitly accepts measured feasibility and product/privacy gates.
+No new external dependencies, WASM crates, ONNX models, or server migrations.
+Complexity is reduced by retiring the server-side detector and adopting a
+conservative client-side metering cost guard.
