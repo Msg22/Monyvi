@@ -101,6 +101,8 @@ export interface StartFlowOptions {
   readonly skipAiProcessingConsent?: boolean;
   readonly requestMicrophonePermission?: boolean;
   readonly retryRecording?: boolean;
+  /** Replace a pre-consent pending availability call after an explicit grant. */
+  readonly supersedePendingAvailability?: boolean;
   readonly availabilitySnapshot?: VoiceAvailabilitySnapshot;
 }
 

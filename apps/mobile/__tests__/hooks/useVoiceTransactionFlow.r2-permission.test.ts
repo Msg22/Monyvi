@@ -282,9 +282,12 @@ describe("R2 typed single just-in-time microphone permission ownership", () => {
     );
   });
 
-  it.each(["consent", "availability"] as const)(
-    "short-circuits %s before the native permission read",
-    async (stage): Promise<void> => {
+  it.each([
+    ["consent", 0, 0],
+    ["availability", 1, 1],
+  ] as const)(
+    "refuses %s with %i non-prompting permission reads and no OS prompt or capture",
+    async (stage, permissionReads, availabilityReads): Promise<void> => {
       const ensureConsent = (): boolean => stage !== "consent";
       if (stage === "availability") {
         mockAvailabilityRefresh.mockResolvedValue({
@@ -299,9 +302,16 @@ describe("R2 typed single just-in-time microphone permission ownership", () => {
         outcome = await flow.result.current.startFlow();
       });
       expect(outcome).toEqual({ kind: "not-started", reason: stage });
-      expect(mockRecorderRefresh).not.toHaveBeenCalled();
+      // FR-050: consent fails before either read; quota refusal still permits
+      // one concurrent, non-prompting local permission read.
+      expect(mockAvailabilityRefresh).toHaveBeenCalledTimes(availabilityReads);
+      expect(mockRecorderRefresh).toHaveBeenCalledTimes(permissionReads);
+      expect(mockRecorderRequestStatus).not.toHaveBeenCalled();
       expect(mockRecorderRequest).not.toHaveBeenCalled();
       expect(mockRecorderStart).not.toHaveBeenCalled();
+      expect(mockUUID).not.toHaveBeenCalled();
+      expect(mockProvider).not.toHaveBeenCalled();
+      expect(flow.result.current.flowStatus).toBe("idle");
     }
   );
 

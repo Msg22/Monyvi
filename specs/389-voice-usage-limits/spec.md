@@ -775,3 +775,249 @@ combined approval revision is
 the official verifier algorithm; PNG bytes, FR-043–FR-047, SC-019–SC-022 and all
 other facts are unchanged. Owner did not review the computed SHA. Final root
 T068 gate completed 2026-10-11 (see the actual receipt in tasks.md).
+
+## Session 2026-10-12 — Voice startup optimization S1 (owner-approved performance continuation)
+
+This additive session plans only the startup path from a valid Voice tap to true
+native capture readiness. It preserves all R1/R2 bindings, copy, controls,
+30-second active-capture behavior, explicit Submit, request identity, AI
+consent, server-authoritative quota/availability, Manual behavior and issue #391
+recorder/ empty-audio ownership.
+
+**Source audited:** `f625183373e29d372b658c10b3848a217477400a`.
+
+### Verified source facts and precedence
+
+- The route owns the single `useVoiceAiAvailability(true)` instance and passes
+  that result into `useVoiceTransactionFlow`; the flow does **not** instantiate
+  a duplicate availability hook. Any earlier duplicate-hook hypothesis is
+  disproven and MUST NOT be used as implementation rationale.
+- `requestVoiceStart` already marks the route pending before awaited work, so
+  approved Starting feedback can remain immediate while startup work proceeds.
+- A normal eligible start currently waits for fresh local AI consent, then the
+  flow performs a fresh authoritative availability request and a fresh native
+  microphone-permission read serially before recorder preparation.
+- `useVoiceAiAvailability.refresh()` currently cancels any in-flight request and
+  starts a replacement. Focus, foreground and explicit pre-start refreshes can
+  therefore restart equivalent same-actor/same-timezone work.
+- Authenticated availability uses `getStableAuthSession()` before Edge Function
+  invocation and retains the existing one-time 401 refresh/retry path. This
+  security behavior is not removed or bypassed by this optimization.
+- Recorder `record()` and `onStarted` occur before the existing 300 ms native
+  stabilization delay. That delay protects early Pause/Stop and is **not** part
+  of tap-to-capture startup latency; it remains unchanged and owned by the
+  recorder/#391 boundary.
+- FR-047 remains authoritative except for its earlier prohibition on changing
+  availability in-flight coordination on an unproven hypothesis. The owner has
+  now explicitly authorized a source-backed, same-context in-flight coalescing
+  plan. This does **not** authorize TTL caching, reuse of a settled snapshot or
+  transport/auth weakening.
+
+### Additive functional requirements
+
+- **FR-048 — Safe startup optimization without gate removal:** Voice startup
+  SHOULD eliminate proven redundant waits/work while preserving fresh local AI
+  consent, one fresh server-authoritative preattempt availability result,
+  current-actor/generation cancellation, one fresh native microphone permission
+  result, explicit OS permission request semantics, request identity, the local
+  30-second cap and no Listening before native `record()` succeeds. No fixed
+  millisecond SLA or artificial minimum delay is introduced.
+- **FR-049 — Same-context in-flight availability coalescing:** While one Voice
+  availability request is unresolved, another refresh for the same authenticated
+  actor, valid device timezone and current hook enablement/context generation
+  MUST join that same in-flight promise instead of aborting and restarting the
+  network request. A settled result MUST NOT be reused as a startup cache.
+  Actor/timezone/enablement change, focus loss, backgrounding, unmount and
+  authoritative reconciliation retain cancellation/stale-result protection.
+  Failure/abort MUST clear the coalescing slot so the next valid refresh can
+  start a new request.
+- **FR-050 — Post-consent availability/permission concurrency:** After fresh AI
+  consent is confirmed and the current actor/timezone remain valid, the flow MAY
+  perform the mandatory authoritative availability request and the
+  **non-prompting** native permission read concurrently. It MUST evaluate both
+  under the same operation generation before recorder preparation. A native OS
+  permission request remains allowed only from the existing explicit
+  `Allow microphone` action, only after availability is eligible, and never from
+  background/focus refresh. Blocked/denied/unknown/revoked handling remains
+  unchanged.
+- **FR-051 — Auth/security and retry semantics remain authoritative:** Startup
+  optimization MUST NOT bypass `getStableAuthSession`, authenticated
+  Edge-Function headers, 401 refresh/retry, server quota/consent enforcement,
+  actor scoping, retained-audio same-key retry, or fail-closed availability.
+  Availability-failure retry may join equivalent in-flight work but still
+  auto-starts only from a fresh eligible result. Retained-audio submission retry
+  does not restart microphone capture or allocate a new logical request key.
+- **FR-052 — Privacy-safe monotonic startup diagnostics:** If startup stage
+  timing is added, it MUST use a monotonic clock and record only stage names and
+  numeric durations in exactly `{ stage, durationMs }` without extra fields. It
+  MUST NOT log user/account/request IDs, audio/URI, transcripts, parsed or
+  financial content, auth tokens, provider payloads or credentials. Diagnostic
+  timing MUST add no sleep/artificial minimum and MUST NOT be presented as a
+  measured product improvement until owner device evidence exists.
+
+- **FR-053 — Consent-transition freshness:** A first-use AI processing consent
+  grant or other explicit consent-transition continuation MUST NOT join an
+  authoritative availability request that began under the previous consent
+  context. That continuation MUST explicitly supersede the older pending request
+  and obtain a fresh authoritative result before native recording may start.
+  This is a pending-work freshness boundary only: already-consented
+  same-actor/same-timezone work may still coalesce while unresolved, completed
+  snapshots remain non-reusable, and existing consent revocation/fail-closed
+  behavior is unchanged.
+
+### Additive success criteria
+
+- **SC-023:** Deterministic hook tests prove simultaneous same-context
+  refreshes, including focus/foreground plus explicit start, produce exactly one
+  availability service call; different actor/timezone/context generations
+  cancel/replace safely, and settled/failed/aborted work is never reused.
+- **SC-024:** Deterministic flow tests prove fresh consent completes before
+  availability/permission work begins, then the availability request and
+  non-prompting permission read are both in flight before either must resolve.
+  Recorder preparation starts only after an eligible availability result and
+  granted permission; explicit OS permission never occurs for blocked
+  availability or without the approved user action.
+- **SC-025:** Cancellation, duplicate taps, Back/Manual switch/unmount,
+  backgrounding, account switch, denied/blocked/unknown/revoked permission,
+  recorder-start failure and unavailable retry never produce false Listening,
+  duplicate recorder starts, stale actor state or extra provider/request
+  identity. Existing retained-audio same-key retry remains unchanged.
+- **SC-026:** Authenticated-edge regression coverage retains stable-session use,
+  one 401 refresh/retry and fail-closed authentication behavior; this startup
+  slice requires no shared-auth production change.
+- **SC-027:** Owner manual evidence records cold/warm startup stage durations
+  separately and validates OS permission/capture behavior on device. Unit/source
+
+## Final Receipt (2026-10-12)
+
+- Root formatter changes preserved in 11 files (local DOC-only integration
+  leaf).
+- Normal ChatGPT source and test artifact frozen at
+  `84cd84f735a8dd51fa05dc1c7a340ecb76be6f50`; cannot edit root uncommitted
+  formatted local state.
+- Only 5 existing docs edited: `specs/389-voice-usage-limits/spec.md`,
+  `plan.md`, `tasks.md`, `checklists/voice-startup-analysis.md`,
+  `checklists/voice-startup-manual-plan.md`. No source/test/other
+  docs/schema/images/copy/issue/PR changes; no
+  commands/checks/commit/push/workers.
+- Root final GREEN receipt on 84+local formatter: exact 28 suites 424 tests PASS
+  27.656s, mobile full TypeScript PASS, changed ESLint 0 errors 3 baseline
+  intentional hook warnings, Prettier PASS, i18n PASS, privacy PASS, diff PASS.
+- Historical RED/unrun worker reports retained with clear dates (2026-10-12
+  S1–S4, S2-FIX, S3, S4, root blocker/reconciliation; owner manual plan cases
+  M01–M28 marked NOT RUN).
+- T077/T078/T079/T080/T081/T083 reconciled only to actual root evidence;
+  T075/T076 retain completed. T082 and all
+  owner/device/manual/rendered/OS/actual timing remain NOT RUN. T074 manual
+  remains not completed.
+- Starting/300ms post-start guard, consent-first, concurrent non-prompt
+  permission+availability, matching unresolved coalescing only, forced
+  first-consent supersede, direct Retry flow own fresh reads, privacy-only
+  stage/durationMs preserved. No 1–2s device claim.
+- #391 separate validated cleanup draft; speech guard blocked
+  tools/corpus/contracts; not feature-merged. Final CURRENT gate wording
+  reconciled; no publication claim. evidence alone MUST NOT be called a measured
+  latency improvement, native timing proof, E2E execution or provider readiness.
+
+### S2 consent-transition clarification (12 October 2026)
+
+The S1 coalescing criterion is intentionally narrower than a cache. For
+**SC-023**, same-context pending work may join only while the consent context is
+unchanged. A first-use consent grant is an explicit freshness boundary and MUST
+force a new authoritative availability request; a completed snapshot is never
+reused. This clarification adds FR-053 without renumbering FR-048–FR-052 or
+changing R1/R2 UI, quota, request-identity, permission, recorder or Manual
+contracts.
+
+### S2-FIX focused Red repair and diagnostic boundaries (12 October 2026)
+
+The existing **FR-048–FR-053** and **SC-023–SC-027** remain unchanged, as do
+R1/R2 approvals and the client 30-second cap. Root's actual source-pinned S2 RED
+is described below; test authoring updates do not constitute a new
+source/UX/server authorization.
+
+The verified companion test paths are
+`apps/mobile/__tests__/hooks/useVoiceAiAvailability.startup.test.tsx`,
+`apps/mobile/__tests__/hooks/useVoiceTransactionFlow.startup.test.ts` and
+`apps/mobile/__tests__/app/add-transaction-modes.test.tsx`. A direct
+`refresh({ supersedePending: true })` must abort a matching _pre-consent_
+request even when ordinary same-context work would coalesce. Two joined callers
+on focus blur, background and unmount must receive **null**, with no late stale
+availability. First-use consent passes the supersede marker; already-consented
+attempts still join equivalent _unresolved_ work.
+
+Diagnostic evidence requires separate monotonic `availability` and `permission`
+stage durations plus the overall parallel `availability_permission` and
+`native_start` durations, each logged as `voice.startupTiming` with **only**
+`{ stage, durationMs }`. Diagnostic logging failure must not delay or prevent
+native capture; no artificial wait, user IDs, request IDs, audio, transcript,
+timezone, token or financial payload is permitted. No owner device timing result
+exists.
+
+**Root's actual staged S2 RED (2026-10-12, baseline
+`aea6e6526058359ac739a4571634669a837c14b8`):** availability companion **2 failed
+/ 8 passed / 10 total (3.122 s)**; flow companion **5 failed / 3 passed / 8
+total (1.865 s)**; route modes **2 failed / 33 passed / 35 total (5.549 s)**.
+Coalescing, concurrent non-prompting permission and first-use consent supersede
+failures were meaningful. One route failure was only an undefined
+`mockVoiceAvailabilityRefresh` import (export already present at
+`add-transaction-route-fixtures.tsx:666`) and **does not count as RED**. The
+initial combined command timed out after 60 seconds; the individual focused
+verbose runs provide the actual accepted evidence. Root must run the repaired
+focused RED before any startup production grant. Neither this test writer nor
+this documentation correction executed Jest, TypeScript, native timing or
+provider work.
+
+### S4 accepted RED and minimal retry correction (12 October 2026)
+
+Root's focused S4 check at `c3dc55d0b2ec25b6a71bcec4466d4147562d0474`: **3
+failed / 54 passed / 57 total (13.044 s)**. Only the unavailable Retry
+expectation was meaningful product RED: one standalone route availability
+refresh occurred where zero was required. Two global `performance.now` tests
+were invalid seam failures because React's scheduler observed the broken clock,
+and the following logger test had no calls. They were not accepted as product
+RED; a broad earlier timeout was not GREEN.
+
+The approved FR-050/FR-051 retry path checks fresh local AI consent first, then
+directly invokes the existing flow with `skipAiProcessingConsent: true`. The
+flow alone performs the fresh authoritative availability request concurrently
+with a non-prompting permission read; blocked availability prevents native
+recording and OS prompting. Only the existing explicit permission action may
+request the OS prompt after eligible availability. The first-use grant continues
+to supersede pre-consent work under FR-053. The optional flow-level snapshot
+contract remains compatible for other callers.
+
+FR-052 timing records use **only** `{ stage, durationMs }`, with no ephemeral
+correlation token or other identity/content fields. Throwing/nonfinite clocks
+are tested directly against the public timing utility outside React rendering,
+and native capture retains separate diagnostic-unavailable and logger-failure
+positives. Unmount during both pending gates must prevent recorder, UUID and
+provider work. This addendum changes no R1/R2 UI, strings, local 30-second cap,
+security/accounting, or Manual behavior. Final GREEN, independent review and
+owner native measurements remain **NOT RUN by this worker**.
+
+### Final pre-integration test-contract reconciliation (12 October 2026)
+
+Root's actual exact 28-suite batch at startup
+`4133231163116e04f9221c42095eb98580f38768`: **25 suites passed / 3 failed; 419
+tests passed / 5 failed / 424 total; 26.373 s.** This is **not GREEN**.
+TypeScript, formatter, i18n, privacy and diff checks passed; ESLint reported **0
+errors** and **3 existing dependency warnings**. All production behavior and new
+startup flow/availability tests passed. Independent S4 review found no new
+critical/high source defect. The remaining five failures are stale test
+contracts, not permission or quota policy changes: three route motion
+Retry/first-consent assertions, one R2 availability-refused
+non-prompting-permission assertion, and one utility logger clock-fixture
+assertion.
+
+The reconciled FR-050 contract reads permission **zero times** when fresh
+consent is denied, but **once** (non-prompting) while authoritative availability
+may be refused. Refusal still produces **zero** OS request, UUID, provider and
+native start. Unavailable Retry delegates once directly to flow with no route
+availability refresh; first-use consent still includes
+`supersedePendingAvailability: true`. A finite deterministic monotonic clock is
+required in the test exercising a throwing optional diagnostic logger; all three
+broken-clock test variants must prove `performance.now` was actually called
+outside React. No voice-startup source changes are authorized here.
+FR-048–FR-053, SC-023–SC-027, R1/R2 UI/copy, Manual and #391 remain unchanged.
+Root T080 GREEN, independent final review and owner native timing are pending.

@@ -16,11 +16,18 @@ import {
 import { getDeviceTimeZone } from "@/utils/device-time-zone";
 import { logger } from "@/utils/logger";
 
+export interface VoiceAvailabilityRefreshOptions {
+  /** Consent transitions must replace even matching unresolved requests. */
+  readonly supersedePending?: boolean;
+}
+
 export interface UseVoiceAiAvailabilityResult {
   readonly availability: VoiceAvailabilitySnapshot | null;
   readonly isLoading: boolean;
   readonly error: VoiceAiAvailabilityError | null;
-  readonly refresh: () => Promise<VoiceAvailabilitySnapshot | null>;
+  readonly refresh: (
+    options?: VoiceAvailabilityRefreshOptions
+  ) => Promise<VoiceAvailabilitySnapshot | null>;
   readonly reconcileAuthoritativeSnapshot: (
     snapshot: VoiceAvailabilitySnapshot
   ) => void;
@@ -37,6 +44,14 @@ interface CurrentAvailabilityContext {
   readonly userId: string | null;
   readonly isResolvingUser: boolean;
   readonly isEnabled: boolean;
+}
+
+interface PendingAvailabilityRequest {
+  readonly userId: string;
+  readonly timeZone: string;
+  readonly generation: number;
+  readonly controller: AbortController;
+  readonly promise: Promise<VoiceAvailabilitySnapshot | null>;
 }
 
 const EMPTY_STATE: OwnedAvailabilityState = {
@@ -101,6 +116,7 @@ export function useVoiceAiAvailability(
   const isMountedRef = useRef(true);
   const generationRef = useRef(0);
   const requestControllerRef = useRef<AbortController | null>(null);
+  const pendingRequestRef = useRef<PendingAvailabilityRequest | null>(null);
   const automaticTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   /*
@@ -128,12 +144,15 @@ export function useVoiceAiAvailability(
 
   const cancelInFlight = useCallback((): void => {
     generationRef.current += 1;
+    pendingRequestRef.current = null;
     requestControllerRef.current?.abort();
     requestControllerRef.current = null;
   }, []);
 
-  const refresh =
-    useCallback(async (): Promise<VoiceAvailabilitySnapshot | null> => {
+  const refresh = useCallback(
+    (
+      options?: VoiceAvailabilityRefreshOptions
+    ): Promise<VoiceAvailabilitySnapshot | null> => {
       const context = currentContextRef.current;
       if (
         !isMountedRef.current ||
@@ -142,7 +161,7 @@ export function useVoiceAiAvailability(
         userId === null ||
         context.userId !== userId
       ) {
-        return null;
+        return Promise.resolve(null);
       }
 
       clearAutomaticTimer();
@@ -166,7 +185,20 @@ export function useVoiceAiAvailability(
           });
         }
 
-        return null;
+        return Promise.resolve(null);
+      }
+
+      const pending = pendingRequestRef.current;
+      if (
+        !options?.supersedePending &&
+        pending !== null &&
+        !pending.controller.signal.aborted &&
+        pending.userId === userId &&
+        pending.timeZone === timeZone &&
+        pending.generation === generationRef.current
+      ) {
+        // Share only unresolved work, never settled results or completed promises.
+        return pending.promise;
       }
 
       cancelInFlight();
@@ -184,93 +216,107 @@ export function useVoiceAiAvailability(
         error: null,
       }));
 
-      try {
-        const nextAvailability = await getVoiceAiAvailability(timeZone, {
-          signal: controller.signal,
-        });
+      let settledSynchronously = false;
+      const promise = (async (): Promise<VoiceAvailabilitySnapshot | null> => {
+        try {
+          const nextAvailability = await getVoiceAiAvailability(timeZone, {
+            signal: controller.signal,
+          });
 
-        const latestContext = currentContextRef.current;
-        if (
-          !isMountedRef.current ||
-          generation !== generationRef.current ||
-          !latestContext.isEnabled ||
-          latestContext.isResolvingUser ||
-          latestContext.userId !== requestedUserId
-        ) {
+          const latestContext = currentContextRef.current;
+          if (
+            !isMountedRef.current ||
+            generation !== generationRef.current ||
+            !latestContext.isEnabled ||
+            latestContext.isResolvingUser ||
+            latestContext.userId !== requestedUserId
+          ) {
+            return null;
+          }
+
+          setOwnedState({
+            ownerUserId: requestedUserId,
+            availability: nextAvailability,
+            isLoading: false,
+            error: null,
+          });
+
+          return nextAvailability;
+        } catch (caught: unknown) {
+          if (caught instanceof Error && caught.name === "AbortError") {
+            return null;
+          }
+
+          const latestContext = currentContextRef.current;
+          if (
+            !isMountedRef.current ||
+            generation !== generationRef.current ||
+            !latestContext.isEnabled ||
+            latestContext.isResolvingUser ||
+            latestContext.userId !== requestedUserId
+          ) {
+            return null;
+          }
+
+          const nextError = isVoiceAiAvailabilityError(caught)
+            ? caught
+            : createUnavailableError();
+
+          setOwnedState({
+            ownerUserId: requestedUserId,
+            availability: null,
+            isLoading: false,
+            error: nextError,
+          });
+
+          logger.warn("voiceAiAvailability.refreshFailed", {
+            kind: nextError.kind,
+            status: nextError.status,
+          });
+
           return null;
+        } finally {
+          settledSynchronously = true;
+          if (pendingRequestRef.current?.controller === controller) {
+            pendingRequestRef.current = null;
+          }
+          if (requestControllerRef.current === controller) {
+            requestControllerRef.current = null;
+          }
+
+          const latestContext = currentContextRef.current;
+          if (
+            isMountedRef.current &&
+            generation === generationRef.current &&
+            latestContext.isEnabled &&
+            !latestContext.isResolvingUser &&
+            latestContext.userId === requestedUserId
+          ) {
+            setOwnedState((current) =>
+              current.ownerUserId === requestedUserId && current.isLoading
+                ? {
+                    ...current,
+                    isLoading: false,
+                  }
+                : current
+            );
+          }
         }
+      })();
 
-        setOwnedState({
-          ownerUserId: requestedUserId,
-          availability: nextAvailability,
-          isLoading: false,
-          error: null,
-        });
-
-        return nextAvailability;
-      } catch (caught: unknown) {
-        if (caught instanceof Error && caught.name === "AbortError") {
-          return null;
-        }
-
-        const latestContext = currentContextRef.current;
-        if (
-          !isMountedRef.current ||
-          generation !== generationRef.current ||
-          !latestContext.isEnabled ||
-          latestContext.isResolvingUser ||
-          latestContext.userId !== requestedUserId
-        ) {
-          return null;
-        }
-
-        const nextError = isVoiceAiAvailabilityError(caught)
-          ? caught
-          : createUnavailableError();
-
-        setOwnedState({
-          ownerUserId: requestedUserId,
-          availability: null,
-          isLoading: false,
-          error: nextError,
-        });
-
-        logger.warn("voiceAiAvailability.refreshFailed", {
-          kind: nextError.kind,
-          status: nextError.status,
-        });
-
-        return null;
-      } finally {
-        if (requestControllerRef.current === controller) {
-          requestControllerRef.current = null;
-        }
-
-        const latestContext = currentContextRef.current;
-        if (
-          isMountedRef.current &&
-          generation === generationRef.current &&
-          latestContext.isEnabled &&
-          !latestContext.isResolvingUser &&
-          latestContext.userId === requestedUserId
-        ) {
-          setOwnedState((current) =>
-            current.ownerUserId === requestedUserId && current.isLoading
-              ? {
-                  ...current,
-                  isLoading: false,
-                }
-              : current
-          );
-        }
+      if (!settledSynchronously) {
+        pendingRequestRef.current = {
+          userId: requestedUserId,
+          timeZone,
+          generation,
+          controller,
+          promise,
+        };
       }
-    }, [
-      cancelInFlight,
-      clearAutomaticTimer,
-      isEnabled,
-      isResolvingUser,
-      userId,
-    ]);
+      return promise;
+    },
+    [cancelInFlight, clearAutomaticTimer, isEnabled, isResolvingUser, userId]
+  );
 
   const reconcileAuthoritativeSnapshot = useCallback(
     (snapshot: VoiceAvailabilitySnapshot): void => {

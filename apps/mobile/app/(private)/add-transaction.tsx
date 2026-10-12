@@ -26,6 +26,7 @@ import {
 import { getAiProcessingConsentStatus } from "@/services/profile-service";
 import { toCategoryTreeSources } from "@/utils/category-tree-source";
 import { logger } from "@/utils/logger";
+import { timeVoiceStartupStage } from "@/utils/voice-startup-timing";
 import { buildCategoryTree } from "@monyvi/logic";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import React, {
@@ -119,7 +120,6 @@ export default function AddTransaction(): React.JSX.Element {
   // Voice availability remains authoritative to the Voice surface only.
   // Manual never renders quota/errors and remains usable when Voice is blocked.
   const voiceAvailability = useVoiceAiAvailability(true);
-  const { refresh: refreshVoiceAvailability } = voiceAvailability;
 
   const ensureAiProcessingConsent = useCallback(async (): Promise<boolean> => {
     if (aiConsent.isLoading) return false;
@@ -267,7 +267,6 @@ export default function AddTransaction(): React.JSX.Element {
   const requestVoiceStart = useCallback(
     async (options?: {
       readonly requestPermission?: boolean;
-      readonly refreshAvailability?: boolean;
       readonly retryRecording?: boolean;
     }): Promise<void> => {
       if (
@@ -291,23 +290,14 @@ export default function AddTransaction(): React.JSX.Element {
       setIsVoiceStartPending(true);
 
       try {
-        const availabilitySnapshot = options?.refreshAvailability
-          ? await refreshVoiceAvailability()
-          : undefined;
-        if (!isCurrent()) return;
-        if (
-          options?.refreshAvailability &&
-          (availabilitySnapshot === null ||
-            availabilitySnapshot === undefined ||
-            availabilitySnapshot.reason !== null ||
-            availabilitySnapshot.remaining === 0)
-        )
-          return;
-        const hasConsent = await ensureAiProcessingConsent();
-        if (!isCurrent() || !hasConsent) {
-          return;
-        }
+        const hasConsent = await timeVoiceStartupStage(
+          "consent",
+          ensureAiProcessingConsent
+        );
+        if (!isCurrent() || !hasConsent) return;
 
+        // Flow owns the fresh authoritative request and can overlap it with
+        // the non-prompting permission read only after consent is confirmed.
         setMicrophoneRecoveryMode(null);
         const result = await flowStartFlow({
           skipAiProcessingConsent: true,
@@ -315,7 +305,6 @@ export default function AddTransaction(): React.JSX.Element {
             ? { requestMicrophonePermission: true }
             : {}),
           ...(options?.retryRecording ? { retryRecording: true } : {}),
-          ...(availabilitySnapshot ? { availabilitySnapshot } : {}),
         });
         if (!isCurrent()) return;
         applyVoiceStartResult(result);
@@ -337,7 +326,6 @@ export default function AddTransaction(): React.JSX.Element {
       ensureAiProcessingConsent,
       flowIsModeSwitchLocked,
       flowStartFlow,
-      refreshVoiceAvailability,
     ]
   );
 
@@ -695,7 +683,7 @@ export default function AddTransaction(): React.JSX.Element {
               handleModeChange("manual");
             }}
             onRefreshAvailability={() => {
-              void requestVoiceStart({ refreshAvailability: true });
+              void requestVoiceStart();
             }}
             onOpenSettings={() => {
               void flowOpenMicrophoneSettings();
@@ -726,7 +714,9 @@ export default function AddTransaction(): React.JSX.Element {
           let didGrantConsent = false;
 
           try {
-            await aiConsent.grantConsent();
+            await timeVoiceStartupStage("consent", () =>
+              aiConsent.grantConsent()
+            );
 
             if (!isCurrent()) {
               return;
@@ -739,6 +729,7 @@ export default function AddTransaction(): React.JSX.Element {
             setMicrophoneRecoveryMode(null);
             const result = await flowStartFlow({
               skipAiProcessingConsent: true,
+              supersedePendingAvailability: true,
             });
             if (isCurrent()) applyVoiceStartResult(result);
           } catch {
