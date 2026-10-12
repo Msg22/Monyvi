@@ -132,3 +132,19 @@ token, actor, timezone, request identity or user content.
 Existing owner cases M01–M28 remain **NOT RUN** by this writer.
 Native/device/OS, provider, Maestro and measured performance validation
 are root/owner-only and pending after actual S4 GREEN.
+
+### Final test reconciliation is not device evidence (12 October 2026)
+
+Root's completed 28-suite pre-integration run at `4133231163116e04f9221c42095eb98580f38768`:
+**25 suites passed / 3 failed; 419 tests passed / 5 failed / 424 total; 26.373 s.** TypeScript, formatter, i18n, privacy and diff checks
+PASS; ESLint 0 errors / 3 preexisting hook warnings. Remaining failures
+were three old motion assertions, an R2 permission-read expectation and
+a logger clock fixture, not a measured new native capture regression.
+
+Unavailable Retry still needs owner verification that it performs a
+consent-first **single flow handoff**, with no separate route refresh,
+and that real blocked availability results in no OS prompt/provider/native
+start and leaves Manual usable. First-use consent supersede remains required.
+The test-only clock repair does not measure Starting latency on a device.
+**All 28 owner manual cases remain NOT RUN; root T080/T081 and native
+M01–M28 evidence remain outstanding** until their own execution receipts.

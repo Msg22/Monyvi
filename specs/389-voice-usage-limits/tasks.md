@@ -1466,3 +1466,26 @@ author. T080 batched GREEN, T081 independent review and T082 owner
 native/manual evidence remain **PENDING root/owner execution**.
 The recorder/#391, services/auth, server, packages, styles, copy,
 locales, migrations and deployment are not touched.
+
+### Final test-only CI-blocker repair after root's exact 28-suite batch (12 October 2026)
+
+At startup `4133231163116e04f9221c42095eb98580f38768`, root recorded **25 suites passed / 3 failed; 419 tests passed / 5 failed / 424 total; 26.373 s.**
+TypeScript, formatter, i18n, privacy and diff PASS, ESLint **0 errors /
+3 preexisting hook dependency warnings**. New production startup flow and
+availability tests passed; source review found no critical/high defect.
+Five failures are old test-contract mismatches: **3 motion**, **1 R2
+availability-refusal**, **1 optional-logger positive clock**.
+
+Only the three named startup test files are newly writable. Motion Retry
+must delegate once to flow and not call route refresh; declined availability
+must remain unavailable and allow safe Manual recovery. First-use grant must
+include the supersede flag. R2 stage expectations are consent denied:
+zero non-prompting reads; availability refused: one non-prompting read,
+both with zero OS request, recorder/UUID/provider. Timing controls must
+actually invoke the broken-clock spy, and logger-throw must be exercised
+under finite values restored with `finally`—no React global-clock corruption.
+
+**T075–T083 original numbering/status remains unchanged. T080 final
+combined GREEN, T081 review sign-off and T082 owner manual/native evidence
+are still PENDING.** No production source, original flow test,
+recorder/#391, services or other worker paths are included.

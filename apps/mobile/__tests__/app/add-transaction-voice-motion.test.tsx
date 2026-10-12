@@ -1,5 +1,6 @@
 import React from "react";
 import { act, fireEvent, screen, waitFor } from "@testing-library/react-native";
+import type { VoiceStartResult } from "@/hooks/useVoiceTransactionFlow";
 import {
   mockVoiceAvailabilityRefresh,
   mockVoiceStartFlow,
@@ -9,7 +10,6 @@ import {
   mockGrantConsent,
   unconsentedStatus,
   mockGetAiProcessingConsentStatus,
-  initialVoiceAvailability,
   renderRoute,
   expectTabState,
   createDeferred,
@@ -145,28 +145,53 @@ describe("AddTransaction approved Voice motion and recovery", () => {
     expect(mockVoiceOpenMicrophoneSettings).not.toHaveBeenCalled();
   });
 
-  it("unavailable Try again refreshes and automatically starts when eligible", async (): Promise<void> => {
+  it("unavailable Try again delegates one consent-first flow start without a route refresh", async (): Promise<void> => {
     mockRouteState.mockVoiceAvailabilityErrorKind = "network";
+    mockVoiceStartFlow.mockResolvedValueOnce({ kind: "started" });
     renderRoute("voice");
     fireEvent.press(screen.getByTestId("voice-unavailable-retry"));
     await waitFor(() => expect(mockVoiceStartFlow).toHaveBeenCalledTimes(1));
-    expect(mockVoiceAvailabilityRefresh).toHaveBeenCalledTimes(1);
+    expect(mockVoiceAvailabilityRefresh).not.toHaveBeenCalled();
+    expect(mockVoiceStartFlow).toHaveBeenCalledWith({
+      skipAiProcessingConsent: true,
+    });
+    // The route facade does not prove native capture; only recorder onStarted
+    // may publish Listening when the real flow owns this authoritative gate.
+    expect(screen.getByTestId("voice-entry-state")).not.toHaveTextContent(
+      "recording"
+    );
   });
 
-  it("unavailable retry preserves an authoritative refusal without capture", async (): Promise<void> => {
+  it("unavailable retry preserves a flow-authoritative refusal and Manual recovery", async (): Promise<void> => {
     mockRouteState.mockVoiceAvailabilityErrorKind = "network";
-    mockVoiceAvailabilityRefresh.mockResolvedValueOnce({
-      ...initialVoiceAvailability,
-      remaining: 0,
-      reason: "daily_limit",
-    });
+    const blockedResult: VoiceStartResult = {
+      kind: "not-started",
+      reason: "availability",
+    };
+    mockVoiceStartFlow.mockResolvedValueOnce(blockedResult);
     renderRoute("voice");
     await act(async (): Promise<void> => {
       fireEvent.press(screen.getByTestId("voice-unavailable-retry"));
       await Promise.resolve();
     });
-    expect(mockVoiceAvailabilityRefresh).toHaveBeenCalledTimes(1);
-    expect(mockVoiceStartFlow).not.toHaveBeenCalled();
+    await waitFor(() => expect(mockVoiceStartFlow).toHaveBeenCalledTimes(1));
+    expect(mockVoiceStartFlow).toHaveBeenCalledWith({
+      skipAiProcessingConsent: true,
+    });
+    expect(mockVoiceAvailabilityRefresh).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(screen.getByTestId("voice-entry-state")).toHaveTextContent(
+        "unavailable"
+      );
+      expectTabState("Manual", { disabled: false });
+    });
+    expect(screen.getByTestId("voice-entry-state")).not.toHaveTextContent(
+      "recording"
+    );
+    expect(screen.queryByTestId("microphone-recovery-modal")).toBeNull();
+    fireEvent.press(screen.getByRole("tab", { name: "Manual" }));
+    expectTabState("Manual", { selected: true });
+    expect(screen.getByTestId("header-save")).toBeOnTheScreen();
   });
 
   it("grants fresh AI consent before Flow's one permission read; only the inline action can request OS access", async (): Promise<void> => {
@@ -193,6 +218,7 @@ describe("AddTransaction approved Voice motion and recovery", () => {
     expect(mockVoicePermissionRefresh).not.toHaveBeenCalled();
     expect(mockVoiceStartFlow).toHaveBeenNthCalledWith(1, {
       skipAiProcessingConsent: true,
+      supersedePendingAvailability: true,
     });
     expect(screen.queryByTestId("microphone-recovery-modal")).toBeNull();
 

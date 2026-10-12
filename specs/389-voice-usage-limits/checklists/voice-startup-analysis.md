@@ -238,3 +238,28 @@ review, but S4 source and new tests have **no worker-executed checks**.
 Root must complete exact-path and wider GREEN plus TypeScript, lint,
 privacy/security and independent async review; M01–M28 native cases
 remain NOT RUN. No measured improvement or changed quota policy is claimed.
+
+## Root 28-suite CI blocker classification and focused test repair (12 October 2026)
+
+**Actual root result at `4133231163116e04f9221c42095eb98580f38768`: 25 suites passed / 3 failed; 419 tests passed / 5 failed / 424 total; 26.373 s.**
+25 suites passed, three suites failed; this does **not** establish final GREEN.
+TypeScript/formatter/i18n/privacy/diff PASS; ESLint 0 errors with
+3 baseline dependency warnings. Production behavior and the new startup
+availability and flow tests pass. Independent OpenCode S4 audit found no
+new critical/high source defect. No executable work by this test author.
+
+| Failure class | Observed old assertion | Exact corrected contract |
+| --- | --- | --- |
+| Motion Retry eligible (1) | Route refresh expected 1 | Route refresh 0; one direct flow call, no facade-based native proof |
+| Motion Retry refused (1) | Route prefetch refused and no flow call | Typed `not-started/availability` flow result; one handoff; unavailable + Manual |
+| First-consent motion (1) | Only `skipAiProcessingConsent` | Also `supersedePendingAvailability: true`; explicit OS action unchanged |
+| R2 permission availability (1) | 0 permission reads | 1 non-prompting read concurrent with availability; 0 OS/UUID/provider/recorder |
+| Logger-positive utility (1) | 0 logger calls under absent/nonfinite Jest clock | Seed finite `performance.now`, require actual thrown logger and successful operation |
+
+The consent-denied R2 control still requires **zero** permission/availability
+reads. Clock-negative thrown, NaN and Infinity controls must assert the
+spy was called and remain isolated from React; the backwards-clamp test
+already passed and is unchanged. No tests are deleted, no broad matchers
+or suppressions introduced. Auth, consent, quota, native-onStarted,
+same-key retry and #391 contracts remain unchanged. **Root must rerun the
+affected/full batch before T080 sign-off; owner M01–M28 remain NOT RUN.**

@@ -967,3 +967,27 @@ positives. Unmount during both pending gates must prevent recorder, UUID and
 provider work. This addendum changes no R1/R2 UI, strings, local 30-second
 cap, security/accounting, or Manual behavior. Final GREEN, independent review
 and owner native measurements remain **NOT RUN by this worker**.
+
+### Final pre-integration test-contract reconciliation (12 October 2026)
+
+Root's actual exact 28-suite batch at startup `4133231163116e04f9221c42095eb98580f38768`:
+**25 suites passed / 3 failed; 419 tests passed / 5 failed / 424 total; 26.373 s.** This is **not GREEN**. TypeScript, formatter, i18n,
+privacy and diff checks passed; ESLint reported **0 errors** and **3 existing
+dependency warnings**. All production behavior and new startup flow/availability
+tests passed. Independent S4 review found no new critical/high source defect.
+The remaining five failures are stale test contracts, not permission or quota
+policy changes: three route motion Retry/first-consent assertions, one R2
+availability-refused non-prompting-permission assertion, and one utility
+logger clock-fixture assertion.
+
+The reconciled FR-050 contract reads permission **zero times** when fresh
+consent is denied, but **once** (non-prompting) while authoritative availability
+may be refused. Refusal still produces **zero** OS request, UUID, provider
+and native start. Unavailable Retry delegates once directly to flow with no
+route availability refresh; first-use consent still includes
+`supersedePendingAvailability: true`. A finite deterministic monotonic clock
+is required in the test exercising a throwing optional diagnostic logger;
+all three broken-clock test variants must prove `performance.now` was actually
+called outside React. No voice-startup source changes are authorized here.
+FR-048–FR-053, SC-023–SC-027, R1/R2 UI/copy, Manual and #391 remain unchanged.
+Root T080 GREEN, independent final review and owner native timing are pending.

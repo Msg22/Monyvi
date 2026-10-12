@@ -1305,3 +1305,35 @@ remain authoritative. This is one source-bounded production correction and
 test refinement, **not a completed executable GREEN**. Root owns the
 combined exact-path hook/route/timing and wider regression checks, final
 independent review and owner device latency evidence.
+
+## Final startup test-contract repair after root exact batch (12 October 2026)
+
+At `4133231163116e04f9221c42095eb98580f38768`, root's 28-suite run reported **25 suites passed / 3 failed; 419 tests passed / 5 failed / 424 total; 26.373 s.**
+TypeScript, formatter, i18n, privacy and diff passed; ESLint 0 errors,
+3 baseline hook-dependency warnings. All new availability/flow behavior and
+production suites passed. Independent OpenCode S4 source review reported no
+new critical/high defect. **Do not call the 28-suite batch GREEN**.
+
+This bounded test-only reconciliation has three owners/surfaces:
+1. `apps/mobile/__tests__/app/add-transaction-voice-motion.test.tsx`:
+   eligible unavailable Retry calls the flow exactly once without a route
+   refresh; a refused retry mocks the typed
+   `{kind:"not-started",reason:"availability"}`, remains unavailable with
+   Manual recovery and never claims the facade proves native recording.
+   First consent passes `supersedePendingAvailability: true`, but the
+   explicit later OS permission action keeps its normal options.
+2. `apps/mobile/__tests__/hooks/useVoiceTransactionFlow.r2-permission.test.ts`:
+   consent denial means zero availability/permission reads; authoritative
+   quota refusal permits one non-prompting permission read. Both preserve zero
+   OS permission request, UUID, native start and provider invocation.
+3. `apps/mobile/__tests__/utils/voice-startup-timing.test.ts`:
+   the negative thrown/NaN/infinite clock tests assert that the spy was
+   called; the logger-positive test seeds finite deterministic values and
+   restores its spy in `finally`. The asynchronous Promise callbacks,
+   operation counter and stage-only payload checks stay intact.
+
+Original 923-line flow tests, production hooks/route, recorder/#391,
+services/auth and UI bindings remain read-only. Root owns the new
+exact-affected/full checks and eventual final docs publication receipt.
+No native/OS/audio, device timing or provider execution is asserted.
+**T080 GREEN remains pending root's exact-affected/full rerun.**

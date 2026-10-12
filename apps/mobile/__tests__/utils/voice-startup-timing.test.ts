@@ -61,6 +61,7 @@ describe("Voice startup monotonic diagnostic safety", () => {
         .mockImplementation(failingNow);
       try {
         expect(voiceStartupClock()).toBeNull();
+        expect(clock).toHaveBeenCalled();
 
         let operationCalls = 0;
         const granted = await timeVoiceStartupStage("consent", (): Promise<string> => {
@@ -75,6 +76,9 @@ describe("Voice startup monotonic diagnostic safety", () => {
         expect(granted).toBe("granted");
         expect(preflight).toEqual(["allowed", "granted"]);
         expect(operationCalls).toBe(1);
+        // Exercise both standalone and wrapped clock reads, not a
+        // vacuous always-null fallback that never calls performance.now.
+        expect(clock.mock.calls.length).toBeGreaterThan(1);
         expect(mockLoggerInfo).not.toHaveBeenCalled();
       } finally {
         clock.mockRestore();
@@ -83,19 +87,32 @@ describe("Voice startup monotonic diagnostic safety", () => {
   );
 
   it("ignores an optional logger failure without changing a successful operation", async (): Promise<void> => {
+    const clock = jest
+      .spyOn(globalThis.performance, "now")
+      .mockReturnValueOnce(100)
+      .mockReturnValueOnce(110);
     mockLoggerInfo.mockImplementationOnce((): void => {
       throw new Error("Diagnostic logger unavailable");
     });
+    try {
+      const result = await timeVoiceStartupStage(
+        "consent",
+        (): Promise<boolean> => Promise.resolve(true)
+      );
 
-    const result = await timeVoiceStartupStage(
-      "consent",
-      (): Promise<boolean> => Promise.resolve(true)
-    );
-
-    expect(result).toBe(true);
-    expect(mockLoggerInfo).toHaveBeenCalledTimes(1);
-    const [, payload] = mockLoggerInfo.mock.calls[0];
-    expect(Object.keys(payload).sort()).toEqual(["durationMs", "stage"]);
+      expect(result).toBe(true);
+      expect(clock).toHaveBeenCalledTimes(2);
+      // The sink really throws, but the caller still completes successfully.
+      expect(mockLoggerInfo).toHaveBeenCalledTimes(1);
+      const [, payload] = mockLoggerInfo.mock.calls[0];
+      expect(Object.keys(payload).sort()).toEqual(["durationMs", "stage"]);
+      expect(mockLoggerInfo).toHaveBeenCalledWith("voice.startupTiming", {
+        stage: "consent",
+        durationMs: 10,
+      });
+    } finally {
+      clock.mockRestore();
+    }
   });
 
   it("clamps a backwards clock to a finite stage-only duration", (): void => {
