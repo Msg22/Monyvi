@@ -63,13 +63,13 @@ describe("Voice startup monotonic diagnostic safety", () => {
         expect(voiceStartupClock()).toBeNull();
 
         let operationCalls = 0;
-        const granted = await timeVoiceStartupStage("consent", async () => {
+        const granted = await timeVoiceStartupStage("consent", (): Promise<string> => {
           operationCalls += 1;
-          return "granted";
+          return Promise.resolve("granted");
         });
         const preflight = await runVoiceStartupPreflight(
-          async () => "allowed",
-          async () => "granted"
+          (): Promise<string> => Promise.resolve("allowed"),
+          (): Promise<string> => Promise.resolve("granted")
         );
 
         expect(granted).toBe("granted");
@@ -89,7 +89,7 @@ describe("Voice startup monotonic diagnostic safety", () => {
 
     const result = await timeVoiceStartupStage(
       "consent",
-      async (): Promise<boolean> => true
+      (): Promise<boolean> => Promise.resolve(true)
     );
 
     expect(result).toBe(true);
