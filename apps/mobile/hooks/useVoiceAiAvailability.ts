@@ -150,7 +150,9 @@ export function useVoiceAiAvailability(
   }, []);
 
   const refresh = useCallback(
-    (options?: VoiceAvailabilityRefreshOptions): Promise<VoiceAvailabilitySnapshot | null> => {
+    (
+      options?: VoiceAvailabilityRefreshOptions
+    ): Promise<VoiceAvailabilitySnapshot | null> => {
       const context = currentContextRef.current;
       if (
         !isMountedRef.current ||
@@ -313,13 +315,8 @@ export function useVoiceAiAvailability(
       }
       return promise;
     },
-    [
-      cancelInFlight,
-      clearAutomaticTimer,
-      isEnabled,
-      isResolvingUser,
-      userId,
-    ]);
+    [cancelInFlight, clearAutomaticTimer, isEnabled, isResolvingUser, userId]
+  );
 
   const reconcileAuthoritativeSnapshot = useCallback(
     (snapshot: VoiceAvailabilitySnapshot): void => {

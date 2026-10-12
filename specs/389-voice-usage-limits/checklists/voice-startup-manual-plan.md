@@ -8,8 +8,8 @@ Metro, emulator, device, Maestro, provider or hosted checks.
 
 ## Measurement rules
 
-- Capture **cold** and **warm** attempts separately; do not average them into one
-  claim.
+- Capture **cold** and **warm** attempts separately; do not average them into
+  one claim.
 - Use privacy-safe monotonic stage durations only. Never capture user/account
   IDs, audio URI/content, transcript, financial data, auth token, request key or
   provider payload.
@@ -24,16 +24,16 @@ Metro, emulator, device, Maestro, provider or hosted checks.
 
 For each cold/warm attempt record, when diagnostics are available:
 
-| Stage | Duration |
-| --- | ---: |
-| tap → pending/Starting visible | ___ ms |
-| pending → fresh consent complete | ___ ms |
-| authoritative availability begin → result | ___ ms |
-| fresh non-prompting permission read begin → result | ___ ms |
-| availability+permission begin → both resolved | ___ ms |
-| gates resolved → recorder start begin | ___ ms |
-| recorder start begin → native record/onStarted | ___ ms |
-| total tap → native record/onStarted | ___ ms |
+| Stage                                              |  Duration |
+| -------------------------------------------------- | --------: |
+| tap → pending/Starting visible                     | \_\_\_ ms |
+| pending → fresh consent complete                   | \_\_\_ ms |
+| authoritative availability begin → result          | \_\_\_ ms |
+| fresh non-prompting permission read begin → result | \_\_\_ ms |
+| availability+permission begin → both resolved      | \_\_\_ ms |
+| gates resolved → recorder start begin              | \_\_\_ ms |
+| recorder start begin → native record/onStarted     | \_\_\_ ms |
+| total tap → native record/onStarted                | \_\_\_ ms |
 
 Also record whether the authoritative availability call joined an already
 in-flight same-context refresh or started a new request; do not record its
@@ -41,37 +41,40 @@ payload or actor identity.
 
 ## Owner scenarios
 
-| ID | Scenario | Expected evidence |
-| --- | --- | --- |
-| M01 | Warm Voice, consent active, permission granted, normal network | Starting immediately; one authoritative gate; native capture then Listening. |
-| M02 | Cold app Voice entry | Same gates and state truth; record cold stage timings separately. |
-| M03 | Tap mic immediately while focus availability is still loading | No visible restart loop; start joins equivalent in-flight work; one capture. |
-| M04 | Rapid double/triple mic tap | One logical start and one recorder; no duplicate OS/provider action. |
-| M05 | AI consent missing | Starting may show while fresh local consent resolves; consent sheet appears; no permission/record/provider before consent. |
-| M06 | Consent revoked between attempts | New start is blocked by fresh consent; previous mounted state does not bypass. |
-| M07 | Permission already granted | No OS sheet; fresh permission read + availability gate; capture only after both. |
-| M08 | Permission denied but requestable | Inline explanation first; OS sheet only after tapping Allow microphone and eligible availability. |
-| M09 | Permission blocked | Settings/Manual recovery; no OS request loop and no recorder. |
-| M10 | Permission becomes revoked in device settings | Next start detects fresh state; no false Listening. |
-| M11 | Permission read returns unknown/error | No recorder/Listening; recovery remains truthful. |
-| M12 | Availability daily/burst blocked | No OS permission request and no recorder even if local mic permission is denied. |
-| M13 | Availability network slow | Starting remains truthful; cancellation remains responsive; no fake timer. |
-| M14 | Availability offline/error | Existing unavailable state; Manual remains usable; no recorder. |
-| M15 | Unavailable → Try again, now eligible | One refresh/join then automatic Starting/start; no second mic tap. |
-| M16 | Unavailable → Try again, still blocked | No auto-record; blocked state remains truthful. |
-| M17 | Back while consent/availability/permission is pending | No late recorder start or stale permission recovery after leaving. |
-| M18 | Switch to Manual while safe pending state is cancelable | No late Voice start; Manual draft/save behavior unchanged. |
-| M19 | Background app during availability/permission | In-flight availability cancels under lifecycle rules; no late capture while backgrounded. |
-| M20 | Foreground focused route with automatic refresh then immediate mic tap | Equivalent request is coalesced; no abort/restart churn visible. |
-| M21 | Account switch during pending start | Old actor cannot start recorder or surface availability for the new actor. |
-| M22 | Native prepare/record failure | Error/retry state, never false Listening; subsequent retry still uses gates. |
-| M23 | Tap Pause/Submit immediately after Listening appears | Existing post-record stabilization safely queues/protects Pause and the user-facing Submit action; Submit may invoke the recorder's native stop/finalize path, but startup timing is not delayed by the 300 ms post-start stabilization. |
-| M24 | Complete 30-second active cap then Submit | S1 has not altered cap/retained-audio/explicit Submit semantics. |
-| M25 | Retained-audio provider retry | No microphone restart; same logical request identity; no startup diagnostics leak request key. |
-| M26 | Arabic/English, light/dark | No UI/copy/binding changes from startup optimization. |
-| M27 | Voice-first → Manual → Voice | Existing lazy first Manual mount/draft retention remains unchanged. |
+| ID  | Scenario                                                               | Expected evidence                                                                                                                                                                                                                        |
+| --- | ---------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| M01 | Warm Voice, consent active, permission granted, normal network         | Starting immediately; one authoritative gate; native capture then Listening.                                                                                                                                                             |
+| M02 | Cold app Voice entry                                                   | Same gates and state truth; record cold stage timings separately.                                                                                                                                                                        |
+| M03 | Tap mic immediately while focus availability is still loading          | No visible restart loop; start joins equivalent in-flight work; one capture.                                                                                                                                                             |
+| M04 | Rapid double/triple mic tap                                            | One logical start and one recorder; no duplicate OS/provider action.                                                                                                                                                                     |
+| M05 | AI consent missing                                                     | Starting may show while fresh local consent resolves; consent sheet appears; no permission/record/provider before consent.                                                                                                               |
+| M06 | Consent revoked between attempts                                       | New start is blocked by fresh consent; previous mounted state does not bypass.                                                                                                                                                           |
+| M07 | Permission already granted                                             | No OS sheet; fresh permission read + availability gate; capture only after both.                                                                                                                                                         |
+| M08 | Permission denied but requestable                                      | Inline explanation first; OS sheet only after tapping Allow microphone and eligible availability.                                                                                                                                        |
+| M09 | Permission blocked                                                     | Settings/Manual recovery; no OS request loop and no recorder.                                                                                                                                                                            |
+| M10 | Permission becomes revoked in device settings                          | Next start detects fresh state; no false Listening.                                                                                                                                                                                      |
+| M11 | Permission read returns unknown/error                                  | No recorder/Listening; recovery remains truthful.                                                                                                                                                                                        |
+| M12 | Availability daily/burst blocked                                       | No OS permission request and no recorder even if local mic permission is denied.                                                                                                                                                         |
+| M13 | Availability network slow                                              | Starting remains truthful; cancellation remains responsive; no fake timer.                                                                                                                                                               |
+| M14 | Availability offline/error                                             | Existing unavailable state; Manual remains usable; no recorder.                                                                                                                                                                          |
+| M15 | Unavailable → Try again, now eligible                                  | One refresh/join then automatic Starting/start; no second mic tap.                                                                                                                                                                       |
+| M16 | Unavailable → Try again, still blocked                                 | No auto-record; blocked state remains truthful.                                                                                                                                                                                          |
+| M17 | Back while consent/availability/permission is pending                  | No late recorder start or stale permission recovery after leaving.                                                                                                                                                                       |
+| M18 | Switch to Manual while safe pending state is cancelable                | No late Voice start; Manual draft/save behavior unchanged.                                                                                                                                                                               |
+| M19 | Background app during availability/permission                          | In-flight availability cancels under lifecycle rules; no late capture while backgrounded.                                                                                                                                                |
+| M20 | Foreground focused route with automatic refresh then immediate mic tap | Equivalent request is coalesced; no abort/restart churn visible.                                                                                                                                                                         |
+| M21 | Account switch during pending start                                    | Old actor cannot start recorder or surface availability for the new actor.                                                                                                                                                               |
+| M22 | Native prepare/record failure                                          | Error/retry state, never false Listening; subsequent retry still uses gates.                                                                                                                                                             |
+| M23 | Tap Pause/Submit immediately after Listening appears                   | Existing post-record stabilization safely queues/protects Pause and the user-facing Submit action; Submit may invoke the recorder's native stop/finalize path, but startup timing is not delayed by the 300 ms post-start stabilization. |
+| M24 | Complete 30-second active cap then Submit                              | S1 has not altered cap/retained-audio/explicit Submit semantics.                                                                                                                                                                         |
+| M25 | Retained-audio provider retry                                          | No microphone restart; same logical request identity; no startup diagnostics leak request key.                                                                                                                                           |
+| M26 | Arabic/English, light/dark                                             | No UI/copy/binding changes from startup optimization.                                                                                                                                                                                    |
+| M27 | Voice-first → Manual → Voice                                           | Existing lazy first Manual mount/draft retention remains unchanged.                                                                                                                                                                      |
 
-| M28 | First-use consent grant while an older availability request is pending | The pre-consent request is superseded; one fresh post-grant authoritative request decides eligibility before capture. Already-consented same-context pending work may still join. |
+| M28 | First-use consent grant while an older availability request is pending |
+The pre-consent request is superseded; one fresh post-grant authoritative
+request decides eligibility before capture. Already-consented same-context
+pending work may still join. |
 
 ## Manual completion boundary
 
@@ -80,71 +83,88 @@ server quota/security tests. #391 recorder/empty/speechless research remains
 separate. Do not mark startup performance complete until root T080/T081 are
 accepted and owner records M01–M28 as applicable.
 
-
 ### S2 timing/privacy note
 
-When S3 diagnostics exist, owner evidence may record only the approved
-`stage` and numeric `durationMs` fields from `voice.startupTiming`. The
-native-start duration ends at recorder `onStarted`, before the recorder-owned
-300 ms stabilization. Do not copy log payloads containing identity, timezone,
-request key, token, audio, transcript, financial or provider content. Unit Red/
-Green is not device timing proof.
+When S3 diagnostics exist, owner evidence may record only the approved `stage`
+and numeric `durationMs` fields from `voice.startupTiming`. The native-start
+duration ends at recorder `onStarted`, before the recorder-owned 300 ms
+stabilization. Do not copy log payloads containing identity, timezone, request
+key, token, audio, transcript, financial or provider content. Unit Red/ Green is
+not device timing proof.
 
 ### S2-FIX owner instrumentation and consent freshness (12 October 2026)
 
-Root's separate unit RED at `aea6e6526058359ac739a4571634669a837c14b8`
-was **2F/8P** availability, **5F/3P** flow and **2F/33P** route
-(one route error was an undefined existing exported mock, **not RED**).
-These are not measured owner cold/warm times. Existing M01–M28 remain
-unchanged, **NOT RUN** on device.
+Root's separate unit RED at `aea6e6526058359ac739a4571634669a837c14b8` was
+**2F/8P** availability, **5F/3P** flow and **2F/33P** route (one route error was
+an undefined existing exported mock, **not RED**). These are not measured owner
+cold/warm times. Existing M01–M28 remain unchanged, **NOT RUN** on device.
 
-For future `voice.startupTiming` records, collect only `stage` and
-finite numeric monotonic `durationMs`. Stages must distinguish individual
+For future `voice.startupTiming` records, collect only `stage` and finite
+numeric monotonic `durationMs`. Stages must distinguish individual
 `availability`, `permission`, combined `availability_permission`, and
-`native_start` ending at recorder `onStarted`. Logging failure must not
-delay or prevent native capture, and the 300ms recorder stabilization
-remains *after* onStarted. First-use consent must supersede an old
-matching pre-consent availability request; already-consented pending
-work may join only while unresolved. Never claim an elapsed-duration
-improvement without owner device evidence, and never include account/
-user/timezone/request identity, audio URI, transcript, financial data,
-tokens or provider payloads. This is manual-plan authorship, no native,
-Maestro, provider or hosted execution.
+`native_start` ending at recorder `onStarted`. Logging failure must not delay or
+prevent native capture, and the 300ms recorder stabilization remains _after_
+onStarted. First-use consent must supersede an old matching pre-consent
+availability request; already-consented pending work may join only while
+unresolved. Never claim an elapsed-duration improvement without owner device
+evidence, and never include account/ user/timezone/request identity, audio URI,
+transcript, financial data, tokens or provider payloads. This is manual-plan
+authorship, no native, Maestro, provider or hosted execution.
 
 ### S4 owner verification — concurrent unavailable retry (12 October 2026)
 
 Root's accepted focused S4 RED is 3F/54P/57 at
-`c3dc55d0b2ec25b6a71bcec4466d4147562d0474`: one meaningful
-serial route refresh, two invalid global-clock test seams. This is
-unit-only evidence, **not a measured cold/warm device improvement**.
+`c3dc55d0b2ec25b6a71bcec4466d4147562d0474`: one meaningful serial route refresh,
+two invalid global-clock test seams. This is unit-only evidence, **not a
+measured cold/warm device improvement**.
 
-For M13–M16 and M20, collect separate monotonic `availability`,
-`permission` and combined `availability_permission` durations
-following fresh consent. Unavailable Try again should hand off to flow
-without a second route refresh; flow still refuses blocked daily/burst
-availability, never opens an OS permission sheet without the existing
-explicit Allow microphone action, and never reports Listening until
-recorder `onStarted`. Background/unmount during pending gates must
-prevent later capture. Clock or logger faults must not change admission.
-Diagnostics contain **only** `{ stage, durationMs }` and no correlation
-token, actor, timezone, request identity or user content.
+For M13–M16 and M20, collect separate monotonic `availability`, `permission` and
+combined `availability_permission` durations following fresh consent.
+Unavailable Try again should hand off to flow without a second route refresh;
+flow still refuses blocked daily/burst availability, never opens an OS
+permission sheet without the existing explicit Allow microphone action, and
+never reports Listening until recorder `onStarted`. Background/unmount during
+pending gates must prevent later capture. Clock or logger faults must not change
+admission. Diagnostics contain **only** `{ stage, durationMs }` and no
+correlation token, actor, timezone, request identity or user content.
 
 Existing owner cases M01–M28 remain **NOT RUN** by this writer.
-Native/device/OS, provider, Maestro and measured performance validation
-are root/owner-only and pending after actual S4 GREEN.
+Native/device/OS, provider, Maestro and measured performance validation are
+root/owner-only and pending after actual S4 GREEN.
 
 ### Final test reconciliation is not device evidence (12 October 2026)
 
-Root's completed 28-suite pre-integration run at `4133231163116e04f9221c42095eb98580f38768`:
-**25 suites passed / 3 failed; 419 tests passed / 5 failed / 424 total; 26.373 s.** TypeScript, formatter, i18n, privacy and diff checks
-PASS; ESLint 0 errors / 3 preexisting hook warnings. Remaining failures
-were three old motion assertions, an R2 permission-read expectation and
-a logger clock fixture, not a measured new native capture regression.
+Root's completed 28-suite pre-integration run at
+`4133231163116e04f9221c42095eb98580f38768`: **25 suites passed / 3 failed; 419
+tests passed / 5 failed / 424 total; 26.373 s.** TypeScript, formatter, i18n,
+privacy and diff checks PASS; ESLint 0 errors / 3 preexisting hook warnings.
+Remaining failures were three old motion assertions, an R2 permission-read
+expectation and a logger clock fixture, not a measured new native capture
+regression.
 
 Unavailable Retry still needs owner verification that it performs a
-consent-first **single flow handoff**, with no separate route refresh,
-and that real blocked availability results in no OS prompt/provider/native
-start and leaves Manual usable. First-use consent supersede remains required.
-The test-only clock repair does not measure Starting latency on a device.
-**All 28 owner manual cases remain NOT RUN; root T080/T081 and native
-M01–M28 evidence remain outstanding** until their own execution receipts.
+consent-first **single flow handoff**, with no separate route refresh, and that
+real blocked availability results in no OS prompt/provider/native start and
+leaves Manual usable. First-use consent supersede remains required. The
+test-only clock repair does not measure Starting latency on a device. **All 28
+owner manual cases remain NOT RUN; root T080/T081 and native M01–M28 evidence
+remain outstanding** until their own execution receipts.
+
+## Final Receipt (2026-10-12)
+
+- Root final GREEN receipt: 28 suites 424 tests PASS 27.656s; mobile full
+  TypeScript PASS; changed ESLint 0 errors 3 baseline intentional hook warnings;
+  Prettier/i18n/privacy/diff PASS (84+local formatter).
+- Only 5 docs edited here; no source/test/other/schema/images/copy/issue/PR; no
+  commands/checks/commit/push/workers.
+- T077/T078/T079/T080/T081/T083 reconciled to actual root evidence; T075/T076
+  completed; T074 manual not completed; T082 and all
+  owner/device/manual/rendered/OS/actual timing remain NOT RUN. M01–M28 NOT RUN.
+- Historical RED/unrun reports dated (S1–S4, S2-FIX, S3, S4, root
+  blocker/reconciliation).
+- Final CURRENT gate wording reconciled; no publication claim; #391 separate
+  validated cleanup draft (speech guard blocked). Starting/300ms guard,
+  consent-first, concurrent non-prompt permission+availability, matching
+  unresolved coalescing only, forced first-consent supersede, direct Retry flow
+  own fresh reads, privacy-only stage/durationMs preserved. No 1–2s device
+  claim.

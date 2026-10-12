@@ -1007,13 +1007,26 @@ No new server/API/SQL/hosted, provider, financial, Manual schema, E2E/device
 execution, unapproved responsive treatment or old image/sidecar change is
 authorized by this document.
 
+## Final Receipt (2026-10-12)
+
+- Local DOC-only integration leaf. Only 5 docs edited in this commit unit.
+- Root GREEN receipt: 28 suites 424 tests PASS 27.656s; full TypeScript PASS;
+  changed ESLint 0 errors 3 baseline hook warnings; Prettier/i18n/privacy/diff
+  PASS (84+local formatter).
+- Stale CURRENT gate reconciled; S1–S4/S2-FIX/S3/S4 and root blocker reports
+  dated; T077/T078/T079/T080/T081/T083 reconciled to actual root evidence;
+  T075/T076 completed; T074, T082, owner/device/manual/rendered/OS/actual timing
+  remain NOT RUN.
+- No publication claim; #391 separate validated cleanup draft (speech guard
+  blocked).
+
 ## Voice startup optimization S1 — source-backed implementation plan (12 October 2026)
 
-**Pinned source:** `f625183373e29d372b658c10b3848a217477400a`.
-This section supersedes only the earlier R2 plan statement that availability
-in-flight coordination should remain untouched. The new owner instruction
-authorizes the minimum source-backed optimization below; all security, consent,
-quota, recorder, UI-binding and #391 boundaries remain.
+**Pinned source:** `f625183373e29d372b658c10b3848a217477400a`. This section
+supersedes only the earlier R2 plan statement that availability in-flight
+coordination should remain untouched. The new owner instruction authorizes the
+minimum source-backed optimization below; all security, consent, quota,
+recorder, UI-binding and #391 boundaries remain.
 
 ### Current startup chain
 
@@ -1044,9 +1057,9 @@ callers can abort and replace the same unresolved request.
 
 1. **`apps/mobile/hooks/useVoiceAiAvailability.ts` — same-context in-flight
    coalescing only.**
-   - Track the unresolved request with an internal context key containing current
-     user ID, valid timezone and hook context/generation plus its promise and
-     AbortController.
+   - Track the unresolved request with an internal context key containing
+     current user ID, valid timezone and hook context/generation plus its
+     promise and AbortController.
    - After normal actor/enablement/timezone validation and automatic-timer
      clearing, return the existing unresolved promise when the key matches.
    - Do not reuse `ownedState.availability` or any settled promise as a startup
@@ -1054,8 +1067,8 @@ callers can abort and replace the same unresolved request.
      authoritative request.
    - Context/auth ownership change, invalid timezone, focus blur, background,
      unmount and `reconcileAuthoritativeSnapshot` keep existing cancellation.
-     Different context cancels and replaces. Promise finalization clears only its
-     own slot.
+     Different context cancels and replaces. Promise finalization clears only
+     its own slot.
    - Keep existing owned-state/generation guards and error mapping; no new
      server/API/TTL policy.
 
@@ -1072,8 +1085,8 @@ callers can abort and replace the same unresolved request.
      harmless local state and MUST NOT trigger the OS sheet.
    - Only when availability is eligible may the existing explicit
      `requestMicrophonePermission` option turn a fresh `denied` read into
-     `requestPermissionStatus()`. Blocked/unknown retain their current
-     recovery. No implicit permission prompt.
+     `requestPermissionStatus()`. Blocked/unknown retain their current recovery.
+     No implicit permission prompt.
    - Create request identity and call `recorder.start()` only after all gates
      pass. Keep `onStarted` as the sole Listening transition and preserve
      same-key retained submission retry.
@@ -1088,13 +1101,14 @@ callers can abort and replace the same unresolved request.
    - If diagnostics are implemented here, use only monotonic stage durations and
      privacy-safe stage labels; no IDs/audio/transcript/financial/auth data.
 
-4. **Transport/security boundaries — regression only, no production edit in S1.**
+4. **Transport/security boundaries — regression only, no production edit in
+   S1.**
    - `apps/mobile/services/voice-ai-availability-service.ts` continues to pass
      AbortSignal and validate the authoritative response.
    - `apps/mobile/services/authenticated-edge-function-service.ts` and its auth
      coordinator retain stable-session lookup, Authorization replacement,
-     one-time 401 refresh/retry and local-session invalidation. Any future shared
-     auth optimization requires separate ownership/security review.
+     one-time 401 refresh/retry and local-session invalidation. Any future
+     shared auth optimization requires separate ownership/security review.
    - `apps/mobile/hooks/useVoiceRecorder.ts` is read-only for this lane. Do not
      prewarm audio mode/recorder, move `onStarted`, alter the 300 ms
      stabilization, cap/finalization, URI cleanup or #391 behavior.
@@ -1114,9 +1128,9 @@ recorder-start-begin -> native-record-started/onStarted
 ```
 
 Structured diagnostics contain exactly `{ stage, durationMs }`, with no
-ephemeral correlation token or additional fields. No user/account IDs,
-timezone value, audio URI,
-transcript, amount/category/account data, provider payload, token or credential.
+ephemeral correlation token or additional fields. No user/account IDs, timezone
+value, audio URI, transcript, amount/category/account data, provider payload,
+token or credential.
 
 ### TDD and source ownership sequence
 
@@ -1138,17 +1152,20 @@ batched Green/integration gate after T078/T079.
 
 ### Planned deterministic test files
 
-- **New focused companion:** `apps/mobile/__tests__/hooks/useVoiceAiAvailability.startup.test.tsx`
-  for same-context coalescing, focus/foreground collision, failure reset and
+- **New focused companion:**
+  `apps/mobile/__tests__/hooks/useVoiceAiAvailability.startup.test.tsx` for
+  same-context coalescing, focus/foreground collision, failure reset and
   actor/timezone/background/unmount cancellation.
-- **New focused companion:** `apps/mobile/__tests__/hooks/useVoiceTransactionFlow.startup.test.ts`
-  for post-consent concurrency, duplicate starts, stale actor/cancel, permission
+- **New focused companion:**
+  `apps/mobile/__tests__/hooks/useVoiceTransactionFlow.startup.test.ts` for
+  post-consent concurrency, duplicate starts, stale actor/cancel, permission
   states, unavailable retry, native-start truth and same-key retained retry.
-- **Existing:** `apps/mobile/__tests__/app/add-transaction-modes.test.tsx`
-  for immediate Starting, consent-first ordering, unavailable
+- **Existing:** `apps/mobile/__tests__/app/add-transaction-modes.test.tsx` for
+  immediate Starting, consent-first ordering, unavailable
   refresh-and-auto-start, Back/Manual/account invalidation and Manual
   regressions.
-- **Existing positive control:** `apps/mobile/__tests__/services/authenticated-edge-function-service.test.ts`
+- **Existing positive control:**
+  `apps/mobile/__tests__/services/authenticated-edge-function-service.test.ts`
   for stable auth/401 recovery semantics. Modify only if the startup change
   actually changes its public contract (not planned).
 
@@ -1163,26 +1180,25 @@ consent/quota/permission gates; no auth/session bypass; no provider or hosted
 change; no recorder prewarm; no #391 work; no UI/copy/mockup change; no Manual
 financial change; no 1–2 second promise.
 
-
 ## S2 Red reconciliation — consent freshness and timing contract (12 October 2026)
 
 Root independently completed the correct-feature prerequisite and canonical
 read-only Speckit analysis for the frozen S1 package at
-`b562426b5543a64c7df4d117007388c42029ae49`: the new S1 requirement mappings
-were complete and critical/high findings were zero. Optional analyze Git hooks
-were not invoked. This S2 append keeps T075–T082 meanings stable and adds only
-the missing consent-transition freshness Red tracked as T083.
+`b562426b5543a64c7df4d117007388c42029ae49`: the new S1 requirement mappings were
+complete and critical/high findings were zero. Optional analyze Git hooks were
+not invoked. This S2 append keeps T075–T082 meanings stable and adds only the
+missing consent-transition freshness Red tracked as T083.
 
 ### Exact preproduction contract
 
-- `useVoiceAiAvailability.refresh` may coalesce one unresolved request only
-  for the same authenticated actor, device timezone, enablement/lifecycle
-  generation and unchanged consent context. Settled results are never cached
-  for the next pre-attempt gate.
+- `useVoiceAiAvailability.refresh` may coalesce one unresolved request only for
+  the same authenticated actor, device timezone, enablement/lifecycle generation
+  and unchanged consent context. Settled results are never cached for the next
+  pre-attempt gate.
 - The availability facade should gain one narrow optional supersede input
-  (planned name: `supersedePending`) that aborts/invalidates a matching
-  pending request instead of joining it. It is a freshness signal, not a quota
-  or caching policy.
+  (planned name: `supersedePending`) that aborts/invalidates a matching pending
+  request instead of joining it. It is a freshness signal, not a quota or
+  caching policy.
 - `StartFlowOptions` should gain the route-to-flow marker
   `supersedePendingAvailability?: boolean`. The first successful consent-sheet
   Continue passes `true`; ordinary already-consented starts omit it.
@@ -1190,18 +1206,17 @@ the missing consent-transition freshness Red tracked as T083.
   non-prompting microphone-permission read start concurrently. Native OS
   permission request remains serialized behind an eligible availability result
   and the existing explicit Allow microphone action.
-- Availability-failure retry remains consent-first, then delegates directly
-  to the flow; the flow performs one authoritative availability refresh
+- Availability-failure retry remains consent-first, then delegates directly to
+  the flow; the flow performs one authoritative availability refresh
   concurrently with a non-prompting microphone-permission read. No separate
   route snapshot prefetch or wait is permitted on this retry path.
 - Startup timing Red is against existing route/flow/logger behavior, not a
-  missing helper import. Structured records use event
-  `voice.startupTiming` and payload keys **only**
-  `{ stage, durationMs }`. Planned stages are `consent`, separate
-  `availability` and `permission`, combined `availability_permission`,
-  and `native_start`; durations are monotonic,
-  numeric and add no artificial wait. `native_start` is captured at recorder
-  `onStarted`, before the recorder-owned 300 ms stabilization.
+  missing helper import. Structured records use event `voice.startupTiming` and
+  payload keys **only** `{ stage, durationMs }`. Planned stages are `consent`,
+  separate `availability` and `permission`, combined `availability_permission`,
+  and `native_start`; durations are monotonic, numeric and add no artificial
+  wait. `native_start` is captured at recorder `onStarted`, before the
+  recorder-owned 300 ms stabilization.
 - No user/account/timezone/request identifiers, tokens, audio URI/content,
   transcript, parsed/financial payload or provider data may appear in timing
   payloads.
@@ -1213,82 +1228,117 @@ the missing consent-transition freshness Red tracked as T083.
   failed slot clearing; timezone/actor split; blur/background/unmount abort;
   authoritative reconciliation invalidation.
 - NEW `apps/mobile/__tests__/hooks/useVoiceTransactionFlow.startup.test.ts`:
-  consent-first ordering; simultaneous availability + permission reads;
-  explicit OS-prompt ordering; blocked availability; duplicate/stale actor
-  safety; truthful `onStarted`; start failure; privacy-safe timing shape.
-- BOUNDED `apps/mobile/__tests__/app/add-transaction-modes.test.tsx`:
-  immediate route Starting while consent is unresolved, existing-consent
-  control, first-use post-grant supersede marker, and consent-first unavailable
-  refresh handing one authoritative snapshot into the flow.
-- Existing retained-audio same-key tests in
-  `useVoiceTransactionFlow.test.ts` remain the positive control and are not
-  duplicated or weakened.
+  consent-first ordering; simultaneous availability + permission reads; explicit
+  OS-prompt ordering; blocked availability; duplicate/stale actor safety;
+  truthful `onStarted`; start failure; privacy-safe timing shape.
+- BOUNDED `apps/mobile/__tests__/app/add-transaction-modes.test.tsx`: immediate
+  route Starting while consent is unresolved, existing-consent control,
+  first-use post-grant supersede marker, and consent-first unavailable refresh
+  handing one authoritative snapshot into the flow.
+- Existing retained-audio same-key tests in `useVoiceTransactionFlow.test.ts`
+  remain the positive control and are not duplicated or weakened.
 
-T077 plus T083 Red must be accepted by root before T078/T079 production work.
-No test execution is claimed by this GitHub-only authoring commit.
+T077 plus T083 Red must be accepted by root before T078/T079 production work. No
+test execution is claimed by this GitHub-only authoring commit.
 
 ### S2-FIX repaired focused RED handoff (12 October 2026)
 
-Root's actual S2 RED on startup commit `aea6e6526058359ac739a4571634669a837c14b8`:
-availability companion **2 failed / 8 passed / 10 total (3.122 s)**;
-flow companion **5 failed / 3 passed / 8 total (1.865 s)**;
-route modes **2 failed / 33 passed / 35 total (5.549 s)**. The
+Root's actual S2 RED on startup commit
+`aea6e6526058359ac739a4571634669a837c14b8`: availability companion **2 failed /
+8 passed / 10 total (3.122 s)**; flow companion **5 failed / 3 passed / 8 total
+(1.865 s)**; route modes **2 failed / 33 passed / 35 total (5.549 s)**. The
 unavailable-retry failure was a `ReferenceError` for an **already exported**
-`mockVoiceAvailabilityRefresh` in
-`add-transaction-route-fixtures.tsx:666`, not meaningful RED. The other route
-failure demands first-use consent supersede; focused coalescing and flow
-concurrency/timing failures were meaningful. An initial combined command
-timed out at 60 s; independent focused commands established the evidence.
+`mockVoiceAvailabilityRefresh` in `add-transaction-route-fixtures.tsx:666`, not
+meaningful RED. The other route failure demands first-use consent supersede;
+focused coalescing and flow concurrency/timing failures were meaningful. An
+initial combined command timed out at 60 s; independent focused commands
+established the evidence.
 
 Test-only S2-FIX corrects the import and uses RNTL `act` to settle new
 consent/grant deferred fixtures, retaining original assertions. The public
 `refresh({ supersedePending: true })` control must abort and replace a matching
 pre-consent request after grant; its late result never publishes. The
 blur/background/unmount checks must exercise **two joined callers** and show
-both stale outcomes `null`. Startup diagnostics require separate
-`availability` and `permission` numeric monotonic durations in addition
-to `availability_permission` and `native_start`, each
-`voice.startupTiming` payload exactly `{ stage, durationMs }`. A throwing
-diagnostic logger must not prevent eligible capture, invent a wait or change
-`onStarted` truth.
+both stale outcomes `null`. Startup diagnostics require separate `availability`
+and `permission` numeric monotonic durations in addition to
+`availability_permission` and `native_start`, each `voice.startupTiming` payload
+exactly `{ stage, durationMs }`. A throwing diagnostic logger must not prevent
+eligible capture, invent a wait or change `onStarted` truth.
 
-Ownership is strictly tests and the five startup planning documents until
-root reruns/accepts meaningful RED. Production route, flow and availability
-remain byte-unchanged; recorder and #391 branch untouched. No local Jest,
-TypeScript, device, native audio, provider or performance execution by this
-successor; S3 remains root-gated.
+Ownership is strictly tests and the five startup planning documents until root
+reruns/accepts meaningful RED. Production route, flow and availability remain
+byte-unchanged; recorder and #391 branch untouched. No local Jest, TypeScript,
+device, native audio, provider or performance execution by this successor; S3
+remains root-gated.
 
 ## S4 test-only route retry preflight correction (12 October 2026)
 
-Root accepted S3 production `6904bc8bcb6f3b49a89c12d26c3968689d068d5d` for review, **not yet GREEN**. Both new startup companion suites passed in root's focused work. The wider batch uncovered one historical route-test expectation missing the already-approved `supersedePendingAvailability: true` after a first-use consent grant, and one ESLint `no-unsafe-assignment` from nested `expect.objectContaining` in the unavailable-retry assertion. A broad test command timed out at 60 seconds; that result is **not** a completed Green or proof of a product regression. Root's TypeScript, i18n, privacy and diff checks reported no errors.
+Root accepted S3 production `6904bc8bcb6f3b49a89c12d26c3968689d068d5d` for
+review, **not yet GREEN**. Both new startup companion suites passed in root's
+focused work. The wider batch uncovered one historical route-test expectation
+missing the already-approved `supersedePendingAvailability: true` after a
+first-use consent grant, and one ESLint `no-unsafe-assignment` from nested
+`expect.objectContaining` in the unavailable-retry assertion. A broad test
+command timed out at 60 seconds; that result is **not** a completed Green or
+proof of a product regression. Root's TypeScript, i18n, privacy and diff checks
+reported no errors.
 
-**Source-reviewed S4 dependency correction, proposed until focused Red and an explicit production grant:** The S3 route `requestVoiceStart({ refreshAvailability: true })` still waits for `refreshVoiceAvailability()` after fresh consent *before* invoking the flow. This serial route prefetch prevents the approved FR-050 concurrent authoritative availability/non-prompting permission reads for unavailable Retry. The route should check fresh consent first and directly delegate to `flowStartFlow({ skipAiProcessingConsent: true })`; the flow alone owns one authoritative refresh, the simultaneous typed local permission read, fail-closed eligibility, and explicit OS prompt ordering. Preserve an existing `availabilitySnapshot` option for other legitimate callers, but the unavailable route retry no longer needs to manufacture or await one. First-use consent continuation still passes the explicit supersede marker; ordinary already-consented retries do not. No second availability hook, cached snapshot, new prompt or user-facing copy is permitted.
+**Source-reviewed S4 dependency correction, proposed until focused Red and an
+explicit production grant:** The S3 route
+`requestVoiceStart({ refreshAvailability: true })` still waits for
+`refreshVoiceAvailability()` after fresh consent _before_ invoking the flow.
+This serial route prefetch prevents the approved FR-050 concurrent authoritative
+availability/non-prompting permission reads for unavailable Retry. The route
+should check fresh consent first and directly delegate to
+`flowStartFlow({ skipAiProcessingConsent: true })`; the flow alone owns one
+authoritative refresh, the simultaneous typed local permission read, fail-closed
+eligibility, and explicit OS prompt ordering. Preserve an existing
+`availabilitySnapshot` option for other legitimate callers, but the unavailable
+route retry no longer needs to manufacture or await one. First-use consent
+continuation still passes the explicit supersede marker; ordinary
+already-consented retries do not. No second availability hook, cached snapshot,
+new prompt or user-facing copy is permitted.
 
-**Exact S4 test-only contract:** `apps/mobile/__tests__/app/add-transaction-modes.test.tsx` updates the historical first-grant assertion to include `supersedePendingAvailability: true`, and tests unavailable retry with a deferred fresh consent result and a deliberately unresolved *route* refresh. The flow facade returns `{ kind: "not-started", reason: "availability" }`: the route must hand off once without a standalone refresh and remain unavailable, while the actual flow's pre-existing blocked-availability oracle independently proves no OS prompt, request identity or native capture. The nested unsafe Jest matcher is removed, not suppressed. `apps/mobile/__tests__/hooks/useVoiceTransactionFlow.startup.test.ts` adds granted-capture controls for a throwing/nonfinite `performance.now`, beside the existing logger-failure case, with actual timing payload shape unchanged.
+**Exact S4 test-only contract:**
+`apps/mobile/__tests__/app/add-transaction-modes.test.tsx` updates the
+historical first-grant assertion to include
+`supersedePendingAvailability: true`, and tests unavailable retry with a
+deferred fresh consent result and a deliberately unresolved _route_ refresh. The
+flow facade returns `{ kind: "not-started", reason: "availability" }`: the route
+must hand off once without a standalone refresh and remain unavailable, while
+the actual flow's pre-existing blocked-availability oracle independently proves
+no OS prompt, request identity or native capture. The nested unsafe Jest matcher
+is removed, not suppressed.
+`apps/mobile/__tests__/hooks/useVoiceTransactionFlow.startup.test.ts` adds
+granted-capture controls for a throwing/nonfinite `performance.now`, beside the
+existing logger-failure case, with actual timing payload shape unchanged.
 
-This S4 leaf is **TEST ONLY**: no startup production, recorder, #391, shared-auth/service, native/device, provider or deployment changes. Root runs focused meaningful RED first; a subsequent narrowly granted route edit is required before final T080 Green and independent T081 review. No latency measurement or test execution is claimed by the test author.
+This S4 leaf is **TEST ONLY**: no startup production, recorder, #391,
+shared-auth/service, native/device, provider or deployment changes. Root runs
+focused meaningful RED first; a subsequent narrowly granted route edit is
+required before final T080 Green and independent T081 review. No latency
+measurement or test execution is claimed by the test author.
 
 ## S4 minimal route implementation after accepted meaningful RED (12 October 2026)
 
-Root's focused test batch on `c3dc55d0b2ec25b6a71bcec4466d4147562d0474`
-was **3 failed / 54 passed / 57 total (13.044 s)**. The route Retry assertion
-found a meaningful standalone-prefetch defect (observed 1 call, expected 0).
-The other two failures were test-seam corruption: a globally broken
-`performance.now` reached React scheduler state updates, and the following
-logger control was not exercised. No global-clock source workaround is
-authorized; final GREEN has not been established.
+Root's focused test batch on `c3dc55d0b2ec25b6a71bcec4466d4147562d0474` was **3
+failed / 54 passed / 57 total (13.044 s)**. The route Retry assertion found a
+meaningful standalone-prefetch defect (observed 1 call, expected 0). The other
+two failures were test-seam corruption: a globally broken `performance.now`
+reached React scheduler state updates, and the following logger control was not
+exercised. No global-clock source workaround is authorized; final GREEN has not
+been established.
 
-The S4 grant removes only the route's `refreshAvailability` option,
-standalone refresh/snapshot wait, now-unused destructured refresh,
-snapshot spread, and unavailable-Retry caller/dependency from
-`apps/mobile/app/(private)/add-transaction.tsx`. Fresh consent remains
-before `flowStartFlow({ skipAiProcessingConsent: true })`; the flow alone
-overlaps authoritative availability with the one non-prompting native
-permission lookup. Fail-closed availability refusal remains in the flow,
-and an OS permission request still requires an eligible response plus
-the explicit existing recovery action. The flow's optional
-`availabilitySnapshot` compatibility remains unchanged. First-use consent
-still sends `supersedePendingAvailability: true`.
+The S4 grant removes only the route's `refreshAvailability` option, standalone
+refresh/snapshot wait, now-unused destructured refresh, snapshot spread, and
+unavailable-Retry caller/dependency from
+`apps/mobile/app/(private)/add-transaction.tsx`. Fresh consent remains before
+`flowStartFlow({ skipAiProcessingConsent: true })`; the flow alone overlaps
+authoritative availability with the one non-prompting native permission lookup.
+Fail-closed availability refusal remains in the flow, and an OS permission
+request still requires an eligible response plus the explicit existing recovery
+action. The flow's optional `availabilitySnapshot` compatibility remains
+unchanged. First-use consent still sends `supersedePendingAvailability: true`.
 
 S4 tests move direct throwing/nonfinite `performance.now` handling to
 `apps/mobile/__tests__/utils/voice-startup-timing.test.ts`, with no React
@@ -1300,40 +1350,41 @@ Structured `voice.startupTiming` payloads contain exactly
 `{ stage, durationMs }`, with finite nonnegative durations only. Logging or
 clock failure cannot add a wait or prevent capture.
 
-Existing FR-048–FR-053 / SC-023–SC-027, T075–T083 and R1/R2 approvals
-remain authoritative. This is one source-bounded production correction and
-test refinement, **not a completed executable GREEN**. Root owns the
-combined exact-path hook/route/timing and wider regression checks, final
-independent review and owner device latency evidence.
+Existing FR-048–FR-053 / SC-023–SC-027, T075–T083 and R1/R2 approvals remain
+authoritative. This is one source-bounded production correction and test
+refinement, **not a completed executable GREEN**. Root owns the combined
+exact-path hook/route/timing and wider regression checks, final independent
+review and owner device latency evidence.
 
 ## Final startup test-contract repair after root exact batch (12 October 2026)
 
-At `4133231163116e04f9221c42095eb98580f38768`, root's 28-suite run reported **25 suites passed / 3 failed; 419 tests passed / 5 failed / 424 total; 26.373 s.**
-TypeScript, formatter, i18n, privacy and diff passed; ESLint 0 errors,
-3 baseline hook-dependency warnings. All new availability/flow behavior and
-production suites passed. Independent OpenCode S4 source review reported no
-new critical/high defect. **Do not call the 28-suite batch GREEN**.
+At `4133231163116e04f9221c42095eb98580f38768`, root's 28-suite run reported **25
+suites passed / 3 failed; 419 tests passed / 5 failed / 424 total; 26.373 s.**
+TypeScript, formatter, i18n, privacy and diff passed; ESLint 0 errors, 3
+baseline hook-dependency warnings. All new availability/flow behavior and
+production suites passed. Independent OpenCode S4 source review reported no new
+critical/high defect. **Do not call the 28-suite batch GREEN**.
 
 This bounded test-only reconciliation has three owners/surfaces:
-1. `apps/mobile/__tests__/app/add-transaction-voice-motion.test.tsx`:
-   eligible unavailable Retry calls the flow exactly once without a route
-   refresh; a refused retry mocks the typed
-   `{kind:"not-started",reason:"availability"}`, remains unavailable with
-   Manual recovery and never claims the facade proves native recording.
-   First consent passes `supersedePendingAvailability: true`, but the
-   explicit later OS permission action keeps its normal options.
+
+1. `apps/mobile/__tests__/app/add-transaction-voice-motion.test.tsx`: eligible
+   unavailable Retry calls the flow exactly once without a route refresh; a
+   refused retry mocks the typed `{kind:"not-started",reason:"availability"}`,
+   remains unavailable with Manual recovery and never claims the facade proves
+   native recording. First consent passes `supersedePendingAvailability: true`,
+   but the explicit later OS permission action keeps its normal options.
 2. `apps/mobile/__tests__/hooks/useVoiceTransactionFlow.r2-permission.test.ts`:
-   consent denial means zero availability/permission reads; authoritative
-   quota refusal permits one non-prompting permission read. Both preserve zero
-   OS permission request, UUID, native start and provider invocation.
-3. `apps/mobile/__tests__/utils/voice-startup-timing.test.ts`:
-   the negative thrown/NaN/infinite clock tests assert that the spy was
-   called; the logger-positive test seeds finite deterministic values and
-   restores its spy in `finally`. The asynchronous Promise callbacks,
-   operation counter and stage-only payload checks stay intact.
+   consent denial means zero availability/permission reads; authoritative quota
+   refusal permits one non-prompting permission read. Both preserve zero OS
+   permission request, UUID, native start and provider invocation.
+3. `apps/mobile/__tests__/utils/voice-startup-timing.test.ts`: the negative
+   thrown/NaN/infinite clock tests assert that the spy was called; the
+   logger-positive test seeds finite deterministic values and restores its spy
+   in `finally`. The asynchronous Promise callbacks, operation counter and
+   stage-only payload checks stay intact.
 
 Original 923-line flow tests, production hooks/route, recorder/#391,
 services/auth and UI bindings remain read-only. Root owns the new
-exact-affected/full checks and eventual final docs publication receipt.
-No native/OS/audio, device timing or provider execution is asserted.
-**T080 GREEN remains pending root's exact-affected/full rerun.**
+exact-affected/full checks and eventual final docs publication receipt. No
+native/OS/audio, device timing or provider execution is asserted. **T080 GREEN
+remains pending root's exact-affected/full rerun.**

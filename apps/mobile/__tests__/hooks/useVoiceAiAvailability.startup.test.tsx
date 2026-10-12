@@ -15,9 +15,7 @@ const mockLoggerWarn = jest.fn();
 let mockUserId: string | null = "user-1";
 let mockIsResolvingUser = false;
 let mockTimeZone: string | null = "Africa/Cairo";
-let mockFocusEffect:
-  | (() => void | (() => void))
-  | null = null;
+let mockFocusEffect: (() => void | (() => void)) | null = null;
 let mockAppStateListener: ((state: AppStateStatus) => void) | null = null;
 const mockAppStateRemove = jest.fn();
 

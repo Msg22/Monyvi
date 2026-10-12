@@ -23,10 +23,7 @@ const mockRequestPermissionStatus = jest.fn<
   Promise<MicrophonePermissionStatus>,
   []
 >();
-const mockRecorderStart = jest.fn<
-  Promise<void>,
-  [RecorderStartOptions?]
->();
+const mockRecorderStart = jest.fn<Promise<void>, [RecorderStartOptions?]>();
 const mockRecorderDiscard = jest.fn<Promise<void>, []>();
 const mockRandomUUID = jest.fn<string, []>();
 const mockLoggerInfo = jest.fn<
@@ -78,10 +75,7 @@ jest.mock("expo-router", () => ({
 
 jest.mock("@/utils/logger", () => ({
   logger: {
-    info: (
-      event: string,
-      payload: Readonly<Record<string, unknown>>
-    ): void => {
+    info: (event: string, payload: Readonly<Record<string, unknown>>): void => {
       mockLoggerInfo(event, payload);
     },
     error: jest.fn(),
@@ -192,12 +186,10 @@ beforeEach((): void => {
   mockRecorderDiscard.mockReset().mockResolvedValue(undefined);
   mockRecorderStart
     .mockReset()
-    .mockImplementation(
-      (options?: RecorderStartOptions): Promise<void> => {
-        options?.onStarted?.();
-        return Promise.resolve();
-      }
-    );
+    .mockImplementation((options?: RecorderStartOptions): Promise<void> => {
+      options?.onStarted?.();
+      return Promise.resolve();
+    });
   mockLoggerInfo.mockReset();
 });
 
@@ -255,7 +247,9 @@ describe("useVoiceTransactionFlow startup ordering", () => {
 
     permission.resolve("denied");
     availability.resolve(blocked);
-    let result: Awaited<ReturnType<typeof flow.result.current.startFlow>> | undefined;
+    let result:
+      | Awaited<ReturnType<typeof flow.result.current.startFlow>>
+      | undefined;
     await act(async (): Promise<void> => {
       result = await pending;
     });
@@ -313,7 +307,9 @@ describe("useVoiceTransactionFlow startup ordering", () => {
     availability.resolve(allowed);
     permission.resolve("granted");
 
-    let result: Awaited<ReturnType<typeof flow.result.current.startFlow>> | undefined;
+    let result:
+      | Awaited<ReturnType<typeof flow.result.current.startFlow>>
+      | undefined;
     await act(async (): Promise<void> => {
       result = await pending;
     });
@@ -331,7 +327,9 @@ describe("useVoiceTransactionFlow startup ordering", () => {
     const flow = renderStartupFlow(() => true);
 
     let first: ReturnType<typeof flow.result.current.startFlow> | undefined;
-    let duplicate: Awaited<ReturnType<typeof flow.result.current.startFlow>> | undefined;
+    let duplicate:
+      | Awaited<ReturnType<typeof flow.result.current.startFlow>>
+      | undefined;
     act((): void => {
       first = flow.result.current.startFlow();
     });

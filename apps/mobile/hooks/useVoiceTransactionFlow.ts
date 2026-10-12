@@ -328,11 +328,13 @@ export function useVoiceTransactionFlow(
           return { kind: "not-started", reason: "availability" };
         }
         const [availability, permission] = await runVoiceStartupPreflight(
-          () => options?.availabilitySnapshot ?? refreshVoiceAvailability(
-            options?.supersedePendingAvailability
-              ? { supersedePending: true }
-              : undefined
-          ),
+          () =>
+            options?.availabilitySnapshot ??
+            refreshVoiceAvailability(
+              options?.supersedePendingAvailability
+                ? { supersedePending: true }
+                : undefined
+            ),
           () => recorder.refreshPermission()
         );
         if (!isLive()) return getStaleStartResult(operation);

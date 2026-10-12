@@ -490,7 +490,6 @@ describe("AddTransaction unified mode intent", () => {
   );
 });
 
-
 describe("AddTransaction Voice startup S2 Red", () => {
   beforeEach(resetRouteMocks);
 
@@ -505,7 +504,9 @@ describe("AddTransaction Voice startup S2 Red", () => {
 
     fireEvent.press(screen.getByTestId("voice-start"));
 
-    expect(screen.getByTestId("voice-entry-state")).toHaveTextContent("starting");
+    expect(screen.getByTestId("voice-entry-state")).toHaveTextContent(
+      "starting"
+    );
     expect(mockVoiceStartFlow).not.toHaveBeenCalled();
 
     await act(async (): Promise<void> => {
@@ -574,7 +575,9 @@ describe("AddTransaction Voice startup S2 Red", () => {
     // If the route still prefetches availability, this promise never resolves:
     // it must delegate directly to the flow which overlaps availability/permission.
     const stalledRouteRefresh = createDeferred<null>();
-    mockVoiceAvailabilityRefresh.mockReturnValueOnce(stalledRouteRefresh.promise);
+    mockVoiceAvailabilityRefresh.mockReturnValueOnce(
+      stalledRouteRefresh.promise
+    );
     // The real flow's blocked-availability companion verifies no native start,
     // request identity or OS prompt. This route double models its refusal.
     mockVoiceStartFlow.mockResolvedValueOnce({
@@ -588,7 +591,9 @@ describe("AddTransaction Voice startup S2 Red", () => {
     );
     fireEvent.press(screen.getByTestId("voice-unavailable-retry"));
 
-    expect(screen.getByTestId("voice-entry-state")).toHaveTextContent("starting");
+    expect(screen.getByTestId("voice-entry-state")).toHaveTextContent(
+      "starting"
+    );
     expect(mockVoiceAvailabilityRefresh).not.toHaveBeenCalled();
     expect(mockVoiceStartFlow).not.toHaveBeenCalled();
 

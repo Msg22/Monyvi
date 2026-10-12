@@ -17,10 +17,7 @@ const mockLoggerInfo = jest.fn<
 
 jest.mock("@/utils/logger", () => ({
   logger: {
-    info: (
-      event: string,
-      payload: Readonly<Record<string, unknown>>
-    ): void => {
+    info: (event: string, payload: Readonly<Record<string, unknown>>): void => {
       mockLoggerInfo(event, payload);
     },
     error: jest.fn(),
@@ -64,10 +61,13 @@ describe("Voice startup monotonic diagnostic safety", () => {
         expect(clock).toHaveBeenCalled();
 
         let operationCalls = 0;
-        const granted = await timeVoiceStartupStage("consent", (): Promise<string> => {
-          operationCalls += 1;
-          return Promise.resolve("granted");
-        });
+        const granted = await timeVoiceStartupStage(
+          "consent",
+          (): Promise<string> => {
+            operationCalls += 1;
+            return Promise.resolve("granted");
+          }
+        );
         const preflight = await runVoiceStartupPreflight(
           (): Promise<string> => Promise.resolve("allowed"),
           (): Promise<string> => Promise.resolve("granted")
