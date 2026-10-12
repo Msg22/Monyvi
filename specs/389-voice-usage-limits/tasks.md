@@ -1419,3 +1419,11 @@ assertions are **read-only**. No production/startup source edits yet;
 #391 recorder/filesystem source/tests/docs are frozen separately. Root must
 accept focused repaired RED before T078/T079 and owns eventual T080 final
 batch, independent review and owner native/manual checks.
+
+### S3 implementation handoff — source authored, root Green pending (12 October 2026)
+
+Root accepted repaired startup RED at `a39d2732ac9fe9127415a280c09f3ae57370d348`: 3 focused suites, **13 meaningful failures / 42 passing / 55 total**, exit 1, 10.917 seconds, with no missing-import/setup error. Root's correct-feature prerequisite and independent read-only analysis are PASS (11/11 mapped, critical 0/high 0). These are root-supplied receipts, **not checks executed by the GitHub author**.
+
+The authorized S3 writer authored source within `apps/mobile/hooks/useVoiceAiAvailability.ts`, `apps/mobile/hooks/useVoiceTransactionFlow.ts`, `apps/mobile/hooks/voice-transaction-flow-types.ts`, `apps/mobile/app/(private)/add-transaction.tsx` and new `apps/mobile/utils/voice-startup-timing.ts`, plus narrowly scoped startup companion test-fixture microtask flushes. Same-context requests join only while unresolved; first-use consent explicitly supersedes; unavailable retry performs consent before availability; non-prompting permission and authoritative availability are concurrent after consent. Optional monotonic diagnostics use only `voice.startupTiming` with `{ stage, durationMs }`: `consent`, individual `availability`/`permission`, combined `availability_permission`, and `native_start` at recorder `onStarted`, with sink failure ignored.
+
+**T078/T079 remain unchecked until root's actual T080 Green and independent T081 source review.** No local test run or native/device measurement is claimed in this source handoff. T075–T083 and all R1/R2 historical approvals stay unchanged. Recorder/#391 tests/source, service/auth, server, style, strings, packages and UI binding remain outside this lane.

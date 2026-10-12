@@ -24,6 +24,12 @@ import {
 import { getAiProcessingConsentStatus } from "@/services/profile-service";
 import { getDeviceTimeZone } from "@/utils/device-time-zone";
 import { logger } from "@/utils/logger";
+import {
+  finishVoiceStartupStage,
+  runVoiceStartupPreflight,
+  timeVoiceStartupStage,
+  voiceStartupClock,
+} from "@/utils/voice-startup-timing";
 export type {
   VoiceFlowStatus,
   VoiceStartResult,
@@ -52,7 +58,6 @@ export function useVoiceTransactionFlow(
     refresh: refreshVoiceAvailability,
     reconcileAuthoritativeSnapshot: reconcileVoiceAvailability,
   } = cfgVoiceAvailability;
-
   const recorder = useVoiceRecorder();
   const { userId, isResolvingUser } = useCurrentUser();
   const [flowStatus, setFlowStatus] = useState<Flow.VoiceFlowStatus>("idle");
@@ -291,6 +296,7 @@ export function useVoiceTransactionFlow(
           ? { kind: "not-started", reason: "actor-changed" }
           : { kind: "not-started", reason: "cancelled" };
       }
+      const isLive = (): boolean => isOperationCurrent(operation);
       startPendingGenerationRef.current = operation.generation;
       setIsStartPending(true);
       updateFlowStatus("starting");
@@ -305,45 +311,42 @@ export function useVoiceTransactionFlow(
           setRefusalReason(null);
         }
         if (!options?.skipAiProcessingConsent && cfgEnsureAiProcessingConsent) {
-          const canUseAi = await cfgEnsureAiProcessingConsent();
-          if (!isOperationCurrent(operation)) {
-            return getStaleStartResult(operation);
-          }
+          const canUseAi = await timeVoiceStartupStage(
+            "consent",
+            cfgEnsureAiProcessingConsent
+          );
+          if (!isLive()) return getStaleStartResult(operation);
           if (!canUseAi) {
             updateFlowStatus("idle");
             return { kind: "not-started", reason: "consent" };
           }
         }
         const callerTimeZone = getDeviceTimeZone();
-        if (!isOperationCurrent(operation)) {
-          return getStaleStartResult(operation);
-        }
+        if (!isLive()) return getStaleStartResult(operation);
         if (callerTimeZone === null) {
           updateFlowStatus("idle");
           return { kind: "not-started", reason: "availability" };
         }
-        const availability =
-          options?.availabilitySnapshot ?? (await refreshVoiceAvailability());
-        if (!isOperationCurrent(operation)) {
-          return getStaleStartResult(operation);
-        }
+        const [availability, permission] = await runVoiceStartupPreflight(
+          () => options?.availabilitySnapshot ?? refreshVoiceAvailability(
+            options?.supersedePendingAvailability
+              ? { supersedePending: true }
+              : undefined
+          ),
+          () => recorder.refreshPermission()
+        );
+        if (!isLive()) return getStaleStartResult(operation);
         if (isAvailabilityBlocked(availability)) {
           setIsOverlayVisible(false);
           updateFlowStatus("idle");
           return { kind: "not-started", reason: "availability" };
-        }
-        const permission = await recorder.refreshPermission();
-        if (!isOperationCurrent(operation)) {
-          return getStaleStartResult(operation);
         }
         const requestedStatus =
           options?.requestMicrophonePermission === true &&
           permission === "denied"
             ? await recorder.requestPermissionStatus()
             : permission;
-        if (!isOperationCurrent(operation)) {
-          return getStaleStartResult(operation);
-        }
+        if (!isLive()) return getStaleStartResult(operation);
         if (requestedStatus !== "granted") {
           setErrorMessage(null);
           setErrorKind(null);
@@ -363,29 +366,27 @@ export function useVoiceTransactionFlow(
         setIsOverlayVisible(true);
         originTabIndexRef.current = cfgOriginTabIndex ?? 0;
         let didNativeRecordStart = false;
+        const nativeStartedAt = voiceStartupClock();
         try {
           await recorder.start({
             signal: operation.signal,
             onStarted: (): void => {
               if (isOperationCurrent(operation)) {
                 didNativeRecordStart = true;
+                finishVoiceStartupStage("native_start", nativeStartedAt);
                 updateFlowStatus("recording");
               }
             },
           });
         } catch {
-          if (!isOperationCurrent(operation)) {
-            return getStaleStartResult(operation);
-          }
+          if (!isLive()) return getStaleStartResult(operation);
           clearSubmissionIdentity();
           setErrorMessage(recordingStartError());
           setErrorKind("generic");
           updateFlowStatus("error");
           return { kind: "not-started", reason: "start-failed" };
         }
-        if (!isOperationCurrent(operation)) {
-          return getStaleStartResult(operation);
-        }
+        if (!isLive()) return getStaleStartResult(operation);
         if (!didNativeRecordStart) {
           clearSubmissionIdentity();
           setErrorMessage(recordingStartError());
@@ -396,9 +397,7 @@ export function useVoiceTransactionFlow(
         }
         return { kind: "started" };
       } catch (error: unknown) {
-        if (!isOperationCurrent(operation)) {
-          return getStaleStartResult(operation);
-        }
+        if (!isLive()) return getStaleStartResult(operation);
         logger.error("voice.startFlow.failed", error);
         clearSubmissionIdentity();
         setErrorMessage(recordingStartError());

@@ -116,8 +116,9 @@ function serviceSignal(index: number): AbortSignal | undefined {
 
 async function flush(): Promise<void> {
   await act(async (): Promise<void> => {
-    await Promise.resolve();
-    await Promise.resolve();
+    for (let index = 0; index < 8; index += 1) {
+      await Promise.resolve();
+    }
   });
 }
 

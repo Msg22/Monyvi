@@ -26,6 +26,7 @@ import {
 import { getAiProcessingConsentStatus } from "@/services/profile-service";
 import { toCategoryTreeSources } from "@/utils/category-tree-source";
 import { logger } from "@/utils/logger";
+import { timeVoiceStartupStage } from "@/utils/voice-startup-timing";
 import { buildCategoryTree } from "@monyvi/logic";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import React, {
@@ -291,6 +292,13 @@ export default function AddTransaction(): React.JSX.Element {
       setIsVoiceStartPending(true);
 
       try {
+        const hasConsent = await timeVoiceStartupStage(
+          "consent",
+          ensureAiProcessingConsent
+        );
+        if (!isCurrent() || !hasConsent) return;
+
+        // An unavailable retry cannot request server capacity before consent.
         const availabilitySnapshot = options?.refreshAvailability
           ? await refreshVoiceAvailability()
           : undefined;
@@ -303,10 +311,6 @@ export default function AddTransaction(): React.JSX.Element {
             availabilitySnapshot.remaining === 0)
         )
           return;
-        const hasConsent = await ensureAiProcessingConsent();
-        if (!isCurrent() || !hasConsent) {
-          return;
-        }
 
         setMicrophoneRecoveryMode(null);
         const result = await flowStartFlow({
@@ -726,7 +730,9 @@ export default function AddTransaction(): React.JSX.Element {
           let didGrantConsent = false;
 
           try {
-            await aiConsent.grantConsent();
+            await timeVoiceStartupStage("consent", () =>
+              aiConsent.grantConsent()
+            );
 
             if (!isCurrent()) {
               return;
@@ -739,6 +745,7 @@ export default function AddTransaction(): React.JSX.Element {
             setMicrophoneRecoveryMode(null);
             const result = await flowStartFlow({
               skipAiProcessingConsent: true,
+              supersedePendingAvailability: true,
             });
             if (isCurrent()) applyVoiceStartResult(result);
           } catch {

@@ -178,3 +178,16 @@ Historical FR-048–FR-053 / SC-023–SC-027 and T075–T083 remain intact.
 No startup source changes, S3 approval, measured performance, native/OS/
 provider/hosted checks, or local Jest execution by this successor. Root
 must accept repaired focused RED before T078/T079 production.
+
+## S3 bounded implementation source handoff (12 October 2026)
+
+**Accepted root repaired RED:** startup branch `a39d2732ac9fe9127415a280c09f3ae57370d348`; 3 focused suites **13 meaningful failures/42 passed/55**, 10.917 seconds, exit 1, no import/setup failure. Root correct-feature prerequisite PASS and independent canonical read-only Speckit review 11/11 new FR/SC mapped, critical/high 0. This author has **not** run test/TypeScript/lint/OS/Metro/device/provider checks; these receipts are supplied by root.
+
+**Source implementation boundaries (awaiting root Green and independent acceptance):**
+
+- `useVoiceAiAvailability` maintains an unresolved actor/timezone/generation-scoped promise, joins matching callers, never caches a settled result, replaces differing contexts, clears its own slot and retains lifecycle/actor/snapshot-reconciliation abort protection. Explicit `supersedePending` aborts a matching pre-grant operation.
+- `useVoiceTransactionFlow` preserves fresh consent first and starts an authoritative availability read alongside one **non-prompting** permission read. The existing explicit OS request remains behind eligible availability; the recorder starts only after both gates and stays Starting until native `onStarted`.
+- The route performs consent before unavailable-refresh retry, passes the eligible snapshot directly (no second refresh), and marks only a successful first-use consent continuation to force pending availability replacement.
+- `voice-startup-timing.ts` uses monotonic `performance.now()` where available and best-effort sink calls. Every record contains only `stage` and finite nonnegative numeric `durationMs`; consent, availability, permission, combined availability_permission and native_start end at the documented boundaries. Clock or logger failure must not change admission; no timers, identifiers or content are added.
+
+**Verification is NOT RUN by this writer.** Root owns the combined T080 Green/TS/lint/privacy pass, independent T081 async/actor-security review, and T082 owner cold/warm native evidence. Existing recorder stabilization/cap/cleanup and #391, Manual draft, R1/R2 UI approval, same-key replay and authenticated availability remain outside scope. No 1–2 s measured improvement is claimed.
