@@ -48,20 +48,26 @@ require owner access.
 
 ## Track B — Speechless-audio / server validation (BLOCKED; do not claim tested)
 
-| ID      | Fixture family / observed expectation                                                                        | Required proof                                                                                                       | Current status                      |
-| ------- | ------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
-| M391-08 | Missing/zero-byte, random bytes, truncated AAC `ftyp`, malformed/unsupported audio track                     | Actual submitted bytes, proposed bounded parser and deterministic response; no Gemini/provider unit                  | BLOCKED — validator/contract        |
-| M391-09 | M4A/AAC digital silence at 5, 15, 30s                                                                        | Real PCM decode and calibrated no-speech outcome, provider mock 0, known reservation release                         | BLOCKED — synthetic files missing   |
-| M391-10 | Fan/traffic proxies at 5, 15, 30s                                                                            | Decoded sound evidence and distinct false-positive measurement, not merely RMS/size                                  | BLOCKED — synthetic files missing   |
-| M391-11 | Licensed quiet Egyptian Arabic at 5, 15, 30s                                                                 | Proven valid speech not falsely rejected (include short simple utterances and faint talkers)                         | BLOCKED — licensed bytes missing    |
-| M391-12 | Licensed quiet English at 5, 15, 30s                                                                         | Same high-recall proof and labeled provenance                                                                        | BLOCKED — licensed bytes missing    |
-| M391-13 | Licensed Arabic/English code-switch at 5, 15, 30s                                                            | Same proof; local dialect and mixed words retained                                                                   | BLOCKED — licensed bytes missing    |
-| M391-14 | Speech over room, breathing, handling, traffic/fan; noise-only real samples; varied speakers/phone distances | Measure FNR first, FPR and ambiguous VAD cases by class, with owner-approved rule                                    | BLOCKED — real licensed samples     |
-| M391-15 | Valid speech unrelated to financial transactions                                                             | Speech detector only establishes speech; current Gemini/parser remains responsible for financial semantics           | BLOCKED — decoder and test contract |
-| M391-16 | Validator cannot initialize/decode or exceeds budget                                                         | No phantom provider start; appropriate approved fail-closed/retry outcome and SQL reservation state                  | BLOCKED — resource/response gate    |
-| M391-17 | Released-terminal same-key replay and parallel two requests on an accepted unexpired reservation             | No claim of refundable same-key retry; no unapproved duplicate CPU work or phantom usage; test agreed lease response | BLOCKED — replay/concurrency policy |
-| M391-18 | Real app 30s **local active** capture, paused wall excluded; external longer upload and AAC padding          | Do not infer a server policy from local cap; duration rule and tolerance must be expressly reconciled                | BLOCKED — server duration decision  |
-| M391-19 | Authenticated consent revoked, quota limit, cancellation/account switch during submit                        | Preserve fail-closed actor/request identity, 35-day replay semantics and Manual fallback                             | BLOCKED — contract and owner test   |
+Feasibility spike evaluated: local Deno proxy measured 10 synthetic
+negative/control cases; Edge Runtime probe rejected `onnxruntime-web@1.22.0`
+shared WebAssembly memory; licensed quiet speech positives remain 0/9 acquired.
+See
+[feasibility report](../../../docs/research/voice-audio-validation-spike/feasibility-2026-10-12.md).
+
+| ID      | Fixture family / observed expectation                                                                        | Required proof                                                                                                                                                           | Current status                                |
+| ------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------- |
+| M391-08 | Missing/zero-byte, random bytes, truncated AAC `ftyp`, malformed/unsupported audio track                     | Actual submitted bytes, proposed bounded parser and deterministic response; no Gemini/provider unit                                                                      | BLOCKED / NOT RUN — validator/contract        |
+| M391-09 | M4A/AAC digital silence at 5, 15, 30s                                                                        | Real PCM decode and calibrated no-speech outcome, provider mock 0, known reservation release; measured on local proxy (0.000 max speech prob) but Edge candidate BLOCKED | NOT RUN                                       |
+| M391-10 | Fan/traffic proxies at 5, 15, 30s                                                                            | Decoded sound evidence and distinct false-positive measurement, not merely RMS/size; measured on local proxy (0.000 max speech prob) but Edge candidate BLOCKED          | NOT RUN                                       |
+| M391-11 | Licensed quiet Egyptian Arabic at 5, 15, 30s                                                                 | Proven valid speech not falsely rejected (include short simple utterances and faint talkers)                                                                             | BLOCKED / NOT RUN — licensed bytes missing    |
+| M391-12 | Licensed quiet English at 5, 15, 30s                                                                         | Same high-recall proof and labeled provenance                                                                                                                            | BLOCKED / NOT RUN — licensed bytes missing    |
+| M391-13 | Licensed Arabic/English code-switch at 5, 15, 30s                                                            | Same proof; local dialect and mixed words retained                                                                                                                       | BLOCKED / NOT RUN — licensed bytes missing    |
+| M391-14 | Speech over room, breathing, handling, traffic/fan; noise-only real samples; varied speakers/phone distances | Measure FNR first, FPR and ambiguous VAD cases by class, with owner-approved rule                                                                                        | BLOCKED / NOT RUN — real licensed samples     |
+| M391-15 | Valid speech unrelated to financial transactions                                                             | Speech detector only establishes speech; current Gemini/parser remains responsible for financial semantics                                                               | BLOCKED / NOT RUN — decoder and test contract |
+| M391-16 | Validator cannot initialize/decode or exceeds budget                                                         | No phantom provider start; appropriate approved fail-closed/retry outcome and SQL reservation state                                                                      | BLOCKED / NOT RUN — resource/response gate    |
+| M391-17 | Released-terminal same-key replay and parallel two requests on an accepted unexpired reservation             | No claim of refundable same-key retry; no unapproved duplicate CPU work or phantom usage; test agreed lease response                                                     | BLOCKED / NOT RUN — replay/concurrency policy |
+| M391-18 | Real app 30s **local active** capture, paused wall excluded; external longer upload and AAC padding          | Do not infer a server policy from local cap; duration rule and tolerance must be expressly reconciled                                                                    | BLOCKED / NOT RUN — server duration decision  |
+| M391-19 | Authenticated consent revoked, quota limit, cancellation/account switch during submit                        | Preserve fail-closed actor/request identity, 35-day replay semantics and Manual fallback                                                                                 | BLOCKED / NOT RUN — contract and owner test   |
 
 **Minimum corpus and metrics:** The committed fixtures template has **19 missing
 assets** (9 synthetic negatives, 9 licensed quiet speech positives, 1
@@ -75,22 +81,23 @@ and real Edge bundle/CPU headroom. No arbitrary VAD confidence/minimum-speech or
 encoder-padding values are approved. Local process CPU or sparse RSS samples
 cannot count as true Edge CPU/peak.
 
-**Runtime STOP rule:** Existing executor explicitly blocks `deno.exe` and
-FFmpeg; do not retry, shell-wrap, alter allowlists, install substitutes, run
-hosted workloads or call Gemini. An independently authorized eligible executor
-and licensed corpus are required. Failed build/import or missing proof keeps all
-server outcomes **BLOCKED**.
+**Runtime evaluation record:** Local offline evaluation of the Symphonia WASM
+and Silero ONNX pipeline occurred on 2026-10-12 in an authorized environment
+(Rust 1.97.1, MSVC 14.44, wasm-pack 0.15.0, Deno 2.9.7, Docker
+`edge-runtime:v1.76.2`). Synthetic negatives passed on local Deno proxy; local
+Edge Runtime probe failed on shared WebAssembly memory policy. Licensed quiet
+speech corpus remains 0/9 acquired. Live server production, device audio runs,
+and Gemini provider calls remain **BLOCKED**.
 
-## Separate owner Starting-latency observation (not owned by #391 branch)
+## Separate owner Starting-latency observation (historical context; not owned by #391 branch)
 
-The owner reports about 3s in Starting. Source-based ordering is consent → fresh
-server allowance → one microphone permission read → pending cleanup → native
-audio mode/prepare → `record()`. The existing 300ms stabilization follows
-`record()` and `onStarted`, not a fixed pre-record wait. **No actual stage
-timings have been measured**; the startup worker alone owns
-route/flow/availability and instrumentation changes. Owner may collect redacted
-monotonic cold/warm stages, but no 1–2s guarantee or #391 edit to those paths is
-authorized.
+The owner previously observed about 3s in Starting prior to PR #383
+(`213b392…`), which addressed tap-to-record latency via parallel permission and
+allowance checks with coalescing. In that legacy path, source-based ordering was
+consent → fresh server allowance → one microphone permission read → pending
+cleanup → native audio mode/prepare → `record()`, followed by 300ms
+stabilization. Startup latency is not an active work stream of this validation
+branch; no #391 edit to those paths is authorized.
 
 ## Release and sign-off evidence
 
@@ -99,9 +106,13 @@ authorized.
   mock reconciliation (`7ad8ed52…`), focused GREEN/TS/lint (72 tests, 3 suites,
   3.809s) and independent minimal-source review PASS; **executed on 2026-10-12
   in the validation branch, outside this owner manual leaf**.
-- Root/owner: authorized decoder/VAD feasibility, licensed corpus, acceptance
-  thresholds, actual Edge measurements, response/replay policy; **all
-  outstanding**.
+- Feasibility spike: local runtime and container probes were executed offline on
+  2026-10-12 (Rust 1.97.1/wasm-pack 0.15.0 decoder build exit 0; 10 negative
+  cases evaluated on local Deno proxy; Edge Runtime v1.76.2 container probe
+  failed on shared memory policy).
+- Root/owner: future non-shared Edge-compatible engine, licensed quiet speech
+  corpus, acceptance thresholds, server HTTP/SQL lease contracts, and replay
+  policy remain **outstanding**.
 - Owner: native/device/OS, retained-audio file cleanup, quiet
   Arabic/English/code-switch listening/quality, safe Manual fallback,
   screenshots if new UI approved; **NOT RUN**.

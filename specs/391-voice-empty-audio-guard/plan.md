@@ -11,8 +11,12 @@
 `.specify/feature.json` otherwise selects feature 389. Existing #391 branch
 only; no generated branch, hooks, broad codemap, issue or production
 mutation.<br> **Status**: US1 cleanup EXECUTED (TDD RED → import-only legacy →
-focused GREEN, root final batch PASS); US2 speech is BLOCKED. Startup
-latency/route/flow/availability belong exclusively to
+focused GREEN, root final batch PASS); US2 speech feasibility evaluated (local
+Deno proxy passed on synthetic negatives; containerized Edge Runtime probe
+failed at runtime due to shared memory policy rejection; 0/9 quiet speech
+positives acquired). See
+[feasibility report](../../docs/research/voice-audio-validation-spike/feasibility-2026-10-12.md).
+Startup latency/route/flow/availability belong exclusively to
 `codex/voice-startup-latency`.
 
 ## Summary
@@ -24,30 +28,32 @@ preserves native release-before-FS cleanup, known URI capture, missing-file
 idempotence, once-only disposal and generation/restart barriers.
 
 **Slice B (BLOCKED)** would validate actual uploaded media on the authoritative
-server before `voice_ai_mark_provider_started`/Gemini. Only a measured, licensed
-high-recall AAC decode/VAD pipeline and reconciled product/accounting/error
-contracts can authorize source work. The
-[nine published research/prototype artifacts](../../docs/research/voice-empty-audio-guard.md)
-are unchanged and **not executed**.
+server before `voice_ai_mark_provider_started`/Gemini. Feasibility spike
+evaluated: Rust/WASM AAC decoder + Silero ONNX pipeline runs on local Deno
+proxy, but official `onnxruntime-web@1.22.0` threaded WebAssembly is rejected by
+Supabase Edge Runtime V8 isolates
+(`TypeError: Creating a shared memory is not supported`). Quiet speech positives
+remain 0/9 available. Authoritative server integration remains BLOCKED pending a
+non-shared Edge-compatible engine and licensed quiet speech fixtures.
 
 ## Technical Context
 
-| Concern         | Current verified boundary                                                                                                                                                                         | Source                                                                                |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| Runtime         | React Native 0.83.6, Expo `~55.0.27`, `expo-file-system ~55.0.23`, `expo-audio ~55.0.15`                                                                                                          | `apps/mobile/package.json` @ Voice `f625183…`                                         |
-| Cleanup         | `useVoiceRecorder.ts:34,725–734` imports runtime-throwing filesystem root methods; `cleanupRecorderResources()` already coordinates release before async deletion, stale generations and retry    | Current published Voice `f625183373e29d372b658c10b3848a217477400a`                    |
-| Upload          | `ai-voice-parser-service.ts` posts multipart local URI, stable request key, timezone, optional date, account/category context to `parse-voice`; 30-second network timeout is not recording length | Current mobile service                                                                |
-| Server          | `parse-voice/index.ts` checks zero bytes/5 MB and signature fallback; no decoded speech check; reserve → provider-start → Gemini; server success/quota structures already defined                 | `supabase/functions/parse-voice/index.ts`, `contracts/parse-voice-quota.openapi.yaml` |
-| Accounting      | Existing SQL 087 scopes work by actor+key, provider start consumes allowance, release allowed only for reserved/non-started rows; 35-day replay identity remains                                  | `supabase/migrations/087_voice_ai_usage_limits.sql`                                   |
-| Local capture   | 30,000ms **active** cap; paused time excluded; `submitRecording` rejects under 1,500ms (not speech detection)                                                                                     | #389 FR-045/FR-046 and current flow                                                   |
-| Runtime spike   | Symphonia 0.6.1 AAC/MP4 → wasm-bindgen web target → pinned Silero ONNX + ONNX Runtime Web 1.22.0; missing all 19 fixtures, model/binary/Edge execution evidence                                   | `scripts/voice-audio-validation-spike/README.md` and templates                        |
-| Resource limits | Supabase published CPU, memory and bundle ceilings are comparison targets; **no actual Edge benchmark**                                                                                           | [Supabase limits](https://supabase.com/docs/guides/functions/limits)                  |
-| Tool limitation | Existing executor blocks Deno and FFmpeg; no workarounds, installs, replacement hosted services or device execution                                                                               | Published `docs/research/voice-empty-audio-guard.md`                                  |
+| Concern         | Current verified boundary                                                                                                                                                                                       | Source                                                                                           |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Runtime         | React Native 0.83.6, Expo `~55.0.27`, `expo-file-system ~55.0.23`, `expo-audio ~55.0.15`                                                                                                                        | `apps/mobile/package.json` @ Voice `f625183…`                                                    |
+| Cleanup         | Voice `f625183…` baseline imported throwing root methods; `e288d12…` migrated to `expo-file-system/legacy`; `cleanupRecorderResources()` coordinates release before async deletion, stale generations and retry | Published `e288d12026bd7076682a6d89b6446bc13c228cab`                                             |
+| Upload          | `ai-voice-parser-service.ts` posts multipart local URI, stable request key, timezone, optional date, account/category context to `parse-voice`; 30-second network timeout is not recording length               | Current mobile service                                                                           |
+| Server          | `parse-voice/index.ts` checks zero bytes/5 MB and signature fallback; no decoded speech check; reserve → provider-start → Gemini; server success/quota structures already defined                               | `supabase/functions/parse-voice/index.ts`, `contracts/parse-voice-quota.openapi.yaml`            |
+| Accounting      | Existing SQL 087 scopes work by actor+key, provider start consumes allowance, release allowed only for reserved/non-started rows; 35-day replay identity remains                                                | `supabase/migrations/087_voice_ai_usage_limits.sql`                                              |
+| Local capture   | 30,000ms **active** cap; paused time excluded; `submitRecording` rejects under 1,500ms (not speech detection)                                                                                                   | #389 FR-045/FR-046 and current flow                                                              |
+| Runtime spike   | Symphonia 0.6.1 WASM (432 KB) + Silero ONNX + ORT Web 1.22.0 measured on local Deno proxy across 10 synthetic negatives/controls; 9 quiet positives missing; Edge Runtime probe rejected on shared memory       | [feasibility report](../../docs/research/voice-audio-validation-spike/feasibility-2026-10-12.md) |
+| Resource limits | Edge Runtime v1.76.2 probe: minimal eszip (14.30 MB / 13.64 MiB) fits 20 MB CLI limit (exceeds 5 MB server limit); isolate execution rejected at `WebAssembly.Memory(shared: true)` initialization              | [Supabase limits](https://supabase.com/docs/guides/functions/limits)                             |
+| Tool limitation | Permitted environment verified: Rust 1.97.1, MSVC 14.44, wasm-pack 0.15.0, Deno 2.9.7, FFmpeg 9.0.2; hosted deploy / external provider calls remain prohibited                                                  | Published `docs/research/voice-empty-audio-guard.md`                                             |
 
 **Language/testing**: TypeScript strict RN/Jest and Deno Edge/shared contracts;
-Rust/WASM prototype (not compiled). No new packages, lockfile edits, migrations,
-hosted changes, customer audio, secrets, provider calls or model artifacts in
-Git.
+Rust/WASM prototype compiled and evaluated locally on Deno proxy. No new
+packages, lockfile edits, migrations, hosted changes, customer audio, secrets,
+provider calls or model artifacts in Git.
 
 ## Constitution Check
 
@@ -78,11 +84,13 @@ lockfile-only and junction runtime checks both resolved
 checkpoint (2026-10-12):** test-only RED
 `392a26f7bd6acdb94e2efe54d1587866d713d2b0` (10 fail / 1 pass / 11 total, 7.836s)
 → import-only production `84696d745bb8e0fdb37b079a6c76e75af18e7db6` → async mock
-reconciliation `7ad8ed5295f05a6f844f82ec2b2727af206fa906` → local uncommitted
-ESLint repair to the dedicated test → root final GREEN **72 tests / 3 suites /
-3.809s** (filesystem, original, r2 recorder suites) with mobile `tsc`, changed
-ESLint autofix, formatting, i18n/privacy and diff PASS, plus a root independent
-minimal-source review PASS. Speech execution evidence remains BLOCKED/NONE.
+reconciliation `7ad8ed5295f05a6f844f82ec2b2727af206fa906` → ESLint repair
+included in published `e288d12026bd7076682a6d89b6446bc13c228cab` → root final
+GREEN **72 tests / 3 suites / 3.809s** (filesystem, original, r2 recorder
+suites) with mobile `tsc`, changed ESLint autofix, formatting, i18n/privacy and
+diff PASS, plus a root independent minimal-source review PASS. Actual local
+offline inference was measured on Deno proxy; hosted production Edge deployment
+remains BLOCKED.
 
 ## Architecture and scope
 
@@ -95,20 +103,8 @@ Current control flow:
 2. `cleanupRecorderResources` awaits any in-flight start/stop, captures known
    URI, **releases native recorder before filesystem work**, serializes retries
    with `cleanupPromiseRef`.
-3. Current `FileSystem.getInfoAsync` / `deleteAsync` throw from root import
-   under Expo 55; error is logged and file may remain.
-
-Proposed minimal change **only after actual RED**: keep call order and async
-cleanup intact, switch `import * as FileSystem from "expo-file-system"` to
-`"expo-file-system/legacy"` and align the fixture mocks. Do **not** substitute
-synchronous new `File` API in this bounded fix or merely suppress the warning.
-
-**Future exact source ownership when separately assigned:** only
-`apps/mobile/hooks/useVoiceRecorder.ts`,
-`apps/mobile/__tests__/hooks/voice-recorder-fixtures.ts`, and new
-`apps/mobile/__tests__/hooks/useVoiceRecorder.filesystem.test.ts`. No
-route/flow/availability/shared startup-owned tests/fixtures or other recorder
-files are granted by this plan.
+3. Expo 55 root `FileSystem.getInfoAsync` / `deleteAsync` methods were replaced
+   with `expo-file-system/legacy` in `e288d12…`.
 
 ### B. Server actual-byte/speech validator: blocked on feasibility
 
@@ -147,8 +143,11 @@ Link, do not regenerate:
   later unexecuted candidate/harness correction.
 - `scripts/voice-audio-validation-spike/{README.md,benchmark.ts,prepare-fixtures.ts,decoder/}`
   and
-  `docs/research/voice-audio-validation-spike/{fixtures.template.json,results.template.json}`.
-  Pinned research remains **BLOCKED/UNMEASURED**.
+  `docs/research/voice-audio-validation-spike/{fixtures.template.json,results.template.json}`
+  (original committed templates reflect historical unmeasured baseline; newer
+  actual 10 synthetic negative/control measurements are recorded in the
+  [feasibility report](../../docs/research/voice-audio-validation-spike/feasibility-2026-10-12.md);
+  production speech validation remains **BLOCKED**).
 - Official Expo SDK 55
   [filesystem root](https://docs.expo.dev/versions/v55.0.0/sdk/filesystem/) and
   [legacy](https://docs.expo.dev/versions/v55.0.0/sdk/filesystem-legacy/) docs,
@@ -181,11 +180,13 @@ independent minimal-source review PASS. Owner native/device validation remains
    test seam review. Owner native/device validation remains **NOT RUN** until
    later evidence.
 
-## Phase 2 — Speech feasibility (BLOCKED; no execution here)
+## Phase 2 — Speech feasibility (PARTIAL feasibility; production BLOCKED)
 
-1. A separately permitted executor with installed pinned toolchain and
-   provenance; never retry blocked `deno.exe`/FFmpeg in the present lean-ctx
-   environment or route around protection.
+1. A verified local toolchain (Rust 1.97.1, Cargo 1.97.1, MSVC 14.44, wasm-pack
+   0.15.0, Deno 2.9.7, FFmpeg 9.0.2) compiled and evaluated 10 synthetic
+   negative and invalid controls on the local Deno proxy on 2026-10-12;
+   remaining Edge-compatible engine and licensed quiet speech corpus gates
+   remain blocking; no individually blocked command retry or protection bypass.
 2. Verify Rust/Symphonia AAC-LC + ISO MP4 WASM compile; correct wasm-bindgen web
    ES initializer; pinned Silero model + ORT 1.22.0 load, tensor shapes,
    sample-rate context and per-clip state reset. Stop and record first real
@@ -275,9 +276,10 @@ research/harness listed above.
 Provisional full remaining effort **8–14 hours only after feasibility inputs
 exist**: **2–4h** readiness/benchmark, **4–7h** approved implementation/tests
 (includes **30–60min** cleanup), **2–3h** independent review/root integration.
-Missing permitted runtime or licensed positives prevents reliable scheduling of
-speech completion. No unmeasured 1–2-second startup timing promise; that work is
-in the separate startup branch.
+Local permitted runtime prerequisite was fulfilled on 2026-10-12; missing
+licensed quiet speech positives and Edge-compatible non-shared WASM candidate
+prevent reliable scheduling of speech completion. Startup work was completed
+independently in published PR #383 (`213b392…`).
 
 ## Complexity Tracking
 

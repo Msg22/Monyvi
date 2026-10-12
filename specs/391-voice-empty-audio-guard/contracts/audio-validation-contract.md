@@ -2,10 +2,13 @@
 
 **Date:** 2026-10-12. **Status:** DECISION GATES OPEN for speech; cleanup
 compatibility is implemented and tested test-first (RED → import-only legacy
-import → focused GREEN).<br> **Source:** published Voice
-`f625183373e29d372b658c10b3848a217477400a` on stacked research branch
-`a7e1e00e118b4b8a989387d48181fdde0c821f3d`.<br> **Canonical context:**
-[#391 spec](../spec.md),
+import → focused GREEN); runtime feasibility evaluated on local Deno proxy and
+local Edge Runtime probe (shared memory rejected; speech validation remains
+BLOCKED). See
+[feasibility report](../../../docs/research/voice-audio-validation-spike/feasibility-2026-10-12.md).<br>
+**Source:** published Voice `f625183373e29d372b658c10b3848a217477400a` on
+stacked research branch `a7e1e00e118b4b8a989387d48181fdde0c821f3d`.<br>
+**Canonical context:** [#391 spec](../spec.md),
 [#389 parse-voice quota OpenAPI](../../389-voice-usage-limits/contracts/parse-voice-quota.openapi.yaml),
 [original research](../../../docs/research/voice-empty-audio-guard.md). No
 request/response schema, HTTP response or backend policy is authorized to change
@@ -142,12 +145,15 @@ unknown status.
 - No raw audio, transcripts, financial/user-specific identifiers, provider
   payloads or model probabilities logged.
 
-**Execution evidence:** NONE for the speech portion of this proposed contract.
-Cleanup eligibility differs and is EXECUTED (2026-10-12): test-only RED
-`392a26f7…` (10 fail / 1 pass / 11 total, 7.836s), import-only production
-`84696d74…`, async mock reconciliation `7ad8ed52…`, root focused GREEN 72 tests
-/ 3 suites / 3.809s (filesystem, original, r2 recorder suites), mobile tsc /
-ESLint autofix / formatting / i18n / privacy / diff PASS. The nine
-research/prototype files exist but **no Deno, FFmpeg, Rust/WASM, model, licensed
-speech, CPU/memory/Edge, provider or native tests ran in this planning lane**;
-owner native/device checks remain NOT RUN.
+**Execution evidence:** Offline feasibility evaluated on 2026-10-12 (Rust/WASM
+decoder compiled, 10 synthetic negative/control cases measured on local Deno
+proxy; containerized Supabase Edge Runtime v1.76.2 probe FAILED at runtime on
+shared memory policy; licensed quiet speech positives remain 0/9 acquired;
+response/error contracts unapproved). Cleanup eligibility differs and is
+EXECUTED (2026-10-12): test-only RED `392a26f7…` (10 fail / 1 pass / 11 total,
+7.836s), import-only production `84696d74…`, async mock reconciliation
+`7ad8ed52…`, ESLint repair in published `e288d12…`, root final GREEN 72 tests /
+3 suites / 3.809s (filesystem, original, r2 recorder suites), mobile tsc /
+ESLint autofix / formatting / i18n / privacy / diff PASS. Authoritative server
+speech validation, public rejection codes, and live production deployment remain
+BLOCKED. owner native/device checks remain NOT RUN.

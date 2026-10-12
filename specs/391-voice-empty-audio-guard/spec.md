@@ -3,11 +3,12 @@
 **Feature Branch**: `codex/voice-empty-audio-guard`<br> **Date**: 2026-10-12<br>
 **Status**: US1 cleanup slice EXECUTED test-first (RED → import-only legacy
 import → focused GREEN, root final batch PASS); authoritative speech validation
-remains BLOCKED on feasibility and contract decisions. No speech benchmark,
-decoder run, or device run is implied.<br> **Published source basis**: Voice
-`f625183373e29d372b658c10b3848a217477400a`; stacked research branch
-`a7e1e00e118b4b8a989387d48181fdde0c821f3d` (preserves nine prototype/research
-files).<br> **Authority**:
+remains BLOCKED on Edge Runtime shared memory incompatibility and missing
+positive corpus. See
+[feasibility report](../../docs/research/voice-audio-validation-spike/feasibility-2026-10-12.md).<br>
+**Published source basis**: Voice `f625183373e29d372b658c10b3848a217477400a`;
+stacked research branch `a7e1e00e118b4b8a989387d48181fdde0c821f3d` (preserves
+nine prototype/research files).<br> **Authority**:
 [issue #391](https://github.com/Msg22/Monyvi/issues/391),
 [feature 389](../389-voice-usage-limits/spec.md),
 [business rules](../../docs/business/business-decisions.md),
@@ -256,8 +257,8 @@ and resource results). **No schema/migration is authorized.**
   verified.
 - **SC-009:** One root-owned final integration/quality batch precedes any
   authorized publication; the cleanup slice's root final batch PASSED
-  (2026-10-12) but no speech execution, CI or publication is claimed by this
-  planning artifact.
+  (2026-10-12) but no production speech-validator execution, CI or publication
+  is claimed by this planning artifact.
 
 ## Assumptions and Open Gates
 
@@ -270,10 +271,16 @@ and resource results). **No schema/migration is authorized.**
 
 **BLOCKED**: Edge decoder/VAD integration, missing quiet licensed positives
 (research candidates ArzEn, FLEURS and Common Voice are identified; none
-acquired), runtime CPU/memory/bundle measurements, threshold/padding choices,
-released-terminal retry and same-key validation concurrency, new HTTP/copy, and
-user-visible rejection semantics. The research's prototype was **never
-executed**. No user data/recordings are available to this planning worker.
+acquired in the public corpus), runtime CPU/memory/bundle measurements,
+threshold/padding choices, released-terminal retry and same-key validation
+concurrency, new HTTP/copy, and user-visible rejection semantics. Offline
+feasibility was evaluated on 2026-10-12 (Deno proxy decoded and evaluated
+synthetic negative controls; no production classification approved; local Edge
+Runtime probe failed on shared memory policy; see
+[feasibility report](../../docs/research/voice-audio-validation-spike/feasibility-2026-10-12.md)).
+No user data/recordings are available to this planning worker; private owner
+audio evaluated by the root orchestrator remains excluded from the public
+corpus.
 
 **Parallel ownership**: root's startup worker owns `codex/voice-startup-latency`
 route/flow/availability. It must not be touched by this #391 lane. No

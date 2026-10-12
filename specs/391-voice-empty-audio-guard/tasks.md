@@ -1,9 +1,12 @@
 # Tasks: #391 Voice Empty-Audio Guard and SDK55 Cleanup
 
 **Date**: 2026-10-12 | **Branch**: `codex/voice-empty-audio-guard` | **Status**:
-Root readiness T001–T004 verified; **US1 cleanup T005–T010 are EXECUTED**
-(test-only RED → import-only legacy → focused GREEN); speech implementation
-remains BLOCKED.<br> **Prerequisites**: [spec](./spec.md), [plan](./plan.md),
+Root readiness T001–T004 verified; **US1 cleanup T005–T010 EXECUTED**; **US2
+feasibility T011–T012 EXECUTED, T013–T014 PARTIAL, T015–T016 BLOCKED** (Edge
+Runtime shared memory policy rejection; speech implementation remains BLOCKED).
+See
+[feasibility report](../../docs/research/voice-audio-validation-spike/feasibility-2026-10-12.md).<br>
+**Prerequisites**: [spec](./spec.md), [plan](./plan.md),
 [proposed contract](./contracts/audio-validation-contract.md),
 [analysis](./checklists/analysis.md),
 [owner manual plan](./checklists/manual-plan.md),
@@ -11,9 +14,8 @@ remains BLOCKED.<br> **Prerequisites**: [spec](./spec.md), [plan](./plan.md),
 gate**: root-only actual RED before production. **Owner of startup
 route/flow/availability:** another worker on `codex/voice-startup-latency`,
 inaccessible for writes here. Root alone mutates issue, root integration refs,
-feature push/PR and runs final checks. T001–T004 readiness and US1 T005–T010 are
-root/source verified; **T011–T032 remain unchecked** and the published nine-file
-spike has **not** been run.
+feature push/PR and runs final checks. T001–T004 readiness, US1 T005–T010, and
+US2 T011–T012 are verified; **T013–T032 remain unchecked** (T013-T014 partial).
 
 ## Format and ownership
 
@@ -48,12 +50,12 @@ or GREEN.
       HIGH/BLOCKED**. Planned cleanup FR001–003 maps to T004–T010; no validator,
       SQL policy, server production or user-visible copy gate cleared. No
       optional hooks.
-- [x] **T004** Root verified `expo-file-system@55.0.23` via `npm ls`
-      **package-lock-only** and the actual junction runtime; no installation or
-      lockfile change. Published `useVoiceRecorder.ts` still imports deprecated
-      root `getInfoAsync`/`deleteAsync`, and the existing fixture mocks them.
-      SDK55 supports asynchronous `expo-file-system/legacy`. **Real RED has not
-      yet run**.
+- [x] **T004** Historical baseline: Voice `f625183…` imported deprecated root
+      `expo-file-system` async methods. Root verified `expo-file-system@55.0.23`
+      via `npm ls` package-lock-only. TDD cycle executed: actual RED `392a26f7…`
+      accepted, import-only production `84696d74…` and test mock update
+      `7ad8ed52…` landed, and full GREEN verified in published
+      `e288d12026bd7076682a6d89b6446bc13c228cab`. **Check completed.**
 
 **Checkpoint A:** Cleanup TDD authority granted by root; T005–T010 are now
 EXECUTED (RED → import-only → focused GREEN). Speech feasibility and
@@ -101,7 +103,8 @@ and native-release/cleanup ordering intact.
       additional defect. **EXECUTED: production commit
       `84696d745bb8e0fdb37b079a6c76e75af18e7db6` changes only the legacy import;
       async mock reconciliation in `7ad8ed5295f05a6f844f82ec2b2727af206fa906`;
-      ESLint repair to the dedicated test is a local uncommitted change.**
+      ESLint repair to the dedicated test included in published
+      `e288d12026bd7076682a6d89b6446bc13c228cab`.**
 - [x] **T009 [US1]** Root executes focused GREEN for
       `useVoiceRecorder.filesystem.test.ts`, `useVoiceRecorder.test.ts`,
       `useVoiceRecorder.r2.test.ts` plus TypeScript and relevant lint. Ensure no
@@ -122,17 +125,20 @@ though US1 is green.
 
 ## Phase 3: User Story 2 — Prove actual-byte speech feasibility (P1; BLOCKED)
 
-- [ ] **T011 [US2]** Preserve `docs/research/voice-empty-audio-guard.md`,
+- [x] **T011 [US2]** Preserve `docs/research/voice-empty-audio-guard.md`,
       `scripts/voice-audio-validation-spike/README.md`, Rust decoder/harness and
       `docs/research/voice-audio-validation-spike/{fixtures.template.json,results.template.json}`
-      unchanged; root confirms original 19 cases are **MISSING/UNMEASURED**, not
-      validated.
-- [ ] **T012 [US2]** In a **separately permitted** runtime with approved tools
-      already present, record exact SHA, rustc/wasm-pack/Deno/ORT/model/FFmpeg
-      versions and LICENSE/provenance, build Symphonia AAC+ISO MP4 WASM and
-      explicitly initialize it with generated web-target glue. Stop on first
-      actual compile/import failure. Existing lean-ctx Deno/FFmpeg denial is
-      **final and must not be retried/bypassed**.
+      unchanged; root confirms original 19 cases were historical templates; 10
+      synthetic negative/invalid controls evaluated and 9 quiet speech positives
+      remain MISSING/UNMEASURED (see
+      [feasibility report](../../docs/research/voice-audio-validation-spike/feasibility-2026-10-12.md)).
+- [x] **T012 [US2]** In a separately permitted runtime (Rust 1.97.1, cargo
+      1.97.1, wasm-pack 0.15.0, MSVC BuildTools 14.44.35207 process-locally
+      activated, Deno 2.9.7, FFmpeg 9.0.2), compile Symphonia 0.6.1 AAC+ISO MP4
+      WASM (`voice_decoder_bg.wasm`, 432,802 bytes, SHA256: `106ef6b2...`) and
+      explicitly initialize with generated web-target glue. Clean build exit 0;
+      verified Deno proxy PCM decode and ONNX Runtime Web 1.22.0 single-thread
+      initialization.
 - [ ] **T013 [US2]** Supply nine synthetic AAC/M4A negatives (digital silence,
       fan proxy, traffic proxy ×5/15/30) and invalid-byte control with SHA256
       and provenance; obtain nine **licensed** quiet Egyptian Arabic, English
@@ -140,22 +146,41 @@ though US1 is green.
       speech, breathing, handling/room and varied speakers. No user/customer
       audio or unlicensed media. Store only ignored local assets. **Research
       candidates ArzEn, FLEURS and Common Voice are identified, but no licensed
-      quiet/code-switch positive fixtures are acquired.**
+      quiet/code-switch positive fixtures are acquired.** _Actual status
+      (2026-10-12):_ PARTIAL. 9 synthetic negatives and 1 invalid control
+      generated and measured; licensed quiet speech positives remain 0/9
+      MISSING. Private owner audio evaluated in an authorized local trial is
+      excluded from the public corpus.
 - [ ] **T014 [US2]** Measure actual decoder PCM/sample-rate/mono/16k resampling
       behavior, codec padding/truncated containers and Silero ONNX tensor/state
       import for 5/15/30 cases; verify model and ORT WASM checksums and per-clip
-      reset. No raw-audio upload/Gemini.
+      reset. No raw-audio upload/Gemini. _Actual status (2026-10-12):_ PARTIAL.
+      Resampling (44.1kHz → 16kHz mono), state reset, and Silero ONNX tensor
+      evaluation measured on local Deno proxy across 10 synthetic
+      negatives/controls. Model/WASM checksums verified. Truncated/padding and
+      positive speech checks remain incomplete.
 - [ ] **T015 [US2]** Run repeated permitted cold/warm full decoder+VAD
       measurements with separate CPU/wall per phase, true peak memory, function
       bundle/model/WASM bytes and hosted Edge resource evidence. Local
       `process.cpuUsage` and RSS checkpoints are **not** Edge CPU/true peak
-      proof; root records tested source/binary SHA and headroom.
+      proof; root records tested source/binary SHA and headroom. _Actual status
+      (2026-10-12):_ BLOCKED. Cold Deno proxy (30s: init 812.78ms, audio
+      1,996.13ms, end-to-end 2,808.91ms, process CPU proxy 4,234ms, RSS 180.68
+      MB / 172.31 MiB) and in-session warm pipeline measured. Edge Runtime
+      v1.76.2 probe passed CLI bundle limit (user-r4.eszip: 14,300,416 bytes =
+      14.30 MB / 13.64 MiB < 20 MB CLI limit; exceeds 5 MB server Management API
+      limit), but failed at runtime
+      (`TypeError: Creating a shared memory is not supported`) due to isolate
+      policy forbidding shared WebAssembly memory required by the pinned
+      threaded distribution. Actual isolated Edge CPU and true peak memory
+      remain UNMEASURED; candidate is BLOCKED on Edge.
 - [ ] **T016 [US2]** Report per-language/noise FNR/FPR, false-rejection cases
       and a candidate threshold grid without setting product thresholds.
       Root/product decides viability and high-recall acceptance. If any
       tool/license/accuracy/Edge resource gate missing, **STOP: US2 production
       BLOCKED**; do not downgrade to metering, duration, WebRTC defaults or a
-      new hosted service.
+      new hosted service. _Actual status (2026-10-12):_ BLOCKED pending
+      Edge-compatible non-shared candidate and licensed quiet speech corpus.
 
 ## Phase 4: User Story 2 — Reconcile authoritative server contract and TDD (BLOCKED until T011–T016 + decisions)
 
@@ -255,11 +280,15 @@ check batch before any requested publication.
 ## Implementation strategy and status notes
 
 **First independently deliverable slice** is supported SDK55 cleanup; its
-RED→import-only→focused-GREEN path is now **EXECUTED** (T005–T010). Entire #391
-remains provisionally **8–14 hours after tools/fixtures/decisions are
-available** (2–4h feasibility, 4–7h implementation/tests including cleanup, 2–3h
-review/integration). The current decoder/VAD prototype has **never run**. No
-future action is implied or scheduled by documentation. No numeric model
+RED→import-only→focused-GREEN path is now **EXECUTED** (T005–T010, root final
+batch 72 tests / 3 suites PASS). Entire #391 remains provisionally **8–14 hours
+after tools/fixtures/decisions are available** (2–4h feasibility, 4–7h
+implementation/tests including cleanup, 2–3h review/integration). Offline
+feasibility evaluated 2026-10-12 (Deno proxy decoded and evaluated synthetic
+negative controls; no production threshold or classification approved, local
+Edge Runtime probe failed on shared memory policy; see
+[feasibility report](../../docs/research/voice-audio-validation-spike/feasibility-2026-10-12.md)).
+No future action is implied or scheduled by documentation. No numeric model
 threshold, false-negative tolerance or decoder gapless/padding slack has been
 selected.
 
