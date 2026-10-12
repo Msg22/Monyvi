@@ -82,22 +82,26 @@ beforeEach((): void => {
     granted: true,
     canAskAgain: true,
   });
-  mockGetInfoAsync.mockReset().mockImplementation(
-    async (uri: string): Promise<FileInfo> => ({
-      exists: existingFiles.has(uri),
-    })
-  );
-  mockDeleteAsync.mockReset().mockImplementation(
-    async (
-      uri: string,
-      options?: { readonly idempotent?: boolean }
-    ): Promise<void> => {
-      if (!existingFiles.has(uri) && options?.idempotent !== true) {
-        throw new Error("File is missing");
+  mockGetInfoAsync
+    .mockReset()
+    .mockImplementation(
+      (uri: string): Promise<FileInfo> =>
+        Promise.resolve({ exists: existingFiles.has(uri) })
+    );
+  mockDeleteAsync
+    .mockReset()
+    .mockImplementation(
+      (
+        uri: string,
+        options?: { readonly idempotent?: boolean }
+      ): Promise<void> => {
+        if (!existingFiles.has(uri) && options?.idempotent !== true) {
+          return Promise.reject(new Error("File is missing"));
+        }
+        existingFiles.delete(uri);
+        return Promise.resolve();
       }
-      existingFiles.delete(uri);
-    }
-  );
+    );
   jest
     .spyOn(AppState, "addEventListener")
     .mockImplementation(() => ({ remove: jest.fn() }));
@@ -136,7 +140,7 @@ describe("#391 SDK55 temporary recording filesystem adapter", () => {
     await actAsync(async (): Promise<void> => {
       expect(await unwrap(result).stop()).toEqual({
         uri: KNOWN_URI,
-        durationMs: expect.any(Number),
+        durationMs: expect.any(Number) as number,
       });
     });
     await actAsync(async (): Promise<void> => {
@@ -179,9 +183,7 @@ describe("#391 SDK55 temporary recording filesystem adapter", () => {
   it("retains a real deletion failure and warns without pretending that the file disappeared", async (): Promise<void> => {
     const ioError = new Error("Simulated filesystem I/O failure");
     mockDeleteAsync.mockImplementationOnce(
-      async (): Promise<void> => {
-        throw ioError;
-      }
+      (): Promise<void> => Promise.reject(ioError)
     );
     const warn = jest.spyOn(logger, "warn").mockImplementation((): void => {});
     const { result } = renderHook(() => useVoiceRecorder());
@@ -205,7 +207,9 @@ describe("#391 SDK55 temporary recording filesystem adapter", () => {
     "deletes the pre-release partial URI after %s without a second Stop",
     async (failure): Promise<void> => {
       if (failure === "failed-native-stop") {
-        mockStop.mockRejectedValueOnce(new Error("Simulated native Stop failure"));
+        mockStop.mockRejectedValueOnce(
+          new Error("Simulated native Stop failure")
+        );
       } else {
         mockStop.mockImplementationOnce((): Promise<void> => {
           setMockRecorderUri(null);
