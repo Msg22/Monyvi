@@ -142,6 +142,7 @@
   "voice_action_resume": "Resume",
   "voice_action_discard": "Discard",
   "voice_recording_too_short": "Recording too short. Please speak for at least 1.5 seconds.",
+  "voice_recording_silent": "We couldn’t hear anything. Please try recording again.",
   "voice_recording_finalize_failed": "Failed to finalize recording. Please try again.",
   "voice_no_transactions_found": "No transactions found in your recording. Try again?",
   "sms_review_title": "Review SMS Transactions",

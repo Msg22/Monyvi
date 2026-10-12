@@ -37,6 +37,7 @@ import {
   markVoiceAiProviderStarted,
   reserveVoiceAiWork,
 } from "../_shared/voice-ai-safeguard-service.ts";
+import { logVoiceAiUsageTelemetry } from "../_shared/voice-ai-usage-telemetry.ts";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -440,6 +441,13 @@ async function processWithRetry(
           temperature: 0,
         },
       });
+
+      // Observe canonical SDK response usageMetadata immediately after EACH
+      // returned generateContent attempt, before reading response.text / JSON parse.
+      // Inspection and sink failure are swallowed in specifically non-throwing
+      // observability boundary. Passing a lazy reader ensures getter throws on
+      // response.usageMetadata do not leak into retry/error handling.
+      logVoiceAiUsageTelemetry(() => response.usageMetadata, attempt);
 
       const text = response.text;
       if (!text) {

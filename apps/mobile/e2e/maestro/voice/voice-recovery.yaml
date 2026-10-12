@@ -100,3 +100,6 @@ appId: com.monyvi.app
 # provider harness exists; the three R2 recording-state action surfaces and
 # inline one-fresh-permission count have Jest-only RED plus owner manual evidence.
 # No step here requests OS permission or uses Voice's Try again/start action.
+# #391 note: local silence metering threshold calibration (< -70 dBFS),
+# speech-pass preservation, and silence error recovery are covered via unit
+# suites and manual owner verification; NOT RUN in this automated baseline.

@@ -29,3 +29,4 @@ export * from "./budget";
 export * from "./financial-actions";
 export * from "./metals";
 export * from "./voice-ai-safeguard-contract";
+export * from "./voice-silence-guard";

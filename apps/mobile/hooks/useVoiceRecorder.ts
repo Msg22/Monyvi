@@ -1,24 +1,12 @@
 /**
  * useVoiceRecorder Hook
  *
- * Encapsulates the expo-audio recording lifecycle with state management,
- * a 30-second ACTIVE-capture cap (paused time excluded), and temp file
- * cleanup.
+ * Encapsulates expo-audio recording lifecycle with state management,
+ * 30s ACTIVE-capture cap (paused time excluded), and temp file cleanup.
  *
- * Architecture & Design Rationale:
- * - Pattern: Custom Hook (Adapter Pattern)
- * - Why: Isolates native recording API behind a clean React interface.
- *   Components only see status/actions, never the raw AudioRecorder.
- * - SOLID: SRP — recording only. OCP — extends via status callbacks
- *   without modifying existing consumers.
- *
- * NOTE: We intentionally bypass `useAudioRecorder` (which uses
- * `useReleasingSharedObject`) and manage the AudioRecorder lifecycle
- * manually via refs. This avoids a known expo-audio@0.3.x bug where
- * `useReleasingSharedObject` prematurely releases the native shared
- * object on re-renders, causing "Cannot use shared object that was
- * already released" → "Integer instead of AudioRecorder" errors.
- * See: https://github.com/expo/expo/issues/35589
+ * Pattern: Custom Hook (Adapter Pattern)
+ * Note: Bypasses useAudioRecorder to manage AudioRecorder lifecycle manually
+ * via refs, avoiding expo-audio@0.3.x shared object bug (expo/expo#35589).
  *
  * @module useVoiceRecorder
  */
@@ -34,6 +22,11 @@ import {
 import * as FileSystem from "expo-file-system/legacy";
 import { Platform } from "react-native";
 import {
+  createAudioMeteringAccumulator,
+  type AudioMeteringSummary,
+} from "@monyvi/logic";
+import { sampleRecorderMetering } from "@/services/voice-metering-service";
+import {
   useMicrophonePermission,
   type MicrophonePermissionStatus,
 } from "./useMicrophonePermission";
@@ -43,31 +36,16 @@ import { logger } from "@/utils/logger";
 // Constants
 // ---------------------------------------------------------------------------
 
-/**
- * Maximum ACTIVE capture duration in milliseconds (FR-045, SC-020).
- *
- * The budget counts only time spent actively recording: paused wall time is
- * excluded, and the countdown starts only after the native `record()` call
- * succeeds. The 300 ms post-record stabilization counts as capture because it
- * happens after `record()`.
- */
+/** Maximum ACTIVE capture duration in milliseconds (FR-045, SC-020). */
 const ACTIVE_CAPTURE_CAP_MS = 30_000;
 
 /** Timer tick interval in milliseconds. */
 const TIMER_TICK_MS = 100;
 
-/**
- * Delay (ms) after calling `record()` before marking the recorder as ready.
- * Gives Android's MediaRecorder.start() time to transition on the native thread.
- *
- * Exported for test usage so tests reference the same constant.
- */
+/** Delay (ms) after calling record() before marking recorder ready (Android stabilization). */
 export const NATIVE_STABILIZATION_DELAY_MS = 300;
 
-/**
- * Maximum time (ms) stop() will wait for the native recorder to become ready
- * before giving up. Prevents indefinite hangs if start() fails silently.
- */
+/** Maximum time (ms) stop() waits for native recorder to become ready. */
 const STOP_READINESS_TIMEOUT_MS = 2000;
 
 /** Polling interval (ms) for readiness checks in stop(). */
@@ -79,7 +57,13 @@ const READINESS_POLL_INTERVAL_MS = 50;
 
 type RecorderStatus = "idle" | "recording" | "paused" | "completed" | "error";
 
-interface VoiceRecorderResult {
+export interface VoiceRecorderStopResult {
+  readonly uri: string;
+  readonly durationMs: number;
+  readonly metering: AudioMeteringSummary | null;
+}
+
+export interface VoiceRecorderResult {
   /** Current recording status */
   readonly status: RecorderStatus;
   /** Elapsed recording time in milliseconds (excludes paused time) */
@@ -88,6 +72,8 @@ interface VoiceRecorderResult {
   readonly isRecording: boolean;
   /** Audio URI after recording completes */
   readonly audioUri: string | null;
+  /** Finalized audio metering snapshot (null while active or unmetered) */
+  readonly meteringSnapshot: AudioMeteringSummary | null;
   /** Whether microphone permission is granted */
   readonly hasPermission: boolean;
   readonly permissionStatus: MicrophonePermissionStatus;
@@ -102,8 +88,8 @@ interface VoiceRecorderResult {
   readonly pause: () => boolean;
   /** Resume a paused recording */
   readonly resume: () => boolean;
-  /** Stop the recording and finalize the audio file */
-  readonly stop: () => Promise<{ uri: string; durationMs: number } | null>;
+  /** Stop the recording and finalize the audio file and metering summary */
+  readonly stop: () => Promise<VoiceRecorderStopResult | null>;
   /** Discard the recording and clean up temp files (FR-021) */
   readonly discard: () => Promise<void>;
   /** Request microphone permission */
@@ -179,14 +165,14 @@ function flattenPlatformOptions(
     sampleRate: options.sampleRate,
     numberOfChannels: options.numberOfChannels,
     bitRate: options.bitRate,
-    isMeteringEnabled: options.isMeteringEnabled ?? false,
+    isMeteringEnabled: true,
   };
 
   if (Platform.OS === "ios" && options.ios) {
-    return { ...common, ...options.ios };
+    return { ...common, ...options.ios, isMeteringEnabled: true };
   }
   if (Platform.OS === "android" && options.android) {
-    return { ...common, ...options.android };
+    return { ...common, ...options.android, isMeteringEnabled: true };
   }
   return common;
 }
@@ -219,6 +205,8 @@ export function useVoiceRecorder(): VoiceRecorderResult {
   const [status, setStatus] = useState<RecorderStatus>("idle");
   const [durationMs, setDurationMs] = useState(0);
   const [audioUri, setAudioUri] = useState<string | null>(null);
+  const [meteringSnapshot, setMeteringSnapshot] =
+    useState<AudioMeteringSummary | null>(null);
   const {
     hasPermission,
     permissionStatus,
@@ -233,47 +221,23 @@ export function useVoiceRecorder(): VoiceRecorderResult {
   const stopAttemptUriRef = useRef<string | null>(null);
   audioUriRef.current = audioUri;
 
-  /**
-   * Updates the retained audio URI in both React state and the synchronous
-   * ref, so cleanup paths that run before the next render (discard/reset/
-   * unmount racing a cap finalization) observe the authoritative value.
-   */
   const applyAudioUri = useCallback((uri: string | null): void => {
     audioUriRef.current = uri;
     setAudioUri(uri);
   }, []);
 
-  // Refs for timer management
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const capTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastTickRef = useRef<number>(0);
   const accumulatedMsRef = useRef<number>(0);
-
-  /**
-   * Holds the latest active-cap finalizer so the one-shot cap timeout always
-   * invokes the current render's closure. Declared as a ref because the cap
-   * timeout is scheduled by `startTimer`, which is created before `stop`.
-   */
+  const accumulatorRef = useRef(createAudioMeteringAccumulator());
+  const finalizedMeteringSnapshotRef = useRef<AudioMeteringSummary | null>(
+    null
+  );
   const capFinalizeRef = useRef<() => void>(() => undefined);
-
-  /**
-   * Tracks whether the native MediaRecorder is in a state that accepts
-   * pause/stop. Set to `true` after `record()` + stabilization delay,
-   * and `false` after `stop()` or on error recovery.
-   */
   const nativeReadyRef = useRef(false);
-
-  /**
-   * Ref to track the current status synchronously (avoids stale closure
-   * issues in callbacks where React state hasn't re-rendered yet).
-   */
   const statusRef = useRef<RecorderStatus>("idle");
 
-  /**
-   * Tracks the in-flight start promise so discard() can await it
-   * before attempting cleanup. Prevents race conditions where discard()
-   * clears state while start()'s stabilization delay is still pending.
-   */
   const nativeStartPromiseRef = useRef<Promise<void> | null>(null);
   const nativeStopPromiseRef = useRef<Promise<string | null> | null>(null);
   const cleanupPromiseRef = useRef<Promise<void> | null>(null);
@@ -282,15 +246,9 @@ export function useVoiceRecorder(): VoiceRecorderResult {
   >(() => Promise.resolve());
   const discardPromiseRef = useRef<Promise<void> | null>(null);
 
-  /**
-   * The single in-flight public `stop()` finalization, shared so a second
-   * Stop/Submit during a deferred native stop awaits the same result instead
-   * of observing `completed` and returning null.
-   */
-  const stopResultRef = useRef<Promise<{
-    uri: string;
-    durationMs: number;
-  } | null> | null>(null);
+  const stopResultRef = useRef<Promise<VoiceRecorderStopResult | null> | null>(
+    null
+  );
 
   /**
    * AbortController aborted on unmount to cancel any in-flight
@@ -299,9 +257,11 @@ export function useVoiceRecorder(): VoiceRecorderResult {
    */
   const unmountAbortRef = useRef(new AbortController());
 
-  // ---------------------------------------------------------------------------
-  // Permission
-  // ---------------------------------------------------------------------------
+  const resetMeteringState = useCallback((): void => {
+    accumulatorRef.current.reset();
+    finalizedMeteringSnapshotRef.current = null;
+    setMeteringSnapshot(null);
+  }, []);
 
   // ---------------------------------------------------------------------------
   // Timer helpers
@@ -330,7 +290,12 @@ export function useVoiceRecorder(): VoiceRecorderResult {
   const startTimer = useCallback((): void => {
     lastTickRef.current = Date.now();
     timerRef.current = setInterval(() => {
-      flushElapsed();
+      const elapsed = flushElapsed();
+      sampleRecorderMetering(
+        recorderRef.current,
+        accumulatorRef.current,
+        elapsed
+      );
     }, TIMER_TICK_MS);
 
     // One-shot wall-clock deadline for the remaining ACTIVE budget. Recomputed
@@ -508,6 +473,7 @@ export function useVoiceRecorder(): VoiceRecorderResult {
           // Reset state
           accumulatedMsRef.current = 0;
           nativeReadyRef.current = false;
+          resetMeteringState();
           setDurationMs(0);
           stopAttemptUriRef.current = null;
           applyAudioUri(null);
@@ -561,7 +527,13 @@ export function useVoiceRecorder(): VoiceRecorderResult {
           nativeStartPromiseRef.current = null;
       }
     },
-    [applyAudioUri, pauseSafely, releaseRecorder, startTimer]
+    [
+      applyAudioUri,
+      pauseSafely,
+      releaseRecorder,
+      resetMeteringState,
+      startTimer,
+    ]
   );
 
   const pause = useCallback((): boolean => {
@@ -593,104 +565,109 @@ export function useVoiceRecorder(): VoiceRecorderResult {
     }
   }, [startTimer]);
 
-  const stop = useCallback(async (): Promise<{
-    uri: string;
-    durationMs: number;
-  } | null> => {
-    // Cap and Submit share one in-flight native stop.
-    const inFlightStop = stopResultRef.current;
-    if (inFlightStop !== null) {
-      return inFlightStop;
-    }
-
-    pendingPauseGenerationRef.current = null;
-    if (statusRef.current !== "recording" && statusRef.current !== "paused") {
-      return null;
-    }
-
-    // Guard against Discard, unmount and replacement generations.
-    const sessionGeneration = startGenerationRef.current;
-    const recorder = recorderRef.current;
-    if (!recorder) return null;
-    const isCurrentSession = (): boolean =>
-      sessionGeneration === startGenerationRef.current &&
-      recorderRef.current === recorder &&
-      !unmountAbortRef.current.signal.aborted;
-    const failFinalization = (): void => {
-      if (!isCurrentSession()) return;
-      nativeReadyRef.current = false;
-      statusRef.current = "error";
-      setStatus("error");
-      void cleanupRecorderResourcesRef.current(stopAttemptUriRef.current);
-    };
-    const stopPromise = (async (): Promise<{
-      uri: string;
-      durationMs: number;
-    } | null> => {
-      // Early Stop waits for native stabilization.
-      if (!nativeReadyRef.current) {
-        if (nativeStartPromiseRef.current) {
-          try {
-            await nativeStartPromiseRef.current;
-          } catch {
-            return null;
-          }
-          if (!isCurrentSession()) return null;
-        }
-
-        const ready = await waitForCondition(
-          () => isCurrentSession() && nativeReadyRef.current,
-          STOP_READINESS_TIMEOUT_MS,
-          READINESS_POLL_INTERVAL_MS,
-          unmountAbortRef.current.signal
-        );
-        if (!isCurrentSession()) return null;
-
-        if (!ready) {
-          logger.warn("voice.recorder.stopReadinessTimeout");
-          return null;
-        }
+  const stop =
+    useCallback(async (): Promise<VoiceRecorderStopResult | null> => {
+      // Cap and Submit share one in-flight native stop.
+      const inFlightStop = stopResultRef.current;
+      if (inFlightStop !== null) {
+        return inFlightStop;
       }
 
-      if (!isCurrentSession()) return null;
-
-      try {
-        if (statusRef.current === "recording") {
-          flushElapsed();
-        }
-        stopTimer();
-        statusRef.current = "completed";
-        try {
-          stopAttemptUriRef.current = recorder.uri ?? audioUriRef.current;
-        } catch (error: unknown) {
-          logger.warn("voice.recorder.captureUriFailed", { error });
-        }
-        const uri = await stopNativeRecorder(recorder);
-        if (!isCurrentSession()) return null;
-        if (!uri) {
-          failFinalization();
-          return null;
-        }
-
-        applyAudioUri(uri);
-        setStatus("completed");
-        return { uri, durationMs: accumulatedMsRef.current };
-      } catch (err: unknown) {
-        logger.error("voice.recorder.stopFailed", err);
-        failFinalization();
+      pendingPauseGenerationRef.current = null;
+      if (statusRef.current !== "recording" && statusRef.current !== "paused") {
         return null;
       }
-    })();
 
-    stopResultRef.current = stopPromise;
-    try {
-      return await stopPromise;
-    } finally {
-      if (stopResultRef.current === stopPromise) {
-        stopResultRef.current = null;
+      // Guard against Discard, unmount and replacement generations.
+      const sessionGeneration = startGenerationRef.current;
+      const recorder = recorderRef.current;
+      if (!recorder) return null;
+      const isCurrentSession = (): boolean =>
+        sessionGeneration === startGenerationRef.current &&
+        recorderRef.current === recorder &&
+        !unmountAbortRef.current.signal.aborted;
+      const failFinalization = (): void => {
+        if (!isCurrentSession()) return;
+        nativeReadyRef.current = false;
+        statusRef.current = "error";
+        setStatus("error");
+        void cleanupRecorderResourcesRef.current(stopAttemptUriRef.current);
+      };
+      const stopPromise =
+        (async (): Promise<VoiceRecorderStopResult | null> => {
+          // Early Stop waits for native stabilization.
+          if (!nativeReadyRef.current) {
+            if (nativeStartPromiseRef.current) {
+              try {
+                await nativeStartPromiseRef.current;
+              } catch {
+                return null;
+              }
+              if (!isCurrentSession()) return null;
+            }
+
+            const ready = await waitForCondition(
+              () => isCurrentSession() && nativeReadyRef.current,
+              STOP_READINESS_TIMEOUT_MS,
+              READINESS_POLL_INTERVAL_MS,
+              unmountAbortRef.current.signal
+            );
+            if (!isCurrentSession()) return null;
+
+            if (!ready) {
+              logger.warn("voice.recorder.stopReadinessTimeout");
+              return null;
+            }
+          }
+
+          if (!isCurrentSession()) return null;
+
+          try {
+            if (statusRef.current === "recording") {
+              flushElapsed();
+            }
+            stopTimer();
+            statusRef.current = "completed";
+            try {
+              stopAttemptUriRef.current = recorder.uri ?? audioUriRef.current;
+            } catch (error: unknown) {
+              logger.warn("voice.recorder.captureUriFailed", { error });
+            }
+            const snapshot = accumulatorRef.current.finalize(
+              accumulatedMsRef.current
+            );
+            finalizedMeteringSnapshotRef.current = snapshot;
+            setMeteringSnapshot(snapshot);
+            const uri = await stopNativeRecorder(recorder);
+            if (!isCurrentSession()) return null;
+            if (!uri) {
+              failFinalization();
+              return null;
+            }
+
+            applyAudioUri(uri);
+            setStatus("completed");
+            return {
+              uri,
+              durationMs: accumulatedMsRef.current,
+              metering: snapshot,
+            };
+          } catch (err: unknown) {
+            logger.error("voice.recorder.stopFailed", err);
+            failFinalization();
+            return null;
+          }
+        })();
+
+      stopResultRef.current = stopPromise;
+      try {
+        return await stopPromise;
+      } finally {
+        if (stopResultRef.current === stopPromise) {
+          stopResultRef.current = null;
+        }
       }
-    }
-  }, [applyAudioUri, flushElapsed, stopNativeRecorder, stopTimer]);
+    }, [applyAudioUri, flushElapsed, stopNativeRecorder, stopTimer]);
 
   // ---------------------------------------------------------------------------
   // Active-capture cap (FR-045 / FR-046 / SC-020 / SC-021)
@@ -783,6 +760,7 @@ export function useVoiceRecorder(): VoiceRecorderResult {
         stopAttemptUriRef.current = null;
         accumulatedMsRef.current = 0;
         nativeReadyRef.current = false;
+        resetMeteringState();
       })();
 
       cleanupPromiseRef.current = cleanupPromise;
@@ -793,7 +771,13 @@ export function useVoiceRecorder(): VoiceRecorderResult {
         }
       });
     },
-    [deleteAudioFile, releaseRecorder, stopNativeRecorder, stopTimer]
+    [
+      deleteAudioFile,
+      releaseRecorder,
+      resetMeteringState,
+      stopNativeRecorder,
+      stopTimer,
+    ]
   );
 
   cleanupRecorderResourcesRef.current = cleanupRecorderResources;
@@ -815,6 +799,7 @@ export function useVoiceRecorder(): VoiceRecorderResult {
     const discardPromise = (async (): Promise<void> => {
       try {
         await cleanupRecorderResources();
+        resetMeteringState();
         statusRef.current = "idle";
         setDurationMs(0);
         applyAudioUri(null);
@@ -822,6 +807,7 @@ export function useVoiceRecorder(): VoiceRecorderResult {
       } catch (err: unknown) {
         logger.error("voice.recorder.discardFailed", err);
         releaseRecorder();
+        resetMeteringState();
         statusRef.current = "idle";
         setStatus("idle");
       }
@@ -834,56 +820,51 @@ export function useVoiceRecorder(): VoiceRecorderResult {
         discardPromiseRef.current = null;
       }
     });
-  }, [applyAudioUri, cleanupRecorderResources, releaseRecorder]);
+  }, [
+    applyAudioUri,
+    cleanupRecorderResources,
+    releaseRecorder,
+    resetMeteringState,
+  ]);
 
-  /**
-   * Reset recorder back to idle. If the recorder is in an active state
-   * (recording/paused), delegates to discard() for proper native cleanup
-   * and temp file deletion.
-   */
   const reset = useCallback(async (): Promise<void> => {
     const currentStatus = statusRef.current;
-
     if (
       currentStatus === "recording" ||
       currentStatus === "paused" ||
       currentStatus === "error"
     ) {
-      // Active state — must do proper native teardown + file cleanup
       await discard();
       return;
     }
 
-    // A cap/manual Stop may still be finalizing. Waiting avoids releasing the
-    // recorder under an in-flight stop and lets cleanup delete the retained URI.
     if (nativeStopPromiseRef.current !== null) {
       await discard();
       return;
     }
 
-    // A completed capture still owns a temp file. Discard deletes it before
-    // the reference is dropped (FR-021) instead of releasing and forgetting it.
     if (statusRef.current === "completed" || audioUriRef.current !== null) {
       await discard();
       return;
     }
 
-    // Idle — just clear JS state and release recorder
     stopTimer();
     releaseRecorder();
     accumulatedMsRef.current = 0;
     nativeReadyRef.current = false;
+    resetMeteringState();
     statusRef.current = "idle";
     setDurationMs(0);
     applyAudioUri(null);
     setStatus("idle");
-  }, [applyAudioUri, stopTimer, discard, releaseRecorder]);
+  }, [applyAudioUri, discard, releaseRecorder, resetMeteringState, stopTimer]);
 
   return {
     status,
     durationMs,
     isRecording: status === "recording",
     audioUri,
+    meteringSnapshot,
     hasPermission,
     permissionStatus,
     refreshPermission,

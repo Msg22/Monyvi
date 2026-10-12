@@ -19,6 +19,9 @@ export function recordingTooShortError(): string {
 export function recordingFinalizeError(): string {
   return t("transactions:voice_recording_finalize_failed");
 }
+export function recordingSilentError(): string {
+  return t("transactions:voice_recording_silent");
+}
 export function emptyVoiceResultError(): string {
   return t("transactions:voice_no_transactions_found");
 }

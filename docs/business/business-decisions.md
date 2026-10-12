@@ -1,6 +1,6 @@
 # Monyvi Business Decisions
 
-**Status:** Active product source of truth **Last updated:** 2026-09-04
+**Status:** Active product source of truth **Last updated:** 2026-10-12
 **Scope:** Business and product rules confirmed by the current codebase and
 implementation history.
 
@@ -1056,6 +1056,156 @@ Business rules:
   navigation/first frame, consent, quota, permission and native prepare/record
   stages; do not log audio, transcripts, financial content, identifiers or
   credentials.
+
+### Voice Empty-Audio Guard & Cache-Hit Tracking (Issue #391 decisions, 2026-10-12)
+
+- **On-Device Metering as Pre-Provider Cost Optimization**: On-device audio
+  metering is strictly a client-side cost optimization to prevent unnecessary
+  recording upload and Gemini invocation on clearly silent input. It is **not**
+  authoritative speech proof, voice activity detection (VAD), or
+  background-noise discrimination. Server-side WASM decoding and Silero ONNX VAD
+  are permanently retired.
+- **Inherent Metering Limitations & Conservative Calibration**: Loudness-only
+  metering measures signal power, not speech presence. Very quiet speech and
+  ambient background noise can overlap in amplitude. Metering makes no claim of
+  distinguishing faint speech from quiet ambient room noise or confirming
+  semantic silence. Policy prioritizes high recall of speech over silence
+  rejection: reject **only** recordings meeting strict candidate near-silence
+  criteria with complete, unbroken, valid capture coverage.
+- **Strict Sentinel / Floor Fail-Open Invariant**: On Android, native
+  `getStatus()` maps both `maxAmplitude = 0` and caught native errors
+  (`IllegalStateException`, `RuntimeException`) to the exact sentinel value
+  `-160.0 dBFS`. Because caught driver/hardware errors and zero-amplitude share
+  the exact same floor value, density or frequency of `-160.0 dBFS` samples does
+  NOT establish validity. Any observation of a floor or sentinel sample
+  (`level <= -160.0 dBFS`) poisons that capture generation and **must fail
+  open** to the server, regardless of sample count or active duration.
+- **Deterministic Validity & Coverage Constants**:
+  - `METERING_SILENCE_THRESHOLD_DBFS = -70.0 dBFS`: Evaluated strictly as
+    `sample < -70.0 dBFS`. Any sample at or above `-70.0 dBFS`
+    (`sample >= -70.0 dBFS`), including exact equality at `-70.0 dBFS`, is
+    considered potentially audible and fails open to the server.
+  - `METERING_MIN_ACTIVE_DURATION_MS = 1500 ms`: Minimum active capture duration
+    (paused time excluded).
+  - `METERING_MIN_VALID_SAMPLES = 10`: Minimum count of uncorrupted valid
+    metering samples.
+  - `METERING_MAX_ACTIVE_GAP_MS = 250 ms`: Maximum allowed active time gap
+    between consecutive valid metering samples.
+  - `METERING_MAX_LEADING_UNCOVERED_MS = 200 ms`: Maximum allowed active
+    duration before the first valid metering sample.
+  - `METERING_MAX_TRAILING_UNCOVERED_MS = 200 ms`: Maximum allowed active
+    duration after the last valid metering sample prior to finalization.
+  - Valid sample range: finite double in `(-160.0, 0.0]`.
+  - Native recorder status requirement: native recorder must report
+    `canRecord = true`, `isRecording = true`, and finite positive
+    `durationMillis > 0`. Because installed `expo-audio` Android
+    `AudioRecorder.kt` omits `mediaServicesDidReset` while iOS
+    `AudioRecorder.swift` supplies it, the Android adapter accepts normal
+    absence of `mediaServicesDidReset` (rejecting only if explicitly `true` or
+    malformed), whereas iOS requires `mediaServicesDidReset === false`.
+    Unsupported platforms fail open. Any caught status exception or invalid
+    reading poisons that generation to fail open.
+  - Active tick clock & single poll: sampling runs once per existing 100ms tick
+    on the active capture timer; redundant immediate `getStatus` reads that
+    drain Android `maxAmplitude` and generate artificial floor samples are
+    forbidden. Paused time produces zero samples and does not consume active
+    duration.
+  - Finalization freeze: the final metering snapshot FREEZES existing samples
+    collected before native recorder release (does not mandate an extra final
+    `getStatus` call that drains Android `maxAmplitude`). Normal cap-completed
+    recordings (at 30 seconds) and manual Submits evaluate the exact same
+    finalized snapshot.
+  - Architectural layering: pure threshold and coverage evaluation is
+    encapsulated in `packages/logic` with O(1) running summary counters; native
+    status normalization is in `apps/mobile/services`; React hook
+    `useVoiceRecorder` in `apps/mobile/hooks` owns React lifecycle, timer ticks,
+    refs, and cancellation only without business logic; file budget stays under
+    900 lines per file (baseline 899).
+- **Zero Server Side-Effects on Local Silence Rejection**: A locally rejected
+  recording produces **zero** recording upload, zero `parse-voice` submission,
+  zero work reservation (`voice_ai_reserve_work_at`), and zero provider-start
+  marking (`voice_ai_mark_provider_started`), consuming zero user daily/burst
+  allowance. Routine, unrelated network operations (authentication,
+  profile/consent refreshes, database sync) remain unaffected.
+- **User-Facing Copy & Experience**: When a recording is rejected locally for
+  silence, the app presents the approved friendly message:
+  `"We couldn’t hear anything. Please try recording again."` (Arabic:
+  `"لم نتمكن من سماع أي شيء. يرجى محاولة التسجيل مرة أخرى."`). The user is
+  returned to the Voice interface with fresh retry capability and unimpeded
+  Manual transaction entry access. No new modal, alert dialog, or layout
+  redesign is introduced.
+- **Preserved Existing Boundaries**: The client-side 30-second active capture
+  cap (paused time excluded) and the `durationMs < 1500` minimum duration check
+  are preserved intact. Server API contracts, schemas, RPCs, and accounting
+  tables (including SQL 087 35-day identity and concurrency contracts) remain
+  completely unchanged in source. Mocked Edge handler and RPC regression tests
+  verify parameter shapes and error mappings but do NOT execute PostgreSQL
+  stored procedures, RLS, retention, or row-level locking concurrency; live
+  database integration, physical devices, and live Gemini provider calls are NOT
+  marked proven.
+- **Gemini Cache-Hit Telemetry**: In `parse-voice`, inspect Gemini 2.5 Flash
+  Lite `response.usageMetadata` after each returned provider attempt before
+  reading text or parsing JSON (including empty, malformed, or retried
+  responses). Log event `voice_ai_gemini_usage` containing sanitized,
+  privacy-safe telemetry: `model` (`"gemini-2.5-flash-lite"`), 0-indexed
+  `attempt`, `promptTokenCount`, `cachedContentTokenCount`,
+  `candidatesTokenCount`, `totalTokenCount`, boolean `cacheObservedHit`, and
+  `cachedInputRatio`.
+  - Precision rules: Valid counts must be finite non-negative safe integers or
+    `null`. A valid pair requires
+    `0 <= cachedContentTokenCount <= promptTokenCount`.
+  - If `cachedContentTokenCount > promptTokenCount`, the pair is malformed: it
+    must record `cacheObservedHit` as `null` (unknown, not an observed miss),
+    and `cachedInputRatio` as `null`.
+  - Cache hit determination: `cacheObservedHit` is `true` if and only if
+    `cachedContentTokenCount > 0` within a valid pair. Missing or undefined
+    cached token count is recorded as `null` / `unknown`, NOT assumed `false` or
+    zero.
+  - `cachedInputRatio`: Calculated as
+    `cachedContentTokenCount / promptTokenCount` strictly when
+    `promptTokenCount > 0` and `cachedContentTokenCount <= promptTokenCount`;
+    otherwise `null`. Ratio denominator includes only paired valid positive
+    prompt count and valid `<= prompt` cached count; excludes unknown cached
+    count.
+  - Observation timing & sink resilience: Every returned attempt is logged
+    before reading text or parsing JSON; if a network/gateway throw occurs
+    before a response is returned, there is no response/metadata, and transport
+    throws yield no event (telemetry must NOT fabricate a cache miss); sink
+    failures or logging exceptions may drop observation without retry.
+  - Supabase project log query & analysis: In Supabase project Logs Edge
+    Functions `parse-voice`, filter event `voice_ai_gemini_usage`:
+    - Cache hit rate: `sum(true) / (sum(true) + sum(false))`, unknowns strictly
+      excluded from denominator.
+    - Weighted cached input fraction: `sum(cached) / sum(prompt)` strictly over
+      valid positive pairs.
+    - Known metadata coverage:
+      `total(events with known status) / total(observed returned attempts)`. The
+      denominator is strictly observed structured `voice_ai_gemini_usage` log
+      events (`total observed returned attempts`); if the log sink drops an
+      event or transport fails, actual returned count cannot be observed from
+      logs alone (missing log events / sink failures cannot be inferred as
+      misses or perfect coverage).
+  - Resilient & Private: Telemetry must never throw or alter retries, and must
+    never log audio, prompt text, categories, accounts, transcripts, request
+    keys, user IDs, or response bodies; zero SQL schema/table, deployment, or
+    explicit cache changes.
+  - Pricing Caveat: Token share reflects efficiency without guaranteed linear
+    USD price reduction.
+  - Verification & Release Gates: Physical Android/iOS
+    quiet/short/noisy/code-switched/floor tests remain NOT RUN as a release
+    gate; SDK Android floor `<= -160.0 dBFS` is uncertain and always fails open,
+    cannot promise all pure zero silence blocked; provisional `-70.0 dBFS`
+    threshold. User requested no emulator and batch checks at end; authored
+    tests first RED NOT RUN. Native audio Maestro harness unavailable:
+    deterministic mock cases unit/integration, navigation-only authored existing
+    flow has no run on device, physical manual-only, no invented E2E. SQL 087
+    35-day identity and concurrency contracts remain unchanged in source; mocked
+    Edge handler/RPC regression tests do not execute PostgreSQL stored
+    procedures, RLS, retention, or row-level locking concurrency; live database
+    integration, physical devices, and live Gemini provider calls are NOT marked
+    proven. Deterministic checks PASS; physical devices, live Gemini calls, and
+    real PostgreSQL integration remain NOT RUN. See
+    [#391 verification ledger](../../specs/391-voice-empty-audio-guard/checklists/manual-plan.md#release-and-sign-off-evidence).
 
 ## 7. SMS Import And Live Detection
 

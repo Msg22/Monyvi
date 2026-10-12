@@ -30,6 +30,7 @@ import {
   setMockRecorderUri,
   setMockSdk55RootAsyncMethodsThrow,
 } from "./voice-recorder-fixtures";
+import type { VoiceRecorderStopResult } from "@/hooks/useVoiceRecorder";
 
 const KNOWN_URI = "file:///tmp/recording.m4a";
 let existingFiles = new Set<string>();
@@ -138,11 +139,14 @@ describe("#391 SDK55 temporary recording filesystem adapter", () => {
     const { result } = renderHook(() => useVoiceRecorder());
     await startRecordingWithFlush(result);
     await actAsync(async (): Promise<void> => {
-      expect(await unwrap(result).stop()).toEqual({
-        uri: KNOWN_URI,
-        durationMs: expect.any(Number) as number,
-      });
+      const stopResult: VoiceRecorderStopResult | null =
+        await unwrap(result).stop();
+      expect(stopResult).not.toBeNull();
+      expect(stopResult?.uri).toBe(KNOWN_URI);
+      expect(typeof stopResult?.durationMs).toBe("number");
+      expect(stopResult?.metering).toEqual(expect.anything());
     });
+
     await actAsync(async (): Promise<void> => {
       await unwrap(result).discard();
     });

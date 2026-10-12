@@ -146,6 +146,7 @@
   "voice_action_resume": "متابعة",
   "voice_action_discard": "تجاهل",
   "voice_recording_too_short": "التسجيل قصير جدًا. تحدث لمدة 1.5 ثانية على الأقل.",
+  "voice_recording_silent": "لم نتمكن من سماع أي شيء. يرجى محاولة التسجيل مرة أخرى.",
   "voice_recording_finalize_failed": "تعذر إنهاء التسجيل. حاول مرة أخرى.",
   "voice_no_transactions_found": "لم يتم العثور على معاملات في تسجيلك. حاول مرة أخرى؟",
   "sms_review_title": "مراجعة معاملات الرسائل",

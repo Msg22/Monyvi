@@ -3,8 +3,15 @@ export type CapturedServeHandler = (
 ) => Response | Promise<Response>;
 
 export type ProviderResult =
-  | { readonly kind: "success"; readonly text: string }
-  | { readonly kind: "error"; readonly message: string };
+  | {
+      readonly kind: "success";
+      readonly text: string;
+      readonly usageMetadata?: unknown;
+    }
+  | {
+      readonly kind: "error";
+      readonly message: string;
+    };
 
 export interface RpcResult {
   readonly data: unknown;

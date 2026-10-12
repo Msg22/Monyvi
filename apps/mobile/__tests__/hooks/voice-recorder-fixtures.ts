@@ -71,12 +71,21 @@ const mockRootDeleteAsync = jest.fn((...args: unknown[]): Promise<unknown> => {
   return mockDeleteAsync(...args) as Promise<unknown>;
 });
 
+const mockGetStatus = jest.fn<unknown, []>(() => ({
+  canRecord: true,
+  isRecording: true,
+  durationMillis: 1000,
+  metering: -50.0,
+  mediaServicesDidReset: false,
+}));
+
 const mockRecorder = {
   record: mockRecord,
   pause: mockPause,
   stop: mockStop,
   prepareToRecordAsync: mockPrepareToRecordAsync,
   release: mockRelease,
+  getStatus: mockGetStatus,
   getUri: jest.fn((): string | null => mockRecorderUri),
   get uri(): string | null {
     if (mockRecorderReleased) {
@@ -253,6 +262,7 @@ export {
   mockSetAudioModeAsync,
   mockDeleteAsync,
   mockGetInfoAsync,
+  mockGetStatus,
   mockRootDeleteAsync,
   mockRootGetInfoAsync,
   mountedUnmounts,
