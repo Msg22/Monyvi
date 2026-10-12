@@ -849,7 +849,7 @@ empty-audio ownership.
   does not restart microphone capture or allocate a new logical request key.
 - **FR-052 — Privacy-safe monotonic startup diagnostics:** If startup stage
   timing is added, it MUST use a monotonic clock and record only stage names and
-  numeric durations (optionally one ephemeral per-attempt correlation token).
+  numeric durations in exactly `{ stage, durationMs }` without extra fields.
   It MUST NOT log user/account/request IDs, audio/URI, transcripts, parsed or
   financial content, auth tokens, provider payloads or credentials. Diagnostic
   timing MUST add no sleep/artificial minimum and MUST NOT be presented as a
@@ -939,3 +939,31 @@ focused verbose runs provide the actual accepted evidence. Root must run the
 repaired focused RED before any startup production grant. Neither this test
 writer nor this documentation correction executed Jest, TypeScript, native
 timing or provider work.
+
+### S4 accepted RED and minimal retry correction (12 October 2026)
+
+Root's focused S4 check at `c3dc55d0b2ec25b6a71bcec4466d4147562d0474`:
+**3 failed / 54 passed / 57 total (13.044 s)**. Only the unavailable
+Retry expectation was meaningful product RED: one standalone route availability
+refresh occurred where zero was required. Two global `performance.now` tests
+were invalid seam failures because React's scheduler observed the broken clock,
+and the following logger test had no calls. They were not accepted as product
+RED; a broad earlier timeout was not GREEN.
+
+The approved FR-050/FR-051 retry path checks fresh local AI consent first,
+then directly invokes the existing flow with `skipAiProcessingConsent: true`.
+The flow alone performs the fresh authoritative availability request concurrently
+with a non-prompting permission read; blocked availability prevents native
+recording and OS prompting. Only the existing explicit permission action
+may request the OS prompt after eligible availability. The first-use grant
+continues to supersede pre-consent work under FR-053. The optional flow-level
+snapshot contract remains compatible for other callers.
+
+FR-052 timing records use **only** `{ stage, durationMs }`, with no ephemeral
+correlation token or other identity/content fields. Throwing/nonfinite clocks
+are tested directly against the public timing utility outside React rendering,
+and native capture retains separate diagnostic-unavailable and logger-failure
+positives. Unmount during both pending gates must prevent recorder, UUID and
+provider work. This addendum changes no R1/R2 UI, strings, local 30-second
+cap, security/accounting, or Manual behavior. Final GREEN, independent review
+and owner native measurements remain **NOT RUN by this worker**.

@@ -1113,9 +1113,9 @@ gates-resolved -> recorder-start-begin
 recorder-start-begin -> native-record-started/onStarted
 ```
 
-Structured diagnostics contain stage + durationMs and, if correlation is
-necessary, an ephemeral random attempt token that is never persisted or reused
-as the Voice request key. No user/account IDs, timezone value, audio URI,
+Structured diagnostics contain exactly `{ stage, durationMs }`, with no
+ephemeral correlation token or additional fields. No user/account IDs,
+timezone value, audio URI,
 transcript, amount/category/account data, provider payload, token or credential.
 
 ### TDD and source ownership sequence
@@ -1190,9 +1190,10 @@ the missing consent-transition freshness Red tracked as T083.
   non-prompting microphone-permission read start concurrently. Native OS
   permission request remains serialized behind an eligible availability result
   and the existing explicit Allow microphone action.
-- Availability-failure retry remains consent-first, then refreshes exactly once
-  and hands that fresh snapshot into the flow so the flow does not perform a
-  second availability request.
+- Availability-failure retry remains consent-first, then delegates directly
+  to the flow; the flow performs one authoritative availability refresh
+  concurrently with a non-prompting microphone-permission read. No separate
+  route snapshot prefetch or wait is permitted on this retry path.
 - Startup timing Red is against existing route/flow/logger behavior, not a
   missing helper import. Structured records use event
   `voice.startupTiming` and payload keys **only**
@@ -1266,3 +1267,41 @@ Root accepted S3 production `6904bc8bcb6f3b49a89c12d26c3968689d068d5d` for revie
 **Exact S4 test-only contract:** `apps/mobile/__tests__/app/add-transaction-modes.test.tsx` updates the historical first-grant assertion to include `supersedePendingAvailability: true`, and tests unavailable retry with a deferred fresh consent result and a deliberately unresolved *route* refresh. The flow facade returns `{ kind: "not-started", reason: "availability" }`: the route must hand off once without a standalone refresh and remain unavailable, while the actual flow's pre-existing blocked-availability oracle independently proves no OS prompt, request identity or native capture. The nested unsafe Jest matcher is removed, not suppressed. `apps/mobile/__tests__/hooks/useVoiceTransactionFlow.startup.test.ts` adds granted-capture controls for a throwing/nonfinite `performance.now`, beside the existing logger-failure case, with actual timing payload shape unchanged.
 
 This S4 leaf is **TEST ONLY**: no startup production, recorder, #391, shared-auth/service, native/device, provider or deployment changes. Root runs focused meaningful RED first; a subsequent narrowly granted route edit is required before final T080 Green and independent T081 review. No latency measurement or test execution is claimed by the test author.
+
+## S4 minimal route implementation after accepted meaningful RED (12 October 2026)
+
+Root's focused test batch on `c3dc55d0b2ec25b6a71bcec4466d4147562d0474`
+was **3 failed / 54 passed / 57 total (13.044 s)**. The route Retry assertion
+found a meaningful standalone-prefetch defect (observed 1 call, expected 0).
+The other two failures were test-seam corruption: a globally broken
+`performance.now` reached React scheduler state updates, and the following
+logger control was not exercised. No global-clock source workaround is
+authorized; final GREEN has not been established.
+
+The S4 grant removes only the route's `refreshAvailability` option,
+standalone refresh/snapshot wait, now-unused destructured refresh,
+snapshot spread, and unavailable-Retry caller/dependency from
+`apps/mobile/app/(private)/add-transaction.tsx`. Fresh consent remains
+before `flowStartFlow({ skipAiProcessingConsent: true })`; the flow alone
+overlaps authoritative availability with the one non-prompting native
+permission lookup. Fail-closed availability refusal remains in the flow,
+and an OS permission request still requires an eligible response plus
+the explicit existing recovery action. The flow's optional
+`availabilitySnapshot` compatibility remains unchanged. First-use consent
+still sends `supersedePendingAvailability: true`.
+
+S4 tests move direct throwing/nonfinite `performance.now` handling to
+`apps/mobile/__tests__/utils/voice-startup-timing.test.ts`, with no React
+scheduler in scope. The flow companion separately spies on exported
+`voiceStartupClock` to prove native capture survives an unavailable diagnostic,
+retains the logger-failure positive, and checks unmount during both unresolved
+preflight reads: late resolutions must cause zero recorder/UUID/provider work.
+Structured `voice.startupTiming` payloads contain exactly
+`{ stage, durationMs }`, with finite nonnegative durations only. Logging or
+clock failure cannot add a wait or prevent capture.
+
+Existing FR-048–FR-053 / SC-023–SC-027, T075–T083 and R1/R2 approvals
+remain authoritative. This is one source-bounded production correction and
+test refinement, **not a completed executable GREEN**. Root owns the
+combined exact-path hook/route/timing and wider regression checks, final
+independent review and owner device latency evidence.

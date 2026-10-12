@@ -120,7 +120,6 @@ export default function AddTransaction(): React.JSX.Element {
   // Voice availability remains authoritative to the Voice surface only.
   // Manual never renders quota/errors and remains usable when Voice is blocked.
   const voiceAvailability = useVoiceAiAvailability(true);
-  const { refresh: refreshVoiceAvailability } = voiceAvailability;
 
   const ensureAiProcessingConsent = useCallback(async (): Promise<boolean> => {
     if (aiConsent.isLoading) return false;
@@ -268,7 +267,6 @@ export default function AddTransaction(): React.JSX.Element {
   const requestVoiceStart = useCallback(
     async (options?: {
       readonly requestPermission?: boolean;
-      readonly refreshAvailability?: boolean;
       readonly retryRecording?: boolean;
     }): Promise<void> => {
       if (
@@ -298,20 +296,8 @@ export default function AddTransaction(): React.JSX.Element {
         );
         if (!isCurrent() || !hasConsent) return;
 
-        // An unavailable retry cannot request server capacity before consent.
-        const availabilitySnapshot = options?.refreshAvailability
-          ? await refreshVoiceAvailability()
-          : undefined;
-        if (!isCurrent()) return;
-        if (
-          options?.refreshAvailability &&
-          (availabilitySnapshot === null ||
-            availabilitySnapshot === undefined ||
-            availabilitySnapshot.reason !== null ||
-            availabilitySnapshot.remaining === 0)
-        )
-          return;
-
+        // Flow owns the fresh authoritative request and can overlap it with
+        // the non-prompting permission read only after consent is confirmed.
         setMicrophoneRecoveryMode(null);
         const result = await flowStartFlow({
           skipAiProcessingConsent: true,
@@ -319,7 +305,6 @@ export default function AddTransaction(): React.JSX.Element {
             ? { requestMicrophonePermission: true }
             : {}),
           ...(options?.retryRecording ? { retryRecording: true } : {}),
-          ...(availabilitySnapshot ? { availabilitySnapshot } : {}),
         });
         if (!isCurrent()) return;
         applyVoiceStartResult(result);
@@ -341,7 +326,6 @@ export default function AddTransaction(): React.JSX.Element {
       ensureAiProcessingConsent,
       flowIsModeSwitchLocked,
       flowStartFlow,
-      refreshVoiceAvailability,
     ]
   );
 
@@ -699,7 +683,7 @@ export default function AddTransaction(): React.JSX.Element {
               handleModeChange("manual");
             }}
             onRefreshAvailability={() => {
-              void requestVoiceStart({ refreshAvailability: true });
+              void requestVoiceStart();
             }}
             onOpenSettings={() => {
               void flowOpenMicrophoneSettings();

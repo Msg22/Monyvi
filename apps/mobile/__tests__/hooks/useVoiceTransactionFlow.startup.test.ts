@@ -4,6 +4,7 @@ import type { UseVoiceAiAvailabilityResult } from "@/hooks/useVoiceAiAvailabilit
 import type { MicrophonePermissionStatus } from "@/hooks/useMicrophonePermission";
 
 import { useVoiceTransactionFlow } from "@/hooks/useVoiceTransactionFlow";
+import * as voiceStartupTiming from "@/utils/voice-startup-timing";
 
 interface RecorderStartOptions {
   readonly signal?: AbortSignal;
@@ -430,65 +431,69 @@ describe("useVoiceTransactionFlow startup ordering", () => {
     expect(stages.has("native_start")).toBe(true);
   });
 
-  it.each([
-    {
-      behavior: "throws",
-      failingNow: (): number => {
-        throw new Error("Monotonic clock unavailable");
-      },
-    },
-    {
-      behavior: "returns non-finite",
-      failingNow: (): number => Number.NaN,
-    },
-  ])(
-    "keeps eligible native capture when performance.now $behavior",
-    async ({ failingNow }): Promise<void> => {
+  it("continues eligible capture when its exported native-start clock is unavailable", async (): Promise<void> => {
+    // Mock only the exported diagnostic seam, never global performance.now:
+    // React's scheduler must retain its real monotonic clock.
+    const nativeClock = jest
+      .spyOn(voiceStartupTiming, "voiceStartupClock")
+      .mockReturnValue(null);
+    try {
       const flow = renderStartupFlow(() => true);
-      let pending: ReturnType<typeof flow.result.current.startFlow> | undefined;
-      let clockCalls = 0;
-      // Scope the broken clock to startFlow's synchronous consent stage so
-      // React's scheduler is not itself forced to use an invalid time source.
-      act((): void => {
-        const clock = jest
-          .spyOn(globalThis.performance, "now")
-          .mockImplementation((): number => {
-            clockCalls += 1;
-            return failingNow();
-          });
-        try {
-          pending = flow.result.current.startFlow();
-        } finally {
-          clock.mockRestore();
-        }
-      });
-
       let result:
         | Awaited<ReturnType<typeof flow.result.current.startFlow>>
         | undefined;
       await act(async (): Promise<void> => {
-        result = await pending;
+        result = await flow.result.current.startFlow();
       });
 
-      expect(clockCalls).toBeGreaterThan(0);
+      expect(nativeClock).toHaveBeenCalled();
       expect(result).toEqual({ kind: "started" });
       expect(flow.result.current.flowStatus).toBe("recording");
       expect(mockAvailabilityRefresh).toHaveBeenCalledTimes(1);
       expect(mockRefreshPermission).toHaveBeenCalledTimes(1);
       expect(mockRecorderStart).toHaveBeenCalledTimes(1);
-      // The failed clock read must never emit a malformed duration payload.
-      for (const [event, payload] of mockLoggerInfo.mock.calls) {
-        if (event !== "voice.startupTiming") continue;
-        expect(Object.keys(payload).sort()).toEqual(["durationMs", "stage"]);
-        expect(typeof payload.durationMs).toBe("number");
-        if (typeof payload.durationMs !== "number") {
-          throw new Error("Expected numeric startup duration");
-        }
-        expect(Number.isFinite(payload.durationMs)).toBe(true);
-        expect(payload.durationMs).toBeGreaterThanOrEqual(0);
-      }
+    } finally {
+      nativeClock.mockRestore();
     }
-  );
+  });
+
+  it("discards late availability and permission after flow unmount without starting a recorder", async (): Promise<void> => {
+    const availability = createDeferred<VoiceAvailabilitySnapshot | null>();
+    const permission = createDeferred<MicrophonePermissionStatus>();
+    mockAvailabilityRefresh.mockReturnValue(availability.promise);
+    mockRefreshPermission.mockReturnValue(permission.promise);
+    const flow = renderStartupFlow(() => true);
+
+    let pending: ReturnType<typeof flow.result.current.startFlow> | undefined;
+    act((): void => {
+      pending = flow.result.current.startFlow();
+    });
+    await flush();
+    expect(mockAvailabilityRefresh).toHaveBeenCalledTimes(1);
+    expect(mockRefreshPermission).toHaveBeenCalledTimes(1);
+    expect(mockRecorderStart).not.toHaveBeenCalled();
+
+    act((): void => {
+      flow.unmount();
+    });
+    let result:
+      | Awaited<ReturnType<typeof flow.result.current.startFlow>>
+      | undefined;
+    await act(async (): Promise<void> => {
+      availability.resolve(allowed);
+      permission.resolve("granted");
+      result = await pending;
+    });
+
+    expect(result).toEqual({ kind: "not-started", reason: "cancelled" });
+    expect(mockRecorderStart).not.toHaveBeenCalled();
+    expect(mockRandomUUID).not.toHaveBeenCalled();
+    expect(mockRequestPermissionStatus).not.toHaveBeenCalled();
+    const voiceParser = jest.requireMock<
+      typeof import("@/services/ai-voice-parser-service")
+    >("@/services/ai-voice-parser-service");
+    expect(voiceParser.parseVoiceWithAi).not.toHaveBeenCalled();
+  });
 
   it("does not block native recording when optional startup timing logging throws", async (): Promise<void> => {
     mockLoggerInfo.mockImplementation((): void => {

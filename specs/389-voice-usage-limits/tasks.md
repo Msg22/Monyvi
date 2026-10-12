@@ -1358,8 +1358,8 @@ after fresh consent.
       non-prompting native permission read. Prompt the OS only from the existing
       explicit action after eligible availability. Preserve actor/generation,
       request identity, retry semantics, recorder `onStarted` truth, 30 s cap
-      and 300 ms post-record stabilization. Timing logs, if added, contain only
-      stage/duration and optional ephemeral attempt correlation.
+      and 300 ms post-record stabilization. Timing logs contain exactly
+      `{ stage, durationMs }`; no extra fields or correlation token.
 - [ ] **T080 [P] [US0] Batched Green/regression gate:** root runs the focused
       startup tests plus retained Voice/R2/Manual/consent/quota/retry/cancellation
       suites, full mobile TSC, changed lint/format/i18n/privacy checks. Existing
@@ -1435,3 +1435,34 @@ Root reports S3 production `6904bc8bcb6f3b49a89c12d26c3968689d068d5d` is source-
 S4 **TEST-ONLY** writes are confined to `apps/mobile/__tests__/app/add-transaction-modes.test.tsx` and `apps/mobile/__tests__/hooks/useVoiceTransactionFlow.startup.test.ts`. The unavailable retry test must prove that after deferred fresh consent the route hands off directly to flow, **without** awaiting a separately unresolved route availability prefetch. Use a realistic flow facade `{kind:"not-started",reason:"availability"}` and retain the independent existing actual-flow blocked-availability oracle. The clock positive controls prove throwing/nonfinite `performance.now` cannot block eligible capture; keep existing logger-failure testing, stage-only diagnostics and native `onStarted` truth.
 
 No production source correction is permitted before root's **new focused meaningful RED**; T075–T083 names, order, historical [x]/[ ] status and R1/R2 approval remain unchanged. Root separately grants any S4 route-only implementation and owns T080 final combined Green, T081 independent review and T082 owner native evidence.
+
+### S4 accepted root RED → bounded route source/timing test handoff (12 October 2026)
+
+At pinned S4 test revision `c3dc55d0b2ec25b6a71bcec4466d4147562d0474`,
+root's exact-path run: **3F / 54P / 57 total (13.044 s)**. Meaningful product
+RED is the unavailable-Retry route calling its own refresh once rather than
+delegating immediately (expected zero). Two other failures were **TEST SEAM**,
+not product RED: `performance.now` mock broke the React scheduler before
+the timing utility, preventing the logger-positive control from executing.
+
+New S4 production authority is strictly
+`apps/mobile/app/(private)/add-transaction.tsx`: remove the obsolete
+route-level `refreshAvailability` option, prefetch and snapshot handoff,
+and call the flow directly after fresh consent. Flow owns one
+concurrent availability/permission check; blocked retry and first-use
+consent supersede remain governed by FR-050–FR-053.
+
+Test refinements: preserve the fixed route consent/Retry assertions;
+test real throwing/nonfinite clock paths outside React in new
+`apps/mobile/__tests__/utils/voice-startup-timing.test.ts`; spy on the
+flow's exported native clock seam without corrupting React's scheduler;
+keep the existing logger-failure success test; add pending-preflight
+unmount with late availability/permission resolution, zero recorder,
+UUID, OS prompt or provider call. Timing remains exactly
+`{ stage, durationMs }`, no IDs/correlation token.
+
+No T075–T083 IDs or original checkboxes are changed by this source
+author. T080 batched GREEN, T081 independent review and T082 owner
+native/manual evidence remain **PENDING root/owner execution**.
+The recorder/#391, services/auth, server, packages, styles, copy,
+locales, migrations and deployment are not touched.

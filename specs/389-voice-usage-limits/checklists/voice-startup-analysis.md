@@ -54,7 +54,7 @@ analysis start.
 | S21 | native `onStarted` truth | flow/recorder positive control | timer/Listening before record | Recording only from callback after native record |
 | S22 | retained-audio submission retry | flow existing tests | mic restart/new key | same request identity; no microphone start |
 | S23 | authenticated edge stable session + 401 retry | existing service tests | auth path bypass | unchanged stable token / one refresh-retry / fail closed |
-| S24 | privacy-safe stage diagnostics | focused unit/source test if diagnostics added | sensitive field or wall-clock dependency | only approved stage/duration + optional ephemeral token |
+| S24 | privacy-safe stage diagnostics | focused unit/source test if diagnostics added | sensitive field or wall-clock dependency | exactly `{ stage, durationMs }`, no correlation token or other fields |
 | S25 | Manual/R2 regression | existing route/Manual suites | hidden Manual/Save or R2 drift | unchanged Manual draft, R2 controls/cap and blocked Voice→Manual |
 
 ### Authorable E2E versus owner-only
@@ -201,3 +201,40 @@ must accept repaired focused RED before T078/T079 production.
 **S4 tests:** exact first-use consent arguments include `supersedePendingAvailability: true`; retry needs only `skipAiProcessingConsent: true`, with zero separate route refresh and realistic facade refusal. Replace unsafe nested Jest matcher with explicit typed/equality assertions. Startup flow clock-failure controls must exercise throw and nonfinite from `performance.now`, still reaching granted/native capture, without malformed `voice.startupTiming` stage/duration logs; existing optional-logger-failure oracle remains.
 
 **Decision:** two tests/doc corrections only, **no source grant** in S4. Existing FR-048–FR-053/SC-023–SC-027, T075–T083, Manual, current recorder/#391, user copy, binding and security contracts remain unchanged. S4 actual focused RED, source correction, final Green and owner device timing are still pending root evidence.
+
+## S4 accepted focused RED, clock test isolation and implementation (12 October 2026)
+
+**Actual root RED:** `c3dc55d0b2ec25b6a71bcec4466d4147562d0474`,
+3F/54P/57 (13.044s). Only one failure is meaningful product RED:
+unavailable Retry invoked the route's separate availability refresh
+(observed one; expected zero) before invoking flow. Two global
+`performance.now` failures were a corrupted **TEST SEAM**: the first
+triggered React scheduler `getCurrentTime` during state update, and the
+logger positive subsequently recorded zero calls. Source clock semantics
+were not responsible for that React failure.
+
+**Narrow S4 correction:** after fresh local consent, route calls
+`flowStartFlow` immediately with `skipAiProcessingConsent: true`.
+Availability and non-prompting microphone permission then run concurrently
+inside the same generation-guarded flow. A blocked result fails closed;
+the OS prompt remains explicit and contingent on eligible availability.
+First-grant consent supersede, same-key retry, actor, native-onStarted,
+Manual and R1/R2 UI remain unchanged. The flow-level optional snapshot
+field is retained for legitimate compatibility.
+
+**Tests:** timing utility in isolation exercises real thrown, NaN and
+infinite performance clocks, successful operation and invalid-log suppression;
+the flow companion separately replaces only exported native clock
+diagnostics (never the global scheduler), maintains the logger-failure
+positive, and verifies cancellation after unmount with both preflight
+promises pending (zero recorder/UUID/OS permission/provider calls).
+Exactly `{ stage, durationMs }` is permitted for
+`voice.startupTiming`; neither timezone nor correlation token nor
+payload data can appear. The existing hook blur/background/unmount
+joined-request controls remain as previously authored.
+
+**Readiness:** original source/tests were accepted for independent
+review, but S4 source and new tests have **no worker-executed checks**.
+Root must complete exact-path and wider GREEN plus TypeScript, lint,
+privacy/security and independent async review; M01–M28 native cases
+remain NOT RUN. No measured improvement or changed quota policy is claimed.

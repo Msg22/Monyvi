@@ -110,3 +110,25 @@ improvement without owner device evidence, and never include account/
 user/timezone/request identity, audio URI, transcript, financial data,
 tokens or provider payloads. This is manual-plan authorship, no native,
 Maestro, provider or hosted execution.
+
+### S4 owner verification — concurrent unavailable retry (12 October 2026)
+
+Root's accepted focused S4 RED is 3F/54P/57 at
+`c3dc55d0b2ec25b6a71bcec4466d4147562d0474`: one meaningful
+serial route refresh, two invalid global-clock test seams. This is
+unit-only evidence, **not a measured cold/warm device improvement**.
+
+For M13–M16 and M20, collect separate monotonic `availability`,
+`permission` and combined `availability_permission` durations
+following fresh consent. Unavailable Try again should hand off to flow
+without a second route refresh; flow still refuses blocked daily/burst
+availability, never opens an OS permission sheet without the existing
+explicit Allow microphone action, and never reports Listening until
+recorder `onStarted`. Background/unmount during pending gates must
+prevent later capture. Clock or logger faults must not change admission.
+Diagnostics contain **only** `{ stage, durationMs }` and no correlation
+token, actor, timezone, request identity or user content.
+
+Existing owner cases M01–M28 remain **NOT RUN** by this writer.
+Native/device/OS, provider, Maestro and measured performance validation
+are root/owner-only and pending after actual S4 GREEN.
