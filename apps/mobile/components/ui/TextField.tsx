@@ -7,7 +7,6 @@ import {
   type Ref,
 } from "react";
 import {
-  Text,
   TextInput,
   type TextInputProps,
   type StyleProp,
@@ -18,12 +17,16 @@ import {
 import { useTranslation } from "react-i18next";
 
 import { palette } from "@/constants/colors";
+import { FieldLabel, composeFieldAccessibleName } from "./FieldLabel";
+import { FieldMessage, selectPrimaryFieldMessage } from "./FieldMessage";
 
 interface TextFieldProps extends TextInputProps {
   readonly label: string;
   readonly required?: boolean;
   readonly variant?: "default" | "outlined";
   readonly error?: string;
+  readonly warning?: string;
+  readonly helperText?: string;
   readonly containerStyle?: ViewStyle;
   readonly containerClassName?: string;
   readonly labelClassName?: string;
@@ -43,6 +46,8 @@ export function TextField({
   required,
   variant = "default",
   error,
+  warning,
+  helperText,
   containerStyle,
   containerClassName,
   labelClassName,
@@ -70,6 +75,23 @@ export function TextField({
   const [leadingWidth, setLeadingWidth] = useState(LEADING_ADORNMENT_SPACE);
   const leadingPadding =
     variant === "outlined" ? leadingWidth + 8 : LEADING_ADORNMENT_SPACE;
+  const requiredText = t("required_field");
+  const accessibleName = composeFieldAccessibleName({
+    label,
+    accessibilityLabel,
+    required,
+    requiredText,
+  });
+  const resolvedHint =
+    required && props.accessibilityHint?.trim() === requiredText
+      ? undefined
+      : props.accessibilityHint;
+  const primaryMessage = selectPrimaryFieldMessage({
+    error,
+    warning,
+    helperText,
+  });
+  const hasError = primaryMessage?.kind === "error";
 
   useEffect(() => {
     if (!isFocusedRef.current || syncWhileFocused) {
@@ -107,7 +129,9 @@ export function TextField({
       style={containerStyle}
       className={containerClassName ?? (variant === "outlined" ? "" : "mb-4")}
     >
-      <Text
+      <FieldLabel
+        label={label}
+        required={required}
         className={
           labelClassName ??
           (variant === "outlined"
@@ -115,25 +139,19 @@ export function TextField({
             : "input-label")
         }
         style={labelStyle}
-      >
-        {label}
-        {required ? <Text className="text-red-500">{" *"}</Text> : null}
-      </Text>
+      />
       <View className="relative">
         <TextInput
           ref={inputRef}
           placeholderTextColor={palette.slate[400]}
           className={`${variant === "outlined" ? "min-h-11 rounded-lg border bg-slate-25 px-3 py-2 text-base font-normal text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-25" : "rounded-2xl border bg-white p-4 text-base font-semibold text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"} ${
-            error ? "border-red-500" : "border-slate-200"
+            hasError ? "border-red-500" : "border-slate-200"
           } ${className || ""}`}
           {...props}
-          accessibilityLabel={accessibilityLabel ?? label}
-          accessibilityHint={
-            props.accessibilityHint ??
-            (required ? t("required_field") : undefined)
-          }
+          accessibilityLabel={accessibleName}
+          accessibilityHint={resolvedHint}
           testID={testID}
-          aria-invalid={Boolean(error)}
+          aria-invalid={hasError}
           style={[
             style,
             leadingAdornment ? { paddingStart: leadingPadding } : null,
@@ -186,16 +204,11 @@ export function TextField({
           </View>
         ) : null}
       </View>
-      {error ? (
-        <Text
-          testID={testID ? `${testID}-error` : undefined}
-          accessibilityRole="alert"
-          className="input-error"
-          style={errorStyle}
-        >
-          {error}
-        </Text>
-      ) : null}
+      <FieldMessage
+        message={primaryMessage}
+        testID={testID}
+        errorStyle={errorStyle}
+      />
     </View>
   );
 }

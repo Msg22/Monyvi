@@ -15,6 +15,8 @@ import { useTranslation } from "react-i18next";
 import { palette } from "@/constants/colors";
 import { useTheme } from "@/context/ThemeContext";
 import { useModalBottomInset } from "@/hooks/useModalBottomInset";
+import { FieldLabel, composeFieldAccessibleName } from "./FieldLabel";
+import { FieldMessage, selectPrimaryFieldMessage } from "./FieldMessage";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -33,6 +35,7 @@ interface DropdownBaseProps<T> {
   label: string;
   required?: boolean;
   accessibilityHint?: string;
+  accessibilityLabel?: string;
   items: ReadonlyArray<DropdownItem<T>>;
   value: T | null;
   onChange: (value: T) => void;
@@ -41,6 +44,8 @@ interface DropdownBaseProps<T> {
   disabled?: boolean;
   testID?: string;
   error?: string;
+  warning?: string;
+  helperText?: string;
   selectedAdornment?: ReactNode;
   triggerClassName?: string;
   labelClassName?: string;
@@ -265,7 +270,10 @@ export function Dropdown<T extends string | number>({
   disabled = false,
   testID,
   accessibilityHint,
+  accessibilityLabel,
   error,
+  warning,
+  helperText,
   selectedAdornment,
   triggerClassName,
   labelClassName,
@@ -277,6 +285,23 @@ export function Dropdown<T extends string | number>({
   const { t } = useTranslation("common");
   const { isDark } = useTheme();
   const selectedItem = items.find((item) => item.value === value);
+  const requiredText = t("required_field");
+  const accessibleName = composeFieldAccessibleName({
+    label,
+    accessibilityLabel,
+    required,
+    requiredText,
+  });
+  const resolvedHint =
+    required && accessibilityHint?.trim() === requiredText
+      ? undefined
+      : accessibilityHint;
+  const primaryMessage = selectPrimaryFieldMessage({
+    error,
+    warning,
+    helperText,
+  });
+  const hasError = primaryMessage?.kind === "error";
   const resolvedLabelClassName =
     labelClassName ??
     (variant === "outlined"
@@ -300,22 +325,24 @@ export function Dropdown<T extends string | number>({
         disabled ? "opacity-50" : ""
       }`.trim()}
     >
-      <Text className={resolvedLabelClassName} style={labelStyle}>
-        {label}
-        {required ? <Text className="text-red-500">{" *"}</Text> : null}
-      </Text>
+      <FieldLabel
+        label={label}
+        required={required}
+        className={resolvedLabelClassName}
+        style={labelStyle}
+      />
 
       <View
         testID={testID ? `${testID}-control` : undefined}
         className={
           variant === "outlined"
             ? `overflow-hidden rounded-lg border bg-slate-25 dark:bg-slate-900 ${
-                error
+                hasError
                   ? "border-red-500"
                   : "border-slate-200 dark:border-slate-700"
               }`
             : `overflow-hidden rounded-2xl border bg-white shadow-sm dark:bg-slate-800 ${
-                error
+                hasError
                   ? "border-red-500"
                   : "border-slate-200 dark:border-slate-700"
               }`
@@ -326,9 +353,12 @@ export function Dropdown<T extends string | number>({
           onPress={onToggle}
           activeOpacity={0.7}
           disabled={disabled}
-          accessibilityHint={
-            accessibilityHint ?? (required ? t("required_field") : undefined)
-          }
+          accessibilityRole="button"
+          accessibilityLabel={accessibleName}
+          accessibilityValue={{ text: selectedItem?.label || placeholder }}
+          accessibilityState={{ disabled }}
+          aria-invalid={hasError}
+          accessibilityHint={resolvedHint}
           className={resolvedTriggerClassName}
         >
           <View className="flex-row items-center justify-between">
@@ -388,16 +418,7 @@ export function Dropdown<T extends string | number>({
         )}
       </View>
 
-      {error ? (
-        <Text
-          testID={testID ? `${testID}-error` : undefined}
-          accessibilityRole="alert"
-          accessibilityLabel={error}
-          className="input-error"
-        >
-          {error}
-        </Text>
-      ) : null}
+      <FieldMessage message={primaryMessage} testID={testID} />
 
       {useModal && (
         <DropdownModalView

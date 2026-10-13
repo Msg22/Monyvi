@@ -1,0 +1,143 @@
+appId: com.monyvi.app
+---
+# T008 shared foundation smoke on an EXISTING public Metals Add control.
+# Authored only — NOT RUN. Unlike the two Account flows, this smoke can become
+# Green with the shared foundation before the later Accounts route adoption.
+# Preconditions:
+# - Normal authenticated/onboarded English user in the local dev client;
+#   Metro/debug-proxy/auth bootstrap are owned by the native runtime lane.
+# - Clean current-user fixture, no holding named "T008 Foundation Gold".
+# - Runner can input malformed alphabetic text into the numeric TextInput and
+#   report its visible value. If the OS filters letters before JS onChangeText,
+#   classify as driver BLOCKED (not a meaningful product Red).
+# - driver inputText/eraseText does NOT prove native paste, caret or IME.
+# - No e2e:seed, service guard bypass, test-only route, remote data or AI action.
+
+- openLink:
+    link: monyvi://metals/add
+- extendedWaitUntil:
+    visible:
+      id: metal-holding-add-screen
+    timeout: 30000
+- assertVisible:
+    id: metal-holding-form
+
+# Complete existing, schema-backed Gold facts by public UI only.
+- tapOn:
+    id: metal-holding-name-field
+- inputText: "T008 Foundation Gold"
+- hideKeyboard
+- tapOn:
+    id: metal-holding-metal-field
+- tapOn:
+    id: metal-holding-metal-option-GOLD
+- scrollUntilVisible:
+    element:
+      id: metal-holding-weight-field
+    direction: DOWN
+    timeout: 30000
+- tapOn:
+    id: metal-holding-weight-field
+- inputText: "10.125"
+- hideKeyboard
+- tapOn:
+    id: metal-holding-purity-trigger
+- tapOn:
+    id: metal-holding-purity-option-gold-999
+
+# Existing GroupedMoneyInput is unsigned/outlined. A malformed value must
+# remain EXACTLY "abc12345"; old formatAmountInput groups the digit substring
+# as "abc12,345". That is the meaningful foundation behavior-Red target.
+- scrollUntilVisible:
+    element:
+      id: metal-holding-purchase-price-field
+    direction: DOWN
+    timeout: 30000
+# The scoped fixture must expose EGP before entering any purchase amount.
+- assertVisible:
+    text: '^EGP$'
+- tapOn:
+    id: metal-holding-purchase-price-field
+- eraseText: 40
+- inputText: "abc12345"
+- assertVisible:
+    id: metal-holding-purchase-price-field
+    text: '^abc12345$'
+
+# Correct through the SAME real field. EGP price uses an existing valid
+# two-decimal fixture here; no new currency input precision rule is introduced.
+- eraseText: 40
+- inputText: "12345.67"
+- assertVisible:
+    id: metal-holding-purchase-price-field
+    text: '^12,345\.67$'
+- hideKeyboard
+
+# Retain existing picker and metal form workflow to complete a real public Save.
+- scrollUntilVisible:
+    element:
+      id: metal-holding-purchase-currency-trigger
+    direction: DOWN
+    timeout: 30000
+- tapOn:
+    id: metal-holding-purchase-currency-trigger
+- tapOn:
+    id: currency-code-row-EGP
+- scrollUntilVisible:
+    element:
+      id: metal-holding-physical-form-field
+    direction: DOWN
+    timeout: 30000
+- tapOn:
+    id: metal-holding-physical-form-field
+- tapOn:
+    id: metal-holding-physical-form-option-COIN
+- scrollUntilVisible:
+    element:
+      id: metal-holding-submit
+    direction: DOWN
+    timeout: 30000
+- tapOn:
+    id: metal-holding-submit
+- extendedWaitUntil:
+    visible:
+      id: metal-holding-detail-root
+    timeout: 30000
+- assertVisible: "T008 Foundation Gold"
+# Real acquisition timeline confirms the entered purchase amount, not just name.
+- scrollUntilVisible:
+    element:
+      text: '^Paid EGP 12,345\.67$'
+    direction: DOWN
+    timeout: 30000
+- assertVisible:
+    text: '^Paid EGP 12,345\.67$'
+
+# Reopen via the real portfolio route; no DB/private function assertions.
+- openLink:
+    link: monyvi://metals
+- extendedWaitUntil:
+    visible:
+      id: metal-portfolio-root
+    timeout: 30000
+- scrollUntilVisible:
+    element:
+      text: "T008 Foundation Gold"
+    direction: DOWN
+    timeout: 60000
+- tapOn: "T008 Foundation Gold"
+- extendedWaitUntil:
+    visible:
+      id: metal-holding-detail-root
+    timeout: 30000
+- assertVisible: "T008 Foundation Gold"
+# Real acquisition timeline confirms the entered purchase amount, not just name.
+- scrollUntilVisible:
+    element:
+      text: '^Paid EGP 12,345\.67$'
+    direction: DOWN
+    timeout: 30000
+- assertVisible:
+    text: '^Paid EGP 12,345\.67$'
+# Passing this never implies Account Add/Edit implementation, native clipboard,
+# signed caret, keyboard suppression, TalkBack, fidelity or all35QA PASS.
