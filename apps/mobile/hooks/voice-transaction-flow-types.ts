@@ -52,6 +52,7 @@ export interface RetainedSubmission extends ParserContextSnapshot {
   readonly audioUri: string;
   readonly requestKey: string;
   readonly callerTimeZone: string;
+  readonly isConfigRetry?: boolean;
 }
 export interface FlowOperation {
   readonly generation: number;

@@ -35,6 +35,7 @@ import {
   completeVoiceAiWork,
   getVoiceQuotaRefusal,
   markVoiceAiProviderStarted,
+  releaseVoiceAiWork,
   reserveVoiceAiWork,
 } from "../_shared/voice-ai-safeguard-service.ts";
 
@@ -596,23 +597,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const validatedRequestKey = parsedRequestKey.data;
     const validatedTimeZone = parsedTimeZone.data;
 
-    // 3. Init Gemini
-    const apiKey = Deno.env.get("GEMINI_API_KEY");
-    if (!apiKey) {
-      return errorResponse("GEMINI_API_KEY not configured", 500);
-    }
-    const ai = new GoogleGenAI({ apiKey });
-
-    // 4. Build system prompt with dynamic category tree and accounts
-    const categoryTree =
-      typeof categoriesInput === "string" && categoriesInput.trim().length > 0
-        ? categoriesInput
-        : DEFAULT_CATEGORY_TREE;
-    const systemPrompt = buildSystemPrompt(categoryTree, accountsInput);
-
-    // 5. Build content parts
-
-    // Resolve today's date: prefer client-supplied local date over UTC server time
+    // Validate optional callerLocalDate BEFORE reservation — invalid date returns 400, no quota consumed.
     const isValidIsoLocalDate = (value: string): boolean => {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
       const d = new Date(`${value}T00:00:00Z`);
@@ -626,35 +611,12 @@ Deno.serve(async (req: Request): Promise<Response> => {
       );
     }
 
-    const todayDate =
-      callerLocalDate && isValidIsoLocalDate(callerLocalDate)
-        ? callerLocalDate
-        : new Date().toISOString().split("T")[0];
-
-    // 5. Build Gemini multimodal content (audio + text prompt)
-    const mimeType = detectAudioMimeType(audioBytes);
-    // Encode in chunks to avoid call-stack limits on large buffers
-    const CHUNK_SIZE = 8192;
-    let binaryString = "";
-    for (let i = 0; i < audioBytes.length; i += CHUNK_SIZE) {
-      const chunk = audioBytes.subarray(i, i + CHUNK_SIZE);
-      binaryString += String.fromCharCode(...chunk);
+    const apiKey = Deno.env.get("GEMINI_API_KEY");
+    if (!apiKey) {
+      return errorResponse("GEMINI_API_KEY not configured", 500);
     }
-    const base64Audio = btoa(binaryString);
 
-    const contents: Array<Record<string, unknown>> = [
-      {
-        inlineData: {
-          mimeType,
-          data: base64Audio,
-        },
-      },
-      {
-        text: `Parse the financial transactions from this voice recording. Today's date is ${todayDate}.`,
-      },
-    ];
-
-    // 6. Resolve authoritative policy and reserve capacity.
+    // 3. Resolve authoritative policy and reserve capacity BEFORE prompt/encoding preparation.
     let policy: VoiceEntitlementPolicy;
     let reservation: VoiceReservationDecision;
 
@@ -673,6 +635,83 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
     if (!reservation.accepted) {
       return jsonResponse(getVoiceQuotaRefusal(reservation), 429);
+    }
+
+    // 4. Init Gemini and prepare prompt/encoding under the accepted reservation.
+    // If local preparation fails after reservation, release the reservation to prevent stranded quota.
+    let ai: GoogleGenAI;
+    let systemPrompt: string;
+    let contents: Array<Record<string, unknown>>;
+
+    try {
+      ai = new GoogleGenAI({ apiKey });
+
+      // Build system prompt with dynamic category tree and accounts
+      const categoryTree =
+        typeof categoriesInput === "string" && categoriesInput.trim().length > 0
+          ? categoriesInput
+          : DEFAULT_CATEGORY_TREE;
+      systemPrompt = buildSystemPrompt(categoryTree, accountsInput);
+
+      // Resolve today's date: prefer validated client-supplied local date over UTC server time.
+      // callerLocalDate was validated before reservation — it is either a valid YYYY-MM-DD or absent.
+      const todayDate =
+        callerLocalDate ?? new Date().toISOString().split("T")[0];
+
+      // Build Gemini multimodal content (audio + text prompt)
+      const mimeType = detectAudioMimeType(audioBytes);
+      // Encode in chunks to avoid call-stack limits on large buffers
+      const CHUNK_SIZE = 8192;
+      let binaryString = "";
+      for (let i = 0; i < audioBytes.length; i += CHUNK_SIZE) {
+        const chunk = audioBytes.subarray(i, i + CHUNK_SIZE);
+        binaryString += String.fromCharCode(...chunk);
+      }
+      const base64Audio = btoa(binaryString);
+
+      contents = [
+        {
+          inlineData: {
+            mimeType,
+            data: base64Audio,
+          },
+        },
+        {
+          text: `Parse the financial transactions from this voice recording. Today's date is ${todayDate}.`,
+        },
+      ];
+    } catch (prepError: unknown) {
+      const errorType =
+        prepError instanceof Error
+          ? prepError.constructor.name
+          : typeof prepError;
+      console.error(
+        "[parse-voice] Preparation failed after accepted reservation",
+        { errorType }
+      );
+      let released = false;
+      try {
+        released = await releaseVoiceAiWork(serviceClient, {
+          userId: auth.userId,
+          requestId: reservation.requestId,
+          decisionCode: "preparation_failed",
+        });
+      } catch (releaseErr: unknown) {
+        const releaseErrorType =
+          releaseErr instanceof Error
+            ? releaseErr.constructor.name
+            : typeof releaseErr;
+        console.error(
+          "[parse-voice] Failed to release reservation after prep error",
+          { errorType: releaseErrorType }
+        );
+      }
+      if (!released) {
+        console.error(
+          "[parse-voice] Release returned false after prep error; quota may be stranded"
+        );
+      }
+      return errorResponse("Internal server error", 500);
     }
 
     // Provider start is the single usage charge for the logical request.

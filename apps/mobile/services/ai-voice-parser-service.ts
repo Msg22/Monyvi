@@ -92,6 +92,11 @@ interface ParseVoiceResult {
   readonly detectedLanguage: string;
 }
 
+/** Public alias — consumed by voice-flow-submission.ts for buildParserPayload return type. */
+export type AiVoiceParserOptions = ParseVoiceOptions;
+/** Public alias — consumed by voice-flow-submission.ts for serializeAiReviewParams param. */
+export type AiVoiceParserSuccess = ParseVoiceResult;
+
 export interface VoiceQuotaParserError {
   readonly kind: VoiceQuotaRefusal["reason"];
   readonly message: string;
@@ -224,6 +229,24 @@ function linkAbortSignal(
 export async function parseVoiceWithAi(
   options: ParseVoiceOptions
 ): Promise<ParseVoiceResult | VoiceParserFailure> {
+  // Pre-transport category validation: fail fast if category data is missing/empty.
+  // An empty category map would cause every parseCategory() call to throw,
+  // silently dropping transactions after expensive network transport and quota deduction.
+  const categoryMap: CategoryMap = buildCategoryMap(options.categoryRecords);
+  if (categoryMap.size === 0) {
+    logger.error(
+      "[ai-voice-parser] Category data unavailable — categoryMap is empty",
+      new Error("Empty categoryMap"),
+      { categoryRecordsLength: options.categoryRecords.length }
+    );
+    return {
+      kind: "config",
+      message:
+        "Category data is unavailable. Please restart the app and try again.",
+      retryableSameRequest: true,
+    };
+  }
+
   // Compute caller's local date in YYYY-MM-DD format for relative date resolution
   const now = new Date();
   const callerLocalDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
@@ -441,22 +464,7 @@ export async function parseVoiceWithAi(
       };
     }
 
-    // Build category map for lookup — fail fast if category data is missing/empty.
-    // An empty category map would cause every parseCategory() call to throw,
-    // silently dropping all transactions and returning a misleading "empty" error.
-    const categoryMap: CategoryMap = buildCategoryMap(options.categoryRecords);
-    if (categoryMap.size === 0) {
-      logger.error(
-        "[ai-voice-parser] Category data unavailable — categoryMap is empty",
-        new Error("Empty categoryMap"),
-        { categoryRecordsLength: options.categoryRecords.length }
-      );
-      return {
-        kind: "config",
-        message:
-          "Category data is unavailable. Please restart the app and try again.",
-      };
-    }
+    // Parse categories using pre-validated categoryMap
 
     const validatedCurrency = normalizeCurrency(options.preferredCurrency);
     const results: ParsedVoiceTransaction[] = [];

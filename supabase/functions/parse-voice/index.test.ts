@@ -409,3 +409,335 @@ Deno.test(
     assertRejectedBeforeProvider(response, 400);
   }
 );
+
+Deno.test(
+  "safeguard ordering: quota refusal rejects before prompt/audio encoding or provider invocation",
+  async (): Promise<void> => {
+    resetParseVoiceTestState();
+    queueProviderSuccess();
+
+    let encodingAttempted = false;
+    const originalBtoa = globalThis.btoa;
+    globalThis.btoa = (data: string): string => {
+      encodingAttempted = true;
+      return originalBtoa(data);
+    };
+
+    try {
+      setRpcResponder(async (name, params): Promise<RpcResult> => {
+        if (name === "voice_ai_reserve_work") {
+          return {
+            data: [
+              {
+                request_id: VOICE_REQUEST_ID,
+                accepted: false,
+                decision_code: "daily_limit",
+                is_replay: false,
+                server_now: SERVER_NOW,
+                time_zone: VALID_TIME_ZONE,
+                daily_limit: 5,
+                remaining: 0,
+                reset_at: RESET_AT,
+                available_at: RESET_AT,
+                burst_available_at: null,
+                reservation_expires_at: null,
+                policy_version: "free-launch-v1",
+              },
+            ],
+            error: null,
+          };
+        }
+        throw new Error(`Unexpected RPC call during quota refusal: ${name}`);
+      });
+
+      const response = await handler(createVoiceRequest());
+
+      assert.equal(response.status, 429);
+      assert.equal(getProviderInvocations().length, 0);
+      assert.equal(encodingAttempted, false);
+      assert.deepEqual(
+        getRpcCalls().map((c) => c.name),
+        ["voice_ai_reserve_work"]
+      );
+    } finally {
+      globalThis.btoa = originalBtoa;
+    }
+  }
+);
+
+Deno.test(
+  "safeguard ordering: accepted reservation releases work when local prompt/encoding preparation fails",
+  async (): Promise<void> => {
+    resetParseVoiceTestState();
+    queueProviderSuccess();
+
+    const originalBtoa = globalThis.btoa;
+    globalThis.btoa = (): string => {
+      throw new Error("Injected base64 encoding preparation failure");
+    };
+
+    try {
+      setRpcResponder(async (name, params): Promise<RpcResult> => {
+        switch (name) {
+          case "voice_ai_reserve_work":
+            return {
+              data: [
+                {
+                  request_id: VOICE_REQUEST_ID,
+                  accepted: true,
+                  decision_code: "accepted",
+                  is_replay: false,
+                  server_now: SERVER_NOW,
+                  time_zone: VALID_TIME_ZONE,
+                  daily_limit: 5,
+                  remaining: 4,
+                  reset_at: RESET_AT,
+                  available_at: null,
+                  burst_available_at: null,
+                  reservation_expires_at: RESERVATION_EXPIRES_AT,
+                  policy_version: "free-launch-v1",
+                },
+              ],
+              error: null,
+            };
+
+          case "voice_ai_release_work":
+            assert.deepEqual(params, {
+              p_user_id: "voice-user",
+              p_request_id: VOICE_REQUEST_ID,
+              p_decision_code: "preparation_failed",
+            });
+            return { data: true, error: null };
+
+          default:
+            throw new Error(`Unexpected RPC during prep failure: ${name}`);
+        }
+      });
+
+      const response = await handler(createVoiceRequest());
+
+      assert.equal(response.status, 500);
+      assert.equal(getProviderInvocations().length, 0);
+      assert.deepEqual(
+        getRpcCalls().map((c) => c.name),
+        ["voice_ai_reserve_work", "voice_ai_release_work"]
+      );
+    } finally {
+      globalThis.btoa = originalBtoa;
+    }
+  }
+);
+
+Deno.test(
+  "safeguard ordering: ambiguous mark-start RPC failure never releases work",
+  async (): Promise<void> => {
+    resetParseVoiceTestState();
+    queueProviderSuccess();
+
+    setRpcResponder(async (name, params): Promise<RpcResult> => {
+      switch (name) {
+        case "voice_ai_reserve_work":
+          return {
+            data: [
+              {
+                request_id: VOICE_REQUEST_ID,
+                accepted: true,
+                decision_code: "accepted",
+                is_replay: false,
+                server_now: SERVER_NOW,
+                time_zone: VALID_TIME_ZONE,
+                daily_limit: 5,
+                remaining: 4,
+                reset_at: RESET_AT,
+                available_at: null,
+                burst_available_at: null,
+                reservation_expires_at: RESERVATION_EXPIRES_AT,
+                policy_version: "free-launch-v1",
+              },
+            ],
+            error: null,
+          };
+
+        case "voice_ai_mark_provider_started":
+          return {
+            data: null,
+            error: { message: "Network timeout communicating with database" },
+          };
+
+        case "voice_ai_release_work":
+          throw new Error(
+            "CRITICAL SAFETY VIOLATION: ambiguous mark-start failure must NEVER release work"
+          );
+
+        default:
+          throw new Error(
+            `Unexpected RPC during ambiguous mark-start: ${name}`
+          );
+      }
+    });
+
+    const response = await handler(createVoiceRequest());
+
+    assert.equal(response.status, 503);
+    assert.equal(getProviderInvocations().length, 0);
+    assert.deepEqual(
+      getRpcCalls().map((c) => c.name),
+      ["voice_ai_reserve_work", "voice_ai_mark_provider_started"]
+    );
+  }
+);
+
+Deno.test(
+  "safeguard ordering: prep failure handles release returning false gracefully without throwing",
+  async (): Promise<void> => {
+    resetParseVoiceTestState();
+    queueProviderSuccess();
+
+    const originalBtoa = globalThis.btoa;
+    globalThis.btoa = (): string => {
+      throw new Error("Injected base64 encoding preparation failure");
+    };
+
+    try {
+      setRpcResponder(async (name, params): Promise<RpcResult> => {
+        switch (name) {
+          case "voice_ai_reserve_work":
+            return {
+              data: [
+                {
+                  request_id: VOICE_REQUEST_ID,
+                  accepted: true,
+                  decision_code: "accepted",
+                  is_replay: false,
+                  server_now: SERVER_NOW,
+                  time_zone: VALID_TIME_ZONE,
+                  daily_limit: 5,
+                  remaining: 4,
+                  reset_at: RESET_AT,
+                  available_at: null,
+                  burst_available_at: null,
+                  reservation_expires_at: RESERVATION_EXPIRES_AT,
+                  policy_version: "free-launch-v1",
+                },
+              ],
+              error: null,
+            };
+
+          case "voice_ai_release_work":
+            assert.deepEqual(params, {
+              p_user_id: "voice-user",
+              p_request_id: VOICE_REQUEST_ID,
+              p_decision_code: "preparation_failed",
+            });
+            // Return false to simulate release returning false
+            return { data: false, error: null };
+
+          default:
+            throw new Error(`Unexpected RPC during prep failure: ${name}`);
+        }
+      });
+
+      const response = await handler(createVoiceRequest());
+
+      assert.equal(response.status, 500);
+      assert.equal(getProviderInvocations().length, 0);
+      assert.deepEqual(
+        getRpcCalls().map((c) => c.name),
+        ["voice_ai_reserve_work", "voice_ai_release_work"]
+      );
+    } finally {
+      globalThis.btoa = originalBtoa;
+    }
+  }
+);
+
+Deno.test(
+  "safeguard ordering: prep failure handles release RPC error gracefully and returns safe 500",
+  async (): Promise<void> => {
+    resetParseVoiceTestState();
+    queueProviderSuccess();
+
+    const originalBtoa = globalThis.btoa;
+    globalThis.btoa = (): string => {
+      throw new Error("Injected base64 encoding preparation failure");
+    };
+
+    try {
+      setRpcResponder(async (name, params): Promise<RpcResult> => {
+        switch (name) {
+          case "voice_ai_reserve_work":
+            return {
+              data: [
+                {
+                  request_id: VOICE_REQUEST_ID,
+                  accepted: true,
+                  decision_code: "accepted",
+                  is_replay: false,
+                  server_now: SERVER_NOW,
+                  time_zone: VALID_TIME_ZONE,
+                  daily_limit: 5,
+                  remaining: 4,
+                  reset_at: RESET_AT,
+                  available_at: null,
+                  burst_available_at: null,
+                  reservation_expires_at: RESERVATION_EXPIRES_AT,
+                  policy_version: "free-launch-v1",
+                },
+              ],
+              error: null,
+            };
+
+          case "voice_ai_release_work":
+            assert.deepEqual(params, {
+              p_user_id: "voice-user",
+              p_request_id: VOICE_REQUEST_ID,
+              p_decision_code: "preparation_failed",
+            });
+            // Simulate release throwing an RPC error
+            throw new Error("Database connection dropped during release");
+
+          default:
+            throw new Error(`Unexpected RPC during prep failure: ${name}`);
+        }
+      });
+
+      const response = await handler(createVoiceRequest());
+
+      assert.equal(response.status, 500);
+      assert.equal(getProviderInvocations().length, 0);
+      assert.deepEqual(
+        getRpcCalls().map((c) => c.name),
+        ["voice_ai_reserve_work", "voice_ai_release_work"]
+      );
+    } finally {
+      globalThis.btoa = originalBtoa;
+    }
+  }
+);
+
+Deno.test(
+  "pre-reserve configuration: missing GEMINI_API_KEY returns 500 without reserving quota or invoking provider",
+  async (): Promise<void> => {
+    resetParseVoiceTestState();
+    queueProviderSuccess();
+
+    const originalApiKey = Deno.env.get("GEMINI_API_KEY");
+    Deno.env.delete("GEMINI_API_KEY");
+
+    try {
+      const response = await handler(createVoiceRequest());
+
+      assert.equal(response.status, 500);
+      assert.deepEqual(await response.json(), {
+        error: "GEMINI_API_KEY not configured",
+        code: 500,
+      });
+      assert.equal(getRpcCalls().length, 0);
+      assert.equal(getProviderInvocations().length, 0);
+    } finally {
+      if (originalApiKey !== undefined) {
+        Deno.env.set("GEMINI_API_KEY", originalApiKey);
+      }
+    }
+  }
+);
