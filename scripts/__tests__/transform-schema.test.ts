@@ -19,6 +19,17 @@ interface TransformSchemaModule {
     relationships: Readonly<Record<string, readonly unknown[]>>,
     tables: ParsedSchema["tables"]
   ) => string;
+  readonly formatContent: (
+    filePath: string,
+    content: string,
+    prettierModule?: unknown
+  ) => Promise<string>;
+  readonly writeIfChanged: (
+    filePath: string,
+    content: string,
+    fsModule?: unknown,
+    prettierModule?: unknown
+  ) => Promise<boolean>;
 }
 
 const transformSchema =
@@ -50,23 +61,102 @@ export type Database = {
   assert.deepEqual(parsed.enums.account_type, ["CASH", "BANK"]);
 });
 
-test("generated-file formatting uses the local Prettier binary and fails closed", () => {
-  const source = readFileSync(
-    new URL("../transform-schema.js", import.meta.url),
-    "utf8"
+test("formatContent formats code using installed Prettier configuration", async () => {
+  const unformatted = "export const x:   number=1;\n";
+  const formatted = await transformSchema.formatContent(
+    "dummy.ts",
+    unformatted
   );
+  assert.equal(formatted, "export const x: number = 1;\n");
+});
 
-  assert.match(source, /PRETTIER_BIN/);
-  assert.match(source, /execFileSync\([\s\S]*PRETTIER_BIN/);
-  assert.match(
-    source,
-    /for \(const generatedPath of generatedBaseModelPaths\)/
+test("writeIfChanged writes formatted content, skips on second identical run, and fails closed", async () => {
+  const fs = require("node:fs");
+  const path = require("node:path");
+  const tmpDir = path.join(
+    __dirname,
+    "../../.tmp/test-transform-write-" + Date.now()
   );
-  assert.doesNotMatch(source, /BASE_MODELS_DIR}\/\*\*\/\*\.ts/);
-  assert.doesNotMatch(
-    source,
-    /Prettier formatting (?:failed|of schema\/types skipped)/
-  );
+  fs.mkdirSync(tmpDir, { recursive: true });
+  const testFile = path.join(tmpDir, "test.ts");
+
+  try {
+    const unformatted = "export  const   y:string='hello';\n";
+    // 1. First write formats and writes file
+    const changed1 = await transformSchema.writeIfChanged(
+      testFile,
+      unformatted
+    );
+    assert.equal(changed1, true);
+    const contentOnDisk1 = fs.readFileSync(testFile, "utf8");
+    assert.equal(contentOnDisk1, 'export const y: string = "hello";\n');
+
+    // 2. Second identical write causes zero writes (skips and returns false)
+    const changed2 = await transformSchema.writeIfChanged(
+      testFile,
+      unformatted
+    );
+    assert.equal(changed2, false);
+    const contentOnDisk2 = fs.readFileSync(testFile, "utf8");
+    assert.equal(contentOnDisk2, contentOnDisk1);
+
+    // 3. Formatting rejection fails closed and leaves old bytes intact
+    const brokenPrettier = {
+      resolveConfig: async () => null,
+      format: async () => {
+        throw new Error("Syntax error in Prettier");
+      },
+    };
+    await assert.rejects(
+      () =>
+        transformSchema.writeIfChanged(
+          testFile,
+          "invalid syntax",
+          fs,
+          brokenPrettier
+        ),
+      /Syntax error in Prettier/
+    );
+    assert.equal(fs.readFileSync(testFile, "utf8"), contentOnDisk1);
+
+    // 4. Disk write failure propagates and leaves old bytes intact
+    const failingWriteFs = {
+      ...fs,
+      writeFileSync: () => {
+        throw new Error("ENOSPC: disk full");
+      },
+    };
+    await assert.rejects(
+      () =>
+        transformSchema.writeIfChanged(
+          testFile,
+          "export const z = 2;\n",
+          failingWriteFs
+        ),
+      /ENOSPC: disk full/
+    );
+    assert.equal(fs.readFileSync(testFile, "utf8"), contentOnDisk1);
+
+    // 5. Rename failure propagates and leaves old bytes intact
+    const failingRenameFs = {
+      ...fs,
+      renameSync: () => {
+        throw new Error("EPERM: rename failed");
+      },
+    };
+    await assert.rejects(
+      () =>
+        transformSchema.writeIfChanged(
+          testFile,
+          "export const w = 3;\n",
+          failingRenameFs
+        ),
+      /Failed to rename temporary file: EPERM/
+    );
+    assert.equal(fs.readFileSync(testFile, "utf8"), contentOnDisk1);
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
 });
 
 test("generates explicit SQL-null fields only for approved model capabilities", () => {
@@ -252,5 +342,92 @@ export type Database = {
   assert.doesNotMatch(
     generatedSchema,
     /sms_ai_work_requests|voice_ai_usage_windows|voice_ai_work_requests/
+  );
+});
+
+test("renames colliding relation property to rateBatch for market_rate_observations while preserving ordinary relations", () => {
+  const parsed = transformSchema.parseSupabaseTypes(`
+export type Database = {
+  public: {
+    Tables: {
+      market_rates: {
+        Row: { id: string; };
+        Insert: {};
+        Update: {};
+        Relationships: [];
+      };
+      market_rate_observations: {
+        Row: { id: string; batch_id: string; };
+        Insert: {};
+        Update: {};
+        Relationships: [
+          {
+            foreignKeyName: "market_rate_observations_batch_id_fkey";
+            columns: ["batch_id"];
+            isOneToOne: false;
+            referencedRelation: "market_rates";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      ordinary_items: {
+        Row: { id: string; account_id: string; };
+        Insert: {};
+        Update: {};
+        Relationships: [
+          {
+            foreignKeyName: "ordinary_items_account_id_fkey";
+            columns: ["account_id"];
+            isOneToOne: false;
+            referencedRelation: "accounts";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      accounts: {
+        Row: { id: string; };
+        Insert: {};
+        Update: {};
+        Relationships: [];
+      };
+    }
+    Enums: { [_ in never]: never }
+  }
+}`);
+
+  const observationModel = transformSchema.generateBaseModel(
+    "market_rate_observations",
+    [
+      { name: "id", wmType: "string" },
+      { name: "batch_id", wmType: "string" },
+    ],
+    parsed.relationships!,
+    parsed.tables
+  );
+
+  const ordinaryModel = transformSchema.generateBaseModel(
+    "ordinary_items",
+    [
+      { name: "id", wmType: "string" },
+      { name: "account_id", wmType: "string" },
+    ],
+    parsed.relationships!,
+    parsed.tables
+  );
+
+  // MarketRateObservation uses rateBatch to avoid shadowing WatermelonDB Model.batch
+  assert.match(
+    observationModel,
+    /@relation\("market_rates", "batch_id"\) rateBatch!: Relation<BaseMarketRate>;/
+  );
+  assert.doesNotMatch(
+    observationModel,
+    /@relation\("market_rates", "batch_id"\) batch!:/
+  );
+
+  // Ordinary relations remain unmodified (e.g. account_id -> account)
+  assert.match(
+    ordinaryModel,
+    /@relation\("accounts", "account_id"\) account!: Relation<BaseAccount>;/
   );
 });

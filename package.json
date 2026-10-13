@@ -62,7 +62,7 @@
     "start:android": "npm run start -w @monyvi/mobile",
     "ios": "expo run:ios",
     "db:types": "npx supabase gen types typescript --project-id yulbcndyssdjicbpmlrk > packages/db/src/supabase-types.ts",
-    "db:types:local": "npx supabase gen types typescript --local > packages/db/src/supabase-types.ts",
+    "db:types:local": "node scripts/generate-local-supabase-types.cjs",
     "db:format-types": "npx prettier --write packages/db/src/supabase-types.ts",
     "db:transform": "node scripts/transform-schema.js",
     "db:sync": "npm run db:types && npm run db:format-types && npm run db:transform",

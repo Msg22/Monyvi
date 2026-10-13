@@ -162,7 +162,13 @@ function VoiceActionSurface({
   const hasInteractiveMic = props.state === "idle";
   const hasDecorativeGradientMic =
     isStarting || isRecording || isPaused || isCompleted;
-  const showStaticHalos = !(props.state === "idle" || hasDecorativeGradientMic);
+  const isError = props.state === "error";
+  // The generic error state keeps its neutral circle without decorative halos.
+  const showStaticHalos = !(
+    props.state === "idle" ||
+    isError ||
+    hasDecorativeGradientMic
+  );
   // The explicit recorder action row uses direction="ltr" to preserve the
   // owner's physical LEFT/CENTER/RIGHT order even in Arabic/RTL layouts.
 
