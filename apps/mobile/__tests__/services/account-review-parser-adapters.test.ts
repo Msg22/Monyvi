@@ -133,17 +133,22 @@ jest.mock("@monyvi/logic", () => {
   const real = jest.requireActual<typeof import("@monyvi/logic")>("@monyvi/logic");
   return {
     ...real,
-    buildCategoryMap: jest.fn().mockImplementation(() => new Map([
-      ["food", { name: "Food", id: mockCategoryIds.food }],
-      ["shopping", { name: "Shopping", id: mockCategoryIds.shopping }],
-    ])),
-    parseCategory: jest.fn().mockImplementation((
-      systemName: string,
-      categories: ReadonlyMap<string, { readonly id: string; readonly name: string }>
-    ): { readonly id: string; readonly displayName: string } => {
-      const matched = categories.get(systemName);
-      if (!matched) throw new Error("Synthetic category is not available");
-      return { id: matched.id, displayName: matched.name };
+    buildCategoryMap: jest.fn().mockImplementation((
+      records: readonly {
+        readonly id: string;
+        readonly systemName: string;
+        readonly displayName: string;
+      }[]
+    ) => {
+      // Real SMS context supplies the category collection; do not substitute
+      // an unconditional fake ID unrelated to the submitted category.
+      if (records.length > 0) return real.buildCategoryMap(records);
+      // Legacy Voice input supplies its category text separately; give the
+      // preexisting Voice test a bounded synthetic category-map fixture.
+      return new Map([
+        ["food", { name: "Food", id: mockCategoryIds.food }],
+        ["shopping", { name: "Shopping", id: mockCategoryIds.shopping }],
+      ]);
     }),
   };
 });
