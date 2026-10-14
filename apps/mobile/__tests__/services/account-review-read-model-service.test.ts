@@ -636,9 +636,103 @@ describe("T006 owned account review snapshot / provider context", () => {
     } finally {
       release();
     }
-    await expect(inFlight).rejects.toThrow();
+    await expect(inFlight).rejects.toThrow("AUTH_SCOPE_CHANGED");
     expect(ownedCalls.filter((value) => value.table === "accounts")
       .every((value) => value.ownerId === OWNER_ID)).toBe(true);
+  });
+
+  it("does not select an arbitrary profile when multiple active owned profiles exist", async () => {
+    profileRows.push({
+      id: "1eea0000-3950-4000-8000-000000000203",
+      userId: OWNER_ID,
+      preferredCurrency: "USD",
+      deleted: false,
+    });
+
+    await expect(loadAccountReviewAccountSnapshots()).rejects.toThrow(
+      "ACCOUNT_REVIEW_PROFILE_CONFLICT"
+    );
+  });
+
+  it.each([-1, 7.5, 10000, Number.NaN, Number.POSITIVE_INFINITY])(
+    "rejects invalid live bank card suffix %s rather than projecting an invented identity",
+    async (cardLast4) => {
+      bankRows = bankRows.map((detail) =>
+        detail.accountId === BANK_ID && !detail.deleted
+          ? { ...detail, cardLast4 }
+          : detail
+      );
+
+      await expect(loadAccountReviewAccountSnapshots()).rejects.toThrow(
+        "ACCOUNT_REVIEW_INVALID_CARD_SUFFIX"
+      );
+    }
+  );
+
+  it.each([7, 2211])(
+    "rejects duplicate live bank details with suffix %s instead of picking one",
+    async (cardLast4) => {
+      bankRows.push({
+        id: "1eea0000-3950-4000-8000-000000000305",
+        accountId: BANK_ID,
+        cardLast4,
+        accountNumber: "PRIVATE-EXTRA-CARD",
+        deleted: false,
+      });
+
+      await expect(loadAccountReviewAccountSnapshots()).rejects.toThrow(
+        "ACCOUNT_REVIEW_BANK_DETAILS_CONFLICT"
+      );
+    }
+  );
+
+  it("preserves a missing bank card suffix as null, without inventing masked digits", async () => {
+    bankRows = bankRows.filter((detail) => detail.accountId !== BANK_ID);
+
+    const snapshot = await loadAccountReviewAccountSnapshots();
+    expect(snapshot.accounts.find((account) => account.id === BANK_ID)?.cardLast4)
+      .toBeNull();
+    expect(
+      snapshot.providerContext.accounts.find((account) => account.id === BANK_ID)
+        ?.cardLast4
+    ).toBeNull();
+  });
+
+  it("deduplicates persisted sender aliases by the existing normalizer and sorts deterministically", async () => {
+    senderRows.push(
+      {
+        id: "1eea0000-3950-4000-8000-000000000404",
+        accountId: BANK_ID,
+        senderName: " qNb ",
+        deleted: false,
+      },
+      {
+        id: "1eea0000-3950-4000-8000-000000000405",
+        accountId: BANK_ID,
+        senderName: " BANQUE  ",
+        deleted: false,
+      }
+    );
+
+    const snapshot = await loadAccountReviewAccountSnapshots();
+    expect(snapshot.accounts.find((account) => account.id === BANK_ID)?.senderNames)
+      .toEqual(["BANQUE", "QNB"]);
+    expect(snapshot.providerContext.accounts.find((account) => account.id === BANK_ID)
+      ?.senderNames).toEqual(["BANQUE", "QNB"]);
+    expect(JSON.stringify(snapshot.providerContext)).not.toContain("PRIVATE-");
+  });
+
+  it("fails closed on a blank active sender instead of silently dropping identity evidence", async () => {
+    senderRows.push({
+      id: "1eea0000-3950-4000-8000-000000000406",
+      accountId: BANK_ID,
+      senderName: " \t  ",
+      deleted: false,
+    });
+
+    await expect(loadAccountReviewAccountSnapshots()).rejects.toThrow(
+      "ACCOUNT_REVIEW_INVALID_SENDER"
+    );
   });
 
   it("fails closed rather than choosing an arbitrary currency when the owned profile is missing", async () => {
