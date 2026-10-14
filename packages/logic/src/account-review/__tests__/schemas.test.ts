@@ -3,11 +3,9 @@ import {
   accountReviewEvidenceSpanSchema,
   accountReviewAccountEvidenceSchema,
   accountReviewCurrencyEvidenceSchema,
-  accountReviewSuggestedAccountSchema,
   accountReviewVoiceResponseV2Schema,
   accountReviewSmsResponseV2Schema,
 } from "../schemas";
-import type { ParsedSmsTransaction, ParsedVoiceTransaction } from "../../types";
 import {
   makeAccountEvidence,
   makeCurrencyEvidence,

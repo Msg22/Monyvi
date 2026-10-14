@@ -249,7 +249,7 @@ describe("#395 T005 — review state integrity and H1/H3/H4 regressions", () => 
     }
 
     type RequiredKeys<T> = {
-      [K in keyof T]-?: {} extends Pick<T, K> ? never : K;
+      [K in keyof T]-?: Record<never, never> extends Pick<T, K> ? never : K;
     }[keyof T];
     type OptionalKeys<T> = Exclude<keyof T, RequiredKeys<T>>;
     type DriftKeys<Snapshot, Existing> = {
@@ -274,16 +274,21 @@ describe("#395 T005 — review state integrity and H1/H3/H4 regressions", () => 
       type SmsConforms = SmsSnapshot extends ParsedSmsTransaction ? true : false;
       type LegacyVoiceReasons = NonNullable<ParsedVoiceTransaction["reviewReasons"]>[number];
       type LegacySmsReasons = NonNullable<ParsedSmsTransaction["reviewReasons"]>[number];
-      type CompatibleReasons =
-        Exclude<LegacyVoiceReasons | LegacySmsReasons, AccountReviewReason> extends never
+      type VoiceReasonsCompatible =
+        Exclude<LegacyVoiceReasons, AccountReviewReason> extends never
+          ? true
+          : false;
+      type SmsReasonsCompatible =
+        Exclude<LegacySmsReasons, AccountReviewReason> extends never
           ? true
           : false;
       const typeOnlyConformance: readonly [VoiceConforms, SmsConforms] = [true, true];
       const driftGuards: readonly [
         NoSourceDrift<VoiceSnapshot, ParsedVoiceTransaction>,
         NoSourceDrift<SmsSnapshot, ParsedSmsTransaction>,
-        CompatibleReasons,
-      ] = [true, true, true];
+        VoiceReasonsCompatible,
+        SmsReasonsCompatible,
+      ] = [true, true, true, true];
       expect(typeOnlyConformance).toEqual([true, true]);
       expect(driftGuards).toEqual([true, true, true]);
       expect(accountReviewRowSchema.safeParse(validVoiceRow()).success).toBe(true);
