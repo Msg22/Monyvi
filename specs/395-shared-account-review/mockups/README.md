@@ -58,6 +58,12 @@ implementation. No more mockups will be generated.
 | [14-sms-save-failure-en](proposals/r3/14-sms-save-failure-en.png)               | SMS review — preserve selections and drafts on save failure         |
 | [15-combined-review-ar](proposals/r3/15-combined-review-ar.png)                 | Arabic RTL — revised combined review and shared disclosure          |
 
-Exact binding sidecars and combined-revision approvals remain prerequisites
-before coding. Generated phone framing/lighting and unrelated form context do
-not authorize a parallel app design system.
+Exact sidecars are prepared alongside all 23 image files, with approvals still
+PENDING. [Review package B1](../pre-plan-review.md) pairs each image with its
+scoped facts and combined revision.
+[Common proposed contract](binding-contract.md) supplies
+normal/responsive/theme/RTL/accessibility values. These values are explicit
+proposals, not inferred measurements of generated raster pixels.
+Combined-revision approvals remain prerequisites before coding. Generated phone
+framing/lighting and unrelated form context do not authorize a parallel app
+design system.

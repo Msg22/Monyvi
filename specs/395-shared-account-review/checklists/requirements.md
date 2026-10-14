@@ -25,10 +25,16 @@ Created: 2026-10-14. Feature: [spec.md](../spec.md).
 
 ## Readiness gates
 
+- [x] Owner approval of exact published spec recorded in
+      `../approvals/spec-2026-10-14.json`; approved spec bytes unchanged.
 - [x] Branch/spec explicitly separated from merged #383 and updated to latest
       main; scope does not include #391 or independent account-form migration.
 - [ ] Owner visual approval of new R3 state proposals recorded.
 - [ ] Exact scoped binding metadata approved and verifier passes.
+- [x] Concrete pre-plan binding package B1 prepared: 23 sidecars, common
+      contract, image/metadata/combined revisions and review index. Pending
+      approval remains explicit; fingerprint integrity alone is not
+      authoritative verification.
 - [ ] Speckit plan and contracts completed after visual gate.
 - [ ] Speckit tasks completed and manual scenario/automation mapping reconciled.
 - [ ] Speckit analyze completed before implementation/worker assignment.

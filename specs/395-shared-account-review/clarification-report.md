@@ -34,3 +34,13 @@ A repeat full session is unnecessary. If technical contract research exposes a
 new material product/financial choice, ask a targeted clarification before the
 dependent plan is finalized. R3 visual/binding approval is a separate pending
 gate, not a missing product-clarification session.
+
+## Final pre-plan pass — 2026-10-14
+
+Owner approved the exact published spec; its receipt is in
+`approvals/spec-2026-10-14.json`. This pass found no new unanswered product
+question. The completed B1 proposal supplies concrete spacing, sizing, theme,
+responsive, RTL, accessibility and transition values for all retained image
+scopes. These new metadata values and R3 visual/copy additions remain pending
+explicit approval in `pre-plan-review.md`. No image was regenerated and no
+technical plan or implementation assignment started.

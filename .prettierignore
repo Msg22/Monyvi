@@ -25,3 +25,6 @@ specs/395-shared-account-review/mockups/provenance/
 specs/395-shared-account-review/mockups/proposals/r3/manifest.json
 specs/395-shared-account-review/mockups/proposals/r3/interaction-notes.md
 specs/395-shared-account-review/mockups/adjustments.md
+specs/395-shared-account-review/mockups/**/*.binding.md
+specs/395-shared-account-review/mockups/binding-contract.md
+specs/395-shared-account-review/mockups/binding-package.json

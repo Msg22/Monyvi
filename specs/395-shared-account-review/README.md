@@ -7,6 +7,10 @@ owner instruction after the merge.
 
 - [Specification](spec.md): agreed behavior, six user stories, 24 requirements
   and edge cases.
+- [Spec approval receipt](approvals/spec-2026-10-14.json): owner approved exact
+  published bytes. The older status header is superseded by this receipt.
+- [Pre-plan review package](pre-plan-review.md): all existing images paired with
+  proposed exact bindings, common design-system contract and EN/AR copy review.
 - [Requirements/readiness checklist](checklists/requirements.md),
   [clarification pass](clarification-report.md),
   [workflow status](workflow-status.md).
