@@ -57,6 +57,8 @@ let profileRows: ProfileRecord[] = [];
 let bankRows: BankRecord[] = [];
 let senderRows: SenderRecord[] = [];
 let failedChildTable: string | null = null;
+let mockAccountReadGate: Promise<void> | null = null;
+let mockNotifyAccountReadStarted: (() => void) | null = null;
 
 const ownedCalls: QueryCall[] = [];
 const childCalls: ChildQueryCall[] = [];
@@ -92,6 +94,10 @@ function makeOwnedQuery(
   ownedCalls.push({ table: table.table, ownerId, conditions });
   return {
     fetch: async (): Promise<readonly (AccountRecord | ProfileRecord)[]> => {
+      if (table.table === "accounts" && mockAccountReadGate) {
+        mockNotifyAccountReadStarted?.();
+        await mockAccountReadGate;
+      }
       const records: readonly (AccountRecord | ProfileRecord)[] =
         table.table === "accounts"
           ? accountRows
@@ -200,13 +206,16 @@ const mockGetCurrentUserDataScope = jest.fn(
       foreignKey: string,
       ...conditions: readonly unknown[]
     ) => ReturnType<typeof makeChildQuery>;
-  }> => ({
-    userId: mockCurrentOwnerId,
+  }> => {
+    // A scope is a captured immutable user identity, not a live global getter.
+    const scopedOwnerId = mockCurrentOwnerId;
+    return {
+    userId: scopedOwnerId,
     queryOwned: (
       table: TableRef,
       ...conditions: readonly unknown[]
     ): ReturnType<typeof makeOwnedQuery> =>
-      mockQueryOwned(table, mockCurrentOwnerId, ...conditions),
+      mockQueryOwned(table, scopedOwnerId, ...conditions),
     queryChildrenOfOwnedParents: (
       table: TableRef,
       parents: readonly { readonly id: string }[],
@@ -216,7 +225,7 @@ const mockGetCurrentUserDataScope = jest.fn(
       mockQueryChildrenOfOwnedParents(
         table,
         parents,
-        mockCurrentOwnerId,
+        scopedOwnerId,
         foreignKey,
         ...conditions
       ),
@@ -229,11 +238,12 @@ const mockGetCurrentUserDataScope = jest.fn(
       mockQueryChildrenOfOwnedParent(
         table,
         parent,
-        mockCurrentOwnerId,
+        scopedOwnerId,
         foreignKey,
         ...conditions
       ),
-  })
+    };
+  }
 );
 
 jest.mock("@monyvi/db", () => ({
@@ -300,6 +310,8 @@ describe("T006 owned account review snapshot / provider context", () => {
     jest.clearAllMocks();
     mockCurrentOwnerId = OWNER_ID;
     failedChildTable = null;
+    mockAccountReadGate = null;
+    mockNotifyAccountReadStarted = null;
     ownedCalls.length = 0;
     childCalls.length = 0;
     individualChildCalls.length = 0;
@@ -393,12 +405,56 @@ describe("T006 owned account review snapshot / provider context", () => {
     ];
   });
 
-  it("loads only active owned accounts with preferred currency and required canonical context", async () => {
-    const result = accountReviewRequestContextSchema.parse(
-      await loadAccountReviewAccountSnapshots()
+  it("returns F01 owned local snapshots plus a strict, separate provider context", async () => {
+    const snapshots = await loadAccountReviewAccountSnapshots();
+    const providerContext = accountReviewRequestContextSchema.parse(
+      snapshots.providerContext
     );
 
-    expect(result).toEqual({
+    expect(snapshots.ownerId).toBe(OWNER_ID);
+    expect(snapshots.preferredCurrency).toBe("EGP");
+    expect(snapshots.accounts).toEqual(
+      expect.arrayContaining([
+        {
+          id: BANK_ID,
+          name: "QNB Everyday",
+          type: "BANK",
+          currency: "EGP",
+          institutionId: "qnb",
+          providerDisplayName: "QNB",
+          cardLast4: "0007",
+          senderNames: ["QNB"],
+          isDefault: true,
+        },
+        {
+          id: CASH_ID,
+          name: "Cash",
+          type: "CASH",
+          currency: "EGP",
+          institutionId: null,
+          providerDisplayName: null,
+          cardLast4: null,
+          senderNames: [],
+          isDefault: false,
+        },
+        {
+          id: WALLET_ID,
+          name: "Mobile Wallet",
+          type: "DIGITAL_WALLET",
+          currency: "USD",
+          institutionId: null,
+          providerDisplayName: "Mobile Wallet",
+          cardLast4: null,
+          senderNames: [],
+          isDefault: false,
+        },
+      ])
+    );
+    expect(snapshots.accounts).toHaveLength(3);
+    expect(snapshots.accounts.map((value) => value.id)).not.toContain(DELETED_ID);
+    expect(snapshots.accounts.map((value) => value.id)).not.toContain(FOREIGN_ID);
+
+    expect(providerContext).toMatchObject({
       reviewContractVersion: "account-review/v2",
       preferredCurrency: "EGP",
       accounts: expect.arrayContaining([
@@ -412,38 +468,32 @@ describe("T006 owned account review snapshot / provider context", () => {
           cardLast4: "0007",
           senderNames: ["QNB"],
         },
-        {
-          id: CASH_ID,
-          name: "Cash",
-          type: "CASH",
-          currency: "EGP",
-          institutionId: null,
-          providerDisplayName: null,
-          cardLast4: null,
-          senderNames: [],
-        },
-        {
-          id: WALLET_ID,
-          name: "Mobile Wallet",
-          type: "DIGITAL_WALLET",
-          currency: "USD",
-          institutionId: null,
-          providerDisplayName: "Mobile Wallet",
-          cardLast4: null,
-          senderNames: [],
-        },
       ]),
     });
-    expect(result.accounts).toHaveLength(3);
-    expect(result.accounts.map((value) => value.id)).not.toContain(DELETED_ID);
-    expect(result.accounts.map((value) => value.id)).not.toContain(FOREIGN_ID);
+    expect(providerContext.accounts).toHaveLength(3);
+    expect(Object.keys(snapshots.providerContext).sort()).toEqual([
+      "accounts",
+      "preferredCurrency",
+      "reviewContractVersion",
+    ]);
+    // The local read model adds ONLY isDefault to the canonical account projection.
+    expect(Object.keys(snapshots.accounts[0] ?? {}).sort()).toEqual(
+      [...Object.keys(providerContext.accounts[0] ?? {}), "isDefault"].sort()
+    );
+    expect(providerContext.accounts.map((value) => value.id)).toEqual(
+      snapshots.accounts.map((value) => value.id)
+    );
   });
 
   it("never sends balances, full identifiers or excluded child records into provider context", async () => {
-    const result = accountReviewRequestContextSchema.parse(
-      await loadAccountReviewAccountSnapshots()
+    const snapshots = await loadAccountReviewAccountSnapshots();
+    const providerContext = accountReviewRequestContextSchema.parse(
+      snapshots.providerContext
     );
-    const serialized = JSON.stringify(result);
+    const serialized = JSON.stringify(snapshots.providerContext);
+    expect(snapshots.accounts.find((value) => value.id === BANK_ID)?.isDefault)
+      .toBe(true);
+    expect(providerContext.accounts).toHaveLength(3);
 
     expect(serialized).not.toContain("910024.25");
     expect(serialized).not.toContain("1234567890123456");
@@ -451,6 +501,12 @@ describe("T006 owned account review snapshot / provider context", () => {
     expect(serialized).not.toContain("balance");
     expect(serialized).not.toContain("accountNumber");
     expect(serialized).not.toContain("isDefault");
+    expect(serialized).not.toContain("ownerId");
+    expect(Object.keys(snapshots.providerContext).sort()).toEqual([
+      "accounts",
+      "preferredCurrency",
+      "reviewContractVersion",
+    ]);
     expect(serialized).not.toContain(FOREIGN_ID);
     expect(serialized).not.toContain(DELETED_ID);
     expect(serialized).toContain('"cardLast4":"0007"');
@@ -487,31 +543,94 @@ describe("T006 owned account review snapshot / provider context", () => {
 
   it("returns an empty account context safely without probing child rows per account", async () => {
     accountRows = [];
-    const result = accountReviewRequestContextSchema.parse(
-      await loadAccountReviewAccountSnapshots()
+    const snapshots = await loadAccountReviewAccountSnapshots();
+    const context = accountReviewRequestContextSchema.parse(
+      snapshots.providerContext
     );
 
-    expect(result.accounts).toEqual([]);
-    expect(result.preferredCurrency).toBe("EGP");
+    expect(snapshots.ownerId).toBe(OWNER_ID);
+    expect(snapshots.accounts).toEqual([]);
+    expect(context.accounts).toEqual([]);
+    expect(snapshots.preferredCurrency).toBe("EGP");
+    expect(context.preferredCurrency).toBe("EGP");
     expect(individualChildCalls).toHaveLength(0);
     expect(childCalls.filter((call) => call.table === "bank_details").length).toBeLessThanOrEqual(1);
     expect(childCalls.filter((call) => call.table === "account_sms_senders").length).toBeLessThanOrEqual(1);
   });
 
   it("does not leak cached first-owner results across an authenticated owner switch", async () => {
-    const first = accountReviewRequestContextSchema.parse(
-      await loadAccountReviewAccountSnapshots()
-    );
+    const first = await loadAccountReviewAccountSnapshots();
+    expect(first.ownerId).toBe(OWNER_ID);
     expect(first.accounts.map((value) => value.id)).toContain(BANK_ID);
 
     mockCurrentOwnerId = OTHER_ID;
-    const second = accountReviewRequestContextSchema.parse(
-      await loadAccountReviewAccountSnapshots()
+    const second = await loadAccountReviewAccountSnapshots();
+    const providerContext = accountReviewRequestContextSchema.parse(
+      second.providerContext
     );
+    expect(second.ownerId).toBe(OTHER_ID);
     expect(second.preferredCurrency).toBe("USD");
     expect(second.accounts.map((value) => value.id)).toEqual([FOREIGN_ID]);
+    expect(providerContext.accounts.map((value) => value.id)).toEqual([FOREIGN_ID]);
     expect(second.accounts.map((value) => value.id)).not.toContain(BANK_ID);
     expect(ownedCalls.filter((call) => call.table === "accounts").map((call) => call.ownerId)).toEqual([OWNER_ID, OTHER_ID]);
+  });
+
+  it("preserves zero or multiple inconsistent local defaults without choosing for the resolver", async () => {
+    accountRows = accountRows.map((row) => ({ ...row, isDefault: false }));
+
+    const none = await loadAccountReviewAccountSnapshots();
+    expect(none.accounts.filter((value) => value.isDefault)).toEqual([]);
+    expect(accountReviewRequestContextSchema.parse(none.providerContext)
+      .accounts).toHaveLength(3);
+
+    accountRows = accountRows.map((row) => ({
+      ...row,
+      isDefault: row.id === BANK_ID || row.id === CASH_ID,
+    }));
+    const inconsistent = await loadAccountReviewAccountSnapshots();
+    expect(inconsistent.accounts.filter((value) => value.isDefault)
+      .map((value) => value.id)).toEqual([BANK_ID, CASH_ID]);
+    expect(JSON.stringify(inconsistent.providerContext)).not.toContain("isDefault");
+  });
+
+  it("captures F07 scoped identity immutably before deferred reads change active user", async () => {
+    const scope = await mockGetCurrentUserDataScope();
+    mockCurrentOwnerId = OTHER_ID;
+
+    const query = scope.queryOwned(
+      { table: "accounts" },
+      { kind: "where", column: "deleted", value: false }
+    );
+    const rows = await query.fetch();
+
+    expect(scope.userId).toBe(OWNER_ID);
+    expect(ownedCalls.at(-1)?.ownerId).toBe(OWNER_ID);
+    expect(rows.map((row) => row.id)).toEqual([BANK_ID, CASH_ID, WALLET_ID]);
+  });
+
+  it("rejects an in-flight account read if the authenticated owner changes before final validation", async () => {
+    let release: () => void = () => undefined;
+    let signalRead: () => void = () => undefined;
+    const started = new Promise<void>((resolve) => { signalRead = resolve; });
+    mockAccountReadGate = new Promise<void>((resolve) => { release = resolve; });
+    mockNotifyAccountReadStarted = signalRead;
+
+    const inFlight = loadAccountReviewAccountSnapshots();
+    const firstEvent = await Promise.race([
+      started.then(() => "account_read_started"),
+      inFlight.then(() => "resolved_before_read", () => "rejected_before_read"),
+    ]);
+
+    try {
+      expect(firstEvent).toBe("account_read_started");
+      mockCurrentOwnerId = OTHER_ID;
+    } finally {
+      release();
+    }
+    await expect(inFlight).rejects.toThrow();
+    expect(ownedCalls.filter((value) => value.table === "accounts")
+      .every((value) => value.ownerId === OWNER_ID)).toBe(true);
   });
 
   it("fails closed rather than choosing an arbitrary currency when the owned profile is missing", async () => {
