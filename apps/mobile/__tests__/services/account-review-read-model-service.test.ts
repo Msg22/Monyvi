@@ -1,6 +1,6 @@
 import type { Account, AccountSmsSender, BankDetails, Profile } from "@monyvi/db";
-import { accountReviewRequestContextSchema } from "@monyvi/logic";
-import { loadAccountReviewAccountSnapshots } from "@/services/account-review-read-model-service";
+import { accountReviewRequestContextSchema, type AccountReviewAccountContext } from "@monyvi/logic";
+import { loadAccountReviewAccountSnapshots, type AccountReviewLocalAccountSnapshot } from "@/services/account-review-read-model-service";
 
 type AccountRecord = Pick<
   Account,
@@ -129,9 +129,9 @@ function makeChildQuery(
     conditions,
   });
   return {
-    fetch: async (): Promise<readonly (BankRecord | SenderRecord)[]> => {
+    fetch: (): Promise<readonly (BankRecord | SenderRecord)[]> => {
       if (failedChildTable === table.table) {
-        throw new Error("owned child query failed");
+        return Promise.reject(new Error("owned child query failed"));
       }
       const records: readonly (BankRecord | SenderRecord)[] =
         table.table === "bank_details"
@@ -139,10 +139,12 @@ function makeChildQuery(
           : table.table === "account_sms_senders"
             ? senderRows
             : [];
-      return records.filter(
-        (record) =>
-          parentIds.includes(record.accountId) &&
-          (!includesDeletedFalse(conditions) || !record.deleted)
+      return Promise.resolve(
+        records.filter(
+          (record) =>
+            parentIds.includes(record.accountId) &&
+            (!includesDeletedFalse(conditions) || !record.deleted)
+        )
       );
     },
   };
@@ -188,7 +190,7 @@ const mockQueryChildrenOfOwnedParent = jest.fn(
 );
 
 const mockGetCurrentUserDataScope = jest.fn(
-  async (): Promise<{
+  (): Promise<{
     readonly userId: string;
     readonly queryOwned: (
       table: TableRef,
@@ -209,7 +211,7 @@ const mockGetCurrentUserDataScope = jest.fn(
   }> => {
     // A scope is a captured immutable user identity, not a live global getter.
     const scopedOwnerId = mockCurrentOwnerId;
-    return {
+    return Promise.resolve({
       userId: scopedOwnerId,
       queryOwned: (
         table: TableRef,
@@ -242,7 +244,7 @@ const mockGetCurrentUserDataScope = jest.fn(
           foreignKey,
           ...conditions
         ),
-    };
+    });
   }
 );
 
@@ -271,7 +273,8 @@ jest.mock("@/services/user-data-access", () => ({
   // All test-module state is captured lazily after Jest hoists mock factories.
   getCurrentUserDataScope: (): ReturnType<typeof mockGetCurrentUserDataScope> =>
     mockGetCurrentUserDataScope(),
-  getRequiredCurrentUserId: async (): Promise<string> => mockCurrentOwnerId,
+  getRequiredCurrentUserId: (): Promise<string> =>
+    Promise.resolve(mockCurrentOwnerId),
   queryOwned: (
     ...args: Parameters<typeof mockQueryOwned>
   ): ReturnType<typeof mockQueryOwned> => mockQueryOwned(...args),
@@ -413,63 +416,63 @@ describe("T006 owned account review snapshot / provider context", () => {
 
     expect(snapshots.ownerId).toBe(OWNER_ID);
     expect(snapshots.preferredCurrency).toBe("EGP");
-    expect(snapshots.accounts).toEqual(
-      expect.arrayContaining([
-        {
-          id: BANK_ID,
-          name: "QNB Everyday",
-          type: "BANK",
-          currency: "EGP",
-          institutionId: "qnb",
-          providerDisplayName: "QNB",
-          cardLast4: "0007",
-          senderNames: ["QNB"],
-          isDefault: true,
-        },
-        {
-          id: CASH_ID,
-          name: "Cash",
-          type: "CASH",
-          currency: "EGP",
-          institutionId: null,
-          providerDisplayName: null,
-          cardLast4: null,
-          senderNames: [],
-          isDefault: false,
-        },
-        {
-          id: WALLET_ID,
-          name: "Mobile Wallet",
-          type: "DIGITAL_WALLET",
-          currency: "USD",
-          institutionId: null,
-          providerDisplayName: "Mobile Wallet",
-          cardLast4: null,
-          senderNames: [],
-          isDefault: false,
-        },
-      ])
-    );
+    const expectedBank: AccountReviewLocalAccountSnapshot = {
+      id: BANK_ID,
+      name: "QNB Everyday",
+      type: "BANK",
+      currency: "EGP",
+      institutionId: "qnb",
+      providerDisplayName: "QNB",
+      cardLast4: "0007",
+      senderNames: ["QNB"],
+      isDefault: true,
+    };
+    const expectedCash: AccountReviewLocalAccountSnapshot = {
+      id: CASH_ID,
+      name: "Cash",
+      type: "CASH",
+      currency: "EGP",
+      institutionId: null,
+      providerDisplayName: null,
+      cardLast4: null,
+      senderNames: [],
+      isDefault: false,
+    };
+    const expectedWallet: AccountReviewLocalAccountSnapshot = {
+      id: WALLET_ID,
+      name: "Mobile Wallet",
+      type: "DIGITAL_WALLET",
+      currency: "USD",
+      institutionId: null,
+      providerDisplayName: "Mobile Wallet",
+      cardLast4: null,
+      senderNames: [],
+      isDefault: false,
+    };
+    expect(snapshots.accounts.find((account) => account.id === BANK_ID))
+      .toEqual(expectedBank);
+    expect(snapshots.accounts.find((account) => account.id === CASH_ID))
+      .toEqual(expectedCash);
+    expect(snapshots.accounts.find((account) => account.id === WALLET_ID))
+      .toEqual(expectedWallet);
     expect(snapshots.accounts).toHaveLength(3);
     expect(snapshots.accounts.map((value) => value.id)).not.toContain(DELETED_ID);
     expect(snapshots.accounts.map((value) => value.id)).not.toContain(FOREIGN_ID);
 
-    expect(providerContext).toMatchObject({
-      reviewContractVersion: "account-review/v2",
-      preferredCurrency: "EGP",
-      accounts: expect.arrayContaining([
-        {
-          id: BANK_ID,
-          name: "QNB Everyday",
-          type: "BANK",
-          currency: "EGP",
-          institutionId: "qnb",
-          providerDisplayName: "QNB",
-          cardLast4: "0007",
-          senderNames: ["QNB"],
-        },
-      ]),
-    });
+    const expectedProviderBank: AccountReviewAccountContext = {
+      id: BANK_ID,
+      name: "QNB Everyday",
+      type: "BANK",
+      currency: "EGP",
+      institutionId: "qnb",
+      providerDisplayName: "QNB",
+      cardLast4: "0007",
+      senderNames: ["QNB"],
+    };
+    expect(providerContext.reviewContractVersion).toBe("account-review/v2");
+    expect(providerContext.preferredCurrency).toBe("EGP");
+    expect(providerContext.accounts.find((account) => account.id === BANK_ID))
+      .toEqual(expectedProviderBank);
     expect(providerContext.accounts).toHaveLength(3);
     expect(Object.keys(snapshots.providerContext).sort()).toEqual([
       "accounts",
