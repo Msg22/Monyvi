@@ -273,6 +273,34 @@ describe("#395 T007 — original Voice parser with advisory review v2", () => {
     expect(mockInvoke).toHaveBeenCalledTimes(1);
   });
 
+  it("preserves ambiguous Voice currency as unconfirmed instead of applying preferred EGP", async () => {
+    const response = makeVoiceV2Response();
+    mockInvoke.mockResolvedValueOnce({
+      data: {
+        ...response,
+        suggestedAccounts: [],
+        transactions: [{
+          ...response.transactions[0],
+          suggestionRef: null,
+          currency: null,
+          currencyEvidence: {
+            state: "ambiguous",
+            statedCode: null,
+            candidateCodes: ["EGP", "USD"],
+            evidenceSpans: [],
+          },
+        }],
+      },
+      error: null,
+    });
+    const result = await parseVoiceWithAi(voiceOptions());
+    expect(isVoiceParserError(result)).toBe(false);
+    if (isVoiceParserError(result)) throw new Error("Valid unconfirmed currency cannot erase transaction");
+    expect(result.transactions).toHaveLength(1);
+    expect(currencyEvidenceStates(result)).toContain("ambiguous");
+    expect(mockInvoke).toHaveBeenCalledTimes(1);
+  });
+
   it("does not interpret old-server v1 null provenance as confirmed v2 omission", async () => {
     mockInvoke.mockResolvedValueOnce({ data: makeVoiceV1Response(), error: null });
     const result = await parseVoiceWithAi(voiceOptions());
@@ -358,6 +386,32 @@ describe("#395 T007 — original SMS parser and DeepInfra advisory compatibility
     expect(result.unresolvedFingerprints).toEqual([]);
     expect(currencyEvidenceStates(result)).toContain("explicit");
     expect(accountEvidenceStates(result)).toContain("explicit");
+  });
+
+  it("retains an otherwise valid SMS row with explicitly unknown v2 currency (null is not an invalid v1 currency)", () => {
+    const response = makeSmsV2Response();
+    const result = parseAiResponse(
+      {
+        ...response,
+        suggestedAccounts: [],
+        transactions: [{
+          ...response.transactions[0],
+          currency: null,
+          suggestionRef: null,
+          currencyEvidence: {
+            state: "unknown",
+            statedCode: null,
+            candidateCodes: [],
+            evidenceSpans: [],
+          },
+        }],
+      },
+      new Set(["synthetic-fingerprint-1"])
+    );
+    expect(result.transactions).toHaveLength(1);
+    expect(result.transactions[0].amount).toBe(50);
+    expect(currencyEvidenceStates(result)).toContain("unknown");
+    expect(result.durableNegativeFingerprints).toEqual([]);
   });
 
   it("keeps v1 valid financial rows and does not fabricate confirmed/omitted v2 evidence", () => {
