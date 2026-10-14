@@ -884,6 +884,57 @@ describe("T008 future current-owner fixture entry (Red before T015)", () => {
     }
   );
 
+  it.each([
+    { reason: "missing", unavailable: mockMissingCategoryIds },
+    { reason: "deleted", unavailable: mockDeletedCategoryIds },
+    { reason: "foreign", unavailable: mockForeignCategoryIds },
+  ])(
+    "rejects a $reason category that is not accessible for the current owner",
+    async ({ unavailable }) => {
+      const categoryId = OWNER_CATEGORY_IDS[CURRENT_OWNER];
+      if (!categoryId) throw new Error("Missing current-owner category fixture");
+      unavailable.add(categoryId);
+      const scope = await mockGetCurrentUserDataScope();
+      const categories = await scope.queryAccessibleCategories({
+        table: "categories",
+      }).fetch();
+      expect(categories).toEqual([]);
+
+      const loadFixture = resolveRuntimeFixtureEntry();
+      await expect(loadFixture("r3-default-only")).rejects.toThrow();
+      assertNoFixtureSideEffects();
+    }
+  );
+
+  it("rejects an ambiguous matching bank role rather than choosing one by name", async () => {
+    const existing = accountRecordsForOwner(CURRENT_OWNER).find(
+      ({ id }) => id === getRoleId(CURRENT_OWNER, "qnbEveryday")
+    );
+    if (!existing) throw new Error("Synthetic account role is unavailable");
+    mockExtraAccounts.push({
+      userId: CURRENT_OWNER,
+      account: {
+        ...existing,
+        id: "2eea0000-3950-4000-8000-000000001099",
+      },
+    });
+
+    const loadFixture = resolveRuntimeFixtureEntry();
+    await expect(loadFixture("r3-clean")).rejects.toThrow();
+    assertNoFixtureSideEffects();
+  });
+
+  it("rejects a bank role whose card and currency disagree despite an identical nickname", async () => {
+    mockAccountOverrides.set(getRoleId(CURRENT_OWNER, "qnbEveryday"), {
+      cardLast4: "7777",
+      currency: "USD",
+    });
+
+    const loadFixture = resolveRuntimeFixtureEntry();
+    await expect(loadFixture("r3-clean")).rejects.toThrow();
+    assertNoFixtureSideEffects();
+  });
+
   it.each(manifest.scenes)(
     "hydrates $id through the REAL fixture service and canonical session schema",
     async (scene) => {
