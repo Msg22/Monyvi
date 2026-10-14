@@ -6,6 +6,9 @@ import {
   accountReviewSuggestedAccountSchema,
   accountReviewVoiceResponseV2Schema,
   accountReviewSmsResponseV2Schema,
+  accountReviewCurrencySchema,
+  accountReviewAssignmentSchema,
+  accountReviewGroupSchema,
 } from "../schemas";
 import {
   makeAccountEvidence,
@@ -304,6 +307,106 @@ describe("#395 T005 — canonical account-review parser contract", () => {
     });
   });
 
+  describe("review state discriminators and durable group identity", () => {
+    it("accepts a known currency only with its provenance, and unconfirmed only with a stable uncertainty reason", () => {
+      expect(accountReviewCurrencySchema.safeParse({
+        state: "known", code: "EGP", origin: "preferred_omission",
+      }).success).toBe(true);
+      expect(accountReviewCurrencySchema.safeParse({
+        state: "unconfirmed", reason: "legacy_unknown",
+        candidateCodes: [], statedCode: null, evidenceSpans: [],
+      }).success).toBe(true);
+      expect(accountReviewCurrencySchema.safeParse({
+        state: "unconfirmed", reason: "ambiguous",
+        candidateCodes: ["EGP", "USD"], statedCode: null, evidenceSpans: [],
+      }).success).toBe(true);
+      expect(accountReviewCurrencySchema.safeParse({
+        state: "known", code: "XYZ", origin: "explicit",
+      }).success).toBe(false);
+      expect(accountReviewCurrencySchema.safeParse({
+        state: "known", code: "EGP", origin: "guessed",
+      }).success).toBe(false);
+    });
+
+    it("never uses an empty ID to mean unresolved and does not allow an invented default source", () => {
+      const unresolved = {
+        state: "unresolved",
+        accountId: null,
+        reasonCode: "account_identity_uncertain",
+        candidateAccountIds: [],
+      };
+      const existing = {
+        state: "existing",
+        accountId: REVIEW_WIRE_IDS.bankAccountId,
+        origin: "user",
+        currency: "EGP",
+        identityRevision: "0",
+      };
+      const suggested = {
+        state: "suggested",
+        accountId: null,
+        groupId: "00000000-0000-4000-8000-000000000104",
+        groupRevision: "1",
+        confirmation: "pending",
+      };
+      expect(accountReviewAssignmentSchema.safeParse(unresolved).success).toBe(true);
+      expect(accountReviewAssignmentSchema.safeParse(existing).success).toBe(true);
+      expect(accountReviewAssignmentSchema.safeParse(suggested).success).toBe(true);
+      expect(accountReviewAssignmentSchema.safeParse({
+        ...unresolved, accountId: "",
+      }).success).toBe(false);
+      expect(accountReviewAssignmentSchema.safeParse({
+        ...existing, origin: "model_inferred",
+      }).success).toBe(false);
+      expect(accountReviewAssignmentSchema.safeParse({
+        ...suggested, groupRevision: "01",
+      }).success).toBe(false);
+    });
+
+    it("keeps linked group identities unique, with exact hash/revision and no unconstrained metadata", () => {
+      const group = {
+        groupId: "00000000-0000-4000-8000-000000000104",
+        evidenceKey: "e".repeat(64),
+        suggestionRefs: [REVIEW_WIRE_IDS.suggestionRef],
+        name: "QNB",
+        type: "BANK",
+        currency: "EGP",
+        institutionId: null,
+        providerDisplayName: "QNB",
+        cardLast4: null,
+        senderNames: ["QNB"],
+        linkedRowIds: ["00000000-0000-4000-8000-000000000105"],
+        status: "pending",
+        revision: "0",
+        confirmedIdentityRevision: null,
+      };
+      expect(accountReviewGroupSchema.safeParse(group).success).toBe(true);
+      expect(accountReviewGroupSchema.safeParse({
+        ...group, linkedRowIds: [group.linkedRowIds[0], group.linkedRowIds[0]],
+      }).success).toBe(false);
+      expect(accountReviewGroupSchema.safeParse({
+        ...group, evidenceKey: "bad",
+      }).success).toBe(false);
+      expect(accountReviewGroupSchema.safeParse({
+        ...group, confidenceFromModel: 1,
+      }).success).toBe(false);
+    });
+
+    it("requires reciprocal source membership inputs to be nonempty and duplicate-free", () => {
+      const suggestion = makeSuggestedAccount();
+      expect(accountReviewSuggestedAccountSchema.safeParse(suggestion).success).toBe(true);
+      expect(accountReviewSuggestedAccountSchema.safeParse({
+        ...suggestion, suggestionRef: "",
+      }).success).toBe(false);
+      expect(accountReviewSuggestedAccountSchema.safeParse({
+        ...suggestion, transactionRefs: [REVIEW_WIRE_IDS.voiceRowRef, REVIEW_WIRE_IDS.voiceRowRef],
+      }).success).toBe(false);
+      expect(accountReviewSuggestedAccountSchema.safeParse({
+        ...suggestion, cardLast4: "7",
+      }).success).toBe(false);
+    });
+  });
+
   describe("v2 response references, source boundaries and compatibility", () => {
     it("accepts a reciprocal single-row/suggestion Voice and SMS review response", () => {
       const voice = accountReviewVoiceResponseV2Schema.safeParse(makeVoiceV2Response());
@@ -375,6 +478,12 @@ describe("#395 T005 — canonical account-review parser contract", () => {
       expect(accountReviewSmsResponseV2Schema.safeParse({
         ...sms,
         transactions: [{ ...sms.transactions[0], toAccountEvidence: makeAccountEvidence("SMS") }],
+      }).success).toBe(false);
+      expect(accountReviewSmsResponseV2Schema.safeParse({
+        ...sms,
+        suggestedAccounts: [{
+          ...sms.suggestedAccounts[0], type: "CASH", senderNames: [],
+        }],
       }).success).toBe(false);
       const voice = makeVoiceV2Response();
       const cash = {
