@@ -27,8 +27,8 @@ mutation.
 3. Discuss full delivery estimate12–18h and approve concrete local SQL/sync
    scope in financial-save and account-default-intent contracts before
    implementation. No hosted DDL/deploy included.
-4. Dispatch bounded non-overlapping slices in Normal ChatGPT → OpenCode →
-   Antigravity → justified native order. Do not spawn planning workers now.
+4. Dispatch bounded non-overlapping slices in Normal ChatGPT → Antigravity →
+   justified native order. Do not spawn planning workers now.
 5. Author meaningful Red unit/integration/E2E fixtures before production. Checks
    run at authorized batched boundaries; no emulator execution.
 

@@ -25,9 +25,9 @@ checkboxes remain unchecked until their own acceptance evidence exists.
   integration/commit boundaries, not after every file. No emulator runs.
 - E2E files are authored and statically validated here; actual journeys remain
   unexecuted until owner device testing. Do not claim a Maestro Red/Green run.
-- Later workers follow Normal ChatGPT → OpenCode → Antigravity → justified
-  native fallback. No ownership assignment is made by this document. Serialize
-  shared files, exports, generators, locale keys and foundation changes.
+- Later workers follow Normal ChatGPT → Antigravity → justified native fallback.
+  No ownership assignment is made by this document. Serialize shared files,
+  exports, generators, locale keys and foundation changes.
 - `[P]` means independent file sets within the named ready wave, after its
   prerequisites. Unmarked tasks are sequential within their subsection unless
   the dependency table explicitly permits separate lanes.
@@ -36,20 +36,20 @@ checkboxes remain unchecked until their own acceptance evidence exists.
 
 ## Phase 1: Setup and approved implementation intake
 
-- [ ] T001 Record owner approval of complete review-save/default-create local
+- [x] T001 Record owner approval of complete review-save/default-create local
       SQL registrations, protected sync/reconciliation, no-effect/zero-net
       support and delivery estimate in
       `specs/395-shared-account-review/workflow-status.md`; separately list
       unapproved hosted deployment.
-- [ ] T002 Refresh/pin main and feature head, inspect #393 form changes and
+- [x] T002 Refresh/pin main and feature head, inspect #393 form changes and
       agree non-overlapping integration boundaries in
       `specs/395-shared-account-review/workflow-status.md`; preserve unrelated
       dirty work and use existing dependencies.
-- [ ] T003 Verify all 23 receipt-bound image/sidecar/dependency revisions with
+- [x] T003 Verify all 23 receipt-bound image/sidecar/dependency revisions with
       `scripts/verify-mockup-binding.js` and record reference-to-surface scope
       in `specs/395-shared-account-review/pre-plan-review.md`; stop on changed
       authority.
-- [ ] T004 Finalize concrete closed wire schemas, previous-default guard fields,
+- [x] T004 Finalize concrete closed wire schemas, previous-default guard fields,
       zero-net/no-effect rules, safe cloud-field whitelist and actual next SQL
       prefix in `specs/395-shared-account-review/contracts/financial-save.md`
       and `specs/395-shared-account-review/contracts/account-default-intent.md`;

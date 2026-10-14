@@ -1,9 +1,14 @@
 # Complete selected-review save contract
 
-Technical design only. This contract requires a **new local SQL migration and
-coordinated sync changes**, not an existing supported operation. Obtain approval
-of this concrete migration/sync scope before implementation; no hosted
-migration, data reset or deployment is authorized by planning/mockup approval.
+Frozen T004 technical target. This contract requires a **new local SQL migration
+and coordinated sync changes**, not an existing supported operation. The owner
+approved this local action/sync/reconciliation scope for implementation;
+implementation is pending. No hosted migration, data reset, backfill or
+deployment is authorized. [Wire shapes](wire-shapes.md) defines exact closed
+fields, money, mutation/guard sets, API exports and local recovery boundaries.
+New Cash/default snapshot creation uses exact current logical active/default
+state CAS. SQL acceptance requires proof of shared owner serialization before
+row locks; timestamp guards and new global revision counters are not used.
 
 ## Why legacy v1 cannot be reused
 
@@ -25,7 +30,7 @@ supported.
 
 Payload contains source/session/save identity, selected stable source refs,
 confirmed referenced draft identities, complete sorted domain mutation records,
-per-account posted minor-unit effects, and minimal local SMS cleanup
+per-account posted minor-unit effects, and minimal local SMS bookkeeping
 descriptors. Canonical schema/export/Edge+SQL validators must agree exactly.
 Existing account, transaction and transfer field vocabulary is reused; new child
 descriptors name owned AccountSmsSender/BankDetails only. No raw audio,
@@ -83,10 +88,11 @@ for both sources and reused existing accounts. No new default-setting
 convenience on group confirmation.
 
 Zero-net same-account batch still creates its distinct income/expense records
-atomically and is revision-guarded. Do not omit its account guard or reject
-valid rows merely because aggregate effect is zero. Empty financial batch after
-all SMS items deduped is local cleanup only, not a fabricated zero-transaction
-action.
+atomically and is revision-guarded: retain one immutable zero effect and advance
+its financial revision once under the new tuple only. Do not omit its account
+guard or reject valid rows merely because aggregate effect is zero. Empty
+financial batch after all SMS items deduped is local cleanup only, not a
+fabricated zero-transaction action.
 
 ## Background push and server CAS
 
@@ -115,16 +121,16 @@ not automatically replay against a new revision or overwrite newer user edits.
 
 ## Migration and rollout boundary
 
-New next sequential SQL file registers strict payload validation/apply/CAS logic
-and extends the existing function dispatch/reconciliation contract. It must
-retain old operations and RLS/ownership protections, including at-most-one
-active default. No schema reset or user-data backfill planned. Generate
-authoritative DB types from complete local migration state; never replace them
-with partial remote types. If no generated domain change occurs, document that
-outcome rather than fabricating schema edits. All function/migration and
-generated artifacts commit together.
+Reserved `supabase/migrations/088_review_batch_save.sql` registers strict
+payload validation/apply/CAS logic and extends the existing function
+dispatch/reconciliation contract. It must retain old operations and
+RLS/ownership protections, including at-most-one active default. No schema reset
+or user-data backfill planned. Generate authoritative DB types from complete
+local migration state; never replace them with partial remote types. If no
+generated domain change occurs, document that outcome rather than fabricating
+schema edits. All function/migration and generated artifacts commit together.
 
-Implementation scope approval must cover local SQL function/registry changes,
+Recorded implementation scope covers local SQL function/registry changes,
 protected sync entity/version recognition, reconciliation, and exact typed batch
 writer. Deployment is separately approved with concrete endpoint/project/runtime
 compatibility evidence. Do not enable new writes on a server lacking
@@ -141,4 +147,9 @@ zero-net/overflow/rounding; repeat action/hash conflict; stale guard; mid-batch
 failure; old-operation compatibility; generic push isolation; all-or-nothing
 server apply; rejected/replayed compensation after restart. Unit/integration
 plus pgTAP; fault harness cases explicit where E2E cannot honestly drive them.
-No runtime correctness claim from this planning text.
+Add Red fixtures for old tuple zero rejection; new tuple zero records and
+revision-once; wrong root/operation/effect kind; zero compensation exactly once;
+no-effect default creation; absent-ID collisions including foreign/deleted rows;
+new child parity; raw snapshot exclusion; SMS remaining-row rebind restoration
+without overwriting newer edits. Independent database/security review is
+required. No runtime correctness claim from this planning text.

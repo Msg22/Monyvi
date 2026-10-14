@@ -20,9 +20,9 @@ Date: 2026-10-14. Issue: [#395](https://github.com/Msg22/Monyvi/issues/395).
 - Owner explicitly retained mockup generation with lead and prohibited
   pre-implementation delegation. Lead handles this planning/publication wave
   under those user overrides; no workers are assigned.
-- Later implementation order: user-created Normal ChatGPT → suitable OpenCode →
-  Antigravity → justified native fallback. Pool readiness is not claimed before
-  actual future dispatch.
+- Current implementation order: user-created Normal ChatGPT → Antigravity →
+  justified native fallback. Owner removed the unavailable intermediate pool on
+  2026-10-14; active workflow cleanup is assigned separately.
 - No emulator testing, no more mockup generation, no production implementation,
   hosted data mutation or merge in this wave.
 
@@ -121,9 +121,118 @@ not implemented/covered behavior. All task checkboxes remain pending, including
 owner-rendered and separate accessibility evidence. No emulator/test authoring,
 app source change, SQL execution or provider call occurred.
 
-Next: review canonical tasks and authorize full implementation plus the concrete
-local SQL/financial-action/protected-sync/reconciliation scope. T001 records
-that approval; T002 refreshes main/#393 and T004 freezes exact wire schemas and
-next local migration prefixes before consumers. Provisional estimate remains
-12–18 elapsed hours with safe overlap; refine at intake. Hosted deployment, data
+Owner subsequently approved full implementation and concrete local SQL/action/
+protected-sync/reconciliation scope in the intake below. Hosted deployment, data
 resets/backfills and main merge remain outside this authorization.
+
+## Approved implementation intake — 2026-10-14
+
+**Owner direction**: “approved, please start the full implementation including
+the local SQL and sync changes. use the workers in the agreed order, run checks
+in one batch, and no emulator testing.” Additional direction removes the
+unavailable intermediate models and their active workflow mentions. T001
+approval is satisfied; no repeated approval requested. Full estimate
+remains12–18h, including independent reviews/integration; actual
+device/visual/accessibility execution remains owner-run. Wall-clock intake19:03
+UTC, first30min checkpoint 19:33 UTC, with wave-transition updates sooner.
+
+Execution: main checkout `E:/Work/My Projects/Monyvi`, branch
+`codex/395-shared-account-review` clean at944cbafc before ledger update. Fresh
+main remains7838df64 and included. #393 is still OPEN at0bb9fffb, base
+`codex/ui-field-foundation`, owns an independent Add/Edit shared-field
+migration. This feature preserves current form behavior and adds only its
+approved default control/helper; it will not merge #393 or copy its shared-field
+foundation. Recheck/reconcile if #393 or main changes before form integration.
+
+Capability probes and contact recovery:
+
+- Normal ChatGPT `391 - Audio validation extra`
+  (`6acc6605-9b30-83e9-8e4f-abe71fee4f0c`): read-only readiness probe accepted;
+  one status request sent. App returns only content-reference placeholders;
+  Chrome explicitly shows “This response couldn’t load,” and Copy is empty. No
+  branch/artifact write ownership granted; probe paused.
+- Normal ChatGPT `Monyvi #347 — Server for backend tests/accounting`
+  (`6ac63cf6-54fc-83e9-adba-b1d4338ba0a0`): read-only probe and status request
+  accepted but no readable new turn; Chrome shows “Something went wrong.” No
+  #395 write grant; previous assignments stay frozen; probe paused.
+- Antigravity desktop exists; `agy`, `antigravity` and `gemini` are absent on
+  PATH, standard CLI bins absent, no callable MCP or native-app control surface
+  in this session. This is a callable-runtime blocker, not a quota claim.
+- Native fallback is justified for the following bounded ready leaves. Recheck
+  primary-pool capability before each subsequent assignment; do not infer a
+  permanent failure or let an old remote run resume edits.
+
+| Task | Lane / exclusive owner        | Worktree / branch                                                             | Scope                                                                         | Dependency                             | ETA / checkpoint                 | Status                                                                                                          |
+| ---- | ----------------------------- | ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------- | -------------------------------------- | -------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| W001 | Native `395_workflow_cleanup` | sibling `Monyvi-issue395-workflow`, `codex/395-workflow-worker` from944cbafc  | Active delivery workflow/skill cleanup; current tasks/quickstart routing only | Owner explicit workflow-change request | Finished within bounded estimate | Complete; accepted 8-file patch integrated into main uncommitted, T001/T002 recorded; source ownership released |
+| T004 | Native `395_wire_contracts`   | sibling `Monyvi-issue395-contracts`, `codex/395-contract-worker` from944cbafc | Four technical contracts plus normative wire shapes; no code/SQL              | Approved scope, analyzed tasks         | Complete after guard checkpoint  | Accepted five-doc freeze integrated into main; parity5/5 and whitespace passed; ownership released              |
+
+Both sibling worktrees are on E drive in the repository parent and share main
+node_modules via junction. Writers own disjoint files. Root owns this ledger and
+main integration coordination; workers make repository edits. T005 onward
+production remains blocked on exact T004 contract freeze and test-first Red. No
+feature production code, SQL, hosted change, emulator or provider call yet.
+
+W001 result: edited team-led canonical workflow/skill plus current tasks and
+quickstart routing; removed four retired entrypoints (two old execution
+workflows, their skill and obsolete runtime PR adapter). Tracked active workflow
+Markdown/current routing has no retired-pool mentions; retained links resolve,
+whitespace clean. Historical feature evidence stays unchanged. Root reviewed
+actual changed-file diff before mechanical main integration. No commit/push yet,
+to consolidate publication with implementation. T001/T002 now checked from
+recorded approval and main/#393 scope verification.
+
+Fresh Normal ChatGPT chats requested asynchronously (Core/UI) to recover
+preferred authoring capacity without blocking local progress. Existing failed
+probes keep no write ownership. Local Deno/FFmpeg/Docker verified and Supabase
+DB healthy; runtime availability is not feature validation. T004 identified076's
+nonzero immutable-effect constraint; any narrowly scoped zero-net registration
+must retain old-tuple rejection and SQL-enforceable root association, with
+independent DB/security review before implementation acceptance.
+
+## Worker recovery and contract freeze — 20:15 UTC
+
+Owner created Normal ChatGPT `Monyvi #395 — Core`
+(`6acfdd38-ba70-83ea-a4cc-01f8b5ffff6c`) and `Monyvi #395 — UI`
+(`6acfdd2b-8a14-83ea-a4df-2827d27c5403`). Ordinary response bodies return
+content-reference placeholders, so bounded capability reports use isolated
+GitHub branches. UI published only its report at
+`codex/395-ui-capability@532dcc81883a1d68857d12da8bb459c3ea88ae62`; actual
+read/write access verified from the fetched artifact. UI authoring awaits
+published frozen contracts, exclusive files and Red-first handoff. Core has a
+five-minute report-only grant on `codex/395-core-capability`; no production
+ownership yet. Both chats must stay in Normal ChatGPT.
+
+T004 accepted as a technical freeze. Default/create CAS compares all current
+active owned account IDs and current default ID/flag, never local/server
+timestamps. Identical relevant A→B→A state may accept; changed active/default
+state rejects atomically. Default clearing updates only its flag. Offline
+successors retain durable local-only predecessor dependencies. Zero-net effects
+require narrow root/tuple validation; zero-opening Add has empty effects.
+Prefixes088/089 reserved after local001–087 history verification.
+Publication-fence→owner-lock→account-row ordering must be proven across
+generic/legacy/new writers, independently reviewed before SQL acceptance.
+Contract completion does not claim that implementation proof.
+
+T003/context validation is assigned to the existing local integration worker.
+Normal ChatGPT cannot run this machine's binding/node checks; Antigravity has no
+callable local runtime. Only a new intake report may be written. No production,
+SQL execution or emulator testing has started. Intake elapsed approximately72
+minutes; full forecast remains within approved12–18 hours.
+
+T003 completed at20:20:42 UTC: all23 canonical CLI/API bindings, receipt-pinned
+images/approved sidecars/Binding Facts/combined revisions, three dependencies,
+spec and manifest passed. The existing pre-plan scope index is unchanged; full
+reference-to-surface map and reproducible commands are in
+[intake checks](validation/intake-checks.md). Eleven dirty-document Prettier
+checks and whitespace passed; temporary verifier removed. No application tests
+or SQL ran. Core independently published its report at
+`codex/395-core-capability@0319581a9026240c2e3f39ba408e6b979f45feb7`; read/write
+access verified. Both report-only grants are now frozen.
+
+Next wave: publish the accepted context on an isolated handoff branch; Core owns
+T005/T007 test authoring and UI owns T006/T008. Both produce isolated test-only
+commits, then freeze for local Red verification. No corresponding production
+edits until Red evidence is accepted. Local checking is a dependent successor,
+not transfer of remote implementation ownership. Target feature branch
+publication remains consolidated after implementation checks.

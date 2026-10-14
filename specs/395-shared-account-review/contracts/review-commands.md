@@ -1,7 +1,9 @@
 # Review engine, services and UI contract
 
-Design only; [spec](../spec.md), [B1 approval](../approvals/b1-2026-10-14.json)
-and scoped image bindings govern behavior/presentation.
+Frozen T004 technical target; exact schema/API names, command keys, revision
+checks and SMS v2 root are in [wire shapes](wire-shapes.md). Implementation is
+pending; [spec](../spec.md), [B1 approval](../approvals/b1-2026-10-14.json) and
+scoped image bindings govern behavior/presentation.
 
 ## Pure layer
 
@@ -16,6 +18,20 @@ codes and effect description. A stale command fails without partial mutation.
 Inject IDs/time; don't generate them during rendering. Identity edits and
 invalidating currency changes increase revisions and clear obsolete
 confirmation.
+
+Wire discriminants use snake_case (`confirm_group`, `select_row`, `edit_group`,
+`choose_row_account`, `replace_group_account`, `remove_group`, `undo_removal`,
+`confirm_row_currency`, `select_ready`, `clear_selection`, `set_row_selected`).
+The camelCase labels below describe interactions rather than a second wire
+schema. `saveSelected` invokes the frozen save-intent/service boundary; it is
+not a reducer DB mutation. No nullable category ID widening.
+
+Explicit grounded Voice Cash uses canonical CASH through the shared engine and
+source/type-safe Save helper; legacy SMS BANK/WALLET draft types must not narrow
+Voice. New Cash creation captures current logical active/default state and the
+first-active Cash rule. Confirmation creates nothing and changes no default.
+Add/default-only clear uses current UUID/flag CAS, not timestamps; the SQL
+serialization proof and independent DB/logic review gate remain explicit.
 
 ## Resolution order
 

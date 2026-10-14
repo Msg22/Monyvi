@@ -3,15 +3,6 @@
 Use this workflow for a large Monyvi module, epic, redesign, migration, or
 cross-layer change that benefits from specialist ownership and parallel work.
 
-OpenCode is an approved execution pool only after explicit user opt-in and only
-when every dispatch loads
-[`opencode-team-delegation.md`](./opencode-team-delegation.md), which owns
-OpenCode runtime and usage policy, model selection, limits, fallback, and
-session rules. When Mohamed explicitly requests a Codex-planned implementation
-handoff, use
-[`opencode-implementation-handoff.md`](./opencode-implementation-handoff.md) and
-still load the delegation workflow.
-
 ## 1. Trigger And Authority
 
 Explicit triggers include `$team-led-delivery`, "act as team lead", "form/manage
@@ -215,9 +206,9 @@ Keep role, workflow, and runtime separate:
   is not a Codex skill-discovery path. A role name does not auto-load a skill.
 - `.codex/agents/*.toml` are Codex custom-agent definitions when present and
   available in the current host. `.claude/agents/*.md` are Claude-specific
-  adapters. Neither path defines a portable role for Normal ChatGPT, OpenCode,
-  or Antigravity. Do not copy their model choices, tool lists, or permissions
-  into another runtime.
+  adapters. Neither path defines a portable role for Normal ChatGPT or
+  Antigravity. Do not copy their model choices, tool lists, or permissions into
+  another runtime.
 
 This repository is configured to track an audited set of Codex adapters:
 `frontend-developer`, `senior-graphic-designer`, `database-reviewer`,
@@ -274,11 +265,11 @@ At dispatch, name the role contract and exact path at the trusted governing
 revision, the applicable skill/workflow, and the task-specific ownership and
 acceptance criteria. Ask the worker to read those sources. For Normal ChatGPT,
 the paths must be published on GitHub at that revision and the connector must be
-able to fetch them. For OpenCode and Antigravity, include the same paths in
-their bounded brief. For Codex, select a verified `agent_type` only when its
-definition matches the role; otherwise use `worker` and the portable contract.
-The persona changes focus, not authority, tools, model availability, effort,
-data-sharing scope, or permission.
+able to fetch them. For Antigravity, include the same paths in its bounded
+brief. For Codex, select a verified `agent_type` only when its definition
+matches the role; otherwise use `worker` and the portable contract. The persona
+changes focus, not authority, tools, model availability, effort, data-sharing
+scope, or permission.
 
 ## 6. Model And Effort
 
@@ -306,7 +297,7 @@ explicitly requests one.
 ### Execution Pools
 
 Default execution preference, after authorization, capability, and ownership
-checks, is Normal ChatGPT, OpenCode, then Antigravity:
+checks, is Normal ChatGPT, then Antigravity:
 
 1. **Normal ChatGPT, including several independent user-created chats.** Give it
    the largest safe slice reachable through the GitHub connector: investigation,
@@ -316,21 +307,15 @@ checks, is Normal ChatGPT, OpenCode, then Antigravity:
    device, or unpublished files. A later need for local verification does not
    disqualify it as implementation owner; reserve verification or integration as
    a named successor task.
-2. **OpenCode paid or free models.** Use an available paid model for complex,
-   medium or large work needing strong reasoning; use a capable free model for
-   small to medium bounded work, routine checks, or unit tests. Choose the
-   lowest-cost model and supported effort that meets the task criteria through
-   [`opencode-team-delegation.md`](./opencode-team-delegation.md). Escalate
-   based on observed failure or insufficient capability, not file count alone.
-3. **Antigravity CLI (`agy`) with an available Gemini or Claude model.** When
+2. **Antigravity CLI (`agy`) with an available Gemini or Claude model.** When
    both requested choices are available and capable, prefer the user's Gemini
    3.8 Flash choice over Claude 4.6 for complex reasoning; Claude can own medium
    or large bounded tasks. These are preferences, not proof of model
    availability or measured superiority. Verify the exact model identifier,
    tools, permissions, and supported effort at dispatch.
 
-Native Codex subagents are a fallback, not a routine fourth pool. Use one for an
-assigned task only after checking the three primary pools and recording why none
+Native Codex subagents are a fallback, not a routine third pool. Use one for an
+assigned task only after checking both primary pools and recording why neither
 can start that specific task safely and capably now: unavailable runtime or
 authentication, a reported limit during attempted work, missing required
 tools/context or permissions, or inability to access needed local/device state.
@@ -379,35 +364,29 @@ instead of guessing. User-created chats and an ongoing authorized coordination
 workflow permit messages within the agreed scope; do not infer permission to
 message unrelated chats.
 
-OpenCode is enabled only by explicit user opt-in, never by configuration alone.
-Every OpenCode dispatch must load
-[`opencode-team-delegation.md`](./opencode-team-delegation.md); that workflow
-owns model selection, limit-response fallback, and session discipline without
-re-stating team ownership, DAG, gates, or review rules from this file.
-
-Antigravity (`agy`) is the third primary execution pool for available Gemini and
-Claude models, subject to external-provider opt-in and the approved data-sharing
-boundary. Per task, reuse one visible persistent conversation; verify the `agy`
-path, authentication, exact model with `agy models`, supported effort with
-`agy --help`, and permissions before dispatch. Distinguish an effort flag from
-an effort label embedded in a model ID. When full repository permissions are
-authorized, run with `--dangerously-skip-permissions --mode accept-edits`. On a
-reported limit, preserve work and promptly hand off unfinished work under the
-limit-response rule above. Never create a concurrent replacement writer in the
-same worktree, and independently verify all output.
+Antigravity (`agy`) is the second primary execution pool for available Gemini
+and Claude models, subject to external-provider opt-in and the approved
+data-sharing boundary. Per task, reuse one visible persistent conversation;
+verify the `agy` path, authentication, exact model with `agy models`, supported
+effort with `agy --help`, and permissions before dispatch. Distinguish an effort
+flag from an effort label embedded in a model ID. When full repository
+permissions are authorized, run with
+`--dangerously-skip-permissions --mode accept-edits`. On a reported limit,
+preserve work and promptly hand off unfinished work under the limit-response
+rule above. Never create a concurrent replacement writer in the same worktree,
+and independently verify all output.
 
 #### ChatGPT Remote Readiness
 
 Prefer Normal ChatGPT for remote implementation when published state and
 authorization support it. Separate later local verification or integration into
 dependent tasks rather than moving the implementation to a native subagent. When
-Normal ChatGPT cannot safely start, consider ready OpenCode, then Antigravity,
-before the native fallback. For unpublished local state, device/runtime access,
-or local verification, consider capable OpenCode and Antigravity local sessions
-first. A local worker may verify or integrate externally owned work without
-taking over its implementation. Keep independent review, trusted verification,
-integration, and merge control with the lead; verify all external output before
-acceptance.
+Normal ChatGPT cannot safely start, consider ready Antigravity before the native
+fallback. For unpublished local state, device/runtime access, or local
+verification, consider capable Antigravity local sessions first. A local worker
+may verify or integrate externally owned work without taking over its
+implementation. Keep independent review, trusted verification, integration, and
+merge control with the lead; verify all external output before acceptance.
 
 ##### Remote Context References And Volatile Handoff Facts
 

@@ -1,11 +1,13 @@
 # Parser evidence contract — review v2
 
-Design only. Extend original parse-voice multipart / parse-sms JSON context with
-`reviewContractVersion: "account-review/v2"`. Existing request identity,
-consent, caller timezone/date, usage policy, chunk scheduler, completion and
-safeguard metadata are unchanged. Clients without the field keep v1 output.
-Deploy compatible Edge support before enabling v2 mobile requests; no automatic
-second provider call for unsupported/malformed v2.
+Frozen T004 technical target; implementation remains pending. Exact closed
+schemas/exports and invalid-advisory policy are in
+[wire shapes](wire-shapes.md). Extend original parse-voice multipart / parse-sms
+JSON context with `reviewContractVersion: "account-review/v2"`. Existing request
+identity, consent, caller timezone/date, usage policy, chunk scheduler,
+completion and safeguard metadata are unchanged. Clients without the field keep
+v1 output. Deploy compatible Edge support before enabling v2 mobile requests; no
+automatic second provider call for unsupported/malformed v2.
 
 ## Canonical source and projections
 
@@ -43,6 +45,14 @@ Top-level `reviewContractVersion`, `suggestedAccounts` and per-transaction
 evidence. Existing source response fields/transcript and SMS completion metadata
 remain.
 
+Normative field names are `transactionRef`, nullable `suggestionRef`,
+`accountEvidence`, nullable `toAccountEvidence`, `currencyEvidence`,
+`evidenceSpans`, `institutionId`, `providerDisplayName`, `cardLast4`, and
+`transactionRefs`; do not implement alternate spellings from descriptive text.
+`EvidenceSpan.field` distinguishes transcript/body/sender. Closed success
+schemas compose original financial keys with additions; error/refusal/completion
+schemas keep their existing separate source contract.
+
 | Object           | Required content                                                                                          | Semantics                                                                                  |
 | ---------------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
 | TransactionRef   | Nonempty unique response-local identifier                                                                 | Scoped alias; normalized to client source/session identity, never DB ID                    |
@@ -58,6 +68,10 @@ fabricate BANK. An ambiguous/conflicting currency may have supported candidates
 but no accepted code. Omitted uses preferred currency locally;
 unknown/unsupported is not omitted. Existing `accountId` cannot override this
 evidence or a user's choice.
+
+Grounded Voice CASH remains a valid canonical type; ordinary SMS source evidence
+retains BANK/WALLET eligibility. The shared adapter must not drop Voice Cash
+because the legacy SMS pending type excludes it.
 
 Voice sourceRef points into returned original transcript; shared context must be
 bounded and linked explicitly to each member. This checks internal textual
