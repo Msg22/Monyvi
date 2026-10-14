@@ -3,6 +3,7 @@ import {
   calculateHistoricalPurityGramPriceDecimal,
   isExactCalendarDate,
   isSupportedMetalsIsoCurrencyCode,
+  parseCanonicalDecimal,
   resolveMetalsCurrencyMinorUnits,
   resolvePuritySelection,
   roundDecimal,
@@ -227,6 +228,17 @@ export function useMetalHistoricalPurchasePriceEstimate(
       input.purchaseCurrency,
     ].join("|");
     const fieldValue = roundDecimal(estimate, currencyMinorUnits);
+    try {
+      const parsedEstimate = parseCanonicalDecimal(fieldValue);
+      if (parsedEstimate.isZero() || parsedEstimate.lessThanOrEqualTo("0")) {
+        clearOwnedEstimate();
+        return;
+      }
+    } catch {
+      clearOwnedEstimate();
+      return;
+    }
+
     if (
       estimateKeyRef.current === estimateKey &&
       ownershipRef.current === "estimated"

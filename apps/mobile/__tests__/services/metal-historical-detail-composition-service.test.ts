@@ -200,14 +200,23 @@ describe("#355 Details acquisition-reference composition", () => {
     };
     const metal = { purityCode: "gold-999", purityFactorDecimal: "0.999" };
     const acquisition = reference("action-add", "acquisition_metal", "100");
-    const context = createHistoricalDetailContext(asset, metal, "GOLD", [
-      acquisition,
-    ]);
+    const dateProof = {
+      purchaseDate: "2026-10-10",
+      acquisitionActionId: "action-add",
+    };
+    const context = createHistoricalDetailContext(
+      asset,
+      metal,
+      "GOLD",
+      [acquisition],
+      dateProof
+    );
     const withUnrelatedRate = createHistoricalDetailContext(
       asset,
       metal,
       "GOLD",
-      [acquisition, reference("action-live", "acquisition_metal", "101")]
+      [acquisition, reference("action-live", "acquisition_metal", "101")],
+      dateProof
     );
     expect(createHistoricalContextKey("user-1", "holding-1", context)).toBe(
       createHistoricalContextKey("user-1", "holding-1", withUnrelatedRate)
@@ -222,11 +231,22 @@ describe("#355 Details acquisition-reference composition", () => {
       { ...asset, purchaseDate: new Date(2026, 9, 9) },
       metal,
       "GOLD",
-      [acquisition]
+      [acquisition],
+      { purchaseDate: "2026-10-09", acquisitionActionId: null }
     );
     expect(
       createHistoricalContextKey("user-1", "holding-1", corrected)
     ).not.toBe(createHistoricalContextKey("user-1", "holding-1", context));
+    const afterTravel = createHistoricalDetailContext(
+      { ...asset, purchaseDate: new Date("2026-10-10T04:00:00.000Z") },
+      metal,
+      "GOLD",
+      [acquisition],
+      dateProof
+    );
+    expect(createHistoricalContextKey("user-1", "holding-1", afterTravel)).toBe(
+      createHistoricalContextKey("user-1", "holding-1", context)
+    );
   });
 
   it("reads local cache on initial Details composition without calling the provider", async () => {

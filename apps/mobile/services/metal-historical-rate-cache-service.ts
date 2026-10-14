@@ -1,5 +1,5 @@
 import { Q, type Database } from "@nozbe/watermelondb";
-import { database, MetalHistoricalRateCache } from "@monyvi/db";
+import { database, type MetalHistoricalRateCache } from "@monyvi/db";
 import {
   isExactCalendarDate,
   parseHistoricalDailyRateRecord,

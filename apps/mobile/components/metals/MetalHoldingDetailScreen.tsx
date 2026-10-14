@@ -33,6 +33,7 @@ import type {
   HoldingActionId,
 } from "@/components/metals/holding-actions/registry";
 import { MetalHoldingTimelineItem } from "./MetalHoldingTimelineItem";
+import { PurchaseDateMarketRateFact } from "./PurchaseDateMarketRateFact";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { palette } from "@/constants/colors";
 import { shouldUseCompactLayout } from "@/constants/ui";
@@ -49,6 +50,7 @@ interface MetalHoldingDetailScreenProps {
   readonly model: MetalDetailReadModel | null;
   readonly onAction?: (action: HoldingActionId) => void;
   readonly onRetry: () => void;
+  readonly onRetryHistoricalReference?: () => void;
 }
 
 export function MetalHoldingDetailScreen(
@@ -86,8 +88,10 @@ export function MetalHoldingDetailScreen(
         <DetailHeader
           error={props.error}
           hasMoreHistory={model.timeline.length > 2}
+          isOffline={props.isOffline}
           model={model}
           onRetry={props.onRetry}
+          onRetryHistoricalReference={props.onRetryHistoricalReference}
           onToggleCalculation={() => setShowCalculation((value) => !value)}
           onViewAllHistory={() => setShowAllHistory(true)}
           showAllHistory={showAllHistory}
@@ -135,8 +139,10 @@ function DetailSkeleton(): React.JSX.Element {
 function DetailHeader({
   error,
   hasMoreHistory,
+  isOffline,
   model,
   onRetry,
+  onRetryHistoricalReference,
   onToggleCalculation,
   onViewAllHistory,
   showAllHistory,
@@ -144,8 +150,10 @@ function DetailHeader({
 }: {
   readonly error: Error | null;
   readonly hasMoreHistory: boolean;
+  readonly isOffline?: boolean;
   readonly model: MetalDetailReadModel;
   readonly onRetry: () => void;
+  readonly onRetryHistoricalReference?: () => void;
   readonly onToggleCalculation: () => void;
   readonly onViewAllHistory: () => void;
   readonly showAllHistory: boolean;
@@ -179,7 +187,13 @@ function DetailHeader({
         <MetalTerminalDetail model={model} />
       )}
       {error === null ? null : <Retry onRetry={onRetry} />}
-      {model.isActiveOwnership ? <ValueJourney model={model} /> : null}
+      {model.isActiveOwnership ? (
+        <ValueJourney
+          isOffline={isOffline}
+          model={model}
+          onRetryHistoricalReference={onRetryHistoricalReference}
+        />
+      ) : null}
       {canExplainCalculation ? (
         <>
           <CalculationDisclosure
@@ -408,9 +422,13 @@ function ValueSummary({
 }
 
 function ValueJourney({
+  isOffline,
   model,
+  onRetryHistoricalReference,
 }: {
+  readonly isOffline?: boolean;
   readonly model: MetalDetailReadModel;
+  readonly onRetryHistoricalReference?: () => void;
 }): React.JSX.Element | null {
   const { t, i18n } = useTranslation("metals");
   const locale = resolveLocale(i18n.resolvedLanguage);
@@ -477,7 +495,12 @@ function ValueJourney({
                   })}
                 </Text>
               )}
-              <PurchaseDateMarketRateFact model={model} locale={locale} />
+              <PurchaseDateMarketRateFact
+                isOffline={isOffline}
+                locale={locale}
+                model={model}
+                onRetryHistoricalReference={onRetryHistoricalReference}
+              />
             </View>
           ) : null}
           {hasCurrentValue ? (
@@ -498,63 +521,6 @@ function ValueJourney({
   );
 }
 
-function PurchaseDateMarketRateFact({
-  locale,
-  model,
-}: {
-  readonly locale: string;
-  readonly model: MetalDetailReadModel;
-}): React.JSX.Element | null {
-  const { t } = useTranslation("metals");
-  const { isDark } = useTheme();
-  const { width, fontScale } = useWindowDimensions();
-  const reference = model.purchaseDateMarketReference ?? null;
-  if (reference === null) return null;
-
-  const value =
-    reference.status === "available"
-      ? `${displayAmount(
-          reference.selectedPurityPerGramDecimal,
-          reference.purchaseCurrency,
-          locale
-        )} ${t("portfolio.per_gram")}`
-      : t("detail.value_unavailable");
-  const label = t("detail.market_rate_on_purchase_date");
-  const iconColor = isDark ? palette.slate[300] : palette.slate[500];
-  const isCompact = shouldUseCompactLayout(width, fontScale);
-
-  return (
-    <View
-      testID="metal-holding-purchase-date-market-rate"
-      accessible
-      accessibilityLabel={t("detail.fact_accessibility", { label, value })}
-      className={`mt-2 gap-2 border-t border-slate-200 pt-2 dark:border-slate-800 ${
-        isCompact ? "flex-col items-start" : "flex-row items-center"
-      }`}
-    >
-      <Ionicons
-        accessibilityElementsHidden
-        importantForAccessibility="no"
-        name="pricetag-outline"
-        size={18}
-        color={iconColor}
-      />
-      <Text className="min-w-0 flex-1 text-sm text-text-secondary dark:text-text-secondary-dark">
-        {label}
-      </Text>
-      <Text
-        className="text-sm font-medium text-text-primary dark:text-text-primary-dark"
-        style={{
-          writingDirection: locale.toLowerCase().startsWith("ar")
-            ? "rtl"
-            : "ltr",
-        }}
-      >
-        {value}
-      </Text>
-    </View>
-  );
-}
 function CalculationDisclosure({
   expanded,
   onPress,

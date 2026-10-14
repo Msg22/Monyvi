@@ -4,6 +4,7 @@ import {
   type HistoricalMetalRateContractErrorCode,
 } from "../_shared/historical-metal-rate-contract.ts";
 import { withTimeout } from "../_shared/promise-timeout.ts";
+import type { HistoricalMetalRateLimiterResult } from "./rate-limiter.ts";
 
 const REMOTE_TIMEOUT_MS = 10_000;
 
@@ -21,6 +22,7 @@ type HandlerErrorCode =
   | "internal_error"
   | "invalid_request"
   | "method_not_allowed"
+  | "rate_limit_exceeded"
   | "remote_rate_error";
 
 class FetchHistoricalMetalRateHandlerError extends Error {
@@ -40,6 +42,10 @@ export interface RemoteHistoricalRateRows {
 
 export interface FetchHistoricalMetalRateHandlerDependencies {
   readonly authenticate: (request: Request) => Promise<string | null>;
+  readonly reserveRateLimit: (
+    userId: string,
+    signal: AbortSignal
+  ) => Promise<HistoricalMetalRateLimiterResult>;
   readonly readRemoteRates: (
     date: string,
     signal: AbortSignal
@@ -69,16 +75,59 @@ export function createFetchHistoricalMetalRateHandler(
       }
 
       const date = await readRequestDate(request);
-      if (request.signal.aborted)
+      if (request.signal.aborted) {
         return jsonResponse({ success: false, code: "request_cancelled" }, 499);
+      }
+
+      let reservation: HistoricalMetalRateLimiterResult;
+      try {
+        reservation = await withTimeout(
+          (signal): Promise<HistoricalMetalRateLimiterResult> =>
+            dependencies.reserveRateLimit(userId, signal),
+          REMOTE_TIMEOUT_MS,
+          request.signal
+        );
+      } catch (reserveError: unknown) {
+        if (request.signal.aborted) {
+          return jsonResponse(
+            { success: false, code: "request_cancelled" },
+            499
+          );
+        }
+        if (
+          reserveError instanceof Error &&
+          reserveError.name === "TimeoutError"
+        ) {
+          return jsonResponse(
+            { success: false, code: "remote_rate_error" },
+            504
+          );
+        }
+        // Fail closed on rate limit RPC, network, or malformed data
+        throw new FetchHistoricalMetalRateHandlerError("internal_error", 500);
+      }
+
+      if (request.signal.aborted) {
+        return jsonResponse({ success: false, code: "request_cancelled" }, 499);
+      }
+
+      if (!reservation.accepted) {
+        return jsonResponse(
+          { success: false, code: "rate_limit_exceeded" },
+          429,
+          { "Retry-After": String(reservation.retryAfterSeconds) }
+        );
+      }
+
       const remote = await withTimeout(
         (signal): Promise<RemoteHistoricalRateRows> =>
           dependencies.readRemoteRates(date, signal),
         REMOTE_TIMEOUT_MS,
         request.signal
       );
-      if (request.signal.aborted)
+      if (request.signal.aborted) {
         return jsonResponse({ success: false, code: "request_cancelled" }, 499);
+      }
 
       const fetchedAtDate = dependencies.now();
       if (!Number.isFinite(fetchedAtDate.getTime())) {
@@ -98,8 +147,9 @@ export function createFetchHistoricalMetalRateHandler(
         responseDigest,
       });
 
-      if (request.signal.aborted)
+      if (request.signal.aborted) {
         return jsonResponse({ success: false, code: "request_cancelled" }, 499);
+      }
       return jsonResponse({ success: true, record }, 200);
     } catch (error: unknown) {
       if (error instanceof Error && error.name === "TimeoutError") {
@@ -111,8 +161,9 @@ export function createFetchHistoricalMetalRateHandler(
       if (error instanceof HistoricalMetalRateContractError) {
         return historicalContractErrorResponse(error.code);
       }
-      if (request.signal.aborted)
+      if (request.signal.aborted) {
         return jsonResponse({ success: false, code: "request_cancelled" }, 499);
+      }
       return jsonResponse({ success: false, code: "remote_rate_error" }, 502);
     }
   };
@@ -164,13 +215,15 @@ function isExactCalendarDate(value: string): boolean {
 
 function jsonResponse(
   body: Readonly<Record<string, unknown>>,
-  status: number
+  status: number,
+  additionalHeaders?: Readonly<Record<string, string>>
 ): Response {
   return new Response(JSON.stringify(body), {
     status,
     headers: {
       ...CORS_HEADERS,
       "Content-Type": "application/json",
+      ...(additionalHeaders ?? {}),
     },
   });
 }

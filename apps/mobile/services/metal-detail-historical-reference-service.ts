@@ -2,7 +2,10 @@ import {
   database,
   type Asset,
   type AssetMetal,
+  type FinancialActionGroup,
+  type MetalActionEvidence,
   type MetalHoldingState,
+  type MetalLifecycleEvent,
   type MetalRateReference,
 } from "@monyvi/db";
 import { isSupportedMetal, type SupportedMetal } from "@monyvi/logic";
@@ -14,10 +17,13 @@ import {
 } from "./metal-historical-detail-composition-service";
 import type { HistoricalMetalDetailReference } from "./metal-historical-detail-facade-service";
 import {
-  copyValidDate,
+  selectCanonicalOrOnly,
   toRateReferenceInput,
 } from "./metal-detail-read-model-shaping";
-import { formatMetalLocalCalendarDate } from "./metal-financial-action-repository";
+import {
+  resolveMetalDetailPurchaseCalendar,
+  type ResolvedMetalDetailPurchaseCalendar,
+} from "./metal-detail-purchase-calendar-service";
 import {
   assertExpectedCurrentUser,
   getCurrentUserDataScope,
@@ -66,35 +72,58 @@ async function readHistoricalDetailContext(
     .fetch();
   const asset = assets.length === 1 ? assets[0] : null;
   if (asset === null) return null;
-  const [metals, states, references] = await Promise.all([
-    scope
-      .queryChildrenOfOwnedParent(
-        database.get<AssetMetal>("asset_metals"),
-        asset,
-        "asset_id",
-        Q.where("deleted", false),
-        Q.take(2)
-      )
-      .fetch(),
-    scope
-      .queryOwned(
-        database.get<MetalHoldingState>("metal_holding_states"),
-        Q.where("holding_id", asset.id),
-        Q.where("deleted", false),
-        Q.take(2)
-      )
-      .fetch(),
-    scope
-      .queryOwned(
-        database.get<MetalRateReference>("metal_rate_references"),
-        Q.where("holding_id", asset.id),
-        Q.where("deleted", false),
-        Q.sortBy("captured_at", Q.desc)
-      )
-      .fetch(),
-  ]);
-  const metal = metals.length === 1 ? metals[0] : null;
-  const state = states.length === 1 ? states[0] : null;
+  const [metals, states, references, events, evidence, groups] =
+    await Promise.all([
+      scope
+        .queryChildrenOfOwnedParent(
+          database.get<AssetMetal>("asset_metals"),
+          asset,
+          "asset_id",
+          Q.where("deleted", false),
+          Q.take(2)
+        )
+        .fetch(),
+      scope
+        .queryOwned(
+          database.get<MetalHoldingState>("metal_holding_states"),
+          Q.where("holding_id", asset.id),
+          Q.where("deleted", false),
+          Q.take(2)
+        )
+        .fetch(),
+      scope
+        .queryOwned(
+          database.get<MetalRateReference>("metal_rate_references"),
+          Q.where("holding_id", asset.id),
+          Q.where("deleted", false),
+          Q.sortBy("captured_at", Q.desc)
+        )
+        .fetch(),
+      scope
+        .queryOwned(
+          database.get<MetalLifecycleEvent>("metal_lifecycle_events"),
+          Q.where("holding_id", asset.id),
+          Q.where("deleted", false)
+        )
+        .fetch(),
+      scope
+        .queryOwned(
+          database.get<MetalActionEvidence>("metal_action_evidence"),
+          Q.where("holding_id", asset.id),
+          Q.where("deleted", false)
+        )
+        .fetch(),
+      scope
+        .queryOwned(
+          database.get<FinancialActionGroup>("financial_action_groups"),
+          Q.where("domain", "metals"),
+          Q.where("domain_reference_id", asset.id),
+          Q.where("deleted", false)
+        )
+        .fetch(),
+    ]);
+  const metal = selectCanonicalOrOnly(metals, asset.id);
+  const state = selectCanonicalOrOnly(states, asset.id);
   if (
     metal === null ||
     state === null ||
@@ -103,11 +132,20 @@ async function readHistoricalDetailContext(
     !isSupportedMetal(metal.metalType)
   )
     return null;
+  const calendar = resolveMetalDetailPurchaseCalendar({
+    asset,
+    metal,
+    state,
+    events,
+    evidence,
+    groups,
+  });
   const context = createHistoricalDetailContext(
     asset,
     metal,
     metal.metalType,
-    references.map(toRateReferenceInput)
+    references.map(toRateReferenceInput),
+    calendar
   );
   await assertExpectedCurrentUser(options.userId);
   return createHistoricalContextKey(scope.userId, asset.id, context) ===
@@ -131,21 +169,25 @@ export function createHistoricalDetailContext(
   >,
   metal: Pick<AssetMetal, "purityCode" | "purityFactorDecimal">,
   metalType: SupportedMetal,
-  rateReferences: ReadonlyArray<Readonly<Record<string, unknown>>>
+  rateReferences: ReadonlyArray<Readonly<Record<string, unknown>>>,
+  calendar: ResolvedMetalDetailPurchaseCalendar | null
 ): HistoricalMetalDetailCompositionInput {
-  const purchaseDate = copyValidDate(asset.purchaseDate);
+  const acquisitionActionId =
+    calendar !== null &&
+    calendar.acquisitionActionId === asset.acquisitionActionId
+      ? calendar.acquisitionActionId
+      : null;
   return {
-    acquisitionActionId: asset.acquisitionActionId,
-    purchaseDate:
-      purchaseDate === null ? null : formatMetalLocalCalendarDate(purchaseDate),
+    acquisitionActionId,
+    purchaseDate: calendar?.purchaseDate ?? null,
     metal: metalType,
     purityCode: metal.purityCode,
     purityFactorDecimal: metal.purityFactorDecimal,
     purchaseCurrency: asset.purchaseCurrency,
     rateReferences: rateReferences.filter(
       (reference): boolean =>
-        asset.acquisitionActionId !== null &&
-        reference["actionId"] === asset.acquisitionActionId &&
+        acquisitionActionId !== null &&
+        reference["actionId"] === acquisitionActionId &&
         (reference["role"] === "acquisition_metal" ||
           reference["role"] === "acquisition_purchase_currency")
     ),

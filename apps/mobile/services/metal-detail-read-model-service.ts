@@ -36,6 +36,7 @@ import {
   createHistoricalContextKey,
   createHistoricalDetailContext,
 } from "@/services/metal-detail-historical-reference-service";
+import { resolveMetalDetailPurchaseCalendar } from "@/services/metal-detail-purchase-calendar-service";
 export { readMetalDetailPurchaseDateMarketReference } from "@/services/metal-detail-historical-reference-service";
 import {
   getCurrentUserDataScope,
@@ -358,11 +359,20 @@ export async function readMetalDetailReadModel(
     return model;
   }
 
+  const calendar = resolveMetalDetailPurchaseCalendar({
+    asset,
+    metal,
+    state: holdingState,
+    events,
+    evidence,
+    groups,
+  });
   const historicalContext = createHistoricalDetailContext(
     asset,
     metal,
     metalType,
-    rateReferenceInputs
+    rateReferenceInputs,
+    calendar
   );
   const purchaseDateMarketReference =
     await composeHistoricalMetalDetailReference({

@@ -9,6 +9,12 @@ import {
   HistoricalMetalRateContractError,
 } from "./historical-metal-rate-contract.ts";
 import {
+  tryQualifyRoot,
+  tryQualifyRootRank,
+  compareCandidates,
+  timestamp,
+} from "./historical-metal-rate-contract-remote.ts";
+import {
   DATE,
   FETCHED_AT,
   DIGEST,
@@ -254,4 +260,119 @@ test("skips newest ineligible snapshot without bypassing its bad canonical atoms
     ).snapshotId,
     BATCH
   );
+});
+
+test("tryQualifyRoot returns null on invalid or partial atoms and succeeds on complete batch", () => {
+  const validRoot = root();
+  assert.ok(tryQualifyRoot(validRoot, atoms(), DATE) !== null);
+
+  // Partial atoms (5 instead of 38)
+  assert.equal(tryQualifyRoot(validRoot, atoms().slice(0, 5), DATE), null);
+
+  // Truly zero atoms falls back to legacy
+  const legacyCandidate = tryQualifyRoot(validRoot, [], DATE);
+  assert.ok(legacyCandidate !== null);
+  assert.equal(legacyCandidate?.source, "remote_market_rates");
+
+  // Invalid atom quality
+  const badAtoms = [
+    atom("metal:GOLD", { quality: "invalid" }),
+    ...atoms().slice(1),
+  ];
+  assert.equal(tryQualifyRoot(validRoot, badAtoms, DATE), null);
+});
+
+test("compareCandidates enforces min provider instant then max then createdAt then id", () => {
+  const c1 = {
+    id: "018f0c7a-1234-7abc-8def-000000000001",
+    createdAt: 1000,
+    metalAt: "2026-10-10T12:00:00.000Z",
+    currencyAt: "2026-10-10T12:00:00.000Z",
+    gold: "100",
+    silver: "1",
+    currencies: { USD: "1" },
+    source: "metals.dev",
+  };
+  const cOlderMin = {
+    ...c1,
+    id: "018f0c7a-1234-7abc-8def-000000000002",
+    metalAt: "2026-10-10T11:00:00.000Z",
+  };
+  // c1 has min 12:00, cOlderMin has min 11:00 -> c1 beats cOlderMin (< 0)
+  assert.ok(compareCandidates(c1, cOlderMin) < 0);
+  assert.ok(compareCandidates(cOlderMin, c1) > 0);
+
+  // Equal min, differing max
+  const cHigherMax = {
+    ...c1,
+    id: "018f0c7a-1234-7abc-8def-000000000003",
+    currencyAt: "2026-10-10T14:00:00.000Z",
+  };
+  // cHigherMax has min 12:00, max 14:00. c1 has min 12:00, max 12:00. cHigherMax beats c1.
+  assert.ok(compareCandidates(cHigherMax, c1) < 0);
+
+  // Equal min, equal max, differing createdAt
+  const cNewerCreated = {
+    ...c1,
+    id: "018f0c7a-1234-7abc-8def-000000000004",
+    createdAt: 2000,
+  };
+  assert.ok(compareCandidates(cNewerCreated, c1) < 0);
+
+  // Equal min, max, createdAt, differing ID (descending: higher id wins)
+  const cIdZ = {
+    ...c1,
+    id: "z",
+  };
+  const cIdA = {
+    ...c1,
+    id: "a",
+  };
+  assert.ok(compareCandidates(cIdZ, cIdA) < 0);
+});
+
+test("timestamp helper validates exact Africa/Cairo calendar date across offsets", () => {
+  // 2026-10-09T21:30:00Z is 2026-10-10T00:30:00+03:00 in Cairo DST
+  assert.equal(
+    timestamp("2026-10-09T21:30:00.000Z", "2026-10-10"),
+    "2026-10-09T21:30:00.000Z"
+  );
+  // 2026-10-09T18:00:00Z is 2026-10-09T21:00:00+03:00 in Cairo (previous day)
+  assert.equal(timestamp("2026-10-09T18:00:00.000Z", "2026-10-10"), null);
+});
+
+test("tryQualifyRootRank extracts strict metadata rank and compares accurately against candidates", () => {
+  const rootData = root();
+  const rank = tryQualifyRootRank(rootData, DATE);
+  assert.ok(rank !== null);
+  assert.equal(rank.id, BATCH);
+  assert.equal(rank.metalAt, "2026-10-10T12:00:00.000Z");
+  assert.equal(rank.currencyAt, "2026-10-10T12:00:00.000Z");
+  assert.equal(rank.createdAt, Date.parse(FETCHED_AT));
+
+  // Invalid roots return null
+  assert.equal(tryQualifyRootRank({ ...rootData, id: "" }, DATE), null);
+  assert.equal(
+    tryQualifyRootRank({ ...rootData, created_at: "invalid" }, DATE),
+    null
+  );
+  assert.equal(
+    tryQualifyRootRank(
+      { ...rootData, timestamp_metal: "2026-10-11T12:00:00Z" },
+      DATE
+    ),
+    null
+  );
+
+  // Equal provider timestamps with descending createdAt: newer beats older
+  const olderRank = tryQualifyRootRank(
+    {
+      ...rootData,
+      created_at: new Date(Date.parse(FETCHED_AT) - 1000).toISOString(),
+    },
+    DATE
+  );
+  assert.ok(olderRank !== null);
+  assert.ok(compareCandidates(rank, olderRank) < 0);
+  assert.ok(compareCandidates(olderRank, rank) > 0);
 });

@@ -51,12 +51,13 @@ const DETAIL_LIFECYCLE_EVENT_COLUMNS = [
   "is_history_visible",
 ] as const;
 
-interface UseMetalHoldingDetailResult {
+export interface UseMetalHoldingDetailResult {
   readonly error: Error | null;
   readonly isLoading: boolean;
   readonly isOffline: boolean;
   readonly model: MetalDetailReadModel | null;
   readonly retry: () => void;
+  readonly retryHistoricalReference: () => void;
 }
 
 function createEmptyTrustReadModel(): LiveRatesTrustReadModel {
@@ -102,6 +103,7 @@ export function useMetalHoldingDetail(
   const [readError, setReadError] = useState<Error | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [retryIndex, setRetryIndex] = useState(0);
+  const [historicalRetryIndex, setHistoricalRetryIndex] = useState(0);
   const [localRevision, setLocalRevision] = useState(0);
   const hasLoadedOnceRef = useRef(false);
   const detailIdentityRef = useRef(detailIdentity);
@@ -121,6 +123,10 @@ export function useMetalHoldingDetail(
       setReadError(toError(cause, "Holding sync unavailable"));
     });
   }, [database, refreshSelectedSnapshot]);
+
+  const retryHistoricalReference = useCallback((): void => {
+    setHistoricalRetryIndex((value) => value + 1);
+  }, []);
 
   useEffect(() => {
     const timer = setInterval(
@@ -331,6 +337,7 @@ export function useMetalHoldingDetail(
       detailIdentity,
       historicalContextKey,
       retryIndex,
+      historicalRetryIndex,
     ]);
     if (historicalAttemptRef.current === attemptKey) return;
     historicalAttemptRef.current = attemptKey;
@@ -365,6 +372,24 @@ export function useMetalHoldingDetail(
             holdingId,
             redactedUserId: redactIdentifierForLog(userId),
           });
+          if (detailIdentityRef.current === detailIdentity) {
+            setModel((previous) =>
+              previous !== null &&
+              previous.purchaseDateMarketReferenceContextKey ===
+                historicalContextKey
+                ? {
+                    ...previous,
+                    purchaseDateMarketReference: {
+                      status: "fetch_failed",
+                      error: toError(
+                        cause,
+                        "Historical market rate fetch failed"
+                      ),
+                    },
+                  }
+                : previous
+            );
+          }
         }
       });
     return () => {
@@ -375,6 +400,7 @@ export function useMetalHoldingDetail(
   }, [
     detailIdentity,
     historicalContextKey,
+    historicalRetryIndex,
     holdingId,
     isConnected,
     isFocused,
@@ -391,5 +417,6 @@ export function useMetalHoldingDetail(
     isOffline: !isConnected,
     model: modelIdentityRef.current === detailIdentity ? model : null,
     retry,
+    retryHistoricalReference,
   };
 }

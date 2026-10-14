@@ -629,6 +629,50 @@ describe("useMetalHoldingDetail", () => {
     );
   });
 
+  it("exposes targeted historical retry that does not trigger full sync or pollute overall error", async () => {
+    mockSyncDatabase.mockClear();
+    mockReadMetalDetailReadModel.mockResolvedValue(
+      historicalModel("2026-10-10")
+    );
+    mockReadHistoricalReference.mockResolvedValueOnce({
+      status: "fetch_failed",
+      error: new Error("history fetch failed"),
+    });
+    mockReadHistoricalReference.mockResolvedValueOnce(availableHistory);
+
+    const { result } = renderHook(() => useMetalHoldingDetail("holding-1"));
+    await waitFor(() =>
+      expect(mockReadHistoricalReference).toHaveBeenCalledTimes(1)
+    );
+    await waitFor(() =>
+      expect(result.current.model?.purchaseDateMarketReference?.status).toBe(
+        "fetch_failed"
+      )
+    );
+    expect(result.current.error).toBeNull();
+    expect(result.current.model).not.toBeNull();
+    const readModelCallsBefore = mockReadMetalDetailReadModel.mock.calls.length;
+
+    act(() => {
+      result.current.retryHistoricalReference();
+    });
+
+    await waitFor(() =>
+      expect(mockReadHistoricalReference).toHaveBeenCalledTimes(2)
+    );
+    await waitFor(() =>
+      expect(result.current.model?.purchaseDateMarketReference?.status).toBe(
+        "available"
+      )
+    );
+    expect(mockReadMetalDetailReadModel).toHaveBeenCalledTimes(
+      readModelCallsBefore
+    );
+    expect(mockSyncDatabase).not.toHaveBeenCalled();
+    expect(result.current.error).toBeNull();
+    expect(result.current.model).not.toBeNull();
+  });
+
   it.each(["date", "holding", "user"] as const)(
     "cancels and ignores historical responses after %s changes",
     async (change) => {

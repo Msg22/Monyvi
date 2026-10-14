@@ -48,13 +48,16 @@ export function atom(
   };
 }
 
-export function atoms(): readonly Record<string, unknown>[] {
+export function atoms(
+  batchId: string = BATCH,
+  overrides: Readonly<Record<string, unknown>> = {}
+): readonly Record<string, unknown>[] {
   return [
     "metal:GOLD",
     "metal:SILVER",
     ...SUPPORTED_FIAT_CURRENCY_CODES.map((code) => `currency:${code}`),
     "currency:BTC",
-  ].map((code) => atom(code));
+  ].map((code) => atom(code, { batch_id: batchId, ...overrides }));
 }
 
 export function raw(rows: readonly Record<string, unknown>[]): string {

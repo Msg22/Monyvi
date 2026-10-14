@@ -10,11 +10,14 @@ import {
   normalizeDecimalToken,
 } from "./market-rate-snapshot-contract.ts";
 
-interface SnapshotCandidate {
+export interface SnapshotRank {
   readonly id: string;
   readonly createdAt: number;
   readonly metalAt: string;
   readonly currencyAt: string;
+}
+
+export interface SnapshotCandidate extends SnapshotRank {
   readonly gold: string;
   readonly silver: string;
   readonly currencies: Readonly<Record<string, string>>;
@@ -46,13 +49,8 @@ export function buildHistoricalSnapshotRateRecord(
   const observations = rows(input.rawObservationResponseText);
   const candidates = roots
     .flatMap((root): readonly SnapshotCandidate[] => {
-      try {
-        const candidate = qualifyRoot(root, observations, input.requestedDate);
-        return candidate === null ? [] : [candidate];
-      } catch (error: unknown) {
-        if (error instanceof HistoricalMetalRateContractError) return [];
-        throw error;
-      }
+      const candidate = tryQualifyRoot(root, observations, input.requestedDate);
+      return candidate === null ? [] : [candidate];
     })
     .sort(compareCandidates);
   const selected = candidates[0];
@@ -78,11 +76,10 @@ export function buildHistoricalSnapshotRateRecord(
   });
 }
 
-function qualifyRoot(
+export function tryQualifyRootRank(
   root: Readonly<Record<string, unknown>>,
-  allAtoms: readonly Readonly<Record<string, unknown>>[],
   date: string
-): SnapshotCandidate | null {
+): SnapshotRank | null {
   const id = text(root.id);
   const metalAt = timestamp(root.timestamp_metal, date);
   const currencyAt = timestamp(root.timestamp_currency, date);
@@ -90,12 +87,35 @@ function qualifyRoot(
   const createdAt =
     typeof root.created_at === "string" ? Date.parse(root.created_at) : NaN;
   if (!Number.isFinite(createdAt)) return null;
-  const atoms = allAtoms.filter((row) => row.batch_id === id);
+  return { id, metalAt, currencyAt, createdAt };
+}
+
+function qualifyRoot(
+  root: Readonly<Record<string, unknown>>,
+  allAtoms: readonly Readonly<Record<string, unknown>>[],
+  date: string
+): SnapshotCandidate | null {
+  const rank = tryQualifyRootRank(root, date);
+  if (rank === null) return null;
+  const atoms = allAtoms.filter((row) => row.batch_id === rank.id);
   const values =
     atoms.length === 0
       ? legacyValues(root)
-      : canonicalValues(atoms, metalAt, currencyAt, date);
-  return { id, metalAt, currencyAt, createdAt, ...values };
+      : canonicalValues(atoms, rank.metalAt, rank.currencyAt, date);
+  return { ...rank, ...values };
+}
+
+export function tryQualifyRoot(
+  root: Readonly<Record<string, unknown>>,
+  atoms: readonly Readonly<Record<string, unknown>>[],
+  date: string
+): SnapshotCandidate | null {
+  try {
+    return qualifyRoot(root, atoms, date);
+  } catch (error: unknown) {
+    if (error instanceof HistoricalMetalRateContractError) return null;
+    throw error;
+  }
 }
 
 function legacyValues(
@@ -171,7 +191,7 @@ function canonicalValues(
   return { gold, silver, currencies, source };
 }
 
-function compareCandidates(a: SnapshotCandidate, b: SnapshotCandidate): number {
+export function compareCandidates(a: SnapshotRank, b: SnapshotRank): number {
   const aMetal = Date.parse(a.metalAt),
     aCurrency = Date.parse(a.currencyAt);
   const bMetal = Date.parse(b.metalAt),
@@ -223,7 +243,7 @@ function text(value: unknown): string | null {
   return typeof value === "string" && value.trim().length > 0 ? value : null;
 }
 
-function timestamp(value: unknown, date: string): string | null {
+export function timestamp(value: unknown, date: string): string | null {
   if (
     typeof value !== "string" ||
     !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(

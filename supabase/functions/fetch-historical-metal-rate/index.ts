@@ -7,6 +7,12 @@ import {
   createFetchHistoricalMetalRateHandler,
   type FetchHistoricalMetalRateHandlerDependencies,
 } from "./handler.ts";
+import {
+  reserveHistoricalMetalRateRequest,
+  type HistoricalMetalRateLimiterResult,
+  type HistoricalMetalRateRpcClient,
+  type HistoricalMetalRateReserveArgs,
+} from "./rate-limiter.ts";
 
 function createServiceClient(): SupabaseClient<Database> {
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
@@ -17,6 +23,24 @@ function createServiceClient(): SupabaseClient<Database> {
   return createClient<Database>(supabaseUrl, serviceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
+}
+
+function createHistoricalMetalRateRpcClient(
+  client: SupabaseClient<Database>
+): HistoricalMetalRateRpcClient {
+  return {
+    rpc: async (
+      functionName: "historical_metal_rate_reserve_request",
+      args: HistoricalMetalRateReserveArgs,
+      signal: AbortSignal
+    ) => {
+      const response = await client.rpc(functionName, args).abortSignal(signal);
+      return {
+        data: response.data,
+        error: response.error,
+      };
+    },
+  };
 }
 
 async function authenticate(request: Request): Promise<string | null> {
@@ -38,6 +62,14 @@ async function sha256Hex(value: string): Promise<string> {
 
 const dependencies: FetchHistoricalMetalRateHandlerDependencies = {
   authenticate,
+  reserveRateLimit: async (
+    userId: string,
+    signal: AbortSignal
+  ): Promise<HistoricalMetalRateLimiterResult> => {
+    const serviceClient = createServiceClient();
+    const rpcClient = createHistoricalMetalRateRpcClient(serviceClient);
+    return reserveHistoricalMetalRateRequest(rpcClient, userId, signal);
+  },
   readRemoteRates: (
     date,
     signal

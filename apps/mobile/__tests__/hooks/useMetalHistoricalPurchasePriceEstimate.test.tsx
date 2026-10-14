@@ -315,4 +315,155 @@ describe("#355 Add-only historical purchase-price estimator", () => {
     rerender({});
     expect(resolver).not.toHaveBeenCalled();
   });
+
+  it("clears owned estimate and does not fill rounded zero when estimate rounds to 0.00", async () => {
+    const onChange = jest.fn();
+    const resolutionWithSubCentRate: PurchaseDateHistoricalRateResolution = {
+      status: "available",
+      source: "network",
+      value: {
+        rateDate: "2026-10-10",
+        origin: "daily_history",
+        metal: "GOLD",
+        purchaseCurrency: "USD",
+        metalUsdPerPureGramDecimal: "0.0001",
+        purchaseCurrencyUsdPerUnitDecimal: "1",
+        metalProviderObservedAt: null,
+        currencyProviderObservedAt: null,
+        capturedAt: null,
+        fetchedAt: "2026-10-10T15:00:00.000Z",
+        source: "metals.dev",
+        quality: "valid",
+      },
+    };
+    const resolver = jest.fn(() => Promise.resolve(resolutionWithSubCentRate));
+    const { result } = renderHook(() =>
+      useMetalHistoricalPurchasePriceEstimate(
+        input({ weight: "0.001", purchasePrice: "" }, onChange, resolver)
+      )
+    );
+
+    await waitFor(() => expect(resolver).toHaveBeenCalledTimes(1));
+    expect(onChange).not.toHaveBeenCalledWith("0.00");
+    expect(onChange).not.toHaveBeenCalledWith("0");
+    expect(result.current.ownership).toBe("unset");
+  });
+
+  it("clears previously estimated amount when updated weight causes estimate to round to 0.00", async () => {
+    const onChange = jest.fn();
+    const resolution: PurchaseDateHistoricalRateResolution = {
+      status: "available",
+      source: "network",
+      value: {
+        rateDate: "2026-10-10",
+        origin: "daily_history",
+        metal: "GOLD",
+        purchaseCurrency: "USD",
+        metalUsdPerPureGramDecimal: "100",
+        purchaseCurrencyUsdPerUnitDecimal: "1",
+        metalProviderObservedAt: null,
+        currencyProviderObservedAt: null,
+        capturedAt: null,
+        fetchedAt: "2026-10-10T15:00:00.000Z",
+        source: "metals.dev",
+        quality: "valid",
+      },
+    };
+    const resolver = jest.fn(() => Promise.resolve(resolution));
+    let currentProps: Props = { weight: "10", purchasePrice: "" };
+    const { result, rerender } = renderHook(() =>
+      useMetalHistoricalPurchasePriceEstimate(
+        input(currentProps, onChange, resolver)
+      )
+    );
+
+    await waitFor(() => expect(resolver).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(onChange).toHaveBeenCalledWith("1000.00"));
+    expect(result.current.ownership).toBe("estimated");
+
+    onChange.mockClear();
+    currentProps = { weight: "0.00001", purchasePrice: "1000.00" };
+    rerender({});
+
+    await waitFor(() => expect(onChange).toHaveBeenCalledWith(""));
+    expect(result.current.ownership).toBe("unset");
+  });
+
+  it("leaves field blank when tiny silver estimate in JPY rounds to 0 with 0 minor units", async () => {
+    const onChange = jest.fn();
+    const resolution: PurchaseDateHistoricalRateResolution = {
+      status: "available",
+      source: "network",
+      value: {
+        rateDate: "2026-10-10",
+        origin: "daily_history",
+        metal: "SILVER",
+        purchaseCurrency: "JPY",
+        metalUsdPerPureGramDecimal: "0.0001",
+        purchaseCurrencyUsdPerUnitDecimal: "0.01",
+        metalProviderObservedAt: null,
+        currencyProviderObservedAt: null,
+        capturedAt: null,
+        fetchedAt: "2026-10-10T15:00:00.000Z",
+        source: "metals.dev",
+        quality: "valid",
+      },
+    };
+    const resolver = jest.fn(() => Promise.resolve(resolution));
+    const { result } = renderHook(() =>
+      useMetalHistoricalPurchasePriceEstimate({
+        metal: "SILVER",
+        weightGrams: "0.001",
+        purityCode: "silver-999",
+        purchaseCurrency: "JPY",
+        purchaseDate: "2026-10-10",
+        purchasePrice: "",
+        onPurchasePriceChange: onChange,
+        resolveReference: resolver,
+      })
+    );
+
+    await waitFor(() => expect(resolver).toHaveBeenCalledTimes(1));
+    expect(onChange).not.toHaveBeenCalledWith("0");
+    expect(onChange).not.toHaveBeenCalledWith("0.00");
+    expect(result.current.ownership).toBe("unset");
+  });
+
+  it("preserves manual edit and manual clear when estimate rounds to 0.00", () => {
+    const onChange = jest.fn();
+    const resolution: PurchaseDateHistoricalRateResolution = {
+      status: "available",
+      source: "network",
+      value: {
+        rateDate: "2026-10-10",
+        origin: "daily_history",
+        metal: "GOLD",
+        purchaseCurrency: "USD",
+        metalUsdPerPureGramDecimal: "0.0001",
+        purchaseCurrencyUsdPerUnitDecimal: "1",
+        metalProviderObservedAt: null,
+        currencyProviderObservedAt: null,
+        capturedAt: null,
+        fetchedAt: "2026-10-10T15:00:00.000Z",
+        source: "metals.dev",
+        quality: "valid",
+      },
+    };
+    const resolver = jest.fn(() => Promise.resolve(resolution));
+    const { result } = renderHook(() =>
+      useMetalHistoricalPurchasePriceEstimate(
+        input({ weight: "0.001", purchasePrice: "42.00" }, onChange, resolver)
+      )
+    );
+
+    expect(result.current.ownership).toBe("manual");
+    expect(resolver).not.toHaveBeenCalled();
+    expect(onChange).not.toHaveBeenCalled();
+
+    act(() => {
+      result.current.onPurchasePriceUserChange("");
+    });
+    expect(onChange).toHaveBeenCalledWith("");
+    expect(result.current.ownership).toBe("manual");
+  });
 });
