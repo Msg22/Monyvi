@@ -265,7 +265,7 @@ FOR EACH ROW EXECUTE FUNCTION private.stamp_sync_updated_at_v1();
 CREATE TRIGGER sms_ai_negative_outcomes_set_server_insert_updated_at
 BEFORE INSERT ON public.sms_ai_negative_outcomes
 FOR EACH ROW EXECUTE FUNCTION private.stamp_sync_updated_at_v1();
-DROP TRIGGER update_sms_ai_negative_outcomes_updated_at ON public.sms_ai_negative_outcomes;
+DROP TRIGGER IF EXISTS update_sms_ai_negative_outcomes_updated_at ON public.sms_ai_negative_outcomes;
 CREATE TRIGGER update_sms_ai_negative_outcomes_updated_at
 BEFORE UPDATE ON public.sms_ai_negative_outcomes
 FOR EACH ROW EXECUTE FUNCTION private.stamp_sync_updated_at_v1();

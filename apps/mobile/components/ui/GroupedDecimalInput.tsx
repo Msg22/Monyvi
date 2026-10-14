@@ -1,6 +1,11 @@
 import { formatAmountInput, resolveAmountInputChange } from "@monyvi/logic";
 import { useCallback, type ReactNode, type Ref } from "react";
-import type { TextInput } from "react-native";
+import type {
+  StyleProp,
+  TextInput,
+  TextInputProps,
+  TextStyle,
+} from "react-native";
 
 import { TextField } from "./TextField";
 
@@ -14,7 +19,7 @@ export interface GroupedDecimalInputProps {
   readonly error?: string;
   readonly autoFocus?: boolean;
   readonly keyboardType?: "decimal-pad" | "numeric" | "numbers-and-punctuation";
-  readonly inputMode?: "decimal" | "numeric" | "text";
+  readonly inputMode?: "decimal" | "numeric" | "text" | "none";
   readonly leadingAdornment?: ReactNode;
   readonly trailingAdornment?: ReactNode;
   readonly inputRef?: Ref<TextInput>;
@@ -22,6 +27,13 @@ export interface GroupedDecimalInputProps {
   readonly placeholder?: string;
   readonly containerClassName?: string;
   readonly maxLength?: number;
+  readonly className?: string;
+  readonly style?: TextInputProps["style"];
+  readonly labelClassName?: string;
+  readonly labelStyle?: StyleProp<TextStyle>;
+  readonly onFocus?: TextInputProps["onFocus"];
+  readonly onBlur?: TextInputProps["onBlur"];
+  readonly showSoftInputOnFocus?: boolean;
 }
 
 /**
@@ -50,6 +62,13 @@ export function GroupedDecimalInput({
   placeholder,
   containerClassName,
   maxLength,
+  className,
+  style,
+  labelClassName,
+  labelStyle,
+  onFocus,
+  onBlur,
+  showSoftInputOnFocus,
 }: GroupedDecimalInputProps): React.JSX.Element {
   const handleChangeText = useCallback(
     (text: string): void => {
@@ -58,6 +77,7 @@ export function GroupedDecimalInput({
     },
     [onCanonicalChange, value]
   );
+  const resolvedInputMode = showSoftInputOnFocus === false ? "none" : inputMode;
 
   return (
     <TextField
@@ -74,12 +94,19 @@ export function GroupedDecimalInput({
       error={error}
       autoFocus={autoFocus}
       keyboardType={keyboardType}
-      inputMode={inputMode}
+      inputMode={resolvedInputMode}
       leadingAdornment={leadingAdornment}
       trailingAdornment={trailingAdornment}
       placeholder={placeholder}
       containerClassName={containerClassName}
+      className={className}
+      style={style}
+      labelClassName={labelClassName}
+      labelStyle={labelStyle}
       maxLength={maxLength}
+      onFocus={onFocus}
+      onBlur={onBlur}
+      showSoftInputOnFocus={showSoftInputOnFocus}
     />
   );
 }

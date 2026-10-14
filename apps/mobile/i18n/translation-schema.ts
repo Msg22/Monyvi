@@ -174,6 +174,32 @@ interface TransactionsTranslations {
   readonly voice_review_title: string;
   readonly voice_what_i_heard: string;
   readonly voice_retry: string;
+  readonly add_transaction_mode_manual: string;
+  readonly add_transaction_mode_voice: string;
+  readonly voice_limit_heading: string;
+  readonly voice_limit_remaining: string;
+  readonly voice_limit_reset: string;
+  readonly voice_idle_title: string;
+  readonly voice_description: string;
+  readonly voice_examples_heading: string;
+  readonly voice_limit_exhausted: string;
+  readonly voice_limit_burst: string;
+  readonly voice_limit_unavailable: string;
+  readonly voice_processing_checking: string;
+  readonly voice_paused: string;
+  readonly voice_replay_unavailable: string;
+  readonly voice_action_try_again: string;
+  readonly voice_action_use_manual: string;
+  readonly voice_action_stop: string;
+  readonly voice_action_pause: string;
+  readonly voice_action_resume: string;
+  readonly voice_action_discard: string;
+  readonly voice_recording_too_short: string;
+  readonly voice_recording_finalize_failed: string;
+  readonly voice_no_transactions_found: string;
+  readonly voice_example_cafe: string;
+  readonly voice_example_groceries: string;
+  readonly voice_example_transport: string;
 
   // SMS scanning
   readonly sms_review_title: string;

@@ -28,3 +28,4 @@ export * from "./utils/amount-helpers";
 export * from "./budget";
 export * from "./financial-actions";
 export * from "./metals";
+export * from "./voice-ai-safeguard-contract";

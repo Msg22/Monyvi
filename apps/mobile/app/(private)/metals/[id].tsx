@@ -221,6 +221,7 @@ export default function MetalHoldingDetailRoute(): React.JSX.Element {
         }
         onAction={actions.length > 0 ? handleAction : undefined}
         onRetry={detail.retry}
+        onRetryHistoricalReference={detail.retryHistoricalReference}
       />
       {isSelectionCurrent && selection !== null ? (
         <RestoreConfirmation

@@ -1,0 +1,102 @@
+appId: com.monyvi.app
+---
+# #347 R1/T062 + R2/T069 - guarded recovery visibility + Manual fallback.
+# AUTHORED, NOT RUN. Requires authenticated seeded E2E account.
+# NO-CAPTURE DEFAULT BASELINE: this flow never taps the mic, never taps
+# "Try again" (r1 retry auto-enters Starting and can begin real native
+# capture), never taps any permission control, and never submits to a paid
+# provider. On a granted-microphone device a single mic tap can start native
+# recording; no actual native capture or automatic provider request is
+# assumed here, so no scripted step may start capture. Starting, native
+# permission, recording, parsing and retry execution
+# are UNIT/MANUAL ONLY: no deterministic native Voice audio/permission/provider
+# fixture exists.
+# Retained central IDs: voice-mic-target, voice-action-try-again,
+# voice-action-use-manual, add-transaction-mode-*.
+# Root-accepted selectors for unit/manual proof (never tapped here):
+# voice-starting-cancel, voice-permission-primary, voice-examples-dismiss.
+
+- runFlow: ../helpers/setup.yaml
+- tapOn:
+    id: "fab-button"
+- tapOn:
+    id: "fab-transaction"
+- tapOn:
+    id: "add-transaction-mode-voice"
+- waitForAnimationToEnd
+- assertVisible:
+    id: "add-transaction-mode-voice"
+
+# Availability check failure state: recovery actions must be VISIBLE and the
+# Manual path must stay reachable. "Try again" is asserted, never tapped: with
+# r1 auto-start an unconditional tap can begin authentic capture and hold
+# the Manual tab; no actual native capture or automatic provider request is
+# assumed. Direct retry start is
+# unit/manual-only (no deterministic native audio/provider fixture exists).
+- runFlow:
+    when:
+      visible: "Voice unavailable"
+    commands:
+      - assertVisible: "Try again"
+      - assertVisible: "Use Manual"
+      - assertVisible:
+          id: "voice-action-try-again"
+      - assertVisible:
+          id: "voice-action-use-manual"
+      - assertNotVisible: "Daily voice limit reached"
+
+# Replay, burst and error alternatives retain a safe Manual path. A future
+# authenticated local HTTP fixture must deterministically cause each state.
+- runFlow:
+    when:
+      visible: "Use Manual"
+    commands:
+      - tapOn: "Use Manual"
+
+- runFlow:
+    when:
+      visible: "Use manual entry"
+    commands:
+      - tapOn: "Use manual entry"
+
+# If no recovery action was exposed, use the normal mode tab.
+- runFlow:
+    when:
+      visible:
+        id: "add-transaction-mode-voice"
+    commands:
+      - tapOn:
+          id: "add-transaction-mode-manual"
+
+- assertVisible:
+    id: "header-save"
+- assertNotVisible: "Voice unavailable"
+- assertNotVisible: "Daily voice limit reached"
+- assertNotVisible: "Limited free voice usage"
+# Mode entry must never auto-start capture. "Starting..." below matches the
+# approved EN product copy exactly (UTF-8 ellipsis) so the negative assertion
+# is meaningful, not vacuous.
+- assertNotVisible: "Starting…"
+- assertNotVisible:
+    id: "voice-action-submit"
+- tapOn:
+    id: "header-back"
+- waitForAnimationToEnd
+- assertVisible: "Transactions"
+# UNIT/MANUAL ONLY / NOT RUN (no mic, no permission, no retry tap in this
+# baseline): immediate Starting + Cancel, cancel during each awaited boundary,
+# rapid duplicate taps, first-use inline permission explanation and removed
+# record-intro modal, AI consent sheet interaction, native permission
+# granted/unknown/missing/denied/permanently denied/revoked plus Settings
+# recovery and resume refresh, recorder start failure, actual recording
+# audio/timer/ripples/pause/resume/explicit Submit/discard and 30 s active
+# capture cap/retained completed audio, Parsing
+# waveform-to-receipt, unmount/account-change cleanup, retained-audio same-key
+# retry, unavailable eligible auto-start retry, daily/burst/server refusal,
+# locale/dark/device fidelity and screen-reader semantics. SMS fixtures do not
+# control Voice audio or the provider. See voice-motion-manual-plan.md.
+
+# R2 status: author-only visibility and Manual navigation. No native/OS/
+# provider harness exists; the three R2 recording-state action surfaces and
+# inline one-fresh-permission count have Jest-only RED plus owner manual evidence.
+# No step here requests OS permission or uses Voice's Try again/start action.
