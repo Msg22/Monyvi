@@ -140,17 +140,17 @@ describe("T008 #395 bounded fixture descriptor contract", () => {
   });
 
   it.each([
-    ["r3-combined-en", 7, 5, 2],
-    ["r3-combined-ar", 7, 5, 2],
-    ["r3-removed-undo", 4, 3, 1],
-    ["r3-default-only", 2, 0, 2],
-    ["r3-issues-only", 4, 4, 0],
-    ["r3-confirmed-feedback", 4, 0, 1],
-    ["r3-clean", 2, 0, 2],
-    ["r3-selected-empty", 3, 0, 0],
+    { id: "r3-combined-en", total: 7, needsReview: 5, selected: 2 },
+    { id: "r3-combined-ar", total: 7, needsReview: 5, selected: 2 },
+    { id: "r3-removed-undo", total: 4, needsReview: 3, selected: 1 },
+    { id: "r3-default-only", total: 2, needsReview: 0, selected: 2 },
+    { id: "r3-issues-only", total: 4, needsReview: 4, selected: 0 },
+    { id: "r3-confirmed-feedback", total: 4, needsReview: 0, selected: 1 },
+    { id: "r3-clean", total: 2, needsReview: 0, selected: 2 },
+    { id: "r3-selected-empty", total: 3, needsReview: 0, selected: 0 },
   ])(
-    "preserves B1 counts for %s: total %i / review %i / selected %i",
-    (id, total, needsReview, selected) => {
+    "preserves B1 counts for $id: total $total / review $needsReview / selected $selected",
+    ({ id, total, needsReview, selected }) => {
       const scene = findScene(id);
       expect(scene.expectedCounts).toEqual({ total, needsReview, selected });
       expect(scene.rows).toHaveLength(total);
