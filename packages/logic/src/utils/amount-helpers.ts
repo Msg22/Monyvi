@@ -1,13 +1,13 @@
 import type { CurrencyType } from "@monyvi/db";
 import Decimal from "decimal.js";
 import { getCurrencyPrecision } from "./currency";
+import { MAX_TRANSACTION_AMOUNT, MAX_BUDGET_AMOUNT } from "./amount-limits";
+export { MAX_TRANSACTION_AMOUNT, MAX_BUDGET_AMOUNT } from "./amount-limits";
 
 /**
  * Formats a raw numeric string with commas for thousands separators,
  * preserving existing decimal components.
  */
-export const MAX_TRANSACTION_AMOUNT = 1_000_000_000;
-export const MAX_BUDGET_AMOUNT = 999_999_999.99;
 
 const COMPLETE_UNGROUPED_AMOUNT_PATTERN = /^(?:\d+(?:\.\d+)?|\.\d+)$/;
 const COMPLETE_GROUPED_AMOUNT_PATTERN =

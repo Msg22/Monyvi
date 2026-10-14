@@ -3,9 +3,10 @@ import Decimal from "decimal.js";
 import { MAX_TRANSACTION_AMOUNT } from "../utils/amount-helpers";
 import { ACCOUNT_REVIEW_EXISTING_REASONS } from "./generated-vocabulary";
 import { accountReviewAccountEvidenceSchema, accountReviewEvidenceSpanSchema } from "./parser-schemas";
+import { recordRevision, canonicalDecimal } from "./review-value-primitives";
 import {
-  canonicalUuid, sourceRef, nonblankText, cardSuffix, hash, recordRevision,
-  currencyCode, accountType, transactionType, reviewSource, canonicalDecimal,
+  canonicalUuid, sourceRef, nonblankText, cardSuffix, hash,
+  currencyCode, accountType, transactionType, reviewSource,
   areDistinct, addIssue, uuidArray, refArray, textArray, currencyArray,
   hashArray, strictUtcTimestamp,
 } from "./schema-primitives";

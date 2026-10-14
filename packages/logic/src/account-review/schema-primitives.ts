@@ -1,6 +1,4 @@
 import { z } from "zod";
-import Decimal from "decimal.js";
-import { parseCanonicalUnsignedIntegerString } from "../financial-actions/action-contracts";
 import { ACCOUNT_REVIEW_ACCOUNT_TYPES, ACCOUNT_REVIEW_CURRENCIES, ACCOUNT_REVIEW_TRANSACTION_TYPES } from "./generated-vocabulary";
 
 /** Canonical T004 value validators; no provider, writer or DB runtime imports. */
@@ -19,15 +17,6 @@ export const nonblankText = z.string().min(1).refine(
 export const optionalAccountId = canonicalUuid.nullable();
 export const cardSuffix = z.string().regex(/^[0-9]{4}$/, "Expected four ASCII digits");
 export const hash = z.string().regex(/^[0-9a-f]{64}$/, "Expected SHA-256");
-export const recordRevision = z.string().refine((value) => {
-  try {
-    parseCanonicalUnsignedIntegerString(value);
-    return true;
-  } catch {
-    return false;
-  }
-}, "Expected canonical unsigned financial/review revision");
-
 export const currencyCode = z.enum(ACCOUNT_REVIEW_CURRENCIES);
 export const accountType = z.enum(ACCOUNT_REVIEW_ACCOUNT_TYPES);
 export const transactionType = z.enum(ACCOUNT_REVIEW_TRANSACTION_TYPES);
@@ -46,21 +35,6 @@ export const calendarDate = z.string().refine((value) => {
 }, "Expected real YYYY-MM-DD");
 
 export const sourceDate = z.union([calendarDate, strictUtcTimestamp]);
-
-export const canonicalDecimal = z.string().refine((value) => {
-  if (!/^-?(?:0|[1-9][0-9]*)(?:\.[0-9]*[1-9])?$/.test(value) || value.startsWith("-0")) {
-    return false;
-  }
-  const digits = value.replace(/[-.]/g, "");
-  const fractional = value.split(".")[1] ?? "";
-  if (digits.length > 50 || fractional.length > 18) return false;
-  try {
-    const amount = new Decimal(value);
-    return amount.isFinite() && amount.toFixed() === value;
-  } catch {
-    return false;
-  }
-}, "Expected canonical decimal, max 50 digits / 18 fractional digits");
 
 export function areDistinct(values: readonly string[]): boolean {
   return values.length === new Set(values).size;

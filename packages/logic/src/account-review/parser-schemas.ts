@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { MAX_TRANSACTION_AMOUNT } from "../utils/amount-helpers";
+import { MAX_TRANSACTION_AMOUNT } from "../utils/amount-limits";
 import { validateAdvisoryEnvelope } from "./parser-advisory-validation";
 import {
   canonicalUuid, sourceRef, nonblankText, optionalAccountId, cardSuffix, currencyCode,
