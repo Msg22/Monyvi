@@ -21,6 +21,14 @@ owner instruction after the merge.
 - [Manual plan / coverage matrix](manual-test-plan.md): scenarios for future
   implementation, with no unrun tests claimed.
 
-Planning/publication only. Final R3 visual/binding approval precedes
-plan/contracts/tasks/analyze; production code and implementation assignments
-have not started. Original #383 spec/tasks and app code remain unchanged.
+Owner approved B1 exact bindings and R3 visual/EN/AR additions; see
+[approval receipt](approvals/b1-2026-10-14.json). All23 sidecars pass the
+canonical verifier. Frozen proposal headers/manifests remain unchanged
+historical inputs; the current approval receipt supersedes their pending status.
+
+[Implementation plan](plan.md), [research](research.md),
+[data model](data-model.md), [contracts](contracts/review-commands.md) and
+[quickstart](quickstart.md) are now prepared. Tasks/analyze and implementation
+authorization remain. The plan identifies a required local SQL/sync
+financial-action extension; none applied. No production code or worker
+assignment started; original #383 artifacts untouched.

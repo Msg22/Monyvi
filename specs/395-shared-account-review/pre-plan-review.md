@@ -2,6 +2,10 @@
 
 Date: 2026-10-14. Scope: specification approval and visual handoff only.
 
+**Current status**: Owner approved B1 bindings and R3 visual/EN/AR additions.
+[Exact receipt](approvals/b1-2026-10-14.json); all23 canonical sidecars pass.
+Original images, Binding Facts and frozen manifest remain unchanged.
+
 ## Completed
 
 - Spec owner approval recorded against unchanged published bytes:
@@ -25,9 +29,9 @@ Read [common binding contract](mockups/binding-contract.md),
 [R3 visuals](mockups/proposals/r3/preview.md),
 [EN/AR copy and states](mockups/proposals/r3/interaction-notes.md), and the
 scoped image/sidecar pairs below. Existing R1/R2 concept approvals are
-preserved, not requested again; new exact metadata and R3 additions require
-approval. R3-04 custom picker chrome remains excluded. All bindings remain
-PENDING until explicit approval; a verifier success is not claimed.
+preserved. New exact metadata and R3 additions are now explicitly approved.
+R3-04 custom picker chrome remains excluded. The current approved sidecars and
+receipt supersede historical proposal status headers; canonical verifier passes.
 
 | Image                                                                                              | Scoped binding                                                             | Combined revision                                                       |
 | -------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
@@ -55,13 +59,13 @@ PENDING until explicit approval; a verifier success is not claimed.
 | [14-sms-save-failure-en.png](mockups/proposals/r3/14-sms-save-failure-en.png)                      | [facts](mockups/proposals/r3/14-sms-save-failure-en.binding.md)            | sha256:96ce301f396ac3ed8f4bf28dd60b84a89e097ffd02c24d388d363cd464269ac1 |
 | [15-combined-review-ar.png](mockups/proposals/r3/15-combined-review-ar.png)                        | [facts](mockups/proposals/r3/15-combined-review-ar.binding.md)             | sha256:3afa8d8df81bcd67db4c3f420e0b759ab892793493ba2280037ddde13fa3c2ec |
 
-## What remains before plan
+## Pre-plan gate completed
 
-Approve B1 exact bindings and the existing R3 visual/copy additions. Then record
-the receipt against this manifest and each combined revision, run the canonical
-verifier, and close the visual gate. No technical contract research,
-plan/tasks/analyze or worker assignment has started. Implementation still
-follows completed plan/tasks/analyze.
+B1 receipt records this exact manifest and every combined revision; the visual
+gate is closed. Plan/research/data-model/contracts are now prepared. Tasks and
+analysis remain before implementation assignments; no worker or production code
+has started. SQL/sync implementation scope is explicit in the new financial
+contract.
 
 Workflow authority: .agent/workflows/team-led-delivery.md lifecycle and
 .agent/workflows/mockup-implementation.md section9.5. The latter states:

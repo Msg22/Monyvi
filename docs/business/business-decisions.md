@@ -291,6 +291,50 @@ Business rules:
   exact account evidence, but if no confident account match exists they must
   return no match for user review instead of guessing.
 
+#### Approved Voice/SMS account review target — issue #395
+
+Approved specification and B1 mockups on 2026-10-14; **implementation pending**.
+These are the agreed target rules for `specs/395-shared-account-review/spec.md`,
+not a claim that the current parser/review implements them.
+
+- Use an eligible active owned default when no account is identified and the
+  known currency matches, regardless of account count. Explain this choice in
+  review and keep it editable; remove only the account blocker.
+- Ordinary SMS source accounts remain Bank/Wallet only. ATM source and Cash
+  destination resolve separately; use same-currency Cash default or sole Cash
+  for destination, otherwise require choice. Regular transfer sides require
+  reliable endpoint evidence or explicit choice, never one account on both
+  sides.
+- Proven currency omission uses the preferred currency. Ambiguous, conflicting
+  or unsupported currency requires confirmation before automatic account
+  assignment. Currency correction preserves the numeric amount without
+  conversion.
+- Explicit named unmatched accounts do not fall back to default. Suggest shared
+  drafts only with compatible explicit name/type/provider/card evidence and the
+  same known currency; ambiguous matches require a per-row choice. Similar names
+  alone cannot merge conflicting accounts/cards.
+- Each suggestion supports independent confirm/edit/replace/remove. Confirmation
+  affects account assignment, selects no other row and creates no real account.
+  Selecting an otherwise valid row may confirm its group with visible
+  disclosure; only that row becomes selected. Preserve all other review reasons.
+- Removal retains transactions and invalidates only affected
+  assignment/selection; unchanged input cannot regenerate it immediately. Undo
+  cannot overwrite later edits. SMS choices/removals survive Review
+  later/restart; Voice stays session-only.
+- Create only draft accounts referenced by valid selected financial entries at
+  final Save, with one atomic idempotent revision-guarded financial action.
+  Preserve existing financial outcomes, exact amount rules, source fingerprints
+  and owned references; no AI bank-balance inference or extra parsing call for
+  review actions.
+- Add Account exposes Edit's Default flag: first active account ON/disabled;
+  later accounts start OFF, preserving existing/no default. ON replaces prior
+  default only after successful creation; unsaved toggle/cancel/failure changes
+  no persisted default. Helper is source/type-aware. Existing unrelated form
+  rules stay.
+- Reuse the existing currency modal with transaction context and honest
+  unconfirmed selection. Opening/cancelling applies nothing; do not build a new
+  picker.
+
 ### Bank Details And SMS Senders
 
 Bank details are child rows owned through an account. They store only bank-

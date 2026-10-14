@@ -29,13 +29,16 @@ Created: 2026-10-14. Feature: [spec.md](../spec.md).
       `../approvals/spec-2026-10-14.json`; approved spec bytes unchanged.
 - [x] Branch/spec explicitly separated from merged #383 and updated to latest
       main; scope does not include #391 or independent account-form migration.
-- [ ] Owner visual approval of new R3 state proposals recorded.
-- [ ] Exact scoped binding metadata approved and verifier passes.
-- [x] Concrete pre-plan binding package B1 prepared: 23 sidecars, common
-      contract, image/metadata/combined revisions and review index. Pending
-      approval remains explicit; fingerprint integrity alone is not
-      authoritative verification.
-- [ ] Speckit plan and contracts completed after visual gate.
+- [x] Owner visual/EN/AR approval of R3 additions recorded against exact B1
+      manifest in `../approvals/b1-2026-10-14.json`.
+- [x] All23 exact scoped bindings approved; canonical verifier passes with image
+      and Binding Facts bytes unchanged.
+- [x] Concrete B1 package complete: 23 sidecars, common contract,
+      image/metadata/combined revisions, explicit approval receipt and review
+      index; fingerprint integrity and approval both verified.
+- [x] Speckit plan, research, data model, contracts and quickstart completed
+      after visual gate; financial-action migration/sync scope identified
+      explicitly.
 - [ ] Speckit tasks completed and manual scenario/automation mapping reconciled.
 - [ ] Speckit analyze completed before implementation/worker assignment.
 

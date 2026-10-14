@@ -14,7 +14,8 @@ implementation. No more mockups will be generated.
   [historical provenance](provenance/README.md), not implementation
   instructions. [Cleanup dispositions](reference-cleanup.json) record removed
   images and their pinned history links.
-- R3: new state proposals, **awaiting approval**.
+- R3: state and EN/AR additions **approved with exact B1 bindings** in the
+  [current receipt](../approvals/b1-2026-10-14.json).
   [Latest owner adjustments](adjustments.md) override the illustrated new-picker
   chrome: reuse the existing currency modal.
 - [Review all R3 images](proposals/r3/preview.md),
@@ -34,11 +35,11 @@ implementation. No more mockups will be generated.
 | [R1 Edit Account helper](references/r1/08-account-helper-en.png)             | Helper beneath Edit Account's default flag; surrounding form is context               |
 | [R1 currency confirmation](references/r1/11-currency-confirm-en.png)         | Foreground confirmation; documented Choose another currency reuses the existing modal |
 | [R1 account chooser AR](references/r1/12-multiple-matches-ar.png)            | Arabic chooser and approved wording                                                   |
-| [R2 combined review](references/r2/01-unified-review-en.png)                 | Approved unified composition; R3 state refinements remain proposals                   |
+| [R2 combined review](references/r2/01-unified-review-en.png)                 | Compact grouping concept; approved R3-05/R3-15 bind final detailed composition        |
 | [R2 independent actions](references/r2/02-individual-account-actions-en.png) | Per-group Confirm/Edit/Replace/Remove menu                                            |
 | [R2 complete account list](references/r2/03-all-suggested-accounts-en.png)   | All suggestions independently reachable/actionable                                    |
 
-## R3 proposals — awaiting approval
+## Approved R3 states — original proposal paths retained
 
 | Image                                                                           | Focus                                                               |
 | ------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
@@ -58,12 +59,15 @@ implementation. No more mockups will be generated.
 | [14-sms-save-failure-en](proposals/r3/14-sms-save-failure-en.png)               | SMS review — preserve selections and drafts on save failure         |
 | [15-combined-review-ar](proposals/r3/15-combined-review-ar.png)                 | Arabic RTL — revised combined review and shared disclosure          |
 
-Exact sidecars are prepared alongside all 23 image files, with approvals still
-PENDING. [Review package B1](../pre-plan-review.md) pairs each image with its
-scoped facts and combined revision.
-[Common proposed contract](binding-contract.md) supplies
-normal/responsive/theme/RTL/accessibility values. These values are explicit
-proposals, not inferred measurements of generated raster pixels.
-Combined-revision approvals remain prerequisites before coding. Generated phone
+Owner approved all23 B1 exact sidecars and R3 visual/EN/AR additions; see the
+[current receipt](../approvals/b1-2026-10-14.json). Canonical verifier passes.
+Frozen R3 manifest/notes and common-contract proposal headers are historical
+approved inputs; the receipt supersedes their pending status. No image or
+Binding Facts changed. [Review package B1](../pre-plan-review.md) pairs each
+image with its scoped facts and combined revision.
+[Approved common contract](binding-contract.md) supplies
+normal/responsive/theme/RTL/accessibility values. Its frozen proposal header is
+superseded by the exact approval receipt; values were explicitly adopted, not
+inferred measurements of generated raster pixels. Generated phone
 framing/lighting and unrelated form context do not authorize a parallel app
 design system.

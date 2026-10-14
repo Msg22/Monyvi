@@ -3,15 +3,15 @@
 <!-- prettier-ignore -->
 - Approved reference image: 03-confirm-currency-other-en.png
 - Approved reference image revision: sha256:882f648018977185ac786781cf9560d3224a57fab8360e44f066d796751d3c1a
-- Binding metadata approval: PENDING
+- Binding metadata approval: APPROVED
 - Binding metadata revision: sha256:66a1fd876b3f52cf21221cc08671988c1a7fec250dd1276ad998a579dee9caf4
-- Approved binding metadata revision: PENDING
+- Approved binding metadata revision: sha256:66a1fd876b3f52cf21221cc08671988c1a7fec250dd1276ad998a579dee9caf4
 - Binding approval revision: sha256:93c86522d972ce038067bc253e35715629c1362cfb40ac56321ca415d452d342
-- Approved binding approval revision: PENDING
-- Binding metadata approval evidence/reference: PENDING
+- Approved binding approval revision: sha256:93c86522d972ce038067bc253e35715629c1362cfb40ac56321ca415d452d342
+- Binding metadata approval evidence/reference: Owner reply "Approve B1 bindings and R3 additions", 2026-10-14; ../../../approvals/b1-2026-10-14.json; approved combined revision sha256:93c86522d972ce038067bc253e35715629c1362cfb40ac56321ca415d452d342
 - Legacy metadata migration: no
 
-This is proposed exact metadata, not implementation authority. Earlier R1/R2 scoped visual approval remains in provenance; R3 visual/copy approval remains pending.
+Owner approved this exact B1 image-and-metadata tuple and R3 visual/copy additions on 2026-10-14. Earlier R1/R2 scoped visual approval remains in provenance. Frozen proposal headers/statuses are superseded by the approval receipt; normative bytes remain unchanged.
 
 ## Binding Facts
 

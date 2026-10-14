@@ -2,6 +2,11 @@
 
 Date: 2026-10-14. Scope: documentation and proposed visual handoff only.
 
+Historical B1 preparation result below. Owner subsequently approved the exact B1
+package; `../approvals/b1-2026-10-14.json` and passing canonical sidecars now
+close this gate. No image/Binding Facts byte changed; the earlier expected
+pending-approval errors are preparation history, not current status.
+
 - Exact current spec SHA-256 matches the explicit owner approval receipt.
 - All 23 image-byte SHA-256 values match their existing image manifests;
   unchanged approved reference/proposal bytes.

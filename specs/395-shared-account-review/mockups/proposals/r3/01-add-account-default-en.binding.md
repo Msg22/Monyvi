@@ -3,15 +3,15 @@
 <!-- prettier-ignore -->
 - Approved reference image: 01-add-account-default-en.png
 - Approved reference image revision: sha256:a05cffd7d98c84b6b3f47515df38f1a9dd9f003032d96bdb14e3c5474b19d02d
-- Binding metadata approval: PENDING
+- Binding metadata approval: APPROVED
 - Binding metadata revision: sha256:66a7911a017944bc207bc8d2beefe1b657526babd67b92b08201ecdf7dc4ba61
-- Approved binding metadata revision: PENDING
+- Approved binding metadata revision: sha256:66a7911a017944bc207bc8d2beefe1b657526babd67b92b08201ecdf7dc4ba61
 - Binding approval revision: sha256:a2726dfe337198d0e72ddee4defcf3cde05f62cc2ad256945b74297cbe1dbef0
-- Approved binding approval revision: PENDING
-- Binding metadata approval evidence/reference: PENDING
+- Approved binding approval revision: sha256:a2726dfe337198d0e72ddee4defcf3cde05f62cc2ad256945b74297cbe1dbef0
+- Binding metadata approval evidence/reference: Owner reply "Approve B1 bindings and R3 additions", 2026-10-14; ../../../approvals/b1-2026-10-14.json; approved combined revision sha256:a2726dfe337198d0e72ddee4defcf3cde05f62cc2ad256945b74297cbe1dbef0
 - Legacy metadata migration: no
 
-This is proposed exact metadata, not implementation authority. Earlier R1/R2 scoped visual approval remains in provenance; R3 visual/copy approval remains pending.
+Owner approved this exact B1 image-and-metadata tuple and R3 visual/copy additions on 2026-10-14. Earlier R1/R2 scoped visual approval remains in provenance. Frozen proposal headers/statuses are superseded by the approval receipt; normative bytes remain unchanged.
 
 ## Binding Facts
 

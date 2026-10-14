@@ -12,7 +12,7 @@ with Angular equivalents in chat (never in code comments).
 
 <!-- SPECKIT START -->
 
-Active Speckit plan: `specs/389-sync-pagination/plan.md`
+Active Speckit plan: `specs/395-shared-account-review/plan.md`
 
 <!-- SPECKIT END -->
 
@@ -757,6 +757,12 @@ actions. After three failed fixes, stop and name the doubtful assumption. If the
 request is ambiguous, ask one short question.
 
 ## Active Technologies
+
+- TypeScript ~5.9.2 strict; Node engine >=22 <23; existing Edge Deno runtime;
+  Expo ~55.0.27, React 19.2.0, React Native 0.83.6
+  (codex/395-shared-account-review)
+- WatermelonDB accounts/financial records and existing SMS draft JSON;
+  (codex/395-shared-account-review)
 
 - TypeScript strict mode; React Native Expo mobile app + Expo Router, React
   Native, NativeWind v4, WatermelonDB, Zod, DateTimePicker, i18next

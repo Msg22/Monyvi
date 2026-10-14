@@ -17,9 +17,9 @@ code were changed.
 | Accessibility/localization     | Clear obligation; binding evidence pending | Existing EN/AR/shared patterns, RTL and reachable actions; owner device evidence                                                  |
 | Terminology and completion     | Clear                                      | Confirmed group distinct from Selected row; readiness gate checklist                                                              |
 
-Next: approve the existing visual proposals/adjustments and scoped bindings,
-then `speckit-plan` → `speckit-tasks` → `speckit-analyze`. Do not invoke
-monolithic implement or start implementation assignments.
+Current: B1 visual/bindings approved and plan complete. Next: `speckit-tasks` →
+`speckit-analyze`. Do not invoke monolithic implement or start implementation
+assignments.
 
 ## Cleanup review — 2026-10-14
 
@@ -41,6 +41,8 @@ Owner approved the exact published spec; its receipt is in
 `approvals/spec-2026-10-14.json`. This pass found no new unanswered product
 question. The completed B1 proposal supplies concrete spacing, sizing, theme,
 responsive, RTL, accessibility and transition values for all retained image
-scopes. These new metadata values and R3 visual/copy additions remain pending
-explicit approval in `pre-plan-review.md`. No image was regenerated and no
-technical plan or implementation assignment started.
+scopes. Owner subsequently approved exact B1 metadata and R3 visual/EN/AR
+additions; receipt and all23 passing sidecars close that gate.
+Plan/research/data-model/four contracts now complete. No image regenerated or
+implementation assignment started. Required SQL/sync scope is a
+pre-implementation approval boundary, not an unanswered product clarification.
