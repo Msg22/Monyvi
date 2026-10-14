@@ -58,7 +58,8 @@ function cardSuffixFromBankDetails(
 ): AccountReviewAccountContext["cardLast4"] {
   if (details === undefined) return null;
 
-  const suffix = details.cardLast4;
+  // WatermelonDB values can be malformed at runtime despite generated types.
+  const suffix: unknown = details.cardLast4;
   if (suffix === null || suffix === undefined) return null;
 
   if (typeof suffix !== "number" || !Number.isInteger(suffix) ||
@@ -85,10 +86,11 @@ function buildSenderNames(
     }
     if (sender.deleted) continue;
 
-    if (typeof sender.senderName !== "string") {
+    const persistedName: unknown = sender.senderName;
+    if (typeof persistedName !== "string") {
       throw new Error(READ_MODEL_ERROR_CODES.INVALID_SENDER);
     }
-    const displayName = sender.senderName.trim().replace(/\s+/gu, " ");
+    const displayName = persistedName.trim().replace(/\s+/gu, " ");
     const normalizedName = normalizeAccountSmsSender(displayName);
     if (!normalizedName) {
       throw new Error(READ_MODEL_ERROR_CODES.INVALID_SENDER);
@@ -182,7 +184,8 @@ export async function loadAccountReviewAccountSnapshots(): Promise<AccountReview
     if (account.userId !== ownerId || account.deleted) {
       throw new Error(READ_MODEL_ERROR_CODES.ACCOUNT_OWNER_MISMATCH);
     }
-    if (typeof account.isDefault !== "boolean") {
+    const persistedDefault: unknown = account.isDefault;
+    if (typeof persistedDefault !== "boolean") {
       throw new Error(READ_MODEL_ERROR_CODES.INVALID_DEFAULT);
     }
   }
