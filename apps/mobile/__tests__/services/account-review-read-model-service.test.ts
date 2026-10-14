@@ -51,7 +51,7 @@ const WALLET_ID = "1eea0000-3950-4000-8000-000000000103";
 const DELETED_ID = "1eea0000-3950-4000-8000-000000000104";
 const FOREIGN_ID = "1eea0000-3950-4000-8000-000000000105";
 
-let currentOwnerId = OWNER_ID;
+let mockCurrentOwnerId = OWNER_ID;
 let accountRows: AccountRecord[] = [];
 let profileRows: ProfileRecord[] = [];
 let bankRows: BankRecord[] = [];
@@ -201,12 +201,12 @@ const mockGetCurrentUserDataScope = jest.fn(
       ...conditions: readonly unknown[]
     ) => ReturnType<typeof makeChildQuery>;
   }> => ({
-    userId: currentOwnerId,
+    userId: mockCurrentOwnerId,
     queryOwned: (
       table: TableRef,
       ...conditions: readonly unknown[]
     ): ReturnType<typeof makeOwnedQuery> =>
-      mockQueryOwned(table, currentOwnerId, ...conditions),
+      mockQueryOwned(table, mockCurrentOwnerId, ...conditions),
     queryChildrenOfOwnedParents: (
       table: TableRef,
       parents: readonly { readonly id: string }[],
@@ -216,7 +216,7 @@ const mockGetCurrentUserDataScope = jest.fn(
       mockQueryChildrenOfOwnedParents(
         table,
         parents,
-        currentOwnerId,
+        mockCurrentOwnerId,
         foreignKey,
         ...conditions
       ),
@@ -229,7 +229,7 @@ const mockGetCurrentUserDataScope = jest.fn(
       mockQueryChildrenOfOwnedParent(
         table,
         parent,
-        currentOwnerId,
+        mockCurrentOwnerId,
         foreignKey,
         ...conditions
       ),
@@ -237,7 +237,9 @@ const mockGetCurrentUserDataScope = jest.fn(
 );
 
 jest.mock("@monyvi/db", () => ({
-  database: { get: mockDatabaseGet },
+  database: {
+    get: (table: string): TableRef => mockDatabaseGet(table),
+  },
 }));
 
 jest.mock("@nozbe/watermelondb", () => ({
@@ -256,11 +258,21 @@ jest.mock("@nozbe/watermelondb", () => ({
 }));
 
 jest.mock("@/services/user-data-access", () => ({
-  getCurrentUserDataScope: mockGetCurrentUserDataScope,
-  getRequiredCurrentUserId: async (): Promise<string> => currentOwnerId,
-  queryOwned: mockQueryOwned,
-  queryChildrenOfOwnedParents: mockQueryChildrenOfOwnedParents,
-  queryChildrenOfOwnedParent: mockQueryChildrenOfOwnedParent,
+  // All test-module state is captured lazily after Jest hoists mock factories.
+  getCurrentUserDataScope: (): ReturnType<typeof mockGetCurrentUserDataScope> =>
+    mockGetCurrentUserDataScope(),
+  getRequiredCurrentUserId: async (): Promise<string> => mockCurrentOwnerId,
+  queryOwned: (
+    ...args: Parameters<typeof mockQueryOwned>
+  ): ReturnType<typeof mockQueryOwned> => mockQueryOwned(...args),
+  queryChildrenOfOwnedParents: (
+    ...args: Parameters<typeof mockQueryChildrenOfOwnedParents>
+  ): ReturnType<typeof mockQueryChildrenOfOwnedParents> =>
+    mockQueryChildrenOfOwnedParents(...args),
+  queryChildrenOfOwnedParent: (
+    ...args: Parameters<typeof mockQueryChildrenOfOwnedParent>
+  ): ReturnType<typeof mockQueryChildrenOfOwnedParent> =>
+    mockQueryChildrenOfOwnedParent(...args),
 }));
 
 function account(
@@ -286,7 +298,7 @@ function account(
 describe("T006 owned account review snapshot / provider context", () => {
   beforeEach((): void => {
     jest.clearAllMocks();
-    currentOwnerId = OWNER_ID;
+    mockCurrentOwnerId = OWNER_ID;
     failedChildTable = null;
     ownedCalls.length = 0;
     childCalls.length = 0;
@@ -492,7 +504,7 @@ describe("T006 owned account review snapshot / provider context", () => {
     );
     expect(first.accounts.map((value) => value.id)).toContain(BANK_ID);
 
-    currentOwnerId = OTHER_ID;
+    mockCurrentOwnerId = OTHER_ID;
     const second = accountReviewRequestContextSchema.parse(
       await loadAccountReviewAccountSnapshots()
     );
