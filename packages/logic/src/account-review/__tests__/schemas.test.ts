@@ -14,6 +14,7 @@ import {
   makeAccountEvidence,
   makeCurrencyEvidence,
   makeEvidenceSpan,
+  makeGroundedVoiceCashV2Response,
   makeRequestAccountContext,
   makeReviewRequestContext,
   makeSmsV1Response,
@@ -192,11 +193,9 @@ describe("#395 T005 — canonical account-review parser contract", () => {
   describe("account identity evidence remains advisory", () => {
     it("accepts explicit evidence with nullable typed identity, including canonical BANK/CASH", () => {
       expect(accountReviewAccountEvidenceSchema.safeParse(makeAccountEvidence()).success).toBe(true);
-      expect(accountReviewAccountEvidenceSchema.safeParse({
-        ...makeAccountEvidence(),
-        type: "CASH",
-        cardLast4: null,
-      }).success).toBe(true);
+      expect(accountReviewAccountEvidenceSchema.safeParse(
+        makeGroundedVoiceCashV2Response().transactions[0].accountEvidence
+      ).success).toBe(true);
     });
 
     it("requires absent evidence to have no identity, candidate or source span", () => {
@@ -485,18 +484,9 @@ describe("#395 T005 — canonical account-review parser contract", () => {
           ...sms.suggestedAccounts[0], type: "CASH", senderNames: [],
         }],
       }).success).toBe(false);
-      const voice = makeVoiceV2Response();
-      const cash = {
-        ...voice,
-        transactions: [{
-          ...voice.transactions[0],
-          accountEvidence: { ...voice.transactions[0].accountEvidence, type: "CASH" },
-        }],
-        suggestedAccounts: [{
-          ...voice.suggestedAccounts[0], type: "CASH", senderNames: [],
-        }],
-      };
-      expect(accountReviewVoiceResponseV2Schema.safeParse(cash).success).toBe(true);
+      expect(accountReviewVoiceResponseV2Schema.safeParse(
+        makeGroundedVoiceCashV2Response()
+      ).success).toBe(true);
     });
 
     it("requires a valid financial row, rejects missing/null category, non-finite amount and new raw transcript leakage", () => {
