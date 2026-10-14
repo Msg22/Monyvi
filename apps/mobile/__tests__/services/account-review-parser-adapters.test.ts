@@ -8,37 +8,49 @@
  */
 import type { Session } from "@supabase/supabase-js";
 import {
-  accountReviewRequestContextSchema,
   accountReviewSessionSchema,
   accountReviewSmsFinancialRowSchema,
   accountReviewSmsResponseV2Schema,
-  type AccountReviewRequestContext,
   type AccountReviewSession,
   type AccountReviewSmsFinancialRow,
   type AccountReviewSmsResponseV2,
-  type AccountReviewVoiceResponseV2,
-  type CategoryTreeSource,
 } from "@monyvi/logic";
-import type { AccountReviewAccountSnapshots } from "@/services/account-review-read-model-service";
 
 import {
   makeSmsV1Response,
   makeSmsV2Response,
   makeVoiceV1Response,
-  makeVoiceV2Response,
   REVIEW_SMS_BODY,
   REVIEW_VOICE_TRANSCRIPT,
   REVIEW_WIRE_IDS,
 } from "../../../../packages/logic/src/account-review/__tests__/fixtures";
+import {
+  PARSER_TEST_CATEGORY_IDS,
+  PARSER_TEST_VOICE_REQUEST_KEY,
+  PARSER_TEST_SMS_SESSION_ID,
+  PARSER_TEST_SMS_REQUEST_KEY,
+  PARSER_TEST_SMS_FINGERPRINT,
+  makeReviewAccountSnapshots,
+  voiceOptions,
+  smsCategories,
+  smsContext,
+  smsCandidates,
+  firstSmsCandidate,
+  explicitVoiceResponse,
+  unmatchedVoiceResponse,
+  trustedSmsResponse,
+  unknownSmsResponse,
+  unmentionedSmsCurrencyResponse,
+  unmatchedSmsCase,
+  smsOrchestratorOptions,
+} from "./account-review-parser-test-fixtures";
 
-const mockCategoryIds = {
-  food: "00000000-0000-4000-8000-000000000181",
-  shopping: "00000000-0000-4000-8000-000000000182",
-} as const;
-const mockVoiceRequestKey = "00000000-0000-4000-8000-000000000199";
-const mockSmsSessionId = "00000000-0000-4000-8000-000000000198";
-const mockSmsRequestKey = "synthetic-original-request";
-const mockSmsFingerprint = "f".repeat(64);
+// Keep these lazy mock* captures local for Jest's factory-hoist restrictions.
+const mockCategoryIds = PARSER_TEST_CATEGORY_IDS;
+const mockVoiceRequestKey = PARSER_TEST_VOICE_REQUEST_KEY;
+const mockSmsSessionId = PARSER_TEST_SMS_SESSION_ID;
+const mockSmsRequestKey = PARSER_TEST_SMS_REQUEST_KEY;
+const mockSmsFingerprint = PARSER_TEST_SMS_FINGERPRINT;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const mockCurrentOwnerId = REVIEW_WIRE_IDS.ownerId;
 
@@ -156,12 +168,10 @@ jest.mock("@monyvi/logic", () => {
 import {
   isVoiceParserError,
   parseVoiceWithAi,
-  type AiVoiceParserOptions,
 } from "@/services/ai-voice-parser-service";
 import {
   parseSmsWithAi,
   type SmsCandidate,
-  type ParseSmsContext,
 } from "@/services/ai-sms-parser-service";
 import { parseSmsWithOrchestrator } from "@/services/sms-parser-orchestrator";
 import {
@@ -192,307 +202,6 @@ function requireSmsFinancialRows(result: ChunkAiResult): readonly AccountReviewS
     throw new Error("Missing preserved typed v2 SMS financial rows");
   }
   return result.reviewFinancialRows.map((row) => accountReviewSmsFinancialRowSchema.parse(row));
-}
-
-function makeReviewRequestContext(): AccountReviewRequestContext {
-  return accountReviewRequestContextSchema.parse({
-    reviewContractVersion: "account-review/v2",
-    preferredCurrency: "EGP",
-    accounts: [
-      {
-        id: REVIEW_WIRE_IDS.bankAccountId,
-        name: "QNB salary",
-        currency: "EGP",
-        type: "BANK",
-        institutionId: null,
-        providerDisplayName: "QNB",
-        cardLast4: "0007",
-        senderNames: ["QNB"],
-      },
-      {
-        id: REVIEW_WIRE_IDS.cashAccountId,
-        name: "Cash",
-        currency: "EGP",
-        type: "CASH",
-        institutionId: null,
-        providerDisplayName: null,
-        cardLast4: null,
-        senderNames: [],
-      },
-    ],
-  });
-}
-
-function makeReviewAccountSnapshots(): AccountReviewAccountSnapshots {
-  const providerContext = makeReviewRequestContext();
-  return {
-    ownerId: REVIEW_WIRE_IDS.ownerId,
-    preferredCurrency: providerContext.preferredCurrency,
-    accounts: providerContext.accounts.map((account) => ({
-      ...account,
-      isDefault: account.id === REVIEW_WIRE_IDS.cashAccountId,
-    })),
-    providerContext,
-  };
-}
-
-function voiceOptions(reviewMode = true): AiVoiceParserOptions & {
-  readonly reviewAccountSnapshots?: AccountReviewAccountSnapshots;
-} {
-  const snapshots = makeReviewAccountSnapshots();
-  return {
-    audioUri: "file:///synthetic/recording.m4a",
-    requestKey: mockVoiceRequestKey,
-    callerTimeZone: "Africa/Cairo",
-    categories: "Food/Shopping",
-    accounts: snapshots.providerContext.accounts,
-    categoryRecords: [],
-    preferredCurrency: snapshots.preferredCurrency,
-    ...(reviewMode ? { reviewAccountSnapshots: snapshots } : {}),
-  };
-}
-
-function smsCategories(): readonly CategoryTreeSource[] {
-  return [
-    {
-      id: mockCategoryIds.shopping,
-      systemName: "shopping",
-      displayName: "Shopping",
-      level: 1,
-      parentId: undefined,
-      type: "EXPENSE",
-    },
-  ];
-}
-
-function smsContext(reviewMode = true): ParseSmsContext & {
-  readonly reviewAccountSnapshots?: AccountReviewAccountSnapshots;
-} {
-  return {
-    categories: smsCategories(),
-    supportedCurrencies: ["EGP", "USD"],
-    ...(reviewMode ? { reviewAccountSnapshots: makeReviewAccountSnapshots() } : {}),
-  };
-}
-
-function smsCandidates(): readonly SmsCandidate[] {
-  return [
-    {
-      message: {
-        id: REVIEW_WIRE_IDS.smsMessageId,
-        address: "QNB",
-        body: REVIEW_SMS_BODY,
-        date: 1791979200000,
-        read: false,
-      },
-      smsFingerprint: mockSmsFingerprint,
-    },
-  ];
-}
-
-function firstSmsCandidate(): SmsCandidate {
-  const candidate = smsCandidates()[0];
-  if (!candidate) throw new Error("Missing submitted synthetic SMS candidate");
-  return candidate;
-}
-
-function forVoiceRequest(response: AccountReviewVoiceResponseV2): AccountReviewVoiceResponseV2 {
-  return {
-    ...response,
-    transactions: response.transactions.map((row) => ({
-      ...row,
-      accountEvidence: {
-        ...row.accountEvidence,
-        evidenceSpans: row.accountEvidence.evidenceSpans.map((span) => ({
-          ...span,
-          sourceRef: mockVoiceRequestKey,
-        })),
-      },
-      currencyEvidence: {
-        ...row.currencyEvidence,
-        evidenceSpans: row.currencyEvidence.evidenceSpans.map((span) => ({
-          ...span,
-          sourceRef: mockVoiceRequestKey,
-        })),
-      },
-    })),
-  };
-}
-
-function explicitVoiceResponse(): AccountReviewVoiceResponseV2 {
-  return forVoiceRequest(makeVoiceV2Response());
-}
-
-function unmatchedVoiceResponse(): AccountReviewVoiceResponseV2 {
-  const base = explicitVoiceResponse();
-  const original = "🛒 Paid CIB 50 EGP for lunch";
-  const identityAt = original.indexOf("CIB");
-  const currencyAt = original.indexOf("EGP");
-  const suggested = base.suggestedAccounts[0];
-  if (!suggested || identityAt < 0 || currencyAt < 0) throw new Error("Bad synthetic fixture");
-  return {
-    ...base,
-    transcript: "Paid CIB 50 EGP for lunch",
-    original_transcript: original,
-    transactions: base.transactions.map((row) => ({
-      ...row,
-      accountEvidence: {
-        ...row.accountEvidence,
-        name: "CIB",
-        providerDisplayName: "CIB",
-        evidenceSpans: [{
-          sourceRef: mockVoiceRequestKey,
-          field: "transcript",
-          start: identityAt,
-          end: identityAt + 3,
-          text: "CIB",
-        }],
-      },
-      currencyEvidence: {
-        ...row.currencyEvidence,
-        evidenceSpans: [{
-          sourceRef: mockVoiceRequestKey,
-          field: "transcript",
-          start: currencyAt,
-          end: currencyAt + 3,
-          text: "EGP",
-        }],
-      },
-    })),
-    suggestedAccounts: [{
-      ...suggested,
-      name: "CIB",
-      providerDisplayName: "CIB",
-      senderNames: ["CIB"],
-    }],
-  };
-}
-
-function trustedSmsResponse(): AccountReviewSmsResponseV2 {
-  const base = makeSmsV2Response();
-  return {
-    ...base,
-    transactions: base.transactions.map((row) => ({ ...row, isTrusted: true })),
-  };
-}
-
-function unknownSmsResponse(): AccountReviewSmsResponseV2 {
-  const base = trustedSmsResponse();
-  return {
-    ...base,
-    suggestedAccounts: [],
-    transactions: base.transactions.map((row) => ({
-      ...row,
-      suggestionRef: null,
-      currency: null,
-      currencyEvidence: {
-        state: "unknown",
-        statedCode: null,
-        candidateCodes: [],
-        evidenceSpans: [],
-      },
-    })),
-  };
-}
-
-function unmentionedSmsCurrencyResponse(): AccountReviewSmsResponseV2 {
-  const base = unknownSmsResponse();
-  return {
-    ...base,
-    transactions: base.transactions.map((row) => ({
-      ...row,
-      accountEvidence: {
-        state: "absent",
-        name: null,
-        type: null,
-        institutionId: null,
-        providerDisplayName: null,
-        cardLast4: null,
-        evidenceSpans: [],
-        candidateAccountIds: [],
-      },
-      currencyEvidence: {
-        state: "omitted",
-        statedCode: null,
-        candidateCodes: [],
-        evidenceSpans: [],
-      },
-    })),
-  };
-}
-
-function unmatchedSmsCase(): {
-  readonly candidates: readonly SmsCandidate[];
-  readonly response: AccountReviewSmsResponseV2;
-} {
-  const submittedBody = "CIB purchase EGP 50";
-  const sms = smsCandidates()[0];
-  const base = trustedSmsResponse();
-  const suggested = base.suggestedAccounts[0];
-  if (!sms || !suggested) throw new Error("Bad synthetic fixture");
-  const candidate: SmsCandidate = {
-    ...sms,
-    message: { ...sms.message, address: "CIB", body: submittedBody },
-  };
-  const bankAt = submittedBody.indexOf("CIB");
-  const currencyAt = submittedBody.indexOf("EGP");
-  return {
-    candidates: [candidate],
-    response: {
-      ...base,
-      suggestedAccounts: [{
-        ...suggested,
-        name: "CIB",
-        providerDisplayName: "CIB",
-        senderNames: ["CIB"],
-      }],
-      transactions: base.transactions.map((row) => ({
-        ...row,
-        accountEvidence: {
-          ...row.accountEvidence,
-          name: "CIB",
-          providerDisplayName: "CIB",
-          evidenceSpans: [{
-            sourceRef: REVIEW_WIRE_IDS.smsMessageId,
-            field: "body",
-            start: bankAt,
-            end: bankAt + 3,
-            text: "CIB",
-          }],
-        },
-        currencyEvidence: {
-          ...row.currencyEvidence,
-          evidenceSpans: [{
-            sourceRef: REVIEW_WIRE_IDS.smsMessageId,
-            field: "body",
-            start: currencyAt,
-            end: currencyAt + 3,
-            text: "EGP",
-          }],
-        },
-      })),
-    },
-  };
-}
-
-function smsOrchestratorOptions(): {
-  readonly expectedUserId: string;
-  readonly requestContext: {
-    readonly scanSessionId: string;
-    readonly scanKind: "incremental";
-    readonly scanStartedAtMs: number;
-  };
-  readonly requestKey: string;
-} {
-  return {
-    expectedUserId: REVIEW_WIRE_IDS.ownerId,
-    requestContext: {
-      scanSessionId: mockSmsSessionId,
-      scanKind: "incremental",
-      scanStartedAtMs: 1791979200000,
-    },
-    requestKey: mockSmsRequestKey,
-  };
 }
 
 function assertSessionBasics(session: AccountReviewSession, source: "VOICE" | "SMS"): void {
