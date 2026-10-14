@@ -8,7 +8,7 @@ import {
   rmSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { delimiter, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import * as prettier from "prettier";
 import test, { type TestContext } from "node:test";
@@ -51,6 +51,7 @@ function generateVocabularyInSandbox(t: TestContext): {
     "scripts/generate-account-review-vocabulary.cjs",
     "packages/db/src/supabase-types.ts",
     "packages/logic/src/types.ts",
+    ".prettierrc.json",
   ];
   for (const relativePath of sourcePaths) {
     const copiedPath = join(sandbox, relativePath);
@@ -68,6 +69,14 @@ function generateVocabularyInSandbox(t: TestContext): {
       cwd: sandbox,
       encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe"],
+      env: {
+        ...process.env,
+        NODE_PATH: [
+          join(ROOT, "node_modules"),
+          process.env.NODE_PATH,
+        ].filter((entry) => typeof entry === "string" && entry.length > 0)
+          .join(delimiter),
+      },
     });
   assert.match(invoke(), /from 5 vocabularies/);
   const first = readFileSync(generatedPath, "utf8");

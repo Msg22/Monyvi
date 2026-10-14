@@ -5,6 +5,7 @@
  */
 const fs = require("node:fs");
 const path = require("node:path");
+const prettier = require("prettier");
 
 const root = path.resolve(__dirname, "..");
 const supabaseTypes = fs.readFileSync(
@@ -78,6 +79,27 @@ lines.push(
   ">;",
   ""
 );
-const outputPath = path.join(root, "packages/logic/src/account-review/generated-vocabulary.ts");
-fs.writeFileSync(outputPath, lines.join("\n"), "utf8");
-process.stdout.write("Generated " + outputPath + " from " + projections.length + " vocabularies\n");
+const outputPath = path.join(
+  root,
+  "packages/logic/src/account-review/generated-vocabulary.ts"
+);
+
+async function generateFormattedVocabulary() {
+  const config = (await prettier.resolveConfig(outputPath)) ?? {};
+  const rendered = await prettier.format(lines.join("\n"), {
+    ...config,
+    filepath: outputPath,
+  });
+  if (!fs.existsSync(outputPath) ||
+      fs.readFileSync(outputPath, "utf8") !== rendered) {
+    fs.writeFileSync(outputPath, rendered, "utf8");
+  }
+  process.stdout.write(
+    "Generated " + outputPath + " from " + projections.length + " vocabularies\n"
+  );
+}
+
+generateFormattedVocabulary().catch((error) => {
+  process.stderr.write(String(error) + "\n");
+  process.exitCode = 1;
+});
