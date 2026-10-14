@@ -1043,6 +1043,38 @@
         "selected": 1
       },
       "note": "Bank ATM source and Cash destination are independently chosen; no inferred opening balance"
+    },
+    {
+      "id": "voice-currency-omitted",
+      "binding": "M03",
+      "source": "VOICE",
+      "sessionId": "1eea0000-3950-4000-8000-0000000007d0",
+      "language": "en",
+      "groups": [],
+      "rows": [
+        {
+          "rowId": "1eea0000-3950-4000-8000-0000000007d1",
+          "sourceRef": "voice:voice-currency-omitted:1",
+          "sourceFingerprint": null,
+          "categoryId": "1eea0000-3950-4000-8000-0000000003ef",
+          "amountDecimal": "12.5",
+          "currencyCode": "EGP",
+          "currencyEvidenceState": "omitted",
+          "accountEvidenceState": "absent",
+          "accountId": "1eea0000-3950-4000-8000-0000000003e8",
+          "groupId": null,
+          "toAccountId": null,
+          "issueTags": [],
+          "selected": true,
+          "isAtmWithdrawal": false
+        }
+      ],
+      "expectedCounts": {
+        "total": 1,
+        "needsReview": 0,
+        "selected": 1
+      },
+      "note": "Explicit proven currency omission accepts the session preferred EGP, not an unknown/conflicting code; Cash default can be used for Voice."
     }
   ],
   "scenarios": [
@@ -1071,6 +1103,7 @@
     {
       "id": "M03",
       "sceneIds": [
+        "voice-currency-omitted",
         "r3-currency-conflict"
       ],
       "requiredAssertion": "Proven omission versus conflicting/unsupported currency; owner real parser interpretation",
