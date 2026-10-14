@@ -17,7 +17,8 @@ const UUID_V4_PATTERN =
 const SHA_256_PATTERN = /^[0-9a-f]{64}$/;
 
 type AccountRole = "cash" | "qnbEveryday" | "qnbSavings" | "cibMain" | "wallet";
-type DescriptorRow = (typeof manifest.scenes)[number]["rows"][number];
+type DescriptorScene = (typeof manifest.scenes)[number];
+type DescriptorRow = DescriptorScene["rows"][number];
 type DescriptorIssueTag = DescriptorRow["issueTags"][number];
 
 interface RoleDefinition {
@@ -298,6 +299,11 @@ jest.mock("@/services/account-review-read-model-service", () => ({
   > => mockLoadAccountReviewAccountSnapshots(),
 }));
 
+function hasDescriptorIssueTag(row: DescriptorRow, tag: DescriptorIssueTag): boolean {
+  const issueTags: readonly DescriptorIssueTag[] = row.issueTags;
+  return issueTags.includes(tag);
+}
+
 // Use normal synchronous Jest module loading: dynamic import needs VM module
 // flags that are not part of this repository's Jest runner.
 function resolveRuntimeFixtureEntry(): (sceneId: string) => Promise<unknown> {
@@ -311,9 +317,7 @@ function resolveRuntimeFixtureEntry(): (sceneId: string) => Promise<unknown> {
   return loadAccountReviewFixtureSession;
 }
 
-function parseHydratedSession(value: unknown): ReturnType<
-  typeof import("@monyvi/logic")["accountReviewSessionSchema"]["parse"]
-> {
+function parseHydratedSession(value: unknown): AccountReviewSession {
   const { accountReviewSessionSchema } = jest.requireActual<
     typeof import("@monyvi/logic")
   >("@monyvi/logic");
@@ -325,7 +329,7 @@ function loadRuntimeFixtureSession(sceneId: string): Promise<unknown> {
   return loadFixture(sceneId);
 }
 
-function findScene(id: string): (typeof manifest.scenes)[number] {
+function findScene(id: string): DescriptorScene {
   const scene = manifest.scenes.find((candidate) => candidate.id === id);
   if (!scene) {
     throw new Error(`Missing synthetic #395 scene ${id}`);
@@ -545,7 +549,7 @@ describe("T008 #395 bounded fixture descriptor contract", () => {
     expect(removed.groups.some((group) => group.status === "removed"))
       .toBe(true);
     expect(removed.rows.filter((row) =>
-      row.issueTags.includes("account_group_removed")
+      hasDescriptorIssueTag(row, "account_group_removed")
     )).toHaveLength(2);
     expect(removed.rows).toHaveLength(4);
   });
