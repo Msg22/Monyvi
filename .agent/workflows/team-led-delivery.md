@@ -124,9 +124,12 @@ Before forming team:
    wall-clock start time, next checkpoint, and the evidence that will change it.
    Count worker time and waiting time when they affect delivery; parallel time
    is elapsed time, not the sum of worker hours.
-10. Classify each task by remote versus local/device requirements. Check the
-    relevant pools' runtime, authentication, tools, and ability to start the
-    task; record unavailable pools. Apply the quota policy in Section 6.
+10. Classify each task by remote versus local/device requirements. Check all
+    eligible primary pools' runtime, authentication, tools, and ability to start
+    the task; record unavailable pools. For OpenCode, separately verify the
+    chosen model's current free pricing and callability under Section 6; do not
+    precheck remaining usage/quota. Native workers require a distinct prior
+    user authorization before any assignment.
 
 If the credible total elapsed estimate exceeds four hours, tell Mohamed before
 starting substantive work. Give the task breakdown, main uncertainty, reason for
@@ -266,8 +269,9 @@ revision, the applicable skill/workflow, and the task-specific ownership and
 acceptance criteria. Ask the worker to read those sources. For Normal ChatGPT,
 the paths must be published on GitHub at that revision and the connector must be
 able to fetch them. For Antigravity, include the same paths in its bounded
-brief. For Codex, select a verified `agent_type` only when its definition
-matches the role; otherwise use `worker` and the portable contract. The persona
+brief. For Codex, only after the separate native-task authorization in Section 6,
+select a verified `agent_type` when its definition matches the role; otherwise
+use `worker` and the portable contract. The persona
 changes focus, not authority, tools, model availability, effort, data-sharing
 scope, or permission.
 
@@ -296,8 +300,12 @@ explicitly requests one.
 
 ### Execution Pools
 
-Default execution preference, after authorization, capability, and ownership
-checks, is Normal ChatGPT, then Antigravity:
+Default execution preference, after authorization, capability, source/data
+sharing, and exclusive ownership checks, is **Normal ChatGPT → verified
+OpenCode FREE models → Antigravity Gemini/Claude**. Only if those pools cannot
+safely perform the specific task may the lead **ask Mohamed for separate,
+explicit prior permission** to use a native Codex subagent. Lack of primary-pool
+capability never grants that permission.
 
 1. **Normal ChatGPT, including several independent user-created chats.** Give it
    the largest safe slice reachable through the GitHub connector: investigation,
@@ -307,30 +315,61 @@ checks, is Normal ChatGPT, then Antigravity:
    device, or unpublished files. A later need for local verification does not
    disqualify it as implementation owner; reserve verification or integration as
    a named successor task.
-2. **Antigravity CLI (`agy`) with an available Gemini or Claude model.** When
-   both requested choices are available and capable, prefer the user's Gemini
-   3.8 Flash choice over Claude 4.6 for complex reasoning; Claude can own medium
-   or large bounded tasks. These are preferences, not proof of model
-   availability or measured superiority. Verify the exact model identifier,
-   tools, permissions, and supported effort at dispatch.
+2. **OpenCode, verified FREE-model route only.** Paid OpenCode routes, including
+   paid Go/subscription models, are excluded. Before each new model dispatch,
+   inspect `opencode models` and the current official pricing for the exact
+   provider/model route; independently confirm it is free for the intended
+   request, not merely named "free" or similar to another model. Never guess a
+   model identifier, assume a free route has paid-route access, or select a
+   paid model as a fallback. Verify the actual executable path, authentication,
+   exact model selection, needed tools/permissions, persistent-session contact,
+   and a first non-error response before treating the worker as callable. Use
+   one visible persistent session and isolated ownership-safe worktrees.
+   Current model availability, pricing, tool access, and runtime success must
+   be checked at dispatch; documentation alone is not proof.
+3. **Antigravity CLI (`agy`) with an available Gemini or Claude model.** Do
+   not bypass this pool when a free OpenCode model is unavailable, limited, or
+   uncallable. Verify the current `agy models` output, exact model ID,
+   authentication, tools, permissions, and supported effort at dispatch. Use
+   the user's current Gemini/Claude preference when available and capable;
+   never hardcode an unverified model/version or claim comparative superiority.
 
-Native Codex subagents are a fallback, not a routine third pool. Use one for an
-assigned task only after checking both primary pools and recording why neither
-can start that specific task safely and capably now: unavailable runtime or
-authentication, a reported limit during attempted work, missing required
-tools/context or permissions, or inability to access needed local/device state.
-Do not use native subagents merely to fill slots or because implementation will
-need later local checks. Recheck primary pools before each new native
-assignment. A native subagent may perform trusted local verification,
-integration, or independent review when no primary pool can perform that
-specific task; this does not transfer implementation ownership.
+**Keep the free OpenCode runtime callable:** when binary/model discovery,
+authentication, tool invocation, or persistent-session contact fails, preserve
+the task/session/partial work, record the specific error, and route durable
+environment/runtime repair to the root/operator owner. Retry only after a
+concrete repair and a successful non-error call; do not silently remove free
+OpenCode from the roster, restore paid models, spin up concurrent writers, or
+loop on identical failures. If the specific task cannot proceed safely there,
+evaluate Antigravity next under its separate provider/data-sharing approval.
+This policy is not a claim that any tool, authentication, free model, or
+pricing has already been verified or repaired.
+
+**Native Codex subagents are separately permission-gated, not an automatic
+fourth pool.** Before **every new native spawn, resumed native task,
+reassignment to native, completed-native follow-up, or new native work** (even
+read-only audit, independent review, local verification, or integration), ask
+Mohamed **first** and obtain his explicit affirmative authorization. Present
+and record the exact proposed task, scope/file allowlist, intended duration,
+why Normal ChatGPT/free OpenCode/Antigravity cannot do that specific work,
+owner/worktree identity, stop conditions, and permitted continuation or
+reassignment boundaries. General full-delivery or SQL/sync approval, an earlier
+native task's approval, idle native capacity, model/tool failure, timeout, or
+a need for local checks does **not** authorize native usage. Completed native
+lanes remain closed; never silently resume, reassign, or repurpose them. Work
+only within the recorded approval; a materially different task, files, duration,
+or unapproved continuation needs renewed prior permission. If approval is not
+given or cannot be obtained, **pause the dependent lane and report alternatives**.
+No native task/tool should be invoked while this gate is unresolved.
 
 Do not inspect, estimate, or route by remaining model quota before assignment.
 Verify the chosen runtime, authentication, exact model, required tools, and
 permissions, then require the first non-error response before treating the
 worker as live. If a worker reports a quota or rate limit during work, stop that
-writer, preserve its session and partial artifacts, and promptly hand unfinished
-work to another capable model. Carry forward the task brief, branch/head,
+writer, preserve its session and partial artifacts, and hand unfinished
+work to the next verified, capable **authorized** pool in the order above.
+Native handoff always requires Mohamed's separate prior permission; otherwise
+pause if no primary pool can take over. Carry forward the task brief, branch/head,
 completed changes, verification, remaining work, and limit error. Confirm the
 former writer is stopped before another writer uses its worktree; keep writers
 isolated when concurrent. Update the ownership ledger and verify the successor's
@@ -340,7 +379,9 @@ print credentials or tokens.
 For each candidate, make a short capability card before assignment: accessible
 source (published GitHub versus local/dirty files), read/write tools, branch/PR
 ability, shell/test/device access, model and effort controls, data boundary, and
-observed reliability. Distinguish "connector is configured" from "this chat can
+observed reliability. For OpenCode include the current exact free-model pricing
+source/confirmation and observed first non-error call; record root-owned runtime
+repair blockers without treating availability as verified. Distinguish "connector is configured" from "this chat can
 use it." Probe the exact required tools or inspect their contracts before
 committing a lane. Match the task to demonstrated capability.
 
@@ -364,8 +405,10 @@ instead of guessing. User-created chats and an ongoing authorized coordination
 workflow permit messages within the agreed scope; do not infer permission to
 message unrelated chats.
 
-Antigravity (`agy`) is the second primary execution pool for available Gemini
-and Claude models, subject to external-provider opt-in and the approved
+Antigravity (`agy`) remains the third preferred primary execution pool after
+Normal ChatGPT and verified free OpenCode, for available Gemini and Claude
+models; do not skip it on a free OpenCode failure. It remains subject to
+external-provider opt-in and the approved
 data-sharing boundary. Per task, reuse one visible persistent conversation;
 verify the `agy` path, authentication, exact model with `agy models`, supported
 effort with `agy --help`, and permissions before dispatch. Distinguish an effort
@@ -381,9 +424,11 @@ and independently verify all output.
 Prefer Normal ChatGPT for remote implementation when published state and
 authorization support it. Separate later local verification or integration into
 dependent tasks rather than moving the implementation to a native subagent. When
-Normal ChatGPT cannot safely start, consider ready Antigravity before the native
-fallback. For unpublished local state, device/runtime access, or local
-verification, consider capable Antigravity local sessions first. A local worker
+Normal ChatGPT cannot safely start, check a verified free OpenCode model, then
+Antigravity Gemini/Claude. For unpublished local state, device/runtime access,
+or local verification, check capable free OpenCode and Antigravity local
+sessions in that order. If none can take the task, ask Mohamed for explicit
+native-task permission under Section 6 before any native action. A local worker
 may verify or integrate externally owned work without taking over its
 implementation. Keep independent review, trusted verification, integration, and
 merge control with the lead; verify all external output before acceptance.
@@ -540,6 +585,9 @@ pools within the stated task and data boundary; do not infer broader access.
 Authorization may cover later bounded dispatches only while provider, model
 pool, data class, and purpose remain inside that recorded boundary.
 Auto-triggering team-led workflow never grants third-party disclosure.
+Provider/model-pool opt-in (including free OpenCode or Antigravity) is distinct
+from the mandatory **per-native-task prior authorization** in Section 6. Broad
+team/full-delivery opt-in never waives the native approval gate.
 
 ### External Worker Checkpoints And Learning
 
@@ -653,8 +701,10 @@ context that preserves correctness:
 
 ## 8. Concurrency And Waves
 
-Inspect live agents and the remote/local capability and start readiness of the
-primary pools before assignment; do not run quota prechecks.
+Inspect live agents and the remote/local capability and start readiness of
+Normal ChatGPT, verified OpenCode FREE models, and Antigravity Gemini/Claude
+before assignment; do not run quota prechecks or treat pricing checks as quota
+checks.
 
 ```text
 free worker capacity = maximum concurrency - currently active agents
@@ -662,8 +712,10 @@ new assignments = min(free worker capacity, ready independent items, ownership-s
 ```
 
 Native slot capacity is not the execution target. First use ready primary-pool
-sessions for ownership-safe work; use a native slot only under the fallback rule
-in Section 6. Count each active Normal ChatGPT chat and external session in the
+sessions for ownership-safe work; a native slot is unavailable **until Mohamed
+explicitly approves that exact task/files/duration and stop/reassignment
+boundary** under Section 6, even for a check, independent review, or follow-up.
+Count each active Normal ChatGPT chat and external session in the
 task graph even when it uses no native slot. Respect the selected pool's actual
 concurrency and observed limits. Keep independent review capacity for high-risk
 work. Parallelism is useful only when expected elapsed time saved exceeds setup,
@@ -674,11 +726,13 @@ ownership, readable/writable boundaries, state, and merge dependencies are
 genuinely independent. One writer owns each artifact per wave; stop affected
 lanes immediately when overlap is discovered.
 
-Reuse a completed worker through follow-up when context and skills fit the next
-task. Continue a recoverable external task in its same persistent session. Spawn
-replacement only for material role change or failed lane; retire finished native
-worker when slot is needed. Never start downstream work merely because capacity
-is free.
+Reuse a completed **non-native** worker through follow-up when context and
+skills fit the next task. Continue a recoverable external task in its same
+persistent session. Spawn replacement only for material role change or failed
+lane. Completed native workers remain retired; a native follow-up, resumption,
+or reassignment is a fresh Section 6 permission checkpoint, regardless of
+whether the old session/slot still exists. Never start downstream work merely
+because capacity is free.
 
 Dependency waves:
 
@@ -714,7 +768,11 @@ contact, branch/head, and next owner in the ledger or linked brief. Where a pool
 exposes per-task token/cost usage, record it at each completed wave; distinguish
 measured usage from estimates. Do not query remaining account quota before
 dispatch. If usage is unavailable, say so and use task count, retries, and
-elapsed time as practical signals. Consolidate repeated worker prompts. At an
+elapsed time as practical signals. For any proposed native assignment, record
+Mohamed's explicit prior answer, exact task, file/owner boundary, intended
+duration, and authorized stop/continuation/reassignment conditions in this
+ledger **before** starting it. No approval record means no native task.
+Consolidate repeated worker prompts. At an
 agreed checkpoint, pause a lane that is spending tokens without verifiable
 progress; diagnose the cause before retrying or raising effort.
 
@@ -847,8 +905,9 @@ Use this blocker route before selecting a replacement or workaround:
 | ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
 | Missing product, financial, schema, sync, or material UX decision | Pause dependent lane; collect options and evidence for Mohamed.                                                               |
 | No worker response or wait timeout                                | Use Section 6 contact recovery; keep ownership until state is known.                                                          |
-| Reported model quota/rate limit                                   | Stop writer, preserve session and artifacts, then promptly hand off unfinished work to another capable model under Section 6. |
-| Authentication or tool failure                                    | Preserve session and output; use the pool's fallback rules, then choose an authorized capable pool if needed.                 |
+| Reported model quota/rate limit                                   | Stop writer and preserve state; check the next verified free/authorized capable pool in Section 6; do not silently use native. |
+| Authentication or tool failure                                    | Preserve state; record and route durable runtime repair, then try a verified eligible pool. Native still needs prior approval. |
+| Only a native worker appears capable                              | Pause and ask Mohamed first for explicit task/files/duration and stop/reassignment approval; no automatic native fallback.    |
 | Ownership overlap or changed remote head                          | Stop affected writers; refresh state and reassign exclusive ownership before edits.                                           |
 | Failed test, CI, or device check                                  | Return evidence to owner and relevant specialist for root cause; do not mark the task done.                                   |
 | Missing local verification after remote implementation            | Execute the planned local successor lane from the pinned remote head.                                                         |

@@ -22,8 +22,9 @@ Start by stating:
 - current authorization boundary;
 - roster, ownership, dependencies, model/effort rationale, and active
   concurrency;
-- remote/local capability and start-readiness of Normal ChatGPT and Antigravity,
-  plus the reason for any native-subagent fallback;
+- remote/local capability and start-readiness of Normal ChatGPT, verified
+  OpenCode FREE models, and Antigravity Gemini/Claude, plus a proposed native
+  exception only after asking Mohamed for explicit prior task permission;
 - selected portable persona or audited Codex adapter path and relevant
   skill/workflow for each lane, with verified runtime support before selecting a
   Codex `agent_type`;
@@ -35,19 +36,21 @@ This skill routes orchestration only. Do not duplicate or replace
 database, security, E2E, or review instructions. Compose only workflows relevant
 to current task.
 
-When lead selects the Gemini/Antigravity CLI pool, apply its execution-pool
-rules from the authoritative workflow (no separate delegation skill). Keep
-capability and ownership routing in authoritative workflow above; do not copy
-external-runtime mechanics into this entrypoint.
+For verified free OpenCode and Gemini/Claude Antigravity, follow their execution
+pool sections in the authoritative workflow. Do not restore retired OpenCode
+paid routes or a second delegation entrypoint. Keep runtime/model/pricing
+verification and the native permission gate canonical in that workflow, not
+duplicated as operational instructions here.
 
-Apply the authoritative workflow's execution order to **bounded partial tasks**,
-not only end-to-end tasks: user-created Normal ChatGPT chats with GitHub
-connector first, then Antigravity, and native workers when the workflow's
-fallback conditions are met. Determine the required number of Normal ChatGPT
-chats, suggest names, and ask Mohamed to create them before dispatch; he returns
-their identities. Use the workflow's capability check, time ledger,
-remote-to-local handoff, and timeout/contact recovery before changing workers or
-ownership. Never treat a wait timeout alone as worker failure.
+Apply the authoritative workflow's order to **bounded partial tasks**, reviews,
+and local verification, not just end-to-end work: Normal ChatGPT chats with the
+GitHub connector → independently verified OpenCode FREE models → Antigravity
+Gemini/Claude. Native workers require **Mohamed's explicit prior permission for
+each exact task/continuation**, even when primary pools are unavailable; never
+resume a completed native lane without it. Determine the required Normal
+ChatGPT chats, suggest names, and ask Mohamed to create them before dispatch.
+Use the canonical capability, cost, ownership, time, contact-recovery, and
+handoff rules. Never treat a wait timeout alone as worker failure.
 
 When explicitly invoked for a small task, run scaling check and avoid a swarm.
 Delegate to one bounded worker if team-led handling remains requested. Lead

@@ -27,8 +27,14 @@ mutation.
 3. Discuss full delivery estimate12–18h and approve concrete local SQL/sync
    scope in financial-save and account-default-intent contracts before
    implementation. No hosted DDL/deploy included.
-4. Dispatch bounded non-overlapping slices in Normal ChatGPT → Antigravity →
-   justified native order. Do not spawn planning workers now.
+4. Dispatch bounded non-overlapping slices in Normal ChatGPT → independently
+   verified OpenCode FREE models (never paid) → Antigravity Gemini/Claude order.
+   Verify actual model/pricing and callable runtime without quota prechecks;
+   runtime setup/repair is root-owned. Native workers are prohibited until
+   Mohamed explicitly approves the exact proposed task/files/duration and
+   stop/reassignment terms **before** any spawn, resumption or follow-up,
+   including review/local checks. Unavailable pools do not imply permission.
+   Do not spawn planning workers now.
 5. Author meaningful Red unit/integration/E2E fixtures before production. Checks
    run at authorized batched boundaries; no emulator execution.
 

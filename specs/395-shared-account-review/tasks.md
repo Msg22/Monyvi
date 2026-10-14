@@ -25,7 +25,12 @@ checkboxes remain unchecked until their own acceptance evidence exists.
   integration/commit boundaries, not after every file. No emulator runs.
 - E2E files are authored and statically validated here; actual journeys remain
   unexecuted until owner device testing. Do not claim a Maestro Red/Green run.
-- Later workers follow Normal ChatGPT → Antigravity → justified native fallback.
+- Later workers follow Normal ChatGPT → verified OpenCode FREE models only
+  (independently confirm current pricing/IDs and callable runtime) → Antigravity
+  Gemini/Claude. Paid OpenCode routes are excluded. Native workers require
+  Mohamed's separate explicit prior approval for each exact task/files/duration
+  and stop/reassignment boundary, including local checks, reviews, completed-
+  native follow-ups and resumed tasks; missing primary capability is not approval.
   No ownership assignment is made by this document. Serialize shared files,
   exports, generators, locale keys and foundation changes.
 - `[P]` means independent file sets within the named ready wave, after its
