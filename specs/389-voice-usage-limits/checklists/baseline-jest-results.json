@@ -1,0 +1,1205 @@
+{
+  "numFailedTestSuites": 0,
+  "numFailedTests": 0,
+  "numPassedTestSuites": 8,
+  "numPassedTests": 76,
+  "numPendingTestSuites": 0,
+  "numPendingTests": 0,
+  "numRuntimeErrorTestSuites": 0,
+  "numTodoTests": 0,
+  "numTotalTestSuites": 8,
+  "numTotalTests": 76,
+  "openHandles": [],
+  "snapshot": {
+    "added": 0,
+    "didUpdate": false,
+    "failure": false,
+    "filesAdded": 0,
+    "filesRemoved": 0,
+    "filesRemovedList": [],
+    "filesUnmatched": 0,
+    "filesUpdated": 0,
+    "matched": 0,
+    "total": 0,
+    "unchecked": 0,
+    "uncheckedKeysByFile": [],
+    "unmatched": 0,
+    "updated": 0
+  },
+  "startTime": 1791372576560,
+  "success": true,
+  "testResults": [
+    {
+      "assertionResults": [
+        {
+          "ancestorTitles": ["CustomBottomTabBar"],
+          "duration": 109,
+          "failureDetails": [],
+          "failureMessages": [],
+          "fullName": "CustomBottomTabBar reports its measured height to tab screens",
+          "invocations": 1,
+          "location": null,
+          "numPassingAsserts": 1,
+          "retryReasons": [],
+          "status": "passed",
+          "title": "reports its measured height to tab screens"
+        },
+        {
+          "ancestorTitles": ["CustomBottomTabBar"],
+          "duration": 74,
+          "failureDetails": [],
+          "failureMessages": [],
+          "fullName": "CustomBottomTabBar uses English and Arabic tab text and accessibility metadata",
+          "invocations": 1,
+          "location": null,
+          "numPassingAsserts": 34,
+          "retryReasons": [],
+          "status": "passed",
+          "title": "uses English and Arabic tab text and accessibility metadata"
+        }
+      ],
+      "endTime": 1791372584715,
+      "message": "",
+      "name": "E:\\Work\\My Projects\\Monyvi-issue347-voice-usage-limits\\apps\\mobile\\__tests__\\components\\tab-bar\\CustomBottomTabBar.test.tsx",
+      "startTime": 1791372577910,
+      "status": "passed",
+      "summary": ""
+    },
+    {
+      "assertionResults": [
+        {
+          "ancestorTitles": ["ai-voice-parser-service", "isVoiceParserError"],
+          "duration": 2,
+          "failureDetails": [],
+          "failureMessages": [],
+          "fullName": "ai-voice-parser-service isVoiceParserError should return true for error objects with 'kind' property",
+          "invocations": 1,
+          "location": null,
+          "numPassingAsserts": 1,
+          "retryReasons": [],
+          "status": "passed",
+          "title": "should return true for error objects with 'kind' property"
+        },
+        {
+          "ancestorTitles": ["ai-voice-parser-service", "isVoiceParserError"],
+          "duration": 0,
+          "failureDetails": [],
+          "failureMessages": [],
+          "fullName": "ai-voice-parser-service isVoiceParserError should return false for success results with 'transactions'",
+          "invocations": 1,
+          "location": null,
+          "numPassingAsserts": 1,
+          "retryReasons": [],
+          "status": "passed",
+          "title": "should return false for success results with 'transactions'"
+        },
+        {
+          "ancestorTitles": [
+            "ai-voice-parser-service",
+            "parseVoiceWithAi — audio mode"
+          ],
+          "duration": 10,
+          "failureDetails": [],
+          "failureMessages": [],
+          "fullName": "ai-voice-parser-service parseVoiceWithAi — audio mode should return parsed transactions for valid response",
+          "invocations": 1,
+          "location": null,
+          "numPassingAsserts": 7,
+          "retryReasons": [],
+          "status": "passed",
+          "title": "should return parsed transactions for valid response"
+        },
+        {
+          "ancestorTitles": [
+            "ai-voice-parser-service",
+            "parseVoiceWithAi — audio mode"
+          ],
+          "duration": 3,
+          "failureDetails": [],
+          "failureMessages": [],
+          "fullName": "ai-voice-parser-service parseVoiceWithAi — audio mode keeps voice parsing available when every SMS AI capability is disabled",
+          "invocations": 1,
+          "location": null,
+          "numPassingAsserts": 3,
+          "retryReasons": [],
+          "status": "passed",
+          "title": "keeps voice parsing available when every SMS AI capability is disabled"
+        },
+        {
+          "ancestorTitles": [
+            "ai-voice-parser-service",
+            "parseVoiceWithAi — audio mode"
+          ],
+          "duration": 4,
+          "failureDetails": [],
+          "failureMessages": [],
+          "fullName": "ai-voice-parser-service parseVoiceWithAi — audio mode should pass categories and accounts to the Edge Function via FormData",
+          "invocations": 1,
+          "location": null,
+          "numPassingAsserts": 7,
+          "retryReasons": [],
+          "status": "passed",
+          "title": "should pass categories and accounts to the Edge Function via FormData"
+        },
+        {
+          "ancestorTitles": [
+            "ai-voice-parser-service",
+            "parseVoiceWithAi — audio mode"
+          ],
+          "duration": 3,
+          "failureDetails": [],
+          "failureMessages": [],
+          "fullName": "ai-voice-parser-service parseVoiceWithAi — audio mode should return multiple parsed transactions",
+          "invocations": 1,
+          "location": null,
+          "numPassingAsserts": 5,
+          "retryReasons": [],
+          "status": "passed",
+          "title": "should return multiple parsed transactions"
+        },
+        {
+          "ancestorTitles": [
+            "ai-voice-parser-service",
+            "parseVoiceWithAi — audio mode"
+          ],
+          "duration": 2,
+          "failureDetails": [],
+          "failureMessages": [],
+          "fullName": "ai-voice-parser-service parseVoiceWithAi — audio mode should normalize INCOME type correctly",
+          "invocations": 1,
+          "location": null,
+          "numPassingAsserts": 1,
+          "retryReasons": [],
+          "status": "passed",
+          "title": "should normalize INCOME type correctly"
+        },
+        {
+          "ancestorTitles": [
+            "ai-voice-parser-service",
+            "parseVoiceWithAi — audio mode"
+          ],
+          "duration": 2,
+          "failureDetails": [],
+          "failureMessages": [],
+          "fullName": "ai-voice-parser-service parseVoiceWithAi — audio mode should skip transactions with invalid types (normalizeType throws)",
+          "invocations": 1,
+          "location": null,
+          "numPassingAsserts": 3,
+          "retryReasons": [],
+          "status": "passed",
+          "title": "should skip transactions with invalid types (normalizeType throws)"
+        },
+        {
+          "ancestorTitles": [
+            "ai-voice-parser-service",
+            "parseVoiceWithAi — audio mode"
+          ],
+          "duration": 3,
+          "failureDetails": [],
+          "failureMessages": [],
+          "fullName": "ai-voice-parser-service parseVoiceWithAi — audio mode should reject negative AI amounts",
+          "invocations": 1,
+          "location": null,
+          "numPassingAsserts": 2,
+          "retryReasons": [],
+          "status": "passed",
+          "title": "should reject negative AI amounts"
+        },
+        {
+          "ancestorTitles": [
+            "ai-voice-parser-service",
+            "parseVoiceWithAi — audio mode"
+          ],
+          "duration": 3,
+          "failureDetails": [],
+          "failureMessages": [],
+          "fullName": "ai-voice-parser-service parseVoiceWithAi — audio mode should reject non-finite AI amounts",
+          "invocations": 1,
+          "location": null,
+          "numPassingAsserts": 2,
+          "retryReasons": [],
+          "status": "passed",
+          "title": "should reject non-finite AI amounts"
+        },
+        {
+          "ancestorTitles": [
+            "ai-voice-parser-service",
+            "parseVoiceWithAi — audio mode"
+          ],
+          "duration": 3,
+          "failureDetails": [],
+          "failureMessages": [],
+          "fullName": "ai-voice-parser-service parseVoiceWithAi — audio mode should populate note from AI description field",
+          "invocations": 1,
+          "location": null,
+          "numPassingAsserts": 3,
+          "retryReasons": [],
+          "status": "passed",
+          "title": "should populate note from AI description field"
+        },
+        {
+          "ancestorTitles": [
+            "ai-voice-parser-service",
+            "parseVoiceWithAi — audio mode"
+          ],
+          "duration": 7,
+          "failureDetails": [],
+          "failureMessages": [],
+          "fullName": "ai-voice-parser-service parseVoiceWithAi — audio mode should send audio as FormData with ReactNativeFormDataFile",
+          "invocations": 1,
+          "location": null,
+          "numPassingAsserts": 9,
+          "retryReasons": [],
+          "status": "passed",
+          "title": "should send audio as FormData with ReactNativeFormDataFile"
+        },
+        {
+          "ancestorTitles": [
+            "ai-voice-parser-service",
+            "parseVoiceWithAi — audio mode"
+          ],
+          "duration": 2,
+          "failureDetails": [],
+          "failureMessages": [],
+          "fullName": "ai-voice-parser-service parseVoiceWithAi — audio mode should normalize bare file paths by prepending file:// prefix",
+          "invocations": 1,
+          "location": null,
+          "numPassingAsserts": 2,
+          "retryReasons": [],
+          "status": "passed",
+          "title": "should normalize bare file paths by prepending file:// prefix"
+        },
+        {
+          "ancestorTitles": [
+            "ai-voice-parser-service",
+            "parseVoiceWithAi — audio mode"
+          ],
+          "duration": 2,
+          "failureDetails": [],
+          "failureMessages": [],
+          "fullName": "ai-voice-parser-service parseVoiceWithAi — audio mode should preserve content:// URIs without prepending file://",
+          "invocations": 1,
+          "location": null,
+          "numPassingAsserts": 2,
+          "retryReasons": [],
+          "status": "passed",
+          "title": "should preserve content:// URIs without prepending file://"
+        },
+        {
+          "ancestorTitles": [
+            "ai-voice-parser-service",
+            "parseVoiceWithAi — error handling"
+          ],
+          "duration": 1,
+          "failureDetails": [],
+          "failureMessages": [],
+          "fullName": "ai-voice-parser-service parseVoiceWithAi — error handling should return 'unknown' error when audioUri is missing",
+          "invocations": 1,
+          "location": null,
+          "numPassingAsserts": 2,
+          "retryReasons": [],
+          "status": "passed",
+          "title": "should return 'unknown' error when audioUri is missing"
+        },
+        {
+          "ancestorTitles": [
+            "ai-voice-parser-service",
+            "parseVoiceWithAi — error handling"
+          ],
+          "duration": 2,
+          "failureDetails": [],
+          "failureMessages": [],
+          "fullName": "ai-voice-parser-service parseVoiceWithAi — error handling should return a friendly 'network' error on Edge Function error",
+          "invocations": 1,
+          "location": null,
+          "numPassingAsserts": 4,
+          "retryReasons": [],
+          "status": "passed",
+          "title": "should return a friendly 'network' error on Edge Function error"
+        },
+        {
+          "ancestorTitles": [
+            "ai-voice-parser-service",
+            "parseVoiceWithAi — error handling"
+          ],
+          "duration": 13,
+          "failureDetails": [],
+          "failureMessages": [],
+          "fullName": "ai-voice-parser-service parseVoiceWithAi — error handling should not log Edge Function response bodies on voice parser errors",
+          "invocations": 1,
+          "location": null,
+          "numPassingAsserts": 5,
+          "retryReasons": [],
+          "status": "passed",
+          "title": "should not log Edge Function response bodies on voice parser errors"
+        },
+        {
+          "ancestorTitles": [
+            "ai-voice-parser-service",
+            "parseVoiceWithAi — error handling"
+          ],
+          "duration": 3,
+          "failureDetails": [],
+          "failureMessages": [],
+          "fullName": "ai-voice-parser-service parseVoiceWithAi — error handling should return consent_required when the Edge Function requires AI consent",
+          "invocations": 1,
+          "location": null,
+          "numPassingAsserts": 4,
+          "retryReasons": [],
+          "status": "passed",
+          "title": "should return consent_required when the Edge Function requires AI consent"
+        },
+        {
+          "ancestorTitles": [
+            "ai-voice-parser-service",
+            "parseVoiceWithAi — error handling"
+          ],
+          "duration": 2,
+          "failureDetails": [],
+          "failureMessages": [],
+          "fullName": "ai-voice-parser-service parseVoiceWithAi — error handling should return 'schema' error when response is missing required fields",
+          "invocations": 1,
+          "location": null,
+          "numPassingAsserts": 2,
+          "retryReasons": [],
+          "status": "passed",
+          "title": "should return 'schema' error when response is missing required fields"
+        },
+        {
+          "ancestorTitles": [
+            "ai-voice-parser-service",
+            "parseVoiceWithAi — error handling"
+          ],
+          "duration": 2,
+          "failureDetails": [],
+          "failureMessages": [],
+          "fullName": "ai-voice-parser-service parseVoiceWithAi — error handling should return 'empty' when all transactions fail validation",
+          "invocations": 1,
+          "location": null,
+          "numPassingAsserts": 2,
+          "retryReasons": [],
+          "status": "passed",
+          "title": "should return 'empty' when all transactions fail validation"
+        },
+        {
+          "ancestorTitles": [
+            "ai-voice-parser-service",
+            "parseVoiceWithAi — error handling"
+          ],
+          "duration": 1,
+          "failureDetails": [],
+          "failureMessages": [],
+          "fullName": "ai-voice-parser-service parseVoiceWithAi — error handling should skip malformed entries but keep valid ones",
+          "invocations": 1,
+          "location": null,
+          "numPassingAsserts": 3,
+          "retryReasons": [],
+          "status": "passed",
+          "title": "should skip malformed entries but keep valid ones"
+        },
+        {
+          "ancestorTitles": [
+            "ai-voice-parser-service",
+            "parseVoiceWithAi — error handling"
+          ],
+          "duration": 1,
+          "failureDetails": [],
+          "failureMessages": [],
+          "fullName": "ai-voice-parser-service parseVoiceWithAi — error handling should return 'unknown' error on unexpected exception",
+          "invocations": 1,
+          "location": null,
+          "numPassingAsserts": 3,
+          "retryReasons": [],
+          "status": "passed",
+          "title": "should return 'unknown' error on unexpected exception"
+        },
+        {
+          "ancestorTitles": [
+            "ai-voice-parser-service",
+            "parseVoiceWithAi — error handling"
+          ],
+          "duration": 1,
+          "failureDetails": [],
+          "failureMessages": [],
+          "fullName": "ai-voice-parser-service parseVoiceWithAi — error handling should return 'timeout' error on AbortError",
+          "invocations": 1,
+          "location": null,
+          "numPassingAsserts": 3,
+          "retryReasons": [],
+          "status": "passed",
+          "title": "should return 'timeout' error on AbortError"
+        },
+        {
+          "ancestorTitles": [
+            "ai-voice-parser-service",
+            "parseVoiceWithAi — date parsing"
+          ],
+          "duration": 1,
+          "failureDetails": [],
+          "failureMessages": [],
+          "fullName": "ai-voice-parser-service parseVoiceWithAi — date parsing should parse valid ISO date string",
+          "invocations": 1,
+          "location": null,
+          "numPassingAsserts": 2,
+          "retryReasons": [],
+          "status": "passed",
+          "title": "should parse valid ISO date string"
+        },
+        {
+          "ancestorTitles": [
+            "ai-voice-parser-service",
+            "parseVoiceWithAi — date parsing"
+          ],
+          "duration": 2,
+          "failureDetails": [],
+          "failureMessages": [],
+          "fullName": "ai-voice-parser-service parseVoiceWithAi — date parsing should fall back to current date for empty date string",
+          "invocations": 1,
+          "location": null,
+          "numPassingAsserts": 1,
+          "retryReasons": [],
+          "status": "passed",
+          "title": "should fall back to current date for empty date string"
+        },
+        {
+          "ancestorTitles": [
+            "ai-voice-parser-service",
+            "parseVoiceWithAi — date parsing"
+          ],
+          "duration": 6,
+          "failureDetails": [],
+          "failureMessages": [],
+          "fullName": "ai-voice-parser-service parseVoiceWithAi — date parsing should fall back to current date for invalid date string",
+          "invocations": 1,
+          "location": null,
+          "numPassingAsserts": 1,
+          "retryReasons": [],
+          "status": "passed",
+          "title": "should fall back to current date for invalid date string"
+        },
+        {
+          "ancestorTitles": [
+            "ai-voice-parser-service",
+            "parseVoiceWithAi — counterparty handling"
+          ],
+          "duration": 2,
+          "failureDetails": [],
+          "failureMessages": [],
+          "fullName": "ai-voice-parser-service parseVoiceWithAi — counterparty handling should convert null counterparty to undefined",
+          "invocations": 1,
+          "location": null,
+          "numPassingAsserts": 1,
+          "retryReasons": [],
+          "status": "passed",
+          "title": "should convert null counterparty to undefined"
+        },
+        {
+          "ancestorTitles": [
+            "ai-voice-parser-service",
+            "parseVoiceWithAi — counterparty handling"
+          ],
+          "duration": 1,
+          "failureDetails": [],
+          "failureMessages": [],
+          "fullName": "ai-voice-parser-service parseVoiceWithAi — counterparty handling should pass through string counterparty",
+          "invocations": 1,
+          "location": null,
+          "numPassingAsserts": 1,
+          "retryReasons": [],
+          "status": "passed",
+          "title": "should pass through string counterparty"
+        }
+      ],
+      "endTime": 1791372586881,
+      "message": "",
+      "name": "E:\\Work\\My Projects\\Monyvi-issue347-voice-usage-limits\\apps\\mobile\\__tests__\\services\\ai-voice-parser-service.test.ts",
+      "startTime": 1791372584751,
+      "status": "passed",
+      "summary": ""
+    },
+    {
+      "assertionResults": [
+        {
+          "ancestorTitles": ["AddTransaction account selection"],
+          "duration": 393,
+          "failureDetails": [],
+          "failureMessages": [],
+          "fullName": "AddTransaction account selection shows the expense balance warning only for a parsed amount above the balance",
+          "invocations": 1,
+          "location": null,
+          "numPassingAsserts": 3,
+          "retryReasons": [],
+          "status": "passed",
+          "title": "shows the expense balance warning only for a parsed amount above the balance"
+        },
+        {
+          "ancestorTitles": ["AddTransaction account selection"],
+          "duration": 165,
+          "failureDetails": [],
+          "failureMessages": [],
+          "fullName": "AddTransaction account selection clears an automatic transfer quote when its snapshot becomes unavailable",
+          "invocations": 1,
+          "location": null,
+          "numPassingAsserts": 4,
+          "retryReasons": [],
+          "status": "passed",
+          "title": "clears an automatic transfer quote when its snapshot becomes unavailable"
+        },
+        {
+          "ancestorTitles": ["AddTransaction account selection"],
+          "duration": 171,
+          "failureDetails": [],
+          "failureMessages": [],
+          "fullName": "AddTransaction account selection does not submit a stale foreign-currency quote after selecting a same-currency destination",
+          "invocations": 1,
+          "location": null,
+          "numPassingAsserts": 2,
+          "retryReasons": [],
+          "status": "passed",
+          "title": "does not submit a stale foreign-currency quote after selecting a same-currency destination"
+        },
+        {
+          "ancestorTitles": ["AddTransaction account selection"],
+          "duration": 104,
+          "failureDetails": [],
+          "failureMessages": [],
+          "fullName": "AddTransaction account selection selects a default account that appears after an initial no-default emission",
+          "invocations": 1,
+          "location": null,
+          "numPassingAsserts": 2,
+          "retryReasons": [],
+          "status": "passed",
+          "title": "selects a default account that appears after an initial no-default emission"
+        },
+        {
+          "ancestorTitles": ["AddTransaction account selection"],
+          "duration": 148,
+          "failureDetails": [],
+          "failureMessages": [],
+          "fullName": "AddTransaction account selection keeps a manually selected account when a default arrives later",
+          "invocations": 1,
+          "location": null,
+          "numPassingAsserts": 2,
+          "retryReasons": [],
+          "status": "passed",
+          "title": "keeps a manually selected account when a default arrives later"
+        },
+        {
+          "ancestorTitles": ["AddTransaction account selection"],
+          "duration": 184,
+          "failureDetails": [],
+          "failureMessages": [],
+          "fullName": "AddTransaction account selection submits a supported calculator expression when DONE is pressed before equals",
+          "invocations": 1,
+          "location": null,
+          "numPassingAsserts": 2,
+          "retryReasons": [],
+          "status": "passed",
+          "title": "submits a supported calculator expression when DONE is pressed before equals"
+        },
+        {
+          "ancestorTitles": ["AddTransaction account selection"],
+          "duration": 242,
+          "failureDetails": [],
+          "failureMessages": [],
+          "fullName": "AddTransaction account selection shows a friendly error when recurring template creation preflight fails",
+          "invocations": 1,
+          "location": null,
+          "numPassingAsserts": 3,
+          "retryReasons": [],
+          "status": "passed",
+          "title": "shows a friendly error when recurring template creation preflight fails"
+        },
+        {
+          "ancestorTitles": ["AddTransaction account selection"],
+          "duration": 208,
+          "failureDetails": [],
+          "failureMessages": [],
+          "fullName": "AddTransaction account selection removes a created recurring payment when its first transaction fails",
+          "invocations": 1,
+          "location": null,
+          "numPassingAsserts": 2,
+          "retryReasons": [],
+          "status": "passed",
+          "title": "removes a created recurring payment when its first transaction fails"
+        }
+      ],
+      "endTime": 1791372590700,
+      "message": "",
+      "name": "E:\\Work\\My Projects\\Monyvi-issue347-voice-usage-limits\\apps\\mobile\\__tests__\\app\\add-transaction-account-selection.test.tsx",
+      "startTime": 1791372586896,
+      "status": "passed",
+      "summary": ""
+    },
+    {
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "QuickActionFab expansion and suppression lifecycle"
+          ],
+          "duration": 128,
+          "failureDetails": [],
+          "failureMessages": [],
+          "fullName": "QuickActionFab expansion and suppression lifecycle resets expansion state when suppression becomes active while open",
+          "invocations": 1,
+          "location": null,
+          "numPassingAsserts": 7,
+          "retryReasons": [],
+          "status": "passed",
+          "title": "resets expansion state when suppression becomes active while open"
+        },
+        {
+          "ancestorTitles": [
+            "QuickActionFab expansion and suppression lifecycle"
+          ],
+          "duration": 22,
+          "failureDetails": [],
+          "failureMessages": [],
+          "fullName": "QuickActionFab expansion and suppression lifecycle keeps the expanded actions above the device bottom inset",
+          "invocations": 1,
+          "location": null,
+          "numPassingAsserts": 1,
+          "retryReasons": [],
+          "status": "passed",
+          "title": "keeps the expanded actions above the device bottom inset"
+        }
+      ],
+      "endTime": 1791372591572,
+      "message": "",
+      "name": "E:\\Work\\My Projects\\Monyvi-issue347-voice-usage-limits\\apps\\mobile\\__tests__\\components\\fab\\QuickActionFab.test.tsx",
+      "startTime": 1791372590710,
+      "status": "passed",
+      "summary": ""
+    },
+    {
+      "assertionResults": [
+        {
+          "ancestorTitles": ["Add Transaction recurring-name QA"],
+          "duration": 227,
+          "failureDetails": [],
+          "failureMessages": [],
+          "fullName": "Add Transaction recurring-name QA blocks both writes for blank recurring name \"\"",
+          "invocations": 1,
+          "location": null,
+          "numPassingAsserts": 5,
+          "retryReasons": [],
+          "status": "passed",
+          "title": "blocks both writes for blank recurring name \"\""
+        },
+        {
+          "ancestorTitles": ["Add Transaction recurring-name QA"],
+          "duration": 277,
+          "failureDetails": [],
+          "failureMessages": [],
+          "fullName": "Add Transaction recurring-name QA blocks both writes for blank recurring name \"   \"",
+          "invocations": 1,
+          "location": null,
+          "numPassingAsserts": 5,
+          "retryReasons": [],
+          "status": "passed",
+          "title": "blocks both writes for blank recurring name \"   \""
+        },
+        {
+          "ancestorTitles": ["Add Transaction recurring-name QA"],
+          "duration": 144,
+          "failureDetails": [],
+          "failureMessages": [],
+          "fullName": "Add Transaction recurring-name QA marks the visible recurring name as required",
+          "invocations": 1,
+          "location": null,
+          "numPassingAsserts": 1,
+          "retryReasons": [],
+          "status": "passed",
+          "title": "marks the visible recurring name as required"
+        },
+        {
+          "ancestorTitles": ["Add Transaction recurring-name QA"],
+          "duration": 425,
+          "failureDetails": [],
+          "failureMessages": [],
+          "fullName": "Add Transaction recurring-name QA clears the error after correction and creates a linked transaction exactly once",
+          "invocations": 1,
+          "location": null,
+          "numPassingAsserts": 6,
+          "retryReasons": [],
+          "status": "passed",
+          "title": "clears the error after correction and creates a linked transaction exactly once"
+        },
+        {
+          "ancestorTitles": ["Add Transaction recurring-name QA"],
+          "duration": 162,
+          "failureDetails": [],
+          "failureMessages": [],
+          "fullName": "Add Transaction recurring-name QA reopens collapsed details when DONE finds a missing recurring name",
+          "invocations": 1,
+          "location": null,
+          "numPassingAsserts": 5,
+          "retryReasons": [],
+          "status": "passed",
+          "title": "reopens collapsed details when DONE finds a missing recurring name"
+        },
+        {
+          "ancestorTitles": ["Add Transaction recurring-name QA"],
+          "duration": 187,
+          "failureDetails": [],
+          "failureMessages": [],
+          "fullName": "Add Transaction recurring-name QA allows a normal unnamed transaction after recurring is disabled",
+          "invocations": 1,
+          "location": null,
+          "numPassingAsserts": 5,
+          "retryReasons": [],
+          "status": "passed",
+          "title": "allows a normal unnamed transaction after recurring is disabled"
+        },
+        {
+          "ancestorTitles": [
+            "Add Transaction recurring-name QA",
+            "validation viewport recovery"
+          ],
+          "duration": 210,
+          "failureDetails": [],
+          "failureMessages": [],
+          "fullName": "Add Transaction recurring-name QA validation viewport recovery scrolls to an offscreen recurring name after header Save, including repeated attempts",
+          "invocations": 1,
+          "location": null,
+          "numPassingAsserts": 5,
+          "retryReasons": [],
+          "status": "passed",
+          "title": "scrolls to an offscreen recurring name after header Save, including repeated attempts"
+        },
+        {
+          "ancestorTitles": [
+            "Add Transaction recurring-name QA",
+            "validation viewport recovery"
+          ],
+          "duration": 135,
+          "failureDetails": [],
+          "failureMessages": [],
+          "fullName": "Add Transaction recurring-name QA validation viewport recovery reveals and scrolls to a collapsed recurring name after header-save",
+          "invocations": 1,
+          "location": null,
+          "numPassingAsserts": 5,
+          "retryReasons": [],
+          "status": "passed",
+          "title": "reveals and scrolls to a collapsed recurring name after header-save"
+        },
+        {
+          "ancestorTitles": [
+            "Add Transaction recurring-name QA",
+            "validation viewport recovery"
+          ],
+          "duration": 144,
+          "failureDetails": [],
+          "failureMessages": [],
+          "fullName": "Add Transaction recurring-name QA validation viewport recovery reveals and scrolls to a collapsed recurring name after key-done",
+          "invocations": 1,
+          "location": null,
+          "numPassingAsserts": 5,
+          "retryReasons": [],
+          "status": "passed",
+          "title": "reveals and scrolls to a collapsed recurring name after key-done"
+        },
+        {
+          "ancestorTitles": [
+            "Add Transaction recurring-name QA",
+            "validation viewport recovery"
+          ],
+          "duration": 106,
+          "failureDetails": [],
+          "failureMessages": [],
+          "fullName": "Add Transaction recurring-name QA validation viewport recovery scrolls to the earlier amount error rather than the later recurring name",
+          "invocations": 1,
+          "location": null,
+          "numPassingAsserts": 4,
+          "retryReasons": [],
+          "status": "passed",
+          "title": "scrolls to the earlier amount error rather than the later recurring name"
+        },
+        {
+          "ancestorTitles": [
+            "Add Transaction recurring-name QA",
+            "validation viewport recovery"
+          ],
+          "duration": 46,
+          "failureDetails": [],
+          "failureMessages": [],
+          "fullName": "Add Transaction recurring-name QA validation viewport recovery places an error below the header instead of behind the ScrollView top edge",
+          "invocations": 1,
+          "location": null,
+          "numPassingAsserts": 2,
+          "retryReasons": [],
+          "status": "passed",
+          "title": "places an error below the header instead of behind the ScrollView top edge"
+        },
+        {
+          "ancestorTitles": [
+            "Add Transaction recurring-name QA",
+            "validation viewport recovery"
+          ],
+          "duration": 117,
+          "failureDetails": [],
+          "failureMessages": [],
+          "fullName": "Add Transaction recurring-name QA validation viewport recovery brings the error above a fixed footer using the actual scroll viewport",
+          "invocations": 1,
+          "location": null,
+          "numPassingAsserts": 2,
+          "retryReasons": [],
+          "status": "passed",
+          "title": "brings the error above a fixed footer using the actual scroll viewport"
+        },
+        {
+          "ancestorTitles": [
+            "Add Transaction recurring-name QA",
+            "validation viewport recovery"
+          ],
+          "duration": 212,
+          "failureDetails": [],
+          "failureMessages": [],
+          "fullName": "Add Transaction recurring-name QA validation viewport recovery does not scroll when the invalid field is already visible or after correction",
+          "invocations": 1,
+          "location": null,
+          "numPassingAsserts": 3,
+          "retryReasons": [],
+          "status": "passed",
+          "title": "does not scroll when the invalid field is already visible or after correction"
+        }
+      ],
+      "endTime": 1791372594800,
+      "message": "",
+      "name": "E:\\Work\\My Projects\\Monyvi-issue347-voice-usage-limits\\apps\\mobile\\__tests__\\app\\add-transaction-recurring-name.test.tsx",
+      "startTime": 1791372591587,
+      "status": "passed",
+      "summary": ""
+    },
+    {
+      "assertionResults": [
+        {
+          "ancestorTitles": ["useVoiceRecorder", "initial state"],
+          "duration": 16,
+          "failureDetails": [],
+          "failureMessages": [],
+          "fullName": "useVoiceRecorder initial state should start with idle status",
+          "invocations": 1,
+          "location": null,
+          "numPassingAsserts": 4,
+          "retryReasons": [],
+          "status": "passed",
+          "title": "should start with idle status"
+        },
+        {
+          "ancestorTitles": ["useVoiceRecorder", "requestPermission"],
+          "duration": 4,
+          "failureDetails": [],
+          "failureMessages": [],
+          "fullName": "useVoiceRecorder requestPermission should request and grant permission",
+          "invocations": 1,
+          "location": null,
+          "numPassingAsserts": 2,
+          "retryReasons": [],
+          "status": "passed",
+          "title": "should request and grant permission"
+        },
+        {
+          "ancestorTitles": ["useVoiceRecorder", "requestPermission"],
+          "duration": 10,
+          "failureDetails": [],
+          "failureMessages": [],
+          "fullName": "useVoiceRecorder requestPermission should return false when permission is denied",
+          "invocations": 1,
+          "location": null,
+          "numPassingAsserts": 2,
+          "retryReasons": [],
+          "status": "passed",
+          "title": "should return false when permission is denied"
+        },
+        {
+          "ancestorTitles": ["useVoiceRecorder", "start"],
+          "duration": 8,
+          "failureDetails": [],
+          "failureMessages": [],
+          "fullName": "useVoiceRecorder start should request permission and transition to recording",
+          "invocations": 1,
+          "location": null,
+          "numPassingAsserts": 4,
+          "retryReasons": [],
+          "status": "passed",
+          "title": "should request permission and transition to recording"
+        },
+        {
+          "ancestorTitles": ["useVoiceRecorder", "start"],
+          "duration": 67,
+          "failureDetails": [],
+          "failureMessages": [],
+          "fullName": "useVoiceRecorder start should fall back to idle if prepareToRecordAsync throws",
+          "invocations": 1,
+          "location": null,
+          "numPassingAsserts": 1,
+          "retryReasons": [],
+          "status": "passed",
+          "title": "should fall back to idle if prepareToRecordAsync throws"
+        },
+        {
+          "ancestorTitles": ["useVoiceRecorder", "pause and resume"],
+          "duration": 5,
+          "failureDetails": [],
+          "failureMessages": [],
+          "fullName": "useVoiceRecorder pause and resume should transition to paused status on pause",
+          "invocations": 1,
+          "location": null,
+          "numPassingAsserts": 2,
+          "retryReasons": [],
+          "status": "passed",
+          "title": "should transition to paused status on pause"
+        },
+        {
+          "ancestorTitles": ["useVoiceRecorder", "pause and resume"],
+          "duration": 4,
+          "failureDetails": [],
+          "failureMessages": [],
+          "fullName": "useVoiceRecorder pause and resume should transition back to recording on resume",
+          "invocations": 1,
+          "location": null,
+          "numPassingAsserts": 2,
+          "retryReasons": [],
+          "status": "passed",
+          "title": "should transition back to recording on resume"
+        },
+        {
+          "ancestorTitles": ["useVoiceRecorder", "stop"],
+          "duration": 3,
+          "failureDetails": [],
+          "failureMessages": [],
+          "fullName": "useVoiceRecorder stop should transition to completed and return audio URI",
+          "invocations": 1,
+          "location": null,
+          "numPassingAsserts": 3,
+          "retryReasons": [],
+          "status": "passed",
+          "title": "should transition to completed and return audio URI"
+        },
+        {
+          "ancestorTitles": ["useVoiceRecorder", "stop"],
+          "duration": 3,
+          "failureDetails": [],
+          "failureMessages": [],
+          "fullName": "useVoiceRecorder stop should wait for native readiness if stop is called during warmup (fast-tap)",
+          "invocations": 1,
+          "location": null,
+          "numPassingAsserts": 3,
+          "retryReasons": [],
+          "status": "passed",
+          "title": "should wait for native readiness if stop is called during warmup (fast-tap)"
+        },
+        {
+          "ancestorTitles": ["useVoiceRecorder", "discard"],
+          "duration": 4,
+          "failureDetails": [],
+          "failureMessages": [],
+          "fullName": "useVoiceRecorder discard should clean up temp file and reset to idle (FR-021)",
+          "invocations": 1,
+          "location": null,
+          "numPassingAsserts": 4,
+          "retryReasons": [],
+          "status": "passed",
+          "title": "should clean up temp file and reset to idle (FR-021)"
+        },
+        {
+          "ancestorTitles": ["useVoiceRecorder", "discard"],
+          "duration": 3,
+          "failureDetails": [],
+          "failureMessages": [],
+          "fullName": "useVoiceRecorder discard should handle discard during warmup window without leaving native recorder running",
+          "invocations": 1,
+          "location": null,
+          "numPassingAsserts": 1,
+          "retryReasons": [],
+          "status": "passed",
+          "title": "should handle discard during warmup window without leaving native recorder running"
+        },
+        {
+          "ancestorTitles": ["useVoiceRecorder", "reset"],
+          "duration": 4,
+          "failureDetails": [],
+          "failureMessages": [],
+          "fullName": "useVoiceRecorder reset should reset all state back to idle from completed",
+          "invocations": 1,
+          "location": null,
+          "numPassingAsserts": 3,
+          "retryReasons": [],
+          "status": "passed",
+          "title": "should reset all state back to idle from completed"
+        },
+        {
+          "ancestorTitles": ["useVoiceRecorder", "reset"],
+          "duration": 3,
+          "failureDetails": [],
+          "failureMessages": [],
+          "fullName": "useVoiceRecorder reset should delegate to discard when called during recording",
+          "invocations": 1,
+          "location": null,
+          "numPassingAsserts": 3,
+          "retryReasons": [],
+          "status": "passed",
+          "title": "should delegate to discard when called during recording"
+        },
+        {
+          "ancestorTitles": ["useVoiceRecorder", "auto-stop at 60 seconds"],
+          "duration": 10,
+          "failureDetails": [],
+          "failureMessages": [],
+          "fullName": "useVoiceRecorder auto-stop at 60 seconds should auto-stop recording when elapsed time reaches 60s",
+          "invocations": 1,
+          "location": null,
+          "numPassingAsserts": 3,
+          "retryReasons": [],
+          "status": "passed",
+          "title": "should auto-stop recording when elapsed time reaches 60s"
+        }
+      ],
+      "endTime": 1791372595269,
+      "message": "",
+      "name": "E:\\Work\\My Projects\\Monyvi-issue347-voice-usage-limits\\apps\\mobile\\__tests__\\hooks\\useVoiceRecorder.test.ts",
+      "startTime": 1791372594815,
+      "status": "passed",
+      "summary": ""
+    },
+    {
+      "assertionResults": [
+        {
+          "ancestorTitles": ["useVoiceTransactionFlow"],
+          "duration": 9,
+          "failureDetails": [],
+          "failureMessages": [],
+          "fullName": "useVoiceTransactionFlow does not start recording from retry when microphone permission is still denied",
+          "invocations": 1,
+          "location": null,
+          "numPassingAsserts": 8,
+          "retryReasons": [],
+          "status": "passed",
+          "title": "does not start recording from retry when microphone permission is still denied"
+        },
+        {
+          "ancestorTitles": ["useVoiceTransactionFlow"],
+          "duration": 4,
+          "failureDetails": [],
+          "failureMessages": [],
+          "fullName": "useVoiceTransactionFlow opens device settings for microphone permission recovery",
+          "invocations": 1,
+          "location": null,
+          "numPassingAsserts": 4,
+          "retryReasons": [],
+          "status": "passed",
+          "title": "opens device settings for microphone permission recovery"
+        },
+        {
+          "ancestorTitles": ["useVoiceTransactionFlow"],
+          "duration": 4,
+          "failureDetails": [],
+          "failureMessages": [],
+          "fullName": "useVoiceTransactionFlow shows a recovery error when opening device settings fails",
+          "invocations": 1,
+          "location": null,
+          "numPassingAsserts": 4,
+          "retryReasons": [],
+          "status": "passed",
+          "title": "shows a recovery error when opening device settings fails"
+        },
+        {
+          "ancestorTitles": ["useVoiceTransactionFlow"],
+          "duration": 10,
+          "failureDetails": [],
+          "failureMessages": [],
+          "fullName": "useVoiceTransactionFlow prevents overlapping retry recording starts",
+          "invocations": 1,
+          "location": null,
+          "numPassingAsserts": 1,
+          "retryReasons": [],
+          "status": "passed",
+          "title": "prevents overlapping retry recording starts"
+        },
+        {
+          "ancestorTitles": ["useVoiceTransactionFlow"],
+          "duration": 2,
+          "failureDetails": [],
+          "failureMessages": [],
+          "fullName": "useVoiceTransactionFlow prevents overlapping recording starts while AI consent is pending",
+          "invocations": 1,
+          "location": null,
+          "numPassingAsserts": 2,
+          "retryReasons": [],
+          "status": "passed",
+          "title": "prevents overlapping recording starts while AI consent is pending"
+        },
+        {
+          "ancestorTitles": ["useVoiceTransactionFlow"],
+          "duration": 3,
+          "failureDetails": [],
+          "failureMessages": [],
+          "fullName": "useVoiceTransactionFlow surfaces recorder start failures during retry",
+          "invocations": 1,
+          "location": null,
+          "numPassingAsserts": 2,
+          "retryReasons": [],
+          "status": "passed",
+          "title": "surfaces recorder start failures during retry"
+        },
+        {
+          "ancestorTitles": ["useVoiceTransactionFlow"],
+          "duration": 5,
+          "failureDetails": [],
+          "failureMessages": [],
+          "fullName": "useVoiceTransactionFlow does not navigate with AI results when consent is revoked during parsing",
+          "invocations": 1,
+          "location": null,
+          "numPassingAsserts": 7,
+          "retryReasons": [],
+          "status": "passed",
+          "title": "does not navigate with AI results when consent is revoked during parsing"
+        },
+        {
+          "ancestorTitles": ["useVoiceTransactionFlow"],
+          "duration": 5,
+          "failureDetails": [],
+          "failureMessages": [],
+          "fullName": "useVoiceTransactionFlow closes the overlay when voice parsing reports missing AI consent",
+          "invocations": 1,
+          "location": null,
+          "numPassingAsserts": 5,
+          "retryReasons": [],
+          "status": "passed",
+          "title": "closes the overlay when voice parsing reports missing AI consent"
+        }
+      ],
+      "endTime": 1791372595684,
+      "message": "",
+      "name": "E:\\Work\\My Projects\\Monyvi-issue347-voice-usage-limits\\apps\\mobile\\__tests__\\hooks\\useVoiceTransactionFlow.test.ts",
+      "startTime": 1791372595327,
+      "status": "passed",
+      "summary": ""
+    },
+    {
+      "assertionResults": [
+        {
+          "ancestorTitles": ["Add Transaction recurring date error handling"],
+          "duration": 3,
+          "failureDetails": [],
+          "failureMessages": [],
+          "fullName": "Add Transaction recurring date error handling maps recurring invalid start-date failures to the established localized date-range copy",
+          "invocations": 1,
+          "location": null,
+          "numPassingAsserts": 2,
+          "retryReasons": [],
+          "status": "passed",
+          "title": "maps recurring invalid start-date failures to the established localized date-range copy"
+        }
+      ],
+      "endTime": 1791372595925,
+      "message": "",
+      "name": "E:\\Work\\My Projects\\Monyvi-issue347-voice-usage-limits\\apps\\mobile\\__tests__\\app\\add-transaction-recurring-date-error.test.ts",
+      "startTime": 1791372595697,
+      "status": "passed",
+      "summary": ""
+    }
+  ],
+  "wasInterrupted": false
+}

@@ -7,6 +7,7 @@ import {
 
 const mockSetTabBarHeight = jest.fn<void, [number]>();
 let mockLanguage: "en" | "ar" = "en";
+const mockMicPress = jest.fn();
 
 const mockCommonTranslations = {
   en: {
@@ -110,6 +111,20 @@ describe("CustomBottomTabBar", () => {
     });
 
     expect(mockSetTabBarHeight).toHaveBeenCalledWith(114);
+  });
+
+  it("emits one existing voice-entry intent when the center mic is pressed", () => {
+    render(
+      <BottomTabBarHeightCallbackContext.Provider value={mockSetTabBarHeight}>
+        <CustomBottomTabBar {...tabBarProps} onMicPress={mockMicPress} />
+      </BottomTabBarHeightCallbackContext.Provider>
+    );
+
+    fireEvent.press(
+      screen.getByLabelText("Voice input - record a transaction")
+    );
+
+    expect(mockMicPress).toHaveBeenCalledTimes(1);
   });
 
   it("uses English and Arabic tab text and accessibility metadata", () => {

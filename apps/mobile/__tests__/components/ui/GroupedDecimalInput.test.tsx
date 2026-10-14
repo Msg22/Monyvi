@@ -1,6 +1,10 @@
 import { fireEvent, render, screen } from "@testing-library/react-native";
 import React from "react";
-import { I18nManager, Text } from "react-native";
+import { I18nManager, Text, TextInput } from "react-native";
+import {
+  getTestInstanceProps,
+  getTestInstances,
+} from "../../test-utils/test-instance-props";
 
 import { GroupedDecimalInput } from "@/components/ui/GroupedDecimalInput";
 import { GroupedMoneyInput } from "@/components/ui/GroupedMoneyInput";
@@ -286,5 +290,84 @@ describe("GroupedMoneyInput delegation", () => {
     );
 
     expect(screen.getByDisplayValue("47,800")).toBeTruthy();
+  });
+});
+
+describe("GroupedMoneyInput typography forwarding", () => {
+  it("forwards input, label style and label class props through the grouped numeric foundation", () => {
+    render(
+      <GroupedMoneyInput
+        testID="manual-money-typography"
+        label="Amount"
+        value="120"
+        onCanonicalChange={jest.fn()}
+        className="text-lg leading-7"
+        style={{ fontFamily: "Inter_500Medium" }}
+        labelStyle={{ fontFamily: "Inter_400Regular" }}
+        labelClassName="mb-2 text-sm"
+      />
+    );
+
+    const textField: unknown = getTestInstances(
+      screen.UNSAFE_getAllByType(TextField)
+    ).find(
+      (node: unknown) =>
+        getTestInstanceProps(node).testID === "manual-money-typography"
+    );
+    if (!textField) throw new Error("Forwarded TextField not found");
+    const textFieldProps = getTestInstanceProps(textField);
+
+    expect(textFieldProps.className).toContain("text-lg leading-7");
+    expect(textFieldProps.style).toEqual({
+      fontFamily: "Inter_500Medium",
+    });
+    expect(textFieldProps.labelClassName).toBe("mb-2 text-sm");
+    expect(textFieldProps.labelStyle).toEqual({
+      fontFamily: "Inter_400Regular",
+    });
+  });
+});
+
+describe("GroupedMoneyInput focus forwarding", () => {
+  it("forwards focus lifecycle and suppresses the native soft keyboard when requested", () => {
+    const onFocus = jest.fn();
+    const onBlur = jest.fn();
+
+    render(
+      <GroupedMoneyInput
+        testID="manual-money-input"
+        label="Amount"
+        value="120"
+        onCanonicalChange={jest.fn()}
+        onFocus={onFocus}
+        onBlur={onBlur}
+        showSoftInputOnFocus={false}
+      />
+    );
+
+    const input: unknown = screen.getByTestId("manual-money-input");
+    expect(input).toHaveProp("showSoftInputOnFocus", false);
+
+    fireEvent(input, "focus", {});
+    expect(onFocus).toHaveBeenCalledTimes(1);
+
+    fireEvent(input, "blur", {});
+    expect(onBlur).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps forwarding the shared native input ref", () => {
+    const inputRef = React.createRef<TextInput>();
+
+    render(
+      <GroupedMoneyInput
+        testID="manual-money-ref"
+        label="Amount"
+        value="120"
+        onCanonicalChange={jest.fn()}
+        inputRef={inputRef}
+      />
+    );
+
+    expect(inputRef.current).not.toBeNull();
   });
 });

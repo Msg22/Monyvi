@@ -914,6 +914,162 @@ Business rules:
 - Users review parsed transactions before saving.
 - Voice review uses the shared AI-parsed transaction review selection rule: only
   high-confidence rows with a resolved account match are pre-selected.
+- During the free-launch phase, server-authoritative voice usage is limited to
+  five provider-starting logical voice requests per authenticated user per local
+  calendar day, with at most two provider-starting logical requests per minute.
+- The local calendar day follows the user's local timezone rather than Egypt
+  time or UTC. The server owns the accepted allowance window; changing device
+  timezone must not create extra allowance inside an already-active window.
+- Requests refused before provider start consume no daily allowance. Once
+  provider execution actually starts, the logical request consumes exactly one
+  daily unit even if provider processing later fails, times out, or returns
+  invalid output.
+- Feature 389 retention decision (owner-approved 7 October 2026): same-key voice
+  replay protection lasts 35 elapsed days (35 × 24 hours) from immutable first
+  server record creation, and while that identity remains retained. Bounded
+  cleanup deletes eligible whole terminal request records at/after the cutoff;
+  retries/status updates do not extend it. Active work, leases and current
+  daily/burst/reservation accounting must survive under the same per-user
+  admission/start lock. Cleanup never refunds current consumption. After actual
+  identity deletion, the same key may be admitted as new subject to all current
+  auth, consent, validation, entitlement and quota gates. Lifetime replay
+  protection, audio/financial-payload retention and a separate tombstone table
+  are not part of this decision.
+- Voice limits are server-authoritative. Client state is UX-only, reflects
+  server availability/remaining usage, and must not reset authoritative usage
+  after reinstall, local deletion, device switching, or client tampering.
+- Free-launch allowance and burst policy are operational configuration, not
+  permanent subscription rules. Voice consumes a provider-independent
+  entitlement decision so a future subscriptions module may provide
+  plan-specific allowances without changing voice parsing.
+- Subscription tier names, pricing, billing/paywall flows, and final paid-plan
+  voice quotas remain outside the voice-limit feature.
+- Add Transaction uses one unified page with Manual and Voice modes. The global
+  Add Transaction FAB opens that page in Manual mode by default; the center
+  microphone, onboarding voice entry, and voice-review retry flow open the same
+  page in Voice mode.
+- Manual mode preserves existing financial entry, validation and submission
+  contracts while using the owner-approved compact layout. Its ordinary amount
+  field uses GroupedMoneyInput. The custom calculator appears only while an
+  amount field is focused; amount fields do not open the native soft keyboard.
+  Done applies existing calculator equals behavior where needed, then dismisses
+  the keypad without saving. Header Save remains the transaction save action.
+  Transfer source/target amounts, currencies/conversion, recurring entry,
+  optional fields, balance/budget feedback and offline local writes retain their
+  existing behavior. Partially entered Manual state must not be silently
+  discarded by a safe switch to Voice and back.
+- Voice mode uses the approved Add Transaction / Voice mockup as the visual
+  target while preserving the existing Gemini parsing and review contract.
+- Manual/Voice switching is unavailable while voice recording, pause/finalize,
+  or provider analysis is actively in progress. Voice exhaustion, burst
+  limiting, or availability failure must never block Manual transaction entry.
+- Voice allowance, exhaustion and availability-check failure notices are scoped
+  to Voice. Manual contains no Voice quota or failure notice and remains usable
+  when Voice is blocked. The exact five-reference UI repair package was approved
+  on 10 October 2026; its immutable revisions and supersession history are in
+  `specs/389-voice-usage-limits/reconciliation.md`.
+- User-facing reset copy must match local-midnight daily semantics and must not
+  claim the limit resets "at the same time tomorrow."
+
+- Owner-approved Voice motion proposal R1 (10 October 2026) adds only scoped
+  interaction/appearance details to #347. Approval provenance, source hashes,
+  immutable five-reference boundary and mapped UI states are in
+  `specs/389-voice-usage-limits/reconciliation.md` and
+  `mockups/voice-motion-binding-context.md`; existing Manual, quota, 35-day
+  replay retention and deferred #384 remain unchanged.
+- Dark idle Voice allowance/examples heading microphone and bulb badges use
+  slate-700 surfaces with green glyphs; the light badge stays as approved.
+  English example restaurant/car/coffee icons retain identities/copy and gain
+  category orange/blue/gold colors; Arabic continues with quoted rows and no
+  English example icons.
+- The examples card has an accessible "Dismiss examples" / "إخفاء الأمثلة"
+  control with the shared minimum 48 dp interactive target. Dismissal hides the
+  whole card immediately and persists **on this device for the currently
+  authenticated account**, including route changes, restart, language/theme
+  changes and later sign-in. Other users have independent choices; no global
+  device-intro flag, hosted schema, sync or network write. Missing/unreadable
+  local preference defaults visible; a failed write cannot claim durability.
+- Mic tap immediately displays the localized **Starting** state and Cancel,
+  before consent/availability/native capture preparation settles. Rapid taps
+  cannot create more than one start. Actual Listening and elapsed time begin
+  only after native recording starts; canceled or stale work never starts
+  recording in the background. Native preparation failure shows recovery, never
+  a false Listening state.
+- During real recording, the approved decoration uses two outward staggered
+  ripples (~1.4 s cycle, 700 ms apart) plus gentle activity bars (~1.2 s). These
+  are **not** measured volume indicators. Paused freezes time and motion; resume
+  continues, reduced-motion shows static indicators, and account
+  change/discard/unmount cancels active effects and recording.
+- Actual analyzing/parsing uses an illustrative waveform flowing toward a
+  receipt (~1.6 s repeating), exact approved EN/AR title/body and no percentage,
+  fabricated completion or financial details. Availability-fetch loading
+  continues to show `Skeleton`; native finalizing does not falsely claim parser
+  progress.
+- A genuinely missing native microphone grant uses the approved **inline** Voice
+  explanation and Allow microphone action before the OS permission prompt,
+  replacing only the prior recording-introduction modal. Known-granted users
+  skip it; an initial asynchronous "unknown" is not a denial. Revoked/ blocked
+  grants retain Settings/Manual recovery. Required first-use **AI Processing
+  Consent Sheet** and privacy consent gate are not removed.
+- Recording-error Try again goes straight to Starting without visible idle
+  detour; the retained-audio submission retry preserves the same request key,
+  recording and accounting contract. Availability-error Try again refreshes the
+  server-authoritative state and automatically starts only when eligible;
+  daily/burst/consent/permission gates remain fail closed. User-facing reset
+  copy in the new scoped daily contexts is "Your limits reset tomorrow." /
+  "يتجدد حد استخدامك غدًا.", still next local midnight, not 24 hours after the
+  last request or burst-reset time.
+
+### Voice recording controls R2 (owner concept approved 2026-10-11)
+
+- The owner approved the latest green/gray/red Voice controls image. Its exact
+  PNG bytes are verified
+  (`sha256:3c1d098090cfac539c834634f2dfb1db29dc75b8afc9f479d61d17af09680281`,
+  1832×858 pixels, 1470108 bytes, Git blob
+  `caceb8d1cade9e4e9c574e95fc0e603a39e766de`). On 2026-10-11 root verified the
+  public verifier results and recorded delegated acceptance of the exact
+  metadata/combined revisions (sidecar metadata APPROVED); do not imply the
+  owner personally approved a new SHA. Final canonical verifier PASS,
+  correct-feature prerequisites and read-only Speckit analysis remain root-owned
+  before implementation.
+- The local Voice recorder caps **active captured audio at 30 seconds**; paused
+  wall time does not consume the capture budget. Recording/paused displays
+  elapsed/max clock text such as `00:12 / 00:30`.
+- Reaching the cap automatically stops/finalizes native recording, retaining the
+  audio for an explicit choice. The **Recording complete / التسجيل مكتمل** state
+  displays `00:30 / 00:30` and keeps physical LEFT Submit (green, enabled),
+  CENTER Pause (gray, **disabled**), RIGHT Discard (red, enabled). It has no
+  Resume, active recording waves or helper sentence. Auto-stop does **not** send
+  to Gemini/`parse-voice`, consume a provider allowance or navigate to review.
+  Only explicit Submit / إرسال enters the existing guarded submission; Discard
+  clears the retained audio.
+- During recording, Submit remains LEFT/green, Pause CENTER/gray and Discard
+  RIGHT/red. During pause, Resume replaces Pause at CENTER, with Submit/Discard
+  unchanged. Those **physical** positions do not mirror in Arabic, although
+  text/fonts remain localized/RTL. Controls meet the existing 48 dp minimum.
+- Remove only ordinary idle/Starting/recording/paused **static filled** mic halo
+  backgrounds; retain R1 recording waves/reduced-motion/cleanup and existing
+  daily-limit/unavailable disabled artwork. Do not change the 104 dp mic target
+  or invent a responsive breakpoint.
+- This is a **client** cap, not server duration validation. Issue #391
+  separately owns authoritative server duration and empty/speechless audio
+  research. Existing Manual draft, AI consent, authenticated actor, fresh server
+  quota, 35-day replay identity and #384 deferral remain unchanged.
+- The accepted read-only latency audit identifies two safe-minimum repairs to
+  test before changing source: consolidate duplicate route/flow native
+  microphone permission refreshes into **one fresh just-in-time actor-safe typed
+  result**, retaining inline permission recovery and OS prompting only after
+  explicit user action; and defer the **first** hidden Manual component mount on
+  a Voice-first route, then keep it mounted after Manual selection so drafts
+  persist. Do not remove fresh local AI consent, authoritative preattempt
+  availability, cancellation generations, native 300 ms early-command
+  stabilization or true record-before-Listening readiness. Do not alter
+  availability HTTP in-flight coordination without evidence.
+- Startup is desired to be faster, but **no elapsed-time target or savings** is
+  approved or measured. Owner-local device timing must distinguish
+  navigation/first frame, consent, quota, permission and native prepare/record
+  stages; do not log audio, transcripts, financial content, identifiers or
+  credentials.
 
 ## 7. SMS Import And Live Detection
 

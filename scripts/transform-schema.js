@@ -20,16 +20,37 @@ const ESLINT_BIN = path.join(
   "bin",
   "eslint.js"
 );
-const PRETTIER_BIN = path.join(
-  path.dirname(require.resolve("prettier/package.json")),
-  "bin",
-  "prettier.cjs"
-);
+const prettier = require("prettier");
+const { atomicReplaceFile } = require("./generate-local-supabase-types.cjs");
 
-function formatWithPrettier(paths) {
-  execFileSync(process.execPath, [PRETTIER_BIN, "--write", ...paths], {
-    stdio: "inherit",
+async function formatContent(filePath, content, prettierModule = prettier) {
+  const config = await prettierModule.resolveConfig(filePath);
+  return prettierModule.format(content, {
+    ...(config || {}),
+    filepath: filePath,
   });
+}
+
+async function writeIfChanged(
+  filePath,
+  content,
+  fsModule = fs,
+  prettierModule = prettier
+) {
+  const formatted = await formatContent(filePath, content, prettierModule);
+  if (fsModule.existsSync(filePath)) {
+    const existing = fsModule.readFileSync(filePath, "utf8");
+    if (existing === formatted) {
+      return false;
+    }
+  }
+  const dir = path.dirname(filePath);
+  const tempPath = path.join(
+    dir,
+    `.${path.basename(filePath)}.${Date.now()}.${process.pid}.tmp`
+  );
+  atomicReplaceFile(tempPath, filePath, formatted, fsModule);
+  return true;
 }
 
 // =============================================================================
@@ -51,6 +72,8 @@ const EXCLUDED_TABLES = [
   "sms_ai_usage_events",
   "sms_ai_scan_sessions",
   "email_verification_resend_limits",
+  "voice_ai_usage_windows",
+  "voice_ai_work_requests",
 ];
 
 // Mapping from table names to class names (for irregular plurals)
@@ -115,6 +138,11 @@ const EXACT_TEXT_MODEL_FIELDS = new Set([
   "metal_rate_references.value_decimal",
   "recurring_payments.financial_revision",
 ]);
+
+// Relation property name overrides to prevent shadowing WatermelonDB Model methods (e.g. Model.batch)
+const RELATION_PROPERTY_NAME_OVERRIDES = {
+  "market_rate_observations.batch_id": "rateBatch",
+};
 
 const UNSAFE_SQL_BY_TABLE = {
   account_financial_effects:
@@ -621,7 +649,10 @@ function generateBaseModel(tableName, columns, relationships, allTables) {
   // Build relation declarations - use Base prefix for types
   const relationDeclarations = rels
     .map((rel) => {
-      const propName = snakeToCamel(rel.foreignKey.replace(/_id$/, ""));
+      const overrideKey = `${tableName}.${rel.foreignKey}`;
+      const propName =
+        RELATION_PROPERTY_NAME_OVERRIDES[overrideKey] ||
+        snakeToCamel(rel.foreignKey.replace(/_id$/, ""));
       const relClassName = tableToClassName(rel.referencedTable);
       return `  @relation("${rel.referencedTable}", "${rel.foreignKey}") ${propName}!: Relation<Base${relClassName}>;`;
     })
@@ -724,7 +755,7 @@ function tableToClassName(tableName) {
 // MAIN
 // =============================================================================
 
-function main() {
+async function main() {
   console.log("🔄 Reading supabase-types.ts...");
   const content = fs.readFileSync(SUPABASE_TYPES_PATH, "utf-8");
 
@@ -748,21 +779,16 @@ function main() {
   console.log("📝 Generating schema.ts...");
   const schemaContent = generateSchema(tables);
   const schemaPath = path.join(OUTPUT_DIR, "schema.ts");
-  fs.writeFileSync(schemaPath, schemaContent);
+  await writeIfChanged(schemaPath, schemaContent);
 
   // Generate types.ts
   console.log("📝 Generating types.ts...");
   const typesContent = generateTypes(enums);
   const typesPath = path.join(OUTPUT_DIR, "types.ts");
-  fs.writeFileSync(typesPath, typesContent);
+  await writeIfChanged(typesPath, typesContent);
 
-  // Format schema.ts and types.ts with Prettier so the output matches
-  // the editor / pre-commit formatter and avoids phantom git diffs.
-  formatWithPrettier([schemaPath, typesPath]);
-
-  // Generate base model files (always overwritten)
+  // Generate base model files (formatted before write, skipping unchanged)
   console.log("📝 Generating base model files...");
-  const generatedBaseModelPaths = [];
   for (const [tableName, { columns }] of Object.entries(tables)) {
     const className = tableToClassName(tableName);
     const baseFileName = `base-${pascalToKebab(className)}.ts`;
@@ -773,8 +799,7 @@ function main() {
       relationships,
       tables
     );
-    fs.writeFileSync(baseModelPath, baseModelContent);
-    generatedBaseModelPaths.push(baseModelPath);
+    await writeIfChanged(baseModelPath, baseModelContent);
     console.log(`   ✅ base/${baseFileName}`);
   }
 
@@ -787,20 +812,12 @@ function main() {
 
     if (!fs.existsSync(extendedFilePath)) {
       const extendedModelContent = generateExtendedModel(tableName);
-      fs.writeFileSync(extendedFilePath, extendedModelContent);
+      await writeIfChanged(extendedFilePath, extendedModelContent);
       console.log(`   ✅ ${extendedFileName} (created)`);
     } else {
       console.log(`   ⏭️  ${extendedFileName} (exists, skipped)`);
     }
   }
-
-  // Format the generated base model files with Prettier
-  console.log("\n🎨 Formatting base model files...");
-
-  for (const generatedPath of generatedBaseModelPaths) {
-    formatWithPrettier([generatedPath]);
-  }
-  console.log("   ✅ Base models formatted");
 
   console.log("\nLinting base model files...");
   try {
@@ -832,7 +849,19 @@ function main() {
 }
 
 if (require.main === module) {
-  main();
+  main().catch((error) => {
+    console.error(
+      "Schema sync failed:",
+      error instanceof Error ? error.message : String(error)
+    );
+    process.exit(1);
+  });
 }
 
-module.exports = { generateBaseModel, generateSchema, parseSupabaseTypes };
+module.exports = {
+  generateBaseModel,
+  generateSchema,
+  parseSupabaseTypes,
+  formatContent,
+  writeIfChanged,
+};

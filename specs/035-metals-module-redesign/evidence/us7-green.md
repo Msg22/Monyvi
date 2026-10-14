@@ -27,9 +27,9 @@ Branch/base: `codex/035-metals-delete` / stable Slice 7 checkpoint `a190d8f`
   bounded-scroll, complete-command retry, and command-construction cleanup gaps.
 - Last full isolated Jest run before the later review-only follow-ups: 2 suites
   passed, 32 tests passed at the verified `8d6bece` checkpoint, including
-  lifecycle-kind, predecessor-less revision-zero, malformed/duplicate generated-ID,
-  unsuccessful replay, command-construction cleanup, complete-command retry,
-  bounded-scroll, and StrictMode cases.
+  lifecycle-kind, predecessor-less revision-zero, malformed/duplicate
+  generated-ID, unsuccessful replay, command-construction cleanup,
+  complete-command retry, bounded-scroll, and StrictMode cases.
 - Current review follow-ups add source-contract coverage for reconciled action
   roots and for the dark destructive button token. In this remote session, a
   focused source probe reproduced the contrast failure with `dark:bg-red-500`

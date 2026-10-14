@@ -32,5 +32,5 @@ export abstract class BaseMarketRateObservation extends Model {
   @field("unit") unit!: string;
   @field("value_decimal") valueDecimal!: string;
 
-  @relation("market_rates", "batch_id") batch!: Relation<BaseMarketRate>;
+  @relation("market_rates", "batch_id") rateBatch!: Relation<BaseMarketRate>;
 }
