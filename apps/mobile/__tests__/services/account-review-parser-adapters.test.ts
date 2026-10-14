@@ -12,7 +12,6 @@ import {
   accountReviewSessionSchema,
   accountReviewSmsFinancialRowSchema,
   accountReviewSmsResponseV2Schema,
-  type AccountReviewAccountContext,
   type AccountReviewRequestContext,
   type AccountReviewSession,
   type AccountReviewSmsFinancialRow,
@@ -41,7 +40,7 @@ const mockSmsSessionId = "00000000-0000-4000-8000-000000000198";
 const mockSmsRequestKey = "synthetic-original-request";
 const mockSmsFingerprint = "f".repeat(64);
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
-let mockCurrentOwnerId = REVIEW_WIRE_IDS.ownerId;
+const mockCurrentOwnerId = REVIEW_WIRE_IDS.ownerId;
 
 interface MockFunctionResponse {
   readonly data: unknown;
@@ -284,6 +283,12 @@ function smsCandidates(): readonly SmsCandidate[] {
       smsFingerprint: mockSmsFingerprint,
     },
   ];
+}
+
+function firstSmsCandidate(): SmsCandidate {
+  const candidate = smsCandidates()[0];
+  if (!candidate) throw new Error("Missing submitted synthetic SMS candidate");
+  return candidate;
 }
 
 function forVoiceRequest(response: AccountReviewVoiceResponseV2): AccountReviewVoiceResponseV2 {
@@ -564,7 +569,7 @@ describe("#395 T007 — original Voice parser with advisory review v2", () => {
     expect(appendedValues("reviewContractVersion")).toEqual(["account-review/v2"]);
     const values = appendedValues("accounts");
     expect(values).toHaveLength(1);
-    const submitted = JSON.parse(String(values[0])) as unknown;
+    const submitted: unknown = JSON.parse(String(values[0]));
     expect(submitted).toEqual(makeReviewAccountSnapshots().providerContext.accounts);
     const text = String(values[0]);
     expect(text).toContain('"cardLast4":"0007"');
@@ -862,7 +867,7 @@ describe("#395 T007 — original Voice parser with advisory review v2", () => {
     assertSessionBasics(session, "SMS");
     const row = session.rows[0];
     if (!row) throw new Error("Expected normalized SMS financial row");
-    assertGroundedSmsRow(row, smsCandidates()[0] as SmsCandidate);
+    assertGroundedSmsRow(row, firstSmsCandidate());
     expect(mockInvoke).toHaveBeenCalledTimes(1);
     expect(mockInvoke.mock.calls[0]?.[0]).toBe("parse-sms");
     const body = invokeBodyText();
@@ -999,7 +1004,7 @@ describe("#395 T007 — original Voice parser with advisory review v2", () => {
     expect(session.rows).toHaveLength(1);
     const row = session.rows[0];
     if (!row) throw new Error("Unknown SMS currency row must be retained");
-    assertGroundedSmsRow(row, smsCandidates()[0] as SmsCandidate);
+    assertGroundedSmsRow(row, firstSmsCandidate());
     expect(row.currency.state).toBe("unconfirmed");
     expect(row.assignment.state).toBe("unresolved");
     expect(row.reviewReasons).toContain("currency_confirmation_needed");
