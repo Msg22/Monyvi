@@ -1,3 +1,5 @@
+import type { AccountReviewEvidenceSpan, AccountReviewRow } from "../schemas";
+
 /**
  * Synthetic, intentionally non-customer #395 wire fixtures.
  * All persisted identities are canonical UUIDs; parser aliases are request-local.
@@ -19,7 +21,7 @@ export const REVIEW_SMS_BODY = "QNB purchase EGP 50";
 
 export function makeEvidenceSpan(
   sourceRef: string,
-  field: "transcript" | "body" | "sender",
+  field: AccountReviewEvidenceSpan["field"],
   sourceText: string,
   fragment: string
 ) {
@@ -62,7 +64,7 @@ export function makeReviewRequestContext() {
 }
 
 export function makeAccountEvidence(
-  source: "VOICE" | "SMS" = "VOICE"
+  source: AccountReviewRow["source"] = "VOICE"
 ) {
   const isVoice = source === "VOICE";
   const sourceRef = isVoice
@@ -83,7 +85,7 @@ export function makeAccountEvidence(
 }
 
 export function makeCurrencyEvidence(
-  source: "VOICE" | "SMS" = "VOICE"
+  source: AccountReviewRow["source"] = "VOICE"
 ) {
   const isVoice = source === "VOICE";
   const sourceRef = isVoice
@@ -106,11 +108,11 @@ export function makeCurrencyEvidence(
 }
 
 export function makeSuggestedAccount(
-  source: "VOICE" | "SMS" = "VOICE"
+  source: AccountReviewRow["source"] = "VOICE"
 ) {
   return {
     suggestionRef: REVIEW_WIRE_IDS.suggestionRef,
-    name: "QNB salary",
+    name: "QNB",
     type: "BANK",
     currency: "EGP",
     institutionId: null,
@@ -147,7 +149,6 @@ export function makeSmsFinancialRow() {
     date: "2026-10-14",
     categorySystemName: "shopping",
     isAtmWithdrawal: false,
-    cardLast4: "0007",
     confidenceScore: 0.91,
     isTrusted: false,
   };
