@@ -10,6 +10,7 @@ import {
 } from "../../packages/logic/src/account-review/schemas";
 import {
   makeReviewRequestContext,
+  makeGroundedVoiceCashV2Response,
   makeSmsV1Response,
   makeSmsV2Response,
   makeVoiceV1Response,
@@ -126,21 +127,7 @@ test("Gemini Voice v2: Edge and client parity for original transcript, grounded 
   const response = makeVoiceV2Response();
   agreeOnAcceptance(canonicalVoice, edgeVoice, response, true);
 
-  const cashResponse = {
-    ...response,
-    transactions: [{
-      ...response.transactions[0],
-      accountEvidence: {
-        ...response.transactions[0].accountEvidence,
-        type: "CASH",
-      },
-    }],
-    suggestedAccounts: [{
-      ...response.suggestedAccounts[0],
-      type: "CASH",
-      senderNames: [],
-    }],
-  };
+  const cashResponse = makeGroundedVoiceCashV2Response();
   agreeOnAcceptance(canonicalVoice, edgeVoice, cashResponse, true);
 
   agreeOnAcceptance(
