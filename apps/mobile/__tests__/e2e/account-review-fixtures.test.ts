@@ -337,6 +337,128 @@ function findScene(id: string): DescriptorScene {
   return scene;
 }
 
+function assertNoFixtureSideEffects(): void {
+  expect(mockDatabaseWrite).not.toHaveBeenCalled();
+  expect(mockUnscopedFetch).not.toHaveBeenCalled();
+  expect(mockProviderCall).not.toHaveBeenCalled();
+}
+
+function assertOwnedSessionReferences(
+  session: AccountReviewSession,
+  scene: DescriptorScene,
+  ownerId: string
+): void {
+  const allowedAccounts = new Set(accountRecordsForOwner(ownerId).map(({ id }) => id));
+  const accessibleCategories = new Set(scopedCategoryForOwner(ownerId).map(({ id }) => id));
+  const staticAccounts = new Set(manifest.accountContext.accounts.map(({ id }) => id));
+  const rowIds = new Set<string>();
+  const sourceRefs = new Set<string>();
+
+  expect(session.ownerId).toBe(ownerId);
+  expect(session.sessionId).toMatch(UUID_V4_PATTERN);
+  expect(session.source).toBe(scene.source);
+  expect(session.preferredCurrency).toBe("EGP");
+  expect(session.sourceRevision).toMatch(/^(0|[1-9][0-9]*)$/);
+  expect(session.revision).toMatch(/^(0|[1-9][0-9]*)$/);
+  expect(session.operationGeneration).toMatch(/^(0|[1-9][0-9]*)$/);
+  expect(session.saveIntent).toBeNull();
+  expect(session.rows).toHaveLength(scene.expectedCounts.total);
+  expect(session.groups).toHaveLength(scene.groups.length);
+  expect(session.rows.filter(({ selected }) => selected)).toHaveLength(
+    scene.expectedCounts.selected
+  );
+  expect(session.rows.filter(({ reviewReasons }) => reviewReasons.length > 0))
+    .toHaveLength(scene.expectedCounts.needsReview);
+  expect(session.groups.map(({ status }) => status).sort())
+    .toEqual(scene.groups.map(({ status }) => status).sort());
+
+  for (const [index, row] of session.rows.entries()) {
+    const descriptor = scene.rows[index];
+    if (!descriptor) throw new Error("Review session has an unregistered row");
+    expect(row.rowId).toMatch(UUID_V4_PATTERN);
+    expect(rowIds.has(row.rowId)).toBe(false);
+    rowIds.add(row.rowId);
+    expect(sourceRefs.has(row.sourceRef)).toBe(false);
+    sourceRefs.add(row.sourceRef);
+    expect(row.source).toBe(scene.source);
+    expect(row.transaction.source).toBe(scene.source);
+    expect(row.transaction.date).toBeInstanceOf(Date);
+    expect(row.transaction.categoryId).toMatch(UUID_V4_PATTERN);
+    expect(accessibleCategories.has(row.transaction.categoryId)).toBe(true);
+    expect(row.transaction.categoryId).not.toBe(manifest.syntheticCategoryId);
+    expect(row.amountDecimal).toBe(descriptor.amountDecimal);
+    expect(row.selected).toBe(descriptor.selected);
+    expect(row.reviewReasons.length > 0).toBe(descriptor.issueTags.length > 0);
+    for (const candidateId of row.accountEvidence.candidateAccountIds) {
+      expect(allowedAccounts.has(candidateId)).toBe(true);
+    }
+    if (row.assignment.state === "existing") {
+      expect(allowedAccounts.has(row.assignment.accountId)).toBe(true);
+      expect(staticAccounts.has(row.assignment.accountId)).toBe(false);
+      if (row.currency.state === "known") {
+        expect(row.assignment.currency).toBe(row.currency.code);
+      }
+    }
+    if (row.assignment.state === "suggested") {
+      const group = session.groups.find(({ groupId }) =>
+        groupId === row.assignment.groupId
+      );
+      expect(group?.linkedRowIds).toContain(row.rowId);
+      expect(group?.revision).toBe(row.assignment.groupRevision);
+      expect(group?.status).toBe(row.assignment.confirmation);
+      expect(row.currency.state).toBe("known");
+    }
+    if (row.transaction.accountId !== undefined) {
+      expect(allowedAccounts.has(row.transaction.accountId)).toBe(true);
+      expect(staticAccounts.has(row.transaction.accountId)).toBe(false);
+    }
+    if (row.toAssignment?.state === "existing") {
+      expect(allowedAccounts.has(row.toAssignment.accountId)).toBe(true);
+      expect(staticAccounts.has(row.toAssignment.accountId)).toBe(false);
+      expect(row.source).toBe("SMS");
+      if (row.assignment.state === "existing") {
+        expect(row.toAssignment.accountId).not.toBe(row.assignment.accountId);
+      }
+    }
+    if (row.source === "SMS") {
+      expect(row.sourceFingerprint).toMatch(SHA_256_PATTERN);
+      expect(row.sourceFingerprint).toBe(row.transaction.smsFingerprint);
+      expect(row.transaction.senderDisplayName).not.toBe("");
+      expect(row.transaction.rawSmsBody).not.toBe("");
+      if (row.transaction.toAccountId !== undefined) {
+        expect(allowedAccounts.has(row.transaction.toAccountId)).toBe(true);
+      }
+    } else {
+      expect(row.sourceFingerprint).toBeNull();
+    }
+    if (descriptor.currencyEvidenceState === "omitted") {
+      expect(row.currency).toEqual({
+        state: "known", code: session.preferredCurrency, origin: "preferred_omission",
+      });
+    }
+    if (descriptor.currencyCode === null) {
+      expect(row.currency.state).toBe("unconfirmed");
+      expect(row.selected).toBe(false);
+      expect(row.assignment.state).toBe("unresolved");
+    }
+  }
+  for (const group of session.groups) {
+    expect(group.groupId).toMatch(UUID_V4_PATTERN);
+    expect(group.evidenceKey).toMatch(SHA_256_PATTERN);
+    expect(group.revision).toMatch(/^(0|[1-9][0-9]*)$/);
+    for (const linked of group.linkedRowIds) {
+      expect(rowIds.has(linked)).toBe(true);
+      if (group.status !== "removed") {
+        const row = session.rows.find(({ rowId }) => rowId === linked);
+        expect(row?.assignment.state).toBe("suggested");
+      }
+    }
+    if (group.status === "removed") {
+      expect(session.removedEvidenceKeys).toContain(group.evidenceKey);
+    }
+  }
+}
+
 describe("T008 #395 bounded fixture descriptor contract", () => {
   it("is synthetic, current-user-only, non-production and contains no hosted seed or runtime claims", () => {
     expect(manifest.format).toBe(
