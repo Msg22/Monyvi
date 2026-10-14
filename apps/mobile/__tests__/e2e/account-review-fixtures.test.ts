@@ -245,6 +245,28 @@ describe("T008 #395 bounded fixture descriptor contract", () => {
     expect(atmSms.rows[0]?.amountDecimal).toBe("25.05");
   });
 
+  it("keeps proven omitted currency separate from conflicting unconfirmed currency", () => {
+    const omitted = findScene("voice-currency-omitted");
+    const conflict = findScene("r3-currency-conflict");
+
+    expect(omitted.rows[0]).toMatchObject({
+      currencyEvidenceState: "omitted",
+      accountEvidenceState: "absent",
+      currencyCode: manifest.accountContext.preferredCurrency,
+      accountId: manifest.defaultAccountId,
+      selected: true,
+      issueTags: [],
+    });
+    expect(conflict.rows[0]).toMatchObject({
+      currencyCode: null,
+      accountId: null,
+      selected: false,
+      issueTags: ["currency_confirmation_needed"],
+    });
+    expect(omitted.source).toBe("VOICE");
+    expect(conflict.source).toBe("SMS");
+  });
+
   it("preserves confirmed-versus-selected independence and removal recovery facts", () => {
     const confirmed = findScene("r3-confirmed-feedback");
     expect(confirmed.groups).toHaveLength(2);
