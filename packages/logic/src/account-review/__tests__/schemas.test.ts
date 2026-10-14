@@ -13,7 +13,11 @@ import {
   accountReviewSessionSchema,
   accountReviewCommandSchema,
   accountReviewSaveIntentSchema,
+  type AccountReviewRow,
+  type AccountReviewSession,
+  type AccountReviewGroup,
 } from "../schemas";
+import type { ParsedSmsTransaction, ParsedVoiceTransaction } from "../../types";
 import {
   makeAccountEvidence,
   makeCurrencyEvidence,
@@ -415,7 +419,7 @@ describe("#395 T005 — canonical account-review parser contract", () => {
     const sessionId = "00000000-0000-4000-8000-000000000106";
     const groupId = "00000000-0000-4000-8000-000000000107";
 
-    function validVoiceRow() {
+    function validVoiceRow(): Extract<AccountReviewRow, { source: "VOICE" }> {
       return {
         rowId,
         source: "VOICE",
@@ -454,7 +458,7 @@ describe("#395 T005 — canonical account-review parser contract", () => {
       };
     }
 
-    function validSession() {
+    function validSession(): AccountReviewSession {
       return {
         ownerId: REVIEW_WIRE_IDS.ownerId,
         source: "VOICE",
@@ -470,6 +474,217 @@ describe("#395 T005 — canonical account-review parser contract", () => {
         saveIntent: null,
       };
     }
+
+    function activeVoiceSession(): AccountReviewSession {
+      const row: Extract<AccountReviewRow, { source: "VOICE" }> = {
+        ...validVoiceRow(),
+        assignment: {
+          state: "suggested", accountId: null,
+          groupId, groupRevision: "0", confirmation: "pending",
+        },
+      };
+      const group: AccountReviewGroup = {
+        groupId,
+        evidenceKey: "e".repeat(64),
+        suggestionRefs: [REVIEW_WIRE_IDS.suggestionRef],
+        name: "QNB",
+        type: "BANK",
+        currency: "EGP",
+        institutionId: null,
+        providerDisplayName: "QNB",
+        cardLast4: null,
+        senderNames: ["QNB"],
+        linkedRowIds: [rowId],
+        status: "pending",
+        revision: "0",
+        confirmedIdentityRevision: null,
+      };
+      return { ...validSession(), rows: [row], groups: [group] };
+    }
+
+    function validSmsRow(): Extract<AccountReviewRow, { source: "SMS" }> {
+      const smsFingerprint = "synthetic-sms-fingerprint";
+      return {
+        rowId,
+        source: "SMS",
+        sourceRef: REVIEW_WIRE_IDS.smsRowRef,
+        sourceFingerprint: smsFingerprint,
+        transaction: {
+          amount: 50,
+          currency: "EGP",
+          type: "EXPENSE",
+          date: new Date("2026-10-14T12:00:00.000Z"),
+          categoryId: "00000000-0000-4000-8000-000000000108",
+          categoryDisplayName: "Shopping",
+          confidence: 0.92,
+          originLabel: "QNB",
+          source: "SMS",
+          smsFingerprint,
+          senderDisplayName: "QNB",
+          rawSmsBody: REVIEW_SMS_BODY,
+          isAtmWithdrawal: false,
+        },
+        amountDecimal: "50",
+        accountEvidence: makeAccountEvidence("SMS"),
+        currency: { state: "known", code: "EGP", origin: "explicit" },
+        assignment: {
+          state: "existing", accountId: REVIEW_WIRE_IDS.bankAccountId,
+          origin: "exact", currency: "EGP", identityRevision: "0",
+        },
+        toAssignment: null,
+        reviewReasons: [],
+        selected: false,
+        revision: "0",
+        hasUserAccountOverride: false,
+        hasUserCurrencyOverride: false,
+      };
+    }
+
+    it("M4 proves inferred source snapshot compatibility with existing parsed Voice/SMS contracts", () => {
+      type VoiceSnapshot = Extract<AccountReviewRow, { source: "VOICE" }>["transaction"];
+      type SmsSnapshot = Extract<AccountReviewRow, { source: "SMS" }>["transaction"];
+      type VoiceConforms = VoiceSnapshot extends ParsedVoiceTransaction ? true : false;
+      type SmsConforms = SmsSnapshot extends ParsedSmsTransaction ? true : false;
+      const typeOnlyConformance: readonly [VoiceConforms, SmsConforms] = [true, true];
+      expect(typeOnlyConformance).toEqual([true, true]);
+      expect(accountReviewRowSchema.safeParse(validVoiceRow()).success).toBe(true);
+      expect(accountReviewRowSchema.safeParse(validSmsRow()).success).toBe(true);
+    });
+
+    it("H3 accepts a current reciprocal pending group and matching confirmed group", () => {
+      const active = activeVoiceSession();
+      expect(accountReviewSessionSchema.safeParse(active).success).toBe(true);
+      expect(accountReviewSessionSchema.safeParse({
+        ...active,
+        rows: [{
+          ...active.rows[0],
+          assignment: {
+            state: "suggested", accountId: null,
+            groupId, groupRevision: "0", confirmation: "confirmed",
+          },
+        }],
+        groups: [{
+          ...active.groups[0], status: "confirmed",
+          confirmedIdentityRevision: "0",
+        }],
+      }).success).toBe(true);
+    });
+
+    it("H3 rejects an active group listing an unrelated unresolved row", () => {
+      const active = activeVoiceSession();
+      const extraId = "00000000-0000-4000-8000-000000000112";
+      const extra = {
+        ...validVoiceRow(), rowId: extraId, sourceRef: "voice-extra",
+      };
+      expect(accountReviewSessionSchema.safeParse({
+        ...active,
+        rows: [...active.rows, extra],
+        groups: [{
+          ...active.groups[0], linkedRowIds: [rowId, extraId],
+        }],
+      }).success).toBe(false);
+    });
+
+    it("H3 rejects two active groups claiming one identical row", () => {
+      const active = activeVoiceSession();
+      const extraGroup: AccountReviewGroup = {
+        ...active.groups[0],
+        groupId: "00000000-0000-4000-8000-000000000113",
+        evidenceKey: "f".repeat(64),
+        suggestionRefs: ["other-suggestion"],
+      };
+      expect(accountReviewSessionSchema.safeParse({
+        ...active, groups: [...active.groups, extraGroup],
+      }).success).toBe(false);
+    });
+
+    it("H3 rejects active group currency inconsistent with linked known review currency", () => {
+      const active = activeVoiceSession();
+      expect(accountReviewSessionSchema.safeParse({
+        ...active, groups: [{ ...active.groups[0], currency: "USD" }],
+      }).success).toBe(false);
+    });
+
+    it("H3 keeps removed-group tombstones inert when rows detach or belong to another live group", () => {
+      const active = activeVoiceSession();
+      const removed: AccountReviewGroup = {
+        ...active.groups[0], status: "removed",
+        confirmedIdentityRevision: "0",
+      };
+      expect(accountReviewSessionSchema.safeParse({
+        ...active, rows: [validVoiceRow()], groups: [removed],
+        removedEvidenceKeys: [removed.evidenceKey],
+      }).success).toBe(true);
+      expect(accountReviewSessionSchema.safeParse({
+        ...active,
+        groups: [
+          active.groups[0],
+          {
+            ...removed,
+            groupId: "00000000-0000-4000-8000-000000000114",
+            evidenceKey: "a".repeat(64),
+          },
+        ],
+        removedEvidenceKeys: ["a".repeat(64)],
+      }).success).toBe(true);
+    });
+
+    it("H4 ordinary Voice and non-ATM SMS rows reject any non-null destination assignment", () => {
+      const destination = {
+        state: "existing",
+        accountId: REVIEW_WIRE_IDS.cashAccountId,
+        origin: "user",
+        currency: "EGP",
+        identityRevision: "0",
+      };
+      expect(accountReviewRowSchema.safeParse({
+        ...validVoiceRow(), toAssignment: destination,
+      }).success).toBe(false);
+      expect(accountReviewRowSchema.safeParse({
+        ...validSmsRow(), toAssignment: destination,
+      }).success).toBe(false);
+      expect(accountReviewRowSchema.safeParse(validVoiceRow()).success).toBe(true);
+      expect(accountReviewRowSchema.safeParse(validSmsRow()).success).toBe(true);
+    });
+
+    it("H4 allows only known-currency and distinct account destination for ATM transfer", () => {
+      const ordinary = validSmsRow();
+      const atm: Extract<AccountReviewRow, { source: "SMS" }> = {
+        ...ordinary,
+        transaction: { ...ordinary.transaction, isAtmWithdrawal: true },
+        toAssignment: {
+          state: "existing", accountId: REVIEW_WIRE_IDS.cashAccountId,
+          origin: "user", currency: "EGP", identityRevision: "0",
+        },
+      };
+      expect(accountReviewRowSchema.safeParse(atm).success).toBe(true);
+      expect(accountReviewRowSchema.safeParse({
+        ...atm,
+        toAssignment: {
+          state: "existing", accountId: REVIEW_WIRE_IDS.bankAccountId,
+          origin: "user", currency: "EGP", identityRevision: "0",
+        },
+      }).success).toBe(false);
+      expect(accountReviewRowSchema.safeParse({
+        ...atm,
+        toAssignment: {
+          state: "existing", accountId: REVIEW_WIRE_IDS.cashAccountId,
+          origin: "user", currency: "USD", identityRevision: "0",
+        },
+      }).success).toBe(false);
+      expect(accountReviewRowSchema.safeParse({
+        ...atm,
+        currency: {
+          state: "unconfirmed", reason: "ambiguous",
+          candidateCodes: ["EGP", "USD"],
+          statedCode: null, evidenceSpans: [],
+        },
+        assignment: {
+          state: "unresolved", accountId: null,
+          reasonCode: "account_needed", candidateAccountIds: [],
+        },
+      }).success).toBe(false);
+    });
 
     it("accepts a full locally parsed voice row with required persisted category and scope", () => {
       expect(accountReviewRowSchema.safeParse(validVoiceRow()).success).toBe(true);
@@ -687,6 +902,66 @@ describe("#395 T005 — canonical account-review parser contract", () => {
           { ...makeSuggestedAccount(), suggestionRef: "second-suggestion" },
         ],
       }).success).toBe(false);
+    });
+
+    it("H1 rejects conflicting non-null institutionId in Voice and SMS shared suggestions", () => {
+      const voice = makeVoiceV2Response();
+      const sms = makeSmsV2Response();
+      for (const [schema, original] of [
+        [accountReviewVoiceResponseV2Schema, voice],
+        [accountReviewSmsResponseV2Schema, sms],
+      ] as const) {
+        const row = original.transactions[0];
+        const suggestion = original.suggestedAccounts[0];
+        const withInstitution = {
+          ...original,
+          transactions: [{
+            ...row,
+            accountEvidence: {
+              ...row.accountEvidence,
+              institutionId: "qnb",
+            },
+          }],
+          suggestedAccounts: [{
+            ...suggestion,
+            institutionId: "cib",
+          }],
+        };
+        expect(schema.safeParse(withInstitution).success).toBe(false);
+        expect(schema.safeParse({
+          ...withInstitution,
+          suggestedAccounts: [{ ...suggestion, institutionId: "qnb" }],
+        }).success).toBe(true);
+        // Null identity provenance is genuinely unknown, not a made-up conflict.
+        expect(schema.safeParse({
+          ...original,
+          suggestedAccounts: [{ ...suggestion, institutionId: "qnb" }],
+        }).success).toBe(true);
+      }
+    });
+
+    it("H2 keeps raw nullable suggestions with proven v2 currency omission as advisory", () => {
+      const voice = makeVoiceV2Response();
+      const stillAdvisory = {
+        ...voice,
+        transactions: [{
+          ...voice.transactions[0],
+          currency: null,
+          currencyEvidence: {
+            state: "omitted",
+            statedCode: null,
+            candidateCodes: [],
+            evidenceSpans: [],
+          },
+        }],
+        suggestedAccounts: [{
+          ...voice.suggestedAccounts[0],
+          currency: null,
+        }],
+      };
+      // This is a provider proposal, not an authorized local shared group.
+      // Only T014 can resolve a validated omission using owned preferred currency.
+      expect(accountReviewVoiceResponseV2Schema.safeParse(stillAdvisory).success).toBe(true);
     });
 
     it("rejects conflicting linked currency and card evidence", () => {

@@ -1,6 +1,17 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import test from "node:test";
+import { execFileSync } from "node:child_process";
+import {
+  copyFileSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import * as prettier from "prettier";
+import test, { type TestContext } from "node:test";
 import { z } from "zod";
 
 import {
@@ -17,11 +28,77 @@ import {
   makeVoiceV2Response,
   REVIEW_WIRE_IDS,
 } from "../../packages/logic/src/account-review/__tests__/fixtures";
-import {
-  accountReviewRequestContextSchema as edgeRequest,
-  accountReviewVoiceResponseV2Schema as edgeVoice,
-  accountReviewSmsResponseV2Schema as edgeSms,
-} from "../../supabase/functions/_shared/account-review-contract";
+// Do not import the not-yet-generated T011 module at collection time: the
+// existing T009 generator-format regression must execute independently.
+async function loadGeneratedEdge() {
+  return import("../../supabase/functions/_shared/account-review-contract");
+}
+
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
+const VOCABULARY_FILE = join(
+  ROOT,
+  "packages/logic/src/account-review/generated-vocabulary.ts"
+);
+
+function generateVocabularyInSandbox(t: TestContext): {
+  first: string;
+  second: string;
+  tracked: string;
+} {
+  const sandbox = mkdtempSync(join(tmpdir(), "monyvi-t009-vocabulary-"));
+  t.after(() => rmSync(sandbox, { recursive: true, force: true }));
+  const sourcePaths = [
+    "scripts/generate-account-review-vocabulary.cjs",
+    "packages/db/src/supabase-types.ts",
+    "packages/logic/src/types.ts",
+  ];
+  for (const relativePath of sourcePaths) {
+    const copiedPath = join(sandbox, relativePath);
+    mkdirSync(dirname(copiedPath), { recursive: true });
+    copyFileSync(join(ROOT, relativePath), copiedPath);
+  }
+  const generatedPath = join(
+    sandbox,
+    "packages/logic/src/account-review/generated-vocabulary.ts"
+  );
+  mkdirSync(dirname(generatedPath), { recursive: true });
+  const command = join(sandbox, sourcePaths[0]);
+  const invoke = (): string =>
+    execFileSync(process.execPath, [command], {
+      cwd: sandbox,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+  assert.match(invoke(), /from 5 vocabularies/);
+  const first = readFileSync(generatedPath, "utf8");
+  assert.match(invoke(), /from 5 vocabularies/);
+  return {
+    first,
+    second: readFileSync(generatedPath, "utf8"),
+    tracked: readFileSync(VOCABULARY_FILE, "utf8"),
+  };
+}
+
+test("T009 five-vocabulary generator is reproducible and matches tracked canonical output", (t) => {
+  const { first, second, tracked } = generateVocabularyInSandbox(t);
+  assert.equal(first, second, "Two independent generator runs differ");
+  assert.equal(first, tracked, "Generated vocabulary differs from the tracked source");
+});
+
+test("T009 vocabulary generator emits Prettier-hook-clean bytes, not just raw matching output", async (t) => {
+  const { first } = generateVocabularyInSandbox(t);
+  const config = await prettier.resolveConfig(VOCABULARY_FILE);
+  const formatted = await prettier.format(first, {
+    ...config,
+    filepath: VOCABULARY_FILE,
+  });
+  assert.equal(
+    first,
+    formatted,
+    "Generator must format before writing so regeneration stays clean after commit hooks"
+  );
+});
+
 
 /**
  * T007: Exercise generated Edge validators and provider-facing schema behavior.
@@ -44,7 +121,12 @@ function agreeOnAcceptance(
   assert.equal(generated.success, original.success);
 }
 
-test("the generated Edge contract is standalone and provider-relevant (not an apps/mobile import)", () => {
+test("the generated Edge contract is standalone and provider-relevant (not an apps/mobile import)", async () => {
+  const {
+    accountReviewRequestContextSchema: edgeRequest,
+    accountReviewVoiceResponseV2Schema: edgeVoice,
+    accountReviewSmsResponseV2Schema: edgeSms,
+  } = await loadGeneratedEdge();
   const generatedSource = readFileSync(
     new URL("../../supabase/functions/_shared/account-review-contract.ts", import.meta.url),
     "utf8"
@@ -79,7 +161,8 @@ test("the generated Edge contract is standalone and provider-relevant (not an ap
   }
 });
 
-test("Edge and logic accept the same minimal owned provider account context", () => {
+test("Edge and logic accept the same minimal owned provider account context", async () => {
+  const { accountReviewRequestContextSchema: edgeRequest } = await loadGeneratedEdge();
   const request = makeReviewRequestContext();
   agreeOnAcceptance(canonicalRequest, edgeRequest, request, true);
   agreeOnAcceptance(
@@ -123,7 +206,8 @@ test("Edge and logic accept the same minimal owned provider account context", ()
   );
 });
 
-test("Gemini Voice v2: Edge and client parity for original transcript, grounded evidence and CASH", () => {
+test("Gemini Voice v2: Edge and client parity for original transcript, grounded evidence and CASH", async () => {
+  const { accountReviewVoiceResponseV2Schema: edgeVoice } = await loadGeneratedEdge();
   const response = makeVoiceV2Response();
   agreeOnAcceptance(canonicalVoice, edgeVoice, response, true);
 
@@ -163,7 +247,8 @@ test("Gemini Voice v2: Edge and client parity for original transcript, grounded 
   agreeOnAcceptance(canonicalVoice, edgeVoice, makeVoiceV1Response(), false);
 });
 
-test("DeepInfra SMS v2: Edge and client parity for message IDs, bidirectional suggestions and completion", () => {
+test("DeepInfra SMS v2: Edge and client parity for message IDs, bidirectional suggestions and completion", async () => {
+  const { accountReviewSmsResponseV2Schema: edgeSms } = await loadGeneratedEdge();
   const response = makeSmsV2Response();
   agreeOnAcceptance(canonicalSms, edgeSms, response, true);
   assert.equal(response.transactions[0].messageId, REVIEW_WIRE_IDS.smsMessageId);
@@ -193,7 +278,8 @@ test("DeepInfra SMS v2: Edge and client parity for message IDs, bidirectional su
   agreeOnAcceptance(canonicalSms, edgeSms, makeSmsV1Response(), false);
 });
 
-test("uncertainty is retained in the generated provider schema; no invented omission", () => {
+test("uncertainty is retained in the generated provider schema; no invented omission", async () => {
+  const { accountReviewVoiceResponseV2Schema: edgeVoice } = await loadGeneratedEdge();
   const voice = makeVoiceV2Response();
   const base = {
     ...voice,
@@ -257,7 +343,11 @@ test("uncertainty is retained in the generated provider schema; no invented omis
   );
 });
 
-test("provider contract rejects unrelated private metadata and unknown version/keys", () => {
+test("provider contract rejects unrelated private metadata and unknown version/keys", async () => {
+  const {
+    accountReviewVoiceResponseV2Schema: edgeVoice,
+    accountReviewSmsResponseV2Schema: edgeSms,
+  } = await loadGeneratedEdge();
   for (const response of [makeVoiceV2Response(), makeSmsV2Response()]) {
     const isVoice = "transcript" in response;
     const canonical = isVoice ? canonicalVoice : canonicalSms;
