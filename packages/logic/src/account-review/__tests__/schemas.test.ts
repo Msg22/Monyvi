@@ -9,6 +9,10 @@ import {
   accountReviewCurrencySchema,
   accountReviewAssignmentSchema,
   accountReviewGroupSchema,
+  accountReviewRowSchema,
+  accountReviewSessionSchema,
+  accountReviewCommandSchema,
+  accountReviewSaveIntentSchema,
 } from "../schemas";
 import {
   makeAccountEvidence,
@@ -406,6 +410,214 @@ describe("#395 T005 — canonical account-review parser contract", () => {
     });
   });
 
+  describe("closed review row, session, command and immutable save-intent shapes", () => {
+    const rowId = "00000000-0000-4000-8000-000000000105";
+    const sessionId = "00000000-0000-4000-8000-000000000106";
+    const groupId = "00000000-0000-4000-8000-000000000107";
+
+    function validVoiceRow() {
+      return {
+        rowId,
+        source: "VOICE",
+        sourceRef: REVIEW_WIRE_IDS.voiceRowRef,
+        sourceFingerprint: null,
+        transaction: {
+          amount: 50,
+          currency: "EGP",
+          type: "EXPENSE",
+          date: new Date("2026-10-14T12:00:00.000Z"),
+          categoryId: "00000000-0000-4000-8000-000000000108",
+          categoryDisplayName: "Food",
+          confidence: 0.95,
+          originLabel: "Voice",
+          source: "VOICE",
+          note: "Lunch",
+          originalTranscript: REVIEW_VOICE_TRANSCRIPT,
+          detectedLanguage: "en",
+          aiDetectedCurrency: "EGP",
+        },
+        amountDecimal: "50",
+        accountEvidence: makeAccountEvidence(),
+        currency: { state: "known", code: "EGP", origin: "explicit" },
+        assignment: {
+          state: "unresolved",
+          accountId: null,
+          reasonCode: "account_needed",
+          candidateAccountIds: [],
+        },
+        toAssignment: null,
+        reviewReasons: ["account_needed"],
+        selected: false,
+        revision: "0",
+        hasUserAccountOverride: false,
+        hasUserCurrencyOverride: false,
+      };
+    }
+
+    function validSession() {
+      return {
+        ownerId: REVIEW_WIRE_IDS.ownerId,
+        source: "VOICE",
+        sessionId,
+        sourceRevision: "0",
+        preferredCurrency: "EGP",
+        rows: [validVoiceRow()],
+        groups: [],
+        removedEvidenceKeys: [],
+        filter: "all",
+        revision: "0",
+        operationGeneration: "0",
+        saveIntent: null,
+      };
+    }
+
+    it("accepts a full locally parsed voice row with required persisted category and scope", () => {
+      expect(accountReviewRowSchema.safeParse(validVoiceRow()).success).toBe(true);
+      expect(accountReviewSessionSchema.safeParse(validSession()).success).toBe(true);
+      expect(accountReviewRowSchema.safeParse({
+        ...validVoiceRow(), sourceFingerprint: "not-null",
+      }).success).toBe(false);
+    });
+
+    it.each(["01", "1.0", "1e3", "-0", "Infinity", "0", "-5"])(
+      "rejects noncanonical or nonpositive review amount %s", (amountDecimal) => {
+        expect(accountReviewRowSchema.safeParse({
+          ...validVoiceRow(), amountDecimal,
+        }).success).toBe(false);
+      }
+    );
+
+    it("requires category identity and rejects invented transaction/reason metadata", () => {
+      const row = validVoiceRow();
+      expect(accountReviewRowSchema.safeParse({
+        ...row, transaction: { ...row.transaction, categoryId: "" },
+      }).success).toBe(false);
+      expect(accountReviewRowSchema.safeParse({
+        ...row, reviewReasons: ["provider_unverified_account"],
+      }).success).toBe(false);
+      expect(accountReviewRowSchema.safeParse({
+        ...row, modelScore: 0.99,
+      }).success).toBe(false);
+    });
+
+    it("fails closed when a row tries to select an account with unconfirmed currency", () => {
+      const row = validVoiceRow();
+      expect(accountReviewRowSchema.safeParse({
+        ...row,
+        currency: {
+          state: "unconfirmed",
+          reason: "ambiguous",
+          candidateCodes: ["EGP", "USD"],
+          statedCode: null,
+          evidenceSpans: [],
+        },
+        assignment: {
+          state: "existing",
+          accountId: REVIEW_WIRE_IDS.bankAccountId,
+          origin: "exact",
+          currency: "EGP",
+          identityRevision: "0",
+        },
+      }).success).toBe(false);
+    });
+
+    it("rejects duplicate review rows, foreign-source rows and dangling group assignments", () => {
+      const session = validSession();
+      expect(accountReviewSessionSchema.safeParse({
+        ...session, rows: [session.rows[0], session.rows[0]],
+      }).success).toBe(false);
+      expect(accountReviewSessionSchema.safeParse({
+        ...session, source: "SMS",
+      }).success).toBe(false);
+      expect(accountReviewSessionSchema.safeParse({
+        ...session,
+        rows: [{
+          ...session.rows[0],
+          assignment: {
+            state: "suggested",
+            accountId: null,
+            groupId,
+            groupRevision: "0",
+            confirmation: "pending",
+          },
+        }],
+      }).success).toBe(false);
+    });
+
+    it("requires explicit shared disclosure and exact stale-prevention revision pairs", () => {
+      const common = {
+        ownerId: REVIEW_WIRE_IDS.ownerId,
+        sessionId,
+        expectedReviewRevision: "0",
+        expectedOperationGeneration: "0",
+      };
+      const ungrouped = {
+        ...common,
+        kind: "select_row",
+        rowId,
+        expectedRowRevision: "0",
+        groupId: null,
+        expectedGroupRevision: null,
+        hasSharedConfirmationDisclosure: false,
+      };
+      expect(accountReviewCommandSchema.safeParse(ungrouped).success).toBe(true);
+      expect(accountReviewCommandSchema.safeParse({
+        ...ungrouped,
+        groupId,
+        expectedGroupRevision: "1",
+        hasSharedConfirmationDisclosure: false,
+      }).success).toBe(false);
+      expect(accountReviewCommandSchema.safeParse({
+        ...ungrouped,
+        groupId,
+        expectedGroupRevision: null,
+        hasSharedConfirmationDisclosure: true,
+      }).success).toBe(false);
+      expect(accountReviewCommandSchema.safeParse({
+        ...ungrouped,
+        groupId,
+        expectedGroupRevision: "1",
+        hasSharedConfirmationDisclosure: true,
+      }).success).toBe(true);
+      expect(accountReviewCommandSchema.safeParse({
+        ...common,
+        kind: "set_row_selected",
+        rowId,
+        expectedRowRevision: "0",
+        selected: true,
+      }).success).toBe(false);
+    });
+
+    it("freezes only canonical save IDs, UTC time and unique selected/group refs", () => {
+      const intent = {
+        actionId: "00000000-0000-4000-8000-000000000109",
+        ownerId: REVIEW_WIRE_IDS.ownerId,
+        source: "VOICE",
+        sessionId,
+        expectedReviewRevision: "0",
+        expectedOperationGeneration: "0",
+        selectedRows: [{ rowId, revision: "0" }],
+        confirmedGroups: [],
+        plannedEntityIds: [{
+          entity: "transaction",
+          localRef: "00000000-0000-4000-8000-000000000110",
+          id: "00000000-0000-4000-8000-000000000111",
+        }],
+        occurredAt: "2026-10-14T12:00:00.000Z",
+      };
+      expect(accountReviewSaveIntentSchema.safeParse(intent).success).toBe(true);
+      expect(accountReviewSaveIntentSchema.safeParse({
+        ...intent, selectedRows: [intent.selectedRows[0], intent.selectedRows[0]],
+      }).success).toBe(false);
+      expect(accountReviewSaveIntentSchema.safeParse({
+        ...intent, occurredAt: "2026-10-14T12:00:00.000123Z",
+      }).success).toBe(false);
+      expect(accountReviewSaveIntentSchema.safeParse({
+        ...intent, rawTranscript: REVIEW_VOICE_TRANSCRIPT,
+      }).success).toBe(false);
+    });
+  });
+
   describe("v2 response references, source boundaries and compatibility", () => {
     it("preserves the legacy SMS optional/default fields while requiring category evidence", () => {
       const sms = makeSmsV2Response();
@@ -477,7 +689,7 @@ describe("#395 T005 — canonical account-review parser contract", () => {
       }).success).toBe(false);
     });
 
-    it("rejects a conflicting linked currency/provider/card without dropping the financial row", () => {
+    it("rejects conflicting linked currency and card evidence", () => {
       const sms = makeSmsV2Response();
       expect(accountReviewSmsResponseV2Schema.safeParse({
         ...sms,
@@ -487,10 +699,6 @@ describe("#395 T005 — canonical account-review parser contract", () => {
         ...sms,
         suggestedAccounts: [{ ...sms.suggestedAccounts[0], cardLast4: "1111" }],
       }).success).toBe(false);
-      // The adapter retains the individually valid financial row as unresolved;
-      // the strict schema itself must not claim the malformed advisory link valid.
-      expect(sms.transactions[0].amount).toBe(50);
-      expect(sms.transactions[0].categorySystemName).toBe("shopping");
     });
 
     it("keeps ordinary SMS endpoint evidence null and allows explicit Voice CASH", () => {

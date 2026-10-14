@@ -1,6 +1,18 @@
-import type { TransactionSource } from "../../types";
+import type {
+  AccountReviewAccountContext,
+  AccountReviewRequestContext,
+  AccountReviewEvidenceSpan,
+  AccountReviewAccountEvidence,
+  AccountReviewCurrencyEvidence,
+  AccountReviewSuggestedAccount,
+  AccountReviewVoiceFinancialRow,
+  AccountReviewSmsFinancialRow,
+  AccountReviewVoiceResponseV2,
+  AccountReviewSmsResponseV2,
+  AccountReviewRow,
+} from "../schemas";
 
-type ReviewTestSource = Exclude<TransactionSource, "MANUAL">;
+type ReviewTestSource = AccountReviewRow["source"];
 
 /**
  * Synthetic, intentionally non-customer #395 wire fixtures.
@@ -23,16 +35,16 @@ export const REVIEW_SMS_BODY = "QNB purchase EGP 50";
 
 export function makeEvidenceSpan(
   sourceRef: string,
-  field: string,
+  field: AccountReviewEvidenceSpan["field"],
   sourceText: string,
   fragment: string
-) {
+): AccountReviewEvidenceSpan {
   const start = sourceText.indexOf(fragment);
   if (start < 0) throw new Error("Synthetic evidence fixture is inconsistent");
   return { sourceRef, field, start, end: start + fragment.length, text: fragment };
 }
 
-export function makeRequestAccountContext() {
+export function makeRequestAccountContext(): AccountReviewAccountContext {
   return {
     id: REVIEW_WIRE_IDS.bankAccountId,
     name: "QNB salary",
@@ -45,7 +57,7 @@ export function makeRequestAccountContext() {
   };
 }
 
-export function makeReviewRequestContext() {
+export function makeReviewRequestContext(): AccountReviewRequestContext {
   return {
     reviewContractVersion: "account-review/v2",
     preferredCurrency: "EGP",
@@ -67,7 +79,7 @@ export function makeReviewRequestContext() {
 
 export function makeAccountEvidence(
   source: ReviewTestSource = "VOICE"
-) {
+): AccountReviewAccountEvidence {
   const isVoice = source === "VOICE";
   const sourceRef = isVoice
     ? REVIEW_WIRE_IDS.voiceRequestKey
@@ -88,7 +100,7 @@ export function makeAccountEvidence(
 
 export function makeCurrencyEvidence(
   source: ReviewTestSource = "VOICE"
-) {
+): AccountReviewCurrencyEvidence {
   const isVoice = source === "VOICE";
   const sourceRef = isVoice
     ? REVIEW_WIRE_IDS.voiceRequestKey
@@ -111,7 +123,7 @@ export function makeCurrencyEvidence(
 
 export function makeSuggestedAccount(
   source: ReviewTestSource = "VOICE"
-) {
+): AccountReviewSuggestedAccount {
   return {
     suggestionRef: REVIEW_WIRE_IDS.suggestionRef,
     name: "QNB",
@@ -127,7 +139,7 @@ export function makeSuggestedAccount(
   };
 }
 
-export function makeVoiceFinancialRow() {
+export function makeVoiceFinancialRow(): AccountReviewVoiceFinancialRow {
   return {
     amount: 50,
     type: "EXPENSE",
@@ -141,7 +153,7 @@ export function makeVoiceFinancialRow() {
   };
 }
 
-export function makeSmsFinancialRow() {
+export function makeSmsFinancialRow(): AccountReviewSmsFinancialRow {
   return {
     messageId: REVIEW_WIRE_IDS.smsMessageId,
     amount: 50,
@@ -156,7 +168,7 @@ export function makeSmsFinancialRow() {
   };
 }
 
-export function makeVoiceV2Response() {
+export function makeVoiceV2Response(): AccountReviewVoiceResponseV2 {
   return {
     reviewContractVersion: "account-review/v2",
     transcript: "Paid QNB 50 EGP for lunch",
@@ -178,7 +190,7 @@ export function makeVoiceV2Response() {
 
 
 /** Voice CASH has an actual spoken Cash span, never a BANK/provider alias recast as cash. */
-export function makeGroundedVoiceCashV2Response() {
+export function makeGroundedVoiceCashV2Response(): AccountReviewVoiceResponseV2 {
   const base = makeVoiceV2Response();
   const transcript = "🛒 Paid Cash 50 EGP for lunch";
   return {
@@ -226,7 +238,7 @@ export function makeGroundedVoiceCashV2Response() {
   };
 }
 
-export function makeSmsV2Response() {
+export function makeSmsV2Response(): AccountReviewSmsResponseV2 {
   return {
     reviewContractVersion: "account-review/v2",
     transactions: [
@@ -247,7 +259,12 @@ export function makeSmsV2Response() {
   };
 }
 
-export function makeVoiceV1Response() {
+export function makeVoiceV1Response(): {
+  readonly transcript: string;
+  readonly original_transcript: string;
+  readonly detected_language: string;
+  readonly transactions: readonly AccountReviewVoiceFinancialRow[];
+} {
   return {
     transcript: "Paid QNB 50 EGP for lunch",
     original_transcript: REVIEW_VOICE_TRANSCRIPT,
@@ -256,7 +273,13 @@ export function makeVoiceV1Response() {
   };
 }
 
-export function makeSmsV1Response() {
+export function makeSmsV1Response(): {
+  readonly transactions: readonly AccountReviewSmsFinancialRow[];
+  readonly completionStatus: "complete";
+  readonly negativeFingerprints: readonly string[];
+  readonly terminalFingerprints: readonly string[];
+  readonly unresolvedFingerprints: readonly string[];
+} {
   return {
     transactions: [makeSmsFinancialRow()],
     completionStatus: "complete",

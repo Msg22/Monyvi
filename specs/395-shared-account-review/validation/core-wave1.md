@@ -1,6 +1,6 @@
 # #395 Core Wave 1 — T005/T007 test-only handoff
 
-**Status: TEST AUTHORING COMPLETE; WRITES FROZEN AFTER PUBLICATION.** This is a bounded tests-first receipt, not a production change, Red/Green execution result, deployment claim, or ownership of the root feature branch.
+**Historical Wave 1 status:** TEST AUTHORING COMPLETE. T009 source ownership was subsequently authorized and is recorded below; no parser/Edge/SQL authorization follows from it. This is a bounded tests-first receipt, not a production change, Red/Green execution result, deployment claim, or ownership of the root feature branch.
 
 ## Immutable source and authorization
 
@@ -85,3 +85,41 @@ Subsequent local static checks once exports are implemented: `npm run typecheck 
 4. Within existing owned tests remove F04 input-only assertions masquerading as retention, annotate F06 canonical raw fixture return values, and strengthen meaningful T007 boundaries without implementing T012–T014. Record the proposed **typed normalized adapter result seam** in this report for later lead approval; do not fabricate a mobile result union at T009.
 
 **Dependency edges:** T009 → T011 generated Edge/provider projection, T012–T014 Voice/SMS parser + adapter production, T016 final export parity. Root, not this GitHub-only worker, runs batched local schema Green and actual TypeScript/lint; none are claimed here. Approved UX/assets/T004 default-state CAS and old v1 parser compatibility remain unchanged.
+
+## T009 schema-only implementation receipt — ready for independent local Green
+
+**Authorized work:** canonical Zod schemas and type projections only. Root's latest actual mobile parser evidence remains **37 cases: 21 pass, 16 fail**; these are measured Voice/SMS v2 behavior gaps and were not addressed here. The T005/Edge prior missing-module stops were not counted as behavioral Red. No runtime check/Green result is claimed by this remote author.
+
+### Modules and API contract
+
+- `packages/logic/src/account-review/schemas.ts` — closed canonical T004 parser objects and review state objects with corresponding `z.infer` types: `accountReviewRequestContextSchema`, `accountReviewEvidenceSpanSchema`, `accountReviewAccountEvidenceSchema`, `accountReviewCurrencyEvidenceSchema`, `accountReviewSuggestedAccountSchema`, `accountReviewVoiceResponseV2Schema`, `accountReviewSmsResponseV2Schema`, `accountReviewCurrencySchema`, `accountReviewAssignmentSchema`, `accountReviewRowSchema`, `accountReviewGroupSchema`, `accountReviewSessionSchema`, `accountReviewCommandSchema`, and `accountReviewSaveIntentSchema`. Additional canonical raw and reason schemas/types serve these interfaces. No hooks, reducers, command handlers, sync, SQL or resolver paths were authored.
+- `packages/logic/src/account-review/generated-vocabulary.ts` — generated-only runtime enum/reason arrays projected from checked-in Supabase `Constants.public.Enums` and `TransactionReviewReason`, with type-only DB imports and compile-time source-union completeness assertions. This contains no local copied union and does not import `@monyvi/db` at runtime. `scripts/generate-account-review-vocabulary.cjs` regenerates it from source; **generator not executed remotely**, so root must run it and confirm no diff.
+- `packages/logic/src/index.ts` — exactly one early canonical schema barrel export, no other shared export owner touched.
+- `packages/logic/src/account-review/__tests__/fixtures.ts` — F06 explicitly annotates raw/typed synthetic factory returns with inferred canonical schema types. Actual v1 return shapes remain separate from v2, and four-digit leading-zero suffixes are preserved.
+- `packages/logic/src/account-review/__tests__/schemas.test.ts` — F04 removes two fixture-only assertions incorrectly labelled financial-row retention; strictly invalid advisory is tested at the schema layer, while retention is an adapter behavioral responsibility. Added focused state/row/session/command/frozen-save-intent tests: canonical amount, required category, identity/scope linkage, explicit shared disclosure, stale revisions, UUID uniqueness, and safe UTC time.
+- `apps/mobile/__tests__/services/account-review-parser-adapters.test.ts` — replaces the fake success-data capacity refusal with the **actual 429 `Response` refusal envelope** from existing safeguard Jest patterns and checks exact `burst_limit` availability/capacity candidate. Existing tested real parser entrypoints remain unchanged.
+
+### Explicit normalized adapter seam proposal (F02/F03 — not implemented in T009)
+
+T004 freezes the **`AccountReviewRow` / `AccountReviewSession`** types but does not settle the mobile parse result transport. Existing `AiVoiceParserSuccess` and `AiParseResult` return legacy `transactions`; a recursive hunt for `currencyEvidence` anywhere inside an arbitrary result object can pass on echoed **raw provider JSON** without proving normalization. Negative v1 tests that assert only `not.toContain("omitted")` can also pass when no review state is present. These should not be counted as proof of the new normalization contract.
+
+**Lead integration decision required before T012–T014:** expose one explicitly typed normalized review projection derived directly from the canonical `AccountReviewRow`/`AccountReviewSession` schemas alongside the preserved legacy financial rows, with a stable owner/source/request identity. Do not copy a new disconnected result union or persist raw provider bodies. Once the seam is chosen, T007 must assert **on that returned normalized row**:
+1. known vs unconfirmed `currency.state/reason` including **`legacy_unknown`** for a v1/old-server response, no invented `omitted`;
+2. `assignment.state` with owned scoped existing/suggested/unresolved IDs and `reviewReasons` including `currency_confirmation_needed`/`account_evidence_invalid` where applicable;
+3. exact retained normalized `transaction.categoryId` and amount (not a successful raw provider parse or arbitrary nested echo);
+4. evidence spans validated against *actual submitted* SMS body/sender or original Voice transcript, with foreign refs never yielding an authorized group; and
+5. precisely one provider invocation, true refusal envelope, and exact `availability: {reason:"burst_limit",availableAt}` for capacity rejection.
+
+The capacity test (#5) was strengthened now because the existing `SmsAiAvailability` type is already published. The remaining assertions depend on that typed seam and are **deferred** rather than weakened into vacuous or invented-result tests. Some existing SMS 0-row parser failures could be mock/correlation problems; compare fixture `messageId` with the *actual submitted* ID and review the existing chunk-mapper/transport state before declaring them product defects.
+
+### Generator and source-backed proof limitations
+
+- Provider/raw v2 response currency can be nullable, unsupported and uncertain. Canonical currency/account/transaction type vocabularies come from the generated DB enums; no silent preferred fallback is applied by these schemas.
+- `accountReviewEvidenceSpanSchema` validates UTF-16 interval geometry. Voice success can compare against the returned `original_transcript`; a standalone SMS provider response deliberately does **not** contain the submitted SMS body or sender, so exact substring verification against that private input remains a T013/T014 adapter responsibility. No claim of independent AI truth proof.
+- Original SMS provider keys retain their existing optional/default rules (`isAtmWithdrawal` defaults false; `cardLast4` optional), while `categorySystemName` stays required. `transaction.categoryId` remains required in the **locally normalized review row**.
+- The local `AccountReviewRow.transaction` schema represents an existing parsed transaction snapshot (including a valid JS `Date`), not a new persisted cloud transaction. T028 SMS draft codec must explicitly serialize/restore this shape under its existing ownership; this T009 commit does not implement that codec.
+- **F05 remains T011-owned:** after authoring the concrete generator/Edge projection contract, add a canonical revision/hash parity marker and test the actual supported Gemini/DeepInfra provider projections, not just parser source strings or an unchecked JSON shape. Current Edge parity file still awaits T011's real generated module.
+- T009 does not register `review.batch-save/v1`, `account.create-default/v1`, change `DefaultSnapshot`, grant server migration, or alter `apply_account_financial_action_v1`.
+- **Must-run root local checks, not claimed:** run `node scripts/generate-account-review-vocabulary.cjs` and check an empty diff, `npm test -w @monyvi/logic -- --runInBand --runTestsByPath src/account-review/__tests__/schemas.test.ts`, `npm run typecheck -w @monyvi/logic`, and scoped format/lint. T011 generation/parity and final mobile batch are separate downstream checks. Report a real Red/Green/status only from observed runner logs.
+
+**Ownership:** once the publication receipt confirms only authorized files on `codex/395-core-worker`, this implementation lane is frozen. Root owns local Green, dependent tasks, independent DB/security/logic review, integration and any next scope grant. No more modifications are implied by this report.

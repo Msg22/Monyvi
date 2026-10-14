@@ -547,13 +547,31 @@ describe("#395 T007 — original SMS parser and DeepInfra advisory compatibility
 
   it("retains existing capacity/quota/refusal semantics with no second provider request", async () => {
     mockInvoke.mockResolvedValueOnce({
-      data: { reason: "burst_limit", availableAt: "2026-10-15T00:00:00.000Z" },
-      error: null,
+      data: null,
+      error: {
+        context: new Response(
+          JSON.stringify({
+            reason: "burst_limit",
+            availableAt: "2026-10-15T00:00:00.000Z",
+          }),
+          { status: 429, headers: { "content-type": "application/json" } }
+        ),
+      },
     });
     const result = await parseSmsWithAi(smsCandidates(), smsContext());
     expect(result.transactions).toHaveLength(0);
+    expect(result.availability).toEqual({
+      reason: "burst_limit",
+      availableAt: "2026-10-15T00:00:00.000Z",
+    });
+    expect(result.unresolvedCandidates).toEqual([
+      expect.objectContaining({
+        candidate: smsCandidates()[0],
+        reason: "capacity_limited",
+        isRetryable: false,
+      }),
+    ]);
     expect(mockInvoke).toHaveBeenCalledTimes(1);
-    expect(result.hasError || result.availability !== undefined).toBe(true);
   });
 
   it("checks current owner before sending any provider request", async () => {
