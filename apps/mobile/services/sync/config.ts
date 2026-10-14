@@ -49,6 +49,8 @@ export const EXCLUDED_TABLES = [
   "sms_review_draft_items",
   "dismissed_sms_fingerprints",
   "email_verification_resend_limits",
+  "voice_ai_usage_windows",
+  "voice_ai_work_requests",
 ] as const;
 export const METALS_DEDICATED_SYNC_TABLES = [
   "metal_holding_states",

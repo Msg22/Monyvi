@@ -1,0 +1,32 @@
+[
+  {
+    "name": "transaction-voice-en",
+    "image": "sha256:740b0515fc223bb18b6797cbefb1a6de80591e93d2655ca4575f23cfcd3a4497",
+    "binding": "sha256:7f2ea6f71cff0c2f95acac4691961fdfbdeb0680fdd41309dae01daa93ca9751",
+    "combined": "sha256:f25efe58e6081f87b6432eded5d2d2cecce3e9ddc80d08864cd0e0faa5a117a1"
+  },
+  {
+    "name": "transaction-voice-ar",
+    "image": "sha256:8be6e526a55dfdd8fd665496b87f8d33e0cf9d40d821f7714d7069b95c1a3654",
+    "binding": "sha256:1612243d22ccfdbc37bf1dff05471becf9c43441843dd70f71a995b41ad61733",
+    "combined": "sha256:714d9bd9309dbbc098f889922182a3231b1f17f0b3889721030ab715d22e7bf4"
+  },
+  {
+    "name": "transaction-voice-daily-limit-en",
+    "image": "sha256:00648dd6c27d73cff8c6738411a361782f3fff7c96877cea314445e756073ba9",
+    "binding": "sha256:ba2ba4934ed42efba8944a541073fc629e0aa1a3708ead7eb0c12adf03cab267",
+    "combined": "sha256:43e1f3022af1ddccd3c2eae9d602db6100852786e0e79a70515f110ed28f7948"
+  },
+  {
+    "name": "transaction-voice-daily-limit-ar",
+    "image": "sha256:327733b5d8317ae663599aea3cd04e42e75ba6ef68a9e9e0fa9bd3ddbb4abbdd",
+    "binding": "sha256:90127535cc572cee008dba7c169e715d0c7a3bfe93da8824fd29639d82f8ce97",
+    "combined": "sha256:57b9ff0a7a2f1a9bc7b44e1faed1321ff4725089090ba79a23229cf2be68552f"
+  },
+  {
+    "name": "transaction-manual-compact-b",
+    "image": "sha256:035d1109c78eadc3d5eee2ff5a279ac04803a5a06e227c58740a7920e81cf3fd",
+    "binding": "sha256:205fa0d8624a01c8cb9a1ddd2d3fe7ccc6abe436f48a06689afd25244ca7f772",
+    "combined": "sha256:d7f5addbdc219858bfb034d1a016e98ed9d58eabd20ffbe1ac8ff5c293f3d21b"
+  }
+]
