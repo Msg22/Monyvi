@@ -41,6 +41,7 @@ const READ_MODEL_ERROR_CODES = {
   PROFILE_UNAVAILABLE: "ACCOUNT_REVIEW_PROFILE_UNAVAILABLE",
   PROFILE_CONFLICT: "ACCOUNT_REVIEW_PROFILE_CONFLICT",
   DUPLICATE_ACCOUNT: "ACCOUNT_REVIEW_DUPLICATE_ACCOUNT",
+  INVALID_DEFAULT: "ACCOUNT_REVIEW_INVALID_DEFAULT",
   BANK_CHILD_SCOPE: "ACCOUNT_REVIEW_BANK_CHILD_SCOPE",
   BANK_DETAILS_CONFLICT: "ACCOUNT_REVIEW_BANK_DETAILS_CONFLICT",
   INVALID_CARD_SUFFIX: "ACCOUNT_REVIEW_INVALID_CARD_SUFFIX",
@@ -180,6 +181,9 @@ export async function loadAccountReviewAccountSnapshots(): Promise<AccountReview
   for (const account of activeAccounts) {
     if (account.userId !== ownerId || account.deleted) {
       throw new Error(READ_MODEL_ERROR_CODES.ACCOUNT_OWNER_MISMATCH);
+    }
+    if (typeof account.isDefault !== "boolean") {
+      throw new Error(READ_MODEL_ERROR_CODES.INVALID_DEFAULT);
     }
   }
 
