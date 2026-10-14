@@ -20,3 +20,17 @@ code were changed.
 Next: approve the existing visual proposals/adjustments and scoped bindings,
 then `speckit-plan` → `speckit-tasks` → `speckit-analyze`. Do not invoke
 monolithic implement or start implementation assignments.
+
+## Cleanup review — 2026-10-14
+
+Clarification precedes planning. The existing session already records the
+owner's account, currency, selection, source eligibility and Add-default
+decisions; no additional unanswered product question was identified by this
+review. FR-008's wording now explicitly requires the agreed direct-row
+confirmation capability, matching User Story 2's existing acceptance scenario
+rather than leaving it optional.
+
+A repeat full session is unnecessary. If technical contract research exposes a
+new material product/financial choice, ask a targeted clarification before the
+dependent plan is finalized. R3 visual/binding approval is a separate pending
+gate, not a missing product-clarification session.

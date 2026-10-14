@@ -30,7 +30,7 @@ Owner: “please don't create more mockups you are regenerating the same mockups
 
 ## Approval boundaries
 
-- Retained R1 and R2 approval applies only to scopes listed in `references/r2/approval-2026-10-14.json`.
+- Retained R1 and R2 approval applies only to scopes listed in `provenance/r2/approval-2026-10-14.json`. Superseded screenshots have been removed from active references; their approval/history records remain separately preserved.
 - R3 contains the currently proposed state images, with their final retained versions in one manifest. Image-specific commentary on the currency picker is not blanket approval of unrelated R3 images.
 - This adjustment supersedes the final review's prior recommendation to omit an Add default control and its suggestion of a separate currency picker. Preserve the historical review unchanged for provenance.
 - Exact sidecar metadata and approved combined revisions are still required before implementation. No speculative pixel dimensions or measured contrast claims are inferred from these generated raster files.

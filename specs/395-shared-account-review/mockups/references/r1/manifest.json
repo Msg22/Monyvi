@@ -1,40 +1,12 @@
 {
   "version": 1,
-  "proposal": "shared-accounts-r1",
   "date": "2026-10-14",
-  "status": "AWAITING_OWNER_VISUAL_APPROVAL",
-  "imageCount": 12,
-  "appHead": "c1e6a198422385a59f7e1bf4e5de3191b353e865",
-  "proposedLogicalBaseline": {
-    "widthDp": 390,
-    "heightDp": 844,
-    "note": "Normalized design target; raster includes hardware framing and is not dp evidence."
-  },
+  "revision": "r1",
+  "status": "APPROVED_SCOPES_BINDINGS_PENDING",
+  "imageCount": 5,
+  "approvalEvidence": "../../provenance/r2/approval-2026-10-14.json",
+  "sourceManifest": "../../provenance/r1/manifest.json",
   "images": [
-    {
-      "id": "01-shared-pending-en",
-      "title": "Shared draft: confirm QNB once for three transactions",
-      "file": "01-shared-pending-en.png",
-      "bytes": 1394925,
-      "sha256": "e03787e669fd6ad051f01111b7bec9f29b9825a613e2de9bbd4183dc4429d2ff",
-      "width": 852,
-      "height": 1846,
-      "generator": "image_gen.imagegen",
-      "sourceFile": "exec-17c327bf-6885-4056-938f-30bf54e82521.png",
-      "reviewStatus": "PROPOSED"
-    },
-    {
-      "id": "02-shared-confirmed-en",
-      "title": "Confirmed shared draft: transactions remain unselected",
-      "file": "02-shared-confirmed-en.png",
-      "bytes": 1424454,
-      "sha256": "b192574446345d99e245fb7b80484df49d4f6e41ef1850a6d0d6deb5c4b82be3",
-      "width": 852,
-      "height": 1846,
-      "generator": "image_gen.imagegen",
-      "sourceFile": "exec-de5265ff-6154-4f3a-aac7-402610778158.png",
-      "reviewStatus": "PROPOSED"
-    },
     {
       "id": "03-multiple-matches-en",
       "title": "Multiple existing matches: compact chooser and account sheet",
@@ -45,43 +17,8 @@
       "height": 1846,
       "generator": "image_gen.imagegen",
       "sourceFile": "exec-24abce23-59c9-4bef-8dfc-d9fce07d7019.png",
-      "reviewStatus": "PROPOSED"
-    },
-    {
-      "id": "04-default-assigned-en",
-      "title": "Voice: existing default Cash account assignment notice",
-      "file": "04-default-assigned-en.png",
-      "bytes": 1523713,
-      "sha256": "8ba40e3a562b266ba9045f96e49c57aa8ef722446fdf98472462273cefb1f924",
-      "width": 852,
-      "height": 1846,
-      "generator": "image_gen.imagegen",
-      "sourceFile": "exec-8f86b5d7-a67c-412c-b638-0aa9a05e2d65.png",
-      "reviewStatus": "PROPOSED"
-    },
-    {
-      "id": "05-unresolved-en",
-      "title": "Unresolved currency and missing default account",
-      "file": "05-unresolved-en.png",
-      "bytes": 1498499,
-      "sha256": "6c766ee82d625c9358a406cf8c490ec018207ecf60b25c933e252bd2b2dff8e7",
-      "width": 853,
-      "height": 1844,
-      "generator": "image_gen.imagegen",
-      "sourceFile": "exec-1e150450-6bf7-49d1-8fe8-91d5cc9bba4e.png",
-      "reviewStatus": "PROPOSED"
-    },
-    {
-      "id": "06-bulk-confirm-en",
-      "title": "Select all: confirm shared new accounts once",
-      "file": "06-bulk-confirm-en.png",
-      "bytes": 1438175,
-      "sha256": "8ac3f645a1ccca5b9c99a3faefe2417055a538ba036e6f2e8426c2c85b9d99df",
-      "width": 852,
-      "height": 1846,
-      "generator": "image_gen.imagegen",
-      "sourceFile": "exec-ee90897a-6e6b-4c33-be8f-5833b00de6f0.png",
-      "reviewStatus": "PROPOSED"
+      "reviewStatus": "OWNER_VISUAL_APPROVED_SCOPED",
+      "approvalScope": "Existing-account chooser concept"
     },
     {
       "id": "07-edit-shared-draft-en",
@@ -93,7 +30,8 @@
       "height": 1846,
       "generator": "image_gen.imagegen",
       "sourceFile": "exec-1fda116c-5e03-4d88-b644-f5c935b28551.png",
-      "reviewStatus": "PROPOSED"
+      "reviewStatus": "OWNER_VISUAL_APPROVED_SCOPED",
+      "approvalScope": "Foreground shared-draft edit sheet; background superseded by R2"
     },
     {
       "id": "08-account-helper-en",
@@ -105,31 +43,8 @@
       "height": 1846,
       "generator": "image_gen.imagegen",
       "sourceFile": "exec-3ce15c30-323f-402c-97ef-4782760ddd4d.png",
-      "reviewStatus": "PROPOSED"
-    },
-    {
-      "id": "09-shared-draft-ar",
-      "title": "Arabic RTL shared-draft confirmation",
-      "file": "09-shared-draft-ar.png",
-      "bytes": 1513146,
-      "sha256": "b1c49cfa0bf54cf9ef67fe5ccf4db5bab6d67597c64aab1854d6129d9bedc471",
-      "width": 852,
-      "height": 1846,
-      "generator": "image_gen.imagegen",
-      "sourceFile": "exec-48c11827-f216-4629-9b3c-7e5a3f960152.png",
-      "reviewStatus": "PROPOSED"
-    },
-    {
-      "id": "10-default-light-en",
-      "title": "Light-mode default assignment",
-      "file": "10-default-light-en.png",
-      "bytes": 1248406,
-      "sha256": "48cd5e8d24be411aa99558dc353f7941a89d500d1d8f8ea85b5a1843703ce449",
-      "width": 852,
-      "height": 1846,
-      "generator": "image_gen.imagegen",
-      "sourceFile": "exec-0a9ae5d9-f89e-44af-bb4d-628e0587254d.png",
-      "reviewStatus": "PROPOSED"
+      "reviewStatus": "OWNER_VISUAL_APPROVED_SCOPED",
+      "approvalScope": "Default-account helper; surrounding Edit form contextual; Add placement unresolved"
     },
     {
       "id": "11-currency-confirm-en",
@@ -141,7 +56,8 @@
       "height": 1844,
       "generator": "image_gen.imagegen",
       "sourceFile": "exec-75832c60-9dea-41ef-bec5-b528e14e5148.png",
-      "reviewStatus": "PROPOSED"
+      "reviewStatus": "OWNER_VISUAL_APPROVED_SCOPED",
+      "approvalScope": "Foreground currency confirmation sheet; background superseded by R2"
     },
     {
       "id": "12-multiple-matches-ar",
@@ -153,7 +69,8 @@
       "height": 1844,
       "generator": "image_gen.imagegen",
       "sourceFile": "exec-aeda45a6-eda1-4946-90d1-7031a053aff8.png",
-      "reviewStatus": "PROPOSED"
+      "reviewStatus": "OWNER_VISUAL_APPROVED_SCOPED",
+      "approvalScope": "Existing-account chooser concept and Arabic copy"
     }
   ]
 }

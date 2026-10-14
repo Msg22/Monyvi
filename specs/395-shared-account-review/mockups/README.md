@@ -6,11 +6,14 @@ implementation. No more mockups will be generated.
 
 ## Approval scope
 
-- Retained R1 concepts and R2 composition:
-  [approval receipt](references/r2/approval-2026-10-14.json). Original reference
-  bytes/manifests/notes unchanged.
-- R1 has historical unapproved/superseded images too; do not treat its whole
-  folder as approved.
+- Approved references contain only five retained R1 concepts and three R2
+  images. Superseded R1 images have been deleted; retained PNG bytes are
+  unchanged.
+- Original [approval receipt](provenance/r2/approval-2026-10-14.json), manifests
+  and proposal notes are preserved separately as
+  [historical provenance](provenance/README.md), not implementation
+  instructions. [Cleanup dispositions](reference-cleanup.json) record removed
+  images and their pinned history links.
 - R3: new state proposals, **awaiting approval**.
   [Latest owner adjustments](adjustments.md) override the illustrated new-picker
   chrome: reuse the existing currency modal.
@@ -18,11 +21,24 @@ implementation. No more mockups will be generated.
   [interaction/copy notes](proposals/r3/interaction-notes.md),
   [frozen manifest](proposals/r3/manifest.json).
 - Historical
-  [single-image final review](references/r2/final-review-2026-10-14.md) is
+  [single-image final review](provenance/r2/final-review-2026-10-14.md) is
   preserved; latest Add flag / existing currency modal instructions supersede
   its F01/F02 recommendations.
 
-## R3 index
+## Approved references still needed
+
+| Reference                                                                    | Approved scope                                                                        |
+| ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| [R1 account chooser EN](references/r1/03-multiple-matches-en.png)            | Choose one matching existing account for one transaction                              |
+| [R1 edit shared draft](references/r1/07-edit-shared-draft-en.png)            | Foreground edit sheet; background follows the approved R2 composition                 |
+| [R1 Edit Account helper](references/r1/08-account-helper-en.png)             | Helper beneath Edit Account's default flag; surrounding form is context               |
+| [R1 currency confirmation](references/r1/11-currency-confirm-en.png)         | Foreground confirmation; documented Choose another currency reuses the existing modal |
+| [R1 account chooser AR](references/r1/12-multiple-matches-ar.png)            | Arabic chooser and approved wording                                                   |
+| [R2 combined review](references/r2/01-unified-review-en.png)                 | Approved unified composition; R3 state refinements remain proposals                   |
+| [R2 independent actions](references/r2/02-individual-account-actions-en.png) | Per-group Confirm/Edit/Replace/Remove menu                                            |
+| [R2 complete account list](references/r2/03-all-suggested-accounts-en.png)   | All suggestions independently reachable/actionable                                    |
+
+## R3 proposals — awaiting approval
 
 | Image                                                                           | Focus                                                               |
 | ------------------------------------------------------------------------------- | ------------------------------------------------------------------- |

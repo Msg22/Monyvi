@@ -15,5 +15,6 @@
       "sourceManifestSha256": "26f4e86f0f03f5a18117e7f0294d71cc77b3670f677e84061a93612a8254e8b3"
     }
   ],
-  "note": "All reference bytes unchanged. Scoped approval is in references/r2/approval-2026-10-14.json; not every historical R1 image is approved."
+  "note": "Historical import record. Current references have been pruned per owner request; see reference-cleanup.json. Approval evidence is now in provenance/r2/approval-2026-10-14.json.",
+  "currentReferenceImageCount": 8
 }

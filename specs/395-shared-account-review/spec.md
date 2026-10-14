@@ -286,9 +286,9 @@ verify account/transaction counts.
   replacement and removal; no mandatory batch confirmation.
 - **FR-007**: Group confirmation MUST affect linked account assignment only, not
   select other transactions or create a real account.
-- **FR-008**: Direct eligible-row selection MAY confirm its group only with
-  visible shared-effect disclosure and feedback; only that row is checked and
-  other review reasons remain.
+- **FR-008**: Direct eligible-row selection MUST support confirming its group
+  only with visible shared-effect disclosure and feedback; only that row is
+  checked and other review reasons remain.
 - **FR-009**: Suggestion removal MUST retain transactions, clear invalid
   assignments/selections, avoid implicit default fallback/regeneration and
   provide reversible Undo consistent with later user edits.
