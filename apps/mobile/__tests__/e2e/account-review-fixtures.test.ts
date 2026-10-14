@@ -762,6 +762,8 @@ describe("T008 future current-owner fixture entry (Red before T015)", () => {
     // proof that production/runtime gating rejected the fixture.
     const loadFixture = resolveRuntimeFixtureEntry();
     await expect(loadFixture("r3-default-only")).rejects.toThrow();
+    expect(mockLoadAccountReviewAccountSnapshots).not.toHaveBeenCalled();
+    assertNoFixtureSideEffects();
   });
 
   it("rejects fixture entry in production even with an E2E-looking environment", async () => {
@@ -772,6 +774,8 @@ describe("T008 future current-owner fixture entry (Red before T015)", () => {
     // proof that production/runtime gating rejected the fixture.
     const loadFixture = resolveRuntimeFixtureEntry();
     await expect(loadFixture("r3-default-only")).rejects.toThrow();
+    expect(mockLoadAccountReviewAccountSnapshots).not.toHaveBeenCalled();
+    assertNoFixtureSideEffects();
   });
 
   it("does not construct a fixture for a signed-out user or infer an owner from the static catalog", async () => {
@@ -781,25 +785,27 @@ describe("T008 future current-owner fixture entry (Red before T015)", () => {
     // proof that production/runtime gating rejected the fixture.
     const loadFixture = resolveRuntimeFixtureEntry();
     await expect(loadFixture("r3-default-only")).rejects.toThrow();
-    expect(mockDatabaseWrite).not.toHaveBeenCalled();
+    assertNoFixtureSideEffects();
   });
 
   it("rejects relabeling another owner's static account IDs during user switching", async () => {
-    const first = parseHydratedSession(
-      await loadRuntimeFixtureSession("r3-default-only")
-    );
-    expect(first.ownerId).toBe(CURRENT_OWNER);
-    expect(first.rows).toHaveLength(2);
+    const scene = findScene("r3-default-only");
+    const first = parseHydratedSession(await loadRuntimeFixtureSession(scene.id));
+    assertOwnedSessionReferences(first, scene, CURRENT_OWNER);
 
     mockActiveOwnerId = ANOTHER_OWNER;
+    // A second owner has similar account names but not a current-owned default.
+    const otherCashId = getRoleId(ANOTHER_OWNER, "cash");
+    mockForeignAccountIds.add(otherCashId);
     const otherOwner = await mockLoadAccountReviewAccountSnapshots();
     expect(otherOwner.ownerId).toBe(ANOTHER_OWNER);
-    expect(otherOwner.accounts.map((account) => account.id))
+    expect(otherOwner.accounts.map(({ id }) => id)).not.toContain(otherCashId);
+    expect(otherOwner.accounts.map(({ id }) => id))
       .not.toContain(manifest.defaultAccountId);
 
     const loadFixture = resolveRuntimeFixtureEntry();
-    await expect(loadFixture("r3-default-only")).rejects.toThrow();
-    expect(mockDatabaseWrite).not.toHaveBeenCalled();
+    await expect(loadFixture(scene.id)).rejects.toThrow();
+    assertNoFixtureSideEffects();
   });
 
   it.each([
@@ -809,49 +815,36 @@ describe("T008 future current-owner fixture entry (Red before T015)", () => {
   ])(
     "rejects a $reason referenced account absent from the active owned snapshot",
     async ({ unavailable }) => {
-      unavailable.add(manifest.defaultAccountId);
+      const cashId = getRoleId(CURRENT_OWNER, "cash");
+      unavailable.add(cashId);
       const snapshot = await mockLoadAccountReviewAccountSnapshots();
-      expect(snapshot.accounts.map((account) => account.id))
-        .not.toContain(manifest.defaultAccountId);
+      expect(snapshot.accounts.map(({ id }) => id)).not.toContain(cashId);
 
       const loadFixture = resolveRuntimeFixtureEntry();
       await expect(loadFixture("r3-default-only")).rejects.toThrow();
-      expect(mockDatabaseWrite).not.toHaveBeenCalled();
+      assertNoFixtureSideEffects();
     }
   );
 
   it.each(manifest.scenes)(
     "hydrates $id through the REAL fixture service and canonical session schema",
     async (scene) => {
-      const session = parseHydratedSession(
-        await loadRuntimeFixtureSession(scene.id)
-      );
-      expect(session.ownerId).toBe(CURRENT_OWNER);
-      expect(session.source).toBe(scene.source);
-      expect(session.rows).toHaveLength(scene.expectedCounts.total);
-      expect(session.groups).toHaveLength(scene.groups.length);
-      expect(session.rows.filter((row) => row.selected)).toHaveLength(
-        scene.expectedCounts.selected
-      );
-      expect(
-        session.rows.filter((row) => row.reviewReasons.length > 0)
-      ).toHaveLength(scene.expectedCounts.needsReview);
+      const session = parseHydratedSession(await loadRuntimeFixtureSession(scene.id));
+      assertOwnedSessionReferences(session, scene, CURRENT_OWNER);
 
-      for (const row of session.rows) {
-        if (scene.source === "SMS") {
-          expect(row.sourceFingerprint).toMatch(SHA_256_PATTERN);
-        } else {
-          expect(row.sourceFingerprint).toBeNull();
-        }
-      }
       expect(mockGetRequiredCurrentUserId).toHaveBeenCalled();
       expect(mockLoadAccountReviewAccountSnapshots).toHaveBeenCalled();
-      expect(mockDatabaseWrite).not.toHaveBeenCalled();
+      expect(mockCategoryScopeCalls).toContainEqual({
+        ownerId: CURRENT_OWNER, mode: "accessible",
+      });
+      assertNoFixtureSideEffects();
     }
   );
 
   it("rejects unregistered fixtures instead of silently opening an empty or production review", async () => {
     const loadFixture = resolveRuntimeFixtureEntry();
     await expect(loadFixture("missing-private-scenario")).rejects.toThrow();
+    expect(mockLoadAccountReviewAccountSnapshots).not.toHaveBeenCalled();
+    assertNoFixtureSideEffects();
   });
 });
