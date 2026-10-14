@@ -1,4 +1,13 @@
 import { isE2eTestMode } from "@/config/e2e-test-config";
+import type {
+  AccountReviewAccountContext,
+  AccountReviewRequestContext,
+  AccountReviewSession,
+} from "@monyvi/logic";
+import type {
+  AccountReviewAccountSnapshots,
+  AccountReviewLocalAccountSnapshot,
+} from "@/services/account-review-read-model-service";
 import manifest from "../../e2e/fixtures/shared-account-review.json";
 
 const CURRENT_OWNER = "1eea0000-3950-4000-8000-000000009001";
@@ -7,121 +16,287 @@ const UUID_V4_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const SHA_256_PATTERN = /^[0-9a-f]{64}$/;
 
+type AccountRole = "cash" | "qnbEveryday" | "qnbSavings" | "cibMain" | "wallet";
+type DescriptorRow = (typeof manifest.scenes)[number]["rows"][number];
+type DescriptorIssueTag = DescriptorRow["issueTags"][number];
+
+interface RoleDefinition {
+  readonly role: AccountRole;
+  readonly account: Omit<AccountReviewAccountContext, "id">;
+}
+interface ScopedCategoryRecord {
+  readonly id: string;
+  readonly userId: string;
+  readonly deleted: boolean;
+  readonly displayName: string;
+  readonly systemName: string;
+  readonly level: number;
+  readonly type: "EXPENSE";
+  readonly isSystem: boolean;
+}
+interface ScopedCategoryQuery {
+  readonly fetch: () => Promise<readonly ScopedCategoryRecord[]>;
+}
+interface ScopedCategoryScope {
+  readonly userId: string;
+  readonly queryOwned: (collection: { readonly table: string }) => ScopedCategoryQuery;
+  readonly queryAccessibleCategories: (
+    collection: { readonly table: string }
+  ) => ScopedCategoryQuery;
+}
+
+// Runtime records have user-specific persisted IDs different from every
+// static catalogue account/category ID. This is a test-owned input fixture,
+// not a DB seed, mutation or production fixture-loader implementation.
+const ACCOUNT_ROLES: readonly RoleDefinition[] = [
+  {
+    role: "cash",
+    account: {
+      name: "Cash", type: "CASH", currency: "EGP",
+      institutionId: null, providerDisplayName: null, cardLast4: null,
+      senderNames: [],
+    },
+  },
+  {
+    role: "qnbEveryday",
+    account: {
+      name: "QNB Everyday", type: "BANK", currency: "EGP",
+      institutionId: "qnb", providerDisplayName: "QNB", cardLast4: "0007",
+      senderNames: ["QNB"],
+    },
+  },
+  {
+    role: "qnbSavings",
+    account: {
+      name: "QNB Savings", type: "BANK", currency: "EGP",
+      institutionId: "qnb", providerDisplayName: "QNB", cardLast4: "9221",
+      senderNames: ["QNB"],
+    },
+  },
+  {
+    role: "cibMain",
+    account: {
+      name: "CIB Main", type: "BANK", currency: "EGP",
+      institutionId: "cib", providerDisplayName: "CIB", cardLast4: "5566",
+      senderNames: ["CIB"],
+    },
+  },
+  {
+    role: "wallet",
+    account: {
+      name: "Wallet", type: "DIGITAL_WALLET", currency: "USD",
+      institutionId: null, providerDisplayName: "Mobile Wallet", cardLast4: null,
+      senderNames: ["WALLET"],
+    },
+  },
+];
+
+const ROLE_IDS: Readonly<
+  Record<string, Readonly<Record<AccountRole, string>>>
+> = {
+  [CURRENT_OWNER]: {
+    cash: "2eea0000-3950-4000-8000-000000001001",
+    qnbEveryday: "2eea0000-3950-4000-8000-000000001002",
+    qnbSavings: "2eea0000-3950-4000-8000-000000001003",
+    cibMain: "2eea0000-3950-4000-8000-000000001004",
+    wallet: "2eea0000-3950-4000-8000-000000001005",
+  },
+  [ANOTHER_OWNER]: {
+    cash: "3eea0000-3950-4000-8000-000000001001",
+    qnbEveryday: "3eea0000-3950-4000-8000-000000001002",
+    qnbSavings: "3eea0000-3950-4000-8000-000000001003",
+    cibMain: "3eea0000-3950-4000-8000-000000001004",
+    wallet: "3eea0000-3950-4000-8000-000000001005",
+  },
+};
+const OWNER_CATEGORY_IDS: Readonly<Record<string, string>> = {
+  [CURRENT_OWNER]: "2eea0000-3950-4000-8000-000000002001",
+  [ANOTHER_OWNER]: "3eea0000-3950-4000-8000-000000002001",
+};
+
 let mockActiveOwnerId: string | null = CURRENT_OWNER;
+let mockSnapshotReadGate: Promise<void> | null = null;
+let mockNotifySnapshotStarted: (() => void) | null = null;
 const mockMissingAccountIds = new Set<string>();
 const mockDeletedAccountIds = new Set<string>();
 const mockForeignAccountIds = new Set<string>();
+const mockMissingCategoryIds = new Set<string>();
+const mockDeletedCategoryIds = new Set<string>();
+const mockForeignCategoryIds = new Set<string>();
+const mockAccountOverrides = new Map<string, Partial<AccountReviewLocalAccountSnapshot>>();
+const mockExtraAccounts: Array<{
+  readonly userId: string;
+  readonly account: AccountReviewLocalAccountSnapshot;
+}> = [];
+const mockCategoryScopeCalls: Array<{ readonly ownerId: string; readonly mode: string }> = [];
 
-const mockDatabaseWrite = jest.fn(async (): Promise<void> => {
-  throw new Error("fixture entry cannot write financial records");
-});
-// The owned local read model is intentionally distinct from provider context.
-const mockLoadAccountReviewAccountSnapshots = jest.fn(async () => {
-  const ownerId = await mockGetRequiredCurrentUserId();
-  const baseAccounts =
-    ownerId === CURRENT_OWNER
-      ? manifest.accountContext.accounts.filter(
-          (account) =>
-            !mockMissingAccountIds.has(account.id) &&
-            !mockDeletedAccountIds.has(account.id) &&
-            !mockForeignAccountIds.has(account.id)
-        )
-      : [
-          ...manifest.accountContext.accounts.filter((account) =>
-            mockForeignAccountIds.has(account.id)
-          ),
-          {
-            ...manifest.accountContext.accounts[0],
-            id: manifest.excludedAccountRefs.foreignAccountId,
-          },
-        ];
+function getRoleId(ownerId: string, role: AccountRole): string {
+  const id = ROLE_IDS[ownerId]?.[role];
+  if (!id) throw new Error("Synthetic current-owner role is not available");
+  return id;
+}
 
-  const accounts = baseAccounts.map((account) => ({
-    ...account,
-    isDefault:
-      ownerId === CURRENT_OWNER && account.id === manifest.defaultAccountId,
-  }));
-  const providerAccounts = accounts.map(({ isDefault, ...account }) => account);
-  return {
-    ownerId,
-    preferredCurrency:
-      ownerId === CURRENT_OWNER
-        ? manifest.accountContext.preferredCurrency
-        : "USD",
-    accounts,
-    providerContext: {
-      ...manifest.accountContext,
-      preferredCurrency:
-        ownerId === CURRENT_OWNER
-          ? manifest.accountContext.preferredCurrency
-          : "USD",
-      accounts: providerAccounts,
-    },
-  };
-});
-const mockGetRequiredCurrentUserId = jest.fn(
-  async (): Promise<string> => {
-    if (!mockActiveOwnerId) {
-      throw new Error("USER_REQUIRED");
-    }
-    return mockActiveOwnerId;
+function accountRecordsForOwner(ownerId: string): AccountReviewLocalAccountSnapshot[] {
+  const accounts = ACCOUNT_ROLES.map(({ role, account }) => {
+    const id = getRoleId(ownerId, role);
+    return {
+      id,
+      name: account.name,
+      currency: account.currency,
+      type: account.type,
+      institutionId: account.institutionId,
+      providerDisplayName: account.providerDisplayName,
+      cardLast4: account.cardLast4,
+      senderNames: [...account.senderNames],
+      isDefault: role === "cash",
+      ...mockAccountOverrides.get(id),
+    };
+  });
+  return [
+    ...accounts,
+    ...mockExtraAccounts
+      .filter((entry) => entry.userId === ownerId)
+      .map((entry) => ({ ...entry.account, senderNames: [...entry.account.senderNames] })),
+  ].filter((account) =>
+    !mockMissingAccountIds.has(account.id) &&
+    !mockDeletedAccountIds.has(account.id) &&
+    !mockForeignAccountIds.has(account.id)
+  );
+}
+
+function scopedCategoryForOwner(ownerId: string): ScopedCategoryRecord[] {
+  const id = OWNER_CATEGORY_IDS[ownerId];
+  if (
+    !id ||
+    mockMissingCategoryIds.has(id) ||
+    mockDeletedCategoryIds.has(id) ||
+    mockForeignCategoryIds.has(id)
+  ) {
+    return [];
   }
-);
-const mockGetCurrentUserDataScope = jest.fn(async () => {
-  const userId = await mockGetRequiredCurrentUserId();
-  // A synthetic category exists ONLY for the explicitly authenticated fixture
-  // owner; the in-memory mock never seeds or writes a business database.
-  const ownedCategory = {
-    id: manifest.syntheticCategoryId,
-    userId: CURRENT_OWNER,
+  return [{
+    id,
+    userId: ownerId,
     deleted: false,
     displayName: "Other",
     systemName: "other",
     level: 1,
     type: "EXPENSE",
     isSystem: false,
-  };
+  }];
+}
+
+function accountProviderProjection(
+  account: AccountReviewLocalAccountSnapshot
+): AccountReviewAccountContext {
   return {
-    userId,
-    queryOwned: (collection: { readonly table: string }) => ({
-      fetch: async () =>
-        collection.table === "categories" && userId === CURRENT_OWNER
-          ? [ownedCategory]
-          : [],
-    }),
+    id: account.id,
+    name: account.name,
+    type: account.type,
+    currency: account.currency,
+    institutionId: account.institutionId,
+    providerDisplayName: account.providerDisplayName,
+    cardLast4: account.cardLast4,
+    senderNames: [...account.senderNames],
   };
-});
+}
+
+const mockDatabaseWrite = jest.fn(
+  (): Promise<never> =>
+    Promise.reject(new Error("Fixture entry cannot write financial records"))
+);
+const mockUnscopedFetch = jest.fn(
+  (): Promise<never> =>
+    Promise.reject(new Error("Fixture reads must be authenticated and scoped"))
+);
+const mockProviderCall = jest.fn(
+  (..._args: readonly unknown[]): Promise<never> =>
+    Promise.reject(new Error("Fixture entry cannot call an AI/provider endpoint"))
+);
+const mockGetRequiredCurrentUserId = jest.fn((): Promise<string> =>
+  mockActiveOwnerId === null
+    ? Promise.reject(new Error("USER_REQUIRED"))
+    : Promise.resolve(mockActiveOwnerId)
+);
+
+const mockLoadAccountReviewAccountSnapshots = jest.fn(
+  async (): Promise<AccountReviewAccountSnapshots> => {
+    const ownerId = await mockGetRequiredCurrentUserId();
+    if (mockSnapshotReadGate !== null) {
+      mockNotifySnapshotStarted?.();
+      await mockSnapshotReadGate;
+    }
+    const accounts = accountRecordsForOwner(ownerId);
+    const providerContext: AccountReviewRequestContext = {
+      reviewContractVersion: "account-review/v2",
+      preferredCurrency: "EGP",
+      accounts: accounts.map(accountProviderProjection),
+    };
+    return {
+      ownerId,
+      preferredCurrency: providerContext.preferredCurrency,
+      accounts,
+      providerContext,
+    };
+  }
+);
+
+const mockGetCurrentUserDataScope = jest.fn(
+  (): Promise<ScopedCategoryScope> =>
+    mockGetRequiredCurrentUserId().then((userId): ScopedCategoryScope => {
+      const makeQuery = (
+        mode: string,
+        collection: { readonly table: string }
+      ): ScopedCategoryQuery => {
+        mockCategoryScopeCalls.push({ ownerId: userId, mode });
+        return {
+          fetch: (): Promise<readonly ScopedCategoryRecord[]> =>
+            Promise.resolve(
+              collection.table === "categories" ? scopedCategoryForOwner(userId) : []
+            ),
+        };
+      };
+      return {
+        userId,
+        queryOwned: (collection): ScopedCategoryQuery => makeQuery("owned", collection),
+        queryAccessibleCategories: (collection): ScopedCategoryQuery =>
+          makeQuery("accessible", collection),
+      };
+    })
+);
 
 jest.mock("@monyvi/db", () => ({
   database: {
-    write: (): Promise<void> => mockDatabaseWrite(),
+    write: (): Promise<never> => mockDatabaseWrite(),
     get: (table: string): object => ({
       table,
-      query: (): object => ({ fetch: async (): Promise<never[]> => [] }),
+      query: (): object => ({ fetch: (): Promise<never> => mockUnscopedFetch() }),
     }),
   },
 }));
-
+jest.mock("@/services/supabase", () => ({
+  supabase: {
+    functions: {
+      invoke: (...args: readonly unknown[]): Promise<never> => mockProviderCall(...args),
+    },
+  },
+}));
+jest.mock("@/services/authenticated-edge-function-service", () => ({
+  invokeAuthenticatedEdgeFunction: (
+    ...args: readonly unknown[]
+  ): Promise<never> => mockProviderCall(...args),
+}));
 jest.mock("@/services/user-data-access", () => ({
-  // Defer all mock variable reads until after Jest's factory hoisting.
   getRequiredCurrentUserId: (): Promise<string> =>
     mockGetRequiredCurrentUserId(),
   getCurrentUserDataScope: (): ReturnType<typeof mockGetCurrentUserDataScope> =>
     mockGetCurrentUserDataScope(),
 }));
-
-// T010 is a FUTURE dependency of the T015 fixture service, not the service
-// under test here. Virtualize only this dependency so the descriptor-only
-// assertions can execute before T010 exists. Never mock the T015 service.
-jest.mock(
-  "@/services/account-review-read-model-service",
-  () => ({
-    loadAccountReviewAccountSnapshots: (): ReturnType<
-      typeof mockLoadAccountReviewAccountSnapshots
-    > => mockLoadAccountReviewAccountSnapshots(),
-  }),
-  { virtual: true }
-);
+jest.mock("@/services/account-review-read-model-service", () => ({
+  loadAccountReviewAccountSnapshots: (): ReturnType<
+    typeof mockLoadAccountReviewAccountSnapshots
+  > => mockLoadAccountReviewAccountSnapshots(),
+}));
 
 // Use normal synchronous Jest module loading: dynamic import needs VM module
 // flags that are not part of this repository's Jest runner.
