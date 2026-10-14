@@ -67,14 +67,28 @@ const mockGetRequiredCurrentUserId = jest.fn(
     return mockActiveOwnerId;
   }
 );
-const mockGetCurrentUserDataScope = jest.fn(async (): Promise<{
-  readonly userId: string;
-  readonly queryOwned: () => { fetch: () => Promise<readonly unknown[]> };
-}> => {
+const mockGetCurrentUserDataScope = jest.fn(async () => {
   const userId = await mockGetRequiredCurrentUserId();
+  // A synthetic category exists ONLY for the explicitly authenticated fixture
+  // owner; the in-memory mock never seeds or writes a business database.
+  const ownedCategory = {
+    id: manifest.syntheticCategoryId,
+    userId: CURRENT_OWNER,
+    deleted: false,
+    displayName: "Other",
+    systemName: "other",
+    level: 1,
+    type: "EXPENSE",
+    isSystem: false,
+  };
   return {
     userId,
-    queryOwned: () => ({ fetch: async () => [] }),
+    queryOwned: (collection: { readonly table: string }) => ({
+      fetch: async () =>
+        collection.table === "categories" && userId === CURRENT_OWNER
+          ? [ownedCategory]
+          : [],
+    }),
   };
 });
 
