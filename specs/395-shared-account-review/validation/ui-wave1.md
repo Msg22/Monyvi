@@ -227,3 +227,48 @@ The only virtual module is the **future T010 read-model dependency** used by the
 **Actual work in this checkpoint:** immutable GitHub source/governance reads, inspection of real user-scoped helper APIs and existing DB model fields, and this **report-only** publication. No T006 test modification, T010 service creation, Core schema change, helper export, financial save/fixture API, branch merge/PR/issues/Pages, E2E, hosted action or native worker. Runtime checks **NOT RUN** by this author; prior root reports remain external evidence, not a fresh pass.
 
 **T010 PLAN-ONLY HANDOFF — STOP FOR ROOT PLAN ACCEPTANCE, NEXT MEANINGFUL RED CHECKPOINT, AND EXPLICIT PRODUCTION FILE GRANT. ALL OTHER WRITE OWNERSHIP FROZEN.**
+
+---
+
+## 10. T010 — source-only implementation handoff (exclusive bounded grant)
+
+**New explicit authorization:** after accepting the Section 9 plan, root reported its affected **55-mobile-case** batch: **22 PASS / 33 FAIL**, comprising **26 future fixture-service module-absence failures** and **7 remaining parser behavior failures**. The T006 file stopped at the missing new `account-review-read-model-service` import; **zero T006 assertions executed**. This was accepted as **new-API-absence tests-first Red for creating T010**, **not** proof of behavior, security or T010 assertion correctness. All root-run figures are historical checkpoints supplied by root. The Core `RequestContext/AccountContext` subtree at `0700eb3e6023ea33a91f8662515d98e644087112` is accepted; **whole T009 is not accepted**, with H1/H3/H4 still exclusively Core-owned.
+
+**Source lease:** branch `codex/395-ui-worker` started at exactly `61838678feabf1c514cadda85c00c245b3d86a7b`; GitHub exact-ref refresh matched before the first edit. Sole writer was this Normal ChatGPT lane. Authorized only `apps/mobile/services/account-review-read-model-service.ts`, existing `apps/mobile/__tests__/services/account-review-read-model-service.test.ts`, and this report. Protected Core schema/vocabulary/tests/barrel, account/payment services, fixture service, SQL/DB files, other test files, B1/artifacts and integration branch were untouched.
+
+### Exact implemented T010 boundary
+
+**New `apps/mobile/services/account-review-read-model-service.ts`**, source blob at final source checkpoint `0832fb64885637a0bf4b03f9291ba61df1c8e0b0`.
+
+- Exports `loadAccountReviewAccountSnapshots(): Promise<AccountReviewAccountSnapshots>`. `AccountReviewLocalAccountSnapshot` **extends the canonical inferred `AccountReviewAccountContext`** from `@monyvi/logic` with only `readonly isDefault: Account["isDefault"]`. `AccountReviewAccountSnapshots` has exactly `{ ownerId, preferredCurrency, accounts, providerContext }`; no copied currency/account union or new DB schema, logic generator, or barrel export.
+- `getCurrentUserDataScope()` captures the current owner **once**. One `queryOwned(..., Q.where("deleted", false))` read per `accounts` and `profiles` collection; exactly one `queryChildrenOfOwnedParents` for active owned BANK `bank_details` and one for active owned `account_sms_senders`, each filtered active; zero-parent cases query no unscoped child records. No per-row N+1 reads, write, network, provider call or cache crossing sessions.
+- Requires **exactly one** active owned profile and preserves its preferred currency; missing/duplicate/inaccessible profile fails closed instead of defaulting to EGP. Active account IDs must be unique/current-owned/not deleted; invalid runtime `isDefault` fails closed. Valid zero and multiple default flags are preserved **locally** without assuming a preferred default. A final `getRequiredCurrentUserId()` check against the captured owner occurs **after all async queries and strict context parsing**; owner change/logout rejects before returning any context.
+- Bank details are joined **by owned parent account UUID**, never by name/provider. Valid numeric suffix `7` converts to exactly `"0007"`, optional absent suffix stays `null`; noninteger/out-of-range/non-numeric runtime suffix and multiple live details per bank (even duplicate identical suffixes) throw instead of silently picking arbitrary evidence. Cash/Wallet do not receive invented Bank digits. Child results with out-of-scope parents fail closed.
+- Only persisted, active, current-owned sender aliases are admitted. `normalizeAccountSmsSender` is reused for normalization/duplicate detection; display spelling is whitespace-normalized, stable and deterministically sorted, with no new alias inference. Empty/invalid active sender and unexpected child-parent scope fail closed; soft-deleted and foreign senders are never projected.
+- Constructs local snapshots explicitly as the eight canonical account identity fields plus `isDefault`; constructs the provider account **separately** using a literal eight-field whitelist. **Only** `providerContext` is passed through the canonical `accountReviewRequestContextSchema.parse`. No local-default, owner ID, balances, full account/card identifiers, financial revision, raw SMS/message contents or model objects enter provider JSON; no extra provider wire fields.
+- Errors are stable local codes without logging sensitive values. The service does not create a financial action, call Supabase, start sync, mutate WatermelonDB, implement a hook/UI, or touch the T015 fixture loader.
+
+### T006 behavior assertions retained and extended
+
+**Owned test path:** `apps/mobile/__tests__/services/account-review-read-model-service.test.ts`, blob at final test checkpoint `5c7625ea996219adcaffb72f8c645a6f39e61706`.
+
+Preserved all existing 10 named T006 assertions (F01 strict two-projection shape/privacy, batched queries, masked suffix, zero/multiple defaults, owner A→B isolation, immutable captured scope, delayed read with final owner change, missing profile and failed children). Strengthened deferred owner rejection to assert the existing `AUTH_SCOPE_CHANGED` stable code rather than any error.
+
+Added **six** individually named cases plus **two** parameterized test definitions (**5 invalid suffix values + 2 duplicate live Bank details cases**), for **23 authored concrete T006 cases** in this source file. New integrity coverage:
+1. Duplicate active owned profiles reject instead of choosing preferredCurrency arbitrarily.
+2. Corrupted persisted local default boolean rejects, and duplicated owned account IDs reject before child reads.
+3. Invalid live Bank suffixes `-1`, fractional `7.5`, `10000`, `NaN`, `Infinity` reject; multiple live Bank details reject whether same or conflicting suffix.
+4. Missing Bank suffix remains honest `null`.
+5. Existing-normalizer sender duplicates coalesce with deterministic safe visible spelling; private/deleted/foreign identifiers never enter provider output.
+6. Blank active sender alias rejects instead of silently erasing identity evidence.
+
+Tests use existing in-memory scoped mocks, synthetic IDs and Jest only; no real customer data, unsafe casts, `any`, runtime dependency installation or additional fixture source.
+
+### Observed verification vs still-unrun gates
+
+- **Remote GitHub checks actually performed:** exact branch lease refreshed before each mutation; created the new service and updated only the existing T006 file. Re-fetched published blobs; static source inspection verified scoped/batched helper calls, distinct provider whitelist, accepted local type imports, final owner recheck, no DB writes/private logging, and explicit fail-closed error branches. The sole post-source validation-report change remains this section.
+- **NOT RUN by this remote worker:** Jest/behavioral T006 Green, TypeScript, ESLint custom `--rulesdir`, Prettier/normal commit hooks, Nx, E2E/MAESTRO, device/emulator, provider/API, hosted/local SQL or sync. **Do not infer a PASS** from a source string inspection. Root owns the single focused integration batch after this freeze.
+- **Explicit temporary dependency:** `@monyvi/logic` exports the canonical review context types and schema only on the independently frozen Core revision; they do not yet exist on this isolated UI branch's original base. Root must integrate the approved Core API subtree **without copying, stubbing or changing Core-owned files here** before meaningful mobile typecheck/Green.
+- **Stop/follow-up:** if root observes a genuine T006 behavior/type/lint defect, reconcile it against this exact source and the accepted F01 contract through a **fresh explicit bounded grant**; do not weaken tests, relax owner scope or broaden file ownership. Root handles code formatting, integration and independent security review under the existing workflow. T016 and story production remain gated.
+
+**T010 SOURCE AUTHORING COMPLETE — ROOT LOCAL CHECKS PENDING. EXCLUSIVE UI SOURCE/TEST/REPORT OWNERSHIP RELEASED; ALL WRITES FROZEN.**
