@@ -172,9 +172,9 @@ function voiceOptions() {
     accounts: review.accounts,
     categoryRecords: [],
     preferredCurrency: review.preferredCurrency,
-    // Extension is the T004 accountReviewRequestContextSchema shape. The
-    // production adapter must forward it in the original multipart request.
-    accountReviewContext: review,
+    // T004 parser request discriminator; account and preference fields above
+    // already use the normative context shape without a copied wrapper.
+    reviewContractVersion: review.reviewContractVersion,
   };
 }
 
@@ -195,7 +195,7 @@ function smsContext() {
   return {
     categories: smsCategories(),
     supportedCurrencies: ["EGP", "USD"],
-    accountReviewContext: makeReviewRequestContext(),
+    ...makeReviewRequestContext(),
   };
 }
 
@@ -250,7 +250,7 @@ describe("#395 T007 — original Voice parser with advisory review v2", () => {
     expect(mockInvoke.mock.calls[0]?.[0]).toBe("parse-voice");
     expect(appendedValues("requestKey")).toEqual([REVIEW_WIRE_IDS.voiceRequestKey]);
     expect(appendedValues("reviewContractVersion")).toEqual(["account-review/v2"]);
-    const sentAccountContext = appendedValues("accountReviewContext");
+    const sentAccountContext = appendedValues("accounts");
     expect(sentAccountContext).toHaveLength(1);
     const serializedContext = String(sentAccountContext[0]);
     expect(serializedContext).toContain(REVIEW_WIRE_IDS.bankAccountId);
