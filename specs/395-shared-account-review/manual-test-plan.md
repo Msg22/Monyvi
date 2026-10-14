@@ -1,0 +1,44 @@
+# Manual test plan and automation mapping
+
+This is the scenario source for future implementation, not executed test
+evidence. No app code, test files, E2E run, device or emulator validation was
+performed in this planning PR. Test authors must establish Red before production
+edits; owner requests batched checks and no emulator execution.
+
+## Scenario matrix
+
+| ID  | Scenario and expected result                                                                                                      | Requirements   | Planned deterministic coverage                                           | E2E / manual boundary                                                           |
+| --- | --------------------------------------------------------------------------------------------------------------------------------- | -------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------- |
+| M01 | Voice: one/several accounts, same-currency default, no account mentioned → accepted default and quiet disclosure                  | FR-001–002     | Resolution/selection service unit and review component integration       | Fixture-driven review flow to Save; owner real Voice sample                     |
+| M02 | SMS Cash default, no default, wrong currency or inconsistent defaults → compatible exact match or unassigned; no guess            | FR-003–004     | Source/type/currency eligibility matrix                                  | Controlled SMS fixture; owner device delivery paths unchanged                   |
+| M03 | Omitted currency → preferred; conflicting/unsupported currency → no automatic account                                             | FR-004         | Response validation/currency-certainty and resolver tests                | Review fixture + owner real parsing sample                                      |
+| M04 | QNB3/CIB1: confirm QNB only → account blocker removed for3, none selected/created, CIB pending                                    | FR-005–007     | Shared identity/state reducer and UI tests                               | Controlled review journey, group confirmation then one Save                     |
+| M05 | Select one eligible QNB row → prior disclosure and feedback; group confirmed, only clicked row selected                           | FR-008         | Selection/confirmation integration; hard-invalid rejection               | Review fixture, exact checked counts/save result                                |
+| M06 | Edit draft identity; different card/type/currency evidence → no accidental merging; changed identity reconfirmed                  | FR-005,012,021 | Canonical identity/dedup/override tests, validation failures             | Fixture-based draft edit; owner localized long/provider names                   |
+| M07 | Replace account via row versus group; cancel/stale/deleted candidate → correct scope/no unintended changes                        | FR-010,012     | Candidate filtering, scope and reference revalidation tests              | Existing chooser journey; owner modal accessibility                             |
+| M08 | Remove QNB, keep its rows unassigned; invalid selection clears; CIB unaffected; Undo does not override later edits                | FR-009         | Removal/undo revision and recovery tests                                 | Remove/Undo/Choose flow; owner interruption/restart checks                      |
+| M09 | Choose another currency → EXISTING modal with transaction context; explicit accept only; numeric amount preserved                 | FR-011–012     | Existing CurrencyPicker/context/unconfirmed adapter and regrouping tests | Supported-currency selection/cancel journey; owner keyboard/TalkBack            |
+| M10 | Combined/default-only/issues-only/confirmed/clean/filtered-empty, overlapping reasons and long group list → exact sections/counts | FR-013–015     | Read-model/counter/filter/component/layout tests                         | All accessible fixture states; owner visual reference comparison                |
+| M11 | Select ready within active filter; unresolved rows remain; Clear selection and final count accurate                               | FR-015         | Bulk selection integration and count tests                               | Fixture filter/select/save journey                                              |
+| M12 | Add first/later account, toggle off/on, existing/no default, cancel/failed Save → correct unsaved boundary and sole default       | FR-016–017     | Form intent/owned command integration, concurrent revalidation           | Add/Edit journey with fixtures; owner account form/keyboard                     |
+| M13 | Save selected rows while unrelated group unresolved; unused confirmed drafts not created                                          | FR-018         | Atomic writer/reference/selected-draft tests                             | Controlled Save and resulting accounts/transactions                             |
+| M14 | Failed save/repeat Save/duplicate source fingerprint → no partial financial effects or duplicate accounts/transactions            | FR-018–019     | Writer failure injection/idempotency/source-fingerprint tests            | Honest failures need fixture harness; otherwise owner manual, no fake E2E claim |
+| M15 | Restore SMS choices/removals, Review later; Voice exit has no added durable recovery                                              | FR-019         | SMS durable draft/service and Voice session boundary tests               | Restart fixture where controllable; owner actual SMS/device lifecycle           |
+| M16 | Confirm/edit/remove/currency actions → zero extra parsing requests/usage; references are owned                                    | FR-020–021     | Transport call counts/validation/user-scope tests                        | Provider calls not driven live by E2E; owner real sample and usage check        |
+| M17 | Compact/ordinary/tablet/landscape, light/dark, RTL, enlarged fonts, long names, keyboard and bottom navigation                    | FR-022–023     | Shared responsive/layout/inset/accessibility semantics tests             | Owner rendered comparison/TalkBack/VoiceOver; no emulator run                   |
+| M18 | Existing fields, type/currency read-only rules, provider/sender/card metadata and balance behavior preserved                      | FR-023         | Existing form/service regression coverage                                | Owner Add/Edit bank/wallet/Cash regression                                      |
+
+Automated targets, fixture capabilities and exact test filenames are assigned by
+the future plan/tasks. Until authored and executed, every automation cell above
+is **planned**, not covered/passing. Live provider interpretation, actual OS
+keyboard and screen-reader speech remain separately reported manual checks.
+
+## Data readiness
+
+Use explicit current-user fixtures for: Cash default EGP; eligible Bank/Wallet
+defaults; no default; conflicting default metadata; QNB same-currency
+distinguishable accounts/cards; draft QNB3/CIB1; currency uncertainty;
+wrong-currency/deleted/foreign references; SMS source fingerprints and restored
+reviews. Do not seed/reset or mutate hosted/local business data during this
+planning step. Future QA preparation must inspect the owner-selected local user
+and add only missing fixture data under the approved scope.

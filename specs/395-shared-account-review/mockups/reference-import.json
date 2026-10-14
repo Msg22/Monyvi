@@ -1,0 +1,19 @@
+{
+  "date": "2026-10-14",
+  "issue": 395,
+  "copiedReferences": [
+    {
+      "revision": "r1",
+      "originalDirectory": "2026-10-14-shared-accounts-r1",
+      "imageCount": 12,
+      "sourceManifestSha256": "6ab440c267020b7e10162c1bd00ade4a6103ea3d2e1a494b53ca10ef5795b076"
+    },
+    {
+      "revision": "r2",
+      "originalDirectory": "2026-10-14-shared-accounts-r2",
+      "imageCount": 3,
+      "sourceManifestSha256": "26f4e86f0f03f5a18117e7f0294d71cc77b3670f677e84061a93612a8254e8b3"
+    }
+  ],
+  "note": "All reference bytes unchanged. Scoped approval is in references/r2/approval-2026-10-14.json; not every historical R1 image is approved."
+}
