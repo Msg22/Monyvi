@@ -171,9 +171,8 @@ function makeReviewRequestContext() {
   const currency: CurrencyType = "EGP";
   const bankType: AccountType = "BANK";
   const cashType: AccountType = "CASH";
-  const version = "account-review/v2";
   return {
-    reviewContractVersion: version,
+    reviewContractVersion: "account-review/v2" as const,
     preferredCurrency: currency,
     accounts: [
       {
