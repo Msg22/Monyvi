@@ -57,6 +57,7 @@ export const METALS_DEDICATED_SYNC_TABLES = [
   "metal_holding_states",
   "metal_action_evidence",
   "metal_lifecycle_events",
+  "metal_metadata_edit_outcomes",
   "metal_rate_references",
 ] as const;
 export const DEDICATED_SYNC_TABLES = new Set<string>([

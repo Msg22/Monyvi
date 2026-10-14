@@ -32,7 +32,19 @@ describe("#355 local historical cache schema preservation", () => {
       expect(migrations.indexOf("toVersion: 31")).toBeGreaterThan(
         historicalMigration
       );
-      expect(migrations).toContain('name: "metal_metadata_edit_outcomes"');
+      expect(migrations).toContain("metalMetadataEditMigrationSteps");
+      const metadataMigration = source(
+        "packages/db/src/local-schema/metal-metadata-edit-migration.ts"
+      );
+      expect(metadataMigration).toContain(
+        'name: "metal_metadata_edit_outcomes"'
+      );
+      expect(metadataMigration).toContain(
+        "metal_metadata_edit_outcomes_owner_edit_unique"
+      );
+      expect(metadataMigration).toContain(
+        "metal_metadata_edit_outcomes_owner_holding_time"
+      );
     }
   });
 

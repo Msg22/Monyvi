@@ -1,5 +1,4 @@
 import type { Database } from "@nozbe/watermelondb";
-import * as Crypto from "expo-crypto";
 import type {
   SyncPushArgs,
   SyncPushResult,
@@ -10,13 +9,22 @@ import type {
 import { logger } from "@/utils/logger";
 
 import {
-  commitCanonicalMetalMetadataLocally,
-  type MetalMetadataRpcOutcome,
-} from "../metal-metadata-service";
-import {
-  commitMetalRpcOutcomeLocally,
-  type MetalRpcOutcome,
-} from "../metal-reconciliation-service";
+  assertCanonicalMixedMetadataOutcomesAvailable,
+  assertNoOrphanedMetalMetadata,
+  createDefaultMetalMetadataOutcomeCommitter,
+  createDefaultMetalOutcomeCommitter,
+  executePendingStandaloneMetalMetadata,
+  guardUnversionedHoldingStateMetadata,
+  parseAndValidatePendingMetalMetadataEdits,
+  readCanonicalMixedMetalMetadataOutcome,
+  reconcileMixedMetalMetadataOutcomes,
+  type MetalMetadataOutcomeCommitter,
+  type MetalOutcomeCommitter,
+  type MetalRpcResult,
+  type MetalSyncRpc,
+  type MixedMetalMetadataOutcomeLoader,
+} from "./metal-metadata-push-guard-service";
+import type { MetalRpcOutcome } from "../metal-reconciliation-service";
 import { getCurrentUserId, supabase } from "../supabase";
 import {
   DEDICATED_SYNC_TABLES,
@@ -31,7 +39,6 @@ import {
   collectBlockedDedicatedRejectedIds,
   collectRpcHandledMetalHoldingIds,
   collectUnacknowledgedMetalRows,
-  excludeHoldingActions,
 } from "./metal-row-routing";
 import {
   expectedRevisionOrder,
@@ -73,40 +80,25 @@ export const GENERIC_SYNC_ERROR_CODES = {
 } as const;
 
 const METAL_ACTION_RPC = "apply_metal_action_v1";
-const METAL_METADATA_RPC = "apply_metal_metadata_patch_v1";
 const METAL_LINKED_TABLES: readonly string[] = [
   "metal_action_evidence",
   "metal_lifecycle_events",
   "metal_rate_references",
 ];
 const NO_ACKNOWLEDGED_ACTIONS: ReadonlySet<string> = new Set<string>();
-const metalOutcomeHashProvider = {
-  digestUtf8: (value: string): Promise<string> =>
-    Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, value),
-};
-
-interface MetalRpcResult {
-  readonly data: unknown;
-  readonly error: unknown;
-}
-
-export type MetalSyncRpc = (
-  name: string,
-  args: Readonly<Record<string, unknown>>
-) => Promise<MetalRpcResult>;
 
 export interface MetalDedicatedPushResult {
   readonly acknowledgeAllDedicatedRows: boolean;
   readonly acknowledgedActionIds: ReadonlySet<string>;
 }
 
-export type MetalOutcomeCommitter = (
-  outcome: MetalRpcOutcome
-) => Promise<"accepted" | "reconciled" | "incomplete">;
-
-export type MetalMetadataOutcomeCommitter = (
-  outcome: MetalMetadataRpcOutcome
-) => Promise<void>;
+export type {
+  MetalMetadataOutcomeCommitter,
+  MetalOutcomeCommitter,
+  MetalRpcResult,
+  MetalSyncRpc,
+  MixedMetalMetadataOutcomeLoader,
+};
 
 const ACCOUNT_FINANCIAL_COLUMNS: ReadonlySet<string> = new Set([
   "balance",
@@ -201,25 +193,6 @@ function parseMetalRpcOutcome(
   return null;
 }
 
-function parseMetalMetadataRpcOutcome(
-  value: unknown,
-  holdingId: string
-): MetalMetadataRpcOutcome | null {
-  const outcome = asRpcObject(value);
-  const canonical = asRpcObject(outcome?.canonicalMetadata);
-  if (
-    !outcome ||
-    !["applied", "idempotent", "ignored"].includes(String(outcome.status)) ||
-    outcome.holdingId !== holdingId ||
-    !canonical ||
-    !("name" in canonical) ||
-    !("notes" in canonical)
-  ) {
-    return null;
-  }
-  return outcome as unknown as MetalMetadataRpcOutcome;
-}
-
 function defaultMetalRpc(
   name: string,
   args: Readonly<Record<string, unknown>>
@@ -230,39 +203,19 @@ function defaultMetalRpc(
   return client.rpc(name, args);
 }
 
-function metalMetadataField(
-  state: Record<string, unknown>,
-  asset: Record<string, unknown>,
-  field: "name" | "notes"
-): Readonly<Record<string, unknown>> | null | false {
-  const writtenAt = state[`${field}_written_at`];
-  const writerId = state[`${field}_writer_id`];
-  if (writtenAt === null || writtenAt === undefined) {
-    return writerId === null || writerId === undefined ? null : false;
-  }
-  const value = asset[field];
-  if (
-    typeof writtenAt !== "number" ||
-    !Number.isSafeInteger(writtenAt) ||
-    typeof writerId !== "string" ||
-    (field === "name"
-      ? typeof value !== "string"
-      : value !== null && typeof value !== "string")
-  ) {
-    return false;
-  }
-  return { value, writtenAt, writerId };
-}
-
 export async function pushMetalDedicatedChanges(
   database: Database,
   changes: SyncPushArgs["changes"],
   userId: string,
   rpc: MetalSyncRpc = defaultMetalRpc,
   commitOutcome?: MetalOutcomeCommitter,
-  commitMetadataOutcome?: MetalMetadataOutcomeCommitter
+  commitMetadataOutcome?: MetalMetadataOutcomeCommitter,
+  readMixedOutcome?: MixedMetalMetadataOutcomeLoader
 ): Promise<MetalDedicatedPushResult> {
   if (!hasDedicatedRows(changes)) {
+    // An old unversioned Name/Notes write has no applied-evidence identity.
+    // Never let an assets-only push silently acknowledge discarded metadata.
+    assertNoOrphanedMetalMetadata(changes);
     return {
       acknowledgeAllDedicatedRows: true,
       acknowledgedActionIds: NO_ACKNOWLEDGED_ACTIONS,
@@ -288,7 +241,8 @@ export async function pushMetalDedicatedChanges(
         ? -1
         : 1;
   });
-  const acceptedActionIds = new Set<string>();
+  const metadataOutcomeActionIds = new Set<string>();
+  const invalidMetadataActionIds = new Set<string>();
   const handledActionIds = new Set<string>();
   const blockedActionIds = new Set<string>();
   for (const root of roots) {
@@ -319,17 +273,27 @@ export async function pushMetalDedicatedChanges(
       blockedActionIds.add(actionId);
       continue;
     }
+    if (
+      outcome.status === "accepted" ||
+      outcome.status === "idempotent" ||
+      (outcome.status === "stale" && outcome.code === "HOLDING_REVISION_STALE")
+    ) {
+      metadataOutcomeActionIds.add(actionId);
+    } else {
+      invalidMetadataActionIds.add(actionId);
+    }
     if (commitOutcome) {
-      await commitOutcome(outcome);
-      handledActionIds.add(actionId);
-      if (outcome.status === "accepted" || outcome.status === "idempotent") {
-        acceptedActionIds.add(actionId);
+      const disposition = await commitOutcome(outcome);
+      if (disposition === "incomplete") {
+        // Reconciliation has not durably settled this financial action.
+        blockedActionIds.add(actionId);
+      } else {
+        handledActionIds.add(actionId);
       }
     } else if (
       outcome.status === "accepted" ||
       outcome.status === "idempotent"
     ) {
-      acceptedActionIds.add(actionId);
       handledActionIds.add(actionId);
     } else {
       blockedActionIds.add(actionId);
@@ -370,71 +334,56 @@ export async function pushMetalDedicatedChanges(
       record,
     ])
   );
-  const metadataHoldingIds = new Set<string>();
-  for (const state of states) {
-    const holdingId =
-      typeof state.holding_id === "string"
-        ? state.holding_id
-        : String(state.id);
-    const asset = assets.get(holdingId);
-    if (
-      typeof state.effective_action_id === "string" &&
-      handledActionIds.has(state.effective_action_id) &&
-      !acceptedActionIds.has(state.effective_action_id)
-    ) {
-      metadataHoldingIds.add(holdingId);
-      continue;
-    }
-    const name = asset ? metalMetadataField(state, asset, "name") : null;
-    const notes = asset ? metalMetadataField(state, asset, "notes") : null;
-    if (name === false || notes === false) {
-      return {
-        acknowledgeAllDedicatedRows: false,
-        acknowledgedActionIds: excludeHoldingActions(
-          safeActionIds,
-          changes,
-          holdingId
-        ),
-      };
-    }
-    const fields = {
-      ...(name ? { name } : {}),
-      ...(notes ? { notes } : {}),
-    };
-    if (Object.keys(fields).length === 0) continue;
-    const { data, error } = await rpc(METAL_METADATA_RPC, {
-      p_holding_id: holdingId,
-      p_patch: { fields },
-    });
-    if (error) throw new Error("metal_metadata_rpc_failed");
-    const outcome = parseMetalMetadataRpcOutcome(data, holdingId);
-    if (!outcome || !commitMetadataOutcome) {
-      return {
-        acknowledgeAllDedicatedRows: false,
-        acknowledgedActionIds: excludeHoldingActions(
-          safeActionIds,
-          changes,
-          holdingId
-        ),
-      };
-    }
-    try {
-      await commitMetadataOutcome(outcome);
-    } catch (error) {
-      logger.error("sync.push.metal.metadata.commit.failed", error, {
-        holdingId,
-      });
-      return {
-        acknowledgeAllDedicatedRows: false,
-        acknowledgedActionIds: excludeHoldingActions(
-          safeActionIds,
-          changes,
-          holdingId
-        ),
-      };
-    }
-    metadataHoldingIds.add(holdingId);
+  // Every v31 Name/Notes edit is a separate durable request. Never derive
+  // an edit from the coalesced assets/holding-state projection.
+  const { editRequests, durableHoldingIds } =
+    parseAndValidatePendingMetalMetadataEdits(changes, userId);
+
+  // The action RPCs must commit before standalone edits on the same holding.
+  await executePendingStandaloneMetalMetadata(
+    editRequests,
+    userId,
+    rpc,
+    commitMetadataOutcome
+  );
+
+  // A pending mixed request with no completed financial RPC or terminal
+  // local predecessor has no reliable server outcome yet. Fail the whole push
+  // instead of allowing Watermelon to acknowledge its dedicated edit row.
+  assertCanonicalMixedMetadataOutcomesAvailable(
+    editRequests,
+    invalidMetadataActionIds,
+    metadataOutcomeActionIds,
+    localTerminalActionIds
+  );
+
+  // A mixed action's canonical applied metadata is separate from its submitted
+  // financial payload. Fetch the immutable server outcome before acknowledging
+  // a handled action. Its metadata result is independent of financial CAS.
+  await reconcileMixedMetalMetadataOutcomes(
+    editRequests,
+    userId,
+    invalidMetadataActionIds,
+    metadataOutcomeActionIds,
+    localTerminalActionIds,
+    readMixedOutcome,
+    commitMetadataOutcome
+  );
+
+  const unversionedGuard = guardUnversionedHoldingStateMetadata(
+    states,
+    assets,
+    durableHoldingIds,
+    handledActionIds,
+    safeActionIds,
+    changes
+  );
+  if (unversionedGuard.earlyExit) {
+    return unversionedGuard.earlyExit;
   }
+  const metadataHoldingIds = new Set<string>(
+    unversionedGuard.metadataHoldingIds
+  );
 
   const hasUnacceptedLinkedRow = METAL_LINKED_TABLES.some((table) =>
     changedRecords(changes, table).some(
@@ -456,7 +405,9 @@ export async function pushMetalDedicatedChanges(
   });
   return {
     acknowledgeAllDedicatedRows:
-      (roots.length > 0 || metadataHoldingIds.size > 0) &&
+      (roots.length > 0 ||
+        metadataHoldingIds.size > 0 ||
+        editRequests.length > 0) &&
       blockedActionIds.size === 0 &&
       !hasUnacceptedLinkedRow &&
       !hasUnacceptedState,
@@ -681,17 +632,9 @@ export async function pushChanges(
     changes,
     userId,
     defaultMetalRpc,
-    (outcome) =>
-      commitMetalRpcOutcomeLocally(
-        database,
-        outcome,
-        userId,
-        metalOutcomeHashProvider
-      ),
-    (outcome) =>
-      database.write(() =>
-        commitCanonicalMetalMetadataLocally(database, outcome, userId)
-      )
+    createDefaultMetalOutcomeCommitter(database, userId),
+    createDefaultMetalMetadataOutcomeCommitter(database, userId),
+    readCanonicalMixedMetalMetadataOutcome
   );
   const protectedFinancialActionIds = mergeRejectedIds(
     dedicatedPush.acknowledgeAllDedicatedRows

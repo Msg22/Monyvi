@@ -1,0 +1,111 @@
+appId: com.monyvi.app
+---
+# Prerequisites: signed-in English manual-QA lifecycle seed, unedited 21k Gold Chain.
+# Run on a bundled QA build offline, or with the already loaded dev client offline.
+# Airplane mode is set by the runner before this flow; this flow never seeds DB rows.
+- openLink: monyvi://metals
+- extendedWaitUntil:
+    visible:
+      id: metal-portfolio-root
+    timeout: 30000
+- scrollUntilVisible:
+    element:
+      text: "21k Gold Chain"
+    direction: DOWN
+- tapOn: "21k Gold Chain"
+- extendedWaitUntil:
+    visible:
+      id: metal-holding-detail-root
+    timeout: 30000
+- scrollUntilVisible:
+    element:
+      id: metal-holding-detail-edit
+    direction: DOWN
+- tapOn:
+    id: metal-holding-detail-edit
+- extendedWaitUntil:
+    visible:
+      id: metal-holding-edit-screen
+    timeout: 30000
+- tapOn:
+    id: metal-holding-name-field
+- eraseText: 100
+- inputText: "363 Family Gold"
+- hideKeyboard
+- assertNotVisible:
+    id: metal-holding-correction-reason
+- scrollUntilVisible:
+    element:
+      id: metal-holding-submit
+    direction: DOWN
+- tapOn:
+    id: metal-holding-submit
+- extendedWaitUntil:
+    visible:
+      id: metal-holding-detail-root
+    timeout: 5000
+- scrollUntilVisible:
+    element:
+      text: ".*Name: 21k Gold Chain → 363 Family Gold.*"
+    direction: DOWN
+- assertVisible: ".*Name: 21k Gold Chain → 363 Family Gold.*"
+- scrollUntilVisible:
+    element:
+      id: metal-holding-detail-edit
+    direction: DOWN
+- tapOn:
+    id: metal-holding-detail-edit
+- extendedWaitUntil:
+    visible:
+      id: metal-holding-edit-screen
+    timeout: 30000
+- scrollUntilVisible:
+    element:
+      id: metal-holding-notes-field
+    direction: DOWN
+- tapOn:
+    id: metal-holding-notes-field
+- eraseText: 500
+- hideKeyboard
+- scrollUntilVisible:
+    element:
+      id: metal-holding-submit
+    direction: DOWN
+- tapOn:
+    id: metal-holding-submit
+- extendedWaitUntil:
+    visible:
+      id: metal-holding-detail-root
+    timeout: 5000
+- scrollUntilVisible:
+    element:
+      text: ".*Notes: Jewelry purchase for metal asset QA → Not recorded.*"
+    direction: DOWN
+- assertVisible: ".*Notes: Jewelry purchase for metal asset QA → Not recorded.*"
+- takeScreenshot: metals-363-local-name-notes-history
+- stopApp
+- launchApp:
+    newInstance: false
+- openLink: monyvi://metals
+- extendedWaitUntil:
+    visible:
+      id: metal-portfolio-root
+    timeout: 30000
+- scrollUntilVisible:
+    element:
+      text: "363 Family Gold"
+    direction: DOWN
+- tapOn: "363 Family Gold"
+- extendedWaitUntil:
+    visible:
+      id: metal-holding-detail-root
+    timeout: 30000
+- assertNotVisible:
+    id: metal-holding-notes
+- scrollUntilVisible:
+    element:
+      text: ".*Notes: Jewelry purchase for metal asset QA → Not recorded.*"
+    direction: DOWN
+- assertVisible: ".*Name: 21k Gold Chain → 363 Family Gold.*"
+- assertVisible: ".*Notes: Jewelry purchase for metal asset QA → Not recorded.*"
+- takeScreenshot: metals-363-restarted-name-notes-history

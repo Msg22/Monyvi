@@ -77,6 +77,7 @@ const METAL_DEDICATED_PULL_TABLES = [
   "financial_action_groups",
   "metal_action_evidence",
   "metal_lifecycle_events",
+  "metal_metadata_edit_outcomes",
   "metal_rate_references",
   "metal_holding_states",
 ] as const;
@@ -169,6 +170,8 @@ const EXACT_TEXT_SELECTS = {
     "*,canonical_holding_revision_text:canonical_holding_revision::text,domain_payload_json_text:domain_payload_json::text,expected_holding_revision_text:expected_holding_revision::text",
   metal_holding_states: "*,financial_revision_text:financial_revision::text",
   metal_lifecycle_events: "*,payload_json_text:payload_json::text",
+  metal_metadata_edit_outcomes:
+    "*,applied_changes_json_text:applied_changes_json::text,canonical_metadata_json_text:canonical_metadata_json::text",
   metal_rate_references: "*,value_decimal_text:value_decimal::text",
   recurring_payments: "*,financial_revision_text:financial_revision::text",
 } as const;
@@ -390,6 +393,20 @@ function normalizeDedicatedPullRecord(
       record,
       "payload_json_text",
       "payload_json",
+      validateSerializedJson
+    );
+  }
+  if (table === "metal_metadata_edit_outcomes") {
+    const applied = normalizeExactTextColumn(
+      record,
+      "applied_changes_json_text",
+      "applied_changes_json",
+      validateSerializedJson
+    );
+    return normalizeExactTextColumn(
+      applied,
+      "canonical_metadata_json_text",
+      "canonical_metadata_json",
       validateSerializedJson
     );
   }

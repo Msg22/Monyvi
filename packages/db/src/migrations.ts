@@ -14,6 +14,7 @@ import {
   addColumns,
   schemaMigrations,
 } from "@nozbe/watermelondb/Schema/migrations";
+import { metalMetadataEditMigrationSteps } from "./local-schema/metal-metadata-edit-migration";
 
 export const ACCOUNT_FINANCIAL_EFFECTS_V29_BACKFILL_SQL =
   "update accounts set financial_revision = '0' where financial_revision is null or financial_revision = ''; update recurring_payments set financial_revision = '0' where financial_revision is null or financial_revision = '';";
@@ -903,6 +904,10 @@ end;`
           'create unique index if not exists "metal_historical_rate_cache_owner_date_unique" on "metal_historical_rate_cache" ("user_id", "rate_date");'
         ),
       ],
+    },
+    {
+      toVersion: 31,
+      steps: [...metalMetadataEditMigrationSteps],
     },
   ],
 });

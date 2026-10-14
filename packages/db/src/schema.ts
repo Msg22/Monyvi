@@ -10,7 +10,7 @@ import { METAL_HISTORICAL_RATE_CACHE_TABLES } from "./local-schema/metal-histori
 import { SMS_REVIEW_DRAFT_TABLES } from "./local-schema/sms-review-draft-schema";
 
 export const schema = appSchema({
-  version: 30,
+  version: 31,
   tables: [
     tableSchema({
       name: "account_financial_effects",
@@ -405,6 +405,32 @@ export const schema = appSchema({
           isOptional: true,
           isIndexed: true,
         },
+        { name: "updated_at", type: "number" },
+        { name: "user_id", type: "string", isIndexed: true },
+      ],
+    }),
+
+    tableSchema({
+      name: "metal_metadata_edit_outcomes",
+      unsafeSql: (sql: string): string =>
+        `${sql}create unique index if not exists "metal_metadata_edit_outcomes_owner_edit_unique" on "metal_metadata_edit_outcomes" ("user_id", "id");create index if not exists "metal_metadata_edit_outcomes_owner_holding_time" on "metal_metadata_edit_outcomes" ("user_id", "holding_id", "occurred_at", "id");`,
+      columns: [
+        {
+          name: "action_id",
+          type: "string",
+          isOptional: true,
+          isIndexed: true,
+        },
+        { name: "applied_changes_json", type: "string", isOptional: true },
+        { name: "canonical_metadata_json", type: "string", isOptional: true },
+        { name: "created_at", type: "number" },
+        { name: "deleted", type: "boolean" },
+        { name: "holding_id", type: "string", isIndexed: true },
+        { name: "local_applied_changes_json", type: "string" },
+        { name: "occurred_at", type: "number", isIndexed: true },
+        { name: "payload_hash", type: "string" },
+        { name: "request_json", type: "string" },
+        { name: "status", type: "string" },
         { name: "updated_at", type: "number" },
         { name: "user_id", type: "string", isIndexed: true },
       ],

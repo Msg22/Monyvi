@@ -11,6 +11,13 @@ import {
   restoreCachedModelSnapshot,
 } from "./watermelon-cache-snapshot";
 import { findOwnedById } from "./user-data-access";
+import { applyMetalMetadataEvidencePatch } from "./metal-metadata-evidence";
+import {
+  findOwnedMetalMetadataEdit,
+  parseMetalMetadataEditRequest,
+  prepareLocalMetalMetadataEvidence,
+  type DurableMetalMetadataEditRequest,
+} from "./metal-metadata-evidence-repository";
 
 export interface MetalMetadataValue<TValue> {
   readonly value: TValue;
@@ -133,7 +140,8 @@ export interface MetalMetadataServiceDependencies {
 
 export interface MetalMetadataService {
   readonly applyPatch: (
-    patch: MetalMetadataPatch
+    patch: MetalMetadataPatch,
+    durableRequest?: DurableMetalMetadataEditRequest
   ) => Promise<{ readonly kind: "applied" | "ignored" | "replay" }>;
 }
 
@@ -162,8 +170,22 @@ export function createMetalMetadataService(
   dependencies: MetalMetadataServiceDependencies
 ): MetalMetadataService {
   async function applyPatch(
-    patch: MetalMetadataPatch
+    patch: MetalMetadataPatch,
+    durableRequest?: DurableMetalMetadataEditRequest
   ): Promise<{ readonly kind: "applied" | "ignored" | "replay" }> {
+    if (durableRequest) {
+      const parsed = parseMetalMetadataEditRequest(durableRequest.requestJson);
+      if (
+        parsed.editId !== durableRequest.editId ||
+        parsed.holdingId !== patch.holdingId ||
+        parsed.userId !== patch.userId ||
+        durableRequest.holdingId !== patch.holdingId ||
+        durableRequest.userId !== patch.userId ||
+        JSON.stringify(parsed.fields) !== JSON.stringify(patch.fields)
+      ) {
+        throw new Error("invalid_metal_metadata_edit_request");
+      }
+    }
     const currentUserId = await dependencies.getCurrentUserId();
     if (patch.userId !== currentUserId) {
       throw new Error("foreign_metal_metadata_patch");
@@ -225,15 +247,64 @@ export function createMetalMetadataService(
       ) {
         throw new Error("metal_metadata_tuple_conflict");
       }
+      // A durable request is idempotent independently of current projection:
+      // it must not be re-merged after a cold restart or ambiguous RPC retry.
+      if (durableRequest) {
+        const existing = await findOwnedMetalMetadataEdit(
+          dependencies.database,
+          durableRequest.editId,
+          currentUserId
+        );
+        if (existing) {
+          if (
+            existing.payloadHash !== durableRequest.payloadHash ||
+            existing.requestJson !== durableRequest.requestJson ||
+            existing.holdingId !== patch.holdingId
+          )
+            throw new Error("metal_metadata_edit_payload_hash_mismatch");
+          return Object.freeze({ kind: "replay" as const });
+        }
+      }
       const hasApply = nameDecision === "apply" || notesDecision === "apply";
-      if (!hasApply) {
-        const isReplay =
-          (!patch.fields.name ||
-            (nameDecision === "same" &&
-              asset.name === patch.fields.name.value)) &&
-          (!patch.fields.notes ||
-            (notesDecision === "same" &&
-              (asset.notes ?? null) === patch.fields.notes.value));
+      const isReplay =
+        (!patch.fields.name ||
+          (nameDecision === "same" &&
+            asset.name === patch.fields.name.value)) &&
+        (!patch.fields.notes ||
+          (notesDecision === "same" &&
+            (asset.notes ?? null) === patch.fields.notes.value));
+      if (!hasApply && !durableRequest) {
+        return Object.freeze({ kind: isReplay ? "replay" : "ignored" });
+      }
+      const localApplied = applyMetalMetadataEvidencePatch(
+        {
+          name: asset.name,
+          notes: asset.notes ?? null,
+          nameClock:
+            state.nameWrittenAt === null || state.nameWriterId === null
+              ? null
+              : {
+                  writtenAt: state.nameWrittenAt,
+                  writerId: state.nameWriterId,
+                },
+          notesClock:
+            state.notesWrittenAt === null || state.notesWriterId === null
+              ? null
+              : {
+                  writtenAt: state.notesWrittenAt,
+                  writerId: state.notesWriterId,
+                },
+        },
+        patch.fields
+      ).appliedChanges;
+      if (!hasApply && durableRequest) {
+        await dependencies.database.batch(
+          prepareLocalMetalMetadataEvidence(
+            dependencies.database,
+            durableRequest,
+            localApplied
+          )
+        );
         return Object.freeze({ kind: isReplay ? "replay" : "ignored" });
       }
 
@@ -263,7 +334,19 @@ export function createMetalMetadataService(
           }
           row.updatedAt = now;
         });
-        await dependencies.database.batch(assetUpdate, stateUpdate);
+        await dependencies.database.batch(
+          assetUpdate,
+          stateUpdate,
+          ...(durableRequest
+            ? [
+                prepareLocalMetalMetadataEvidence(
+                  dependencies.database,
+                  durableRequest,
+                  localApplied
+                ),
+              ]
+            : [])
+        );
         return Object.freeze({ kind: "applied" as const });
       } catch (error) {
         snapshots.forEach(restoreCachedModelSnapshot);

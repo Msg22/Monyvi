@@ -39,6 +39,7 @@ jest.mock("@monyvi/db", () => ({
         metal_holding_states: mockHoldingStatesCollection,
         metal_lifecycle_events: mockLifecycleEventsCollection,
         metal_rate_references: mockRateReferencesCollection,
+        metal_metadata_edit_outcomes: { table: "metal_metadata_edit_outcomes" },
       };
       const collection = collections[table];
       if (collection === undefined)
@@ -366,12 +367,14 @@ describe("metal detail and History read models", () => {
 
   it("revalues an active holding from current observations instead of immutable action references", () => {
     const input = detailInput();
+    const currentRates = input.currentRates;
+    if (!currentRates) throw new Error("currentRates is required");
     const model = buildMetalDetailReadModel({
       ...input,
       currentRates: {
-        ...input.currentRates!,
+        ...currentRates,
         gold: {
-          ...input.currentRates!.gold,
+          ...currentRates.gold,
           state: "stale",
           valueDecimal: "20",
         },
@@ -728,10 +731,7 @@ describe("metal detail and History read models", () => {
           holdingId: "sold-gold",
           kind: "sell",
         }),
-        evidenceRow({
-          actionId: "silver-add",
-          holdingId: "disposed-silver",
-        }),
+        evidenceRow({ actionId: "silver-add", holdingId: "disposed-silver" }),
         evidenceRow({
           actionId: "silver-dispose",
           holdingId: "disposed-silver",

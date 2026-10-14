@@ -12,6 +12,7 @@ const collections: Readonly<Record<string, { readonly table: string }>> = {
   metal_holding_states: { table: "metal_holding_states" },
   metal_lifecycle_events: { table: "metal_lifecycle_events" },
   metal_rate_references: { table: "metal_rate_references" },
+  metal_metadata_edit_outcomes: { table: "metal_metadata_edit_outcomes" },
 };
 const mockGetCurrentUserDataScope = jest.fn();
 const mockQueryChildrenOfOwnedParent = jest.fn();

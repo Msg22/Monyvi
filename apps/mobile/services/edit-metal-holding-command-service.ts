@@ -7,10 +7,12 @@ import type {
   MetalLifecycleEvent,
   MetalRateReference,
 } from "@monyvi/db";
-import type {
-  FinancialActionEnvelopeV1,
-  RegisteredActionPayload,
-  Sha256Provider,
+import {
+  serializeCanonicalJsonValue,
+  type CanonicalJsonValue,
+  type FinancialActionEnvelopeV1,
+  type RegisteredActionPayload,
+  type Sha256Provider,
 } from "@monyvi/logic";
 
 import type {
@@ -19,6 +21,11 @@ import type {
   FinancialActionLinkedOperationPlan,
 } from "./financial-action-foundation-repository";
 import { incrementCanonicalMetalRevision } from "./metal-financial-action-adapter";
+import { applyMetalMetadataEvidencePatch } from "./metal-metadata-evidence";
+import {
+  createCanonicalMetalMetadataEditRequest,
+  prepareMixedMetalMetadataEvidence,
+} from "./metal-metadata-evidence-repository";
 import {
   compareMetalMetadataClock,
   createMetalMetadataService,
@@ -250,7 +257,7 @@ function metadataDecision(
   const candidate = {
     value: input.metadata[field],
     writtenAt: new Date(input.occurredAt).getTime(),
-    writerId: input.userId,
+    writerId: input.actionId,
   };
   const decision = compareMetalMetadataClock(
     field === "name" ? state.nameWrittenAt : state.notesWrittenAt,
@@ -270,7 +277,11 @@ function prepareCorrectionPlan(
   database: Database,
   input: EditMetalHoldingCommandInput,
   envelope: FinancialActionEnvelopeV1,
-  projection: Awaited<ReturnType<typeof loadProjection>>
+  projection: Awaited<ReturnType<typeof loadProjection>>,
+  metadataProof: {
+    readonly requestJson: string;
+    readonly payloadHash: string;
+  } | null
 ): FinancialActionLinkedOperationPlan {
   if (projection.state.status !== "active" || !projection.state.isVisible)
     throw new Error("terminal_holding_material_edit_forbidden");
@@ -297,6 +308,50 @@ function prepareCorrectionPlan(
   const material = input.materialFacts;
   if (!material) throw new Error("metal_correction_material_required");
   const occurredAt = new Date(input.occurredAt);
+  const locallyAppliedMetadata = metadataProof
+    ? applyMetalMetadataEvidencePatch(
+        {
+          name: projection.asset.name,
+          notes: projection.asset.notes ?? null,
+          nameClock:
+            projection.state.nameWrittenAt === null ||
+            projection.state.nameWriterId === null
+              ? null
+              : {
+                  writtenAt: projection.state.nameWrittenAt,
+                  writerId: projection.state.nameWriterId,
+                },
+          notesClock:
+            projection.state.notesWrittenAt === null ||
+            projection.state.notesWriterId === null
+              ? null
+              : {
+                  writtenAt: projection.state.notesWrittenAt,
+                  writerId: projection.state.notesWriterId,
+                },
+        },
+        {
+          ...(input.originalMetadata.name !== input.metadata.name
+            ? {
+                name: {
+                  value: input.metadata.name,
+                  writtenAt: occurredAt.getTime(),
+                  writerId: input.actionId,
+                },
+              }
+            : {}),
+          ...(input.originalMetadata.notes !== input.metadata.notes
+            ? {
+                notes: {
+                  value: input.metadata.notes,
+                  writtenAt: occurredAt.getTime(),
+                  writerId: input.actionId,
+                },
+              }
+            : {}),
+        }
+      ).appliedChanges
+    : null;
   const nextRevision = incrementCanonicalMetalRevision(
     input.expectedFinancialRevision
   );
@@ -363,7 +418,24 @@ function prepareCorrectionPlan(
       })
   );
   return {
-    preparedCreates: [evidence, event, ...rateReferences],
+    preparedCreates: [
+      evidence,
+      event,
+      ...rateReferences,
+      ...(metadataProof && locallyAppliedMetadata
+        ? [
+            prepareMixedMetalMetadataEvidence(database, {
+              actionId: input.actionId,
+              userId: input.userId,
+              holdingId: input.holdingId,
+              occurredAt: input.occurredAt,
+              requestJson: metadataProof.requestJson,
+              payloadHash: metadataProof.payloadHash,
+              locallyApplied: locallyAppliedMetadata,
+            }),
+          ]
+        : []),
+    ],
     existingOperations: [
       {
         kind: "update",
@@ -423,11 +495,11 @@ function prepareCorrectionPlan(
           state.reconciliationState = "sync_pending";
           if (nameDecision === "apply") {
             state.nameWrittenAt = occurredAt.getTime();
-            state.nameWriterId = input.userId;
+            state.nameWriterId = input.actionId;
           }
           if (notesDecision === "apply") {
             state.notesWrittenAt = occurredAt.getTime();
-            state.notesWriterId = input.userId;
+            state.notesWriterId = input.actionId;
           }
           state.updatedAt = occurredAt;
         },
@@ -440,7 +512,8 @@ function prepareCorrectionPlan(
 
 async function saveMetadata(
   database: Database,
-  input: EditMetalHoldingCommandInput
+  input: EditMetalHoldingCommandInput,
+  hashProvider: Sha256Provider
 ): Promise<void> {
   const changedName = input.originalMetadata.name !== input.metadata.name;
   const changedNotes = input.originalMetadata.notes !== input.metadata.notes;
@@ -451,30 +524,41 @@ async function saveMetadata(
       (await getCurrentUserDataScope()).userId,
   });
   const writtenAt = new Date(input.occurredAt).getTime();
-  await metadataService.applyPatch({
-    holdingId: input.holdingId,
-    userId: input.userId,
-    fields: {
-      ...(changedName
-        ? {
-            name: {
-              value: input.metadata.name,
-              writtenAt,
-              writerId: input.userId,
-            },
-          }
-        : {}),
-      ...(changedNotes
-        ? {
-            notes: {
-              value: input.metadata.notes,
-              writtenAt,
-              writerId: input.userId,
-            },
-          }
-        : {}),
+  const fields = {
+    ...(changedName
+      ? {
+          name: {
+            value: input.metadata.name,
+            writtenAt,
+            writerId: input.actionId,
+          },
+        }
+      : {}),
+    ...(changedNotes
+      ? {
+          notes: {
+            value: input.metadata.notes,
+            writtenAt,
+            writerId: input.actionId,
+          },
+        }
+      : {}),
+  };
+  const durableRequest = await createCanonicalMetalMetadataEditRequest(
+    {
+      editId: input.actionId,
+      holdingId: input.holdingId,
+      userId: input.userId,
+      linkedActionId: null,
+      occurredAt: input.occurredAt,
+      fields,
     },
-  });
+    hashProvider
+  );
+  await metadataService.applyPatch(
+    { holdingId: input.holdingId, userId: input.userId, fields },
+    durableRequest
+  );
 }
 
 export function createEditMetalHoldingCommandService(
@@ -485,11 +569,30 @@ export function createEditMetalHoldingCommandService(
       input
     ): Promise<{ readonly kind: "metadata" | "correction" | "replay" }> => {
       if (!materialChanged(input)) {
-        await saveMetadata(dependencies.database, input);
+        await saveMetadata(
+          dependencies.database,
+          input,
+          dependencies.hashProvider
+        );
         return { kind: "metadata" };
       }
       const payload = payloadFor(input);
       const envelope = dependencies.createEnvelope(input, payload);
+      const metadataProof = metadataChanged(input)
+        ? await (async (): Promise<{
+            readonly requestJson: string;
+            readonly payloadHash: string;
+          }> => {
+            const requestJson = serializeCanonicalJsonValue(
+              envelope as unknown as CanonicalJsonValue
+            );
+            return {
+              requestJson,
+              payloadHash:
+                await dependencies.hashProvider.digestUtf8(requestJson),
+            };
+          })()
+        : null;
       const projection = await loadProjection(dependencies.database, input);
       const result = await dependencies.commitFinancialActionGroupLocally({
         envelope,
@@ -501,7 +604,8 @@ export function createEditMetalHoldingCommandService(
               dependencies.database,
               input,
               envelope,
-              projection
+              projection,
+              metadataProof
             )
           ),
       });

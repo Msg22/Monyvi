@@ -116,6 +116,7 @@ jest.mock("@monyvi/db", () => {
     "MetalActionEvidence",
     "MetalHoldingState",
     "MetalLifecycleEvent",
+    "MetalMetadataEdit",
     "MetalRateReference",
   ].map(
     (name) =>

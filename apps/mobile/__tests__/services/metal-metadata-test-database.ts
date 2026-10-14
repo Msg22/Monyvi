@@ -5,6 +5,7 @@ import { schema } from "../../../../packages/db/src/schema";
 import { Asset } from "../../../../packages/db/src/models/Asset";
 import { FinancialActionGroup } from "../../../../packages/db/src/models/FinancialActionGroup";
 import { MetalHoldingState } from "../../../../packages/db/src/models/MetalHoldingState";
+import { MetalMetadataEdit } from "../../../../packages/db/src/models/MetalMetadataEdit";
 
 export interface MetalMetadataFixtureIds {
   readonly userId: string;
@@ -24,7 +25,12 @@ export async function createMetalMetadataFixtureDatabase(
   await adapter.initializingPromise;
   const database = new Database({
     adapter,
-    modelClasses: [Asset, MetalHoldingState, FinancialActionGroup] as Array<typeof Model>,
+    modelClasses: [
+      Asset,
+      MetalHoldingState,
+      FinancialActionGroup,
+      MetalMetadataEdit,
+    ] as Array<typeof Model>,
   });
   await database.write(async (): Promise<void> => {
     const asset = database.get<Asset>("assets").prepareCreate((row) => {

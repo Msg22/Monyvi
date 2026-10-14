@@ -17,6 +17,10 @@ import {
   type MetalDetailReadModel,
 } from "@/services/metal-detail-read-model-service";
 import { observeMetalDetailActionEvidence } from "@/services/metal-action-evidence-observer-service";
+import {
+  observeMetalDetailMetadata,
+  observeMetalDetailMetadataRoots,
+} from "@/services/metal-metadata-history-read-model-service";
 import { syncDatabase } from "@/services/sync";
 import { logger } from "@/utils/logger";
 import { redactIdentifierForLog } from "@/utils/logger-redaction";
@@ -192,6 +196,17 @@ export function useMetalHoldingDetail(
         .subscribe({ error: onObservationError, next: onChange }),
       observeMetalDetailRateReferences(userId, holdingId)
         .observe()
+        .subscribe({ error: onObservationError, next: onChange }),
+      observeMetalDetailMetadata(userId, holdingId)
+        .observeWithColumns([
+          "status",
+          "applied_changes_json",
+          "local_applied_changes_json",
+          "deleted",
+        ])
+        .subscribe({ error: onObservationError, next: onChange }),
+      observeMetalDetailMetadataRoots(userId, holdingId)
+        .observeWithColumns(["state", "deleted"])
         .subscribe({ error: onObservationError, next: onChange }),
     ];
     return () => {

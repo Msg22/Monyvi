@@ -25,6 +25,7 @@ export { MetalActionEvidence } from "./models/MetalActionEvidence";
 export { MetalHistoricalRateCache } from "./models/MetalHistoricalRateCache";
 export { MetalHoldingState } from "./models/MetalHoldingState";
 export { MetalLifecycleEvent } from "./models/MetalLifecycleEvent";
+export { MetalMetadataEdit } from "./models/MetalMetadataEdit";
 export { MetalRateReference } from "./models/MetalRateReference";
 export { Profile } from "./models/Profile";
 export { RecurringPayment } from "./models/RecurringPayment";
