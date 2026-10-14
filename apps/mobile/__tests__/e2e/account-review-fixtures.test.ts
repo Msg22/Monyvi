@@ -304,17 +304,23 @@ function hasDescriptorIssueTag(row: DescriptorRow, tag: DescriptorIssueTag): boo
   return issueTags.includes(tag);
 }
 
-// Use normal synchronous Jest module loading: dynamic import needs VM module
-// flags that are not part of this repository's Jest runner.
+interface FixtureEntryModule {
+  readonly loadAccountReviewFixtureSession?: (
+    sceneId: string
+  ) => Promise<unknown>;
+}
+
+// Synchronous, real-module resolution; an absent T015 file is genuine Red.
+// This local module-import typing is NOT a mock loader or a review-state DTO.
 function resolveRuntimeFixtureEntry(): (sceneId: string) => Promise<unknown> {
-  // This is the REAL future T015 SUT. Never mock or virtualize it.
-  const { loadAccountReviewFixtureSession } = jest.requireActual<
-    typeof import("@/services/account-review-fixture-service")
-  >("@/services/account-review-fixture-service");
-  if (typeof loadAccountReviewFixtureSession !== "function") {
+  const module = jest.requireActual<FixtureEntryModule>(
+    "@/services/account-review-fixture-service"
+  );
+  const loadFixture = module.loadAccountReviewFixtureSession;
+  if (typeof loadFixture !== "function") {
     throw new Error("T015 fixture entry export is unavailable");
   }
-  return loadAccountReviewFixtureSession;
+  return loadFixture;
 }
 
 function parseHydratedSession(value: unknown): AccountReviewSession {
