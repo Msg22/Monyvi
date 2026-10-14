@@ -694,9 +694,17 @@ describe("T008 future current-owner fixture entry (Red before T015)", () => {
   beforeEach((): void => {
     jest.clearAllMocks();
     mockActiveOwnerId = CURRENT_OWNER;
+    mockSnapshotReadGate = null;
+    mockNotifySnapshotStarted = null;
     mockMissingAccountIds.clear();
     mockDeletedAccountIds.clear();
     mockForeignAccountIds.clear();
+    mockMissingCategoryIds.clear();
+    mockDeletedCategoryIds.clear();
+    mockForeignCategoryIds.clear();
+    mockAccountOverrides.clear();
+    mockExtraAccounts.length = 0;
+    mockCategoryScopeCalls.length = 0;
     process.env = {
       ...originalEnv,
       NODE_ENV: "test",
@@ -712,9 +720,11 @@ describe("T008 future current-owner fixture entry (Red before T015)", () => {
   it("accepts an explicit safe test-mode Voice entry and materializes the canonical current-user session", async () => {
     expect(isE2eTestMode()).toBe(true);
 
+    const scene = findScene("r3-combined-en");
     const session = parseHydratedSession(
-      await loadRuntimeFixtureSession("r3-combined-en")
+      await loadRuntimeFixtureSession(scene.id)
     );
+    assertOwnedSessionReferences(session, scene, CURRENT_OWNER);
 
     expect(session.ownerId).toBe(CURRENT_OWNER);
     expect(session.source).toBe("VOICE");
@@ -722,22 +732,26 @@ describe("T008 future current-owner fixture entry (Red before T015)", () => {
     expect(session.rows.filter((row) => row.selected)).toHaveLength(2);
     expect(session.groups).toHaveLength(2);
     expect(mockGetRequiredCurrentUserId).toHaveBeenCalled();
-    expect(mockDatabaseWrite).not.toHaveBeenCalled();
+    expect(mockCategoryScopeCalls).toContainEqual({
+      ownerId: CURRENT_OWNER, mode: "accessible",
+    });
+    assertNoFixtureSideEffects();
   });
 
   it("materializes SMS fingerprints in a current-owner session without calling hosted seed/write", async () => {
+    const scene = findScene("sms-review-restart");
     const session = parseHydratedSession(
-      await loadRuntimeFixtureSession("sms-review-restart")
+      await loadRuntimeFixtureSession(scene.id)
     );
+    assertOwnedSessionReferences(session, scene, CURRENT_OWNER);
 
     expect(session.ownerId).toBe(CURRENT_OWNER);
     expect(session.source).toBe("SMS");
     expect(session.rows).toHaveLength(1);
     expect(session.rows[0]?.sourceFingerprint).toMatch(SHA_256_PATTERN);
     expect(session.groups).toHaveLength(1);
-    // This loader returns review state; a real future Save still goes through
-    // the approved financial action writer. No test-only financial bypass.
-    expect(mockDatabaseWrite).not.toHaveBeenCalled();
+    // The loader constructs a session; only the real writer may subsequently Save.
+    assertNoFixtureSideEffects();
   });
 
   it("rejects fixture entry when E2E mode is off", async () => {
