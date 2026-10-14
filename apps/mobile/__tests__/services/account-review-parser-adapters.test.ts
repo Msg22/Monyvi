@@ -9,9 +9,9 @@
  */
 import type { Session } from "@supabase/supabase-js";
 import type { CategoryTreeSource } from "@monyvi/logic";
+import type { AccountType, CurrencyType } from "@monyvi/db";
 
 import {
-  makeReviewRequestContext,
   makeSmsV1Response,
   makeSmsV2Response,
   makeVoiceV1Response,
@@ -39,7 +39,7 @@ const mockScopedUser = jest.fn<Promise<void>, [userId: string]>();
 const mockLoggerWarn = jest.fn<void, [message: string, details?: unknown]>();
 const mockLoggerError = jest.fn<void, [message: string, error?: unknown, details?: unknown]>();
 
-const syntheticSession: Session = {
+const mockStableSession: Session = {
   access_token: "synthetic-test-token",
   refresh_token: "synthetic-refresh-token",
   expires_in: 3600,
@@ -64,7 +64,7 @@ jest.mock("@/services/supabase", () => ({
   getStableAuthSession: (): Promise<{
     data: { session: Session };
     error: null;
-  }> => Promise.resolve({ data: { session: syntheticSession }, error: null }),
+  }> => Promise.resolve({ data: { session: mockStableSession }, error: null }),
   supabase: {
     functions: {
       invoke: (
@@ -123,10 +123,12 @@ jest.mock("@monyvi/logic", () => {
 import {
   isVoiceParserError,
   parseVoiceWithAi,
+  type AiVoiceParserOptions,
 } from "@/services/ai-voice-parser-service";
 import {
   parseSmsWithAi,
   type SmsCandidate,
+  type ParseSmsContext,
 } from "@/services/ai-sms-parser-service";
 import { parseAiResponse } from "@/services/ai-sms-parser-response";
 
@@ -162,6 +164,42 @@ function hasSuggestionReference(value: unknown, expectedRef: string): boolean {
   return nestedValues(value, "suggestionRef").includes(expectedRef);
 }
 
+/** Synthetic T004 request context, using only EXISTING domain/input types.
+ * Strict review-schema behavior remains the separate T005 responsibility.
+ */
+function makeReviewRequestContext() {
+  const currency: CurrencyType = "EGP";
+  const bankType: AccountType = "BANK";
+  const cashType: AccountType = "CASH";
+  const version = "account-review/v2";
+  return {
+    reviewContractVersion: version,
+    preferredCurrency: currency,
+    accounts: [
+      {
+        id: REVIEW_WIRE_IDS.bankAccountId,
+        name: "QNB salary",
+        currency,
+        type: bankType,
+        institutionId: null,
+        providerDisplayName: "QNB",
+        cardLast4: "0007",
+        senderNames: ["QNB"],
+      },
+      {
+        id: REVIEW_WIRE_IDS.cashAccountId,
+        name: "Cash",
+        currency,
+        type: cashType,
+        institutionId: null,
+        providerDisplayName: null,
+        cardLast4: null,
+        senderNames: [],
+      },
+    ],
+  };
+}
+
 function voiceOptions() {
   const review = makeReviewRequestContext();
   return {
@@ -175,6 +213,8 @@ function voiceOptions() {
     // T004 parser request discriminator; account and preference fields above
     // already use the normative context shape without a copied wrapper.
     reviewContractVersion: review.reviewContractVersion,
+  } satisfies AiVoiceParserOptions & {
+    readonly reviewContractVersion: "account-review/v2";
   };
 }
 
@@ -196,7 +236,7 @@ function smsContext() {
     categories: smsCategories(),
     supportedCurrencies: ["EGP", "USD"],
     ...makeReviewRequestContext(),
-  };
+  } satisfies ParseSmsContext & ReturnType<typeof makeReviewRequestContext>;
 }
 
 function smsCandidates(): readonly SmsCandidate[] {
@@ -410,6 +450,8 @@ describe("#395 T007 — original SMS parser and DeepInfra advisory compatibility
     );
     expect(result.transactions).toHaveLength(1);
     expect(result.transactions[0].amount).toBe(50);
+    expect(result.transactions[0].categorySystemName).toBe("shopping");
+    expect(result.transactions[0].isAtmWithdrawal).toBe(false);
     expect(currencyEvidenceStates(result)).toContain("unknown");
     expect(result.durableNegativeFingerprints).toEqual([]);
   });
@@ -439,6 +481,7 @@ describe("#395 T007 — original SMS parser and DeepInfra advisory compatibility
 
     expect(result.transactions).toHaveLength(1);
     expect(result.hasError).toBe(false);
+    expect(result.transactions[0].categoryId).toBe("category-shopping");
     expect(mockInvoke).toHaveBeenCalledTimes(1);
     expect(mockInvoke.mock.calls[0]?.[0]).toBe("parse-sms");
     const body = invokeBodyText();

@@ -1,4 +1,6 @@
-import type { AccountReviewEvidenceSpan, AccountReviewRow } from "../schemas";
+import type { TransactionSource } from "../../types";
+
+type ReviewTestSource = Exclude<TransactionSource, "MANUAL">;
 
 /**
  * Synthetic, intentionally non-customer #395 wire fixtures.
@@ -21,7 +23,7 @@ export const REVIEW_SMS_BODY = "QNB purchase EGP 50";
 
 export function makeEvidenceSpan(
   sourceRef: string,
-  field: AccountReviewEvidenceSpan["field"],
+  field: string,
   sourceText: string,
   fragment: string
 ) {
@@ -64,7 +66,7 @@ export function makeReviewRequestContext() {
 }
 
 export function makeAccountEvidence(
-  source: AccountReviewRow["source"] = "VOICE"
+  source: ReviewTestSource = "VOICE"
 ) {
   const isVoice = source === "VOICE";
   const sourceRef = isVoice
@@ -85,7 +87,7 @@ export function makeAccountEvidence(
 }
 
 export function makeCurrencyEvidence(
-  source: AccountReviewRow["source"] = "VOICE"
+  source: ReviewTestSource = "VOICE"
 ) {
   const isVoice = source === "VOICE";
   const sourceRef = isVoice
@@ -108,7 +110,7 @@ export function makeCurrencyEvidence(
 }
 
 export function makeSuggestedAccount(
-  source: AccountReviewRow["source"] = "VOICE"
+  source: ReviewTestSource = "VOICE"
 ) {
   return {
     suggestionRef: REVIEW_WIRE_IDS.suggestionRef,

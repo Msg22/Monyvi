@@ -407,6 +407,27 @@ describe("#395 T005 — canonical account-review parser contract", () => {
   });
 
   describe("v2 response references, source boundaries and compatibility", () => {
+    it("preserves the legacy SMS optional/default fields while requiring category evidence", () => {
+      const sms = makeSmsV2Response();
+      const { isAtmWithdrawal: _omitted, ...withoutAtm } = sms.transactions[0];
+      // Existing SMS provider: isAtmWithdrawal defaults false; cardLast4 is optional.
+      expect(accountReviewSmsResponseV2Schema.safeParse({
+        ...sms, transactions: [withoutAtm],
+      }).success).toBe(true);
+      expect(accountReviewSmsResponseV2Schema.safeParse({
+        ...sms,
+        transactions: [{ ...withoutAtm, cardLast4: "0007" }],
+      }).success).toBe(true);
+      expect(accountReviewSmsResponseV2Schema.safeParse({
+        ...sms,
+        transactions: [{ ...withoutAtm, cardLast4: "7" }],
+      }).success).toBe(false);
+      expect(accountReviewSmsResponseV2Schema.safeParse({
+        ...sms,
+        transactions: [{ ...withoutAtm, categorySystemName: undefined }],
+      }).success).toBe(false);
+    });
+
     it("accepts a reciprocal single-row/suggestion Voice and SMS review response", () => {
       const voice = accountReviewVoiceResponseV2Schema.safeParse(makeVoiceV2Response());
       const sms = accountReviewSmsResponseV2Schema.safeParse(makeSmsV2Response());
