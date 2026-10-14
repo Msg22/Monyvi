@@ -50,6 +50,11 @@ export const ACCOUNT_REVIEW_REASON_CODES = [
 
 export const accountReviewReasonSchema = z.enum(ACCOUNT_REVIEW_REASON_CODES);
 const reasonArray = z.array(accountReviewReasonSchema).refine(areDistinct, "Duplicate review reason");
+// ParsedVoice/SmsTransaction.reviewReasons retain the legacy parser vocabulary;
+// only AccountReviewRow.reviewReasons admits the new account-review reason codes.
+const legacyTransactionReasonArray = z.array(
+  z.enum(ACCOUNT_REVIEW_EXISTING_REASONS)
+).refine(areDistinct, "Duplicate review reason");
 
 export const accountReviewAssignmentSchema = z.discriminatedUnion("state", [
   z.object({
@@ -88,7 +93,7 @@ const reviewTransactionBase = {
   accountId: canonicalUuid.optional(),
   merchant: z.string().optional(),
   reviewStatus: z.enum(["auto_selectable", "needs_review"]).optional(),
-  reviewReasons: reasonArray.optional(),
+  reviewReasons: legacyTransactionReasonArray.optional(),
 };
 
 const localSmsTransaction = z.object({

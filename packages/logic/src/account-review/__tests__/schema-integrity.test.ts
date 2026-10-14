@@ -251,39 +251,66 @@ describe("#395 T005 — review state integrity and H1/H3/H4 regressions", () => 
     type RequiredKeys<T> = {
       [K in keyof T]-?: {} extends Pick<T, K> ? never : K;
     }[keyof T];
-    type StableFields<T> = Exclude<keyof T, "reviewReasons">;
+    type OptionalKeys<T> = Exclude<keyof T, RequiredKeys<T>>;
     type DriftKeys<Snapshot, Existing> = {
-      [K in StableFields<Existing>]-?:
+      [K in keyof Existing]-?:
         K extends keyof Snapshot
           ? K extends RequiredKeys<Existing>
             ? K extends RequiredKeys<Snapshot>
               ? Snapshot[K] extends Existing[K] ? never : K
               : K
-            : K extends Exclude<keyof Snapshot, RequiredKeys<Snapshot>>
+            : K extends OptionalKeys<Snapshot>
               ? Snapshot[K] extends Existing[K] ? never : K
               : K
           : K;
-    }[StableFields<Existing>];
+    }[keyof Existing];
     type NoSourceDrift<Snapshot, Existing> =
       [DriftKeys<Snapshot, Existing>] extends [never] ? true : false;
 
-    it("M4 ensures every required/optional stable parsed field remains type-compatible", () => {
+    it("M4 preserves full legacy source assignability and required/optional field drift guards", () => {
       type VoiceSnapshot = Extract<AccountReviewRow, { source: "VOICE" }>["transaction"];
       type SmsSnapshot = Extract<AccountReviewRow, { source: "SMS" }>["transaction"];
+      type VoiceConforms = VoiceSnapshot extends ParsedVoiceTransaction ? true : false;
+      type SmsConforms = SmsSnapshot extends ParsedSmsTransaction ? true : false;
       type LegacyVoiceReasons = NonNullable<ParsedVoiceTransaction["reviewReasons"]>[number];
       type LegacySmsReasons = NonNullable<ParsedSmsTransaction["reviewReasons"]>[number];
       type CompatibleReasons =
         Exclude<LegacyVoiceReasons | LegacySmsReasons, AccountReviewReason> extends never
           ? true
           : false;
+      const typeOnlyConformance: readonly [VoiceConforms, SmsConforms] = [true, true];
       const driftGuards: readonly [
         NoSourceDrift<VoiceSnapshot, ParsedVoiceTransaction>,
         NoSourceDrift<SmsSnapshot, ParsedSmsTransaction>,
         CompatibleReasons,
       ] = [true, true, true];
+      expect(typeOnlyConformance).toEqual([true, true]);
       expect(driftGuards).toEqual([true, true, true]);
       expect(accountReviewRowSchema.safeParse(validVoiceRow()).success).toBe(true);
       expect(accountReviewRowSchema.safeParse(validSmsRow()).success).toBe(true);
+    });
+
+    it("M4 keeps parser snapshot reasons legacy-only while allowing new row review reasons", () => {
+      const voice = validVoiceRow();
+      const sms = validSmsRow();
+      expect(accountReviewRowSchema.safeParse({
+        ...voice,
+        transaction: { ...voice.transaction, reviewReasons: ["currency_confirmation_needed"] },
+      }).success).toBe(false);
+      expect(accountReviewRowSchema.safeParse({
+        ...sms,
+        transaction: { ...sms.transaction, reviewReasons: ["account_evidence_invalid"] },
+      }).success).toBe(false);
+      expect(accountReviewRowSchema.safeParse({
+        ...voice,
+        transaction: { ...voice.transaction, reviewReasons: ["account_needed"] },
+        reviewReasons: ["currency_confirmation_needed"],
+      }).success).toBe(true);
+      expect(accountReviewRowSchema.safeParse({
+        ...sms,
+        transaction: { ...sms.transaction, reviewReasons: ["low_confidence"] },
+        reviewReasons: ["account_evidence_invalid"],
+      }).success).toBe(true);
     });
 
     it("H3 accepts a current reciprocal pending group and matching confirmed group", () => {
