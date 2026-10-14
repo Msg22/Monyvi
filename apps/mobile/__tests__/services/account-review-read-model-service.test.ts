@@ -238,7 +238,7 @@ const mockGetCurrentUserDataScope = jest.fn(
 
 jest.mock("@monyvi/db", () => ({
   database: {
-    get: (table: string): TableRef => mockDatabaseGet(table),
+    get: (table: string): { readonly table: string } => mockDatabaseGet(table),
   },
 }));
 
