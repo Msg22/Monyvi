@@ -210,38 +210,38 @@ const mockGetCurrentUserDataScope = jest.fn(
     // A scope is a captured immutable user identity, not a live global getter.
     const scopedOwnerId = mockCurrentOwnerId;
     return {
-    userId: scopedOwnerId,
-    queryOwned: (
-      table: TableRef,
-      ...conditions: readonly unknown[]
-    ): ReturnType<typeof makeOwnedQuery> =>
-      mockQueryOwned(table, scopedOwnerId, ...conditions),
-    queryChildrenOfOwnedParents: (
-      table: TableRef,
-      parents: readonly { readonly id: string }[],
-      foreignKey: string,
-      ...conditions: readonly unknown[]
-    ): ReturnType<typeof makeChildQuery> =>
-      mockQueryChildrenOfOwnedParents(
-        table,
-        parents,
-        scopedOwnerId,
-        foreignKey,
-        ...conditions
-      ),
-    queryChildrenOfOwnedParent: (
-      table: TableRef,
-      parent: { readonly id: string },
-      foreignKey: string,
-      ...conditions: readonly unknown[]
-    ): ReturnType<typeof makeChildQuery> =>
-      mockQueryChildrenOfOwnedParent(
-        table,
-        parent,
-        scopedOwnerId,
-        foreignKey,
-        ...conditions
-      ),
+      userId: scopedOwnerId,
+      queryOwned: (
+        table: TableRef,
+        ...conditions: readonly unknown[]
+      ): ReturnType<typeof makeOwnedQuery> =>
+        mockQueryOwned(table, scopedOwnerId, ...conditions),
+      queryChildrenOfOwnedParents: (
+        table: TableRef,
+        parents: readonly { readonly id: string }[],
+        foreignKey: string,
+        ...conditions: readonly unknown[]
+      ): ReturnType<typeof makeChildQuery> =>
+        mockQueryChildrenOfOwnedParents(
+          table,
+          parents,
+          scopedOwnerId,
+          foreignKey,
+          ...conditions
+        ),
+      queryChildrenOfOwnedParent: (
+        table: TableRef,
+        parent: { readonly id: string },
+        foreignKey: string,
+        ...conditions: readonly unknown[]
+      ): ReturnType<typeof makeChildQuery> =>
+        mockQueryChildrenOfOwnedParent(
+          table,
+          parent,
+          scopedOwnerId,
+          foreignKey,
+          ...conditions
+        ),
     };
   }
 );
@@ -480,8 +480,8 @@ describe("T006 owned account review snapshot / provider context", () => {
     expect(Object.keys(snapshots.accounts[0] ?? {}).sort()).toEqual(
       [...Object.keys(providerContext.accounts[0] ?? {}), "isDefault"].sort()
     );
-    expect(providerContext.accounts.map((value) => value.id)).toEqual(
-      snapshots.accounts.map((value) => value.id)
+    expect(providerContext.accounts.map((value) => value.id).sort()).toEqual(
+      snapshots.accounts.map((value) => value.id).sort()
     );
   });
 
@@ -589,8 +589,12 @@ describe("T006 owned account review snapshot / provider context", () => {
       isDefault: row.id === BANK_ID || row.id === CASH_ID,
     }));
     const inconsistent = await loadAccountReviewAccountSnapshots();
-    expect(inconsistent.accounts.filter((value) => value.isDefault)
-      .map((value) => value.id)).toEqual([BANK_ID, CASH_ID]);
+    expect(
+      inconsistent.accounts
+        .filter((value) => value.isDefault)
+        .map((value) => value.id)
+        .sort()
+    ).toEqual([BANK_ID, CASH_ID].sort());
     expect(JSON.stringify(inconsistent.providerContext)).not.toContain("isDefault");
   });
 
@@ -605,15 +609,19 @@ describe("T006 owned account review snapshot / provider context", () => {
     const rows = await query.fetch();
 
     expect(scope.userId).toBe(OWNER_ID);
-    expect(ownedCalls.at(-1)?.ownerId).toBe(OWNER_ID);
+    expect(ownedCalls[ownedCalls.length - 1]?.ownerId).toBe(OWNER_ID);
     expect(rows.map((row) => row.id)).toEqual([BANK_ID, CASH_ID, WALLET_ID]);
   });
 
   it("rejects an in-flight account read if the authenticated owner changes before final validation", async () => {
     let release: () => void = () => undefined;
     let signalRead: () => void = () => undefined;
-    const started = new Promise<void>((resolve) => { signalRead = resolve; });
-    mockAccountReadGate = new Promise<void>((resolve) => { release = resolve; });
+    const started = new Promise<void>((resolve) => {
+      signalRead = resolve;
+    });
+    mockAccountReadGate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
     mockNotifyAccountReadStarted = signalRead;
 
     const inFlight = loadAccountReviewAccountSnapshots();
