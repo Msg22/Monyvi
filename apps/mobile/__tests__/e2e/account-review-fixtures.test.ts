@@ -8,13 +8,57 @@ const UUID_V4_PATTERN =
 const SHA_256_PATTERN = /^[0-9a-f]{64}$/;
 
 let mockActiveOwnerId: string | null = CURRENT_OWNER;
+const mockMissingAccountIds = new Set<string>();
+const mockDeletedAccountIds = new Set<string>();
+const mockForeignAccountIds = new Set<string>();
 
 const mockDatabaseWrite = jest.fn(async (): Promise<void> => {
   throw new Error("fixture entry cannot write financial records");
 });
-const mockLoadAccountReviewAccountSnapshots = jest.fn(
-  async (): Promise<typeof manifest.accountContext> => manifest.accountContext
-);
+// The owned local read model is intentionally distinct from provider context.
+const mockLoadAccountReviewAccountSnapshots = jest.fn(async () => {
+  const ownerId = await mockGetRequiredCurrentUserId();
+  const baseAccounts =
+    ownerId === CURRENT_OWNER
+      ? manifest.accountContext.accounts.filter(
+          (account) =>
+            !mockMissingAccountIds.has(account.id) &&
+            !mockDeletedAccountIds.has(account.id) &&
+            !mockForeignAccountIds.has(account.id)
+        )
+      : [
+          ...manifest.accountContext.accounts.filter((account) =>
+            mockForeignAccountIds.has(account.id)
+          ),
+          {
+            ...manifest.accountContext.accounts[0],
+            id: manifest.excludedAccountRefs.foreignAccountId,
+          },
+        ];
+
+  const accounts = baseAccounts.map((account) => ({
+    ...account,
+    isDefault:
+      ownerId === CURRENT_OWNER && account.id === manifest.defaultAccountId,
+  }));
+  const providerAccounts = accounts.map(({ isDefault, ...account }) => account);
+  return {
+    ownerId,
+    preferredCurrency:
+      ownerId === CURRENT_OWNER
+        ? manifest.accountContext.preferredCurrency
+        : "USD",
+    accounts,
+    providerContext: {
+      ...manifest.accountContext,
+      preferredCurrency:
+        ownerId === CURRENT_OWNER
+          ? manifest.accountContext.preferredCurrency
+          : "USD",
+      accounts: providerAccounts,
+    },
+  };
+});
 const mockGetRequiredCurrentUserId = jest.fn(
   async (): Promise<string> => {
     if (!mockActiveOwnerId) {
@@ -65,23 +109,30 @@ jest.mock(
   { virtual: true }
 );
 
-// A runtime-entry test may deliberately fail resolution until T015 exists.
-// Keeping this import inside the test path lets the independent catalogue
-// checks run against published synthetic JSON before any production API exists.
-async function resolveRuntimeFixtureEntry(): Promise<
-  (sceneId: string) => Promise<unknown>
-> {
-  const { loadAccountReviewFixtureSession } = await import(
-    "@/services/account-review-fixture-service"
-  );
+// Use normal synchronous Jest module loading: dynamic import needs VM module
+// flags that are not part of this repository's Jest runner.
+function resolveRuntimeFixtureEntry(): (sceneId: string) => Promise<unknown> {
+  // This is the REAL future T015 SUT. Never mock or virtualize it.
+  const { loadAccountReviewFixtureSession } = jest.requireActual<
+    typeof import("@/services/account-review-fixture-service")
+  >("@/services/account-review-fixture-service");
   if (typeof loadAccountReviewFixtureSession !== "function") {
     throw new Error("T015 fixture entry export is unavailable");
   }
   return loadAccountReviewFixtureSession;
 }
 
-async function loadRuntimeFixtureSession(sceneId: string): Promise<unknown> {
-  const loadFixture = await resolveRuntimeFixtureEntry();
+function parseHydratedSession(value: unknown): ReturnType<
+  typeof import("@monyvi/logic")["accountReviewSessionSchema"]["parse"]
+> {
+  const { accountReviewSessionSchema } = jest.requireActual<
+    typeof import("@monyvi/logic")
+  >("@monyvi/logic");
+  return accountReviewSessionSchema.parse(value);
+}
+
+function loadRuntimeFixtureSession(sceneId: string): Promise<unknown> {
+  const loadFixture = resolveRuntimeFixtureEntry();
   return loadFixture(sceneId);
 }
 
@@ -314,8 +365,10 @@ describe("T008 #395 bounded fixture descriptor contract", () => {
 describe("T008 future current-owner fixture entry (Red before T015)", () => {
   const originalEnv = process.env;
 
-  it("validates the safe request catalogue with the canonical Zod schema once T005 exists", async () => {
-    const { accountReviewRequestContextSchema } = await import("@monyvi/logic");
+  it("validates the safe request catalogue with the canonical Zod schema once T005 exists", () => {
+    const { accountReviewRequestContextSchema } = jest.requireActual<
+      typeof import("@monyvi/logic")
+    >("@monyvi/logic");
     const context = accountReviewRequestContextSchema.parse(
       manifest.accountContext
     );
@@ -326,6 +379,9 @@ describe("T008 future current-owner fixture entry (Red before T015)", () => {
   beforeEach((): void => {
     jest.clearAllMocks();
     mockActiveOwnerId = CURRENT_OWNER;
+    mockMissingAccountIds.clear();
+    mockDeletedAccountIds.clear();
+    mockForeignAccountIds.clear();
     process.env = {
       ...originalEnv,
       NODE_ENV: "test",
@@ -341,7 +397,7 @@ describe("T008 future current-owner fixture entry (Red before T015)", () => {
   it("accepts an explicit safe test-mode Voice entry and materializes the canonical current-user session", async () => {
     expect(isE2eTestMode()).toBe(true);
 
-    const session = (await import("@monyvi/logic")).accountReviewSessionSchema.parse(
+    const session = parseHydratedSession(
       await loadRuntimeFixtureSession("r3-combined-en")
     );
 
@@ -355,7 +411,7 @@ describe("T008 future current-owner fixture entry (Red before T015)", () => {
   });
 
   it("materializes SMS fingerprints in a current-owner session without calling hosted seed/write", async () => {
-    const session = (await import("@monyvi/logic")).accountReviewSessionSchema.parse(
+    const session = parseHydratedSession(
       await loadRuntimeFixtureSession("sms-review-restart")
     );
 
@@ -375,7 +431,7 @@ describe("T008 future current-owner fixture entry (Red before T015)", () => {
     expect(isE2eTestMode()).toBe(false);
     // Resolve the future module OUTSIDE rejects; a missing module is not
     // proof that production/runtime gating rejected the fixture.
-    const loadFixture = await resolveRuntimeFixtureEntry();
+    const loadFixture = resolveRuntimeFixtureEntry();
     await expect(loadFixture("r3-default-only")).rejects.toThrow();
   });
 
@@ -385,7 +441,7 @@ describe("T008 future current-owner fixture entry (Red before T015)", () => {
 
     // Resolve the future module OUTSIDE rejects; a missing module is not
     // proof that production/runtime gating rejected the fixture.
-    const loadFixture = await resolveRuntimeFixtureEntry();
+    const loadFixture = resolveRuntimeFixtureEntry();
     await expect(loadFixture("r3-default-only")).rejects.toThrow();
   });
 
@@ -394,27 +450,79 @@ describe("T008 future current-owner fixture entry (Red before T015)", () => {
 
     // Resolve the future module OUTSIDE rejects; a missing module is not
     // proof that production/runtime gating rejected the fixture.
-    const loadFixture = await resolveRuntimeFixtureEntry();
+    const loadFixture = resolveRuntimeFixtureEntry();
     await expect(loadFixture("r3-default-only")).rejects.toThrow();
     expect(mockDatabaseWrite).not.toHaveBeenCalled();
   });
 
-  it("uses the current authenticated owner after user switching, never a cached previous owner", async () => {
-    const first = (await import("@monyvi/logic")).accountReviewSessionSchema.parse(
-      await loadRuntimeFixtureSession("r3-issues-only")
+  it("rejects relabeling another owner's static account IDs during user switching", async () => {
+    const first = parseHydratedSession(
+      await loadRuntimeFixtureSession("r3-default-only")
     );
     expect(first.ownerId).toBe(CURRENT_OWNER);
+    expect(first.rows).toHaveLength(2);
 
     mockActiveOwnerId = ANOTHER_OWNER;
-    const second = (await import("@monyvi/logic")).accountReviewSessionSchema.parse(
-      await loadRuntimeFixtureSession("r3-issues-only")
-    );
-    expect(second.ownerId).toBe(ANOTHER_OWNER);
-    expect(second.ownerId).not.toBe(first.ownerId);
+    const otherOwner = await mockLoadAccountReviewAccountSnapshots();
+    expect(otherOwner.ownerId).toBe(ANOTHER_OWNER);
+    expect(otherOwner.accounts.map((account) => account.id))
+      .not.toContain(manifest.defaultAccountId);
+
+    const loadFixture = resolveRuntimeFixtureEntry();
+    await expect(loadFixture("r3-default-only")).rejects.toThrow();
+    expect(mockDatabaseWrite).not.toHaveBeenCalled();
   });
 
+  it.each([
+    { reason: "missing", unavailable: mockMissingAccountIds },
+    { reason: "deleted", unavailable: mockDeletedAccountIds },
+    { reason: "foreign", unavailable: mockForeignAccountIds },
+  ])(
+    "rejects a $reason referenced account absent from the active owned snapshot",
+    async ({ unavailable }) => {
+      unavailable.add(manifest.defaultAccountId);
+      const snapshot = await mockLoadAccountReviewAccountSnapshots();
+      expect(snapshot.accounts.map((account) => account.id))
+        .not.toContain(manifest.defaultAccountId);
+
+      const loadFixture = resolveRuntimeFixtureEntry();
+      await expect(loadFixture("r3-default-only")).rejects.toThrow();
+      expect(mockDatabaseWrite).not.toHaveBeenCalled();
+    }
+  );
+
+  it.each(manifest.scenes)(
+    "hydrates $id through the REAL fixture service and canonical session schema",
+    async (scene) => {
+      const session = parseHydratedSession(
+        await loadRuntimeFixtureSession(scene.id)
+      );
+      expect(session.ownerId).toBe(CURRENT_OWNER);
+      expect(session.source).toBe(scene.source);
+      expect(session.rows).toHaveLength(scene.expectedCounts.total);
+      expect(session.groups).toHaveLength(scene.groups.length);
+      expect(session.rows.filter((row) => row.selected)).toHaveLength(
+        scene.expectedCounts.selected
+      );
+      expect(
+        session.rows.filter((row) => row.reviewReasons.length > 0)
+      ).toHaveLength(scene.expectedCounts.needsReview);
+
+      for (const row of session.rows) {
+        if (scene.source === "SMS") {
+          expect(row.sourceFingerprint).toMatch(SHA_256_PATTERN);
+        } else {
+          expect(row.sourceFingerprint).toBeNull();
+        }
+      }
+      expect(mockGetRequiredCurrentUserId).toHaveBeenCalled();
+      expect(mockLoadAccountReviewAccountSnapshots).toHaveBeenCalled();
+      expect(mockDatabaseWrite).not.toHaveBeenCalled();
+    }
+  );
+
   it("rejects unregistered fixtures instead of silently opening an empty or production review", async () => {
-    const loadFixture = await resolveRuntimeFixtureEntry();
+    const loadFixture = resolveRuntimeFixtureEntry();
     await expect(loadFixture("missing-private-scenario")).rejects.toThrow();
   });
 });
