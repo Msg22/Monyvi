@@ -13,6 +13,7 @@ import {
   observeMetalDetailHoldingState,
   observeMetalDetailRateReferences,
   readMetalDetailReadModel,
+  readMetalDetailPurchaseDateMarketReference,
   type MetalDetailReadModel,
 } from "@/services/metal-detail-read-model-service";
 import { observeMetalDetailActionEvidence } from "@/services/metal-action-evidence-observer-service";
@@ -50,12 +51,13 @@ const DETAIL_LIFECYCLE_EVENT_COLUMNS = [
   "is_history_visible",
 ] as const;
 
-interface UseMetalHoldingDetailResult {
+export interface UseMetalHoldingDetailResult {
   readonly error: Error | null;
   readonly isLoading: boolean;
   readonly isOffline: boolean;
   readonly model: MetalDetailReadModel | null;
   readonly retry: () => void;
+  readonly retryHistoricalReference: () => void;
 }
 
 function createEmptyTrustReadModel(): LiveRatesTrustReadModel {
@@ -101,14 +103,17 @@ export function useMetalHoldingDetail(
   const [readError, setReadError] = useState<Error | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [retryIndex, setRetryIndex] = useState(0);
+  const [historicalRetryIndex, setHistoricalRetryIndex] = useState(0);
   const [localRevision, setLocalRevision] = useState(0);
   const hasLoadedOnceRef = useRef(false);
   const detailIdentityRef = useRef(detailIdentity);
   const modelIdentityRef = useRef<string | null>(null);
+  const historicalAttemptRef = useRef<string | null>(null);
   if (detailIdentityRef.current !== detailIdentity) {
     detailIdentityRef.current = detailIdentity;
     modelIdentityRef.current = null;
     hasLoadedOnceRef.current = false;
+    historicalAttemptRef.current = null;
   }
 
   const retry = useCallback((): void => {
@@ -118,6 +123,10 @@ export function useMetalHoldingDetail(
       setReadError(toError(cause, "Holding sync unavailable"));
     });
   }, [database, refreshSelectedSnapshot]);
+
+  const retryHistoricalReference = useCallback((): void => {
+    setHistoricalRetryIndex((value) => value + 1);
+  }, []);
 
   useEffect(() => {
     const timer = setInterval(
@@ -238,6 +247,7 @@ export function useMetalHoldingDetail(
     void readMetalDetailReadModel({
       currentRates,
       holdingId,
+      includePurchaseDateMarketReference: true,
       snapshotId: selectedSnapshot?.snapshotId ?? null,
       preferredCurrency,
       userId,
@@ -246,7 +256,24 @@ export function useMetalHoldingDetail(
         if (isCurrent && detailIdentityRef.current === detailIdentity) {
           hasLoadedOnceRef.current = true;
           modelIdentityRef.current = detailIdentity;
-          setModel(next);
+          setModel((previous) => {
+            if (
+              next !== null &&
+              previous !== null &&
+              next.purchaseDateMarketReferenceContextKey !== undefined &&
+              next.purchaseDateMarketReferenceContextKey ===
+                previous.purchaseDateMarketReferenceContextKey &&
+              previous.purchaseDateMarketReference?.status === "available" &&
+              next.purchaseDateMarketReference?.status !== "available"
+            ) {
+              return {
+                ...next,
+                purchaseDateMarketReference:
+                  previous.purchaseDateMarketReference,
+              };
+            }
+            return next;
+          });
         }
       })
       .catch((cause: unknown) => {
@@ -281,11 +308,115 @@ export function useMetalHoldingDetail(
     userId,
   ]);
 
+  const historicalContextKey =
+    modelIdentityRef.current === detailIdentity
+      ? (model?.purchaseDateMarketReferenceContextKey ?? null)
+      : null;
+  const shouldEnrichHistory =
+    model?.isActiveOwnership === true &&
+    model.purchaseDateMarketReference?.status !== "available" &&
+    (model.purchaseDateMarketReference?.status === "fetch_failed" ||
+      (model.purchaseDateMarketReference?.status === "unavailable" &&
+        (model.purchaseDateMarketReference.reason === "cache_miss" ||
+          model.purchaseDateMarketReference.reason ===
+            "purchase_currency_unavailable")));
+
+  useEffect(() => {
+    if (
+      !isFocused ||
+      !isConnected ||
+      isResolvingUser ||
+      userId === null ||
+      holdingId === undefined ||
+      historicalContextKey === null ||
+      !shouldEnrichHistory ||
+      observationError !== null
+    )
+      return;
+    const attemptKey = JSON.stringify([
+      detailIdentity,
+      historicalContextKey,
+      retryIndex,
+      historicalRetryIndex,
+    ]);
+    if (historicalAttemptRef.current === attemptKey) return;
+    historicalAttemptRef.current = attemptKey;
+    const controller = new AbortController();
+    let hasSettled = false;
+    void readMetalDetailPurchaseDateMarketReference({
+      holdingId,
+      userId,
+      contextKey: historicalContextKey,
+      signal: controller.signal,
+    })
+      .then((reference) => {
+        hasSettled = true;
+        if (
+          controller.signal.aborted ||
+          reference === null ||
+          detailIdentityRef.current !== detailIdentity
+        )
+          return;
+        setModel((previous) =>
+          previous !== null &&
+          previous.purchaseDateMarketReferenceContextKey ===
+            historicalContextKey
+            ? { ...previous, purchaseDateMarketReference: reference }
+            : previous
+        );
+      })
+      .catch((cause: unknown) => {
+        hasSettled = true;
+        if (!controller.signal.aborted) {
+          logger.error("metalHoldingDetail.history.failed", cause, {
+            holdingId,
+            redactedUserId: redactIdentifierForLog(userId),
+          });
+          if (detailIdentityRef.current === detailIdentity) {
+            setModel((previous) =>
+              previous !== null &&
+              previous.purchaseDateMarketReferenceContextKey ===
+                historicalContextKey
+                ? {
+                    ...previous,
+                    purchaseDateMarketReference: {
+                      status: "fetch_failed",
+                      error: toError(
+                        cause,
+                        "Historical market rate fetch failed"
+                      ),
+                    },
+                  }
+                : previous
+            );
+          }
+        }
+      });
+    return () => {
+      controller.abort();
+      if (!hasSettled && historicalAttemptRef.current === attemptKey)
+        historicalAttemptRef.current = null;
+    };
+  }, [
+    detailIdentity,
+    historicalContextKey,
+    historicalRetryIndex,
+    holdingId,
+    isConnected,
+    isFocused,
+    isResolvingUser,
+    observationError,
+    retryIndex,
+    shouldEnrichHistory,
+    userId,
+  ]);
+
   return {
     error: observationError ?? readError ?? marketRatesError,
     isLoading,
     isOffline: !isConnected,
     model: modelIdentityRef.current === detailIdentity ? model : null,
     retry,
+    retryHistoricalReference,
   };
 }

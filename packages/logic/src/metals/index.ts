@@ -1,6 +1,7 @@
 export * from "./attribution";
 export * from "./currency-minor-units";
 export * from "./current-market-snapshot";
+export * from "./historical-rate";
 export * from "./decimal";
 export * from "./lifecycle-reducer";
 export * from "./purity-catalog";

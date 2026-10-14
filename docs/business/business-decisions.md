@@ -670,12 +670,20 @@ A bare `24K = 1.0` option is forbidden. The user selects the actual stamped
 fineness. Recorded pure grams and immutable historical calculations continue to
 use exact weight multiplied by the stored factor snapshot.
 
-For **current selected-quote presentation and current holding valuation only**,
-the selected `metal:GOLD` quote is the quoted 24K gram price. An exact
-`gold-999` / `0.999` holding therefore uses that quoted gram rate directly and
-MUST NOT multiply the quote by `0.999` again. The persisted/catalog purity tuple
-remains `gold-999` / `0.999`. Gold 21K/18K and Silver retain their existing
-catalog-factor basis.
+For **current selected-quote presentation, current holding valuation,
+purchase-date historical market-reference display, and the Add holding
+purchase-price estimate**, the selected `metal:GOLD` quote is the quoted 24K
+gram price. An exact `gold-999` / `0.999` holding therefore uses that quoted
+gram rate directly and MUST NOT multiply the quote by `0.999` again. The
+persisted/catalog purity tuple remains `gold-999` / `0.999`. Gold 21K/18K and
+Silver retain their existing catalog-factor basis.
+
+The historical display and Add estimate use the exact purchase-date historical
+Gold quote with a display/estimate factor of `1` for `gold-999` / `0.999`. They
+do not change the stored purity factor, raw provider-rate evidence, recorded
+pure grams, or the FR-050 acquisition, terminal, and P/L attribution
+calculations. The Add estimate remains an editable helper; a manual edit or
+deliberate clear owns the field and prevents further automatic replacement.
 
 ### Financial Arithmetic
 
@@ -712,6 +720,12 @@ introduce a new calculation or product decision.
   directly: `weight × m_current ÷ x_current`. This does not mutate `p = 0.999`,
   does not change Gold 21K/18K or Silver factor semantics, and does not rewrite
   immutable acquisition, terminal, History, or attribution calculations.
+- Purchase-date historical display and the Add purchase-price estimate use the
+  same quoted 24K basis for exact `gold-999` / `0.999`: historical gram display
+  `m_date ÷ x_date` and estimate `weight × m_date ÷ x_date`. This helper and
+  display exception does not change the persisted factor, raw historical
+  observations, or the acquisition and valuation references used for FR-050 P/L
+  and attribution below.
 - Purchase currency `P` is the canonical calculation and reporting basis. With
   acquisition time `a`, current or terminal valuation time `v`, and positive
   known all-in purchase cost `K`: acquisition reference `A = q × m_a ÷ x_{P,a}`;
