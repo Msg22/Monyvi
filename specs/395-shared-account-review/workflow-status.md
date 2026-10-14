@@ -28,19 +28,19 @@ Date: 2026-10-14. Issue: [#395](https://github.com/Msg22/Monyvi/issues/395).
 
 ## Speckit execution
 
-| Step                    | Status      | Evidence                                                                                                                                  |
-| ----------------------- | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| Inspect extension hooks | Complete    | extensions.yml checked before plan; optional pre/post commits consolidated into authorized batch                                          |
-| `speckit-git-feature`   | Complete    | PowerShell branch script returned `codex/395-shared-account-review`; exact override preserves project codex prefix                        |
-| `speckit-specify`       | Complete    | `spec.md` follows repository template; feature selector points here                                                                       |
-| `speckit-clarify`       | Complete    | Existing owner decisions encoded; coverage in `clarification-report.md`                                                                   |
-| Requirements checklist  | Complete    | `checklists/requirements.md` separates content quality from readiness                                                                     |
-| Spec owner approval     | Complete    | Exact published spec approved on 2026-10-14; immutable bytes bound by `approvals/spec-2026-10-14.json`                                    |
-| Visual/binding package  | Complete    | B1 frozen manifest and exact owner receipt approvals/b1-2026-10-14.json; image/facts/dependencies unchanged                               |
-| Visual/binding gate     | Passed      | Explicit B1/R3 EN/AR approval recorded; all23 approved sidecars pass canonical verifier                                                   |
-| `speckit-plan`          | Complete    | setup-plan.sh --json selected exact feature; research/data-model/four contracts/quickstart and agent-context update; design gates checked |
-| `speckit-tasks`         | Not started | Next canonical phase; original #383 tasks untouched; no implementation task IDs assigned                                                  |
-| `speckit-analyze`       | Not run     | Requires tasks; must precede production edits or worker assignment                                                                        |
+| Step                    | Status   | Evidence                                                                                                                                                                              |
+| ----------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Inspect extension hooks | Complete | extensions.yml checked before plan; optional pre/post commits consolidated into authorized batch                                                                                      |
+| `speckit-git-feature`   | Complete | PowerShell branch script returned `codex/395-shared-account-review`; exact override preserves project codex prefix                                                                    |
+| `speckit-specify`       | Complete | `spec.md` follows repository template; feature selector points here                                                                                                                   |
+| `speckit-clarify`       | Complete | Existing owner decisions encoded; coverage in `clarification-report.md`                                                                                                               |
+| Requirements checklist  | Complete | `checklists/requirements.md` separates content quality from readiness                                                                                                                 |
+| Spec owner approval     | Complete | Exact published spec approved on 2026-10-14; immutable bytes bound by `approvals/spec-2026-10-14.json`                                                                                |
+| Visual/binding package  | Complete | B1 frozen manifest and exact owner receipt approvals/b1-2026-10-14.json; image/facts/dependencies unchanged                                                                           |
+| Visual/binding gate     | Passed   | Explicit B1/R3 EN/AR approval recorded; all23 approved sidecars pass canonical verifier                                                                                               |
+| `speckit-plan`          | Complete | setup-plan.sh --json selected exact feature; research/data-model/four contracts/quickstart and agent-context update; design gates checked                                             |
+| `speckit-tasks`         | Complete | setup-tasks.sh selected exact feature; 80 unchecked canonical tasks, six priority-ordered stories, dependency/file serialization and coverage matrices; original #383 tasks untouched |
+| `speckit-analyze`       | Complete | Read-only report emitted in chat; prerequisite selected exact feature with tasks; 32/32 requirement coverage, no actionable findings, no implementation authorization implied         |
 
 The tracked `.specify/feature.json` selects this new directory. The
 clarification prerequisite script returned the actual branch
@@ -95,5 +95,35 @@ batch action and atomic account creation with default intent. New local SQL
 registrations, protected sync and reconciliation scope are proposed in the
 contracts and require explicit approval before implementation; no deployment is
 included. Full implementation estimate is12–18h with safe overlap, to be refined
-from tasks and discussed before worker start. Next steps: speckit-tasks, then
-speckit-analyze.
+from tasks and discussed before worker start. Tasks and analysis completed in
+the following checkpoint.
+
+## Tasks and analysis checkpoint — 2026-10-14
+
+Task generation: 80 unchecked tasks; US1:7, US2:10, US3:8, US6:15, US4:7, US5:8,
+shared:25. Twenty disjoint test-authoring tasks permit safe parallel work after
+their prerequisites. The financial lane can overlap resolver/state/UI work;
+shared reducer, hooks, shell, registry, sync, SQL, generated types and locales
+serialize explicitly. No worker assignment made.
+
+Read-only analysis compared spec/plan/tasks, four contracts, data model,
+constitution1.7.0 and M01–M20. All24 FRs and eight buildable SCs have mapped
+tasks; all20 manual scenarios and23 approved scoped references are represented.
+No actionable duplication, ambiguity, constitutional conflict or baseline
+coverage gap found. The structured report was emitted in chat without writing or
+modifying analysis inputs; this checkpoint is subsequent administrative
+bookkeeping, not remediation of analyzed artifacts.
+
+All23 canonical bindings plus approved spec/manifest/dependency hashes passed
+before consumption. Task format/count/story labels/references and document
+format/whitespace are checked at publication; this is documentation validation,
+not implemented/covered behavior. All task checkboxes remain pending, including
+owner-rendered and separate accessibility evidence. No emulator/test authoring,
+app source change, SQL execution or provider call occurred.
+
+Next: review canonical tasks and authorize full implementation plus the concrete
+local SQL/financial-action/protected-sync/reconciliation scope. T001 records
+that approval; T002 refreshes main/#393 and T004 freezes exact wire schemas and
+next local migration prefixes before consumers. Provisional estimate remains
+12–18 elapsed hours with safe overlap; refine at intake. Hosted deployment, data
+resets/backfills and main merge remain outside this authorization.
