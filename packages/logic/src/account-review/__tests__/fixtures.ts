@@ -174,6 +174,56 @@ export function makeVoiceV2Response() {
   };
 }
 
+
+/** Voice CASH has an actual spoken Cash span, never a BANK/provider alias recast as cash. */
+export function makeGroundedVoiceCashV2Response() {
+  const base = makeVoiceV2Response();
+  const transcript = "🛒 Paid Cash 50 EGP for lunch";
+  return {
+    ...base,
+    transcript: "Paid Cash 50 EGP for lunch",
+    original_transcript: transcript,
+    transactions: [{
+      ...base.transactions[0],
+      accountEvidence: {
+        ...base.transactions[0].accountEvidence,
+        name: "Cash",
+        type: "CASH",
+        institutionId: null,
+        providerDisplayName: null,
+        cardLast4: null,
+        evidenceSpans: [
+          makeEvidenceSpan(
+            REVIEW_WIRE_IDS.voiceRequestKey,
+            "transcript",
+            transcript,
+            "Cash"
+          ),
+        ],
+      },
+      currencyEvidence: {
+        ...base.transactions[0].currencyEvidence,
+        evidenceSpans: [
+          makeEvidenceSpan(
+            REVIEW_WIRE_IDS.voiceRequestKey,
+            "transcript",
+            transcript,
+            "EGP"
+          ),
+        ],
+      },
+    }],
+    suggestedAccounts: [{
+      ...base.suggestedAccounts[0],
+      name: "Cash",
+      type: "CASH",
+      providerDisplayName: null,
+      cardLast4: null,
+      senderNames: [],
+    }],
+  };
+}
+
 export function makeSmsV2Response() {
   return {
     reviewContractVersion: "account-review/v2",
