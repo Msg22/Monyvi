@@ -290,7 +290,7 @@ describe("#395 T005 — review state integrity and H1/H3/H4 regressions", () => 
         SmsReasonsCompatible,
       ] = [true, true, true, true];
       expect(typeOnlyConformance).toEqual([true, true]);
-      expect(driftGuards).toEqual([true, true, true]);
+      expect(driftGuards).toEqual([true, true, true, true]);
       expect(accountReviewRowSchema.safeParse(validVoiceRow()).success).toBe(true);
       expect(accountReviewRowSchema.safeParse(validSmsRow()).success).toBe(true);
     });
