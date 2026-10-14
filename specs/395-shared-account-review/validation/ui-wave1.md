@@ -134,3 +134,51 @@ The current T006 expectation that `loadAccountReviewAccountSnapshots()` returns 
 - Next observed failure may legitimately be missing T010/T015 target implementation or Core Zod exports; neither permits virtualizing the target or creating a production stub in this test-only leaf.
 
 **CORRECTION REPORT PUBLISHED — EXCLUSIVE WRITE OWNERSHIP RELEASED — ALL WRITES FROZEN.**
+
+
+---
+
+## 8. Next correction — F01/F07/F08/F09, regular Jest loading (test-only)
+
+**Reopened frozen revision:** `b482c79a917f1388818cf323f15201091c76eb01`. Root's actual isolated local affected batch, **before this correction**, reported **37 mobile tests: 21 PASS / 16 FAIL**. All **15 synthetic descriptor cases passed**. The earlier 8 T008 runtime-entry tests reached a dynamic-import callback requiring `--experimental-vm-modules`; the T006 read-loader SUT was still absent. These are root-supplied outcomes, **not** new green results. No Jest/global runner flag, production source, fake SUT or alternate writer was introduced here.
+
+**Published correction commits (sequential, exclusive worker branch):**
+- `57b8f5833ac2e7bdf8fd11bdff086ad6b5d82547` — F01/F07 dual-projection T006 expectations and immutable-owner deferred reads.
+- `a320ef097af8f4af10fc633d3f96aa4950e3b828` — regular synchronous `jest.requireActual`; F08 owner/reference validation and F09 per-scene canonical hydration tests.
+- `f0d7dee882d486e8a456e2359da1f39e44b70f08` — owner-scoped synthetic category read used only as an in-memory test double; no seeds or persistent writes.
+- `11413e9ec4444e40cb78d3062c4669e46a1cefc0` — formatting and order-independent account comparisons.
+- One final successor commit updates this report only. Verify its exact full SHA and diff against the reopened revision before accepting this leaf.
+
+### F01 accepted producer boundary — reflected in T006 assertions
+
+**Accepted future API:** `loadAccountReviewAccountSnapshots(): Promise<AccountReviewAccountSnapshots>` returning `{ownerId, preferredCurrency, accounts, providerContext}`, with **local** `AccountReviewLocalAccountSnapshot` fields equal to all canonical `AccountReviewRequestContext["accounts"][number]` fields plus `isDefault: Account["isDefault"]`. These local-only interfaces belong to `apps/mobile/services/account-review-read-model-service.ts`. No new persisted columns or provider protocol keys.
+
+T006 now validates **only** `snapshots.providerContext` against `accountReviewRequestContextSchema` and asserts the separate local fields, captured owner and preferred currency. Provider JSON contains exactly `reviewContractVersion`, `preferredCurrency`, and `accounts`, with strictly whitelisted account identity/currency/type/provider/masked card/sender values. It has **no ownerId, isDefault, balance, full card/account number, foreign/deleted record or private local metadata**. Local accounts retain true `isDefault`; tests explicitly preserve both **zero** and **inconsistent multiple defaults** for unresolved review, never selecting an arbitrary default. The same scoped read must produce both projections and batched bank/sender children without N+1 access.
+
+### F07 owner identity and deferred-read safety
+
+The T006 mock scope captures `const scopedOwnerId = mockCurrentOwnerId` **once** when created and passes it immutably into every query and child query; mutable global owner changes no longer alter an existing scope. One case verifies the scope against a user switch before its deferred `fetch`. A second blocks the owned account fetch, switches authenticated identity while the operation is in flight, releases the read and requires **rejection** before returning financial account context. The production T010 loader must revalidate against the **current** owner after the batched async read and fail closed if the owner changed. The mock's final `getRequiredCurrentUserId` remains dynamic for this proof.
+
+### F08 current-owner fixture references cannot be relabeled
+
+The T008 dependency `mockLoadAccountReviewAccountSnapshots` now returns **F01-shaped owner-specific** snapshots. For the original fixture owner it exposes the static synthetic owned catalog; for another authenticated owner it exposes **different account IDs**. Distinct in-memory unavailable/deleted/foreign conditions remove the referenced Cash account from current-owned eligibility; a moved foreign account is visible only to its modeled owner. Tests require the *real future T015 loader* to reject a previously valid scene when its static assignment points to missing, deleted, foreign or another user's account. Simply overwriting `session.ownerId` or trusting the synthetic accountId is insufficient. The mock also supplies the current owner's synthetic category via a scoped in-memory query; no hosted/local data was seeded or mutated.
+
+Accepted T015 seam remains `loadAccountReviewFixtureSession(sceneId)` with explicit test mode, canonical current-user hydration and ordinary financial Save behavior, not a test-only Save shortcut. Missing or invalid user/reference state must fail closed.
+
+### F09 separate catalogue integrity from real hydration
+
+The original **15 catalogue-integrity cases** (7 named, 8 B1 parameterized) remain independent of missing T005/T010/T015 runtime modules. The T008 **runtime-only** section now has **8 named cases + 3 missing/deleted/foreign parameterized cases + 15 individually parameterized all-scene cases = 26** test cases. Including the catalogue, T008 authors **41** cases. T006 authors **10** cases after adding F01 default-inconsistency and F07 scope-switch/deferred-read coverage; the two owned files now author **51** cases in total, but **no new run evidence**.
+
+The 15 runtime scene cases resolve the **actual future T015 service** through ordinary synchronous `jest.requireActual<typeof import(...)>(...)`, and pass its output to the **actual canonical** `accountReviewSessionSchema.parse` from `@monyvi/logic`. They assert authenticated owner/source, scene row/group counts, actual checked counts, review-reason row counts, SMS fingerprint/Voice-null boundaries and zero direct mock DB financial writes. The existing 20 M01–M20 mappings and approved exact B1 counts are unchanged. These runtime cases remain intentionally **Red/pending** until the genuine canonical schemas and real T015 service are implemented.
+
+The only virtual module is the **future T010 read-model dependency** used by the T008 fixture-entry test, not either actual service under test. The real T006 loader SUT stays unmocked/unvirtualized, and the real T015 loader SUT stays unmocked/unvirtualized. Rejection tests resolve the real module/export **before** `expect(...).rejects`, preventing missing-module failures from masquerading as successful runtime gating. No `await import()` remains; no changes to global Jest flags.
+
+### Actual verification and ownership boundary
+
+- GitHub branch ref was refreshed at the exact reopened SHA before any mutation. Sole writer stayed on `codex/395-ui-worker`.
+- The pre-receipt HEAD was rechecked before the final report edit. Test-file source and unchanged JSON were read back. A static source inspection checked mock scope capture, `jest.requireActual` occurrences, no dynamic imports, future-SUT nonvirtualization, 15-scene/20-scenario integrity and exact B1 counts. This is **not** a Jest/TypeScript/lint result.
+- **Tests actually executed in this correction leaf: NONE.** Root alone reruns the affected local batch; 21/37 is a **prior** run and must never be reported as a result of these changes.
+- The reopened correction changed **T006, T008 and this validation report only**. `apps/mobile/e2e/fixtures/shared-account-review.json` remains **byte-identical**, and the original branch-versus-implementation-context cumulative delta stays within the four-authorized-path allowlist.
+- Root/Core own canonical schema implementation and compatibility with existing Voice behaviors. T010/T015 production implementation requires a separate grant after canonical types freeze and meaningful Red. No production code, SQL, business documents, PR/issues/Pages/root branch, provider call, hosted/local seed/reset/deploy, emulator or Maestro operation was performed.
+
+**F01/F07/F08/F09 CORRECTION HANDOFF COMPLETE. EXCLUSIVE TEST LEAF OWNERSHIP RELEASED; ALL WRITES FROZEN.**
