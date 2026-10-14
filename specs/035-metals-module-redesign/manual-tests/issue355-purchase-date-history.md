@@ -38,8 +38,11 @@ the approved #355 binding delta; source/tests are not rendered proof.
    history, a supported purchase currency, and enter weight `10`.
 3. Confirm the automatic Purchase Price uses the quoted 24K rate directly rather
    than multiplying by stored `0.999`.
-4. Confirm the helper reads: **Estimated from the purchase-date market rate. You
-   can change it to what you paid.**
+4. Confirm the helper includes the selected-karat historical rate in the
+   purchase currency, formatted to two decimals, for example: **Estimated from
+   the purchase-date market rate of EGP 7,066.57/g. You can change it to what
+   you paid.** The calculation retains full precision; the displayed rate is
+   rounded.
 5. Manually replace the estimate, then change weight/karat/date and confirm the
    manual value is never overwritten.
 6. Repeat by manually clearing Purchase Price; confirm it stays empty after
@@ -87,3 +90,22 @@ the approved #355 binding delta; source/tests are not rendered proof.
 
 Device/visual/accessibility execution remains deferred to the local final QA
 batch; these scenario descriptions are not execution evidence.
+
+## Focused regression check — 2026-10-14
+
+- On a fresh Add form with no historical cache row, select 10 October 2026, Gold
+  24K, 10 g, EGP, leaving Purchase Price untouched. Confirm the first cache
+  write succeeds, the amount fills automatically, and the helper shows the rate
+  used.
+- Repeat with 21K: the helper and estimate must both use the adjusted 21K rate.
+- Edit or clear Purchase Price: manual ownership must remain permanent for that
+  form session, and the automatic-estimate helper must disappear.
+- Stop/reopen offline after a successful fetch: confirm the saved rate can be
+  reused without assigning the cache creation timestamp again.
+- A missing endpoint or malformed HTTP 404 is a fetch failure; only an explicit
+  `date_unavailable` response represents absent historical prices.
+
+Mohamed confirmed automatic filling on his physical device after the read-only
+`createdAt` assignment was removed. Helper-copy changes and the remaining
+regression scenarios require their own validation; this is not full-plan
+signoff.

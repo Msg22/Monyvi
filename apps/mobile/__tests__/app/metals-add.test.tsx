@@ -11,7 +11,8 @@ import { DEFAULT_COPY } from "@/components/metals/metal-holding-form-copy";
 
 jest.mock("react-i18next", () => ({
   useTranslation: () => ({
-    t: (key: string): string => key,
+    t: (key: string, options?: { readonly rate?: string }): string =>
+      options?.rate ? `${key} ${options.rate}` : key,
     i18n: { language: "en", dir: (): "ltr" => "ltr" },
   }),
 }));
@@ -98,6 +99,10 @@ jest.mock("@/hooks/useMetalHistoricalPurchasePriceEstimate", () => ({
     mockHistoricalEstimateInput = input;
     return {
       ownership: mockHistoricalEstimateOwnership,
+      marketRatePerGramDecimal:
+        mockHistoricalEstimateOwnership === "estimated"
+          ? "7066.5664720870406881533736906809582268181635177447"
+          : null,
       isLoading: false,
       error: null,
       onPurchasePriceUserChange: mockHistoricalManualPurchasePriceChange,
@@ -510,7 +515,7 @@ describe("Add metal holding route", () => {
     render(<AddHoldingRoute />);
 
     expect(
-      screen.getByText("add.purchase_price_estimate_hint")
+      screen.getByText("add.purchase_price_estimate_hint EGP 7,066.57")
     ).toBeOnTheScreen();
     expect(screen.queryByText("add.purchase_price_hint")).toBeNull();
   });

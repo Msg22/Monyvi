@@ -125,13 +125,13 @@ describe("Metals EN/AR content contract", () => {
       "Market rate on purchase date"
     );
     expect(enFlat["add.purchase_price_estimate_hint"]).toBe(
-      "Estimated from the purchase-date market rate. You can change it to what you paid."
+      "Estimated from the purchase-date market rate of {{rate}}/g. You can change it to what you paid."
     );
     expect(arFlat["detail.market_rate_on_purchase_date"]).toBe(
       "سعر السوق في تاريخ الشراء"
     );
     expect(arFlat["add.purchase_price_estimate_hint"]).toBe(
-      "مُقدَّر من سعر السوق في تاريخ الشراء. يمكنك تغييره إلى المبلغ الذي دفعته."
+      "مُقدَّر من سعر السوق في تاريخ الشراء: {{rate}} للجرام. يمكنك تغييره إلى المبلغ الذي دفعته."
     );
   });
 

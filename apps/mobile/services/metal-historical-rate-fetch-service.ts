@@ -8,6 +8,8 @@ import {
   invokeAuthenticatedEdgeFunction,
 } from "./authenticated-edge-function-service";
 
+import { logger } from "../utils/logger";
+
 const FUNCTION_NAME = "fetch-historical-metal-rate";
 
 export const METAL_HISTORICAL_RATE_FETCH_ERROR_CODES = {
@@ -40,14 +42,21 @@ export async function fetchHistoricalDailyRate(
   );
 
   if (response.error !== null) {
-    if (getEdgeFunctionErrorStatus(response.error) === 404) {
+    if (
+      getEdgeFunctionErrorStatus(response.error) === 404 &&
+      (await isHistoricalDateUnavailable(response.error))
+    ) {
       throw new MetalHistoricalRateFetchError(
         METAL_HISTORICAL_RATE_FETCH_ERROR_CODES.DATE_UNAVAILABLE
       );
     }
-    throw new MetalHistoricalRateFetchError(
+    const error = new MetalHistoricalRateFetchError(
       METAL_HISTORICAL_RATE_FETCH_ERROR_CODES.FAILED
     );
+    logger.error("metals.historicalRate.fetch.failed", error, {
+      status: getEdgeFunctionErrorStatus(response.error),
+    });
+    throw error;
   }
 
   if (
@@ -70,4 +79,28 @@ export async function fetchHistoricalDailyRate(
     );
   }
   return record;
+}
+
+async function isHistoricalDateUnavailable(error: unknown): Promise<boolean> {
+  if (
+    typeof error !== "object" ||
+    error === null ||
+    !("context" in error) ||
+    !(error.context instanceof Response)
+  )
+    return false;
+  try {
+    const body: unknown = await error.context.clone().json();
+    return (
+      typeof body === "object" &&
+      body !== null &&
+      "success" in body &&
+      body.success === false &&
+      "code" in body &&
+      body.code === "date_unavailable"
+    );
+  } catch {
+    // An unreadable gateway response cannot prove that historical rates are missing.
+    return false;
+  }
 }

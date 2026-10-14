@@ -1,5 +1,6 @@
 import {
   calculateHistoricalPurchaseEstimateDecimal,
+  calculateHistoricalPurityGramPriceDecimal,
   isExactCalendarDate,
   isSupportedMetalsIsoCurrencyCode,
   resolveMetalsCurrencyMinorUnits,
@@ -32,6 +33,7 @@ export interface UseMetalHistoricalPurchasePriceEstimateInput {
 
 export interface UseMetalHistoricalPurchasePriceEstimateResult {
   readonly ownership: HistoricalPurchasePriceOwnership;
+  readonly marketRatePerGramDecimal: string | null;
   readonly isLoading: boolean;
   readonly error: Error | null;
   readonly onPurchasePriceUserChange: (value: string) => void;
@@ -272,8 +274,24 @@ export function useMetalHistoricalPurchasePriceEstimate(
     setRetryIndex((value) => value + 1);
   }, []);
 
+  const marketRatePerGramDecimal = useMemo((): string | null => {
+    if (
+      ownership !== "estimated" ||
+      reference === null ||
+      referenceIdentityRef.current !== referenceIdentity ||
+      !purity.available
+    )
+      return null;
+    return calculateHistoricalPurityGramPriceDecimal({
+      purityCode: purity.entry.code,
+      purityFactorDecimal: purity.entry.factorDecimal,
+      pair: reference,
+    });
+  }, [ownership, reference, referenceIdentity, purity]);
+
   return {
     ownership,
+    marketRatePerGramDecimal,
     isLoading,
     error,
     onPurchasePriceUserChange,

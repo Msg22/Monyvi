@@ -2,6 +2,15 @@ const mockInvokeAuthenticatedEdgeFunction = jest.fn<
   Promise<unknown>,
   [string, unknown]
 >();
+const mockLogError = jest.fn();
+jest.mock("../../utils/logger", () => ({
+  logger: {
+    error: (...args: unknown[]): void => {
+      mockLogError(...args);
+    },
+  },
+}));
+
 const mockGetEdgeFunctionErrorStatus = jest.fn<number | undefined, [unknown]>();
 
 jest.mock("../../services/authenticated-edge-function-service", () => ({
@@ -68,7 +77,12 @@ describe("#355 authenticated historical Edge fetch", () => {
   });
 
   it("maps an exact-date 404 without inventing a fallback", async () => {
-    const error = new Error("function returned 404");
+    const error = {
+      context: new Response(
+        JSON.stringify({ success: false, code: "date_unavailable" }),
+        { status: 404 }
+      ),
+    };
     mockInvokeAuthenticatedEdgeFunction.mockResolvedValue({
       data: null,
       error,
@@ -80,6 +94,36 @@ describe("#355 authenticated historical Edge fetch", () => {
       code: METAL_HISTORICAL_RATE_FETCH_ERROR_CODES.DATE_UNAVAILABLE,
     });
   });
+
+  it.each([
+    JSON.stringify({
+      code: "NOT_FOUND",
+      message: "Requested function was not found",
+    }),
+    "not JSON",
+    JSON.stringify({ success: true, code: "date_unavailable" }),
+  ])(
+    "treats an infrastructure 404 as fetch failure, not missing history (%s)",
+    async (body) => {
+      const error = { context: new Response(body, { status: 404 }) };
+      mockInvokeAuthenticatedEdgeFunction.mockResolvedValue({
+        data: null,
+        error,
+      });
+      mockGetEdgeFunctionErrorStatus.mockReturnValue(404);
+      await expect(
+        fetchHistoricalDailyRate("2026-10-10")
+      ).rejects.toMatchObject({
+        code: METAL_HISTORICAL_RATE_FETCH_ERROR_CODES.FAILED,
+      });
+      expect(mockLogError).toHaveBeenCalledWith(
+        "metals.historicalRate.fetch.failed",
+        expect.any(Error),
+        { status: 404 }
+      );
+      expect(error.context.bodyUsed).toBe(false);
+    }
+  );
 
   it("passes cancellation to the installed Edge invoke transport", async () => {
     const controller = new AbortController();

@@ -155,6 +155,28 @@ describe("#355 historical local cache", () => {
     );
   });
 
+  it("creates a cache row without assigning WatermelonDB's read-only creation timestamp", async () => {
+    const createdAt = new Date("2026-10-14T12:00:00.000Z");
+    const draft: Record<string, unknown> = {};
+    Object.defineProperty(draft, "createdAt", {
+      get: (): Date => createdAt,
+      set: (): never => {
+        throw new Error("createdAt is read-only");
+      },
+    });
+    mockCreate.mockImplementationOnce((apply): Promise<void> => {
+      apply(draft);
+      return Promise.resolve();
+    });
+    await expect(saveHistoricalDailyRateCache(record())).resolves.toEqual(
+      record()
+    );
+    expect(draft.createdAt).toBe(createdAt);
+    expect(draft.rateDate).toBe("2026-10-10");
+    expect(draft.userId).toBe("user-1");
+    expect(draft.updatedAt).toBeInstanceOf(Date);
+  });
+
   it("creates one current-user row and reuses provider/date identity on later saves", async () => {
     await saveHistoricalDailyRateCache(record());
 

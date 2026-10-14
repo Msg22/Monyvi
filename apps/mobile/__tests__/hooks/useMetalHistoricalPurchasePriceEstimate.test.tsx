@@ -51,6 +51,7 @@ interface Props {
   readonly weight: string;
   readonly purchasePrice: string;
   readonly purchaseDate?: string;
+  readonly purityCode?: string;
 }
 
 function input(
@@ -61,7 +62,7 @@ function input(
   return {
     metal: "GOLD",
     weightGrams: props.weight,
-    purityCode: "gold-999",
+    purityCode: props.purityCode ?? "gold-999",
     purchaseCurrency: "USD",
     purchaseDate: props.purchaseDate ?? "2026-10-10",
     purchasePrice: props.purchasePrice,
@@ -87,6 +88,7 @@ describe("#355 Add-only historical purchase-price estimator", () => {
     await waitFor(() => {
       expect(onChange).toHaveBeenCalledWith("1000.00");
       expect(result.current.ownership).toBe("estimated");
+      expect(result.current.marketRatePerGramDecimal).toBe("100");
     });
   });
 
@@ -109,6 +111,37 @@ describe("#355 Add-only historical purchase-price estimator", () => {
 
     await waitFor(() => {
       expect(onChange).toHaveBeenCalledWith("2000.00");
+    });
+    expect(resolver).toHaveBeenCalledTimes(1);
+  });
+
+  it("reports the selected karat's exact historical gram rate without rounding the estimate input", async () => {
+    const onChange = jest.fn();
+    const resolver = jest.fn(() => Promise.resolve(available()));
+    const { result, rerender } = renderHook(
+      (props: Props) =>
+        useMetalHistoricalPurchasePriceEstimate(
+          input(props, onChange, resolver)
+        ),
+      {
+        initialProps: {
+          weight: "10",
+          purchasePrice: "",
+          purityCode: "gold-999",
+        },
+      }
+    );
+    await waitFor(() =>
+      expect(result.current.marketRatePerGramDecimal).toBe("100")
+    );
+    rerender({
+      weight: "10",
+      purchasePrice: "1000.00",
+      purityCode: "gold-875",
+    });
+    await waitFor(() => {
+      expect(result.current.marketRatePerGramDecimal).toBe("87.5");
+      expect(onChange).toHaveBeenCalledWith("875.00");
     });
     expect(resolver).toHaveBeenCalledTimes(1);
   });
@@ -155,6 +188,7 @@ describe("#355 Add-only historical purchase-price estimator", () => {
       result.current.onPurchasePriceUserChange("");
     });
     expect(result.current.ownership).toBe("manual");
+    expect(result.current.marketRatePerGramDecimal).toBeNull();
     expect(onChange).toHaveBeenCalledWith("");
 
     const callsBeforeChange = resolver.mock.calls.length;

@@ -42,6 +42,8 @@ import { useMetalHistoricalPurchasePriceEstimate } from "@/hooks/useMetalHistori
 import { useToast } from "@/components/ui/Toast";
 import { addMetalHoldingFromForm } from "@/services/add-metal-holding-facade-service";
 
+import { formatLocalizedMoneyAmount } from "@/utils/localized-money-display";
+
 const SAFE_RANGE = {
   maximumWeightGramsDecimal: "999999999.999",
   maximumPurchasePriceDecimal: "999999999999999.99",
@@ -88,8 +90,27 @@ export default function AddMetalHoldingRoute(): React.JSX.Element {
     onPurchasePriceChange: setEstimatedPurchasePrice,
   });
   const copy = useMemo(
-    () => createCopy(t, historicalPurchasePrice.ownership === "estimated"),
-    [historicalPurchasePrice.ownership, t]
+    () =>
+      createCopy(
+        t,
+        historicalPurchasePrice.marketRatePerGramDecimal !== null &&
+          isSupportedMetalsIsoCurrencyCode(form.values.purchaseCurrency)
+          ? formatLocalizedMoneyAmount({
+              amount: historicalPurchasePrice.marketRatePerGramDecimal,
+              currency: form.values.purchaseCurrency,
+              language: locale,
+              englishPresentation: "code-prefix",
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            })
+          : null
+      ),
+    [
+      historicalPurchasePrice.marketRatePerGramDecimal,
+      form.values.purchaseCurrency,
+      locale,
+      t,
+    ]
   );
   const { onPurchasePriceUserChange } = historicalPurchasePrice;
   const handleFormChange = useCallback(
@@ -281,7 +302,7 @@ function DirtyExitGuard({
 
 function createCopy(
   t: ReturnType<typeof useTranslation<"metals">>["t"],
-  hasHistoricalEstimate: boolean = false
+  historicalRateLabel: string | null = null
 ): MetalHoldingFormCopy {
   return {
     title: t("add.submit"),
@@ -294,11 +315,10 @@ function createCopy(
     weight: t("add.weight"),
     purity: t("add.karat"),
     purchasePrice: t("add.total_purchase_price"),
-    purchasePriceHint: t(
-      hasHistoricalEstimate
-        ? "add.purchase_price_estimate_hint"
-        : "add.purchase_price_hint"
-    ),
+    purchasePriceHint:
+      historicalRateLabel === null
+        ? t("add.purchase_price_hint")
+        : t("add.purchase_price_estimate_hint", { rate: historicalRateLabel }),
     purchaseCurrency: t("add.purchase_currency"),
     purchaseDate: t("purchase_date"),
     physicalForm: t("add.physical_form"),

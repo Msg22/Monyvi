@@ -93,7 +93,6 @@ export async function saveHistoricalDailyRateCache(
     await collection.create((draft): void => {
       draft.userId = scope.userId;
       applyRecord(draft, record);
-      draft.createdAt = now;
       draft.updatedAt = now;
     });
   });

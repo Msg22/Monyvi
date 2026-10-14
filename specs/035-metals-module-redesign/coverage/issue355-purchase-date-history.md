@@ -62,7 +62,7 @@ Remote-only lookup is approved. Metals.Dev HTTP fallback, provider API-key use, 
 - The active Details production read explicitly opts into purchase-date history enrichment. It selects only rate references owned by the holding's current `acquisitionActionId`; legacy/null acquisition actions fall back to exact-date cache/network history rather than borrowing another action's evidence.
 - Active Details exposes one presentation-safe fact: `Market rate on purchase date`; the UI never renders resolver origin, provider, source, quality, freshness, or trust metadata.
 - Add composes `useMetalHistoricalPurchasePriceEstimate` with the existing form setter. Programmatic estimates call the ordinary `updateField("purchasePrice", value)`; actual Purchase Price edits and clears use the manual-ownership handler.
-- The Add helper is exactly `Estimated from the purchase-date market rate. You can change it to what you paid.` only while the displayed value is estimator-owned. Missing history retains the existing paid-amount helper and manual entry.
+- The Add helper includes the selected-karat historical market rate in the purchase currency: `Estimated from the purchase-date market rate of {{rate}}/g. You can change it to what you paid.` only while the displayed value is estimator-owned. Missing history retains the existing paid-amount helper and manual entry.
 
 ### Focused follow-on tests authored, NOT RUN
 
@@ -75,3 +75,17 @@ Remote-only lookup is approved. Metals.Dev HTTP fallback, provider API-key use, 
 - Presentation-safe facade quoted-24K behavior in `apps/mobile/__tests__/services/metal-historical-detail-facade-service.test.ts`.
 
 No test/lint/type/build/format/device gate has been executed in this remote author lane.
+
+## Device regression corrections — 2026-10-14
+
+| Scenario | Coverage |
+| --- | --- |
+| First cache insertion with read-only creation timestamp | `metal-historical-rate-cache-service.test.ts`; physical-device automatic filling confirmed by Mohamed |
+| HTTP 404 endpoint missing versus historical date absent | `metal-historical-rate-fetch-service.test.ts` |
+| Exact historical gram rate, quoted 24K and adjusted 21K | `useMetalHistoricalPurchasePriceEstimate.test.tsx` |
+| Helper shows grouped two-decimal purchase-currency rate | `metals-add.test.tsx` |
+| EN/AR helper interpolation parity | `metals-content-contract.test.ts` |
+
+No migration or rate-calculation policy changed. WatermelonDB supplies the
+read-only creation timestamp. Historical calculations keep full precision; the
+helper uses the existing localized monetary formatter at the display boundary.
