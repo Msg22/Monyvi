@@ -1,0 +1,1263 @@
+{
+  "format": "monyvi-account-review-fixture-descriptors/v1",
+  "authority": "specs/395-shared-account-review/contracts/wire-shapes.md",
+  "synthetic": true,
+  "ownerBinding": "authenticated-current-user-only",
+  "productionEntryAllowed": false,
+  "requires": "EXPO_PUBLIC_MONYVI_TEST_MODE=e2e and non-production runtime",
+  "sourceDataPolicy": "No customer data, hosted seed/reset, SMS body, full card/account numbers, access tokens or real provider calls",
+  "fixtureSemantics": "Descriptor catalog only, not a persisted ReviewSession nor a substitute for canonical logic schemas. T015 must validate/hydrate through logic-owned Zod and current-owner read scope; saved entries use real writer.",
+  "accountContext": {
+    "reviewContractVersion": "account-review/v2",
+    "preferredCurrency": "EGP",
+    "accounts": [
+      {
+        "id": "1eea0000-3950-4000-8000-0000000003e8",
+        "name": "Cash",
+        "currency": "EGP",
+        "type": "CASH",
+        "institutionId": null,
+        "providerDisplayName": null,
+        "cardLast4": null,
+        "senderNames": []
+      },
+      {
+        "id": "1eea0000-3950-4000-8000-0000000003e9",
+        "name": "QNB Everyday",
+        "currency": "EGP",
+        "type": "BANK",
+        "institutionId": "qnb",
+        "providerDisplayName": "QNB",
+        "cardLast4": "0007",
+        "senderNames": [
+          "QNB"
+        ]
+      },
+      {
+        "id": "1eea0000-3950-4000-8000-0000000003ea",
+        "name": "QNB Savings",
+        "currency": "EGP",
+        "type": "BANK",
+        "institutionId": "qnb",
+        "providerDisplayName": "QNB",
+        "cardLast4": "9221",
+        "senderNames": [
+          "QNB"
+        ]
+      },
+      {
+        "id": "1eea0000-3950-4000-8000-0000000003eb",
+        "name": "CIB Main",
+        "currency": "EGP",
+        "type": "BANK",
+        "institutionId": "cib",
+        "providerDisplayName": "CIB",
+        "cardLast4": "5566",
+        "senderNames": [
+          "CIB"
+        ]
+      },
+      {
+        "id": "1eea0000-3950-4000-8000-0000000003ec",
+        "name": "Wallet",
+        "currency": "USD",
+        "type": "DIGITAL_WALLET",
+        "institutionId": null,
+        "providerDisplayName": "Mobile Wallet",
+        "cardLast4": null,
+        "senderNames": [
+          "WALLET"
+        ]
+      }
+    ]
+  },
+  "defaultAccountId": "1eea0000-3950-4000-8000-0000000003e8",
+  "excludedAccountRefs": {
+    "deletedAccountId": "1eea0000-3950-4000-8000-0000000003ed",
+    "foreignAccountId": "1eea0000-3950-4000-8000-0000000003ee"
+  },
+  "syntheticCategoryId": "1eea0000-3950-4000-8000-0000000003ef",
+  "fingerprintProvenance": "Each 64-hex sample is SHA-256 of a distinct 'Monyvi 395 synthetic SMS fixture <seed>' label; not a claim of app parser-generated hashes. Runtime adaptation must honor actual source fingerprint rules.",
+  "scenes": [
+    {
+      "id": "r3-combined-en",
+      "binding": "R3-05",
+      "source": "VOICE",
+      "sessionId": "1eea0000-3950-4000-8000-0000000003f0",
+      "language": "en",
+      "groups": [
+        {
+          "groupId": "1eea0000-3950-4000-8000-0000000003f1",
+          "name": "QNB",
+          "currency": "EGP",
+          "type": "BANK",
+          "cardLast4": "0007",
+          "status": "pending",
+          "linkedRowIds": [
+            "1eea0000-3950-4000-8000-0000000003f3",
+            "1eea0000-3950-4000-8000-0000000003f4",
+            "1eea0000-3950-4000-8000-0000000003f5"
+          ]
+        },
+        {
+          "groupId": "1eea0000-3950-4000-8000-0000000003f2",
+          "name": "CIB",
+          "currency": "EGP",
+          "type": "BANK",
+          "cardLast4": "5566",
+          "status": "pending",
+          "linkedRowIds": [
+            "1eea0000-3950-4000-8000-0000000003f6"
+          ]
+        }
+      ],
+      "rows": [
+        {
+          "rowId": "1eea0000-3950-4000-8000-0000000003f3",
+          "sourceRef": "voice:r3-combined-en:1",
+          "sourceFingerprint": null,
+          "categoryId": "1eea0000-3950-4000-8000-0000000003ef",
+          "amountDecimal": "120",
+          "currencyCode": "EGP",
+          "accountId": null,
+          "groupId": "1eea0000-3950-4000-8000-0000000003f1",
+          "toAccountId": null,
+          "issueTags": [
+            "account_group_unconfirmed"
+          ],
+          "selected": false,
+          "isAtmWithdrawal": false
+        },
+        {
+          "rowId": "1eea0000-3950-4000-8000-0000000003f4",
+          "sourceRef": "voice:r3-combined-en:2",
+          "sourceFingerprint": null,
+          "categoryId": "1eea0000-3950-4000-8000-0000000003ef",
+          "amountDecimal": "121",
+          "currencyCode": "EGP",
+          "accountId": null,
+          "groupId": "1eea0000-3950-4000-8000-0000000003f1",
+          "toAccountId": null,
+          "issueTags": [
+            "account_group_unconfirmed"
+          ],
+          "selected": false,
+          "isAtmWithdrawal": false
+        },
+        {
+          "rowId": "1eea0000-3950-4000-8000-0000000003f5",
+          "sourceRef": "voice:r3-combined-en:3",
+          "sourceFingerprint": null,
+          "categoryId": "1eea0000-3950-4000-8000-0000000003ef",
+          "amountDecimal": "122",
+          "currencyCode": "EGP",
+          "accountId": null,
+          "groupId": "1eea0000-3950-4000-8000-0000000003f1",
+          "toAccountId": null,
+          "issueTags": [
+            "account_group_unconfirmed"
+          ],
+          "selected": false,
+          "isAtmWithdrawal": false
+        },
+        {
+          "rowId": "1eea0000-3950-4000-8000-0000000003f6",
+          "sourceRef": "voice:r3-combined-en:4",
+          "sourceFingerprint": null,
+          "categoryId": "1eea0000-3950-4000-8000-0000000003ef",
+          "amountDecimal": "45",
+          "currencyCode": "EGP",
+          "accountId": null,
+          "groupId": "1eea0000-3950-4000-8000-0000000003f2",
+          "toAccountId": null,
+          "issueTags": [
+            "account_group_unconfirmed"
+          ],
+          "selected": false,
+          "isAtmWithdrawal": false
+        },
+        {
+          "rowId": "1eea0000-3950-4000-8000-0000000003f7",
+          "sourceRef": "voice:r3-combined-en:5",
+          "sourceFingerprint": null,
+          "categoryId": "1eea0000-3950-4000-8000-0000000003ef",
+          "amountDecimal": "200",
+          "currencyCode": "EGP",
+          "accountId": "1eea0000-3950-4000-8000-0000000003e8",
+          "groupId": null,
+          "toAccountId": null,
+          "issueTags": [],
+          "selected": true,
+          "isAtmWithdrawal": false
+        },
+        {
+          "rowId": "1eea0000-3950-4000-8000-0000000003f8",
+          "sourceRef": "voice:r3-combined-en:6",
+          "sourceFingerprint": null,
+          "categoryId": "1eea0000-3950-4000-8000-0000000003ef",
+          "amountDecimal": "35",
+          "currencyCode": "EGP",
+          "accountId": "1eea0000-3950-4000-8000-0000000003e8",
+          "groupId": null,
+          "toAccountId": null,
+          "issueTags": [],
+          "selected": true,
+          "isAtmWithdrawal": false
+        },
+        {
+          "rowId": "1eea0000-3950-4000-8000-0000000003f9",
+          "sourceRef": "voice:r3-combined-en:7",
+          "sourceFingerprint": null,
+          "categoryId": "1eea0000-3950-4000-8000-0000000003ef",
+          "amountDecimal": "76",
+          "currencyCode": null,
+          "accountId": null,
+          "groupId": null,
+          "toAccountId": null,
+          "issueTags": [
+            "currency_confirmation_needed"
+          ],
+          "selected": false,
+          "isAtmWithdrawal": false
+        }
+      ],
+      "expectedCounts": {
+        "total": 7,
+        "needsReview": 5,
+        "selected": 2
+      },
+      "note": "QNB3 + CIB1 + default2 + one conflicting-currency entry; 7/5/2"
+    },
+    {
+      "id": "r3-combined-ar",
+      "binding": "R3-15",
+      "source": "VOICE",
+      "sessionId": "1eea0000-3950-4000-8000-0000000003fa",
+      "language": "ar",
+      "groups": [
+        {
+          "groupId": "1eea0000-3950-4000-8000-0000000003fb",
+          "name": "QNB",
+          "currency": "EGP",
+          "type": "BANK",
+          "cardLast4": "0007",
+          "status": "pending",
+          "linkedRowIds": [
+            "1eea0000-3950-4000-8000-0000000003fd",
+            "1eea0000-3950-4000-8000-0000000003fe",
+            "1eea0000-3950-4000-8000-0000000003ff"
+          ]
+        },
+        {
+          "groupId": "1eea0000-3950-4000-8000-0000000003fc",
+          "name": "CIB",
+          "currency": "EGP",
+          "type": "BANK",
+          "cardLast4": "5566",
+          "status": "pending",
+          "linkedRowIds": [
+            "1eea0000-3950-4000-8000-000000000400"
+          ]
+        }
+      ],
+      "rows": [
+        {
+          "rowId": "1eea0000-3950-4000-8000-0000000003fd",
+          "sourceRef": "voice:r3-combined-ar:1",
+          "sourceFingerprint": null,
+          "categoryId": "1eea0000-3950-4000-8000-0000000003ef",
+          "amountDecimal": "120",
+          "currencyCode": "EGP",
+          "accountId": null,
+          "groupId": "1eea0000-3950-4000-8000-0000000003fb",
+          "toAccountId": null,
+          "issueTags": [
+            "account_group_unconfirmed"
+          ],
+          "selected": false,
+          "isAtmWithdrawal": false
+        },
+        {
+          "rowId": "1eea0000-3950-4000-8000-0000000003fe",
+          "sourceRef": "voice:r3-combined-ar:2",
+          "sourceFingerprint": null,
+          "categoryId": "1eea0000-3950-4000-8000-0000000003ef",
+          "amountDecimal": "121",
+          "currencyCode": "EGP",
+          "accountId": null,
+          "groupId": "1eea0000-3950-4000-8000-0000000003fb",
+          "toAccountId": null,
+          "issueTags": [
+            "account_group_unconfirmed"
+          ],
+          "selected": false,
+          "isAtmWithdrawal": false
+        },
+        {
+          "rowId": "1eea0000-3950-4000-8000-0000000003ff",
+          "sourceRef": "voice:r3-combined-ar:3",
+          "sourceFingerprint": null,
+          "categoryId": "1eea0000-3950-4000-8000-0000000003ef",
+          "amountDecimal": "122",
+          "currencyCode": "EGP",
+          "accountId": null,
+          "groupId": "1eea0000-3950-4000-8000-0000000003fb",
+          "toAccountId": null,
+          "issueTags": [
+            "account_group_unconfirmed"
+          ],
+          "selected": false,
+          "isAtmWithdrawal": false
+        },
+        {
+          "rowId": "1eea0000-3950-4000-8000-000000000400",
+          "sourceRef": "voice:r3-combined-ar:4",
+          "sourceFingerprint": null,
+          "categoryId": "1eea0000-3950-4000-8000-0000000003ef",
+          "amountDecimal": "45",
+          "currencyCode": "EGP",
+          "accountId": null,
+          "groupId": "1eea0000-3950-4000-8000-0000000003fc",
+          "toAccountId": null,
+          "issueTags": [
+            "account_group_unconfirmed"
+          ],
+          "selected": false,
+          "isAtmWithdrawal": false
+        },
+        {
+          "rowId": "1eea0000-3950-4000-8000-000000000401",
+          "sourceRef": "voice:r3-combined-ar:5",
+          "sourceFingerprint": null,
+          "categoryId": "1eea0000-3950-4000-8000-0000000003ef",
+          "amountDecimal": "200",
+          "currencyCode": "EGP",
+          "accountId": "1eea0000-3950-4000-8000-0000000003e8",
+          "groupId": null,
+          "toAccountId": null,
+          "issueTags": [],
+          "selected": true,
+          "isAtmWithdrawal": false
+        },
+        {
+          "rowId": "1eea0000-3950-4000-8000-000000000402",
+          "sourceRef": "voice:r3-combined-ar:6",
+          "sourceFingerprint": null,
+          "categoryId": "1eea0000-3950-4000-8000-0000000003ef",
+          "amountDecimal": "35",
+          "currencyCode": "EGP",
+          "accountId": "1eea0000-3950-4000-8000-0000000003e8",
+          "groupId": null,
+          "toAccountId": null,
+          "issueTags": [],
+          "selected": true,
+          "isAtmWithdrawal": false
+        },
+        {
+          "rowId": "1eea0000-3950-4000-8000-000000000403",
+          "sourceRef": "voice:r3-combined-ar:7",
+          "sourceFingerprint": null,
+          "categoryId": "1eea0000-3950-4000-8000-0000000003ef",
+          "amountDecimal": "76",
+          "currencyCode": null,
+          "accountId": null,
+          "groupId": null,
+          "toAccountId": null,
+          "issueTags": [
+            "currency_confirmation_needed"
+          ],
+          "selected": false,
+          "isAtmWithdrawal": false
+        }
+      ],
+      "expectedCounts": {
+        "total": 7,
+        "needsReview": 5,
+        "selected": 2
+      },
+      "note": "QNB3 + CIB1 + default2 + one conflicting-currency entry; 7/5/2"
+    },
+    {
+      "id": "r3-removed-undo",
+      "binding": "R3-06",
+      "source": "SMS",
+      "sessionId": "1eea0000-3950-4000-8000-000000000404",
+      "language": "en",
+      "groups": [
+        {
+          "groupId": "1eea0000-3950-4000-8000-000000000405",
+          "name": "QNB",
+          "currency": "EGP",
+          "type": "BANK",
+          "cardLast4": "0007",
+          "status": "removed",
+          "linkedRowIds": [
+            "1eea0000-3950-4000-8000-000000000407",
+            "1eea0000-3950-4000-8000-000000000408"
+          ]
+        },
+        {
+          "groupId": "1eea0000-3950-4000-8000-000000000406",
+          "name": "CIB",
+          "currency": "EGP",
+          "type": "BANK",
+          "cardLast4": "5566",
+          "status": "pending",
+          "linkedRowIds": [
+            "1eea0000-3950-4000-8000-000000000409"
+          ]
+        }
+      ],
+      "rows": [
+        {
+          "rowId": "1eea0000-3950-4000-8000-000000000407",
+          "sourceRef": "sms:r3-removed-undo:1",
+          "sourceFingerprint": "3efe7e0b01a39878d4533a6b041d158eba274a1aa4c6b2b272d936a37ac82dc1",
+          "categoryId": "1eea0000-3950-4000-8000-0000000003ef",
+          "amountDecimal": "125",
+          "currencyCode": "EGP",
+          "accountId": null,
+          "groupId": "1eea0000-3950-4000-8000-000000000405",
+          "toAccountId": null,
+          "issueTags": [
+            "account_group_removed"
+          ],
+          "selected": false,
+          "isAtmWithdrawal": false
+        },
+        {
+          "rowId": "1eea0000-3950-4000-8000-000000000408",
+          "sourceRef": "sms:r3-removed-undo:2",
+          "sourceFingerprint": "48b2d5067bb032b207b6265f8dc659fb847d4e4e952d45c43630a259a5f234dc",
+          "categoryId": "1eea0000-3950-4000-8000-0000000003ef",
+          "amountDecimal": "125",
+          "currencyCode": "EGP",
+          "accountId": null,
+          "groupId": "1eea0000-3950-4000-8000-000000000405",
+          "toAccountId": null,
+          "issueTags": [
+            "account_group_removed"
+          ],
+          "selected": false,
+          "isAtmWithdrawal": false
+        },
+        {
+          "rowId": "1eea0000-3950-4000-8000-000000000409",
+          "sourceRef": "sms:r3-removed-undo:3",
+          "sourceFingerprint": "fdc570d9335e0ca49929aa1214c8f4f8e7553a5f3b7ae9f26f0b83af25cb150a",
+          "categoryId": "1eea0000-3950-4000-8000-0000000003ef",
+          "amountDecimal": "125",
+          "currencyCode": "EGP",
+          "accountId": null,
+          "groupId": "1eea0000-3950-4000-8000-000000000406",
+          "toAccountId": null,
+          "issueTags": [
+            "account_group_unconfirmed"
+          ],
+          "selected": false,
+          "isAtmWithdrawal": false
+        },
+        {
+          "rowId": "1eea0000-3950-4000-8000-00000000040a",
+          "sourceRef": "sms:r3-removed-undo:4",
+          "sourceFingerprint": "3fab18762bbfea5eacbbf937d9b57f81e640082076f4ff3ac8b308599951ec1e",
+          "categoryId": "1eea0000-3950-4000-8000-0000000003ef",
+          "amountDecimal": "125",
+          "currencyCode": "EGP",
+          "accountId": "1eea0000-3950-4000-8000-0000000003eb",
+          "groupId": null,
+          "toAccountId": null,
+          "issueTags": [],
+          "selected": true,
+          "isAtmWithdrawal": false
+        }
+      ],
+      "expectedCounts": {
+        "total": 4,
+        "needsReview": 3,
+        "selected": 1
+      },
+      "note": "Separate QNB2 removed + CIB1 pending + default1 selected: 4/3/1"
+    },
+    {
+      "id": "r3-default-only",
+      "binding": "R3-07",
+      "source": "VOICE",
+      "sessionId": "1eea0000-3950-4000-8000-00000000040b",
+      "language": "en",
+      "groups": [],
+      "rows": [
+        {
+          "rowId": "1eea0000-3950-4000-8000-00000000040c",
+          "sourceRef": "voice:r3-default-only:1",
+          "sourceFingerprint": null,
+          "categoryId": "1eea0000-3950-4000-8000-0000000003ef",
+          "amountDecimal": "125",
+          "currencyCode": "EGP",
+          "accountId": "1eea0000-3950-4000-8000-0000000003e8",
+          "groupId": null,
+          "toAccountId": null,
+          "issueTags": [],
+          "selected": true,
+          "isAtmWithdrawal": false
+        },
+        {
+          "rowId": "1eea0000-3950-4000-8000-00000000040d",
+          "sourceRef": "voice:r3-default-only:2",
+          "sourceFingerprint": null,
+          "categoryId": "1eea0000-3950-4000-8000-0000000003ef",
+          "amountDecimal": "125",
+          "currencyCode": "EGP",
+          "accountId": "1eea0000-3950-4000-8000-0000000003e8",
+          "groupId": null,
+          "toAccountId": null,
+          "issueTags": [],
+          "selected": true,
+          "isAtmWithdrawal": false
+        }
+      ],
+      "expectedCounts": {
+        "total": 2,
+        "needsReview": 0,
+        "selected": 2
+      },
+      "note": "Two confident eligible Cash default rows; quiet Why disclosure, no details panel"
+    },
+    {
+      "id": "r3-issues-only",
+      "binding": "R3-08",
+      "source": "SMS",
+      "sessionId": "1eea0000-3950-4000-8000-00000000040e",
+      "language": "en",
+      "groups": [],
+      "rows": [
+        {
+          "rowId": "1eea0000-3950-4000-8000-00000000040f",
+          "sourceRef": "sms:r3-issues-only:1",
+          "sourceFingerprint": "879af0d08d839f68b403795927ce2d5ddf8ed88f7a36d326c8fc3a1278a56766",
+          "categoryId": "1eea0000-3950-4000-8000-0000000003ef",
+          "amountDecimal": "125",
+          "currencyCode": "EGP",
+          "accountId": null,
+          "groupId": null,
+          "toAccountId": null,
+          "issueTags": [
+            "account_unavailable"
+          ],
+          "selected": false,
+          "isAtmWithdrawal": false
+        },
+        {
+          "rowId": "1eea0000-3950-4000-8000-000000000410",
+          "sourceRef": "sms:r3-issues-only:2",
+          "sourceFingerprint": "106ebd9a006a606bb154d9b844e7611c8b6c9543c51d3311670acde3d93fedb1",
+          "categoryId": "1eea0000-3950-4000-8000-0000000003ef",
+          "amountDecimal": "125",
+          "currencyCode": null,
+          "accountId": null,
+          "groupId": null,
+          "toAccountId": null,
+          "issueTags": [
+            "currency_confirmation_needed"
+          ],
+          "selected": false,
+          "isAtmWithdrawal": false
+        },
+        {
+          "rowId": "1eea0000-3950-4000-8000-000000000411",
+          "sourceRef": "sms:r3-issues-only:3",
+          "sourceFingerprint": "e14bb2aeb91b54bae41d0f6a39b93c5b70d77eae92aca605a15ee178a8414d13",
+          "categoryId": "1eea0000-3950-4000-8000-0000000003ef",
+          "amountDecimal": "125",
+          "currencyCode": "EGP",
+          "accountId": null,
+          "groupId": null,
+          "toAccountId": null,
+          "issueTags": [
+            "amount"
+          ],
+          "selected": false,
+          "isAtmWithdrawal": false
+        },
+        {
+          "rowId": "1eea0000-3950-4000-8000-000000000412",
+          "sourceRef": "sms:r3-issues-only:4",
+          "sourceFingerprint": "ddf5da7b3f8716497fc9bad7d48f0b54fc97aef960fbc3a8ba09ce94638e6d13",
+          "categoryId": "1eea0000-3950-4000-8000-0000000003ef",
+          "amountDecimal": "125",
+          "currencyCode": "EGP",
+          "accountId": null,
+          "groupId": null,
+          "toAccountId": null,
+          "issueTags": [
+            "category"
+          ],
+          "selected": false,
+          "isAtmWithdrawal": false
+        }
+      ],
+      "expectedCounts": {
+        "total": 4,
+        "needsReview": 4,
+        "selected": 0
+      },
+      "note": "One unresolved account/currency/amount/category entry each"
+    },
+    {
+      "id": "r3-confirmed-feedback",
+      "binding": "R3-09",
+      "source": "VOICE",
+      "sessionId": "1eea0000-3950-4000-8000-000000000413",
+      "language": "en",
+      "groups": [
+        {
+          "groupId": "1eea0000-3950-4000-8000-000000000414",
+          "name": "QNB",
+          "currency": "EGP",
+          "type": "BANK",
+          "cardLast4": "0007",
+          "status": "confirmed",
+          "linkedRowIds": [
+            "1eea0000-3950-4000-8000-000000000416",
+            "1eea0000-3950-4000-8000-000000000417",
+            "1eea0000-3950-4000-8000-000000000418"
+          ]
+        },
+        {
+          "groupId": "1eea0000-3950-4000-8000-000000000415",
+          "name": "CIB",
+          "currency": "EGP",
+          "type": "BANK",
+          "cardLast4": "5566",
+          "status": "confirmed",
+          "linkedRowIds": [
+            "1eea0000-3950-4000-8000-000000000419"
+          ]
+        }
+      ],
+      "rows": [
+        {
+          "rowId": "1eea0000-3950-4000-8000-000000000416",
+          "sourceRef": "voice:r3-confirmed-feedback:1",
+          "sourceFingerprint": null,
+          "categoryId": "1eea0000-3950-4000-8000-0000000003ef",
+          "amountDecimal": "125",
+          "currencyCode": "EGP",
+          "accountId": null,
+          "groupId": "1eea0000-3950-4000-8000-000000000414",
+          "toAccountId": null,
+          "issueTags": [],
+          "selected": true,
+          "isAtmWithdrawal": false
+        },
+        {
+          "rowId": "1eea0000-3950-4000-8000-000000000417",
+          "sourceRef": "voice:r3-confirmed-feedback:2",
+          "sourceFingerprint": null,
+          "categoryId": "1eea0000-3950-4000-8000-0000000003ef",
+          "amountDecimal": "125",
+          "currencyCode": "EGP",
+          "accountId": null,
+          "groupId": "1eea0000-3950-4000-8000-000000000414",
+          "toAccountId": null,
+          "issueTags": [],
+          "selected": false,
+          "isAtmWithdrawal": false
+        },
+        {
+          "rowId": "1eea0000-3950-4000-8000-000000000418",
+          "sourceRef": "voice:r3-confirmed-feedback:3",
+          "sourceFingerprint": null,
+          "categoryId": "1eea0000-3950-4000-8000-0000000003ef",
+          "amountDecimal": "125",
+          "currencyCode": "EGP",
+          "accountId": null,
+          "groupId": "1eea0000-3950-4000-8000-000000000414",
+          "toAccountId": null,
+          "issueTags": [],
+          "selected": false,
+          "isAtmWithdrawal": false
+        },
+        {
+          "rowId": "1eea0000-3950-4000-8000-000000000419",
+          "sourceRef": "voice:r3-confirmed-feedback:4",
+          "sourceFingerprint": null,
+          "categoryId": "1eea0000-3950-4000-8000-0000000003ef",
+          "amountDecimal": "125",
+          "currencyCode": "EGP",
+          "accountId": null,
+          "groupId": "1eea0000-3950-4000-8000-000000000415",
+          "toAccountId": null,
+          "issueTags": [],
+          "selected": false,
+          "isAtmWithdrawal": false
+        }
+      ],
+      "expectedCounts": {
+        "total": 4,
+        "needsReview": 0,
+        "selected": 1
+      },
+      "note": "QNB3 plus CIB1 confirmed; selecting Lunch checks one row only"
+    },
+    {
+      "id": "r3-clean",
+      "binding": "R3-10",
+      "source": "VOICE",
+      "sessionId": "1eea0000-3950-4000-8000-00000000041a",
+      "language": "en",
+      "groups": [],
+      "rows": [
+        {
+          "rowId": "1eea0000-3950-4000-8000-00000000041b",
+          "sourceRef": "voice:r3-clean:1",
+          "sourceFingerprint": null,
+          "categoryId": "1eea0000-3950-4000-8000-0000000003ef",
+          "amountDecimal": "125",
+          "currencyCode": "EGP",
+          "accountId": "1eea0000-3950-4000-8000-0000000003e9",
+          "groupId": null,
+          "toAccountId": null,
+          "issueTags": [],
+          "selected": true,
+          "isAtmWithdrawal": false
+        },
+        {
+          "rowId": "1eea0000-3950-4000-8000-00000000041c",
+          "sourceRef": "voice:r3-clean:2",
+          "sourceFingerprint": null,
+          "categoryId": "1eea0000-3950-4000-8000-0000000003ef",
+          "amountDecimal": "125",
+          "currencyCode": "EGP",
+          "accountId": "1eea0000-3950-4000-8000-0000000003e9",
+          "groupId": null,
+          "toAccountId": null,
+          "issueTags": [],
+          "selected": true,
+          "isAtmWithdrawal": false
+        }
+      ],
+      "expectedCounts": {
+        "total": 2,
+        "needsReview": 0,
+        "selected": 2
+      },
+      "note": "Two confident existing QNB matches, no details panel"
+    },
+    {
+      "id": "r3-selected-empty",
+      "binding": "R3-11",
+      "source": "VOICE",
+      "sessionId": "1eea0000-3950-4000-8000-00000000041d",
+      "language": "en",
+      "groups": [
+        {
+          "groupId": "1eea0000-3950-4000-8000-00000000041e",
+          "name": "QNB",
+          "currency": "EGP",
+          "type": "BANK",
+          "cardLast4": "0007",
+          "status": "confirmed",
+          "linkedRowIds": [
+            "1eea0000-3950-4000-8000-00000000041f",
+            "1eea0000-3950-4000-8000-000000000420",
+            "1eea0000-3950-4000-8000-000000000421"
+          ]
+        }
+      ],
+      "rows": [
+        {
+          "rowId": "1eea0000-3950-4000-8000-00000000041f",
+          "sourceRef": "voice:r3-selected-empty:1",
+          "sourceFingerprint": null,
+          "categoryId": "1eea0000-3950-4000-8000-0000000003ef",
+          "amountDecimal": "125",
+          "currencyCode": "EGP",
+          "accountId": null,
+          "groupId": "1eea0000-3950-4000-8000-00000000041e",
+          "toAccountId": null,
+          "issueTags": [],
+          "selected": false,
+          "isAtmWithdrawal": false
+        },
+        {
+          "rowId": "1eea0000-3950-4000-8000-000000000420",
+          "sourceRef": "voice:r3-selected-empty:2",
+          "sourceFingerprint": null,
+          "categoryId": "1eea0000-3950-4000-8000-0000000003ef",
+          "amountDecimal": "125",
+          "currencyCode": "EGP",
+          "accountId": null,
+          "groupId": "1eea0000-3950-4000-8000-00000000041e",
+          "toAccountId": null,
+          "issueTags": [],
+          "selected": false,
+          "isAtmWithdrawal": false
+        },
+        {
+          "rowId": "1eea0000-3950-4000-8000-000000000421",
+          "sourceRef": "voice:r3-selected-empty:3",
+          "sourceFingerprint": null,
+          "categoryId": "1eea0000-3950-4000-8000-0000000003ef",
+          "amountDecimal": "125",
+          "currencyCode": "EGP",
+          "accountId": null,
+          "groupId": "1eea0000-3950-4000-8000-00000000041e",
+          "toAccountId": null,
+          "issueTags": [],
+          "selected": false,
+          "isAtmWithdrawal": false
+        }
+      ],
+      "expectedCounts": {
+        "total": 3,
+        "needsReview": 0,
+        "selected": 0
+      },
+      "note": "Three confirmed but unchecked rows; selected filter empty and Save disabled"
+    },
+    {
+      "id": "r1-account-chooser",
+      "binding": "R1-03/R1-12",
+      "source": "VOICE",
+      "sessionId": "1eea0000-3950-4000-8000-000000000422",
+      "language": "en",
+      "groups": [],
+      "rows": [
+        {
+          "rowId": "1eea0000-3950-4000-8000-000000000423",
+          "sourceRef": "voice:r1-account-chooser:1",
+          "sourceFingerprint": null,
+          "categoryId": "1eea0000-3950-4000-8000-0000000003ef",
+          "amountDecimal": "125",
+          "currencyCode": "EGP",
+          "accountId": null,
+          "groupId": null,
+          "toAccountId": null,
+          "issueTags": [
+            "account_match_ambiguous"
+          ],
+          "selected": false,
+          "isAtmWithdrawal": false
+        }
+      ],
+      "expectedCounts": {
+        "total": 1,
+        "needsReview": 1,
+        "selected": 0
+      },
+      "note": "Three distinguishable same-currency candidates; no preselection"
+    },
+    {
+      "id": "r3-currency-conflict",
+      "binding": "R1-11/R3-03/R3-04",
+      "source": "SMS",
+      "sessionId": "1eea0000-3950-4000-8000-000000000424",
+      "language": "en",
+      "groups": [],
+      "rows": [
+        {
+          "rowId": "1eea0000-3950-4000-8000-000000000425",
+          "sourceRef": "sms:r3-currency-conflict:1",
+          "sourceFingerprint": "a1b9a67ff1f16956ea567f684bde4481373fc36181a2c29e6da9fb4ea63e7889",
+          "categoryId": "1eea0000-3950-4000-8000-0000000003ef",
+          "amountDecimal": "125",
+          "currencyCode": null,
+          "accountId": null,
+          "groupId": null,
+          "toAccountId": null,
+          "issueTags": [
+            "currency_confirmation_needed"
+          ],
+          "selected": false,
+          "isAtmWithdrawal": false
+        }
+      ],
+      "expectedCounts": {
+        "total": 1,
+        "needsReview": 1,
+        "selected": 0
+      },
+      "note": "EGP/USD conflict; existing picker entry unconfirmed with transaction context"
+    },
+    {
+      "id": "r3-sms-save-failure",
+      "binding": "R3-14",
+      "source": "SMS",
+      "sessionId": "1eea0000-3950-4000-8000-000000000426",
+      "language": "en",
+      "groups": [
+        {
+          "groupId": "1eea0000-3950-4000-8000-000000000428",
+          "name": "QNB",
+          "currency": "EGP",
+          "type": "BANK",
+          "cardLast4": "0007",
+          "status": "pending",
+          "linkedRowIds": [
+            "1eea0000-3950-4000-8000-000000000429"
+          ]
+        }
+      ],
+      "rows": [
+        {
+          "rowId": "1eea0000-3950-4000-8000-000000000427",
+          "sourceRef": "sms:r3-sms-save-failure:1",
+          "sourceFingerprint": "fa2675c80db0394ca9f82f87d7eae13fc8c9a81d30d3c978c9a03142451c0a6e",
+          "categoryId": "1eea0000-3950-4000-8000-0000000003ef",
+          "amountDecimal": "125",
+          "currencyCode": "EGP",
+          "accountId": "1eea0000-3950-4000-8000-0000000003eb",
+          "groupId": null,
+          "toAccountId": null,
+          "issueTags": [],
+          "selected": true,
+          "isAtmWithdrawal": false
+        },
+        {
+          "rowId": "1eea0000-3950-4000-8000-000000000429",
+          "sourceRef": "sms:r3-sms-save-failure:2",
+          "sourceFingerprint": "852b148967a98b2140a16277d5f881ab8d1dc9546c3e1748dade3c5288c3e23a",
+          "categoryId": "1eea0000-3950-4000-8000-0000000003ef",
+          "amountDecimal": "125",
+          "currencyCode": "EGP",
+          "accountId": null,
+          "groupId": "1eea0000-3950-4000-8000-000000000428",
+          "toAccountId": null,
+          "issueTags": [
+            "account_group_unconfirmed"
+          ],
+          "selected": false,
+          "isAtmWithdrawal": false
+        }
+      ],
+      "expectedCounts": {
+        "total": 2,
+        "needsReview": 1,
+        "selected": 1
+      },
+      "note": "Fixture holds choices for injected writer failure; injection itself belongs service/SQL testing"
+    },
+    {
+      "id": "sms-cash-ineligible",
+      "binding": "M02",
+      "source": "SMS",
+      "sessionId": "1eea0000-3950-4000-8000-00000000042a",
+      "language": "en",
+      "groups": [],
+      "rows": [
+        {
+          "rowId": "1eea0000-3950-4000-8000-00000000042b",
+          "sourceRef": "sms:sms-cash-ineligible:1",
+          "sourceFingerprint": "191df3966ec686e272f7380dd1490279bd2ff3df50ce12282cadfee8715880f9",
+          "categoryId": "1eea0000-3950-4000-8000-0000000003ef",
+          "amountDecimal": "125",
+          "currencyCode": "EGP",
+          "accountId": null,
+          "groupId": null,
+          "toAccountId": null,
+          "issueTags": [
+            "account_unavailable"
+          ],
+          "selected": false,
+          "isAtmWithdrawal": false
+        }
+      ],
+      "expectedCounts": {
+        "total": 1,
+        "needsReview": 1,
+        "selected": 0
+      },
+      "note": "Ordinary SMS source cannot fall back to Cash even when Cash is default"
+    },
+    {
+      "id": "sms-review-restart",
+      "binding": "M15/M20",
+      "source": "SMS",
+      "sessionId": "1eea0000-3950-4000-8000-00000000042c",
+      "language": "en",
+      "groups": [
+        {
+          "groupId": "1eea0000-3950-4000-8000-00000000042d",
+          "name": "QNB",
+          "currency": "EGP",
+          "type": "BANK",
+          "cardLast4": "0007",
+          "status": "pending",
+          "linkedRowIds": [
+            "1eea0000-3950-4000-8000-00000000042e"
+          ]
+        }
+      ],
+      "rows": [
+        {
+          "rowId": "1eea0000-3950-4000-8000-00000000042e",
+          "sourceRef": "sms:sms-review-restart:1",
+          "sourceFingerprint": "a4ff402a0d69e4027d391792a476527b77538a55108b7dbe2b12f490dde10820",
+          "categoryId": "1eea0000-3950-4000-8000-0000000003ef",
+          "amountDecimal": "125",
+          "currencyCode": "EGP",
+          "accountId": null,
+          "groupId": "1eea0000-3950-4000-8000-00000000042d",
+          "toAccountId": null,
+          "issueTags": [
+            "account_group_unconfirmed"
+          ],
+          "selected": false,
+          "isAtmWithdrawal": false
+        }
+      ],
+      "expectedCounts": {
+        "total": 1,
+        "needsReview": 1,
+        "selected": 0
+      },
+      "note": "Restorable current-user SMS draft with stable source fingerprint and pending group"
+    },
+    {
+      "id": "sms-atm-transfer",
+      "binding": "M02/M19",
+      "source": "SMS",
+      "sessionId": "1eea0000-3950-4000-8000-00000000042f",
+      "language": "en",
+      "groups": [],
+      "rows": [
+        {
+          "rowId": "1eea0000-3950-4000-8000-000000000430",
+          "sourceRef": "sms:sms-atm-transfer:1",
+          "sourceFingerprint": "33673ba7e972721efeca92450ab9a9d2e7eafe32dcf895e5d95eb47f10911d9f",
+          "categoryId": "1eea0000-3950-4000-8000-0000000003ef",
+          "amountDecimal": "25.05",
+          "currencyCode": "EGP",
+          "accountId": "1eea0000-3950-4000-8000-0000000003e9",
+          "groupId": null,
+          "toAccountId": "1eea0000-3950-4000-8000-0000000003e8",
+          "issueTags": [],
+          "selected": true,
+          "isAtmWithdrawal": true
+        }
+      ],
+      "expectedCounts": {
+        "total": 1,
+        "needsReview": 0,
+        "selected": 1
+      },
+      "note": "Bank ATM source and Cash destination are independently chosen; no inferred opening balance"
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "M01",
+      "sceneIds": [
+        "r3-default-only",
+        "r3-combined-en"
+      ],
+      "requiredAssertion": "Eligible default and quiet disclosure; real Voice interpretation owner-run",
+      "fixtureAuthoringOnly": true,
+      "maestroExecuted": false,
+      "ownerOrSeparateTestBoundary": "Eligible default and quiet disclosure; real Voice interpretation owner-run"
+    },
+    {
+      "id": "M02",
+      "sceneIds": [
+        "sms-cash-ineligible",
+        "sms-atm-transfer"
+      ],
+      "requiredAssertion": "SMS Cash source exclusion and independent ATM endpoints",
+      "fixtureAuthoringOnly": true,
+      "maestroExecuted": false,
+      "ownerOrSeparateTestBoundary": "SMS Cash source exclusion and independent ATM endpoints"
+    },
+    {
+      "id": "M03",
+      "sceneIds": [
+        "r3-currency-conflict"
+      ],
+      "requiredAssertion": "Proven omission versus conflicting/unsupported currency; owner real parser interpretation",
+      "fixtureAuthoringOnly": true,
+      "maestroExecuted": false,
+      "ownerOrSeparateTestBoundary": "Proven omission versus conflicting/unsupported currency; owner real parser interpretation"
+    },
+    {
+      "id": "M04",
+      "sceneIds": [
+        "r3-combined-en",
+        "r3-confirmed-feedback"
+      ],
+      "requiredAssertion": "QNB3 group confirm leaves CIB independent",
+      "fixtureAuthoringOnly": true,
+      "maestroExecuted": false,
+      "ownerOrSeparateTestBoundary": "QNB3 group confirm leaves CIB independent"
+    },
+    {
+      "id": "M05",
+      "sceneIds": [
+        "r3-confirmed-feedback"
+      ],
+      "requiredAssertion": "Confirm shared group but check one clicked row only",
+      "fixtureAuthoringOnly": true,
+      "maestroExecuted": false,
+      "ownerOrSeparateTestBoundary": "Confirm shared group but check one clicked row only"
+    },
+    {
+      "id": "M06",
+      "sceneIds": [
+        "r1-account-chooser",
+        "r3-combined-en"
+      ],
+      "requiredAssertion": "Identity/card/type split and edited re-confirmation belong reducer tests",
+      "fixtureAuthoringOnly": true,
+      "maestroExecuted": false,
+      "ownerOrSeparateTestBoundary": "Identity/card/type split and edited re-confirmation belong reducer tests"
+    },
+    {
+      "id": "M07",
+      "sceneIds": [
+        "r1-account-chooser"
+      ],
+      "requiredAssertion": "Row/group chooser, cancel, stale/deleted candidate belong scoped command tests",
+      "fixtureAuthoringOnly": true,
+      "maestroExecuted": false,
+      "ownerOrSeparateTestBoundary": "Row/group chooser, cancel, stale/deleted candidate belong scoped command tests"
+    },
+    {
+      "id": "M08",
+      "sceneIds": [
+        "r3-removed-undo"
+      ],
+      "requiredAssertion": "Remove/Undo with later-edit generation guard belongs reducer/persistence tests",
+      "fixtureAuthoringOnly": true,
+      "maestroExecuted": false,
+      "ownerOrSeparateTestBoundary": "Remove/Undo with later-edit generation guard belongs reducer/persistence tests"
+    },
+    {
+      "id": "M09",
+      "sceneIds": [
+        "r3-currency-conflict"
+      ],
+      "requiredAssertion": "Existing CurrencyPicker and contextual unconfirmed choice; keyboard owner-run",
+      "fixtureAuthoringOnly": true,
+      "maestroExecuted": false,
+      "ownerOrSeparateTestBoundary": "Existing CurrencyPicker and contextual unconfirmed choice; keyboard owner-run"
+    },
+    {
+      "id": "M10",
+      "sceneIds": [
+        "r3-combined-en",
+        "r3-combined-ar",
+        "r3-default-only",
+        "r3-issues-only",
+        "r3-confirmed-feedback",
+        "r3-clean",
+        "r3-selected-empty"
+      ],
+      "requiredAssertion": "Exact conditional counts, section presence and RTL variants",
+      "fixtureAuthoringOnly": true,
+      "maestroExecuted": false,
+      "ownerOrSeparateTestBoundary": "Exact conditional counts, section presence and RTL variants"
+    },
+    {
+      "id": "M11",
+      "sceneIds": [
+        "r3-selected-empty",
+        "r3-combined-en"
+      ],
+      "requiredAssertion": "Actually selected filter and ready-only bulk action",
+      "fixtureAuthoringOnly": true,
+      "maestroExecuted": false,
+      "ownerOrSeparateTestBoundary": "Actually selected filter and ready-only bulk action"
+    },
+    {
+      "id": "M12",
+      "sceneIds": [],
+      "requiredAssertion": "Add/Edit default intent belongs account-form/action tests and owner device; no fake review fixture",
+      "fixtureAuthoringOnly": true,
+      "maestroExecuted": false,
+      "ownerOrSeparateTestBoundary": "Add/Edit default intent belongs account-form/action tests and owner device; no fake review fixture"
+    },
+    {
+      "id": "M13",
+      "sceneIds": [
+        "r3-combined-en"
+      ],
+      "requiredAssertion": "Save selected only while unrelated group unresolved; real writer checked at T043",
+      "fixtureAuthoringOnly": true,
+      "maestroExecuted": false,
+      "ownerOrSeparateTestBoundary": "Save selected only while unrelated group unresolved; real writer checked at T043"
+    },
+    {
+      "id": "M14",
+      "sceneIds": [
+        "r3-sms-save-failure"
+      ],
+      "requiredAssertion": "Failure injection/idempotency belongs writer/SQL tests, not synthetic happy E2E",
+      "fixtureAuthoringOnly": true,
+      "maestroExecuted": false,
+      "ownerOrSeparateTestBoundary": "Failure injection/idempotency belongs writer/SQL tests, not synthetic happy E2E"
+    },
+    {
+      "id": "M15",
+      "sceneIds": [
+        "sms-review-restart"
+      ],
+      "requiredAssertion": "SMS durable restart requires real local writer and owner-device restart; Voice remains session-only",
+      "fixtureAuthoringOnly": true,
+      "maestroExecuted": false,
+      "ownerOrSeparateTestBoundary": "SMS durable restart requires real local writer and owner-device restart; Voice remains session-only"
+    },
+    {
+      "id": "M16",
+      "sceneIds": [
+        "r3-combined-en",
+        "sms-cash-ineligible"
+      ],
+      "requiredAssertion": "Zero extra parser/provider calls asserted in adapter/transport tests, not inferred from offline fixture",
+      "fixtureAuthoringOnly": true,
+      "maestroExecuted": false,
+      "ownerOrSeparateTestBoundary": "Zero extra parser/provider calls asserted in adapter/transport tests, not inferred from offline fixture"
+    },
+    {
+      "id": "M17",
+      "sceneIds": [
+        "r3-combined-en",
+        "r3-combined-ar",
+        "r3-issues-only",
+        "r3-selected-empty"
+      ],
+      "requiredAssertion": "Viewport/themes/RTL/keyboard/screen-reader owner-run only",
+      "fixtureAuthoringOnly": true,
+      "maestroExecuted": false,
+      "ownerOrSeparateTestBoundary": "Viewport/themes/RTL/keyboard/screen-reader owner-run only"
+    },
+    {
+      "id": "M18",
+      "sceneIds": [],
+      "requiredAssertion": "Existing Add/Edit provider/sender/card/balance rules covered by regression/owner manual, no fake review fixture",
+      "fixtureAuthoringOnly": true,
+      "maestroExecuted": false,
+      "ownerOrSeparateTestBoundary": "Existing Add/Edit provider/sender/card/balance rules covered by regression/owner manual, no fake review fixture"
+    },
+    {
+      "id": "M19",
+      "sceneIds": [
+        "sms-atm-transfer",
+        "r3-sms-save-failure"
+      ],
+      "requiredAssertion": "Complete selected action/CAS/replay/faults require service+pgTAP, not synthetic E2E",
+      "fixtureAuthoringOnly": true,
+      "maestroExecuted": false,
+      "ownerOrSeparateTestBoundary": "Complete selected action/CAS/replay/faults require service+pgTAP, not synthetic E2E"
+    },
+    {
+      "id": "M20",
+      "sceneIds": [
+        "sms-review-restart",
+        "r3-combined-en"
+      ],
+      "requiredAssertion": "v1/v2 parsing/late chunks/legacy provenance require parser/codec tests, no live provider promise",
+      "fixtureAuthoringOnly": true,
+      "maestroExecuted": false,
+      "ownerOrSeparateTestBoundary": "v1/v2 parsing/late chunks/legacy provenance require parser/codec tests, no live provider promise"
+    }
+  ]
+}
