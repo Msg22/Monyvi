@@ -68,11 +68,21 @@ jest.mock(
 // A runtime-entry test may deliberately fail resolution until T015 exists.
 // Keeping this import inside the test path lets the independent catalogue
 // checks run against published synthetic JSON before any production API exists.
-async function loadRuntimeFixtureSession(sceneId: string): Promise<unknown> {
+async function resolveRuntimeFixtureEntry(): Promise<
+  (sceneId: string) => Promise<unknown>
+> {
   const { loadAccountReviewFixtureSession } = await import(
     "@/services/account-review-fixture-service"
   );
-  return loadRuntimeFixtureSession(sceneId);
+  if (typeof loadAccountReviewFixtureSession !== "function") {
+    throw new Error("T015 fixture entry export is unavailable");
+  }
+  return loadAccountReviewFixtureSession;
+}
+
+async function loadRuntimeFixtureSession(sceneId: string): Promise<unknown> {
+  const loadFixture = await resolveRuntimeFixtureEntry();
+  return loadFixture(sceneId);
 }
 
 function findScene(id: string): (typeof manifest.scenes)[number] {
@@ -363,26 +373,29 @@ describe("T008 future current-owner fixture entry (Red before T015)", () => {
     process.env.EXPO_PUBLIC_MONYVI_TEST_MODE = "off";
 
     expect(isE2eTestMode()).toBe(false);
-    await expect(
-      loadRuntimeFixtureSession("r3-default-only")
-    ).rejects.toThrow();
+    // Resolve the future module OUTSIDE rejects; a missing module is not
+    // proof that production/runtime gating rejected the fixture.
+    const loadFixture = await resolveRuntimeFixtureEntry();
+    await expect(loadFixture("r3-default-only")).rejects.toThrow();
   });
 
   it("rejects fixture entry in production even with an E2E-looking environment", async () => {
     process.env.NODE_ENV = "production";
     process.env.EXPO_PUBLIC_MONYVI_TEST_MODE = "e2e";
 
-    await expect(
-      loadRuntimeFixtureSession("r3-default-only")
-    ).rejects.toThrow();
+    // Resolve the future module OUTSIDE rejects; a missing module is not
+    // proof that production/runtime gating rejected the fixture.
+    const loadFixture = await resolveRuntimeFixtureEntry();
+    await expect(loadFixture("r3-default-only")).rejects.toThrow();
   });
 
   it("does not construct a fixture for a signed-out user or infer an owner from the static catalog", async () => {
     mockActiveOwnerId = null;
 
-    await expect(
-      loadRuntimeFixtureSession("r3-default-only")
-    ).rejects.toThrow();
+    // Resolve the future module OUTSIDE rejects; a missing module is not
+    // proof that production/runtime gating rejected the fixture.
+    const loadFixture = await resolveRuntimeFixtureEntry();
+    await expect(loadFixture("r3-default-only")).rejects.toThrow();
     expect(mockDatabaseWrite).not.toHaveBeenCalled();
   });
 
@@ -401,8 +414,7 @@ describe("T008 future current-owner fixture entry (Red before T015)", () => {
   });
 
   it("rejects unregistered fixtures instead of silently opening an empty or production review", async () => {
-    await expect(
-      loadRuntimeFixtureSession("missing-private-scenario")
-    ).rejects.toThrow();
+    const loadFixture = await resolveRuntimeFixtureEntry();
+    await expect(loadFixture("missing-private-scenario")).rejects.toThrow();
   });
 });
