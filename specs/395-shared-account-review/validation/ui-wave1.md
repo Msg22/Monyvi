@@ -464,3 +464,16 @@ The session must populate **every frozen field**: owner/session/source IDs and c
 - **Ownership:** report/test writes released after GitHub compare; other lanes remain protected. Any real test failure needs a **new explicit narrow grant**.
 
 **T008 TESTS-ONLY SOURCE RELEASED — ROOT T015 CREATION RED PENDING — ALL WRITES FROZEN.**
+
+---
+
+## 16. T007 test-only fixture extraction checkpoint
+
+- **Contact recovery:** T008 final tests/report were **already published** at `321cb133673dcc4459a515e59db3f51730856ab4` and independently read back; no T008 modification, duplicate publication or claim of Green.
+- **New bounded lease:** on `codex/395-ui-worker@321cb133673dcc4459a515e59db3f51730856ab4`, author **only** `apps/mobile/__tests__/services/account-review-parser-adapters.test.ts`, new `apps/mobile/__tests__/services/account-review-parser-test-fixtures.ts`, and this report. Core normalization, SQL/financial, routes, schema, T008, JSON, source, and other test lanes remain protected.
+- **Mechanical split:** T007 primary file **1,111 → 820 raw lines** (<900). Extracted pure typed request-context, T010-snapshot, Voice/SMS source, v2 advisory, and orchestrator case builders into one new **322-line** test helper; all helper function boundaries are **<50 raw lines** (largest static function-to-function span 29 lines). Original `unmatchedSmsCase` was subdivided into a CIB SMS evidence helper and a concise case builder; Voice CIB evidence likewise uses the existing canonical span fixture helper.
+- **Behavior preservation proof:** immutable GitHub readback compared the complete T007 `describe(...)`-through-EOF test body **byte-for-byte equal** before/after extraction; all **23 named assertions** and 14 original safeguards/refusal/one-call tests remain untouched. `jest.mock` factories, `mock*` captures, spies, typed raw-v2 evidence, complete canonical `reviewSession`, no-options/v1, category UUID, and original privacy tests stay in the owning test module. New fixture helper has no Jest mocks, DB writes or provider calls; canonical source/test types are imported, not copied.
+- **Execution honesty:** no runner, TypeScript, ESLint, formatter, hook, emulator, provider, install, SQL or native worker invoked. Root's existing Red/Green process remains pending, and this mechanical comparison is **not** runtime proof. If integration reveals a genuine module-hoist/type/format error, root must request a fresh narrow correction grant rather than silently weakening assertions.
+- **Final scope freeze:** T007 test + new typed helper + report only; no PR/issue/comment/merge, branch beyond this leaf, E2E seed or T015 loader work. **Ownership released, all writes frozen.**
+
+**T007 TEST-ONLY EXTRACTION COMPLETE — ROOT RED PENDING — SOURCE/TEST OWNERSHIP RELEASED.**
