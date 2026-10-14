@@ -639,11 +639,12 @@ export const accountReviewSessionSchema = z.object({
       addIssue(ctx, ["rows", i, "source"], "Review row has wrong session source");
     }
     if (row.assignment.state === "suggested") {
-      const group = session.groups.find((item) => item.groupId === row.assignment.groupId);
+      const suggestedAssignment = row.assignment;
+      const group = session.groups.find((item) => item.groupId === suggestedAssignment.groupId);
       if (!group ||
         !group.linkedRowIds.includes(row.rowId) ||
-        group.revision !== row.assignment.groupRevision ||
-        group.status !== row.assignment.confirmation) {
+        group.revision !== suggestedAssignment.groupRevision ||
+        group.status !== suggestedAssignment.confirmation) {
         addIssue(ctx, ["rows", i, "assignment"], "Stale or missing linked group");
       }
     }

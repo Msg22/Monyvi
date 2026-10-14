@@ -132,3 +132,17 @@ The capacity test (#5) was strengthened now because the existing `SmsAiAvailabil
 - **GitHub verification:** implementation HEAD and parent confirmed; comparison to the checkpoint lists exactly those eight paths, with no UI-owned files, parser production, edge adapters, sync, SQL, feature contracts, PRs/issues or Pages mutated.
 - **No runtime evidence claimed:** schema behavioral Green, generator parity/empty diff, typecheck, Jest, format and ESLint remain root-local gates. F02 adapter normalized-result seam and F05 generated provider projection remain downstream approval boundaries. This final report-only publication intentionally advances the isolated branch past the implementation commit; use the live branch HEAD to retrieve this receipt.
 - **Ownership final state: FROZEN / RELEASED.** No automatic continuation to T010–T015, no other writes.
+
+## T009 TS2339 narrow correction (bounded reopened ownership)
+
+**Source lease:** the existing worker branch `codex/395-core-worker` was refreshed and exactly matched `511a223cd4695411d8a060c8ad1ba7f1a15fbdcd` immediately before authoring. No other branch or file ownership was assumed.
+
+**Actual root-local evidence (reported by lead):** T005 canonical schema Jest batch **54/54 PASS**. The logic TypeScript typecheck failed with **TS2339** at `packages/logic/src/account-review/schemas.ts:642:83`: `groupId` is absent on other `AccountReviewAssignment` union members because discriminant narrowing of `row.assignment` was not retained inside the nested `Array.find` callback. This is a TypeScript narrowing failure, not a behavioral validation failure.
+
+**Exact source change:** inside `if (row.assignment.state === "suggested")`, capture `const suggestedAssignment = row.assignment;` and reference `suggestedAssignment.groupId`, `suggestedAssignment.groupRevision` and `suggestedAssignment.confirmation` for the existing group lookup and comparisons. The Zod schema, issue paths, conditions and validation semantics are unchanged. No casts, `any`, schema weakening, tests edits or new exports.
+
+**Generator status (reported by lead):** the vocabulary generator executed locally with five vocabularies. Exact generated-output parity remains under independent inspection; this report does **not** assert an empty diff or parity PASS.
+
+**Routing policy:** latest owner override is **Normal ChatGPT → verified FREE OpenCode → AGY Gemini/Claude → native only after prior explicit task permission from Mohamed**. Prior no-OpenCode statements in historical Wave 1 receipts are superseded. Native lanes are retired. No handoff occurred for this bounded Normal ChatGPT correction.
+
+**Verification boundary:** the typecheck has **not been rerun or claimed PASS** by this remote author. Root should run `npm run typecheck -w @monyvi/logic` on this corrected immutable snapshot and retain the observed 54/54 Jest receipt. No emulator, provider, hosted database, deployment, PR, issue, Page, unrelated tests or source changed. Source ownership **FROZEN / RELEASED** following the single correction commit.
