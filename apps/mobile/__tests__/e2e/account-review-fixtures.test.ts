@@ -1,6 +1,4 @@
-import { accountReviewRequestContextSchema, accountReviewSessionSchema } from "@monyvi/logic";
 import { isE2eTestMode } from "@/config/e2e-test-config";
-import { loadAccountReviewFixtureSession } from "@/services/account-review-fixture-service";
 import manifest from "../../e2e/fixtures/shared-account-review.json";
 
 const CURRENT_OWNER = "1eea0000-3950-4000-8000-000000009001";
@@ -9,7 +7,7 @@ const UUID_V4_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const SHA_256_PATTERN = /^[0-9a-f]{64}$/;
 
-let activeOwnerId: string | null = CURRENT_OWNER;
+let mockActiveOwnerId: string | null = CURRENT_OWNER;
 
 const mockDatabaseWrite = jest.fn(async (): Promise<void> => {
   throw new Error("fixture entry cannot write financial records");
@@ -19,10 +17,10 @@ const mockLoadAccountReviewAccountSnapshots = jest.fn(
 );
 const mockGetRequiredCurrentUserId = jest.fn(
   async (): Promise<string> => {
-    if (!activeOwnerId) {
+    if (!mockActiveOwnerId) {
       throw new Error("USER_REQUIRED");
     }
-    return activeOwnerId;
+    return mockActiveOwnerId;
   }
 );
 const mockGetCurrentUserDataScope = jest.fn(async (): Promise<{
@@ -38,7 +36,7 @@ const mockGetCurrentUserDataScope = jest.fn(async (): Promise<{
 
 jest.mock("@monyvi/db", () => ({
   database: {
-    write: mockDatabaseWrite,
+    write: (): Promise<void> => mockDatabaseWrite(),
     get: (table: string): object => ({
       table,
       query: (): object => ({ fetch: async (): Promise<never[]> => [] }),
@@ -47,13 +45,35 @@ jest.mock("@monyvi/db", () => ({
 }));
 
 jest.mock("@/services/user-data-access", () => ({
-  getRequiredCurrentUserId: mockGetRequiredCurrentUserId,
-  getCurrentUserDataScope: mockGetCurrentUserDataScope,
+  // Defer all mock variable reads until after Jest's factory hoisting.
+  getRequiredCurrentUserId: (): Promise<string> =>
+    mockGetRequiredCurrentUserId(),
+  getCurrentUserDataScope: (): ReturnType<typeof mockGetCurrentUserDataScope> =>
+    mockGetCurrentUserDataScope(),
 }));
 
-jest.mock("@/services/account-review-read-model-service", () => ({
-  loadAccountReviewAccountSnapshots: mockLoadAccountReviewAccountSnapshots,
-}));
+// T010 is a FUTURE dependency of the T015 fixture service, not the service
+// under test here. Virtualize only this dependency so the descriptor-only
+// assertions can execute before T010 exists. Never mock the T015 service.
+jest.mock(
+  "@/services/account-review-read-model-service",
+  () => ({
+    loadAccountReviewAccountSnapshots: (): ReturnType<
+      typeof mockLoadAccountReviewAccountSnapshots
+    > => mockLoadAccountReviewAccountSnapshots(),
+  }),
+  { virtual: true }
+);
+
+// A runtime-entry test may deliberately fail resolution until T015 exists.
+// Keeping this import inside the test path lets the independent catalogue
+// checks run against published synthetic JSON before any production API exists.
+async function loadRuntimeFixtureSession(sceneId: string): Promise<unknown> {
+  const { loadAccountReviewFixtureSession } = await import(
+    "@/services/account-review-fixture-service"
+  );
+  return loadRuntimeFixtureSession(sceneId);
+}
 
 function findScene(id: string): (typeof manifest.scenes)[number] {
   const scene = manifest.scenes.find((candidate) => candidate.id === id);
@@ -87,10 +107,8 @@ describe("T008 #395 bounded fixture descriptor contract", () => {
     expect(serialized).not.toContain("localhost:54321");
   });
 
-  it("validates the preferred-currency account context with the canonical logic schema", () => {
-    const context = accountReviewRequestContextSchema.parse(
-      manifest.accountContext
-    );
+  it("describes a privacy-safe preferred-currency request context without requiring the future Zod export", () => {
+    const context = manifest.accountContext;
     expect(context.reviewContractVersion).toBe("account-review/v2");
     expect(context.preferredCurrency).toBe("EGP");
     expect(context.accounts).toHaveLength(5);
@@ -286,9 +304,18 @@ describe("T008 #395 bounded fixture descriptor contract", () => {
 describe("T008 future current-owner fixture entry (Red before T015)", () => {
   const originalEnv = process.env;
 
+  it("validates the safe request catalogue with the canonical Zod schema once T005 exists", async () => {
+    const { accountReviewRequestContextSchema } = await import("@monyvi/logic");
+    const context = accountReviewRequestContextSchema.parse(
+      manifest.accountContext
+    );
+    expect(context.reviewContractVersion).toBe("account-review/v2");
+    expect(context.accounts).toHaveLength(5);
+  });
+
   beforeEach((): void => {
     jest.clearAllMocks();
-    activeOwnerId = CURRENT_OWNER;
+    mockActiveOwnerId = CURRENT_OWNER;
     process.env = {
       ...originalEnv,
       NODE_ENV: "test",
@@ -304,8 +331,8 @@ describe("T008 future current-owner fixture entry (Red before T015)", () => {
   it("accepts an explicit safe test-mode Voice entry and materializes the canonical current-user session", async () => {
     expect(isE2eTestMode()).toBe(true);
 
-    const session = accountReviewSessionSchema.parse(
-      await loadAccountReviewFixtureSession("r3-combined-en")
+    const session = (await import("@monyvi/logic")).accountReviewSessionSchema.parse(
+      await loadRuntimeFixtureSession("r3-combined-en")
     );
 
     expect(session.ownerId).toBe(CURRENT_OWNER);
@@ -318,8 +345,8 @@ describe("T008 future current-owner fixture entry (Red before T015)", () => {
   });
 
   it("materializes SMS fingerprints in a current-owner session without calling hosted seed/write", async () => {
-    const session = accountReviewSessionSchema.parse(
-      await loadAccountReviewFixtureSession("sms-review-restart")
+    const session = (await import("@monyvi/logic")).accountReviewSessionSchema.parse(
+      await loadRuntimeFixtureSession("sms-review-restart")
     );
 
     expect(session.ownerId).toBe(CURRENT_OWNER);
@@ -337,7 +364,7 @@ describe("T008 future current-owner fixture entry (Red before T015)", () => {
 
     expect(isE2eTestMode()).toBe(false);
     await expect(
-      loadAccountReviewFixtureSession("r3-default-only")
+      loadRuntimeFixtureSession("r3-default-only")
     ).rejects.toThrow();
   });
 
@@ -346,28 +373,28 @@ describe("T008 future current-owner fixture entry (Red before T015)", () => {
     process.env.EXPO_PUBLIC_MONYVI_TEST_MODE = "e2e";
 
     await expect(
-      loadAccountReviewFixtureSession("r3-default-only")
+      loadRuntimeFixtureSession("r3-default-only")
     ).rejects.toThrow();
   });
 
   it("does not construct a fixture for a signed-out user or infer an owner from the static catalog", async () => {
-    activeOwnerId = null;
+    mockActiveOwnerId = null;
 
     await expect(
-      loadAccountReviewFixtureSession("r3-default-only")
+      loadRuntimeFixtureSession("r3-default-only")
     ).rejects.toThrow();
     expect(mockDatabaseWrite).not.toHaveBeenCalled();
   });
 
   it("uses the current authenticated owner after user switching, never a cached previous owner", async () => {
-    const first = accountReviewSessionSchema.parse(
-      await loadAccountReviewFixtureSession("r3-issues-only")
+    const first = (await import("@monyvi/logic")).accountReviewSessionSchema.parse(
+      await loadRuntimeFixtureSession("r3-issues-only")
     );
     expect(first.ownerId).toBe(CURRENT_OWNER);
 
-    activeOwnerId = ANOTHER_OWNER;
-    const second = accountReviewSessionSchema.parse(
-      await loadAccountReviewFixtureSession("r3-issues-only")
+    mockActiveOwnerId = ANOTHER_OWNER;
+    const second = (await import("@monyvi/logic")).accountReviewSessionSchema.parse(
+      await loadRuntimeFixtureSession("r3-issues-only")
     );
     expect(second.ownerId).toBe(ANOTHER_OWNER);
     expect(second.ownerId).not.toBe(first.ownerId);
@@ -375,7 +402,7 @@ describe("T008 future current-owner fixture entry (Red before T015)", () => {
 
   it("rejects unregistered fixtures instead of silently opening an empty or production review", async () => {
     await expect(
-      loadAccountReviewFixtureSession("missing-private-scenario")
+      loadRuntimeFixtureSession("missing-private-scenario")
     ).rejects.toThrow();
   });
 });
