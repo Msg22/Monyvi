@@ -641,6 +641,25 @@ describe("T006 owned account review snapshot / provider context", () => {
       .every((value) => value.ownerId === OWNER_ID)).toBe(true);
   });
 
+  it("rejects malformed active local default flags instead of treating them as false", async () => {
+    const bank = accountRows.find((account) => account.id === BANK_ID);
+    if (!bank) throw new Error("Synthetic bank fixture missing");
+    Object.defineProperty(bank, "isDefault", { value: null });
+
+    await expect(loadAccountReviewAccountSnapshots()).rejects.toThrow(
+      "ACCOUNT_REVIEW_INVALID_DEFAULT"
+    );
+  });
+
+  it("rejects duplicate active owned account IDs before assembling child metadata", async () => {
+    accountRows.push(account(BANK_ID, OWNER_ID, { name: "Duplicate QNB" }));
+
+    await expect(loadAccountReviewAccountSnapshots()).rejects.toThrow(
+      "ACCOUNT_REVIEW_DUPLICATE_ACCOUNT"
+    );
+    expect(childCalls).toHaveLength(0);
+  });
+
   it("does not select an arbitrary profile when multiple active owned profiles exist", async () => {
     profileRows.push({
       id: "1eea0000-3950-4000-8000-000000000203",
