@@ -788,6 +788,64 @@ describe("T008 future current-owner fixture entry (Red before T015)", () => {
     assertNoFixtureSideEffects();
   });
 
+  it("binds the same scene to two owners with distinct real-shaped account and category IDs", async () => {
+    const scene = findScene("r3-default-only");
+    const first = parseHydratedSession(await loadRuntimeFixtureSession(scene.id));
+    assertOwnedSessionReferences(first, scene, CURRENT_OWNER);
+    expect(first.rows[0]?.assignment.state).toBe("existing");
+
+    mockActiveOwnerId = ANOTHER_OWNER;
+    const second = parseHydratedSession(await loadRuntimeFixtureSession(scene.id));
+    assertOwnedSessionReferences(second, scene, ANOTHER_OWNER);
+    expect(second.rows[0]?.assignment.state).toBe("existing");
+
+    const firstAccountIds = new Set(
+      accountRecordsForOwner(CURRENT_OWNER).map(({ id }) => id)
+    );
+    const secondAccountIds = new Set(
+      accountRecordsForOwner(ANOTHER_OWNER).map(({ id }) => id)
+    );
+    expect([...secondAccountIds].some((id) => firstAccountIds.has(id))).toBe(false);
+    const firstChoice = first.rows[0]?.assignment;
+    const secondChoice = second.rows[0]?.assignment;
+    if (firstChoice?.state !== "existing" || secondChoice?.state !== "existing") {
+      throw new Error("A real current-owner default assignment is required");
+    }
+    expect(firstChoice.accountId).not.toBe(secondChoice.accountId);
+    expect(mockCategoryScopeCalls).toContainEqual({
+      ownerId: ANOTHER_OWNER,
+      mode: "accessible",
+    });
+    assertNoFixtureSideEffects();
+  });
+
+  it("rejects an in-flight hydration if the authenticated owner switches after scoped reads begin", async () => {
+    let release: () => void = (): void => undefined;
+    let notify: () => void = (): void => undefined;
+    const started = new Promise<void>((resolve) => {
+      notify = resolve;
+    });
+    mockSnapshotReadGate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    mockNotifySnapshotStarted = notify;
+
+    const loadFixture = resolveRuntimeFixtureEntry();
+    const inFlight = loadFixture("r3-default-only");
+    const observed = await Promise.race([
+      started.then(() => "scoped_read_started"),
+      inFlight.then(() => "resolved_early", () => "rejected_early"),
+    ]);
+    try {
+      expect(observed).toBe("scoped_read_started");
+      mockActiveOwnerId = ANOTHER_OWNER;
+    } finally {
+      release();
+    }
+    await expect(inFlight).rejects.toThrow();
+    assertNoFixtureSideEffects();
+  });
+
   it("rejects relabeling another owner's static account IDs during user switching", async () => {
     const scene = findScene("r3-default-only");
     const first = parseHydratedSession(await loadRuntimeFixtureSession(scene.id));
