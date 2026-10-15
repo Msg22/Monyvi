@@ -136,6 +136,17 @@ const mockGetCurrentUserDataScope = jest.fn(
     })
 );
 
+// Use Node's real SHA-256 in Jest; Expo's native crypto bridge is unavailable
+// in this unit runner. This preserves real fingerprint/hash semantics.
+jest.mock("expo-crypto", () => {
+  const nodeCrypto = jest.requireActual<typeof import("node:crypto")>("node:crypto");
+  return {
+    CryptoDigestAlgorithm: { SHA256: "SHA256" },
+    digestStringAsync: (_algorithm: string, input: string): Promise<string> =>
+      Promise.resolve(nodeCrypto.createHash("sha256").update(input).digest("hex")),
+  };
+});
+
 jest.mock("@monyvi/db", () => ({
   database: {
     write: (): Promise<never> => mockDatabaseWrite(),
