@@ -16,7 +16,9 @@ import type { Sha256Provider } from "../../../../packages/logic/src/financial-ac
 import { createAccountReviewSaveService } from "../../services/account-review-save-service";
 import {
   ACTION, OWNER, FOREIGN_OWNER, BANK, CASH, CATEGORY, FINGERPRINT_A,
-  FINGERPRINT_B, GROUP_CIB, makeSaveFixture,
+  FINGERPRINT_B, GROUP_CIB, GROUP_QNB, GROUP_WALLET, SESSION,
+  changedSelectedSharedQnb, expectedChildLocalRef, freezeSaveIntent,
+  makeSaveFixture, selectedSmsFingerprint, uniquePlannedSenderAliases,
   type SaveFixture,
 } from "./account-review-save-test-fixtures";
 import {
@@ -208,6 +210,74 @@ describe("T043 selected-only accounts, children, categories and effects", () => 
     expect(state.counts.transactions).toBe(2);
     expect(f.intent.confirmedGroups.map((group) => group.groupId))
       .not.toContain(GROUP_CIB);
+  });
+  it("S10b saves WALLET with one normalized sender and no BankDetails", async (): Promise<void> => {
+    const f = makeSaveFixture("sms-new-wallet");
+    const group = f.session.groups[0];
+    if (!group) throw new Error("Missing Wallet group");
+    expect(group.type).toBe("DIGITAL_WALLET");
+    expect(uniquePlannedSenderAliases(group.senderNames)).toEqual(["wally pay"]);
+    expect(f.intent.plannedEntityIds.filter((p) => p.entity === "bank_details"))
+      .toHaveLength(0);
+    expect(f.intent.plannedEntityIds.filter((p) => p.entity === "account_sms_sender"))
+      .toHaveLength(1);
+    await seedSmsReviewDrafts(database, f.session);
+    await expect(save(f)).resolves.toMatchObject({ kind: "committed" });
+    const state = await ledgerState(database);
+    expect(state.counts).toMatchObject({
+      accounts: 4, bankDetails: 0, senders: 1,
+      transactions: 1, effects: 1, actions: 1,
+    });
+    const created = f.intent.plannedEntityIds.find((p) => p.entity === "account");
+    if (!created) throw new Error("Missing planned Wallet account");
+    const account = await database.get<import("@monyvi/db").Account>("accounts")
+      .find(created.id);
+    expect(account.type).toBe("DIGITAL_WALLET");
+    expect(account.balance).toBe(10);
+  });
+  it("S10c maps each frozen financial and account alias by rowId/groupId", (): void => {
+    const f = makeSaveFixture("sms-new-bank");
+    const group = f.session.groups[0];
+    const financial = f.intent.plannedEntityIds.filter((p) => p.entity === "transaction");
+    const account = f.intent.plannedEntityIds.find((p) => p.entity === "account");
+    if (!group || !account) throw new Error("Missing confirmed QNB group");
+    expect(account.localRef).toBe(group.groupId);
+    expect(account.id).not.toBe(account.localRef);
+    expect(financial.map((p) => p.localRef)).toEqual(
+      f.session.rows.filter((row) => row.selected).map((row) => row.rowId)
+    );
+  });
+  it("S10d uses approved bank/sender alias preimages without index mapping", (): void => {
+    const bank = makeSaveFixture("sms-new-bank");
+    const planned = bank.intent.plannedEntityIds;
+    expect(planned.find((p) => p.entity === "bank_details")?.localRef)
+      .toBe(expectedChildLocalRef(OWNER, SESSION, GROUP_QNB, "bank_details"));
+    expect(planned.find((p) => p.entity === "account_sms_sender")?.localRef)
+      .toBe(expectedChildLocalRef(
+        OWNER, SESSION, GROUP_QNB, "account_sms_sender", "qnb"
+      ));
+    const wallet = makeSaveFixture("sms-new-wallet");
+    expect(wallet.intent.plannedEntityIds.filter((p) => p.entity === "bank_details"))
+      .toHaveLength(0);
+    expect(wallet.intent.plannedEntityIds.find((p) =>
+      p.entity === "account_sms_sender"
+    )?.localRef).toBe(expectedChildLocalRef(
+      OWNER, SESSION, GROUP_WALLET, "account_sms_sender", "wally pay"
+    ));
+  });
+  it("S10e rejects repeated localRef even with another physical create ID", (): void => {
+    const f = makeSaveFixture("sms-new-wallet");
+    const account = f.intent.plannedEntityIds.find((p) => p.entity === "account");
+    if (!account) throw new Error("Missing account alias");
+    const invalid = {
+      ...f.intent,
+      plannedEntityIds: [...f.intent.plannedEntityIds,
+        { ...account, id: CASH }],
+    };
+    expect(accountReviewSaveIntentSchema.safeParse(invalid).success).toBe(false);
+    expect(new Set(f.intent.plannedEntityIds.map((p) => p.localRef)).size)
+      .toBe(f.intent.plannedEntityIds.length);
+    expect(freezeSaveIntent(f.session)).toEqual(f.intent);
   });
   it("S11 reuses an existing owned account with no new pending-account child", async (): Promise<void> => {
     await expect(save(makeSaveFixture())).resolves.toMatchObject({ kind: "committed" });
