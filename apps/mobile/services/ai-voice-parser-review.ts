@@ -46,9 +46,14 @@ function validFinancialRows(
   return result;
 }
 
+/** Keep externally supplied JSON arrays typed as unknown[], never inferred any[]. */
+function isUnknownArray(value: unknown): value is readonly unknown[] {
+  return Array.isArray(value);
+}
+
 function readResponseRows(value: unknown): readonly unknown[] | null {
   if (typeof value !== "object" || value === null ||
-      !("transactions" in value) || !Array.isArray(value.transactions)) {
+      !("transactions" in value) || !isUnknownArray(value.transactions)) {
     return null;
   }
   return value.transactions;

@@ -555,7 +555,7 @@ export async function parseVoiceWithAi(
       reviewMode ? ownedReview.preferredCurrency : options.preferredCurrency
     );
     const results: ParsedVoiceTransaction[] = [];
-    const originalFinancialRows: VoiceReviewNormalizationInput["financialRows"][number][] = [];
+    const originalFinancialRows: Array<VoiceReviewNormalizationInput["financialRows"][number]> = [];
     const categoryIdsBySystemName = new Map<string, string>();
 
     for (const { sourceIndex, transaction: aiTx } of validTransactions) {
