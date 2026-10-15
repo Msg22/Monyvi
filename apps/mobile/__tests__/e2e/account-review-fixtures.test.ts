@@ -1,7 +1,8 @@
 import { isE2eTestMode } from "@/config/e2e-test-config";
-import type {
-  AccountReviewRequestContext,
-  AccountReviewSession,
+import {
+  computeSmsFingerprint,
+  type AccountReviewRequestContext,
+  type AccountReviewSession,
 } from "@monyvi/logic";
 import type {
   AccountReviewAccountSnapshots,
@@ -725,6 +726,17 @@ describe("T008 future current-owner fixture entry (Red before T015)", () => {
     async (scene) => {
       const session = parseHydratedSession(await loadRuntimeFixtureSession(scene.id));
       assertOwnedSessionReferences(session, scene, CURRENT_OWNER);
+      // Fingerprints must originate from the synthetic SMS source itself,
+      // never the unrelated 64-hex labels in the descriptor catalogue.
+      for (const row of session.rows) {
+        if (row.source !== "SMS") continue;
+        const fingerprint = await computeSmsFingerprint({
+          sender: row.transaction.senderDisplayName,
+          body: row.transaction.rawSmsBody,
+          receivedAtMs: row.transaction.date.getTime(),
+        });
+        expect(row.sourceFingerprint).toBe(fingerprint);
+      }
 
       expect(mockGetRequiredCurrentUserId).toHaveBeenCalled();
       expect(mockLoadAccountReviewAccountSnapshots).toHaveBeenCalled();
