@@ -150,7 +150,9 @@ describe("T035 R1-03/R1-12 — explicit existing-account choice", () => {
     expect(screen.getByTestId("account-review-account-choice-sheet")).toBeTruthy();
     expect(screen.getAllByTestId("account-review-account-option")).toHaveLength(3);
     for (const candidate of props.candidateOptions) {
-      expect(screen.getByLabelText(candidate.accessibilityLabel)).toBeTruthy();
+      expect(screen.getByLabelText(candidate.accessibilityLabel)).toHaveProp(
+        "accessibilityState", expect.objectContaining({ selected: false })
+      );
     }
     const use = screen.getByTestId("account-review-account-use");
     expect(use).toHaveProp("accessibilityState", expect.objectContaining({ disabled: true }));
@@ -252,19 +254,25 @@ describe("T035 R1-03/R1-12 — explicit existing-account choice", () => {
 
   it("preserves row scope versus disclosed group-wide replacement without selecting other rows", () => {
     const rowUse = jest.fn(), groupUse = jest.fn();
+    const candidateId = getQnbCandidate(makeQnbChoiceCandidates(), "0007").id;
     const first = render(
-      <AccountChoiceSheet {...makeAccountChoiceProps({ onUseSelected: rowUse })} />
+      <AccountChoiceSheet {...makeAccountChoiceProps({
+        selectedCandidateId: candidateId, canUseSelection: true, onUseSelected: rowUse,
+      })} />
     );
     expect(screen.getByText(ROW_CONTEXT_EN)).toBeTruthy();
+    expect(screen.getByText("Only this transaction will change.")).toBeTruthy();
+    fireEvent.press(screen.getByTestId("account-review-account-use"));
+    expect(rowUse).toHaveBeenCalledTimes(1);
     first.unmount();
     renderAccounts(makeGroupChoiceProps({
-      selectedCandidateId: getQnbCandidate(makeQnbChoiceCandidates(), "0007").id,
+      selectedCandidateId: candidateId,
       canUseSelection: true, onUseSelected: groupUse,
     }));
     expect(screen.getByText(GROUP_SCOPE_EN)).toBeTruthy();
     fireEvent.press(screen.getByTestId("account-review-account-use"));
     expect(groupUse).toHaveBeenCalledTimes(1);
-    expect(rowUse).not.toHaveBeenCalled();
+    expect(rowUse).toHaveBeenCalledTimes(1);
     // Real row/group mutation scope is T034/T036/T039, not this callback.
   });
 
@@ -299,7 +307,7 @@ describe("T035 R1-03/R1-12 — explicit existing-account choice", () => {
     const longName = "حساب بنكي طويل جداً QNB Everyday and family";
     renderAccounts(makeAccountChoiceProps({
       contextSubtitle: ROW_CONTEXT_AR,
-      scopeDisclosure: ROW_CONTEXT_AR,
+      scopeDisclosure: "سيُغيَّر حساب هذه المعاملة فقط.",
       candidateOptions: [{
         ...original, displayName: longName, accessibilityLabel: arLabel,
       }],
@@ -503,6 +511,19 @@ describe("T035 T037 — real existing CurrencyPicker nullable/additive regressio
 });
 
 describe("T035 — conflict/picker parent mode transition", () => {
+  it("stages a conflict currency in the parent and resolves only after explicit Use", () => {
+    const onResolved = jest.fn();
+    render(<ControlledCurrencyJourney onResolved={onResolved} />);
+    fireEvent.press(screen.getByLabelText("US Dollar, USD"));
+    expect(onResolved).not.toHaveBeenCalled();
+    const use = screen.getByTestId("account-review-currency-use");
+    expect(use).toHaveProp("accessibilityState", expect.objectContaining({ disabled: false }));
+    fireEvent.press(use);
+    expect(onResolved).toHaveBeenCalledTimes(1);
+    expect(onResolved).toHaveBeenCalledWith("USD");
+    expect(screen.queryByTestId("account-review-currency-conflict-sheet")).toBeNull();
+  });
+
   it("closes the conflict sheet before showing only the existing picker", () => {
     const onResolved = jest.fn();
     render(<ControlledCurrencyJourney onResolved={onResolved} />);
