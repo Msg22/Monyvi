@@ -45,7 +45,7 @@ export function normalizeAtmDestinationEvidence(
   rawProof: unknown
 ): NormalizedAtmDestination {
   if (!sourceIsAtm(input, entry)) {
-    return { toAccountEvidence: null, invalid: rawProof != null };
+    return { toAccountEvidence: null, invalid: rawProof !== null && rawProof !== undefined };
   }
   if (rawProof === null) return { toAccountEvidence: null, invalid: false };
   const result = accountReviewAccountEvidenceSchema.safeParse(rawProof);
