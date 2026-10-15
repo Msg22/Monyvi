@@ -1,0 +1,103 @@
+appId: com.monyvi.app
+---
+# #395 T035 US3 R1-03/R1-11/R1-12/R3-03/R3-04/R3-13
+# AUTHORED ONLY — NOT RUNNABLE OR EXECUTED. T035 component Red comes first.
+#
+# FUTURE HARD PRECONDITIONS (none satisfied by this YAML itself):
+# - T016 gates production; T034/T036 typed candidate and currency commands,
+#   T037 nullable/context CurrencyPicker, T038 sheets, T039/T054 source-aware
+#   canonical facade and test-only navigation. Do not route through legacy Save.
+# - Existing authenticated E2E bootstrap below only signs in; T054 must
+#   implement/verify strict __DEV__ + E2E + current-owner route entry.
+# - Current Voice /voice-review route has NO reviewFixtureSceneId parameter.
+#   SMS /sms-review currently owns a durable draft queue, NOT direct T015
+#   session navigation; it needs its OWN source-aware guarded T054 bridge.
+# - Real owned local seed: T015 exact five account roles + accessible category.
+#   Standard E2E Cash/NBE/QNB/Wallet seed is insufficient.
+# - R1-03 B1 shows 3 eligible distinguishable QNB/EGP choices; T015's
+#   frozen catalogue contains only TWO QNB accounts. A separate genuinely
+#   owned compatible third option is mandatory for 3-choice E2E.
+# - The current r3-currency-conflict T015 session is unconfirmed with
+#   candidateCodes=[]; T034/T036/T039 must provide grounded EGP/USD
+#   candidate evidence. Never invent a preselected/default currency.
+# - Selectors below intentionally use UI-visible accessible names/actions,
+#   NOT owner-hashed group/row ID environment variables.
+# - No command here records microphone audio, calls providers, seeds a DB,
+#   taps Save or claims financial persistence or real-device proof.
+
+# Existing working auth bootstrap — future flow state remains unimplemented.
+- runFlow: ../helpers/ci-auth-deeplink-bootstrap.yaml
+
+# FUTURE Voice review fixture entry, NOT a verified current deep link.
+- openLink: "monyvi://voice-review?reviewFixtureSceneId=r1-account-chooser&originTabIndex=2"
+- extendedWaitUntil:
+    visible:
+      id: "transaction-review-screen"
+    timeout: 30000
+
+# R1-03: no initial account chosen; Use account must be disabled.
+# Actual disabled state is proved by future unit test, not a Maestro tap.
+- assertVisible: "Choose an account"
+- assertVisible: "No account is selected yet."
+- assertVisible: "For Lunch at Talabat"
+- assertVisible: "QNB Everyday, Bank, EGP, card ending 0007"
+- assertVisible: "QNB Savings, Bank, EGP, card ending 9221"
+# THIRD below is approved B1 display contract, NOT an existing seeded account:
+- assertVisible: "QNB Everyday, Bank, EGP, card ending 4402"
+- tapOn: "QNB Savings, Bank, EGP, card ending 9221"
+- tapOn: "Use account"
+- assertVisible:
+    id: "transaction-review-screen"
+# Actual row-only assignment, no other checked rows and no financial Save
+# require verified T036/T039 reducer/service coverage, NOT a fake button.
+
+# R3-13, distinct Voice group replacement scope; no hashed group ID.
+- openLink: "monyvi://voice-review?reviewFixtureSceneId=r3-combined-en&originTabIndex=2"
+- extendedWaitUntil:
+    visible:
+      id: "transaction-review-screen"
+    timeout: 30000
+# FUTURE accessible group-menu label must identify QNB and linked count.
+- tapOn: "QNB, 3 transactions, account actions"
+- tapOn: "Use existing account"
+- assertVisible: "Replace QNB for all 3 linked transactions."
+- assertVisible: "Transaction selections stay unchanged."
+- tapOn: "Cancel"
+- assertVisible:
+    id: "transaction-review-screen"
+
+# FUTURE *SMS-specific* T054 entry; do NOT send this SMS scene to Voice.
+# /sms-review exists, but its optional fixture param is NOT implemented.
+- openLink: "monyvi://sms-review?reviewFixtureSceneId=r3-currency-conflict"
+- extendedWaitUntil:
+    visible:
+      id: "transaction-review-screen"
+    timeout: 30000
+
+# R1-11/R3-03 EGP and USD are both initially UNCONFIRMED.
+- assertVisible: "Confirm currency"
+- assertVisible: "For Lunch at Talabat"
+- assertVisible: "Egyptian Pound, EGP"
+- assertVisible: "US Dollar, USD"
+# Use is disabled until a candidate is tapped; choose other instead.
+- tapOn: "Choose another currency"
+- assertNotVisible: "Choose another currency"
+# R3-04 MUST reuse actual CurrencyPicker search/list/slide/inset, not new UI.
+- assertVisible: "Select Currency"
+- assertVisible: "For Lunch at Talabat"
+- tapOn: "Search by name or code..."
+- inputText: "US Dollar"
+- assertVisible: "US Dollar"
+- tapOn: "US Dollar"
+- assertVisible:
+    id: "transaction-review-screen"
+# Only the explicitly selected USD may be sent through the normal T036
+# row-scoped review command. Numeric amount stays unchanged; no conversion.
+# T034/T036 tests prove actual immutable amount, owner scope and regrouping.
+# Cancel/Back negative path must be covered separately with fresh unknown state,
+# never by reusing a already-confirmed/selected row.
+#
+# Separate owner/manual evidence: compact 340dp/390dp, tablet 600dp,
+# font1.35, AR R1-12 mirrored chooser/context, card/ISO bidi isolation,
+# dark theme, keyboard/safe-area inset, native Back/focus, screen readers.
+# M14/M19 Save/replay/CAS/pgTAP are US6 and NOT this authored YAML.
