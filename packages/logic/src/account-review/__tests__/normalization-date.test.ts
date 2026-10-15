@@ -1,6 +1,6 @@
 /**
  * #395 T014-P tests-first date parity. Real parseAiDate and pure normalizer:
- * calendar source YYYY-MM-DD is local; strict UTC timestamp is an instant.
+ * Voice date-only is local, SMS date-only is UTC; strict ISO is an instant.
  * Run the host-local tests under Africa/Cairo, America/New_York and UTC in
  * Root's TZ matrix; the explicit offset examples remain timezone independent.
  */
@@ -25,7 +25,7 @@ import {
   makeVoiceDateInput,
 } from "./normalization-date-fixtures";
 
-describe("#395 date-only local calendar mapping", () => {
+describe("#395 date-only Voice-local and SMS-UTC calendar mapping", () => {
   it("preserves original Voice YYYY-MM-DD through real parseAiDate local midnight", async () => {
     const expectedDay = "2026-10-14";
     const localMidnight = parseAiDate(expectedDay);
@@ -50,14 +50,18 @@ describe("#395 date-only local calendar mapping", () => {
     expect(row.selected).toBe(false);
   });
 
-  it("uses identical local calendar semantics for an SMS date-only financial row", async () => {
-    const localMidnight = parseAiDate("2026-10-14");
-    const input = canonicalSmsDate("2026-10-14", localMidnight);
+  it("preserves the existing SMS YYYY-MM-DD mapper's UTC calendar day", async () => {
+    const utcMidnight = new Date("2026-10-14");
+    expect(utcMidnight.toISOString()).toBe("2026-10-14T00:00:00.000Z");
+    expect(calendarDayInZone(utcMidnight, "America/New_York")).toBe("2026-10-13");
+    const input = canonicalSmsDate("2026-10-14", utcMidnight);
     const session = await normalizeAccountReviewParserResult(input);
     const row = session.rows[0];
     if (!row || row.source !== "SMS") throw new Error("Missing SMS day row");
-    expect(row.transaction.date.getTime()).toBe(localMidnight.getTime());
-    expect(row.transaction.date.getDate()).toBe(14);
+    expect(row.transaction.date.getTime()).toBe(utcMidnight.getTime());
+    expect(row.transaction.date.getUTCFullYear()).toBe(2026);
+    expect(row.transaction.date.getUTCMonth()).toBe(9);
+    expect(row.transaction.date.getUTCDate()).toBe(14);
     expect(row.transaction.categoryId).toBe(NORMALIZATION_IDS.shoppingCategory);
     expect(row.transaction.amount).toBe(50);
     expect(row.sourceFingerprint).toBe(NORMALIZATION_IDS.smsFingerprint);
@@ -82,8 +86,8 @@ describe("#395 date-only local calendar mapping", () => {
       .rejects.toThrow("account_review_voice_mapping_missing");
   });
 
-  it("rejects an SMS mapped date from the wrong calendar day", async () => {
-    const input = canonicalSmsDate("2026-10-14", parseAiDate("2026-10-15"));
+  it("rejects an SMS mapped date from the wrong UTC calendar day", async () => {
+    const input = canonicalSmsDate("2026-10-14", new Date("2026-10-15"));
     await expect(normalizeAccountReviewParserResult(input))
       .rejects.toThrow("account_review_financial_date_mismatch");
   });
