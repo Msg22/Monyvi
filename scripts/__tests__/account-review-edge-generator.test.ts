@@ -221,7 +221,15 @@ test("T011 parser entry and standalone artifact have no Decimal, registry or DB 
     ts.forEachChild(node, inspect);
   }
   inspect(syntax);
-  assert.deepEqual(runtimeImports, ["zod"], "Only Deno-mapped Zod may remain external");
+  assert.ok(runtimeImports.length > 0, "Expected a runtime Zod dependency");
+  assert.deepEqual(
+    [...new Set(runtimeImports)].sort(),
+    ["zod"],
+    "Only the unique bare Zod dependency may remain external"
+  );
+  for (const bareImport of runtimeImports) {
+    assert.equal(bareImport, "zod", "No relative/Node/DB imports are permitted");
+  }
   assert.doesNotMatch(
     source,
     /createFinancialActionRegistry|DEFAULT_FINANCIAL_ACTION_REGISTRY|class Decimal|process\.env|Deno\.env/,
@@ -353,6 +361,37 @@ function verifyDeepInfraStrict(value: unknown, where = "root"): void {
 }
 
 
+
+test("T011 generated Edge TS passes a full strict compiler diagnostic check", () => {
+  requireExisting(GENERATED, "canonical generated Edge contract");
+  const configPath = ts.findConfigFile(
+    join(ROOT, "packages/logic"), ts.sys.fileExists, "tsconfig.json"
+  );
+  assert.ok(configPath, "Missing canonical logic TypeScript settings");
+  const config = ts.readConfigFile(configPath, ts.sys.readFile);
+  if (config.error) {
+    assert.fail(ts.flattenDiagnosticMessageText(config.error.messageText, "\n"));
+  }
+  const parsed = ts.parseJsonConfigFileContent(
+    config.config, ts.sys, dirname(configPath)
+  );
+  assert.equal(parsed.errors.length, 0, "Invalid inherited logic compiler config");
+  const program = ts.createProgram([GENERATED], {
+    ...parsed.options,
+    strict: true,
+    noImplicitAny: true,
+    noEmit: true,
+  });
+  const diagnostics = ts.getPreEmitDiagnostics(program).filter(
+    (issue) => issue.category === ts.DiagnosticCategory.Error
+  );
+  const formatted = ts.formatDiagnostics(diagnostics, {
+    getCanonicalFileName: (name): string => name,
+    getCurrentDirectory: (): string => ROOT,
+    getNewLine: (): string => "\n",
+  });
+  assert.equal(diagnostics.length, 0, formatted);
+});
 
 test("T011 standalone exposes all seven canonical T004 validators without detached copies", async () => {
   const edge = await loadGeneratedEdge();

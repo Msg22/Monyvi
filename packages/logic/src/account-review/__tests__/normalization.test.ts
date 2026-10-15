@@ -103,6 +103,7 @@ describe("#395 T014-P — canonical pure first-session normalization", () => {
     const row = requireRow(session);
     expect(row.accountEvidence.type).toBe("CASH");
     expect(row.accountEvidence.name).toBe("Cash");
+    if (row.source !== "VOICE") throw new Error("Expected a Voice row");
     expect(row.transaction.originalTranscript).toContain("Cash");
     expect(row.transaction.categoryId).toBe(NORMALIZATION_IDS.foodCategory);
     expect(row.currency).toEqual({ state: "known", code: "EGP", origin: "explicit" });
@@ -119,6 +120,7 @@ describe("#395 T014-P — canonical pure first-session normalization", () => {
     expect(row.sourceRef).toBe(REVIEW_WIRE_IDS.smsRowRef);
     expect(row.sourceFingerprint).toBe(NORMALIZATION_IDS.smsFingerprint);
     expect(row.transaction.categoryId).toBe(NORMALIZATION_IDS.shoppingCategory);
+    if (row.source !== "SMS") throw new Error("Expected an SMS row");
     expect(row.transaction.smsFingerprint).toBe(NORMALIZATION_IDS.smsFingerprint);
     expect(row.transaction.rawSmsBody).toBe(REVIEW_SMS_BODY);
     expect(row.transaction.amount).toBe(50);
