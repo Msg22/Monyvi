@@ -6,6 +6,7 @@
  */
 import { createHash } from "node:crypto";
 import type { Database } from "@nozbe/watermelondb";
+import type { FinancialActionGroup } from "@monyvi/db";
 import type SQLiteAdapter from "@nozbe/watermelondb/adapters/sqlite";
 import {
   accountReviewSaveIntentSchema,
@@ -185,6 +186,29 @@ describe("T043 frozen SaveIntent, actor and current revision protection", () => 
     expect(persisted.counts.effects).toBe(1);
   });
 
+  it("S09b rejects valid changed selection against a persisted prior pending root", async (): Promise<void> => {
+    const initial = makeSaveFixture("voice-shared");
+    liveSession = initial.session;
+    const writer = service();
+    await expect(writer.saveSelectedAccountReview(initial))
+      .resolves.toMatchObject({ kind: "committed" });
+    // Stage the genuinely persisted hashed root in pending_local status.
+    // This tests prior-root identity mismatch, not mid-commit concurrency.
+    const roots = await database.get<FinancialActionGroup>("financial_action_groups")
+      .query().fetch();
+    const root = roots.find((item) => item.actionId === initial.intent.actionId);
+    if (!root) throw new Error("Missing persisted root");
+    await database.write(async (): Promise<void> => {
+      await root.update((record): void => { record.state = "pending_local"; });
+    });
+    const changed = changedSelectedSharedQnb(initial);
+    expect(changed.intent.actionId).toBe(initial.intent.actionId);
+    expect(changed.intent.selectedRows).not.toEqual(initial.intent.selectedRows);
+    liveSession = changed.session;
+    const baseline = await ledgerState(database);
+    await expect(writer.saveSelectedAccountReview(changed)).rejects.toThrow();
+    expect(await ledgerState(database)).toEqual(baseline);
+  });
   it("S09 rejects a schema-valid changed selection inconsistent with the frozen current session", async (): Promise<void> => {
     const f = makeSaveFixture("voice-shared");
     const unselected = f.session.rows.find((row) => !row.selected);
