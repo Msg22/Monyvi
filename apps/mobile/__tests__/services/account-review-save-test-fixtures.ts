@@ -23,6 +23,7 @@ export const BANK = testUuid(3);
 export const CASH = testUuid(4);
 export const WALLET = testUuid(5);
 export const CATEGORY = testUuid(6);
+export const INCOME_CATEGORY = testUuid(12);
 export const SESSION = testUuid(7);
 export const ACTION = testUuid(8);
 export const GROUP_QNB = testUuid(9);
@@ -96,7 +97,8 @@ function assignment(spec: RowSpec): object {
 function transaction(spec: RowSpec): object {
   const common = {
     amount: Number(spec.amount), currency: "EGP",
-    type: spec.type ?? "EXPENSE", categoryId: CATEGORY,
+    type: spec.type ?? "EXPENSE",
+    categoryId: spec.type === "INCOME" ? INCOME_CATEGORY : CATEGORY,
     date: new Date(TEST_DATE), categoryDisplayName: "Food",
     confidence: 1, originLabel: "Synthetic bank", counterparty: "Lunch",
   };
