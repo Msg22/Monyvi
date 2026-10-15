@@ -228,7 +228,7 @@ describe("T018: B1 R3-07 quiet accepted-default disclosure", () => {
     expect(screen.getByTestId("account-review-default-info")).toBeTruthy();
     // Real TransactionItem must retain its amber "Review details" blocker
     // while default-account disclosure stays visible and independently editable.
-    expect(screen.getByText("review_badge_review_details")).toBeTruthy();
+    expect(screen.getByText("Review details")).toBeTruthy();
     fireEvent.press(screen.getByTestId("transaction-review-edit-action"));
     expect(edit).toHaveBeenCalledWith(0);
     expect(select).not.toHaveBeenCalled();
