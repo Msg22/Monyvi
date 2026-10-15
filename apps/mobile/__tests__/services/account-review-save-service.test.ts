@@ -27,7 +27,7 @@ interface MockDb {
 jest.mock("@nozbe/watermelondb/adapters/sqlite/makeDispatcher", (): unknown =>
   jest.requireActual("@nozbe/watermelondb/adapters/sqlite/makeDispatcher/index.js")
 );
-jest.mock("@monyvi/db", () => {
+jest.mock("@monyvi/db", (): Readonly<Record<string, unknown>> => {
   const wm = jest.requireActual<typeof import("@nozbe/watermelondb")>(
     "@nozbe/watermelondb"
   );
@@ -107,31 +107,31 @@ beforeEach(async (): Promise<void> => {
 });
 
 describe("T043 frozen SaveIntent, actor and current revision protection", () => {
-  it("S01 rejects an intent whose owner is not the canonical session owner", async () => {
+  it("S01 rejects an intent whose owner is not the canonical session owner", async (): Promise<void> => {
     const f = makeSaveFixture();
     const intent = { ...f.intent, ownerId: FOREIGN_OWNER };
     await expectRejectedAndUnchanged(changedIntent(f, intent));
   });
-  it("S02 rejects a stale selected-row revision observed inside the writer", async () => {
+  it("S02 rejects a stale selected-row revision observed inside the writer", async (): Promise<void> => {
     const f = makeSaveFixture();
     liveSession = staleSelectedRow(f);
     const before = await ledgerState(database);
     await expect(service().saveSelectedAccountReview(f)).rejects.toThrow();
     expect(await ledgerState(database)).toEqual(before);
   });
-  it("S03 rejects repeated selected row IDs, not a partial second financial row", async () => {
+  it("S03 rejects repeated selected row IDs, not a partial second financial row", async (): Promise<void> => {
     const f = makeSaveFixture();
     const intent = { ...f.intent, selectedRows: [
       ...f.intent.selectedRows, ...f.intent.selectedRows,
     ] };
     await expectRejectedAndUnchanged(changedIntent(f, intent));
   });
-  it("S04 rejects stale operation generation even with unchanged financial input", async () => {
+  it("S04 rejects stale operation generation even with unchanged financial input", async (): Promise<void> => {
     const f = makeSaveFixture();
     const intent = { ...f.intent, expectedOperationGeneration: "1" };
     await expectRejectedAndUnchanged(changedIntent(f, intent));
   });
-  it("S05 rejects an unreferenced/stale group evidence key", async () => {
+  it("S05 rejects an unreferenced/stale group evidence key", async (): Promise<void> => {
     const f = makeSaveFixture("voice-shared");
     const groups = f.intent.confirmedGroups.map((group) => ({
       ...group, evidenceKey: "f".repeat(64),
@@ -140,7 +140,7 @@ describe("T043 frozen SaveIntent, actor and current revision protection", () => 
       ...f.intent, confirmedGroups: groups,
     }));
   });
-  it("S06 preserves the frozen planned IDs after rejection and retry", async () => {
+  it("S06 preserves the frozen planned IDs after rejection and retry", async (): Promise<void> => {
     const f = makeSaveFixture();
     actor = FOREIGN_OWNER;
     await expect(save(f)).rejects.toThrow();
@@ -151,7 +151,7 @@ describe("T043 frozen SaveIntent, actor and current revision protection", () => 
     const state = await ledgerState(database);
     expect(state.counts.actions).toBe(1);
   });
-  it("S07 rechecks principal across awaits, not solely before the writer", async () => {
+  it("S07 rechecks principal across awaits, not solely before the writer", async (): Promise<void> => {
     const f = makeSaveFixture();
     nextActor = FOREIGN_OWNER;
     const before = await ledgerState(database);
@@ -159,12 +159,12 @@ describe("T043 frozen SaveIntent, actor and current revision protection", () => 
     expect(readCount).toBeGreaterThan(1);
     expect(await ledgerState(database)).toEqual(before);
   });
-  it("S08 refuses a foreign-current actor without reading other owner's records", async () => {
+  it("S08 refuses a foreign-current actor without reading other owner's records", async (): Promise<void> => {
     const f = makeSaveFixture();
     actor = FOREIGN_OWNER;
     await expectRejectedAndUnchanged(f);
   });
-  it("S09 rejects selected changes while a prior frozen action is pending", async () => {
+  it("S09 rejects selected changes while a prior frozen action is pending", async (): Promise<void> => {
     const f = makeSaveFixture("voice-shared");
     const changed = {
       ...f.intent, selectedRows: f.intent.selectedRows.slice(1),
@@ -174,7 +174,7 @@ describe("T043 frozen SaveIntent, actor and current revision protection", () => 
 });
 
 describe("T043 selected-only accounts, children, categories and effects", () => {
-  it("S10 creates only the selected referenced QNB group, never unused CIB", async () => {
+  it("S10 creates only the selected referenced QNB group, never unused CIB", async (): Promise<void> => {
     const f = makeSaveFixture("voice-shared");
     await expect(save(f)).resolves.toMatchObject({ kind: "committed" });
     const state = await ledgerState(database);
@@ -185,7 +185,7 @@ describe("T043 selected-only accounts, children, categories and effects", () => 
     expect(f.intent.confirmedGroups.map((group) => group.groupId))
       .not.toContain(GROUP_CIB);
   });
-  it("S11 reuses an existing owned account with no new pending-account child", async () => {
+  it("S11 reuses an existing owned account with no new pending-account child", async (): Promise<void> => {
     await expect(save(makeSaveFixture())).resolves.toMatchObject({ kind: "committed" });
     const state = await ledgerState(database);
     expect(state.counts.accounts).toBe(3);
@@ -193,7 +193,7 @@ describe("T043 selected-only accounts, children, categories and effects", () => 
     expect(state.counts.senders).toBe(0);
     expect(state.counts.transactions).toBe(1);
   });
-  it("S12 rejects a deleted or unavailable account without creating an action root", async () => {
+  it("S12 rejects a deleted or unavailable account without creating an action root", async (): Promise<void> => {
     const f = makeSaveFixture();
     await database.write(async (): Promise<void> => {
       const account = await database.get<import("@monyvi/db").Account>("accounts").find(BANK);
@@ -201,7 +201,7 @@ describe("T043 selected-only accounts, children, categories and effects", () => 
     });
     await expectRejectedAndUnchanged(f);
   });
-  it("S13 fails closed when an accessible category became deleted before Save", async () => {
+  it("S13 fails closed when an accessible category became deleted before Save", async (): Promise<void> => {
     const f = makeSaveFixture();
     await database.write(async (): Promise<void> => {
       const category = await database.get<import("@monyvi/db").Category>("categories").find(CATEGORY);
@@ -209,7 +209,7 @@ describe("T043 selected-only accounts, children, categories and effects", () => 
     });
     await expectRejectedAndUnchanged(f);
   });
-  it("S14 rejects an existing account with incompatible currency", async () => {
+  it("S14 rejects an existing account with incompatible currency", async (): Promise<void> => {
     const f = makeSaveFixture();
     await database.write(async (): Promise<void> => {
       const account = await database.get<import("@monyvi/db").Account>("accounts").find(BANK);
@@ -217,7 +217,7 @@ describe("T043 selected-only accounts, children, categories and effects", () => 
     });
     await expectRejectedAndUnchanged(f);
   });
-  it("S15 saves the exact SMS new-Bank selected net delta once, no AI opening", async () => {
+  it("S15 saves the exact SMS new-Bank selected net delta once, no AI opening", async (): Promise<void> => {
     const f = makeSaveFixture("sms-new-bank");
     await seedSmsReviewDrafts(database, f.session);
     await expect(save(f)).resolves.toMatchObject({ kind: "committed" });
@@ -229,7 +229,7 @@ describe("T043 selected-only accounts, children, categories and effects", () => 
     expect(created?.balance).toBe(15);
     expect(created?.financialRevision).toBe("1");
   });
-  it("S16 retains nonempty zero-net expense and income with a zero account effect", async () => {
+  it("S16 retains nonempty zero-net expense and income with a zero account effect", async (): Promise<void> => {
     await expect(save(makeSaveFixture("voice-zero-net")))
       .resolves.toMatchObject({ kind: "committed" });
     const state = await ledgerState(database);
@@ -238,7 +238,7 @@ describe("T043 selected-only accounts, children, categories and effects", () => 
     expect(state.accounts.find((account) => account.id === BANK))
       .toMatchObject({ balance: 100, financialRevision: "1" });
   });
-  it("S17 processes an SMS ATM withdrawal as one transfer with two account effects", async () => {
+  it("S17 processes an SMS ATM withdrawal as one transfer with two account effects", async (): Promise<void> => {
     const f = makeSaveFixture("sms-atm");
     await seedSmsReviewDrafts(database, f.session);
     await expect(save(f)).resolves.toMatchObject({ kind: "committed" });
@@ -249,7 +249,7 @@ describe("T043 selected-only accounts, children, categories and effects", () => 
     expect(state.accounts.find((account) => account.id === BANK)?.balance).toBe(74.95);
     expect(state.accounts.find((account) => account.id === CASH)?.balance).toBe(35.05);
   });
-  it("S18 permits grounded Voice CASH without bank details or inferred opening balance", async () => {
+  it("S18 permits grounded Voice CASH without bank details or inferred opening balance", async (): Promise<void> => {
     const f = makeSaveFixture("voice-cash");
     await clearAndSeed(database, { onlyCategories: true });
     await expect(save(f)).resolves.toMatchObject({ kind: "committed" });
@@ -262,7 +262,7 @@ describe("T043 selected-only accounts, children, categories and effects", () => 
 });
 
 describe("T043 SMS deduplication, cleanup-only and safe partial selection", () => {
-  it("S19 deduplicates against an existing owned active transaction", async () => {
+  it("S19 deduplicates against an existing owned active transaction", async (): Promise<void> => {
     const f = makeSaveFixture("sms-all-dedup");
     await seedSmsReviewDrafts(database, f.session);
     await seedSavedFingerprint(database, FINGERPRINT_B, "transaction");
@@ -274,7 +274,7 @@ describe("T043 SMS deduplication, cleanup-only and safe partial selection", () =
     expect(state.counts.effects).toBe(0);
     expect(state.counts.draftItems).toBe(0);
   });
-  it("S20 deduplicates an SMS fingerprint saved as a transfer, not just transactions", async () => {
+  it("S20 deduplicates an SMS fingerprint saved as a transfer, not just transactions", async (): Promise<void> => {
     const f = makeSaveFixture("sms-all-dedup");
     await seedSmsReviewDrafts(database, f.session);
     await seedSavedFingerprint(database, FINGERPRINT_B, "transfer");
@@ -286,21 +286,21 @@ describe("T043 SMS deduplication, cleanup-only and safe partial selection", () =
     expect(state.counts.transactions).toBe(0);
     expect(state.counts.actions).toBe(0);
   });
-  it("S21 does not confuse a deleted transaction fingerprint with a completed Save", async () => {
+  it("S21 does not confuse a deleted transaction fingerprint with a completed Save", async (): Promise<void> => {
     const f = makeSaveFixture("sms-existing");
     await seedSmsReviewDrafts(database, f.session);
     await seedSavedFingerprint(database, FINGERPRINT_B, "transaction", OWNER, true);
     await expect(save(f)).resolves.toMatchObject({ kind: "committed" });
     expect((await ledgerState(database)).counts.actions).toBe(1);
   });
-  it("S22 does not treat a foreign owner's fingerprint as an owned duplicate", async () => {
+  it("S22 does not treat a foreign owner's fingerprint as an owned duplicate", async (): Promise<void> => {
     const f = makeSaveFixture("sms-existing");
     await seedSmsReviewDrafts(database, f.session);
     await seedSavedFingerprint(database, FINGERPRINT_B, "transaction", FOREIGN_OWNER);
     await expect(save(f)).resolves.toMatchObject({ kind: "committed" });
     expect((await ledgerState(database)).counts.actions).toBe(1);
   });
-  it("S23 cleans already-saved SMS drafts while creating only the remaining unsaved row", async () => {
+  it("S23 cleans already-saved SMS drafts while creating only the remaining unsaved row", async (): Promise<void> => {
     const f = makeSaveFixture("sms-mixed");
     await seedSmsReviewDrafts(database, f.session);
     await seedSavedFingerprint(database, FINGERPRINT_A, "transaction");
@@ -311,7 +311,7 @@ describe("T043 SMS deduplication, cleanup-only and safe partial selection", () =
     expect(state.counts.draftItems).toBe(0);
     expect(state.counts.effects).toBe(1);
   });
-  it("S24 never creates a fake financial action when every SMS selection is deduped", async () => {
+  it("S24 never creates a fake financial action when every SMS selection is deduped", async (): Promise<void> => {
     const f = makeSaveFixture("sms-all-dedup");
     await seedSmsReviewDrafts(database, f.session);
     await seedSavedFingerprint(database, FINGERPRINT_B);
