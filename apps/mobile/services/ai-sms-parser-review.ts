@@ -65,6 +65,10 @@ function validFinancialRows(
   return accepted;
 }
 
+function isUnknownArray(value: unknown): value is readonly unknown[] {
+  return Array.isArray(value);
+}
+
 function validSourceSpans(
   row: AccountReviewSmsFinancialRow,
   advisory: unknown,
@@ -78,9 +82,11 @@ function validSourceSpans(
   const currencyProof = advisory.currencyEvidence.evidenceSpans;
   const targetProof = isRecord(advisory.toAccountEvidence)
     ? advisory.toAccountEvidence.evidenceSpans : [];
-  const spans = [sourceProof, currencyProof, targetProof].flatMap(
-    (values) => Array.isArray(values) ? values : []
-  );
+  const spans: unknown[] = [];
+  for (const values of [sourceProof, currencyProof, targetProof]) {
+    if (!isUnknownArray(values)) continue;
+    spans.push(...values);
+  }
   return spans.every((span) => {
     if (!isRecord(span) || span.sourceRef !== source.id ||
         typeof span.start !== "number" || typeof span.end !== "number" ||
