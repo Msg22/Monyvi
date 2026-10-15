@@ -1,0 +1,79 @@
+appId: com.monyvi.app
+---
+# #395 T018 US1 B1 R3-07/R3-12 — AUTHORED-ONLY, NOT RUNNABLE YET.
+#
+# HARD PREREQUISITES BEFORE EXECUTION:
+# 1. T054 integrates the FULL canonical AccountReviewSession in the REAL
+#    apps/mobile/app/(private)/voice-review.tsx route; route param
+#    reviewFixtureSceneId is PROPOSED, NOT CURRENTLY IMPLEMENTED.
+# 2. Authenticated, nonproduction E2E app build; __DEV__ + E2E flag;
+#    current-user owner-scoped T015 loader and T054 guarded entry.
+# 3. Separate bounded local test-source seed profile must prepare the EXACT
+#    five owner-derived account roles/card suffixes and accessible category.
+#    Existing E2E Cash/NBE/QNB/Wallet seed DOES NOT meet those roles.
+# 4. T020/T021 render the approved quiet note, Why sheet and editable row,
+#    with the proposed testIDs below; no current screenshot asserts Green.
+#
+# This draft intentionally FAILS until those prerequisites exist.
+# Never substitute a static catalogue id, fake route, mock writer or dummy
+# successful Save. No microphone, paid provider, DB seed, Save, or OS prompt.
+
+# Existing real authenticated E2E bootstrap; it only signs in.
+- runFlow: ../helpers/ci-auth-deeplink-bootstrap.yaml
+
+# PROPOSED FUTURE direct entry to the existing private /voice-review route.
+# NOT a verified current deep-link contract; T054 must validate app routing.
+# Pass only allowlisted scene id, not serialized session/user/financial data.
+- openLink: "monyvi://voice-review?reviewFixtureSceneId=r3-default-only&originTabIndex=2"
+
+- extendedWaitUntil:
+    visible:
+      id: "transaction-review-screen"
+    timeout: 30000
+
+# FUTURE T020 note/Why IDs; actual current TransactionReview IDs noted below.
+- assertVisible:
+    id: "account-review-default-info"
+- assertVisible: "Cash was used for 2 transactions."
+- assertVisible:
+    id: "account-review-default-why-trigger"
+- assertNotVisible: "Review details"
+- assertVisible:
+    id: "review-action-bar"
+- assertVisible:
+    id: "transaction-account-match"
+
+# T020 informational disclosure is NOT a selection or account command.
+- tapOn:
+    id: "account-review-default-why-trigger"
+- assertVisible:
+    id: "account-review-default-why-sheet"
+- assertVisible: "Default account used"
+- assertVisible: "Cash was selected for 2 transactions because no account was mentioned and the currency matches."
+- assertVisible: "You can change the account on each transaction before saving."
+- tapOn:
+    id: "account-review-default-why-dismiss"
+- assertNotVisible:
+    id: "account-review-default-why-sheet"
+- assertVisible:
+    id: "account-review-default-info"
+
+# REAL existing TransactionItem edit action: open the normal account-edit
+# surface without touching the review Save button or selecting extra rows.
+- assertVisible:
+    id: "transaction-review-edit-action"
+- tapOn:
+    id: "transaction-review-edit-action"
+- assertVisible: "Edit Transaction"
+- assertVisible: "Account"
+- tapOn: "Cancel"
+- assertVisible:
+    id: "transaction-review-screen"
+- assertVisible:
+    id: "account-review-default-info"
+
+# Future separate device/owner verification:
+# - 390x844 baseline, 340dp, fontScale1.35, 600dp/landscape, dark, Arabic RTL.
+# - Insets/keyboard, TalkBack/VoiceOver real focus, Android hardware Back,
+#   group/row selection arithmetic, real scoped category and T054 normal Save.
+# - M14/M19 injected failures, replay, writer and pgTAP are NOT this YAML.
