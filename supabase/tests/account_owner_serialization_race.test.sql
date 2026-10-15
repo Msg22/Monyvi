@@ -2,6 +2,9 @@
 -- Requires a LOCAL PostgreSQL with 088/089 applied AND extensions.dblink installed
 -- by the root runner. This test does NOT install extensions or change migrations.
 -- The new tuples are deliberately RED against SQL 001-087.
+-- Optional local-only GUC: monyvi.test_dblink_conninfo, supplied by root
+-- securely in the same runner session (not in this file, TAP or logs).
+-- If unset/blank, use the original dbname/current_user CI connection.
 -- Each fixture identity is synthetic, reserved below, and protected by a mutex.
 -- External dblink fixture commits are cleaned explicitly; all financial RPCs
 -- execute within separate transactions which are ROLLED BACK, even on failure.
@@ -27,18 +30,23 @@ END;
 $$;
 
 CREATE FUNCTION pg_temp.r395_connect(p_name text)
-RETURNS void LANGUAGE plpgsql AS $$
+RETURNS void LANGUAGE plpgsql AS $
+DECLARE
+  -- Supplied only in the local test runner session; never persisted or printed.
+  v_conninfo text := current_setting('monyvi.test_dblink_conninfo', true);
 BEGIN
-  PERFORM extensions.dblink_connect(
-    p_name, 'dbname=' || current_database() || ' user=' || current_user
-  );
+  IF v_conninfo IS NULL OR btrim(v_conninfo) = '' THEN
+    -- Preserve the original trusted/superuser CI connection behavior.
+    v_conninfo := 'dbname=' || current_database() || ' user=' || current_user;
+  END IF;
+  PERFORM extensions.dblink_connect(p_name, v_conninfo);
   PERFORM extensions.dblink_exec(p_name, 'SET statement_timeout = ''8s''');
   PERFORM extensions.dblink_exec(p_name, 'SET lock_timeout = ''6s''');
   PERFORM extensions.dblink_exec(
     p_name, 'SET idle_in_transaction_session_timeout = ''20s'''
   );
 END;
-$$;
+$;
 
 CREATE FUNCTION pg_temp.r395_auth(p_name text, p_owner uuid)
 RETURNS void LANGUAGE plpgsql AS $$
@@ -229,7 +237,8 @@ BEGIN
     PERFORM extensions.dblink_disconnect(p_name);
   END IF;
 EXCEPTION WHEN OTHERS THEN
-  PERFORM pg_temp.r395_note('cleanup_error:'||p_name,SQLSTATE||':'||SQLERRM);
+  -- Error text can contain connection details; retain SQLSTATE only.
+  PERFORM pg_temp.r395_note('cleanup_error:'||p_name,SQLSTATE);
 END;
 $$;
 
@@ -268,7 +277,7 @@ BEGIN
           '39a70000-0000-4000-8000-000000000003'::uuid)
       $cleanup$);
     EXCEPTION WHEN OTHERS THEN
-      PERFORM pg_temp.r395_note('cleanup_error:fixture',SQLSTATE||':'||SQLERRM);
+      PERFORM pg_temp.r395_note('cleanup_error:fixture',SQLSTATE);
     END;
   END IF;
   PERFORM pg_temp.r395_safe_close('race_fixture');
@@ -315,8 +324,8 @@ BEGIN
     IF v_collisions<>0 THEN
       RAISE EXCEPTION 'reserved_fixture_id_already_exists';
     END IF;
-    -- From here on any fixture inserts belong only to this invocation.
-    v_owned := true;
+    -- Empty namespace + mutex alone do not authorize cleanup. Only a
+    -- successful atomic auth-user seed makes these synthetic IDs ours.
     PERFORM pg_temp.r395_connect('race_fixture');
     PERFORM extensions.dblink_exec('race_fixture',$seed$
       INSERT INTO auth.users
@@ -329,6 +338,7 @@ BEGIN
         ('39a70000-0000-4000-8000-000000000003','authenticated','authenticated',
          'sql395-race-cascade@monyvi.test','unused','{}','{}')
     $seed$);
+    v_owned := true;
     PERFORM extensions.dblink_exec('race_fixture',$seed$
       INSERT INTO public.accounts
         (id,user_id,name,type,balance,currency,financial_revision,is_default,deleted)
@@ -607,7 +617,7 @@ BEGIN
     PERFORM pg_temp.r395_note('run_completed','true');
   EXCEPTION WHEN OTHERS THEN
     -- Preserve an explicit TAP failure rather than claiming Green on error.
-    PERFORM pg_temp.r395_note('run_error',SQLSTATE||':'||SQLERRM);
+    PERFORM pg_temp.r395_note('run_error',SQLSTATE);
   END;
   PERFORM pg_temp.r395_cleanup(v_owned,v_mutex);
 END;

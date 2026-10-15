@@ -78,3 +78,13 @@
 - Harness is not yet concurrency evidence: no database execution, connection result, deadlock-free or freshness PASS claimed here. Crash between independent fixture commits and cleanup can leave only synthetic rows; namespace collision fails closed for manual root recovery, not automatic deletion of preexisting rows.
 - **Unproven stages:** installed `dblink`/connection privileges, fresh-snapshot/wait graph under 088/089, serializing all privileged/global/zero-row writers and auth cascades, committed/restart cross-session replay and exhaustive deadlock paths. Independent database/security review remains mandatory.
 - No Maestro work, new production/helper functions, existing migrations, remote calls, file ownership expansion or branch/PR/issue changes beyond this tests-only commit.
+## Root race-harness prerequisite repair — 2026-10-15 (TESTS ONLY)
+
+- **Root local execution receipt:** independent race harness at `c8e555b0` reported **4 PASS / 32 FAIL / 36** with `run_error=2F003` (non-superuser dblink required password or delegated GSSAPI credentials); **not behavioral Red or concurrency proof**.
+- Root operator installed transient pgTAP and dblink for that run, then removed both; postflight reserved users/accounts/categories **0**, extensions **0**. No fixture was inserted because connection failed.
+- `pg_temp.r395_connect` now reads optional **local runner-only** `current_setting('monyvi.test_dblink_conninfo', true)` and calls normal `extensions.dblink_connect(name, conninfo)`; unset/blank preserves original `dbname=current_database(), user=current_user` behavior for trusted/superuser CI.
+- Root may supply authenticated **local-only** conninfo through secure SQL stdin from its container environment **inside the test-runner session**. Do not commit, print, echo, log, or include raw credentials in test artifacts.
+- No `dblink_connect_u`, role/pg_hba modifications, privilege grants, bypasses or extension installs are added by this worker.
+- **No-owner cleanup safety:** advisory mutex + namespace-empty guard precede seeding; `v_owned` becomes true only **after successful atomic synthetic auth-user INSERT**. Failed connection/seed or prior UUID collision leaves it false, so cleanup must not delete unowned rows.
+- Cleanup/driver error observations contain **SQLSTATE only**, never `SQLERRM` that could reveal connection details. Named sessions, timeout budget, rollback/cleanup, and all **36 TAP assertions** remain intact.
+- Root must independently verify authenticated conninfo access, role permissions, cleanup/postflight, and actual lock graph. No rerun, local DB/test/extension command, secret read, migration or production change occurred here; **T016 and implementation grants still pending**.
