@@ -43,14 +43,13 @@ function post(body: unknown): Request {
   });
 }
 
-function makeHarness(): {
-  readonly handler: ReturnType<typeof createParseSmsHandler>;
-  readonly calls: GateCalls;
-} {
-  const calls: GateCalls = {
-    auth: 0, consent: 0, policy: 0, reserve: 0, providerStart: 0, provider: 0,
-  };
-  const dependencies: ParseSmsHandlerDependencies = {
+function preflight(calls: GateCalls): Pick<ParseSmsHandlerDependencies,
+  | "authenticate" | "hasConsent" | "getPolicy" | "buildFixedPrompt"
+  | "buildCategoryContext" | "buildResponseSchema" | "shouldExclude"
+  | "computeFingerprint" | "computeRequestDigest" | "getServerNowMs"
+  | "resolveScanWindowStart" | "getProcessingOutcomes"
+> {
+  return {
     authenticate: async () => { calls.auth++; return "synthetic-owner"; },
     hasConsent: async () => { calls.consent++; return true; },
     getPolicy: () => { calls.policy++; return DEFAULT_SMS_SAFEGUARD_POLICY; },
@@ -63,6 +62,14 @@ function makeHarness(): {
     getServerNowMs: () => Date.UTC(2026, 9, 14, 12, 1),
     resolveScanWindowStart: async (input) => input.requestedScanStartedAtMs,
     getProcessingOutcomes: async () => [],
+  };
+}
+
+function accounting(calls: GateCalls): Pick<ParseSmsHandlerDependencies,
+  | "reserveWork" | "markProviderStarted" | "executeProvider"
+  | "completeWork" | "releaseWork" | "reconcileOutcomes"
+> {
+  return {
     reserveWork: async () => {
       calls.reserve++;
       return {
@@ -77,16 +84,17 @@ function makeHarness(): {
         terminalFingerprints: [], availableAt: null,
       };
     },
-    executeProvider: async (input) => {
+    executeProvider: async (input): ReturnType<ParseSmsHandlerDependencies["executeProvider"]> => {
       calls.provider++;
-      const common = {
-        completionStatus: "complete" as const,
-        isResponseSchemaValid: true,
-        transactions: [],
-      };
-      return input.reviewProviderRequest === undefined ? common : {
-        ...common,
-        reviewContractVersion: "account-review/v2",
+      if (input.reviewProviderRequest === undefined) {
+        return {
+          completionStatus: "complete", isResponseSchemaValid: true,
+          transactions: [],
+        };
+      }
+      return {
+        completionStatus: "complete", isResponseSchemaValid: true,
+        reviewContractVersion: "account-review/v2", transactions: [],
         rawReviewResponse: {
           reviewContractVersion: "account-review/v2",
           transactions: [], suggestedAccounts: [],
@@ -101,7 +109,20 @@ function makeHarness(): {
       negativeFingerprints: submittedCandidates.map((entry) => entry.smsFingerprint),
     }),
   };
-  return { handler: createParseSmsHandler(dependencies), calls };
+}
+
+function makeHarness(): {
+  readonly handler: ReturnType<typeof createParseSmsHandler>;
+  readonly calls: GateCalls;
+} {
+  const calls: GateCalls = {
+    auth: 0, consent: 0, policy: 0, reserve: 0, providerStart: 0, provider: 0,
+  };
+  const deps: ParseSmsHandlerDependencies = {
+    ...preflight(calls),
+    ...accounting(calls),
+  };
+  return { handler: createParseSmsHandler(deps), calls };
 }
 
 async function requireRejectedBeforeAdmission(body: unknown): Promise<void> {
