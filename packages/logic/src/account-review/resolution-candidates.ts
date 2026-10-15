@@ -43,7 +43,6 @@ export function assertOwnedResolutionContext(
 ): void {
   const provider = accountReviewRequestContextSchema.parse(snapshots.providerContext);
   if (session.ownerId !== snapshots.ownerId ||
-      session.preferredCurrency !== snapshots.preferredCurrency ||
       provider.preferredCurrency !== snapshots.preferredCurrency ||
       snapshots.accounts.length !== provider.accounts.length ||
       new Set(snapshots.accounts.map((a) => a.id)).size !== snapshots.accounts.length ||
@@ -88,8 +87,10 @@ function identityFieldsAgree(
       evidence.institutionId !== account.institutionId) return false;
   if (evidence.providerDisplayName !== null &&
       !sameText(evidence.providerDisplayName, account.providerDisplayName)) return false;
-  // No inferred equivalence when the owned account has a different/unproven card.
-  if (evidence.cardLast4 !== account.cardLast4) return false;
+  // A card omitted from grounded evidence is not a conflicting card claim.
+  // A stated suffix must match the actual owned account, never an unknown card.
+  if (evidence.cardLast4 !== null &&
+      evidence.cardLast4 !== account.cardLast4) return false;
   return evidence.name === null ||
     [account.name, account.providerDisplayName, ...account.senderNames].some(
       (candidate) => sameText(evidence.name, candidate)
@@ -120,10 +121,13 @@ export function groundedOwnedCandidates(
   return eligible.filter((account) => identityFieldsAgree(evidence, account));
 }
 
-/** Multiple simultaneous eligible defaults are an inconsistency, not ordering. */
+/** Exactly one active default globally may be used as a default fallback.
+ * A currency/source-filtered subset cannot hide an inconsistent owned state. */
 export function soleEligibleDefault(
-  eligible: readonly OwnedReviewAccount[]
+  eligible: readonly OwnedReviewAccount[],
+  allOwned: readonly OwnedReviewAccount[]
 ): OwnedReviewAccount | null {
-  const defaults = eligible.filter((account) => account.isDefault);
-  return defaults.length === 1 ? defaults[0] ?? null : null;
+  const defaults = allOwned.filter((account) => account.isDefault);
+  if (defaults.length !== 1 || !defaults[0]) return null;
+  return eligible.find((account) => account.id === defaults[0]?.id) ?? null;
 }

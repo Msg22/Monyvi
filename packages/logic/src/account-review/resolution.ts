@@ -3,10 +3,10 @@
  * Financial rows, provider proof, user choices, group state, and Save intent
  * remain immutable. An owning writer must revalidate again at Save.
  */
-import { accountReviewSessionSchema } from "./review-schemas";
-import type {
-  AccountReviewAssignment, AccountReviewReason,
-  AccountReviewRow, AccountReviewSession,
+import {
+  accountReviewSessionSchema,
+  type AccountReviewAssignment, type AccountReviewReason,
+  type AccountReviewRow, type AccountReviewSession,
 } from "./review-schemas";
 import type { AccountReviewOwnedContext } from "./normalization-types";
 import {
@@ -88,7 +88,9 @@ function groundedMatchAllowed(row: ReviewRow): boolean {
 }
 
 function priorAssignmentStillEligible(
-  row: ReviewRow, eligible: readonly OwnedReviewAccount[]
+  row: ReviewRow,
+  eligible: readonly OwnedReviewAccount[],
+  allOwned: readonly OwnedReviewAccount[]
 ): boolean {
   if (row.assignment.state !== "existing") return false;
   const account = eligible.find((item) => item.id === row.assignment.accountId);
@@ -97,7 +99,7 @@ function priorAssignmentStillEligible(
   if (row.assignment.origin === "user" || row.hasUserAccountOverride) return true;
   if (row.assignment.origin === "default") {
     return row.accountEvidence.state === "absent" &&
-      soleEligibleDefault(eligible)?.id === account.id;
+      soleEligibleDefault(eligible, allOwned)?.id === account.id;
   }
   if (row.source === "SMS" && row.accountEvidence.state === "contextual") {
     return false;
@@ -108,7 +110,9 @@ function priorAssignmentStillEligible(
 }
 
 function resolveAbsentSource(
-  row: ReviewRow, eligible: readonly OwnedReviewAccount[]
+  row: ReviewRow,
+  eligible: readonly OwnedReviewAccount[],
+  allOwned: readonly OwnedReviewAccount[]
 ): ReviewRow {
   // Hard invalid or removed evidence is not a valid absence/default signal.
   if (row.assignment.state === "unresolved" &&
@@ -126,7 +130,7 @@ function resolveAbsentSource(
       row.reviewReasons.includes("account_identity_uncertain")) {
     return unresolvedSource(row, "account_evidence_invalid");
   }
-  const preferred = soleEligibleDefault(eligible);
+  const preferred = soleEligibleDefault(eligible, allOwned);
   return preferred
     ? acceptedSource(row, preferred, "default")
     : unresolvedSource(row, "account_needed");
@@ -156,14 +160,14 @@ function resolveSource(
   }
   const eligible = eligibleSourceAccounts(snapshots.accounts, row.source, row.currency.code);
   if (row.assignment.state === "existing") {
-    return priorAssignmentStillEligible(row, eligible)
+    return priorAssignmentStillEligible(row, eligible, snapshots.accounts)
       ? { ...row, reviewReasons: removeAccountBlockers(row.reviewReasons) }
       : unresolvedSource(row, "account_unavailable", [], true);
   }
   // A previously invalidated explicit user choice cannot silently become default.
   if (row.hasUserAccountOverride) return { ...row, selected: false };
   if (row.accountEvidence.state === "absent") {
-    return resolveAbsentSource(row, eligible);
+    return resolveAbsentSource(row, eligible, snapshots.accounts);
   }
   if (row.accountEvidence.state === "explicit" ||
       (row.source === "VOICE" && row.accountEvidence.state === "contextual")) {
@@ -191,9 +195,11 @@ function acceptedDestination(
 }
 
 function matchCashFallback(
-  row: ReviewRow, cash: readonly OwnedReviewAccount[]
+  row: ReviewRow,
+  cash: readonly OwnedReviewAccount[],
+  allOwned: readonly OwnedReviewAccount[]
 ): ReviewRow {
-  const preferred = soleEligibleDefault(cash);
+  const preferred = soleEligibleDefault(cash, allOwned);
   if (preferred) return acceptedDestination(row, preferred, "default");
   if (cash.length === 1 && cash[0]) {
     // The canonical origin enum has no "sole Cash" literal.
@@ -205,7 +211,8 @@ function matchCashFallback(
 function resolveExistingDestination(
   row: ReviewRow,
   previous: Extract<AccountReviewAssignment, { state: "existing" }>,
-  cash: readonly OwnedReviewAccount[]
+  cash: readonly OwnedReviewAccount[],
+  allOwned: readonly OwnedReviewAccount[]
 ): ReviewRow {
   const current = cash.find((item) => item.id === previous.accountId);
   if (!current || current.currency !== previous.currency) {
@@ -213,8 +220,12 @@ function resolveExistingDestination(
   }
   if (previous.origin === "user") return row;
   if (previous.origin === "default") {
-    return soleEligibleDefault(cash)?.id === current.id
-      ? row : unresolvedDestination(row, "account_unavailable", [], true);
+    if (soleEligibleDefault(cash, allOwned)?.id === current.id) return row;
+    // Global default flags may drift while the independent sole-Cash
+    // destination rule still uniquely allows this same owned account.
+    return cash.length === 1
+      ? { ...row, toAssignment: existing(current, "exact", row) }
+      : unresolvedDestination(row, "account_unavailable", [], true);
   }
   const proof = row.toAccountEvidence;
   const matches = proof?.state === "explicit"
@@ -239,7 +250,9 @@ function resolveAtmDestination(
   if (row.toAssignment?.state === "suggested") return row;
   const previousDestination = row.toAssignment;
   if (previousDestination?.state === "existing") {
-    return resolveExistingDestination(row, previousDestination, cash);
+    return resolveExistingDestination(
+      row, previousDestination, cash, snapshots.accounts
+    );
   }
   const evidence = row.toAccountEvidence;
   if (evidence === null || evidence.state === "absent") {
@@ -248,7 +261,7 @@ function resolveAtmDestination(
           row.toAssignment.reasonCode === "account_evidence_invalid")) {
       return unresolvedDestination(row, "account_evidence_invalid");
     }
-    return matchCashFallback(row, cash);
+    return matchCashFallback(row, cash, snapshots.accounts);
   }
   if (evidence.state !== "explicit") {
     return unresolvedDestination(row, "account_identity_uncertain");
