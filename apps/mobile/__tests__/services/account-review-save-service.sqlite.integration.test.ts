@@ -41,7 +41,10 @@ jest.mock("@monyvi/db", () => {
   >("./account-review-save-sqlite-test-helpers").LEDGER_MODEL_CLASSES;
   const adapter = new Sqlite({ schema });
   const database = new wm.Database({ adapter, modelClasses: models });
-  return { database, __adapter: adapter, schema, Q: wm.Q };
+  return {
+    database, __adapter: adapter, schema, Q: wm.Q,
+    ...Object.fromEntries(models.map((model) => [model.name, model])),
+  };
 });
 jest.mock("@/services/supabase", () => ({
   getCurrentUserId: (): Promise<string> =>
@@ -162,12 +165,14 @@ describe("T043 physical SQLite selected-save and immutable action", () => {
     const f = makeSaveFixture("voice-existing");
     const planned = f.intent.plannedEntityIds.find((id) => id.entity === "transaction");
     if (!planned) throw new Error("Missing planned transaction ID");
+    const selected = f.session.rows[0];
+    if (!selected) throw new Error("Missing selected source row");
     await database.write(async (): Promise<void> => {
       const tx = database.get<Transaction>("transactions").prepareCreate((record): void => {
         record._raw.id = planned.id;
         record.userId = OWNER; record.accountId = BANK;
         record.amount = 7; record.currency = "EGP";
-        record.type = "EXPENSE"; record.categoryId = f.session.rows[0]?.transaction.categoryId ?? "";
+        record.type = "EXPENSE"; record.categoryId = selected.transaction.categoryId;
         record.source = "VOICE"; record.date = new Date("2026-10-15T12:00:00.000Z");
         record.isDraft = false; record.deleted = false;
       });
