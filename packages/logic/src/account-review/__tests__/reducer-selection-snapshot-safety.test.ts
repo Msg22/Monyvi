@@ -690,7 +690,11 @@ describe("#395 T027 group edit preserves only freshly eligible ATM selection", (
     }
 
     expectAccepted(state, outcome);
-    expect(groupByName(outcome.state, "QNB")).toMatchObject({
+    const renamedGroup = outcome.state.groups.find(
+      (candidate) => candidate.groupId === group.groupId
+    );
+    expect(renamedGroup).toMatchObject({
+      groupId: group.groupId,
       name: "QNB Confirmed ATM", status: "confirmed",
       type: group.type, currency: group.currency,
       institutionId: group.institutionId,
@@ -736,7 +740,11 @@ describe("#395 T027 group edit preserves only freshly eligible ATM selection", (
     const frozen = structuredClone(state);
     const result = execute(state, nicknameOnlyEdit(state, group), snapshots);
     expectAccepted(state, result);
-    const updated = groupByName(result.state, "QNB");
+    const updated = result.state.groups.find(
+      (candidate) => candidate.groupId === group.groupId
+    );
+    if (!updated) throw new Error("Missing renamed canonical group ID");
+    expect(updated.groupId).toBe(group.groupId);
     expect(updated.name).toBe("QNB Confirmed ATM");
     expect(updated.status).toBe("confirmed");
     expect(updated.revision).not.toBe(group.revision);

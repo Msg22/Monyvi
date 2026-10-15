@@ -402,3 +402,30 @@ operation; no post-change Red or Green is claimed. Root owns the first coherent
 meaningful Red, independent review reconciliation, and any separate minimal
 production-fix authorization. Freeze this writer immediately after the
 CAS-guarded tests/report child publication.
+
+
+## Post-e785 T027 tests-only correction: stable group identity after nickname edit
+
+**Root actual grouped execution on e785:** 56 PASS / 2 FAIL over the
+four-suite batch; every earlier 30 safety and 26 T024 case passed. Both new
+failures were fixture assertion lookups after the intended rename, not yet
+meaningful reducer Red. In formatted test lines 854 and 907, searching the
+accepted result by old nickname QNB throws because the edit renamed the
+group to QNB Confirmed ATM.
+
+**Bounded test-only repair:** On the existing ATM test, replace precisely the
+two accepted-outcome old-name lookups with searches by the canonical
+pre-command groupId. The negative retains the full expected new name,
+confirmation status, original type/currency/institution/provider/card and
+the strict invalid-ATM-selected-false invariant. The positive asserts
+that the stable groupId still exists, its new name/status/revisions are
+correct, the eligible ATM stays checked, and the unrelated purchase stays
+unchecked. On missing groupId the assertion still fails (fail closed);
+neither scenario is weakened. The unchanged-rejection path, fresh
+real-resolver proofs, financial preservation and all original cases remain.
+
+No production source, public schemas, fixtures, other tests or canonical
+business documents edited. This worker has **NOT RUN** tests, TypeScript
+or lint after the repair. Root must run the corrected grouped Red to
+establish the actual stale-Cash-preservation behavior before authorizing
+the independent production fix.
