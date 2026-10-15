@@ -16,8 +16,9 @@ import {
 import { MAX_CANONICAL_UNSIGNED_INTEGER_STRING } from "../../financial-actions/action-contracts";
 import { syntheticHashProvider } from "./normalization-fixtures";
 import {
-  COMMAND_IDS, canonicalCommand, groupByName, laterCibUserChoiceReview,
-  mismatchedIncomingReview, ownedContext, qnbCibReview, requireRow, scope,
+  COMMAND_IDS, canonicalCommand, canonicalVoiceReview, groupByName,
+  laterCibUserChoiceReview, mismatchedIncomingReview, ownedContext,
+  qnbCibReview, requireRow, scope,
 } from "./review-command-fixtures";
 
 interface UndoLease {
