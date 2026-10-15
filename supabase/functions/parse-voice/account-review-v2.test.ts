@@ -3,15 +3,18 @@
  * Import the future real helper directly; do not fake the SUT or invoke Gemini.
  */
 import assert from "node:assert/strict";
-import type {
-  AccountReviewRequestContext,
-} from "../../../packages/logic/src/account-review/parser-schemas.ts";
+import type { z } from "zod";
 import {
+  accountReviewRequestContextSchema,
+  accountReviewVoiceResponseV2Schema,
+} from "../_shared/account-review-contract.ts";
+import {
+  makeReviewRequestContext,
   makeGroundedVoiceCashV2Response,
   makeVoiceV1Response,
   makeVoiceV2Response,
   REVIEW_WIRE_IDS,
-} from "../../../packages/logic/src/account-review/__tests__/fixtures.ts";
+} from "./test-fixtures/account-review.ts";
 import {
   parseVoiceReviewV2Context,
   buildVoiceReviewV2Instructions,
@@ -19,36 +22,8 @@ import {
   parseVoiceReviewV2Advisory,
 } from "./account-review-v2.ts";
 
-const VERSION = "account-review/v2";
-
-function context(): AccountReviewRequestContext {
-  return {
-    reviewContractVersion: VERSION,
-    preferredCurrency: "EGP",
-    accounts: [
-      {
-        id: REVIEW_WIRE_IDS.bankAccountId,
-        name: "QNB salary",
-        currency: "EGP",
-        type: "BANK",
-        institutionId: null,
-        providerDisplayName: "QNB",
-        cardLast4: "0007",
-        senderNames: ["QNB"],
-      },
-      {
-        id: REVIEW_WIRE_IDS.cashAccountId,
-        name: "Cash",
-        currency: "EGP",
-        type: "CASH",
-        institutionId: null,
-        providerDisplayName: null,
-        cardLast4: null,
-        senderNames: [],
-      },
-    ],
-  };
-}
+type ReviewContext = z.infer<typeof accountReviewRequestContextSchema>;
+const VERSION: ReviewContext["reviewContractVersion"] = makeReviewRequestContext().reviewContractVersion;
 
 function multipartFields(input: {
   readonly reviewContractVersion?: string | null;
@@ -65,7 +40,7 @@ function multipartFields(input: {
     preferredCurrency: input.preferredCurrency === undefined
       ? "EGP" : input.preferredCurrency,
     accounts: input.accounts === undefined
-      ? JSON.stringify(context().accounts) : input.accounts,
+      ? JSON.stringify(makeReviewRequestContext().accounts) : input.accounts,
   };
 }
 
@@ -80,7 +55,7 @@ Deno.test("T012 v1/no opt-in does not activate a review provider schema", () => 
 
 Deno.test("T012 v2 reads only canonical provider context from the original multipart fields", () => {
   const parsed = parseVoiceReviewV2Context(multipartFields());
-  assert.deepEqual(parsed, context());
+  assert.deepEqual(parsed, makeReviewRequestContext());
   assert.equal(parsed?.accounts[0]?.cardLast4, "0007");
   assert.equal(parsed?.accounts[1]?.type, "CASH");
   assert.equal("ownerId" in (parsed ?? {}), false);
@@ -104,7 +79,7 @@ Deno.test("T012 v2 never silently downgrades an unsupported contract version", (
 });
 
 Deno.test("T012 private balances and default metadata are forbidden in provider input", () => {
-  const extra = context().accounts.map((account) => ({
+  const extra = makeReviewRequestContext().accounts.map((account) => ({
     ...account, isDefault: true, openingBalanceMinorUnits: 10000,
   }));
   assert.throws(() => parseVoiceReviewV2Context(
@@ -113,7 +88,7 @@ Deno.test("T012 private balances and default metadata are forbidden in provider 
 });
 
 Deno.test("T012 duplicate account IDs or invalid unknown currency cannot enter the model", () => {
-  const bank = context().accounts[0];
+  const bank = makeReviewRequestContext().accounts[0];
   if (!bank) throw new Error("Missing canonical source account");
   assert.throws(() => parseVoiceReviewV2Context(
     multipartFields({ accounts: JSON.stringify([bank, bank]) })
@@ -124,7 +99,7 @@ Deno.test("T012 duplicate account IDs or invalid unknown currency cannot enter t
 });
 
 Deno.test("T012 grounded instructions retain source/identity/currency distinctions", () => {
-  const instruction = buildVoiceReviewV2Instructions(context());
+  const instruction = buildVoiceReviewV2Instructions(makeReviewRequestContext());
   assert.ok(instruction.includes("QNB salary"));
   assert.ok(instruction.includes("Cash"));
   assert.match(instruction, /original_transcript/);
@@ -152,7 +127,7 @@ Deno.test("T012 v2 uses the generated canonical Gemini schema without copying th
 });
 
 Deno.test("T012 canonical v2 Voice response retains grounded finance plus one pending suggestion", () => {
-  const source = makeVoiceV2Response();
+  const source: z.infer<typeof accountReviewVoiceResponseV2Schema> = makeVoiceV2Response();
   const result = parseVoiceReviewV2Advisory(source);
   assert.deepEqual(result, source);
   assert.equal(result?.transactions[0]?.amount, 50);

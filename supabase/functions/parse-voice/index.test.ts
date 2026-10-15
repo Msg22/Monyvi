@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import {
   makeReviewRequestContext,
   makeVoiceV2Response,
-} from "../../../packages/logic/src/account-review/__tests__/fixtures.ts";
+} from "./test-fixtures/account-review.ts";
 
 import {
   getAuthTokens,
@@ -781,25 +781,9 @@ Deno.test(
     resetParseVoiceTestState();
     installSuccessfulQuotaLifecycle();
     const context = makeReviewRequestContext();
-    const raw = makeVoiceV2Response();
-    const transactions = raw.transactions.map((row) => ({
-      ...row,
-      accountEvidence: {
-        ...row.accountEvidence,
-        evidenceSpans: row.accountEvidence.evidenceSpans.map((span) => ({
-          ...span, sourceRef: VALID_REQUEST_KEY,
-        })),
-      },
-      currencyEvidence: {
-        ...row.currencyEvidence,
-        evidenceSpans: row.currencyEvidence.evidenceSpans.map((span) => ({
-          ...span, sourceRef: VALID_REQUEST_KEY,
-        })),
-      },
-    }));
-    setProviderResults([{ kind: "success", text: JSON.stringify({
-      ...raw, transactions,
-    }) }]);
+    // Canonical response builder grounds spans to this one logical request.
+    const raw = makeVoiceV2Response(VALID_REQUEST_KEY);
+    setProviderResults([{ kind: "success", text: JSON.stringify(raw) }]);
     const response = await handler(createVoiceRequest({
       review: {
         reviewContractVersion: "account-review/v2",
@@ -810,7 +794,16 @@ Deno.test(
     assert.equal(response.status, 200);
     const result: unknown = await response.json();
     assert.equal(typeof result, "object");
-    assert.ok(result !== null && "reviewContractVersion" in result);
+    assert.ok(
+      typeof result === "object" && result !== null &&
+      "reviewContractVersion" in result
+    );
+    if (
+      typeof result !== "object" || result === null ||
+      !("reviewContractVersion" in result)
+    ) {
+      throw new Error("Expected validated Voice v2 envelope");
+    }
     assert.equal(result.reviewContractVersion, "account-review/v2");
     assert.equal(getProviderInvocations().length, 1);
     assertSuccessfulQuotaLifecycle();
