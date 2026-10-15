@@ -180,7 +180,7 @@ const mutation = <TEntity extends string, TAfter extends z.ZodType>(
   mode: z.ZodLiteral<"create">;
   expectedUpdatedAt: z.ZodNull;
   after: TAfter;
-}> => z.strictObject({
+}, z.core.$strict> => z.strictObject({
   entity: z.literal(entity),
   mode: z.literal("create"),
   expectedUpdatedAt: z.null(),
