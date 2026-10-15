@@ -65,15 +65,18 @@ interface RowSpec {
 
 function accountEvidence(spec: RowSpec): object {
   const hasGroup = spec.groupId !== undefined;
-  const name = spec.groupId === GROUP_CASH ? "Cash" : "QNB";
+  const name = spec.groupId === GROUP_CASH ? "Cash" :
+    spec.groupId === GROUP_CIB ? "CIB" : "QNB";
   const field = spec.source === "VOICE" ? "transcript" : "body";
   return {
     state: hasGroup ? "explicit" : "absent",
     name: hasGroup ? name : null,
     type: hasGroup ? (spec.groupId === GROUP_CASH ? "CASH" : "BANK") : null,
-    institutionId: hasGroup && spec.groupId !== GROUP_CASH ? "qnb" : null,
+    institutionId: hasGroup && spec.groupId !== GROUP_CASH
+      ? name.toLowerCase() : null,
     providerDisplayName: hasGroup ? name : null,
-    cardLast4: hasGroup && spec.groupId !== GROUP_CASH ? "0007" : null,
+    cardLast4: hasGroup && spec.groupId !== GROUP_CASH
+      ? spec.groupId === GROUP_CIB ? "5566" : "0007" : null,
     evidenceSpans: hasGroup ? [{
       sourceRef: "fixture:" + spec.index,
       field, start: 0, end: name.length, text: name,
@@ -96,6 +99,8 @@ function assignment(spec: RowSpec): object {
   };
 }
 function transaction(spec: RowSpec): object {
+  const label = spec.groupId === GROUP_CIB ? "CIB Lunch" :
+    spec.groupId === GROUP_CASH ? "Cash Lunch" : "QNB Lunch";
   const common = {
     amount: Number(spec.amount), currency: "EGP",
     type: spec.type ?? "EXPENSE",
@@ -104,12 +109,13 @@ function transaction(spec: RowSpec): object {
     confidence: 1, originLabel: "Synthetic bank", counterparty: "Lunch",
   };
   if (spec.source === "VOICE") return {
-    ...common, source: "VOICE", note: "QNB Lunch", originalTranscript: "QNB Lunch",
+    ...common, source: "VOICE", note: label, originalTranscript: label,
     detectedLanguage: "en", aiDetectedCurrency: "EGP",
   };
   return {
     ...common, source: "SMS", smsFingerprint: spec.fingerprint ?? FINGERPRINT_A,
-    rawSmsBody: "QNB Lunch", senderDisplayName: "QNB",
+    rawSmsBody: label, senderDisplayName:
+      spec.groupId === GROUP_CIB ? "CIB" : "QNB",
     ...(spec.destinationId === undefined ? {} : {
       isAtmWithdrawal: true, toAccountId: spec.destinationId,
     }),
@@ -138,11 +144,13 @@ function group(groupId: string, rows: readonly AccountReviewRow[]): AccountRevie
   const cash = groupId === GROUP_CASH;
   const name = groupId === GROUP_CIB ? "CIB" : cash ? "Cash" : "QNB";
   return accountReviewGroupSchema.parse({
-    groupId, evidenceKey: cash ? "c".repeat(64) : "d".repeat(64),
+    groupId, evidenceKey: cash ? "c".repeat(64) :
+      groupId === GROUP_CIB ? "e".repeat(64) : "d".repeat(64),
     suggestionRefs: ["synthetic:" + name], name,
     type: cash ? "CASH" : "BANK", currency: "EGP",
     institutionId: cash ? null : name.toLowerCase(),
-    providerDisplayName: name, cardLast4: cash ? null : "0007",
+    providerDisplayName: name, cardLast4: cash ? null :
+      groupId === GROUP_CIB ? "5566" : "0007",
     senderNames: cash ? [] : [name],
     linkedRowIds: rows.filter((item) =>
       item.assignment.state === "suggested" &&
