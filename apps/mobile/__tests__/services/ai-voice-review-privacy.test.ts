@@ -29,6 +29,9 @@ const mockInvoke = jest.fn<
   Promise<FunctionResponse>, [name: string, options: FunctionOptions]
 >();
 const mockScopedUser = jest.fn<Promise<void>, [ownerId: string]>();
+const mockLoadSnapshots = jest.fn<
+  Promise<NonNullable<AiVoiceParserOptions["reviewAccountSnapshots"]>>, []
+>();
 const mockWarn = jest.fn<void, [message: string, details?: unknown]>();
 const mockError = jest.fn<
   void, [message: string, error?: unknown, details?: unknown]
@@ -48,9 +51,7 @@ jest.mock("@/services/user-data-access", () => ({
     mockScopedUser(ownerId),
 }));
 jest.mock("@/services/account-review-read-model-service", () => ({
-  loadAccountReviewAccountSnapshots: (): Promise<
-    ReturnType<typeof makeOwnedContext>
-  > => Promise.resolve(makeOwnedContext()),
+  loadAccountReviewAccountSnapshots: () => mockLoadSnapshots(),
 }));
 jest.mock("expo-crypto", () => ({
   randomUUID: (): string => "00000000-0000-4000-8000-000000000199",
@@ -159,6 +160,7 @@ describe("#395 P2-03 — original Voice semantic-map diagnostics privacy", () =>
   beforeEach((): void => {
     jest.clearAllMocks();
     mockScopedUser.mockResolvedValue(undefined);
+    mockLoadSnapshots.mockResolvedValue(makeOwnedContext());
   });
 
   it("RED: v2 invalid private category cannot leak while valid finance survives", async () => {
