@@ -146,19 +146,24 @@ describe("T043 physical SQLite selected-save and immutable action", () => {
 
   it("S29 after physical rollback the SAME cached service/input retries once", async (): Promise<void> => {
     const f = makeSaveFixture("voice-existing");
+    currentSession = f.session;
+    const writer = service(database);
+    const frozenInput: SaveFixture = f;
     const release = injectMidBatchDuplicate(database);
     try {
-      await expect(save(f)).rejects.toThrow();
+      await expect(writer.saveSelectedAccountReview(frozenInput)).rejects.toThrow();
     } finally {
       release();
     }
     const afterFailure = await ledgerState(await reopenSqliteLedger(ledger));
     expect(afterFailure.counts.actions).toBe(0);
-    await expect(save(f)).resolves.toMatchObject({ kind: "committed" });
+    await expect(writer.saveSelectedAccountReview(frozenInput))
+      .resolves.toMatchObject({ kind: "committed" });
     const afterRetry = await ledgerState(await reopenSqliteLedger(ledger));
     expect(afterRetry.counts.actions).toBe(1);
     expect(afterRetry.counts.transactions).toBe(1);
     expect(afterRetry.counts.effects).toBe(1);
+    expect(afterRetry.counts.draftItems).toBe(afterFailure.counts.draftItems);
   });
 
   it("S30 rejects an already-existing planned financial create ID without overwriting it", async (): Promise<void> => {
