@@ -383,7 +383,7 @@ describe("T043 SMS deduplication, cleanup-only and safe partial selection", () =
   it("S19 deduplicates against an existing owned active transaction", async (): Promise<void> => {
     const f = makeSaveFixture("sms-all-dedup");
     await seedSmsReviewDrafts(database, f.session);
-    await seedSavedFingerprint(database, FINGERPRINT_B, "transaction");
+    await seedSavedFingerprint(database, selectedSmsFingerprint(f), "transaction");
     const result = await save(f);
     expect(result).toMatchObject({ kind: "cleanup_only", resolvedSmsDraftCount: 1 });
     const state = await ledgerState(database);
@@ -405,7 +405,7 @@ describe("T043 SMS deduplication, cleanup-only and safe partial selection", () =
   it("S20 deduplicates an SMS fingerprint saved as a transfer, not just transactions", async (): Promise<void> => {
     const f = makeSaveFixture("sms-all-dedup");
     await seedSmsReviewDrafts(database, f.session);
-    await seedSavedFingerprint(database, FINGERPRINT_B, "transfer");
+    await seedSavedFingerprint(database, selectedSmsFingerprint(f), "transfer");
     await expect(save(f)).resolves.toMatchObject({
       kind: "cleanup_only", resolvedSmsDraftCount: 1,
     });
@@ -442,7 +442,7 @@ describe("T043 SMS deduplication, cleanup-only and safe partial selection", () =
   it("S24 never creates a fake financial action when every SMS selection is deduped", async (): Promise<void> => {
     const f = makeSaveFixture("sms-all-dedup");
     await seedSmsReviewDrafts(database, f.session);
-    await seedSavedFingerprint(database, FINGERPRINT_B);
+    await seedSavedFingerprint(database, selectedSmsFingerprint(f));
     await expect(save(f)).resolves.toMatchObject({ kind: "cleanup_only" });
     const state = await ledgerState(database);
     expect(state.counts.actions).toBe(0);
