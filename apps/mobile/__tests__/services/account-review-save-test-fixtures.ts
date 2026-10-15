@@ -376,3 +376,34 @@ export function selectedSmsFingerprint(fixture: SaveFixture): string {
   }
   return selected[0].sourceFingerprint;
 }
+/** A valid new selection/generation that intentionally keeps the prior action ID. */
+export function changedSelectedSharedQnb(fixture: SaveFixture): SaveFixture {
+  const qnb = fixture.session.rows.filter((row) =>
+    row.assignment.state === "suggested" &&
+    row.assignment.groupId === GROUP_QNB
+  );
+  const chosen = qnb.find((row) => row.selected);
+  const replacement = qnb.find((row) => !row.selected);
+  if (!chosen || !replacement) throw new Error("Shared QNB needs a swappable row");
+  const rows = fixture.session.rows.map((row) => {
+    if (row.rowId === chosen.rowId) return {
+      ...row, selected: false, revision: "1",
+    };
+    if (row.rowId === replacement.rowId) return {
+      ...row, selected: true, revision: "1",
+    };
+    return row;
+  });
+  const next = accountReviewSessionSchema.parse({
+    ...fixture.session, revision: "1", operationGeneration: "1",
+    rows, saveIntent: null,
+  });
+  const intent = freezeSaveIntent(next);
+  if (intent.actionId !== fixture.intent.actionId) {
+    throw new Error("Changed selection must retain the frozen action ID");
+  }
+  return {
+    session: accountReviewSessionSchema.parse({ ...next, saveIntent: intent }),
+    intent,
+  };
+}
