@@ -23,6 +23,7 @@ import {
   makeAdapterVoiceInput, makeAdapterSmsInput, makeAdapterTwoSmsInput,
   makeAdapterVoiceCashInput, makeAdapterAtmInput,
   makeAdapterSmsCashSourceInput, makeAdapterRepeatedVoiceInput,
+  makeAdapterSmsOmittedCurrencyInput, makeSameOwnerChangedSnapshots,
   realNodeSha256,
 } from "./account-review-source-adapter-fixtures";
 
@@ -370,5 +371,76 @@ describe("#395 T014-M — current-owner and source scope guards", () => {
     );
     expect(source).not.toMatch(/(?:from|require\()["'][^"']*(?:@monyvi\/db|@nozbe\/)/);
     expect(source).not.toMatch(/(?:parseVoiceWithAi|parseSmsWithAi|parseSmsWithOrchestrator)\(/);
+  });
+});
+
+describe("#395 T014-M — same-owner freshness cannot erase pinned finance", () => {
+  it("keeps the captured Voice review when another owned account appears during processing", async () => {
+    const input = makeAdapterVoiceInput();
+    const fresh = makeSameOwnerChangedSnapshots("added");
+    expect(fresh.ownerId).toBe(input.ownerId);
+    expect(fresh.accounts).toHaveLength(input.reviewAccountSnapshots.accounts.length + 1);
+    expect(fresh.providerContext.accounts).toHaveLength(fresh.accounts.length);
+    mockLoadSnapshots.mockResolvedValue(fresh);
+
+    const session = await createVoiceAccountReviewSession(input);
+    checkUnselectedInitialSession(session);
+    expect(session).toEqual(await normalizeAccountReviewParserResult(input));
+    expect(requireRow(session).transaction.categoryId).toBe(ADAPTER_IDS.food);
+    expect(requireRow(session).transaction.amount).toBe(50);
+    expect(session.groups[0]?.confirmedIdentityRevision).toBeNull();
+    expect(mockLoadSnapshots).toHaveBeenCalledWith();
+    expect(mockGetRequiredCurrentUserId.mock.calls.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("retains original SMS proof when same-owner name, provider, card, aliases and default change", async () => {
+    const input = makeAdapterSmsInput();
+    const fresh = makeSameOwnerChangedSnapshots("metadata");
+    expect(fresh.ownerId).toBe(input.ownerId);
+    expect(fresh.accounts.find((account) => account.id === ADAPTER_IDS.bank))
+      .toMatchObject({
+        name: "QNB updated", providerDisplayName: "QNB new",
+        cardLast4: "4321", senderNames: ["QNB-new"], isDefault: true,
+      });
+    expect(fresh.providerContext.accounts[0]).not.toHaveProperty("isDefault");
+    mockLoadSnapshots.mockResolvedValue(fresh);
+
+    const session = await createSmsAccountReviewSession(input);
+    checkUnselectedInitialSession(session);
+    expect(session).toEqual(await normalizeAccountReviewParserResult(input));
+    const row = requireRow(session);
+    expect(row.accountEvidence.name).toBe("QNB");
+    expect(row.accountEvidence.providerDisplayName).toBe("QNB");
+    expect(row.transaction.amount).toBe(50);
+    expect(row.currency).toEqual({ state: "known", code: "EGP", origin: "explicit" });
+    expect(row.assignment.state).toBe("suggested");
+    expect(session.groups[0]?.confirmedIdentityRevision).toBeNull();
+    expect(row.selected).toBe(false);
+  });
+
+  it("uses captured EGP for actual SMS omission despite fresh same-owner preferred USD", async () => {
+    const input = makeAdapterSmsOmittedCurrencyInput();
+    const fresh = makeSameOwnerChangedSnapshots("preferred");
+    expect(input.reviewAccountSnapshots.preferredCurrency).toBe("EGP");
+    expect(fresh.ownerId).toBe(input.ownerId);
+    expect(fresh.preferredCurrency).toBe("USD");
+    expect(fresh.providerContext.preferredCurrency).toBe("USD");
+    expect(accountReviewSmsResponseV2Schema.safeParse(input.providerResponse).success)
+      .toBe(true);
+    mockLoadSnapshots.mockResolvedValue(fresh);
+
+    const session = await createSmsAccountReviewSession(input);
+    checkUnselectedInitialSession(session);
+    expect(session).toEqual(await normalizeAccountReviewParserResult(input));
+    expect(session.preferredCurrency).toBe("EGP");
+    const row = requireRow(session);
+    expect(row.transaction.amount).toBe(50);
+    expect(row.transaction.currency).toBe("EGP");
+    expect(row.currency).toEqual({
+      state: "known", code: "EGP", origin: "preferred_omission",
+    });
+    expect(row.assignment.state).toBe("unresolved");
+    expect(row.selected).toBe(false);
+    expect(session.groups).toEqual([]);
   });
 });

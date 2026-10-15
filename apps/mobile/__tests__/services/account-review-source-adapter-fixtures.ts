@@ -339,3 +339,82 @@ export function makeAdapterSmsCashSourceInput(): SmsReviewNormalizationInput {
     }],
   };
 }
+
+/** Current T010 account metadata may move while a pinned parse is in flight. */
+export type AdapterSnapshotChange = "added" | "metadata" | "preferred";
+
+function projectCurrentPublicAccount(
+  account: AccountReviewOwnedContext["accounts"][number]
+): AccountReviewAccountContext {
+  return {
+    id: account.id, name: account.name, currency: account.currency,
+    type: account.type, institutionId: account.institutionId,
+    providerDisplayName: account.providerDisplayName,
+    cardLast4: account.cardLast4, senderNames: [...account.senderNames],
+  };
+}
+
+function changedCurrentAccounts(
+  original: AccountReviewOwnedContext["accounts"],
+  kind: AdapterSnapshotChange
+): AccountReviewOwnedContext["accounts"] {
+  if (kind === "added") return [...original, {
+    id: "00000000-0000-4000-8000-000000000206",
+    name: "Another wallet", type: "DIGITAL_WALLET", currency: "USD",
+    institutionId: null, providerDisplayName: null, cardLast4: null,
+    senderNames: [], isDefault: false,
+  }];
+  if (kind !== "metadata") return original;
+  return original.map((account) =>
+    account.id === ADAPTER_IDS.bank
+      ? {
+          ...account, name: "QNB updated", providerDisplayName: "QNB new",
+          cardLast4: "4321", senderNames: ["QNB-new"], isDefault: true,
+        }
+      : { ...account, isDefault: false }
+  );
+}
+
+/** A valid refreshed same-owner snapshot; never mutates the captured input. */
+export function makeSameOwnerChangedSnapshots(
+  kind: AdapterSnapshotChange
+): AccountReviewOwnedContext {
+  const original = makeAdapterSnapshots();
+  const accounts = changedCurrentAccounts(original.accounts, kind);
+  const preferredCurrency = kind === "preferred" ? "USD" : original.preferredCurrency;
+  return {
+    ...original, accounts, preferredCurrency,
+    providerContext: accountReviewRequestContextSchema.parse({
+      reviewContractVersion: "account-review/v2",
+      preferredCurrency, accounts: accounts.map(projectCurrentPublicAccount),
+    }),
+  };
+}
+
+/** Only valid original financial omission may use captured preferred EGP. */
+export function makeAdapterSmsOmittedCurrencyInput(): SmsReviewNormalizationInput {
+  const input = makeAdapterSmsInput();
+  const response = accountReviewSmsResponseV2Schema.parse(input.providerResponse);
+  const financial = response.transactions[0];
+  const mapped = input.mappedTransactions[0];
+  const submitted = input.submittedMessages[0];
+  if (!financial || !mapped || !submitted) {
+    throw new Error("Missing original SMS financial omission fixture");
+  }
+  const body = "QNB purchase 50";
+  const row: AccountReviewSmsResponseV2["transactions"][number] = {
+    ...financial, currency: null, suggestionRef: null,
+    currencyEvidence: {
+      state: "omitted", statedCode: null,
+      candidateCodes: [], evidenceSpans: [],
+    },
+  };
+  return {
+    ...input, financialRows: [row],
+    providerResponse: accountReviewSmsResponseV2Schema.parse({
+      ...response, transactions: [row], suggestedAccounts: [],
+    }),
+    submittedMessages: [{ ...submitted, body }],
+    mappedTransactions: [{ ...mapped, rawSmsBody: body }],
+  };
+}
