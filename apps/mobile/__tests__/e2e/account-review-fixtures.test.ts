@@ -1,6 +1,5 @@
 import { isE2eTestMode } from "@/config/e2e-test-config";
 import type {
-  AccountReviewAccountContext,
   AccountReviewRequestContext,
   AccountReviewSession,
 } from "@monyvi/logic";
@@ -9,6 +8,16 @@ import type {
   AccountReviewLocalAccountSnapshot,
 } from "@/services/account-review-read-model-service";
 import manifest from "../../e2e/fixtures/shared-account-review.json";
+import {
+  CURRENT_OWNER,
+  ANOTHER_OWNER,
+  OWNER_CATEGORY_IDS,
+  getRoleId,
+  buildAccountRecordsForOwner,
+  buildScopedCategoryForOwner,
+  accountProviderProjection,
+  type ScopedCategoryRecord,
+} from "./account-review-fixture-test-fixtures";
 
 const CURRENT_OWNER = "1eea0000-3950-4000-8000-000000009001";
 const ANOTHER_OWNER = "1eea0000-3950-4000-8000-000000009002";
@@ -16,25 +25,6 @@ const UUID_V4_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const SHA_256_PATTERN = /^[0-9a-f]{64}$/;
 
-type AccountRole = "cash" | "qnbEveryday" | "qnbSavings" | "cibMain" | "wallet";
-type DescriptorScene = (typeof manifest.scenes)[number];
-type DescriptorRow = DescriptorScene["rows"][number];
-type DescriptorIssueTag = DescriptorRow["issueTags"][number];
-
-interface RoleDefinition {
-  readonly role: AccountRole;
-  readonly account: Omit<AccountReviewAccountContext, "id">;
-}
-interface ScopedCategoryRecord {
-  readonly id: string;
-  readonly userId: string;
-  readonly deleted: boolean;
-  readonly displayName: string;
-  readonly systemName: string;
-  readonly level: number;
-  readonly type: "EXPENSE";
-  readonly isSystem: boolean;
-}
 interface ScopedCategoryQuery {
   readonly fetch: () => Promise<readonly ScopedCategoryRecord[]>;
 }
@@ -45,75 +35,6 @@ interface ScopedCategoryScope {
     collection: { readonly table: string }
   ) => ScopedCategoryQuery;
 }
-
-// Runtime records have user-specific persisted IDs different from every
-// static catalogue account/category ID. This is a test-owned input fixture,
-// not a DB seed, mutation or production fixture-loader implementation.
-const ACCOUNT_ROLES: readonly RoleDefinition[] = [
-  {
-    role: "cash",
-    account: {
-      name: "Cash", type: "CASH", currency: "EGP",
-      institutionId: null, providerDisplayName: null, cardLast4: null,
-      senderNames: [],
-    },
-  },
-  {
-    role: "qnbEveryday",
-    account: {
-      name: "QNB Everyday", type: "BANK", currency: "EGP",
-      institutionId: "qnb", providerDisplayName: "QNB", cardLast4: "0007",
-      senderNames: ["QNB"],
-    },
-  },
-  {
-    role: "qnbSavings",
-    account: {
-      name: "QNB Savings", type: "BANK", currency: "EGP",
-      institutionId: "qnb", providerDisplayName: "QNB", cardLast4: "9221",
-      senderNames: ["QNB"],
-    },
-  },
-  {
-    role: "cibMain",
-    account: {
-      name: "CIB Main", type: "BANK", currency: "EGP",
-      institutionId: "cib", providerDisplayName: "CIB", cardLast4: "5566",
-      senderNames: ["CIB"],
-    },
-  },
-  {
-    role: "wallet",
-    account: {
-      name: "Wallet", type: "DIGITAL_WALLET", currency: "USD",
-      institutionId: null, providerDisplayName: "Mobile Wallet", cardLast4: null,
-      senderNames: ["WALLET"],
-    },
-  },
-];
-
-const ROLE_IDS: Readonly<
-  Record<string, Readonly<Record<AccountRole, string>>>
-> = {
-  [CURRENT_OWNER]: {
-    cash: "2eea0000-3950-4000-8000-000000001001",
-    qnbEveryday: "2eea0000-3950-4000-8000-000000001002",
-    qnbSavings: "2eea0000-3950-4000-8000-000000001003",
-    cibMain: "2eea0000-3950-4000-8000-000000001004",
-    wallet: "2eea0000-3950-4000-8000-000000001005",
-  },
-  [ANOTHER_OWNER]: {
-    cash: "3eea0000-3950-4000-8000-000000001001",
-    qnbEveryday: "3eea0000-3950-4000-8000-000000001002",
-    qnbSavings: "3eea0000-3950-4000-8000-000000001003",
-    cibMain: "3eea0000-3950-4000-8000-000000001004",
-    wallet: "3eea0000-3950-4000-8000-000000001005",
-  },
-};
-const OWNER_CATEGORY_IDS: Readonly<Record<string, string>> = {
-  [CURRENT_OWNER]: "2eea0000-3950-4000-8000-000000002001",
-  [ANOTHER_OWNER]: "3eea0000-3950-4000-8000-000000002001",
-};
 
 let mockActiveOwnerId: string | null = CURRENT_OWNER;
 let mockSnapshotReadGate: Promise<void> | null = null;
@@ -131,75 +52,22 @@ const mockExtraAccounts: Array<{
 }> = [];
 const mockCategoryScopeCalls: Array<{ readonly ownerId: string; readonly mode: string }> = [];
 
-function getRoleId(ownerId: string, role: AccountRole): string {
-  const id = ROLE_IDS[ownerId]?.[role];
-  if (!id) throw new Error("Synthetic current-owner role is not available");
-  return id;
-}
-
 function accountRecordsForOwner(ownerId: string): AccountReviewLocalAccountSnapshot[] {
-  const accounts = ACCOUNT_ROLES.map(({ role, account }) => {
-    const id = getRoleId(ownerId, role);
-    return {
-      id,
-      name: account.name,
-      currency: account.currency,
-      type: account.type,
-      institutionId: account.institutionId,
-      providerDisplayName: account.providerDisplayName,
-      cardLast4: account.cardLast4,
-      senderNames: [...account.senderNames],
-      isDefault: role === "cash",
-      ...mockAccountOverrides.get(id),
-    };
+  return buildAccountRecordsForOwner(ownerId, {
+    missingAccountIds: mockMissingAccountIds,
+    deletedAccountIds: mockDeletedAccountIds,
+    foreignAccountIds: mockForeignAccountIds,
+    accountOverrides: mockAccountOverrides,
+    extraAccounts: mockExtraAccounts,
   });
-  return [
-    ...accounts,
-    ...mockExtraAccounts
-      .filter((entry) => entry.userId === ownerId)
-      .map((entry) => ({ ...entry.account, senderNames: [...entry.account.senderNames] })),
-  ].filter((account) =>
-    !mockMissingAccountIds.has(account.id) &&
-    !mockDeletedAccountIds.has(account.id) &&
-    !mockForeignAccountIds.has(account.id)
-  );
 }
 
 function scopedCategoryForOwner(ownerId: string): ScopedCategoryRecord[] {
-  const id = OWNER_CATEGORY_IDS[ownerId];
-  if (
-    !id ||
-    mockMissingCategoryIds.has(id) ||
-    mockDeletedCategoryIds.has(id) ||
-    mockForeignCategoryIds.has(id)
-  ) {
-    return [];
-  }
-  return [{
-    id,
-    userId: ownerId,
-    deleted: false,
-    displayName: "Other",
-    systemName: "other",
-    level: 1,
-    type: "EXPENSE",
-    isSystem: false,
-  }];
-}
-
-function accountProviderProjection(
-  account: AccountReviewLocalAccountSnapshot
-): AccountReviewAccountContext {
-  return {
-    id: account.id,
-    name: account.name,
-    type: account.type,
-    currency: account.currency,
-    institutionId: account.institutionId,
-    providerDisplayName: account.providerDisplayName,
-    cardLast4: account.cardLast4,
-    senderNames: [...account.senderNames],
-  };
+  return buildScopedCategoryForOwner(ownerId, {
+    missingCategoryIds: mockMissingCategoryIds,
+    deletedCategoryIds: mockDeletedCategoryIds,
+    foreignCategoryIds: mockForeignCategoryIds,
+  });
 }
 
 const mockDatabaseWrite = jest.fn(
@@ -405,13 +273,14 @@ function assertOwnedSessionReferences(
         expect(row.assignment.currency).toBe(row.currency.code);
       }
     }
-    if (row.assignment.state === "suggested") {
+    const assignment = row.assignment;
+    if (assignment.state === "suggested") {
       const group = session.groups.find(({ groupId }) =>
-        groupId === row.assignment.groupId
+        groupId === assignment.groupId
       );
       expect(group?.linkedRowIds).toContain(row.rowId);
-      expect(group?.revision).toBe(row.assignment.groupRevision);
-      expect(group?.status).toBe(row.assignment.confirmation);
+      expect(group?.revision).toBe(assignment.groupRevision);
+      expect(group?.status).toBe(assignment.confirmation);
       expect(row.currency.state).toBe("known");
     }
     if (row.transaction.accountId !== undefined) {
@@ -437,7 +306,10 @@ function assertOwnedSessionReferences(
     } else {
       expect(row.sourceFingerprint).toBeNull();
     }
-    if (descriptor.currencyEvidenceState === "omitted") {
+    if (
+      "currencyEvidenceState" in descriptor &&
+      descriptor.currencyEvidenceState === "omitted"
+    ) {
       expect(row.currency).toEqual({
         state: "known", code: session.preferredCurrency, origin: "preferred_omission",
       });
