@@ -182,33 +182,44 @@ function smsSharedRows(): readonly AccountReviewRow[] {
       groupId: GROUP_CIB, selected: false, fingerprint: "e".repeat(64) }),
   ];
 }
+function voiceZeroNetRows(): readonly AccountReviewRow[] {
+  return [
+    row({ index: 1, source: "VOICE", amount: "20.01",
+      type: "INCOME", existingAccountId: BANK }),
+    row({ index: 2, source: "VOICE", amount: "20.01",
+      type: "EXPENSE", existingAccountId: BANK }),
+  ];
+}
+function smsNewBankRows(): readonly AccountReviewRow[] {
+  return [
+    row({ index: 1, source: "SMS", amount: "20.01",
+      type: "INCOME", groupId: GROUP_QNB, fingerprint: FINGERPRINT_A }),
+    row({ index: 2, source: "SMS", amount: "5.01",
+      type: "EXPENSE", groupId: GROUP_QNB, fingerprint: FINGERPRINT_B }),
+  ];
+}
+function smsMixedRows(): readonly AccountReviewRow[] {
+  return [
+    row({ index: 1, source: "SMS", amount: "10",
+      existingAccountId: BANK, fingerprint: FINGERPRINT_A }),
+    row({ index: 2, source: "SMS", amount: "5",
+      existingAccountId: BANK, fingerprint: FINGERPRINT_B }),
+  ];
+}
 function scenarioRows(name: SaveScenario): readonly AccountReviewRow[] {
   if (name === "voice-shared") return voiceSharedRows();
   if (name === "sms-shared") return smsSharedRows();
-  const source = name.startsWith("voice") ? "VOICE" : "SMS";
-  if (name === "voice-zero-net") return [
-    row({ index: 1, source, amount: "20.01", type: "INCOME", existingAccountId: BANK }),
-    row({ index: 2, source, amount: "20.01", type: "EXPENSE", existingAccountId: BANK }),
-  ];
-  if (name === "sms-new-bank") return [
-    row({ index: 1, source, amount: "20.01",
-      type: "INCOME", groupId: GROUP_QNB, fingerprint: FINGERPRINT_A }),
-    row({ index: 2, source, amount: "5.01",
-      type: "EXPENSE", groupId: GROUP_QNB, fingerprint: FINGERPRINT_B }),
+  if (name === "voice-zero-net") return voiceZeroNetRows();
+  if (name === "sms-new-bank") return smsNewBankRows();
+  if (name === "sms-mixed") return smsMixedRows();
+  if (name === "voice-cash") return [
+    row({ index: 1, source: "VOICE", amount: "11", groupId: GROUP_CASH }),
   ];
   if (name === "sms-atm") return [
-    row({ index: 1, source, amount: "25.05",
+    row({ index: 1, source: "SMS", amount: "25.05",
       existingAccountId: BANK, destinationId: CASH, fingerprint: FINGERPRINT_C }),
   ];
-  if (name === "voice-cash") return [
-    row({ index: 1, source, amount: "11", groupId: GROUP_CASH }),
-  ];
-  if (name === "sms-mixed") return [
-    row({ index: 1, source, amount: "10", existingAccountId: BANK,
-      fingerprint: FINGERPRINT_A }),
-    row({ index: 2, source, amount: "5", existingAccountId: BANK,
-      fingerprint: FINGERPRINT_B }),
-  ];
+  const source = name.startsWith("voice") ? "VOICE" : "SMS";
   const fingerprint = name === "sms-all-dedup" ? FINGERPRINT_A : FINGERPRINT_B;
   return [row({ index: 1, source, amount: "10",
     existingAccountId: BANK, fingerprint })];
