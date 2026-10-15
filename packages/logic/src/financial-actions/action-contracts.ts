@@ -7,6 +7,7 @@ import {
   type CanonicalJsonValue,
   type RegisteredActionPayload,
 } from "./action-registry";
+import { assertReviewBatchSaveEnvelope } from "./review-batch-save-envelope";
 
 export const FINANCIAL_ACTION_ERROR_CODES = {
   INVALID_JSON: "financial_action_invalid_json",
@@ -362,6 +363,16 @@ export function canonicalizeFinancialActionEnvelope(
     ) {
       fail(FINANCIAL_ACTION_ERROR_CODES.INVALID_ENVELOPE);
     }
+  } else if (
+    value.domain === "transactions" &&
+    value.kind === "review_batch_save" &&
+    value.payloadVersion === "review.batch-save/v1"
+  ) {
+    assertReviewBatchSaveEnvelope(
+      payload,
+      accountGuards,
+      value.domainReferenceId
+    );
   } else if (accountGuards.length !== 0) {
     fail(FINANCIAL_ACTION_ERROR_CODES.INVALID_ENVELOPE);
   }
