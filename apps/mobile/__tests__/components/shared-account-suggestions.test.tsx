@@ -176,7 +176,7 @@ describe("T026 US2: R3-05 combined independent group cards", () => {
     expect(screen.getByTestId("account-review-group-disclosure-" + qnb.groupId))
       .toHaveTextContent("all 3");
     expect(screen.getByTestId("account-review-group-disclosure-" + cib.groupId))
-      .toHaveTextContent("all 1");
+      .toHaveTextContent("1 transaction");
     expect(screen.getByText("Confirm currency")).toBeTruthy();
     expect(screen.queryByText("Confirm all")).toBeNull();
   });
