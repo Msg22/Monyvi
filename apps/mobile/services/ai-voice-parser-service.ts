@@ -17,6 +17,16 @@
  */
 
 import { supabase } from "./supabase";
+import {
+  classifyVoiceReviewV2Response,
+  attachVoiceReviewSession,
+} from "./ai-voice-parser-review";
+import type {
+  VoiceReviewNormalizationInput,
+} from "../../../packages/logic/src/account-review/normalization-types";
+import type {
+  AccountReviewSession,
+} from "../../../packages/logic/src/account-review/review-schemas";
 import { z } from "zod";
 import { t } from "i18next";
 import { logger } from "@/utils/logger";
@@ -66,7 +76,21 @@ interface AccountInput {
   readonly currency: string;
 }
 
+type ReviewPreparation = Pick<
+  VoiceReviewNormalizationInput,
+  | "ownerId" | "sessionId" | "sourceRevision" | "requestKey"
+  | "categoryIdsBySystemName" | "hashProvider"
+>;
+
 interface ParseVoiceOptions {
+  /** Optional T010 owner-scoped snapshot: only providerContext is sent to Gemini. */
+  readonly reviewAccountSnapshots?: VoiceReviewNormalizationInput["reviewAccountSnapshots"];
+  /** Pinned identity/category/hash preparation supplied by T014-M, not Core. */
+  readonly reviewSessionContext?: ReviewPreparation;
+  /** The actual T014-M facade; no parser -> adapter import cycle. */
+  readonly createVoiceAccountReviewSession?: (
+    input: VoiceReviewNormalizationInput
+  ) => Promise<AccountReviewSession>;
   /** Audio file URI */
   readonly audioUri: string;
   /** Stable opaque identity for this logical voice submission. */
@@ -90,6 +114,8 @@ interface ParseVoiceResult {
   readonly transcript: string;
   readonly originalTranscript: string;
   readonly detectedLanguage: string;
+  /** Full T014-M-produced canonical local session, never a provider DTO. */
+  readonly reviewSession?: AccountReviewSession;
 }
 
 /** Public alias — consumed by voice-flow-submission.ts for buildParserPayload return type. */
@@ -247,6 +273,22 @@ export async function parseVoiceWithAi(
     };
   }
 
+  const ownedReview = options.reviewAccountSnapshots;
+  const reviewMode = ownedReview !== undefined;
+  const prepared = options.reviewSessionContext;
+  const createReview = options.createVoiceAccountReviewSession;
+  if (reviewMode && (
+    prepared === undefined || createReview === undefined ||
+    prepared.ownerId !== ownedReview.ownerId ||
+    prepared.requestKey !== options.requestKey
+  )) {
+    return {
+      kind: "config",
+      message: "Account review context is unavailable. Please retry.",
+      retryableSameRequest: true,
+    };
+  }
+
   // Compute caller's local date in YYYY-MM-DD format for relative date resolution
   const now = new Date();
   const callerLocalDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
@@ -291,7 +333,12 @@ export async function parseVoiceWithAi(
       if (options.categories) {
         formData.append("categories", options.categories);
       }
-      if (options.accounts && options.accounts.length > 0) {
+      if (reviewMode) {
+        // Existing multipart account field, but only the closed provider shape.
+        formData.append("accounts", JSON.stringify(ownedReview.providerContext.accounts));
+        formData.append("reviewContractVersion", "account-review/v2");
+        formData.append("preferredCurrency", ownedReview.providerContext.preferredCurrency);
+      } else if (options.accounts && options.accounts.length > 0) {
         formData.append("accounts", JSON.stringify(options.accounts));
       }
       formData.append("callerLocalDate", callerLocalDate);
@@ -432,8 +479,14 @@ export async function parseVoiceWithAi(
     }
 
     const transcript = data.transcript;
-    const originalTranscript = data.original_transcript || transcript;
+    // V2 source spans must reference the exact original transcript, including
+    // the empty-string case; v1 retains its historical display fallback.
+    const originalTranscript = reviewMode
+      ? data.original_transcript
+      : (data.original_transcript || transcript);
     const detectedLanguage = data.detected_language;
+    const classification = reviewMode
+      ? classifyVoiceReviewV2Response(rawData) : null;
 
     // Validate and map AI response to ParsedVoiceTransaction
     const validTransactions: AiVoiceTransaction[] = [];
@@ -466,10 +519,13 @@ export async function parseVoiceWithAi(
 
     // Parse categories using pre-validated categoryMap
 
-    const validatedCurrency = normalizeCurrency(options.preferredCurrency);
+    const validatedCurrency = normalizeCurrency(
+      reviewMode ? ownedReview.preferredCurrency : options.preferredCurrency
+    );
     const results: ParsedVoiceTransaction[] = [];
+    const acceptedFinancialIndices: number[] = [];
 
-    for (const aiTx of validTransactions) {
+    for (const [index, aiTx] of validTransactions.entries()) {
       try {
         const resolvedCategory = parseCategory(
           aiTx.categorySystemName,
@@ -491,9 +547,11 @@ export async function parseVoiceWithAi(
           ? normalizeCurrencySafe(aiTx.currency, validatedCurrency)
           : null;
 
-        const resolvedCurrency: CurrencyType = matchedAccount
-          ? normalizeCurrencySafe(matchedAccount.currency, validatedCurrency)
-          : (aiDetectedCurrency ?? validatedCurrency);
+        const resolvedCurrency: CurrencyType = reviewMode
+          ? (aiDetectedCurrency ?? validatedCurrency)
+          : matchedAccount
+            ? normalizeCurrencySafe(matchedAccount.currency, validatedCurrency)
+            : (aiDetectedCurrency ?? validatedCurrency);
 
         results.push({
           amount: aiTx.amount,
@@ -506,12 +564,13 @@ export async function parseVoiceWithAi(
           categoryId: resolvedCategory.id,
           categoryDisplayName: resolvedCategory.displayName,
           confidence: clampConfidence(aiTx.confidenceScore),
-          accountId: aiTx.accountId || undefined,
+          accountId: reviewMode ? undefined : (aiTx.accountId || undefined),
           note: aiTx.description,
           originalTranscript,
           detectedLanguage,
           aiDetectedCurrency,
         });
+        acceptedFinancialIndices.push(index);
       } catch (error) {
         // PII/privacy: do NOT log the full `aiTx` object — it contains the
         // user's transcript-derived transaction (counterparty, amount, note,
@@ -538,12 +597,58 @@ export async function parseVoiceWithAi(
       };
     }
 
-    return {
+    const success: AiVoiceParserSuccess = {
       transactions: results,
       transcript,
       originalTranscript,
       detectedLanguage,
     };
+    if (!reviewMode) return success;
+
+    // Review cannot be silently absent from an opted-in successful result.
+    if (prepared === undefined || createReview === undefined ||
+        classification === null) {
+      return {
+        kind: "config",
+        message: "Account review context is unavailable. Please retry.",
+        retryableSameRequest: true,
+      };
+    }
+    if (abortController.signal.aborted) {
+      return { kind: didClientTimeout ? "timeout" : "network",
+        message: VOICE_ANALYSIS_NETWORK_ERROR_MESSAGE,
+        retryableSameRequest: didClientTimeout };
+    }
+    const originalFinancialRows = acceptedFinancialIndices.flatMap((index) => {
+      const row = classification.financialRows[index];
+      return row === undefined ? [] : [row];
+    });
+    if (originalFinancialRows.length !== results.length) {
+      return {
+        kind: "schema",
+        message: "The server returned an unexpected response format. Please try again.",
+      };
+    }
+    const reviewSession = await createReview({
+      ...prepared,
+      source: "VOICE",
+      reviewAccountSnapshots: ownedReview,
+      financialRows: originalFinancialRows,
+      mappedTransactions: results,
+      providerResponse: classification.providerResponse,
+      originalTranscript,
+    });
+    if (abortController.signal.aborted) {
+      return { kind: didClientTimeout ? "timeout" : "network",
+        message: VOICE_ANALYSIS_NETWORK_ERROR_MESSAGE,
+        retryableSameRequest: didClientTimeout };
+    }
+    return attachVoiceReviewSession({
+      success,
+      reviewSession,
+      expectedOwnerId: ownedReview.ownerId,
+      expectedSessionId: prepared.sessionId,
+    });
   } catch (err: unknown) {
     // FR-024: Handle timeout specifically
     if (err instanceof Error && err.name === "AbortError") {

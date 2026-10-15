@@ -32,6 +32,13 @@ import {
 } from "../_shared/voice-ai-safeguard-contract.ts";
 import { resolveVoiceEntitlementPolicy } from "../_shared/voice-ai-entitlement.ts";
 import {
+  parseVoiceReviewV2Context,
+  buildVoiceReviewV2Instructions,
+  buildVoiceReviewV2GenerationConfig,
+  parseVoiceReviewV2Advisory,
+  LEGACY_VOICE_RESPONSE_SCHEMA,
+} from "./account-review-v2.ts";
+import {
   completeVoiceAiWork,
   getVoiceQuotaRefusal,
   markVoiceAiProviderStarted,
@@ -105,97 +112,6 @@ INCOME categories:
 // Gemini response JSON schema
 // ---------------------------------------------------------------------------
 
-const RESPONSE_SCHEMA = {
-  type: "object",
-  properties: {
-    transcript: {
-      type: "string",
-      description:
-        "Full text interpretation of the user's voice recording. Translated to English if the user spoke in other language.",
-    },
-    original_transcript: {
-      type: "string",
-      description:
-        "Original verbatim transcript of the user's voice recording in the language they spoke, without translation. If the user spoke in English, this will be the same as 'transcript'.",
-    },
-    detected_language: {
-      type: "string",
-      description:
-        "ISO 639-1 language code of the primary language detected in the voice recording (e.g., 'ar' for Arabic, 'en' for English). If code-switching is detected, return the dominant language.",
-    },
-    transactions: {
-      type: "array",
-      description: "Array of extracted transactions from the voice input.",
-      items: {
-        type: "object",
-        properties: {
-          amount: {
-            type: "number",
-            description: "Transaction amount as a positive number.",
-          },
-          type: {
-            type: "string",
-            description:
-              "Transaction type: EXPENSE for spending, INCOME for receiving money.",
-            enum: ["EXPENSE", "INCOME"],
-          },
-          counterparty: {
-            type: ["string", "null"],
-            description:
-              "The counterparty name (merchant, vendor, person, or entity). Translate to English if originally in Arabic. Return null if not mentioned.",
-          },
-          categorySystemName: {
-            type: "string",
-            description:
-              "Exactly ONE system_name from the category tree. Use a specific L2 ONLY when confident. If uncertain about which L2 fits, use the L1 parent instead. NEVER use *_other L2 categories — use the L1 parent. Fall back to 'other' only as last resort.",
-          },
-          description: {
-            type: "string",
-            description:
-              "Short description of the transaction. Translate to English if originally in Arabic.",
-          },
-          accountId: {
-            type: ["string", "null"],
-            description:
-              "The matched account ID from the provided account list. Return null if no account was mentioned or no match found. IMPORTANT: only assign an account if its currency matches the transaction's currency.",
-          },
-          currency: {
-            type: ["string", "null"],
-            description:
-              "ISO 4217 currency code detected from the user's speech (e.g., 'SAR', 'EGP', 'USD'). Return null if no currency was explicitly mentioned or implied.",
-          },
-          date: {
-            type: "string",
-            description:
-              "ISO 8601 date string (YYYY-MM-DD). If the user mentioned a date or time (e.g., 'yesterday', 'last Friday'), resolve it relative to today's date. If no date was mentioned, default to today's date.",
-          },
-          confidenceScore: {
-            type: "number",
-            description:
-              "Your confidence in the accuracy of this extraction (0.0 to 1.0). 1.0 = all fields are perfectly clear. 0.5 = some fields required guessing.",
-          },
-        },
-        required: [
-          "amount",
-          "type",
-          "counterparty",
-          "categorySystemName",
-          "description",
-          "accountId",
-          "currency",
-          "date",
-          "confidenceScore",
-        ],
-      },
-    },
-  },
-  required: [
-    "transcript",
-    "original_transcript",
-    "detected_language",
-    "transactions",
-  ],
-};
 
 // ---------------------------------------------------------------------------
 // System prompt builder
@@ -209,10 +125,11 @@ interface AccountInfo {
 
 function buildSystemPrompt(
   categoryTree: string,
-  accounts: readonly AccountInfo[]
+  accounts: readonly AccountInfo[],
+  reviewV2 = false
 ): string {
   const accountSection =
-    accounts.length > 0
+    reviewV2 ? "" : accounts.length > 0
       ? `
 AVAILABLE ACCOUNTS:
 ${accounts.map((a) => `  - Name: "${a.name}" (${a.currency}) → ID: "${a.id}"`).join("\n")}
@@ -417,8 +334,9 @@ function sleep(ms: number): Promise<void> {
 async function processWithRetry(
   ai: GoogleGenAI,
   contents: ContentListUnion,
-  systemPrompt: string
-): Promise<AiResponse> {
+  systemPrompt: string,
+  reviewV2: boolean
+): Promise<AiResponse | Record<string, unknown>> {
   let lastError: unknown = null;
 
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
@@ -431,13 +349,16 @@ async function processWithRetry(
         await sleep(delay);
       }
 
+      const reviewConfig = reviewV2
+        ? buildVoiceReviewV2GenerationConfig()
+        : { responseMimeType: "application/json" as const, responseJsonSchema: LEGACY_VOICE_RESPONSE_SCHEMA };
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash-lite",
         contents,
         config: {
           systemInstruction: systemPrompt,
-          responseMimeType: "application/json",
-          responseJsonSchema: RESPONSE_SCHEMA,
+          responseMimeType: reviewConfig.responseMimeType,
+          responseJsonSchema: reviewConfig.responseJsonSchema,
           temperature: 0,
         },
       });
@@ -454,6 +375,18 @@ async function processWithRetry(
       }
 
       const parsed: AiResponse = JSON.parse(text);
+      if (reviewV2) {
+        const canonical = parseVoiceReviewV2Advisory(parsed);
+        if (canonical !== null) return canonical;
+        // A malformed advisory cannot erase a valid financial result. Preserve
+        // raw v2 provenance for the existing mobile financial recovery path.
+        if (typeof parsed === "object" && parsed !== null &&
+            !Array.isArray(parsed) && "transactions" in parsed &&
+            Array.isArray(parsed.transactions)) {
+          return parsed;
+        }
+        throw new Error("Invalid Voice v2 response envelope");
+      }
       return {
         transcript: parsed.transcript ?? "",
         original_transcript:
@@ -525,6 +458,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
     let callerLocalDate: string | null = null;
     let requestKey: string | null = null;
     let callerTimeZone: string | null = null;
+    let reviewContractVersion: string | null = null;
+    let reviewPreferredCurrency: string | null = null;
+    let reviewAccountsJson: string | null = null;
 
     if (contentType?.includes("multipart/form-data")) {
       const formData = await req.formData();
@@ -540,8 +476,15 @@ Deno.serve(async (req: Request): Promise<Response> => {
         typeof callerTimeZoneInput === "string" ? callerTimeZoneInput : null;
 
       // Parse accounts from form data
+      const versionPart = formData.get("reviewContractVersion");
+      reviewContractVersion = versionPart === null ? null
+        : typeof versionPart === "string" ? versionPart : "__invalid_version__";
+      const preferredPart = formData.get("preferredCurrency");
+      reviewPreferredCurrency = typeof preferredPart === "string" ? preferredPart : null;
+
       const accountsRaw = formData.get("accounts") as string | null;
-      if (accountsRaw) {
+      reviewAccountsJson = accountsRaw;
+      if (accountsRaw && reviewContractVersion === null) {
         try {
           const parsed = JSON.parse(accountsRaw);
           if (Array.isArray(parsed)) {
@@ -611,6 +554,19 @@ Deno.serve(async (req: Request): Promise<Response> => {
       );
     }
 
+    // Validate requested v2 context strictly before any policy/quota RPC. The
+    // v1/no-opt-in path retains the exact existing account prompt behavior.
+    let reviewContext: ReturnType<typeof parseVoiceReviewV2Context>;
+    try {
+      reviewContext = parseVoiceReviewV2Context({
+        reviewContractVersion,
+        preferredCurrency: reviewPreferredCurrency,
+        accounts: reviewAccountsJson,
+      });
+    } catch {
+      return errorResponse("Invalid account review context", 400);
+    }
+
     const apiKey = Deno.env.get("GEMINI_API_KEY");
     if (!apiKey) {
       return errorResponse("GEMINI_API_KEY not configured", 500);
@@ -651,7 +607,13 @@ Deno.serve(async (req: Request): Promise<Response> => {
         typeof categoriesInput === "string" && categoriesInput.trim().length > 0
           ? categoriesInput
           : DEFAULT_CATEGORY_TREE;
-      systemPrompt = buildSystemPrompt(categoryTree, accountsInput);
+      systemPrompt = buildSystemPrompt(
+        categoryTree, accountsInput, reviewContext !== null
+      );
+      if (reviewContext !== null) {
+        systemPrompt += "\n\n" + buildVoiceReviewV2Instructions(reviewContext) +
+          "\nThe original Voice evidence sourceRef MUST equal: " + validatedRequestKey;
+      }
 
       // Resolve today's date: prefer validated client-supplied local date over UTC server time.
       // callerLocalDate was validated before reservation — it is either a valid YYYY-MM-DD or absent.
@@ -734,9 +696,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
     }
 
     // All existing Gemini retries remain inside this one started identity.
-    let result: AiResponse;
+    let result: AiResponse | Record<string, unknown>;
     try {
-      result = await processWithRetry(ai, contents, systemPrompt);
+      result = await processWithRetry(ai, contents, systemPrompt, reviewContext !== null);
     } catch (providerError: unknown) {
       try {
         await completeVoiceAiWork(serviceClient, {
@@ -766,11 +728,14 @@ Deno.serve(async (req: Request): Promise<Response> => {
       console.error("[parse-voice] Failed to finalize successful usage");
     }
 
-    console.log(
-      `[parse-voice] Parsed ${result.transactions.length} transactions`
-    );
+    const transactionCount = Array.isArray(result.transactions) ? result.transactions.length : 0;
+    console.log(`[parse-voice] Parsed ${transactionCount} transactions`);
 
-    // 7. Return results (no currency — set client-side)
+    // V2 keeps source evidence and canonical financial fields in the same
+    // response. No second provider/retry/grouping call or quota accounting.
+    if (reviewContext !== null) return jsonResponse(result);
+
+    // 7. Keep the exact legacy v1 output keys and values.
     return jsonResponse({
       transcript: result.transcript,
       original_transcript: result.original_transcript,
