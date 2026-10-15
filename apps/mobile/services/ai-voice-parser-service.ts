@@ -621,20 +621,15 @@ export async function parseVoiceWithAi(
           categoryIdsBySystemName.set(financial.categorySystemName, resolvedCategory.id);
         }
         results.push(mappedTransaction);
-      } catch (error) {
-        // PII/privacy: do NOT log the full `aiTx` object — it contains the
-        // user's transcript-derived transaction (counterparty, amount, note,
-        // description). Log only the category system name (enum-ish) and
-        // currency for diagnostics.
+      } catch {
+        // Only stable diagnostic codes and bounded counts. A category, currency,
+        // exception name/message or model text may contain private user input.
         logger.warn(
           "[ai-voice-parser] Skipping semantically invalid transaction",
           {
-            categorySystemNameLength: aiTx.categorySystemName,
-            currency: aiTx.currency
-              ? normalizeCurrencySafe(aiTx.currency, validatedCurrency)
-              : null,
-
-            error: error instanceof Error ? error.message : String(error),
+            reasonCode: "voice_semantic_mapping_failed",
+            errorClass: "semantic_mapping_exception",
+            categorySystemNameLength: Math.min(aiTx.categorySystemName.length, 512),
           }
         );
       }
