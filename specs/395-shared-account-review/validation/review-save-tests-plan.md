@@ -172,3 +172,79 @@ T004 already defines `plannedEntityIds: {entity,localRef:UUID,id:UUID}[]` with g
 **Evidence boundary:** Root verified older SQLite harness **2 suites/8 PASS on main**, not these suites. New T043 still has intentional missing T048 Save service, T046 financial tuple and now T025 v2 codec creation Red; **0 new behavior PASS claimed**. No npm, native binary, SQLite execution, emulator, provider, SQL or remote DB operation by this worker.
 
 **T043 BOUNDED FIXES PUBLISHED — ALIAS MAPPING AWAITING ROOT FREEZE — ALL SOURCE WRITES RELEASED / FROZEN.**
+
+---
+
+## 10. T043 approved closed-field alias freeze — bounded correction receipt
+
+**Technical freeze is now APPROVED**, superseding §9's "alias awaiting freeze"
+wording. This is no new schema, product rule, account policy or public API.
+Current lease changed only the three previously authored T043 test/fixture
+files, **this** validation report, and strictly appended technical notes in
+`contracts/wire-shapes.md` and `contracts/review-commands.md`.
+`account-review-save-sqlite-test-helpers.ts`, including the actual v2
+`encodeSmsReviewDraftV2({transaction,review})` and
+`smsReviewDraftPayloadV2Schema` boundary, remains byte-identical.
+
+- **Closed aliases:** `plannedEntityIds[].localRef` is selected `row.rowId`
+  for transaction/transfer, needed `group.groupId` for account, and exact
+  SHA-256 of `JSON.stringify(["account-review-localref/v1",ownerId,sessionId,
+  groupId,"bank_details"])` for BANK details or that array plus
+  `"account_sms_sender",normalizedSender` for sender; convert digest with
+  **existing pure** `uuidV8FromSha256` from the published normalization
+  branch `codex/395-normalization-worker@decf68ebcbe390d2e94be70e67b19b77e1cc4546`
+  (`packages/logic/src/account-review/identity.ts` blob
+  `9d97854be1bed5e14d5cdcdb2a3a1e5526a6f05a`). Test-only Node
+  `createHash("sha256")` provides reference bytes; **no duplicated UUID
+  bit code**. This identity module is **not in the current UI branch** until
+  integration, so another missing-module creation Red is expected. Actual
+  created `id` remains a distinct frozen UUID; grouping never uses array
+  order as a linkage. All ID/time/selected/revision snapshots freeze before
+  async Save; revalidate current state after awaits.
+- **Sender policy:** the test helper imports actual mobile
+  `normalizeAccountSmsSender` — trim, collapse `/\s+/g`, lower case, no NFC —
+  and deduplicates equivalent sender names per current
+  `uniqueTrimmedSenderNames` policy. Production T027/T048 will use pure shared
+  normalization or an injected mobile delegate, **never logic→apps imports**.
+  New **WALLET** has three case/whitespace variants of the same sender but only
+  **one sender child and zero BankDetails**; BANK has at most one details child,
+  CASH none. `S10b–S10e` and real-SQLite `S25b` assert count, account type,
+  physical parent, exact alias UUIDs and duplicate alias rejection.
+- **Prior-root coverage:** `S09b` first persists a genuinely hashed action
+  through the real future Save service, stages that durable root as
+  `pending_local`, and then submits a **different schema-valid** QNB
+  selection/revision with the **same action ID** through the same writer; it
+  must reject without changing linked rows. The pending status is deliberately
+  staged and **does not claim a real in-flight half-commit/concurrent adapter
+  race**. Old `S09` remains an honest pre-action consistency check; `S09a`
+  double-tap, `S26` restart replay and `S29` **same writer/same frozen input**
+  actual SQLite UNIQUE rollback+retry remain intact.
+- **Dedup controls:** `S19/S20/S24/S35` seed the **actual selected SMS
+  fingerprint** through `selectedSmsFingerprint`; separate `S19b` still
+  deliberately seeds a different fingerprint as negative control. Selected
+  old root lookup precedes all-dedup cleanup. Happy SMS save fixtures remain
+  strict future **v2** and never fall back to a fake V1 payload; the explicitly
+  named legacy V1 seed remains a migration-only option, separately owned T025.
+- **ATM freeze:** the current S17 fixture sends SMS ATM from eligible BANK to
+  an **existing owned CASH** destination; no new ATM destination group is
+  manufactured. A genuine future canonical destination `toAssignment`
+  suggested group would map by its groupId, not row position. T034/T036 will
+  route `choose_row_account` eligible CASH to destination, BANK/WALLET to
+  source and preserve the other endpoint; this is **not UI implementation**
+  or a new source-Cash allowance.
+
+**Readback count after this lease:** **44 authored cases = 31 service + 13
+real-SQLite**, preserving all 38 earlier named tests plus the focused alias,
+Wallet and pending cases. Every test/helper file remains under 900 **raw**
+lines (fixture 410, service 454, SQLite 306, SQLite helper 311; formatter may
+change these). Production T048 service/T046 action validator, T025 v2 codec
+and the unmerged Core identity module are still genuine **creation Red
+dependencies**; no behavior Green or native SQLite run was claimed. Root's
+existing main-only **2 suites/8 SQLite tests PASS** is readiness of old
+tests only. Migration slots: **090 review / 091 default** after main occupied
+089. Source/SQL/index/sync/UI/seed/route/locale files remain frozen.
+Root must run actual T043 Red and later focused TypeScript, Jest, prettier,
+lint and full SQLite once integration permits; SQL owner-lock proof still
+gates server registration/shipping.
+
+**T043 APPROVED CORRECTIONS PUBLISHED — SOURCE OWNERSHIP RELEASED — ALL WRITES FROZEN.**
