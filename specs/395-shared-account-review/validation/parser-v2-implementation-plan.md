@@ -134,3 +134,60 @@ The classifier keeps original canonical financial amount/type/date/`categorySyst
 - **No account-first v2 currency/default/group call:** matched account currency remains **v1-only**. V2 currency derives from original financial/explicit evidence or captured preferred fallback for presentation only; the pure normalizer resolves known versus ambiguous/omitted/unsupported review currency. Legacy v1 no-opt-in result and Gemini call count are untouched. No extra ASR, prompt, provider, account matcher, grouping call, WatermelonDB read or cloud evidence is introduced.
 
 **Root gates and coordination:** The SQL normalizer at `b8d833f3ab5bf77bcf45100a0078f70ca5b9cde2` was independently reported **164 logic tests PASS, strict TS 0** before adapter integration. Root integrates actual T014-M adapter and authoritative T010 `loadAccountReviewAccountSnapshots()` **zero args** before running opted-in parser end-to-end. Its locally maintained T007 test fixture must provide actual canonical category IDs if the current mocked `parseCategory` yields non-UUID synthetic IDs; Core cannot weaken the canonical normalizer to accept fabricated IDs. Root reruns T007 Voice 11 cases, 15+1 mobile review helper, v1 legacy, one-Edge-call/consent/quota/abort/owner, strict mobile/logic tsc, formatting (files under 900 post-format, new helpers under 50), privacy and E2E/read-model. Neither Core nor Root may infer Green for the future adapter, tests or normalized review session from this publication. **No local tests/commands/provider/deploy executed by this Core GitHub-only author. STOP / SOURCE RELEASED / FROZEN.**
+
+
+## T013 SMS tests-first source/helper ABI checkpoint — Red pending Root
+
+**Frozen authority/lease:** existing context `9a8987a8087db886d9b9244182ef8e8128016621`, Core `4087503870152e45b241f6be07df8d64328b1a7c` and reviewed normalizer `b8d833f3ab5bf77bcf45100a0078f70ca5b9cde2`. New tests-only bounded ownership: NEW `supabase/functions/_shared/sms-ai/sms-ai-review-v2.test.ts` (**15 named Deno cases, 49 assert calls**); cohesive NEW `sms-ai-review-v2-test-fixtures.ts` derived from **generated Edge** Zod type/validator exports, not `packages/logic` imports; NEW `apps/mobile/__tests__/services/ai-sms-parser-review.test.ts` (**16 named Jest cases, 60 expect calls**) using existing canonical `packages/logic` fixtures and the **actual pure normalizer**, not a fake SUT. Existing T007 `account-review-parser-adapters.test.ts` **all original 23 tests and 8 SMS expected failures untouched**. This report is the only other change. No SMS Edge/mobile production, SQL source adapter, matcher, orchestrator, canonical schema, generator, contracts, T007 test alteration, provider, network, native or deploy.
+
+**Published future Edge pure helper ABI (intentionally missing production module `supabase/functions/_shared/sms-ai/sms-ai-review-v2.ts`):**
+
+```ts
+type ReviewContext = z.infer<typeof accountReviewRequestContextSchema>;
+type V2Response = z.infer<typeof accountReviewSmsResponseV2Schema>;
+parseSmsReviewV2Context(input: {
+  readonly reviewContractVersion: string | null;
+  readonly reviewContext: unknown;
+  readonly supportedCurrencies: readonly string[];
+}): ReviewContext | null;
+prepareSmsReviewV2ProviderRequest(input: {
+  readonly reviewContext: ReviewContext;
+  readonly messages: readonly ParseSmsMessage[];
+  readonly categories: string;
+  readonly supportedCurrencies: readonly string[];
+}): SmsAiProviderRequest; // existing original provider messages + generated JSON schema
+measureSmsReviewV2ProviderRequest(input: {
+  readonly requestBody: unknown;
+  readonly providerRequest: SmsAiProviderRequest;
+}): { readonly payloadBytes: number; readonly estimatedInputTokens: number };
+parseSmsReviewV2Advisory(
+  value: unknown, submittedMessages: readonly ParseSmsMessage[]
+): V2Response | null;
+```
+
+**Required Edge behavior:** absent discriminator returns null and keeps original v1 strict DeepInfra; present unknown/malformed review version/provider context/private owner/balance/default/card extras/supported-currency incoherence throws before admission. V2 plan preserves `buildSmsAiStableSystemPrompt` as first message for caching, appends bounded provider account context and existing dynamic category context before the original `buildSmsProviderUserPromptAtEdge` SMS user message. `responseSchema` must equal generated `buildAccountReviewDeepInfraResponseSchema(supportedCurrencies)` exactly, supporting `currency:null`; only `reviewContractVersion,transactions,suggestedAccounts` are model-owned. Completion/negative/terminal/unresolved fingerprints and `retryRequestMode` remain server-owned and **excluded from provider schema**. The **same** `SmsAiProviderRequest.messages` and `responseSchema` object must feed `measureSmsReviewV2ProviderRequest` before quota/admission and the original configured provider call; metrics must equal `estimateSmsRequestInputTokensAtEdge` over each exact transmitted prompt component and the same JSON schema, with `payloadBytes` over the actual versioned original request body. No truncated account identity, unknown currency coercion, second provider call or new grouping call. Canonical financial parse and matching each row to admitted original `messageId+smsFingerprint` is separate from model aliases; unsubmitted message IDs, forged sender/body spans, duplicate financial rows per one SMS and invalid finance fail closed.
+
+**Published future mobile pure helper ABI (intentionally missing module `apps/mobile/services/ai-sms-parser-review.ts`):**
+
+```ts
+classifySmsReviewV2Response(
+  value: unknown,
+  admitted: readonly SubmittedSmsReviewSource[]
+): {
+  readonly kind: "v2" | "legacy" | "malformed_advisory" | "invalid_financial";
+  readonly financialRows: readonly AccountReviewSmsFinancialRow[];
+  readonly providerResponse: unknown;
+};
+attachSmsReviewSession(input: {
+  readonly success: AiParseResult;
+  readonly reviewSession: AccountReviewSession | null;
+  readonly expectedOwnerId: AccountReviewSession["ownerId"];
+  readonly expectedSessionId: AccountReviewSession["sessionId"];
+}): AiParseResult;
+```
+
+**Required mobile behavior:** derive financial rows from canonical `accountReviewSmsFinancialRowSchema` and their original `date,categorySystemName,amount,isTrusted,currency`, **not** legacy `AiCurrencySchema` for v2. A real `currency:null` with `currencyEvidence.state:"unknown"` stays null/unconfirmed for review, never auto-EGP from account/preferred context. Old v1 financial/completion rows remain accepted with `providerResponse:null` and **no fabricated v2 omission/group/default**. Valid-finance/bad-advisory preserves raw v2 provenance for pure hard-review recovery; unsupported v2 version does not downgrade to v1. The helper uses admitted `messageId/body/sender/smsFingerprint` to reject foreign identity/cross-message proof and multiple positive rows for the same SMS without fabricating negative fingerprints. Full `reviewSession` is validated with `accountReviewSessionSchema`, source SMS + owner/session identity, then attached immutably only when a **real** T014-M `createSmsAccountReviewSession` result is supplied; tests exercise the real published `normalizeAccountReviewParserResult(makeSmsInput())`, not a mocked normalizer. SMS `scanSessionId` remains an **opaque string**, never a presumed UUID or group hash. Only T014-M SQL worker owns local canonical session UUID, category/source/hash snapshots and stateful hybrid/trusted/orchestrator integration.
+
+**Preserved original transport/guardrails:** no edits to `parse-sms-handler`, executor/provider/config, `ai-sms-chunk-runner-service`, `ai-sms-parser-response`, `ai-sms-parser-service`, matcher or orchestrator. Existing strict v1, DeepInfra `response_format`, one provider attempt, token/payload 413 size split, 429 rolling/scan limits, 502 fresh retry, current auth/consent checks, cancellation, original `ChunkWork.requestKey`, scan started time, fingerprint dedup, negative/terminal/unresolved reconciliation and progress remain separate Root/source-integration regression gates. Existing T007 SMS **8 expected failures** and all assertions are left unchanged, not re-baselined.
+
+**Red and finish condition:** Both helpers are **direct static imports of absent real production files**; the generated Edge canonical modules exist only after Root integrates/regenerates tracked outputs, so isolated Core GitHub alone cannot establish executable Red or PASS. Deno fixture imports generated façade and existing Edge-only `sms-ai-provider.ts`, never app/logic/DB graph, `--sloppy-imports`, `ts-ignore`, `ts-nocheck`, `allow-net` or providers. Root reruns ordinary Deno `--allow-env/--allow-read` with generated façade, mobile Jest with real normalizer, strict TypeScript, formatter <900/<50, static privacy, original T007 23 and all v1 provider/safeguards before a separately approved SMS production lease. **No commands/tests were executed in this connector-only T013 test-authoring lane. STOP / SOURCE OWNERSHIP RELEASED / FROZEN.**
