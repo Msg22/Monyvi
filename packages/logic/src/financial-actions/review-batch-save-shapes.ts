@@ -175,7 +175,12 @@ const transferAfterSchema = z.strictObject({
 
 const mutation = <TEntity extends string, TAfter extends z.ZodType>(
   entity: TEntity, after: TAfter
-) => z.strictObject({
+): z.ZodObject<{
+  entity: z.ZodLiteral<TEntity>;
+  mode: z.ZodLiteral<"create">;
+  expectedUpdatedAt: z.ZodNull;
+  after: TAfter;
+}> => z.strictObject({
   entity: z.literal(entity),
   mode: z.literal("create"),
   expectedUpdatedAt: z.null(),
