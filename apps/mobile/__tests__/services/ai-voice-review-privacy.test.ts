@@ -134,16 +134,20 @@ function assertPrivacySafeDiagnostics(privateSpans: readonly string[]): void {
   for (const call of calls) {
     expect(typeof call[0]).toBe("string");
     for (const detail of call.slice(1)) {
+      expect(detail).not.toBeInstanceOf(Error);
       expect(isRecord(detail)).toBe(true);
       if (!isRecord(detail)) continue;
+      expect("reasonCode" in detail || "errorName" in detail).toBe(true);
       for (const [field, value] of Object.entries(detail)) {
         expect(allowed.has(field)).toBe(true);
         if (field.endsWith("Count") || field.endsWith("Length")) {
           expect(typeof value).toBe("number");
+          if (typeof value !== "number") continue;
           expect(Number.isSafeInteger(value)).toBe(true);
           expect(value).toBeGreaterThanOrEqual(0);
         } else {
           expect(typeof value).toBe("string");
+          if (typeof value !== "string") continue;
           expect(value).toMatch(/^[a-z][a-z0-9_.-]{0,80}$/i);
         }
       }
