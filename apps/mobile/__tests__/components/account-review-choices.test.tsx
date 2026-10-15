@@ -62,7 +62,7 @@ function renderConflict(
 }
 function renderCurrencyPicker(
   selectedCurrency: "EGP" | "USD" | null,
-  overrides: { readonly onSelect?: (code: "EGP" | "USD") => void;
+  overrides: { readonly onSelect?: (code: string) => void;
     readonly onClose?: () => void; readonly contextSubtitle?: string } = {}
 ): void {
   render(
