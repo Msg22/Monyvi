@@ -3,6 +3,7 @@
  * Keep mapped finance, original source identity, and captured owner context.
  * No copied provider DTO, schema relaxation, or test-only normalizer.
  */
+import { z } from "zod";
 import {
   accountReviewSmsFinancialRowSchema,
   accountReviewVoiceFinancialRowSchema,
@@ -61,7 +62,7 @@ export function makeUntaggedVoice(): VoiceReviewNormalizationInput {
     providerResponse: {
       ...legacy,
       transactions: original.financialRows.map((row) =>
-        accountReviewVoiceFinancialRowSchema.parse(row)
+        z.object(accountReviewVoiceFinancialRowSchema.shape).parse(row)
       ),
     },
   };
@@ -80,7 +81,7 @@ export function makeUntaggedSms(): SmsReviewNormalizationInput {
     providerResponse: {
       ...legacy,
       transactions: original.financialRows.map((row) =>
-        accountReviewSmsFinancialRowSchema.parse(row)
+        z.object(accountReviewSmsFinancialRowSchema.shape).parse(row)
       ),
     },
   };
