@@ -18,6 +18,11 @@ import {
 import { getCurrentUserDataScope, getRequiredCurrentUserId } from "./user-data-access";
 import { USER_DATA_ACCESS_ERROR_CODES } from "./user-data-access-error-codes";
 
+/** Normalize the static descriptor's otherwise broad JSON strings exactly once. */
+const validatedFixtureAccountContext = accountReviewRequestContextSchema.parse(
+  manifest.accountContext
+);
+
 export interface FixtureBindings {
   readonly ownerId: string;
   readonly snapshots: AccountReviewAccountSnapshots;
@@ -49,7 +54,7 @@ function bindExactAccounts(
 ): ReadonlyMap<string, AccountReviewLocalAccountSnapshot> {
   const bindings = new Map<string, AccountReviewLocalAccountSnapshot>();
   const usedIds = new Set<string>();
-  for (const descriptor of manifest.accountContext.accounts) {
+  for (const descriptor of validatedFixtureAccountContext.accounts) {
     const candidates = snapshots.accounts.filter((account) =>
       matchesDescriptorAccount(account, descriptor)
     );
