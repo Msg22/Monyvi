@@ -3,6 +3,9 @@
  * Source-specific transactions are schema-validated; no copied domain DTO.
  * These are synthetic owners/accounts, NOT runtime seeded T015 financial data.
  */
+import { createHash } from "node:crypto";
+import { uuidV8FromSha256 } from "../../../../packages/logic/src/account-review/identity";
+import { normalizeAccountSmsSender } from "../../services/account-sms-sender-service";
 import {
   accountReviewGroupSchema,
   accountReviewRowSchema,
@@ -29,6 +32,7 @@ export const ACTION = testUuid(8);
 export const GROUP_QNB = testUuid(9);
 export const GROUP_CIB = testUuid(10);
 export const GROUP_CASH = testUuid(11);
+export const GROUP_WALLET = testUuid(13);
 export const FINGERPRINT_A = "a".repeat(64);
 export const FINGERPRINT_B = "b".repeat(64);
 export const FINGERPRINT_C = "c".repeat(64);
@@ -41,6 +45,7 @@ export type SaveScenario =
   | "voice-cash"
   | "sms-existing"
   | "sms-new-bank"
+  | "sms-new-wallet"
   | "sms-shared"
   | "sms-atm"
   | "sms-all-dedup"
@@ -63,20 +68,28 @@ interface RowSpec {
   readonly fingerprint?: string;
 }
 
+function groupName(groupId: string | undefined): string {
+  if (groupId === GROUP_CASH) return "Cash";
+  if (groupId === GROUP_CIB) return "CIB";
+  if (groupId === GROUP_WALLET) return "Wallet";
+  return "QNB";
+}
+function groupType(groupId: string): "CASH" | "BANK" | "DIGITAL_WALLET" {
+  if (groupId === GROUP_CASH) return "CASH";
+  return groupId === GROUP_WALLET ? "DIGITAL_WALLET" : "BANK";
+}
 function accountEvidence(spec: RowSpec): object {
   const hasGroup = spec.groupId !== undefined;
-  const name = spec.groupId === GROUP_CASH ? "Cash" :
-    spec.groupId === GROUP_CIB ? "CIB" : "QNB";
+  const name = groupName(spec.groupId);
+  const bank = spec.groupId === GROUP_QNB || spec.groupId === GROUP_CIB;
   const field = spec.source === "VOICE" ? "transcript" : "body";
   return {
     state: hasGroup ? "explicit" : "absent",
     name: hasGroup ? name : null,
-    type: hasGroup ? (spec.groupId === GROUP_CASH ? "CASH" : "BANK") : null,
-    institutionId: hasGroup && spec.groupId !== GROUP_CASH
-      ? name.toLowerCase() : null,
+    type: hasGroup ? groupType(spec.groupId) : null,
+    institutionId: bank ? name.toLowerCase() : null,
     providerDisplayName: hasGroup ? name : null,
-    cardLast4: hasGroup && spec.groupId !== GROUP_CASH
-      ? spec.groupId === GROUP_CIB ? "5566" : "0007" : null,
+    cardLast4: bank ? spec.groupId === GROUP_CIB ? "5566" : "0007" : null,
     evidenceSpans: hasGroup ? [{
       sourceRef: "fixture:" + spec.index,
       field, start: 0, end: name.length, text: name,
@@ -99,8 +112,7 @@ function assignment(spec: RowSpec): object {
   };
 }
 function transaction(spec: RowSpec): object {
-  const label = spec.groupId === GROUP_CIB ? "CIB Lunch" :
-    spec.groupId === GROUP_CASH ? "Cash Lunch" : "QNB Lunch";
+  const label = groupName(spec.groupId) + " Lunch";
   const common = {
     amount: Number(spec.amount), currency: "EGP",
     type: spec.type ?? "EXPENSE",
@@ -115,7 +127,8 @@ function transaction(spec: RowSpec): object {
   return {
     ...common, source: "SMS", smsFingerprint: spec.fingerprint ?? FINGERPRINT_A,
     rawSmsBody: label, senderDisplayName:
-      spec.groupId === GROUP_CIB ? "CIB" : "QNB",
+      spec.groupId === GROUP_WALLET ? "Wally Pay" :
+        spec.groupId === GROUP_CIB ? "CIB" : "QNB",
     ...(spec.destinationId === undefined ? {} : {
       isAtmWithdrawal: true, toAccountId: spec.destinationId,
     }),
@@ -141,17 +154,19 @@ function row(spec: RowSpec): AccountReviewRow {
   });
 }
 function group(groupId: string, rows: readonly AccountReviewRow[]): AccountReviewGroup {
-  const cash = groupId === GROUP_CASH;
-  const name = groupId === GROUP_CIB ? "CIB" : cash ? "Cash" : "QNB";
+  const type = groupType(groupId);
+  const bank = type === "BANK";
+  const name = groupName(groupId);
   return accountReviewGroupSchema.parse({
-    groupId, evidenceKey: cash ? "c".repeat(64) :
+    groupId, evidenceKey: groupId === GROUP_CASH ? "c".repeat(64) :
       groupId === GROUP_CIB ? "e".repeat(64) : "d".repeat(64),
-    suggestionRefs: ["synthetic:" + name], name,
-    type: cash ? "CASH" : "BANK", currency: "EGP",
-    institutionId: cash ? null : name.toLowerCase(),
-    providerDisplayName: name, cardLast4: cash ? null :
-      groupId === GROUP_CIB ? "5566" : "0007",
-    senderNames: cash ? [] : [name],
+    suggestionRefs: ["synthetic:" + name], name, type, currency: "EGP",
+    institutionId: bank ? name.toLowerCase() : null,
+    providerDisplayName: name,
+    cardLast4: bank ? groupId === GROUP_CIB ? "5566" : "0007" : null,
+    senderNames: groupId === GROUP_WALLET
+      ? ["  Wally   Pay ", "WALLY Pay", "wally pay "]
+      : bank ? [name] : [],
     linkedRowIds: rows.filter((item) =>
       item.assignment.state === "suggested" &&
       item.assignment.groupId === groupId
@@ -198,6 +213,12 @@ function smsNewBankRows(): readonly AccountReviewRow[] {
       type: "EXPENSE", groupId: GROUP_QNB, fingerprint: FINGERPRINT_B }),
   ];
 }
+function smsNewWalletRows(): readonly AccountReviewRow[] {
+  return [
+    row({ index: 1, source: "SMS", amount: "10", type: "INCOME",
+      groupId: GROUP_WALLET, fingerprint: FINGERPRINT_A }),
+  ];
+}
 function smsMixedRows(): readonly AccountReviewRow[] {
   return [
     row({ index: 1, source: "SMS", amount: "10",
@@ -211,6 +232,7 @@ function scenarioRows(name: SaveScenario): readonly AccountReviewRow[] {
   if (name === "sms-shared") return smsSharedRows();
   if (name === "voice-zero-net") return voiceZeroNetRows();
   if (name === "sms-new-bank") return smsNewBankRows();
+  if (name === "sms-new-wallet") return smsNewWalletRows();
   if (name === "sms-mixed") return smsMixedRows();
   if (name === "voice-cash") return [
     row({ index: 1, source: "VOICE", amount: "11", groupId: GROUP_CASH }),
