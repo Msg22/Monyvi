@@ -492,3 +492,13 @@ The session must populate **every frozen field**: owner/session/source IDs and c
 - **Scope and freeze:** Only these four test paths + this report. T007 fixture source `account-review-parser-test-fixtures.ts` remains unchanged. Source/test ownership is released at the final GitHub compare checkpoint; all other files, PRs/refs, comments and shared branch lanes are protected.
 
 **T007/T008 TEST HARNESS REPAIR AUTHORED — ROOT CHECKS PENDING — T018 HOLD — ALL WRITES FROZEN.**
+
+---
+
+## 18. T008 duplicate owner import repair — test-only freeze
+
+- **Root's observed r3 integration batch:** T007 **23 executed** (7 PASS, 16 expected missing v2 API failures); native `WMDatabaseBridge` load issue cleared. Actual formatted sizes: SMS 670, Voice 546, T008 785, helper 399 (all <900). T014/Core test and generated typing issues remain Core-owned. T008 could not load because both `CURRENT_OWNER` and `ANOTHER_OWNER` were imported from the new typed helper **and** redeclared locally. These results are **root-reported**, not rerun here.
+- **Exact authorized repair:** on `codex/395-ui-worker@4eb3afa3bfeed20af0dcb33a7e7f3e43014341ca`, deleted **only the two local `const` declarations** from `apps/mobile/__tests__/e2e/account-review-fixtures.test.ts`. Retained canonical helper imports, the existing `mockActiveOwnerId` reference, all Jest mock factories, both T008 `describe` blocks byte-for-byte, all **48 cases** and the **55 exact full-session assertions** in unchanged helper `account-review-fixture-test-fixtures.ts`. Unmocked real T015 loader remains legitimate creation Red; no fake pass.
+- **Scope and evidence:** updated only this T008 test and `validation/ui-wave1.md`. Remote GitHub source inspection compared pre/post T008 test bodies exactly; no local CLI/Jest/TypeScript/lint/format/provider/SQL/emulator or native delegation executed. Root must rerun the T008 load/type gate; no PASS claimed. T007 and all helper files are protected and unchanged. **T018 remains HOLD.**
+
+**T008 TWO-CONSTANT REPAIR COMPLETE — ROOT RERUN PENDING — OWNERSHIP RELEASED / ALL WRITES FROZEN.**
