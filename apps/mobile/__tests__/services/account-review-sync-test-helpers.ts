@@ -1,4 +1,4 @@
-import type { SyncPushArgs } from "@nozbe/watermelondb/sync";
+import type { SyncPushArgs, SyncTableChangeSet } from "@nozbe/watermelondb/sync";
 import {
   REVIEW_ACTION_ID,
   REVIEW_USER_ID,
@@ -206,7 +206,7 @@ export function predecessorGatingScenario(): {
   };
 }
 
-function reviewAccountFinancialEffectsChanges(): NonNullable<SyncPushArgs["changes"]["account_financial_effects"]> {
+function reviewAccountFinancialEffectsChanges(): SyncTableChangeSet {
   return {
     created: [
       {
@@ -226,7 +226,7 @@ function reviewAccountFinancialEffectsChanges(): NonNullable<SyncPushArgs["chang
   };
 }
 
-function reviewAccountsChanges(): NonNullable<SyncPushArgs["changes"]["accounts"]> {
+function reviewAccountsChanges(): SyncTableChangeSet {
   return {
     created: [],
     deleted: [],
@@ -242,7 +242,7 @@ function reviewAccountsChanges(): NonNullable<SyncPushArgs["changes"]["accounts"
   };
 }
 
-function reviewIncomeTransaction(): NonNullable<SyncPushArgs["changes"]["transactions"]>["created"][number] {
+function reviewIncomeTransaction(): SyncTableChangeSet["created"][number] {
   return {
     _status: "created",
     account_id: REVIEW_ACCOUNT_ID,
@@ -265,7 +265,7 @@ function reviewIncomeTransaction(): NonNullable<SyncPushArgs["changes"]["transac
   };
 }
 
-function reviewExpenseTransaction(): NonNullable<SyncPushArgs["changes"]["transactions"]>["created"][number] {
+function reviewExpenseTransaction(): SyncTableChangeSet["created"][number] {
   return {
     _status: "created",
     account_id: REVIEW_ACCOUNT_ID,
@@ -288,7 +288,7 @@ function reviewExpenseTransaction(): NonNullable<SyncPushArgs["changes"]["transa
   };
 }
 
-function reviewTransactionsChanges(): NonNullable<SyncPushArgs["changes"]["transactions"]> {
+function reviewTransactionsChanges(): SyncTableChangeSet {
   return {
       created: [
         reviewIncomeTransaction(),
@@ -299,7 +299,7 @@ function reviewTransactionsChanges(): NonNullable<SyncPushArgs["changes"]["trans
   };
 }
 
-function smsAccountFinancialEffectsChanges(): NonNullable<SyncPushArgs["changes"]["account_financial_effects"]> {
+function smsAccountFinancialEffectsChanges(): SyncTableChangeSet {
   return {
     created: [
       {
@@ -319,7 +319,7 @@ function smsAccountFinancialEffectsChanges(): NonNullable<SyncPushArgs["changes"
   };
 }
 
-function smsAccountsChanges(): NonNullable<SyncPushArgs["changes"]["accounts"]> {
+function smsAccountsChanges(): SyncTableChangeSet {
   return {
     created: [
       {
@@ -334,7 +334,7 @@ function smsAccountsChanges(): NonNullable<SyncPushArgs["changes"]["accounts"]> 
   };
 }
 
-function smsBankDetailsChanges(): NonNullable<SyncPushArgs["changes"]["bank_details"]> {
+function smsBankDetailsChanges(): SyncTableChangeSet {
   return {
     created: [
       {
@@ -351,7 +351,7 @@ function smsBankDetailsChanges(): NonNullable<SyncPushArgs["changes"]["bank_deta
   };
 }
 
-function smsAccountSmsSendersChanges(): NonNullable<SyncPushArgs["changes"]["account_sms_senders"]> {
+function smsAccountSmsSendersChanges(): SyncTableChangeSet {
   return {
     created: [
       {
@@ -368,7 +368,7 @@ function smsAccountSmsSendersChanges(): NonNullable<SyncPushArgs["changes"]["acc
   };
 }
 
-function smsIncomeTransaction(): NonNullable<SyncPushArgs["changes"]["transactions"]>["created"][number] {
+function smsIncomeTransaction(): SyncTableChangeSet["created"][number] {
   return {
     _status: "created",
     account_id: NEW_BANK_ACCOUNT_ID,
@@ -391,7 +391,7 @@ function smsIncomeTransaction(): NonNullable<SyncPushArgs["changes"]["transactio
   };
 }
 
-function smsExpenseTransaction(): NonNullable<SyncPushArgs["changes"]["transactions"]>["created"][number] {
+function smsExpenseTransaction(): SyncTableChangeSet["created"][number] {
   return {
     _status: "created",
     account_id: NEW_BANK_ACCOUNT_ID,
@@ -414,7 +414,7 @@ function smsExpenseTransaction(): NonNullable<SyncPushArgs["changes"]["transacti
   };
 }
 
-function smsTransactionsChanges(): NonNullable<SyncPushArgs["changes"]["transactions"]> {
+function smsTransactionsChanges(): SyncTableChangeSet {
   return {
       created: [
         smsIncomeTransaction(),
@@ -425,7 +425,7 @@ function smsTransactionsChanges(): NonNullable<SyncPushArgs["changes"]["transact
   };
 }
 
-function atmAccountFinancialEffectsChanges(): NonNullable<SyncPushArgs["changes"]["account_financial_effects"]> {
+function atmAccountFinancialEffectsChanges(): SyncTableChangeSet {
   return {
     created: [
       {
@@ -456,7 +456,7 @@ function atmAccountFinancialEffectsChanges(): NonNullable<SyncPushArgs["changes"
   };
 }
 
-function atmAccountsChanges(): NonNullable<SyncPushArgs["changes"]["accounts"]> {
+function atmAccountsChanges(): SyncTableChangeSet {
   return {
     created: [],
     deleted: [],
@@ -479,7 +479,7 @@ function atmAccountsChanges(): NonNullable<SyncPushArgs["changes"]["accounts"]> 
   };
 }
 
-function atmTransfersChanges(): NonNullable<SyncPushArgs["changes"]["transfers"]> {
+function atmTransfersChanges(): SyncTableChangeSet {
   return {
     created: [
       {
