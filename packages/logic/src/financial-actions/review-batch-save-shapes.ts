@@ -45,6 +45,7 @@ export const revisionSchema = z.string().refine((value) => {
 export const minorUnitsSchema = z.string().regex(MINOR_UNITS).refine(
   (value) =>
     value.length <= 20 &&
+    MINOR_UNITS.test(value) &&
     value !== "-0" &&
     BigInt(value) >= -MAX_MINOR_UNITS &&
     BigInt(value) <= MAX_MINOR_UNITS
