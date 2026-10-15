@@ -4,7 +4,6 @@
  * Deliberately not added to DEFAULT_FINANCIAL_ACTION_REGISTRY. SQL/local writer,
  * stored ownership, financial revision and replay checks are later lanes.
  */
-import { z } from "zod";
 import type {
   FinancialActionDefinition, RegisteredActionPayload,
 } from "./action-registry";
