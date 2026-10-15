@@ -62,6 +62,16 @@ function assertMappedFinance(
   }
 }
 
+function assertMappedVoiceIdentity(
+  financial: AccountReviewVoiceFinancialRow,
+  mapped: ParsedVoiceTransaction
+): void {
+  if (mapped.counterparty !== (financial.counterparty ?? undefined) ||
+      mapped.note !== financial.description) {
+    throw new Error("account_review_voice_financial_identity_mismatch");
+  }
+}
+
 function voiceFinancial(value: AccountReviewVoiceFinancialRow): AccountReviewVoiceFinancialRow {
   return accountReviewVoiceFinancialRowSchema.parse({
     amount: value.amount, type: value.type, counterparty: value.counterparty,
@@ -133,6 +143,7 @@ function makeVoiceEntries(input: VoiceReviewNormalizationInput): VoiceFinancialE
     const index = remaining.findIndex((mapped) => {
       try {
         assertMappedFinance(financial, mapped, input.categoryIdsBySystemName);
+        assertMappedVoiceIdentity(financial, mapped);
         return true;
       } catch {
         return false;

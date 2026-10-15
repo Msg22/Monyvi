@@ -24,11 +24,17 @@ function isProvenAlias(
   row: AccountReviewRow
 ): boolean {
   const alias = normalizeGroundedIdentity(candidate);
-  if (evidence.accountEvidence.name?.trim() &&
-      alias === normalizeGroundedIdentity(evidence.accountEvidence.name)) return true;
+  if (input.source === "VOICE" && row.source === "VOICE") {
+    return evidence.accountEvidence.name !== null &&
+      evidence.accountEvidence.name.trim().length > 0 &&
+      alias === normalizeGroundedIdentity(evidence.accountEvidence.name);
+  }
   if (input.source === "SMS" && row.source === "SMS") {
+    const originalMessageId = evidence.sourceMessageId;
+    const originalFingerprint = row.sourceFingerprint;
     const original = input.submittedMessages.find(
-      (item) => item.id === row.sourceRef || item.smsFingerprint === row.sourceFingerprint
+      (item) => item.id === originalMessageId &&
+        item.smsFingerprint === originalFingerprint
     );
     return original !== undefined && original.sender.trim().length > 0 &&
       alias === normalizeGroundedIdentity(original.sender);

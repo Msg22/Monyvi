@@ -8,6 +8,7 @@ import type {
 import type { AccountReviewNormalizationInput } from "./normalization-types";
 import type { FinancialEntry } from "./normalization-financial";
 import { currencyCode } from "./schema-primitives";
+import { normalizeGroundedIdentity } from "./identity";
 
 export interface NormalizedRowEvidence {
   readonly accountEvidence: AccountReviewAccountEvidence;
@@ -15,6 +16,8 @@ export interface NormalizedRowEvidence {
   readonly isAccountEvidenceValid: boolean;
   readonly reasons: readonly AccountReviewReason[];
   readonly sourceRef: string;
+  /** Original submitted SMS ID, never a response-local model transactionRef. */
+  readonly sourceMessageId: string | null;
   readonly suggestionRef: string | null;
 }
 
@@ -62,11 +65,72 @@ function spansMatch(
   return spans.every((span) => spanMatches(input, entry, span));
 }
 
+function sameGroundedName(left: string | null, right: string | null): boolean {
+  return left !== null && right !== null &&
+    left.trim().length > 0 && right.trim().length > 0 &&
+    normalizeGroundedIdentity(left) === normalizeGroundedIdentity(right);
+}
+
+type OwnedCandidate = AccountReviewNormalizationInput[
+  "reviewAccountSnapshots"
+]["accounts"][number];
+
+function candidateIdentityMatches(
+  input: AccountReviewNormalizationInput,
+  entry: FinancialEntry,
+  evidence: AccountReviewAccountEvidence,
+  account: OwnedCandidate
+): boolean {
+  const name = evidence.name;
+  const provider = evidence.providerDisplayName;
+  if (provider !== null && !sameGroundedName(provider, account.providerDisplayName)) {
+    return false;
+  }
+  if (name !== null) {
+    return [account.name, account.providerDisplayName, ...account.senderNames]
+      .some((value) => sameGroundedName(name, value));
+  }
+  if (provider !== null) return true;
+  if (entry.source !== "SMS" || input.source !== "SMS") return false;
+  const originalMessageId = entry.financial.messageId;
+  const originalFingerprint = entry.mapped.smsFingerprint;
+  const submitted = input.submittedMessages.find((candidate) =>
+    candidate.id === originalMessageId &&
+    candidate.smsFingerprint === originalFingerprint
+  );
+  const sender = submitted?.sender ?? null;
+  return sender !== null && account.senderNames.some(
+    (alias) => sameGroundedName(alias, sender)
+  );
+}
+
+function originalSmsSenderMatchesOwned(
+  input: AccountReviewNormalizationInput,
+  entry: FinancialEntry,
+  account: OwnedCandidate
+): boolean {
+  if (input.source !== "SMS" || entry.source !== "SMS") return true;
+  const messageId = entry.financial.messageId;
+  const fingerprint = entry.mapped.smsFingerprint;
+  const submitted = input.submittedMessages.find(
+    (candidate) => candidate.id === messageId &&
+      candidate.smsFingerprint === fingerprint
+  );
+  const sender = submitted?.sender ?? null;
+  return sender !== null && sender.trim().length > 0 &&
+    [account.name, account.providerDisplayName, ...account.senderNames]
+      .some((name) => sameGroundedName(name, sender));
+}
+
 function candidatesOwned(
   input: AccountReviewNormalizationInput,
+  entry: FinancialEntry,
   evidence: AccountReviewAccountEvidence,
-  currency: AccountReviewCurrency
+  currency: AccountReviewCurrency,
+  role: "source" | "destination"
 ): boolean {
+  if (evidence.candidateAccountIds.length > 0 &&
+      evidence.state !== "explicit" && evidence.state !== "contextual") return false;
   return evidence.candidateAccountIds.every((id) => {
     const account = input.reviewAccountSnapshots.accounts.find(
       (candidate) => candidate.id === id
@@ -78,7 +142,9 @@ function candidatesOwned(
     }
     return (evidence.institutionId === null ||
       evidence.institutionId === account.institutionId) &&
-      (evidence.cardLast4 === null || evidence.cardLast4 === account.cardLast4);
+      (evidence.cardLast4 === null || evidence.cardLast4 === account.cardLast4) &&
+      candidateIdentityMatches(input, entry, evidence, account) &&
+      (role === "destination" || originalSmsSenderMatchesOwned(input, entry, account));
   });
 }
 
@@ -103,11 +169,15 @@ export function normalizeEvidenceCurrency(
     return unresolvedCurrency("legacy_unknown", null);
   }
   if (evidence.state === "omitted") {
-    return {
-      state: "known",
-      code: input.reviewAccountSnapshots.preferredCurrency,
-      origin: "preferred_omission",
-    };
+    const preferred = input.reviewAccountSnapshots.preferredCurrency;
+    if (entry.financial.currency !== null && entry.financial.currency !== preferred) {
+      return {
+        state: "unconfirmed", reason: "conflicting",
+        candidateCodes: [entry.mapped.currency, preferred],
+        statedCode: entry.financial.currency, evidenceSpans: [],
+      };
+    }
+    return { state: "known", code: preferred, origin: "preferred_omission" };
   }
   if (evidence.state === "explicit" &&
       evidence.statedCode !== null &&
@@ -136,10 +206,10 @@ export function normalizeRowEvidence(
   const validDestination = destination === null ||
     (destination !== undefined &&
       spansMatch(input, entry, destination.evidenceSpans) &&
-      candidatesOwned(input, destination, currency));
+      candidatesOwned(input, entry, destination, currency, "destination"));
   const isAccountEvidenceValid = advisory !== null && validDestination &&
     spansMatch(input, entry, original.evidenceSpans) &&
-    candidatesOwned(input, original, currency) &&
+    candidatesOwned(input, entry, original, currency, "source") &&
     !(input.source === "SMS" && original.state === "contextual");
   const accountEvidence: AccountReviewAccountEvidence = isAccountEvidenceValid
     ? original : { ...original, state: "uncertain", candidateAccountIds: [] };
@@ -152,7 +222,9 @@ export function normalizeRowEvidence(
   }
   return {
     accountEvidence, currency, isAccountEvidenceValid,
-    reasons, sourceRef, suggestionRef: isAccountEvidenceValid
+    reasons, sourceRef,
+    sourceMessageId: entry.source === "SMS" ? entry.financial.messageId : null,
+    suggestionRef: isAccountEvidenceValid
       ? advisory?.suggestionRef ?? null : null,
   };
 }

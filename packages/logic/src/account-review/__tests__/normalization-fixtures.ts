@@ -123,7 +123,8 @@ export function makeParsedVoice(): ParsedVoiceTransaction {
     confidence: 0.95,
     originLabel: "Voice",
     source: "VOICE",
-    note: "Synthetic lunch",
+    counterparty: "Lunch",
+    note: "Lunch at the canteen",
     originalTranscript: REVIEW_VOICE_TRANSCRIPT,
     detectedLanguage: "en",
     aiDetectedCurrency: "EGP",
@@ -471,7 +472,8 @@ export function makeTwoIdenticalVoiceWithExtraInput(): VoiceV2Input {
     financialRows: providerResponse.transactions,
     mappedTransactions: [
       ...input.mappedTransactions.map((row) => ({ ...row, originalTranscript })),
-      { ...makeParsedVoice(), amount: 25, note: "Coffee", originalTranscript },
+      { ...makeParsedVoice(), amount: 25, counterparty: "Coffee",
+        note: "Coffee", originalTranscript },
     ],
   };
 }
