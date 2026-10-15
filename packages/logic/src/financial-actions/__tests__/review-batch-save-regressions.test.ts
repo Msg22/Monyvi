@@ -21,8 +21,11 @@ import {
   validateSourceAndChildren,
 } from "../review-batch-save-integrity";
 import {
+  validateAffectedAccountCoverage,
   validateCreatedAccountBalances,
+  validateFinancialRowLimits,
   validatePostedEffects,
+  validateTransferEndpoints,
 } from "../review-batch-save-effects";
 import {
   ATM_BANK_ACCOUNT_ID,
@@ -48,6 +51,7 @@ import {
   cashUsedForOrdinarySmsPayload,
   egpFinancialAmountBounds,
   existingAccountSmsPayload,
+  queuedAtmPayload,
   sharedSmsQueuePayload,
   validAtmCashDestinationPayload,
   validVoiceCashPayload,
@@ -183,20 +187,22 @@ describe("#395 T046 C — current currency precision and major-amount maximum", 
 });
 
 describe("#395 T046 D — SMS bookkeeping IDs are local-only", () => {
-  it("accepts the original valid ATM transfer with independent local IDs", () => {
-    expect(validateReviewBatchSavePayload(atmTransferPayload)).toEqual(
-      atmTransferPayload
-    );
+  it("accepts the valid ATM transfer with aligned queue/session and local IDs", () => {
+    const payload = queuedAtmPayload();
+    expect(payload.sessionId).toBe(ATM_QUEUE_ID);
+    expect(payload.localSmsBookkeeping[0]?.queueId).toBe(payload.sessionId);
+    expect(validateReviewBatchSavePayload(payload)).toEqual(payload);
     expect(canonicalizeFinancialActionEnvelope(
-      atmTransferEnvelope, registry
-    ).payload).toEqual(atmTransferPayload);
+      { ...atmTransferEnvelope, payload }, registry
+    ).payload).toEqual(payload);
   });
 
   it("RED: rejects local draftId aliasing a created transfer/domainRecordRef", () => {
+    const source = queuedAtmPayload();
     const aliased = {
-      ...atmTransferPayload,
+      ...source,
       localSmsBookkeeping: [{
-        ...atmTransferPayload.localSmsBookkeeping[0],
+        ...source.localSmsBookkeeping[0],
         draftId: ATM_TRANSFER_RECORD_ID,
       }],
     };
@@ -205,10 +211,11 @@ describe("#395 T046 D — SMS bookkeeping IDs are local-only", () => {
   });
 
   it("RED: rejects local queueId aliasing a created transfer/domainRecordRef", () => {
+    const source = queuedAtmPayload();
     const aliased = {
-      ...atmTransferPayload,
+      ...source,
       localSmsBookkeeping: [{
-        ...atmTransferPayload.localSmsBookkeeping[0],
+        ...source.localSmsBookkeeping[0],
         queueId: ATM_TRANSFER_RECORD_ID,
       }],
     };
@@ -216,10 +223,11 @@ describe("#395 T046 D — SMS bookkeeping IDs are local-only", () => {
   });
 
   it("rejects reuse of the same UUID for one local draft and its queue", () => {
+    const source = queuedAtmPayload();
     const aliased = {
-      ...atmTransferPayload,
+      ...source,
       localSmsBookkeeping: [{
-        ...atmTransferPayload.localSmsBookkeeping[0],
+        ...source.localSmsBookkeeping[0],
         draftId: ATM_QUEUE_ID,
       }],
     };
@@ -258,6 +266,8 @@ describe("#395 T046 E — selected group must justify every newly created accoun
   it("accepts existing-account SMS with no new account and no group", () => {
     const payload = existingAccountSmsPayload();
     expect(payload.confirmedGroupRefs).toEqual([]);
+    expect(payload.sessionId).toBe(SMS_QUEUE_ID);
+    expect(payload.localSmsBookkeeping[0]?.queueId).toBe(payload.sessionId);
     expect(payload.domainMutation.records.some(
       (record) => record.entity === "account"
     )).toBe(false);
@@ -306,7 +316,7 @@ describe("#395 T046 F — explicit latest-allowed calendar-date input", () => {
 
   it("RED: rejects transfer later than cutoff, without consulting ambient time", () => {
     expect(() => canonicalizeFinancialActionEnvelope(
-      atmTransferEnvelope,
+      { ...atmTransferEnvelope, payload: queuedAtmPayload() },
       registry,
       { latestAllowedCalendarDate: "2026-10-13" }
     )).toThrow();
@@ -337,6 +347,12 @@ describe("#395 T046 G — source-specific created Cash eligibility", () => {
       activeAccountIds: [], defaultAccount: null,
     });
     expect(payload.accountEffects[0]?.amountMinorUnits).toBe("0");
+    expect(payload.domainMutation.records.some(
+      (record) => record.entity === "bank_details"
+    )).toBe(false);
+    expect(payload.createGuards.some(
+      (guard) => guard.entity === "bank_details"
+    )).toBe(false);
     expect(validateReviewBatchSavePayload(payload)).toEqual(payload);
     const envelope = {
       ...reviewBatchSaveEnvelope,
@@ -362,6 +378,12 @@ describe("#395 T046 G — source-specific created Cash eligibility", () => {
     });
     expect(payload.sessionId).toBe(ATM_QUEUE_ID);
     expect(payload.localSmsBookkeeping[0]?.queueId).toBe(payload.sessionId);
+    expect(payload.domainMutation.records.some(
+      (record) => record.entity === "bank_details"
+    )).toBe(false);
+    expect(payload.createGuards.some(
+      (guard) => guard.entity === "bank_details"
+    )).toBe(false);
     expect(validateReviewBatchSavePayload(payload)).toEqual(payload);
     const envelope = {
       ...atmTransferEnvelope,
@@ -382,6 +404,9 @@ describe("#395 T046 G — source-specific created Cash eligibility", () => {
     expect(validateCreateCoverage(payload)).toBeNull();
     expect(validateSelectedCoverage(payload)).toBeNull();
     expect(validatePostedEffects(payload)).toBeNull();
+    expect(validateFinancialRowLimits(payload)).toBeNull();
+    expect(validateTransferEndpoints(payload)).toBeNull();
+    expect(validateAffectedAccountCoverage(payload)).toBeNull();
     expect(validateCreatedAccountBalances(payload)).toBeNull();
     // The same Cash IS a legitimate ATM destination in another selected row.
     // Source eligibility must inspect EVERY financial use, not just some().
@@ -393,6 +418,9 @@ describe("#395 T046 G — source-specific created Cash eligibility", () => {
     expect(validateCreateCoverage(payload)).toBeNull();
     expect(validateSelectedCoverage(payload)).toBeNull();
     expect(validatePostedEffects(payload)).toBeNull();
+    expect(validateFinancialRowLimits(payload)).toBeNull();
+    expect(validateTransferEndpoints(payload)).toBeNull();
+    expect(validateAffectedAccountCoverage(payload)).toBeNull();
     expect(validateCreatedAccountBalances(payload)).toBeNull();
     expect(validateSourceAndChildren(payload)).not.toBeNull();
   });
