@@ -65,7 +65,9 @@ export function existingAccountSmsPayload(): ReviewBatchSavePayload {
   return {
     ...base,
     confirmedGroupRefs: [],
-    createGuards: [base.createGuards[2]],
+    createGuards: base.createGuards.filter(
+      (guard) => guard.entity === "transaction"
+    ),
     accountEffects: base.accountEffects.map((effect) => ({
       ...effect, accountId: REVIEW_ACCOUNT_ID,
     })),
@@ -198,15 +200,23 @@ export function validAtmCashDestinationPayload(): ReviewBatchSavePayload {
 }
 
 function additionalSmsBookkeeping(): ReviewBatchSavePayload["localSmsBookkeeping"][number] {
+  const first = atmTransferPayload.localSmsBookkeeping[0];
+  if (!first) throw new Error("Missing synthetic ATM draft");
   return {
-    ...atmTransferPayload.localSmsBookkeeping[0],
+    ...first,
     draftId: SECOND_SMS_DRAFT_ID,
-    queueId: atmTransferPayload.localSmsBookkeeping[0].queueId,
+    queueId: first.queueId,
   };
 }
 
 export function cashUsedForOrdinarySmsPayload(): ReviewBatchSavePayload {
   const source = validAtmCashDestinationPayload();
+  const cashGuard = source.createGuards.find((g) => g.entity === "account");
+  const transferGuard = source.createGuards.find((g) => g.entity === "transfer");
+  const cashRecord = source.domainMutation.records.find((r) => r.entity === "account");
+  const transferRecord = source.domainMutation.records.find((r) => r.entity === "transfer");
+  if (!cashGuard || !transferGuard || !cashRecord || !transferRecord)
+    throw new Error("Incomplete canonical ATM Cash fixture");
   const original = smsNewBankPayload.domainMutation.records[2];
   const transaction: ReviewFinancialRecord = {
     ...original,
@@ -227,9 +237,9 @@ export function cashUsedForOrdinarySmsPayload(): ReviewBatchSavePayload {
         sourceFingerprint: SECOND_SMS_FINGERPRINT },
     ],
     createGuards: [
-      source.createGuards[0],
+      cashGuard,
       { entity: "transaction", id: SECOND_TRANSACTION_ID, expectedAbsent: true },
-      source.createGuards[1],
+      transferGuard,
     ],
     accountEffects: source.accountEffects.map((effect) => ({
       ...effect,
@@ -239,7 +249,7 @@ export function cashUsedForOrdinarySmsPayload(): ReviewBatchSavePayload {
       ATM_CASH_ACCOUNT_ID, ATM_TRANSFER_RECORD_ID, SECOND_TRANSACTION_ID,
     ],
     domainMutation: {
-      records: [source.domainMutation.records[0], transaction, source.domainMutation.records[1]],
+      records: [cashRecord, transaction, transferRecord],
     },
     localSmsBookkeeping: [
       ...source.localSmsBookkeeping,
@@ -250,6 +260,10 @@ export function cashUsedForOrdinarySmsPayload(): ReviewBatchSavePayload {
 
 export function cashUsedAsAtmSourcePayload(): ReviewBatchSavePayload {
   const source = validAtmCashDestinationPayload();
+  const cashGuard = source.createGuards.find((g) => g.entity === "account");
+  const transferGuard = source.createGuards.find((g) => g.entity === "transfer");
+  if (!cashGuard || !transferGuard)
+    throw new Error("Missing ATM Cash guards");
   const original = atmTransferPayload.domainMutation.records[0];
   const secondTransfer: ReviewFinancialRecord = {
     ...original,
@@ -270,7 +284,7 @@ export function cashUsedAsAtmSourcePayload(): ReviewBatchSavePayload {
         sourceFingerprint: SECOND_SMS_FINGERPRINT },
     ],
     createGuards: [
-      source.createGuards[0], source.createGuards[1],
+      cashGuard, transferGuard,
       { entity: "transfer", id: SECOND_TRANSFER_ID, expectedAbsent: true },
     ],
     accountEffects: source.accountEffects.map((effect) => ({
