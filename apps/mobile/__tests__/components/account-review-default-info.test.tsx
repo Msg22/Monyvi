@@ -289,9 +289,9 @@ describe("T018: B1 R3-12 Why explanation and dismissal", () => {
     renderSheet(true, onClose);
     // accessibilityViewIsModal hides sibling overlays from screen readers:
     // this backdrop is a pointer target, not another inaccessible button.
-    expect(screen.getByTestId("account-review-default-why-backdrop"))
+    expect(screen.getByTestId("account-review-default-why-backdrop", { includeHiddenElements: true }))
       .toHaveProp("accessible", false);
-    fireEvent.press(screen.getByTestId("account-review-default-why-backdrop"));
+    fireEvent.press(screen.getByTestId("account-review-default-why-backdrop", { includeHiddenElements: true }));
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
