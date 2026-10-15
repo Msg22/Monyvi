@@ -48,3 +48,22 @@ This Normal ChatGPT worker published source/tests/docs through GitHub connector 
 4. Treat new runtime/SQL/sync/writer/effect revision and recovery acceptance as **separate future owners and gates**. No unsupported server registration or local green should be inferred from these pure source files.
 
 **Ownership release:** One complete **T046 PURE source checkpoint**, pending Root tests/independent review. **FROZEN**. No general project acceptance, Save screen success, registration deployment, or background work claimed.
+
+
+---
+
+## Follow-up lint/style checkpoint — Root consolidated batch (2026-10-15)
+
+**Root's actual coherent evidence (reported by Root, not rerun in this chat):** integrated new payload+resolver and prior financial suites **19/19 suites, 462/462 tests PASS**; strict logic `tsc` **0 errors**. The new T042/T046 cases include **45 new payload behavioral assertions/cases** alongside **172 legacy financial cases**; the existing canonical v1 behavior remains untouched. These results establish Root's passing local test batch on the pre-style source, **not** global/runtime registration, SQL/CAS, deployed behavior or final independent payload acceptance.
+
+**Source-only formatting/lint repairs:**
+
+- `review-batch-save-shapes.ts`: added an explicit generic mutation schema return type, using the repository's strict Zod object convention `z.ZodObject<..., z.core.$strict>` to preserve closed/discriminated-union inference; no validator/schema logic changed.
+- `review-batch-save.ts`: consolidated the value and type import from the same shapes module and changed the function-array type from nested `readonly (...)[]` to `ReadonlyArray<...>`; the unused `z` import was already absent at the lease's starting head, so no removal was necessary. Schema checks and tuple registration are unchanged.
+- `ai-voice-review-privacy.test.ts`: reordered constructor before explicit readonly members in the platform `Category` test fixture and changed `allDiagnostics`' non-simple nested readonly-array return type to `ReadonlyArray<ReadonlyArray<unknown>>`. **All three test cases, logger privacy allowlist, and assertions are untouched**. Core retains sole ownership of the separate production diagnostic `errorClass`/reason-code corrections.
+
+**Change controls:** No T046 test fixture/assertion edited in this follow-up. No changes to normalizer, source adapter, Core parser, provider, SQL, local Save, runtime services, queues, UI routes, `index.ts`, or `DEFAULT_FINANCIAL_ACTION_REGISTRY`. No new version activation, metadata provider call or database write. Pure guard and ledger effects unchanged.
+
+**Verification boundary:** This worker used the GitHub connector to review and update the exact authorized files. **No new local Jest/TypeScript/ESLint/Prettier/AST run** was performed here. Root must reformat, inspect function lengths (<50) and type/lint the finalized strict Zod annotation, then independently review the exact source and rerun the coherent batch before accepting. The reported **19 suites/462 PASS, strict logic tsc0** are Root's externally executed pre-style baseline, not an independent post-style Green receipt.
+
+**Handoff:** publish exact remote SHA and freeze all UI/T046 writes. Source remains a candidate until Root's independent payload review; Core owns Voice production logging and NormalSQL owns resolution.
