@@ -393,6 +393,29 @@ test("T011 generated Edge TS passes a full strict compiler diagnostic check", ()
   assert.equal(diagnostics.length, 0, formatted);
 });
 
+test("T011 generated output retains canonical typed helpers and explicit builder signatures", () => {
+  requireExisting(GENERATED, "typed standalone Edge contract");
+  const text = readFileSync(GENERATED, "utf8");
+  const source = ts.createSourceFile(
+    GENERATED, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS
+  );
+  const functions = source.statements.filter(ts.isFunctionDeclaration);
+  for (const name of [
+    "areDistinct", "addIssue", "validateRowEvidence",
+    "validateAdvisoryEnvelope", "lowerProviderSchema",
+    "buildAccountReviewGeminiResponseSchema",
+    "buildAccountReviewDeepInfraResponseSchema",
+  ]) {
+    const declaration = functions.find((item) => item.name?.text === name);
+    assert.ok(declaration, "Missing canonical helper/builder: " + name);
+    assert.ok(declaration.type, "Erased return type on " + name);
+    for (const param of declaration.parameters) {
+      assert.ok(param.type, "Erased parameter type in " + name);
+      assert.notEqual(param.type.kind, ts.SyntaxKind.AnyKeyword, "Unsafe any in " + name);
+    }
+  }
+});
+
 test("T011 standalone exposes all seven canonical T004 validators without detached copies", async () => {
   const edge = await loadGeneratedEdge();
   const sampleVoice = makeVoiceV2Response();

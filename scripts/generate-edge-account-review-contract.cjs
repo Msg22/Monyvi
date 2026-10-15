@@ -5,6 +5,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
 const prettier = require("prettier");
+const ts = require("typescript");
 
 const ROOT = path.resolve(__dirname, "..");
 const OUTPUT = path.join(ROOT, "supabase/functions/_shared/account-review-contract.ts");
@@ -20,6 +21,13 @@ const REVIEWED_PATHS = [
   "packages/logic/src/account-review/generated-vocabulary.ts",
 ];
 const PARSER_ENTRY = "packages/logic/src/account-review/parser-schemas.ts";
+const PARSER_RUNTIME_FILES = [
+  "packages/logic/src/account-review/generated-vocabulary.ts",
+  "packages/logic/src/utils/amount-limits.ts",
+  "packages/logic/src/account-review/schema-primitives.ts",
+  "packages/logic/src/account-review/parser-advisory-validation.ts",
+  "packages/logic/src/account-review/parser-schemas.ts",
+];
 const FULL_ENTRY = "packages/logic/src/account-review/schemas.ts";
 const FORBIDDEN_RETAINED = /decimal\.js|financial-actions|action-registry|metals|apps\/mobile|packages\/db/;
 
@@ -114,29 +122,48 @@ function validateParserOnlyGraph(metafile) {
 
 const PROJECTION_SOURCE = [
   "",
-  "function schemaRecord(value, where) {",
-  "  if (!value || typeof value !== \"object\" || Array.isArray(value)) {",
-  "    throw new Error(\"Invalid canonical JSON Schema at \" + where);",
-  "  }",
+  "type ProviderMode = \"gemini\" | \"deepinfra\";",
+  "type ProviderObject = Record<string, unknown>;",
+  "const MODEL_KEYWORDS = new Set<string>([",
+  "  \"$schema\", \"type\", \"properties\", \"required\", \"additionalProperties\",",
+  "  \"items\", \"enum\", \"const\", \"format\", \"minimum\", \"maximum\",",
+  "  \"minItems\", \"maxItems\", \"pattern\", \"minLength\", \"maxLength\",",
+  "  \"uniqueItems\", \"default\", \"description\", \"title\",",
+  "  \"exclusiveMinimum\", \"exclusiveMaximum\", \"anyOf\", \"oneOf\",",
+  "]);",
+  "const MODEL_PRIMITIVES = new Set<string>([",
+  "  \"string\", \"number\", \"integer\", \"boolean\", \"object\", \"array\", \"null\",",
+  "]);",
+  "",
+  "function isProviderObject(value: unknown): value is ProviderObject {",
+  "  return typeof value === \"object\" && value !== null && !Array.isArray(value);",
+  "}",
+  "",
+  "function schemaRecord(value: unknown, where: string): ProviderObject {",
+  "  if (!isProviderObject(value)) throw new Error(\"Invalid canonical JSON Schema at \" + where);",
   "  return value;",
   "}",
   "",
-  "function collapseUnion(schema) {",
+  "function schemaRecords(value: unknown, where: string): ProviderObject[] {",
+  "  if (!Array.isArray(value)) throw new Error(\"Invalid canonical array at \" + where);",
+  "  return value.map((item: unknown) => schemaRecord(item, where + \"[]\"));",
+  "}",
+  "",
+  "function collapseUnion(schema: ProviderObject): ProviderObject {",
   "  const variants = schema.anyOf ?? schema.oneOf;",
-  "  if (!variants) return schema;",
-  "  if (!Array.isArray(variants) || variants.length < 2) {",
-  "    throw new Error(\"Unrecognized provider union\");",
-  "  }",
-  "  const list = variants.map((part) => schemaRecord(part, \"union member\"));",
+  "  if (variants === undefined) return schema;",
+  "  const list = schemaRecords(variants, \"union member\");",
+  "  if (list.length < 2) throw new Error(\"Unrecognized provider union\");",
   "  const nonnull = list.filter((item) => item.type !== \"null\");",
   "  if (nonnull.length === 1 && list.length === 2) {",
   "    const part = collapseUnion(nonnull[0]);",
   "    if (typeof part.type !== \"string\") throw new Error(\"Unsupported nullable union\");",
-  "    return {",
-  "      ...part,",
-  "      type: [part.type, \"null\"],",
-  "      ...(part.enum ? { enum: [...part.enum, null] } : {}),",
-  "    };",
+  "    const converted: ProviderObject = { ...part, type: [part.type, \"null\"] };",
+  "    if (part.enum !== undefined) {",
+  "      if (!Array.isArray(part.enum)) throw new Error(\"Non-array nullable enum\");",
+  "      converted.enum = [...part.enum, null];",
+  "    }",
+  "    return converted;",
   "  }",
   "  if (nonnull.length === list.length &&",
   "      list.every((item) => item.type === \"string\")) {",
@@ -145,39 +172,45 @@ const PROJECTION_SOURCE = [
   "  throw new Error(\"Unrepresentable provider union; Zod remains authoritative\");",
   "}",
   "",
-  "const MODEL_KEYWORDS = new Set([",
-  "  \"$schema\", \"type\", \"properties\", \"required\", \"additionalProperties\",",
-  "  \"items\", \"enum\", \"const\", \"format\", \"minimum\", \"maximum\",",
-  "  \"minItems\", \"maxItems\", \"pattern\", \"minLength\", \"maxLength\",",
-  "  \"uniqueItems\", \"default\", \"description\", \"title\",",
-  "  \"exclusiveMinimum\", \"exclusiveMaximum\", \"anyOf\", \"oneOf\",",
-  "]);",
-  "const MODEL_PRIMITIVES = new Set([\"string\", \"number\", \"integer\", \"boolean\", \"object\", \"array\", \"null\"]);",
-  "",
-  "function supportedType(value) {",
-  "  const values = Array.isArray(value) ? value : [value];",
-  "  if (values.length < 1 || values.some((item) => !MODEL_PRIMITIVES.has(item))) {",
+  "function supportedType(value: unknown): string | string[] {",
+  "  const values: unknown[] = Array.isArray(value) ? value : [value];",
+  "  if (!values.every((item): item is string =>",
+  "    typeof item === \"string\" && MODEL_PRIMITIVES.has(item))) {",
   "    throw new Error(\"Unsupported provider JSON type\");",
   "  }",
-  "  return value;",
+  "  return Array.isArray(value) ? values : values[0];",
   "}",
   "",
-  "function projectCurrencyEnum(values, supported) {",
+  "function projectCurrencyEnum(",
+  "  values: readonly unknown[],",
+  "  supported: readonly string[] | null",
+  "): readonly unknown[] {",
   "  const present = values.filter((item) => item !== null);",
-  "  const canonical = ACCOUNT_REVIEW_CURRENCIES;",
+  "  const canonical: readonly string[] = ACCOUNT_REVIEW_CURRENCIES;",
   "  const isCurrency = present.length === canonical.length &&",
   "    canonical.every((currency) => present.includes(currency));",
   "  if (!isCurrency || supported === null) return values;",
   "  return [...supported, ...(values.includes(null) ? [null] : [])];",
   "}",
   "",
-  "function lowerProviderSchema(input, mode, supported, where) {",
+  "function requiredFields(value: unknown, where: string): string[] {",
+  "  if (!Array.isArray(value) ||",
+  "      !value.every((item: unknown): item is string => typeof item === \"string\")) {",
+  "    throw new Error(\"Invalid required keys at \" + where);",
+  "  }",
+  "  return value;",
+  "}",
+  "",
+  "function lowerProviderSchema(",
+  "  input: unknown, mode: ProviderMode,",
+  "  supported: readonly string[] | null, where: string",
+  "): ProviderObject {",
   "  const schema = collapseUnion(schemaRecord(input, where));",
   "  for (const keyword of Object.keys(schema)) {",
   "    if (!MODEL_KEYWORDS.has(keyword)) throw new Error(\"Unsupported canonical keyword \" + keyword + \" at \" + where);",
   "  }",
   "  const type = supportedType(schema.type);",
-  "  const result = { type };",
+  "  const result: ProviderObject = { type };",
   "  const enumValues = schema.enum ?? (schema.const === undefined ? undefined : [schema.const]);",
   "  if (enumValues !== undefined) {",
   "    if (!Array.isArray(enumValues)) throw new Error(\"Non-array schema enum\");",
@@ -194,41 +227,49 @@ const PROJECTION_SOURCE = [
   "  return result;",
   "}",
   "",
-  "function lowerObject(schema, output, mode, supported, where) {",
+  "function lowerObject(",
+  "  schema: ProviderObject, output: ProviderObject,",
+  "  mode: ProviderMode, supported: readonly string[] | null, where: string",
+  "): ProviderObject {",
   "  if (schema.additionalProperties !== false) throw new Error(\"Open object \" + where);",
   "  const members = schemaRecord(schema.properties, where + \".properties\");",
-  "  if (!Array.isArray(schema.required)) throw new Error(\"Missing required array at \" + where);",
-  "  const required = new Set(schema.required);",
-  "  output.properties = {};",
+  "  const required = requiredFields(schema.required, where);",
+  "  const projected: ProviderObject = {};",
   "  for (const [name, value] of Object.entries(members)) {",
-  "    if (mode === \"deepinfra\" && !required.has(name)) continue;",
-  "    output.properties[name] = lowerProviderSchema(value, mode, supported, where + \".\" + name);",
+  "    if (mode === \"deepinfra\" && !required.includes(name)) continue;",
+  "    projected[name] = lowerProviderSchema(value, mode, supported, where + \".\" + name);",
   "  }",
-  "  output.required = mode === \"deepinfra\" ?",
-  "    Object.keys(output.properties) : [...schema.required];",
+  "  for (const name of required) {",
+  "    if (!Object.hasOwn(projected, name)) throw new Error(\"Lost required field \" + where + \".\" + name);",
+  "  }",
+  "  output.properties = projected;",
+  "  output.required = mode === \"deepinfra\" ? Object.keys(projected) : required;",
   "  output.additionalProperties = false;",
-  "  for (const name of schema.required) {",
-  "    if (!Object.hasOwn(output.properties, name)) throw new Error(\"Lost required field \" + where + \".\" + name);",
-  "  }",
   "  return output;",
   "}",
   "",
-  "function canonicalInputSchema(validator) {",
-  "  return z.toJSONSchema(validator, {",
-  "    io: \"input\", reused: \"inline\", unrepresentable: \"throw\",",
-  "  });",
+  "function canonicalInputSchema(validator: z.ZodType): ProviderObject {",
+  "  return schemaRecord(",
+  "    z.toJSONSchema(validator, {",
+  "      io: \"input\", reused: \"inline\", unrepresentable: \"throw\",",
+  "    }),",
+  "    \"canonical input\"",
+  "  );",
   "}",
   "",
-  "export function buildAccountReviewGeminiResponseSchema() {",
+  "export function buildAccountReviewGeminiResponseSchema(): ProviderObject {",
   "  return lowerProviderSchema(",
   "    canonicalInputSchema(accountReviewVoiceResponseV2Schema),",
   "    \"gemini\", null, \"Voice\"",
   "  );",
   "}",
   "",
-  "export function buildAccountReviewDeepInfraResponseSchema(supportedCurrencies) {",
+  "export function buildAccountReviewDeepInfraResponseSchema(",
+  "  supportedCurrencies: readonly string[]",
+  "): ProviderObject {",
+  "  const canonical: readonly string[] = ACCOUNT_REVIEW_CURRENCIES;",
   "  if (!Array.isArray(supportedCurrencies) || supportedCurrencies.length < 1 ||",
-  "      supportedCurrencies.some((code) => !ACCOUNT_REVIEW_CURRENCIES.includes(code)) ||",
+  "      supportedCurrencies.some((code) => !canonical.includes(code)) ||",
   "      new Set(supportedCurrencies).size !== supportedCurrencies.length) {",
   "    throw new Error(\"Invalid supported SMS currency vocabulary\");",
   "  }",
@@ -240,46 +281,98 @@ const PROJECTION_SOURCE = [
   "",
 ].join("\n");
 
-function edgeEntrypoint(paths, hash) {
+function assertSupportedSourceImports(source, relativePath) {
+  for (const statement of source.statements) {
+    if (!ts.isImportDeclaration(statement)) continue;
+    const moduleName = statement.moduleSpecifier.text;
+    if (moduleName === "zod" || moduleName.startsWith(".")) continue;
+    if (statement.importClause?.isTypeOnly) continue;
+    throw new Error("Unexpected canonical runtime import in " + relativePath + ": " + moduleName);
+  }
+}
+
+function emitVocabularyStatement(statement, source) {
+  if (!ts.isVariableStatement(statement)) return null;
+  const declarations = statement.declarationList.declarations;
+  if (declarations.length !== 1) throw new Error("Unexpected generated vocabulary statement");
+  const declaration = declarations[0];
+  if (!ts.isIdentifier(declaration.name) ||
+      !declaration.name.text.startsWith("ACCOUNT_REVIEW_")) return null;
+  const initializer = declaration.initializer;
+  if (!initializer || !ts.isSatisfiesExpression(initializer)) {
+    throw new Error("Expected canonical generated-vocabulary type assertion");
+  }
+  const raw = statement.getText(source);
+  return raw.replace(initializer.getText(source), initializer.expression.getText(source));
+}
+
+function extractCanonicalDeclarations(relativePath) {
+  const original = fs.readFileSync(path.join(ROOT, relativePath), "utf8");
+  const source = ts.createSourceFile(relativePath, original, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+  if (source.parseDiagnostics.length > 0) throw new Error("Canonical TypeScript syntax failure " + relativePath);
+  assertSupportedSourceImports(source, relativePath);
+  const vocab = relativePath.endsWith("/generated-vocabulary.ts");
+  const declarations = [];
+  for (const statement of source.statements) {
+    if (ts.isImportDeclaration(statement)) continue;
+    if (vocab) {
+      const rendered = emitVocabularyStatement(statement, source);
+      if (rendered !== null) declarations.push(rendered);
+      continue;
+    }
+    if (ts.isVariableStatement(statement) || ts.isFunctionDeclaration(statement) ||
+        ts.isTypeAliasDeclaration(statement) || ts.isInterfaceDeclaration(statement)) {
+      declarations.push(statement.getText(source));
+      continue;
+    }
+    throw new Error("Unexpected canonical TypeScript declaration " + relativePath);
+  }
+  if (declarations.length === 0) throw new Error("Empty canonical declarations " + relativePath);
+  return "// Canonical source: " + relativePath + "\n" + declarations.join("\n\n");
+}
+
+function verifyParserInputs(metafile) {
+  validateParserOnlyGraph(metafile);
+  const retained = Object.keys(metafile.inputs)
+    .filter((entry) => entry.startsWith("packages/logic/src/"));
+  for (const relative of retained) {
+    if (!PARSER_RUNTIME_FILES.includes(relative)) {
+      throw new Error("Unexpected parser runtime file: " + relative);
+    }
+  }
+  for (const required of PARSER_RUNTIME_FILES) {
+    if (!retained.includes(required)) throw new Error("Missing parser module: " + required);
+  }
+}
+
+function typedEdgeEntrypoint(paths, hash) {
   return [
+    "/* GENERATED from canonical T009 Zod. Do not edit. */",
     'import { z } from "zod";',
-    'import { ACCOUNT_REVIEW_CURRENCIES } from "./packages/logic/src/account-review/generated-vocabulary.ts";',
-    'import { accountReviewVoiceResponseV2Schema, accountReviewSmsResponseV2Schema } from "./packages/logic/src/account-review/parser-schemas.ts";',
-    'export { accountReviewRequestContextSchema, accountReviewEvidenceSpanSchema, accountReviewAccountEvidenceSchema, accountReviewCurrencyEvidenceSchema, accountReviewSuggestedAccountSchema, accountReviewVoiceResponseV2Schema, accountReviewSmsResponseV2Schema } from "./packages/logic/src/account-review/parser-schemas.ts";',
+    ...PARSER_RUNTIME_FILES.map(extractCanonicalDeclarations),
     'export const ACCOUNT_REVIEW_EDGE_GENERATOR_VERSION = ' + JSON.stringify(VERSION) + ";",
     'export const ACCOUNT_REVIEW_CANONICAL_SHA256 = ' + JSON.stringify(hash) + ";",
     'export const ACCOUNT_REVIEW_CANONICAL_SOURCE_PATHS = Object.freeze(' + JSON.stringify(paths) + ");",
     PROJECTION_SOURCE,
-  ].join("\n");
+  ].join("\n\n");
 }
 
 async function renderContract() {
   const esbuild = loadEsbuild();
-  if (esbuild.version !== "0.28.1") {
-    throw new Error("Unsupported esbuild version " + esbuild.version);
+  if (esbuild.version !== "0.28.1" || ts.version !== "5.9.3") {
+    throw new Error("Unreviewed bundler/compiler version");
   }
   const paths = await canonicalManifest(esbuild);
   const hash = hashManifest(paths);
-  const content = edgeEntrypoint(paths, hash);
-  const options = buildOptions(PARSER_ENTRY, true);
-  delete options.entryPoints;
-  options.stdin = {
-    contents: content,
-    resolveDir: ROOT,
-    sourcefile: "account-review-edge-entry.ts",
-    loader: "ts",
-  };
-  const result = await esbuild.build(options);
-  validateParserOnlyGraph(result.metafile);
-  if (!result.outputFiles || result.outputFiles.length !== 1) {
-    throw new Error("Expected one standalone Edge output file");
-  }
+  const parser = await esbuild.build(buildOptions(PARSER_ENTRY));
+  verifyParserInputs(parser.metafile);
+  const content = typedEdgeEntrypoint(paths, hash);
   const config = (await prettier.resolveConfig(OUTPUT)) ?? {};
-  const formatted = await prettier.format(
-    "/* GENERATED from canonical T009 Zod. Do not edit. */\n" + result.outputFiles[0].text,
-    { ...config, filepath: OUTPUT }
-  );
-  if (formatted.split("\n").length >= 900) {
+  const formatted = await prettier.format(content, {
+    ...config, filepath: OUTPUT,
+  });
+  const lines = formatted.split("\n").length;
+  if (lines >= 900) {
     throw new Error("Generated Edge contract exceeds 899 formatted lines: request a cohesive generated split");
   }
   return formatted;
