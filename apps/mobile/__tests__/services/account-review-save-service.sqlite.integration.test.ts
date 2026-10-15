@@ -26,7 +26,7 @@ interface MockDb {
 jest.mock("@nozbe/watermelondb/adapters/sqlite/makeDispatcher", (): unknown =>
   jest.requireActual("@nozbe/watermelondb/adapters/sqlite/makeDispatcher/index.js")
 );
-jest.mock("@monyvi/db", () => {
+jest.mock("@monyvi/db", (): Readonly<Record<string, unknown>> => {
   const wm = jest.requireActual<typeof import("@nozbe/watermelondb")>(
     "@nozbe/watermelondb"
   );
@@ -91,7 +91,7 @@ beforeEach(async (): Promise<void> => {
 });
 
 describe("T043 physical SQLite selected-save and immutable action", () => {
-  it("S25 commits Bank, bank child, sender, two SMS records, effects and draft cleanup together", async () => {
+  it("S25 commits Bank, bank child, sender, two SMS records, effects and draft cleanup together", async (): Promise<void> => {
     const f = makeSaveFixture("sms-new-bank");
     await seedSmsReviewDrafts(database, f.session);
     await expect(save(f)).resolves.toMatchObject({ kind: "committed" });
@@ -106,7 +106,7 @@ describe("T043 physical SQLite selected-save and immutable action", () => {
       .toMatchObject({ balance: 15, financialRevision: "1" });
   });
 
-  it("S26 a fresh-instance replay with the same frozen intent applies zero second changes", async () => {
+  it("S26 a fresh-instance replay with the same frozen intent applies zero second changes", async (): Promise<void> => {
     const f = makeSaveFixture("voice-existing");
     await expect(save(f)).resolves.toMatchObject({ kind: "committed" });
     const fresh = await reopenSqliteLedger(ledger);
@@ -116,7 +116,7 @@ describe("T043 physical SQLite selected-save and immutable action", () => {
     expect((await actionRoots(fresh))[0]?.actionId).toBe(ACTION);
   });
 
-  it("S27 an identical action ID with altered frozen occurrence/hash is rejected", async () => {
+  it("S27 an identical action ID with altered frozen occurrence/hash is rejected", async (): Promise<void> => {
     const f = makeSaveFixture("voice-existing");
     await expect(save(f)).resolves.toMatchObject({ kind: "committed" });
     const fresh = await reopenSqliteLedger(ledger);
@@ -130,7 +130,7 @@ describe("T043 physical SQLite selected-save and immutable action", () => {
     expect((await actionRoots(fresh))).toHaveLength(1);
   });
 
-  it("S28 a real within-batch SQLite UNIQUE conflict rolls all linked tables back", async () => {
+  it("S28 a real within-batch SQLite UNIQUE conflict rolls all linked tables back", async (): Promise<void> => {
     const f = makeSaveFixture("sms-new-bank");
     await seedSmsReviewDrafts(database, f.session);
     const before = await ledgerState(await reopenSqliteLedger(ledger));
@@ -144,7 +144,7 @@ describe("T043 physical SQLite selected-save and immutable action", () => {
     expect((await actionRoots(database))).toHaveLength(0);
   });
 
-  it("S29 after physical rollback the SAME cached service/input retries once", async () => {
+  it("S29 after physical rollback the SAME cached service/input retries once", async (): Promise<void> => {
     const f = makeSaveFixture("voice-existing");
     const release = injectMidBatchDuplicate(database);
     try {
@@ -161,7 +161,7 @@ describe("T043 physical SQLite selected-save and immutable action", () => {
     expect(afterRetry.counts.effects).toBe(1);
   });
 
-  it("S30 rejects an already-existing planned financial create ID without overwriting it", async () => {
+  it("S30 rejects an already-existing planned financial create ID without overwriting it", async (): Promise<void> => {
     const f = makeSaveFixture("voice-existing");
     const planned = f.intent.plannedEntityIds.find((id) => id.entity === "transaction");
     if (!planned) throw new Error("Missing planned transaction ID");
@@ -183,7 +183,7 @@ describe("T043 physical SQLite selected-save and immutable action", () => {
     expect(await ledgerState(await reopenSqliteLedger(ledger))).toEqual(before);
   });
 
-  it("S31 the existing account's selected delta posts once without new draft account", async () => {
+  it("S31 the existing account's selected delta posts once without new draft account", async (): Promise<void> => {
     const f = makeSaveFixture("voice-existing");
     await expect(save(f)).resolves.toMatchObject({ kind: "committed" });
     const snapshot = await ledgerState(await reopenSqliteLedger(ledger));
@@ -194,7 +194,7 @@ describe("T043 physical SQLite selected-save and immutable action", () => {
     expect(snapshot.counts.senders).toBe(0);
   });
 
-  it("S32 zero-net creates two real financial rows and advances the unchanged balance's revision", async () => {
+  it("S32 zero-net creates two real financial rows and advances the unchanged balance's revision", async (): Promise<void> => {
     const f = makeSaveFixture("voice-zero-net");
     await expect(save(f)).resolves.toMatchObject({ kind: "committed" });
     const fresh = await reopenSqliteLedger(ledger);
@@ -208,7 +208,7 @@ describe("T043 physical SQLite selected-save and immutable action", () => {
     expect(effects[0]?.isEffective).toBe(true);
   });
 
-  it("S33 shared SMS Save rebinds unselected siblings but never auto-selects CIB", async () => {
+  it("S33 shared SMS Save rebinds unselected siblings but never auto-selects CIB", async (): Promise<void> => {
     const f = makeSaveFixture("sms-shared");
     await seedSmsReviewDrafts(database, f.session);
     await expect(save(f)).resolves.toMatchObject({ kind: "committed" });
@@ -228,7 +228,7 @@ describe("T043 physical SQLite selected-save and immutable action", () => {
     expect(remainingQnb.every((draft) => draft.payloadJson.includes(createdId))).toBe(true);
   });
 
-  it("S34 a throwing postcommit observer cannot turn durable Save into a rollback", async () => {
+  it("S34 a throwing postcommit observer cannot turn durable Save into a rollback", async (): Promise<void> => {
     const f = makeSaveFixture("voice-existing");
     const account = await database.get<Account>("accounts").find(BANK);
     const unsubscribe = account.experimentalSubscribe((): void => {
@@ -247,7 +247,7 @@ describe("T043 physical SQLite selected-save and immutable action", () => {
     await expect(save(f, fresh)).resolves.toMatchObject({ kind: "replay" });
   });
 
-  it("S35 an all-dedup SMS cleanup survives restart without a fabricated action", async () => {
+  it("S35 an all-dedup SMS cleanup survives restart without a fabricated action", async (): Promise<void> => {
     const f = makeSaveFixture("sms-all-dedup");
     await seedSmsReviewDrafts(database, f.session);
     await seedSavedFingerprint(database, FINGERPRINT_B, "transfer");
@@ -260,7 +260,7 @@ describe("T043 physical SQLite selected-save and immutable action", () => {
     });
   });
 
-  it("S36 canonical cloud payload keeps raw SMS, transcript and local draft snapshots off-wire", async () => {
+  it("S36 canonical cloud payload keeps raw SMS, transcript and local draft snapshots off-wire", async (): Promise<void> => {
     const f = makeSaveFixture("sms-new-bank");
     await seedSmsReviewDrafts(database, f.session);
     await expect(save(f)).resolves.toMatchObject({ kind: "committed" });
