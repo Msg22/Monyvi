@@ -159,49 +159,77 @@ function group(groupId: string, rows: readonly AccountReviewRow[]): AccountRevie
     status: "confirmed", revision: "0", confirmedIdentityRevision: "0",
   });
 }
+function voiceSharedRows(): readonly AccountReviewRow[] {
+  return [
+    row({ index: 1, source: "VOICE", amount: "20.01", groupId: GROUP_QNB }),
+    row({ index: 2, source: "VOICE", amount: "5.01", groupId: GROUP_QNB, selected: false }),
+    row({ index: 3, source: "VOICE", amount: "10", groupId: GROUP_QNB, selected: false }),
+    row({ index: 4, source: "VOICE", amount: "8", groupId: GROUP_CIB, selected: false }),
+    row({ index: 5, source: "VOICE", amount: "3", existingAccountId: CASH }),
+    row({ index: 6, source: "VOICE", amount: "2", existingAccountId: CASH, selected: false }),
+    row({ index: 7, source: "VOICE", amount: "5", existingAccountId: CASH, selected: false }),
+  ];
+}
+function smsSharedRows(): readonly AccountReviewRow[] {
+  return [
+    row({ index: 1, source: "SMS", amount: "20.01",
+      groupId: GROUP_QNB, fingerprint: FINGERPRINT_A }),
+    row({ index: 2, source: "SMS", amount: "5.01",
+      groupId: GROUP_QNB, selected: false, fingerprint: FINGERPRINT_B }),
+    row({ index: 3, source: "SMS", amount: "8",
+      groupId: GROUP_QNB, selected: false, fingerprint: FINGERPRINT_C }),
+    row({ index: 4, source: "SMS", amount: "3",
+      groupId: GROUP_CIB, selected: false, fingerprint: "e".repeat(64) }),
+  ];
+}
 function scenarioRows(name: SaveScenario): readonly AccountReviewRow[] {
-  const voice = name.startsWith("voice");
-  const source = voice ? "VOICE" : "SMS";
+  if (name === "voice-shared") return voiceSharedRows();
+  if (name === "sms-shared") return smsSharedRows();
+  const source = name.startsWith("voice") ? "VOICE" : "SMS";
   if (name === "voice-zero-net") return [
     row({ index: 1, source, amount: "20.01", type: "INCOME", existingAccountId: BANK }),
     row({ index: 2, source, amount: "20.01", type: "EXPENSE", existingAccountId: BANK }),
   ];
   if (name === "sms-new-bank") return [
-    row({ index: 1, source, amount: "20.01", type: "INCOME", groupId: GROUP_QNB, fingerprint: FINGERPRINT_A }),
-    row({ index: 2, source, amount: "5.01", type: "EXPENSE", groupId: GROUP_QNB, fingerprint: FINGERPRINT_B }),
-  ];
-  if (name === "sms-shared") return [
-    row({ index: 1, source, amount: "20.01", groupId: GROUP_QNB,
-      fingerprint: FINGERPRINT_A }),
-    row({ index: 2, source, amount: "5.01", groupId: GROUP_QNB,
-      selected: false, fingerprint: FINGERPRINT_B }),
-    row({ index: 3, source, amount: "8", groupId: GROUP_QNB,
-      selected: false, fingerprint: FINGERPRINT_C }),
-    row({ index: 4, source, amount: "3", groupId: GROUP_CIB,
-      selected: false, fingerprint: "e".repeat(64) }),
+    row({ index: 1, source, amount: "20.01",
+      type: "INCOME", groupId: GROUP_QNB, fingerprint: FINGERPRINT_A }),
+    row({ index: 2, source, amount: "5.01",
+      type: "EXPENSE", groupId: GROUP_QNB, fingerprint: FINGERPRINT_B }),
   ];
   if (name === "sms-atm") return [
-    row({ index: 1, source, amount: "25.05", existingAccountId: BANK,
-      destinationId: CASH, fingerprint: FINGERPRINT_C }),
+    row({ index: 1, source, amount: "25.05",
+      existingAccountId: BANK, destinationId: CASH, fingerprint: FINGERPRINT_C }),
   ];
   if (name === "voice-cash") return [
     row({ index: 1, source, amount: "11", groupId: GROUP_CASH }),
   ];
-  if (name === "voice-shared") return [
-    row({ index: 1, source, amount: "20.01", groupId: GROUP_QNB }),
-    row({ index: 2, source, amount: "5.01", groupId: GROUP_QNB, selected: false }),
-    row({ index: 3, source, amount: "10", groupId: GROUP_QNB, selected: false }),
-    row({ index: 4, source, amount: "8", groupId: GROUP_CIB, selected: false }),
-    row({ index: 5, source, amount: "3", existingAccountId: CASH }),
-    row({ index: 6, source, amount: "2", existingAccountId: CASH, selected: false }),
-    row({ index: 7, source, amount: "5", existingAccountId: CASH, selected: false }),
-  ];
   if (name === "sms-mixed") return [
-    row({ index: 1, source, amount: "10", existingAccountId: BANK, fingerprint: FINGERPRINT_A }),
-    row({ index: 2, source, amount: "5", existingAccountId: BANK, fingerprint: FINGERPRINT_B }),
+    row({ index: 1, source, amount: "10", existingAccountId: BANK,
+      fingerprint: FINGERPRINT_A }),
+    row({ index: 2, source, amount: "5", existingAccountId: BANK,
+      fingerprint: FINGERPRINT_B }),
   ];
   const fingerprint = name === "sms-all-dedup" ? FINGERPRINT_A : FINGERPRINT_B;
-  return [row({ index: 1, source, amount: "10", existingAccountId: BANK, fingerprint })];
+  return [row({ index: 1, source, amount: "10",
+    existingAccountId: BANK, fingerprint })];
+}
+function plannedAccountIds(
+  groups: readonly AccountReviewGroup[]
+): AccountReviewSaveIntent["plannedEntityIds"] {
+  return groups.flatMap((item, index) => {
+    const account = {
+      entity: "account" as const, localRef: testUuid(600 + index),
+      id: testUuid(700 + index),
+    };
+    if (item.type === "CASH") return [account];
+    return [
+      account,
+      { entity: "bank_details" as const,
+        localRef: testUuid(620 + index), id: testUuid(720 + index) },
+      { entity: "account_sms_sender" as const,
+        localRef: testUuid(640 + index), id: testUuid(740 + index) },
+    ];
+  });
 }
 export function freezeSaveIntent(session: AccountReviewSession): AccountReviewSaveIntent {
   const selected = session.rows.filter((item) => item.selected);
@@ -209,31 +237,21 @@ export function freezeSaveIntent(session: AccountReviewSession): AccountReviewSa
     selected.some((r) => r.assignment.state === "suggested" &&
       r.assignment.groupId === item.groupId)
   );
-  const ids = selected.map((item, index) => ({
-    entity: item.source === "SMS" && item.transaction.isAtmWithdrawal === true
-      ? "transfer" : "transaction",
-    localRef: item.rowId, id: testUuid(500 + index),
-  }));
-  const newIds = groups.flatMap((item, index) => {
-    const account = { entity: "account", localRef: testUuid(600 + index),
-      id: testUuid(700 + index) };
-    if (item.type === "CASH") return [account];
-    return [account, {
-      entity: "bank_details", localRef: testUuid(620 + index),
-      id: testUuid(720 + index),
-    }, {
-      entity: "account_sms_sender", localRef: testUuid(640 + index),
-      id: testUuid(740 + index),
-    }];
-  });
+  const plannedRows: AccountReviewSaveIntent["plannedEntityIds"] =
+    selected.map((item, index) => ({
+      entity: item.source === "SMS" && item.transaction.isAtmWithdrawal === true
+        ? "transfer" : "transaction",
+      localRef: item.rowId, id: testUuid(500 + index),
+    }));
   return accountReviewSaveIntentSchema.parse({
     actionId: ACTION, ownerId: session.ownerId, source: session.source,
     sessionId: session.sessionId, expectedReviewRevision: session.revision,
     expectedOperationGeneration: session.operationGeneration,
-    selectedRows: selected.map((item) => ({rowId: item.rowId, revision: item.revision})),
+    selectedRows: selected.map((item) => ({ rowId: item.rowId, revision: item.revision })),
     confirmedGroups: groups.map((item) => ({
       groupId: item.groupId, revision: item.revision, evidenceKey: item.evidenceKey,
-    })), plannedEntityIds: [...ids, ...newIds],
+    })),
+    plannedEntityIds: [...plannedRows, ...plannedAccountIds(groups)],
     occurredAt: "2026-10-15T12:00:00.000Z",
   });
 }
