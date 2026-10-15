@@ -2,16 +2,20 @@
  * #395 T008 pure owner-scoped fixture-role records. No DB writes or seeding.
  * Mutable mocks and Jest factories remain in the owning test file.
  */
-import type { AccountReviewAccountContext } from "@monyvi/logic";
+import type {
+  AccountReviewAccountContext,
+  AccountReviewSession,
+} from "@monyvi/logic";
 import type { AccountReviewLocalAccountSnapshot } from "@/services/account-review-read-model-service";
+import manifest from "../../e2e/fixtures/shared-account-review.json";
 
 export const CURRENT_OWNER = "1eea0000-3950-4000-8000-000000009001";
 export const ANOTHER_OWNER = "1eea0000-3950-4000-8000-000000009002";
 
 export type AccountRole = "cash" | "qnbEveryday" | "qnbSavings" | "cibMain" | "wallet";
-type DescriptorScene = (typeof manifest.scenes)[number];
-type DescriptorRow = DescriptorScene["rows"][number];
-type DescriptorIssueTag = DescriptorRow["issueTags"][number];
+export type DescriptorScene = (typeof manifest.scenes)[number];
+export type DescriptorRow = DescriptorScene["rows"][number];
+export type DescriptorIssueTag = DescriptorRow["issueTags"][number];
 
 interface RoleDefinition {
   readonly role: AccountRole;
@@ -188,4 +192,165 @@ export function accountProviderProjection(
     cardLast4: account.cardLast4,
     senderNames: [...account.senderNames],
   };
+}
+
+const UUID_V4_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+const SHA_256_PATTERN = /^[0-9a-f]{64}$/;
+type ReviewRow = AccountReviewSession["rows"][number];
+
+function assertSessionOverview(
+  session: AccountReviewSession,
+  scene: DescriptorScene,
+  ownerId: string
+): void {
+  expect(session.ownerId).toBe(ownerId);
+  expect(session.sessionId).toMatch(UUID_V4_PATTERN);
+  expect(session.source).toBe(scene.source);
+  expect(session.preferredCurrency).toBe("EGP");
+  expect(session.sourceRevision).toMatch(/^(0|[1-9][0-9]*)$/);
+  expect(session.revision).toMatch(/^(0|[1-9][0-9]*)$/);
+  expect(session.operationGeneration).toMatch(/^(0|[1-9][0-9]*)$/);
+  expect(session.saveIntent).toBeNull();
+  expect(session.rows).toHaveLength(scene.expectedCounts.total);
+  expect(session.groups).toHaveLength(scene.groups.length);
+  expect(session.rows.filter(({ selected }) => selected)).toHaveLength(
+    scene.expectedCounts.selected
+  );
+  expect(session.rows.filter(({ reviewReasons }) => reviewReasons.length > 0))
+    .toHaveLength(scene.expectedCounts.needsReview);
+  expect(session.groups.map(({ status }) => status).sort())
+    .toEqual(scene.groups.map(({ status }) => status).sort());
+}
+
+function assertReviewRowSource(row: ReviewRow): void {
+  if (row.source === "SMS") {
+    expect(row.sourceFingerprint).toMatch(SHA_256_PATTERN);
+    expect(row.sourceFingerprint).toBe(row.transaction.smsFingerprint);
+    expect(row.transaction.senderDisplayName).not.toBe("");
+    expect(row.transaction.rawSmsBody).not.toBe("");
+  } else {
+    expect(row.sourceFingerprint).toBeNull();
+  }
+}
+
+function assertReviewRowFinancial(
+  row: ReviewRow,
+  descriptor: DescriptorRow,
+  session: AccountReviewSession,
+  accessibleCategories: ReadonlySet<string>
+): void {
+  expect(row.rowId).toMatch(UUID_V4_PATTERN);
+  expect(row.source).toBe(session.source);
+  expect(row.transaction.source).toBe(session.source);
+  expect(row.transaction.date).toBeInstanceOf(Date);
+  expect(row.transaction.categoryId).toMatch(UUID_V4_PATTERN);
+  expect(accessibleCategories.has(row.transaction.categoryId)).toBe(true);
+  expect(row.transaction.categoryId).not.toBe(manifest.syntheticCategoryId);
+  expect(row.amountDecimal).toBe(descriptor.amountDecimal);
+  expect(row.selected).toBe(descriptor.selected);
+  expect(row.reviewReasons.length > 0).toBe(descriptor.issueTags.length > 0);
+  if (
+    "currencyEvidenceState" in descriptor &&
+    descriptor.currencyEvidenceState === "omitted"
+  ) {
+    expect(row.currency).toEqual({
+      state: "known", code: session.preferredCurrency, origin: "preferred_omission",
+    });
+  }
+  if (descriptor.currencyCode === null) {
+    expect(row.currency.state).toBe("unconfirmed");
+    expect(row.selected).toBe(false);
+    expect(row.assignment.state).toBe("unresolved");
+  }
+}
+
+function assertReviewRowAssignments(
+  row: ReviewRow,
+  session: AccountReviewSession,
+  allowedAccounts: ReadonlySet<string>,
+  staticAccounts: ReadonlySet<string>
+): void {
+  for (const id of row.accountEvidence.candidateAccountIds) {
+    expect(allowedAccounts.has(id)).toBe(true);
+  }
+  const assignment = row.assignment;
+  if (assignment.state === "existing") {
+    expect(allowedAccounts.has(assignment.accountId)).toBe(true);
+    expect(staticAccounts.has(assignment.accountId)).toBe(false);
+    if (row.currency.state === "known") {
+      expect(assignment.currency).toBe(row.currency.code);
+    }
+  }
+  if (assignment.state === "suggested") {
+    const group = session.groups.find(({ groupId }) => groupId === assignment.groupId);
+    expect(group?.linkedRowIds).toContain(row.rowId);
+    expect(group?.revision).toBe(assignment.groupRevision);
+    expect(group?.status).toBe(assignment.confirmation);
+    expect(row.currency.state).toBe("known");
+  }
+  if (row.transaction.accountId !== undefined) {
+    expect(allowedAccounts.has(row.transaction.accountId)).toBe(true);
+    expect(staticAccounts.has(row.transaction.accountId)).toBe(false);
+  }
+  if (row.toAssignment?.state === "existing") {
+    expect(allowedAccounts.has(row.toAssignment.accountId)).toBe(true);
+    expect(staticAccounts.has(row.toAssignment.accountId)).toBe(false);
+    expect(row.source).toBe("SMS");
+    if (assignment.state === "existing") {
+      expect(row.toAssignment.accountId).not.toBe(assignment.accountId);
+    }
+  }
+  if (row.source === "SMS" && row.transaction.toAccountId !== undefined) {
+    expect(allowedAccounts.has(row.transaction.toAccountId)).toBe(true);
+  }
+}
+
+function assertSessionGroupLinks(
+  session: AccountReviewSession,
+  rowIds: ReadonlySet<string>
+): void {
+  for (const group of session.groups) {
+    expect(group.groupId).toMatch(UUID_V4_PATTERN);
+    expect(group.evidenceKey).toMatch(SHA_256_PATTERN);
+    expect(group.revision).toMatch(/^(0|[1-9][0-9]*)$/);
+    for (const linked of group.linkedRowIds) {
+      expect(rowIds.has(linked)).toBe(true);
+      if (group.status !== "removed") {
+        const row = session.rows.find(({ rowId }) => rowId === linked);
+        expect(row?.assignment.state).toBe("suggested");
+      }
+    }
+    if (group.status === "removed") {
+      expect(session.removedEvidenceKeys).toContain(group.evidenceKey);
+    }
+  }
+}
+
+/** Full real session assertions, bound to distinct authenticated fixture rows. */
+export function assertOwnedSessionReferencesForFixture(
+  session: AccountReviewSession,
+  scene: DescriptorScene,
+  ownerId: string,
+  accounts: readonly AccountReviewLocalAccountSnapshot[],
+  categories: readonly ScopedCategoryRecord[]
+): void {
+  const allowedAccounts = new Set(accounts.map(({ id }) => id));
+  const accessibleCategories = new Set(categories.map(({ id }) => id));
+  const staticAccounts = new Set(manifest.accountContext.accounts.map(({ id }) => id));
+  const rowIds = new Set<string>();
+  const sourceRefs = new Set<string>();
+  assertSessionOverview(session, scene, ownerId);
+  for (const [index, row] of session.rows.entries()) {
+    const descriptor = scene.rows[index];
+    if (!descriptor) throw new Error("Review session has an unregistered row");
+    expect(rowIds.has(row.rowId)).toBe(false);
+    rowIds.add(row.rowId);
+    expect(sourceRefs.has(row.sourceRef)).toBe(false);
+    sourceRefs.add(row.sourceRef);
+    assertReviewRowFinancial(row, descriptor, session, accessibleCategories);
+    assertReviewRowAssignments(row, session, allowedAccounts, staticAccounts);
+    assertReviewRowSource(row);
+  }
+  assertSessionGroupLinks(session, rowIds);
 }
