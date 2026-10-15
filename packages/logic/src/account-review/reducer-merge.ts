@@ -3,10 +3,12 @@
  * keys are authoritative over repeated parser snapshots of the same session.
  */
 import { normalizeGroundedIdentity } from "./identity";
-import { accountReviewSessionSchema } from "./review-schemas";
-import type {
-  AccountReviewGroup, AccountReviewReason,
-  AccountReviewRow, AccountReviewSession,
+import {
+  accountReviewSessionSchema,
+  type AccountReviewGroup,
+  type AccountReviewReason,
+  type AccountReviewRow,
+  type AccountReviewSession,
 } from "./review-schemas";
 import {
   incrementReviewRevision, revisedRow, uniqueReasons,

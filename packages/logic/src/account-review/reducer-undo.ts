@@ -1,9 +1,12 @@
 /** Volatile Undo: current-generation-only restoration, never a queue payload. */
 import { canonicalUuid } from "./schema-primitives";
-import { accountReviewSessionSchema } from "./review-schemas";
-import type {
-  AccountReviewCommand, AccountReviewGroup, AccountReviewReason,
-  AccountReviewRow, AccountReviewSession,
+import {
+  accountReviewSessionSchema,
+  type AccountReviewCommand,
+  type AccountReviewGroup,
+  type AccountReviewReason,
+  type AccountReviewRow,
+  type AccountReviewSession,
 } from "./review-schemas";
 import {
   incrementReviewRevision, revisedRow, type ReviewTransition, type ReviewUndoLease,
