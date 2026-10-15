@@ -48,6 +48,8 @@ export const NORMALIZATION_IDS = Object.freeze({
   secondSmsMessageId: "synthetic-message-2",
   secondRowRef: "sms-row-2",
   secondSuggestionRef: "qnb-suggestion-2",
+  secondVoiceRowRef: "voice-duplicate-row-2",
+  thirdVoiceRowRef: "voice-distinct-row-3",
 });
 
 /** Structural T010 compatibility, derived only from existing canonical types. */
@@ -376,6 +378,100 @@ export function makeTwoCurrenciesInput(): SmsV2Input {
     submittedMessages: [
       input.submittedMessages[0],
       { ...input.submittedMessages[1], body },
+    ],
+  };
+}
+
+/** Actual speech identifies two identical but separate lunch transactions. */
+function groundedVoiceRow(
+  original: AccountReviewVoiceResponseV2["transactions"][number],
+  transcript: string
+): AccountReviewVoiceResponseV2["transactions"][number] {
+  const span = (fragment: string) =>
+    makeEvidenceSpan(
+      REVIEW_WIRE_IDS.voiceRequestKey, "transcript", transcript, fragment
+    );
+  return {
+    ...original,
+    accountEvidence: {
+      ...original.accountEvidence,
+      evidenceSpans: [span("QNB")],
+    },
+    currencyEvidence: {
+      ...original.currencyEvidence,
+      evidenceSpans: [span("EGP")],
+    },
+  };
+}
+
+export function makeTwoIdenticalVoiceInput(): VoiceV2Input {
+  const input = makeVoiceInput();
+  const originalTranscript = "🛒 Paid QNB 50 EGP for lunch twice";
+  const original = input.providerResponse.transactions[0];
+  const suggested = input.providerResponse.suggestedAccounts[0];
+  if (!original || !suggested) {
+    throw new Error("Synthetic Voice response is missing its first entry");
+  }
+  const first = groundedVoiceRow(original, originalTranscript);
+  const second = {
+    ...first,
+    transactionRef: NORMALIZATION_IDS.secondVoiceRowRef,
+  };
+  const providerResponse: AccountReviewVoiceResponseV2 = {
+    ...input.providerResponse,
+    transcript: "Paid QNB 50 EGP for lunch twice",
+    original_transcript: originalTranscript,
+    transactions: [first, second],
+    suggestedAccounts: [{
+      ...suggested,
+      transactionRefs: [first.transactionRef, second.transactionRef],
+    }],
+  };
+  const mapped = { ...makeParsedVoice(), originalTranscript };
+  return {
+    ...input,
+    originalTranscript,
+    providerResponse,
+    financialRows: providerResponse.transactions,
+    mappedTransactions: [mapped, { ...mapped }],
+  };
+}
+
+/** An unrelated, genuinely spoken coffee item must not renumber lunch rows. */
+export function makeTwoIdenticalVoiceWithExtraInput(): VoiceV2Input {
+  const input = makeTwoIdenticalVoiceInput();
+  const originalTranscript =
+    "🛒 Paid QNB 50 EGP for lunch twice and QNB 25 EGP for coffee";
+  const first = input.providerResponse.transactions[0];
+  const suggested = input.providerResponse.suggestedAccounts[0];
+  if (!first || !suggested) {
+    throw new Error("Synthetic duplicate Voice fixture is incomplete");
+  }
+  const distinct = {
+    ...first,
+    transactionRef: NORMALIZATION_IDS.thirdVoiceRowRef,
+    amount: 25,
+    counterparty: "Coffee",
+    description: "Coffee",
+  };
+  const providerResponse: AccountReviewVoiceResponseV2 = {
+    ...input.providerResponse,
+    original_transcript: originalTranscript,
+    transcript: "Paid QNB 50 EGP for lunch twice and QNB 25 EGP for coffee",
+    transactions: [...input.providerResponse.transactions, distinct],
+    suggestedAccounts: [{
+      ...suggested,
+      transactionRefs: [...suggested.transactionRefs, distinct.transactionRef],
+    }],
+  };
+  return {
+    ...input,
+    originalTranscript,
+    providerResponse,
+    financialRows: providerResponse.transactions,
+    mappedTransactions: [
+      ...input.mappedTransactions.map((row) => ({ ...row, originalTranscript })),
+      { ...makeParsedVoice(), amount: 25, note: "Coffee", originalTranscript },
     ],
   };
 }
