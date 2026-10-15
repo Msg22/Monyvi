@@ -49,9 +49,9 @@ import {
   egpFinancialAmountBounds,
   existingAccountSmsPayload,
   sharedSmsQueuePayload,
-  singleSelectedNewBankPayload,
   validAtmCashDestinationPayload,
   validVoiceCashPayload,
+  voiceNewBankPayload,
   voiceZeroNetAtAmount,
 } from "./review-batch-save-regression-fixtures";
 
@@ -65,9 +65,13 @@ describe("#395 T046 A — same real SMS queue, distinct local drafts", () => {
   it("RED: accepts two selected SMS drafts sharing one queueId and sessionId", () => {
     const payload = sharedSmsQueuePayload();
     expect(payload.localSmsBookkeeping).toHaveLength(2);
+    expect(payload.sessionId).toBe(SMS_QUEUE_ID);
     expect(payload.localSmsBookkeeping[0]?.draftId).toBe(SMS_DRAFT_ID);
     expect(payload.localSmsBookkeeping[0]?.queueId).toBe(SMS_QUEUE_ID);
     expect(payload.localSmsBookkeeping[1]?.queueId).toBe(SMS_QUEUE_ID);
+    expect(payload.localSmsBookkeeping.every(
+      (entry) => entry.queueId === payload.sessionId
+    )).toBe(true);
     expect(payload.localSmsBookkeeping[0]?.draftId).not.toBe(
       payload.localSmsBookkeeping[1]?.draftId
     );
@@ -228,10 +232,11 @@ describe("#395 T046 D — SMS bookkeeping IDs are local-only", () => {
 
 describe("#395 T046 E — selected group must justify every newly created account", () => {
   it("RED: rejects account create when no confirmed group references it", () => {
-    const payload = {
-      ...singleSelectedNewBankPayload(),
-      confirmedGroupRefs: [],
-    };
+    const baseline = voiceNewBankPayload();
+    expect(baseline.source).toBe("VOICE");
+    expect(baseline.localSmsBookkeeping).toEqual([]);
+    expect(validateReviewBatchSavePayload(baseline)).toEqual(baseline);
+    const payload = { ...baseline, confirmedGroupRefs: [] };
     expect(payload.domainMutation.records.some(
       (record) => record.entity === "account" &&
         record.after.id === NEW_BANK_ACCOUNT_ID
@@ -239,8 +244,13 @@ describe("#395 T046 E — selected group must justify every newly created accoun
     expect(() => validateReviewBatchSavePayload(payload)).toThrow();
   });
 
-  it("accepts a new Bank only when its selected confirmed group is present", () => {
-    const payload = singleSelectedNewBankPayload();
+  it("accepts independently valid Voice new Bank with an owned confirmed group", () => {
+    const payload = voiceNewBankPayload();
+    expect(payload.source).toBe("VOICE");
+    expect(payload.localSmsBookkeeping).toEqual([]);
+    expect(payload.selectedSourceRefs.every(
+      (ref) => ref.sourceFingerprint === null
+    )).toBe(true);
     expect(payload.confirmedGroupRefs[0]?.accountId).toBe(NEW_BANK_ACCOUNT_ID);
     expect(validateReviewBatchSavePayload(payload)).toEqual(payload);
   });
@@ -350,6 +360,8 @@ describe("#395 T046 G — source-specific created Cash eligibility", () => {
     expect(payload.cashDefaultSnapshot).toEqual({
       activeAccountIds: [ATM_BANK_ACCOUNT_ID], defaultAccount: null,
     });
+    expect(payload.sessionId).toBe(ATM_QUEUE_ID);
+    expect(payload.localSmsBookkeeping[0]?.queueId).toBe(payload.sessionId);
     expect(validateReviewBatchSavePayload(payload)).toEqual(payload);
     const envelope = {
       ...atmTransferEnvelope,
