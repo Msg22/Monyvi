@@ -12,7 +12,7 @@ import type { Sha256Provider } from "../../../../packages/logic/src/financial-ac
 import { createAccountReviewSaveService } from "../../services/account-review-save-service";
 import {
   ACTION, OWNER, FOREIGN_OWNER, BANK, CASH, FINGERPRINT_B,
-  makeSaveFixture, type SaveFixture,
+  makeSaveFixture, selectedSmsFingerprint, type SaveFixture,
 } from "./account-review-save-test-fixtures";
 import {
   clearAndSeed, ledgerState, reopenSqliteLedger, injectMidBatchDuplicate,
@@ -104,6 +104,30 @@ describe("T043 physical SQLite selected-save and immutable action", () => {
     expect(persisted.accounts.find((x) => x.id === f.intent.plannedEntityIds
       .find((id) => id.entity === "account")?.id))
       .toMatchObject({ balance: 15, financialRevision: "1" });
+  });
+
+  it("S25b creates one Wallet sender child and no BankDetails in fresh SQLite", async (): Promise<void> => {
+    const f = makeSaveFixture("sms-new-wallet");
+    await seedSmsReviewDrafts(database, f.session);
+    await expect(save(f)).resolves.toMatchObject({ kind: "committed" });
+    const fresh = await reopenSqliteLedger(ledger);
+    const state = await ledgerState(fresh);
+    expect(state.counts).toMatchObject({
+      accounts: 4, bankDetails: 0, senders: 1,
+      transactions: 1, transfers: 0, effects: 1,
+      actions: 1, draftItems: 0,
+    });
+    const planned = f.intent.plannedEntityIds.find((p) => p.entity === "account");
+    if (!planned) throw new Error("Missing Wallet account ID");
+    const account = await fresh.get<Account>("accounts").find(planned.id);
+    expect(account.type).toBe("DIGITAL_WALLET");
+    expect(account.balance).toBe(10);
+    const senderRows = await fresh.get<import("@monyvi/db").AccountSmsSender>(
+      "account_sms_senders"
+    ).query().fetch();
+    expect(senderRows).toHaveLength(1);
+    expect(senderRows[0]?.accountId).toBe(planned.id);
+    expect(senderRows[0]?.normalizedSenderName).toBe("wally pay");
   });
 
   it("S26 a fresh-instance replay with the same frozen intent applies zero second changes", async (): Promise<void> => {
@@ -255,7 +279,7 @@ describe("T043 physical SQLite selected-save and immutable action", () => {
   it("S35 an all-dedup SMS cleanup survives restart without a fabricated action", async (): Promise<void> => {
     const f = makeSaveFixture("sms-all-dedup");
     await seedSmsReviewDrafts(database, f.session);
-    await seedSavedFingerprint(database, FINGERPRINT_B, "transfer");
+    await seedSavedFingerprint(database, selectedSmsFingerprint(f), "transfer");
     await expect(save(f)).resolves.toMatchObject({
       kind: "cleanup_only", resolvedSmsDraftCount: 1,
     });
