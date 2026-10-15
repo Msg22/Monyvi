@@ -429,3 +429,52 @@ business documents edited. This worker has **NOT RUN** tests, TypeScript
 or lint after the repair. Root must run the corrected grouped Red to
 establish the actual stale-Cash-preservation behavior before authorizing
 the independent production fix.
+
+
+## T027 latest production correction: fresh selection eligibility on nickname reconfirmation
+
+**Immutable source parent:** 733ffef5eea36251822630624df6ef190b843f67.
+**Root's actual source-before-fix Red:** 57 PASS / 1 FAIL across four suites,
+with all earlier 30 safety plus 26 T024 cases passing, and lint 0. The one
+meaningful Red is the newly invalid selected SMS ATM after Cash account
+deletion: fresh real resolver clears the selection and yields
+account_unavailable, but nickname-only edit retains selected=true.
+The existing current-Cash positive case and unrelated purchase check pass.
+
+**Precise production ownership and changes:** reducer-groups.ts and, solely
+to forward the already-validated fresh owned context, reducer.ts; this
+validation note. No changes to reducer-selection.ts, resolver, account schema,
+command DTO, public index, test files, financial/provider/mobile/SQL or peer
+source.
+
+- reducer.ts routeCommand forwards input.accountSnapshots as an optional
+  fourth argument to reduceGroupCommand for existing group commands. This
+  input has already passed assertOwnedResolutionContext at the main reducer
+  boundary and has the same owner/session scope. A confirm_group invoked by
+  reduceSelectRow directly still uses the pre-existing three-argument form;
+  it cannot accidentally claim nickname-only preservation.
+- reducer-groups.ts checks selected linked members **only** when the incoming
+  command is an explicit compatible nickname-only reconfirmation of an
+  already confirmed group. Unselected groups, group confirmation, removals,
+  unrelated selected rows and material identity edits retain their original
+  paths.
+- When there are selected linked members, a missing fresh owned context
+  rejects rather than treating stored account IDs as current eligibility.
+  Otherwise the real resolveAccountReviewSession validates the owner/context,
+  available source and current Cash destination, currency and source proof.
+  Only the selected linked rows are considered: their fresh selected state
+  must remain true and their assignment, destination, review reasons and
+  currency must remain **identical** to the original. The resolved session is
+  proof only, never copied or persisted. A changed/cancelled/newly-invalid
+  row triggers the canonical account_unavailable rejection **before**
+  confirmedGroup or confirmGroupRows changes revisions, group identity,
+  selections or tombstones. There is no partial group effect.
+- A still-valid original selected Voice/ATM row remains preserved by the
+  unchanged confirmGroupRows compatible-selection predicate, while
+  unselected siblings stay unchecked. No automatic destination/default
+  choice, new policy or broader refresh is introduced.
+
+**Post-edit validation:** NOT RUN by this remote source worker. Root owns
+one coherent Green/TS/lint batch for all 32 current safety cases and the 26
+existing T024 cases, followed by independent peer acceptance. All test
+files and assertions remain frozen. This publication does not assert Green.

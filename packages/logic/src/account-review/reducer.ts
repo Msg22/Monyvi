@@ -36,7 +36,9 @@ function routeCommand(
     case "confirm_group":
     case "edit_group":
     case "remove_group":
-      return reduceGroupCommand(state, command, input.nextUndoToken);
+      return reduceGroupCommand(
+        state, command, input.nextUndoToken, input.accountSnapshots
+      );
     case "undo_removal":
       return reduceUndoRemoval(state, command, input.undo);
     case "select_row":

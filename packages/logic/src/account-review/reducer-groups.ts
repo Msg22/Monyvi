@@ -1,6 +1,8 @@
 /** Pure T027 group transitions: preserve original evidenceKey/groupId on edit. */
 import { canonicalUuid } from "./schema-primitives";
 import { normalizeGroundedIdentity } from "./identity";
+import { resolveAccountReviewSession } from "./resolution";
+import type { AccountReviewOwnedContext } from "./normalization-types";
 import type {
   AccountReviewCommand, AccountReviewGroup, AccountReviewReason,
   AccountReviewRow, AccountReviewSession,
@@ -78,6 +80,34 @@ function isNicknameOnlyReconfirmation(
     identity.senderNames.every((name, index) => name === group.senderNames[index]);
 }
 
+/** Resolve *current owned* account eligibility before retaining a checkbox.
+ * A stale selected member must reject the entire edit, not silently preserve
+ * its original invalid Cash/source assignment or rewrite unrelated rows.
+ * The resolved session is proof only: no row or group is copied from it. */
+function selectedMembersStillEligible(
+  state: AccountReviewSession, group: AccountReviewGroup,
+  context: AccountReviewOwnedContext | undefined
+): boolean {
+  const members = new Set(group.linkedRowIds);
+  const checked = state.rows.filter((row) =>
+    row.selected && members.has(row.rowId)
+  );
+  if (checked.length === 0) return true;
+  if (context === undefined) return false;
+  const refreshed = resolveAccountReviewSession({
+    session: state, accountSnapshots: context,
+  });
+  const freshById = new Map(refreshed.rows.map((row) => [row.rowId, row]));
+  return checked.every((row) => {
+    const current = freshById.get(row.rowId);
+    if (current === undefined || !current.selected) return false;
+    return JSON.stringify(current.assignment) === JSON.stringify(row.assignment) &&
+      JSON.stringify(current.toAssignment) === JSON.stringify(row.toAssignment) &&
+      JSON.stringify(current.reviewReasons) === JSON.stringify(row.reviewReasons) &&
+      JSON.stringify(current.currency) === JSON.stringify(row.currency);
+  });
+}
+
 function confirmGroupRows(
   rows: readonly AccountReviewRow[], group: AccountReviewGroup,
   revision: string, retainValidSelections: boolean
@@ -120,7 +150,8 @@ function editedNameConflicts(
 }
 
 function confirmOrEdit(
-  state: AccountReviewSession, group: AccountReviewGroup, command: GroupCommand
+  state: AccountReviewSession, group: AccountReviewGroup, command: GroupCommand,
+  context: AccountReviewOwnedContext | undefined
 ): GroupTransitionResult {
   // Active SMS groups always assign the source, never an ATM Cash destination.
   // A grounded Voice Cash group remains valid.
@@ -134,12 +165,16 @@ function confirmOrEdit(
   if (command.kind === "confirm_group" && group.status === "confirmed") {
     return blocked("review_revision_stale");
   }
+  const retainValidSelections = isNicknameOnlyReconfirmation(group, command);
+  if (retainValidSelections &&
+      !selectedMembersStillEligible(state, group, context)) {
+    return blocked("account_unavailable");
+  }
   const updated = confirmedGroup(group, command);
   return accepted({
     groups: state.groups.map((item) => item.groupId === group.groupId ? updated : item),
     rows: confirmGroupRows(
-      state.rows, group, updated.revision,
-      isNicknameOnlyReconfirmation(group, command)
+      state.rows, group, updated.revision, retainValidSelections
     ),
     affectedGroupIds: [group.groupId],
     affectedRowIds: [...group.linkedRowIds],
@@ -186,11 +221,12 @@ function removeGroup(
 }
 
 export function reduceGroupCommand(
-  state: AccountReviewSession, command: GroupCommand, nextUndoToken: string | null
+  state: AccountReviewSession, command: GroupCommand, nextUndoToken: string | null,
+  context?: AccountReviewOwnedContext
 ): GroupTransitionResult {
   const found = findCurrentGroup(state, command);
   if (isBlockedResult(found)) return found;
   return command.kind === "remove_group"
     ? removeGroup(state, found, nextUndoToken)
-    : confirmOrEdit(state, found, command);
+    : confirmOrEdit(state, found, command, context);
 }
