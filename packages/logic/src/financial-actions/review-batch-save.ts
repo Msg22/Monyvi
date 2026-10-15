@@ -9,8 +9,8 @@ import type {
 } from "./action-registry";
 import {
   reviewBatchSaveWireSchema,
+  type ReviewBatchSavePayload,
 } from "./review-batch-save-shapes";
-import type { ReviewBatchSavePayload } from "./review-batch-save-shapes";
 import {
   validateCreateCoverage, validateGroupAndBookkeeping,
   validateSelectedCoverage, validateSourceAndChildren,
@@ -29,7 +29,7 @@ export type { ReviewBatchSavePayload } from "./review-batch-save-shapes";
  */
 export const reviewBatchSavePayloadSchema = reviewBatchSaveWireSchema.superRefine(
   (payload, ctx) => {
-    const checks: readonly ((value: ReviewBatchSavePayload) => string | null)[] = [
+    const checks: ReadonlyArray<(value: ReviewBatchSavePayload) => string | null> = [
       validateCreateCoverage,
       validateSelectedCoverage,
       validateSourceAndChildren,
