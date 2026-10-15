@@ -5,19 +5,19 @@
  * The registered new financial tuple is not yet implemented: do not report Green.
  */
 import { createHash } from "node:crypto";
-import type { Database, Model } from "@nozbe/watermelondb";
+import type { Database } from "@nozbe/watermelondb";
 import type SQLiteAdapter from "@nozbe/watermelondb/adapters/sqlite";
 import type { AccountReviewSession, AccountReviewSaveIntent } from "@monyvi/logic";
 import type { Sha256Provider } from "../../../../packages/logic/src/financial-actions";
 import { createAccountReviewSaveService } from "../../services/account-review-save-service";
 import {
   ACTION, OWNER, FOREIGN_OWNER, BANK, CASH, CATEGORY, FINGERPRINT_A,
-  FINGERPRINT_B, GROUP_CIB, GROUP_QNB, makeSaveFixture,
+  FINGERPRINT_B, GROUP_CIB, makeSaveFixture,
   type SaveFixture,
 } from "./account-review-save-test-fixtures";
 import {
-  LEDGER_MODEL_CLASSES, clearAndSeed, ledgerState, seedSavedFingerprint,
-  seedSmsReviewDrafts, type SqliteLedger,
+  clearAndSeed, ledgerState, seedSavedFingerprint,
+  seedSmsReviewDrafts,
 } from "./account-review-save-sqlite-test-helpers";
 
 interface MockDb {
@@ -42,14 +42,17 @@ jest.mock("@monyvi/db", () => {
   >("./account-review-save-sqlite-test-helpers").LEDGER_MODEL_CLASSES;
   const adapter = new Sqlite({ schema });
   const database = new wm.Database({ adapter, modelClasses: models });
-  return { database, __adapter: adapter, schema, Q: wm.Q };
+  return {
+    database, __adapter: adapter, schema, Q: wm.Q,
+    ...Object.fromEntries(models.map((model) => [model.name, model])),
+  };
 });
 jest.mock("@/services/supabase", () => ({
-  getCurrentUserId: (): Promise<string> => Promise.resolve(OWNER),
+  getCurrentUserId: (): Promise<string> =>
+    Promise.resolve("018f0c7a-1234-4abc-8def-000000000001"),
   supabase: {},
 }));
 const { database, __adapter: adapter } = jest.requireMock<MockDb>("@monyvi/db");
-const ledger: SqliteLedger = { database, adapter };
 const hashProvider: Sha256Provider = {
   digestUtf8: (text: string): Promise<string> =>
     Promise.resolve(createHash("sha256").update(text, "utf8").digest("hex")),
@@ -179,7 +182,8 @@ describe("T043 selected-only accounts, children, categories and effects", () => 
     expect(state.counts.bankDetails).toBe(1);
     expect(state.counts.senders).toBe(1);
     expect(state.counts.transactions).toBe(2);
-    expect(state.accounts.every((a) => a.id !== GROUP_CIB)).toBe(true);
+    expect(f.intent.confirmedGroups.map((group) => group.groupId))
+      .not.toContain(GROUP_CIB);
   });
   it("S11 reuses an existing owned account with no new pending-account child", async () => {
     await expect(save(makeSaveFixture())).resolves.toMatchObject({ kind: "committed" });
