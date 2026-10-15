@@ -16,6 +16,16 @@ import {
   validateReviewBatchSavePayload,
 } from "../review-batch-save";
 import {
+  validateCreateCoverage,
+  validateSelectedCoverage,
+  validateSourceAndChildren,
+} from "../review-batch-save-integrity";
+import {
+  validateCreatedAccountBalances,
+  validatePostedEffects,
+} from "../review-batch-save-effects";
+import {
+  ATM_BANK_ACCOUNT_ID,
   ATM_QUEUE_ID,
   ATM_TRANSFER_RECORD_ID,
   NEW_BANK_ACCOUNT_ID,
@@ -34,9 +44,14 @@ import {
 } from "./review-batch-save-fixtures";
 import {
   atmAtAmount,
+  cashUsedAsAtmSourcePayload,
+  cashUsedForOrdinarySmsPayload,
   egpFinancialAmountBounds,
   existingAccountSmsPayload,
   sharedSmsQueuePayload,
+  singleSelectedNewBankPayload,
+  validAtmCashDestinationPayload,
+  validVoiceCashPayload,
   voiceZeroNetAtAmount,
 } from "./review-batch-save-regression-fixtures";
 
@@ -214,7 +229,7 @@ describe("#395 T046 D — SMS bookkeeping IDs are local-only", () => {
 describe("#395 T046 E — selected group must justify every newly created account", () => {
   it("RED: rejects account create when no confirmed group references it", () => {
     const payload = {
-      ...sharedSmsQueuePayload(),
+      ...singleSelectedNewBankPayload(),
       confirmedGroupRefs: [],
     };
     expect(payload.domainMutation.records.some(
@@ -225,7 +240,7 @@ describe("#395 T046 E — selected group must justify every newly created accoun
   });
 
   it("accepts a new Bank only when its selected confirmed group is present", () => {
-    const payload = sharedSmsQueuePayload();
+    const payload = singleSelectedNewBankPayload();
     expect(payload.confirmedGroupRefs[0]?.accountId).toBe(NEW_BANK_ACCOUNT_ID);
     expect(validateReviewBatchSavePayload(payload)).toEqual(payload);
   });
@@ -299,5 +314,74 @@ describe("#395 T046 F — explicit latest-allowed calendar-date input", () => {
       reviewBatchSavePayload,
       { latestAllowedCalendarDate: "2026-10-13" }
     )).toThrow(INVALID_CODE);
+  });
+});
+
+
+describe("#395 T046 G — source-specific created Cash eligibility", () => {
+  it("accepts selected Voice Cash with a complete first-active default snapshot", () => {
+    const payload = validVoiceCashPayload();
+    const cashId = payload.confirmedGroupRefs[0]?.accountId;
+    if (!cashId) throw new Error("Missing confirmed Voice Cash group");
+    expect(payload.cashDefaultSnapshot).toEqual({
+      activeAccountIds: [], defaultAccount: null,
+    });
+    expect(payload.accountEffects[0]?.amountMinorUnits).toBe("0");
+    expect(validateReviewBatchSavePayload(payload)).toEqual(payload);
+    const envelope = {
+      ...reviewBatchSaveEnvelope,
+      accountGuards: [{
+        accountId: cashId,
+        expectedRevision: parseCanonicalUnsignedIntegerString("0"),
+      }],
+      payload,
+    };
+    expect(canonicalizeFinancialActionEnvelope(envelope, registry).payload).toEqual(
+      payload
+    );
+  });
+
+  it("accepts newly created Cash only as selected ATM transfer destination", () => {
+    const payload = validAtmCashDestinationPayload();
+    const newCash = payload.domainMutation.records.find(
+      (record) => record.entity === "account"
+    );
+    if (!newCash) throw new Error("Missing selected ATM Cash destination");
+    expect(payload.cashDefaultSnapshot).toEqual({
+      activeAccountIds: [ATM_BANK_ACCOUNT_ID], defaultAccount: null,
+    });
+    expect(validateReviewBatchSavePayload(payload)).toEqual(payload);
+    const envelope = {
+      ...atmTransferEnvelope,
+      accountGuards: [
+        atmTransferEnvelope.accountGuards[0],
+        { accountId: newCash.after.id,
+          expectedRevision: parseCanonicalUnsignedIntegerString("0") },
+      ],
+      payload,
+    };
+    expect(canonicalizeFinancialActionEnvelope(envelope, registry).payload).toEqual(
+      payload
+    );
+  });
+
+  it("RED: disallows SMS ordinary transaction using newly created ATM-destination Cash", () => {
+    const payload = cashUsedForOrdinarySmsPayload();
+    expect(validateCreateCoverage(payload)).toBeNull();
+    expect(validateSelectedCoverage(payload)).toBeNull();
+    expect(validatePostedEffects(payload)).toBeNull();
+    expect(validateCreatedAccountBalances(payload)).toBeNull();
+    // The same Cash IS a legitimate ATM destination in another selected row.
+    // Source eligibility must inspect EVERY financial use, not just some().
+    expect(validateSourceAndChildren(payload)).not.toBeNull();
+  });
+
+  it("RED: disallows Cash as ATM source despite another selected ATM destination", () => {
+    const payload = cashUsedAsAtmSourcePayload();
+    expect(validateCreateCoverage(payload)).toBeNull();
+    expect(validateSelectedCoverage(payload)).toBeNull();
+    expect(validatePostedEffects(payload)).toBeNull();
+    expect(validateCreatedAccountBalances(payload)).toBeNull();
+    expect(validateSourceAndChildren(payload)).not.toBeNull();
   });
 });
