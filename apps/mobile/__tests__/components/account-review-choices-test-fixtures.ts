@@ -92,7 +92,7 @@ export function makeAccountChoiceProps(
     visible: true,
     title: "Choose an account",
     contextSubtitle: ROW_CONTEXT_EN,
-    scopeDisclosure: ROW_CONTEXT_EN,
+    scopeDisclosure: "Only this transaction will change.",
     candidateOptions: makeQnbChoiceCandidates(),
     selectedCandidateId: null,
     canUseSelection: false,
