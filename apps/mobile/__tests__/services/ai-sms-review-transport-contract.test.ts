@@ -187,7 +187,7 @@ describe("#395 P2-04 — tagged-v2 server completion metadata, two original mess
 
   it("partial metadata with only fingerprint arrays is not accepted as complete", (): void => {
     const fixture = makeTransportCase();
-    expectRecoverableMissingMetadata({
+    expectRecoverableMissingMetadata(fixture, {
       ...modelOnly(fixture.onePositive),
       negativeFingerprints: [], terminalFingerprints: [], unresolvedFingerprints: [],
     });
