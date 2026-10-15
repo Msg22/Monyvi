@@ -1,0 +1,115 @@
+appId: com.monyvi.app
+---
+# #395 T026 US2 — AUTHORING-ONLY / NOT RUNNABLE / NO DEVICE EXECUTION.
+# B1 approved R3-05/06/09/15, R2-02/03, R1-07 / group-specific actions.
+#
+# REQUIRED BEFORE any run:
+# - T016 gates; T027/29/30 canonical commands/recovery and T031 real UI.
+# - T054: strict __DEV__ + nonproduction E2E-only current-user scene
+#   entry on EXISTING /(private)/voice-review.tsx, optional proposed route
+#   param reviewFixtureSceneId (NOT CURRENTLY IMPLEMENTED).
+# - Separate local code-only seed prepares T015 exact five owner-scoped
+#   account roles and accessible active category. Current ordinary E2E
+#   Cash/NBE/QNB/Wallet seed is INSUFFICIENT.
+# - The E2E owner publishes runtime SHA-derived, current-owner-scoped
+#   group/row IDs as MAESTRO environment values below; manifest alias UUIDs
+#   are NEVER passed as live account/row/group identity.
+# - T030/T054 supplies genuine eligible transient Undo token for R3-06;
+#   T015 read-only session by itself does NOT implement Undo command.
+# - Expected selectors below include FUTURE T031/T054 IDs, not existing UI.
+# Do not claim this script passes. Never tap review-save-button, mic,
+# provider, OS permission, or local/remote financial database writer.
+
+# Existing real authenticated-only E2E bootstrap:
+- runFlow: ../helpers/ci-auth-deeplink-bootstrap.yaml
+
+# Future guarded registered private Voice review route, NOT validated today.
+- openLink: "monyvi://voice-review?reviewFixtureSceneId=r3-combined-en&originTabIndex=2"
+- extendedWaitUntil:
+    visible:
+      id: "transaction-review-screen"
+    timeout: 30000
+
+# Approved R3-05: 7 total, 5 distinct needs review, 2 selected,
+# QNB3/CIB1 pending, default2, currency issue1.
+- assertVisible:
+    id: "account-review-details-panel"
+- assertVisible: "Review details"
+- assertVisible:
+    id: "account-review-group-card-${E2E_REVIEW_QNB_GROUP_ID_COMBINED}"
+- assertVisible:
+    id: "account-review-group-card-${E2E_REVIEW_CIB_GROUP_ID_COMBINED}"
+- assertVisible:
+    id: "account-review-group-disclosure-${E2E_REVIEW_QNB_GROUP_ID_COMBINED}"
+- assertVisible: "Selecting a QNB transaction confirms this account for all 3."
+- assertVisible: "Confirm currency"
+- assertNotVisible: "Confirm all"
+
+# Independent group confirmation is NOT row-selection or financial Save.
+- tapOn:
+    id: "account-review-group-confirm-${E2E_REVIEW_QNB_GROUP_ID_COMBINED}"
+- assertVisible:
+    id: "account-review-group-status-${E2E_REVIEW_QNB_GROUP_ID_COMBINED}"
+- assertVisible:
+    id: "account-review-group-card-${E2E_REVIEW_CIB_GROUP_ID_COMBINED}"
+# Future T054 row checkbox identity is additionally required, not the
+# existing non-unique flat transaction-review-row selector.
+- tapOn:
+    id: "account-review-row-checkbox-${E2E_REVIEW_FIRST_QNB_ROW_ID}"
+- assertVisible:
+    id: "review-save-button"
+# One clicked QNB row only; two accepted-default rows remain selected.
+# No Save tap, no side-effect assertion from clicking Confirm alone.
+
+# R1-07 editing QNB once, locked currency, Cancel inert.
+- tapOn:
+    id: "account-review-group-actions-${E2E_REVIEW_QNB_GROUP_ID_COMBINED}"
+- assertVisible:
+    id: "account-review-group-action-sheet"
+- tapOn:
+    id: "account-review-group-edit"
+- assertVisible:
+    id: "account-review-group-edit-sheet"
+- assertVisible:
+    id: "account-review-group-locked-currency"
+- assertVisible: "EGP"
+- tapOn: "Cancel"
+- assertNotVisible:
+    id: "account-review-group-edit-sheet"
+- assertVisible:
+    id: "account-review-group-card-${E2E_REVIEW_CIB_GROUP_ID_COMBINED}"
+
+# R3-13 group replacement discloses all three, not single-row picker.
+- tapOn:
+    id: "account-review-group-actions-${E2E_REVIEW_QNB_GROUP_ID_COMBINED}"
+- tapOn:
+    id: "account-review-group-replace"
+- assertVisible: "Replace QNB for all 3 linked transactions."
+# T038 row/group chooser requires separate explicit/null selection tests.
+# Return/cancel is source-specific; NO candidate auto-selected or saved.
+
+# Restore independent R3-06 removal/Undo case; never equate to 7-row batch.
+- openLink: "monyvi://voice-review?reviewFixtureSceneId=r3-removed-undo&originTabIndex=2"
+- extendedWaitUntil:
+    visible:
+      id: "transaction-review-screen"
+    timeout: 30000
+- assertVisible:
+    id: "account-review-group-status-${E2E_REVIEW_QNB_GROUP_ID_REMOVED}"
+- assertVisible: "QNB suggestion removed"
+- assertVisible: "Choose an account"
+- assertVisible:
+    id: "account-review-group-card-${E2E_REVIEW_CIB_GROUP_ID_REMOVED}"
+- assertVisible:
+    id: "account-review-group-undo"
+- tapOn:
+    id: "account-review-group-undo"
+- assertVisible:
+    id: "transaction-review-screen"
+# Actual owner/session/generation token protection and durable SMS removal
+# are separate T024/T025/service tests, not proved by this Voice YAML.
+
+# Future owner/device checks: 390x844 baseline, 340, font-scale 1.35,
+# 600/tablet, long labels, AR RTL R3-15, dark mode, keyboard, live insets,
+# one active sheet, Back/focus, TalkBack/VoiceOver. No fake screenshots.
+# US6 M14/M19 failure/replay/CAS/atomic Save and SQL pgTAP remain outside.
