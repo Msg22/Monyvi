@@ -24,6 +24,7 @@ import { normalizeAccountReviewParserResult } from "../../../../packages/logic/s
 import type { AiVoiceParserSuccess } from "@/services/ai-voice-parser-service";
 import {
   classifyVoiceReviewV2Response,
+  projectVoiceFinancialAtSourceIndex,
   attachVoiceReviewSession,
 } from "@/services/ai-voice-parser-review";
 
@@ -58,6 +59,25 @@ describe("#395 T012 — mobile original Voice financial/advisory split", () => {
     });
     expect(raw.transactions[0]?.transactionRef).toBe(REVIEW_WIRE_IDS.voiceRowRef);
     expect(raw.transactions[0]?.suggestionRef).toBe(REVIEW_WIRE_IDS.suggestionRef);
+  });
+
+  it("retains the original source index when malformed finance precedes a valid Voice row", () => {
+    const original = makeVoiceV2Response();
+    const valid = original.transactions[0];
+    if (!valid) throw new Error("Missing original Voice financial fixture");
+    const rows = [{ ...valid, amount: Number.POSITIVE_INFINITY }, valid];
+    const classified = classifyVoiceReviewV2Response({
+      ...original, transactions: rows, suggestedAccounts: [],
+    });
+    expect(classified.kind).toBe("invalid_financial");
+    expect(classified.financialRows).toHaveLength(1);
+    expect(projectVoiceFinancialAtSourceIndex(rows, 0)).toBeNull();
+    expect(projectVoiceFinancialAtSourceIndex(rows, 1)).toEqual(
+      classified.financialRows[0]
+    );
+    expect(projectVoiceFinancialAtSourceIndex(rows, 1)).toMatchObject({
+      amount: 50, categorySystemName: "food", date: "2026-10-14",
+    });
   });
 
   it("keeps legitimate grounded Voice CASH and never invents destination evidence", () => {

@@ -22,6 +22,18 @@ export interface VoiceReviewClassification {
 
 const financialProjection = z.object(accountReviewVoiceFinancialRowSchema.shape);
 
+/**
+ * Resolve one financial row by its ORIGINAL response index. Compacted valid
+ * arrays are not safe to index after a preceding malformed row is filtered.
+ */
+export function projectVoiceFinancialAtSourceIndex(
+  rows: readonly unknown[],
+  sourceIndex: number
+): AccountReviewVoiceFinancialRow | null {
+  const parsed = financialProjection.safeParse(rows[sourceIndex]);
+  return parsed.success ? parsed.data : null;
+}
+
 /** Reuse the canonical financial schema; strip only the canonical v2 evidence fields. */
 function validFinancialRows(
   rows: readonly unknown[]
