@@ -86,7 +86,7 @@ function accountEvidence(spec: RowSpec): object {
   return {
     state: hasGroup ? "explicit" : "absent",
     name: hasGroup ? name : null,
-    type: hasGroup ? groupType(spec.groupId) : null,
+    type: spec.groupId === undefined ? null : groupType(spec.groupId),
     institutionId: bank ? name.toLowerCase() : null,
     providerDisplayName: hasGroup ? name : null,
     cardLast4: bank ? spec.groupId === GROUP_CIB ? "5566" : "0007" : null,
