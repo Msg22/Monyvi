@@ -11,7 +11,8 @@ import { DEFAULT_COPY } from "@/components/metals/metal-holding-form-copy";
 
 jest.mock("react-i18next", () => ({
   useTranslation: () => ({
-    t: (key: string): string => key,
+    t: (key: string, options?: { readonly rate?: string }): string =>
+      options?.rate ? `${key} ${options.rate}` : key,
     i18n: { language: "en", dir: (): "ltr" => "ltr" },
   }),
 }));
@@ -84,6 +85,30 @@ const mockForm = {
 jest.mock("@/hooks/useAddMetalHolding", () => ({
   useMetalAddPreviewRates: () => ({ getPreviewRates: jest.fn() }),
   useAddMetalHoldingForm: () => mockForm,
+}));
+
+const mockHistoricalManualPurchasePriceChange = jest.fn();
+let mockHistoricalEstimateOwnership: "unset" | "estimated" | "manual" = "unset";
+let mockHistoricalEstimateInput: {
+  readonly onPurchasePriceChange: (value: string) => void;
+} | null = null;
+jest.mock("@/hooks/useMetalHistoricalPurchasePriceEstimate", () => ({
+  useMetalHistoricalPurchasePriceEstimate: (input: {
+    readonly onPurchasePriceChange: (value: string) => void;
+  }) => {
+    mockHistoricalEstimateInput = input;
+    return {
+      ownership: mockHistoricalEstimateOwnership,
+      marketRatePerGramDecimal:
+        mockHistoricalEstimateOwnership === "estimated"
+          ? "7066.5664720870406881533736906809582268181635177447"
+          : null,
+      isLoading: false,
+      error: null,
+      onPurchasePriceUserChange: mockHistoricalManualPurchasePriceChange,
+      retry: jest.fn(),
+    };
+  },
 }));
 
 jest.mock("@/services/add-metal-holding-facade-service", () => ({
@@ -439,6 +464,8 @@ describe("Add metal holding route", () => {
     mockForm.isSubmitting = false;
     mockForm.submit.mockReset();
     mockForm.submit.mockResolvedValue(null);
+    mockHistoricalEstimateOwnership = "unset";
+    mockHistoricalEstimateInput = null;
   });
 
   it("renders the full form directly instead of a modal or a review route", () => {
@@ -449,6 +476,48 @@ describe("Add metal holding route", () => {
     expect(screen.getByTestId("metal-holding-add-screen")).toBeOnTheScreen();
     expect(screen.getByTestId("metal-holding-form")).toBeOnTheScreen();
     expect(screen.queryByTestId("metal-holding-review-screen")).toBeNull();
+  });
+
+  it("routes real Purchase Price edits and clears through manual ownership while estimator writes use the ordinary setter", () => {
+    const AddHoldingRoute = loadAddHoldingRoute();
+    render(<AddHoldingRoute />);
+
+    fireEvent.changeText(
+      screen.getByTestId("metal-holding-purchase-price-field"),
+      "1234"
+    );
+    fireEvent.changeText(
+      screen.getByTestId("metal-holding-purchase-price-field"),
+      ""
+    );
+
+    expect(mockHistoricalManualPurchasePriceChange).toHaveBeenNthCalledWith(
+      1,
+      "1234"
+    );
+    expect(mockHistoricalManualPurchasePriceChange).toHaveBeenNthCalledWith(
+      2,
+      ""
+    );
+
+    act(() => {
+      mockHistoricalEstimateInput?.onPurchasePriceChange("999.00");
+    });
+    expect(mockForm.updateField).toHaveBeenCalledWith(
+      "purchasePrice",
+      "999.00"
+    );
+  });
+
+  it("shows the approved estimated-price helper only while the Add price is estimator-owned", () => {
+    mockHistoricalEstimateOwnership = "estimated";
+    const AddHoldingRoute = loadAddHoldingRoute();
+    render(<AddHoldingRoute />);
+
+    expect(
+      screen.getByText("add.purchase_price_estimate_hint EGP 7,066.57")
+    ).toBeOnTheScreen();
+    expect(screen.queryByText("add.purchase_price_hint")).toBeNull();
   });
 
   it("registers navigation removal prevention when dirty and handles discard", () => {

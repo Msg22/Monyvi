@@ -85,6 +85,7 @@ export default function MetalHoldingDetailRoute(): React.JSX.Element {
         {...detail}
         onAction={actions.length > 0 ? handleAction : undefined}
         onRetry={detail.retry}
+        onRetryHistoricalReference={detail.retryHistoricalReference}
       />
     </View>
   );

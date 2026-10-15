@@ -1861,6 +1861,15 @@ export type Database = {
           reservation_id: string;
         }[];
       };
+      historical_metal_rate_reserve_request: {
+        Args: { p_user_id: string };
+        Returns: {
+          accepted: boolean;
+          remaining: number;
+          reset_at: string;
+          retry_after_seconds: number;
+        }[];
+      };
       persist_market_rate_snapshot_v1: {
         Args: {
           p_captured_at: string;

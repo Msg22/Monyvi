@@ -441,6 +441,7 @@ ${columnDefs},
 
 import { appSchema, tableSchema } from "@nozbe/watermelondb";
 
+import { METAL_HISTORICAL_RATE_CACHE_TABLES } from "./local-schema/metal-historical-rate-cache-schema";
 import { SMS_REVIEW_DRAFT_TABLES } from "./local-schema/sms-review-draft-schema";
 
 export const schema = appSchema({
@@ -448,6 +449,7 @@ export const schema = appSchema({
   tables: [
 ${tableSchemas},
     ...SMS_REVIEW_DRAFT_TABLES,
+    ...METAL_HISTORICAL_RATE_CACHE_TABLES,
   ],
 });
 `;

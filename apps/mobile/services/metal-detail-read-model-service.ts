@@ -30,6 +30,14 @@ import {
   type LegacyDisposalRevisionEvidence,
 } from "@/services/metal-legacy-disposal-baseline-service";
 import { buildMetalDetailTerminalFacts } from "@/services/metal-terminal-display-service";
+import { composeHistoricalMetalDetailReference } from "@/services/metal-historical-detail-composition-service";
+import type { HistoricalMetalDetailReference } from "@/services/metal-historical-detail-facade-service";
+import {
+  createHistoricalContextKey,
+  createHistoricalDetailContext,
+} from "@/services/metal-detail-historical-reference-service";
+import { resolveMetalDetailPurchaseCalendar } from "@/services/metal-detail-purchase-calendar-service";
+export { readMetalDetailPurchaseDateMarketReference } from "@/services/metal-detail-historical-reference-service";
 import {
   getCurrentUserDataScope,
   queryChildrenOfOwnedParents,
@@ -198,6 +206,8 @@ export interface MetalDetailReadModel {
   readonly purchaseCurrency: string | null;
   readonly purchaseDate: Date | null;
   readonly purchasePriceDecimal: string | null;
+  readonly purchaseDateMarketReference?: HistoricalMetalDetailReference | null;
+  readonly purchaseDateMarketReferenceContextKey?: string;
   readonly purityCatalogVersion: string | null;
   readonly purityCode: string | null;
   readonly purityFactorDecimal: string | null;
@@ -216,6 +226,7 @@ export interface MetalDetailReadModel {
 
 export interface ReadMetalDetailReadModelOptions {
   readonly currentRates?: LiveRatesTrustReadModel;
+  readonly includePurchaseDateMarketReference?: boolean;
   readonly holdingId: string;
   readonly preferredCurrency?: CurrencyType;
   readonly snapshotId?: string | null;
@@ -327,7 +338,8 @@ export async function readMetalDetailReadModel(
     userId: scope.userId,
   });
 
-  return buildMetalDetailReadModel({
+  const rateReferenceInputs = rateReferences.map(toRateReferenceInput);
+  const model = buildMetalDetailReadModel({
     asset: toDetailAssetInput(asset),
     currentRates: options.currentRates,
     holdingState: toDetailHoldingStateInput(holdingState),
@@ -335,9 +347,48 @@ export async function readMetalDetailReadModel(
     lifecycleEvents: shapeMetalDetailLifecycleEvents(events, evidence),
     metal: toDetailMetalInput(metal, metalType),
     preferredCurrency: options.preferredCurrency,
-    rateReferences: rateReferences.map(toRateReferenceInput),
+    rateReferences: rateReferenceInputs,
     terminalFacts,
     userId: scope.userId,
+  });
+  if (
+    model === null ||
+    !model.isActiveOwnership ||
+    options.includePurchaseDateMarketReference !== true
+  ) {
+    return model;
+  }
+
+  const calendar = resolveMetalDetailPurchaseCalendar({
+    asset,
+    metal,
+    state: holdingState,
+    events,
+    evidence,
+    groups,
+  });
+  const historicalContext = createHistoricalDetailContext(
+    asset,
+    metal,
+    metalType,
+    rateReferenceInputs,
+    calendar
+  );
+  const purchaseDateMarketReference =
+    await composeHistoricalMetalDetailReference({
+      ...historicalContext,
+      allowNetwork: false,
+      expectedUserId: scope.userId,
+    });
+
+  return Object.freeze({
+    ...model,
+    purchaseDateMarketReference,
+    purchaseDateMarketReferenceContextKey: createHistoricalContextKey(
+      scope.userId,
+      asset.id,
+      historicalContext
+    ),
   });
 }
 

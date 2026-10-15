@@ -1,0 +1,163 @@
+const mockInvokeAuthenticatedEdgeFunction = jest.fn<
+  Promise<unknown>,
+  [string, unknown]
+>();
+const mockLogError = jest.fn();
+jest.mock("../../utils/logger", () => ({
+  logger: {
+    error: (...args: unknown[]): void => {
+      mockLogError(...args);
+    },
+  },
+}));
+
+const mockGetEdgeFunctionErrorStatus = jest.fn<number | undefined, [unknown]>();
+
+jest.mock("../../services/authenticated-edge-function-service", () => ({
+  invokeAuthenticatedEdgeFunction: (
+    functionName: string,
+    options: unknown
+  ): Promise<unknown> =>
+    mockInvokeAuthenticatedEdgeFunction(functionName, options),
+  getEdgeFunctionErrorStatus: (error: unknown): number | undefined =>
+    mockGetEdgeFunctionErrorStatus(error),
+}));
+
+import {
+  METAL_HISTORICAL_RATE_FETCH_ERROR_CODES,
+  fetchHistoricalDailyRate,
+} from "../../services/metal-historical-rate-fetch-service";
+import {
+  normalizeHistoricalMetalTroyOunceToPureGramDecimal,
+  type HistoricalDailyRateRecord,
+} from "@monyvi/logic";
+
+function record(): HistoricalDailyRateRecord {
+  const gold = "3110.34768";
+  const silver = "31.1034768";
+  return {
+    contractVersion: 1,
+    providerKey: "metals.dev",
+    rateDate: "2026-10-10",
+    resolution: "daily",
+    goldUsdPerTroyOunceDecimal: gold,
+    silverUsdPerTroyOunceDecimal: silver,
+    goldUsdPerPureGramDecimal:
+      normalizeHistoricalMetalTroyOunceToPureGramDecimal(gold) ?? "",
+    silverUsdPerPureGramDecimal:
+      normalizeHistoricalMetalTroyOunceToPureGramDecimal(silver) ?? "",
+    currenciesUsdPerUnit: { USD: "1", EGP: "0.02" },
+    providerResponseTimestamp: null,
+    fetchedAt: "2026-10-10T15:00:00.000Z",
+    responseDigest:
+      "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    source: "metals.dev",
+    quality: "valid",
+  };
+}
+
+describe("#355 authenticated historical Edge fetch", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("requests the exact date from the authenticated server-only endpoint", async () => {
+    mockInvokeAuthenticatedEdgeFunction.mockResolvedValue({
+      data: { success: true, record: record() },
+      error: null,
+    });
+
+    await expect(fetchHistoricalDailyRate("2026-10-10")).resolves.toEqual(
+      record()
+    );
+    expect(mockInvokeAuthenticatedEdgeFunction).toHaveBeenCalledWith(
+      "fetch-historical-metal-rate",
+      { body: { date: "2026-10-10" } }
+    );
+  });
+
+  it("maps an exact-date 404 without inventing a fallback", async () => {
+    const error = {
+      context: new Response(
+        JSON.stringify({ success: false, code: "date_unavailable" }),
+        { status: 404 }
+      ),
+    };
+    mockInvokeAuthenticatedEdgeFunction.mockResolvedValue({
+      data: null,
+      error,
+    });
+    mockGetEdgeFunctionErrorStatus.mockReturnValue(404);
+
+    await expect(fetchHistoricalDailyRate("2026-10-10")).rejects.toMatchObject({
+      name: "MetalHistoricalRateFetchError",
+      code: METAL_HISTORICAL_RATE_FETCH_ERROR_CODES.DATE_UNAVAILABLE,
+    });
+  });
+
+  it.each([
+    JSON.stringify({
+      code: "NOT_FOUND",
+      message: "Requested function was not found",
+    }),
+    "not JSON",
+    JSON.stringify({ success: true, code: "date_unavailable" }),
+  ])(
+    "treats an infrastructure 404 as fetch failure, not missing history (%s)",
+    async (body) => {
+      const error = { context: new Response(body, { status: 404 }) };
+      mockInvokeAuthenticatedEdgeFunction.mockResolvedValue({
+        data: null,
+        error,
+      });
+      mockGetEdgeFunctionErrorStatus.mockReturnValue(404);
+      await expect(
+        fetchHistoricalDailyRate("2026-10-10")
+      ).rejects.toMatchObject({
+        code: METAL_HISTORICAL_RATE_FETCH_ERROR_CODES.FAILED,
+      });
+      expect(mockLogError).toHaveBeenCalledWith(
+        "metals.historicalRate.fetch.failed",
+        expect.any(Error),
+        { status: 404 }
+      );
+      expect(error.context.bodyUsed).toBe(false);
+    }
+  );
+
+  it("passes cancellation to the installed Edge invoke transport", async () => {
+    const controller = new AbortController();
+    mockInvokeAuthenticatedEdgeFunction.mockResolvedValue({
+      data: { success: true, record: record() },
+      error: null,
+    });
+    await fetchHistoricalDailyRate("2026-10-10", controller.signal);
+    expect(mockInvokeAuthenticatedEdgeFunction).toHaveBeenCalledWith(
+      "fetch-historical-metal-rate",
+      { body: { date: "2026-10-10" }, signal: controller.signal }
+    );
+  });
+
+  it("does not invoke the provider for an already cancelled request", async () => {
+    const controller = new AbortController();
+    controller.abort();
+    await expect(
+      fetchHistoricalDailyRate("2026-10-10", controller.signal)
+    ).rejects.toThrow();
+    expect(mockInvokeAuthenticatedEdgeFunction).not.toHaveBeenCalled();
+  });
+
+  it("rejects malformed or different-date response records", async () => {
+    mockInvokeAuthenticatedEdgeFunction.mockResolvedValue({
+      data: {
+        success: true,
+        record: { ...record(), rateDate: "2026-10-09" },
+      },
+      error: null,
+    });
+
+    await expect(fetchHistoricalDailyRate("2026-10-10")).rejects.toMatchObject({
+      code: METAL_HISTORICAL_RATE_FETCH_ERROR_CODES.INVALID_RESPONSE,
+    });
+  });
+});

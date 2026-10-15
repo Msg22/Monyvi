@@ -175,7 +175,18 @@ describe("069 account financial-effects cutover", () => {
     const barrel = source("packages/db/src/index.ts");
     const generatedTypes = source("packages/db/src/supabase-types.ts");
 
-    expect(schema).toMatch(/version:\s*29/);
+    const schemaVersionMatch = schema.match(/version:\s*(\d+)/);
+    const schemaVersion = schemaVersionMatch
+      ? Number(schemaVersionMatch[1])
+      : 0;
+    const migrationVersions = Array.from(
+      migrations.matchAll(/toVersion:\s*(\d+)/g),
+      (match) => Number(match[1])
+    );
+    const highestMigrationVersion = Math.max(...migrationVersions);
+
+    expect(schemaVersion).toBeGreaterThanOrEqual(29);
+    expect(schemaVersion).toBe(highestMigrationVersion);
     expect(schema).toMatch(
       /name:\s*["']accounts["'][\s\S]*name:\s*["']financial_revision["']/
     );

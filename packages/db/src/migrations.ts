@@ -829,9 +829,7 @@ end;`
           table: "recurring_payments",
           columns: [{ name: "financial_revision", type: "string" }],
         }),
-        unsafeExecuteSql(
-          ACCOUNT_FINANCIAL_EFFECTS_V29_BACKFILL_SQL
-        ),
+        unsafeExecuteSql(ACCOUNT_FINANCIAL_EFFECTS_V29_BACKFILL_SQL),
         createTable({
           name: "account_financial_effects",
           columns: [
@@ -858,6 +856,51 @@ end;`
         }),
         unsafeExecuteSql(
           'create unique index if not exists "account_financial_effects_user_action_account_kind_unique" on "account_financial_effects" ("user_id", "action_id", "account_id", "kind"); create unique index if not exists "account_financial_effects_reversal_once_unique" on "account_financial_effects" ("user_id", "reverses_effect_id") where "reverses_effect_id" is not null;'
+        ),
+      ],
+    },
+    {
+      toVersion: 30,
+      steps: [
+        createTable({
+          name: "metal_historical_rate_cache",
+          columns: [
+            { name: "user_id", type: "string", isIndexed: true },
+            { name: "provider_key", type: "string", isIndexed: true },
+            { name: "rate_date", type: "string", isIndexed: true },
+            { name: "resolution", type: "string" },
+            { name: "gold_usd_per_troy_ounce_decimal", type: "string" },
+            { name: "silver_usd_per_troy_ounce_decimal", type: "string" },
+            { name: "gold_usd_per_pure_gram_decimal", type: "string" },
+            { name: "silver_usd_per_pure_gram_decimal", type: "string" },
+            { name: "currencies_usd_per_unit_json", type: "string" },
+            {
+              name: "provider_response_timestamp",
+              type: "string",
+              isOptional: true,
+            },
+            { name: "snapshot_id", type: "string", isOptional: true },
+            {
+              name: "metal_provider_observed_at",
+              type: "string",
+              isOptional: true,
+            },
+            {
+              name: "currency_provider_observed_at",
+              type: "string",
+              isOptional: true,
+            },
+            { name: "fetched_at", type: "number" },
+            { name: "response_digest", type: "string" },
+            { name: "source", type: "string" },
+            { name: "quality", type: "string" },
+            { name: "contract_version", type: "number" },
+            { name: "created_at", type: "number" },
+            { name: "updated_at", type: "number" },
+          ],
+        }),
+        unsafeExecuteSql(
+          'create unique index if not exists "metal_historical_rate_cache_owner_date_unique" on "metal_historical_rate_cache" ("user_id", "rate_date");'
         ),
       ],
     },
