@@ -220,7 +220,7 @@ function scenarioRows(name: SaveScenario): readonly AccountReviewRow[] {
       existingAccountId: BANK, destinationId: CASH, fingerprint: FINGERPRINT_C }),
   ];
   const source = name.startsWith("voice") ? "VOICE" : "SMS";
-  const fingerprint = name === "sms-all-dedup" ? FINGERPRINT_A : FINGERPRINT_B;
+  const fingerprint = FINGERPRINT_B;
   return [row({ index: 1, source, amount: "10",
     existingAccountId: BANK, fingerprint })];
 }
