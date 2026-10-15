@@ -164,6 +164,21 @@ describe("T043 frozen SaveIntent, actor and current revision protection", () => 
     actor = FOREIGN_OWNER;
     await expectRejectedAndUnchanged(f);
   });
+  it("S09a concurrent double-taps retain one action and one financial posting", async (): Promise<void> => {
+    const fixture = makeSaveFixture("voice-existing");
+    liveSession = fixture.session;
+    const writer = service();
+    const [first, second] = await Promise.all([
+      writer.saveSelectedAccountReview(fixture),
+      writer.saveSelectedAccountReview(fixture),
+    ]);
+    expect([first.kind, second.kind].sort()).toEqual(["committed", "replay"]);
+    const persisted = await ledgerState(database);
+    expect(persisted.counts.actions).toBe(1);
+    expect(persisted.counts.transactions).toBe(1);
+    expect(persisted.counts.effects).toBe(1);
+  });
+
   it("S09 rejects selected changes while a prior frozen action is pending", async (): Promise<void> => {
     const f = makeSaveFixture("voice-shared");
     const changed = {
