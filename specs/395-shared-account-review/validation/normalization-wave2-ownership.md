@@ -1,0 +1,37 @@
+# #395 T024/T034 pure tests-first ownership and API checkpoint
+
+**2026-10-15 — TESTS ONLY / Core T019 Green precondition reported by Root.** This is an isolated test contract for the **future** T027 group reducer and T036 candidate/choice logic. Root remains the integration/review owner. No production implementation, hook, queue, SQL, sync, financial effect or schema changes are authorized here.
+
+## Sources and existing authority
+
+- Governing approved `specs/395-shared-account-review/{spec,plan,tasks,data-model}.md`, `contracts/{review-commands,wire-shapes}.md` at `63d6e40bf24867aa269ef8a74b79c7bcbb618205`; business decisions for #395; current canonical schema/normalization and pure T019 resolver at `b31ca1644dba961c9c970ee124bb6fdf6a1f0092`.
+- Required frozen canonical types are `AccountReviewCommand`, `AccountReviewSession`, `AccountReviewRow`, `AccountReviewGroup`, `AccountReviewReason`, `AccountReviewOwnedContext` from existing Zod and normalization contracts. All command discriminators and payload keys are defined by `accountReviewCommandSchema`; neither tests nor future code may add parallel wire DTOs/enums.
+- Use already implemented `deriveAccountReviewGroupIdentity({ownerId,sessionId,source,identity,hashProvider})` and `deriveAccountReviewRowIdentity` unchanged. The real `normalizeAccountReviewParserResult` and existing synthetic `makeTwoIdenticalVoiceInput/makeTwoIdenticalVoiceWithExtraInput` yield stable three-QNB evidence/identities; a separate CIB row/group has original literal UTF-16 proof and an independently derived cryptographic identity.
+
+## Proposed exact **pure** entrypoint contracts (freeze for Root review before source)
+
+1. **T027 `packages/logic/src/account-review/reducer.ts`**
+   - `reduceAccountReviewCommand(input)` accepts `{ state: AccountReviewSession, command: AccountReviewCommand, accountSnapshots: AccountReviewOwnedContext, nextUndoToken: string | null, undo: UndoLease | null }`.
+   - `UndoLease` is transient, external to the canonical session: `{ token: string, previousState: AccountReviewSession, afterRemovalGeneration: AccountReviewSession["operationGeneration"] }`. Caller injects an already-generated UUID only for a removal; this is **not** a durable SMS Undo payload, a DB cache or a new schema.
+   - Returns `{ state: AccountReviewSession, affectedRowIds: readonly string[], affectedGroupIds: readonly string[], reasonCodes: readonly AccountReviewReason[], effect: "none" | "persist_sms" | "session_only", undoToken: string | null }`. Failed/stale/unauthorized action returns unchanged state/effect none with canonical reason codes.
+   - `mergeAccountReviewLateRows({ current: AccountReviewSession, incoming: AccountReviewSession }): AccountReviewSession` is a pure owner/source/session-checked deterministic late source replay. Preserve current selected/user-chosen/edited/removed/tombstoned state; add only new source identities unselected; never synthesize queue/revision from SMS transport IDs.
+
+2. **T036 `packages/logic/src/account-review/candidates.ts`**
+   - `getAccountReviewAccountCandidates({ session: AccountReviewSession, rowId: AccountReviewRow["rowId"], role: "source" | "destination", accountSnapshots: AccountReviewOwnedContext }): readonly AccountReviewOwnedContext["accounts"][number][]`. Return only current owned, same-known-currency and source/type-eligible plain accounts, retaining canonical name/provider/card differentiation; no balances/account numbers/network. Ordinary SMS source excludes Cash, grounded Voice Cash may be explicitly chosen, SMS ATM destination permits only compatible Cash, and ordinary rows have no synthesized transfer destination. An unconfirmed currency returns no candidates until an explicit confirmation; no default inference, ownership derivation from response-local candidate IDs, or amount conversion.
+   - `role` reuses the existing normalization source/destination vocabulary, not a new persisted wire enum. UI formatting and chooser state belong outside this pure slice.
+
+**Root must check these signatures and any undo/late-merge interpretation before permitting T027/T036 source implementation.** A conflict requires a contract/review decision; do not force production to pass an inaccurate test or widen frozen schemas. Exact tests-first paths and checkpoints do not certify future API implementation.
+
+## Test-to-contract map
+
+| New file / coverage | Core assertions |
+| --- | --- |
+| `__tests__/shared-groups.test.ts` (T024, 17 named/expanded cases) | QNB3/CIB1 independent scope; confirmed != selected != created; disclosed pending row click confirms linked group but selects clicked row only; bulk select never confirms; edit/reconfirm and identity/card/type/provider/currency discrimination; nickname conflict fail closed; removed tombstone/volatile Undo current-generation-only; stale actor/row/group/review revision and generation inert; Undo cannot overwrite a later unrelated account edit; compatible late arrivals unselected/idempotent; edited group/user selection/removed state survive late replay; merchant label alone cannot establish membership |
+| `__tests__/account-choices.test.ts` (T034, 19 named / 25 expanded cases) | Owned same-currency/type candidate list and descriptive metadata; Voice Cash vs SMS Bank/Wallet source; ATM Cash destination; foreign/removed/unknown currency excluded; captured preferred currency is stable after a coherent profile change; row-only detach vs disclosed group-wide replacement and wrong-count refusal; explicit chosen row survives replay; stale choice rejected; ambiguous/conflicting/legacy currency confirmed per row only; exact decimal and original parsed amount/date/category unchanged |
+| `__tests__/review-command-fixtures.ts` | Canonical owned context through existing `accountReviewRequestContextSchema`, typed commands through `accountReviewCommandSchema`, actual normalized QNB group identity and distinct proven CIB source; current owner-scoped snapshots and deterministic UUIDs; zero live app/provider/database access |
+
+**Negative/side-effect boundaries:** `accountReviewSessionSchema` must accept all legitimate prepared/returned sessions. No test asserts a durable DB write, actual cancellation of an asynchronous callback, SQL CAS, live SMS queue identity, save, screen rendering, or hosted completion. The pure cancellation boundary is **absence of a command**; stale review/row/group revisions and operation generations represent invalidated late callbacks without imitating hook cancellation. User-visible screen/a11y, command-service atomicity and queue persistence keep their separate T025/T026/T028–T031/T035/T037–T039 gates. The number of written assertions is not a coverage report.
+
+## Exact checkpoint and Root gate
+
+**Only new** `packages/logic/src/account-review/__tests__/{shared-groups.test.ts,account-choices.test.ts,review-command-fixtures.ts}` and **this** validation note. No original 75 T017/T019 cases, source, identity, financial action, barrel, schema, runtime or task checkboxes change. Import of future `../reducer` and `../candidates` is intentional **creation Red**; Root must distinguish missing-module creation Red from fixture/schema/type errors before authorizing bounded T027/T036 source. Root runs consolidated Red with current pure/financial/mobile baselines and strict TS/lint, independently reviews API/future source scopes, and explicitly grants implementation. **NO TEST/JEST/TSC/NATIVE RUN BY THIS GITHUB AUTHOR; TESTS-ONLY FROZEN / STOP.**
