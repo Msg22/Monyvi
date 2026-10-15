@@ -4,7 +4,7 @@
  * models, untrusted provider evidence or snapshot preimages are serialized.
  */
 import { z } from "zod";
-import type { AccountType } from "@monyvi/db";
+import type { AccountType, CurrencyType } from "@monyvi/db";
 import { SUPPORTED_CURRENCIES } from "../utils/currency-data";
 import { VALID_TYPES } from "../utils/ai-parser-utils";
 import { parseCanonicalUnsignedIntegerString } from "./action-contracts";
@@ -56,8 +56,8 @@ const positiveMinorUnitsSchema = minorUnitsSchema.refine(
 const nonBlankSchema = z.string().refine(
   (value) => value.trim().length > 0
 );
-const currencySchema = z.string().refine(
-  (value) => CURRENCY_CODES.has(value)
+const currencySchema = z.custom<CurrencyType>(
+  (value) => typeof value === "string" && CURRENCY_CODES.has(value)
 );
 const accountTypeSchema = z.custom<AccountType>(
   (value) => typeof value === "string" && ACCOUNT_TYPES.has(value)
