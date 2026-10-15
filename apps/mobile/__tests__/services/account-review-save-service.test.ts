@@ -7,7 +7,11 @@
 import { createHash } from "node:crypto";
 import type { Database } from "@nozbe/watermelondb";
 import type SQLiteAdapter from "@nozbe/watermelondb/adapters/sqlite";
-import type { AccountReviewSession, AccountReviewSaveIntent } from "@monyvi/logic";
+import {
+  accountReviewSaveIntentSchema,
+  type AccountReviewSession,
+  type AccountReviewSaveIntent,
+} from "@monyvi/logic";
 import type { Sha256Provider } from "../../../../packages/logic/src/financial-actions";
 import { createAccountReviewSaveService } from "../../services/account-review-save-service";
 import {
@@ -179,12 +183,17 @@ describe("T043 frozen SaveIntent, actor and current revision protection", () => 
     expect(persisted.counts.effects).toBe(1);
   });
 
-  it("S09 rejects selected changes while a prior frozen action is pending", async (): Promise<void> => {
+  it("S09 rejects a schema-valid changed selection inconsistent with the frozen current session", async (): Promise<void> => {
     const f = makeSaveFixture("voice-shared");
-    const changed = {
-      ...f.intent, selectedRows: f.intent.selectedRows.slice(1),
+    const unselected = f.session.rows.find((row) => !row.selected);
+    if (!unselected) throw new Error("Fixture requires an unselected review row");
+    const changed: AccountReviewSaveIntent = {
+      ...f.intent,
+      selectedRows: [{ rowId: unselected.rowId, revision: unselected.revision }],
     };
+    expect(accountReviewSaveIntentSchema.safeParse(changed).success).toBe(true);
     await expectRejectedAndUnchanged(changedIntent(f, changed));
+    // This tests pre-action selection consistency, NOT pending-action supersession.
   });
 });
 
@@ -287,6 +296,16 @@ describe("T043 SMS deduplication, cleanup-only and safe partial selection", () =
     expect(state.counts.transactions).toBe(1);
     expect(state.counts.actions).toBe(0);
     expect(state.counts.effects).toBe(0);
+    expect(state.counts.draftItems).toBe(0);
+  });
+  it("S19b does not deduplicate a different SMS fingerprint from an owned transaction", async (): Promise<void> => {
+    const f = makeSaveFixture("sms-all-dedup");
+    await seedSmsReviewDrafts(database, f.session);
+    await seedSavedFingerprint(database, FINGERPRINT_A, "transaction");
+    await expect(save(f)).resolves.toMatchObject({ kind: "committed" });
+    const state = await ledgerState(database);
+    expect(state.counts.transactions).toBe(2);
+    expect(state.counts.actions).toBe(1);
     expect(state.counts.draftItems).toBe(0);
   });
   it("S20 deduplicates an SMS fingerprint saved as a transfer, not just transactions", async (): Promise<void> => {
