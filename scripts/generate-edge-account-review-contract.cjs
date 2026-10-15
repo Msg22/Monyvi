@@ -8,7 +8,12 @@ const prettier = require("prettier");
 const ts = require("typescript");
 
 const ROOT = path.resolve(__dirname, "..");
-const OUTPUT = path.join(ROOT, "supabase/functions/_shared/account-review-contract.ts");
+const GENERATED_PATHS = [
+  "supabase/functions/_shared/account-review-contract.ts",
+  "supabase/functions/_shared/account-review-parser-contract.ts",
+  "supabase/functions/_shared/account-review-provider-projections.ts",
+];
+const OUTPUT = path.join(ROOT, GENERATED_PATHS[0]);
 const VERSION = "account-review-edge/v1";
 const HASH_DOMAIN = "monyvi.account-review.edge.canonical.v1";
 const REVIEWED_PATHS = [
@@ -345,16 +350,115 @@ function verifyParserInputs(metafile) {
   }
 }
 
-function typedEdgeEntrypoint(paths, hash) {
+function parserModule() {
   return [
     "/* GENERATED from canonical T009 Zod. Do not edit. */",
     'import { z } from "zod";',
     ...PARSER_RUNTIME_FILES.map(extractCanonicalDeclarations),
+  ].join("\n\n");
+}
+
+function providerProjectionModule() {
+  return [
+    "/* GENERATED from canonical T009 Zod. Do not edit. */",
+    'import { z } from "zod";',
+    'import { ACCOUNT_REVIEW_CURRENCIES, accountReviewVoiceResponseV2Schema, accountReviewSmsResponseV2Schema } from "./account-review-parser-contract.ts";',
+    PROJECTION_SOURCE,
+  ].join("\n\n");
+}
+
+function publicFacadeModule(paths, hash) {
+  return [
+    "/* GENERATED from canonical T009 Zod. Do not edit. */",
+    'export { accountReviewRequestContextSchema, accountReviewEvidenceSpanSchema, accountReviewAccountEvidenceSchema, accountReviewCurrencyEvidenceSchema, accountReviewSuggestedAccountSchema, accountReviewVoiceResponseV2Schema, accountReviewSmsResponseV2Schema } from "./account-review-parser-contract.ts";',
+    'export { buildAccountReviewGeminiResponseSchema, buildAccountReviewDeepInfraResponseSchema } from "./account-review-provider-projections.ts";',
     'export const ACCOUNT_REVIEW_EDGE_GENERATOR_VERSION = ' + JSON.stringify(VERSION) + ";",
     'export const ACCOUNT_REVIEW_CANONICAL_SHA256 = ' + JSON.stringify(hash) + ";",
     'export const ACCOUNT_REVIEW_CANONICAL_SOURCE_PATHS = Object.freeze(' + JSON.stringify(paths) + ");",
-    PROJECTION_SOURCE,
   ].join("\n\n");
+}
+
+function checkGraphModule(relative, code, allowedImports, allowedExports) {
+  const node = ts.createSourceFile(relative, code, ts.ScriptTarget.Latest, true);
+  if (node.parseDiagnostics.length > 0) throw new Error("Invalid generated TS " + relative);
+  const imports = [];
+  const exports = [];
+  function visit(part) {
+    if (ts.isImportDeclaration(part)) {
+      if (!ts.isStringLiteral(part.moduleSpecifier)) throw new Error("Invalid generated import");
+      if (part.importClause?.isTypeOnly) throw new Error("Unexpected type-only runtime import");
+      imports.push(part.moduleSpecifier.text);
+    }
+    if (ts.isExportDeclaration(part) && part.moduleSpecifier) {
+      if (!ts.isStringLiteral(part.moduleSpecifier)) throw new Error("Invalid generated export");
+      if (part.isTypeOnly) throw new Error("Unexpected type-only reexport");
+      exports.push(part.moduleSpecifier.text);
+    }
+    if (ts.isCallExpression(part) &&
+        (part.expression.kind === ts.SyntaxKind.ImportKeyword ||
+         (ts.isIdentifier(part.expression) && part.expression.text === "require"))) {
+      throw new Error("Generated dynamic import/require forbidden");
+    }
+    ts.forEachChild(part, visit);
+  }
+  visit(node);
+  if (JSON.stringify(imports.sort()) !== JSON.stringify([...allowedImports].sort()) ||
+      JSON.stringify(exports.sort()) !== JSON.stringify([...allowedExports].sort())) {
+    throw new Error("Generated import/export graph changed: " + relative);
+  }
+  if (/Deno\.env|process\.env|createFinancialActionRegistry|class Decimal/.test(code)) {
+    throw new Error("Generated runtime includes forbidden operations " + relative);
+  }
+}
+
+function validateGeneratedGraph(sources) {
+  checkGraphModule(GENERATED_PATHS[0], sources.get(GENERATED_PATHS[0]),
+    [], ["./account-review-parser-contract.ts", "./account-review-provider-projections.ts"]);
+  checkGraphModule(GENERATED_PATHS[1], sources.get(GENERATED_PATHS[1]),
+    ["zod"], []);
+  checkGraphModule(GENERATED_PATHS[2], sources.get(GENERATED_PATHS[2]),
+    ["zod", "./account-review-parser-contract.ts"], []);
+}
+
+function validateGeneratedTypes(sources) {
+  const configPath = path.join(ROOT, "packages/logic/tsconfig.json");
+  const loaded = ts.readConfigFile(configPath, ts.sys.readFile);
+  if (loaded.error) throw new Error("Invalid logic TS config");
+  const parsed = ts.parseJsonConfigFileContent(
+    loaded.config, ts.sys, path.dirname(configPath)
+  );
+  if (parsed.errors.length > 0) throw new Error("Invalid inherited TS config");
+  const generated = new Map(GENERATED_PATHS.map((relative) => [
+    path.resolve(ROOT, relative), sources.get(relative),
+  ]));
+  const options = {
+    ...parsed.options, strict: true, noImplicitAny: true,
+    allowImportingTsExtensions: true, noEmit: true,
+  };
+  const host = ts.createCompilerHost(options);
+  const fromDisk = host.getSourceFile.bind(host);
+  host.getSourceFile = (filename, languageVersion, onError, fresh) => {
+    const virtual = generated.get(path.resolve(filename));
+    return virtual === undefined
+      ? fromDisk(filename, languageVersion, onError, fresh)
+      : ts.createSourceFile(filename, virtual, languageVersion, true);
+  };
+  const originalExists = host.fileExists.bind(host);
+  host.fileExists = (filename) => generated.has(path.resolve(filename)) ||
+    originalExists(filename);
+  const program = ts.createProgram(
+    [...generated.keys()], options, host
+  );
+  const diagnostics = ts.getPreEmitDiagnostics(program).filter(
+    (item) => item.category === ts.DiagnosticCategory.Error
+  );
+  if (diagnostics.length > 0) {
+    throw new Error(ts.formatDiagnostics(diagnostics, {
+      getCanonicalFileName: (filename) => filename,
+      getCurrentDirectory: () => ROOT,
+      getNewLine: () => "\n",
+    }));
+  }
 }
 
 async function renderContract() {
@@ -363,37 +467,55 @@ async function renderContract() {
     throw new Error("Unreviewed bundler/compiler version");
   }
   const paths = await canonicalManifest(esbuild);
-  const hash = hashManifest(paths);
   const parser = await esbuild.build(buildOptions(PARSER_ENTRY));
   verifyParserInputs(parser.metafile);
-  const content = typedEdgeEntrypoint(paths, hash);
-  const config = (await prettier.resolveConfig(OUTPUT)) ?? {};
-  const formatted = await prettier.format(content, {
-    ...config, filepath: OUTPUT,
-  });
-  const lines = formatted.split("\n").length;
-  if (lines >= 900) {
-    throw new Error("Generated Edge contract exceeds 899 formatted lines: request a cohesive generated split");
+  const hash = hashManifest(paths);
+  const sourceByPath = new Map([
+    [GENERATED_PATHS[0], publicFacadeModule(paths, hash)],
+    [GENERATED_PATHS[1], parserModule()],
+    [GENERATED_PATHS[2], providerProjectionModule()],
+  ]);
+  const formatted = new Map();
+  for (const relative of GENERATED_PATHS) {
+    const absolute = path.join(ROOT, relative);
+    const config = (await prettier.resolveConfig(absolute)) ?? {};
+    const text = await prettier.format(sourceByPath.get(relative), {
+      ...config, filepath: absolute,
+    });
+    if (text.split("\n").length >= 900) {
+      throw new Error("Generated module exceeds 899 formatted lines: " + relative);
+    }
+    formatted.set(relative, text);
   }
+  validateGeneratedGraph(formatted);
+  validateGeneratedTypes(formatted);
   return formatted;
 }
 
 async function main() {
   const mode = checkRequestedMode();
+  // No output is written before every module passes formatting, graph,
+  // type and size checks.
   const rendered = await renderContract();
   if (mode === "--stdout") {
-    process.stdout.write(rendered);
+    process.stdout.write(JSON.stringify(Object.fromEntries(rendered)) + "\n");
     return;
   }
   if (mode === "--check") {
-    if (!fs.existsSync(OUTPUT) || fs.readFileSync(OUTPUT, "utf8") !== rendered) {
-      throw new Error("Stale or missing generated Edge contract");
+    for (const [relative, bytes] of rendered) {
+      const absolute = path.join(ROOT, relative);
+      if (!fs.existsSync(absolute) || fs.readFileSync(absolute, "utf8") !== bytes) {
+        throw new Error("Stale or missing generated Edge module: " + relative);
+      }
     }
     return;
   }
-  fs.mkdirSync(path.dirname(OUTPUT), { recursive: true });
-  if (!fs.existsSync(OUTPUT) || fs.readFileSync(OUTPUT, "utf8") !== rendered) {
-    fs.writeFileSync(OUTPUT, rendered, "utf8");
+  for (const [relative, bytes] of rendered) {
+    const absolute = path.join(ROOT, relative);
+    fs.mkdirSync(path.dirname(absolute), { recursive: true });
+    if (!fs.existsSync(absolute) || fs.readFileSync(absolute, "utf8") !== bytes) {
+      fs.writeFileSync(absolute, bytes, "utf8");
+    }
   }
 }
 
