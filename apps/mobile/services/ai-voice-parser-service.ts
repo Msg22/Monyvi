@@ -622,14 +622,12 @@ export async function parseVoiceWithAi(
         }
         results.push(mappedTransaction);
       } catch {
-        // Only stable diagnostic codes and bounded counts. A category, currency,
-        // exception name/message or model text may contain private user input.
+        // Only the approved fixed reason code: all other model-derived
+        // diagnostic metadata may contain private user input.
         logger.warn(
           "[ai-voice-parser] Skipping semantically invalid transaction",
           {
             reasonCode: "voice_semantic_mapping_failed",
-            errorClass: "semantic_mapping_exception",
-            categorySystemNameLength: Math.min(aiTx.categorySystemName.length, 512),
           }
         );
       }
