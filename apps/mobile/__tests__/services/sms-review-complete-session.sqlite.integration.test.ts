@@ -4,6 +4,9 @@
  * auth boundary is mocked; never mock the queue service, repository or writer.
  */
 import { Q, type Database, type Model } from "@nozbe/watermelondb";
+import { seedCapturedSmsReviewContext } from "./sms-review-real-sqlite-fixture";
+import type { ParsedSmsTransaction } from "@monyvi/logic";
+import type { AccountReviewSession } from "../../../../packages/logic/src/account-review/review-schemas";
 import type SQLiteAdapter from "@nozbe/watermelondb/adapters/sqlite";
 import { setGenerator } from "@nozbe/watermelondb/utils/common/randomId";
 import type { SmsReviewQueue, SmsReviewDraftItem } from "@monyvi/db";
@@ -16,6 +19,7 @@ import type { SmsReviewChunk } from "@/services/ai-sms-parser-review";
 import type { ParseSmsContext, SmsCandidate } from "@/services/ai-sms-parser-service";
 import { parseSmsWithAi } from "@/services/ai-sms-parser-service";
 import { parseSmsWithOrchestrator } from "@/services/sms-parser-orchestrator";
+import { mergeSmsReviewDrafts, updateSmsReviewDraftItem, updateSmsReviewDraftSelection } from "@/services/sms-review-draft-repository";
 import { getFixtureById } from "@/services/dev/sms-fixtures";
 import { makeSmsV1Response } from
   "../../../../packages/logic/src/account-review/__tests__/fixtures";
@@ -33,7 +37,7 @@ interface RealSqliteDatabaseModule {
 }
 
 
-type EdgeReply = { readonly data: unknown; readonly error: null };
+type EdgeReply = { readonly data: unknown; readonly error: Error | null };
 const mockEdge = jest.fn<Promise<EdgeReply>, [string, unknown, unknown?]>();
 let mockParserRoute: "ai" | "hybrid" | "local" = "ai";
 
@@ -102,6 +106,21 @@ jest.mock("@monyvi/db", () => {
     jest.requireActual<typeof import("../../../../packages/db/src/models/Transfer")>(
       "../../../../packages/db/src/models/Transfer"
     ).Transfer,
+    jest.requireActual<typeof import("../../../../packages/db/src/models/Account")>(
+      "../../../../packages/db/src/models/Account"
+    ).Account,
+    jest.requireActual<typeof import("../../../../packages/db/src/models/BankDetails")>(
+      "../../../../packages/db/src/models/BankDetails"
+    ).BankDetails,
+    jest.requireActual<typeof import("../../../../packages/db/src/models/AccountSmsSender")>(
+      "../../../../packages/db/src/models/AccountSmsSender"
+    ).AccountSmsSender,
+    jest.requireActual<typeof import("../../../../packages/db/src/models/Profile")>(
+      "../../../../packages/db/src/models/Profile"
+    ).Profile,
+    jest.requireActual<typeof import("../../../../packages/db/src/models/Category")>(
+      "../../../../packages/db/src/models/Category"
+    ).Category,
   ];
   const adapter = new Adapter({ schema });
   return {
@@ -113,25 +132,85 @@ jest.mock("@monyvi/db", () => {
     DismissedSmsFingerprint: modelClasses[2],
     Transaction: modelClasses[3],
     Transfer: modelClasses[4],
+    Account: modelClasses[5],
+    BankDetails: modelClasses[6],
+    AccountSmsSender: modelClasses[7],
+    Profile: modelClasses[8],
+    Category: modelClasses[9],
   };
 });
 
-jest.mock("@/services/user-data-access", () => ({
-  getCurrentUserDataScope: (): Promise<{
-    readonly userId: string;
-    readonly queryOwned: (collection: {
-      query: (...clauses: readonly unknown[]) => unknown;
-    }, ...conditions: readonly unknown[]) => unknown;
-  }> => Promise.resolve({
-    userId: mockCurrentUserId,
-    queryOwned: (collection, ...conditions) =>
-      collection.query(Q.where("user_id", mockCurrentUserId), ...conditions),
-  }),
-  assertExpectedCurrentUser: (expected: string): Promise<void> =>
-    expected === mockCurrentUserId ? Promise.resolve() :
-      Promise.reject(new Error("auth_scope_changed")),
-}));
+jest.mock("@/services/user-data-access", () => {
+  const { Q: scopedQ } = jest.requireActual<
+    typeof import("@nozbe/watermelondb")
+  >("@nozbe/watermelondb");
+  return {
+    getCurrentUserDataScope: () => {
+      const ownerId = mockCurrentUserId;
+      return Promise.resolve({
+        userId: ownerId,
+        queryOwned: (
+          collection: { query: (...clauses: unknown[]) => unknown },
+          ...conditions: unknown[]
+        ): unknown =>
+          collection.query(scopedQ.where("user_id", ownerId), ...conditions),
+        queryAccessibleCategories: (
+          collection: { query: (...clauses: unknown[]) => unknown },
+          ...conditions: unknown[]
+        ): unknown => collection.query(
+          scopedQ.or(scopedQ.where("user_id", ownerId),
+            scopedQ.where("user_id", null)),
+          ...conditions
+        ),
+        queryChildrenOfOwnedParents: (
+          collection: { query: (...clauses: unknown[]) => unknown },
+          parents: readonly { id: string; userId: string }[],
+          foreignKey: string,
+          ...conditions: unknown[]
+        ): unknown => {
+          if (parents.some((parent) => parent.userId !== ownerId)) {
+            throw new Error("auth_scope_changed");
+          }
+          return collection.query(
+            scopedQ.where(foreignKey, scopedQ.oneOf(parents.map((p) => p.id))),
+            ...conditions
+          );
+        },
+        assertOwned: <T extends { readonly userId: string }>(record: T): T => {
+          if (record.userId !== ownerId) throw new Error("auth_scope_changed");
+          return record;
+        },
+      });
+    },
+    queryOwned: (
+      collection: { query: (...clauses: unknown[]) => unknown },
+      ownerId: string,
+      ...conditions: unknown[]
+    ): unknown => collection.query(scopedQ.where("user_id", ownerId), ...conditions),
+    queryChildrenOfOwnedParents: (
+      collection: { query: (...clauses: unknown[]) => unknown },
+      parents: readonly { id: string; userId: string }[],
+      ownerId: string,
+      foreignKey: string,
+      ...conditions: unknown[]
+    ): unknown => {
+      if (parents.some((parent) => parent.userId !== ownerId)) {
+        throw new Error("auth_scope_changed");
+      }
+      return collection.query(
+        scopedQ.where(foreignKey, scopedQ.oneOf(parents.map((parent) => parent.id))),
+        ...conditions
+      );
+    },
+    assertExpectedCurrentUser: (expected: string): Promise<void> =>
+      expected === mockCurrentUserId ? Promise.resolve() :
+        Promise.reject(new Error("auth_scope_changed")),
+  };
+});
 
+jest.mock("@/services/supabase", () => ({
+  getCurrentUserId: (): Promise<string> => Promise.resolve(mockCurrentUserId),
+}));
 const { database, __adapter: adapter } =
   jest.requireMock<RealSqliteDatabaseModule>("@monyvi/db");
 type Lease = Awaited<ReturnType<typeof acquireOwnedSmsReviewQueueNamespace>>;
@@ -181,6 +260,7 @@ beforeEach(async () => {
   await database.write(async (): Promise<void> => {
     await database.unsafeResetDatabase();
   });
+  await seedCapturedSmsReviewContext(database, OWNER);
 });
 
 afterEach(async () => {
@@ -287,7 +367,11 @@ describe("#395 full initial SMS assembler — actual normalizer and SQLite lease
     expect(review.rows[0]?.amountDecimal).toBe("50");
     expect(review.rows[0]?.transaction.categoryId)
       .toBe(NORMALIZATION_IDS.shoppingCategory);
-    expect(review.rows[0]?.transaction.smsFingerprint)
+    const sourceRow = review.rows[0];
+    if (!sourceRow || sourceRow.source !== "SMS") {
+      throw new Error("Review must carry an original SMS row");
+    }
+    expect(sourceRow.transaction.smsFingerprint)
       .toBe(NORMALIZATION_IDS.smsFingerprint);
     expect(review.saveIntent).toBeNull();
     expect(review.rows[0]?.selected).toBe(false);
@@ -312,7 +396,7 @@ describe("#395 full initial SMS assembler — actual normalizer and SQLite lease
     const chunks = separateOriginalChunks();
     const first = await complete(chunks, lease);
     const second = await complete([...chunks].reverse(), lease);
-    const keyed = (review: typeof first) =>
+    const keyed = (review: AccountReviewSession): ReadonlyMap<string, string> =>
       new Map(review.rows.map((row) => [row.sourceFingerprint, row.rowId]));
     expect(keyed(first)).toEqual(keyed(second));
     expect(first.sessionId).toBe(lease.sessionId);
@@ -374,7 +458,11 @@ describe("#395 full initial SMS assembler — actual normalizer and SQLite lease
     }], lease);
     expect(review.sessionId).toBe(lease.sessionId);
     expect(review.sessionId).not.toBe("provider-retry-key-not-session");
-    expect(review.rows[0]?.transaction.smsFingerprint)
+    const sourceRow = review.rows[0];
+    if (!sourceRow || sourceRow.source !== "SMS") {
+      throw new Error("Review must carry an original SMS row");
+    }
+    expect(sourceRow.transaction.smsFingerprint)
       .toBe(NORMALIZATION_IDS.smsFingerprint);
     await release(lease, "cancelled");
   });
@@ -472,7 +560,7 @@ describe("#395 original direct AI SMS parser — same provider and complete sess
     expect(mockEdge).toHaveBeenCalledTimes(1);
   });
 
-  it("a zero-positive response or refusal allocates no provisional queue", async () => {
+  it("a zero-positive successful response allocates no provisional queue", async () => {
     mockEdge.mockResolvedValueOnce({
       data: { transactions: [], completionStatus: "complete",
         negativeFingerprints: [], terminalFingerprints: [],
@@ -487,6 +575,41 @@ describe("#395 original direct AI SMS parser — same provider and complete sess
     expect(result.reviewChunks ?? []).toHaveLength(0);
     expect(await ownedQueues()).toHaveLength(0);
     expect(mockEdge).toHaveBeenCalledTimes(1);
+  });
+
+  it("a real rolling-limit HTTP refusal stays nonretryable without a phantom queue", async () => {
+    const candidate = originalCandidate();
+    const availableAt = "2026-10-16T00:00:00.000Z";
+    const refusal = Object.assign(new Error("FunctionsHttpError"), {
+      context: new Response(
+        JSON.stringify({ reason: "rolling_limit", availableAt }),
+        { status: 429, headers: { "Content-Type": "application/json" } }
+      ),
+    });
+    mockEdge.mockResolvedValueOnce({ data: null, error: refusal });
+    const result = await parseSmsWithAi(
+      [candidate], admittedContext(), undefined, undefined, OWNER,
+      smsRequestContext(), "refused-original-request"
+    );
+    expect(mockEdge).toHaveBeenCalledTimes(1);
+    expect(result.transactions).toEqual([]);
+    expect(result.hasError).toBe(true);
+    expect(result.isRetryable).toBe(false);
+    expect(result.availability).toEqual({ reason: "rolling_limit", availableAt });
+    expect(result.unresolvedCandidates).toEqual([
+      expect.objectContaining({
+        candidate: expect.objectContaining({
+          smsFingerprint: candidate.smsFingerprint,
+        }),
+        reason: "capacity_limited",
+        isRetryable: false,
+      }),
+    ]);
+    expect(result.durableNegativeFingerprints ?? []).toEqual([]);
+    expect(result.terminalFingerprints ?? []).toEqual([]);
+    expect(result.reviewChunks ?? []).toEqual([]);
+    expect(result.reviewSession).toBeUndefined();
+    expect(await ownedQueues()).toHaveLength(0);
   });
 });
 
@@ -503,6 +626,49 @@ function catalogCandidate(fixtureId: string): SmsCandidate {
     },
     smsFingerprint: "fingerprint-" + source.id,
   };
+}
+
+async function seedEditedTrustedSmsDraft(
+  candidate: SmsCandidate
+): Promise<{ readonly queueId: string; readonly draftId: string; readonly payloadJson: string }> {
+  const source = makeSmsInput().mappedTransactions[0];
+  if (!source) throw new Error("Missing original SMS financial fixture");
+  const transaction: ParsedSmsTransaction = {
+    ...source,
+    smsFingerprint: candidate.smsFingerprint,
+    senderDisplayName: candidate.message.address,
+    rawSmsBody: candidate.message.body,
+  };
+  const merged = await mergeSmsReviewDrafts({
+    expectedUserId: OWNER, transactions: [transaction],
+  });
+  expect(merged.insertedCount).toBe(1);
+  const draft = (await draftItems())[0];
+  const queue = (await ownedQueues())[0];
+  if (!draft || !queue) throw new Error("Missing persisted SMS review");
+  await updateSmsReviewDraftItem(draft.id, OWNER, {
+    ...transaction, amount: 73, counterparty: "User edited merchant",
+  });
+  await updateSmsReviewDraftSelection(draft.id, OWNER, true);
+  const edited = (await draftItems())[0];
+  if (!edited) throw new Error("Edited draft disappeared");
+  return { queueId: queue.id, draftId: edited.id, payloadJson: edited.payloadJson };
+}
+
+function stubAcceptedHybridAiRow(candidate: SmsCandidate): void {
+  mockEdge.mockImplementation((name: string): Promise<EdgeReply> => Promise.resolve({
+    data: name === "parse-sms" ? {
+      transactions: [{
+        messageId: candidate.message.id, amount: 55.55, currency: "EGP",
+        type: "EXPENSE", counterparty: "AI Shop", date: "2026-10-14",
+        categorySystemName: "shopping", confidenceScore: 0.95, isTrusted: true,
+      }],
+      completionStatus: "complete",
+      negativeFingerprints: [], terminalFingerprints: [],
+      unresolvedFingerprints: [],
+    } : { outcomes: [], completionStatus: "complete" },
+    error: null,
+  }));
 }
 
 describe("#395 outer orchestrator — real hybrid/local parser and final namespace", () => {
@@ -556,6 +722,37 @@ describe("#395 outer orchestrator — real hybrid/local parser and final namespa
     expect(result.reviewSession?.rows[0]?.sourceFingerprint)
       .toBe(trusted.smsFingerprint);
     expect(result.reviewSession?.rows[0]?.toAssignment).toBeNull();
+  });
+
+  it("preserves a selected edited SQLite draft without AI-only interim publication", async () => {
+    mockParserRoute = "hybrid";
+    const trusted = catalogCandidate("hybrid_trusted_qnb_purchase");
+    const ai = catalogCandidate("hybrid_ai_purchase");
+    const edited = await seedEditedTrustedSmsDraft(trusted);
+    stubAcceptedHybridAiRow(ai);
+    const interimSessionFlags: boolean[] = [];
+    const result = await parseSmsWithOrchestrator(
+      [trusted, ai], admittedContext(),
+      (progress) => {
+        interimSessionFlags.push(
+          Object.prototype.hasOwnProperty.call(progress, "reviewSession")
+        );
+      },
+      undefined,
+      { expectedUserId: OWNER, requestContext: smsRequestContext() }
+    );
+    const saved = await draftItems();
+    expect(saved).toHaveLength(1);
+    expect(saved[0]?.id).toBe(edited.draftId);
+    expect(saved[0]?.payloadJson).toBe(edited.payloadJson);
+    expect(saved[0]?.selectionOverride).toBe(true);
+    expect((await ownedQueues()).map((queue) => queue.id))
+      .toEqual([edited.queueId]);
+    expect(result.reviewSession?.sessionId).toBe(edited.queueId);
+    expect(interimSessionFlags.length).toBeGreaterThan(0);
+    expect(interimSessionFlags).not.toContain(true);
+    expect(mockEdge.mock.calls.filter(([name]) => name === "parse-sms"))
+      .toHaveLength(1);
   });
 
   it("hybrid prior trusted result cannot be overwritten by a duplicate AI fingerprint", async () => {

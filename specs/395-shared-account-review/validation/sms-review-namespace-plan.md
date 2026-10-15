@@ -161,3 +161,44 @@ releaseOwnedSmsReviewQueueNamespace(input: {
 **Exact SQL/assembler integration boundary:** `SmsReviewChunk = Pick<SmsReviewNormalizationInput,"requestKey"|"financialRows"|"mappedTransactions"|"submittedMessages"|"providerResponse">`; `createCompleteSmsAccountReviewSession({reviewAccountSnapshots,acceptedReviewChunks,sourceRevision,namespaceLease}):Promise<AccountReviewSession>` remains SQL-owned until explicitly leased. It validates actor/lease after awaits and before publishing, keeps distinct originals and source spans' `sourceRef=messageId` and `smsFingerprint` unchanged, namespaces only model aliases per accepted chunk, uses already trusted parsed `categoryId` and original date, and invokes the real T014-P normalizer/identity hashing. The same queue UUID applies to direct and outer hybrid/local; intermediate AI-only progress may not overwrite outer final session, and edited-row late merge awaits T027. No required public parser callback or second provider/grouping request. Do not use `scanSessionId`, numeric UI revision, requestKey or model alias as a canonical local session UUID.
 
 **Gate:** Root reruns new lease+assembler tests with its repaired real SQLite runtime (not fake in-memory queue) and current integrated SQL adapter; record exact creation/behavior Red and any truly missing dependent module. Run formatter <900 files/<50 functions, strict TypeScript, owner/privacy checks and existing parser v1/v2/T007 tests, without provider/native/emulator/deploy. Only after Root acknowledges Red may Core receive a new bounded namespace/repository/original-v1 carrier/assembler production grant. This turn does **not** write those source files. **TESTS FIRST; STOP / RELEASE / FROZEN.**
+
+## Core successor tests-only harness correction after Root pre-assertion Red
+
+**Governed checkpoint:** `85ce6167304c0f5a7b05e222469794ced02872d9`
+(original 27 authored cases are preserved, not declared passing). This
+tests-only successor checkpoint repairs the Babel/Jest initialization failure
+by resolving WatermelonDB `Q` **inside** the current-user fixture factory.
+It registers the actual `Account`, `BankDetails`,
+`AccountSmsSender`, `Profile`, and accessible `Category` model classes
+with both real SQLite adapters. A shared fixture persists the same two owned
+accounts, current-owner profile/preferred currency and system Shopping
+category as the synthetic pinned T010 captured context. It deliberately
+does **not** manufacture card/sender child evidence or mock a successful
+T010 read, normalizer, namespace lease, parser or final assembler.
+A discriminated `source === "SMS"` check guards access to
+`transaction.smsFingerprint`, and the chunk-row mapping callback has the
+canonical `AccountReviewSession` type. Future source missing-module
+errors remain genuine creation Red.
+
+**Additional observable cases (three):** one performs 24 serialized
+acquire/publish cycles and verifies the **same single** physical owned queue,
+retirement of completed operation authority, a live current lease and
+conditional final cleanup. It measures public lifecycle behavior, **not**
+private heap/Map cardinality; no debug API is invented. One uses an actual
+HTTP 429 `rolling_limit` `Response` error and asserts original
+`capacity_limited`, nonretryable status, `availableAt`, absence of
+durable negatives/terminal fingerprints and **no** review session or queue.
+The third uses real SQLite `mergeSmsReviewDrafts`,
+`updateSmsReviewDraftItem` and `updateSmsReviewDraftSelection` to preserve
+a user's edited amount/payload and selected state across a hybrid
+trusted-plus-AI parse; progress must never surface an interim AI-only
+`reviewSession`, and the final output retains the exact owned queue UUID.
+
+**Explicit gate:** these protect only **initial** UUID lease, direct/final
+SMS session assembly, and original existing-draft non-mutation. The
+stateful T027 merge/reducer rule for *late* AI rows versus in-memory edited
+group assignment/selection/revisions is **not proven** or mocked here.
+Full queue codec, last-row Undo identity, Save and UI remain T028/T029/T031
+gated. No SQL/schema/provider/orchestrator source was modified. Root must
+run real SQLite creation/type/formatter gates and distinguish genuine
+missing-source Red from harness failures **before** any production grant.

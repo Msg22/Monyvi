@@ -4,6 +4,7 @@
  * auth boundary is mocked; never mock the queue service, repository or writer.
  */
 import { Q, type Database, type Model } from "@nozbe/watermelondb";
+import { seedCapturedSmsReviewContext } from "./sms-review-real-sqlite-fixture";
 import type SQLiteAdapter from "@nozbe/watermelondb/adapters/sqlite";
 import { setGenerator } from "@nozbe/watermelondb/utils/common/randomId";
 import { canonicalUuid } from "../../../../packages/logic/src/account-review/schema-primitives";
@@ -96,6 +97,21 @@ jest.mock("@monyvi/db", () => {
     jest.requireActual<typeof import("../../../../packages/db/src/models/Transfer")>(
       "../../../../packages/db/src/models/Transfer"
     ).Transfer,
+    jest.requireActual<typeof import("../../../../packages/db/src/models/Account")>(
+      "../../../../packages/db/src/models/Account"
+    ).Account,
+    jest.requireActual<typeof import("../../../../packages/db/src/models/BankDetails")>(
+      "../../../../packages/db/src/models/BankDetails"
+    ).BankDetails,
+    jest.requireActual<typeof import("../../../../packages/db/src/models/AccountSmsSender")>(
+      "../../../../packages/db/src/models/AccountSmsSender"
+    ).AccountSmsSender,
+    jest.requireActual<typeof import("../../../../packages/db/src/models/Profile")>(
+      "../../../../packages/db/src/models/Profile"
+    ).Profile,
+    jest.requireActual<typeof import("../../../../packages/db/src/models/Category")>(
+      "../../../../packages/db/src/models/Category"
+    ).Category,
   ];
   const adapter = new Adapter({ schema });
   return {
@@ -107,25 +123,85 @@ jest.mock("@monyvi/db", () => {
     DismissedSmsFingerprint: modelClasses[2],
     Transaction: modelClasses[3],
     Transfer: modelClasses[4],
+    Account: modelClasses[5],
+    BankDetails: modelClasses[6],
+    AccountSmsSender: modelClasses[7],
+    Profile: modelClasses[8],
+    Category: modelClasses[9],
   };
 });
 
-jest.mock("@/services/user-data-access", () => ({
-  getCurrentUserDataScope: (): Promise<{
-    readonly userId: string;
-    readonly queryOwned: (collection: {
-      query: (...clauses: readonly unknown[]) => unknown;
-    }, ...conditions: readonly unknown[]) => unknown;
-  }> => Promise.resolve({
-    userId: mockCurrentUserId,
-    queryOwned: (collection, ...conditions) =>
-      collection.query(Q.where("user_id", mockCurrentUserId), ...conditions),
-  }),
-  assertExpectedCurrentUser: (expected: string): Promise<void> =>
-    expected === mockCurrentUserId ? Promise.resolve() :
-      Promise.reject(new Error("auth_scope_changed")),
-}));
+jest.mock("@/services/user-data-access", () => {
+  const { Q: scopedQ } = jest.requireActual<
+    typeof import("@nozbe/watermelondb")
+  >("@nozbe/watermelondb");
+  return {
+    getCurrentUserDataScope: () => {
+      const ownerId = mockCurrentUserId;
+      return Promise.resolve({
+        userId: ownerId,
+        queryOwned: (
+          collection: { query: (...clauses: unknown[]) => unknown },
+          ...conditions: unknown[]
+        ): unknown =>
+          collection.query(scopedQ.where("user_id", ownerId), ...conditions),
+        queryAccessibleCategories: (
+          collection: { query: (...clauses: unknown[]) => unknown },
+          ...conditions: unknown[]
+        ): unknown => collection.query(
+          scopedQ.or(scopedQ.where("user_id", ownerId),
+            scopedQ.where("user_id", null)),
+          ...conditions
+        ),
+        queryChildrenOfOwnedParents: (
+          collection: { query: (...clauses: unknown[]) => unknown },
+          parents: readonly { id: string; userId: string }[],
+          foreignKey: string,
+          ...conditions: unknown[]
+        ): unknown => {
+          if (parents.some((parent) => parent.userId !== ownerId)) {
+            throw new Error("auth_scope_changed");
+          }
+          return collection.query(
+            scopedQ.where(foreignKey, scopedQ.oneOf(parents.map((p) => p.id))),
+            ...conditions
+          );
+        },
+        assertOwned: <T extends { readonly userId: string }>(record: T): T => {
+          if (record.userId !== ownerId) throw new Error("auth_scope_changed");
+          return record;
+        },
+      });
+    },
+    queryOwned: (
+      collection: { query: (...clauses: unknown[]) => unknown },
+      ownerId: string,
+      ...conditions: unknown[]
+    ): unknown => collection.query(scopedQ.where("user_id", ownerId), ...conditions),
+    queryChildrenOfOwnedParents: (
+      collection: { query: (...clauses: unknown[]) => unknown },
+      parents: readonly { id: string; userId: string }[],
+      ownerId: string,
+      foreignKey: string,
+      ...conditions: unknown[]
+    ): unknown => {
+      if (parents.some((parent) => parent.userId !== ownerId)) {
+        throw new Error("auth_scope_changed");
+      }
+      return collection.query(
+        scopedQ.where(foreignKey, scopedQ.oneOf(parents.map((parent) => parent.id))),
+        ...conditions
+      );
+    },
+    assertExpectedCurrentUser: (expected: string): Promise<void> =>
+      expected === mockCurrentUserId ? Promise.resolve() :
+        Promise.reject(new Error("auth_scope_changed")),
+  };
+});
 
+jest.mock("@/services/supabase", () => ({
+  getCurrentUserId: (): Promise<string> => Promise.resolve(mockCurrentUserId),
+}));
 const { database, __adapter: adapter } =
   jest.requireMock<RealSqliteDatabaseModule>("@monyvi/db");
 type Lease = Awaited<ReturnType<typeof acquireOwnedSmsReviewQueueNamespace>>;
@@ -192,6 +268,7 @@ describe("#395 owned queue UUID lease — real SQLite concurrency and lifetime",
     await database.write(async (): Promise<void> => {
       await database.unsafeResetDatabase();
     });
+    await seedCapturedSmsReviewContext(database, OWNER);
   });
 
   afterEach(async () => {
@@ -255,6 +332,28 @@ describe("#395 owned queue UUID lease — real SQLite concurrency and lifetime",
     await release(first, "cancelled");
     expect(await ownedQueues()).toHaveLength(1);
     await release(second, "cancelled");
+    expect(await ownedQueues()).toHaveLength(0);
+  });
+
+  it("retires published operation tokens while retaining just one queue pin", async () => {
+    const completed: Lease[] = [];
+    for (let index = 0; index < 24; index += 1) {
+      const lease = await acquire();
+      completed.push(lease);
+      await release(lease, "published");
+      await expect(assertOwnedSmsReviewQueueNamespaceCurrent({ lease }))
+        .rejects.toThrow();
+      expect((await ownedQueues()).map((queue) => queue.id))
+        .toEqual([completed[0]?.queueId]);
+    }
+    const stillActive = await acquire();
+    expect(stillActive.sessionId).toBe(completed[0]?.queueId);
+    await assertOwnedSmsReviewQueueNamespaceCurrent({ lease: stillActive });
+    await release(stillActive, "cancelled");
+    expect(await ownedQueues()).toHaveLength(1);
+    for (const lease of completed) {
+      await release(lease, "cancelled");
+    }
     expect(await ownedQueues()).toHaveLength(0);
   });
 
