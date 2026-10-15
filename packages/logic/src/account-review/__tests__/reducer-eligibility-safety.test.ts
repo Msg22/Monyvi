@@ -95,7 +95,13 @@ function groupCommand(
   });
 }
 
-function financialRows(state: AccountReviewSession) {
+function financialRows(
+  state: AccountReviewSession
+): ReadonlyArray<Pick<
+  AccountReviewRow,
+  "rowId" | "amountDecimal" | "transaction" | "currency" |
+  "assignment" | "toAssignment" | "reviewReasons" | "selected" | "revision"
+>> {
   return state.rows.map((row) => ({
     rowId: row.rowId, amountDecimal: row.amountDecimal,
     transaction: row.transaction, currency: row.currency,
@@ -337,7 +343,7 @@ describe("#395 T027 source and current-default reducer safety", () => {
   it.each(["select_row", "select_ready"])(
     "accepts still-current Bank A default and an explicit A override using %s",
     async (kind) => {
-      const origins: readonly ("default" | "user")[] = ["default", "user"];
+      const origins: ReadonlyArray<"default" | "user"> = ["default", "user"];
       for (const origin of origins) {
         const state = await defaultBankAReview(origin);
         const snapshots = withSoleDefault(
@@ -355,6 +361,41 @@ describe("#395 T027 source and current-default reducer safety", () => {
       }
     }
   );
+
+  it("bulk selection skips stale default A but selects another ready explicit B row", async () => {
+    const base = await defaultBankAReview("default");
+    const stale = requireRow(base, COMMAND_IDS.readyRow);
+    if (stale.source !== "VOICE") throw new Error("Expected ready Voice row");
+    const ready: AccountReviewRow = {
+      ...stale,
+      rowId: COMMAND_IDS.cibRow,
+      sourceRef: "bulk-ready-explicit-cib",
+      amountDecimal: "44",
+      assignment: {
+        state: "existing", accountId: COMMAND_IDS.cibAccount,
+        origin: "user", currency: "EGP", identityRevision: "0",
+      },
+      hasUserAccountOverride: true,
+      transaction: {
+        ...stale.transaction, amount: 44, note: "Explicit CIB choice",
+      },
+    };
+    const state = accountReviewSessionSchema.parse({
+      ...base, rows: [...base.rows, ready],
+    });
+    const snapshots = withSoleDefault(state, COMMAND_IDS.cibAccount);
+    const frozen = structuredClone(state);
+    const result = execute(state, selectReady(state), snapshots);
+    expectAccepted(state, result);
+    expect(result.affectedRowIds).toEqual([ready.rowId]);
+    expect(result.state.rows.filter((row) => row.selected).map((row) => row.rowId))
+      .toEqual([ready.rowId]);
+    expect(requireRow(result.state, COMMAND_IDS.readyRow)).toEqual(stale);
+    expect(groupByName(result.state, "QNB")).toEqual(groupByName(base, "QNB"));
+    expect(result.state.rows.map((row) => row.amountDecimal))
+      .toEqual(frozen.rows.map((row) => row.amountDecimal));
+    expect(state).toEqual(frozen);
+  });
 });
 
 describe("#395 T027 ATM destination eligibility, separately from source Bank", () => {
@@ -397,7 +438,9 @@ describe("#395 T027 ATM destination eligibility, separately from source Bank", (
     const input = await normalizedAtmSource();
     const state = stagedAtm(input, COMMAND_IDS.cashAccount, "existing");
     const row = state.rows[0];
-    if (!row) throw new Error("Missing ATM destination row");
+    if (!row || row.source !== "SMS") {
+      throw new Error("Missing SMS ATM destination row");
+    }
     expect(row.transaction.isAtmWithdrawal).toBe(true);
     expect(row.reviewReasons).toEqual([]);
     for (const command of [selectRow(state, row.rowId), selectReady(state)]) {

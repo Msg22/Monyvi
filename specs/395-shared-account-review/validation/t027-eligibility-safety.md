@@ -11,7 +11,7 @@ contracts; business-decisions.md lines 265–273 and 300–325.
 
 ## Case inventory and predicted behavior (NOT EXECUTED)
 
-The new suite contains **15 test declarations expanded to 18 Jest cases** by
+The corrected suite contains **16 test declarations expanded to 19 Jest cases** by
 three two-entry tables. It has no SUT mocks, fake reducer outcomes, unsafe
 casts, any types, provider calls, or future T036 reducer commands.
 
@@ -82,3 +82,53 @@ covered.
 - **Next:** Root fetches the published commit and runs focused checks, inspects
   canonical setup and meaningful Red, and decides whether to grant a separate
   bounded source correction. T036 remains held.
+
+
+## Subsequent production correction lease — source prepared, execution held
+
+**Root's actual pre-correction Red**: 34 PASS / 10 FAIL, comprising existing
+26 T024 PASS plus the new suite 8 PASS / 10 FAIL. Root reported all ten failures
+as meaningful reducer invariants and no fixture construction failures.
+**After this correction:** Jest, strict logic TypeScript, lint, and independent
+review are **NOT RUN** by this remote worker; do not interpret the source
+changes or this note as verified Green.
+
+Production source authored against parent
+3512166dbee9c4a37fc4244b9abff79cec5ffdef:
+
+- reducer-groups.ts: SMS source groups cannot be confirmed/edited into CASH,
+  while Voice CASH and removed-group cleanup retain their own paths. The
+  edit collision guard now scopes normalized nicknames by the current
+  user/session, locked currency and stable institutionId (including null);
+  provider display name and account type do not create new namespaces.
+  Removing a group requires a valid transient UUID Undo token; null and
+  malformed tokens reject before any tombstone/row mutation.
+- reducer-selection.ts: selection eligibility invokes the existing
+  resolveAccountReviewSession pure owned-snapshot revalidation instead of
+  replicating its default, account evidence, Cash destination, currency,
+  provider and source rules. Direct rows and disclosed pending group clicks
+  gate on the refreshed row before accepting any selection/confirmation.
+  ATM destination must revalidate to **existing**; unresolved/absent/pending
+  destinations are not ready. Confirmed SMS source group cannot be CASH.
+  Bulk select_ready refreshes once, selects only eligible visible rows and
+  skips invalid ones; an empty eligible set returns the existing canonical
+  rejection without any state change. clear_selection is unchanged.
+- reducer-eligibility-safety.test.ts: preserved all 18 existing cases and
+  assertions, added one mixed bulk-selected safety case, annotated the
+  financial-row snapshot projection with the authoritative AccountReviewRow
+  type, used the appropriate ReadonlyArray union annotation, and narrowed
+  the SMS discriminant before reading isAtmWithdrawal.
+
+The correction reuses an existing pure, exported resolver without moving or
+editing resolution.ts, identity.ts, review-schemas.ts, repository indexes,
+persisted payloads or contracts. It returns the reducer's original immutable
+session transitions only; revalidated rows are used as eligibility evidence,
+not silently committed financial data. A later resolver or snapshot refresh
+must not be mistaken for an accepted reducer mutation.
+
+**Root next gate:** fetch the child commit, confirm only the two reducer source
+modules, this new test and this note changed, then run batched strict TS/lint,
+focused 26+19 suite and unaffected logic checks. Independently review
+selection refresh cost and atomic rejected outcomes. No source Green or full
+runtime Save/SQL/UI validation is claimed. Branch ownership is released after
+publication.

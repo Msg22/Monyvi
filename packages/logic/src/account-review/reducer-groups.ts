@@ -79,12 +79,17 @@ function confirmGroupRows(
   });
 }
 
+/** The current session fixes owner and group currency; institutionId, not
+ * the provider display label or account type, scopes known-provider nicknames. */
 function editedNameConflicts(
-  state: AccountReviewSession, command: Extract<GroupCommand, { kind: "edit_group" }>
+  state: AccountReviewSession, edited: AccountReviewGroup,
+  command: Extract<GroupCommand, { kind: "edit_group" }>
 ): boolean {
   const wanted = normalizeGroundedIdentity(command.identity.name);
   return state.groups.some((group) =>
-    group.groupId !== command.groupId && group.status !== "removed" &&
+    group.groupId !== edited.groupId && group.status !== "removed" &&
+    group.currency === edited.currency &&
+    group.institutionId === command.identity.institutionId &&
     normalizeGroundedIdentity(group.name) === wanted
   );
 }
@@ -92,7 +97,13 @@ function editedNameConflicts(
 function confirmOrEdit(
   state: AccountReviewSession, group: AccountReviewGroup, command: GroupCommand
 ): GroupTransitionResult {
-  if (command.kind === "edit_group" && editedNameConflicts(state, command)) {
+  // Active SMS groups always assign the source, never an ATM Cash destination.
+  // A grounded Voice Cash group remains valid.
+  const type = command.kind === "edit_group" ? command.identity.type : group.type;
+  if (state.source === "SMS" && type === "CASH") {
+    return blocked("account_group_snapshot_conflict");
+  }
+  if (command.kind === "edit_group" && editedNameConflicts(state, group, command)) {
     return blocked("account_group_snapshot_conflict");
   }
   if (command.kind === "confirm_group" && group.status === "confirmed") {
@@ -129,7 +140,8 @@ function removeGroup(
   state: AccountReviewSession, group: AccountReviewGroup,
   nextUndoToken: string | null
 ): GroupTransitionResult {
-  if (nextUndoToken !== null && !canonicalUuid.safeParse(nextUndoToken).success) {
+  // Every removal must be reversible with a valid transient, caller-issued lease.
+  if (nextUndoToken === null || !canonicalUuid.safeParse(nextUndoToken).success) {
     return blocked("review_undo_invalid");
   }
   const updated: AccountReviewGroup = {

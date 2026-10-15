@@ -4,7 +4,7 @@ import type {
   AccountReviewRow, AccountReviewSession,
 } from "./review-schemas";
 import type { AccountReviewOwnedContext } from "./normalization-types";
-import { eligibleSourceAccounts } from "./resolution-candidates";
+import { resolveAccountReviewSession } from "./resolution";
 import { reduceGroupCommand } from "./reducer-groups";
 import {
   revisedRow, type ReviewTransition,
@@ -35,33 +35,28 @@ function hardReasonsRemain(row: AccountReviewRow): boolean {
   );
 }
 
-function hasAccountChoice(
-  row: AccountReviewRow, accounts: AccountReviewOwnedContext
-): boolean {
-  if (row.currency.state !== "known") return false;
-  if (row.assignment.state === "suggested") return false;
-  const assignment = row.assignment;
-  if (assignment.state !== "existing") return false;
-  return eligibleSourceAccounts(accounts.accounts, row.source, row.currency.code)
-    .some((account) => account.id === assignment.accountId);
+/** Called only on a freshly re-resolved row. The shared resolver validates
+ * Cash ownership, currency, distinct endpoints, default origin and evidence;
+ * an unresolved or pending destination is never ready for ATM selection. */
+function hasSatisfiedAtmDestination(row: AccountReviewRow): boolean {
+  return row.source !== "SMS" || row.transaction.isAtmWithdrawal !== true ||
+    row.toAssignment?.state === "existing";
 }
 
 function isReady(
-  row: AccountReviewRow,
-  groups: readonly AccountReviewGroup[],
-  accounts: AccountReviewOwnedContext
+  row: AccountReviewRow, groups: readonly AccountReviewGroup[]
 ): boolean {
-  if (row.currency.state !== "known" || hardReasonsRemain(row)) return false;
-  if (row.source === "SMS" && row.transaction.isAtmWithdrawal &&
-      (row.toAssignment === null || row.toAssignment.state === "unresolved")) {
-    return false;
-  }
+  if (row.currency.state !== "known" || hardReasonsRemain(row) ||
+      !hasSatisfiedAtmDestination(row)) return false;
   const assignment = row.assignment;
   if (assignment.state === "suggested") {
     return groups.some((group) => group.groupId === assignment.groupId &&
-      group.status === "confirmed" && group.revision === assignment.groupRevision);
+      group.status === "confirmed" && group.revision === assignment.groupRevision &&
+      // SMS groups always supply the source; Cash is destination-only for ATM.
+      (row.source !== "SMS" || group.type !== "CASH"));
   }
-  return hasAccountChoice(row, accounts);
+  // A pure fresh resolution has already invalidated stale default/account IDs.
+  return assignment.state === "existing";
 }
 
 function linkedGroupForSelection(
@@ -113,7 +108,11 @@ function selectExistingOrConfirmed(
         command.expectedGroupRevision !== row.assignment.groupRevision)) {
     return blocked("review_revision_stale");
   }
-  if (!isReady(row, session.groups, context)) return blocked("account_needed");
+  const refreshed = resolveAccountReviewSession({
+    session, accountSnapshots: context,
+  });
+  const current = refreshed.rows.find((item) => item.rowId === row.rowId);
+  if (!current || !isReady(current, refreshed.groups)) return blocked("account_needed");
   const rows = session.rows.map((item): AccountReviewRow =>
     item.rowId === row.rowId ? revisedRow({ ...item, selected: true }) : item
   );
@@ -137,7 +136,14 @@ export function reduceSelectRow(
       row.assignment.confirmation === "confirmed") {
     return selectExistingOrConfirmed(session, row, command, context);
   }
-  if (row.currency.state !== "known" || hardReasonsRemain(row)) {
+  // Inspect fresh ownership/default/destination eligibility *before* a
+  // disclosed click confirms a pending shared source group.
+  const refreshed = resolveAccountReviewSession({
+    session, accountSnapshots: context,
+  });
+  const current = refreshed.rows.find((item) => item.rowId === row.rowId);
+  if (!current || current.currency.state !== "known" ||
+      hardReasonsRemain(current) || !hasSatisfiedAtmDestination(current)) {
     return blocked("account_needed");
   }
   const prepared = confirmForClick(session, row, command);
@@ -181,10 +187,17 @@ export function reduceSelectBatch(
   context: AccountReviewOwnedContext
 ): SelectionTransitionResult {
   if (command.filter !== session.filter) return blocked("review_revision_stale");
+  // Recheck the whole owned snapshot once, then select only ready visible IDs.
+  // Ineligible rows are skipped; a wholly ineligible batch remains a no-op.
+  const readyIds = command.kind === "select_ready"
+    ? new Set(resolveAccountReviewSession({
+      session, accountSnapshots: context,
+    }).rows.filter((row) => isReady(row, session.groups)).map((row) => row.rowId))
+    : new Set<string>();
   const chosen = session.rows.filter((row) =>
     visibleByFilter(row, command.filter) &&
     (command.kind === "clear_selection" ? row.selected :
-      !row.selected && isReady(row, session.groups, context))
+      !row.selected && readyIds.has(row.rowId))
   );
   if (chosen.length === 0) return blocked("review_revision_stale");
   const ids = new Set(chosen.map((row) => row.rowId));
