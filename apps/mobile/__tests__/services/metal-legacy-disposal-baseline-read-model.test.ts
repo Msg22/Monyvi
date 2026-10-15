@@ -18,6 +18,7 @@ import {
 } from "@/services/metal-legacy-disposal-baseline-service";
 import type { MetalDetailLifecycleEventRecord } from "@/services/metal-detail-read-model-shaping";
 import type { MetalDisposeGroupSnapshot } from "@/services/metal-disposed-evidence-service";
+import type { MetalLifecycleIdentitySource } from "@/services/metal-lifecycle-identity-service";
 import { terminalFactsFixture } from "./terminal-facts-fixture";
 
 function originalDisposalPayload(): Readonly<Record<string, unknown>> {
@@ -227,6 +228,57 @@ function baselineSource(
     terminalFacts: input.terminalFacts ?? null,
     revisionEvidence: input.legacyDisposalRevisionEvidence ?? null,
     actionEvidence: input.legacyDisposalActionEvidence ?? null,
+  };
+}
+
+interface HistoricalOriginalDisposalProof extends ResolveLegacyDisposalBaselineInput {
+  readonly lifecycleEvents: readonly MetalDetailLifecycleEventInput[];
+}
+
+// Build the historical action as recorded on its originating device.
+// Its recorded civil date may be later than Cairo's day at the same UTC instant.
+function historicalOriginalDisposalProof(
+  occurredAtIso: string,
+  recordedDisposalDate: string
+): HistoricalOriginalDisposalProof {
+  const input = legacyActiveAfterUndoDetailInput();
+  const occurredAt = new Date(occurredAtIso);
+  const payload = {
+    ...originalDisposalPayload(),
+    disposalDate: recordedDisposalDate,
+  };
+  const originalEnvelope: unknown = JSON.parse(
+    originalDisposalGroup().payloadJson
+  );
+  if (
+    originalEnvelope === null ||
+    typeof originalEnvelope !== "object" ||
+    Array.isArray(originalEnvelope)
+  ) {
+    throw new Error("invalid_disposal_envelope_fixture");
+  }
+  const event = {
+    ...originalDisposalEvent(),
+    occurredAt,
+    payloadJson: JSON.stringify(payload),
+  };
+  const group = originalDisposalGroup({
+    payloadJson: JSON.stringify({
+      ...originalEnvelope,
+      occurredAt: occurredAtIso,
+      payload,
+    }),
+  });
+  return {
+    ...baselineSource(input),
+    lifecycleEvents: [
+      { ...legacyDisposedEvent(), occurredAt, payloadJson: event.payloadJson },
+      {
+        ...legacyUndoEvent(),
+        occurredAt: new Date(occurredAt.getTime() + 60_000),
+      },
+    ],
+    actionEvidence: toLegacyDisposalActionEvidence([event], [group]),
   };
 }
 
@@ -442,6 +494,90 @@ describe("legacy disposal baseline read model (issue #338)", () => {
     expect(buildMetalDetailReadModel(shaped)?.timeline).toHaveLength(2);
   });
 
+  it("retains immutable original disposal evidence after the device clock rolls back", (): void => {
+    const input = legacyActiveAfterUndoDetailInput();
+    jest.useFakeTimers().setSystemTime(new Date("2025-01-01T00:00:00.000Z"));
+    try {
+      expect(resolveLegacyDisposalBaseline(baselineSource(input))).toEqual({
+        terminalEventId: originalDisposalEvent().id,
+      });
+      expect(buildMetalDetailReadModel(input)?.status).toBe("active");
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it.each(["Asia/Dubai", "Pacific/Honolulu", "Africa/Cairo"])(
+    "preserves Dubai-device Nov 15 disposal when current timezone changes to %s and clock rolls back",
+    (deviceTimezone: string): void => {
+      // Nov 15 00:30 in Dubai = Nov 14 20:30Z; Cairo still reads Nov 14.
+      const savedTimezone: unknown = process.env.TZ;
+      const previousTimezone =
+        typeof savedTimezone === "string" ? savedTimezone : undefined;
+      process.env.TZ = deviceTimezone;
+      jest.useFakeTimers().setSystemTime(new Date("2025-01-01T00:00:00.000Z"));
+      try {
+        const proof = historicalOriginalDisposalProof(
+          "2026-11-14T20:30:00.000Z",
+          "2026-11-15"
+        );
+        expect(resolveLegacyDisposalBaseline(proof)).toEqual({
+          terminalEventId: originalDisposalEvent().id,
+        });
+        const source = legacyActiveAfterUndoDetailInput();
+        expect(
+          buildMetalDetailReadModel({
+            ...source,
+            lifecycleEvents: proof.lifecycleEvents,
+            legacyDisposalActionEvidence: proof.actionEvidence,
+          })?.status
+        ).toBe("active");
+      } finally {
+        jest.useRealTimers();
+        if (previousTimezone === undefined) {
+          delete process.env.TZ;
+        } else {
+          process.env.TZ = previousTimezone;
+        }
+      }
+    }
+  );
+
+  it.each([
+    ["2026-11-14T09:59:59.999Z", false],
+    ["2026-11-14T10:00:00.000Z", true],
+    ["2026-11-14T20:30:00.000Z", true],
+  ] as const)(
+    "uses the actual +14 device-calendar maximum at %s for Nov 15 (valid: %s)",
+    (occurredAt, isValid): void => {
+      const proof = historicalOriginalDisposalProof(occurredAt, "2026-11-15");
+      const outcome = resolveLegacyDisposalBaseline(proof);
+      expect(outcome !== null).toBe(isValid);
+    }
+  );
+
+  it("rejects Nov 16 when the latest possible device date at the saved occurrence is Nov 15", (): void => {
+    expect(
+      resolveLegacyDisposalBaseline(
+        historicalOriginalDisposalProof(
+          "2026-11-14T20:30:00.000Z",
+          "2026-11-16"
+        )
+      )
+    ).toBeNull();
+  });
+
+  it("retains an intentionally backdated civil disposal date before its occurrence", (): void => {
+    expect(
+      resolveLegacyDisposalBaseline(
+        historicalOriginalDisposalProof(
+          "2026-11-14T20:30:00.000Z",
+          "2026-11-01"
+        )
+      )
+    ).toEqual({ terminalEventId: originalDisposalEvent().id });
+  });
+
   it("keeps a verified legacy disposal readable in detail and History after its first action", (): void => {
     const input = legacyDisposedDetailInput();
 
@@ -580,6 +716,73 @@ describe("legacy disposal baseline read model (issue #338)", () => {
     expect(rejectedUndoModel?.timeline.map(({ id }) => id)).toEqual([
       "018f0c7a-1234-7abc-8def-000000000005",
     ]);
+  });
+
+  function canonicalIdentitySource(): MetalLifecycleIdentitySource {
+    return {
+      userId: "018f0c7a-1234-7abc-8def-000000000001",
+      holdingId: "018f0c7a-1234-7abc-8def-000000000002",
+      events: [originalDisposalEvent()],
+      groups: [{ ...originalDisposalGroup(), accountGuardsJson: "[]" }],
+      evidence: [
+        {
+          actionId: originalDisposalEvent().actionId,
+          canonicalHoldingRevision: "1",
+          deleted: false,
+          domainPayloadJson: JSON.stringify(originalDisposalPayload()),
+          expectedHoldingRevision: "0",
+          holdingId: originalDisposalEvent().holdingId,
+          kind: "dispose",
+          userId: originalDisposalEvent().userId,
+        },
+      ],
+    };
+  }
+
+  it("builds Active after a new canonical Undo without rewriting legacy event rows", (): void => {
+    const original = legacyActiveAfterUndoDetailInput();
+    const canonicalId = originalDisposalEvent().actionId;
+    const model = buildMetalDetailReadModel({
+      ...original,
+      identitySource: canonicalIdentitySource(),
+      lifecycleEvents: [
+        legacyDisposedEvent(),
+        {
+          ...legacyUndoEvent(),
+          predecessorEventId: canonicalId,
+          reversesEventId: canonicalId,
+        },
+      ],
+    });
+    expect(model?.status).toBe("active");
+    expect(model?.isActiveOwnership).toBe(true);
+    expect(model?.timeline).toHaveLength(2);
+    expect(model?.timeline[1]?.id).toBe(canonicalId);
+    expect(originalDisposalEvent().id).not.toBe(canonicalId);
+  });
+
+  it("does not silently server-accept an old Undo with E references", (): void => {
+    const original = legacyActiveAfterUndoDetailInput();
+    const model = buildMetalDetailReadModel({
+      ...original,
+      identitySource: canonicalIdentitySource(),
+    });
+    expect(model?.isActiveOwnership).toBe(false);
+    expect(model?.status).toBe("disposed");
+    expect(model?.timeline).toHaveLength(1);
+  });
+
+  it("preserves immutable history for recovery without fabricating Active when alias proof is missing", (): void => {
+    const original = legacyActiveAfterUndoDetailInput();
+    const unproved = {
+      ...canonicalIdentitySource(),
+      evidence: [],
+    };
+    expect(
+      buildMetalDetailReadModel({ ...original, identitySource: unproved })
+    ).toBeNull();
+    expect(original.lifecycleEvents).toHaveLength(2);
+    expect(original.legacyDisposalActionEvidence).toBeDefined();
   });
 
   it("retains original legacy root and complete Details timeline through repeated Dispose/Undo cycles", (): void => {

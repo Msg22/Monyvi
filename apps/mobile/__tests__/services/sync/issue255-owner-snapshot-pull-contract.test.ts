@@ -153,6 +153,24 @@ describe("#255 public pull caller contracts", () => {
     }
   });
 
+  it("continues rejecting numeric exact financial revisions on nondeleted dedicated pulls", async () => {
+    const query = chain(
+      [
+        {
+          id: FIRST,
+          updated_at: STAMP,
+          deleted: false,
+          financial_revision_text: 1,
+        },
+      ],
+      1
+    );
+    mockFrom.mockReturnValueOnce(query);
+    await expect(
+      pullMetalDedicatedTable("metal_holding_states", USER, LOWER, UPPER)
+    ).rejects.toThrow("sync_invalid_exact_text");
+  });
+
   it("dedicated pulls obey count EOF even below requested page size", async () => {
     const first = chain([{ id: FIRST, updated_at: STAMP, deleted: true }], 2);
     const second = chain([{ id: SECOND, updated_at: STAMP, deleted: true }], 1);

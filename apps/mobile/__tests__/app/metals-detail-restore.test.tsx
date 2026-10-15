@@ -29,6 +29,9 @@ let mockContext: Record<string, unknown> | null = {
   expectedFinancialRevision: "1",
 };
 let mockContextError: Error | null = null;
+let mockContextIsLoading = false;
+const mockDetailRetry = jest.fn();
+const mockRecoveryAfterSync = jest.fn();
 const mockSubmit = jest.fn<Promise<boolean>, []>();
 const mockRetry = jest.fn<Promise<boolean>, []>();
 const mockToast = jest.fn();
@@ -59,7 +62,7 @@ jest.mock("@/hooks/useMetalHoldingDetail", () => ({
     isLoading: false,
     isOffline: true,
     error: null,
-    retry: jest.fn(),
+    retry: mockDetailRetry,
   }),
 }));
 jest.mock("@/hooks/useUndoMetalHoldingContext", () => ({
@@ -67,9 +70,10 @@ jest.mock("@/hooks/useUndoMetalHoldingContext", () => ({
     context: mockContext,
     userId: mockUserId,
     isResolvingUser: false,
-    isLoading: false,
+    isLoading: mockContextIsLoading,
     error: mockContextError,
     retry: jest.fn(),
+    retryAfterSync: mockRecoveryAfterSync,
   }),
 }));
 jest.mock("@/hooks/useRestoreMetalHolding", () => ({
@@ -121,19 +125,43 @@ jest.mock("@/components/metals/RestoreMetalHoldingSheet", () => {
       readonly summary: { readonly body: string };
       readonly holdingVisual: React.ReactNode;
       readonly bottomInset: number;
+      readonly visible: boolean;
+      readonly isPending: boolean;
       readonly onConfirm: () => void;
       readonly onRetry: () => void;
       readonly onCancel: () => void;
-    }): React.JSX.Element => (
-      <View testID="restore-holding-modal">
-        <Text>{props.summary.body}</Text>
-        {props.holdingVisual}
-        <Text>{`bottom:${props.bottomInset}`}</Text>
-        <Pressable testID="restore-holding-confirm" onPress={props.onConfirm} />
-        <Pressable testID="restore-holding-retry" onPress={props.onRetry} />
-        <Pressable testID="restore-holding-cancel" onPress={props.onCancel} />
-      </View>
-    ),
+    }): React.JSX.Element | null =>
+      props.visible ? (
+        <View testID="restore-holding-modal">
+          <Text>{props.summary.body}</Text>
+          {props.holdingVisual}
+          <Text>{`bottom:${props.bottomInset}`}</Text>
+          <Pressable
+            testID="restore-holding-confirm"
+            accessibilityRole="button"
+            accessibilityState={{
+              disabled: props.isPending,
+              busy: props.isPending,
+            }}
+            disabled={props.isPending}
+            onPress={props.isPending ? undefined : props.onConfirm}
+          />
+          <Pressable
+            testID="restore-holding-retry"
+            accessibilityRole="button"
+            accessibilityState={{ disabled: props.isPending }}
+            disabled={props.isPending}
+            onPress={props.isPending ? undefined : props.onRetry}
+          />
+          <Pressable
+            testID="restore-holding-cancel"
+            accessibilityRole="button"
+            accessibilityState={{ disabled: props.isPending }}
+            disabled={props.isPending}
+            onPress={props.isPending ? undefined : props.onCancel}
+          />
+        </View>
+      ) : null,
   };
 });
 jest.mock("@/components/metals/MetalHoldingDetailScreen", () => {
@@ -142,12 +170,15 @@ jest.mock("@/components/metals/MetalHoldingDetailScreen", () => {
   return {
     MetalHoldingDetailScreen: ({
       actions,
+      isActionLoading,
       onAction,
     }: {
       readonly actions: readonly HoldingActionDescriptor[];
+      readonly isActionLoading?: boolean;
       readonly onAction?: (id: HoldingActionId) => void;
     }): React.JSX.Element => (
-      <View>
+      <View testID="loaded-detail-content">
+        {isActionLoading ? <View testID="restore-action-loading" /> : null}
         {actions.map((action) => (
           <Pressable
             key={action.id}
@@ -160,6 +191,29 @@ jest.mock("@/components/metals/MetalHoldingDetailScreen", () => {
   };
 });
 
+function expectRestorePendingActionsBlocked(): void {
+  expect(screen.getByTestId("restore-holding-confirm")).toHaveProp(
+    "accessibilityState",
+    expect.objectContaining({ disabled: true, busy: true })
+  );
+
+  for (const testID of [
+    "restore-holding-confirm",
+    "restore-holding-retry",
+    "restore-holding-cancel",
+  ]) {
+    expect(screen.getByTestId(testID)).toHaveProp(
+      "accessibilityState",
+      expect.objectContaining({ disabled: true })
+    );
+    fireEvent.press(screen.getByTestId(testID));
+  }
+
+  expect(mockSubmit).toHaveBeenCalledTimes(1);
+  expect(mockRetry).not.toHaveBeenCalled();
+  expect(screen.getByTestId("restore-holding-modal")).toBeTruthy();
+}
+
 beforeEach((): void => {
   jest.clearAllMocks();
   mockUserId = "user-1";
@@ -171,11 +225,13 @@ beforeEach((): void => {
     expectedFinancialRevision: "1",
   };
   mockContextError = null;
+  mockContextIsLoading = false;
   mockModel = {
     ...mockModel,
     status: "disposed",
     isActiveOwnership: false,
     isFinancialActionLocked: false,
+    timeline: [],
   };
   mockSubmit.mockResolvedValue(true);
   mockRetry.mockResolvedValue(true);
@@ -255,5 +311,176 @@ describe("reachable Details Restore", (): void => {
     rerender(<MetalHoldingDetailRoute />);
     expect(screen.queryByTestId("restore-holding-modal")).toBeNull();
     expect(mockSubmit).not.toHaveBeenCalled();
+  });
+
+  it("invalidates an open Restore when Detail terminal identity changes before eligibility rereads", (): void => {
+    const { rerender } = render(<MetalHoldingDetailRoute />);
+    fireEvent.press(screen.getByTestId("detail-action-undo"));
+    expect(screen.getByTestId("restore-holding-modal")).toBeTruthy();
+
+    mockModel = {
+      ...mockModel,
+      timeline: [{ id: "dispose-2", kind: "dispose" }],
+    };
+    rerender(<MetalHoldingDetailRoute />);
+    expect(screen.queryByTestId("restore-holding-modal")).toBeNull();
+    expect(mockSubmit).not.toHaveBeenCalled();
+
+    mockModel = { ...mockModel, timeline: [] };
+    rerender(<MetalHoldingDetailRoute />);
+    expect(screen.queryByTestId("restore-holding-modal")).toBeNull();
+  });
+
+  it("revokes an open Restore when the same holding gets another terminal action and never resurrects it", (): void => {
+    const { rerender } = render(<MetalHoldingDetailRoute />);
+    fireEvent.press(screen.getByTestId("detail-action-undo"));
+    expect(screen.getByTestId("restore-holding-modal")).toBeTruthy();
+    const originalContext = mockContext;
+
+    mockContext = {
+      ...mockContext,
+      terminalEventId: "dispose-2",
+      expectedFinancialRevision: "2",
+    };
+    mockModel = {
+      ...mockModel,
+      timeline: [{ id: "dispose-2", kind: "dispose" }],
+    };
+    rerender(<MetalHoldingDetailRoute />);
+    expect(screen.queryByTestId("restore-holding-modal")).toBeNull();
+
+    mockContext = originalContext;
+    mockModel = { ...mockModel, timeline: [] };
+    rerender(<MetalHoldingDetailRoute />);
+    expect(screen.queryByTestId("restore-holding-modal")).toBeNull();
+    expect(mockSubmit).not.toHaveBeenCalled();
+  });
+
+  it("revokes a same-terminal Restore when its financial revision changes, without reopening on a reverted token", (): void => {
+    const { rerender } = render(<MetalHoldingDetailRoute />);
+    fireEvent.press(screen.getByTestId("detail-action-undo"));
+    expect(screen.getByTestId("restore-holding-modal")).toBeTruthy();
+    const originalContext = mockContext;
+
+    mockContext = { ...mockContext, expectedFinancialRevision: "2" };
+    rerender(<MetalHoldingDetailRoute />);
+    expect(screen.queryByTestId("restore-holding-modal")).toBeNull();
+
+    mockContext = originalContext;
+    rerender(<MetalHoldingDetailRoute />);
+    expect(screen.queryByTestId("restore-holding-modal")).toBeNull();
+    expect(mockSubmit).not.toHaveBeenCalled();
+  });
+
+  it("closes the old Restore after reconciliation locks actions, without reopening on unlock", (): void => {
+    const { rerender } = render(<MetalHoldingDetailRoute />);
+    fireEvent.press(screen.getByTestId("detail-action-undo"));
+    expect(screen.getByTestId("restore-holding-modal")).toBeTruthy();
+
+    mockModel = { ...mockModel, isFinancialActionLocked: true };
+    rerender(<MetalHoldingDetailRoute />);
+    expect(screen.queryByTestId("restore-holding-modal")).toBeNull();
+    expect(mockSubmit).not.toHaveBeenCalled();
+
+    mockModel = { ...mockModel, isFinancialActionLocked: false };
+    rerender(<MetalHoldingDetailRoute />);
+    expect(screen.queryByTestId("restore-holding-modal")).toBeNull();
+    expect(screen.getByTestId("detail-action-undo")).toBeTruthy();
+  });
+
+  it("keeps an already submitted Restore pending through local Active projection until its success toast", async (): Promise<void> => {
+    let resolveSubmit: (succeeded: boolean) => void = (): void => {
+      throw new Error("missing_submit_resolver");
+    };
+    mockSubmit.mockImplementationOnce(
+      (): Promise<boolean> =>
+        new Promise<boolean>((resolve): void => {
+          resolveSubmit = resolve;
+        })
+    );
+    const { rerender } = render(<MetalHoldingDetailRoute />);
+    fireEvent.press(screen.getByTestId("detail-action-undo"));
+    fireEvent.press(screen.getByTestId("restore-holding-confirm"));
+    expect(mockSubmit).toHaveBeenCalledTimes(1);
+
+    mockModel = { ...mockModel, status: "active", isActiveOwnership: true };
+    mockContext = null;
+    rerender(<MetalHoldingDetailRoute />);
+    expect(screen.getByTestId("restore-holding-modal")).toBeTruthy();
+    expectRestorePendingActionsBlocked();
+
+    await act(async (): Promise<void> => {
+      resolveSubmit(true);
+      await Promise.resolve();
+    });
+    expect(mockToast).toHaveBeenCalledTimes(1);
+    expect(mockToast).toHaveBeenCalledWith({
+      type: "success",
+      title: "restore.success",
+    });
+    expect(screen.queryByTestId("restore-holding-modal")).toBeNull();
+  });
+
+  it("does not reactivate a stale pending Restore even if its terminal token returns after failure", async (): Promise<void> => {
+    let resolveSubmit: (succeeded: boolean) => void = (): void => {
+      throw new Error("missing_submit_resolver");
+    };
+    mockSubmit.mockImplementationOnce(
+      (): Promise<boolean> =>
+        new Promise<boolean>((resolve): void => {
+          resolveSubmit = resolve;
+        })
+    );
+    const { rerender } = render(<MetalHoldingDetailRoute />);
+    fireEvent.press(screen.getByTestId("detail-action-undo"));
+    fireEvent.press(screen.getByTestId("restore-holding-confirm"));
+    const originalContext = mockContext;
+    mockContext = {
+      ...mockContext,
+      terminalEventId: "dispose-2",
+      expectedFinancialRevision: "2",
+    };
+    mockModel = {
+      ...mockModel,
+      timeline: [{ id: "dispose-2", kind: "dispose" }],
+    };
+    rerender(<MetalHoldingDetailRoute />);
+    expectRestorePendingActionsBlocked();
+
+    mockContext = originalContext;
+    mockModel = { ...mockModel, timeline: [] };
+    rerender(<MetalHoldingDetailRoute />);
+    expectRestorePendingActionsBlocked();
+
+    await act(async (): Promise<void> => {
+      resolveSubmit(false);
+      await Promise.resolve();
+    });
+    expect(screen.queryByTestId("restore-holding-modal")).toBeNull();
+    expect(mockToast).not.toHaveBeenCalled();
+    expect(mockSubmit).toHaveBeenCalledTimes(1);
+  });
+
+  it("reserves Restore action space while terminal eligibility loads without hiding loaded Details", (): void => {
+    mockContext = null;
+    mockContextIsLoading = true;
+    render(<MetalHoldingDetailRoute />);
+
+    expect(screen.getByTestId("loaded-detail-content")).toBeTruthy();
+    expect(screen.getByTestId("restore-action-loading")).toBeTruthy();
+    expect(screen.queryByTestId("detail-action-undo")).toBeNull();
+  });
+
+  it("requests existing Detail synchronization before waiting to reread missing Restore evidence", (): void => {
+    mockContext = null;
+    mockContextError = new Error("missing_terminal_evidence");
+    render(<MetalHoldingDetailRoute />);
+    fireEvent.press(screen.getByText("detail.retry"));
+
+    expect(mockDetailRetry).toHaveBeenCalledTimes(1);
+    expect(mockRecoveryAfterSync).toHaveBeenCalledTimes(1);
+    expect(mockDetailRetry.mock.invocationCallOrder[0]).toBeLessThan(
+      mockRecoveryAfterSync.mock.invocationCallOrder[0]
+    );
   });
 });

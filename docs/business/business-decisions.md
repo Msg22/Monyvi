@@ -640,6 +640,21 @@ Business rules:
   account effect in the same grouped action.
 - Undo uses one focused consequence confirmation before restoring ownership and
   reversing any linked effect.
+- **2026-10-15 — PR #386 legacy revision-zero Dispose identity:** For an
+  authenticated holding with one uniquely verified immutable original Dispose
+  action, its legacy device-local lifecycle/evidence row IDs may differ from the
+  server canonical `action_id`. New Undo, subsequent lifecycle commands, and
+  server CAS use the canonical action ID in their immutable predecessor/reversal
+  references. Client read-only lineage projections may interpret the legacy row
+  ID as that action ID only after binding the owned action root, event, evidence
+  payload, original occurrence, and revision-zero provenance. Canonical pull and
+  stale recovery may match the existing user/action/holding row instead of
+  inserting a duplicate; its local primary key and recorded immutable facts
+  remain unchanged. Missing, ambiguous, conflicting, or foreign proof fails
+  closed. Original Undo actions with incorrect immutable references are not
+  repaired, rewritten, or silently server-accepted. This is a client
+  compatibility rule, not a new schema, SQL/RPC, financial policy, historical
+  backfill, or account-credit capability.
 - Correcting terminal financial facts requires Undo, then a new correct terminal
   action. Gift, inheritance, dowry acquisition, partial sale, purchase-time
   account deduction, and Zakat are outside Metals V1. Zakat is a separate future

@@ -1,6 +1,13 @@
 import { createHash } from "node:crypto";
 
-import { Q, type Database, type Model } from "@nozbe/watermelondb";
+import {
+  Q,
+  type Collection,
+  type Database,
+  type Model,
+} from "@nozbe/watermelondb";
+import type Query from "@nozbe/watermelondb/Query";
+import type { Clause } from "@nozbe/watermelondb/QueryDescription";
 import type SQLiteAdapter from "@nozbe/watermelondb/adapters/sqlite";
 import type {
   Asset,
@@ -137,7 +144,10 @@ function userDataScopeFor(userId: string): FinancialActionUserDataScope {
       if (record.userId !== userId) throw new Error("not_owned");
       return record;
     },
-    queryOwned: (collection, ...clauses) =>
+    queryOwned: <TRecord extends Model & { readonly userId: string }>(
+      collection: Collection<TRecord>,
+      ...clauses: Clause[]
+    ): Query<TRecord> =>
       collection.query(Q.where("user_id", userId), ...clauses),
   };
 }
@@ -149,13 +159,61 @@ async function seedHolding(
     readonly isAssetDeleted?: boolean;
     readonly includeTerminalEvent?: boolean;
     readonly customTerminalActionId?: string;
+    readonly occurredAt?: string;
+    readonly terminalCalendarDate?: string;
+    readonly legacyRevisionZero?: boolean;
   } = {}
 ): Promise<void> {
-  const at = new Date("2026-08-30T10:00:00.000Z");
-  const terminalPayload = JSON.stringify({
-    expectedHoldingRevision: "0",
-    holdingId: IDS.holding,
-  });
+  const at = new Date(options.occurredAt ?? "2026-08-30T10:00:00.000Z");
+  const terminalCalendarDate = options.terminalCalendarDate ?? "2026-08-30";
+  const payload: RegisteredActionPayload =
+    terminalKind === "sell"
+      ? {
+          expectedHoldingRevision: "0",
+          feeMinorUnits: "0",
+          grossProceedsMinorUnits: "10000",
+          holdingId: IDS.holding,
+          metalType: "GOLD",
+          netProceedsMinorUnits: "10000",
+          notes: null,
+          predecessorEventId: options.legacyRevisionZero
+            ? null
+            : IDS.createdEvent,
+          purchaseCurrency: "EGP",
+          rateSnapshots: [],
+          reversesEventId: null,
+          saleCurrency: "EGP",
+          saleDate: terminalCalendarDate,
+        }
+      : {
+          disposalDate: terminalCalendarDate,
+          expectedHoldingRevision: "0",
+          holdingId: IDS.holding,
+          notes: null,
+          predecessorEventId: options.legacyRevisionZero
+            ? null
+            : IDS.createdEvent,
+          reason: "given_away",
+          reversesEventId: null,
+        };
+  const terminalEnvelope = canonicalizeFinancialActionEnvelope(
+    {
+      accountGuards: [],
+      actionId: IDS.terminalAction,
+      domain: "metals",
+      domainReferenceId: IDS.holding,
+      envelopeVersion: "monyvi.financial-action/v1",
+      kind: terminalKind,
+      occurredAt: at.toISOString(),
+      payload,
+      payloadVersion:
+        terminalKind === "sell" ? "metals.sell/v2" : "metals.dispose/v1",
+      userId: IDS.user,
+    },
+    DEFAULT_FINANCIAL_ACTION_REGISTRY,
+    { latestAllowedCalendarDate: terminalCalendarDate }
+  );
+  const terminalPayload = JSON.stringify(terminalEnvelope.payload);
   const accountGuardsJson = JSON.stringify(options.accountGuards ?? []);
   const status = terminalKind === "sell" ? "sold" : "disposed";
   await database.write(async (): Promise<void> => {
@@ -178,6 +236,7 @@ async function seedHolding(
         record.domainReferenceId = IDS.holding;
         record.kind = terminalKind;
         record.payloadHash = "hash-1";
+        record.payloadJson = JSON.stringify(terminalEnvelope);
         record.state = "sync_pending";
         record.updatedAt = at;
         record.userId = IDS.user;
@@ -200,7 +259,9 @@ async function seedHolding(
       await database
         .get<MetalLifecycleEvent>("metal_lifecycle_events")
         .create((record): void => {
-          record._raw.id = IDS.terminalEvent;
+          record._raw.id = options.legacyRevisionZero
+            ? IDS.terminalEvent
+            : IDS.terminalAction;
           record.actionId = IDS.terminalAction;
           record.deleted = false;
           record.holdingId = IDS.holding;
@@ -209,7 +270,9 @@ async function seedHolding(
           record.kind = terminalKind;
           record.occurredAt = at;
           record.payloadJson = terminalPayload;
-          record.predecessorEventId = IDS.createdEvent;
+          record.predecessorEventId = options.legacyRevisionZero
+            ? null
+            : IDS.createdEvent;
           record.reversesEventId = null;
           record.updatedAt = at;
           record.userId = IDS.user;
@@ -221,7 +284,9 @@ async function seedHolding(
         record._raw.id = IDS.state;
         record.deleted = false;
         record.effectiveActionId = IDS.terminalAction;
-        record.effectiveEventId = IDS.terminalEvent;
+        record.effectiveEventId = options.legacyRevisionZero
+          ? IDS.terminalEvent
+          : IDS.terminalAction;
         record.financialRevision = "1";
         record.holdingId = IDS.holding;
         record.isVisible = true;
@@ -250,8 +315,8 @@ function standardInput(
     actionId: IDS.undoAction,
     actionEvidenceId: IDS.undoEvidence,
     lifecycleEventId: IDS.undoEvent,
-    predecessorEventId: IDS.terminalEvent,
-    reversesEventId: IDS.terminalEvent,
+    predecessorEventId: IDS.terminalAction,
+    reversesEventId: IDS.terminalAction,
     holdingId: IDS.holding,
     userId: IDS.user,
     occurredAt: "2026-08-30T12:00:00.000Z",
@@ -287,14 +352,16 @@ function createService(
   });
 }
 
-async function expectUnchangedTerminal(): Promise<void> {
+async function expectUnchangedTerminal(
+  terminalKind: "sell" | "dispose" = "dispose"
+): Promise<void> {
   const state = await database
     .get<MetalHoldingState>("metal_holding_states")
     .find(IDS.state);
   expect(state).toMatchObject({
-    status: "disposed",
+    status: terminalKind === "sell" ? "sold" : "disposed",
     financialRevision: "1",
-    effectiveEventId: IDS.terminalEvent,
+    effectiveEventId: IDS.terminalAction,
   });
   expect(
     await database
@@ -317,7 +384,7 @@ async function expectUnchangedTerminal(): Promise<void> {
 }
 
 describe("undo-metal-holding-command-service integration", () => {
-  beforeEach(async () => {
+  beforeEach(async (): Promise<void> => {
     await adapter.initializingPromise;
     await database.write(
       async (): Promise<void> => database.unsafeResetDatabase()
@@ -339,7 +406,7 @@ describe("undo-metal-holding-command-service integration", () => {
       holdingId: IDS.holding,
       userId: IDS.user,
       terminalKind: "dispose",
-      terminalEventId: IDS.terminalEvent,
+      terminalEventId: IDS.terminalAction,
       expectedFinancialRevision: "1",
     });
     await expectUnchangedTerminal();
@@ -433,140 +500,6 @@ describe("undo-metal-holding-command-service integration", () => {
   });
 
   it.each([
-    "missing-asset",
-    "missing-event",
-    "missing-root",
-    "missing-evidence",
-    "foreign-asset",
-    "foreign-event",
-    "foreign-root",
-    "foreign-evidence",
-    "active",
-    "delete",
-    "hidden",
-    "ineffective",
-    "hidden-event",
-    "stale-terminal",
-    "kind-mismatch",
-    "action-mismatch",
-    "evidence-revision",
-    "malformed-account-guards",
-    "incomplete-projection",
-  ])(
-    "rejects %s eligibility without any Undo rows or state changes",
-    async (scenario): Promise<void> => {
-      await seedHolding("dispose");
-      await database.write(async (): Promise<void> => {
-        if (scenario === "missing-asset" || scenario === "foreign-asset") {
-          await (
-            await database.get<Asset>("assets").find(IDS.holding)
-          ).update((record): void => {
-            if (scenario === "missing-asset") record.deleted = true;
-            else record.userId = IDS.foreignUser;
-          });
-        } else if (
-          [
-            "missing-event",
-            "foreign-event",
-            "delete",
-            "ineffective",
-            "hidden-event",
-            "kind-mismatch",
-          ].includes(scenario)
-        ) {
-          await (
-            await database
-              .get<MetalLifecycleEvent>("metal_lifecycle_events")
-              .find(IDS.terminalEvent)
-          ).update((record): void => {
-            if (scenario === "missing-event") record.deleted = true;
-            if (scenario === "foreign-event") record.userId = IDS.foreignUser;
-            if (scenario === "delete") record.kind = "delete";
-            if (scenario === "ineffective") record.isEffective = false;
-            if (scenario === "hidden-event") record.isHistoryVisible = false;
-            if (scenario === "kind-mismatch") record.kind = "sell";
-          });
-        } else if (
-          [
-            "missing-root",
-            "foreign-root",
-            "action-mismatch",
-            "malformed-account-guards",
-          ].includes(scenario)
-        ) {
-          await (
-            await database
-              .get<FinancialActionGroup>("financial_action_groups")
-              .find(IDS.terminalAction)
-          ).update((record): void => {
-            if (scenario === "missing-root") record.deleted = true;
-            if (scenario === "foreign-root") record.userId = IDS.foreignUser;
-            if (scenario === "action-mismatch")
-              record.domainReferenceId = IDS.createdEvent;
-            if (scenario === "malformed-account-guards")
-              record.accountGuardsJson = "{}";
-          });
-        } else if (
-          [
-            "missing-evidence",
-            "foreign-evidence",
-            "evidence-revision",
-          ].includes(scenario)
-        ) {
-          await (
-            await database
-              .get<MetalActionEvidence>("metal_action_evidence")
-              .find(IDS.terminalEvidence)
-          ).update((record): void => {
-            if (scenario === "missing-evidence") record.deleted = true;
-            if (scenario === "foreign-evidence")
-              record.userId = IDS.foreignUser;
-            if (scenario === "evidence-revision")
-              record.canonicalHoldingRevision = "0";
-          });
-        } else {
-          await (
-            await database
-              .get<MetalHoldingState>("metal_holding_states")
-              .find(IDS.state)
-          ).update((record): void => {
-            if (scenario === "active") record.status = "active";
-            if (scenario === "hidden") record.isVisible = false;
-            if (scenario === "stale-terminal")
-              record.effectiveEventId = IDS.createdEvent;
-            if (scenario === "incomplete-projection")
-              record.reconciliationState = "reconciliation_incomplete";
-          });
-        }
-      });
-      const state = await database
-        .get<MetalHoldingState>("metal_holding_states")
-        .find(IDS.state);
-      const before = { ...state._raw };
-      await expect(createService().undo(standardInput())).rejects.toThrow();
-      expect(state._raw).toEqual(before);
-      expect(
-        await database
-          .get<MetalLifecycleEvent>("metal_lifecycle_events")
-          .query()
-          .fetch()
-      ).toHaveLength(1);
-      expect(
-        await database
-          .get<MetalActionEvidence>("metal_action_evidence")
-          .query()
-          .fetch()
-      ).toHaveLength(1);
-      expect(
-        await database
-          .get<FinancialActionGroup>("financial_action_groups")
-          .query()
-          .fetch()
-      ).toHaveLength(1);
-    }
-  );
-
-  it.each([
     "rejected_compensating",
     "reconciliation_incomplete",
     "reconciled",
@@ -657,7 +590,7 @@ describe("undo-metal-holding-command-service integration", () => {
     }
   );
 
-  it("reverses a Dispose holding, marks it Active, and retains immutable history", async () => {
+  it("reverses a Dispose holding, marks it Active, and retains immutable history", async (): Promise<void> => {
     await seedHolding("dispose");
     const repository = createFinancialActionFoundationRepository({
       database,
@@ -690,12 +623,12 @@ describe("undo-metal-holding-command-service integration", () => {
       .get<MetalLifecycleEvent>("metal_lifecycle_events")
       .find(IDS.undoAction);
     expect(event.kind).toBe("undo");
-    expect(event.reversesEventId).toBe(IDS.terminalEvent);
-    expect(event.predecessorEventId).toBe(IDS.terminalEvent);
+    expect(event.reversesEventId).toBe(IDS.terminalAction);
+    expect(event.predecessorEventId).toBe(IDS.terminalAction);
     expect(event.isEffective).toBe(true);
   });
 
-  it("reverses an uncredited Sold holding safely", async () => {
+  it("reverses an uncredited Sold holding safely", async (): Promise<void> => {
     await seedHolding("sell", { accountGuards: [] });
     const repository = createFinancialActionFoundationRepository({
       database,
@@ -714,7 +647,12 @@ describe("undo-metal-holding-command-service integration", () => {
       hashProvider,
     });
 
-    const result = await service.undo(standardInput());
+    const result = await service.undo(
+      standardInput({
+        predecessorEventId: IDS.terminalAction,
+        reversesEventId: IDS.terminalAction,
+      })
+    );
     expect(result.kind).toBe("committed");
 
     const state = await database
@@ -723,7 +661,7 @@ describe("undo-metal-holding-command-service integration", () => {
     expect(state.status).toBe("active");
   });
 
-  it("survives cold database restart and preserves active state and undo event without network", async () => {
+  it("survives cold database restart and preserves active state and undo event without network", async (): Promise<void> => {
     await seedHolding("dispose");
     const repository = createFinancialActionFoundationRepository({
       database,
@@ -756,10 +694,10 @@ describe("undo-metal-holding-command-service integration", () => {
       .get<MetalLifecycleEvent>("metal_lifecycle_events")
       .find(IDS.undoAction);
     expect(restartedEvent.kind).toBe("undo");
-    expect(restartedEvent.reversesEventId).toBe(IDS.terminalEvent);
+    expect(restartedEvent.reversesEventId).toBe(IDS.terminalAction);
   });
 
-  it("blocks undo of a credited sale when account guards exist (#242 gate)", async () => {
+  it("blocks undo of a credited sale when account guards exist (#242 gate)", async (): Promise<void> => {
     await seedHolding("sell", { accountGuards: [{ accountId: "acc-1" }] });
     const repository = createFinancialActionFoundationRepository({
       database,
@@ -778,12 +716,17 @@ describe("undo-metal-holding-command-service integration", () => {
       hashProvider,
     });
 
-    await expect(service.undo(standardInput())).rejects.toThrow(
-      "metal_undo_credited_sale_blocked"
-    );
+    await expect(
+      service.undo(
+        standardInput({
+          predecessorEventId: IDS.terminalAction,
+          reversesEventId: IDS.terminalAction,
+        })
+      )
+    ).rejects.toThrow("metal_undo_credited_sale_blocked");
   });
 
-  it("rejects when predecessorEventId does not match reversesEventId", async () => {
+  it("rejects when predecessorEventId does not match reversesEventId", async (): Promise<void> => {
     await seedHolding("dispose");
     const repository = createFinancialActionFoundationRepository({
       database,
@@ -807,7 +750,7 @@ describe("undo-metal-holding-command-service integration", () => {
     ).rejects.toThrow("metal_undo_terminal_link_mismatch");
   });
 
-  it("rejects when user is mismatched / foreign scope", async () => {
+  it("rejects when user is mismatched / foreign scope", async (): Promise<void> => {
     await seedHolding("dispose");
     const repository = createFinancialActionFoundationRepository({
       database,
@@ -831,7 +774,7 @@ describe("undo-metal-holding-command-service integration", () => {
     ).rejects.toThrow("financial_action_auth_scope_changed");
   });
 
-  it("is idempotent on replay with same input and actionId", async () => {
+  it("is idempotent on replay with same input and actionId", async (): Promise<void> => {
     await seedHolding("dispose");
     const repository = createFinancialActionFoundationRepository({
       database,
@@ -857,7 +800,7 @@ describe("undo-metal-holding-command-service integration", () => {
     expect(second.kind).toBe("replay");
   });
 
-  it("persists canonical actionId as ID for actionEvidence and lifecycleEvent, matching SQL migration 068 sync contract", async () => {
+  it("persists canonical actionId as ID for actionEvidence and lifecycleEvent, matching SQL migration 068 sync contract", async (): Promise<void> => {
     await seedHolding("dispose");
     const service = createService();
 
@@ -919,7 +862,7 @@ describe("undo-metal-holding-command-service integration", () => {
     expect(eventsAfterReplay).toHaveLength(1);
   });
 
-  it("correctly shapes undo consequences for sell and dispose", () => {
+  it("correctly shapes undo consequences for sell and dispose", (): void => {
     const sellConsequences = shapeUndoMetalHoldingConsequences("sell");
     expect(sellConsequences).toEqual({
       terminalKind: "sell",

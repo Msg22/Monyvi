@@ -25,6 +25,11 @@ export function MetalHoldingTimelineItem({
 }: MetalHoldingTimelineItemProps): React.JSX.Element {
   const { t, i18n } = useTranslation("metals");
   const locale = resolveLocale(i18n.resolvedLanguage);
+  const isReversedTerminal =
+    (item.kind === "sell" || item.kind === "dispose") &&
+    item.reversedByEventId !== null &&
+    item.reversedByEventId !== undefined;
+  const reversedLabel = isReversedTerminal ? t("timeline.reversed") : null;
 
   const changeLines =
     item.kind === "correct" && item.correctionChanges
@@ -43,7 +48,7 @@ export function MetalHoldingTimelineItem({
 
   const verifiedLines =
     changeLines?.length && changeLines.every((line) => line !== null)
-      ? (changeLines as string[])
+      ? changeLines
       : null;
 
   const details =
@@ -57,6 +62,7 @@ export function MetalHoldingTimelineItem({
       accessible
       accessibilityLabel={[
         t("timeline." + item.kind),
+        ...(reversedLabel === null ? [] : [reversedLabel]),
         formatShortDate(item.occurredAt, locale),
         ...details,
       ].join(". ")}
@@ -71,8 +77,19 @@ export function MetalHoldingTimelineItem({
         <View className="mt-2 h-3 w-3 rounded-full bg-nileGreen-700 dark:bg-nileGreen-400" />
       </View>
       <View className="min-w-0 flex-1 py-1">
-        <Text className="text-sm text-text-primary dark:text-text-primary-dark">
+        <Text
+          testID={"metal-holding-timeline-" + item.id}
+          className="text-sm text-text-primary dark:text-text-primary-dark"
+        >
           {t("timeline." + item.kind)}
+          {reversedLabel === null ? null : (
+            <Text
+              testID={"metal-history-reversed-" + item.id}
+              className="font-semibold text-text-secondary dark:text-text-secondary-dark"
+            >
+              {" · " + reversedLabel}
+            </Text>
+          )}
           <Text className="text-text-secondary dark:text-text-secondary-dark">
             {" · " + formatShortDate(item.occurredAt, locale)}
           </Text>

@@ -466,6 +466,7 @@
     "sell": "Sold",
     "dispose": "No longer owned",
     "delete": "Deleted",
-    "undo": "Restored"
+    "undo": "Restored",
+    "reversed": "Reversed"
   }
 }

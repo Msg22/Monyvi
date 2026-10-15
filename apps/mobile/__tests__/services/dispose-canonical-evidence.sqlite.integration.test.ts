@@ -414,6 +414,146 @@ describe("Dispose canonical evidence SQLite sync replay", () => {
     });
   });
 
+  it("updates both legacy event/evidence local primary keys through the existing SQLite pull pipeline without unique collisions", async (): Promise<void> => {
+    const legacyEventId = IDS.disposeEvent;
+    const legacyEvidenceId = IDS.disposeEvidence;
+    const at = new Date("2026-09-05T10:15:30.123Z");
+    const domainPayloadValue = {
+      disposalDate: "2026-09-05",
+      expectedHoldingRevision: "0",
+      holdingId: IDS.holding,
+      notes: null,
+      predecessorEventId: null,
+      reason: "given_away",
+      reversesEventId: null,
+    };
+    const domainPayload = JSON.stringify(domainPayloadValue);
+    await database.write(async (): Promise<void> => {
+      await database.get<Asset>("assets").create((record): void => {
+        record._raw.id = IDS.holding;
+        record.deleted = false;
+        record.name = "Legacy test holding";
+        record.type = "METAL";
+        record.updatedAt = at;
+        record.userId = IDS.user;
+      });
+      await database
+        .get<FinancialActionGroup>("financial_action_groups")
+        .create((record): void => {
+          record._raw.id = IDS.disposeAction;
+          record.accountGuardsJson = "[]";
+          record.actionId = IDS.disposeAction;
+          record.deleted = false;
+          record.domain = "metals";
+          record.domainReferenceId = IDS.holding;
+          record.kind = "dispose";
+          record.payloadHash = "b".repeat(64);
+          record.payloadJson = JSON.stringify({
+            accountGuards: [],
+            actionId: IDS.disposeAction,
+            domain: "metals",
+            domainReferenceId: IDS.holding,
+            envelopeVersion: "monyvi.financial-action/v1",
+            kind: "dispose",
+            occurredAt: at.toISOString(),
+            payload: domainPayloadValue,
+            payloadVersion: "metals.dispose/v1",
+            userId: IDS.user,
+          });
+          record.state = "local_complete";
+          record.updatedAt = at;
+          record.userId = IDS.user;
+        });
+      await database
+        .get<MetalActionEvidence>("metal_action_evidence")
+        .create((record): void => {
+          record._raw.id = legacyEvidenceId;
+          record.actionId = IDS.disposeAction;
+          record.canonicalHoldingRevision = "1";
+          record.deleted = false;
+          record.domainPayloadJson = domainPayload;
+          record.expectedHoldingRevision = "0";
+          record.holdingId = IDS.holding;
+          record.kind = "dispose";
+          record.updatedAt = at;
+          record.userId = IDS.user;
+        });
+      await database
+        .get<MetalLifecycleEvent>("metal_lifecycle_events")
+        .create((record): void => {
+          record._raw.id = legacyEventId;
+          record.actionId = IDS.disposeAction;
+          record.deleted = false;
+          record.holdingId = IDS.holding;
+          record.isEffective = true;
+          record.isHistoryVisible = true;
+          record.kind = "dispose";
+          record.occurredAt = at;
+          record.payloadJson = domainPayload;
+          record.predecessorEventId = null;
+          record.reversesEventId = null;
+          record.updatedAt = at;
+          record.userId = IDS.user;
+        });
+    });
+    const eventPull = {
+      ...serverEventRaw(domainPayload),
+      id: legacyEventId,
+      predecessor_event_id: null,
+      reverses_event_id: null,
+    };
+    const evidencePull = {
+      ...serverEvidenceRaw(domainPayload),
+      id: legacyEvidenceId,
+    };
+    const syncOnce = (): Promise<void> =>
+      synchronize({
+        database,
+        pullChanges: (): Promise<SyncPullResult> =>
+          Promise.resolve({
+            changes: {
+              metal_lifecycle_events: {
+                created: [],
+                updated: [eventPull],
+                deleted: [],
+              },
+              metal_action_evidence: {
+                created: [],
+                updated: [evidencePull],
+                deleted: [],
+              },
+            },
+            timestamp: SERVER_ACCEPTED_AT,
+          }),
+        pushChanges: (): Promise<void> => Promise.resolve(),
+        sendCreatedAsUpdated: true,
+      });
+    await expect(syncOnce()).resolves.toBeUndefined();
+    expect(
+      (
+        await database
+          .get<MetalLifecycleEvent>("metal_lifecycle_events")
+          .query(Q.where("action_id", IDS.disposeAction))
+          .fetch()
+      ).map((event) => event.id)
+    ).toEqual([legacyEventId]);
+    expect(
+      (
+        await database
+          .get<MetalActionEvidence>("metal_action_evidence")
+          .query(Q.where("action_id", IDS.disposeAction))
+          .fetch()
+      ).map((item) => item.id)
+    ).toEqual([legacyEvidenceId]);
+    expect(
+      (
+        await database
+          .get<MetalLifecycleEvent>("metal_lifecycle_events")
+          .find(legacyEventId)
+      ).payloadJson
+    ).toBe(domainPayload);
+  });
+
   it("replays the same dispose after sync without a second evidence row", async (): Promise<void> => {
     await seedHolding();
     await createService().dispose(command());

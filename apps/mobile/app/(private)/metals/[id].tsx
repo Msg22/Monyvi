@@ -41,6 +41,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 interface RestoreSelection {
   readonly context: UndoMetalHoldingContext;
   readonly model: MetalDetailReadModel;
+  readonly terminalIdentity: string;
 }
 
 export default function MetalHoldingDetailRoute(): React.JSX.Element {
@@ -134,12 +135,14 @@ export default function MetalHoldingDetailRoute(): React.JSX.Element {
       if (action === "undo") {
         if (
           detail.model !== null &&
+          terminalIdentity !== null &&
           restoreContext.context !== null &&
           actions.some((candidate): boolean => candidate.id === "undo")
         ) {
           setSelection({
             model: detail.model,
             context: restoreContext.context,
+            terminalIdentity,
           });
         }
         return;
@@ -152,7 +155,7 @@ export default function MetalHoldingDetailRoute(): React.JSX.Element {
         router.push(createDeleteHoldingActionDescriptor(holdingId).href);
       }
     },
-    [actions, detail.model, holdingId, restoreContext.context]
+    [actions, detail.model, holdingId, restoreContext.context, terminalIdentity]
   );
 
   const completeRestore = useCallback((): void => {
@@ -160,14 +163,37 @@ export default function MetalHoldingDetailRoute(): React.JSX.Element {
     setHasRestored(true);
     setIsAwaitingRestore(true);
   }, []);
-  const isSelectionCurrent =
+  const isSelectionScoped =
     selection !== null &&
     selection.context.holdingId === holdingId &&
     selection.context.userId === restoreContext.userId &&
     !restoreContext.isResolvingUser;
+  const isSelectionCurrent =
+    isSelectionScoped &&
+    selection !== null &&
+    terminalIdentity !== null &&
+    selection.terminalIdentity === terminalIdentity &&
+    detail.model?.id === holdingId &&
+    restoreContext.context !== null &&
+    restoreContext.context.holdingId === selection.context.holdingId &&
+    restoreContext.context.userId === selection.context.userId &&
+    restoreContext.context.terminalKind === selection.context.terminalKind &&
+    restoreContext.context.terminalEventId ===
+      selection.context.terminalEventId &&
+    restoreContext.context.expectedFinancialRevision ===
+      selection.context.expectedFinancialRevision;
+  const invalidateRestore = useCallback((): void => setSelection(null), []);
   const showRestoreRecovery =
     restoreContext.error !== null &&
     restoreContext.error.message !== "metal_undo_credited_sale_blocked";
+  const retryDetail = detail.retry;
+  const retryRestoreContextAfterSync = restoreContext.retryAfterSync;
+  const handleRestoreRecovery = useCallback((): void => {
+    // The explicit Detail retry initiates the existing one-flight sync path.
+    // Context refresh follows that pull, never a second eager local read.
+    retryDetail();
+    retryRestoreContextAfterSync();
+  }, [retryDetail, retryRestoreContextAfterSync]);
 
   return (
     <View className="flex-1 bg-background dark:bg-background-dark">
@@ -201,7 +227,7 @@ export default function MetalHoldingDetailRoute(): React.JSX.Element {
           </Text>
           <Pressable
             accessibilityRole="button"
-            onPress={restoreContext.retry}
+            onPress={handleRestoreRecovery}
             className="min-h-12 justify-center"
           >
             <Text className="text-base font-semibold text-nileGreen-700 dark:text-nileGreen-400">
@@ -212,6 +238,7 @@ export default function MetalHoldingDetailRoute(): React.JSX.Element {
       ) : null}
       <MetalHoldingDetailScreen
         actions={actions}
+        isActionLoading={terminalIdentity !== null && restoreContext.isLoading}
         {...detail}
         isLoading={
           detail.isLoading ||
@@ -223,12 +250,14 @@ export default function MetalHoldingDetailRoute(): React.JSX.Element {
         onRetry={detail.retry}
         onRetryHistoricalReference={detail.retryHistoricalReference}
       />
-      {isSelectionCurrent && selection !== null ? (
+      {isSelectionScoped && selection !== null ? (
         <RestoreConfirmation
           selection={selection}
-          onCancel={(): void => setSelection(null)}
+          isCurrent={isSelectionCurrent}
+          onCancel={invalidateRestore}
+          onInvalidate={invalidateRestore}
           onRefresh={(): void => {
-            setSelection(null);
+            invalidateRestore();
             restoreContext.retry();
           }}
           onComplete={completeRestore}
@@ -240,16 +269,29 @@ export default function MetalHoldingDetailRoute(): React.JSX.Element {
 
 function RestoreConfirmation({
   selection,
+  isCurrent,
   onCancel,
+  onInvalidate,
   onRefresh,
   onComplete,
 }: {
   readonly selection: RestoreSelection;
+  readonly isCurrent: boolean;
   readonly onCancel: () => void;
+  readonly onInvalidate: () => void;
   readonly onRefresh: () => void;
   readonly onComplete: () => void;
 }): React.JSX.Element {
   const submission = useRestoreMetalHolding(selection.context);
+  const [wasInvalidated, setWasInvalidated] = useState(false);
+  const [isAttemptPending, setIsAttemptPending] = useState(false);
+  useEffect((): void => {
+    if (!isCurrent) setWasInvalidated(true);
+  }, [isCurrent]);
+  const canSubmit = isCurrent && !wasInvalidated;
+  useEffect((): void => {
+    if (!canSubmit && !isAttemptPending) onInvalidate();
+  }, [canSubmit, isAttemptPending, onInvalidate]);
   const { t, i18n } = useTranslation("metals");
   const { showToast } = useToast();
   const insets = useSafeAreaInsets();
@@ -270,27 +312,33 @@ function RestoreConfirmation({
     ].includes(submission.error.message);
   const finish = useCallback(
     async (isRetry: boolean): Promise<void> => {
-      const succeeded = await (isRetry
-        ? submission.retry()
-        : submission.submit());
-      if (succeeded) {
-        showToast({ type: "success", title: t("restore.success") });
-        onComplete();
+      if (!canSubmit) return;
+      setIsAttemptPending(true);
+      try {
+        const succeeded = await (isRetry
+          ? submission.retry()
+          : submission.submit());
+        if (succeeded) {
+          showToast({ type: "success", title: t("restore.success") });
+          onComplete();
+        }
+      } finally {
+        setIsAttemptPending(false);
       }
     },
-    [onComplete, showToast, submission, t]
+    [canSubmit, onComplete, showToast, submission, t]
   );
   const context = selection.context;
   return (
     <RestoreMetalHoldingSheet
-      visible
+      visible={canSubmit || isAttemptPending}
       copy={copy}
       summary={summary}
       bottomInset={insets.bottom}
       width={width}
       fontScale={fontScale}
       isRtl={i18n.dir(i18n.resolvedLanguage) === "rtl"}
-      isPending={submission.isSubmitting}
+      isPending={submission.isSubmitting || isAttemptPending || !canSubmit}
       errorMessage={
         submission.error === null
           ? null
@@ -317,6 +365,7 @@ function RestoreConfirmation({
         void finish(false);
       }}
       onRetry={(): void => {
+        if (!canSubmit) return;
         if (requiresFreshReview) onRefresh();
         else void finish(true);
       }}

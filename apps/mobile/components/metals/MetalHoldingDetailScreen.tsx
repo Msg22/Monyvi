@@ -44,6 +44,7 @@ import { formatLocalizedMoneyAmount } from "@/utils/localized-money-display";
 
 interface MetalHoldingDetailScreenProps {
   readonly actions: readonly HoldingActionDescriptor[];
+  readonly isActionLoading?: boolean;
   readonly error: Error | null;
   readonly isLoading: boolean;
   readonly isOffline: boolean;
@@ -80,7 +81,7 @@ export function MetalHoldingDetailScreen(
       showsVerticalScrollIndicator={false}
       contentContainerClassName="pt-1"
       contentContainerStyle={
-        props.actions.length === 0
+        props.actions.length === 0 && !props.isActionLoading
           ? { paddingBottom: insets.bottom + 16 }
           : undefined
       }
@@ -109,6 +110,7 @@ export function MetalHoldingDetailScreen(
         <ActionRegion
           actions={props.actions}
           bottomInset={insets.bottom}
+          isLoading={props.isActionLoading === true}
           onAction={props.onAction}
         />
       }
@@ -711,22 +713,32 @@ function FactRow({
 function ActionRegion({
   actions,
   bottomInset,
+  isLoading,
   onAction,
 }: {
   readonly actions: readonly HoldingActionDescriptor[];
   readonly bottomInset: number;
+  readonly isLoading: boolean;
   readonly onAction?: (action: HoldingActionId) => void;
 }): React.JSX.Element | null {
-  if (actions.length === 0) return null;
+  if (!isLoading && actions.length === 0) return null;
   return (
     <View
-      testID="metal-holding-detail-actions"
+      testID={
+        isLoading
+          ? "metal-holding-detail-actions-loading"
+          : "metal-holding-detail-actions"
+      }
       className="mt-5 gap-3 border-t border-slate-200 bg-background px-5 pt-4 dark:border-slate-800 dark:bg-background-dark"
       style={{ paddingBottom: bottomInset + 16 }}
     >
-      {actions.map((action) => (
-        <ActionButton key={action.id} action={action} onAction={onAction} />
-      ))}
+      {isLoading ? (
+        <Skeleton width="100%" height={56} borderRadius={12} />
+      ) : (
+        actions.map((action) => (
+          <ActionButton key={action.id} action={action} onAction={onAction} />
+        ))
+      )}
     </View>
   );
 }

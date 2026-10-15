@@ -125,6 +125,19 @@ export function toLegacyDisposalRevisionEvidence(
   }));
 }
 
+const MAX_DEVICE_LOCAL_UTC_OFFSET_MS = 14 * 60 * 60 * 1000;
+
+function latestPossibleDeviceLocalDateAtOccurrence(occurredAt: Date): string {
+  // New actions use the device's actual local calendar, not Cairo's. The
+  // originating timezone is not persisted, so the latest possible civil date
+  // at this immutable instant is the global UTC+14 limit. This is a calendar
+  // upper bound, not a 24-hour grace period or a new-action date policy.
+  const latestPossibleLocalDate = new Date(
+    occurredAt.getTime() + MAX_DEVICE_LOCAL_UTC_OFFSET_MS
+  );
+  return latestPossibleLocalDate.toISOString().slice(0, 10);
+}
+
 function hasOwnedOriginalDisposalProof(
   input: ResolveLegacyDisposalBaselineInput,
   root: LegacyDisposalBaselineLifecycleEvent
@@ -148,6 +161,11 @@ function hasOwnedOriginalDisposalProof(
     group,
     holdingId: input.assetId,
     userId: input.userId,
+    // Prove original immutable lineage at its occurrence, regardless of a
+    // later device-clock rollback. Current-date rules for new disposal stay put.
+    latestAllowedCalendarDate: latestPossibleDeviceLocalDateAtOccurrence(
+      event.occurredAt
+    ),
   });
   if (!proof.available) return false;
   const payload = proof.envelope.payload;
