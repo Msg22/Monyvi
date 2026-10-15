@@ -165,7 +165,7 @@ export const smsNewBankPayload = {
   schemaVersion: "review.batch-save/v1",
   operationCode: "review.batch-save",
   source: "SMS",
-  sessionId: REVIEW_SESSION_ID,
+  sessionId: SMS_QUEUE_ID,
   selectedSourceRefs: [
     {
       rowId: SMS_INCOME_ROW_ID,
@@ -294,7 +294,7 @@ export const smsNewBankPayload = {
     },
     {
       draftId: SMS_DRAFT_ID_2,
-      queueId: SMS_QUEUE_ID_2,
+      queueId: SMS_QUEUE_ID,
       snapshotHash: REVIEW_SNAPSHOT_HASH,
       expectedReviewRevision: "0",
       operation: "delete_saved",
@@ -324,7 +324,7 @@ export const atmTransferPayload = {
   schemaVersion: "review.batch-save/v1",
   operationCode: "review.batch-save",
   source: "SMS",
-  sessionId: REVIEW_SESSION_ID,
+  sessionId: ATM_QUEUE_ID,
   selectedSourceRefs: [
     {
       rowId: ATM_ROW_ID,

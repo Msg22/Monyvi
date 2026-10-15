@@ -5,14 +5,16 @@
  * stored ownership, financial revision and replay checks are later lanes.
  */
 import type {
-  FinancialActionDefinition, RegisteredActionPayload,
+  FinancialActionDefinition, FinancialActionValidationInput,
+  RegisteredActionPayload,
 } from "./action-registry";
 import {
+  calendarDateSchema,
   reviewBatchSaveWireSchema,
   type ReviewBatchSavePayload,
 } from "./review-batch-save-shapes";
 import {
-  validateCreateCoverage, validateGroupAndBookkeeping,
+  financialRecords, validateCreateCoverage, validateGroupAndBookkeeping,
   validateSelectedCoverage, validateSourceAndChildren,
 } from "./review-batch-save-integrity";
 import {
@@ -47,10 +49,26 @@ export const reviewBatchSavePayloadSchema = reviewBatchSaveWireSchema.superRefin
   }
 );
 
+/** Explicit source cutoff, with no ambient time or implicit clock. */
+function assertLatestAllowedCalendarDate(
+  payload: ReviewBatchSavePayload,
+  input?: FinancialActionValidationInput
+): void {
+  const bound = input?.latestAllowedCalendarDate;
+  if (bound === undefined) return;
+  if (!calendarDateSchema.safeParse(bound).success)
+    throw new Error("review_batch_save_invalid_calendar_date_bound");
+  if (financialRecords(payload).some((record) => record.after.date > bound))
+    throw new Error("review_batch_save_date_after_cutoff");
+}
+
 export function validateReviewBatchSavePayload(
-  value: unknown
+  value: unknown,
+  validationInput?: FinancialActionValidationInput
 ): ReviewBatchSavePayload {
-  return reviewBatchSavePayloadSchema.parse(value);
+  const payload = reviewBatchSavePayloadSchema.parse(value);
+  assertLatestAllowedCalendarDate(payload, validationInput);
+  return payload;
 }
 
 function toCanonicalRegistryPayload(
@@ -73,9 +91,14 @@ export function createReviewFinancialActionDefinitions(
     domain: "transactions",
     kind: "review_batch_save",
     payloadVersion: "review.batch-save/v1",
-    validatePayload: (value: unknown): RegisteredActionPayload => {
+    validatePayload: (
+      value: unknown,
+      validationInput?: FinancialActionValidationInput
+    ): RegisteredActionPayload => {
       try {
-        return toCanonicalRegistryPayload(validateReviewBatchSavePayload(value));
+        return toCanonicalRegistryPayload(
+          validateReviewBatchSavePayload(value, validationInput)
+        );
       } catch {
         throw new Error(invalidPayloadCode);
       }

@@ -7,7 +7,7 @@ import { z } from "zod";
 import type { AccountType, CurrencyType } from "@monyvi/db";
 import { SUPPORTED_CURRENCIES } from "../utils/currency-data";
 import { VALID_TYPES } from "../utils/ai-parser-utils";
-import { parseCanonicalUnsignedIntegerString } from "./action-contracts";
+import { parseCanonicalUnsignedIntegerString } from "./canonical-unsigned-revision";
 
 const MAX_MINOR_UNITS = 9223372036854775807n;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;

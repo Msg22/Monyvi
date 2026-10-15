@@ -129,11 +129,30 @@ export function validateSourceAndChildren(
   for (const accountId of newAccounts.keys()) {
     if (!involved.has(accountId)) return "review_unused_created_account";
   }
+  const cashRoleError = validateSmsCreatedCashRoles(payload, newAccounts);
+  if (cashRoleError !== null) return cashRoleError;
   const bankDetailsByAccount = new Set<string>();
   const senderNames = new Set<string>();
   for (const record of payload.domainMutation.records) {
     const reason = validateChild(record, newAccounts, bankDetailsByAccount, senderNames);
     if (reason !== null) return reason;
+  }
+  return null;
+}
+
+/** Pure proof covers only newly-created Cash; existing types remain DB-owned. */
+function validateSmsCreatedCashRoles(
+  payload: ReviewBatchSavePayload,
+  newAccounts: ReadonlyMap<string, ReviewNewAccount["after"]>
+): string | null {
+  if (payload.source !== "SMS") return null;
+  for (const record of financialRecords(payload)) {
+    if (record.entity === "transaction" &&
+        newAccounts.get(record.after.accountId)?.type === "CASH")
+      return "review_sms_cash_transaction_source_forbidden";
+    if (record.entity === "transfer" &&
+        newAccounts.get(record.after.fromAccountId)?.type === "CASH")
+      return "review_sms_cash_atm_source_forbidden";
   }
   return null;
 }
@@ -171,13 +190,29 @@ export function validateGroupAndBookkeeping(
   const involved = affectedAccountIds(payload);
   if (payload.confirmedGroupRefs.some((ref) => !involved.has(ref.accountId)))
     return "review_unselected_confirmed_group";
+  const confirmed = new Set(payload.confirmedGroupRefs.map((ref) => ref.accountId));
+  for (const account of newAccountRecords(payload)) {
+    const isSmsAtmCashDestination = payload.source === "SMS" &&
+      account.after.type === "CASH" && financialRecords(payload).some(
+        (record) => record.entity === "transfer" &&
+          record.after.toAccountId === account.after.id
+      );
+    if (!isSmsAtmCashDestination && !confirmed.has(account.after.id))
+      return "review_created_account_requires_confirmed_group";
+  }
   const bookkeeping = payload.localSmsBookkeeping;
   if (!sortedDistinct(bookkeeping, (item) => item.draftId))
     return "review_sms_cleanup_not_sorted_unique";
-  if (new Set(bookkeeping.map((item) => item.queueId)).size !== bookkeeping.length)
-    return "review_sms_queue_id_duplicate";
   if (payload.source === "VOICE")
     return bookkeeping.length === 0 ? null : "review_voice_cleanup_forbidden";
+  const domainIds = new Set(payload.domainRecordRefs);
+  for (const entry of bookkeeping) {
+    if (entry.queueId !== payload.sessionId)
+      return "review_sms_queue_session_mismatch";
+    if (entry.draftId === entry.queueId || domainIds.has(entry.draftId) ||
+        domainIds.has(entry.queueId))
+      return "review_local_bookkeeping_id_collision";
+  }
   const deleted = bookkeeping.filter((item) => item.operation === "delete_saved");
   return deleted.length === payload.selectedSourceRefs.length
     ? null : "review_sms_saved_cleanup_mismatch";

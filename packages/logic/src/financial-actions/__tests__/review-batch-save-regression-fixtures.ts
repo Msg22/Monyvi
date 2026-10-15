@@ -171,10 +171,11 @@ export function voiceZeroNetAtAmount(
   return {
     ...source,
     domainMutation: {
-      records: source.domainMutation.records.map((record) => ({
-        ...record,
-        after: { ...record.after, amountMinorUnits },
-      })),
+      records: source.domainMutation.records.map((record): ReviewMutation => {
+        if (record.entity !== "transaction")
+          throw new Error("Expected synthetic Voice transaction");
+        return { ...record, after: { ...record.after, amountMinorUnits } };
+      }),
     },
   };
 }
@@ -191,10 +192,11 @@ export function atmAtAmount(amountMinorUnits: string): ReviewBatchSavePayload {
         effect.accountId === ATM_BANK_ACCOUNT_ID ? debit : amountMinorUnits,
     })),
     domainMutation: {
-      records: original.domainMutation.records.map((record) => ({
-        ...record,
-        after: { ...record.after, amountMinorUnits },
-      })),
+      records: original.domainMutation.records.map((record): ReviewMutation => {
+        if (record.entity !== "transfer")
+          throw new Error("Expected synthetic ATM transfer");
+        return { ...record, after: { ...record.after, amountMinorUnits } };
+      }),
     },
   };
 }
@@ -255,10 +257,14 @@ export function validVoiceCashPayload(): ReviewBatchSavePayload {
     domainMutation: {
       records: [
         newCashAccount(NEW_CASH_ACCOUNT_ID, true),
-        ...source.domainMutation.records.map((record) => ({
-          ...record,
-          after: { ...record.after, accountId: NEW_CASH_ACCOUNT_ID },
-        })),
+        ...source.domainMutation.records.map((record): ReviewMutation => {
+          if (record.entity !== "transaction")
+            throw new Error("Expected synthetic Voice transaction");
+          return {
+            ...record,
+            after: { ...record.after, accountId: NEW_CASH_ACCOUNT_ID },
+          };
+        }),
       ],
     },
     cashDefaultSnapshot: { activeAccountIds: [], defaultAccount: null },

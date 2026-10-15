@@ -148,9 +148,11 @@ describe("#395 T046 C — current currency precision and major-amount maximum", 
   it("accepts inclusive EGP maximum on two opposite selected transactions", () => {
     const { maximumMinorUnits } = egpFinancialAmountBounds();
     const payload = voiceZeroNetAtAmount(maximumMinorUnits);
-    expect(payload.domainMutation.records.map((record) =>
-      record.after.amountMinorUnits
-    )).toEqual([maximumMinorUnits, maximumMinorUnits]);
+    expect(payload.domainMutation.records.map((record) => {
+      if (record.entity !== "transaction")
+        throw new Error("Expected only selected Voice financial transactions");
+      return record.after.amountMinorUnits;
+    })).toEqual([maximumMinorUnits, maximumMinorUnits]);
     expect(payload.accountEffects[0]?.amountMinorUnits).toBe("0");
     expect(validateReviewBatchSavePayload(payload)).toEqual(payload);
   });
@@ -212,6 +214,7 @@ describe("#395 T046 D — SMS bookkeeping IDs are local-only", () => {
     const source = queuedAtmPayload();
     const aliased = {
       ...source,
+      sessionId: ATM_TRANSFER_RECORD_ID,
       localSmsBookkeeping: [{
         ...source.localSmsBookkeeping[0],
         queueId: ATM_TRANSFER_RECORD_ID,
