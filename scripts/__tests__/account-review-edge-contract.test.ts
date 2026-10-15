@@ -136,13 +136,20 @@ test("the generated Edge contract is standalone and provider-relevant (not an ap
     accountReviewVoiceResponseV2Schema: edgeVoice,
     accountReviewSmsResponseV2Schema: edgeSms,
   } = await loadGeneratedEdge();
-  const generatedSource = readFileSync(
-    new URL("../../supabase/functions/_shared/account-review-contract.ts", import.meta.url),
-    "utf8"
-  );
-  assert.doesNotMatch(generatedSource, /from\s+["'][^"']*apps\/mobile\//);
-  assert.doesNotMatch(generatedSource, /from\s+["'][^"']*packages\/logic\//);
-  assert.doesNotMatch(generatedSource, /process\.env|Deno\.env|getItem\(|secretKey/i);
+  const generatedModules = [
+    "account-review-contract.ts",
+    "account-review-parser-contract.ts",
+    "account-review-provider-projections.ts",
+  ];
+  for (const filename of generatedModules) {
+    const source = readFileSync(
+      new URL("../../supabase/functions/_shared/" + filename, import.meta.url),
+      "utf8"
+    );
+    assert.doesNotMatch(source, /from\s+["'][^"']*apps\/mobile\//);
+    assert.doesNotMatch(source, /from\s+["'][^"']*packages\/logic\//);
+    assert.doesNotMatch(source, /process\.env|Deno\.env|getItem\(|secretKey/i);
+  }
 
   // JSON Schema is the independently inspectable provider-facing projection.
   // Its fields/constraints must be derived from the same canonical validators.

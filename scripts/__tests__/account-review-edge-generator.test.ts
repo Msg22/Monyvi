@@ -36,7 +36,12 @@ import {
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const GENERATOR = join(ROOT, "scripts/generate-edge-account-review-contract.cjs");
-const GENERATED = join(ROOT, "supabase/functions/_shared/account-review-contract.ts");
+const GENERATED_RELATIVE = [
+  "supabase/functions/_shared/account-review-contract.ts",
+  "supabase/functions/_shared/account-review-parser-contract.ts",
+  "supabase/functions/_shared/account-review-provider-projections.ts",
+] as const;
+const GENERATED = join(ROOT, GENERATED_RELATIVE[0]);
 const VERSION = "account-review-edge/v1";
 const HASH_DOMAIN = "monyvi.account-review.edge.canonical.v1";
 
@@ -117,32 +122,68 @@ function localInputs(inputs: readonly string[]): string[] {
     .sort();
 }
 
+function readGeneratedMap(output: string): ReadonlyMap<string, string> {
+  const parsed: unknown = JSON.parse(output);
+  assert.ok(
+    typeof parsed === "object" && parsed !== null && !Array.isArray(parsed),
+    "Generator stdout must be a filename-to-content JSON map"
+  );
+  const entries = Object.entries(parsed);
+  assert.deepEqual(
+    entries.map(([name]) => name),
+    [...GENERATED_RELATIVE],
+    "Generator stdout keys must be complete and ASCII sorted"
+  );
+  const result = new Map<string, string>();
+  for (const [filename, content] of entries) {
+    if (typeof content !== "string") {
+      assert.fail("Nontext generated module: " + filename);
+    }
+    assert.ok(content.length > 80, "Generated module is a placeholder");
+    result.set(filename, content);
+  }
+  return result;
+}
+
 test("T011 generator --stdout repeats and exactly matches hook-clean tracked bytes", async () => {
-  requireExisting(GENERATED, "standalone Edge contract");
   const first = runGenerator("--stdout");
   const second = runGenerator("--stdout");
-  assert.ok(first.length > 1000, "Generated module is an empty placeholder");
-  assert.equal(first, second, "Non-deterministic standalone renders");
-  assert.equal(first, readFileSync(GENERATED, "utf8"), "Tracked artifact differs");
-  const config = await prettier.resolveConfig(GENERATED);
-  const formatted = await prettier.format(first, {
-    ...config,
-    filepath: GENERATED,
-  });
-  assert.equal(first, formatted, "Generator must format before writing");
-  assert.ok(
-    first.split("\n").length < 900,
-    "Standalone artifact exceeds 899 formatted lines; propose a module split, never minify"
-  );
+  assert.equal(first, second, "Three independent outputs must be reproducible");
+  const rendered = readGeneratedMap(first);
+  for (const path of GENERATED_RELATIVE) {
+    const absolute = join(ROOT, path);
+    requireExisting(absolute, "generated module");
+    const content = rendered.get(path);
+    assert.ok(content, "No rendered content for " + path);
+    assert.equal(content, readFileSync(absolute, "utf8"), "Tracked artifact differs: " + path);
+    const config = await prettier.resolveConfig(absolute);
+    const formatted = await prettier.format(content, {
+      ...config,
+      filepath: absolute,
+    });
+    assert.equal(content, formatted, "Generator emitted unformatted module: " + path);
+    assert.ok(
+      content.split("\n").length < 900,
+      "Generated module exceeds 899 formatted lines: " + path
+    );
+  }
 });
 
 test("T011 --check validates without modifying tracked contents or mtime", () => {
-  requireExisting(GENERATED, "standalone Edge contract");
-  const before = readFileSync(GENERATED, "utf8");
-  const beforeMtime = statSync(GENERATED).mtimeMs;
+  const originals = GENERATED_RELATIVE.map((path) => {
+    const absolute = join(ROOT, path);
+    requireExisting(absolute, "generated contract");
+    return {
+      absolute,
+      bytes: readFileSync(absolute, "utf8"),
+      mtimeMs: statSync(absolute).mtimeMs,
+    };
+  });
   runGenerator("--check");
-  assert.equal(readFileSync(GENERATED, "utf8"), before);
-  assert.equal(statSync(GENERATED).mtimeMs, beforeMtime);
+  for (const { absolute, bytes, mtimeMs } of originals) {
+    assert.equal(readFileSync(absolute, "utf8"), bytes);
+    assert.equal(statSync(absolute).mtimeMs, mtimeMs);
+  }
 });
 
 test("T011 reviewed manifest includes all T009 modules plus actual parser helper inputs", async () => {
@@ -179,7 +220,7 @@ test("T011 SHA-256 marker independently hashes sorted raw paths, lengths and byt
   assert.ok(!JSON.stringify(sorted).includes("node_modules"));
 });
 
-test("T011 parser entry and standalone artifact have no Decimal, registry or DB runtime dependencies", async () => {
+test("T011 parser and all generated module imports form only the approved acyclic Zod graph", async () => {
   const independent = await independentlyBundleSource(
     "packages/logic/src/account-review/parser-schemas.ts"
   );
@@ -197,44 +238,52 @@ test("T011 parser entry and standalone artifact have no Decimal, registry or DB 
     );
   }
 
-  requireExisting(GENERATED, "standalone Edge contract");
-  const source = readFileSync(GENERATED, "utf8");
-  const syntax = ts.createSourceFile(GENERATED, source, ts.ScriptTarget.Latest, true);
-  const runtimeImports: string[] = [];
-  function inspect(node: ts.Node): void {
-    if (ts.isImportDeclaration(node)) {
-      assert.ok(ts.isStringLiteral(node.moduleSpecifier));
-      assert.equal(
-        node.importClause?.isTypeOnly, false,
-        "Standalone Edge artifact must not retain a type-only import"
-      );
-      runtimeImports.push(node.moduleSpecifier.text);
+  const allowed = [
+    { imports: [], exports: ["./account-review-parser-contract.ts", "./account-review-provider-projections.ts"] },
+    { imports: ["zod"], exports: [] },
+    { imports: ["zod", "./account-review-parser-contract.ts"], exports: [] },
+  ];
+  const runtimeBare: string[] = [];
+  for (const [index, path] of GENERATED_RELATIVE.entries()) {
+    const absolute = join(ROOT, path);
+    requireExisting(absolute, "generated module");
+    const text = readFileSync(absolute, "utf8");
+    assert.doesNotMatch(
+      text,
+      /createFinancialActionRegistry|DEFAULT_FINANCIAL_ACTION_REGISTRY|class Decimal|process\.env|Deno\.env/,
+      "Generated module imported a non-parser runtime or environment"
+    );
+    const syntax = ts.createSourceFile(absolute, text, ts.ScriptTarget.Latest, true);
+    assert.equal(syntax.parseDiagnostics.length, 0, "Invalid generated TypeScript: " + path);
+    const imports: string[] = [];
+    const exports: string[] = [];
+    function inspect(node: ts.Node): void {
+      if (ts.isImportDeclaration(node)) {
+        assert.ok(ts.isStringLiteral(node.moduleSpecifier));
+        assert.notEqual(node.importClause?.isTypeOnly, true);
+        imports.push(node.moduleSpecifier.text);
+        if (!node.moduleSpecifier.text.startsWith(".")) {
+          runtimeBare.push(node.moduleSpecifier.text);
+        }
+      }
+      if (ts.isExportDeclaration(node) && node.moduleSpecifier) {
+        assert.ok(ts.isStringLiteral(node.moduleSpecifier));
+        assert.equal(node.isTypeOnly, false);
+        exports.push(node.moduleSpecifier.text);
+      }
+      if (ts.isCallExpression(node) &&
+          (node.expression.kind === ts.SyntaxKind.ImportKeyword ||
+            (ts.isIdentifier(node.expression) && node.expression.text === "require"))) {
+        assert.fail("Dynamic import and require are forbidden in " + path);
+      }
+      ts.forEachChild(node, inspect);
     }
-    if (ts.isExportDeclaration(node) && node.moduleSpecifier !== undefined) {
-      assert.fail("Standalone Edge output cannot reexport unresolved modules");
-    }
-    if (ts.isCallExpression(node) &&
-      (node.expression.kind === ts.SyntaxKind.ImportKeyword ||
-       ts.isIdentifier(node.expression) && node.expression.text === "require")) {
-      assert.fail("Standalone Edge output cannot use runtime dynamic imports or require()");
-    }
-    ts.forEachChild(node, inspect);
+    inspect(syntax);
+    assert.deepEqual(imports.sort(), allowed[index].imports.sort(), "Unexpected import in " + path);
+    assert.deepEqual(exports.sort(), allowed[index].exports.sort(), "Unexpected reexport in " + path);
   }
-  inspect(syntax);
-  assert.ok(runtimeImports.length > 0, "Expected a runtime Zod dependency");
-  assert.deepEqual(
-    [...new Set(runtimeImports)].sort(),
-    ["zod"],
-    "Only the unique bare Zod dependency may remain external"
-  );
-  for (const bareImport of runtimeImports) {
-    assert.equal(bareImport, "zod", "No relative/Node/DB imports are permitted");
-  }
-  assert.doesNotMatch(
-    source,
-    /createFinancialActionRegistry|DEFAULT_FINANCIAL_ACTION_REGISTRY|class Decimal|process\.env|Deno\.env/,
-    "Bundled non-parser runtime or environmental side effects"
-  );
+  assert.ok(runtimeBare.length > 0, "A generated module must actually import Zod");
+  assert.deepEqual([...new Set(runtimeBare)].sort(), ["zod"], "Only Zod may remain external");
 });
 
 test("T011 refactor isolates review-only revision and decimal validators from provider primitives", () => {
@@ -362,8 +411,8 @@ function verifyDeepInfraStrict(value: unknown, where = "root"): void {
 
 
 
-test("T011 generated Edge TS passes a full strict compiler diagnostic check", () => {
-  requireExisting(GENERATED, "canonical generated Edge contract");
+test("T011 all three generated modules pass inherited strict TypeScript diagnostics", () => {
+  for (const path of GENERATED_RELATIVE) requireExisting(join(ROOT, path), "typed module");
   const configPath = ts.findConfigFile(
     join(ROOT, "packages/logic"), ts.sys.fileExists, "tsconfig.json"
   );
@@ -376,12 +425,16 @@ test("T011 generated Edge TS passes a full strict compiler diagnostic check", ()
     config.config, ts.sys, dirname(configPath)
   );
   assert.equal(parsed.errors.length, 0, "Invalid inherited logic compiler config");
-  const program = ts.createProgram([GENERATED], {
-    ...parsed.options,
-    strict: true,
-    noImplicitAny: true,
-    noEmit: true,
-  });
+  const program = ts.createProgram(
+    GENERATED_RELATIVE.map((path) => join(ROOT, path)),
+    {
+      ...parsed.options,
+      strict: true,
+      noImplicitAny: true,
+      allowImportingTsExtensions: true,
+      noEmit: true,
+    }
+  );
   const diagnostics = ts.getPreEmitDiagnostics(program).filter(
     (issue) => issue.category === ts.DiagnosticCategory.Error
   );
@@ -393,25 +446,36 @@ test("T011 generated Edge TS passes a full strict compiler diagnostic check", ()
   assert.equal(diagnostics.length, 0, formatted);
 });
 
-test("T011 generated output retains canonical typed helpers and explicit builder signatures", () => {
-  requireExisting(GENERATED, "typed standalone Edge contract");
-  const text = readFileSync(GENERATED, "utf8");
-  const source = ts.createSourceFile(
-    GENERATED, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS
-  );
-  const functions = source.statements.filter(ts.isFunctionDeclaration);
-  for (const name of [
-    "areDistinct", "addIssue", "validateRowEvidence",
-    "validateAdvisoryEnvelope", "lowerProviderSchema",
-    "buildAccountReviewGeminiResponseSchema",
-    "buildAccountReviewDeepInfraResponseSchema",
-  ]) {
-    const declaration = functions.find((item) => item.name?.text === name);
-    assert.ok(declaration, "Missing canonical helper/builder: " + name);
-    assert.ok(declaration.type, "Erased return type on " + name);
-    for (const param of declaration.parameters) {
-      assert.ok(param.type, "Erased parameter type in " + name);
-      assert.notEqual(param.type.kind, ts.SyntaxKind.AnyKeyword, "Unsafe any in " + name);
+test("T011 parser and projection modules retain canonical typed helper/builder signatures", () => {
+  const cases = [
+    {
+      path: GENERATED_RELATIVE[1],
+      names: ["areDistinct", "addIssue", "validateRowEvidence", "validateAdvisoryEnvelope"],
+    },
+    {
+      path: GENERATED_RELATIVE[2],
+      names: [
+        "lowerProviderSchema",
+        "buildAccountReviewGeminiResponseSchema",
+        "buildAccountReviewDeepInfraResponseSchema",
+      ],
+    },
+  ];
+  for (const { path, names } of cases) {
+    const absolute = join(ROOT, path);
+    requireExisting(absolute, "typed module");
+    const source = ts.createSourceFile(
+      absolute, readFileSync(absolute, "utf8"), ts.ScriptTarget.Latest, true
+    );
+    const functions = source.statements.filter(ts.isFunctionDeclaration);
+    for (const name of names) {
+      const declaration = functions.find((item) => item.name?.text === name);
+      assert.ok(declaration, "Missing typed helper: " + name);
+      assert.ok(declaration.type, "Erased return annotation: " + name);
+      for (const parameter of declaration.parameters) {
+        assert.ok(parameter.type, "Erased parameter annotation: " + name);
+        assert.notEqual(parameter.type.kind, ts.SyntaxKind.AnyKeyword);
+      }
     }
   }
 });
