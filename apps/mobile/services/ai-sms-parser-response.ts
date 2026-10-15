@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { classifySmsReviewV2Response } from "./ai-sms-parser-review";
+import type { AccountReviewSmsFinancialRow } from "../../../packages/logic/src/account-review/parser-schemas";
 
 import { logger } from "@/utils/logger";
 import { MAX_TRANSACTION_AMOUNT, normalizeCurrency } from "@monyvi/logic";
@@ -68,9 +70,22 @@ const SmsProviderRetrySchema = z.object({
 });
 
 export type AiSmsTransaction = z.infer<typeof AiSmsTransactionSchema>;
+/** Original v1 remains strict string-currency; canonical v2 may be null. */
+export type SmsAiFinancialTransaction =
+  | AiSmsTransaction
+  | AccountReviewSmsFinancialRow;
 
 export interface ChunkAiResult {
-  readonly transactions: readonly AiSmsTransaction[];
+  readonly transactions: readonly SmsAiFinancialTransaction[];
+  /** Original validated finance; legacy capture is opt-in and tagged by null advice. */
+  readonly reviewV2FinancialRows?: readonly AccountReviewSmsFinancialRow[];
+  /** Existing local readback name; only validated v2 financial rows. */
+  readonly reviewFinancialRows?: readonly AccountReviewSmsFinancialRow[];
+  readonly reviewV2ProviderResponse?: unknown;
+  /** Existing local advisory readback; never an account-selection authority. */
+  readonly reviewAdvisory?: ReturnType<
+    typeof classifySmsReviewV2Response
+  >["providerResponse"];
   readonly hasError: boolean;
   readonly isRetryable?: boolean;
   readonly invalidMessageIds?: readonly string[];
@@ -129,7 +144,9 @@ export function isRetryableAiFailure(status: number | undefined): boolean {
 
 export function parseAiResponse(
   data: unknown,
-  submittedFingerprints: ReadonlySet<string>
+  submittedFingerprints: ReadonlySet<string>,
+  submittedMessages?: Parameters<typeof classifySmsReviewV2Response>[1],
+  captureLegacyReviewFinance = false
 ): ChunkAiResult {
   const errorResult: ChunkAiResult = {
     transactions: [],
@@ -146,6 +163,14 @@ export function parseAiResponse(
   }
 
   const response = data as Record<string, unknown>;
+  if ("reviewContractVersion" in response) {
+    return parseSmsReviewTransport(
+      data,
+      response,
+      submittedFingerprints,
+      submittedMessages
+    );
+  }
   if (!Array.isArray(response.transactions)) {
     logger.warn("[ai-sms-parser] parseAiResponse: invalid response envelope", {
       reasonCode: "transactions_array_missing",
@@ -191,6 +216,12 @@ export function parseAiResponse(
   const hasResponseError = invalidCount > 0 || metadata.isInvalid;
   return {
     transactions,
+    ...(captureLegacyReviewFinance
+      ? {
+          reviewV2FinancialRows: transactions,
+          reviewV2ProviderResponse: null,
+        }
+      : {}),
     hasError: hasResponseError || metadata.unresolvedFingerprints.length > 0,
     isRetryable:
       hasResponseError || metadata.unresolvedFingerprints.length > 0
@@ -199,6 +230,62 @@ export function parseAiResponse(
     invalidMessageIds: [...invalidMessageIds],
     hasUncorrelatedFailure: hasUncorrelatedFailure || metadata.isInvalid,
     failureReason: hasResponseError ? "response_invalid" : undefined,
+    durableNegativeFingerprints: metadata.durableNegativeFingerprints,
+    terminalFingerprints: metadata.terminalFingerprints,
+    unresolvedFingerprints: metadata.unresolvedFingerprints,
+    retryRequestMode: metadata.retryRequestMode,
+  };
+}
+
+/** Canonical v2 finance never passes through the strict v1 currency coercer. */
+function parseSmsReviewTransport(
+  raw: unknown,
+  response: Record<string, unknown>,
+  submittedFingerprints: ReadonlySet<string>,
+  submittedMessages?: Parameters<typeof classifySmsReviewV2Response>[1]
+): ChunkAiResult {
+  if (response.reviewContractVersion !== "account-review/v2") {
+    return {
+      transactions: [],
+      hasError: true,
+      isRetryable: true,
+      hasUncorrelatedFailure: true,
+      failureReason: "response_invalid",
+    };
+  }
+  const reviewed = classifySmsReviewV2Response(raw, submittedMessages);
+  if (reviewed.kind === "invalid_financial") {
+    return {
+      transactions: [],
+      hasError: true,
+      isRetryable: true,
+      hasUncorrelatedFailure: true,
+      failureReason: "response_invalid",
+    };
+  }
+  // Tagged v2 responses require the server-owned completion/fingerprint envelope.
+  // Legacy v1 intentionally retains its historical no-metadata acceptance.
+  const metadata = parseSafeguardMetadata(
+    response,
+    submittedFingerprints,
+    true
+  );
+  const hasError =
+    metadata.isInvalid || metadata.unresolvedFingerprints.length > 0;
+  return {
+    transactions: reviewed.financialRows,
+    reviewV2FinancialRows: reviewed.financialRows,
+    reviewFinancialRows: reviewed.financialRows,
+    reviewV2ProviderResponse: reviewed.providerResponse,
+    reviewAdvisory: reviewed.providerResponse,
+    hasError,
+    ...(hasError
+      ? {
+          isRetryable: true,
+          hasUncorrelatedFailure: metadata.isInvalid,
+          failureReason: "response_invalid" as const,
+        }
+      : {}),
     durableNegativeFingerprints: metadata.durableNegativeFingerprints,
     terminalFingerprints: metadata.terminalFingerprints,
     unresolvedFingerprints: metadata.unresolvedFingerprints,
@@ -222,7 +309,8 @@ interface SafeguardMetadata {
 
 function parseSafeguardMetadata(
   response: Record<string, unknown>,
-  submittedFingerprints: ReadonlySet<string>
+  submittedFingerprints: ReadonlySet<string>,
+  required = false
 ): SafeguardMetadata {
   const hasMetadata = [
     "completionStatus",
@@ -230,7 +318,10 @@ function parseSafeguardMetadata(
     "terminalFingerprints",
     "unresolvedFingerprints",
   ].some((field) => field in response);
-  if (!hasMetadata) return createEmptySafeguardMetadata(false);
+  if (!hasMetadata) {
+    if (required) logInvalidSafeguardMetadata();
+    return createEmptySafeguardMetadata(required);
+  }
 
   const parsed = SmsSafeguardResponseSchema.safeParse(response);
   if (!parsed.success) {

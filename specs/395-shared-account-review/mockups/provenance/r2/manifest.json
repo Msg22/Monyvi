@@ -1,0 +1,45 @@
+{
+  "version": 2,
+  "date": "2026-10-14",
+  "status": "AWAITING_OWNER_VISUAL_APPROVAL",
+  "proposal": "shared-accounts-r2",
+  "supersedes": "R1 account-section composition and compulsory bulk-confirm presentation; other concepts retained subject to approval",
+  "images": [
+    {
+      "id": "01-unified-review-en",
+      "title": "All conditional states in one compact review section",
+      "file": "01-unified-review-en.png",
+      "bytes": 1455030,
+      "width": 853,
+      "height": 1844,
+      "sha256": "ca26ac07c04550267d15c95f4e9ee55e50a6d644b249ed7163b3facc5b2d0a1b",
+      "sourceFile": "exec-6f5d96e4-ed15-401f-aac7-42b7abba801d.png",
+      "generator": "image_gen.imagegen",
+      "status": "PROPOSED"
+    },
+    {
+      "id": "02-individual-account-actions-en",
+      "title": "Independent confirm, edit, replace and remove actions",
+      "file": "02-individual-account-actions-en.png",
+      "bytes": 1425607,
+      "width": 853,
+      "height": 1844,
+      "sha256": "b44883958d569c8e6dddafdabc6b49b84979ccfbfadf6badcf85f83c233faa91",
+      "sourceFile": "exec-4330daf7-8a68-44a0-a65d-8f0a2f96e87d.png",
+      "generator": "image_gen.imagegen",
+      "status": "PROPOSED"
+    },
+    {
+      "id": "03-all-suggested-accounts-en",
+      "title": "Full list of six suggestions with individual status/actions",
+      "file": "03-all-suggested-accounts-en.png",
+      "bytes": 1477760,
+      "width": 853,
+      "height": 1844,
+      "sha256": "51888693f9da55b9d6c87e0499b76e182e833c7e61aa8e5602a61cd65006d8de",
+      "sourceFile": "exec-1c768dc6-cb45-407f-b0ac-0fd69c103c44.png",
+      "generator": "image_gen.imagegen",
+      "status": "PROPOSED"
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "date": "2026-10-14",
+  "status": "APPROVED",
+  "artifact": "../spec.md",
+  "revision": "sha256:e012f5a7d2edadc8bc1e2fa2ce03aeea56bc0c947dc02bfc2a3f166150e2c7d0",
+  "sourceHead": "cb117de27b8725fb6c802eb9e346ef0ada3b6183",
+  "evidence": {
+    "source": "Owner message in this chat",
+    "quote": "okay let's finish what needs to be completed before the plan. spec.md is approved"
+  },
+  "scope": "Exact published spec bytes, including the clarified product behavior. The spec header predates this receipt; unchanged to preserve approved bytes. Does not approve later binding proposals or all R3 visuals/copy."
+}

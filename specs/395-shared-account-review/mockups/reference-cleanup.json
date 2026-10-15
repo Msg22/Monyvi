@@ -1,0 +1,71 @@
+{
+  "date": "2026-10-14",
+  "sourceCommit": "035c6fd90e9d472d2b5b394ca7e2877c9c984d04",
+  "ownerRequest": "Delete duplicate dirty folders under 389 and remove superseded reference mockups to prevent implementation confusion.",
+  "duplicateDirectoriesRemoved": [
+    {
+      "name": "2026-10-14-shared-accounts-r1",
+      "fileCount": 16,
+      "verifiedByteIdenticalBeforeDeletion": true
+    },
+    {
+      "name": "2026-10-14-shared-accounts-r2",
+      "fileCount": 9,
+      "verifiedByteIdenticalBeforeDeletion": true
+    }
+  ],
+  "removedReferenceImages": [
+    {
+      "id": "01-shared-pending-en",
+      "file": "01-shared-pending-en.png",
+      "sha256": "e03787e669fd6ad051f01111b7bec9f29b9825a613e2de9bbd4183dc4429d2ff",
+      "reason": "Old/unapproved composition superseded by approved R2",
+      "historicalFile": "https://github.com/Msg22/Monyvi/blob/035c6fd90e9d472d2b5b394ca7e2877c9c984d04/specs/395-shared-account-review/mockups/references/r1/01-shared-pending-en.png"
+    },
+    {
+      "id": "02-shared-confirmed-en",
+      "file": "02-shared-confirmed-en.png",
+      "sha256": "b192574446345d99e245fb7b80484df49d4f6e41ef1850a6d0d6deb5c4b82be3",
+      "reason": "Old/unapproved composition superseded by approved R2",
+      "historicalFile": "https://github.com/Msg22/Monyvi/blob/035c6fd90e9d472d2b5b394ca7e2877c9c984d04/specs/395-shared-account-review/mockups/references/r1/02-shared-confirmed-en.png"
+    },
+    {
+      "id": "04-default-assigned-en",
+      "file": "04-default-assigned-en.png",
+      "sha256": "8ba40e3a562b266ba9045f96e49c57aa8ef722446fdf98472462273cefb1f924",
+      "reason": "Old/unapproved composition superseded by approved R2",
+      "historicalFile": "https://github.com/Msg22/Monyvi/blob/035c6fd90e9d472d2b5b394ca7e2877c9c984d04/specs/395-shared-account-review/mockups/references/r1/04-default-assigned-en.png"
+    },
+    {
+      "id": "05-unresolved-en",
+      "file": "05-unresolved-en.png",
+      "sha256": "6c766ee82d625c9358a406cf8c490ec018207ecf60b25c933e252bd2b2dff8e7",
+      "reason": "Old/unapproved composition superseded by approved R2",
+      "historicalFile": "https://github.com/Msg22/Monyvi/blob/035c6fd90e9d472d2b5b394ca7e2877c9c984d04/specs/395-shared-account-review/mockups/references/r1/05-unresolved-en.png"
+    },
+    {
+      "id": "06-bulk-confirm-en",
+      "file": "06-bulk-confirm-en.png",
+      "sha256": "8ac3f645a1ccca5b9c99a3faefe2417055a538ba036e6f2e8426c2c85b9d99df",
+      "reason": "Old/unapproved composition superseded by approved R2",
+      "historicalFile": "https://github.com/Msg22/Monyvi/blob/035c6fd90e9d472d2b5b394ca7e2877c9c984d04/specs/395-shared-account-review/mockups/references/r1/06-bulk-confirm-en.png"
+    },
+    {
+      "id": "09-shared-draft-ar",
+      "file": "09-shared-draft-ar.png",
+      "sha256": "b1c49cfa0bf54cf9ef67fe5ccf4db5bab6d67597c64aab1854d6129d9bedc471",
+      "reason": "Old composition superseded by approved R2; Arabic copy approval retained in historical evidence",
+      "historicalFile": "https://github.com/Msg22/Monyvi/blob/035c6fd90e9d472d2b5b394ca7e2877c9c984d04/specs/395-shared-account-review/mockups/references/r1/09-shared-draft-ar.png"
+    },
+    {
+      "id": "10-default-light-en",
+      "file": "10-default-light-en.png",
+      "sha256": "48cd5e8d24be411aa99558dc353f7941a89d500d1d8f8ea85b5a1843703ce449",
+      "reason": "Old/unapproved composition superseded by approved R2",
+      "historicalFile": "https://github.com/Msg22/Monyvi/blob/035c6fd90e9d472d2b5b394ca7e2877c9c984d04/specs/395-shared-account-review/mockups/references/r1/10-default-light-en.png"
+    }
+  ],
+  "currentReferenceImages": 8,
+  "currentR3Proposals": 15,
+  "note": "No retained PNG bytes or owner approval evidence changed. R3 proposals remain pending; no new images generated."
+}
