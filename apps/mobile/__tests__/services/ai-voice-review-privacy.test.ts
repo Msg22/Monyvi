@@ -71,15 +71,15 @@ jest.mock("@/utils/logger", () => ({
 // buildCategoryMap/parseCategory retain their REAL implementations.
 jest.mock("@monyvi/db", () => {
   class TestCategoryRecord {
-    readonly id: string;
-    readonly systemName: string;
-    readonly displayName: string;
-
     constructor(id: string, systemName: string, displayName: string) {
       this.id = id;
       this.systemName = systemName;
       this.displayName = displayName;
     }
+
+    readonly id: string;
+    readonly systemName: string;
+    readonly displayName: string;
   }
   return { Category: TestCategoryRecord };
 });
@@ -116,7 +116,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function allDiagnostics(): readonly (readonly unknown[])[] {
+function allDiagnostics(): ReadonlyArray<ReadonlyArray<unknown>> {
   return [...mockWarn.mock.calls, ...mockError.mock.calls];
 }
 
