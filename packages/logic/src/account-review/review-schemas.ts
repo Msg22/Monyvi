@@ -138,6 +138,8 @@ const commonReviewRow = {
     "Review amount must be positive and within accepted maximum"
   ),
   accountEvidence: accountReviewAccountEvidenceSchema,
+  // Local review proof only; legacy stored rows parse with explicit null output.
+  toAccountEvidence: accountReviewAccountEvidenceSchema.nullable().default(null),
   currency: accountReviewCurrencySchema,
   assignment: accountReviewAssignmentSchema,
   toAssignment: accountReviewAssignmentSchema.nullable(),
@@ -163,10 +165,27 @@ const accountReviewRowBaseSchema = z.discriminatedUnion("source", [
   }).strict(),
 ]);
 
+/** Source-specific local destination-proof rules, independent of account choice. */
+function validateDestinationEvidence(
+  row: z.infer<typeof accountReviewRowBaseSchema>,
+  ctx: z.RefinementCtx
+): void {
+  if (row.source === "VOICE" || !row.transaction.isAtmWithdrawal) {
+    if (row.toAccountEvidence !== null) {
+      addIssue(ctx, ["toAccountEvidence"], "Ordinary review row cannot carry destination evidence");
+    }
+    return;
+  }
+  if (row.toAccountEvidence?.state === "contextual") {
+    addIssue(ctx, ["toAccountEvidence"], "SMS destination cannot use contextual Voice evidence");
+  }
+}
+
 function validateReviewDestination(
   row: z.infer<typeof accountReviewRowBaseSchema>,
   ctx: z.RefinementCtx
 ): void {
+  validateDestinationEvidence(row, ctx);
   if (row.source === "VOICE" || !row.transaction.isAtmWithdrawal) {
     if (row.toAssignment !== null) {
       addIssue(ctx, ["toAssignment"], "Ordinary review row cannot have a transfer destination");

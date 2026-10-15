@@ -52,6 +52,15 @@ serialization proof and independent DB/logic review gate remain explicit.
    transfer endpoints require reliable evidence/user choice; no same
    source/target.
 
+For ATM SMS, `toAccountEvidence` is **local destination proof**, distinct
+from `toAssignment` (current choice). Match grounded explicit destination
+to owned eligible Cash or require a named choice; explicit unmatched or
+uncertain/invalid proof must never fall back to a Cash default. Only genuine
+absence (`null` or canonical `absent`) with known matching currency permits
+the compatible Cash default, then sole eligible Cash, otherwise unresolved.
+Source and destination require independent validation; user choice is rechecked,
+and legacy `transaction.toAccountId` is not proof.
+
 Accepting a default clears only the account blocker and exposes editable row
 label plus quiet count/Why copy. Preserve amount/category/confidence/currency
 reasons.

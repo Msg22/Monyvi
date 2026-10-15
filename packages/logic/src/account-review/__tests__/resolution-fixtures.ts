@@ -151,13 +151,14 @@ function parsedSms(): Extract<AccountReviewRow, { source: "SMS" }>["transaction"
 
 function rowFields(): Pick<
   AccountReviewRow, "rowId" | "amountDecimal" | "accountEvidence" |
-  "currency" | "assignment" | "toAssignment" | "reviewReasons" |
+  "currency" | "assignment" | "toAccountEvidence" | "toAssignment" | "reviewReasons" |
   "selected" | "revision" | "hasUserAccountOverride" |
   "hasUserCurrencyOverride"
 > {
   return {
     rowId: R17.row, amountDecimal: "50", accountEvidence: absentEvidence(),
-    currency: known(), assignment: unresolved(), toAssignment: null,
+    currency: known(), assignment: unresolved(),
+    toAccountEvidence: null, toAssignment: null,
     reviewReasons: ["account_needed"], selected: false, revision: "0",
     hasUserAccountOverride: false, hasUserCurrencyOverride: false,
   };

@@ -105,6 +105,11 @@ compatible explicit source identity/provider/card evidence of its own.
    unresolved account/currency review, preserving hard reasons. Do not treat it
    as no-results or a durable negative fingerprint. Existing malformed financial
    response handling/safeguards still govern retry; no extra grouping call.
+   ATM `toAccountEvidence` is validated against its **own** submitted message
+   and retained independently from source `accountEvidence` in the local review
+   row. Invalid destination provenance becomes sanitized `uncertain` with a
+   hard review reason, never `null`/`absent` eligible for default fallback;
+   a valid financial row survives. No provider request shape or retry changes.
 8. Emit only reason codes/counts/timing/token usage in logs, not names, text,
    snippets, transaction amounts, full responses or source fingerprints.
 

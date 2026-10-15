@@ -113,7 +113,7 @@ Canonical schema exports: `accountReviewCurrencySchema`,
 | Unresolved assignment | `state: "unresolved"`, `accountId: null`, `reasonCode: stable code`, `candidateAccountIds: UUID[]`                                                                                                                                                                                                                                                                                                                       |
 | Existing assignment   | `state: "existing"`, `accountId: UUID`, `origin: "exact"\|"default"\|"user"`, `currency: Currency`, `identityRevision: Revision`                                                                                                                                                                                                                                                                                         |
 | Suggested assignment  | `state: "suggested"`, `accountId: null`, `groupId: UUID`, `groupRevision: Revision`, `confirmation: "pending"\|"confirmed"`                                                                                                                                                                                                                                                                                              |
-| Row                   | `rowId: UUID`, `source: "VOICE"\|"SMS"`, `sourceRef: Ref`, `sourceFingerprint: string\|null`, `transaction: existing source parsed snapshot`, `amountDecimal: Decimal`, `accountEvidence`, `currency: review currency`, `assignment`, `toAssignment: assignment\|null`, `reviewReasons: stable code[]`, `selected: boolean`, `revision: Revision`, `hasUserAccountOverride: boolean`, `hasUserCurrencyOverride: boolean` |
+| Row                   | `rowId: UUID`, `source: "VOICE"\|"SMS"`, `sourceRef: Ref`, `sourceFingerprint: string\|null`, `transaction: existing source parsed snapshot`, `amountDecimal: Decimal`, `accountEvidence`, `toAccountEvidence: AccountEvidence\|null`, `currency: review currency`, `assignment`, `toAssignment: assignment\|null`, `reviewReasons: stable code[]`, `selected: boolean`, `revision: Revision`, `hasUserAccountOverride: boolean`, `hasUserCurrencyOverride: boolean` |
 | Group                 | `groupId: UUID`, `evidenceKey: Hash`, `suggestionRefs: Ref[]`, `name`, `type: AccountType\|null`, `currency: Currency`, `institutionId`, `providerDisplayName`, `cardLast4`, `senderNames`, `linkedRowIds: UUID[]`, `status: "pending"\|"confirmed"\|"removed"`, `revision: Revision`, `confirmedIdentityRevision: Revision\|null`                                                                                       |
 | Session               | `ownerId: UUID`, `source`, `sessionId: UUID`, `sourceRevision: Revision`, `preferredCurrency: Currency`, `rows: Row[]`, `groups: Group[]`, `removedEvidenceKeys: Hash[]`, `filter: "all"\|"needs_review"\|"selected"`, `revision: Revision`, `operationGeneration: Revision`, `saveIntent: SaveIntent\|null`                                                                                                             |
 
@@ -125,6 +125,14 @@ recordings never deduplicate merely by text. Identity/evidence keys use
 canonical normalized fields and scoped source provenance, never nickname alone.
 Removed tombstones survive detaching the final row. `identityRevision` is the
 review snapshot revision, not a fabricated persisted account column.
+
+For **local review rows only**, `toAccountEvidence` reuses the closed canonical
+`AccountEvidence` schema. Earlier local inputs may omit it; parsing materializes
+required output `null`. Ordinary Voice and non-ATM SMS require null, while ATM
+SMS retains independently grounded explicit, absent or uncertain proof; contextual
+ATM destination evidence is rejected. Proof is separate from `toAssignment`
+(account choice), and never enters provider requests, cloud financial-action
+tuples, database columns or logs.
 
 Every command has required `ownerId`, `sessionId`, `expectedReviewRevision`,
 `expectedOperationGeneration`, `kind`, and the keys below. Only `select_ready`
