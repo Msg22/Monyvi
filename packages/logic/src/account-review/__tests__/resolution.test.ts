@@ -224,10 +224,13 @@ describe("#395 T017 — exact grounded candidates before any default", () => {
   });
 
   it("low confidence grounded identity cannot auto-accept a matching account", () => {
-    const original = withRow(explicit(session()), (row) => ({
-      ...row, transaction: { ...row.transaction, confidence: 0.15 },
-      reviewReasons: ["low_confidence", "account_needed"],
-    }));
+    const original = withRow(explicit(session()), (row) => {
+      if (row.source !== "VOICE") throw new Error("Expected Voice review row");
+      return {
+        ...row, transaction: { ...row.transaction, confidence: 0.15 },
+        reviewReasons: ["low_confidence", "account_needed"],
+      };
+    });
     expectUnresolved(resolve(original, snapshots([BANK])));
   });
 
@@ -261,9 +264,12 @@ describe("#395 T017 — exact grounded candidates before any default", () => {
   });
 
   it("a merchant label cannot become grounded account identity", () => {
-    const original = withRow(session("SMS"), (row) => ({
-      ...row, transaction: { ...row.transaction, counterparty: "QNB", merchant: "QNB" },
-    }));
+    const original = withRow(session("SMS"), (row) => {
+      if (row.source !== "SMS") throw new Error("Expected SMS review row");
+      return {
+        ...row, transaction: { ...row.transaction, counterparty: "QNB", merchant: "QNB" },
+      };
+    });
     expectUnresolved(resolve(original, snapshots([account(R17.bank)])));
   });
 });

@@ -69,7 +69,7 @@ function providerAccount(local: ScopedAccount): AccountReviewAccountContext {
 
 export function snapshots(
   accounts: readonly ScopedAccount[],
-  ownerId = R17.owner,
+  ownerId: AccountReviewSession["ownerId"] = R17.owner,
   preferredCurrency: AccountReviewRequestContext["preferredCurrency"] = "EGP"
 ): ResolutionSnapshots {
   const providerContext = accountReviewRequestContextSchema.parse({
