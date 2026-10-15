@@ -619,26 +619,191 @@ Normal lint/format hooks and one coherent foundation commit batch precede
 context publication. PR396 feature push/update still waits full requested
 delivery; owner device/rendered/accessibility/E2E execution remains NOT RUN.
 
-
 ## Dependency restoration and worker checkpoints — 23:43 UTC
 
-Supabase guidance access remains verified. Main direct installed TypeScript5.9.3 passed both logic and mobile typechecks before dependency restoration. Jest could not run: @babel/code-frame was physically absent; missing node_modules/.bin had first been restored with offline npm rebuild. No code/test changes are justified by these runner failures. Offline install then failed ENOTCACHED for WatermelonDB. One main-only npm ci --ignore-scripts --no-audit --no-fund from the existing lockfile is running; no secondary install or concurrent replacement installer is authorized. Package/lock changes and actual runners require revalidation after completion. NVM points C:/nvm4w/nodejs to v22.22.3; global Supabase shim exists there. Switching Node versions can hide version-specific global commands, but no evidence establishes what removed project dependency files.
+Supabase guidance access remains verified. Main direct installed TypeScript5.9.3
+passed both logic and mobile typechecks before dependency restoration. Jest
+could not run: @babel/code-frame was physically absent; missing
+node_modules/.bin had first been restored with offline npm rebuild. No code/test
+changes are justified by these runner failures. Offline install then failed
+ENOTCACHED for WatermelonDB. One main-only npm ci --ignore-scripts --no-audit
+--no-fund from the existing lockfile is running; no secondary install or
+concurrent replacement installer is authorized. Package/lock changes and actual
+runners require revalidation after completion. NVM points C:/nvm4w/nodejs to
+v22.22.3; global Supabase shim exists there. Switching Node versions can hide
+version-specific global commands, but no evidence establishes what removed
+project dependency files.
 
-Fetched Coref47b96d6 T011 generator/helper source and UI03623771 canonical parser tests; mechanically restored only assigned paths into the isolated verification checkout. Source remains pending generated-size/parity/static/runtime acceptance. Core now has a15–20min report-only T012–T014 dependency-cycle plan; UI has20–30min T008 tests-only strengthening. New Normal ChatGPT Monyvi #395 — SQL & Sync (6ad00ece-4444-83ea-a50a-ab9f24e16732) proved connector publication atc628a176 on codex/395-sql-sync-worker. Its plan is accepted, followed by40–60min tests-only T045/T066 pgTAP grant; race harness remains a path/dependency proposal, not implemented proof. Main-node_modules junction was linked immediately in its sibling checkout.
+Fetched Coref47b96d6 T011 generator/helper source and UI03623771 canonical
+parser tests; mechanically restored only assigned paths into the isolated
+verification checkout. Source remains pending
+generated-size/parity/static/runtime acceptance. Core now has a15–20min
+report-only T012–T014 dependency-cycle plan; UI has20–30min T008 tests-only
+strengthening. New Normal ChatGPT Monyvi #395 — SQL & Sync
+(6ad00ece-4444-83ea-a50a-ab9f24e16732) proved connector publication atc628a176
+on codex/395-sql-sync-worker. Its plan is accepted, followed by40–60min
+tests-only T045/T066 pgTAP grant; race harness remains a path/dependency
+proposal, not implemented proof. Main-node_modules junction was linked
+immediately in its sibling checkout.
 
-Free OpenCode financial fixture/tests reached a reason:stop checkpoint; artifacts are frozen pending review/Red, not accepted complete financial coverage. No native lane, emulator, hosted data mutation or feature push. Approximate intake elapsed4h40; full delivery forecast remains within the approved12–18h envelope, with tooling restoration now an explicit uncertainty. Next30min checkpoint00:15UTC or earlier at restoration result.
-
+Free OpenCode financial fixture/tests reached a reason:stop checkpoint;
+artifacts are frozen pending review/Red, not accepted complete financial
+coverage. No native lane, emulator, hosted data mutation or feature push.
+Approximate intake elapsed4h40; full delivery forecast remains within the
+approved12–18h envelope, with tooling restoration now an explicit uncertainty.
+Next30min checkpoint00:15UTC or earlier at restoration result.
 
 ## Restored runtime and existing-chat continuation — 2026-10-15T00:33:59.316Z
 
-Owner delegated bounded business decisions while asleep; lead must document them. Existing Normal Core/UI/SQL chats remain first choice. New chats are permitted only when an existing chat is unusable, using Extra-high or Pro; no replacement chat has been created. An unused normalization sibling/branch was prepared before that clarification and remains clean, unassigned, and without implementation. No native task was started.
+Owner delegated bounded business decisions while asleep; lead must document
+them. Existing Normal Core/UI/SQL chats remain first choice. New chats are
+permitted only when an existing chat is unusable, using Extra-high or Pro; no
+replacement chat has been created. An unused normalization sibling/branch was
+prepared before that clarification and remains clean, unassigned, and without
+implementation. No native task was started.
 
-Main locked dependency restore completed exit0:1563 packages; package.json/package-lock.json unchanged. Repository postinstall applied3 known patches. Main foundation Jest logs show65/65 schema and23/23 scoped read-model PASS; i18n PASS. Typecheck logs are empty but their process receipts were lost across turn recovery, so no new exit-status claim is inferred. Prior lint-staged completed and restored unstaged ledger changes.
+Main locked dependency restore completed exit0:1563 packages;
+package.json/package-lock.json unchanged. Repository postinstall applied3 known
+patches. Main foundation Jest logs show65/65 schema and23/23 scoped read-model
+PASS; i18n PASS. Typecheck logs are empty but their process receipts were lost
+across turn recovery, so no new exit-status claim is inferred. Prior lint-staged
+completed and restored unstaged ledger changes.
 
-SQL tests against isolated local Docker PG17.6 observed review32PASS/25FAIL of57 and default58PASS/23FAIL of81; new-registration/CAS failures are expected Red, legacy positive controls pass. Rolled-back extension/fixture setup left zero pgTAP extensions and zero reserved auth users. No hosted operation occurred. SQL worker c8e555b0 authored a697-line independent-connection race harness, still awaiting full source review and real execution.
+SQL tests against isolated local Docker PG17.6 observed review32PASS/25FAIL of57
+and default58PASS/23FAIL of81; new-registration/CAS failures are expected Red,
+legacy positive controls pass. Rolled-back extension/fixture setup left zero
+pgTAP extensions and zero reserved auth users. No hosted operation occurred. SQL
+worker c8e555b0 authored a697-line independent-connection race harness, still
+awaiting full source review and real execution.
 
-Core de3f0167 fixes typed-source generation and test narrowing; mechanical Prettier PASS, but generation stops before writing because the typed module exceeds899 formatted lines. Existing796-line output is stale, not Deno Green. Same Core chat owns a report-only cohesive generated-split proposal plus T014 identity preimage plan. Earlier16/17 Node and60 Deno failures remain historical baseline. UI4eb3afa3 splits test files; actual formatted sizes670/546 T007 and785/399 T008, all below900. Root parser Red/type batch pending. T015 remains missing, not implemented.
+Core de3f0167 fixes typed-source generation and test narrowing; mechanical
+Prettier PASS, but generation stops before writing because the typed module
+exceeds899 formatted lines. Existing796-line output is stale, not Deno Green.
+Same Core chat owns a report-only cohesive generated-split proposal plus T014
+identity preimage plan. Earlier16/17 Node and60 Deno failures remain historical
+baseline. UI4eb3afa3 splits test files; actual formatted sizes670/546 T007
+and785/399 T008, all below900. Root parser Red/type batch pending. T015 remains
+missing, not implemented.
 
-Active ownership: Core report-only split/identity proposal; UI test repair publication frozen pending root batch; SQL race test publication frozen pending root review; free financial tests frozen for audit. Existing owners/branches preserved; no duplicate writer or new Normal chat. Full feature/SQL/recovery/UI implementation and independent review remain pending; PR396 feature push is not complete. No emulator/provider/deployment.
+Active ownership: Core report-only split/identity proposal; UI test repair
+publication frozen pending root batch; SQL race test publication frozen pending
+root review; free financial tests frozen for audit. Existing owners/branches
+preserved; no duplicate writer or new Normal chat. Full feature/SQL/recovery/UI
+implementation and independent review remain pending; PR396 feature push is not
+complete. No emulator/provider/deployment.
 
-Main foundation typecheck receipt recovered by a bounded rerun: logic and mobile tsc both exit0 (durable .tmp/main-foundation-types.result.json). Foundation schema/read-model88 tests and i18n remain PASS. T007 now executes23cases:7PASS16expected missing-v2 failures; creation Red accepted for adapter work. T008 duplicate imported/local owner constants prevents load; same UI owner has a narrow5–10min repair. SQL race run36 assertions4PASS32FAIL is NOT behavioral Red: dblink connection2F003 local postgres is non-superuser. No fixtures inserted, extensions removed and reserved users/accounts/categories0. Same SQL owner has a test-only connection-setting repair; security configuration/roles unchanged.
+Main foundation typecheck receipt recovered by a bounded rerun: logic and mobile
+tsc both exit0 (durable .tmp/main-foundation-types.result.json). Foundation
+schema/read-model88 tests and i18n remain PASS. T007 now
+executes23cases:7PASS16expected missing-v2 failures; creation Red accepted for
+adapter work. T008 duplicate imported/local owner constants prevents load; same
+UI owner has a narrow5–10min repair. SQL race run36 assertions4PASS32FAIL is NOT
+behavioral Red: dblink connection2F003 local postgres is non-superuser. No
+fixtures inserted, extensions removed and reserved users/accounts/categories0.
+Same SQL owner has a test-only connection-setting repair; security
+configuration/roles unchanged.
+
+## Foundation local commit and technical decisions — 2026-10-15T00:42:49.692Z
+
+Local foundation commit e8fcdbfe8ac267a9bd5ccbf28bb769112d1c7edd contains20
+accepted schema/read-model/tests/report files. No feature push yet. Before
+commit, manual lint-staged had passed, schema65/read23/i18n passed and both main
+TypeScript receipt exits0. Dependency restoration had removed ignored .husky/\_
+runtime shims, so this commit did not invoke the Git hook automatically. Root
+detected that immediately afterward, ran installed husky/bin.js (no init/source
+changes), and verified ignored hook entry/runner restored. No hooks were
+intentionally disabled; future commits use restored real hook.
+
+Core b718290d proposed parser-schema/provider-projection/public-facade generated
+modules. Root approved that cohesive3fileDAG with exact publicAPI/hash
+preservation and transitive checks; same Core owns30–45min implementation.
+Technical stdout contract becomes sorted filename-content map; all outputs
+checked/formatted beforewrite. This changes tooling organization only. Group
+identity proposal accepted conceptually, but rejecting a whole session on
+identical financial-row collisions rejected: legitimate repeated transactions
+must remain separate. Final source-occurrence identity must preserve
+multiplicity and later user edits, without per-row fields entering shared group
+identity. No T014 production grant yet.
+
+UI7d98f970 removed only duplicate owner const declarations after test
+extraction; all48fixture cases retained. Same Normal chats still usable, no
+replacements created. SQL connection-setting test repair remains active, no
+role/pg_hba/security changes authorized. No new native assignments, emulator,
+provider, hosted migrations or deployment.
+
+## Parallel foundation continuation — 2026-10-15T00:49:59.045Z
+
+T008 r4 actual48cases16PASS32missing-real-loader failures; mobile tsc exit0.
+Same UI owner now owns T015 read-only developer fixture
+service/builders/roles,40–60min, plancheckpoint10min; original catalogue/B1
+unchanged. Core owns approved3module typed-generator split,30–45min, no T014
+production yet.
+
+SQL d8065db6 conninfo design needed a narrow published dollar-quote correction
+d046d015; root rejected invalid candidate without executing. Authenticated
+non-superuser attempt still2F003 because local connection did not use password
+auth. Built-in local supabase_admin role was verified already superuser; running
+the test under that existing admin context, while RPC sub-connections explicitly
+SET ROLE authenticated, completed all36 assertions:23PASS13expected
+missing-tuple/serialization FAIL, run_completed and cleanup checks pass. No
+role/pg_hba/privilege modification or connect_u used. Transient pgtap/dblink
+removed; reserved auth users/accounts/categories0. This is real
+independent-connection Red, not Green acceptance of new locks. Same SQL owner
+releases race artifacts and may take a separate pure-normalization
+tests/identity checkpoint in the unused normalization branch while Core/UI run;
+no concurrent SQL writer.
+
+Free OpenCode same persistent financial-tests session resumed a15min
+exact3test/report correction after all3 Normal chats were busy. CLI1.19.0 and
+exact LongCat2.5PreviewFree route verified; official
+opencode.ai/v2/docs/console/models pricing lists input/output/cache Free. No
+autoapproval/newnative; existing source/write allowlist preserved. First resumed
+step_start observed; further non-error model/tool result required before
+treating repair authoring as live.
+
+T011 f9e16811 root mechanically generated facade44/parser719/projections241
+lines. Actual batch:19/19NodePASS, actualDeno checkexit0 including siblinggraph,
+strictgeneratorTS/hash/parity/projection/injectedtransportPASS.
+Generator623lines,contracttest436;
+generator.test938requirescohesivehelperextraction bysameCore15–20min. No
+productionfixwarrantedbyGreen. Financialfree-sessionrepairfinished
+reasonstop/exit0, four edit calls non-error, cost0 (exacttokensnextcheckpoint);
+three proofgapsfixed andobsoleteplanaddendumadded. RootT042 creationRed genuine
+missing ../review-batch-save,0behaviorassertionsexecuted; no
+financialimplementationgrant beforeT016.
+
+## Main wave2 accepted verification — 2026-10-15T01:28:28.146Z
+
+Main checkout/featurebranch retained. Core c23045ae +UI76794edd
+scopedsource/tests/threegeneratedmodules integrated mechanically from
+verification against e8fc base; no pending parser/normalization/financial Red
+files copied into feature. Real23filelint-staged passed (ESLintautofix+Prettier;
+backupstash cleaned). Main generation rerun AFTERautofix to bind
+currentcanonical rawbytes;19canonicalmanifestinputs verifiedLF, no
+CRLFhashdrift.
+
+Main batch:65logic +71mobile(read23/fixture48) +19Node =155PASS; actualDenoPASS,
+logictscexit0, EN/ARcheckexit0. One mobiletest readonlyNODE_ENV assignment was
+exposed by actualautofix, returnedtoUI and repaired by wholeenvironment
+replacement (no cast/suppression/guardmock). Hook-equivalent scopedautofix +
+finalmobiletscexit0 andfixture48PASS verifythatfix.
+Generatedfacade/parser/projections44/728/241formattedlines, Nodegenerator
+test788/helper190; namedproductionhelpers<50. Scope remainscode/serviceproof
+only, no route/E2E/rendered/device/provider/deployment acceptance.
+
+T005/T006/T008/T009/T010/T011/T015 recordedcomplete fromtheseartifacts. T007
+mobile23 tests remain frozeninworker/verificationbranches
+with7PASS16expectedold-v2gaps, notyetfeatureintegrated. T012/T013/T014/T016
+incomplete; no storyproductiongatepassed. Core nowT017resolution unitmatrix
+tests only25–35min. UI T018 existingroute/props/E2Eseam PLANonly15–20min;
+currentfixturetestrepairreleased. SameSQLchat nowpureT014-Pproducer,
+normalization-worker4a12b69c,60–90minrisk20;
+canonicalhelperownerCoreandindexownerNormalizerclearlyserialized.
+
+Approximately6h20–30 elapsedfrom19:03UTC; remainingfoundationparser work and
+SQL/UI high-riskintegration stillsubstantial. Fullforecast14–18h
+retainsapproved12–18henvelope assumingcurrentworkeravailability andno
+SQLconcurrencyrework. Next30mincheckpoint01:42UTC oratnormalizer20minrisk.
+Existing3Normalchatsremainusable; no
+replacementchat/native/emulator/hostedchange. Independentreviews
+andownerdevice/visual/a11y evidence stillpending.

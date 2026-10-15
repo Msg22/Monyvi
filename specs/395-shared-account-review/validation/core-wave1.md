@@ -1029,3 +1029,675 @@ production grant. Existing policy 8a96f74c requires Normal ChatGPT → verified
 free OpenCode → Antigravity, native only with explicit prior permission; no
 delegation occurred. **STOP / FREEZE / RELEASE** after this test-and-report
 publication.
+
+## T011 production source checkpoint — Edge output deliberately root-generated
+
+**Source lease:**
+`codex/395-core-worker@a1f1765530c6de43c236bd2450df7ebc8b3d4203`; only explicit
+T011 production paths below. Root reported **9/9 new T011 tests Red** (eight
+missing-artifact dependencies and one genuinely retained parser-only Decimal
+module); this is accepted Red, not provider evidence. No CLI, tests, formatter,
+provider or Deno operation was run by this remote author.
+
+**Bounded dependency repairs:** `review-value-primitives.ts` now contains the
+_verbatim existing_ `recordRevision` and `canonicalDecimal` validators plus
+their original financial-action/Decimal imports, used only by
+`review-schemas.ts`. `schema-primitives.ts` no longer imports the
+financial-action registry or Decimal, and parser `parser-schemas.ts` now reads
+the unchanged `MAX_TRANSACTION_AMOUNT` from new pure `utils/amount-limits.ts`;
+`amount-helpers.ts` imports/reexports **both** original MAX constants unchanged.
+This is strictly a runtime-import split, with no parser/provider fields,
+validation semantics or canonical public exports altered.
+
+**Generator authored:** `scripts/generate-edge-account-review-contract.cjs` uses
+the root-verified already-installed esbuild 0.28.1, Zod 4.4.3 at future Edge
+runtime and Prettier 3.8.3; **no install**. It compiles only the canonical
+parser Zod entry and exports exactly the seven frozen T004 validators, metadata
+`ACCOUNT_REVIEW_EDGE_GENERATOR_VERSION` / `ACCOUNT_REVIEW_CANONICAL_SHA256` /
+`ACCOUNT_REVIEW_CANONICAL_SOURCE_PATHS`, and the two Gemini/DeepInfra projection
+builders. Generator assembly contains no detached schema/enum union: the
+provider builders use
+`z.toJSONSchema(...,{io:"input",reused:"inline",unrepresentable:"throw"})`,
+explicit structural lowering, rejection of unknown keywords/unsupported unions,
+nullable-preserving conversion, and runtime canonical Zod checks after provider
+extraction.
+
+**Hash/parity:** reviewed source minimum includes `schemas.ts`,
+`parser-schemas.ts`, `parser-advisory-validation.ts`, `schema-primitives.ts`,
+`review-schemas.ts`, `review-value-primitives.ts`, `generated-vocabulary.ts`;
+manifest is expanded deterministically with all root-local sources discovered by
+the esbuild metafile for the **full** canonical public entry. ASCII path
+ordering and exact `monyvi.account-review.edge.canonical.v1` + NUL +
+`account-review-edge/v1` + NUL, followed by each path + NUL + raw byte length +
+NUL + raw bytes + NUL, produce the independently recomputable SHA-256. Only
+`zod` remains external in emitted parser ESM; parser-only retained esbuild
+metafile must exclude Decimal, registry, metals, DB, and mobile. No timestamps
+or fake bundle bytes.
+
+**Provider behavior:** Gemini gets the documented JSON structural keyword
+whitelist and exact required/nullability fields, leaving
+patterns/minLength/custom refinements in runtime Zod. DeepInfra gets strict
+all-present _modeled_ object fields; canonical optional-but-nonnullable SMS
+properties are omitted rather than silently made required-nullable, server
+completion/fingerprint/retry metadata is excluded from the model output, and
+supported currency choices come from generated canonical vocabularies. Existing
+DeepInfra request-wrapper ABI remains unchanged; T012/T013 adapters still own
+submitted evidence-string correlation, provider negotiation and SMS completion
+metadata.
+
+**Local-only generated output and size stop:**
+`supabase/functions/_shared/account-review-contract.ts` is **not authored,
+fabricated or committed by this worker**. Root must run the generator locally;
+`--stdout` is pure render, `--check` compares without writing, default write
+updates only if bytes differ. The render applies repository Prettier and fails
+before write when output is **900 or more formatted lines**, requesting a
+separately approved cohesive generated split; **no minifier**.
+Build/meta/formatter/provider behavior and ESM importability are not claimed
+Green remotely.
+
+**Scoped scripts:** only three new root package script keys:
+`account-review:edge:generate`, `account-review:edge:check`,
+`test:account-review:edge`; existing scripts and the nine T011 + eight original
+Edge + 65 schema tests are unchanged. No new generator helper/module beyond
+explicitly approved review-value and amount-limits.
+
+**Root acceptance gate:** after mechanical local generation, verify the
+canonical 7-schema export parity, all 17 Edge Node tests (including an actual
+injected DeepInfra request), esbuild metafile/AST no-import-leak, hash manifest,
+`--stdout` reproducibility, `--check` nonmutation, formatted line/function
+limits, T009 65/65, T006 23/23, logic TypeScript and scoped ESLint/format. If
+output exceeds 899 formatted lines or unexpected runtime dependencies remain,
+**STOP and request explicit scope**, not silent minification, provider
+compromise or new source modules. **T011 source ownership FROZEN/RELEASED**
+after this commit; no T012–T014 seam, UI, SQL, provider calls or parallel lane
+writes.
+
+## T012 → T013 → T014 dependency-cycle resolution — plan only (2026-10-15)
+
+**Lease/scope:**
+`codex/395-core-worker@f47b96d6f8a9f2de736cfe3d2509189b89914c79`; report-only;
+no code, tests, tasks, contracts, providers or other ownership. T011
+generation/Green is blocked on root's dependency restore; its
+<900-formatted-line gate is not yet proven. If exceeded, STOP for a separately
+approved generated split, never preemptively minify. **Accepted seam:** UI
+`ui-wave1.md` Sections 13/14 at `03623771a575ad83a6a7d580d6bf67f508856c8e` and
+T007 test blob `ce1954b7d73912f773f66e281dc597f1c9edf2ec`: optional **full**
+`reviewSession?: AccountReviewSession` on existing Voice/SMS success, additive
+`reviewAccountSnapshots?: AccountReviewAccountSnapshots` input, not a new `Pick`
+or parallel result DTO. T010
+`account-review-read-model-service.ts::loadAccountReviewAccountSnapshots`
+returns owner/preferred/local accounts plus closed `providerContext`;
+`isDefault` remains local.
+
+### Technical DAG (task IDs unchanged; execution reordered)
+
+1. **T014-P FIRST — pure normalizer contract.** Grant NEW
+   `apps/mobile/services/account-review-source-adapter-service.ts` to one owner
+   _before_ T012/T013 integration. Propose
+   `normalizeAccountReviewParserResult(...): AccountReviewSession` consuming
+   canonical Zod-inferred Voice/SMS provider evidence, existing mapped
+   transaction/category data, captured T010 account snapshot, authenticated
+   owner, source identity and submitted source texts. Runtime imports only pure
+   `@monyvi/logic` validators/helpers; T010 snapshot import is **type-only**. No
+   WatermelonDB, hooks, provider or imports of Voice/SMS parser, chunk runner or
+   orchestrator: break circular dependency without stubs/new exported DTO.
+2. T014-P constructs _all_ frozen `accountReviewSessionSchema.parse` fields:
+   canonical owner/session UUIDs, row/source IDs and fingerprints, accessible
+   category UUID, amountDecimal, evidence/spans, independently known/unconfirmed
+   currency, assignment/toAssignment, review reasons, group evidence
+   hash/reciprocal links/status/revisions, removal tombstones,
+   selection/overrides, filter/generation, and initial `saveIntent:null`. Only
+   actual current-owned context may authorize matching; no model suggestion
+   alone creates a local confirmed group.
+3. **Identity boundary:** pin owner, canonical session UUID and request
+   generation once before dispatch; Voice `requestKey` generated by existing
+   `voice-flow-submission.ts` can anchor Voice session when valid UUID, but SMS
+   `SmsAiRequestContext.scanSessionId` is only an opaque string and
+   `SmsScanContext.reviewSessionId` a number. Validate/pin SMS canonical UUID
+   independently. Scope provider `transactionRef/suggestionRef` by original
+   request and `ChunkWork.requestKey`; derive stable row/evidence identities
+   from owner+session+source fingerprint/message/voice ref, reject
+   duplicate/cross-chunk aliases, and preserve them across retry/rechunk without
+   random reminting.
+4. **Provenance boundary:** only valid v2 `currencyEvidence.state:"omitted"`
+   resolves to captured `preferredCurrency` with `origin:"preferred_omission"`;
+   explicit valid evidence yields `known/explicit`.
+   Ambiguous/conflicting/unsupported/unknown, invalid advisory, and
+   old-server/v1 are `unconfirmed` (`legacy_unknown` for v1),
+   unresolved/unselected, with no authorized active group; neither AI
+   `accountId` nor the required legacy display `transaction.currency` proves
+   certainty. Keep valid category/amount despite invalid advice when safely
+   representable, otherwise explicit unresolved recovery.
+5. **T012 NEXT — Voice transport independent of SMS.**
+   `supabase/functions/parse-voice/index.ts` must opt into
+   `reviewContractVersion:"account-review/v2"` on the _existing multipart_ and
+   closed T010 `providerContext` only; select generated T011 Gemini schema in
+   existing `RESPONSE_SCHEMA`/`buildSystemPrompt`/`processWithRetry` path,
+   verify v2 evidence and legacy fallback. Preserve `reserveVoiceAiWork`,
+   `markVoiceAiProviderStarted`, consent, one original logical recording/usage
+   identity and existing Gemini internal retry policy: no separate grouping/STT
+   call.
+6. T012 `apps/mobile/services/ai-voice-parser-service.ts::parseVoiceWithAi` adds
+   optional `AiVoiceParserOptions.reviewAccountSnapshots` and
+   `AiVoiceParserSuccess.reviewSession`. After canonical v2 validation, resolve
+   real `categoryId` via existing `buildCategoryMap/parseCategory`, call T014-P
+   with original transcript/pinned owner/requestKey/snapshot; recheck actor and
+   abort before returning. Keep legacy
+   `transactions/transcript/originalTranscript/detectedLanguage`,
+   quota/timeout/errors and old `ParseVoiceResponseSchema`; old
+   account-ID→currency→preferred display fallback cannot authorize v2 currency.
+7. **T013 EDGE — version negotiation before mobile chunk wiring.**
+   `supabase/functions/parse-sms/index.ts::createParseSmsHandler` and
+   `supabase/functions/_shared/parse-sms-handler.ts::parseRequestBody/calculateRequestMetrics`
+   accept optional v2 discriminator + closed `providerContext` in **original**
+   chunk request, retaining
+   requestKey/scanSessionId/scanKind/messages/categories/currency and all
+   existing payload/token limits, 413 refusals, reservation, 429 capacity,
+   consent and negative fingerprint accounting. Only account providerContext,
+   never `ownerId/isDefault/balance/accountNumber`, is sent to model.
+8. T013 requires **explicit additional exclusive file grants** for
+   `supabase/functions/_shared/sms-ai/sms-ai-provider.ts`,
+   `sms-ai-provider-executor.ts::executeSmsAiProvider`,
+   `sms-ai-prompt.ts::buildSmsAiResponseSchema/buildSmsAiProviderMessages` and
+   grounded-response validator as actually needed. Use generated T011 DeepInfra
+   v2 projection **only** for requested v2; retain
+   `createConfiguredSmsAiProvider`, configured DeepInfra model, strict existing
+   `response_format.json_schema` and original v1 schema otherwise. Server owns
+   completion/retry/terminal/negative-fingerprint metadata; model only supplies
+   canonical advisory. Preserve original admitted-chunk model invocation and
+   configured retry, **never add an AI grouping call**.
+9. **T013 CLIENT — typed intermediate, not a session inside raw parser.**
+   `apps/mobile/services/ai-sms-parser-response.ts::parseAiResponse(data,submittedFingerprints)`
+   stays synchronous with the exact two parameters; `ChunkAiResult` may add
+   `reviewAdvisory?: AccountReviewSmsResponseV2` /
+   `reviewFinancialRows?: readonly AccountReviewSmsFinancialRow[]`. Canonical v2
+   finance may have `currency:null`; do **not** force it through v1
+   `AiCurrencySchema` or convert unknown to omitted. Invalid advice cannot
+   authorize suggested group/negative outcome or discard valid finance;
+   `parseAiResponse` cannot know owner, raw submitted body/sender or category
+   UUID.
+10. T013 `apps/mobile/services/ai-sms-parser-service.ts::ParseSmsContext` gains
+    optional snapshots; `AiParseResult` gains optional full session, preserving
+    existing `parseSmsWithAi(..., expectedUserId?,requestContext?,requestKey?)`
+    positional ABI. Explicitly grant
+    `ai-sms-chunk-runner-service.ts::invokeParseChunk/runChunk/mapAiTransactions`:
+    whitelist snapshot's `providerContext` in existing body, verify each v2
+    member against actual `ChunkWork.messages` id/body/sender/fingerprint and
+    real mapped `parseCategory` UUID; keep typed nullable-currency rows separate
+    because legacy `mapAiTransaction` requires a concrete
+    `ParsedSmsTransaction.currency`.
+11. Retain accepted per-chunk typed evidence through existing
+    `ChunkAggregationState`, `applyChunkResolution`, `resultFromState` across
+    parallel/sequential/split/fresh retry. After **whole admitted AI scan**,
+    invoke T014-P once to build optional session; never forward an uncorrelated
+    chunk session. Keep progress, consent/abort/current-user guards, 413/429 and
+    terminal/negative/unresolved bookkeeping. Review opt-in with v1 old-server
+    may yield safe `legacy_unknown` blocked row/session; no opt-in leaves v1
+    return unchanged.
+12. **T014-M LAST — platform merge and eligibility**, after stable T013 chunk
+    intermediate. Explicitly lease
+    `apps/mobile/services/sms-parser-orchestrator.ts::parseSmsWithOrchestrator/parseHybrid/mergeDistinctTransactions`
+    and `sms-account-matcher.ts::matchTransaction/matchTransactionsBatched`;
+    lease `sms-local-parser-adapter.ts::createLocalParserResult` only if needed.
+    Rebuild one final canonical session from admitted AI+trusted/local/hybrid
+    merged rows (not the AI-only session), preserving SMS BANK/WALLET
+    eligibility vs separate ATM Cash endpoint, Voice CASH, owner, selection
+    override, tombstones/revisions and no automatic reselect. Unknown
+    deterministic local evidence stays unresolved, not invented omission.
+13. **Exclusive ownership:** T014-P owns pure normalized graph
+    functions/data-in/data-out; T012 owns Voice Edge/client; T013 owns SMS
+    Edge/provider/client and chunk runner; T014-M owns final
+    orchestrator/matcher/local-source integration. T012 and T013 may proceed in
+    parallel **after** T014-P accepted, while T014-M waits for T013's typed
+    intermediate. No T012/T013 runtime imports back into normalizer; platform
+    actor checks/category/transport stay at caller boundaries.
+
+### Compatibility, tests and hold
+
+- `SmsParserOrchestratorResult extends Omit<AiParseResult,"unresolvedCandidates">`
+  already inherits optional session; do not define another union. Existing
+  no-opt-in Voice/SMS, trusted/local, v1/old server, live/headless
+  (`sms-live-processor.ts::processLiveSmsEvent`, `sms-headless-task.ts`) retain
+  current automatic behavior/refusals. Optional review session is only produced
+  when requested, validated, owner-bound and source-complete.
+- Root integrates UI's **23 T007 cases**, preserving original 14 and asserting
+  actual `accountReviewSessionSchema` rather than recursive raw response search;
+  verify one original successful provider call, real SMS UTF-16 body/sender
+  evidence, source category UUID, >1 chunk, stable aliases/retries, owner/abort,
+  hybrid merge, 413/429, v1 `legacy_unknown`, v2 omission, no-review absence.
+  Keep T054 route handoff later: do not serialize evidence/session into
+  `voice-flow-submission.ts::serializeAiReviewParams` URL or bypass
+  selected-review Save writer.
+- **Root must map reordered technical stages and grant disjoint source/test
+  ownership before production. T011 remains source-frozen, generated output
+  unverified; all other files untouched. STOP / RELEASE this report-only
+  planning lane.**
+
+## T014-P pure normalization tests-first checkpoint — packages/logic, NO production
+
+**Lease:** `codex/395-core-worker@b81d8a15a627cb9338207a5976f8ebc569b41807`.
+Correct prior plan: business normalization belongs
+**`packages/logic/src/account-review/normalization.ts`**, not
+`apps/mobile/services`; mobile's future
+`account-review-source-adapter-service.ts` is _platform/source orchestration
+only_ and calls the logic API. Tests-only files: NEW
+`__tests__/normalization.test.ts` and `__tests__/normalization-fixtures.ts` plus
+this report; no other production, T011, T007, T027, UI, SQL, provider, contract
+or task write.
+
+**Proposed exact callable API (root approval required before production):**
+`normalizeAccountReviewParserResult(input: AccountReviewNormalizationInput): Promise<AccountReviewSession>`,
+a **pure discriminated Voice/SMS input**, no copied provider wire DTO and no
+DB/app runtime import. Shared fields: `source`, `ownerId` (canonical UUID),
+pinned `sessionId` (UUID), `sourceRevision` (canonical revision), `requestKey`
+(request/chunk scope), `reviewAccountSnapshots`,
+`categoryIdsBySystemName: ReadonlyMap<string,string>` (already accessible
+resolved category IDs), `providerResponse: unknown` (untrusted envelope or null
+for v1), source-specific `financialRows` from existing
+`AccountReviewVoiceFinancialRow[]` / `AccountReviewSmsFinancialRow[]`,
+corresponding
+`mappedTransactions: readonly ParsedVoiceTransaction[]/ParsedSmsTransaction[]`
+from existing logic types, and **`hashProvider: Sha256Provider`**. Voice carries
+`originalTranscript:string`; SMS carries original
+`submittedMessages: readonly {id,body,sender,smsFingerprint}[]` from existing
+`ChunkWork.messages`. Only `providerResponse` is `unknown` until canonical v2
+`safeParse`; mapped source, financial rows, and account context remain typed.
+Null/invalid advisory cannot erase valid finance or authorize a group.
+
+**Owned-context structural seam (propose in logic; no implementation now):**
+`AccountReviewOwnedContext = {readonly ownerId:string; readonly preferredCurrency:AccountReviewRequestContext["preferredCurrency"]; readonly accounts:readonly (AccountReviewAccountContext & {readonly isDefault:boolean})[]; readonly providerContext:AccountReviewRequestContext}`.
+Derive all account fields from canonical Zod type, never duplicate bank/currency
+unions or import T010 from mobile. T016 can reexport/alias from
+`apps/mobile/services/account-review-read-model-service.ts` without changing its
+accepted `AccountReviewAccountSnapshots` shape. Platform alone fetches
+owner/categories, verifies current actor, captures original SMS/Voice bytes and
+injects crypto; logic revalidates pinned
+owner/context/source/category/provenance. `categoryIdsBySystemName` rejects even
+valid-shaped but **inaccessible** category UUIDs.
+
+**Approved pure hash seam:** existing
+`packages/logic/src/financial-actions/action-contracts.ts::Sha256Provider.digestUtf8(canonicalText):Promise<string>`
+is an injected _type-only_ dependency; platform supplies Expo Crypto, synthetic
+test supplies Node SHA-256. Therefore normalization returns
+`Promise<AccountReviewSession>` (not a synchronous facade) while still
+performing no IO itself. Propose one reusable, pure
+**`deriveAccountReviewGroupIdentity`** helper owned alongside normalization for
+future T027: versioned canonical preimage of owner/session/source scope,
+normalized proven type/currency/institution/provider/card/sender identity and
+authenticated source provenance (stable ASCII order; not merchant/nickname alone
+or full raw SMS body); digest forms 64-hex evidence key and deterministic UUID
+grouping. **T027 must call that identical helper**, never create another group
+hash/ID algorithm. Root must approve preimage/version before production; tests
+assert stability, scope separation and injected digest usage, not fabricated
+digest values.
+
+**Authored source-backed tests:** 23 named `it`/`it.each` declarations (29
+expanded scenarios), using canonical T009 parser schemas and real
+`ParsedVoiceTransaction`/`ParsedSmsTransaction` types, plus synthetic UUID
+categories/account snapshots. Grounded Voice BANK/CASH and SMS spans/original
+fingerprint, original amount/category no conversion, v2 proven omission only,
+ambiguous/conflicting/unsupported/unknown blocked, valid v1 Voice+SMS
+`legacy_unknown`, malformed advisory preserves finance without active group,
+foreign owner/session/message/alias/category, forged UTF-16
+body/sender/transcript, incompatible currency/type/card/institution/sender,
+merchant≠account, stable IDs across rechunk/reorder/owner/session, two-member
+reciprocal **pending** group and injected SHA-256/no raw-body hashing. Always
+assert a complete `accountReviewSessionSchema.parse`, not provider JSON echo;
+`selected:false`, zero revisions, `saveIntent:null`, no premature
+default-account resolver/T019, confirmation/edit/T027/Save actions.
+
+**Creation Red, no fake Green:**
+`packages/logic/src/account-review/normalization.ts` intentionally **does not
+exist** in this test-only lease; direct import must fail until a fresh source
+grant implements the pure normalizer. Do not add skip, mock, stub, copied wire
+DTO or module solely to make the test load. Root performs one Red batch after
+dependencies restore, then grants production separately. Expected production
+function must preserve all 65 T009 schema cases, 23 T006 read-service cases and
+separate T007 23 named mobile parser cases; no provider/device executions
+inferred. Fixture/test files each stay below 900 raw lines, function callbacks
+constrained for formatter review. No local tests, lint, format, network or
+source changes were executed here. **STOP / RELEASE / FREEZE.**
+
+## T011 strict TypeScript emission repair — tests-first risk checkpoint
+
+**Lease** `codex/395-core-worker@4f9d65e1c6c35501b161fb2e17dc68482f5e1d0d`.
+Root-observed after exact `npm ci` (1563 packages, 3 postinstall patches): T009
+**65/65**, T006 **23/23**, T011 **16/17** Node; generated Edge **796 formatted
+lines**, esbuild retained-graph no-Decimal PASS and actual Gemini/DeepInfra
+serializer PASS. AST failure is only repeated bare import statements
+`["zod","zod","zod"]`, not a forbidden distinct runtime dependency. The
+authoritative Deno check produces **60 TS errors** because esbuild strips
+canonical function parameter/return annotations and the untyped projection code
+fails inference; no Deno Green claimed. T014 missing `../normalization` is
+intentional creation Red; its three source-discriminator test accesses require
+narrowing.
+
+**First test-only gate:** preserve import AST's
+relative/module/environment/dynamic/require bans but require a _nonempty unique
+bare dependency set exactly `{"zod"}`_; add a strict compiler diagnostic test
+over the tracked generated `.ts` with inherited logic TypeScript settings and
+`strict,noImplicitAny,noEmit` (never suppress/skip errors). Fix T014 fixture
+accesses with `row.source === "VOICE"/"SMS"` guards; preserve every assertion
+and all creation-Red cases.
+
+**Approved source strategy for subsequent bounded production:** keep esbuild
+0.28.1 to prove tree-shaken parser-only runtime/metafile; emit **TypeScript**,
+not esbuild's JS. Use TypeScript 5.9.3 Compiler API to collect, type-preserve
+and inline exact runtime declarations from canonical `generated-vocabulary.ts`
+(five generated literals, AST-remove type-only `satisfies`), pure
+`amount-limits.ts`, `schema-primitives.ts`, `parser-advisory-validation.ts`, and
+`parser-schemas.ts`, removing their local module imports and retaining **one**
+external `zod` import. Preserve `z.infer` type aliases and typed validator
+functions; no copy of wire unions/schema. The existing Zod-derived
+Gemini/DeepInfra lowering functions need full `unknown` narrowing and explicit
+**structural** TypeScript signatures, never `any` or `ts-nocheck`. Preserve 7
+runtime validators, 2 builders, version/hash/source manifest, CLI, provider ABI
+and formatting/size ceiling; root alone regenerates and runs actual Deno check.
+If formatted module exceeds 899 lines or compiler graph proves unsafe, stop for
+split grant rather than minifying/config relaxing.
+
+## T011 typed-Edge generation source candidate — unverified
+
+**Lease:** `codex/395-core-worker@2a5a06b72d292cb395bc3928efdc6c6d05ad4f26`;
+prior checkpoint captured actual 60 Deno TS errors and added strict TypeScript
+Red. **No remote command, Deno, Node, provider, CI, SDK, deployment or
+generated-file execution is claimed.** Canonical public schema APIs and T011
+provider wire exports unchanged.
+
+**Repair:** `scripts/generate-edge-account-review-contract.cjs` now uses TS
+5.9.3 `createSourceFile` AST to extract **actual canonical TypeScript
+declaration text** in dependency order from the five parser-runtime files
+(`generated-vocabulary.ts`, pure `amount-limits.ts`, `schema-primitives.ts`,
+`parser-advisory-validation.ts`, `parser-schemas.ts`), removing module-local
+imports but preserving `z.infer` aliases and original validator parameter/return
+types. Compiler-AST stripping of generated vocabulary `satisfies` references
+retains canonical `as const` values with no copied enum/wire DTO; one external
+`import {z} from "zod"` remains. Esbuild 0.28.1 still independently validates
+the parser-only runtime dependency/metafile; unapproved side effects/imports
+abort generation.
+
+**Typed builders:** the same canonical
+`z.toJSONSchema(...,{io:"input",reused:"inline",unrepresentable:"throw"})`
+source feeds the existing Gemini/DeepInfra projection lowering, now explicitly
+typed with generic `Record<string,unknown>`, provider discriminant, guarded
+objects/arrays and return types. No explicit `any`, `ts-ignore`, `ts-nocheck`,
+config relaxation, extra schema or provider call. Existing seven validator
+exports, two provider builders, version/hash/source-path metadata, canonical
+full-input SHA encoding, `--stdout`/`--check`/write idempotence, deterministic
+Prettier, 899-line cap and non-minification remain frozen.
+
+**Tests:** `scripts/__tests__/account-review-edge-generator.test.ts` checks
+unique actual runtime dependencies `{"zod"}` (allowing repeated same bare-import
+statements only), preserves strict AST bans on relative
+imports/env/dynamic/require, and adds both inherited-strict full compiler
+diagnostics and AST signature checks for typed canonical helpers/builders. The
+T014 normalization tests' three old discriminator accesses were repaired with
+actual Voice/SMS source guards in the prior separate checkpoint; intentional
+missing normalizer creation Red remains untouched.
+
+**ROOT NEXT:** mechanically regenerate (never fake committed output), verify
+formatted artifact stays below 900 lines and original 17+ Edge cases, new
+TypeScript regressions, **actual Deno check**, T009 65/65, T006 23/23, hash
+parity, provider serializer, scoped formatter/lint. If generated size, type
+diagnostics or unsafe graph remain, **STOP and report exact failure** for a new
+lease; no blind split/minification/fallback. No T014 normalizer production.
+**T011 ownership FROZEN / RELEASED.**
+
+## T014 group-identity v1 and T011 generated-module split — plan only
+
+**Lease and evidence:**
+`codex/395-core-worker@de3f016707cd6520a8163b6898ddaa2bcedb0c26`; report-only.
+Root confirmed mechanical Prettier PASS but typed T011 generation now **fails
+the 899-line guard before writing**; the earlier 796-line JS artifact is stale,
+and **no Deno Green exists**. Propose the cohesive split below before any
+generator/source/test grant. No T014 production/normalizer or T011 edits in this
+checkpoint.
+
+### Canonical identity shared by initial T014 normalization and future T027
+
+- **Exact group digest domain/version:**
+  `"monyvi.account-review.group-identity"`, `"v1"`. Form a UTF-8 string by
+  `JSON.stringify` of this **ordered array**, with explicit JSON `null`s:
+  `[domain,version,ownerId,sessionId,source,name,type,currency,institutionId,providerDisplayName,cardLast4,senderNames]`.
+  Owner/session are lowercase canonical UUIDs; source is literal
+  `"VOICE"`/`"SMS"`; type and currency **must be proven, known, non-null**. Name
+  is grounded account identity, not merchant/counterparty or an uncorroborated
+  model nickname.
+- **Canonical field normalization before hashing:** for grounded
+  name/provider/sender strings use
+  `NFC → trim → collapse Unicode whitespace (/\\s+/gu) to one ASCII space → toLowerCase()`
+  (locale independent); reject blank grounded name and malformed identity. Treat
+  opaque `institutionId` as its validated exact string (case preserved),
+  `cardLast4` as exact four ASCII digits or null; **null is not a wildcard**.
+  `senderNames` contains only _group-level_ validated aliases,
+  normalized/deduplicated then sorted by JavaScript code-unit comparator
+  `a<b?-1:a>b?1:0`, never accumulated from membership. Each nullable field's
+  `null` is preserved, not rewritten to `""`. Do not fuzzy-match, transliterate,
+  strip card digits, or ignore conflicting metadata.
+- **Proposed exact T027-reusable helper in future
+  `packages/logic/src/account-review/identity.ts`:**
+  `deriveAccountReviewGroupIdentity(input: {ownerId: AccountReviewSession["ownerId"];sessionId: AccountReviewSession["sessionId"];source: AccountReviewSession["source"];identity: Pick<AccountReviewGroup,"name"|"type"|"currency"|"institutionId"|"providerDisplayName"|"cardLast4"|"senderNames">;hashProvider: Sha256Provider}): Promise<Pick<AccountReviewGroup,"evidenceKey"|"groupId">>`.
+  Reject `identity.type === null` or unconfirmed row currency _before_ this
+  call. `evidenceKey = await hashProvider.digestUtf8(groupPreimage)` (lowercase
+  64 hex); `groupId` is a deterministic RFC-9562 **UUIDv8-format** projection of
+  the first 32 hex digest characters, setting the version nibble at position 12
+  to `8` and the variant nibble at position 16 to `(hexNibble & 3) | 8`. No
+  separate digest algorithm for T027.
+- **Hard group-membership separation:** **never** include `linkedRowIds`,
+  suggestion/transaction refs, `requestKey`, chunk number, source message IDs,
+  SMS fingerprints, row count/order, amounts, source body/transcript, evidence
+  spans, categories or mutable revisions in the group preimage. These remain
+  independently validated **per-row eligibility**: same normalized grounded
+  name/type/known currency, exact compatible provider/institution/card and
+  source-specific sender evidence; SMS BANK/WALLET vs explicit ATM endpoint,
+  Voice CASH allowed. Different/null-vs-concrete metadata stay
+  separate/unresolved. Late equivalent eligible rows can link to the same
+  **pending** group without changing key/ID, but never auto-confirm or
+  auto-select.
+- **Separate row-identity domain/version:**
+  `"monyvi.account-review.row-identity"`, `"v1"`.
+  `rowDigest = digestUtf8(JSON.stringify([domain,version,ownerId,sessionId,source,sourceRecordKey,sourceFinancialKey]))`.
+  For SMS `sourceRecordKey` is the already validated **original**
+  `smsFingerprint` plus submitted `messageId` (one fixed string tuple); for
+  Voice it is the stable logical recording/request UUID. `sourceFinancialKey` is
+  a fixed tuple of canonical original amountDecimal, type, normalized date,
+  category-system identifier and source counterparty/description used **once at
+  first parse** to distinguish multiple transactions from one source; never
+  model `transactionRef` or its arrival ordinal. Ambiguous identical
+  source/finance collisions fail closed, not arbitrary index reassignment.
+  `rowId` uses the same UUIDv8 projection rule **on rowDigest**; future user
+  edits keep the established rowId and bump revisions instead of rehashing.
+- **Privacy/revisions:** hash inputs stay entirely in memory; no raw SMS
+  body/transcript, full account numbers, name/preimage, digest call arguments,
+  or fingerprints logged/sent to analytics/cloud. Account/group identity
+  metadata used inside the digest remains private even when output is opaque.
+  `Sha256Provider.digestUtf8` remains the injected type-only pure-logic
+  boundary; platform supplies digest capability. T027 edit/group reconciliation
+  calls the _same helper_ for updated `evidenceKey`, retains established
+  `groupId` for existing groups, increments the appropriate identity/review
+  revision and preserves old removed-key tombstones; no alternative legacy hash
+  on restore/retry. Across same owner/session, re-chunking and request-key
+  retries cannot change key/ID or selected/removed state.
+
+### T011 exact acyclic generated split (pending fresh production/test grant)
+
+- **Generated `supabase/functions/_shared/account-review-parser-contract.ts`:**
+  source-extract canonical typed `generated-vocabulary.ts`, pure
+  `amount-limits.ts`, `schema-primitives.ts`, `parser-advisory-validation.ts`,
+  `parser-schemas.ts`; exports the **seven frozen T004 Zod validators** and
+  canonical `ACCOUNT_REVIEW_CURRENCIES` for projection. External runtime import
+  **only `zod`**. No manual schema copy, runtime DB/Decimal, source import from
+  `packages/logic` or TS-type erasure.
+- **Generated
+  `supabase/functions/_shared/account-review-provider-projections.ts`:** imports
+  `zod` plus the parser module's canonical Voice/SMS validators and currency
+  vocabulary using **explicit sibling `.ts` relative imports**; contains only
+  the typed `z.toJSONSchema(io:"input",reused:"inline",unrepresentable:"throw")`
+  structural lowering and exports the existing **two** Gemini/DeepInfra
+  builders. No duplicated enum/wire shape, app/DB access or provider call;
+  strict existing DeepInfra serialization remains external.
+- **Generated public `supabase/functions/_shared/account-review-contract.ts`:**
+  a tiny façade reexporting exactly the **seven existing validators** from
+  parser and **two builders** from projections, plus unchanged
+  `ACCOUNT_REVIEW_EDGE_GENERATOR_VERSION`, `ACCOUNT_REVIEW_CANONICAL_SHA256`,
+  `ACCOUNT_REVIEW_CANONICAL_SOURCE_PATHS`. **DAG:** façade→parser,
+  façade→projections→parser; parser/projections→`zod`, no imports back to
+  façade. Preserve importers' exact public path/API and whole reviewed
+  canonical-source manifest/hash encoding; hash **raw canonical inputs**, not
+  generated output file count.
+- **Generator/size and CLI adjustments proposed:** one TypeScript-AST canonical
+  extraction pass and one esbuild retained-graph proof; render all three ESM
+  `.ts` modules, format each with repo Prettier, reject if **any** formatted
+  file reaches 900 lines (no minify). Make `--stdout` emit a stable sorted
+  filename→content JSON map for all files, `--check` verify all three
+  nonmutating (including mtime), and default write update changed bytes only
+  **after** all three render/size/graph checks pass. Root commits mechanically
+  rendered files together with generator, never hand-authored generated
+  replacements.
+- **Required independent test updates before Green:** expand both owned T011
+  Node suites' single-file assumptions to inspect the three-file sorted output
+  map, hook-clean and hash parity, import/export symbol ownership, and
+  AST-resolved **transitive dependency graph** (only allowed sibling edges; sole
+  bare external `zod`, no dynamic/require/env/Node/mobile/DB/Decimal). Run
+  strict TS diagnostics over **all three** files and the actual
+  `deno check --node-modules-dir=manual --config supabase/functions/deno.json supabase/functions/_shared/account-review-contract.ts`
+  transitively; preserve seven-schema acceptance parity, injected DeepInfra
+  request, Gemini projection and no-output-on-failed-check tests. The original
+  `loadGeneratedEdge()` still imports the public façade unchanged.
+- **Deployment implication:** both future `parse-voice` and `parse-sms` import
+  only the façade path; Supabase/Deno must resolve and deploy its two sibling
+  generated `_shared` modules together. Existing `supabase/functions/deno.json`
+  Zod `npm:zod@4.4.3` mapping suffices; no `node_modules`, `packages/logic` or
+  mobile imports at runtime. Preserve per-function consent/provider and quota
+  architecture. **No split files/generator/tests authored here; STOP pending
+  explicit root grant and Deno evidence.**
+
+## T011 three-module implementation handoff — generator authored, outputs root-rendered
+
+**Lease and accepted Red:**
+`codex/395-core-worker@b718290d5d2f61161c7f99dd11b24f50137037d2`; root's
+mechanically formatted typed monolith exceeded the **899-line limit before
+writing**. The old 796-line JavaScript artifact is stale and **Deno Green is NOT
+claimed**. Tests-only checkpoint `79d4f1975590fcf4a30678adb5f7079de1544432`
+first adapted both existing Edge suites without deleting the original 8 tests,
+seven-validator parity, or real injected Gemini/DeepInfra cases.
+
+**Exactly three approved generated destinations (root produces them locally):**
+
+1. `supabase/functions/_shared/account-review-parser-contract.ts` — TypeScript
+   AST extraction of the five existing canonical runtime sources in fixed
+   dependency order; emits original source declarations and `z.infer` types,
+   seven frozen provider validators and source-derived
+   `ACCOUNT_REVIEW_CURRENCIES`; runtime dependency `zod` only.
+2. `supabase/functions/_shared/account-review-provider-projections.ts` — fully
+   typed canonical-Zod-derived Gemini/DeepInfra builders, imports only `zod` and
+   `./account-review-parser-contract.ts`; no copied wire DTO, untyped JavaScript
+   or model action.
+3. `supabase/functions/_shared/account-review-contract.ts` — original public
+   import path/facade, **seven schema reexports**, **two builder reexports**,
+   unchanged
+   `ACCOUNT_REVIEW_EDGE_GENERATOR_VERSION`/`ACCOUNT_REVIEW_CANONICAL_SHA256`/`ACCOUNT_REVIEW_CANONICAL_SOURCE_PATHS`.
+   DAG façade → parser+projections → parser → Zod; no cycles, runtime
+   DB/Decimal, app import or new provider call.
+
+**Generator behavior:** existing
+`scripts/generate-edge-account-review-contract.cjs` retains esbuild
+retained-input exclusion, the reviewed full canonical _raw-source_ manifest/hash
+domain and exact-path length-delimited SHA-256 preimage, TypeScript 5.9.3 typed
+source extraction, and no minification. It prepares all three modules in memory,
+applies repository Prettier **per target**, rejects **any** module at 900+
+formatted lines, verifies the exact static acyclic imports/exports, and runs
+strict noEmit TypeScript diagnostics across all three **before writing any
+file**. `--stdout` now returns **ASCII-sorted relative
+filename→formatted-content JSON**, `--check` verifies all files without changing
+bytes/mtime, ordinary writes change only stale artifacts after every check
+passes.
+
+**Tests and root gate:**
+`scripts/__tests__/account-review-edge-generator.test.ts` checks sorted full
+map/two-repeat equality, each rendered target's tracked bytes/Prettier/line
+limit, all-file nonmutating `--check`, the generated transitive import graph,
+full-manifest hash, canonical helper signatures, and strict TS of the 3-file
+graph; `account-review-edge-contract.test.ts` retains its 8 previous assertions
+and inspects all three source files. Root must **mechanically render and commit
+all three generated outputs** and independently run actual
+`deno check --node-modules-dir=manual --config supabase/functions/deno.json supabase/functions/_shared/account-review-contract.ts`,
+full Node/Jest, logic tsc, lint, parity and real injected-provider tests. No
+local command/SDK/provider execution or generated artifact is claimed here;
+**T014 normalization/row multiplicity and T027 remain separate, unimplemented**.
+
+**STOP / source ownership RELEASED / FROZEN after scoped publication.** If any
+generated output exceeds 899 formatted lines or typed runtime graph fails,
+report exact root result for a new grant; never add unapproved modules, minify,
+suppress diagnostics or hand-author generated output.
+
+## T011 Node test-size extraction — test-only frozen handoff
+
+**Lease:** `codex/395-core-worker@f9e16811ff5a51d22f8ddab0802b3eed22b078e0`;
+sole changes are existing
+`scripts/__tests__/account-review-edge-generator.test.ts`, NEW
+`scripts/__tests__/account-review-edge-generator-test-fixtures.ts`, and this
+report. Root independently reported **three generated files at 44/719/241
+formatted lines, all 19 Edge Node tests PASS, strict generated TS and actual
+transitive Deno check exit 0, canonical SHA/provider projections and injected
+DeepInfra PASS**; these are root-local results, **not remote execution**. No
+real provider/emulator result is claimed. Root's separate local foundation
+acceptance was `e8fcdbfe` (not a feature push).
+
+**Exact split:** moved only the already-tested complete three-path
+`GENERATED_RELATIVE` declaration, `readGeneratedMap`, pure JSON
+shape/nullable/required-key helpers, and recursive Gemini/DeepInfra structural
+verification helpers into the focused new fixture/helper module. Added one
+synthetic `makeSyntheticSmsProviderReply` builder using existing
+`makeSmsV2Response`; original model response root keys/content remain identical.
+The existing test still exercises the real injected `DeepInfraSmsProvider`
+transport, unchanged original 11 named Node cases, 8 independent contract cases,
+strict typed Deno/module graph/Prettier/hash parity, failure/refusal and
+negative samples. Exactly **99 original `assert.*` calls** are retained across
+the two test files (static source count). No skips, mocks of SUT, assertion
+removal, generated/source/provider/code changes.
+
+**Size gate:** extracted original raw 726-line generator test to raw 605 lines
+plus 153-line helper, each well below 900; root must mechanically
+Prettier-format both and independently check both stay **below 900 formatted
+lines** (old test was **938 formatted lines**). This author made no runtime
+TypeScript/lint/Node claims for the extracted version. Root reruns the affected
+Node suite and its static gates after integration, without a fresh
+generator/source Deno batch unless independently required. **STOP / RELEASE /
+FROZEN.**
+
+## T011 post-format function-size maintenance — source-only extraction
+
+**Additional bounded lease:**
+`codex/395-core-worker@af043998328c895f4da55f106135f0591bf9cd1d`. Root's actual
+pre-maintenance three-module generated Edge batch was **19/19 Node PASS, Deno
+transitive `check` EXIT 0**, generated files 44/719/241 formatted lines, strict
+TypeScript/hash/Gemini/injected DeepInfra PASS. Separate 65/65 canonical T009
+and 23/23 T006 were last reported PASS before this canonical-file edit; **all
+gates require root revalidation** after regeneration. No real model, provider or
+emulator run.
+
+**Exactly two behavior-preserving function splits:**
+`scripts/generate-edge-account-review-contract.cjs::checkGraphModule` (54
+formatted lines before) now delegates its **unchanged recursive AST visitor** to
+`inspectGeneratedModuleEdges`; original imports, reexports, forbidden
+dynamic/require/env checks, graph comparisons, error messages and one-pass AST
+behavior remain.
+`packages/logic/src/account-review/parser-advisory-validation.ts::validateRowEvidence`
+(53 formatted lines before) now delegates the same four evidence-policy guards
+to `validateRowEvidenceConditions`; original issue codes/paths/order, span
+grounding and exported `validateAdvisoryEnvelope` schema behavior remain. No
+schema/API/DTO/provider/SQL/identity/normalizer logic change; both source
+modules and their helpers are substantially below 50 _raw_ lines per function
+and await actual post-Prettier verification.
+
+**Cascading generated-source gate:** the canonical helper change **necessarily
+changes the full canonical-source SHA-256** and generated parser bytes; root
+must **mechanically regenerate and format all three Edge modules**,
+independently verify under-900 sizes and under-50 functions, hash parity, all 19
+Edge Node cases, actual Deno transitive `check`, T009 65 schema regressions,
+T006 23 read-model tests and scoped TypeScript/lint. The generated targets
+remain root-only outputs; no hand edits, runtime execution or extra source paths
+from this worker. Earlier test-size extraction was published at `af043998` and
+is unchanged in this maintenance receipt. **STOP / ownership RELEASED /
+FROZEN.**

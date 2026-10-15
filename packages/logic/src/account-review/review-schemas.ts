@@ -6,18 +6,17 @@ import {
   accountReviewAccountEvidenceSchema,
   accountReviewEvidenceSpanSchema,
 } from "./parser-schemas";
+import { recordRevision, canonicalDecimal } from "./review-value-primitives";
 import {
   canonicalUuid,
   sourceRef,
   nonblankText,
   cardSuffix,
   hash,
-  recordRevision,
   currencyCode,
   accountType,
   transactionType,
   reviewSource,
-  canonicalDecimal,
   areDistinct,
   addIssue,
   uuidArray,

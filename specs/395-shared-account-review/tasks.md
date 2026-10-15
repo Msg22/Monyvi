@@ -69,11 +69,11 @@ prepare tests against the frozen T004 contract in parallel.
 
 ### Tests first
 
-- [ ] T005 [P] Author schema/evidence fixtures and failing validation tests in
+- [x] T005 [P] Author schema/evidence fixtures and failing validation tests in
       `packages/logic/src/account-review/__tests__/schemas.test.ts`: v1/v2, null
       IDs, unique/dangling refs, spans, omitted versus unknown currency,
       malformed advisory content retaining valid rows.
-- [ ] T006 [P] Author owned account-read tests in
+- [x] T006 [P] Author owned account-read tests in
       `apps/mobile/__tests__/services/account-review-read-model-service.test.ts`:
       active/foreign/deleted accounts, bank children/senders, preferred-currency
       snapshot and batched queries.
@@ -82,7 +82,7 @@ prepare tests against the frozen T004 contract in parallel.
       `apps/mobile/__tests__/services/account-review-parser-adapters.test.ts`:
       supported Gemini/DeepInfra schema fixtures, old-server handling,
       original-call counts and existing completion/safeguards.
-- [ ] T008 [P] Author production-gated fixture-entry tests in
+- [x] T008 [P] Author production-gated fixture-entry tests in
       `apps/mobile/__tests__/e2e/account-review-fixtures.test.ts`; specify
       current-user Voice/SMS fixtures for M01–M20 in
       `apps/mobile/e2e/fixtures/shared-account-review.json` without hosted seeds
@@ -90,15 +90,15 @@ prepare tests against the frozen T004 contract in parallel.
 
 ### Implementation after focused foundation Red
 
-- [ ] T009 Implement logic-owned Zod evidence/session/assignment/group/command
+- [x] T009 Implement logic-owned Zod evidence/session/assignment/group/command
       schemas in `packages/logic/src/account-review/schemas.ts`; derive types,
       preserve required category IDs and canonical domain vocabulary, account
       choice null, currency certainty wrapper.
-- [ ] T010 Implement owned batched snapshots in
+- [x] T010 Implement owned batched snapshots in
       `apps/mobile/services/account-review-read-model-service.ts` using scoped
       account/bank/sender helpers; exclude private balances/full identifiers
       from provider context.
-- [ ] T011 Generate strict Edge contract/provider projection from T009 in
+- [x] T011 Generate strict Edge contract/provider projection from T009 in
       `scripts/generate-edge-account-review-contract.cjs` and
       `supabase/functions/_shared/account-review-contract.ts`; add parity
       invocation in `package.json` without broadening legacy response schemas.
@@ -119,7 +119,7 @@ prepare tests against the frozen T004 contract in parallel.
       `apps/mobile/services/sms-account-matcher.ts`; namespace aliases, remove
       v2 account-currency priority, retain source eligibility/live-confirm
       boundaries.
-- [ ] T015 Add existing test-mode-only fixture access for Voice session/SMS
+- [x] T015 Add existing test-mode-only fixture access for Voice session/SMS
       review through `apps/mobile/services/account-review-fixture-service.ts`;
       isolate current owner, reject production activation and expose honest
       user-visible outcomes without bypassing the writer.

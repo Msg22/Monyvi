@@ -31,10 +31,10 @@ function validateSpanSource(
   }
 }
 
-function validateRowEvidence(
+/** Evidence eligibility constraints, independent of span-source grounding. */
+function validateRowEvidenceConditions(
   row: ResponseRow,
   source: "VOICE" | "SMS",
-  transcript: string | null,
   ctx: z.RefinementCtx,
   index: number
 ): void {
@@ -75,6 +75,17 @@ function validateRowEvidence(
       "Ordinary SMS transaction cannot invent Cash destination"
     );
   }
+}
+
+/** Original source-text span validation; no extra provider or platform calls. */
+function validateRowEvidence(
+  row: ResponseRow,
+  source: "VOICE" | "SMS",
+  transcript: string | null,
+  ctx: z.RefinementCtx,
+  index: number
+): void {
+  validateRowEvidenceConditions(row, source, ctx, index);
   const messageId = "messageId" in row ? row.messageId : null;
   for (const span of [
     ...row.accountEvidence.evidenceSpans,
