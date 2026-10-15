@@ -262,3 +262,72 @@ worker. Root owns a final coherent focused Red / TS / lint batch before
 consolidated independent-review triage, and must separately grant any source
 changes. No schema, identity, resolver, runtime, financial/Core, UI, SQL,
 PR/issue or external source was changed.
+
+
+## T027 final source correction — complete child checkpoint, Root Green pending
+
+**Authorization:** one bounded production correction on existing
+codex/395-reducer-safety, parent
+937e5da9e239159c0deb9783b84d992ef5862f19; only
+reducer-selection.ts, reducer-groups.ts and this validation note. No tests,
+schemas, resolver, identity, candidates, indexes, financial, Core/UI/SQL or
+other files changed by the source owner.
+
+**Root's observed pre-correction Red:** 20 PASS / 10 FAIL across the two
+30-case reducer safety suites (seven selected ATM destinations incomplete,
+two selected Voice unresolved default assignments, one compatible nickname
+edit unchecking the selected row). Prior 26 T024 cases are unchanged.
+The financial lane's separately reviewed 272 PASS is out of this correction's
+scope. Strict logic TS has only the unrelated future candidates import in
+account-choices.test.ts, with no reducer/financial TS errors; the reported
+lint baseline is 0. These are Root's pre-correction observations, NOT this
+worker's post-change test evidence.
+
+**Correction A — reducer-selection.ts, fail closed with original proof:**
+
+- Existing/confirmed source direct selection first requires the original
+  row to be ready, with no review blockers, a valid original source/known
+  currency, and an existing destination for ATM. It separately verifies
+  the re-resolved row is ready under the current owned context.
+- The original and resolved row's canonical account assignments, destination
+  assignments and review reasons must agree before selecting the original;
+  changes found by the resolver are **eligibility evidence only** and
+  cannot silently be discarded while returning a selected stale row.
+  Thus an original missing/unresolved ATM destination or Voice missing/default
+  source is safely rejected without mutation. An explicit already selected
+  Cash destination or current eligible Bank/default/user assignment remains
+  eligible when its proof stays coherent.
+- Disclosed pending-group clicks require both original and current currency,
+  source proof, blocker and Cash destination eligibility before the group
+  confirmation/row selection. The permitted account_group_unconfirmed
+  reason is cleared only through the existing group-confirmation transition.
+  Rejecting prior to that transition preserves the original pending group.
+- Bulk select_ready evaluates original and fresh row proof with one real
+  resolver call and an indexed refreshed row map, skipping invalid rows while
+  still checking unrelated ready rows. Zero eligible rows yields the existing
+  canonical unchanged rejection, including no group confirmation or revision
+  increment. clear_selection and other commands are unchanged.
+- The reducer continues to commit its original scoped immutable source row
+  (with the expected selection/revision transition), **not** a wholesale
+  resolved session or its unrelated row/group changes. No new default,
+  provider, identity, currency, cash or financial persistence policy appears.
+
+**Correction B — reducer-groups.ts, compatible reconfirmation:**
+
+- An explicitly reconfirmed edit_group may preserve a previously checked
+  linked row only when the prior group was confirmed and the edit changes
+  no type, institutionId, providerDisplayName, cardLast4, sender aliases or
+  locked group currency (nickname-only). The row must be canonically linked
+  to the prior confirmed group/revision with known matching currency and
+  zero review blockers. An ATM row also needs an existing Cash destination
+  rather than an unresolved one.
+- The group still gets its new revision and confirmedIdentityRevision, and
+  linked rows are updated through the existing atomic transition. No
+  previously unchecked sibling becomes selected. Confirm-group commands and
+  material edits continue clearing selections; removal, Undo, schema and
+  source type rules stay unchanged.
+
+**Post-correction checks:** NOT RUN by remote owner, as authorized. Root must
+perform one coherent Green/TypeScript/lint run including both 30-case safety
+files and all 26 T024 cases, then seek independent source review before
+acceptance. This report is a source checkpoint, not a Green or release claim.

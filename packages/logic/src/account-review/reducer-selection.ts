@@ -35,9 +35,9 @@ function hardReasonsRemain(row: AccountReviewRow): boolean {
   );
 }
 
-/** Called only on a freshly re-resolved row. The shared resolver validates
- * Cash ownership, currency, distinct endpoints, default origin and evidence;
- * an unresolved or pending destination is never ready for ATM selection. */
+/** The shared resolver validates Cash ownership, currency, distinct endpoints,
+ * default origin and evidence. The ORIGINAL row must also retain that proof;
+ * a valid transient resolution cannot authorize selection of stale input. */
 function hasSatisfiedAtmDestination(row: AccountReviewRow): boolean {
   return row.source !== "SMS" || row.transaction.isAtmWithdrawal !== true ||
     row.toAssignment?.state === "existing";
@@ -46,7 +46,9 @@ function hasSatisfiedAtmDestination(row: AccountReviewRow): boolean {
 function isReady(
   row: AccountReviewRow, groups: readonly AccountReviewGroup[]
 ): boolean {
-  if (row.currency.state !== "known" || hardReasonsRemain(row) ||
+  // Existing/confirmed account choices cannot retain an account-only blocker.
+  // Pending group clicks use a separate disclosed confirmation path below.
+  if (row.currency.state !== "known" || row.reviewReasons.length > 0 ||
       !hasSatisfiedAtmDestination(row)) return false;
   const assignment = row.assignment;
   if (assignment.state === "suggested") {
@@ -57,6 +59,17 @@ function isReady(
   }
   // A pure fresh resolution has already invalidated stale default/account IDs.
   return assignment.state === "existing";
+}
+
+/** A resolver refresh is eligibility evidence, NOT the state that the
+ * reducer commits. Reject if it would repair source, destination or blockers
+ * that would otherwise be left stale in the selected original row. */
+function selectionEvidenceUnchanged(
+  original: AccountReviewRow, refreshed: AccountReviewRow
+): boolean {
+  return JSON.stringify(original.assignment) === JSON.stringify(refreshed.assignment) &&
+    JSON.stringify(original.toAssignment) === JSON.stringify(refreshed.toAssignment) &&
+    JSON.stringify(original.reviewReasons) === JSON.stringify(refreshed.reviewReasons);
 }
 
 function linkedGroupForSelection(
@@ -112,7 +125,10 @@ function selectExistingOrConfirmed(
     session, accountSnapshots: context,
   });
   const current = refreshed.rows.find((item) => item.rowId === row.rowId);
-  if (!current || !isReady(current, refreshed.groups)) return blocked("account_needed");
+  if (!current || !selectionEvidenceUnchanged(row, current) ||
+      !isReady(row, session.groups) || !isReady(current, refreshed.groups)) {
+    return blocked("account_needed");
+  }
   const rows = session.rows.map((item): AccountReviewRow =>
     item.rowId === row.rowId ? revisedRow({ ...item, selected: true }) : item
   );
@@ -142,8 +158,10 @@ export function reduceSelectRow(
     session, accountSnapshots: context,
   });
   const current = refreshed.rows.find((item) => item.rowId === row.rowId);
-  if (!current || current.currency.state !== "known" ||
-      hardReasonsRemain(current) || !hasSatisfiedAtmDestination(current)) {
+  if (!current || !selectionEvidenceUnchanged(row, current) ||
+      row.currency.state !== "known" || current.currency.state !== "known" ||
+      hardReasonsRemain(row) || hardReasonsRemain(current) ||
+      !hasSatisfiedAtmDestination(row) || !hasSatisfiedAtmDestination(current)) {
     return blocked("account_needed");
   }
   const prepared = confirmForClick(session, row, command);
@@ -189,11 +207,20 @@ export function reduceSelectBatch(
   if (command.filter !== session.filter) return blocked("review_revision_stale");
   // Recheck the whole owned snapshot once, then select only ready visible IDs.
   // Ineligible rows are skipped; a wholly ineligible batch remains a no-op.
-  const readyIds = command.kind === "select_ready"
-    ? new Set(resolveAccountReviewSession({
+  const readyIds = new Set<string>();
+  if (command.kind === "select_ready") {
+    const refreshed = resolveAccountReviewSession({
       session, accountSnapshots: context,
-    }).rows.filter((row) => isReady(row, session.groups)).map((row) => row.rowId))
-    : new Set<string>();
+    });
+    const refreshedById = new Map(refreshed.rows.map((row) => [row.rowId, row]));
+    for (const original of session.rows) {
+      const current = refreshedById.get(original.rowId);
+      if (current && selectionEvidenceUnchanged(original, current) &&
+          isReady(original, session.groups) && isReady(current, refreshed.groups)) {
+        readyIds.add(original.rowId);
+      }
+    }
+  }
   const chosen = session.rows.filter((row) =>
     visibleByFilter(row, command.filter) &&
     (command.kind === "clear_selection" ? row.selected :

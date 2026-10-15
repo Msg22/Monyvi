@@ -61,15 +61,40 @@ function confirmedGroup(
   };
 }
 
+/** Reconfirming a compatible nickname-only edit cannot uncheck an otherwise
+ * valid previously selected row. A changed type/provider/card/sender identity
+ * remains material and continues to clear every linked selection. */
+function isNicknameOnlyReconfirmation(
+  group: AccountReviewGroup, command: GroupCommand
+): boolean {
+  if (command.kind !== "edit_group" || !command.reconfirm ||
+      group.status !== "confirmed") return false;
+  const identity = command.identity;
+  return identity.type === group.type &&
+    identity.institutionId === group.institutionId &&
+    identity.providerDisplayName === group.providerDisplayName &&
+    identity.cardLast4 === group.cardLast4 &&
+    identity.senderNames.length === group.senderNames.length &&
+    identity.senderNames.every((name, index) => name === group.senderNames[index]);
+}
+
 function confirmGroupRows(
   rows: readonly AccountReviewRow[], group: AccountReviewGroup,
-  revision: string
+  revision: string, retainValidSelections: boolean
 ): AccountReviewRow[] {
   const members = new Set(group.linkedRowIds);
   return rows.map((row): AccountReviewRow => {
     if (!members.has(row.rowId) || row.assignment.state !== "suggested") return row;
+    const retainSelection = retainValidSelections && row.selected &&
+      row.assignment.groupId === group.groupId &&
+      row.assignment.groupRevision === group.revision &&
+      row.assignment.confirmation === "confirmed" &&
+      row.currency.state === "known" && row.currency.code === group.currency &&
+      row.reviewReasons.length === 0 &&
+      (row.source !== "SMS" || row.transaction.isAtmWithdrawal !== true ||
+        row.toAssignment?.state === "existing");
     return revisedRow({
-      ...row, selected: false,
+      ...row, selected: retainSelection,
       assignment: {
         state: "suggested", accountId: null, groupId: group.groupId,
         groupRevision: revision, confirmation: "confirmed",
@@ -112,7 +137,10 @@ function confirmOrEdit(
   const updated = confirmedGroup(group, command);
   return accepted({
     groups: state.groups.map((item) => item.groupId === group.groupId ? updated : item),
-    rows: confirmGroupRows(state.rows, group, updated.revision),
+    rows: confirmGroupRows(
+      state.rows, group, updated.revision,
+      isNicknameOnlyReconfirmation(group, command)
+    ),
     affectedGroupIds: [group.groupId],
     affectedRowIds: [...group.linkedRowIds],
   });
