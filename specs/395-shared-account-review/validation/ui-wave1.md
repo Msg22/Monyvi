@@ -528,3 +528,15 @@ The session must populate **every frozen field**: owner/session/source IDs and c
 - **Not run/claimed:** no Jest, TypeScript, ESLint, Prettier, emulator, native worker, npm/install, fixture seed, hosted DB, provider or financial Save operation. Root owns the coherent T008 48-case Green and type/lint/format/security gates. **T054** later owns the real review route/facade and normal writer; this T015 loader alone is not end-to-end UI/Save proof. T018 stays **HOLD**.
 
 **T015 SOURCE AUTHORING COMPLETE — ROOT GREEN PENDING — OWNERSHIP RELEASED / ALL WRITES FROZEN.**
+
+---
+
+## 21. T015 typed-descriptor/null-evidence correction checkpoint — ROOT RERUN PENDING
+
+- **Narrow source lease:** at verified `codex/395-ui-worker@17b400bedb1a8a6262e57d315cee9dd0f1039f62`, modified only `apps/mobile/services/account-review-fixture-role-service.ts`, `apps/mobile/services/account-review-fixture-builders.ts`, and this report. T008 and helper, 15-scene JSON catalogue, T010, logic/Core, parser, UI, seed, contracts, SQL, and T018 remain frozen.
+- **Real TypeScript correction:** parse `manifest.accountContext` **once** with canonical `accountReviewRequestContextSchema.parse` at its static descriptor boundary; `bindExactAccounts` now iterates `validatedFixtureAccountContext.accounts` (Zod-inferred currency/type/account shape) instead of broad JSON strings. Existing T010 provider-context validation, exact current-owned role matching and ambiguity checks are unchanged. No casts, copied enums, schema changes or loose type extensions.
+- **Null-path correction:** `makeAccountEvidence` retains the absent/default and grouped paths, but now explicitly rejects its otherwise impossible ungrouped `row.accountId === null` branch and invokes `requireAccount(bindings, row.accountId)` only after narrowing to a real string. Removed `row.accountId ?? ""`; no sentinel, hidden fallback or relaxed lookup.
+- **Root observed prior batch (not re-run here):** **T008 48/48 PASS**; formatted service 69 / builder 617 / role service 176 / tests 809, all named functions under 50. Root reported just the manifest descriptor `string` to `AccountReviewAccountContext` TypeScript error, plus the AGENTS empty-ID branch concern. These fixes address both identified source lines, but **no post-correction TypeScript/Jest/formatter PASS is claimed**.
+- **Audit boundary:** immutable GitHub compare/readback only. No local commands, provider/network calls, hosted or local writes, E2E route, device, financial Save, native or delegated worker. Root owns the focused tsc/48-case rerun. T054 facade/Save proof remains separate; **T018 HOLD**.
+
+**T015 NARROW REPAIR AUTHORED — POST-REPAIR ROOT GREEN PENDING — OWNERSHIP RELEASED / ALL WRITES FROZEN.**
