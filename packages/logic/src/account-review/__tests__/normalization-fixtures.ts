@@ -20,6 +20,7 @@ import type { ParsedSmsTransaction, ParsedVoiceTransaction } from "../../types";
 import {
   accountReviewRequestContextSchema,
   type AccountReviewAccountContext,
+  type AccountReviewEvidenceSpan,
   type AccountReviewRequestContext,
   type AccountReviewSmsResponseV2,
   type AccountReviewVoiceResponseV2,
@@ -388,7 +389,7 @@ function groundedVoiceRow(
   original: AccountReviewVoiceResponseV2["transactions"][number],
   transcript: string
 ): AccountReviewVoiceResponseV2["transactions"][number] {
-  const span = (fragment: string) =>
+  const span = (fragment: string): AccountReviewEvidenceSpan =>
     makeEvidenceSpan(
       REVIEW_WIRE_IDS.voiceRequestKey, "transcript", transcript, fragment
     );
