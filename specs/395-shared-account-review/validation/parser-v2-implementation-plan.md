@@ -47,3 +47,43 @@
 **No test duplication/weakening:** retain original named T007 23 assertions, independent existing Edge 19, canonical schemas/I1 65+30 and actual normalization/multiplicity regressions; update test harness only after Root grants concrete files. Root reports **7 T007 PASS + 16 v2 gaps**; do not interpret missing v2 behavior as a success. Root executes injected transport/tsc/Jest/Deno/formatter/ESLint, not this author. Tests must assert full canonical `reviewSession`, not recursive property searching, with owner/session/revision/row/group links and explicit nullability.
 
 **Lease sequencing / stop conditions:** (1) Root accepts this file ownership map and settles the v2 SMS nullable-currency transport branch and T014-M typed input return mechanism; (2) producer I1 canonical field + SQL normalization proof tests are Green at exact successor SHA; (3) Root grants disjoint **T012 tests-first**, then T012 server/client source and T014-M adapter seam; (4) independently **T013 tests-first**, then T013 provider/mobile source and T014-M incremental orchestration; (5) root runs integration with T016, old-v1, real original 403/429/502 and provider-independent privacy/formatter gates. New helpers may only be added within separately granted exact paths, kept <900 formatted lines and <50 lines/function, never micro-splitting for an arbitrary count. No T019 resolver, T020 UI, financial writer, SQL, Deno deploy or model/provider calls in either parser wave. **PLAN-ONLY. STOP / RELEASE / FROZEN.**
+
+## T012 Voice tests-first implementation contract — Core checkpoint
+
+**New bounded lease:** `codex/395-core-worker@0b47004cfbd38372a9e4194c1d0890804c98505b`. Tests **only**: NEW `supabase/functions/parse-voice/account-review-v2.test.ts` (12 Deno cases); NEW `apps/mobile/__tests__/services/ai-voice-parser-review.test.ts` (15 Jest cases); minimally extend existing `supabase/functions/parse-voice/index.test.ts` by **2** injected-handler cases while preserving the original 17 (total 19): one v2 private context refused **before any quota/provider**, one valid v2 original request with **exact one Gemini mock invocation** and the original reserve/start/complete RPC sequence. No additional helper-fixture modules were needed. New mobile tests import the **real** published T014-P `normalizeAccountReviewParserResult` + existing synthetic fixture to verify a full canonical session; they do **not** mock the normalizer, parser under test, or T014-M facade. Production paths, generated contracts, T007, T014-M, SQL, UI, index and provider runtime are untouched.
+
+**New Edge helper contract (missing production module by design):**
+```ts
+// supabase/functions/parse-voice/account-review-v2.ts
+parseVoiceReviewV2Context(fields: {
+  readonly reviewContractVersion: string | null;
+  readonly preferredCurrency: string | null;
+  readonly accounts: string | null; // original multipart JSON for providerContext.accounts
+}): AccountReviewRequestContext | null;
+buildVoiceReviewV2Instructions(context: AccountReviewRequestContext): string;
+buildVoiceReviewV2GenerationConfig(): {
+  readonly responseMimeType: "application/json";
+  readonly responseJsonSchema: Readonly<Record<string, unknown>>;
+};
+parseVoiceReviewV2Advisory(input: unknown): AccountReviewVoiceResponseV2 | null;
+```
+No opt-in (`reviewContractVersion:null`) returns null; opt-in unknown version, missing/corrupt/extra-private account data, duplicate IDs or unsupported preferred currency **throw before admission**, never silently fall back to legacy. The instructions preserve transcript-grounded source/provider/card/Cash/currency/suggestion semantics, not account balances, full card/account identifiers or default flags. The v2 config delegates to the canonical **generated Gemini schema**, with original `gemini-2.5-flash-lite`, one existing `responseMimeType:"application/json"` call and retry/quota lifecycle. `parseVoiceReviewV2Advisory` accepts only canonical-valid v2, not v1 or partial ungrounded proof.
+
+**New mobile helper contract (missing production module by design):**
+```ts
+// apps/mobile/services/ai-voice-parser-review.ts
+classifyVoiceReviewV2Response(input: unknown): {
+  readonly kind: "v2" | "legacy" | "malformed_advisory" | "invalid_financial";
+  readonly financialRows: readonly AccountReviewVoiceFinancialRow[];
+  readonly providerResponse: unknown;
+};
+attachVoiceReviewSession(input: {
+  readonly success: AiVoiceParserSuccess;
+  readonly reviewSession: AccountReviewSession | null;
+  readonly expectedOwnerId: AccountReviewSession["ownerId"];
+  readonly expectedSessionId: AccountReviewSession["sessionId"];
+}): AiVoiceParserSuccess;
+```
+The classifier keeps original canonical financial amount/type/date/`categorySystemName` and **nullable currency**; validated v2 passes the intact typed `providerResponse`, malformed v2 advisory preserves the **raw** response for T014-P's hard-failure classification without losing valid finance, v1 returns `providerResponse:null` (never proven omission), invalid core finance rejects the row, zero valid rows stay empty. `attachVoiceReviewSession` accepts only fully `accountReviewSessionSchema`-validated, same-owner, same-Voice-session source; no session on legacy/no-facade failure. The **T014-M owner** still supplies pinned owner/session identity and invokes the real normalizer. The tiny pure helper only attaches the already produced result; it must not call a provider, hook, WatermelonDB or the adapter itself. No implicit account default or group confirmation, no second AI request, no private snapshot in navigation params.
+
+**T007 and root compatibility:** The historical Core tree still stores 23 T007 original tests with 7 Root-reported passing and 16 v2 gaps; Root reports its active locally updated T007 `voiceOptions(reviewMode=true)` and SMS fixture already provide optional `reviewAccountSnapshots`. This test-only commit does not edit or mock T007; Root must reconcile its local changes with the exact accepted optional snapshot ABI. The standalone Core GitHub tree does not yet contain the future Edge/mobile helper files or the SQL-owned pure-normalizer implementation; the static imports are **intentional creation Red**. For execution, Root must integrate accepted `0c4e03c1` producer/normalization fixtures and mechanically generated Edge outputs; an additional missing dependency before that integration does not prove behavior. Root tests the 12+15 new cases, 19 total Edge handler cases, existing T007 and v1 quota/consent/cancellation tests, strict TypeScript, Deno/Jest formatting <900 lines and function <50, and import/privacy gates. No tests, commands, provider calls, emulator, SDK or source changes were executed by this GitHub-only author. **STOP / RELEASE / FROZEN pending real Root Red and separate T012 source grant.**

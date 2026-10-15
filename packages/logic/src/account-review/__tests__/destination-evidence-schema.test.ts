@@ -7,6 +7,7 @@ import {
   accountReviewAccountEvidenceSchema,
   accountReviewRowSchema,
   accountReviewSessionSchema,
+  type AccountReviewRow,
 } from "../schemas";
 import {
   I1, absentDestination, atmRow, existingAccount, explicitDestination,
@@ -15,7 +16,7 @@ import {
 } from "./destination-evidence-schema-fixtures";
 import { REVIEW_WIRE_IDS } from "./fixtures";
 
-function parseRow(input: unknown) {
+function parseRow(input: unknown): AccountReviewRow {
   const result = accountReviewRowSchema.safeParse(input);
   expect(result.success).toBe(true);
   if (!result.success) throw new Error("Synthetic local review row rejected");

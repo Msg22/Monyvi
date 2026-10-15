@@ -1,4 +1,8 @@
 import assert from "node:assert/strict";
+import {
+  makeReviewRequestContext,
+  makeVoiceV2Response,
+} from "../../../packages/logic/src/account-review/__tests__/fixtures.ts";
 
 import {
   getAuthTokens,
@@ -48,6 +52,11 @@ interface VoiceRequestOptions {
   readonly requestKey?: string | null;
   readonly callerTimeZone?: string | null;
   readonly callerLocalDate?: string | null;
+  readonly review?: {
+    readonly reviewContractVersion: string;
+    readonly preferredCurrency: string;
+    readonly accounts: string;
+  };
 }
 
 for (const [name, value] of [
@@ -197,6 +206,11 @@ function createVoiceRequest(options: VoiceRequestOptions = {}): Request {
   }
   if (callerLocalDate !== null) {
     formData.set("callerLocalDate", callerLocalDate);
+  }
+  if (options.review !== undefined) {
+    formData.set("reviewContractVersion", options.review.reviewContractVersion);
+    formData.set("preferredCurrency", options.review.preferredCurrency);
+    formData.set("accounts", options.review.accounts);
   }
 
   const headers = new Headers();
@@ -739,5 +753,69 @@ Deno.test(
         Deno.env.set("GEMINI_API_KEY", originalApiKey);
       }
     }
+  }
+);
+
+Deno.test(
+  "T012 rejects private v2 review context before quota admission or provider call",
+  async (): Promise<void> => {
+    resetParseVoiceTestState();
+    queueProviderSuccess();
+    const context = makeReviewRequestContext();
+    const response = await handler(createVoiceRequest({
+      review: {
+        reviewContractVersion: "account-review/v2",
+        preferredCurrency: context.preferredCurrency,
+        accounts: JSON.stringify(context.accounts.map((account) => ({
+          ...account, isDefault: true,
+        }))),
+      },
+    }));
+    assertRejectedBeforeProvider(response, 400);
+  }
+);
+
+Deno.test(
+  "T012 accepted v2 keeps the existing one-call quota lifecycle and full response",
+  async (): Promise<void> => {
+    resetParseVoiceTestState();
+    installSuccessfulQuotaLifecycle();
+    const context = makeReviewRequestContext();
+    const raw = makeVoiceV2Response();
+    const transactions = raw.transactions.map((row) => ({
+      ...row,
+      accountEvidence: {
+        ...row.accountEvidence,
+        evidenceSpans: row.accountEvidence.evidenceSpans.map((span) => ({
+          ...span, sourceRef: VALID_REQUEST_KEY,
+        })),
+      },
+      currencyEvidence: {
+        ...row.currencyEvidence,
+        evidenceSpans: row.currencyEvidence.evidenceSpans.map((span) => ({
+          ...span, sourceRef: VALID_REQUEST_KEY,
+        })),
+      },
+    }));
+    setProviderResults([{ kind: "success", text: JSON.stringify({
+      ...raw, transactions,
+    }) }]);
+    const response = await handler(createVoiceRequest({
+      review: {
+        reviewContractVersion: "account-review/v2",
+        preferredCurrency: context.preferredCurrency,
+        accounts: JSON.stringify(context.accounts),
+      },
+    }));
+    assert.equal(response.status, 200);
+    const result: unknown = await response.json();
+    assert.equal(typeof result, "object");
+    assert.ok(result !== null && "reviewContractVersion" in result);
+    assert.equal(result.reviewContractVersion, "account-review/v2");
+    assert.equal(getProviderInvocations().length, 1);
+    assertSuccessfulQuotaLifecycle();
+    const called = JSON.stringify(getProviderInvocations()[0]);
+    assert.match(called, /"suggestedAccounts"/);
+    assert.doesNotMatch(called, /openingBalanceMinorUnits|accountNumber|cardNumber|isDefault/);
   }
 );
