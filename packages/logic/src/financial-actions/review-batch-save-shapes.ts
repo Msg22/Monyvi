@@ -17,7 +17,7 @@ const MINOR_UNITS = /^-?(?:0|[1-9][0-9]*)$/;
 const CURRENCY_CODES: ReadonlySet<string> = new Set(
   SUPPORTED_CURRENCIES.map(({ code }) => code)
 );
-const ACCOUNT_TYPES: ReadonlySet<AccountType> = new Set([
+const ACCOUNT_TYPES: ReadonlySet<string> = new Set<AccountType>([
   "BANK", "CASH", "DIGITAL_WALLET",
 ]);
 
@@ -43,7 +43,10 @@ export const revisionSchema = z.string().refine((value) => {
   }
 });
 export const minorUnitsSchema = z.string().regex(MINOR_UNITS).refine(
-  (value) => value !== "-0" && BigInt(value) >= -MAX_MINOR_UNITS &&
+  (value) =>
+    value.length <= 20 &&
+    value !== "-0" &&
+    BigInt(value) >= -MAX_MINOR_UNITS &&
     BigInt(value) <= MAX_MINOR_UNITS
 );
 const positiveMinorUnitsSchema = minorUnitsSchema.refine(
@@ -55,16 +58,14 @@ const nonBlankSchema = z.string().refine(
 const currencySchema = z.string().refine(
   (value) => CURRENCY_CODES.has(value)
 );
-const accountTypeSchema = z.string().refine(
-  (value): value is AccountType =>
-    ACCOUNT_TYPES.has(value as AccountType)
+const accountTypeSchema = z.custom<AccountType>(
+  (value) => typeof value === "string" && ACCOUNT_TYPES.has(value)
 );
 const transactionTypeSchema = z.string().refine(
   (value) => VALID_TYPES.has(value)
 );
 const cardSuffixSchema = z.string().regex(/^[0-9]{4}$/).nullable();
 const nullableStringSchema = z.string().nullable();
-const nullableUuidSchema = uuidSchema.nullable();
 const fingerprintSchema = nonBlankSchema.nullable();
 
 export const selectedSourceRefSchema = z.strictObject({
