@@ -70,10 +70,13 @@ function reviewContextFrom(
   value: Record<string, unknown>,
   currencies: readonly string[]
 ): SmsReviewContext | null | undefined {
-  const version = "reviewContractVersion" in value
-    ? value.reviewContractVersion : null;
-  if (version !== null && typeof version !== "string") return undefined;
-  if (version === null && "reviewContext" in value) return undefined;
+  // Only an absent discriminator opts into the historical v1 branch.
+  // A present null/undefined value is malformed v2 intent, not v1.
+  if (!Object.hasOwn(value, "reviewContractVersion")) {
+    return "reviewContext" in value ? undefined : null;
+  }
+  const version = value.reviewContractVersion;
+  if (typeof version !== "string") return undefined;
   try {
     return parseSmsReviewV2Context({
       reviewContractVersion: version,
