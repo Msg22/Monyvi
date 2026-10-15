@@ -105,6 +105,15 @@ export function validateCreatedAccountBalances(
     return payload.cashDefaultSnapshot === undefined
       ? null : "review_unexpected_cash_snapshot";
   if (cash.length !== 1) return "review_multiple_new_cash_accounts";
+  const cashAccount = cash[0];
+  if (!cashAccount) return "review_cash_account_missing";
+  if (
+    payload.source === "SMS" &&
+    !financialRecords(payload).some(
+      (record) => record.entity === "transfer" &&
+        record.after.toAccountId === cashAccount.after.id
+    )
+  ) return "review_sms_cash_only_for_atm";
   const snapshot = payload.cashDefaultSnapshot;
   if (!snapshot) return "review_cash_snapshot_missing";
   if (!sortedDistinct(snapshot.activeAccountIds, (id) => id))
