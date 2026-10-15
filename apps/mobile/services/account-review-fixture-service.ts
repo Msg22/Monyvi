@@ -19,6 +19,7 @@ function requireFixtureMode(): void {
   // The generic E2E config flag alone does not reject a production runtime.
   if (
     process.env.NODE_ENV === "production" ||
+    (typeof __DEV__ !== "undefined" && __DEV__ === false) ||
     !isE2eTestMode() ||
     manifest.productionEntryAllowed !== false
   ) {
