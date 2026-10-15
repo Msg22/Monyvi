@@ -169,12 +169,20 @@ production task still requires lead review, explicit file ownership and
 test-first authorization; this paragraph grants none.
 
 **T016 remains INCOMPLETE** until the complete all-source foundation is
-independently accepted. It remains a mandatory prerequisite for every
-user-facing route, hook, UI, SMS queue, Save, network-wiring or other runtime
-integration; early pure code does not satisfy or bypass that gate. SQL
-implementation/race proofs and local writer integration retain their separate
-approved Red, scope, ownership and review gates. No implementation, test run,
-SQL mutation or hosted deployment is authorized by this dependency update.
+independently accepted. It remains mandatory before user-facing route/hook/UI,
+full SMS queue codec, stateful merge/writer, Save, network wiring or runtime
+enablement; early pure code does not bypass that gate. **Conditional identity
+prerequisite only:** if Core's queue-namespace plan and Root's read-only analysis
+prove a T014-M ↔ T028 identity-capture cycle, the smallest atomic *owned
+queue-UUID acquisition/lease helper* may receive a separate tests-first,
+owner-reviewed pre-T016 lease. Its exact API/files are NOT frozen or granted;
+it must guard owner isolation, cancellation, empty-queue cleanup, queue
+replacement and CAS/generation races, with no new table/column or edited-row
+renamespace. This exception does not complete T014-M, T028 or T016 and cannot
+enable full queue/runtime integration. SQL implementation/race proofs and
+local financial writer retain separate approved Red, scope and owner gates.
+No implementation, test run, SQL mutation or hosted deployment is authorized
+by this dependency update.
 
 ## Effort and risks
 

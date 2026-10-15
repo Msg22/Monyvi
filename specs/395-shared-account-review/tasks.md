@@ -59,12 +59,17 @@ checkboxes remain unchecked until their own acceptance evidence exists.
 ## Phase 2: Foundation — blocking shared contracts and fixtures
 
 **Goal**: One canonical typed source, owned snapshots and honest fixture entry.
-T016 remains INCOMPLETE and mandatory before any story route/hook/UI, SMS
-queue, Save, network-wiring or other runtime integration. Only the explicitly
-side-effect-free pure T019, T027 and T046 work below can be made ready before
-T016, each after its own actual test Red and frozen upstream contracts. Other
-story production still waits for the full T005–T016 gate; no checkbox changes
-or implementation authorization follows from this scheduling reconciliation.
+T016 remains INCOMPLETE and mandatory before every story route/hook/UI, full
+SMS queue codec/stateful merge/writer, Save, network wiring or runtime
+enablement. Only side-effect-free pure T019/T027/T046 may become ready on their
+stated Red/frozen-contract gates. **A separate conditional prerequisite, not
+a ready task or source grant:** if Core's published namespace plan and Root
+analysis prove a T014-M ↔ T028 identity-capture cycle, an atomically owned
+queue-UUID acquisition/lease helper may be reviewed for pre-T016 implementation
+with its own Red and owner/cancellation/empty-cleanup/CAS tests. No new DB
+table/column, edited-row renamespace or premature T028 completion. Every
+other story production path still waits for the full T005–T016 gate; no
+checkbox changes or implementation permission follow from this note.
 
 ### Tests first
 
@@ -207,8 +212,13 @@ three assignments, one row click checks one, CIB untouched. Save requires US6.
 
 Pure T027 requires **T019 Green plus its own T024 Red** and reviewed disjoint
 file ownership; neither checkbox is completed by this dependency note.
-T028–T031 still wait for T016, their applicable Red, and the separate SMS
-queue/codec/command-writer ownership and atomicity gates.
+Full T028–T031 codec, stateful queue/command writer and UI still wait for
+T016, their applicable Red, and separate ownership/atomicity gates. A
+Core-and-Root-proven minimal atomic owned queue-UUID acquisition/lease helper
+might be necessary earlier solely for T014-M identity capture: freeze its
+actual API/owned files only after read-only analysis, own tests-first Red,
+owner/cancellation/empty-cleanup/CAS proof, with no new tables/columns or
+T028 completion claimed. No such helper is authorized here.
 
 - [ ] T027 [US2] Implement canonical evidence identity and immutable group
       commands in `packages/logic/src/account-review/identity.ts` and
@@ -541,10 +551,12 @@ existing fields.
 
 Phase order expresses priority, not permission to skip integration dependencies.
 Within each implementation subsection, unmarked tasks run in listed order
-**except** the three narrowly released side-effect-free pure tasks below.
-An early pure task may be assigned only after its recorded meaningful Red and
-lead-reviewed file-specific approval. It neither completes T016 nor opens
-user-facing/runtime paths.
+**except** the three narrowly released side-effect-free pure tasks below
+and a conditional namespace-identity prerequisite only if Core's plan proves
+the T014-M ↔ T028 cycle. Each requires its own meaningful Red, Root analysis
+and lead-reviewed file-specific approval; no conditional helper API/source
+ownership is granted here. None completes T016 or opens user-facing/runtime
+paths.
 
 | Wave                      | Prerequisites                                           | Ready work                                                                               | Explicit completion dependency                                                                |
 | ------------------------- | ------------------------------------------------------- | ---------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
@@ -553,6 +565,7 @@ user-facing/runtime paths.
 | Foundation implementation | Foundation Red                                          | T009 → T010 → T011 → T012 → T013 → T014 → T015 → T016                                    | T016 still required before runtime integration; early pure exceptions below do not complete it |
 | Early pure Red            | Frozen T004 plus accepted schemas/parity/context/producer as applicable | T017; T024; T042 in disjoint test files                                               | Actual task-specific Red; no runtime, SQL or integration permission                            |
 | Early pure implementation | T017 Red + accepted foundation → T019; T019 Green + T024 Red → T027; T042 Red + T004 + legacy baseline → T046 | Pure T019, T027, T046 only (separate reviewed source leases)                          | Side-effect-free declarations/logic; T016 remains INCOMPLETE and mandatory downstream          |
+| Conditional identity prerequisite | Only if published Core namespace plan + Root analysis prove T014-M ↔ T028 cycle | Proposed smallest owned queue-UUID acquisition/lease helper (API/paths NOT frozen) | Separate real Red + owner/cancel/empty-cleanup/CAS guards; no new tables/columns, no T028/T016 completion or runtime enablement |
 | Story Red                 | T016                                                    | US1 T018; US2 T025–T026; US3 T034–T035; US6 T043–T045; US4 T057–T058; US5 T064–T066      | Remaining tests and integrations use the full foundation; Red before own production            |
 | Resolution presentation   | T019 Green, T016, T018 Red                              | T020 → T021                                                                             | User-facing disclosure and bindings cannot precede the T016 gate                              |
 | Shared state runtime      | T027 Green, T016, T025–T026 Red                         | T028 → T029 → T030 → T031                                                               | Queue/codec/writer and UI retain atomic/generation/ownership gates                             |
