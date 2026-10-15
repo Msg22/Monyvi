@@ -47,10 +47,19 @@ and local verification, not just end-to-end work: Normal ChatGPT chats with the
 GitHub connector → independently verified OpenCode FREE models → Antigravity
 Gemini/Claude. Native workers require **Mohamed's explicit prior permission for
 each exact task/continuation**, even when primary pools are unavailable; never
-resume a completed native lane without it. Determine the required Normal ChatGPT
-chats, suggest names, and ask Mohamed to create them before dispatch. Use the
-canonical capability, cost, ownership, time, contact-recovery, and handoff
-rules. Never treat a wait timeout alone as worker failure.
+resume a completed native lane without it.
+
+Reuse suitable existing Normal ChatGPT chats first. The lead creates and names
+additional chats in the verified Codex in-app browser, with external-browser
+fallback only for the documented failure/sign-in reason; never ask Mohamed to
+create chats or provide their names/links. Follow the workflow's connector
+readiness, acknowledged chat identity, one-attempt same-chat recovery, writer
+freeze, bounded replacement, concise handoff, standing Extra High/Pro selection
+for newly created Normal workers when supported, and ownership rules. **Reject
+every in-chat Codex handoff** using **Stay in chat** or the observed decline
+control; remain in Normal ChatGPT, verify no unintended Codex task was created,
+and preserve drafts/report the blocker if decline cannot be performed or
+verified. A wait timeout alone is not worker failure.
 
 When explicitly invoked for a small task, run scaling check and avoid a swarm.
 Delegate to one bounded worker if team-led handling remains requested. Lead

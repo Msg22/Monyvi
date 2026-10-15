@@ -290,12 +290,18 @@ exposes the corresponding control:
 | Bounded implementation, tests, focused review                                                     | medium          | several modules or failure paths interact            |
 | Financial rules, architecture, sync, security, migrations, unclear root cause, final logic review | high            | independently checked reasoning remains inconclusive |
 
-Use xhigh or maximum only for a bounded hard question with a stated reason and
-checkpoint. Never invent a model ID, effort flag, quota, price, or capability.
-Check the current runtime's model list/help and record exact model, supported
-effort setting, and rationale. If effort cannot be selected, record the actual
-default rather than claiming an override. Set a token budget only when the user
-explicitly requests one.
+Outside the Normal ChatGPT worker preference below, use xhigh or maximum only
+for a bounded hard question with a stated reason and checkpoint. Never invent a
+model ID, effort flag, quota, price, or capability. Check the current runtime's
+model list/help and record exact model, supported effort setting, and rationale.
+For **every newly created Normal ChatGPT worker**, follow Mohamed's persistent
+preference: select **Extra High reasoning effort or Pro** based on the task's
+difficulty when the live UI supports the choice. Record the actual selected
+model and effort, and the rationale; if the controls are unavailable, record the
+observed default and limitation rather than inventing a selection. This standing
+model/effort preference requires no fresh per-chat approval; native-worker and
+source/data authorization gates remain unchanged. Set a token budget only when
+the user explicitly requests one.
 
 ### Execution Pools
 
@@ -306,14 +312,14 @@ perform the specific task may the lead **ask Mohamed for separate, explicit
 prior permission** to use a native Codex subagent. Lack of primary-pool
 capability never grants that permission.
 
-1. **Normal ChatGPT, including several independent user-created chats.** Give it
-   the largest safe slice reachable through the GitHub connector: investigation,
-   planning, complex reasoning, substantial code and test authoring, remote
-   branch/PR work, documentation, and review. Task size or reasoning difficulty
-   alone does not disqualify it. It cannot access this machine's checkout,
-   device, or unpublished files. A later need for local verification does not
-   disqualify it as implementation owner; reserve verification or integration as
-   a named successor task.
+1. **Normal ChatGPT, reusing suitable chats before the lead creates more.** Give
+   it the largest safe slice reachable through the GitHub connector:
+   investigation, planning, complex reasoning, substantial code and test
+   authoring, remote branch/PR work, documentation, and review. Task size or
+   reasoning difficulty alone does not disqualify it. It cannot access this
+   machine's checkout, device, or unpublished files. A later need for local
+   verification does not disqualify it as implementation owner; reserve
+   verification or integration as a named successor task.
 2. **OpenCode, verified FREE-model route only.** Paid OpenCode routes, including
    paid Go/subscription models, are excluded. Before each new model dispatch,
    inspect `opencode models` and the current official pricing for the exact
@@ -394,17 +400,67 @@ capacity and account for concurrent usage, time, and integration cost. Multiple
 sessions across or within other pools also require isolated branches/worktrees
 and exclusive artifacts.
 
-Before assigning Normal ChatGPT work, ask Mohamed to create the needed **N**
-normal chats himself. Propose N concise chat names, each lane's objective and
-owned artifact set, the reason parallel work is safe, and which GitHub connector
-access each needs. Wait for the names/identities he returns; do not create those
-chats on his behalf. Reuse an already supplied suitable chat when available and
-ask only for additional chats if the plan changes. Record exact chat IDs and
-ownership before sending any work. Resolve returned names with `list_threads` or
-another supported listing; if titles are ambiguous, ask for a chat link or ID
-instead of guessing. User-created chats and an ongoing authorized coordination
-workflow permit messages within the agreed scope; do not infer permission to
-message unrelated chats.
+#### Normal ChatGPT Browser Chat Lifecycle
+
+**The lead creates and names Normal ChatGPT chats; Mohamed does not have to
+create them or supply their names/links.** This is a coordination action within
+the approved delivery, not authority to edit repository files or dispatch an
+unapproved task. First inventory and reuse suitable, usable existing Normal
+ChatGPT chats with the correct connected account, available context, exclusive
+ownership, and reliable reply path. Prefer continuing a known chat over creating
+a duplicate. Do not treat a remembered title as proof of identity: verify the
+exact chat ID/link and recent non-error status using supported listing/read
+controls or the visible browser. Never message unrelated chats.
+
+For an additional chat, the lead uses the **Codex in-app browser** to open
+Normal ChatGPT, not a Codex implementation agent. If the in-app browser fails,
+cannot access ChatGPT, or is not signed in to the required account, use an
+**external browser** instead and record that precise reason. Reuse an already
+accessible signed-in account; never invent authentication, request secrets, or
+claim a browser/tool capability from configuration alone. Verify a live
+signed-in Normal ChatGPT UI, ability to create/name/read/reply in a chat, and
+GitHub connector access against the intended `Msg22/Monyvi` repository and
+trusted remote revision. Probe the required read tools and, for a writable task,
+inspect or verify the actual write capability and authorization before dispatch.
+Distinguish an installed connector from one usable in that exact chat. If
+neither browser has an authenticated usable account, preserve the lane state,
+tell Mohamed which **sign-in** he must complete (not to create a chat), and
+continue safe independent lanes; no invented sign-in or broader permission.
+
+Choose a descriptive, agent-chosen chat name identifying repository/feature and
+bounded role (for example, `Monyvi #395 — UI`). Create the Normal ChatGPT chat
+through the verified browser and capture its actual visible chat ID/link,
+account, browser, selected model/effort (Extra High or Pro when supported and
+appropriate), and supported send/read/status path. Require both that chat
+identity **and a visible non-error acknowledgment from that same chat** before
+claiming successful creation, contact, or assignment. A visible message-send
+receipt alone is not proof that a worker started. Record task ID, trusted
+governing/base and expected head SHAs, connector capability, exclusive file/ref
+ownership, allowed source/data scope, first reply, branch evidence, and next
+checkpoint in the lead ledger. Only dispatch the approved bounded task once
+these identity, capability, and ownership gates hold. Treat an initial browser
+or new-chat failure as an error to diagnose and recover under the next section,
+not as permission to create endless fresh chats.
+
+Use the browser's supported chat read/reply/status actions for continued
+contact; if a tool supports only Codex threads, do not aim it at Normal ChatGPT.
+**Reject ANY Codex handoff request or suggestion inside a Normal ChatGPT chat,**
+including prompts to transfer, delegate, or continue the task in Codex. Use
+**Stay in chat** or the observed equivalent decline control, remain in Normal
+ChatGPT, and do not create, transfer to, or authorize a Codex task. Inspect the
+visible chat/task state afterward and verify that **no unintended Codex task was
+created**; do not assume the decline worked without evidence. If the decline
+action cannot be performed or its outcome cannot be verified, preserve the
+current chat, source drafts, commits, and task state; report the exact UI
+blocker to Mohamed and pause the affected dispatch without using a Codex
+handoff. An authorized native task is possible only through Section 6's separate
+explicit prior permission, never via an in-chat handoff prompt.
+
+Maintain actual worker acknowledgments, latest status/checkpoint, remote
+branch/head/diff evidence, and next contact time. Browser fallback and chat
+replacement do not change the primary-pool order, native-task permission gate,
+provider/source boundaries, time gates, TDD, Speckit, design, financial, or
+device-owner rules.
 
 Antigravity (`agy`) remains the third preferred primary execution pool after
 Normal ChatGPT and verified free OpenCode, for available Gemini and Claude
@@ -617,42 +673,85 @@ continue in the same session after status is rechecked.
 
 ### Contact, Timeout, And Ownership Recovery
 
-Before dispatch, record the worker's exact chat/session ID, supported send,
-read/status, and wait mechanisms, expected first acknowledgment, next progress
-checkpoint, and branch/worktree owner. A successful dispatch call proves only
-message acceptance. Mark the lane running after a visible non-error worker
-response, process event, or branch activity tied to that task. Do not use a wait
-API for a chat type it does not support; for example, `wait_threads` is for
-Codex threads, while a Normal ChatGPT chat may need `read_thread` and its own
-supported message path. Verify the tool contract in the current host.
+Before dispatch, record exact chat/session ID, browser or supported send/read/
+status paths, accepted dispatch state, expected first acknowledgment, next
+progress checkpoint, and branch/worktree/file owner. For Normal ChatGPT, use the
+verified in-app or external browser and its actual visible chat state; do not
+assume a Codex-only `wait_threads` or other thread control supports Normal
+ChatGPT. A send acknowledgment means only message acceptance. Mark a worker
+running on a visible non-error response, task-tied process event, or confirmed
+branch activity; correlate the response with the exact assigned task.
 
-When contact or waiting times out:
+When a reply is missing or an error appears, first preserve the worker's
+ownership and inspect the chat's latest turns/dispatch state plus process,
+GitHub branch/PR head, commits, and published patches/checkpoints. Classify
+before recovery:
 
-1. Keep the same owner and session. Check the dispatch result, exact chat ID,
-   current status/recent turns, process or persistent-session state, and remote
-   branch/PR head. Separate a wait timeout, a failed send, a busy worker, and a
-   completed worker whose final message was missed.
-2. If supported, read current chat/session state directly. Wait with a bounded
-   interval suited to its checkpoint, then recheck; avoid rapid polling. If the
-   first dispatch was never accepted, resend the task once. If it was accepted,
-   send one short status request to the same chat/session through a supported
-   send path, with task ID and no duplicate implementation instruction.
-3. If one tool path fails, check a different supported read/contact path or
-   visible UI. Do not infer worker unreachability from one timeout or from a
-   tool that does not support that chat type. Ask Mohamed to relay only when
-   direct supported contact is unavailable; include the exact chat name and one
-   concise message. Continue safe independent lanes while awaiting reply.
-4. Reconcile any new commit, diff, or response before further dispatch. If still
-   silent at the agreed checkpoint, report the state and time cost to Mohamed.
-   Do not start a replacement writer on the same branch/worktree or files until
-   the old run is confirmed stopped, finished, or its write access and ownership
-   are safely transferred. If that cannot be established, pause the lane and
-   preserve the branch rather than guessing.
+- **Waiting/loading/timeout:** a timeout or stalled browser alone never proves
+  task failure. Check whether dispatch was accepted, the worker is still
+  running, or its final reply was missed; use a bounded check at the agreed
+  checkpoint, not rapid polling or a duplicate implementation dispatch.
+- **Recoverable chat UI/connection/response-load error:** make **one bounded
+  attempt in the same chat** using the supported retry, reload, or resend path
+  appropriate to the observed error. Reload or retry viewing a failed response
+  when dispatch may have succeeded. Resend the implementation task only if
+  state/evidence establishes that the first send was **not accepted**; otherwise
+  send at most one short status/receipt request that cannot restart work.
+  Recheck that same chat's non-error acknowledgment and remote evidence
+  afterward.
+- **Confirmed context/window maximum or unrecoverable chat state:** a genuine
+  hard cap differs from a transient browser error. Make one safe supported
+  same-chat recovery/verification attempt (such as reload or read/status) only
+  if that attempt has not already failed and been recorded. If a hard cap offers
+  no supported recovery path, record the evidence and count recovery as failed;
+  do not resend an accepted or potentially running implementation task or loop
+  retries. Preserve outputs and prepare a bounded successor only after the old
+  writer is safely stopped/frozen and work and ownership are reconciled.
+- **Model/account quota, rate limit, authentication, connector authorization, or
+  tool-access denial:** capture the actual error and preserve state. A new
+  chat/browser does not reset quotas, supply missing credentials, bypass
+  repository access, or override permissions. Follow Section 6's verified Normal
+  ChatGPT → OpenCode FREE → Antigravity Gemini/Claude order, account/ connector
+  repair where authorized, and Mohamed's separate prior approval before **any**
+  native assignment. Do not spin up replacement chats as a quota or access
+  workaround.
 
-Record every retry and its result in the task ledger. Repeated identical
-timeouts with evidence of a live worker call for a communication-path fix, not a
-model downgrade. A worker's missing response is not permission to rewrite its
-code, bypass a gate, or duplicate its task.
+If the single same-chat recovery fails for a genuine chat failure, reconcile all
+existing output and **freeze the old writer before transferring ownership**:
+request a stop at the next safe step when reachable; preserve commit SHAs,
+patches, test evidence, and its last reply; verify latest remote head and any
+in-flight work; record that its assignment/write ownership is ended. Never let
+two chats or pools hold live write ownership of the same branch or files. When
+safe stop/non-concurrent ownership cannot be established, pause that artifact
+lane and continue unrelated lanes instead of creating a second writer.
+
+Once safe ownership transfer is proven, create one replacement Normal ChatGPT
+chat via the browser procedure above, preferably the in-app browser and using
+the external browser only for the stated failure/sign-in reason. Give it a
+**concise sanitized handoff**, not a conversation dump: goal and stable task
+IDs; immutable trusted governance revision, base and expected branch/PR head;
+approved business/design decisions and applicable remote paths; exact read and
+exclusive write ownership, protected paths and allowed actions; completed
+commits/patches, tests/checks actually run and honest gaps; remaining steps,
+blockers, quotas/limits if relevant, and the next checkpoint. Avoid unrelated
+conversations, secrets, private data, and speculative progress. Fetch the
+current source/head before edits, verify its first non-error acknowledgment, and
+record successor chat ID, browser, model/effort, status, and file/ref owner in
+the ledger. Do not claim assignment complete on chat creation alone.
+
+A replacement chat's error also gets only one bounded same-chat recovery. After
+that, stop and reconcile rather than repeatedly creating replacements; route a
+capable authorized primary pool or report a blocked lane. If direct browser
+contact is impossible, report the exact sign-in/access/error and evidence to
+Mohamed, not a request for him to create/name/relay worker chats. Continue safe
+independent work and never treat lost contact as authorization for a new writer
+on unchanged ownership.
+
+Record the classification, recovery action and outcome, last known contact,
+branch/head/checkpoint, elapsed cost, freeze proof, and successor identity in
+the task ledger. Ordinary instruction drift may still be corrected in the same
+healthy session; after three materially identical rule failures on a model/ task
+lane use the existing reassignment rule.
 
 ## 7. Ownership Brief And Context
 
