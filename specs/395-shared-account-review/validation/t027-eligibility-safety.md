@@ -331,3 +331,74 @@ worker's post-change test evidence.
 perform one coherent Green/TypeScript/lint run including both 30-case safety
 files and all 26 T024 cases, then seek independent source review before
 acceptance. This report is a source checkpoint, not a Green or release claim.
+
+
+## T027 follow-up: nickname-only selection under refreshed Cash ownership (tests-only)
+
+**Review finding:** A separately authored, read-only Core reviewer identified that
+reducer-groups.ts currently preserves a selected linked row on compatible
+nickname-only edit by consulting the stored assignment, row reasons and the
+presence of an existing toAssignment. It does not revalidate the selected ATM
+Cash destination against fresh owned snapshots. Top-level
+assertOwnedResolutionContext validates coherence and owner but is not a current
+account eligibility check. The canonical resolver does recheck that destination.
+
+**Source/parent for this bounded follow-up:**
+a5e10871fc2a36230b6badeca40dc793c31dd445,
+codex/395-reducer-safety. Only the existing
+reducer-selection-snapshot-safety.test.ts and this validation report changed;
+all six reducer production modules, source adapters, schema, other tests, and
+index/contract files remain untouched.
+
+**Added two tests, original 30 safety + 26 T024 assertions preserved:**
+
+1. **Expected meaningful Red — selected shared SMS ATM, then deleted Cash:**
+   Build the real two-message QNB parser fixture, replacing *only* the original
+   first financial/source SMS body with a coherent ATM withdrawal and exact
+   original-message QNB/EGP spans. The second independently correlated QNB
+   purchase remains a live, originally unselected member of the same canonical
+   two-row group. The normalizer creates the real pending Bank group. Its ATM
+   destination is explicitly reviewed to the existing owned EGP Cash account,
+   its independent cash_transfer_review reason is cleared, the real reducer
+   confirms the group, and an ordinary select_row checks just the ATM.
+   The fresh snapshot excludes that Cash account to model an actual deletion
+   (rather than illegally changing an immutable account's type/currency).
+   **The real** resolveAccountReviewSession must invalidate the destination,
+   add account_unavailable and clear its selection while leaving the ordinary
+   unselected purchase untouched. An edit_group reconfirm:true that changes
+   only the nickname must then either:
+   - reject atomically with unchanged canonical input and all financial,
+     selection, group and session revisions; **or**
+   - accept but clear the now-invalid ATM checkbox, selecting no other row.
+   The existing source is expected to fail this check by preserving the stale
+   selected ATM because it only tests toAssignment.state === existing.
+2. **Positive control — same fixture/current owned Cash:** The identical
+   confirmed+selected group with the unchanged complete owned snapshot
+   independently resolves its ATM destination to the still-eligible Cash
+   account. A nickname-only reconfirmation must preserve the one valid checked
+   ATM, leave its independent purchase sibling unchecked, advance the group
+   confirmation revision, and preserve all financial amounts and transactions.
+
+**No voice ATM case:** Canonical Voice rows cannot have ATM transfer
+destination semantics. The existing Voice selected-before-edit positive test
+remains untouched, and this exclusively SMS Cash invalidation does not warrant
+inventing an impossible Voice ATM row. No mock, fake reducer result, cast/any,
+future T036 command, or synthetic account type/currency mutation is used.
+
+**Fixture validity and ownership:** Both provider financial rows retain their
+correlated input messageId/fingerprint, category, amount and original
+response-local suggestion linkage. The ATM-specific span indices are
+recomputed from the changed source body. The canonical normalizer and session
+schema run before the real reducer commands, and the changed owned snapshot is
+rebuilt with ownedContext to keep its provider projection coherent. The second
+transaction's finance and unchecked status are positively asserted. Owner,
+session, group and revision scopes stay canonical.
+
+**Root baseline before these new cases:** 330 PASS / 0 FAIL over 16 pure
+account-review suites, including all original 30 safety and 26 T024 cases;
+lint 0; strict logic only the held unrelated ../candidates import.
+This remote worker has **NOT RUN** tests, TypeScript, lint or a provider/native
+operation; no post-change Red or Green is claimed. Root owns the first coherent
+meaningful Red, independent review reconciliation, and any separate minimal
+production-fix authorization. Freeze this writer immediately after the
+CAS-guarded tests/report child publication.

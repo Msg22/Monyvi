@@ -18,7 +18,7 @@ import {
   COMMAND_IDS, availableAccounts, canonicalCommand, groupByName,
   ownedContext, requireRow, scope, type OwnedCommandAccount,
 } from "./review-command-fixtures";
-import { makeSmsInput } from "./normalization-fixtures";
+import { makeSmsInput, makeTwoSmsInput } from "./normalization-fixtures";
 import { makeEvidenceSpan, REVIEW_WIRE_IDS } from "./fixtures";
 
 type Result = ReturnType<typeof reduceAccountReviewCommand>;
@@ -305,6 +305,132 @@ function expectSafeAtmSelectionOrAtomicRejection(
   expect(state).toEqual(snapshot);
 }
 
+/** A genuine two-message QNB SMS group: one ATM withdrawal and one ordinary
+ * purchase. Both provider rows are correlated with their actual submitted SMS
+ * bodies and their own evidence spans before the canonical normalizer runs. */
+async function normalizedSharedAtmAndPurchase(): Promise<AccountReviewSession> {
+  const input = makeTwoSmsInput();
+  const original = input.providerResponse.transactions[0];
+  const mapped = input.mappedTransactions[0];
+  const message = input.submittedMessages[0];
+  if (!original || !mapped || !message) {
+    throw new Error("Missing two-message SMS fixture source");
+  }
+  const body = "QNB ATM withdrawal EGP 50";
+  const atm = {
+    ...original, isAtmWithdrawal: true,
+    accountEvidence: {
+      ...original.accountEvidence,
+      evidenceSpans: [
+        makeEvidenceSpan(REVIEW_WIRE_IDS.smsMessageId, "body", body, "QNB"),
+      ],
+    },
+    currencyEvidence: {
+      ...original.currencyEvidence,
+      evidenceSpans: [
+        makeEvidenceSpan(REVIEW_WIRE_IDS.smsMessageId, "body", body, "EGP"),
+      ],
+    },
+  };
+  const transactions = [atm, ...input.providerResponse.transactions.slice(1)];
+  const session = accountReviewSessionSchema.parse(
+    await normalizeAccountReviewParserResult({
+      ...input,
+      financialRows: transactions,
+      providerResponse: { ...input.providerResponse, transactions },
+      mappedTransactions: [
+        { ...mapped, isAtmWithdrawal: true, rawSmsBody: body },
+        ...input.mappedTransactions.slice(1),
+      ],
+      submittedMessages: [
+        { ...message, body },
+        ...input.submittedMessages.slice(1),
+      ],
+    })
+  );
+  const group = groupByName(session, "QNB");
+  const atmRows = session.rows.filter((row) =>
+    row.source === "SMS" && row.transaction.isAtmWithdrawal === true
+  );
+  if (atmRows.length !== 1 || group.linkedRowIds.length !== 2) {
+    throw new Error("Canonical QNB shared ATM/purchase group incomplete");
+  }
+  return session;
+}
+
+/** Select a genuinely reviewed ATM before the ownership snapshot changes.
+ * Group confirmation and the row checkbox use real reducer commands. */
+async function selectedSharedAtm(): Promise<{
+  readonly state: AccountReviewSession;
+  readonly atmRowId: string;
+  readonly siblingRowId: string;
+}> {
+  const normalized = await normalizedSharedAtmAndPurchase();
+  const original = normalized.rows.find((row) =>
+    row.source === "SMS" && row.transaction.isAtmWithdrawal === true
+  );
+  if (!original || original.source !== "SMS" ||
+      original.assignment.state !== "suggested") {
+    throw new Error("Missing canonical ATM Bank source");
+  }
+  const pending = accountReviewSessionSchema.parse({
+    ...normalized,
+    rows: normalized.rows.map((row): AccountReviewRow =>
+      row.rowId === original.rowId
+        ? {
+            ...original,
+            toAssignment: {
+              state: "existing", accountId: COMMAND_IDS.cashAccount,
+              origin: "user", currency: "EGP", identityRevision: "0",
+            },
+            reviewReasons: original.reviewReasons.filter(
+              (reason) => reason !== "cash_transfer_review"
+            ),
+          }
+        : row
+    ),
+  });
+  const bank = groupByName(pending, "QNB");
+  expect(bank.status).toBe("pending");
+  const confirmation = execute(
+    pending, groupCommand(pending, bank, "confirm_group")
+  );
+  expectAccepted(pending, confirmation);
+  const stateAfterConfirmation = confirmation.state;
+  const selected = execute(
+    stateAfterConfirmation, selectRow(stateAfterConfirmation, original.rowId)
+  );
+  expectAccepted(stateAfterConfirmation, selected);
+  const state = selected.state;
+  const siblings = state.rows.filter((row) => row.rowId !== original.rowId);
+  if (siblings.length !== 1 || !siblings[0]) {
+    throw new Error("Expected one independent ordinary SMS sibling");
+  }
+  expect(requireRow(state, original.rowId).selected).toBe(true);
+  expect(siblings[0].selected).toBe(false);
+  expect(groupByName(state, "QNB").status).toBe("confirmed");
+  return {
+    state, atmRowId: original.rowId, siblingRowId: siblings[0].rowId,
+  };
+}
+
+function nicknameOnlyEdit(
+  state: AccountReviewSession, group: AccountReviewGroup
+): AccountReviewCommand {
+  if (group.type === null) throw new Error("Expected typed Bank group");
+  return canonicalCommand({
+    ...scope(state), kind: "edit_group",
+    groupId: group.groupId, expectedGroupRevision: group.revision,
+    identity: {
+      name: "QNB Confirmed ATM", type: group.type,
+      institutionId: group.institutionId,
+      providerDisplayName: group.providerDisplayName,
+      cardLast4: group.cardLast4, senderNames: [...group.senderNames],
+    },
+    reconfirm: true,
+  });
+}
+
 describe("#395 T027 ATM destination eligibility, separately from source Bank", () => {
 
   it.each(absentAtmDestinations)(
@@ -507,3 +633,123 @@ describe("#395 T027 ATM destination eligibility, separately from source Bank", (
   });
 });
 
+
+describe("#395 T027 group edit preserves only freshly eligible ATM selection", () => {
+  it("atomically rejects or unchecks a selected ATM when its Cash account was deleted", async () => {
+    const { state, atmRowId, siblingRowId } = await selectedSharedAtm();
+    const group = groupByName(state, "QNB");
+    const selectedBefore = requireRow(state, atmRowId);
+    const siblingBefore = requireRow(state, siblingRowId);
+    expect(selectedBefore.toAssignment).toMatchObject({
+      state: "existing", accountId: COMMAND_IDS.cashAccount,
+      currency: "EGP",
+    });
+    expect(siblingBefore.source).toBe("SMS");
+    if (siblingBefore.source !== "SMS") {
+      throw new Error("Expected an unrelated SMS purchase");
+    }
+    expect(siblingBefore.transaction.isAtmWithdrawal).toBe(false);
+    expect(siblingBefore.selected).toBe(false);
+
+    // Account deletion removes it from the fresh *owned active* snapshot.
+    // Do not mutate an immutable account's type/currency to simulate deletion.
+    const remaining = availableAccounts().filter((account) =>
+      account.id !== COMMAND_IDS.cashAccount
+    );
+    const freshContext = ownedContext(state, remaining);
+    expect(freshContext.accounts.some((account) =>
+      account.id === COMMAND_IDS.cashAccount)).toBe(false);
+    expect(freshContext.accounts.find((account) =>
+      account.id === COMMAND_IDS.qnbAccount)).toMatchObject({
+      type: "BANK", currency: "EGP",
+    });
+    const refreshed = resolveAccountReviewSession({
+      session: state, accountSnapshots: freshContext,
+    });
+    expect(accountReviewSessionSchema.safeParse(refreshed).success).toBe(true);
+    const invalidated = requireRow(refreshed, atmRowId);
+    expect(invalidated.selected).toBe(false);
+    expect(invalidated.toAssignment).toMatchObject({
+      state: "unresolved", reasonCode: "account_unavailable",
+    });
+    expect(invalidated.reviewReasons).toContain("account_unavailable");
+    expect(requireRow(refreshed, siblingRowId).selected).toBe(false);
+    expect(requireRow(refreshed, siblingRowId).transaction)
+      .toEqual(siblingBefore.transaction);
+
+    const frozen = structuredClone(state);
+    const command = nicknameOnlyEdit(state, group);
+    expect(command).toMatchObject({
+      kind: "edit_group", reconfirm: true,
+    });
+    const outcome = execute(state, command, freshContext);
+    if (outcome.effect === "none") {
+      expectAtomicRejection(state, frozen, outcome);
+      expect(requireRow(outcome.state, siblingRowId)).toEqual(siblingBefore);
+      return;
+    }
+
+    expectAccepted(state, outcome);
+    expect(groupByName(outcome.state, "QNB")).toMatchObject({
+      name: "QNB Confirmed ATM", status: "confirmed",
+      type: group.type, currency: group.currency,
+      institutionId: group.institutionId,
+      providerDisplayName: group.providerDisplayName,
+      cardLast4: group.cardLast4,
+    });
+    const afterAtm = requireRow(outcome.state, atmRowId);
+    expect(afterAtm.selected).toBe(false);
+    expect(outcome.state.rows.filter((row) => row.selected)).toEqual([]);
+    const afterSibling = requireRow(outcome.state, siblingRowId);
+    expect(afterSibling.selected).toBe(false);
+    expect(afterSibling.transaction).toEqual(siblingBefore.transaction);
+    expect(afterSibling.amountDecimal).toBe(siblingBefore.amountDecimal);
+    expect(afterSibling.currency).toEqual(siblingBefore.currency);
+    expect(outcome.state.rows.map((row) => row.rowId))
+      .toEqual(state.rows.map((row) => row.rowId));
+    expect(outcome.state.rows.map((row) => row.amountDecimal))
+      .toEqual(state.rows.map((row) => row.amountDecimal));
+    expect(state).toEqual(frozen);
+  });
+
+  it("keeps one selected ATM and one unchecked purchase when fresh owned Cash remains eligible", async () => {
+    const { state, atmRowId, siblingRowId } = await selectedSharedAtm();
+    const group = groupByName(state, "QNB");
+    const snapshots = ownedContext(state);
+    const activeCash = snapshots.accounts.find((account) =>
+      account.id === COMMAND_IDS.cashAccount
+    );
+    expect(activeCash).toMatchObject({
+      type: "CASH", currency: "EGP",
+    });
+    const fresh = resolveAccountReviewSession({
+      session: state, accountSnapshots: snapshots,
+    });
+    const stillEligible = requireRow(fresh, atmRowId);
+    expect(stillEligible.selected).toBe(true);
+    expect(stillEligible.toAssignment).toMatchObject({
+      state: "existing", accountId: COMMAND_IDS.cashAccount,
+      currency: "EGP",
+    });
+    expect(stillEligible.reviewReasons).toEqual([]);
+    const beforeSibling = requireRow(state, siblingRowId);
+    const frozen = structuredClone(state);
+    const result = execute(state, nicknameOnlyEdit(state, group), snapshots);
+    expectAccepted(state, result);
+    const updated = groupByName(result.state, "QNB");
+    expect(updated.name).toBe("QNB Confirmed ATM");
+    expect(updated.status).toBe("confirmed");
+    expect(updated.revision).not.toBe(group.revision);
+    expect(updated.confirmedIdentityRevision).toBe(updated.revision);
+    expect(result.state.rows.filter((row) => row.selected)
+      .map((row) => row.rowId)).toEqual([atmRowId]);
+    expect(requireRow(result.state, atmRowId).toAssignment)
+      .toEqual(requireRow(state, atmRowId).toAssignment);
+    expect(requireRow(result.state, siblingRowId).selected).toBe(false);
+    expect(requireRow(result.state, siblingRowId).transaction)
+      .toEqual(beforeSibling.transaction);
+    expect(result.state.rows.map((row) => row.amountDecimal))
+      .toEqual(state.rows.map((row) => row.amountDecimal));
+    expect(state).toEqual(frozen);
+  });
+});
