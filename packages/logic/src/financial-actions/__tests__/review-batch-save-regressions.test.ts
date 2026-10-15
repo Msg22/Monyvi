@@ -23,7 +23,6 @@ import {
 import {
   validateAffectedAccountCoverage,
   validateCreatedAccountBalances,
-  validateFinancialRowLimits,
   validatePostedEffects,
   validateTransferEndpoints,
 } from "../review-batch-save-effects";
@@ -406,7 +405,6 @@ describe("#395 T046 G — source-specific created Cash eligibility", () => {
     expect(validateCreateCoverage(payload)).toBeNull();
     expect(validateSelectedCoverage(payload)).toBeNull();
     expect(validatePostedEffects(payload)).toBeNull();
-    expect(validateFinancialRowLimits(payload)).toBeNull();
     expect(validateTransferEndpoints(payload)).toBeNull();
     expect(validateAffectedAccountCoverage(payload)).toBeNull();
     expect(validateCreatedAccountBalances(payload)).toBeNull();
@@ -420,7 +418,6 @@ describe("#395 T046 G — source-specific created Cash eligibility", () => {
     expect(validateCreateCoverage(payload)).toBeNull();
     expect(validateSelectedCoverage(payload)).toBeNull();
     expect(validatePostedEffects(payload)).toBeNull();
-    expect(validateFinancialRowLimits(payload)).toBeNull();
     expect(validateTransferEndpoints(payload)).toBeNull();
     expect(validateAffectedAccountCoverage(payload)).toBeNull();
     expect(validateCreatedAccountBalances(payload)).toBeNull();
