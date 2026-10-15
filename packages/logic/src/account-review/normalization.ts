@@ -15,8 +15,12 @@ import { normalizeRowEvidence, type RowAdvisory, type NormalizedRowEvidence } fr
 import { createPendingReviewGroups, type PendingReviewRow } from "./normalization-groups";
 import type { AccountReviewNormalizationInput } from "./normalization-types";
 
+type ValidatedAdvisoryRow =
+  | AccountReviewVoiceResponseV2["transactions"][number]
+  | AccountReviewSmsResponseV2["transactions"][number];
+
 interface ValidatedAdvisory {
-  readonly rows: readonly RowAdvisory[];
+  readonly rows: readonly ValidatedAdvisoryRow[];
   readonly suggestions: readonly AccountReviewSuggestedAccount[];
   readonly isMalformed: boolean;
 }
@@ -61,8 +65,7 @@ function originalRef(input: AccountReviewNormalizationInput, index: number): str
 
 function financialMatches(
   entry: FinancialEntry,
-  candidate: AccountReviewVoiceResponseV2["transactions"][number] |
-    AccountReviewSmsResponseV2["transactions"][number]
+  candidate: ValidatedAdvisoryRow
 ): boolean {
   return entry.financial.amount === candidate.amount &&
     entry.financial.type === candidate.type &&
