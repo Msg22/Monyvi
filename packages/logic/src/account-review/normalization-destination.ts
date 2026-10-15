@@ -45,7 +45,9 @@ export function normalizeAtmDestinationEvidence(
   rawProof: unknown
 ): NormalizedAtmDestination {
   if (!sourceIsAtm(input, entry)) {
-    return { toAccountEvidence: null, invalid: rawProof !== null && rawProof !== undefined };
+    // Tagged v2 requires an explicit field; recovered undefined is malformed.
+    // Legacy/v1 arrives as null from destinationFor and stays compatible.
+    return { toAccountEvidence: null, invalid: rawProof !== null };
   }
   if (rawProof === null) return { toAccountEvidence: null, invalid: false };
   const result = accountReviewAccountEvidenceSchema.safeParse(rawProof);

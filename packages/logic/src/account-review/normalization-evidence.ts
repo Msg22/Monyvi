@@ -122,6 +122,17 @@ function originalSmsSenderMatchesOwned(
       .some((name) => sameGroundedName(name, sender));
 }
 
+function ownedSmsRoleCompatible(
+  entry: FinancialEntry,
+  role: "source" | "destination",
+  actualType: OwnedCandidate["type"]
+): boolean {
+  if (entry.source !== "SMS") return true;
+  return role === "destination"
+    ? actualType === "CASH"
+    : actualType === "BANK" || actualType === "DIGITAL_WALLET";
+}
+
 export function candidatesOwned(
   input: AccountReviewNormalizationInput,
   entry: FinancialEntry,
@@ -129,6 +140,10 @@ export function candidatesOwned(
   currency: AccountReviewCurrency,
   role: "source" | "destination"
 ): boolean {
+  // Only actual Bank/Wallet accounts may be ordinary SMS sources.
+  // Explicit Cash source proof is invalid even without candidate IDs.
+  if (role === "source" && entry.source === "SMS" &&
+      evidence.state === "explicit" && evidence.type === "CASH") return false;
   if (evidence.candidateAccountIds.length > 0 &&
       evidence.state !== "explicit" && evidence.state !== "contextual") return false;
   return evidence.candidateAccountIds.every((id) => {
@@ -136,6 +151,7 @@ export function candidatesOwned(
       (candidate) => candidate.id === id
     );
     if (!account) return false;
+    if (!ownedSmsRoleCompatible(entry, role, account.type)) return false;
     if (evidence.type !== null && evidence.type !== account.type) return false;
     if (currency.state === "known" && currency.code !== account.currency) {
       return false;
