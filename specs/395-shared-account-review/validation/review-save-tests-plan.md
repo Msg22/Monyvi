@@ -6,7 +6,7 @@
 
 Read the complete `.agents/personas/offline-financial-systems-engineer.md` (blob `97ca26628a64ec2e4a35599e684bd01f4d576e0e`) and `.agents/skills/offline-financial-systems/SKILL.md` (blob `7b856980bf245b51f11a7f58586058532fb52ca8`) at trusted context, along with `AGENTS.md`, constitution, approved business decisions and `specs/395-shared-account-review/{tasks.md,manual-test-plan.md}`. The normative **approved T004 closed protocol** comes from `contracts/financial-save.md` (blob `36673fd5054b1231a3f60d4f95bb18a1a12b9e37`), `contracts/wire-shapes.md` (blob `b6c513eec986b93158be51002487e6a39c84361b`), `contracts/review-commands.md` and `contracts/account-default-intent.md`. No new financial/business rule, tuple or hosted migration is proposed.
 
-- **New tuple only:** `domain=transactions`, `kind=review_batch_save`, `payloadVersion=review.batch-save/v1`, `operationCode=review.batch-save`; retain `envelopeVersion=monyvi.financial-action/v1` and the existing `apply_account_financial_action_v1` RPC. Registry/schema/Edge projection/SQL are **not yet implemented/verified**; SQL prefix `088_review_batch_save.sql` (and independent `089_account_create_default_intent.sql`) is reserved for the separate approved producer. Registration enablement is blocked until owner-wide serialization before row locks is independently proven, including generic/legacy account writers.
+- **New tuple only:** `domain=transactions`, `kind=review_batch_save`, `payloadVersion=review.batch-save/v1`, `operationCode=review.batch-save`; retain `envelopeVersion=monyvi.financial-action/v1` and the existing `apply_account_financial_action_v1` RPC. Registry/schema/Edge projection/SQL are **not yet implemented/verified**; SQL prefix `090_review_batch_save.sql` (and independent `091_account_create_default_intent.sql`) is reserved for the separate approved producer. Registration enablement is blocked until owner-wide serialization before row locks is independently proven, including generic/legacy account writers.
 - The published logic **does** already export canonical `AccountReviewSession` and `AccountReviewSaveIntent` via `accountReviewSessionSchema`/`accountReviewSaveIntentSchema` (`packages/logic/src/account-review/review-schemas.ts` blob `e2d01244aed58d1a23e6588db9a18173c237c274`). Exact SaveIntent: `actionId, ownerId, source, sessionId, expectedReviewRevision, expectedOperationGeneration, selectedRows[{rowId,revision}], confirmedGroups[{groupId,revision,evidenceKey}], plannedEntityIds[{entity,localRef,id}], occurredAt`. `selectedRows` is nonempty; duplicate IDs/aliases forbidden; `session.saveIntent` can be null before the explicit freeze. **Do not copy these domain types.**
 - New payload root is closed: `schemaVersion,operationCode,source,sessionId,selectedSourceRefs,confirmedGroupRefs,createGuards,accountEffects,domainRecordRefs,domainMutation.records,localSmsBookkeeping` plus **optional** `cashDefaultSnapshot` only for an actually created Cash account. Existing `accountGuards` protect every financial source/destination (including a zero-net account); `createGuards` require `expectedAbsent=true` for every created account/child/financial ID, even if its financial revision is `"0"`. Sort refs/effects/mutations/guards deterministically. `domainReferenceId` is the first created transaction/transfer ID by ASCII order. Keep raw SMS/transcript/audio, review JSON, evidence spans, confidence, choices, undo and local preimages out of cloud payload/outbox/logs.
 - Money uses existing Decimal canonical strings, `CURRENCY_PRECISION`/rounding/`toMinorUnits`, strict signed integer minor units and overflow/financial-revision checks; not JavaScript float accumulation. A **nonempty zero-net** income/expense batch still creates **both records, one zero account effect, one financial-revision increase**. Legacy v1 still rejects its forbidden zero-net operation. **All-selected SMS fingerprints already durably saved** → scoped local draft cleanup **only**, no fake root, effect, account, child, financial row, or provider request.
@@ -94,3 +94,40 @@ Exact other paths: T042 `packages/logic/src/financial-actions/__tests__/review-b
 **T043 test authoring can use already frozen T004 canonical session/intent**, but may be genuine missing-new-schema/service **creation Red** until T046/T048. Root must freeze the proposed `saveSelectedAccountReview({session,intent})` and local-only `cleanup_only` return before implementation and grant separate file ownership for T043 test/SQLite companion. **Production T046–T054 waits T016, actual Red/Green, SQL owner-lock proof and independent database/security review.** Do not enable new actions on servers without registration or retry through unguarded legacy writers.
 
 **Only this document is authorized here**. No Jest, SQLite, SQL execution, npm, code generation, migration, emulator, provider, seed, native, hosted database, source/test/YAML/route/locale, branch/ref move, PR/issue writes, or deployment was performed. **PLAN-ONLY CHECKPOINT — OWNERSHIP RELEASED — ALL WRITES FROZEN.**
+
+---
+
+## 7. T043 approved test-only lease, exact injected factory seam and SQLite readiness
+
+**Approval:** Root froze the public `saveSelectedAccountReview({session: AccountReviewSession,intent: AccountReviewSaveIntent})` return as `CommitFinancialActionGroupLocallyResult | {kind:"cleanup_only";resolvedSmsDraftCount:number}`. No copied canonical DTO or extra public argument. Proposed **testable factory addition** from the same future `apps/mobile/services/account-review-save-service.ts`, to be reconciled by T048 with the public wrapper before production:
+
+```ts
+export interface AccountReviewSaveServiceDependencies {
+  readonly database: Database;
+  readonly getCurrentOwnerId: () => Promise<string>;
+  readonly loadCurrentSession: (
+    ownerId: string,
+    sessionId: string
+  ) => Promise<AccountReviewSession>;
+  readonly hashProvider: Sha256Provider;
+}
+export function createAccountReviewSaveService(
+  dependencies: AccountReviewSaveServiceDependencies
+): {
+  readonly saveSelectedAccountReview: (input: Readonly<{
+    session: AccountReviewSession;
+    intent: AccountReviewSaveIntent;
+  }>) => Promise<
+    | CommitFinancialActionGroupLocallyResult
+    | Readonly<{kind: "cleanup_only"; resolvedSmsDraftCount: number}>
+  >;
+};
+```
+
+**All four ports are dependencies, not business decision inputs.** Production `getCurrentOwnerId` and `loadCurrentSession` must revalidate current authenticated owner and the exact session/revisions **inside the registered owned financial writer**, not merely before its callback. A test factory can supply current-user switching and a current live snapshot without mocking the actual writer/SUT. `database` must be used by the **real** financial foundation/writer; not a fake `write(fn)=>fn()` that claims atomicity. `hashProvider` uses actual canonical SHA-256. If T048 requires narrower production-scope adapters, Root must reconcile dependency types explicitly rather than weaken the public API.
+
+**Migration inventory correction (authoritative main `ac11a03b7bf9f75b842a7df2639f1c885e2c386b`):** `089_historical_metal_rate_request_limits.sql` exists on main; #395 is **`090_review_batch_save.sql` / `091_account_create_default_intent.sql`**, superseding the frozen older prefix references in §1/§6 and earlier T004 reservations. This is a numbering update only; **no SQL or contract mutation** was made.
+
+**Root runtime update:** root's **main-only** `better-sqlite3` native binding rebuild on locked 11.10.0 succeeded, and root independently ran existing `recurring-payment-atomicity.integration.test.ts` plus `financial-action-foundation.sqlite.integration.test.ts`: **2 suites / 8 tests PASS on main schema30**. The intentionally injected postcommit observer error logged within a passing test is not a T043 failure. This remote worker has not run SQLite. Native readiness **does not imply T043 tests pass**, nor that new financial tuple/registry/SQL implementation exists.
+
+**Lease:** exactly two NEW T043 test files, plus optional cohesive NEW test helper files and this report only; every named helper explicit return, <900 **formatted** lines/file, no `any` or cast hiding future SUT, no SUT mocks. Actual test creation Red is expected from missing T048 service and T046 registry; run no npm/emulator/provider/SQL here. Root alone runs new SQLite after publication. **T043 AUTHORING LEASE ACTIVE; NO PRODUCTION GRANT.**
