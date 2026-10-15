@@ -378,9 +378,8 @@ function publicFacadeModule(paths, hash) {
   ].join("\n\n");
 }
 
-function checkGraphModule(relative, code, allowedImports, allowedExports) {
-  const node = ts.createSourceFile(relative, code, ts.ScriptTarget.Latest, true);
-  if (node.parseDiagnostics.length > 0) throw new Error("Invalid generated TS " + relative);
+/** Traverse emitted TypeScript once, rejecting dynamic imports and unapproved edges. */
+function inspectGeneratedModuleEdges(node) {
   const imports = [];
   const exports = [];
   function visit(part) {
@@ -402,6 +401,13 @@ function checkGraphModule(relative, code, allowedImports, allowedExports) {
     ts.forEachChild(part, visit);
   }
   visit(node);
+  return { imports, exports };
+}
+
+function checkGraphModule(relative, code, allowedImports, allowedExports) {
+  const node = ts.createSourceFile(relative, code, ts.ScriptTarget.Latest, true);
+  if (node.parseDiagnostics.length > 0) throw new Error("Invalid generated TS " + relative);
+  const { imports, exports } = inspectGeneratedModuleEdges(node);
   if (JSON.stringify(imports.sort()) !== JSON.stringify([...allowedImports].sort()) ||
       JSON.stringify(exports.sort()) !== JSON.stringify([...allowedExports].sort())) {
     throw new Error("Generated import/export graph changed: " + relative);
