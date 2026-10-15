@@ -54,8 +54,16 @@ function issueLabel(tag: string): string {
   return "Choose an account";
 }
 function groupDisclosure(name: string, count: number, locale: "en" | "ar"): string {
-  if (locale === "ar" && name === "QNB" && count === 3) {
-    return "اختيار معاملة من QNB يؤكد الحساب للمعاملات الثلاث.";
+  if (locale === "ar") {
+    if (name === "QNB" && count === 3) {
+      return "اختيار معاملة من QNB يؤكد الحساب للمعاملات الثلاث.";
+    }
+    if (count === 1) return "اختيار معاملة من " + name + " يؤكد الحساب لهذه المعاملة.";
+    if (count === 2) return "اختيار معاملة من " + name + " يؤكد الحساب لمعاملتين.";
+    return "اختيار معاملة من " + name + " يؤكد الحساب لـ" + count + " معاملات.";
+  }
+  if (count === 1) {
+    return "Selecting a " + name + " transaction confirms this account for 1 transaction.";
   }
   return "Selecting a " + name + " transaction confirms this account for all " + count + ".";
 }
