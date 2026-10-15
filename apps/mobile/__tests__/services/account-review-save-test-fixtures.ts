@@ -41,6 +41,7 @@ export type SaveScenario =
   | "voice-cash"
   | "sms-existing"
   | "sms-new-bank"
+  | "sms-shared"
   | "sms-atm"
   | "sms-all-dedup"
   | "sms-mixed";
@@ -160,6 +161,16 @@ function scenarioRows(name: SaveScenario): readonly AccountReviewRow[] {
   if (name === "sms-new-bank") return [
     row({ index: 1, source, amount: "20.01", type: "INCOME", groupId: GROUP_QNB, fingerprint: FINGERPRINT_A }),
     row({ index: 2, source, amount: "5.01", type: "EXPENSE", groupId: GROUP_QNB, fingerprint: FINGERPRINT_B }),
+  ];
+  if (name === "sms-shared") return [
+    row({ index: 1, source, amount: "20.01", groupId: GROUP_QNB,
+      fingerprint: FINGERPRINT_A }),
+    row({ index: 2, source, amount: "5.01", groupId: GROUP_QNB,
+      selected: false, fingerprint: FINGERPRINT_B }),
+    row({ index: 3, source, amount: "8", groupId: GROUP_QNB,
+      selected: false, fingerprint: FINGERPRINT_C }),
+    row({ index: 4, source, amount: "3", groupId: GROUP_CIB,
+      selected: false, fingerprint: "e".repeat(64) }),
   ];
   if (name === "sms-atm") return [
     row({ index: 1, source, amount: "25.05", existingAccountId: BANK,
