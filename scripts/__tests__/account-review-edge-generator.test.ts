@@ -33,14 +33,22 @@ import {
   DeepInfraSmsProvider,
   DEEPINFRA_SMS_ENDPOINT,
 } from "../../supabase/functions/_shared/sms-ai/providers/deepinfra-sms-provider.ts";
+import {
+  GENERATED_RELATIVE,
+  readGeneratedMap,
+  jsonObject,
+  jsonArray,
+  property,
+  fieldsRequired,
+  isNullable,
+  isNullableString,
+  verifyGeminiWhitelist,
+  verifyDeepInfraStrict,
+  makeSyntheticSmsProviderReply,
+} from "./account-review-edge-generator-test-fixtures";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const GENERATOR = join(ROOT, "scripts/generate-edge-account-review-contract.cjs");
-const GENERATED_RELATIVE = [
-  "supabase/functions/_shared/account-review-contract.ts",
-  "supabase/functions/_shared/account-review-parser-contract.ts",
-  "supabase/functions/_shared/account-review-provider-projections.ts",
-] as const;
 const GENERATED = join(ROOT, GENERATED_RELATIVE[0]);
 const VERSION = "account-review-edge/v1";
 const HASH_DOMAIN = "monyvi.account-review.edge.canonical.v1";
@@ -120,29 +128,6 @@ function localInputs(inputs: readonly string[]): string[] {
     .map((path) => path.replaceAll("\\", "/"))
     .filter((path) => path.startsWith("packages/logic/src/"))
     .sort();
-}
-
-function readGeneratedMap(output: string): ReadonlyMap<string, string> {
-  const parsed: unknown = JSON.parse(output);
-  assert.ok(
-    typeof parsed === "object" && parsed !== null && !Array.isArray(parsed),
-    "Generator stdout must be a filename-to-content JSON map"
-  );
-  const entries = Object.entries(parsed);
-  assert.deepEqual(
-    entries.map(([name]) => name),
-    [...GENERATED_RELATIVE],
-    "Generator stdout keys must be complete and ASCII sorted"
-  );
-  const result = new Map<string, string>();
-  for (const [filename, content] of entries) {
-    if (typeof content !== "string") {
-      assert.fail("Nontext generated module: " + filename);
-    }
-    assert.ok(content.length > 80, "Generated module is a placeholder");
-    result.set(filename, content);
-  }
-  return result;
 }
 
 test("T011 generator --stdout repeats and exactly matches hook-clean tracked bytes", async () => {
@@ -308,107 +293,6 @@ test("T011 refactor isolates review-only revision and decimal validators from pr
   assert.match(review, /from "\.\/review-value-primitives"/);
   assert.doesNotMatch(values, /@monyvi\/db|apps\/mobile/);
 });
-
-
-function isPlainRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function jsonObject(value: unknown, field: string): Record<string, unknown> {
-  assert.ok(isPlainRecord(value), "Expected JSON object at " + field);
-  return value;
-}
-
-function jsonArray(value: unknown, field: string): readonly unknown[] {
-  assert.ok(Array.isArray(value), "Expected JSON array at " + field);
-  return value;
-}
-
-function property(parent: unknown, field: string): Record<string, unknown> {
-  const o = jsonObject(parent, "parent");
-  const members = jsonObject(o.properties, "properties");
-  assert.ok(Object.hasOwn(members, field), "Missing provider field: " + field);
-  return jsonObject(members[field], field);
-}
-
-function fieldsRequired(parent: unknown): readonly unknown[] {
-  return jsonArray(jsonObject(parent, "schema").required, "required");
-}
-
-function isNullable(schema: unknown): boolean {
-  const source = jsonObject(schema, "nullable field");
-  if (source.type === "null") return true;
-  if (Array.isArray(source.type) && source.type.includes("null")) return true;
-  for (const key of ["anyOf", "oneOf"]) {
-    if (Array.isArray(source[key]) &&
-      source[key].some((variant) => isNullable(variant))) {
-      return true;
-    }
-  }
-  return false;
-}
-
-function isNullableString(schema: unknown): boolean {
-  const types = jsonObject(schema, "currency").type;
-  return isNullable(schema) &&
-    Array.isArray(types) &&
-    types.includes("string") &&
-    types.includes("null");
-}
-
-const GEMINI_STRUCTURAL_KEYWORDS = new Set([
-  "type", "properties", "required", "additionalProperties", "enum",
-  "format", "minimum", "maximum", "items", "minItems", "maxItems",
-]);
-
-function verifyGeminiWhitelist(value: unknown, where = "root"): void {
-  const schema = jsonObject(value, where);
-  for (const name of Object.keys(schema)) {
-    assert.ok(GEMINI_STRUCTURAL_KEYWORDS.has(name), "Unsupported Gemini keyword " + where + "." + name);
-  }
-  if (schema.type === "object" ||
-      Array.isArray(schema.type) && schema.type.includes("object")) {
-    assert.equal(schema.additionalProperties, false);
-    const properties = jsonObject(schema.properties, where + ".properties");
-    for (const [name, child] of Object.entries(properties)) {
-      verifyGeminiWhitelist(child, where + "." + name);
-    }
-  } else if (schema.type === "array" ||
-             Array.isArray(schema.type) && schema.type.includes("array")) {
-    verifyGeminiWhitelist(schema.items, where + "[]");
-  }
-}
-
-function verifyDeepInfraStrict(value: unknown, where = "root"): void {
-  const schema = jsonObject(value, where);
-  assert.ok(!Object.hasOwn(schema, "default"), "Model schema must not supply default values");
-  if (schema.type === "object" ||
-      Array.isArray(schema.type) && schema.type.includes("object")) {
-    assert.equal(schema.additionalProperties, false, "Non-closed provider object at " + where);
-    const properties = jsonObject(schema.properties, where + ".properties");
-    const required = jsonArray(schema.required, where + ".required");
-    assert.deepEqual(
-      [...required].sort(),
-      Object.keys(properties).sort(),
-      "DeepInfra strict objects require every modeled property at " + where
-    );
-    for (const [name, child] of Object.entries(properties)) {
-      verifyDeepInfraStrict(child, where + "." + name);
-    }
-  } else if (schema.type === "array" ||
-             Array.isArray(schema.type) && schema.type.includes("array")) {
-    verifyDeepInfraStrict(schema.items, where + "[]");
-  } else if (Array.isArray(schema.anyOf)) {
-    for (const [index, variant] of schema.anyOf.entries()) {
-      verifyDeepInfraStrict(variant, where + ".anyOf[" + index + "]");
-    }
-  } else if (Array.isArray(schema.oneOf)) {
-    for (const [index, variant] of schema.oneOf.entries()) {
-      verifyDeepInfraStrict(variant, where + ".oneOf[" + index + "]");
-    }
-  }
-}
-
 
 
 test("T011 all three generated modules pass inherited strict TypeScript diagnostics", () => {
@@ -665,12 +549,7 @@ test("T011 DeepInfra strict projection runs through real request serializer with
     serviceTier: "default",
     apiKey: "test-injected-transport-only",
   };
-  const fixture = makeSmsV2Response();
-  const modelResponse = {
-    reviewContractVersion: fixture.reviewContractVersion,
-    transactions: fixture.transactions,
-    suggestedAccounts: fixture.suggestedAccounts,
-  };
+  const { fixture, modelResponse } = makeSyntheticSmsProviderReply();
   let urlCaptured = "";
   let bodyCaptured: unknown;
   const provider = new DeepInfraSmsProvider(config, {
