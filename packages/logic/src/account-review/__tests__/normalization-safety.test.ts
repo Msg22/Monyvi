@@ -71,9 +71,26 @@ describe("#395 B1 — model alias must not authorize another SMS sender", () => 
     expect(accountReviewSmsResponseV2Schema.safeParse(input.providerResponse).success)
       .toBe(true);
     const responseA = input.providerResponse.transactions[0];
-    expect(responseA?.transactionRef).toBe(NORMALIZATION_IDS.secondSmsMessageId);
-    expect(responseA?.messageId).toBe(REVIEW_WIRE_IDS.smsMessageId);
-    expect(input.submittedMessages[1]?.sender).toBe("CIB");
+    const responseB = input.providerResponse.transactions[1];
+    const submittedB = input.submittedMessages[0];
+    const submittedA = input.submittedMessages[1];
+    expect(input.providerResponse.transactions.map((row) => row.messageId)).toEqual([
+      REVIEW_WIRE_IDS.smsMessageId, NORMALIZATION_IDS.secondSmsMessageId,
+    ]);
+    expect(input.submittedMessages.map((sms) => sms.id)).toEqual([
+      NORMALIZATION_IDS.secondSmsMessageId, REVIEW_WIRE_IDS.smsMessageId,
+    ]);
+    expect(submittedB?.sender).toBe("CIB");
+    expect(submittedA?.sender).toBe("QNB");
+    expect(submittedB?.smsFingerprint).toBe(NORMALIZATION_IDS.secondSmsFingerprint);
+    expect(submittedA?.smsFingerprint).toBe(NORMALIZATION_IDS.smsFingerprint);
+    expect(submittedB?.body).toBe("CIB purchase EGP 25");
+    expect(submittedA?.body).toBe("QNB purchase EGP 50");
+    expect(responseA?.transactionRef).toBe(submittedB?.id);
+    expect(responseA?.messageId).toBe(submittedA?.id);
+    expect(responseB?.messageId).toBe(submittedB?.id);
+    expect(responseA?.accountEvidence.evidenceSpans[0]?.sourceRef).toBe(submittedA?.id);
+    expect(responseB?.accountEvidence.evidenceSpans[0]?.sourceRef).toBe(submittedB?.id);
     const session = await canonical(input);
     const qnb = requireSmsRow(session, NORMALIZATION_IDS.smsFingerprint);
     const cib = requireSmsRow(session, NORMALIZATION_IDS.secondSmsFingerprint);

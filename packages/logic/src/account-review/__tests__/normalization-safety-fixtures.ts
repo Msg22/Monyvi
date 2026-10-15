@@ -72,9 +72,10 @@ export function makeCrossMessageSenderAliasAttack(): ReturnType<typeof makeTwoSm
         rawSmsBody: body,
       },
     ],
+    // Intentionally order B before A: the alias must never win over A's fingerprint.
     submittedMessages: [
-      firstMessage,
       { ...secondMessage, sender: "CIB", body },
+      firstMessage,
     ],
     providerResponse: {
       ...input.providerResponse, transactions,
