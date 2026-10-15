@@ -807,3 +807,308 @@ SQLconcurrencyrework. Next30mincheckpoint01:42UTC oratnormalizer20minrisk.
 Existing3Normalchatsremainusable; no
 replacementchat/native/emulator/hostedchange. Independentreviews
 andownerdevice/visual/a11y evidence stillpending.
+
+## Existing-chat continuation and normalizer checkpoint — 2026-10-15T01:43Z
+
+Existing Normal Core/UI/SQL chats remain usable; replacement chats are fallback
+only. Core independent normalizer review follows T017 tests freeze; UI T018
+tests-only grant follows accepted route/sheet plan; SQL normalizer 0511 first
+publication frozen then minimal typed-row correction assigned after actual
+batch. Free OpenCode financial r5 finished exit0, partial test fixture
+corrections under inspection. No native assignment/emulator/hosted change.
+
+Actual first normalizer integration batch:103/103 tests PASS (38
+normalization/identity +65 canonical); both logic/mobile tsc find RowAdvisory
+lost financial fields in normalization.ts, returned to owner. T017 creation Red
+is missing ../resolution with0 assertions; separate fixture type narrowings
+returned to Core after independent review. No story production/T016 acceptance
+yet. Approximately6h40 elapsed; forecast14–18h retained within approved12–18h;
+next time checkpoint02:13UTC. Main9a8987a8 remains last accepted155PASS
+foundation, only ledger dirty plus untracked.tmp.
+
+### Current-main refresh — 01:48UTC
+
+Fetchedmainac11a03b (#387 historicalmetalrates)
+andmechanicallymergedwithoutconflictinto featurefd08d656;
+preserveaddedlocalcache/schema30/generatedhistoricalrequestlimittype. No
+featurepushyet. #393 remainsOPEN0bb9fffb. Existingmainmigration089nowoccupied;
+future#395SQLmustuse090reviewbatch/091defaultintent,
+recheckbeforelocalCLIcreationandassignscopedreferenceupdatebeforeSQLsource.
+No088/089#395filesauthored, nohostedwrites. Normalizer38+65testsPASS,
+typedfix5be pendingfinalbatch; repoESLintwrapperinitiallymissed--rulesdir
+andwascorrected; actualnobitwise/requireawait returnedtosameowner
+afterplanpublication.
+
+### Parallel tests/review checkpoint — 01:58UTC
+
+T017104f53a9 and T018be886588 authored/frozen with actualcreationRed:
+missingresolution module andDefaultAccountInfo respectively,0behaviorassertions
+executed. Strictlogic/mobiletsc nowreportONLYthoseexpectedmissingmodules
+afterfixturetypenarrowings; no normalizerproductiontypeerrors
+at85e40b6d.103canonical/normalization testsPASS,
+repocustomruleslint0errors/1autofixablearraystylewarning.
+Maestrodefault-accountYAMLparsed24actionsbutnotexecuted/notrunnableuntilT054+reviewfixtureseed.
+T017/T018authoringtaskschecked; T019/T020productionstillT016gated.
+
+Core independent0511report3665f9eb reviewed.
+RootindependentlyreproducedB1cross-messagealias/senderborrow,B2omittedEGPvsfinancialUSD,B3incompatibleownedcandidate,B4distinguishableVoiceA/Bswappedmappingon5be.
+Original103testsnotcoveringthese; normalizeracceptanceHELD,
+sameremoteauthornewregressiontests-firstgrant.
+I1validATMdestinationevidencehandoffgapunderCoreplan-onlyreview;
+C1existingonefinancialrecord/SMSfingerprintpreserved, no
+multi-recordSMSexpansion.
+
+Publishedonlyreviewed9a8987a8contextbranchforNormalT010APIaccess,
+privacyhookPASS/nodbchange; finalPRbranchpushstillheld.
+SQLT014Mplan85e40published,
+actualT010loadAccountReviewAccountSnapshots()zeroargs clarified.
+CoreI1plan15min,UIshared-groupUIplan15–20min.
+Freefinancialr6stoppedonprohibitedbashread(count)attempt,0sourceprogress;
+r7samesessionresumedfiletools-onlybounded30min,
+exactadditionaltestpathsallowlisted; no quota failure or nativefallback.
+Approx7helapsed, forecast14–18h remains withinapproved; next02:13UTCcheckpoint.
+
+Localmainrefresh runtime: explicit Supabase migration up --local applied only
+imported089_historical_metal_rate_request_limits.sql,exit0;
+localhistorymax089/functionexistenceverified. This is
+localintegrationofmergedmain, no#395migrationauthored/hostedoperation.
+GeneratedDBtypesfrommainpreserved, no partialhistoryregeneration.
+
+### Safety regression and UI checkpoint — 02:05 UTC
+
+Normal SQL tests-only checkpoint393a7c86: actual nine-case Red has6PASS/3FAIL(B2
+currency/B3 candidate/B4 pairing). B1 falseGreen traced to
+submitted-messageorder; owner assigned minimal fixture correction to put other
+message first, not a production workaround. Original38+65 pass preserved. Core
+destination-evidence plan5cdfe697 accepted as local proof-preservation technical
+reconciliation; tests-only new schema suite before canonical change. No new
+provider/DB/UI rule; no cloud evidence. UI dd8c71d4 shared-group plan accepted
+and T026 component+YAML tests-only leased45–60min; T025 service/codec separate.
+No storyproduction accepted. Free financial r7 pending first tool milestone;
+bounded checkpoint/deadline maintained, no quota claim/native fallback.
+
+## Delivery checkpoint — 02:13 UTC
+
+Elapsed: about 7h10 from the 19:03 UTC intake. Forecast remains 14–18h total
+within the approved 12–18h envelope; the remaining parser, financial writer/SQL,
+sync, UI and independent verification work is substantial. Next
+checkpoint:02:43UTC, or earlier for a blocked source grant.
+
+Existing Normal Core owns the minimal local ATM destination-proof
+schema/contract reconciliation after actual30-case Red(25fail/5pass), source
+lease20–35min/risk15. Normal SQL owns four reproduced normalizer safety repairs
+after corrected9-case Red(4fail/5pass),35–50min/risk20. Normal UI owns T026
+shared-group component/YAML tests-only,45–60min. All are existing chats;
+replacement remains fallback only. No native assignment or emulator. Main
+fd08d656 includes ac11a03b; final feature push/PR update still pending.
+
+Free OpenCode r7 completed at response-length with no new edits:
+measured233046total tokens, input5334/output1/reasoning31999/cache-read195712,
+cost0. Its writer is stopped; files preserved. Remaining bounded T042 test-patch
+authoring transferred to Antigravity Gemini3.8FlashHigh, high effort,
+source-only sanitized packet/read-only plan mode; no repository write
+permission. CLI child initially lacked Windows USERPROFILE and failed before
+dispatch; repaired actual profile environment in persistent task driver. Active
+conversation0d0f1ef8-df0c-4940-9587-c196cc42f620 now has observed non-error
+reads of the exact approved packet. Return-only two-file patch; root
+independently reviews/applies/checks. No quota claim or native fallback.
+
+### UI authoring and external test-patch review — 02:18 UTC
+
+T026 UI source2f38a852: actual creation Red missing
+SharedAccountSuggestions,0assertions run; authored Maestro parsed2documents/no
+YAML errors, not executed and not yet runnable. Component29expandedcases and
+shared-group plan kept distinct from actual reducer/DB behavior. Next existing
+UI chat owns T035 chooser/currency plan-only; no story production beforeT016.
+
+Antigravity first read-only proposal returned successfully in
+conversation0d0f1ef8:231s,109190input/35594output/31527thinking/364988cache-read,144784total
+tokens; monetary cost unavailable. Two-file T042 test patch not applied: Root
+found Cash positive baseline lacked groupref/first-active default and no
+explicit positive control. Same session bounded10–15min correction requested,
+preserving real SMSnegative correction and11 pure negatives. No repository
+write/tool/shell/provider/DB authority was granted.
+
+### Combined foundation Green and next tests — 02:25 UTC
+
+Verification candidate Core2b92fe08 +Normal SQL0c4e03c1:142logicPASS,
+strictlogic/mobileTypeScriptPASS,19EdgeNodePASS, actualDeno transitivecheckPASS
+andgeneratedparityPASS. Formattedproductionhelpers all<50/sourcefiles<900. Lint
+has two test-helper missing explicitreturntypes, returned to their existing
+owners; no sourcebehaviorfailure. Canonicaldestinationproofschema is Green;
+actualproducerproofhandoff tests still being authored before implementation,
+soT014/T016 remain incomplete.
+
+Antigravity correctedT042 return-only patch reviewed and mechanically applied
+only to two authorized financial testfiles; firstCash positivecontrol now has
+groupref/isDefaulttrue underemptylogicalsnapshot and explicitbaselineacceptance,
+plus11negative invariant cases. Prettier sizes main384/new300/fixtures461;
+actual two-suite creationRed missingreview-batch-save module,0assertions.
+Typedlint currently reports unresolvedfuturemodule unsafe-call fallout, not a
+claim ofGreen. OriginalFREEwriterstopped, no overlappingwriter. Agy
+repair499.6s;146679input/54463output/46576thinking/464175cache-read/201142total
+tokens; costunavailable. Onlyobservedtoolview_file, no repository
+writes/commands.
+
+UI T035 plan af2bb102accepted andtests-only35–50minstarted;
+reusedCurrencyPickernullableinput/contextSubtitle additivecontract,
+oldcallersretained. No newmockup/emulator/native/hostedchange.
+Nextoveralltimecheckpoint02:43UTC.
+
+### Independent safety review — 02:35 UTC
+
+Fresh FREE OpenCode F-R1 session ses_ec29b2681ffeYrixjOI1gwo3k9 completed
+bounded source-only review of exact0c4e03c1 B1–B4 fixes, reporting no confirmed
+in-scope defect. It wrote only its permitted review report in sanitized
+siblingfolder; no source edits/commands. Pricing and callablemodel independently
+reverified02:29, CLIdefault effort (no invented override), first observed read
+successful. Root dispositions: twin physical identity is already scoped T027
+risk; sequential group hashing is intentional; strict currency mismatch correct;
+explicit spans constrained upstream; SMScontextual/Cashsource exclusions and
+strict nullmetadata mandated by approved contracts; same-snapshot sender-order
+comparison is fail-closed. Report uses packetline references, not independently
+verified source lines. This is bounded static peer review, not full
+feature/runtime/device approval. I1producer successor will need separate delta
+review.
+
+### Parser seam and producer continuation — 02:37 UTC
+
+Core parser-v2 plan0b47004c accepted: opt-in snapshots on existingVoice/SMS
+inputs, optional fullcanonical reviewSession, v2nullablefinancial branch
+separatefromstrictv1, same actualprovider schema/context
+measuredbeforeadmission, no provider/modelreplacement/secondgroupingcall. Voice
+logicalUUID anchorsitsrecording; SMS transportscan IDs notcasttoUUID and
+interactive/durable reviewnamespace mustbe pinnedseparately byT014M/T028. Core
+nowT012 tests-only20–35min on existinghandler/newv2helper suites; stableVoiceAPI
+permits independent foundation work while ATMproducer evolves.
+
+NormalSQL producer destination tests cbe1434a: actual15case Red12fail/3pass,
+missingproof andinvaliddestcontaminatinggoodBANKsource.
+Sourcegrant30–45min/risk20 issued02:31 with canonical2boutput
+andsalvageusingexistingvalidators, no schemaweakening. No storyproduction
+beforeT016. PR396 attachedtothischat; no finalfeaturepush/publicPRupdateyet.
+
+### Chooser test boundary — 02:40 UTC
+
+T035 a0092c71 authored36cases plusMaestro; RootactualcreationRed is
+missingAccountChoiceSheet(0assertions), unchangedexistingCurrencyPicker
+regression8/8PASS. YAML2documents/0syntaxerrors, neverexecuted.
+Requirednullablepicker/contextSubtitle remainsplannedT037 contract; no
+fallback/cast/sourcechange. T035authoringcheckedcomplete, T037/T038
+remainT016gated. ExistingUIchat nowindependentT043localwriter
+testplan-only25–35min, usingpublishedfinancialcontracts/currentserviceharness,
+no production.
+
+F-R1 freeindependentreview measuredper-step token records
+retainedinsanitizedreviewevents; cost0. Staticreportno confirmedB1–B4defect
+acceptedwithRootspecdispositions; futureI1sourcewantsdeltareview. No
+normalchatreplacement/native/emulator/hostedchange.
+
+## Delivery checkpoint — 02:43 UTC
+
+About7h40 elapsed; forecast14–18h total retained within approved12–18h. Next
+checkpoint03:13UTC. The remaining work is still parser/provider integration,
+review resolver/reducer/persistence, complete local financial writer+SQL/sync,
+UI wiring/copy and independent final checks. Existing3Normalchats remainusable;
+no replacement/native/emulator/hostedoperation.
+
+NormalSQL I1producer b979 published/frozen: actual157logic and71mobilePASS. One
+strict-equality lint repair returned toowner, preservingundefined/nullcompat.
+SeparateF-R2read-onlysource review of b979 is running in existingFREEreview
+session; previous0cB1–B4 no confirmeddefect acceptedwithspecdispositions.
+Canonical I1marker/Deno19Node/parity priorPASS
+remainsuntilcanonicalsourcechanges. FutureT035tests stillinverificationtree
+andintentionallyfailmobiletyping untilheldoutorimplemented; no
+falsefull-typeGreenclaim.
+
+Core T012testauthoring active after accepted0b47004c sourceplan;
+freshcheckpointd6956242 fetchedforreview. UI T043localwriter test-plan only.
+Sourcebranches andRootlocalverification remainisolated; main fd08
+retainslastacceptedfoundation9a andlatestmainac11; nofinalfeaturepush/PRupdate.
+
+### Evidence-role Red and SQLite runtime readiness — 03:06 UTC
+
+Existing Normal chats only; replacements remain fallback on unusability.
+NormalSQL tests561381ff independently ran against18b: focusedF-R2
+4FAIL/3positivePASS/24existingnotselected. Confirmed actualownedCashSMSsource,
+explicitCashno-candidate, nullhintownedBANKATMdestination and
+ordinarytaggedv2missingrequired destination; minimalproducerfix15–25min assigned
+sameowner afterRed, preserve validfinance/allpriorassertions.
+CoreT012production75–110min assigned02:57:50 after isolatedDeno/mobile
+genuineRed, unchangedpureVoiceAPI. NormalUIeabcT043planaccepted, canonical
+saveSelectedAccountReview({session,intent})
+existingfoundationresult|localcleanup_only frozen; tests-only60–90min owned
+unit+realSQLitecompanion+cohesivefixtures, no productionbeforeT016.
+SQLslots090/091 correctedinbrief (089mainhistoricalnowoccupied).
+
+MainSQLite readiness initiallyfailedmissingbetter-sqlite3 binding
+afterlockedignore-scriptsrestore. One no-output shortlivedspawn
+diedbeforeinstallerstarted (PIDcheckeddead), then hiddenpersistentmain-only npm
+rebuild better-sqlite3 --foreground-scripts restoredlocked11.10.0,exit0; no
+duplicateinstaller/package/lockchange. Actual main multi-entity
+recurring-payment-atomicity +foundation.sqlite integration:2suites/8PASS on
+schema30, including deliberatepostcommitobserverfailure. This is
+realSQLitebaselineproof, not newT043behaviorGreen. Log.tmp/sqlite-readiness.log.
+Noemulator/hostedoperation/nativeassignment. Nextoverallcheckpoint03:13UTC.
+
+## Delivery checkpoint — 03:13 UTC
+
+About8h10elapsed; forecast14–18h retainedwithinapproved12–18h; next03:43UTC.
+ThreeexistingNormalchatsremainusable, no newNormalchatcreated. Core58ea1973
+Voiceproduction andNormalSQLb8d833f3 endpoint-rolefixpublished,
+awaitingindependentintegrationcheck; futureT016notaccepted.
+NormalUIauthoringT043tests plusnecessarysyntheticincomecategoryfixturec8082691.
+CoherentpreintegrationT007baseline23cases:16expectedFAIL/7PASS,
+originalparserSUT, notfalseGreen.
+
+BoundedlocalT044sync PLAN ONLY assignedverifiedFREEOpenCodeLongCat
+becauseall3Normalchatsareunderexclusiveactiveleases.
+Exactrouteverifiedopencodemodels
++officialpricing03:08(input/output/cacheFree,zero-retention),CLIactualdefault
+effort, sanitized132379-byte trackedsource/contracts/personapacket only,
+noenv/privatefixturedata/repositorywrites/commands/network.
+Firstglobpermissionrejected andnotretried; samesticky
+sessionses_ec2776101ffelQnTRnLh8qR54g resumedexplicitreadtool-only,
+observedcompletedreads. Ownssync-tests-plan.md only,10–15min; no
+native/Agyfallbackrequired.
+PreviousF-R2revieweravailablefornormalizerroledeltareviewaftersourceGreen.
+Mainfd08unchangedexcepttasks/ledger; no lock/packagechangefromruntimefix.
+
+### Producer acceptance and Voice gate — 03:21 UTC
+
+NormalSQLb8rolefix combined164logicPASS/logicstricttsc0 aftersequentialPrettier,
+generatedparity/19NodePASS. F-R3FREEsame-session reviewfailedquality:
+contradicted actualowned-rolecheck andrepeatedalreadyfixedBANKnullcase,
+claimednonexistentreport; notrepresentedasacceptedartifact.
+ThirdpoolAntigravityverifiedactualagymodels03:17,
+gemini-3.8-flash-high/efforthigh/request-reviewplan, source-only35382bytes,
+onlyobservedview_file; conversationcc2c4071-6276-4de8-8873-9d3f29a91fa5
+returnedSUCCESS109.9s/no confirmeddefect, Rootreview+actualregressionproof
+agrees.
+Usage45545input/15996output/14451thinking/26469cache-read/61541total;costunavailable.
+Scopeonlyrole/missingfieldpatch, nofeature/runtimeapproval.
+Pureproducer/I1readyforcoherentmainintegrationafterstaticcheck;
+T014Mintentionallypending.
+
+Core58ea T012Edgeactual31DenoPASS (12helper+19handler)
+andnewmobileclassification/legacy51PASS, but9T007Voicefail
+becausechangedpublicAPIrequiresnewcallbacks/context.
+Rootrejecteddeviationfromsnapshot-onlyoptin/directSQLwrapper,
+sameremoteowner20–35minfix; no testweakening/missingreviewfallback.
+Corelegacy/provider/quotalifecycletestsGreen, completeT012notaccepted.
+SQLnextT014Msourceadaptertests-only20–30min, no appsourceuntilactualRed.
+MainDBglobalUUIDgeneratorverified queueIDsUUID; do notcastSMStransportscanIDs.
+ExistingUIT043testauthoringstillactive.
+
+### Accepted producer main batch — 03:25 UTC
+
+MechanicalexactpathintegrationofcanonicalI1/Core2b+d695 andNormalSQLpureproducer
+b8 into
+mainfd08:164logic+71mobilePASS,strictlogic/mobileTypeScriptPASS,generatedparityPASS.
+Earlier19Node/31DenoPASS appliesexactcopiedcanonicaloutput/Edgecandidate;
+mobileVoiceproductionstillheldoutside mainpendingT014M+Corecorrection.
+SequentialESLint--fixonproducerbeforebatch:0errors/2existingDecimalimportwarnings;
+no testsconcurrentwithmutations. Mainonlyacceptedcode+reports/ledger;
+nofutureRedUI/parser/sync/Savemodulescopied. About8h22elapsed;
+fullfeatureT016gateremainsclosed.
+Preparingactualcommithooksforcoherentproducercheckpoint; no finalfeaturepush.

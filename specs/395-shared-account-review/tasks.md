@@ -138,12 +138,12 @@ save mocked.
 
 ### Tests first
 
-- [ ] T017 [P] [US1] Author default/currency/source matrix tests in
+- [x] T017 [P] [US1] Author default/currency/source matrix tests in
       `packages/logic/src/account-review/__tests__/resolution.test.ts`:
       one/several accounts, absent/explicit/uncertain evidence, zero/multiple
       defaults, Cash exclusion, ATM destination and ordinary transfer endpoint
       rules.
-- [ ] T018 [P] [US1] Author disclosure/Why/editability and other-review-reason
+- [x] T018 [P] [US1] Author disclosure/Why/editability and other-review-reason
       tests in
       `apps/mobile/__tests__/components/account-review-default-info.test.tsx`,
       plus `apps/mobile/e2e/maestro/account-review/default-account.yaml` before
@@ -194,7 +194,7 @@ three assignments, one row click checks one, CIB untouched. Save requires US6.
       `packages/logic/src/sms-review-drafts/__tests__/account-review-v2-codec.test.ts`:
       v1 choices/fingerprints retained, v2 conflicting snapshots fail closed,
       stale commands, failed writes and owner isolation.
-- [ ] T026 [P] [US2] Author sheet/group/selection UI tests in
+- [x] T026 [P] [US2] Author sheet/group/selection UI tests in
       `apps/mobile/__tests__/components/shared-account-suggestions.test.tsx` and
       independent confirm/edit/remove/Undo journeys in
       `apps/mobile/e2e/maestro/account-review/shared-suggestions.yaml`.
@@ -247,7 +247,7 @@ group replacement its disclosed count; Choose another uses existing picker.
       `packages/logic/src/account-review/__tests__/account-choices.test.ts`:
       same currency/type/owner, deleted/stale candidates, per-row detach, group
       replacement, material edit reconfirm and preserved numeric amounts.
-- [ ] T035 [P] [US3] Author existing picker/sheet tests in
+- [x] T035 [P] [US3] Author existing picker/sheet tests in
       `apps/mobile/__tests__/components/account-review-choices.test.tsx`; null
       means no confirmed selection, cancel/Back unchanged, old callers
       compatible; author
