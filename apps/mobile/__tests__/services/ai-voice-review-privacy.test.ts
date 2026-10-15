@@ -71,11 +71,15 @@ jest.mock("@/utils/logger", () => ({
 // buildCategoryMap/parseCategory retain their REAL implementations.
 jest.mock("@monyvi/db", () => {
   class TestCategoryRecord {
-    constructor(
-      readonly id: string,
-      readonly systemName: string,
-      readonly displayName: string
-    ) {}
+    readonly id: string;
+    readonly systemName: string;
+    readonly displayName: string;
+
+    constructor(id: string, systemName: string, displayName: string) {
+      this.id = id;
+      this.systemName = systemName;
+      this.displayName = displayName;
+    }
   }
   return { Category: TestCategoryRecord };
 });
