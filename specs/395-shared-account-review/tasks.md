@@ -239,7 +239,7 @@ T028 completion claimed. No such helper is authorized here.
       `packages/logic/src/account-review/reducer.ts`; separate confirmation from
       selection, validate nickname uniqueness, tombstones, scoped revisions and
       safe late-chunk merges.
-- [ ] T028 [US2] Extend existing
+- [x] T028 [US2] Extend existing
       `packages/logic/src/sms-review-drafts/sms-review-draft-codec.ts` with v1
       reader/v2 writer; preserve existing fields/choices, unknown legacy
       provenance, durable removal and no durable Undo/new table.
@@ -386,7 +386,7 @@ local-writer/SQL implementation, race-proof and sync/reconciliation gates.
       singleton, first-active default by frozen actual create UUID order across
       Cash/Bank/Wallet, none when active snapshot nonempty; unchanged Add
       `expectedDefaultSnapshot` and old tuple definitions.
-- [ ] T047 [US6] Extend
+- [x] T047 [US6] Extend
       `apps/mobile/services/core-account-financial-action-service.ts` with
       explicit new-version adapter preserving affected zero-net account guards
       and absent-create guards; do not widen legacy v1, fabricate nonzero
