@@ -151,3 +151,15 @@ real recording cannot be claimed as automated E2E without an honest controlled
 fixture/harness. For atomic zero/nonzero create and remote unique-default
 safety, see [account default intent](account-default-intent.md); a separate
 post-create toggle is not an acceptable implementation.
+
+---
+
+## T043 technical note — ATM account choice and frozen Save links
+
+This approved **existing-command interpretation** does not introduce a command,
+account type, destination draft, new schema, UI control or category rule:
+
+- For an **SMS ATM** row, `choose_row_account` routes an explicitly selected and currently eligible **CASH** account to `toAssignment` (the transfer destination); an eligible BANK/WALLET choice routes to the source `assignment`. Preserve the opposite endpoint and its existing choice. Revalidate active owner, known currency, distinct endpoints, row/financial revisions and group linkage through T034/T036 resolver/reducer implementation; no implicit first-bank/Cash guess or source-Cash exception.
+- Existing compatible default/sole Cash and explicit manual selection are the only current destination outcomes. No automatic new ATM destination group/account is authorized here; if neither a real eligible Cash account nor an already canonically identified `toAssignment` group exists, leave the destination **unresolved**, with no Save or invented row-index group.
+- A real referenced canonical destination group, if ever supplied, uses the same frozen `groupId` account localRef as source groups, with no extra field. The T043 test has a **real existing CASH destination**; group-creation aliases and sender dedup remain governed by the appended T004 wire-shapes technical freeze.
+- All row/group choices and a complete `SaveIntent` freeze **before awaits**; recheck current owner/source, row/group/currency/selection revisions after asynchronous reads and inside the atomic writer. Actual T034/T036 resolver and T027/T048 commit behavior are separately owned; neither a test callback nor an account label is proof of persistence.
