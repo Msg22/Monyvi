@@ -246,22 +246,71 @@ function scenarioRows(name: SaveScenario): readonly AccountReviewRow[] {
   return [row({ index: 1, source, amount: "10",
     existingAccountId: BANK, fingerprint })];
 }
-function plannedAccountIds(
-  groups: readonly AccountReviewGroup[]
+/** Test-only Node hash input, with Core's existing pure UUIDv8 projection. */
+export function expectedChildLocalRef(
+  ownerId: string, sessionId: string, groupId: string,
+  kind: "bank_details" | "account_sms_sender",
+  normalizedSender?: string
+): string {
+  if (kind === "account_sms_sender" && !normalizedSender) {
+    throw new Error("Missing normalized sender for child alias");
+  }
+  const preimage = kind === "bank_details"
+    ? ["account-review-localref/v1", ownerId, sessionId, groupId, kind]
+    : ["account-review-localref/v1", ownerId, sessionId, groupId,
+      kind, normalizedSender];
+  const digest = createHash("sha256").update(JSON.stringify(preimage), "utf8")
+    .digest("hex");
+  return uuidV8FromSha256(digest);
+}
+/** The existing mobile sender normalizer owns dedup equivalence. */
+export function uniquePlannedSenderAliases(
+  senderNames: readonly string[]
+): readonly string[] {
+  const seen = new Set<string>();
+  const aliases: string[] = [];
+  for (const senderName of senderNames) {
+    const normalized = normalizeAccountSmsSender(senderName);
+    if (!normalized || seen.has(normalized)) continue;
+    seen.add(normalized);
+    aliases.push(normalized);
+  }
+  return aliases;
+}
+function plannedGroupChildren(
+  group: AccountReviewGroup, index: number, ownerId: string, sessionId: string
 ): AccountReviewSaveIntent["plannedEntityIds"] {
-  return groups.flatMap((item, index) => {
+  if (group.type === "CASH") return [];
+  const children: Array<AccountReviewSaveIntent["plannedEntityIds"][number]> = [];
+  if (group.type === "BANK") children.push({
+    entity: "bank_details",
+    localRef: expectedChildLocalRef(ownerId, sessionId, group.groupId, "bank_details"),
+    id: testUuid(720 + index),
+  });
+  for (const [senderIndex, normalized] of
+    uniquePlannedSenderAliases(group.senderNames).entries()) {
+    children.push({
+      entity: "account_sms_sender",
+      localRef: expectedChildLocalRef(
+        ownerId, sessionId, group.groupId, "account_sms_sender", normalized
+      ),
+      id: testUuid(740 + index * 10 + senderIndex),
+    });
+  }
+  return children;
+}
+function plannedAccountIds(
+  groups: readonly AccountReviewGroup[],
+  ownerId: string, sessionId: string
+): AccountReviewSaveIntent["plannedEntityIds"] {
+  return groups.flatMap((group, index) => {
+    if (group.type === null) throw new Error("Unconfirmed account type");
     const account = {
-      entity: "account" as const, localRef: testUuid(600 + index),
+      entity: "account" as const,
+      localRef: group.groupId,
       id: testUuid(700 + index),
     };
-    if (item.type === "CASH") return [account];
-    return [
-      account,
-      { entity: "bank_details" as const,
-        localRef: testUuid(620 + index), id: testUuid(720 + index) },
-      { entity: "account_sms_sender" as const,
-        localRef: testUuid(640 + index), id: testUuid(740 + index) },
-    ];
+    return [account, ...plannedGroupChildren(group, index, ownerId, sessionId)];
   });
 }
 export function freezeSaveIntent(session: AccountReviewSession): AccountReviewSaveIntent {
@@ -284,7 +333,10 @@ export function freezeSaveIntent(session: AccountReviewSession): AccountReviewSa
     confirmedGroups: groups.map((item) => ({
       groupId: item.groupId, revision: item.revision, evidenceKey: item.evidenceKey,
     })),
-    plannedEntityIds: [...plannedRows, ...plannedAccountIds(groups)],
+    plannedEntityIds: [
+      ...plannedRows,
+      ...plannedAccountIds(groups, session.ownerId, session.sessionId),
+    ],
     occurredAt: "2026-10-15T12:00:00.000Z",
   });
 }
@@ -316,4 +368,11 @@ export function changeIntent(
   mutate: (intent: AccountReviewSaveIntent) => AccountReviewSaveIntent
 ): SaveFixture {
   return { ...fixture, intent: accountReviewSaveIntentSchema.parse(mutate(fixture.intent)) };
+}
+export function selectedSmsFingerprint(fixture: SaveFixture): string {
+  const selected = fixture.session.rows.filter((row) => row.selected);
+  if (selected.length !== 1 || selected[0]?.source !== "SMS") {
+    throw new Error("Expected exactly one selected SMS source row");
+  }
+  return selected[0].sourceFingerprint;
 }
