@@ -169,9 +169,14 @@ function makeAccountEvidence(
   if ((row.accountId === null && group === null) || isSilentDefault) {
     return makeAbsentAccountEvidence();
   }
-  const account = group !== null
-    ? requireGroupIdentity(bindings, group)
-    : requireAccount(bindings, row.accountId ?? "");
+  if (group !== null) {
+    const account = requireGroupIdentity(bindings, group);
+    return makeGroundedAccountEvidence(scene, row, account, sourceText, label);
+  }
+  if (row.accountId === null) {
+    throw new Error("ACCOUNT_REVIEW_FIXTURE_ACCOUNT_REF_UNAVAILABLE");
+  }
+  const account = requireAccount(bindings, row.accountId);
   return makeGroundedAccountEvidence(scene, row, account, sourceText, label);
 }
 
