@@ -1,13 +1,12 @@
 /**
  * #395 T014-M — the single mobile entrypoint for canonical first-session review.
  * Parser transport supplies the original immutable normalization input; only
- * current actor and owned-account freshness are rechecked before publication.
+ * current actor and owner scope are rechecked before publication.
  * No parsing, matching, persistence, provider calls or stateful merge here.
  */
 import {
   normalizeAccountReviewParserResult,
   type AccountReviewNormalizationInput,
-  type AccountReviewOwnedContext,
   type AccountReviewSession,
   type SmsReviewNormalizationInput,
   type VoiceReviewNormalizationInput,
@@ -15,53 +14,9 @@ import {
 import { loadAccountReviewAccountSnapshots } from "./account-review-read-model-service";
 import { assertExpectedCurrentUser } from "./user-data-access";
 
-type OwnedAccount = AccountReviewOwnedContext["accounts"][number];
-
-/** Compare aliases as an immutable multiset; never mutate captured evidence. */
-function sameSenderNames(
-  captured: readonly string[],
-  current: readonly string[]
-): boolean {
-  if (captured.length !== current.length) return false;
-  const first = [...captured].sort();
-  const second = [...current].sort();
-  return first.every((name, index) => name === second[index]);
-}
-
-function sameAccount(
-  captured: OwnedAccount,
-  current: OwnedAccount
-): boolean {
-  return captured.id === current.id &&
-    captured.name === current.name &&
-    captured.type === current.type &&
-    captured.currency === current.currency &&
-    captured.institutionId === current.institutionId &&
-    captured.providerDisplayName === current.providerDisplayName &&
-    captured.cardLast4 === current.cardLast4 &&
-    captured.isDefault === current.isDefault &&
-    sameSenderNames(captured.senderNames, current.senderNames);
-}
-
-function sameOwnedAccounts(
-  captured: AccountReviewOwnedContext["accounts"],
-  current: AccountReviewOwnedContext["accounts"]
-): boolean {
-  if (captured.length !== current.length) return false;
-  const currentById = new Map<string, OwnedAccount>();
-  for (const account of current) {
-    if (currentById.has(account.id)) return false;
-    currentById.set(account.id, account);
-  }
-  return captured.every((account) => {
-    const latest = currentById.get(account.id);
-    return latest !== undefined && sameAccount(account, latest);
-  });
-}
-
 /**
- * Recheck active current-owner accounts without replacing pinned provenance,
- * preference, category UUID mappings or the caller's injected SHA-256 boundary.
+ * Recheck the authenticated current owner without resampling captured provider
+ * evidence, preference, account metadata or the injected SHA-256 boundary.
  */
 async function createAccountReviewSession(
   input: AccountReviewNormalizationInput
@@ -73,8 +28,9 @@ async function createAccountReviewSession(
 
   const current = await loadAccountReviewAccountSnapshots();
   await assertExpectedCurrentUser(input.ownerId);
-  if (current.ownerId !== input.ownerId ||
-      !sameOwnedAccounts(input.reviewAccountSnapshots.accounts, current.accounts)) {
+  // Fresh metadata or unrelated account changes never invalidate original
+  // finance. Resolver/Save must separately recheck current account eligibility.
+  if (current.ownerId !== input.ownerId) {
     throw new Error("account_review_owned_snapshot_changed");
   }
 
