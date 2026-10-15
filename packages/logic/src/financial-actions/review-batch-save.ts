@@ -17,7 +17,8 @@ import {
 } from "./review-batch-save-integrity";
 import {
   validateAffectedAccountCoverage, validateCreatedAccountBalances,
-  validatePostedEffects, validateTransferEndpoints,
+  validateFinancialRowLimits, validatePostedEffects,
+  validateTransferEndpoints,
 } from "./review-batch-save-effects";
 
 export type { ReviewBatchSavePayload } from "./review-batch-save-shapes";
@@ -34,6 +35,7 @@ export const reviewBatchSavePayloadSchema = reviewBatchSaveWireSchema.superRefin
       validateSourceAndChildren,
       validateGroupAndBookkeeping,
       validateTransferEndpoints,
+      validateFinancialRowLimits,
       validateAffectedAccountCoverage,
       validatePostedEffects,
       validateCreatedAccountBalances,
