@@ -13,6 +13,7 @@ import {
   accountReviewRowSchema,
   accountReviewSessionSchema,
   computeSmsFingerprint,
+  type AccountReviewAccountContext,
   type AccountReviewAccountEvidence,
   type AccountReviewAssignment,
   type AccountReviewCurrency,
@@ -124,6 +125,37 @@ function fixtureSourceText(
   return `${scene.source} ${label} ${row.amountDecimal} ${currencyText} (${row.sourceRef})`;
 }
 
+function makeAbsentAccountEvidence(): AccountReviewAccountEvidence {
+  return accountReviewAccountEvidenceSchema.parse({
+    state: "absent", name: null, type: null, institutionId: null,
+    providerDisplayName: null, cardLast4: null, evidenceSpans: [],
+    candidateAccountIds: [],
+  });
+}
+
+function makeGroundedAccountEvidence(
+  scene: FixtureScene,
+  row: FixtureRow,
+  account: AccountReviewAccountContext,
+  sourceText: string,
+  label: string
+): AccountReviewAccountEvidence {
+  const start = sourceText.indexOf(label);
+  if (start < 0) throw new Error("ACCOUNT_REVIEW_FIXTURE_EVIDENCE_UNGROUNDED");
+  return accountReviewAccountEvidenceSchema.parse({
+    state: "explicit", name: label, type: account.type,
+    institutionId: account.institutionId,
+    providerDisplayName: account.providerDisplayName,
+    cardLast4: account.cardLast4,
+    evidenceSpans: [{
+      sourceRef: row.sourceRef,
+      field: scene.source === "VOICE" ? "transcript" : "body",
+      start, end: start + label.length, text: label,
+    }],
+    candidateAccountIds: [],
+  });
+}
+
 function makeAccountEvidence(
   scene: FixtureScene,
   row: FixtureRow,
@@ -135,29 +167,12 @@ function makeAccountEvidence(
   const isSilentDefault = scene.source === "VOICE" &&
     row.accountId === manifest.defaultAccountId;
   if ((row.accountId === null && group === null) || isSilentDefault) {
-    return accountReviewAccountEvidenceSchema.parse({
-      state: "absent", name: null, type: null, institutionId: null,
-      providerDisplayName: null, cardLast4: null, evidenceSpans: [],
-      candidateAccountIds: [],
-    });
+    return makeAbsentAccountEvidence();
   }
   const account = group !== null
     ? requireGroupIdentity(bindings, group)
     : requireAccount(bindings, row.accountId ?? "");
-  const at = sourceText.indexOf(label);
-  if (at < 0) throw new Error("ACCOUNT_REVIEW_FIXTURE_EVIDENCE_UNGROUNDED");
-  return accountReviewAccountEvidenceSchema.parse({
-    state: "explicit", name: label, type: account.type,
-    institutionId: account.institutionId,
-    providerDisplayName: account.providerDisplayName,
-    cardLast4: account.cardLast4,
-    evidenceSpans: [{
-      sourceRef: row.sourceRef,
-      field: scene.source === "VOICE" ? "transcript" : "body",
-      start: at, end: at + label.length, text: label,
-    }],
-    candidateAccountIds: [],
-  });
+  return makeGroundedAccountEvidence(scene, row, account, sourceText, label);
 }
 
 function makeReviewCurrency(
