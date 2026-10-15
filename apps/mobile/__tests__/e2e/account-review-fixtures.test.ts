@@ -553,8 +553,11 @@ describe("T008 future current-owner fixture entry (Red before T015)", () => {
   });
 
   it("rejects fixture entry in production even with an E2E-looking environment", async () => {
-    process.env.NODE_ENV = "production";
-    process.env.EXPO_PUBLIC_MONYVI_TEST_MODE = "e2e";
+    process.env = {
+      ...process.env,
+      NODE_ENV: "production",
+      EXPO_PUBLIC_MONYVI_TEST_MODE: "e2e",
+    };
 
     // Resolve the future module OUTSIDE rejects; a missing module is not
     // proof that production/runtime gating rejected the fixture.
