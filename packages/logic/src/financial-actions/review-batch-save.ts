@@ -52,6 +52,15 @@ export function validateReviewBatchSavePayload(
   return reviewBatchSavePayloadSchema.parse(value);
 }
 
+function toCanonicalRegistryPayload(
+  payload: ReviewBatchSavePayload
+): RegisteredActionPayload {
+  const { cashDefaultSnapshot, ...required } = payload;
+  return cashDefaultSnapshot === undefined
+    ? required
+    : { ...required, cashDefaultSnapshot };
+}
+
 /**
  * Explicit caller registry only; no action activation in the app or old v1.
  * The foundation's canonical envelope/guard selector is a separate Root gate.
@@ -65,7 +74,7 @@ export function createReviewFinancialActionDefinitions(
     payloadVersion: "review.batch-save/v1",
     validatePayload: (value: unknown): RegisteredActionPayload => {
       try {
-        return validateReviewBatchSavePayload(value);
+        return toCanonicalRegistryPayload(validateReviewBatchSavePayload(value));
       } catch {
         throw new Error(invalidPayloadCode);
       }
