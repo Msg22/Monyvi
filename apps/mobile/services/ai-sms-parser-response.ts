@@ -240,7 +240,9 @@ function parseSmsReviewTransport(
       hasUncorrelatedFailure: true, failureReason: "response_invalid",
     };
   }
-  const metadata = parseSafeguardMetadata(response, submittedFingerprints);
+  // Tagged v2 responses require the server-owned completion/fingerprint envelope.
+  // Legacy v1 intentionally retains its historical no-metadata acceptance.
+  const metadata = parseSafeguardMetadata(response, submittedFingerprints, true);
   const hasError = metadata.isInvalid || metadata.unresolvedFingerprints.length > 0;
   return {
     transactions: reviewed.financialRows,
@@ -274,7 +276,8 @@ interface SafeguardMetadata {
 
 function parseSafeguardMetadata(
   response: Record<string, unknown>,
-  submittedFingerprints: ReadonlySet<string>
+  submittedFingerprints: ReadonlySet<string>,
+  required = false
 ): SafeguardMetadata {
   const hasMetadata = [
     "completionStatus",
@@ -282,7 +285,10 @@ function parseSafeguardMetadata(
     "terminalFingerprints",
     "unresolvedFingerprints",
   ].some((field) => field in response);
-  if (!hasMetadata) return createEmptySafeguardMetadata(false);
+  if (!hasMetadata) {
+    if (required) logInvalidSafeguardMetadata();
+    return createEmptySafeguardMetadata(required);
+  }
 
   const parsed = SmsSafeguardResponseSchema.safeParse(response);
   if (!parsed.success) {
