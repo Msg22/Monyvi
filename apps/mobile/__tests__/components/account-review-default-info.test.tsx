@@ -13,6 +13,8 @@ import {
   use as registerI18nextPlugin,
 } from "i18next";
 import { initReactI18next } from "react-i18next";
+import enTransactions from "../../locales/en/transactions.json";
+import arTransactions from "../../locales/ar/transactions.json";
 import React, { useState } from "react";
 import {
   KeyboardAvoidingView,
@@ -46,43 +48,6 @@ let mockLocale: "en" | "ar" = "en";
 jest.mock("@/context/LocaleContext", () => ({
   useLocale: (): { readonly language: "en" | "ar" } => ({ language: mockLocale }),
 }));
-
-const en = {
-  account_review_default_note_one: "{{defaultAccountName}} was used for 1 transaction.",
-  account_review_default_note_other: "{{defaultAccountName}} was used for {{count}} transactions.",
-  account_review_default_why_trigger: "Why?",
-  account_review_default_why_title: "Default account used",
-  account_review_default_why_body_one:
-    "{{defaultAccountName}} was selected for 1 transaction because no account was mentioned and the currency matches.",
-  account_review_default_why_body_other:
-    "{{defaultAccountName}} was selected for {{count}} transactions because no account was mentioned and the currency matches.",
-  account_review_default_edit_reminder:
-    "You can change the account on each transaction before saving.",
-  account_review_default_why_boundary:
-    "A named account or an uncertain currency still needs your review.",
-  account_review_default_why_action: "Got it",
-  account_review_default_why_close_accessibility: "Close default account explanation",
-} as const;
-
-const ar = {
-  account_review_default_note_one: "تم استخدام {{defaultAccountName}} لمعاملة واحدة.",
-  account_review_default_note_two: "تم استخدام {{defaultAccountName}} لمعاملتين.",
-  account_review_default_note_other: "تم استخدام {{defaultAccountName}} لـ{{count}} معاملات.",
-  account_review_default_why_trigger: "لماذا؟",
-  account_review_default_why_title: "تم استخدام الحساب الافتراضي",
-  account_review_default_why_body_one:
-    "تم اختيار {{defaultAccountName}} لمعاملة واحدة لأن الحساب لم يُذكر والعملة تطابق عملة الحساب.",
-  account_review_default_why_body_two:
-    "تم اختيار {{defaultAccountName}} لمعاملتين لأن الحساب لم يُذكر والعملة تطابق عملة الحساب.",
-  account_review_default_why_body_other:
-    "تم اختيار {{defaultAccountName}} لـ{{count}} معاملات لأن الحساب لم يُذكر والعملة تطابق عملة الحساب.",
-  account_review_default_edit_reminder:
-    "يمكنك تغيير الحساب لكل معاملة قبل الحفظ.",
-  account_review_default_why_boundary:
-    "إذا ذُكر حساب بالاسم أو كانت العملة غير مؤكدة، فستظل المعاملة بحاجة إلى مراجعتك.",
-  account_review_default_why_action: "فهمت",
-  account_review_default_why_close_accessibility: "إغلاق شرح الحساب الافتراضي",
-} as const;
 
 interface InfoProps {
   readonly defaultAccountName: string;
@@ -141,8 +106,8 @@ beforeAll(async (): Promise<void> => {
     ns: ["transactions"],
     defaultNS: "transactions",
     resources: {
-      en: { transactions: en },
-      ar: { transactions: ar },
+      en: { transactions: enTransactions },
+      ar: { transactions: arTransactions },
     },
     interpolation: { escapeValue: false },
   });
@@ -293,6 +258,9 @@ describe("T018: B1 R3-12 Why explanation and dismissal", () => {
     expect(screen.getByText(
       "You can change the account on each transaction before saving."
     )).toBeTruthy();
+    expect(screen.getByText(
+      "A named account or an uncertain currency still needs your review."
+    )).toBeTruthy();
     expect(screen.getByText("Got it")).toBeTruthy();
   });
 
@@ -316,10 +284,14 @@ describe("T018: B1 R3-12 Why explanation and dismissal", () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it("wires the accessible outside backdrop to cancellation without selection", () => {
+  it("uses the outside pointer backdrop to dismiss once; accessible Got it remains inside the modal", () => {
     const onClose = jest.fn();
     renderSheet(true, onClose);
-    fireEvent.press(screen.getByLabelText("Close default account explanation"));
+    // accessibilityViewIsModal hides sibling overlays from screen readers:
+    // this backdrop is a pointer target, not another inaccessible button.
+    expect(screen.getByTestId("account-review-default-why-backdrop"))
+      .toHaveProp("accessible", false);
+    fireEvent.press(screen.getByTestId("account-review-default-why-backdrop"));
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
@@ -406,7 +378,39 @@ describe("T018: B1 R3-12 Why explanation and dismissal", () => {
       "تم اختيار كاش لمعاملتين لأن الحساب لم يُذكر والعملة تطابق عملة الحساب."
     )).toBeTruthy();
     expect(screen.getByText("يمكنك تغيير الحساب لكل معاملة قبل الحفظ.")).toBeTruthy();
+    expect(screen.getByText(
+      "إذا ذُكر حساب بالاسم أو كانت العملة غير مؤكدة، فستظل المعاملة بحاجة إلى مراجعتك."
+    )).toBeTruthy();
     expect(screen.getByText("فهمت")).toBeTruthy();
+  });
+
+  it("isolates mixed Arabic/Latin account names and suffixes inside Arabic disclosure copy", async () => {
+    await changeLanguage("ar");
+    mockLocale = "ar";
+    const originalName = "QNB راتب 0007";
+    const isolatedName = "\u2068" + originalName + "\u2069";
+
+    render(
+      <>
+        <DefaultAccountInfo
+          defaultAccountName={originalName}
+          assignmentCount={2}
+          onWhyPress={jest.fn()}
+        />
+        <DefaultAccountWhySheet
+          visible
+          defaultAccountName={originalName}
+          assignmentCount={2}
+          onClose={jest.fn()}
+        />
+      </>
+    );
+
+    expect(screen.getByText(`تم استخدام ${isolatedName} لمعاملتين.`)).toBeTruthy();
+    expect(screen.getByText(
+      `تم اختيار ${isolatedName} لمعاملتين لأن الحساب لم يُذكر والعملة تطابق عملة الحساب.`
+    )).toBeTruthy();
+    expect(originalName).toBe("QNB راتب 0007");
   });
 
   it("retains semantic light/dark theme classes without adding a new decorative palette", () => {

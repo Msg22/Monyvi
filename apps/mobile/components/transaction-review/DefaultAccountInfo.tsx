@@ -31,6 +31,22 @@ export interface DefaultAccountWhySheetProps {
   readonly onClose: () => void;
 }
 
+/** Text-level isolation only: keep the original stored account name untouched. */
+const RTL_SCRIPT = /[\u0590-\u08ff]/u;
+const LATIN_OR_DIGITS = /[A-Za-z0-9]/u;
+const FSI = "\u2068";
+const PDI = "\u2069";
+
+function accountNameForDisplay(name: string, language: "en" | "ar"): string {
+  const containsRTL = RTL_SCRIPT.test(name);
+  const containsLatinOrDigits = LATIN_OR_DIGITS.test(name);
+  const needsIsolation =
+    (containsRTL && containsLatinOrDigits) ||
+    (language === "ar" && containsLatinOrDigits) ||
+    (language === "en" && containsRTL);
+  return needsIsolation ? `${FSI}${name}${PDI}` : name;
+}
+
 export function DefaultAccountInfo({
   defaultAccountName, assignmentCount, onWhyPress,
 }: DefaultAccountInfoProps): React.JSX.Element | null {
@@ -38,36 +54,77 @@ export function DefaultAccountInfo({
   const { language } = useLocale();
   const { width, fontScale } = useWindowDimensions();
   const colorScheme = useColorScheme();
-  const compact = shouldUseDenseRowCompactLayout(width, fontScale);
   if (assignmentCount <= 0) return null;
 
-  const rtl = language === "ar";
-  const writingDirection: TextStyle["writingDirection"] = rtl ? "rtl" : "ltr";
-  const why = t("account_review_default_why_trigger");
+  return (
+    <QuietDefaultDisclosure
+      label={t("account_review_default_note", {
+        count: assignmentCount,
+        defaultAccountName: accountNameForDisplay(defaultAccountName, language),
+      })}
+      whyLabel={t("account_review_default_why_trigger")}
+      onWhyPress={onWhyPress}
+      compact={shouldUseDenseRowCompactLayout(width, fontScale)}
+      rtl={language === "ar"}
+      iconColor={colorScheme === "dark" ? palette.slate[400] : palette.slate[500]}
+    />
+  );
+}
+
+interface QuietDefaultDisclosureProps {
+  readonly label: string;
+  readonly whyLabel: string;
+  readonly onWhyPress: () => void;
+  readonly compact: boolean;
+  readonly rtl: boolean;
+  readonly iconColor: string;
+}
+
+function QuietDefaultDisclosure(props: QuietDefaultDisclosureProps): React.JSX.Element {
+  const { compact, rtl, whyLabel, onWhyPress } = props;
   return (
     <View
       testID="account-review-default-info"
       className="w-full max-w-[350px] self-center py-2 dark:bg-transparent"
     >
-      <View className={compact ? "items-start gap-1" :
-        rtl ? "flex-row-reverse items-center gap-2" : "flex-row items-center gap-2"}>
-        <Ionicons name="information-circle-outline" size={22}
-          color={colorScheme === "dark" ? palette.slate[400] : palette.slate[500]}
-          accessibilityElementsHidden importantForAccessibility="no" />
-        <Text
-          style={{ writingDirection }}
-          className={`${rtl ? "text-right" : "text-left"} ${
-            compact
-              ? "w-full text-xs leading-[18px] text-text-secondary dark:text-text-secondary-dark"
-              : "min-w-0 flex-1 text-xs leading-[18px] text-text-secondary dark:text-text-secondary-dark"
-          }`}
-        >
-          {t("account_review_default_note", { count: assignmentCount, defaultAccountName })}
-        </Text>
-        {!compact ? <WhyLink label={why} onPress={onWhyPress} rtl={rtl} /> : null}
+      <View
+        className={compact ? "items-start gap-1" :
+          rtl ? "flex-row-reverse items-center gap-2" : "flex-row items-center gap-2"}
+      >
+        <Ionicons
+          name="information-circle-outline"
+          size={22}
+          color={props.iconColor}
+          accessibilityElementsHidden
+          importantForAccessibility="no"
+        />
+        <QuietDefaultNote label={props.label} compact={compact} rtl={rtl} />
+        {!compact ? <WhyLink label={whyLabel} onPress={onWhyPress} rtl={rtl} /> : null}
       </View>
-      {compact ? <WhyLink label={why} onPress={onWhyPress} rtl={rtl} /> : null}
+      {compact ? <WhyLink label={whyLabel} onPress={onWhyPress} rtl={rtl} /> : null}
     </View>
+  );
+}
+
+function QuietDefaultNote({
+  label, compact, rtl,
+}: {
+  readonly label: string;
+  readonly compact: boolean;
+  readonly rtl: boolean;
+}): React.JSX.Element {
+  const writingDirection: TextStyle["writingDirection"] = rtl ? "rtl" : "ltr";
+  return (
+    <Text
+      style={{ writingDirection }}
+      className={`${rtl ? "text-right" : "text-left"} ${
+        compact
+          ? "w-full text-xs leading-[18px] text-text-secondary dark:text-text-secondary-dark"
+          : "min-w-0 flex-1 text-xs leading-[18px] text-text-secondary dark:text-text-secondary-dark"
+      }`}
+    >
+      {label}
+    </Text>
   );
 }
 
@@ -127,13 +184,14 @@ export function DefaultAccountWhySheet({
   );
 }
 
+/** Pointer dismissal outside the accessibility-modal panel, not a hidden button. */
 function WhyBackdrop({ onClose }: { readonly onClose: () => void }): React.JSX.Element {
-  const { t } = useTranslation("transactions");
   return (
     <TouchableOpacity
-      accessible
-      accessibilityRole="button"
-      accessibilityLabel={t("account_review_default_why_close_accessibility")}
+      testID="account-review-default-why-backdrop"
+      accessible={false}
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
       onPress={onClose}
       activeOpacity={1}
       className="absolute inset-0"
@@ -194,7 +252,7 @@ function WhyCopy({
         className={`${rtl ? "text-right" : "text-left"} mt-4 text-sm leading-5 text-text-secondary dark:text-text-secondary-dark`}
         style={{ writingDirection }}
       >
-        {t("account_review_default_why_body", { count, defaultAccountName: name })}
+        {t("account_review_default_why_body", { count, defaultAccountName: accountNameForDisplay(name, language) })}
       </Text>
       <Text
         className={`${rtl ? "text-right" : "text-left"} mt-3 text-sm leading-5 text-text-secondary dark:text-text-secondary-dark`}
