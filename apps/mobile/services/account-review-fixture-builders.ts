@@ -184,7 +184,8 @@ function makeReviewCurrency(
 }
 
 function makeReviewReasons(row: FixtureRow): readonly AccountReviewReason[] {
-  return row.issueTags.map((tag): AccountReviewReason =>
+  const tags: readonly string[] = row.issueTags;
+  return tags.map((tag): AccountReviewReason =>
     accountReviewReasonSchema.parse(
       tag === "amount" ? "ambiguous_amount" :
       tag === "category" ? "category_needed" : tag
@@ -276,11 +277,10 @@ async function makeRow(
   if (row.selected && (reasons.length > 0 || currency.state !== "known")) {
     throw new Error("ACCOUNT_REVIEW_FIXTURE_SELECTED_UNRESOLVED");
   }
+  const state: RowState = { evidence, currency, assignment, toAssignment, reasons };
   return scene.source === "SMS"
-    ? makeSmsReviewRow(scene, row, bindings, ids, sourceText, evidence,
-      currency, assignment, toAssignment, reasons)
-    : makeVoiceReviewRow(scene, row, bindings, ids, sourceText, evidence,
-      currency, assignment, toAssignment, reasons);
+    ? makeSmsReviewRow(scene, row, bindings, ids, sourceText, state)
+    : makeVoiceReviewRow(scene, row, bindings, ids, sourceText, state);
 }
 
 interface RowState {
@@ -305,12 +305,10 @@ function makeRowBase(row: FixtureRow, ids: FixtureIds, state: RowState): object 
 
 function makeVoiceReviewRow(
   scene: FixtureScene, row: FixtureRow, bindings: FixtureBindings,
-  ids: FixtureIds, sourceText: string, evidence: AccountReviewAccountEvidence,
-  currency: AccountReviewCurrency, assignment: AccountReviewAssignment,
-  toAssignment: AccountReviewAssignment | null, reasons: readonly AccountReviewReason[]
+  ids: FixtureIds, sourceText: string, state: RowState
 ): AccountReviewRow {
   return accountReviewRowSchema.parse({
-    ...makeRowBase(row, ids, { evidence, currency, assignment, toAssignment, reasons }),
+    ...makeRowBase(row, ids, state),
     source: "VOICE", sourceFingerprint: null,
     transaction: {
       amount: Number(row.amountDecimal),
@@ -320,16 +318,15 @@ function makeVoiceReviewRow(
       confidence: 1, originLabel: "Synthetic Voice",
       note: sourceText, originalTranscript: sourceText,
       detectedLanguage: scene.language, aiDetectedCurrency:
-        currency.state === "known" && currency.origin === "explicit" ? currency.code : null,
+        state.currency.state === "known" && state.currency.origin === "explicit"
+          ? state.currency.code : null,
     },
   });
 }
 
 async function makeSmsReviewRow(
   scene: FixtureScene, row: FixtureRow, bindings: FixtureBindings,
-  ids: FixtureIds, sourceText: string, evidence: AccountReviewAccountEvidence,
-  currency: AccountReviewCurrency, assignment: AccountReviewAssignment,
-  toAssignment: AccountReviewAssignment | null, reasons: readonly AccountReviewReason[]
+  ids: FixtureIds, sourceText: string, state: RowState
 ): Promise<AccountReviewRow> {
   const group = resolveGroup(scene, row);
   const sender = group?.name ?? (row.accountId !== null
@@ -339,7 +336,7 @@ async function makeSmsReviewRow(
     sender, body: sourceText, receivedAtMs: Date.parse(FIXTURE_DATE),
   });
   return accountReviewRowSchema.parse({
-    ...makeRowBase(row, ids, { evidence, currency, assignment, toAssignment, reasons }),
+    ...makeRowBase(row, ids, state),
     source: "SMS", sourceFingerprint: smsFingerprint,
     transaction: {
       amount: Number(row.amountDecimal),
