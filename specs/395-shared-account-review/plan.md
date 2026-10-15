@@ -148,14 +148,33 @@ analyze must reconcile coverage/contracts before the lead maps owners or
 dispatches.
 
 1. Canonical schemas/fixtures/projections and review engine tests.
-2. Parallel after contract freeze: provider/source adapters; engine and SMS v2
-   persistence; financial-action SQL/save tests; UI fixtures/tests.
+2. Parallel after contract freeze: provider/source adapters; separately gated
+   side-effect-free pure resolver/financial validators; SMS v2 persistence,
+   financial-action SQL/save tests; UI fixtures/tests.
 3. Engine/persistence/parser integration before route wiring. Add/Edit default
    intent can overlap review UI with distinct files; one owner for shared
    hooks/shell.
 4. Complete action validation/sync/reconciliation before selected-save wiring.
 5. Independent review/coverage audit, one integration check batch, owner device
    validation, commit/push/PR update.
+
+**Narrow pure-work readiness (dependency reconciliation only):** Accepted
+canonical T004/T009–T011 schemas, generated Edge parity, owned account context
+and pure T014-P source normalization allow T017 resolver tests to demonstrate
+meaningful Red before side-effect-free T019. Pure T046 payload validation and
+registry declarations may proceed only after T042 Red, the frozen T004 financial
+contract and an unchanged legacy financial-action regression baseline. Pure
+T027 identity/reducer work requires T019 Green and its own T024 Red. Each
+production task still requires lead review, explicit file ownership and
+test-first authorization; this paragraph grants none.
+
+**T016 remains INCOMPLETE** until the complete all-source foundation is
+independently accepted. It remains a mandatory prerequisite for every
+user-facing route, hook, UI, SMS queue, Save, network-wiring or other runtime
+integration; early pure code does not satisfy or bypass that gate. SQL
+implementation/race proofs and local writer integration retain their separate
+approved Red, scope, ownership and review gates. No implementation, test run,
+SQL mutation or hosted deployment is authorized by this dependency update.
 
 ## Effort and risks
 

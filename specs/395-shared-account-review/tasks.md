@@ -59,8 +59,12 @@ checkboxes remain unchecked until their own acceptance evidence exists.
 ## Phase 2: Foundation — blocking shared contracts and fixtures
 
 **Goal**: One canonical typed source, owned snapshots and honest fixture entry.
-No story production starts before T005–T016 complete; story test authors may
-prepare tests against the frozen T004 contract in parallel.
+T016 remains INCOMPLETE and mandatory before any story route/hook/UI, SMS
+queue, Save, network-wiring or other runtime integration. Only the explicitly
+side-effect-free pure T019, T027 and T046 work below can be made ready before
+T016, each after its own actual test Red and frozen upstream contracts. Other
+story production still waits for the full T005–T016 gate; no checkbox changes
+or implementation authorization follows from this scheduling reconciliation.
 
 ### Tests first
 
@@ -146,6 +150,11 @@ save mocked.
 
 ### Implementation after US1 Red
 
+Pure T019 may start only after accepted T004/T009–T011 canonical schemas,
+generated contract parity, owned context and T014-P pure producer, plus meaningful
+T017 Red and a new lead-reviewed exclusive source lease. T020–T021 remain
+user-facing work gated by completed T016 and T018 Red.
+
 - [ ] T019 [US1] Implement immutable resolution in
       `packages/logic/src/account-review/resolution.ts`: known matching
       currency, preferred only for proven omission, owned eligibility, preserve
@@ -195,6 +204,11 @@ three assignments, one row click checks one, CIB untouched. Save requires US6.
       `apps/mobile/e2e/maestro/account-review/shared-suggestions.yaml`.
 
 ### Implementation after US2 Red
+
+Pure T027 requires **T019 Green plus its own T024 Red** and reviewed disjoint
+file ownership; neither checkbox is completed by this dependency note.
+T028–T031 still wait for T016, their applicable Red, and the separate SMS
+queue/codec/command-writer ownership and atomicity gates.
 
 - [ ] T027 [US2] Implement canonical evidence identity and immutable group
       commands in `packages/logic/src/account-review/identity.ts` and
@@ -312,6 +326,13 @@ tests consume frozen plain review fixtures and need no UI completion.
       E2E.
 
 ### Implementation after US6 Red and T001/T004 approval
+
+Pure T046 schema/financial-effect registry validation alone may start after its
+own meaningful T042 Red, frozen T004, an **unchanged legacy v1 financial-action
+regression baseline**, and lead-reviewed exclusive ownership. This does not
+authorize financial writes, runtime action activation or server registration.
+T047–T053 remain behind T016, their applicable Red, and separately approved
+local-writer/SQL implementation, race-proof and sync/reconciliation gates.
 
 - [ ] T046 [US6] Register canonical strict `review.batch-save/v1` schema/effect
       mapping in `packages/logic/src/financial-actions/review-batch-save.ts` and
@@ -519,18 +540,24 @@ existing fields.
 ## Dependency DAG and file serialization
 
 Phase order expresses priority, not permission to skip integration dependencies.
-Within each implementation subsection, unmarked tasks run in listed order.
+Within each implementation subsection, unmarked tasks run in listed order
+**except** the three narrowly released side-effect-free pure tasks below.
+An early pure task may be assigned only after its recorded meaningful Red and
+lead-reviewed file-specific approval. It neither completes T016 nor opens
+user-facing/runtime paths.
 
 | Wave                      | Prerequisites                                           | Ready work                                                                               | Explicit completion dependency                                                                |
 | ------------------------- | ------------------------------------------------------- | ---------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
 | Intake                    | Tasks/analyze accepted, implementation scope authorized | T001 → T002 → T003 → T004                                                                | All production blocked until these gates                                                      |
 | Foundation Red            | T004                                                    | T005–T008 parallel                                                                       | Meaningful deterministic Red before T009                                                      |
-| Foundation implementation | Foundation Red                                          | T009 → T010 → T011 → T012 → T013 → T014 → T015 → T016                                    | Freeze API/projection/export contract before stories                                          |
-| Story Red                 | T016                                                    | US1 T017–T018; US2 T024–T026; US3 T034–T035; US6 T042–T045; US4 T057–T058; US5 T064–T066 | Disjoint test files can be authored concurrently; Red batch before own production             |
-| Resolution                | US1 Red                                                 | T019 → T020 → T021                                                                       | US2/US3 reducers use T019 resolution                                                          |
-| Shared state              | US2 Red, T019                                           | T027 → T028 → T029 → T030 → T031                                                         | State API needed before dependent choice/UI integration                                       |
+| Foundation implementation | Foundation Red                                          | T009 → T010 → T011 → T012 → T013 → T014 → T015 → T016                                    | T016 still required before runtime integration; early pure exceptions below do not complete it |
+| Early pure Red            | Frozen T004 plus accepted schemas/parity/context/producer as applicable | T017; T024; T042 in disjoint test files                                               | Actual task-specific Red; no runtime, SQL or integration permission                            |
+| Early pure implementation | T017 Red + accepted foundation → T019; T019 Green + T024 Red → T027; T042 Red + T004 + legacy baseline → T046 | Pure T019, T027, T046 only (separate reviewed source leases)                          | Side-effect-free declarations/logic; T016 remains INCOMPLETE and mandatory downstream          |
+| Story Red                 | T016                                                    | US1 T018; US2 T025–T026; US3 T034–T035; US6 T043–T045; US4 T057–T058; US5 T064–T066      | Remaining tests and integrations use the full foundation; Red before own production            |
+| Resolution presentation   | T019 Green, T016, T018 Red                              | T020 → T021                                                                             | User-facing disclosure and bindings cannot precede the T016 gate                              |
+| Shared state runtime      | T027 Green, T016, T025–T026 Red                         | T028 → T029 → T030 → T031                                                               | Queue/codec/writer and UI retain atomic/generation/ownership gates                             |
 | Choice                    | US3 Red, T027                                           | T036 → T037 → T038 → T039                                                                | T039 additionally waits T021/T030                                                             |
-| Financial save            | US6 Red, T016, approved scope                           | T046 → T047 → T048 → T049 → T050 → T051 → T052 → T053                                    | Can overlap resolution/shared-state work; writer uses frozen schemas/fixtures, not mutable UI |
+| Financial save runtime    | T046 Green, T016, T043–T045 Red, approved SQL/writer scope | T047 → T048 → T049 → T050 → T051 → T052 → T053                                      | No Save/writer/network activation without independent SQL/raceproof/local-writer gates         |
 | Save routes               | T030, T039, T049–T053                                   | T054                                                                                     | US1/US2 complete Save journeys require this; no legacy writer fallback                        |
 | Conditional UI            | US4 Red, T036                                           | T059 → T060 → T061                                                                       | T060 waits T020/T031; T061 waits T054                                                         |
 | Account intent            | US5 Red, T046–T053                                      | T067 → T068 → T069 → T070                                                                | Shared registry/foundation/sync edits serialize after US6; T002 reconciles #393 before forms  |
@@ -555,9 +582,11 @@ reconciliation only; approved copy meaning must not change.
 | US4   | T057 projection + T058 component/YAML                  | Exact conditional counts/filters; production integrates after T054    |
 | US5   | T064 action + T065 form/YAML + T066 pgTAP              | First/later intent tested independently; shared foundation serialized |
 
-After test contracts freeze, the financial lane T046–T053 can overlap
-resolution/state/UI work T019–T039 with distinct ownership. Shared forms are not
-a second simultaneous sync/foundation lane. Rendered and accessibility reviews
+After task-specific Red, pure T019 and T046 may proceed in disjoint lanes; T027
+follows T019 Green and T024 Red. Once T016 completes, T047–T053 can overlap
+other ready state/UI work with distinct ownership and their independent
+SQL/local-writer gates. Shared forms are not a second simultaneous
+sync/foundation lane. Rendered and accessibility reviews
 are separate evidence activities, not additional production writers.
 
 ## Requirement and success coverage
