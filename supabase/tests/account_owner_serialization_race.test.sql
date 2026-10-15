@@ -30,7 +30,7 @@ END;
 $$;
 
 CREATE FUNCTION pg_temp.r395_connect(p_name text)
-RETURNS void LANGUAGE plpgsql AS $
+RETURNS void LANGUAGE plpgsql AS $connect$
 DECLARE
   -- Supplied only in the local test runner session; never persisted or printed.
   v_conninfo text := current_setting('monyvi.test_dblink_conninfo', true);
@@ -46,7 +46,7 @@ BEGIN
     p_name, 'SET idle_in_transaction_session_timeout = ''20s'''
   );
 END;
-$;
+$connect$;
 
 CREATE FUNCTION pg_temp.r395_auth(p_name text, p_owner uuid)
 RETURNS void LANGUAGE plpgsql AS $$

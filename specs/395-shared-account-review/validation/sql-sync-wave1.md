@@ -88,3 +88,7 @@
 - **No-owner cleanup safety:** advisory mutex + namespace-empty guard precede seeding; `v_owned` becomes true only **after successful atomic synthetic auth-user INSERT**. Failed connection/seed or prior UUID collision leaves it false, so cleanup must not delete unowned rows.
 - Cleanup/driver error observations contain **SQLSTATE only**, never `SQLERRM` that could reveal connection details. Named sessions, timeout budget, rollback/cleanup, and all **36 TAP assertions** remain intact.
 - Root must independently verify authenticated conninfo access, role permissions, cleanup/postflight, and actual lock graph. No rerun, local DB/test/extension command, secret read, migration or production change occurred here; **T016 and implementation grants still pending**.
+## Narrow SQL delimiter repair — 2026-10-15 (tests only)
+
+- Root identified invalid published `AS $` / `$;` around **only** `pg_temp.r395_connect` at `d8065db6`; restored matched `$connect$` tags, without changing its optional local conninfo, secret handling, no-owner cleanup, or 36 assertions.
+- Root **has not executed** this invalid candidate or this repair; no behavioral Red/Green or independent-connection proof claimed. Same test-only authorization; T016 pending.
