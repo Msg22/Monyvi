@@ -13,7 +13,6 @@ import {
   KeyboardAvoidingView,
   Modal,
   ScrollView,
-  StyleSheet,
 } from "react-native";
 import {
   DefaultAccountInfo,
@@ -38,8 +37,9 @@ jest.mock("@/components/institutions/InstitutionLogoMark", () => ({
 jest.mock("@/components/ui/Skeleton", () => ({
   Skeleton: (): null => null,
 }));
+let mockLocale: "en" | "ar" = "en";
 jest.mock("@/context/LocaleContext", () => ({
-  useLocale: (): { readonly language: "en" } => ({ language: "en" }),
+  useLocale: (): { readonly language: "en" | "ar" } => ({ language: mockLocale }),
 }));
 
 const en = {
@@ -122,26 +122,27 @@ function DefaultDisclosureJourney(): React.JSX.Element {
   );
 }
 
+beforeAll(async (): Promise<void> => {
+  await i18next.init({
+    lng: "en",
+    fallbackLng: "en",
+    ns: ["transactions"],
+    defaultNS: "transactions",
+    resources: {
+      en: { transactions: en },
+      ar: { transactions: ar },
+    },
+    interpolation: { escapeValue: false },
+  });
+});
+
+afterEach(async (): Promise<void> => {
+  await i18next.changeLanguage("en");
+  mockLocale = "en";
+  jest.clearAllMocks();
+});
+
 describe("T018: B1 R3-07 quiet accepted-default disclosure", () => {
-  beforeAll(async (): Promise<void> => {
-    await i18next.init({
-      lng: "en",
-      fallbackLng: "en",
-      ns: ["transactions"],
-      defaultNS: "transactions",
-      resources: {
-        en: { transactions: en },
-        ar: { transactions: ar },
-      },
-      interpolation: { escapeValue: false },
-    });
-  });
-
-  afterEach(async (): Promise<void> => {
-    await i18next.changeLanguage("en");
-    jest.clearAllMocks();
-  });
-
   it("renders absolutely no note, Why action or empty details container for count zero", () => {
     const onWhyPress = jest.fn();
     render(<DefaultAccountInfo {...makeInfoProps({ assignmentCount: 0, onWhyPress })} />);
@@ -237,7 +238,7 @@ describe("T018: B1 R3-07 quiet accepted-default disclosure", () => {
         <TransactionItem
           transaction={row.transaction}
           index={0}
-          isSelected={row.selected}
+          isSelected={false}
           accountName="Cash"
           hasMissingInfo
           reviewMeta={{ isAutoSelectable: false, reasons: otherReasons }}
@@ -249,7 +250,9 @@ describe("T018: B1 R3-07 quiet accepted-default disclosure", () => {
 
     expect(screen.getByTestId("transaction-account-match")).toBeTruthy();
     expect(screen.getByTestId("account-review-default-info")).toBeTruthy();
-    expect(otherReasons).toEqual(["category_needed", "low_confidence"]);
+    // Real TransactionItem must retain its amber "Review details" blocker
+    // while default-account disclosure stays visible and independently editable.
+    expect(screen.getByText("review_badge_review_details")).toBeTruthy();
     fireEvent.press(screen.getByTestId("transaction-review-edit-action"));
     expect(edit).toHaveBeenCalledWith(0);
     expect(select).not.toHaveBeenCalled();
@@ -337,9 +340,7 @@ describe("T018: B1 R3-12 Why explanation and dismissal", () => {
     expect(screen.UNSAFE_getByType(KeyboardAvoidingView)).toBeTruthy();
     expect(screen.UNSAFE_getByType(ScrollView)).toBeTruthy();
     const sheet = screen.getByTestId("account-review-default-why-sheet");
-    expect(StyleSheet.flatten(sheet.props.style)).toEqual(
-      expect.objectContaining({ paddingBottom: 24 })
-    );
+    expect(sheet).toHaveStyle({ paddingBottom: 24 });
     // Native measured inset, focus and keyboard overlap remain device-only.
   });
 
@@ -372,6 +373,7 @@ describe("T018: B1 R3-12 Why explanation and dismissal", () => {
 
   it("renders approved Arabic dual-count Why explanation and keeps user account name intact", async () => {
     await i18next.changeLanguage("ar");
+    mockLocale = "ar";
     render(
       <>
         <DefaultAccountInfo
