@@ -20,7 +20,7 @@ type Scenario = (typeof manifest.scenes)[number];
 type ScenarioRow = Scenario["rows"][number];
 type ScenarioGroup = Scenario["groups"][number];
 
-const TEST_DATE = new Date("2026-10-15T12:00:00.000Z");
+const TEST_DATE_MS = Date.parse("2026-10-15T12:00:00.000Z");
 const TEST_CATEGORY_NAME = "Other";
 
 function requireScene(id: "r3-default-only" | "r3-combined-en"): Scenario {
@@ -109,6 +109,29 @@ function rowAssignment(row: ScenarioRow, group: ScenarioGroup | undefined): obje
   };
 }
 
+function makeVoiceTransaction(
+  row: ScenarioRow,
+  scene: Scenario,
+  note: string
+): object {
+  return {
+    source: "VOICE",
+    amount: Number(row.amountDecimal),
+    currency: row.currencyCode ?? "EGP",
+    type: "EXPENSE",
+    date: new Date(TEST_DATE_MS),
+    categoryId: manifest.syntheticCategoryId,
+    categoryDisplayName: TEST_CATEGORY_NAME,
+    confidence: 0.92,
+    originLabel: "Voice",
+    note,
+    originalTranscript: note,
+    detectedLanguage: scene.language,
+    aiDetectedCurrency: row.currencyCode,
+    ...(row.accountId !== null ? { accountId: row.accountId } : {}),
+  };
+}
+
 function makeRow(row: ScenarioRow, scene: Scenario): AccountReviewRow {
   const group = linkedGroup(scene, row);
   const reasons: readonly string[] = row.issueTags;
@@ -135,22 +158,7 @@ function makeRow(row: ScenarioRow, scene: Scenario): AccountReviewRow {
     revision: "0",
     hasUserAccountOverride: false,
     hasUserCurrencyOverride: false,
-    transaction: {
-      source: "VOICE",
-      amount: Number(row.amountDecimal),
-      currency: row.currencyCode ?? "EGP",
-      type: "EXPENSE",
-      date: new Date(TEST_DATE),
-      categoryId: manifest.syntheticCategoryId,
-      categoryDisplayName: TEST_CATEGORY_NAME,
-      confidence: 0.92,
-      originLabel: "Voice",
-      note,
-      originalTranscript: note,
-      detectedLanguage: scene.language,
-      aiDetectedCurrency: row.currencyCode,
-      ...(row.accountId !== null ? { accountId: row.accountId } : {}),
-    },
+    transaction: makeVoiceTransaction(row, scene, note),
   });
 }
 
