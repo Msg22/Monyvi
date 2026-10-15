@@ -5,7 +5,13 @@
  */
 import { Database, type Model } from "@nozbe/watermelondb";
 import SQLiteAdapter from "@nozbe/watermelondb/adapters/sqlite";
-import { encodeSmsReviewDraft, type AccountReviewSession } from "@monyvi/logic";
+import {
+  encodeSmsReviewDraft,
+  encodeSmsReviewDraftV2,
+  smsReviewDraftPayloadV2Schema,
+  type AccountReviewRow,
+  type AccountReviewSession,
+} from "@monyvi/logic";
 import { schema } from "../../../../packages/db/src/schema";
 import { Account } from "../../../../packages/db/src/models/Account";
 import { AccountFinancialEffect } from "../../../../packages/db/src/models/AccountFinancialEffect";
@@ -158,8 +164,60 @@ export async function seedSavedFingerprint(
     await database.batch(transfer);
   });
 }
-export async function seedSmsReviewDrafts(
-  database: Database, session: AccountReviewSession
+interface EncodedDraft {
+  readonly version: number;
+  readonly json: string;
+}
+function requireSmsRow(
+  row: AccountReviewRow
+): Extract<AccountReviewRow, { readonly source: "SMS" }> {
+  if (row.source !== "SMS") throw new Error("Mixed SMS fixture source");
+  return row;
+}
+function encodeV2ReviewDraft(
+  row: Extract<AccountReviewRow, { readonly source: "SMS" }>,
+  session: AccountReviewSession
+): EncodedDraft {
+  const groups = session.groups.filter((group) =>
+    group.linkedRowIds.includes(row.rowId)
+  );
+  const tombstones = groups.filter((group) => group.status === "removed")
+    .map((group) => group.evidenceKey);
+  const review = {
+    ownerId: session.ownerId,
+    sessionId: session.sessionId,
+    sourceRevision: session.sourceRevision,
+    preferredCurrency: session.preferredCurrency,
+    reviewRevision: session.revision,
+    operationGeneration: session.operationGeneration,
+    row,
+    groups,
+    removedEvidenceKeys: session.removedEvidenceKeys.filter(
+      (key) => tombstones.includes(key)
+    ),
+  };
+  // Frozen v2 root is {version:2,transaction,review}; T025 codec export
+  // is intentionally not yet present on this branch. Never fall back to v1.
+  const encoded = encodeSmsReviewDraftV2({
+    transaction: row.transaction,
+    review,
+  });
+  const raw: unknown = JSON.parse(encoded.json);
+  const checked = smsReviewDraftPayloadV2Schema.parse(raw);
+  if (encoded.version !== 2 || checked.version !== 2) {
+    throw new Error("Expected canonical account-review SMS v2 payload");
+  }
+  return encoded;
+}
+function encodeLegacyV1Draft(
+  row: Extract<AccountReviewRow, { readonly source: "SMS" }>
+): EncodedDraft {
+  return encodeSmsReviewDraft(row.transaction);
+}
+async function seedDraftsWithVersion(
+  database: Database,
+  session: AccountReviewSession,
+  version: "v2" | "v1"
 ): Promise<void> {
   if (session.source !== "SMS") throw new Error("Expected SMS review session");
   await database.write(async (): Promise<void> => {
@@ -168,9 +226,11 @@ export async function seedSmsReviewDrafts(
         record._raw.id = testUuid(950);
         record.userId = OWNER;
       });
-    const drafts = session.rows.map((row, index): SmsReviewDraftItem => {
-      if (row.source !== "SMS") throw new Error("Mixed SMS fixture source");
-      const encoded = encodeSmsReviewDraft(row.transaction);
+    const drafts = session.rows.map((rawRow, index): SmsReviewDraftItem => {
+      const row = requireSmsRow(rawRow);
+      const encoded = version === "v2"
+        ? encodeV2ReviewDraft(row, session)
+        : encodeLegacyV1Draft(row);
       return database.get<SmsReviewDraftItem>("sms_review_draft_items")
         .prepareCreate((record): void => {
           record._raw.id = testUuid(951 + index);
@@ -183,6 +243,18 @@ export async function seedSmsReviewDrafts(
     });
     await database.batch(queue, ...drafts);
   });
+}
+/** All T043 happy-path SMS cases use canonical v2, never implicit v1 migration. */
+export async function seedSmsReviewDrafts(
+  database: Database, session: AccountReviewSession
+): Promise<void> {
+  await seedDraftsWithVersion(database, session, "v2");
+}
+/** Explicit legacy-only harness for separately tested T025 v1 -> v2 migration. */
+export async function seedLegacySmsReviewDraftsV1(
+  database: Database, session: AccountReviewSession
+): Promise<void> {
+  await seedDraftsWithVersion(database, session, "v1");
 }
 export async function ledgerState(database: Database): Promise<LedgerState> {
   const [accounts, drafts, actions, effects, transactions, transfers, banks, senders, queues] =
