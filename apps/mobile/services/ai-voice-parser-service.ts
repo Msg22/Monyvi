@@ -17,6 +17,10 @@
  */
 
 import { supabase } from "./supabase";
+import * as Crypto from "expo-crypto";
+import { assertExpectedCurrentUser } from "./user-data-access";
+import { createVoiceAccountReviewSession } from "./account-review-source-adapter-service";
+import { uuidV8FromSha256 } from "../../../packages/logic/src/account-review/identity";
 import {
   classifyVoiceReviewV2Response,
   projectVoiceFinancialAtSourceIndex,
@@ -130,7 +134,6 @@ const VOICE_REVIEW_SESSION_DOMAIN = "monyvi.account-review.voice-session.v1";
 
 /** Current actor must still match the pre-captured T010 review owner. */
 async function assertVoiceReviewOwner(ownerId: string): Promise<void> {
-  const { assertExpectedCurrentUser } = await import("./user-data-access");
   await assertExpectedCurrentUser(ownerId);
 }
 
@@ -145,10 +148,6 @@ async function buildVoiceReviewNormalizationInput(input: {
   readonly providerResponse: unknown;
   readonly originalTranscript: string;
 }): Promise<VoiceReviewNormalizationInput> {
-  const Crypto = await import("expo-crypto");
-  const { uuidV8FromSha256 } = await import(
-    "../../../packages/logic/src/account-review/identity"
-  );
   const hashProvider: VoiceReviewNormalizationInput["hashProvider"] = {
     digestUtf8: (value: string): Promise<string> =>
       Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, value),
@@ -683,10 +682,8 @@ export async function parseVoiceWithAi(
         providerResponse: classification.providerResponse,
         originalTranscript,
       });
-      // Import only on opted-in success: legacy callers never load the adapter.
-      const { createVoiceAccountReviewSession } = await import(
-        "./account-review-source-adapter-service"
-      );
+      // The SQL-owned adapter is statically linked but invoked only for an
+      // opted-in result; v1 never loads account snapshots or creates a session.
       const reviewSession = await createVoiceAccountReviewSession(input);
       if (abortController.signal.aborted) {
         return {

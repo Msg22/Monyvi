@@ -79,6 +79,14 @@ jest.mock("@/services/user-data-access", () => ({
   assertExpectedCurrentUser: (userId: string): Promise<void> => mockScopedUser(userId),
 }));
 
+// T014-M's real adapter may re-read its current-owner snapshot. Mock ONLY
+// that platform read-model boundary, never the adapter, parser or normalizer.
+jest.mock("@/services/account-review-read-model-service", () => ({
+  loadAccountReviewAccountSnapshots: (): Promise<
+    NonNullable<AiVoiceParserOptions["reviewAccountSnapshots"]>
+  > => Promise.resolve(mockReadModelAccountSnapshots()),
+}));
+
 jest.mock("@/config/e2e-test-config", () => ({
   shouldBlockUnsafeSmsParserConfiguration: () => false,
   shouldUseFixtureSmsParser: () => false,
@@ -196,6 +204,20 @@ function makeReviewRequestContext() {
         senderNames: [],
       },
     ],
+  };
+}
+
+function mockReadModelAccountSnapshots(): NonNullable<
+  AiVoiceParserOptions["reviewAccountSnapshots"]
+> {
+  const providerContext = makeReviewRequestContext();
+  return {
+    ownerId: REVIEW_WIRE_IDS.ownerId,
+    preferredCurrency: providerContext.preferredCurrency,
+    accounts: providerContext.accounts.map((account) => ({
+      ...account, isDefault: account.type === "CASH",
+    })),
+    providerContext,
   };
 }
 

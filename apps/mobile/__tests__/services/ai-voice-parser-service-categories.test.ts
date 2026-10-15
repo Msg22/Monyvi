@@ -27,6 +27,12 @@ jest.mock("@/services/supabase", () => ({
   },
 }));
 
+// Legacy-only parser tests must never enter T010's native DB read model.
+// The SQL adapter may be statically imported, but this boundary remains inert.
+jest.mock("@/services/account-review-read-model-service", () => ({
+  loadAccountReviewAccountSnapshots: jest.fn(),
+}));
+
 jest.mock("@/utils/logger", () => ({
   logger: {
     debug: jest.fn(),
