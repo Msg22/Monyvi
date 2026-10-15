@@ -42,7 +42,7 @@ function scopedSeed(ownerId: string, scene: FixtureScene, kind: string, value: s
   return JSON.stringify(["monyvi-account-review-fixture/v1", ownerId, scene.id, kind, value]);
 }
 
-async function sha256(input: string): Promise<string> {
+function sha256(input: string): Promise<string> {
   return Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, input);
 }
 
@@ -289,7 +289,7 @@ function makeDestination(
   return makeExistingAssignment(bindings, row.toAccountId, "exact", currency);
 }
 
-async function makeRow(
+function makeRow(
   scene: FixtureScene,
   row: FixtureRow,
   bindings: FixtureBindings,
@@ -307,9 +307,12 @@ async function makeRow(
     throw new Error("ACCOUNT_REVIEW_FIXTURE_SELECTED_UNRESOLVED");
   }
   const state: RowState = { evidence, currency, assignment, toAssignment, reasons };
-  return scene.source === "SMS"
-    ? makeSmsReviewRow(scene, row, bindings, ids, sourceText, state)
-    : makeVoiceReviewRow(scene, row, bindings, ids, sourceText, state);
+  if (scene.source === "SMS") {
+    return makeSmsReviewRow(scene, row, bindings, ids, sourceText, state);
+  }
+  return Promise.resolve(
+    makeVoiceReviewRow(scene, row, bindings, ids, sourceText, state)
+  );
 }
 
 interface RowState {
