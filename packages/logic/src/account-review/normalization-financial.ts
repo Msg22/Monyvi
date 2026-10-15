@@ -1,4 +1,4 @@
-import Decimal from "decimal.js";
+import { Decimal } from "decimal.js";
 import type { ParsedSmsTransaction, ParsedVoiceTransaction } from "../types";
 import {
   accountReviewRequestContextSchema,

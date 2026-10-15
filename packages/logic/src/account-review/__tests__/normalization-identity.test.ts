@@ -150,7 +150,7 @@ describe("#395 T014-P — stable row occurrence and pending-group identities", (
     expect(group.evidenceKey).toBe(digest);
     const bytes = digest.slice(0, 32).split("");
     bytes[12] = "8";
-    bytes[16] = (((parseInt(bytes[16] ?? "0", 16) & 3) | 8)).toString(16);
+    bytes[16] = ((parseInt(bytes[16] ?? "0", 16) % 4) + 8).toString(16);
     const hex = bytes.join("");
     expect(group.groupId).toBe(
       [hex.slice(0, 8), hex.slice(8, 12), hex.slice(12, 16),
@@ -203,7 +203,7 @@ describe("#395 T014-P — stable row occurrence and pending-group identities", (
     });
     expect(card.groupId).not.toBe(original.groupId);
     await expect(deriveAccountReviewGroupIdentity({
-      ...scope, identity, hashProvider: { digestUtf8: async () => "bad" },
+      ...scope, identity, hashProvider: { digestUtf8: (): Promise<string> => Promise.resolve("bad") },
     })).rejects.toThrow();
   });
 

@@ -19,7 +19,7 @@ export function uuidV8FromSha256(digest: string): string {
   const canonicalDigest = hash.parse(digest);
   const bytes = canonicalDigest.slice(0, 32).split("");
   bytes[12] = "8";
-  bytes[16] = ((parseInt(bytes[16] ?? "0", 16) & 3) | 8).toString(16);
+  bytes[16] = ((parseInt(bytes[16] ?? "0", 16) % 4) + 8).toString(16);
   const hex = bytes.join("");
   return canonicalUuid.parse([
     hex.slice(0, 8), hex.slice(8, 12), hex.slice(12, 16),
