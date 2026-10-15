@@ -224,6 +224,29 @@ function makeExistingAssignment(
   });
 }
 
+function makeSuggestedAssignment(
+  group: FixtureGroup,
+  ids: FixtureIds
+): AccountReviewAssignment {
+  return accountReviewAssignmentSchema.parse({
+    state: "suggested", accountId: null,
+    groupId: requireBoundId(ids.groups, group.groupId),
+    groupRevision: FIXTURE_REVISION, confirmation: group.status,
+  });
+}
+
+function makeUnresolvedAssignment(
+  currency: AccountReviewCurrency,
+  reasons: readonly AccountReviewReason[]
+): AccountReviewAssignment {
+  return accountReviewAssignmentSchema.parse({
+    state: "unresolved", accountId: null,
+    reasonCode: currency.state === "unconfirmed"
+      ? "currency_confirmation_needed" : (reasons[0] ?? "account_needed"),
+    candidateAccountIds: [],
+  });
+}
+
 function makeAssignment(
   scene: FixtureScene,
   row: FixtureRow,
@@ -243,18 +266,9 @@ function makeAssignment(
         ? "default" : "exact", currency);
   }
   if (currency.state === "known" && group !== null && group.status !== "removed") {
-    return accountReviewAssignmentSchema.parse({
-      state: "suggested", accountId: null,
-      groupId: requireBoundId(ids.groups, group.groupId),
-      groupRevision: FIXTURE_REVISION, confirmation: group.status,
-    });
+    return makeSuggestedAssignment(group, ids);
   }
-  return accountReviewAssignmentSchema.parse({
-    state: "unresolved", accountId: null,
-    reasonCode: currency.state === "unconfirmed"
-      ? "currency_confirmation_needed" : (reasons[0] ?? "account_needed"),
-    candidateAccountIds: [],
-  });
+  return makeUnresolvedAssignment(currency, reasons);
 }
 
 function makeDestination(
@@ -339,6 +353,30 @@ function makeVoiceReviewRow(
   });
 }
 
+function makeSmsFinancialSnapshot(
+  row: FixtureRow,
+  bindings: FixtureBindings,
+  sourceText: string,
+  sender: string,
+  smsFingerprint: string
+): object {
+  // The required legacy currency is not v2 certainty. Canonical row.currency
+  // independently remains unconfirmed and blocks assignment/Save when unknown.
+  return {
+    amount: Number(row.amountDecimal),
+    currency: row.currencyCode ?? bindings.snapshots.preferredCurrency,
+    type: "EXPENSE", date: new Date(FIXTURE_DATE), source: "SMS",
+    categoryId: bindings.category.id, categoryDisplayName: bindings.category.displayName,
+    confidence: 1, originLabel: sender,
+    smsFingerprint, senderDisplayName: sender, rawSmsBody: sourceText,
+    deduplicationHash: smsFingerprint, isAtmWithdrawal: row.isAtmWithdrawal,
+    ...(row.accountId !== null
+      ? { accountId: requireAccount(bindings, row.accountId).id } : {}),
+    ...(row.toAccountId !== null
+      ? { toAccountId: requireAccount(bindings, row.toAccountId).id } : {}),
+  };
+}
+
 async function makeSmsReviewRow(
   scene: FixtureScene, row: FixtureRow, bindings: FixtureBindings,
   ids: FixtureIds, sourceText: string, state: RowState
@@ -353,19 +391,7 @@ async function makeSmsReviewRow(
   return accountReviewRowSchema.parse({
     ...makeRowBase(row, ids, state),
     source: "SMS", sourceFingerprint: smsFingerprint,
-    transaction: {
-      amount: Number(row.amountDecimal),
-      currency: row.currencyCode ?? bindings.snapshots.preferredCurrency,
-      type: "EXPENSE", date: new Date(FIXTURE_DATE), source: "SMS",
-      categoryId: bindings.category.id, categoryDisplayName: bindings.category.displayName,
-      confidence: 1, originLabel: sender,
-      smsFingerprint, senderDisplayName: sender, rawSmsBody: sourceText,
-      deduplicationHash: smsFingerprint, isAtmWithdrawal: row.isAtmWithdrawal,
-      ...(row.accountId !== null
-        ? { accountId: requireAccount(bindings, row.accountId).id } : {}),
-      ...(row.toAccountId !== null
-        ? { toAccountId: requireAccount(bindings, row.toAccountId).id } : {}),
-    },
+    transaction: makeSmsFinancialSnapshot(row, bindings, sourceText, sender, smsFingerprint),
   });
 }
 
