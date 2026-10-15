@@ -23,8 +23,6 @@ import {
   type DescriptorIssueTag,
 } from "./account-review-fixture-test-fixtures";
 
-const CURRENT_OWNER = "1eea0000-3950-4000-8000-000000009001";
-const ANOTHER_OWNER = "1eea0000-3950-4000-8000-000000009002";
 const UUID_V4_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const SHA_256_PATTERN = /^[0-9a-f]{64}$/;
