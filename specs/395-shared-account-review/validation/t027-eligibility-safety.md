@@ -132,3 +132,69 @@ focused 26+19 suite and unaffected logic checks. Independently review
 selection refresh cost and atomic rejected outcomes. No source Green or full
 runtime Save/SQL/UI validation is claimed. Branch ownership is released after
 publication.
+
+
+## Follow-up: selected ATM must persist a complete destination (tests-only)
+
+**Bounded authorization:** tests/report only, parent expected
+bfb124ac46e6a06ccac5024593c09389329e141f. Source edit grant is **absent**.
+Root executed the preceding bfb integration gate: **319 PASS / 0 FAIL**
+across 15 account-review logic suites, including all 19 existing safety cases
+and 26 T024 cases; lint 0 and no reducer TS errors. Independent source
+acceptance is still held for review. This follow-up has **NOT** been run.
+
+**New source:** reducer-eligibility-safety.test.ts adds five test declarations
+expanding to **eight Jest cases** (21 declarations / 27 Jest cases total),
+preserving all previous 19 safety and 26 original T024 cases:
+
+| New regression | Scenarios | Safe outcome |
+| --- | --- | --- |
+| Direct existing Bank source | Null and unresolved ATM destination (2) | Reject unchanged, OR return selected row with owned distinct EGP Cash destination and no review blockers |
+| Direct confirmed Bank group | Null destination after an actual pure group confirmation (1) | Same |
+| Disclosed pending Bank group | Null and unresolved destination (2) | Same; rejection must leave original group pending and all selection/revisions untouched |
+| Bulk select_ready | Null and unresolved destination (2) | Skip/reject, OR selected row must retain validated Cash assignment and no hard review reasons |
+| Existing hard-review reason | A null destination retaining cash_transfer_review (1); asserts both direct and bulk commands | Reject unchanged, OR only select with fully valid Cash and cleared blocker |
+
+Original explicit user-selected, owned same-currency Cash positive control remains
+untouched. The new tests check both the **real**
+resolveAccountReviewSession(source state, same fresh owned snapshots) result and
+the **real reducer** result: fresh resolver must find exactly the existing
+eligible default Cash account, while reducer may either fail closed unchanged
+or return a selected ATM row with eligible current-owned same-currency Cash,
+distinct from its source, no cash_transfer_review/other remaining review
+reasons, unchanged original financial transaction and amount. Rejected
+outcomes reuse the prior atomic-rejection helper, which checks identity,
+financial fields, selections, groups, revisions, affected IDs and tombstones.
+No mocked resolver, fabricated output, cast, any, T036 command, or wholesale
+refreshed-session expected state is introduced.
+
+**Expected meaningful Red (not executed):** The current reducer-selection.ts
+checks readiness against resolved temporary rows but builds accepted transitions
+from the original rows in direct selection, post-confirmation click and bulk
+select_ready. Thus the first seven scenarios are expected to expose an accepted
+selected ATM with a **missing/unresolved original destination**, despite a
+ready fresh copy. The hard cash_transfer_review control may pass fail-closed,
+depending on the current resolver's reason preservation. Exact Red counts and
+schema validation require Root execution; if another guard prevents selection
+and returns an unchanged rejection, that is correct and the test must pass.
+
+**Critical integration prerequisite / source discrepancy:** At immutable bfb,
+review-schemas.ts blob d549e3a3a14b44e73072eb346c95342d9e6ea6b7 defines
+toAssignment but **omits toAccountEvidence**, although
+normalization.ts already constructs toAccountEvidence and resolution.ts
+dereferences it for null/absent ATM fallback. That standalone revision cannot
+be used to claim a valid resolved fallback. Root's **newer nullable
+toAccountEvidence** schema integration (previously disclosed, exclusively
+owned outside this lane) is required before the new proof is meaningful.
+The new tests use exactly the already accepted normalized ATM fixture,
+no hand-written evidence or out-of-scope schema fix. If Root's combined
+current-schema execution cannot produce canonical normalized ATM source and
+real Cash fallback, treat that as a **fixture/schema integration blocker**,
+not a valid reducer Red. No changes to schema, normalization, resolver,
+shared identity, T024 fixtures, or published financial contracts were made.
+
+**Next gate:** Root imports only this test and report from the child commit
+into its existing combined verification sibling; independently verifies current
+schema compatibility, real resolver positive control and meaningful reducer
+Red before any production edit authorization. Full Green, TS and lint remain
+Root-owned. This tests-only lease ends with publication and writer freeze.
