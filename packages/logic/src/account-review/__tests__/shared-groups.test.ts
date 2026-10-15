@@ -11,7 +11,9 @@ import {
   reduceAccountReviewCommand, mergeAccountReviewLateRows,
 } from "../reducer";
 import type { AccountReviewOwnedContext } from "../normalization-types";
-import { syntheticHashProvider } from "./normalization-fixtures";
+import { MAX_CANONICAL_UNSIGNED_INTEGER_STRING } from "../../financial-actions/action-contracts";
+import { makeTwoSmsInput, syntheticHashProvider } from "./normalization-fixtures";
+import { normalizeAccountReviewParserResult } from "../normalization";
 import {
   COMMAND_IDS, canonicalCommand, canonicalVoiceReview, groupByName,
   laterCibUserChoiceReview, mismatchedIncomingReview,
@@ -526,6 +528,140 @@ describe("#395 T024 immutable independent QNB3/CIB1 group commands", () => {
       expect(incoming).toEqual(beforeIncoming);
     }
   );
+
+  it("returns only a pure SMS persistence descriptor for an accepted group command", async () => {
+    const before = accountReviewSessionSchema.parse(
+      await normalizeAccountReviewParserResult(makeTwoSmsInput())
+    );
+    const group = before.groups[0];
+    if (!group) throw new Error("Missing original grounded SMS group");
+    const frozen = structuredClone(before);
+    const result = apply(before, canonicalCommand({
+      ...scope(before), kind: "confirm_group", groupId: group.groupId,
+      expectedGroupRevision: group.revision,
+    }));
+    expect(result.reasonCodes).toEqual([]);
+    expect(result.effect).toBe("persist_sms");
+    expect(result.state.groups[0]?.status).toBe("confirmed");
+    expect(result.affectedGroupIds).toEqual([group.groupId]);
+    expect(result.state.rows.every((row) => !row.selected)).toBe(true);
+    expect(result.state.saveIntent).toBeNull();
+    expect(before).toEqual(frozen);
+    accountReviewSessionSchema.parse(result.state);
+  });
+
+  it("late parser replay cannot overwrite a previously chosen unrelated CIB account", async () => {
+    const before = await qnbCibReview();
+    const removal = apply(
+      before, groupCommand(before, "QNB", "remove_group"), COMMAND_IDS.undoToken
+    );
+    const later = laterCibUserChoiceReview(removal.state);
+    const replay = mergeAccountReviewLateRows({
+      current: later, incoming: await qnbCibReview(),
+    });
+    expect(requireRow(replay, COMMAND_IDS.cibRow).assignment).toMatchObject({
+      state: "existing", origin: "user", accountId: COMMAND_IDS.cibAccount,
+    });
+    expect(requireRow(replay, COMMAND_IDS.cibRow).hasUserAccountOverride).toBe(true);
+    expect(replay.removedEvidenceKeys).toContain(groupByName(before, "QNB").evidenceKey);
+    expect(replay.rows.every((row) => !row.selected)).toBe(true);
+    expect(replay.rows.map((row) => row.rowId).sort()).toEqual(
+      later.rows.map((row) => row.rowId).sort()
+    );
+    accountReviewSessionSchema.parse(replay);
+  });
+
+  it("rejects canonical revision overflow without partially confirming a group", async () => {
+    const original = await qnbCibReview();
+    const max = MAX_CANONICAL_UNSIGNED_INTEGER_STRING;
+    const sessionMax = accountReviewSessionSchema.parse({ ...original, revision: max });
+    const generationMax = accountReviewSessionSchema.parse({
+      ...original, operationGeneration: max,
+    });
+    for (const state of [sessionMax, generationMax]) {
+      const frozen = structuredClone(state);
+      const result = apply(state, groupCommand(state, "QNB", "confirm_group"));
+      expect(result.state).toEqual(frozen);
+      expect(result.effect).toBe("none");
+      expect(result.affectedGroupIds).toEqual([]);
+      expect(result.affectedRowIds).toEqual([]);
+      expect(result.reasonCodes).toContain("review_revision_stale");
+      expect(groupByName(state, "QNB").status).toBe("pending");
+    }
+  });
+
+  it("rejects group revision overflow without changing any linked row", async () => {
+    const initial = await qnbCibReview();
+    const qnb = groupByName(initial, "QNB");
+    const max = MAX_CANONICAL_UNSIGNED_INTEGER_STRING;
+    const state = accountReviewSessionSchema.parse({
+      ...initial,
+      groups: initial.groups.map((g) =>
+        g.groupId === qnb.groupId ? { ...g, revision: max } : g),
+      rows: initial.rows.map((row) =>
+        row.assignment.state === "suggested" &&
+        row.assignment.groupId === qnb.groupId
+          ? { ...row, assignment: { ...row.assignment, groupRevision: max } }
+          : row),
+    });
+    const result = apply(state, groupCommand(state, "QNB", "confirm_group"));
+    expect(result.state).toEqual(state);
+    expect(result.effect).toBe("none");
+    expect(result.reasonCodes).toContain("review_revision_stale");
+    expect(result.affectedRowIds).toEqual([]);
+  });
+
+  it("rejects a disclosed wrong-group ID even if revisions are equal", async () => {
+    const start = await qnbCibReview();
+    const confirmed = apply(start, groupCommand(start, "QNB", "confirm_group")).state;
+    const qnb = groupByName(confirmed, "QNB");
+    const clicked = qnb.linkedRowIds[0];
+    if (!clicked) throw new Error("No confirmed QNB row");
+    const command = canonicalCommand({
+      ...scope(confirmed), kind: "select_row", rowId: clicked,
+      expectedRowRevision: requireRow(confirmed, clicked).revision,
+      groupId: groupByName(confirmed, "CIB").groupId,
+      expectedGroupRevision: qnb.revision,
+      hasSharedConfirmationDisclosure: true,
+    });
+    const result = apply(confirmed, command);
+    expect(result.state).toEqual(confirmed);
+    expect(result.effect).toBe("none");
+    expect(result.reasonCodes).toContain("review_revision_stale");
+    expect(result.state.rows.every((row) => !row.selected)).toBe(true);
+  });
+
+  it("T036 choice/currency/group replacement commands remain unsupported in T027", async () => {
+    const state = await qnbCibReview();
+    const qnb = groupByName(state, "QNB");
+    const clicked = qnb.linkedRowIds[0];
+    if (!clicked) throw new Error("Missing QNB row");
+    const row = requireRow(state, clicked);
+    const unsupported = [
+      canonicalCommand({
+        ...scope(state), kind: "choose_row_account", rowId: clicked,
+        expectedRowRevision: row.revision, accountId: COMMAND_IDS.cibAccount,
+      }),
+      canonicalCommand({
+        ...scope(state), kind: "confirm_row_currency", rowId: clicked,
+        expectedRowRevision: row.revision, currency: "USD",
+      }),
+      canonicalCommand({
+        ...scope(state), kind: "replace_group_account",
+        groupId: qnb.groupId, expectedGroupRevision: qnb.revision,
+        accountId: COMMAND_IDS.qnbAccount,
+        disclosedLinkedRowCount: qnb.linkedRowIds.length,
+      }),
+    ];
+    for (const command of unsupported) {
+      const result = apply(state, command);
+      expect(result.state).toEqual(state);
+      expect(result.effect).toBe("none");
+      expect(result.reasonCodes).toContain("account_group_snapshot_conflict");
+      expect(result.affectedRowIds).toEqual([]);
+      expect(result.affectedGroupIds).toEqual([]);
+    }
+  });
 
   it("the same account name without compatible type/provider/card is not one group", async () => {
     const state = await qnbCibReview();
