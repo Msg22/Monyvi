@@ -5,6 +5,7 @@
 import type {
   ReviewBatchSavePayload,
   ReviewFinancialRecord,
+  ReviewMutation,
   ReviewNewAccount,
 } from "../review-batch-save-shapes";
 import { MAX_TRANSACTION_AMOUNT } from "../../utils/amount-helpers";
@@ -12,10 +13,10 @@ import { getCurrencyPrecision } from "../../utils/currency";
 import {
   ATM_BANK_ACCOUNT_ID,
   ATM_CASH_ACCOUNT_ID,
+  ATM_QUEUE_ID,
   ATM_TRANSFER_RECORD_ID,
   REVIEW_ACCOUNT_ID,
   REVIEW_TRANSACTION_DATE,
-  SMS_EXPENSE_RECORD_ID,
   SMS_INCOME_RECORD_ID,
   SMS_QUEUE_ID,
   smsNewBankPayload,
@@ -26,6 +27,7 @@ import {
 export function sharedSmsQueuePayload(): ReviewBatchSavePayload {
   return {
     ...smsNewBankPayload,
+    sessionId: SMS_QUEUE_ID,
     localSmsBookkeeping: smsNewBankPayload.localSmsBookkeeping.map((entry) => ({
       ...entry,
       queueId: SMS_QUEUE_ID,
@@ -33,14 +35,14 @@ export function sharedSmsQueuePayload(): ReviewBatchSavePayload {
   };
 }
 
-/** Reuses the same selected SMS rows; creates no new account or child. */
 /**
- * One selected SMS row is sufficient to exercise new-account group linkage,
- * without coupling tests to the independent multi-draft queue defect.
+ * One selected SMS row is sufficient for existing-account SMS controls.
+ * Unlike the independent mixed-queue A case, this is a single legitimate draft.
  */
 export function singleSelectedNewBankPayload(): ReviewBatchSavePayload {
   return {
     ...smsNewBankPayload,
+    sessionId: SMS_QUEUE_ID,
     selectedSourceRefs: [smsNewBankPayload.selectedSourceRefs[0]],
     createGuards: smsNewBankPayload.createGuards.slice(0, 3),
     accountEffects: smsNewBankPayload.accountEffects.map((effect) => ({
@@ -52,6 +54,33 @@ export function singleSelectedNewBankPayload(): ReviewBatchSavePayload {
       records: smsNewBankPayload.domainMutation.records.slice(0, 3),
     },
     localSmsBookkeeping: [smsNewBankPayload.localSmsBookkeeping[0]],
+  };
+}
+
+/**
+ * E baseline: a selected, confirmed new BANK for VOICE, with exactly the
+ * original financial IDs, two account-safe records, and their bank-details
+ * child. No SMS queue/bookkeeping or source fingerprints are permitted.
+ */
+export function voiceNewBankPayload(): ReviewBatchSavePayload {
+  return {
+    ...smsNewBankPayload,
+    source: "VOICE",
+    selectedSourceRefs: smsNewBankPayload.selectedSourceRefs.map((ref) => ({
+      ...ref, sourceFingerprint: null,
+    })),
+    domainMutation: {
+      records: smsNewBankPayload.domainMutation.records.map(
+        (record): ReviewMutation =>
+          record.entity === "transaction"
+            ? {
+                ...record,
+                after: { ...record.after, source: "VOICE", smsFingerprint: null },
+              }
+            : record
+      ),
+    },
+    localSmsBookkeeping: [],
   };
 }
 
@@ -184,6 +213,7 @@ export function validAtmCashDestinationPayload(): ReviewBatchSavePayload {
   const source = atmTransferPayload;
   return {
     ...source,
+    sessionId: ATM_QUEUE_ID,
     createGuards: [
       { entity: "account", id: ATM_CASH_ACCOUNT_ID, expectedAbsent: true },
       ...source.createGuards,
