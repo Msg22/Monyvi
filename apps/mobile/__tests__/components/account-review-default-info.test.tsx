@@ -7,7 +7,12 @@
  * geometry and canonical route/Save require owner device + T054 evidence.
  */
 import { fireEvent, render, screen } from "@testing-library/react-native";
-import i18next from "i18next";
+import {
+  changeLanguage,
+  init as initializeI18next,
+  use as registerI18nextPlugin,
+} from "i18next";
+import { initReactI18next } from "react-i18next";
 import React, { useState } from "react";
 import {
   KeyboardAvoidingView,
@@ -127,7 +132,10 @@ function DefaultDisclosureJourney(): React.JSX.Element {
 }
 
 beforeAll(async (): Promise<void> => {
-  await i18next.init({
+  // Real i18next singleton + actual react-i18next hook binding.
+  // Initializing i18next alone leaves useTranslation with an empty fallback.
+  registerI18nextPlugin(initReactI18next);
+  await initializeI18next({
     lng: "en",
     fallbackLng: "en",
     ns: ["transactions"],
@@ -141,7 +149,7 @@ beforeAll(async (): Promise<void> => {
 });
 
 afterEach(async (): Promise<void> => {
-  await i18next.changeLanguage("en");
+  await changeLanguage("en");
   mockLocale = "en";
   jest.clearAllMocks();
 });
@@ -174,8 +182,7 @@ describe("T018: B1 R3-07 quiet accepted-default disclosure", () => {
       />
     );
 
-    const note = screen.getByTestId("account-review-default-info");
-    expect(note).toBeTruthy();
+    expect(screen.getByTestId("account-review-default-info")).toBeTruthy();
     expect(screen.getByText("Cash was used for 2 transactions.")).toBeTruthy();
     expect(screen.queryByText("Review details")).toBeNull();
     fireEvent.press(screen.getByTestId("account-review-default-why-trigger"));
@@ -318,9 +325,9 @@ describe("T018: B1 R3-12 Why explanation and dismissal", () => {
 
   it("returns to the same accessible Why trigger after informational dismissal", () => {
     render(<DefaultDisclosureJourney />);
-    const trigger = screen.getByTestId("account-review-default-why-trigger");
-    expect(trigger).toHaveProp("accessibilityRole", "button");
-    fireEvent.press(trigger);
+    expect(screen.getByTestId("account-review-default-why-trigger"))
+      .toHaveProp("accessibilityRole", "button");
+    fireEvent.press(screen.getByTestId("account-review-default-why-trigger"));
     expect(screen.getByTestId("account-review-default-why-sheet")).toBeTruthy();
     fireEvent.press(screen.getByTestId("account-review-default-why-dismiss"));
     expect(screen.queryByTestId("account-review-default-why-sheet")).toBeNull();
@@ -330,9 +337,9 @@ describe("T018: B1 R3-12 Why explanation and dismissal", () => {
 
   it("has named modal boundaries and accessible dismiss and Why actions", () => {
     render(<DefaultDisclosureJourney />);
-    const trigger = screen.getByTestId("account-review-default-why-trigger");
-    expect(trigger).toHaveProp("accessibilityRole", "button");
-    fireEvent.press(trigger);
+    expect(screen.getByTestId("account-review-default-why-trigger"))
+      .toHaveProp("accessibilityRole", "button");
+    fireEvent.press(screen.getByTestId("account-review-default-why-trigger"));
     expect(screen.getByTestId("account-review-default-why-dismiss"))
       .toHaveProp("accessibilityRole", "button");
     expect(screen.getByTestId("account-review-default-why-sheet"))
@@ -343,13 +350,13 @@ describe("T018: B1 R3-12 Why explanation and dismissal", () => {
     renderSheet();
     expect(screen.UNSAFE_getByType(KeyboardAvoidingView)).toBeTruthy();
     expect(screen.UNSAFE_getByType(ScrollView)).toBeTruthy();
-    const sheet = screen.getByTestId("account-review-default-why-sheet");
-    expect(sheet).toHaveStyle({ paddingBottom: 24 });
+    expect(screen.getByTestId("account-review-default-why-sheet"))
+      .toHaveStyle({ paddingBottom: 24 });
     // Native measured inset, focus and keyboard overlap remain device-only.
   });
 
   it("keeps long names and explanations untruncated at the semantic level", () => {
-    const name = "QNB Everyday - very long owner-defined Arabic/English account name 0007";
+    const name = "QNB Everyday - حساب يومي very long owner-defined Arabic/English account name 0007";
     render(
       <DefaultAccountWhySheet
         visible
@@ -358,8 +365,8 @@ describe("T018: B1 R3-12 Why explanation and dismissal", () => {
         onClose={jest.fn()}
       />
     );
-    const content = screen.getByText(new RegExp(name));
-    expect(content.props.numberOfLines).not.toBe(1);
+    expect(screen.getByText(new RegExp(name)))
+      .not.toHaveProp("numberOfLines", 1);
     expect(screen.getByText(/You can change the account/)).toBeTruthy();
     // Native 340dp, font-scale 1.35 and viewport scrolling need owner render.
   });
@@ -376,7 +383,7 @@ describe("T018: B1 R3-12 Why explanation and dismissal", () => {
   });
 
   it("renders approved Arabic dual-count Why explanation and keeps user account name intact", async () => {
-    await i18next.changeLanguage("ar");
+    await changeLanguage("ar");
     mockLocale = "ar";
     render(
       <>
@@ -404,8 +411,9 @@ describe("T018: B1 R3-12 Why explanation and dismissal", () => {
 
   it("retains semantic light/dark theme classes without adding a new decorative palette", () => {
     render(<DefaultAccountInfo {...makeInfoProps()} />);
-    const note = screen.getByTestId("account-review-default-info");
-    expect(note).toHaveProp("className", expect.stringContaining("dark:"));
-    expect(note).not.toHaveProp("className", expect.stringContaining("bg-blue-"));
+    expect(screen.getByTestId("account-review-default-info"))
+      .toHaveProp("className", expect.stringContaining("dark:"));
+    expect(screen.getByTestId("account-review-default-info"))
+      .not.toHaveProp("className", expect.stringContaining("bg-blue-"));
   });
 });

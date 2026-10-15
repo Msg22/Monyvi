@@ -12,6 +12,7 @@ import {
 } from "react-native";
 
 import { palette } from "@/constants/colors";
+import { useLocale } from "@/context/LocaleContext";
 import {
   shouldUseCompactLayout, shouldUseDenseRowCompactLayout,
 } from "@/constants/ui";
@@ -33,13 +34,14 @@ export interface DefaultAccountWhySheetProps {
 export function DefaultAccountInfo({
   defaultAccountName, assignmentCount, onWhyPress,
 }: DefaultAccountInfoProps): React.JSX.Element | null {
-  const { t, i18n } = useTranslation("transactions");
+  const { t } = useTranslation("transactions");
+  const { language } = useLocale();
   const { width, fontScale } = useWindowDimensions();
   const colorScheme = useColorScheme();
   const compact = shouldUseDenseRowCompactLayout(width, fontScale);
   if (assignmentCount <= 0) return null;
 
-  const rtl = i18n.dir() === "rtl";
+  const rtl = language === "ar";
   const writingDirection: TextStyle["writingDirection"] = rtl ? "rtl" : "ltr";
   const why = t("account_review_default_why_trigger");
   return (
@@ -52,10 +54,13 @@ export function DefaultAccountInfo({
         <Ionicons name="information-circle-outline" size={22}
           color={colorScheme === "dark" ? palette.slate[400] : palette.slate[500]}
           accessibilityElementsHidden importantForAccessibility="no" />
-        <Text style={{ writingDirection, textAlign: rtl ? "right" : "left" }}
-          className={compact
-            ? "w-full text-xs leading-[18px] text-text-secondary dark:text-text-secondary-dark"
-            : "min-w-0 flex-1 text-xs leading-[18px] text-text-secondary dark:text-text-secondary-dark"}
+        <Text
+          style={{ writingDirection }}
+          className={`${rtl ? "text-right" : "text-left"} ${
+            compact
+              ? "w-full text-xs leading-[18px] text-text-secondary dark:text-text-secondary-dark"
+              : "min-w-0 flex-1 text-xs leading-[18px] text-text-secondary dark:text-text-secondary-dark"
+          }`}
         >
           {t("account_review_default_note", { count: assignmentCount, defaultAccountName })}
         </Text>
@@ -179,26 +184,27 @@ function WhyPanel(props: WhyPanelProps): React.JSX.Element {
 function WhyCopy({
   name, count,
 }: { readonly name: string; readonly count: number }): React.JSX.Element {
-  const { t, i18n } = useTranslation("transactions");
-  const rtl = i18n.dir() === "rtl";
+  const { t } = useTranslation("transactions");
+  const { language } = useLocale();
+  const rtl = language === "ar";
   const writingDirection: TextStyle["writingDirection"] = rtl ? "rtl" : "ltr";
   return (
     <>
       <Text
-        className="mt-4 text-sm leading-5 text-text-secondary dark:text-text-secondary-dark"
-        style={{ writingDirection, textAlign: rtl ? "right" : "left" }}
+        className={`${rtl ? "text-right" : "text-left"} mt-4 text-sm leading-5 text-text-secondary dark:text-text-secondary-dark`}
+        style={{ writingDirection }}
       >
         {t("account_review_default_why_body", { count, defaultAccountName: name })}
       </Text>
       <Text
-        className="mt-3 text-sm leading-5 text-text-secondary dark:text-text-secondary-dark"
-        style={{ writingDirection, textAlign: rtl ? "right" : "left" }}
+        className={`${rtl ? "text-right" : "text-left"} mt-3 text-sm leading-5 text-text-secondary dark:text-text-secondary-dark`}
+        style={{ writingDirection }}
       >
         {t("account_review_default_edit_reminder")}
       </Text>
       <Text
-        className="mt-3 text-sm leading-5 text-text-muted dark:text-text-muted-dark"
-        style={{ writingDirection, textAlign: rtl ? "right" : "left" }}
+        className={`${rtl ? "text-right" : "text-left"} mt-3 text-sm leading-5 text-text-muted dark:text-text-muted-dark`}
+        style={{ writingDirection }}
       >
         {t("account_review_default_why_boundary")}
       </Text>
@@ -227,9 +233,10 @@ function WhyDismiss({ onClose }: { readonly onClose: () => void }): React.JSX.El
 }
 
 function WhyHeading({ compact }: { readonly compact: boolean }): React.JSX.Element {
-  const { t, i18n } = useTranslation("transactions");
+  const { t } = useTranslation("transactions");
+  const { language } = useLocale();
   const colorScheme = useColorScheme();
-  const rtl = i18n.dir() === "rtl";
+  const rtl = language === "ar";
   return (
     <View className={compact ? "items-start gap-3" :
       rtl ? "flex-row-reverse items-center gap-3" : "flex-row items-center gap-3"}>
