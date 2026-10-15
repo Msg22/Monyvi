@@ -39,11 +39,35 @@ export function canonicalAmount(amount: number): string {
   return canonicalDecimal.parse(new Decimal(amount.toString()).toFixed());
 }
 
-function validateOriginalDate(sourceDate: string, mappedDate: Date): void {
-  if (
-    !Number.isFinite(mappedDate.getTime()) ||
-    mappedDate.toISOString().slice(0, 10) !== sourceDate.slice(0, 10)
-  ) {
+function validateOriginalDate(
+  sourceDate: string,
+  mappedDate: Date,
+  source: "VOICE" | "SMS"
+): void {
+  if (!Number.isFinite(mappedDate.getTime())) {
+    throw new Error("account_review_financial_date_mismatch");
+  }
+  // The closed canonical sourceDate schema allows only calendar YYYY-MM-DD
+  // or an exact UTC millisecond timestamp. The source parsers intentionally
+  // assign different semantics to a date-only value.
+  if (sourceDate.length !== 10) {
+    if (mappedDate.toISOString() !== sourceDate) {
+      throw new Error("account_review_financial_date_mismatch");
+    }
+    return;
+  }
+  const year =
+    source === "VOICE" ? mappedDate.getFullYear() : mappedDate.getUTCFullYear();
+  const month =
+    source === "VOICE" ? mappedDate.getMonth() : mappedDate.getUTCMonth();
+  const day =
+    source === "VOICE" ? mappedDate.getDate() : mappedDate.getUTCDate();
+  const mappedCalendar = [
+    String(year).padStart(4, "0"),
+    String(month + 1).padStart(2, "0"),
+    String(day).padStart(2, "0"),
+  ].join("-");
+  if (mappedCalendar !== sourceDate) {
     throw new Error("account_review_financial_date_mismatch");
   }
 }
@@ -65,7 +89,7 @@ function assertMappedFinance(
   ) {
     throw new Error("account_review_financial_mapping_mismatch");
   }
-  validateOriginalDate(financial.date, mapped.date);
+  validateOriginalDate(financial.date, mapped.date, mapped.source);
   if (financial.currency !== null && mapped.currency !== financial.currency) {
     throw new Error("account_review_mapped_currency_mismatch");
   }

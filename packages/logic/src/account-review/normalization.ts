@@ -136,7 +136,7 @@ function readAdvisory(
   return {
     rows: [],
     suggestions: [],
-    isMalformed: isV2Response(input.providerResponse),
+    isMalformed: hasReviewDiscriminator(input.providerResponse),
   };
 }
 
@@ -146,6 +146,15 @@ function isV2Response(response: unknown): boolean {
     response !== null &&
     "reviewContractVersion" in response &&
     response.reviewContractVersion === "account-review/v2"
+  );
+}
+
+/** A present invalid discriminator is malformed, not an untagged v1 response. */
+function hasReviewDiscriminator(response: unknown): boolean {
+  return (
+    typeof response === "object" &&
+    response !== null &&
+    Object.prototype.hasOwnProperty.call(response, "reviewContractVersion")
   );
 }
 
