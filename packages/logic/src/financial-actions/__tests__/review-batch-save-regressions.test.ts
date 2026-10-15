@@ -1,5 +1,5 @@
 /**
- * #395 T046 independent regression Reds (A-F), no SUT mocks or copied DTOs.
+ * #395 T046 independent regression Reds (A-G), no SUT mocks or copied DTOs.
  * Derive all payloads from the handed-off T042 fixtures and real validators.
  * EXPECT mixed behavioral Red; do not conflate this with missing-module Red.
  */
@@ -38,7 +38,6 @@ import {
   SMS_QUEUE_ID,
   SMS_QUEUE_ID_2,
   atmTransferEnvelope,
-  atmTransferPayload,
   legacyEditBalanceEnvelope,
   reviewBatchSaveEnvelope,
   reviewBatchSavePayload,
@@ -261,6 +260,9 @@ describe("#395 T046 E — selected group must justify every newly created accoun
     )).toBe(true);
     expect(payload.confirmedGroupRefs[0]?.accountId).toBe(NEW_BANK_ACCOUNT_ID);
     expect(validateReviewBatchSavePayload(payload)).toEqual(payload);
+    expect(canonicalizeFinancialActionEnvelope(
+      { ...smsNewBankEnvelope, payload }, registry
+    ).payload).toEqual(payload);
   });
 
   it("accepts existing-account SMS with no new account and no group", () => {
