@@ -142,8 +142,7 @@ function parseAndReduce(input: TransportCase, response: unknown): {
   return { parsed, state };
 }
 
-function expectRecoverableMissingMetadata(wire: unknown): void {
-  const fixture = makeTransportCase();
+function expectRecoverableMissingMetadata(fixture: TransportCase, wire: unknown): void {
   const { parsed, state } = parseAndReduce(fixture, wire);
   const first = fixture.source.submittedMessages[0];
   const second = fixture.source.submittedMessages[1];
@@ -176,12 +175,12 @@ describe("#395 P2-04 — tagged-v2 server completion metadata, two original mess
 
   it("RED: entirely absent server metadata preserves one positive, retries second", (): void => {
     const fixture = makeTransportCase();
-    expectRecoverableMissingMetadata(modelOnly(fixture.onePositive));
+    expectRecoverableMissingMetadata(fixture, modelOnly(fixture.onePositive));
   });
 
   it("partial metadata with only completionStatus is not accepted as complete", (): void => {
     const fixture = makeTransportCase();
-    expectRecoverableMissingMetadata({
+    expectRecoverableMissingMetadata(fixture, {
       ...modelOnly(fixture.onePositive), completionStatus: "complete",
     });
   });
@@ -217,7 +216,9 @@ describe("#395 P2-04 — tagged-v2 server completion metadata, two original mess
   it("legacy v1 without ANY completion metadata preserves original behavior", (): void => {
     const fixture = makeTransportCase();
     const originalV1 = makeSmsV1Response();
-    const response = { transactions: originalV1.transactions };
+    const response = {
+      transactions: originalV1.transactions.map((row) => ({ ...row, isTrusted: true })),
+    };
     const { parsed, state } = parseAndReduce(fixture, response);
     expect(parsed.hasError).toBe(false);
     expect(parsed.transactions).toHaveLength(1);
