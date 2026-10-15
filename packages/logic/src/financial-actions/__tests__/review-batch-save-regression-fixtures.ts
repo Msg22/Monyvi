@@ -24,11 +24,58 @@ import {
   reviewBatchSavePayload,
 } from "./review-batch-save-fixtures";
 
-export function sharedSmsQueuePayload(): ReviewBatchSavePayload {
+/**
+ * Copy only top-level fixture arrays into mutable Zod-inferred data arrays.
+ * This is not a validator: RED payloads must reach the REAL SUT unmodified.
+ */
+function mutableSmsSource(): ReviewBatchSavePayload {
+  const source = smsNewBankPayload;
   return {
-    ...smsNewBankPayload,
+    ...source,
+    selectedSourceRefs: [...source.selectedSourceRefs],
+    confirmedGroupRefs: [...source.confirmedGroupRefs],
+    createGuards: [...source.createGuards],
+    accountEffects: [...source.accountEffects],
+    domainRecordRefs: [...source.domainRecordRefs],
+    domainMutation: { records: [...source.domainMutation.records] },
+    localSmsBookkeeping: [...source.localSmsBookkeeping],
+  };
+}
+
+function mutableVoiceSource(): ReviewBatchSavePayload {
+  const source = reviewBatchSavePayload;
+  return {
+    ...source,
+    selectedSourceRefs: [...source.selectedSourceRefs],
+    confirmedGroupRefs: [...source.confirmedGroupRefs],
+    createGuards: [...source.createGuards],
+    accountEffects: [...source.accountEffects],
+    domainRecordRefs: [...source.domainRecordRefs],
+    domainMutation: { records: [...source.domainMutation.records] },
+    localSmsBookkeeping: [...source.localSmsBookkeeping],
+  };
+}
+
+function mutableAtmSource(): ReviewBatchSavePayload {
+  const source = atmTransferPayload;
+  return {
+    ...source,
+    selectedSourceRefs: [...source.selectedSourceRefs],
+    confirmedGroupRefs: [...source.confirmedGroupRefs],
+    createGuards: [...source.createGuards],
+    accountEffects: [...source.accountEffects],
+    domainRecordRefs: [...source.domainRecordRefs],
+    domainMutation: { records: [...source.domainMutation.records] },
+    localSmsBookkeeping: [...source.localSmsBookkeeping],
+  };
+}
+
+export function sharedSmsQueuePayload(): ReviewBatchSavePayload {
+  const source = mutableSmsSource();
+  return {
+    ...source,
     sessionId: SMS_QUEUE_ID,
-    localSmsBookkeeping: smsNewBankPayload.localSmsBookkeeping.map((entry) => ({
+    localSmsBookkeeping: source.localSmsBookkeeping.map((entry) => ({
       ...entry,
       queueId: SMS_QUEUE_ID,
     })),
@@ -44,6 +91,7 @@ export function singleSelectedNewBankPayload(): ReviewBatchSavePayload {
     ...smsNewBankPayload,
     sessionId: SMS_QUEUE_ID,
     selectedSourceRefs: [smsNewBankPayload.selectedSourceRefs[0]],
+    confirmedGroupRefs: [...smsNewBankPayload.confirmedGroupRefs],
     createGuards: smsNewBankPayload.createGuards.slice(0, 3),
     accountEffects: smsNewBankPayload.accountEffects.map((effect) => ({
       ...effect,
@@ -63,14 +111,15 @@ export function singleSelectedNewBankPayload(): ReviewBatchSavePayload {
  * child. No SMS queue/bookkeeping or source fingerprints are permitted.
  */
 export function voiceNewBankPayload(): ReviewBatchSavePayload {
+  const source = mutableSmsSource();
   return {
-    ...smsNewBankPayload,
+    ...source,
     source: "VOICE",
-    selectedSourceRefs: smsNewBankPayload.selectedSourceRefs.map((ref) => ({
+    selectedSourceRefs: source.selectedSourceRefs.map((ref) => ({
       ...ref, sourceFingerprint: null,
     })),
     domainMutation: {
-      records: smsNewBankPayload.domainMutation.records.map(
+      records: source.domainMutation.records.map(
         (record): ReviewMutation =>
           record.entity === "transaction"
             ? {
@@ -112,16 +161,17 @@ export function existingAccountSmsPayload(): ReviewBatchSavePayload {
 
 /** A new-suite-only ATM control: prior 45 legacy fixtures stay untouched. */
 export function queuedAtmPayload(): ReviewBatchSavePayload {
-  return { ...atmTransferPayload, sessionId: ATM_QUEUE_ID };
+  return { ...mutableAtmSource(), sessionId: ATM_QUEUE_ID };
 }
 
 export function voiceZeroNetAtAmount(
   amountMinorUnits: string
 ): ReviewBatchSavePayload {
+  const source = mutableVoiceSource();
   return {
-    ...reviewBatchSavePayload,
+    ...source,
     domainMutation: {
-      records: reviewBatchSavePayload.domainMutation.records.map((record) => ({
+      records: source.domainMutation.records.map((record) => ({
         ...record,
         after: { ...record.after, amountMinorUnits },
       })),
@@ -188,7 +238,7 @@ function newCashAccount(id: string, isDefault: boolean): ReviewNewAccount {
 }
 
 export function validVoiceCashPayload(): ReviewBatchSavePayload {
-  const source = reviewBatchSavePayload;
+  const source = mutableVoiceSource();
   return {
     ...source,
     confirmedGroupRefs: [{
