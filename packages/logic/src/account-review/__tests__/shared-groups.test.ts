@@ -14,6 +14,7 @@ import type { AccountReviewOwnedContext } from "../normalization-types";
 import { syntheticHashProvider } from "./normalization-fixtures";
 import {
   COMMAND_IDS, canonicalCommand, canonicalVoiceReview, groupByName,
+  laterCibUserChoiceReview, mismatchedIncomingReview,
   ownedContext, qnbCibReview, requireRow, reviewWithReadyRow, scope,
 } from "./review-command-fixtures";
 
@@ -141,7 +142,9 @@ describe("#395 T024 immutable independent QNB3/CIB1 group commands", () => {
 
   it("a pending group cannot be selected by an undisclosed row-only command", async () => {
     const before = await qnbCibReview();
-    const row = requireRow(before, groupByName(before, "QNB").linkedRowIds[0] ?? "");
+    const rowId = groupByName(before, "QNB").linkedRowIds[0];
+    if (!rowId) throw new Error("Missing pending QNB member");
+    const row = requireRow(before, rowId);
     const withoutGroup = canonicalCommand({
       ...scope(before), kind: "select_row", rowId: row.rowId,
       expectedRowRevision: row.revision, groupId: null,
@@ -185,7 +188,7 @@ describe("#395 T024 immutable independent QNB3/CIB1 group commands", () => {
     assertPurePreservation(before, result.state);
   });
 
-  it("a material edit increments identity revision and requires explicit reconfirm", async () => {
+  it("Confirm account explicitly reconfirms the new material identity revision", async () => {
     const before = await qnbCibReview();
     const confirmed = apply(before, groupCommand(before, "QNB", "confirm_group")).state;
     const qnb = groupByName(confirmed, "QNB");
@@ -203,16 +206,19 @@ describe("#395 T024 immutable independent QNB3/CIB1 group commands", () => {
     const result = apply(confirmed, cmd);
     const changed = result.state.groups.find((group) => group.name === "QNB Everyday");
     if (!changed) throw new Error("Edited group not retained");
-    expect(changed.status).toBe("pending");
+    expect(changed.status).toBe("confirmed");
     expect(changed.revision).not.toBe(qnb.revision);
-    expect(changed.confirmedIdentityRevision).toBeNull();
+    expect(changed.confirmedIdentityRevision).toBe(changed.revision);
+    expect(changed.confirmedIdentityRevision).not.toBe(qnb.confirmedIdentityRevision);
     expect(groupByName(result.state, "CIB")).toEqual(groupByName(before, "CIB"));
     for (const id of qnb.linkedRowIds) {
       expect(requireRow(result.state, id).assignment).toMatchObject({
-        state: "suggested", groupRevision: changed.revision, confirmation: "pending",
+        state: "suggested", groupRevision: changed.revision, confirmation: "confirmed",
       });
       expect(requireRow(result.state, id).selected).toBe(false);
     }
+    expect(result.state.saveIntent).toBeNull();
+    expect(result.state.rows.every((row) => !row.selected)).toBe(true);
     assertPurePreservation(confirmed, result.state);
   });
 
@@ -341,13 +347,16 @@ describe("#395 T024 immutable independent QNB3/CIB1 group commands", () => {
       before, groupCommand(before, "QNB", "remove_group"), COMMAND_IDS.undoToken
     );
     const afterRemoval = removed.state;
-    const cib = requireRow(afterRemoval, COMMAND_IDS.cibRow);
-    const later = apply(afterRemoval, canonicalCommand({
-      ...scope(afterRemoval), kind: "choose_row_account",
-      rowId: cib.rowId, expectedRowRevision: cib.revision,
-      accountId: COMMAND_IDS.cibAccount,
-    })).state;
+    // An independent later user choice has already committed. T024 must not
+    // rely on T036's future choose_row_account implementation to set it up.
+    const later = laterCibUserChoiceReview(afterRemoval);
+    expect(accountReviewSessionSchema.safeParse(later).success).toBe(true);
+    expect(later.revision).not.toBe(afterRemoval.revision);
     expect(later.operationGeneration).not.toBe(afterRemoval.operationGeneration);
+    expect(requireRow(later, COMMAND_IDS.cibRow).revision).not.toBe(
+      requireRow(afterRemoval, COMMAND_IDS.cibRow).revision
+    );
+    expect(later.groups.some((group) => group.name === "CIB")).toBe(false);
     const undo = apply(later, canonicalCommand({
       ...scope(later), kind: "undo_removal", undoToken: COMMAND_IDS.undoToken,
     }), null, {
@@ -429,14 +438,16 @@ describe("#395 T024 immutable independent QNB3/CIB1 group commands", () => {
     const incoming = await qnbCibReview();
     const merged = mergeAccountReviewLateRows({ current: edited, incoming });
     const retained = groupByName(merged, "QNB Household");
-    expect(retained.status).toBe("pending");
+    expect(retained.status).toBe("confirmed");
     expect(retained.revision).not.toBe(qnb.revision);
+    expect(retained.confirmedIdentityRevision).toBe(retained.revision);
+    expect(retained.confirmedIdentityRevision).not.toBe(qnb.confirmedIdentityRevision);
     expect(merged.groups.some((group) => group.name === "QNB")).toBe(false);
     expect(groupByName(merged, "CIB")).toEqual(groupByName(edited, "CIB"));
     for (const id of qnb.linkedRowIds) {
       expect(requireRow(merged, id).assignment).toMatchObject({
         state: "suggested", groupRevision: retained.revision,
-        confirmation: "pending",
+        confirmation: "confirmed",
       });
     }
     expect(merged.rows.every((row) => !row.selected)).toBe(true);
@@ -485,6 +496,36 @@ describe("#395 T024 immutable independent QNB3/CIB1 group commands", () => {
       incoming.rows.map((row) => row.rowId).sort()
     );
   });
+
+  it.each(["owner", "source", "session"] as const)(
+    "rejects a different %s scope before any late-merge mutation",
+    async (dimension) => {
+      const current = await canonicalVoiceReview();
+      const incoming = await mismatchedIncomingReview(dimension);
+      expect(accountReviewSessionSchema.safeParse(current).success).toBe(true);
+      expect(accountReviewSessionSchema.safeParse(incoming).success).toBe(true);
+      if (dimension === "owner") {
+        expect(incoming.ownerId).not.toBe(current.ownerId);
+        expect(incoming.source).toBe(current.source);
+        expect(incoming.sessionId).toBe(current.sessionId);
+      } else if (dimension === "source") {
+        expect(incoming.ownerId).toBe(current.ownerId);
+        expect(incoming.source).not.toBe(current.source);
+        expect(incoming.sessionId).toBe(current.sessionId);
+      } else {
+        expect(incoming.ownerId).toBe(current.ownerId);
+        expect(incoming.source).toBe(current.source);
+        expect(incoming.sessionId).not.toBe(current.sessionId);
+      }
+      const beforeCurrent = structuredClone(current);
+      const beforeIncoming = structuredClone(incoming);
+      // Uniform fail-closed error; never yield a mixed-owner/recording session.
+      expect(() => mergeAccountReviewLateRows({ current, incoming }))
+        .toThrow("account_review_late_merge_scope_mismatch");
+      expect(current).toEqual(beforeCurrent);
+      expect(incoming).toEqual(beforeIncoming);
+    }
+  );
 
   it("the same account name without compatible type/provider/card is not one group", async () => {
     const state = await qnbCibReview();

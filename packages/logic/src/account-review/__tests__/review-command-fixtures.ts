@@ -12,7 +12,7 @@ import { normalizeAccountReviewParserResult } from "../normalization";
 import type { AccountReviewOwnedContext } from "../normalization-types";
 import {
   makeTwoIdenticalVoiceInput, makeTwoIdenticalVoiceWithExtraInput,
-  syntheticHashProvider,
+  makeTwoSmsInput, syntheticHashProvider,
 } from "./normalization-fixtures";
 import { makeEvidenceSpan, makeRequestAccountContext, REVIEW_WIRE_IDS } from "./fixtures";
 
@@ -27,6 +27,7 @@ export const COMMAND_IDS = Object.freeze({
   otherOwner: "00000000-0000-4000-8000-000000009208",
   outsideAccount: "00000000-0000-4000-8000-000000009209",
   undoToken: "00000000-0000-4000-8000-000000009210",
+  otherSession: "00000000-0000-4000-8000-000000009211",
 });
 
 export type OwnedCommandAccount = AccountReviewOwnedContext["accounts"][number];
@@ -111,6 +112,30 @@ export async function canonicalVoiceReview(
 ): Promise<AccountReviewSession> {
   const input = withExtra ? makeTwoIdenticalVoiceWithExtraInput() : makeTwoIdenticalVoiceInput();
   return accountReviewSessionSchema.parse(await normalizeAccountReviewParserResult(input));
+}
+
+/** Real independently normalized owner/source/session controls, never bare
+ * mutation of a live review session's identity hashes. */
+export async function mismatchedIncomingReview(
+  dimension: "owner" | "source" | "session"
+): Promise<AccountReviewSession> {
+  if (dimension === "source") {
+    return accountReviewSessionSchema.parse(
+      await normalizeAccountReviewParserResult(makeTwoSmsInput())
+    );
+  }
+  const input = makeTwoIdenticalVoiceInput();
+  const altered = dimension === "owner"
+    ? {
+      ...input, ownerId: COMMAND_IDS.otherOwner,
+      reviewAccountSnapshots: {
+        ...input.reviewAccountSnapshots, ownerId: COMMAND_IDS.otherOwner,
+      },
+    }
+    : { ...input, sessionId: COMMAND_IDS.otherSession };
+  return accountReviewSessionSchema.parse(
+    await normalizeAccountReviewParserResult(altered)
+  );
 }
 
 async function cibGroup(
@@ -213,6 +238,42 @@ export async function reviewWithReadyRow(): Promise<AccountReviewSession> {
       ready,
     ],
     groups: parsed.groups.filter((group) => group.groupId !== cibGroup.groupId),
+  });
+}
+
+/** A later independent CIB account choice already completed by a writer.
+ * This is a canonical fixture, NOT a call to future T036 reducer behavior. */
+export function laterCibUserChoiceReview(
+  afterRemoval: AccountReviewSession
+): AccountReviewSession {
+  const cib = groupByName(afterRemoval, "CIB");
+  const previous = requireRow(afterRemoval, COMMAND_IDS.cibRow);
+  if (previous.source !== "VOICE" ||
+      previous.assignment.state !== "suggested" ||
+      previous.assignment.groupId !== cib.groupId) {
+    throw new Error("Expected unedited CIB group member");
+  }
+  const bump = (value: string): string => (BigInt(value) + 1n).toString();
+  return accountReviewSessionSchema.parse({
+    ...afterRemoval,
+    revision: bump(afterRemoval.revision),
+    operationGeneration: bump(afterRemoval.operationGeneration),
+    groups: afterRemoval.groups.filter((group) => group.groupId !== cib.groupId),
+    rows: afterRemoval.rows.map((row): AccountReviewRow => {
+      if (row.rowId !== previous.rowId) return row;
+      if (row.source !== "VOICE") throw new Error("Expected CIB Voice row");
+      const revision = bump(row.revision);
+      return {
+        ...row, revision, selected: false, hasUserAccountOverride: true,
+        assignment: {
+          state: "existing", accountId: COMMAND_IDS.cibAccount, origin: "user",
+          currency: "EGP", identityRevision: revision,
+        },
+        reviewReasons: row.reviewReasons.filter(
+          (reason) => reason !== "account_group_unconfirmed"
+        ),
+      };
+    }),
   });
 }
 
