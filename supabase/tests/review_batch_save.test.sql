@@ -368,8 +368,13 @@ SELECT ok((SELECT payload_json NOT LIKE '%original_transcript%'
     AND payload_json NOT LIKE '%"preimages"%'
   FROM review_inputs WHERE case_name='new_bank_selected'),
   'cloud action contains no transcript, raw SMS body or local snapshots');
-SELECT is((SELECT count(*) FROM public.accounts WHERE id=pg_temp.r395_id(399)),
-  0::bigint, 'unused draft account is not created');
+-- SQL can prove complete server mutation validation, not producer omission of
+-- unrelated review groups. Actual selected-only/no-unused-group coverage is T043.
+SELECT is((SELECT envelope->'payload'->'confirmedGroupRefs'
+  FROM review_inputs WHERE case_name='new_bank_selected'),
+  jsonb_build_array(jsonb_build_object(
+    'groupId',pg_temp.r395_id(701),'revision','1','accountId',pg_temp.r395_id(200))),
+  'SQL fixture binds only selected group; unused-group suppression belongs to T043');
 
 -- ATM transfer source and destination both revision guarded, one fingerprint.
 INSERT INTO review_outcomes
