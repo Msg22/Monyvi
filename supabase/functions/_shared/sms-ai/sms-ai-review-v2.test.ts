@@ -4,6 +4,7 @@
  */
 import assert from "node:assert/strict";
 import type { z } from "zod";
+import type { SmsAiProviderRequest } from "./sms-ai-provider.ts";
 import {
   accountReviewRequestContextSchema,
   accountReviewSmsResponseV2Schema,
@@ -34,6 +35,7 @@ import {
 
 type Context = z.infer<typeof accountReviewRequestContextSchema>;
 type V2Response = z.infer<typeof accountReviewSmsResponseV2Schema>;
+type ProviderMessage = SmsAiProviderRequest["messages"][number];
 
 const SUPPORTED = ["EGP", "USD"];
 const CATEGORIES = "EXPENSE categories:\nL1: shopping\nL2: groceries";
@@ -50,7 +52,7 @@ function reviewFields(context: unknown = makeSmsReviewContext()): {
   };
 }
 
-function providerPlan(context: Context = makeSmsReviewContext()) {
+function providerPlan(context: Context = makeSmsReviewContext()): SmsAiProviderRequest {
   return prepareSmsReviewV2ProviderRequest({
     reviewContext: context,
     messages: makeSubmittedSmsMessages(),
@@ -67,7 +69,6 @@ function originalBody(): Readonly<Record<string, unknown>> {
     scanStartedAt: "2026-10-14T12:00:00.000Z",
     messages: makeSubmittedSmsMessages(),
     categories: CATEGORIES,
-    supportedCurrencies: SUPPORTED,
     ...reviewFields(),
   };
 }
@@ -120,10 +121,11 @@ Deno.test("T013 v2 keeps unchanged cached prompt first and original SMS last", (
   assert.equal(last?.role, "user");
   assert.equal(last?.content, buildSmsProviderUserPromptAtEdge(makeSubmittedSmsMessages()));
   const accountPart = result.messages.findIndex(
-    (message, index) => index > 0 && message.content.includes("QNB salary")
+    (message: ProviderMessage, index: number) =>
+      index > 0 && message.content.includes("QNB salary")
   );
   assert.ok(accountPart > 0 && accountPart < result.messages.length - 1);
-  const body = result.messages.map((message) => message.content).join("\n");
+  const body = result.messages.map((message: ProviderMessage) => message.content).join("\n");
   assert.match(body, /QNB salary/);
   assert.match(body, /"cardLast4":"0007"/);
   assert.match(body, /shopping/);
@@ -178,7 +180,7 @@ Deno.test("T013 pre-admission estimator counts every sent prompt component and e
   const reference = estimateSmsRequestInputTokensAtEdge({
     prompt: "", categories: "",
     schema: JSON.stringify(plan.responseSchema),
-    messages: plan.messages.map((message) => message.content),
+    messages: plan.messages.map((message: ProviderMessage) => message.content),
   });
   assert.equal(measured.estimatedInputTokens, reference.totalTokens);
   assert.equal(measured.payloadBytes, getUtf8ByteLengthAtEdge(JSON.stringify(body)));
