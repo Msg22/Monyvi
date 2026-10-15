@@ -3,6 +3,8 @@
  * preserves canonical integer minor units (no Number summation or rounding).
  */
 import type { ReviewBatchSavePayload } from "./review-batch-save-shapes";
+import { MAX_TRANSACTION_AMOUNT } from "../utils/amount-helpers";
+import { getCurrencyPrecision } from "../utils/currency";
 import {
   affectedAccountIds, financialRecords, newAccountRecords, sortedDistinct,
 } from "./review-batch-save-integrity";
@@ -42,6 +44,19 @@ export function validateTransferEndpoints(
     if (record.after.convertedAmountMinorUnits !== null ||
         record.after.exchangeRate !== null)
       return "review_atm_conversion_forbidden";
+  }
+  return null;
+}
+
+export function validateFinancialRowLimits(
+  payload: ReviewBatchSavePayload
+): string | null {
+  for (const record of financialRecords(payload)) {
+    const precision = getCurrencyPrecision(record.after.currency);
+    const maximumMinorUnits = BigInt(MAX_TRANSACTION_AMOUNT) *
+      10n ** BigInt(precision);
+    if (BigInt(record.after.amountMinorUnits) > maximumMinorUnits)
+      return "review_financial_amount_exceeds_maximum";
   }
   return null;
 }
