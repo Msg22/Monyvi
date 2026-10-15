@@ -235,3 +235,54 @@ export function makeAtmWithLegacyDestinationId(): AtmSmsInput {
 export function makeAtmV1Input(): Parameters<typeof normalizeAccountReviewParserResult>[0] {
   return { ...makeGroundedAtmSms(), providerResponse: null };
 }
+
+function ownedQnbBankSnapshots(
+  input: AtmSmsInput
+): AtmSmsInput["reviewAccountSnapshots"] {
+  const snapshots = input.reviewAccountSnapshots;
+  const bankId = REVIEW_WIRE_IDS.bankAccountId;
+  return {
+    ...snapshots,
+    accounts: snapshots.accounts.map((account) =>
+      account.id === bankId
+        ? { ...account, name: "QNB", providerDisplayName: "QNB", senderNames: ["QNB"] }
+        : account
+    ),
+    providerContext: {
+      ...snapshots.providerContext,
+      accounts: snapshots.providerContext.accounts.map((account) =>
+        account.id === bankId
+          ? { ...account, name: "QNB", providerDisplayName: "QNB", senderNames: ["QNB"] }
+          : account
+      ),
+    },
+  };
+}
+
+/**
+ * Original ATM source proof is valid QNB BANK. Null destination type is
+ * permissible without owned candidates, but does not prove BANK as Cash.
+ */
+export function makeNullHintAtmDestination(
+  withBankCandidate: boolean
+): AtmSmsInput {
+  const input = makeGroundedAtmSms();
+  const sourceRow = input.providerResponse.transactions[0];
+  if (!sourceRow || !sourceRow.toAccountEvidence) {
+    throw new Error("Missing original ATM source and destination proof");
+  }
+  const destination: AccountReviewAccountEvidence = withBankCandidate
+    ? {
+        ...sourceRow.accountEvidence, type: null,
+        candidateAccountIds: [REVIEW_WIRE_IDS.bankAccountId],
+      }
+    : {
+        ...sourceRow.toAccountEvidence, type: null, candidateAccountIds: [],
+      };
+  const updated = replaceAtmDestination(input, destination);
+  return {
+    ...updated,
+    reviewAccountSnapshots: withBankCandidate
+      ? ownedQnbBankSnapshots(input) : input.reviewAccountSnapshots,
+  };
+}

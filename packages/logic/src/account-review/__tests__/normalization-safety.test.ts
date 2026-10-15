@@ -17,6 +17,8 @@ import {
   makeDistinctVoiceCounterpartyInput,
   makeOmittedCurrencySmsInput,
   makeOwnedCandidateSmsInput,
+  makeOrdinaryCashSenderSms,
+  makeOrdinarySmsMissingRequiredDestination,
   makeTwoSmsGroundedControl,
 } from "./normalization-safety-fixtures";
 import { REVIEW_WIRE_IDS } from "./fixtures";
@@ -225,5 +227,112 @@ describe("#395 C1 — one financial record per submitted SMS remains the frozen 
       mappedTransactions: [mapped, { ...mapped }],
       providerResponse,
     })).rejects.toThrow("account_review_sms_message_not_submitted");
+  });
+});
+
+describe("#395 F-R2 — ordinary SMS Cash is not a source-account candidate", () => {
+  it("positive: grounded owned BANK QNB remains a review candidate at known EGP", async () => {
+    const input = makeOwnedCandidateSmsInput(true);
+    expect(accountReviewSmsResponseV2Schema.safeParse(input.providerResponse).success)
+      .toBe(true);
+    const row = requireSmsRow(await canonical(input), NORMALIZATION_IDS.smsFingerprint);
+    expect(row.accountEvidence.state).toBe("explicit");
+    expect(row.accountEvidence.type).toBe("BANK");
+    expect(row.accountEvidence.candidateAccountIds).toEqual([REVIEW_WIRE_IDS.bankAccountId]);
+    expect(row.currency).toEqual({ state: "known", code: "EGP", origin: "explicit" });
+    expect(row.assignment.state).toBe("unresolved");
+    expect(row.selected).toBe(false);
+  });
+
+  it("rejects an owned Cash source candidate even with matching Cash body and sender alias", async () => {
+    const input = makeOrdinaryCashSenderSms(true);
+    expect(accountReviewSmsResponseV2Schema.safeParse(input.providerResponse).success)
+      .toBe(true);
+    expect(input.reviewAccountSnapshots.accounts.find(
+      (account) => account.id === REVIEW_WIRE_IDS.cashAccountId
+    )).toMatchObject({ type: "CASH", currency: "EGP", senderNames: ["Cash"] });
+    const response = input.providerResponse.transactions[0];
+    expect(response?.accountEvidence.evidenceSpans.map((span) => span.field))
+      .toEqual(["body", "sender"]);
+    expect(response?.accountEvidence.candidateAccountIds).toEqual([
+      REVIEW_WIRE_IDS.cashAccountId,
+    ]);
+    const session = await canonical(input);
+    const row = requireSmsRow(session, NORMALIZATION_IDS.smsFingerprint);
+    expect(row.transaction.rawSmsBody).toBe("Cash purchase EGP 50");
+    expect(row.transaction.senderDisplayName).toBe("Cash");
+    expect(row.transaction.amount).toBe(50);
+    expect(row.transaction.categoryId).toBe(NORMALIZATION_IDS.shoppingCategory);
+    expect(row.currency).toEqual({ state: "known", code: "EGP", origin: "explicit" });
+    expect(row.accountEvidence.state).toBe("uncertain");
+    expect(row.accountEvidence.candidateAccountIds).toEqual([]);
+    expect(row.reviewReasons).toContain("account_evidence_invalid");
+    expect(row.assignment.state).toBe("unresolved");
+    expect(row.selected).toBe(false);
+    expect(session.groups).toEqual([]);
+  });
+
+  it("rejects explicit ordinary-SMS Cash identity even without candidate IDs", async () => {
+    const input = makeOrdinaryCashSenderSms(false);
+    expect(accountReviewSmsResponseV2Schema.safeParse(input.providerResponse).success)
+      .toBe(true);
+    expect(input.providerResponse.transactions[0]?.accountEvidence.state)
+      .toBe("explicit");
+    expect(input.providerResponse.transactions[0]?.accountEvidence.type).toBe("CASH");
+    expect(input.providerResponse.transactions[0]?.accountEvidence.candidateAccountIds)
+      .toEqual([]);
+    const session = await canonical(input);
+    const row = requireSmsRow(session, NORMALIZATION_IDS.smsFingerprint);
+    expect(row.transaction.smsFingerprint).toBe(NORMALIZATION_IDS.smsFingerprint);
+    expect(row.transaction.amount).toBe(50);
+    expect(row.transaction.categoryId).toBe(NORMALIZATION_IDS.shoppingCategory);
+    expect(row.currency).toEqual({ state: "known", code: "EGP", origin: "explicit" });
+    expect(row.accountEvidence.state).toBe("uncertain");
+    expect(row.accountEvidence.candidateAccountIds).toEqual([]);
+    expect(row.reviewReasons).toContain("account_evidence_invalid");
+    expect(row.assignment.state).toBe("unresolved");
+    expect(row.selected).toBe(false);
+    expect(session.groups).toEqual([]);
+  });
+});
+
+describe("#395 F-R2 — a tagged v2 destination field remains required", () => {
+  it("positive: explicit null destination in ordinary SMS v2 remains valid", async () => {
+    const { input } = makeOrdinarySmsMissingRequiredDestination();
+    const original = input.providerResponse.transactions[0];
+    if (!original) throw new Error("Missing valid ordinary v2 row");
+    expect(Object.prototype.hasOwnProperty.call(original, "toAccountEvidence"))
+      .toBe(true);
+    expect(original.toAccountEvidence).toBeNull();
+    expect(accountReviewSmsResponseV2Schema.safeParse(input.providerResponse).success)
+      .toBe(true);
+    const session = await canonical(input);
+    const row = requireSmsRow(session, NORMALIZATION_IDS.smsFingerprint);
+    expect(row.transaction.categoryId).toBe(NORMALIZATION_IDS.shoppingCategory);
+    expect(row.transaction.amount).toBe(50);
+    expect(row.currency).toEqual({ state: "known", code: "EGP", origin: "explicit" });
+    expect(row.accountEvidence.state).toBe("explicit");
+    expect(row).toHaveProperty("toAccountEvidence", null);
+    expect(row.toAssignment).toBeNull();
+    expect(row.reviewReasons).not.toContain("account_evidence_invalid");
+    expect(row.assignment.state).toBe("suggested");
+    expect(session.groups).toHaveLength(1);
+  });
+
+  it("rejects missing required destination in tagged v2 without dropping valid finance", async () => {
+    const { input, rawV2Response } = makeOrdinarySmsMissingRequiredDestination();
+    expect(accountReviewSmsResponseV2Schema.safeParse(rawV2Response).success)
+      .toBe(false);
+    const session = await canonical({ ...input, providerResponse: rawV2Response });
+    const row = requireSmsRow(session, NORMALIZATION_IDS.smsFingerprint);
+    expect(row.transaction.smsFingerprint).toBe(NORMALIZATION_IDS.smsFingerprint);
+    expect(row.transaction.rawSmsBody).toBe("QNB purchase EGP 50");
+    expect(row.transaction.amount).toBe(50);
+    expect(row.transaction.currency).toBe("EGP");
+    expect(row.transaction.categoryId).toBe(NORMALIZATION_IDS.shoppingCategory);
+    expect(row).toHaveProperty("toAccountEvidence", null);
+    expect(row.toAssignment).toBeNull();
+    expect(row.reviewReasons).toContain("account_evidence_invalid");
+    expect(row.selected).toBe(false);
   });
 });

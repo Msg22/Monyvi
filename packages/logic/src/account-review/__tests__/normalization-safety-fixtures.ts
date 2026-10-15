@@ -5,6 +5,7 @@
  */
 import type {
   AccountReviewCurrencyEvidence,
+  AccountReviewAccountEvidence,
   AccountReviewSmsResponseV2,
   AccountReviewVoiceResponseV2,
 } from "../schemas";
@@ -266,5 +267,98 @@ export function makeDistinctVoiceCounterpartyInput(
     financialRows: response.transactions,
     providerResponse: response,
     mappedTransactions: reverseMapped ? [...mapped].reverse() : mapped,
+  };
+}
+
+function cashSenderOwnedSnapshots(
+  input: ReturnType<typeof makeSmsInput>
+): ReturnType<typeof makeSmsInput>["reviewAccountSnapshots"] {
+  const snapshots = input.reviewAccountSnapshots;
+  const cashId = REVIEW_WIRE_IDS.cashAccountId;
+  return {
+    ...snapshots,
+    accounts: snapshots.accounts.map((account) =>
+      account.id === cashId ? { ...account, senderNames: ["Cash"] } : account
+    ),
+    providerContext: {
+      ...snapshots.providerContext,
+      accounts: snapshots.providerContext.accounts.map((account) =>
+        account.id === cashId ? { ...account, senderNames: ["Cash"] } : account
+      ),
+    },
+  };
+}
+
+function groundedCashSource(
+  messageId: string, body: string, sender: string,
+  candidateIds: readonly string[]
+): AccountReviewAccountEvidence {
+  return {
+    state: "explicit", name: "Cash", type: "CASH",
+    institutionId: null, providerDisplayName: null, cardLast4: null,
+    evidenceSpans: [
+      makeEvidenceSpan(messageId, "body", body, "Cash"),
+      makeEvidenceSpan(messageId, "sender", sender, "Cash"),
+    ],
+    candidateAccountIds: [...candidateIds],
+  };
+}
+
+/** Valid v2 source; ordinary SMS must exclude Cash even when owner/sender agree. */
+export function makeOrdinaryCashSenderSms(
+  withCandidate: boolean
+): ReturnType<typeof makeSmsInput> {
+  const input = makeSmsInput();
+  const original = input.providerResponse.transactions[0];
+  const mapped = input.mappedTransactions[0];
+  const submitted = input.submittedMessages[0];
+  if (!original || !mapped || !submitted) {
+    throw new Error("Missing original ordinary SMS");
+  }
+  const body = "Cash purchase EGP 50";
+  const sender = "Cash";
+  const accountEvidence = groundedCashSource(
+    submitted.id, body, sender,
+    withCandidate ? [REVIEW_WIRE_IDS.cashAccountId] : []
+  );
+  const row: AccountReviewSmsResponseV2["transactions"][number] = {
+    ...original, suggestionRef: null, accountEvidence,
+    currencyEvidence: {
+      ...original.currencyEvidence,
+      evidenceSpans: [makeEvidenceSpan(submitted.id, "body", body, "EGP")],
+    },
+  };
+  return {
+    ...input,
+    financialRows: [row],
+    mappedTransactions: [{
+      ...mapped, rawSmsBody: body, senderDisplayName: sender,
+      originLabel: sender,
+    }],
+    submittedMessages: [{ ...submitted, body, sender }],
+    reviewAccountSnapshots: cashSenderOwnedSnapshots(input),
+    providerResponse: {
+      ...input.providerResponse, transactions: [row], suggestedAccounts: [],
+    },
+  };
+}
+
+/** Tagged v2 intentionally omits only the *required* destination field. */
+export function makeOrdinarySmsMissingRequiredDestination(): {
+  readonly input: ReturnType<typeof makeSmsInput>;
+  readonly rawV2Response: unknown;
+} {
+  const input = makeSmsInput();
+  const original = input.providerResponse.transactions[0];
+  if (!original) throw new Error("Missing ordinary SMS response row");
+  const { toAccountEvidence, ...missingRequiredField } = original;
+  if (toAccountEvidence !== null) {
+    throw new Error("Baseline ordinary SMS must have explicit null destination");
+  }
+  return {
+    input,
+    rawV2Response: {
+      ...input.providerResponse, transactions: [missingRequiredField],
+    },
   };
 }

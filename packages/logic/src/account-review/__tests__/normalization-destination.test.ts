@@ -14,7 +14,7 @@ import {
   makeGroundedAtmSms, makeUnmatchedAtmSms, makeUncertainAtmSms,
   makeAbsentAtmSms, makeAtmV1Input, makeAtmWithAmbiguousCurrency,
   makeAtmWithLegacyDestinationId, makeInvalidAtmDestination,
-  replaceAtmDestination, REVIEW_ATM_BODY,
+  makeNullHintAtmDestination, replaceAtmDestination, REVIEW_ATM_BODY,
   type InvalidDestinationKind,
 } from "./normalization-destination-fixtures";
 import {
@@ -257,4 +257,59 @@ describe("#395 I1 — invalid ATM destination evidence cannot contaminate valid 
       expect(row.selected).toBe(false);
     }
   );
+});
+
+describe("#395 F-R2 — ATM Cash-only destination candidate role", () => {
+  it("positive: explicit null-type Cash evidence with zero candidates remains inert", async () => {
+    const input = makeNullHintAtmDestination(false);
+    expect(accountReviewSmsResponseV2Schema.safeParse(input.providerResponse).success)
+      .toBe(true);
+    const destination = input.providerResponse.transactions[0]?.toAccountEvidence;
+    expect(destination).toMatchObject({
+      state: "explicit", name: "Cash", type: null, candidateAccountIds: [],
+    });
+    const session = await canonical(input);
+    const row = requireAtmRow(session);
+    expectUntouchedAtmFinance(row);
+    expectBankSourcePreserved(row, session);
+    expect(row).toHaveProperty("toAccountEvidence", destination);
+    expect(row.reviewReasons).not.toContain("account_evidence_invalid");
+    expect(row.reviewReasons).toContain("cash_transfer_review");
+    expect(row.toAssignment).toBeNull();
+    expect(row.selected).toBe(false);
+  });
+
+  it("rejects real owned BANK QNB as a Cash endpoint despite null type hint", async () => {
+    const input = makeNullHintAtmDestination(true);
+    expect(accountReviewSmsResponseV2Schema.safeParse(input.providerResponse).success)
+      .toBe(true);
+    const destination = input.providerResponse.transactions[0]?.toAccountEvidence;
+    expect(destination).toMatchObject({
+      state: "explicit", name: "QNB", type: null,
+      providerDisplayName: "QNB",
+      candidateAccountIds: [REVIEW_WIRE_IDS.bankAccountId],
+    });
+    expect(destination?.evidenceSpans.map((span) => span.field))
+      .toEqual(["body", "sender"]);
+    expect(destination?.evidenceSpans.every(
+      (span) => span.sourceRef === REVIEW_WIRE_IDS.smsMessageId
+    )).toBe(true);
+    expect(input.reviewAccountSnapshots.accounts.find(
+      (account) => account.id === REVIEW_WIRE_IDS.bankAccountId
+    )).toMatchObject({
+      name: "QNB", providerDisplayName: "QNB",
+      type: "BANK", currency: "EGP", senderNames: ["QNB"],
+    });
+    const session = await canonical(input);
+    const row = requireAtmRow(session);
+    expectUntouchedAtmFinance(row);
+    expectBankSourcePreserved(row, session);
+    expect(row).toHaveProperty("toAccountEvidence", expect.objectContaining({
+      state: "uncertain", candidateAccountIds: [], evidenceSpans: [],
+    }));
+    expect(row.reviewReasons).toContain("account_evidence_invalid");
+    expect(row.reviewReasons).toContain("cash_transfer_review");
+    expect(row.toAssignment).toBeNull();
+    expect(row.selected).toBe(false);
+  });
 });
