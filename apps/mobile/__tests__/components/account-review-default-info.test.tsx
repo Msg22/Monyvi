@@ -53,6 +53,8 @@ const en = {
     "{{defaultAccountName}} was selected for {{count}} transactions because no account was mentioned and the currency matches.",
   account_review_default_edit_reminder:
     "You can change the account on each transaction before saving.",
+  account_review_default_why_boundary:
+    "A named account or an uncertain currency still needs your review.",
   account_review_default_why_action: "Got it",
   account_review_default_why_close_accessibility: "Close default account explanation",
 } as const;
@@ -71,6 +73,8 @@ const ar = {
     "تم اختيار {{defaultAccountName}} لـ{{count}} معاملات لأن الحساب لم يُذكر والعملة تطابق عملة الحساب.",
   account_review_default_edit_reminder:
     "يمكنك تغيير الحساب لكل معاملة قبل الحفظ.",
+  account_review_default_why_boundary:
+    "إذا ذُكر حساب بالاسم أو كانت العملة غير مؤكدة، فستظل المعاملة بحاجة إلى مراجعتك.",
   account_review_default_why_action: "فهمت",
   account_review_default_why_close_accessibility: "إغلاق شرح الحساب الافتراضي",
 } as const;
