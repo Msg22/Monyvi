@@ -1,6 +1,24 @@
 // Shared types and interfaces for Monyvi
 
 export * from "./account-review/schemas";
+export {
+  normalizeAccountReviewParserResult,
+} from "./account-review/normalization";
+export {
+  deriveAccountReviewGroupIdentity,
+  deriveAccountReviewRowIdentity,
+} from "./account-review/identity";
+export type {
+  AccountReviewGroupIdentityInput,
+  AccountReviewRowIdentityInput,
+} from "./account-review/identity";
+export type {
+  AccountReviewNormalizationInput,
+  AccountReviewOwnedContext,
+  VoiceReviewNormalizationInput,
+  SmsReviewNormalizationInput,
+  SubmittedSmsReviewSource,
+} from "./account-review/normalization-types";
 export * from "./accounts/accounts-calculations";
 export * from "./analytics";
 export * from "./assets/assets-calculations";
