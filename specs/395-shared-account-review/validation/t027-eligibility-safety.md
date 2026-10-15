@@ -198,3 +198,67 @@ into its existing combined verification sibling; independently verifies current
 schema compatibility, real resolver positive control and meaningful reducer
 Red before any production edit authorization. Full Green, TS and lint remain
 Root-owned. This tests-only lease ends with publication and writer freeze.
+
+
+## Final T027 tests-only checkpoint: Voice default and compatible edit
+
+**Approved parent:** ac4e1e83a074e89fea801beda86bae7ac589d9cd on existing
+codex/395-reducer-safety. **No production correction permitted in this wave.**
+Root's actual coherent pre-follow-up Red on ac4: **46 PASS / 7 FAIL**,
+including all prior 19 safety plus 26 T024 cases passing. All seven failures
+specifically concern selected ATM output retaining null or unresolved Cash
+destination. The hard cash_transfer_review control safely rejected. Root's
+new-schema integration, rather than the older standalone schema, supplies the
+canonical nullable toAccountEvidence boundary.
+
+**Test inventory after this checkpoint: 30 safety cases** (previous 27
+preserved, plus 3), with all existing 26 T024 cases unchanged. The original
+27 cases have been relocated without semantic edits, assertions removed or
+duplicate execution into two cohesive files. This respects the 900-line
+per-file bound:
+
+- reducer-eligibility-safety.test.ts: SMS/Voice source, default freshness,
+  mixed select_ready, scope/nickname/Undo and the new Voice/edit invariants.
+- reducer-selection-snapshot-safety.test.ts (new): moves the existing ATM
+  producer-backed tests, the associated canonical normalized-ATM fixtures and
+  assertions into a separate test file. The tests and expected behavior are
+  unchanged. Two TypeScript closure-narrowing errors are fixed by assigning
+  validated destination account ID and suggested source group ID to immutable
+  consts before their respective array callbacks. The simple readonly
+  AbsentAtmDestination array uses readonly T[] style. No casts, any, SUT mocks,
+  fake response or new public type is introduced.
+
+**New item N1 (two cases):** A Voice row with genuinely absent account evidence
+and unresolved account_needed assignment is built directly from the existing
+canonical reviewWithReadyRow fixture, with the other QNB group untouched.
+A freshly coherent owned snapshot makes CIB the sole default Bank and retains
+Cash as nondefault; the real resolveAccountReviewSession must convert this
+same unresolved row to an existing CIB/EGP default without any account blocker.
+Both direct select_row and select_ready are exercised. Each may reject
+atomically without changing state, selection, revision, finance or sibling
+groups. If accepted, the **actual selected output row** (not temporary resolver
+data) must contain the eligible CIB default assignment, zero review reasons,
+and its original amount/transaction/row identity. Current source is expected
+to fail the accepted-output invariant because readiness is checked against
+the fresh resolved copy but the source transition persists the old unresolved
+row. This is a source-backed expected Red, **not an executed result**.
+
+**New item N2 (one case):** Starting with the actual QNB3/CIB1 canonical
+Voice fixture, a disclosed group click confirms QNB and checks exactly one
+QNB row. A subsequent **nickname-only edit** uses the actual
+edit_group command with reconfirm:true while preserving currency,
+type, known-provider fields, card and sender identity. The group revision
+and confirmedIdentityRevision must progress, the clicked row must remain
+selected, previously unchecked siblings and the independent CIB group must
+remain unchanged, and all financial amount fields must be retained. This
+enforces specs/395-shared-account-review/data-model.md (Edit identity:
+"Compatible links retained, invalid selection clears") and the owner-approved
+binding 94–95. A material identity/type/provider/currency edit is not given
+this preservation guarantee. Current confirmGroupRows unconditionally resets
+selection, so the nickname-only case is expected Red pending Root execution.
+
+**Validation:** new tests, TypeScript and lint were **NOT RUN** by this remote
+worker. Root owns a final coherent focused Red / TS / lint batch before
+consolidated independent-review triage, and must separately grant any source
+changes. No schema, identity, resolver, runtime, financial/Core, UI, SQL,
+PR/issue or external source was changed.

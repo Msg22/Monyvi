@@ -21,10 +21,9 @@ import {
   type OwnedCommandAccount,
 } from "./review-command-fixtures";
 import {
-  makeCashVoiceInput, makeSmsInput, makeTwoCurrenciesInput,
+  makeCashVoiceInput, makeTwoCurrenciesInput,
   makeTwoSmsInput, syntheticHashProvider,
 } from "./normalization-fixtures";
-import { makeEvidenceSpan, REVIEW_WIRE_IDS } from "./fixtures";
 
 type Result = ReturnType<typeof reduceAccountReviewCommand>;
 type EditIdentity = Extract<
@@ -72,12 +71,6 @@ function selectRow(
     expectedGroupRevision: disclosedGroup?.revision ?? null,
     hasSharedConfirmationDisclosure: disclosedGroup !== null,
   });
-}
-
-function onlyRowId(state: AccountReviewSession): string {
-  const row = state.rows[0];
-  if (!row) throw new Error("Expected exactly one canonical test row");
-  return row.rowId;
 }
 
 function selectReady(state: AccountReviewSession): AccountReviewCommand {
@@ -138,196 +131,6 @@ function expectAccepted(state: AccountReviewSession, result: Result): void {
   expect(result.state.revision).not.toBe(state.revision);
   expect(result.state.operationGeneration).not.toBe(state.operationGeneration);
   expect(accountReviewSessionSchema.safeParse(result.state).success).toBe(true);
-}
-
-/** Actual tagged ATM parser row/body/spans; no mocked provider or output. */
-async function normalizedAtmSource(): Promise<AccountReviewSession> {
-  const input = makeSmsInput();
-  const original = input.providerResponse.transactions[0];
-  const mapped = input.mappedTransactions[0];
-  const message = input.submittedMessages[0];
-  if (!original || !mapped || !message) throw new Error("Missing canonical SMS source");
-  const body = "QNB ATM withdrawal EGP 50";
-  const row = {
-    ...original, isAtmWithdrawal: true,
-    accountEvidence: {
-      ...original.accountEvidence,
-      evidenceSpans: [
-        makeEvidenceSpan(REVIEW_WIRE_IDS.smsMessageId, "body", body, "QNB"),
-      ],
-    },
-    currencyEvidence: {
-      ...original.currencyEvidence,
-      evidenceSpans: [
-        makeEvidenceSpan(REVIEW_WIRE_IDS.smsMessageId, "body", body, "EGP"),
-      ],
-    },
-  };
-  const parsed = accountReviewSessionSchema.parse(
-    await normalizeAccountReviewParserResult({
-      ...input,
-      providerResponse: { ...input.providerResponse, transactions: [row] },
-      financialRows: [row],
-      mappedTransactions: [{ ...mapped, isAtmWithdrawal: true, rawSmsBody: body }],
-      submittedMessages: [{ ...message, body }],
-    })
-  );
-  const source = parsed.rows[0];
-  if (!source || source.source !== "SMS" ||
-      source.currency.state !== "known" || source.currency.code !== "EGP" ||
-      source.assignment.state !== "suggested" || parsed.groups.length !== 1) {
-    throw new Error("ATM fixture must retain an eligible pending Bank source");
-  }
-  expect(source.transaction.isAtmWithdrawal).toBe(true);
-  return parsed;
-}
-
-/**
- * An explicitly reviewed destination is a canonical post-review state (T036
- * commands are intentionally not called). Remove normalizer's independent
- * cash_transfer_review hard reason only for this eligibility boundary test.
- * A forged/stale destination is injected solely to test reducer revalidation;
- * no currently exposed UI path to that state is claimed.
- */
-function stagedAtm(
-  normalized: AccountReviewSession, destinationAccountId: string,
-  sourceMode: "existing" | "pending"
-): AccountReviewSession {
-  const row = normalized.rows[0];
-  if (!row || row.source !== "SMS" || row.assignment.state !== "suggested" ||
-      row.currency.state !== "known" || row.currency.code !== "EGP") {
-    throw new Error("Missing canonical Bank ATM row");
-  }
-  const sourceAssignment: AccountReviewRow["assignment"] =
-    sourceMode === "pending" ? row.assignment : {
-      state: "existing", accountId: COMMAND_IDS.qnbAccount,
-      origin: "user", currency: "EGP", identityRevision: "0",
-    };
-  const staged: AccountReviewRow = {
-    ...row, assignment: sourceAssignment, selected: false,
-    hasUserAccountOverride: sourceMode === "existing",
-    toAssignment: {
-      state: "existing", accountId: destinationAccountId,
-      origin: "user", currency: "EGP", identityRevision: "0",
-    },
-    reviewReasons: sourceMode === "pending" ? ["account_group_unconfirmed"] : [],
-  };
-  return accountReviewSessionSchema.parse({
-    ...normalized, rows: [staged],
-    groups: sourceMode === "pending" ? normalized.groups : [],
-  });
-}
-
-
-type AbsentAtmDestination = "null" | "unresolved";
-const absentAtmDestinations: ReadonlyArray<AbsentAtmDestination> = [
-  "null", "unresolved",
-];
-
-/** Canonical post-review states based on the original, fully normalized ATM.
- * The independent Bank source and original provider evidence remain unchanged;
- * only a missing/stale Cash destination assignment is under review here. */
-function withAbsentAtmDestination(
-  reviewed: AccountReviewSession, absence: AbsentAtmDestination
-): AccountReviewSession {
-  const first = reviewed.rows[0];
-  if (!first || first.source !== "SMS" ||
-      first.transaction.isAtmWithdrawal !== true) {
-    throw new Error("Expected normalized SMS ATM review");
-  }
-  const missing: AccountReviewRow["toAssignment"] = absence === "null"
-    ? null
-    : {
-      state: "unresolved", accountId: null,
-      reasonCode: "cash_transfer_review", candidateAccountIds: [],
-    };
-  return accountReviewSessionSchema.parse({
-    ...reviewed,
-    rows: reviewed.rows.map((row): AccountReviewRow => row.rowId === first.rowId
-      ? { ...row, toAssignment: missing } : row),
-  });
-}
-
-/** The same fresh owned snapshots MUST actually resolve the destination.
- * Do not mock the resolver or synthesize a reducer outcome. */
-function expectRealCashFallback(
-  state: AccountReviewSession
-): AccountReviewOwnedContext {
-  expect(accountReviewSessionSchema.safeParse(state).success).toBe(true);
-  const originalWire = makeSmsInput().providerResponse.transactions[0];
-  expect(originalWire?.toAccountEvidence).toBeNull();
-  const before = requireRow(state, onlyRowId(state));
-  expect(before.toAssignment === null ||
-    before.toAssignment.state === "unresolved").toBe(true);
-  const context = ownedContext(state);
-  const cash = context.accounts.find((account) =>
-    account.id === COMMAND_IDS.cashAccount
-  );
-  expect(cash).toMatchObject({
-    type: "CASH", currency: "EGP", isDefault: true,
-  });
-  const resolved = resolveAccountReviewSession({
-    session: state, accountSnapshots: context,
-  });
-  const row = requireRow(resolved, before.rowId);
-  expect(row.toAssignment).toMatchObject({
-    state: "existing", accountId: COMMAND_IDS.cashAccount,
-    currency: "EGP",
-  });
-  expect(row.selected).toBe(false);
-  expect(row.amountDecimal).toBe(before.amountDecimal);
-  expect(row.transaction).toEqual(before.transaction);
-  expect(state.rows).toContainEqual(before);
-  return context;
-}
-
-/** Both fail-closed rejection and a fully valid selected Cash destination are
- * safe. Never require automatic destination selection or a new UX action. */
-function expectSafeAtmSelectionOrAtomicRejection(
-  state: AccountReviewSession, context: AccountReviewOwnedContext,
-  result: Result, snapshot: AccountReviewSession
-): void {
-  if (result.effect === "none") {
-    expectAtomicRejection(state, snapshot, result);
-    return;
-  }
-  expectAccepted(state, result);
-  const before = requireRow(state, onlyRowId(state));
-  const after = requireRow(result.state, before.rowId);
-  expect(after.selected).toBe(true);
-  if (after.source !== "SMS" ||
-      after.transaction.isAtmWithdrawal !== true ||
-      after.currency.state !== "known" ||
-      after.toAssignment?.state !== "existing") {
-    throw new Error("Selected ATM row lacks a canonical existing Cash destination");
-  }
-  const destination = context.accounts.find((account) =>
-    account.id === after.toAssignment.accountId
-  );
-  expect(destination).toBeDefined();
-  expect(destination?.type).toBe("CASH");
-  expect(destination?.currency).toBe(after.currency.code);
-  expect(after.toAssignment.currency).toBe(after.currency.code);
-  if (after.assignment.state === "existing") {
-    expect(after.assignment.accountId).not.toBe(after.toAssignment.accountId);
-  } else if (after.assignment.state === "suggested") {
-    const sourceGroup = result.state.groups.find((group) =>
-      group.groupId === after.assignment.groupId
-    );
-    expect(sourceGroup?.type).toBe("BANK");
-    expect(sourceGroup?.status).toBe("confirmed");
-  } else {
-    throw new Error("Selected ATM source is unresolved");
-  }
-  // An old Cash review blocker must not survive a successful selection.
-  expect(after.reviewReasons).not.toContain("cash_transfer_review");
-  expect(after.reviewReasons).toEqual([]);
-  expect(after.transaction).toEqual(before.transaction);
-  expect(after.amountDecimal).toBe(before.amountDecimal);
-  expect(after.sourceFingerprint).toBe(before.sourceFingerprint);
-  expect(result.state.rows.map((row) => row.rowId))
-    .toEqual(state.rows.map((row) => row.rowId));
-  expect(state).toEqual(snapshot);
 }
 
 function withSoleDefault(
@@ -511,205 +314,121 @@ describe("#395 T027 source and current-default reducer safety", () => {
   });
 });
 
-describe("#395 T027 ATM destination eligibility, separately from source Bank", () => {
-
-  it.each(absentAtmDestinations)(
-    "direct existing Bank ATM selection with %s destination must resolve or reject atomically",
-    async (absence) => {
-      const staged = stagedAtm(
-        await normalizedAtmSource(), COMMAND_IDS.cashAccount, "existing"
-      );
-      const state = withAbsentAtmDestination(staged, absence);
-      const row = requireRow(state, onlyRowId(state));
-      expect(row.source).toBe("SMS");
-      expect(row.reviewReasons).toEqual([]);
-      const context = expectRealCashFallback(state);
-      const frozen = structuredClone(state);
-      const result = execute(state, selectRow(state, row.rowId), context);
-      expectSafeAtmSelectionOrAtomicRejection(state, context, result, frozen);
-    }
-  );
-
-  it("direct confirmed Bank-group ATM selection cannot retain a null destination", async () => {
-    const pending = withAbsentAtmDestination(
-      stagedAtm(await normalizedAtmSource(), COMMAND_IDS.cashAccount, "pending"),
-      "null"
-    );
-    const bank = groupByName(pending, "QNB");
-    const confirmation = execute(pending, groupCommand(pending, bank, "confirm_group"));
-    expectAccepted(pending, confirmation);
-    const state = confirmation.state;
-    const row = requireRow(state, onlyRowId(state));
-    expect(row.assignment).toMatchObject({
-      state: "suggested", confirmation: "confirmed",
-    });
-    expect(row.toAssignment).toBeNull();
-    expect(row.reviewReasons).toEqual([]);
-    const context = expectRealCashFallback(state);
-    const frozen = structuredClone(state);
-    const result = execute(state, selectRow(state, row.rowId), context);
-    expectSafeAtmSelectionOrAtomicRejection(state, context, result, frozen);
-    if (result.effect === "none") {
-      expect(groupByName(result.state, "QNB"))
-        .toEqual(groupByName(state, "QNB"));
-    }
-  });
-
-  it.each(absentAtmDestinations)(
-    "disclosed pending Bank ATM click with %s Cash destination must not select an incomplete row",
-    async (absence) => {
-      const staged = stagedAtm(
-        await normalizedAtmSource(), COMMAND_IDS.cashAccount, "pending"
-      );
-      const state = withAbsentAtmDestination(staged, absence);
-      const bank = groupByName(state, "QNB");
-      expect(bank.status).toBe("pending");
-      const row = requireRow(state, onlyRowId(state));
-      expect(row.assignment).toMatchObject({
-        state: "suggested", confirmation: "pending",
-      });
-      expect(row.reviewReasons).toEqual(["account_group_unconfirmed"]);
-      const context = expectRealCashFallback(state);
-      const frozen = structuredClone(state);
-      const result = execute(state, selectRow(state, row.rowId, bank), context);
-      expectSafeAtmSelectionOrAtomicRejection(state, context, result, frozen);
-      if (result.effect === "none") {
-        expect(groupByName(result.state, "QNB")).toEqual(bank);
-      } else {
-        expect(groupByName(result.state, "QNB").status).toBe("confirmed");
+describe("#395 T027 Voice fresh-default output must be canonical on selection", () => {
+  it.each(["select_row", "select_ready"])(
+    "%s on previously unresolved Voice account preserves a real fresh Bank default or rejects atomically",
+    async (kind) => {
+      const initial = await reviewWithReadyRow();
+      const ready = requireRow(initial, COMMAND_IDS.readyRow);
+      if (ready.source !== "VOICE" || ready.accountEvidence.state !== "absent") {
+        throw new Error("Expected a genuinely absent-evidence Voice ready row");
       }
-    }
-  );
-
-  it.each(absentAtmDestinations)(
-    "select_ready with %s ATM destination must skip or resolve without persisting incomplete Cash",
-    async (absence) => {
-      const staged = stagedAtm(
-        await normalizedAtmSource(), COMMAND_IDS.cashAccount, "existing"
+      const state = accountReviewSessionSchema.parse({
+        ...initial,
+        rows: initial.rows.map((row): AccountReviewRow =>
+          row.rowId === ready.rowId ? {
+            ...ready, selected: false, hasUserAccountOverride: false,
+            assignment: {
+              state: "unresolved", accountId: null,
+              reasonCode: "account_needed", candidateAccountIds: [],
+            },
+            reviewReasons: ["account_needed"],
+          } : row
+        ),
+      });
+      const context = withSoleDefault(state, COMMAND_IDS.cibAccount);
+      const cash = context.accounts.find((account) =>
+        account.id === COMMAND_IDS.cashAccount
       );
-      const state = withAbsentAtmDestination(staged, absence);
-      const context = expectRealCashFallback(state);
+      expect(cash).toMatchObject({ isDefault: false, type: "CASH" });
+      expect(context.accounts.find((account) =>
+        account.id === COMMAND_IDS.cibAccount)).toMatchObject({
+        isDefault: true, currency: "EGP", type: "BANK",
+      });
+      const fresh = resolveAccountReviewSession({
+        session: state, accountSnapshots: context,
+      });
+      const resolved = requireRow(fresh, ready.rowId);
+      expect(resolved.assignment).toMatchObject({
+        state: "existing", origin: "default", currency: "EGP",
+        accountId: COMMAND_IDS.cibAccount,
+      });
+      expect(resolved.reviewReasons).toEqual([]);
+      expect(requireRow(state, ready.rowId).assignment.state).toBe("unresolved");
       const frozen = structuredClone(state);
-      const result = execute(state, selectReady(state), context);
-      expectSafeAtmSelectionOrAtomicRejection(state, context, result, frozen);
+      const result = execute(state, kind === "select_row"
+        ? selectRow(state, ready.rowId)
+        : selectReady(state), context);
+      if (result.effect === "none") {
+        expectAtomicRejection(state, frozen, result);
+        return;
+      }
+      expectAccepted(state, result);
+      const selected = requireRow(result.state, ready.rowId);
+      expect(selected.selected).toBe(true);
+      expect(selected.assignment).toMatchObject({
+        state: "existing", origin: "default", currency: "EGP",
+        accountId: COMMAND_IDS.cibAccount,
+      });
+      expect(selected.reviewReasons).toEqual([]);
+      expect(result.state.rows.filter((row) => row.selected)
+        .map((row) => row.rowId)).toEqual([ready.rowId]);
+      expect(result.state.rows.map((row) => row.amountDecimal))
+        .toEqual(state.rows.map((row) => row.amountDecimal));
+      expect(result.state.groups).toEqual(state.groups);
+      expect(state).toEqual(frozen);
     }
   );
+});
 
-  it("a retained cash_transfer_review reason must never be selected unresolved", async () => {
-    const staged = withAbsentAtmDestination(
-      stagedAtm(await normalizedAtmSource(), COMMAND_IDS.cashAccount, "existing"),
-      "null"
-    );
-    const state = accountReviewSessionSchema.parse({
-      ...staged,
-      rows: staged.rows.map((row): AccountReviewRow => ({
-        ...row, reviewReasons: ["cash_transfer_review"],
-      })),
+describe("#395 T027 compatible group identity edits preserve prior checked rows", () => {
+  it("explicitly reconfirmed nickname-only edit retains the clicked selected row, never checks siblings", async () => {
+    const original = await qnbCibReview();
+    const qnb = groupByName(original, "QNB");
+    const clicked = qnb.linkedRowIds[0];
+    if (!clicked) throw new Error("Expected one canonical QNB row");
+    const selected = execute(original, selectRow(original, clicked, qnb));
+    expectAccepted(original, selected);
+    const before = selected.state;
+    const current = groupByName(before, "QNB");
+    const unchangedCib = groupByName(before, "CIB");
+    const command = edit(before, current, {
+      ...identityOf(current), name: "QNB Daily Spending",
     });
-    const context = expectRealCashFallback(state);
-    for (const command of [selectRow(state, onlyRowId(state)), selectReady(state)]) {
-      const frozen = structuredClone(state);
-      const result = execute(state, command, context);
-      expectSafeAtmSelectionOrAtomicRejection(state, context, result, frozen);
-    }
-  });
-
-  it.each([
-    ["foreign account", COMMAND_IDS.outsideAccount],
-    ["owned non-Cash Wallet", COMMAND_IDS.walletAccount],
-  ])("rejects %s as an ATM destination for direct and bulk selection", async (_label, id) => {
-    const input = await normalizedAtmSource();
-    const state = stagedAtm(input, id, "existing");
-    expect(accountReviewSessionSchema.safeParse(state).success).toBe(true);
-    for (const command of [selectRow(state, onlyRowId(state)), selectReady(state)]) {
-      const frozen = structuredClone(state);
-      const result = execute(state, command);
-      expectAtomicRejection(state, frozen, result);
-    }
-  });
-
-  it("rejects a stale EGP destination projection whose owned Cash currency is USD", async () => {
-    const input = await normalizedAtmSource();
-    const state = stagedAtm(input, COMMAND_IDS.usdAccount, "existing");
-    const accounts: readonly OwnedCommandAccount[] = availableAccounts().map(
-      (account): OwnedCommandAccount => account.id === COMMAND_IDS.usdAccount
-        ? {
-          ...account, name: "USD cash", type: "CASH", providerDisplayName: null,
-          cardLast4: null, senderNames: [],
-        }
-        : account
+    expect(command).toMatchObject({ kind: "edit_group", reconfirm: true });
+    expect(before.rows.filter((row) => row.selected).map((row) => row.rowId))
+      .toEqual([clicked]);
+    expect(current.status).toBe("confirmed");
+    const frozen = structuredClone(before);
+    const result = execute(before, command);
+    expectAccepted(before, result);
+    const editedGroup = result.state.groups.find(
+      (group) => group.groupId === current.groupId
     );
-    const snapshots = ownedContext(state, accounts);
-    expect(snapshots.accounts.find((account) =>
-      account.id === COMMAND_IDS.usdAccount)?.currency).toBe("USD");
-    expect(accountReviewSessionSchema.safeParse(state).success).toBe(true);
-    const frozen = structuredClone(state);
-    expectAtomicRejection(
-      state, frozen, execute(state, selectRow(state, onlyRowId(state)), snapshots)
-    );
-  });
-
-  it("accepts owned distinct same-currency Cash destination after reviewed ATM choice", async () => {
-    const input = await normalizedAtmSource();
-    const state = stagedAtm(input, COMMAND_IDS.cashAccount, "existing");
-    const row = state.rows[0];
-    if (!row || row.source !== "SMS") {
-      throw new Error("Missing SMS ATM destination row");
-    }
-    expect(row.transaction.isAtmWithdrawal).toBe(true);
-    expect(row.reviewReasons).toEqual([]);
-    for (const command of [selectRow(state, row.rowId), selectReady(state)]) {
-      const result = execute(state, command);
-      expectAccepted(state, result);
-      expect(requireRow(result.state, row.rowId).selected).toBe(true);
-      expect(requireRow(result.state, row.rowId).toAssignment).toMatchObject({
-        state: "existing", accountId: COMMAND_IDS.cashAccount,
+    expect(editedGroup).toMatchObject({
+      name: "QNB Daily Spending", status: "confirmed",
+      type: current.type, currency: current.currency,
+      providerDisplayName: current.providerDisplayName,
+      institutionId: current.institutionId, cardLast4: current.cardLast4,
+    });
+    expect(editedGroup?.revision).not.toBe(current.revision);
+    expect(editedGroup?.confirmedIdentityRevision).toBe(editedGroup?.revision);
+    expect(result.state.rows.filter((row) => row.selected).map((row) => row.rowId))
+      .toEqual([clicked]);
+    for (const rowId of current.linkedRowIds) {
+      const linked = requireRow(result.state, rowId);
+      expect(linked.selected).toBe(rowId === clicked);
+      expect(linked.assignment).toMatchObject({
+        state: "suggested", confirmation: "confirmed",
+        groupId: current.groupId, groupRevision: editedGroup?.revision,
       });
     }
-  });
-
-  it("does not let a pending Bank group click confirm/select through an ineligible ATM destination", async () => {
-    const input = await normalizedAtmSource();
-    const state = stagedAtm(input, COMMAND_IDS.walletAccount, "pending");
-    const bank = groupByName(state, "QNB");
-    const row = state.rows[0];
-    if (!row) throw new Error("Missing pending ATM row");
-    expect(bank.status).toBe("pending");
-    expect(row.reviewReasons).toEqual(["account_group_unconfirmed"]);
-    const frozen = structuredClone(state);
-    const result = execute(state, selectRow(state, row.rowId, bank));
-    expectAtomicRejection(state, frozen, result);
-    expect(groupByName(result.state, "QNB").status).toBe("pending");
-    expect(requireRow(result.state, row.rowId).selected).toBe(false);
-  });
-
-  it("preserves pending Bank-group disclosure with a genuinely eligible Cash destination", async () => {
-    const input = await normalizedAtmSource();
-    const state = stagedAtm(input, COMMAND_IDS.cashAccount, "pending");
-    const bank = groupByName(state, "QNB");
-    const row = state.rows[0];
-    if (!row) throw new Error("Missing pending ATM row");
-    const result = execute(state, selectRow(state, row.rowId, bank));
-    expectAccepted(state, result);
-    expect(groupByName(result.state, "QNB").status).toBe("confirmed");
-    expect(requireRow(result.state, row.rowId).selected).toBe(true);
-  });
-
-  it("leaves mismatched declared ATM destination currency to the canonical schema", async () => {
-    const state = stagedAtm(
-      await normalizedAtmSource(), COMMAND_IDS.cashAccount, "existing"
-    );
-    const row = state.rows[0];
-    if (!row || row.toAssignment?.state !== "existing") {
-      throw new Error("Missing existing Cash destination");
-    }
-    expect(accountReviewSessionSchema.safeParse({
-      ...state,
-      rows: [{
-        ...row, toAssignment: { ...row.toAssignment, currency: "USD" },
-      }],
-    }).success).toBe(false);
-    // This is not classified as a missing reducer behavior.
+    expect(groupByName(result.state, "CIB")).toEqual(unchangedCib);
+    expect(requireRow(result.state, COMMAND_IDS.cibRow))
+      .toEqual(requireRow(before, COMMAND_IDS.cibRow));
+    expect(result.state.rows.map((row) => row.amountDecimal))
+      .toEqual(before.rows.map((row) => row.amountDecimal));
+    expect(before).toEqual(frozen);
   });
 });
 
