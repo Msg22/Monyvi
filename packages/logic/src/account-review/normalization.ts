@@ -12,6 +12,9 @@ import {
 import { deriveAccountReviewRowIdentity } from "./identity";
 import { collectFinancialEntries, canonicalAmount, type FinancialEntry } from "./normalization-financial";
 import { normalizeRowEvidence, type RowAdvisory, type NormalizedRowEvidence } from "./normalization-evidence";
+import {
+  normalizeAtmDestinationEvidence, type NormalizedAtmDestination,
+} from "./normalization-destination";
 import { createPendingReviewGroups, type PendingReviewRow } from "./normalization-groups";
 import type { AccountReviewNormalizationInput } from "./normalization-types";
 
@@ -23,6 +26,52 @@ interface ValidatedAdvisory {
   readonly rows: readonly ValidatedAdvisoryRow[];
   readonly suggestions: readonly AccountReviewSuggestedAccount[];
   readonly isMalformed: boolean;
+  /** Only after a full canonical re-parse with destination proof redacted. */
+  readonly rawDestinationByRef?: ReadonlyMap<string, unknown>;
+}
+
+
+/**
+ * A bad destination alone must not poison valid source evidence. Redact only
+ * that field, then run the SAME closed canonical v2 parser over every other
+ * source/financial/suggestion field. Original proof remains untrusted.
+ */
+function recoverSmsDestinationOnly(raw: unknown): ValidatedAdvisory | null {
+  if (!isV2Response(raw) || typeof raw !== "object" || raw === null ||
+      !("transactions" in raw) || !Array.isArray(raw.transactions)) return null;
+  const originalRows: readonly unknown[] = raw.transactions;
+  const redactedRows = originalRows.map((row) =>
+    typeof row === "object" && row !== null
+      ? { ...row, toAccountEvidence: null }
+      : row
+  );
+  const parsed = accountReviewSmsResponseV2Schema.safeParse({
+    ...raw, transactions: redactedRows,
+  });
+  if (!parsed.success) return null;
+  const rawDestinationByRef = new Map<string, unknown>();
+  for (const [index, row] of parsed.data.transactions.entries()) {
+    const original = originalRows[index];
+    rawDestinationByRef.set(
+      row.transactionRef,
+      typeof original === "object" && original !== null &&
+        "toAccountEvidence" in original
+        ? original.toAccountEvidence : undefined
+    );
+  }
+  return {
+    rows: parsed.data.transactions, suggestions: parsed.data.suggestedAccounts,
+    isMalformed: false, rawDestinationByRef,
+  };
+}
+
+function destinationFor(
+  parsed: ValidatedAdvisory, row: RowAdvisory | null
+): unknown {
+  if (!row) return null;
+  return parsed.rawDestinationByRef?.has(row.transactionRef)
+    ? parsed.rawDestinationByRef.get(row.transactionRef)
+    : row.toAccountEvidence;
 }
 
 function readAdvisory(input: AccountReviewNormalizationInput): ValidatedAdvisory {
@@ -44,6 +93,10 @@ function readAdvisory(input: AccountReviewNormalizationInput): ValidatedAdvisory
         isMalformed: false,
       };
     }
+    // Invalid *destination* proof can be isolated without relaxing any
+    // existing financial/source/account/currency/group validators.
+    const recovered = recoverSmsDestinationOnly(input.providerResponse);
+    if (recovered) return recovered;
   }
   return {
     rows: [], suggestions: [],
@@ -112,16 +165,21 @@ function initialReasons(
 
 function prepareRow(
   entry: FinancialEntry, rowId: string, evidence: NormalizedRowEvidence,
-  malformed: boolean
+  destination: NormalizedAtmDestination, malformed: boolean
 ): AccountReviewRow {
   const reasons = initialReasons(entry, evidence, malformed);
+  if (destination.invalid && !reasons.includes("account_evidence_invalid")) {
+    reasons.push("account_evidence_invalid");
+  }
   const reasonCode = reasons.includes("currency_confirmation_needed")
     ? "currency_confirmation_needed" :
     reasons.includes("account_evidence_invalid")
       ? "account_evidence_invalid" : "account_needed";
   const common = {
     rowId, sourceRef: evidence.sourceRef, amountDecimal: canonicalAmount(entry.financial.amount),
-    accountEvidence: evidence.accountEvidence, currency: evidence.currency,
+    accountEvidence: evidence.accountEvidence,
+    toAccountEvidence: destination.toAccountEvidence,
+    currency: evidence.currency,
     assignment: {
       state: "unresolved" as const, accountId: null, reasonCode,
       candidateAccountIds: [],
@@ -154,9 +212,15 @@ async function buildRows(
     });
     const raw = advisoryFor(input, entry, index, advisory);
     const evidence = normalizeRowEvidence(input, entry, raw);
+    const destination = normalizeAtmDestinationEvidence(
+      input, entry, evidence.currency, destinationFor(advisory, raw)
+    );
     const invalidAdvisory = advisory.isMalformed ||
       (advisory.rows.length > 0 && raw === null);
-    pending.push({ row: prepareRow(entry, rowId, evidence, invalidAdvisory), evidence });
+    pending.push({
+      row: prepareRow(entry, rowId, evidence, destination, invalidAdvisory),
+      evidence,
+    });
   }
   return pending;
 }

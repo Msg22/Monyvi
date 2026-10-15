@@ -29,7 +29,7 @@ export interface RowAdvisory {
   readonly currencyEvidence: AccountReviewCurrencyEvidence;
 }
 
-function uncertainEvidence(): AccountReviewAccountEvidence {
+export function uncertainEvidence(): AccountReviewAccountEvidence {
   return {
     state: "uncertain", name: null, type: null, institutionId: null,
     providerDisplayName: null, cardLast4: null,
@@ -57,7 +57,7 @@ function spanMatches(
   return sourceText.slice(span.start, span.end) === span.text;
 }
 
-function spansMatch(
+export function spansMatch(
   input: AccountReviewNormalizationInput,
   entry: FinancialEntry,
   spans: readonly AccountReviewEvidenceSpan[]
@@ -122,7 +122,7 @@ function originalSmsSenderMatchesOwned(
       .some((name) => sameGroundedName(name, sender));
 }
 
-function candidatesOwned(
+export function candidatesOwned(
   input: AccountReviewNormalizationInput,
   entry: FinancialEntry,
   evidence: AccountReviewAccountEvidence,
@@ -202,12 +202,8 @@ export function normalizeRowEvidence(
   const sourceRef = advisory?.transactionRef ??
     (entry.source === "SMS" ? entry.financial.messageId : input.requestKey);
   const original = advisory?.accountEvidence ?? uncertainEvidence();
-  const destination = advisory?.toAccountEvidence;
-  const validDestination = destination === null ||
-    (destination !== undefined &&
-      spansMatch(input, entry, destination.evidenceSpans) &&
-      candidatesOwned(input, entry, destination, currency, "destination"));
-  const isAccountEvidenceValid = advisory !== null && validDestination &&
+  // Source BANK evidence is independent of any ATM Cash destination proof.
+  const isAccountEvidenceValid = advisory !== null &&
     spansMatch(input, entry, original.evidenceSpans) &&
     candidatesOwned(input, entry, original, currency, "source") &&
     !(input.source === "SMS" && original.state === "contextual");
