@@ -496,3 +496,17 @@ tuple/parser/codec compatibility. Existing source-specific notes/date/ATM labels
 and refund/income semantics remain; no new conversion or AI balance. M01–M20
 owner device/provider/rendered checks remain separate from deterministic
 fixtures, parity and local pgTAP evidence. No test execution claimed by T004.
+
+---
+
+## T043 technical freeze — planned create localRef derivation (2026-10-15)
+
+This is the approved **linkage of existing T004 closed fields**, not a new
+payload field, DTO, schema, business rule or account-selection fallback.
+
+- Each selected financial create has `plannedEntityIds[{entity:"transaction"|"transfer",localRef:row.rowId,id}]`; the entity follows its genuine financial kind. Each **needed newly created group account** uses `{entity:"account",localRef:group.groupId,id}`. The corresponding `id` is a separate frozen actual create UUID, **not** the group/row/child alias. Existing-account reuse and unused groups have no create entries.
+- For a new **BANK** account, the one `bank_details` child localRef is `uuidV8FromSha256(SHA256(JSON.stringify(["account-review-localref/v1",ownerId,sessionId,groupId,"bank_details"])))`. For each actual sender child: `uuidV8FromSha256(SHA256(JSON.stringify(["account-review-localref/v1",ownerId,sessionId,groupId,"account_sms_sender",normalizedSender])))`. Reuse the published pure `uuidV8FromSha256` in `packages/logic/src/account-review/identity.ts` (Core normalization source), **not copied UUID nibble logic**. Sender normalization matches existing mobile `normalizeAccountSmsSender` exactly: `trim()`, `replace(/\\s+/g," ")`, `toLowerCase()`, **no NFC**. Deduplicate case/whitespace-equivalent sender aliases per existing `uniqueTrimmedSenderNames` policy, not an invented duplicate-name error.
+- BANK alone gets a bank-details child; WALLET may get its distinct normalized sender children but has **no** bank details; CASH has neither bank details nor fabricated sender children. Reject duplicate planned aliases/created IDs, missing/extra children, mismatched parent/evidence/revision, or any alias inferred from array/index position. Child `after.accountId` references the **frozen created account id**, not its localRef. Implement a pure shared sender normalizer or explicit mobile dependency adapter when T027/T048 produces source; **packages/logic never imports apps/mobile**.
+- Freeze all real create IDs, localRefs, timestamp, selected rows, owner/session/operation generation and confirmed group revisions **before any async Save**; the writer must rederive/validate exact mappings against captured authenticated current state **after awaits**. A retry reuses the exact frozen identity/hash, never mints another create or silently substitutes a stale group.
+- **ATM destination** in the current approved scope is an explicitly chosen **existing eligible CASH** account (compatible default/sole/manual). If a future genuine canonical `toAssignment.state="suggested"` identifies an already-approved group, use its **groupId** linkage, not row index/name. Absent a verified existing Cash endpoint or canonical group, remain unresolved; do not invent an ATM Cash group/create.
+- The reviewed SMS v2 test boundary is `encodeSmsReviewDraftV2({transaction,review})` and `smsReviewDraftPayloadV2Schema` from separately owned T025. V1 encoding is limited to explicit legacy/migration tests; it must not be a silent happy-path fallback.
