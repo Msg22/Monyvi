@@ -68,12 +68,16 @@ function fromActualRoot(
   root: FinancialActionGroup,
   overrides: Readonly<Record<string, unknown>> = {}
 ): Record<string, unknown> {
-  const {
-    local_recovery_snapshot_json: _private,
-    _status: _status,
-    _changed: _changed,
-    ...publicRaw
-  } = root._raw;
+  const publicRaw: Record<string, unknown> = {};
+  for (const [column, rawValue] of Object.entries(root._raw)) {
+    if (
+      column === "local_recovery_snapshot_json" ||
+      column === "_status" ||
+      column === "_changed"
+    ) continue;
+    const value: unknown = rawValue;
+    publicRaw[column] = value;
+  }
   return { ...publicRaw, ...overrides };
 }
 

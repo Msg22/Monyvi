@@ -22,11 +22,16 @@ import { createFinancialActionFoundationRepository } from
   "../../services/financial-action-foundation-repository";
 import { createAccountReviewFinancialRegistry } from
   "../../services/account-review-financial-command-service";
-import { createFinancialActionSyncService } from
-  "../../services/financial-action-sync-service";
+import {
+  createFinancialActionSyncService,
+  type FinancialActionSyncDependencies,
+} from "../../services/financial-action-sync-service";
 import { DEDICATED_SYNC_TABLES, SYNCABLE_TABLES } from
   "../../services/sync/config";
-import { constructReviewSave } from "../../services/account-review-save-plan";
+import {
+  constructReviewSave,
+  type SaveConstruction,
+} from "../../services/account-review-save-plan";
 import { freezeSelectedAccountReview } from
   "../../services/account-review-save-preparation";
 import {
@@ -165,7 +170,7 @@ async function assertPhysicalCreatedRefs(
 }
 
 async function createFailingPrivatePlan(fixture: SaveFixture): Promise<{
-  readonly envelope: NonNullable<Awaited<ReturnType<typeof constructReviewSave>>["envelope"]>;
+  readonly envelope: NonNullable<SaveConstruction["envelope"]>;
   readonly plan: FinancialActionLinkedOperationPlan;
   readonly stages: string[];
 }> {
@@ -191,7 +196,7 @@ async function createFailingPrivatePlan(fixture: SaveFixture): Promise<{
       await original.assertPreparedOwnership(input);
       stages.push("validated");
     },
-    buildLocalRecoverySnapshot: async (input): Promise<AccountReviewLocalSaveSnapshot> => {
+    buildLocalRecoverySnapshot: (input): Promise<AccountReviewLocalSaveSnapshot> => {
       stages.push("builder");
       expect(input.userId).toBe(OWNER);
       expect(input.cachedPreimages.length).toBeGreaterThan(0);
@@ -199,7 +204,7 @@ async function createFailingPrivatePlan(fixture: SaveFixture): Promise<{
       expect(input.preparedPostimages.every((row) =>
         Object.isFrozen(row.raw)
       )).toBe(true);
-      throw new Error("intentional_private_builder_failure");
+      return Promise.reject(new Error("intentional_private_builder_failure"));
     },
   };
   return { envelope: built.envelope, plan, stages };
@@ -254,7 +259,10 @@ describe("#395 T043 actual selected Save device-private evidence", () => {
         const rootOperation = operations.find(
           (model: Model) => model.table === "financial_action_groups"
         );
-        expect(rootOperation?._raw[PRIVATE_COLUMN]).toEqual(expect.any(String));
+        if (!rootOperation) throw new Error("missing_real_root_operation");
+        const privateColumn: unknown = Object.entries(rootOperation._raw)
+          .find(([name]) => name === PRIVATE_COLUMN)?.[1];
+        expect(privateColumn).toEqual(expect.any(String));
         expect(operations.map((model: Model) => model.table)).toEqual(
           expect.arrayContaining([
             "financial_action_groups", "accounts",
@@ -394,5 +402,54 @@ describe("#395 T043 actual selected Save device-private evidence", () => {
     const fresh = await cloneRecoverySqlite();
     expect(await ownedPhysicalRows(fresh, "financial_action_groups")).toHaveLength(0);
     expect((await ledgerState(fresh)).counts.draftItems).toBe(0);
+  });
+
+  it("L09 uses real dedicated RPC and generic-sync classification without private recovery bytes", async () => {
+    const fixture = makeSaveFixture("sms-new-bank");
+    await seedBoundSmsReview(fixture);
+    await expect(saveReview(fixture)).resolves.toMatchObject({ kind: "committed" });
+    const root = await requireActionRoot(await cloneRecoverySqlite());
+    const privateBytes = root.localRecoverySnapshotJson;
+    if (typeof privateBytes !== "string")
+      throw new Error("missing_durable_private_root_for_rpc");
+    const snapshot = readPrivateOwnedRoot(root);
+    const available = snapshot.smsDrafts.find(
+      (draft) => draft.retentionState === "available"
+    );
+    if (!available || available.retentionState !== "available")
+      throw new Error("missing_actual_sms_preimage_for_privacy");
+    const outgoing: Array<
+      Parameters<FinancialActionSyncDependencies["invokeAccountFinancialActionRpc"]>[0]
+    > = [];
+    const foundation = createFinancialActionFoundationRepository({
+      database,
+      getCurrentUserDataScope,
+      assertExpectedCurrentUser,
+      registry: createAccountReviewFinancialRegistry(),
+    });
+    const sync = createFinancialActionSyncService({
+      foundationRepository: foundation,
+      invokeAccountFinancialActionRpc: (input): Promise<unknown> => {
+        outgoing.push(input);
+        return Promise.reject(new Error("injected_private_rpc_transport_failure"));
+      },
+    });
+    await expect(sync.syncAction(root.actionId)).rejects.toThrow(
+      "injected_private_rpc_transport_failure"
+    );
+    expect(outgoing).toEqual([{
+      payloadHash: root.payloadHash,
+      payloadJson: root.payloadJson,
+    }]);
+    const sent = JSON.stringify(outgoing);
+    expect(sent).not.toContain(privateBytes);
+    expect(sent).not.toContain(available.payloadJson);
+    expect(sent).not.toContain(PRIVATE_COLUMN);
+    expect(DEDICATED_SYNC_TABLES.has("financial_action_groups")).toBe(true);
+    expect(SYNCABLE_TABLES).not.toContain("financial_action_groups");
+    const failed = await requireActionRoot(await cloneRecoverySqlite());
+    expect(failed.state).toBe("sync_failed");
+    expect(failed.localRecoverySnapshotJson).toBe(privateBytes);
+    expect(failed.outcomeJson).toBeNull();
   });
 });
