@@ -226,7 +226,8 @@ export function createFinancialActionFoundationRepository(
   function prepareNewRoot(
     context: PreparedFinancialActionContext,
     state: FinancialActionState,
-    now: Date
+    now: Date,
+    localSnapshotJson: string | null = null
   ): FinancialActionGroup {
     return collection().prepareCreate((candidate) => {
       candidate.actionId = context.envelope.actionId;
@@ -245,6 +246,10 @@ export function createFinancialActionFoundationRepository(
       candidate.rejectionCode = null;
       candidate.deleted = false;
       candidate.updatedAt = now;
+      // Decorated WatermelonDB fields are writable only while prepareCreate
+      // invokes this callback (or inside an actual prepareUpdate callback).
+      if (localSnapshotJson !== null)
+        candidate.localRecoverySnapshotJson = localSnapshotJson;
     });
   }
 
@@ -523,7 +528,8 @@ export function createFinancialActionFoundationRepository(
   ): PreparedLocalRoot {
     const now = new Date();
     const record =
-      foundRecord ?? prepareNewRoot(context, "local_complete", now);
+      foundRecord ??
+      prepareNewRoot(context, "local_complete", now, localSnapshotJson);
     const operation = foundRecord
       ? record.prepareUpdate((candidate) => {
           candidate.state = "local_complete";
@@ -532,8 +538,6 @@ export function createFinancialActionFoundationRepository(
             candidate.localRecoverySnapshotJson = localSnapshotJson;
         })
       : record;
-    if (!foundRecord && localSnapshotJson !== null)
-      record.localRecoverySnapshotJson = localSnapshotJson;
     return { operation, record };
   }
 
