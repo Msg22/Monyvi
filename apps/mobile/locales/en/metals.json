@@ -430,6 +430,26 @@
     "confirm_accessibility": "Delete holding {{holdingName}}",
     "terminal_unavailable": "To correct this terminal action, undo it first."
   },
+  "restore": {
+    "title": "Restore holding",
+    "back": "Back",
+    "consequences_heading": "What will change",
+    "review": "I reviewed these changes.",
+    "confirm": "Restore holding",
+    "pending": "Restoring holding",
+    "cancel": "Cancel",
+    "sale_body": "This restores the same holding to Active. The sale stays in History as reversed.",
+    "disposal_body": "This restores the same holding to Active. The no longer owned record stays in History as reversed.",
+    "active_consequence": "{{holdingName}} becomes Active",
+    "sale_result": "Profit or loss from this sale is removed",
+    "disposal_treatment": "The effect of this change is removed",
+    "sale_history": "The sale stays in History as reversed",
+    "disposal_history": "The no longer owned record stays in History as reversed",
+    "success": "Holding restored",
+    "failure": "We couldn't restore this holding. Try again.",
+    "changed_failure": "This holding changed. Try again to review the latest details.",
+    "load_failure": "We couldn't check this holding. Try again."
+  },
   "actions": {
     "sell": "Sell holding",
     "edit": "Edit",
@@ -446,6 +466,7 @@
     "sell": "Sold",
     "dispose": "No longer owned",
     "delete": "Deleted",
-    "undo": "Restored"
+    "undo": "Restored",
+    "reversed": "Reversed"
   }
 }

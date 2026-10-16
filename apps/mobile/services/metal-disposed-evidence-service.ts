@@ -93,6 +93,24 @@ export interface MetalDisposedEvidenceInput {
   readonly userId: string;
 }
 
+export interface MetalDisposeActionEvidenceInput {
+  readonly event: MetalDisposeEventSnapshot | null;
+  readonly group: MetalDisposeGroupSnapshot | null;
+  readonly holdingId: string;
+  readonly userId: string;
+  readonly latestAllowedCalendarDate?: string;
+}
+
+export type MetalDisposeActionEnvelopeOutcome =
+  | {
+      readonly available: true;
+      readonly envelope: ReturnType<typeof parseFinancialActionEnvelopeJson>;
+    }
+  | {
+      readonly available: false;
+      readonly reason: MetalDisposedEvidenceUnavailableReason;
+    };
+
 interface ShapedDisposalReason {
   readonly reason: MetalDisposalReason;
   readonly treatment: MetalDisposalTreatment;
@@ -108,41 +126,15 @@ export function shapeMetalDisposedEvidence(
     return { available: false, reason: "excluded_disposal" };
   }
 
-  let envelope;
-  try {
-    const latestAllowedCalendarDate =
-      input.latestAllowedCalendarDate ?? currentCalendarDate();
-    envelope = parseFinancialActionEnvelopeJson(group.payloadJson, undefined, {
-      latestAllowedCalendarDate,
-    });
-  } catch {
-    return { available: false, reason: "unsupported_disposal_evidence" };
-  }
-
-  if (
-    envelope.envelopeVersion !== "monyvi.financial-action/v1" ||
-    envelope.payloadVersion !== "metals.dispose/v1" ||
-    envelope.actionId !== group.actionId ||
-    envelope.actionId !== event.actionId ||
-    envelope.domain !== "metals" ||
-    envelope.domain !== group.domain ||
-    envelope.kind !== "dispose" ||
-    envelope.kind !== group.kind ||
-    envelope.domainReferenceId !== holding.holdingId ||
-    envelope.domainReferenceId !== group.domainReferenceId ||
-    envelope.userId !== input.userId ||
-    envelope.accountGuards.length !== 0
-  ) {
-    return { available: false, reason: "invalid_disposal_evidence" };
-  }
-
-  const eventPayload = parseJsonValue(event.payloadJson);
-  if (
-    eventPayload === null ||
-    canonicalJson(eventPayload) !== canonicalJson(envelope.payload)
-  ) {
-    return { available: false, reason: "invalid_disposal_evidence" };
-  }
+  const validated = readMetalDisposeActionEnvelope({
+    event,
+    group,
+    holdingId: holding.holdingId,
+    userId: input.userId,
+    latestAllowedCalendarDate: input.latestAllowedCalendarDate,
+  });
+  if (!validated.available) return validated;
+  const envelope = validated.envelope;
 
   const payload = envelope.payload;
   const reason = shapeReason(payload.reason);
@@ -164,6 +156,67 @@ export function shapeMetalDisposedEvidence(
       ...reason,
     },
   };
+}
+
+// This proof depends on immutable action evidence, independently of the current head.
+export function readMetalDisposeActionEnvelope(
+  input: MetalDisposeActionEvidenceInput
+): MetalDisposeActionEnvelopeOutcome {
+  const { event, group, holdingId, userId } = input;
+  if (
+    (event !== null && event.userId !== userId) ||
+    (group !== null && group.userId !== userId)
+  ) {
+    return { available: false, reason: "foreign_disposal_evidence" };
+  }
+  if (
+    event === null ||
+    group === null ||
+    event.deleted ||
+    group.deleted ||
+    !event.isEffective ||
+    event.kind !== "dispose" ||
+    group.kind !== "dispose" ||
+    event.holdingId !== holdingId ||
+    group.domainReferenceId !== holdingId ||
+    event.actionId !== group.actionId ||
+    !isReportableGroup(group)
+  ) {
+    return { available: false, reason: "excluded_disposal" };
+  }
+  let envelope: ReturnType<typeof parseFinancialActionEnvelopeJson>;
+  try {
+    envelope = parseFinancialActionEnvelopeJson(group.payloadJson, undefined, {
+      latestAllowedCalendarDate:
+        input.latestAllowedCalendarDate ?? currentCalendarDate(),
+    });
+  } catch {
+    return { available: false, reason: "unsupported_disposal_evidence" };
+  }
+  if (
+    envelope.envelopeVersion !== "monyvi.financial-action/v1" ||
+    envelope.payloadVersion !== "metals.dispose/v1" ||
+    envelope.actionId !== group.actionId ||
+    envelope.actionId !== event.actionId ||
+    envelope.domain !== "metals" ||
+    envelope.domain !== group.domain ||
+    envelope.kind !== "dispose" ||
+    envelope.kind !== group.kind ||
+    envelope.domainReferenceId !== holdingId ||
+    envelope.domainReferenceId !== group.domainReferenceId ||
+    envelope.userId !== userId ||
+    envelope.accountGuards.length !== 0
+  ) {
+    return { available: false, reason: "invalid_disposal_evidence" };
+  }
+  const eventPayload = parseJsonValue(event.payloadJson);
+  if (
+    eventPayload === null ||
+    canonicalJson(eventPayload) !== canonicalJson(envelope.payload)
+  ) {
+    return { available: false, reason: "invalid_disposal_evidence" };
+  }
+  return { available: true, envelope };
 }
 
 function classifyDisposalExclusion(

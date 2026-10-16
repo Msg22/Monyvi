@@ -244,6 +244,18 @@ export function buildTimeline(
   sourceEvents: readonly MetalDetailLifecycleEventInput[]
 ): readonly MetalDetailTimelineItem[] {
   const sourceById = new Map(sourceEvents.map((event) => [event.id, event]));
+  const reversedByTarget = new Map<string, string>();
+  for (const event of acceptedEvents) {
+    if (
+      event.kind === "reversed" &&
+      event.canonicalCasStatus === "accepted" &&
+      event.evidenceState === "effective" &&
+      event.reversesEventId !== null &&
+      event.predecessorEventId === event.reversesEventId
+    ) {
+      reversedByTarget.set(event.reversesEventId, event.id);
+    }
+  }
   return Object.freeze(
     orderLifecycleEventsNewestFirst(acceptedEvents)
       .map((accepted) => sourceById.get(accepted.id))
@@ -256,6 +268,9 @@ export function buildTimeline(
           id: event.id,
           kind: event.kind,
           occurredAt: new Date(event.occurredAt.getTime()),
+          ...(event.kind === "sell" || event.kind === "dispose"
+            ? { reversedByEventId: reversedByTarget.get(event.id) ?? null }
+            : {}),
           ...(event.kind === "correct"
             ? {
                 correctionChanges: correctionChangesFromPayload(
@@ -332,9 +347,29 @@ export function toDetailHoldingStateInput(
   };
 }
 
+export type MetalDetailLifecycleEventRecord = Pick<
+  MetalLifecycleEvent,
+  | "actionId"
+  | "deleted"
+  | "holdingId"
+  | "id"
+  | "isEffective"
+  | "isHistoryVisible"
+  | "kind"
+  | "occurredAt"
+  | "payloadJson"
+  | "predecessorEventId"
+  | "reversesEventId"
+  | "userId"
+>;
+type MetalDetailActionEvidenceRecord = Pick<
+  MetalActionEvidence,
+  "actionId" | "holdingId" | "kind" | "userId" | "deleted"
+>;
+
 export function toDetailLifecycleEventInput(
-  event: MetalLifecycleEvent,
-  evidence: readonly MetalActionEvidence[]
+  event: MetalDetailLifecycleEventRecord,
+  evidence: readonly MetalDetailActionEvidenceRecord[]
 ): MetalDetailLifecycleEventInput | null {
   const isLegacyAdd =
     event.kind === "created" &&
@@ -413,8 +448,8 @@ function toLifecycleKind(
 }
 
 export function shapeMetalDetailLifecycleEvents(
-  events: readonly MetalLifecycleEvent[],
-  evidence: readonly MetalActionEvidence[]
+  events: readonly MetalDetailLifecycleEventRecord[],
+  evidence: readonly MetalDetailActionEvidenceRecord[]
 ): readonly MetalDetailLifecycleEventInput[] {
   const canonicalAddActionIds = new Set(
     events

@@ -5,6 +5,7 @@ import { router } from "expo-router";
 import MetalHoldingDetailRoute from "@/app/(private)/metals/[id]";
 
 let mockModel: Record<string, unknown> | null = {
+  timeline: [],
   status: "active",
   isActiveOwnership: true,
   isFinancialActionLocked: false,
@@ -12,9 +13,23 @@ let mockModel: Record<string, unknown> | null = {
 let mockRouteId: string | string[] | undefined = "holding-123";
 
 jest.mock("expo-router", () => ({
+  useFocusEffect: jest.fn(),
   router: { push: jest.fn() },
   useRouter: () => ({ push: jest.fn() }),
   useLocalSearchParams: () => ({ id: mockRouteId }),
+}));
+jest.mock("@/hooks/useUndoMetalHoldingContext", () => ({
+  useUndoMetalHoldingContext: () => ({
+    context: null,
+    userId: null,
+    isResolvingUser: false,
+    isLoading: false,
+    error: null,
+    retry: jest.fn(),
+  }),
+}));
+jest.mock("@/hooks/useRestoreMetalHolding", () => ({
+  useRestoreMetalHolding: jest.fn(),
 }));
 jest.mock("react-i18next", () => ({
   useTranslation: () => ({ t: (key: string): string => key }),
@@ -86,6 +101,7 @@ jest.mock("@/components/metals/MetalHoldingDetailScreen", () => {
 beforeEach(() => {
   jest.clearAllMocks();
   mockModel = {
+    timeline: [],
     status: "active",
     isActiveOwnership: true,
     isFinancialActionLocked: false,
@@ -136,7 +152,7 @@ describe("Detail No Longer production wiring", () => {
       },
     ],
   ])("fails closed for %s without a dispose action", (_label, model): void => {
-    mockModel = model;
+    mockModel = { ...model, timeline: [] };
     render(<MetalHoldingDetailRoute />);
     expect(mockCapturedActions.some((action) => action.id === "dispose")).toBe(
       false

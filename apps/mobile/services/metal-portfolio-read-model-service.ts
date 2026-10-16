@@ -4,9 +4,7 @@ import {
   type AssetMetal,
   type CurrencyType,
   type FinancialActionGroup,
-  type MetalActionEvidence,
   type MetalHoldingState,
-  type MetalLifecycleEvent,
   type MetalRateReference,
 } from "@monyvi/db";
 import {
@@ -48,6 +46,7 @@ import {
   type MetalSellGroupSnapshot,
   type MetalSellRateReferenceSnapshot,
 } from "@/services/metal-realized-sale-read-model-service";
+import { resolvePortfolioLegacyLineage } from "./metal-portfolio-legacy-lineage-service";
 import {
   toPortfolioSaleGroup,
   toPortfolioSaleHolding,
@@ -136,6 +135,9 @@ export interface MetalPortfolioLifecycleEventSnapshot {
   readonly occurredAt: Date;
   readonly payloadJson?: string;
   readonly userId: string;
+  readonly predecessorEventId?: string | null;
+  readonly reversesEventId?: string | null;
+  readonly isHistoryVisible?: boolean;
 }
 
 export interface MetalPortfolioActionEvidenceSnapshot {
@@ -144,6 +146,9 @@ export interface MetalPortfolioActionEvidenceSnapshot {
   readonly holdingId: string;
   readonly kind: string;
   readonly userId: string;
+  readonly domainPayloadJson?: string;
+  readonly expectedHoldingRevision?: string | null;
+  readonly canonicalHoldingRevision?: string | null;
 }
 
 export interface ShapeMetalPortfolioHoldingsInput {
@@ -273,58 +278,10 @@ export function observePortfolioHoldingStates(
   );
 }
 
-export function observePortfolioRecentHistory(
-  input: ObservePortfolioRecentHistoryInput
-): Query<MetalLifecycleEvent> | null {
-  const effectiveEventIds = Array.from(
-    new Set(
-      input.holdingStates
-        .filter(
-          (state) =>
-            state.userId === input.userId &&
-            !state.deleted &&
-            state.effectiveEventId !== null
-        )
-        .map((state) => state.effectiveEventId)
-        .filter((id): id is string => id !== null)
-    )
-  ).sort();
-  if (effectiveEventIds.length === 0) return null;
-  return queryOwned(
-    database.get<MetalLifecycleEvent>("metal_lifecycle_events"),
-    input.userId,
-    Q.where("id", Q.oneOf(effectiveEventIds)),
-    Q.where("deleted", false),
-    Q.where("is_effective", true),
-    Q.sortBy("occurred_at", Q.desc)
-  );
-}
-
-export function observePortfolioEffectiveActionEvidence(
-  input: ObservePortfolioRecentHistoryInput
-): Query<MetalActionEvidence> | null {
-  const actionIds = Array.from(
-    new Set(
-      input.holdingStates
-        .filter(
-          (state) =>
-            state.userId === input.userId &&
-            !state.deleted &&
-            state.effectiveActionId !== null &&
-            state.effectiveActionId !== undefined
-        )
-        .map((state) => state.effectiveActionId)
-        .filter((id): id is string => typeof id === "string")
-    )
-  ).sort();
-  if (actionIds.length === 0) return null;
-  return queryOwned(
-    database.get<MetalActionEvidence>("metal_action_evidence"),
-    input.userId,
-    Q.where("action_id", Q.oneOf(actionIds)),
-    Q.where("deleted", false)
-  );
-}
+export {
+  observePortfolioRecentHistory,
+  observePortfolioEffectiveActionEvidence,
+} from "./metal-portfolio-legacy-lineage-service";
 
 export function shapeMetalPortfolioHoldings(
   input: ShapeMetalPortfolioHoldingsInput
@@ -339,11 +296,7 @@ export function shapeMetalPortfolioHoldings(
       .filter((state) => state.userId === input.userId && !state.deleted)
       .map((state) => [state.holdingId, state] as const)
   );
-  const eventsById = new Map(
-    input.lifecycleEvents
-      .filter((event) => event.userId === input.userId && !event.deleted)
-      .map((event) => [event.id, event] as const)
-  );
+  // Effective event lookup below uses the shared owner/action identity proof.
   const groupsByActionId = new Map(
     (input.actionGroups ?? [])
       .filter((group) => group.userId === input.userId && !group.deleted)
@@ -380,20 +333,32 @@ export function shapeMetalPortfolioHoldings(
       return [];
     }
 
-    const event = state.effectiveEventId
-      ? eventsById.get(state.effectiveEventId)
-      : undefined;
+    const { event, lineageTrusted } = resolvePortfolioLegacyLineage(
+      input,
+      state
+    );
     const hasValidEventLink =
-      state.effectiveEventId === null ||
-      (event !== undefined &&
-        event.holdingId === asset.id &&
-        event.isEffective &&
-        copyValidDate(event.occurredAt) !== null);
+      lineageTrusted &&
+      (state.effectiveEventId === null ||
+        (event !== undefined &&
+          event.holdingId === asset.id &&
+          event.isEffective &&
+          copyValidDate(event.occurredAt) !== null));
     const hasValidTerminalEvidence =
-      persistedStatus === "active" ||
-      hasBoundEffectiveActionEvidence(state, event, actionEvidence);
-    const status = hasValidTerminalEvidence ? persistedStatus : "active";
-    const effectiveEvent = status === persistedStatus ? event : undefined;
+      lineageTrusted &&
+      (persistedStatus === "active" ||
+        hasBoundEffectiveActionEvidence(state, event, actionEvidence));
+    // A malformed old Undo referencing legacy E is persisted for recovery,
+    // never counted as active wealth. Ordinary nonlegacy holdings are unchanged.
+    const status = lineageTrusted
+      ? hasValidTerminalEvidence
+        ? persistedStatus
+        : "active"
+      : persistedStatus;
+    const effectiveEvent =
+      hasValidTerminalEvidence && status === persistedStatus
+        ? event
+        : undefined;
     const exactFacts = normalizeExactHoldingFacts(asset, metal);
     const values = calculateHoldingCardValues({
       currentRates: input.currentRates,
@@ -451,6 +416,7 @@ export function shapeMetalPortfolioHoldings(
         id: asset.id,
         isEffective:
           hasValidEventLink &&
+          hasValidTerminalEvidence &&
           isEffectiveReconciliationState(state.reconciliationState),
         isVisible: state.isVisible,
         metalType: metal.metalType,

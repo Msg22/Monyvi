@@ -11,10 +11,15 @@ import type {
 import {
   reduceMetalLifecycle,
   type FinancialActionEnvelopeV1,
+  type LifecycleEvent,
   type RegisteredActionPayload,
   type Sha256Provider,
 } from "@monyvi/logic";
 
+import {
+  normalizeMetalLifecycleEvents,
+  resolveMetalLifecycleIdentity,
+} from "./metal-lifecycle-identity-service";
 import type {
   CommitFinancialActionGroupLocallyInput,
   CommitFinancialActionGroupLocallyResult,
@@ -135,6 +140,7 @@ export interface DisposeMetalHoldingConsequences {
 
 interface Projection {
   readonly actionRoots: readonly FinancialActionGroup[];
+  readonly actionEvidence: readonly MetalActionEvidence[];
   readonly asset: Asset;
   readonly metal: AssetMetal | null;
   readonly state: MetalHoldingState;
@@ -297,7 +303,7 @@ async function loadProjection(
             Q.take(1)
           )
           .fetch();
-  const [assets, states, predecessors, timeline, actionRoots] =
+  const [assets, states, predecessors, timeline, actionRoots, actionEvidence] =
     await Promise.all([
       scope
         .queryOwned(
@@ -335,6 +341,15 @@ async function loadProjection(
           Q.where("deleted", false)
         )
         .fetch(),
+      scope
+        .queryOwned(
+          dependencies.database.get<MetalActionEvidence>(
+            "metal_action_evidence"
+          ),
+          Q.where("holding_id", input.holdingId),
+          Q.where("deleted", false)
+        )
+        .fetch(),
     ]);
   if (
     !assets[0] ||
@@ -354,6 +369,9 @@ async function loadProjection(
     .fetch();
   return {
     actionRoots: actionRoots.map((root) => scope.assertOwned(root)),
+    actionEvidence: actionEvidence.map((candidate) =>
+      scope.assertOwned(candidate)
+    ),
     asset,
     metal: metals[0] ?? null,
     state: scope.assertOwned(states[0]),
@@ -423,10 +441,27 @@ function assertProjection(
     projection.predecessor === null &&
     projection.timeline.length === 0;
   if (isMigratedRevisionZero) return;
-  const reduced = reduceMetalLifecycle(
+  const identity = resolveMetalLifecycleIdentity({
+    userId: input.userId,
+    holdingId: input.holdingId,
+    events: projection.timeline,
+    groups: projection.actionRoots,
+    evidence: projection.actionEvidence,
+  });
+  if (identity.hasUnprovenLegacyRoot) {
+    throw new Error("metal_dispose_lifecycle_conflict");
+  }
+  const reducerEvents = normalizeMetalLifecycleEvents(
     projection.timeline.map((event) =>
       toReducerEvent(event, projection.actionRoots)
-    )
+    ),
+    identity
+  );
+  const reduced = reduceMetalLifecycle(
+    reducerEvents,
+    identity.canonicalRootActionId === null
+      ? null
+      : { terminalEventId: identity.canonicalRootActionId }
   );
   if (
     projection.predecessor === null ||
@@ -458,11 +493,15 @@ function assertProjection(
 function toReducerEvent(
   event: MetalLifecycleEvent,
   actionRoots: readonly FinancialActionGroup[]
-): Readonly<Record<string, unknown>> {
+): LifecycleEvent {
+  const kind = toReducerKind(event.kind);
+  if (kind === null) {
+    throw new Error("metal_dispose_lifecycle_conflict");
+  }
   const actionRoot = actionRoots.find(
     (candidate) =>
       candidate.actionId === event.actionId &&
-      toReducerKind(candidate.kind) === toReducerKind(event.kind)
+      toReducerKind(candidate.kind) === kind
   );
   const canonicalCasStatus = actionRoot
     ? ACCEPTED_ACTION_ROOT_STATES.has(actionRoot.state)
@@ -482,15 +521,15 @@ function toReducerEvent(
         : "ineffective",
     fingerprint: event.payloadJson,
     id: event.id,
-    kind: toReducerKind(event.kind),
+    kind,
     occurredAt: event.occurredAt.getTime(),
     predecessorEventId: event.predecessorEventId,
     reversesEventId: event.reversesEventId,
   };
 }
 
-function toReducerKind(kind: string): string {
-  const kinds: Readonly<Record<string, string>> = {
+function toReducerKind(kind: string): LifecycleEvent["kind"] | null {
+  const kinds: Readonly<Record<string, LifecycleEvent["kind"]>> = {
     add: "created",
     correct: "corrected",
     created: "created",
@@ -504,7 +543,7 @@ function toReducerKind(kind: string): string {
     undo: "reversed",
     reversed: "reversed",
   };
-  return kinds[kind] ?? kind;
+  return kinds[kind] ?? null;
 }
 
 function assertSuccessfulReplay(

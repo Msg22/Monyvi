@@ -264,7 +264,7 @@ describe("metal portfolio read model", () => {
     });
   });
 
-  it("builds user-scoped queries and observes only effective events referenced by current holding states", () => {
+  it("builds user-scoped queries and observes the full holding timeline required for legacy lineage", () => {
     expect(observePortfolioAssets("user-1")).toBe(mockAssetsQuery);
     expect(observePortfolioHoldingStates("user-1")).toBe(
       mockHoldingStatesQuery
@@ -316,9 +316,8 @@ describe("metal portfolio read model", () => {
     expect(mockQueryOwned).toHaveBeenCalledWith(
       mockLifecycleEventsCollection,
       "user-1",
-      { kind: "where", column: "id", value: { oneOf: ["event-current"] } },
+      { kind: "where", column: "holding_id", value: { oneOf: ["holding-1"] } },
       { kind: "where", column: "deleted", value: false },
-      { kind: "where", column: "is_effective", value: true },
       { kind: "sortBy", column: "occurred_at", value: "desc" }
     );
   });

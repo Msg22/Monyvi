@@ -48,7 +48,9 @@ interface CanonicalInstallPlan {
 function isCanonicalInstallPlan(value: unknown): value is CanonicalInstallPlan {
   if (typeof value !== "object" || value === null) return false;
   const candidate = value as Readonly<Record<string, unknown>>;
-  return Array.isArray(candidate.operations) && Array.isArray(candidate.snapshots);
+  return (
+    Array.isArray(candidate.operations) && Array.isArray(candidate.snapshots)
+  );
 }
 
 async function createDatabase(): Promise<Database> {
@@ -100,7 +102,10 @@ function createGroup(): CanonicalMetalActionGroup {
       domain: "metals",
       domainReferenceId: HOLDING_ID,
       kind: "correct",
-      outcomeJson: canonicalMetalJson({ actionId: ACTION_ID, status: "accepted" }),
+      outcomeJson: canonicalMetalJson({
+        actionId: ACTION_ID,
+        status: "accepted",
+      }),
       payloadHash: HASH,
       payloadJson: canonicalMetalJson(envelope),
       rejectionCode: null,
@@ -295,6 +300,156 @@ describe("canonical winner cache atomicity", () => {
     expect(winner.root.serverOutcome).toBeNull();
     expect(winner.evidence.canonicalHoldingRevision).toBeNull();
     expect(winner.event.isEffective).toBe(false);
+  });
+
+  it("retains a uniquely proven legacy Dispose primary key during canonical stale installation", async (): Promise<void> => {
+    const database = await createDatabase();
+    const legacyEventId = "018f0c7a-1234-7abc-8def-000000000017";
+    const legacyEvidenceId = "018f0c7a-1234-7abc-8def-000000000018";
+    const disposalPayload = {
+      disposalDate: "2026-08-31",
+      expectedHoldingRevision: "0",
+      holdingId: HOLDING_ID,
+      notes: null,
+      predecessorEventId: null,
+      reason: "given_away",
+      reversesEventId: null,
+    };
+    const payloadJson = canonicalMetalJson(disposalPayload);
+    // The local command uses registry field order, whereas server JSONB
+    // encoding canonicalizes object key order. Both represent the exact same
+    // immutable disposal payload, but their original bytes must be retained.
+    const originalLocalPayloadJson =
+      ` { "holdingId": "${HOLDING_ID}", "reason":"given_away", "notes":null, ` +
+      `"reversesEventId":null, "expectedHoldingRevision":"0", ` +
+      `"predecessorEventId":null, "disposalDate":"2026-08-31" } `;
+    expect(originalLocalPayloadJson).not.toBe(payloadJson);
+    const source = createGroup();
+    const group: CanonicalMetalActionGroup = {
+      ...source,
+      root: {
+        ...source.root,
+        kind: "dispose",
+        payloadJson: JSON.stringify({
+          accountGuards: [],
+          actionId: ACTION_ID,
+          domain: "metals",
+          domainReferenceId: HOLDING_ID,
+          envelopeVersion: "monyvi.financial-action/v1",
+          kind: "dispose",
+          occurredAt: TIMESTAMP,
+          payload: disposalPayload,
+          payloadVersion: "metals.dispose/v1",
+          userId: USER_ID,
+        }),
+      },
+      evidence: {
+        ...source.evidence,
+        kind: "dispose",
+        domainPayloadJson: payloadJson,
+      },
+      event: {
+        ...source.event,
+        kind: "dispose",
+        payloadJson,
+      },
+      rates: [],
+    };
+    await database.write(async (): Promise<void> => {
+      const root = database
+        .get<FinancialActionGroup>("financial_action_groups")
+        .prepareCreate((record): void => {
+          record._raw.id = ROOT_ID;
+          record.accountGuardsJson = "[]";
+          record.actionId = ACTION_ID;
+          record.deleted = false;
+          record.domain = "metals";
+          record.domainReferenceId = HOLDING_ID;
+          record.kind = "dispose";
+          record.outcomeJson = group.root.outcomeJson;
+          record.payloadHash = HASH;
+          record.payloadJson = group.root.payloadJson;
+          record.rejectionCode = null;
+          record.serverOutcome = "accepted";
+          record.state = "accepted";
+          record.updatedAt = new Date(TIMESTAMP);
+          record.userId = USER_ID;
+        });
+      const evidence = database
+        .get<MetalActionEvidence>("metal_action_evidence")
+        .prepareCreate((record): void => {
+          record._raw.id = legacyEvidenceId;
+          record.actionId = ACTION_ID;
+          record.canonicalHoldingRevision = "1";
+          record.deleted = false;
+          record.domainPayloadJson = originalLocalPayloadJson;
+          record.expectedHoldingRevision = "0";
+          record.holdingId = HOLDING_ID;
+          record.kind = "dispose";
+          record.updatedAt = new Date(TIMESTAMP);
+          record.userId = USER_ID;
+        });
+      const event = database
+        .get<MetalLifecycleEvent>("metal_lifecycle_events")
+        .prepareCreate((record): void => {
+          record._raw.id = legacyEventId;
+          record.actionId = ACTION_ID;
+          record.deleted = false;
+          record.holdingId = HOLDING_ID;
+          record.isEffective = true;
+          record.isHistoryVisible = true;
+          record.kind = "dispose";
+          record.occurredAt = new Date(TIMESTAMP);
+          record.payloadJson = originalLocalPayloadJson;
+          record.predecessorEventId = null;
+          record.reversesEventId = null;
+          record.updatedAt = new Date(TIMESTAMP);
+          record.userId = USER_ID;
+        });
+      await database.batch(root, evidence, event);
+    });
+
+    const planned = await prepareCanonicalActionGroupInstall(
+      database,
+      group,
+      USER_ID
+    );
+    await database.write(async (): Promise<void> => {
+      await database.batch(...planned.operations);
+    });
+    const events = await database
+      .get<MetalLifecycleEvent>("metal_lifecycle_events")
+      .query()
+      .fetch();
+    const evidence = await database
+      .get<MetalActionEvidence>("metal_action_evidence")
+      .query()
+      .fetch();
+    expect(events).toHaveLength(1);
+    expect(evidence).toHaveLength(1);
+    expect(events[0]?.id).toBe(legacyEventId);
+    expect(evidence[0]?.id).toBe(legacyEvidenceId);
+    expect(events[0]?.actionId).toBe(ACTION_ID);
+    expect(events[0]?.payloadJson).toBe(originalLocalPayloadJson);
+    expect(evidence[0]?.domainPayloadJson).toBe(originalLocalPayloadJson);
+    expect(group.event.payloadJson).toBe(payloadJson);
+
+    await expect(
+      prepareCanonicalActionGroupInstall(
+        database,
+        {
+          ...group,
+          event: {
+            ...group.event,
+            payloadJson: JSON.stringify({
+              ...disposalPayload,
+              reason: "donated",
+            }),
+          },
+        },
+        USER_ID
+      )
+    ).rejects.toThrow("incomplete_metal_action_group");
   });
 
   it("wires canonical winner preimages into reconciliation batch-failure rollback", () => {

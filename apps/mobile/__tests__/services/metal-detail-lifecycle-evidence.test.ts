@@ -279,7 +279,7 @@ describe("metal detail lifecycle evidence binding", () => {
           predecessorEventId: null,
           reversesEventId: null,
           userId: "user-1",
-        } as unknown as MetalLifecycleEvent,
+        },
         [
           {
             actionId: "action-add",
@@ -288,7 +288,7 @@ describe("metal detail lifecycle evidence binding", () => {
             kind: "add",
             userId: "user-1",
           },
-        ] as unknown as readonly MetalActionEvidence[]
+        ]
       )
     ).toBeNull();
   });
@@ -328,5 +328,125 @@ describe("metal detail lifecycle evidence binding", () => {
     expect(model).not.toBeNull();
     expect(model?.currentValueCurrency).toBe("EGP");
     expect(model?.currentValueDecimal).not.toBeNull();
+  });
+});
+
+describe("accepted Undo reversal relationships in the Detail timeline", (): void => {
+  it("marks only the precisely targeted terminal row across repeated cycles", (): void => {
+    const model = buildMetalDetailReadModel(
+      detailInput({
+        lifecycleEvents: [
+          event(),
+          event({
+            id: "sale-1",
+            kind: "sell",
+            predecessorEventId: "created",
+            occurredAt: new Date("2026-08-21T10:00:00.000Z"),
+          }),
+          event({
+            id: "undo-1",
+            kind: "undo",
+            predecessorEventId: "sale-1",
+            reversesEventId: "sale-1",
+            occurredAt: new Date("2026-08-22T10:00:00.000Z"),
+          }),
+          event({
+            id: "dispose-2",
+            kind: "dispose",
+            predecessorEventId: "undo-1",
+            occurredAt: new Date("2026-08-23T10:00:00.000Z"),
+          }),
+          event({
+            id: "undo-2",
+            kind: "undo",
+            predecessorEventId: "dispose-2",
+            reversesEventId: "dispose-2",
+            occurredAt: new Date("2026-08-24T10:00:00.000Z"),
+          }),
+          event({
+            id: "sale-3",
+            kind: "sell",
+            predecessorEventId: "undo-2",
+            occurredAt: new Date("2026-08-25T10:00:00.000Z"),
+          }),
+        ],
+      })
+    );
+    expect(model?.status).toBe("sold");
+    expect(model?.timeline.find(({ id }) => id === "sale-1")).toMatchObject({
+      reversedByEventId: "undo-1",
+    });
+    expect(model?.timeline.find(({ id }) => id === "dispose-2")).toMatchObject({
+      reversedByEventId: "undo-2",
+    });
+    expect(model?.timeline.find(({ id }) => id === "sale-3")).toMatchObject({
+      reversedByEventId: null,
+    });
+  });
+
+  it.each([
+    ["rejected", "rejected", true],
+    ["unknown", "unknown", true],
+    ["ineffective", "accepted", false],
+  ] as const)(
+    "does not mark a terminal event reversed by a %s Undo",
+    (_reason, actionState, isEffective): void => {
+      const model = buildMetalDetailReadModel(
+        detailInput({
+          lifecycleEvents: [
+            event(),
+            event({
+              id: "sale-1",
+              kind: "sell",
+              predecessorEventId: "created",
+              occurredAt: new Date("2026-08-21T10:00:00.000Z"),
+            }),
+            event({
+              id: "undo-rejected",
+              kind: "undo",
+              actionState,
+              isEffective,
+              predecessorEventId: "sale-1",
+              reversesEventId: "sale-1",
+              occurredAt: new Date("2026-08-22T10:00:00.000Z"),
+            }),
+          ],
+        })
+      );
+      expect(model?.status).toBe("sold");
+      expect(model?.timeline.find(({ id }) => id === "sale-1")).toMatchObject({
+        reversedByEventId: null,
+      });
+      expect(model?.timeline.some(({ id }) => id === "undo-rejected")).toBe(
+        false
+      );
+    }
+  );
+
+  it("does not mark a row for a mismatched reversal target even if both rows claim acceptance", (): void => {
+    const model = buildMetalDetailReadModel(
+      detailInput({
+        lifecycleEvents: [
+          event(),
+          event({
+            id: "sale-1",
+            kind: "sell",
+            predecessorEventId: "created",
+            occurredAt: new Date("2026-08-21T10:00:00.000Z"),
+          }),
+          event({
+            id: "wrong-undo",
+            kind: "undo",
+            predecessorEventId: "sale-1",
+            reversesEventId: "another-terminal",
+            occurredAt: new Date("2026-08-22T10:00:00.000Z"),
+          }),
+        ],
+      })
+    );
+    expect(model?.timeline.find(({ id }) => id === "sale-1")).toMatchObject({
+      reversedByEventId: null,
+    });
+    expect(model?.timeline.some(({ id }) => id === "wrong-undo")).toBe(false);
   });
 });

@@ -27,9 +27,17 @@ import {
 } from "@/services/metal-detail-read-model-service";
 import {
   toLegacyDisposalRevisionEvidence,
+  toLegacyDisposalActionEvidence,
+  type LegacyDisposalActionEvidence,
   type LegacyDisposalRevisionEvidence,
 } from "@/services/metal-legacy-disposal-baseline-service";
 import { hasBoundEffectiveActionEvidence } from "@/services/metal-portfolio-read-model-service";
+import {
+  resolveMetalLifecycleIdentity,
+  resolveMetalOwnedEffectiveEvent,
+  type MetalLifecycleIdentity,
+  type MetalLifecycleIdentitySource,
+} from "@/services/metal-lifecycle-identity-service";
 import {
   toDetailAssetInput,
   toDetailMetalInput,
@@ -53,6 +61,10 @@ export interface MetalHistoryCounts {
 export interface MetalHistoryHoldingInput {
   readonly asset: MetalDetailAssetInput;
   readonly holdingState: MetalDetailHoldingStateInput;
+  readonly identitySource?: MetalLifecycleIdentitySource;
+  readonly legacyDisposalActionEvidence?:
+    | readonly LegacyDisposalActionEvidence[]
+    | null;
   readonly legacyDisposalRevisionEvidence?:
     | readonly LegacyDisposalRevisionEvidence[]
     | null;
@@ -215,21 +227,16 @@ async function orderTerminalStatesByEffectiveEventTime(
 ): Promise<readonly MetalHoldingState[]> {
   if (states.length === 0) return [];
 
-  const eventIds = Array.from(
-    new Set(
-      states
-        .map((state) => state.effectiveEventId)
-        .filter((id): id is string => id !== null)
-    )
-  ).sort();
   const holdingIds = Array.from(
     new Set(states.map((state) => state.holdingId))
   ).sort();
-  const [events, evidence] = await Promise.all([
+  const [events, evidence, groups] = await Promise.all([
     scope
       .queryOwned(
         database.get<MetalLifecycleEvent>("metal_lifecycle_events"),
-        Q.where("id", Q.oneOf(eventIds)),
+        // Complete owner-scoped timeline is required for E!=D rev0 proof,
+        // including intermediate Restore/Dispose descendants.
+        Q.where("holding_id", Q.oneOf(holdingIds)),
         Q.where("deleted", false),
         Q.where("is_effective", true)
       )
@@ -241,28 +248,54 @@ async function orderTerminalStatesByEffectiveEventTime(
         Q.where("deleted", false)
       )
       .fetch(),
+    scope
+      .queryOwned(
+        database.get<FinancialActionGroup>("financial_action_groups"),
+        Q.where("domain", "metals"),
+        Q.where("domain_reference_id", Q.oneOf(holdingIds)),
+        Q.where("deleted", false)
+      )
+      .fetch(),
   ]);
-  const eventsById = new Map(events.map((event) => [event.id, event] as const));
-
+  const acceptedByHolding = new Map<string, MetalLifecycleEvent>();
+  for (const state of states) {
+    const candidateEvents = events.filter(
+      (event) => event.holdingId === state.holdingId
+    );
+    const identity = resolveMetalLifecycleIdentity({
+      userId: scope.userId,
+      holdingId: state.holdingId,
+      events: candidateEvents,
+      evidence: evidence.filter(
+        (candidate) => candidate.holdingId === state.holdingId
+      ),
+      groups: groups.filter(
+        (group) => group.domainReferenceId === state.holdingId
+      ),
+    });
+    const event = resolveMetalOwnedEffectiveEvent(
+      candidateEvents,
+      state,
+      identity
+    );
+    if (
+      event !== null &&
+      Number.isFinite(event.occurredAt.getTime()) &&
+      hasBoundEffectiveActionEvidence(state, event, evidence)
+    ) {
+      acceptedByHolding.set(state.holdingId, event);
+    }
+  }
   return states
-    .filter((state) => {
-      const event = state.effectiveEventId
-        ? eventsById.get(state.effectiveEventId)
-        : undefined;
-      return (
-        event !== undefined &&
-        Number.isFinite(event.occurredAt.getTime()) &&
-        hasBoundEffectiveActionEvidence(state, event, evidence)
-      );
-    })
+    .filter((state) => acceptedByHolding.has(state.holdingId))
     .sort((left, right) => {
-      const leftEvent = eventsById.get(left.effectiveEventId as string);
-      const rightEvent = eventsById.get(right.effectiveEventId as string);
-      const timeDifference =
+      const leftEvent = acceptedByHolding.get(left.holdingId);
+      const rightEvent = acceptedByHolding.get(right.holdingId);
+      const difference =
         (rightEvent?.occurredAt.getTime() ?? 0) -
         (leftEvent?.occurredAt.getTime() ?? 0);
-      return timeDifference !== 0
-        ? timeDifference
+      return difference !== 0
+        ? difference
         : left.holdingId.localeCompare(right.holdingId);
     });
 }
@@ -357,22 +390,40 @@ function shapeReadHistoryHoldings(
     const holdingEvidence = dependencies.evidence.filter(
       (candidate) => candidate.holdingId === state.holdingId
     );
+    const identitySource: MetalLifecycleIdentitySource = {
+      userId: state.userId,
+      holdingId: state.holdingId,
+      events: holdingEvents,
+      groups: dependencies.groups.filter(
+        (group) => group.domainReferenceId === state.holdingId
+      ),
+      evidence: holdingEvidence,
+    };
+    const identity = resolveMetalLifecycleIdentity(identitySource);
     const terminalFacts = shapeHistoryTerminalFacts(
       asset,
       metal,
       metal.metalType,
       state,
       holdingEvents,
-      dependencies.groups
+      dependencies.groups.filter(
+        (group) => group.domainReferenceId === state.holdingId
+      ),
+      identity
     );
     return [
       {
         asset: toDetailAssetInput(asset),
         holdingState: toDetailHoldingStateInput(state),
+        identitySource,
         legacyDisposalRevisionEvidence: toLegacyDisposalRevisionEvidence(
           dependencies.evidence.filter(
             (candidate) => candidate.holdingId === state.holdingId
           )
+        ),
+        legacyDisposalActionEvidence: toLegacyDisposalActionEvidence(
+          holdingEvents,
+          dependencies.groups
         ),
         lifecycleEvents: shapeMetalDetailLifecycleEvents(
           holdingEvents,
@@ -391,15 +442,21 @@ function shapeHistoryTerminalFacts(
   metalType: SupportedMetal,
   state: MetalHoldingState,
   events: readonly MetalLifecycleEvent[],
-  groups: readonly FinancialActionGroup[]
+  groups: readonly FinancialActionGroup[],
+  identity: MetalLifecycleIdentity
 ): MetalTerminalFacts | null {
+  const event = resolveMetalOwnedEffectiveEvent(events, state, identity);
   return shapeMetalTerminalFacts({
     asset,
-    event: events.find((event) => event.id === state.effectiveEventId) ?? null,
+    event,
     group:
       groups.find((group) => group.actionId === state.effectiveActionId) ??
       null,
-    holdingState: state,
+    holdingState: {
+      ...toDetailHoldingStateInput(state),
+      effectiveActionId: state.effectiveActionId ?? null,
+      effectiveEventId: event?.id ?? state.effectiveEventId,
+    },
     metal: { ...metal, metalType },
     rateReferences: [],
     userId: state.userId,
@@ -457,7 +514,9 @@ function toHistoryItem(
   const model = buildMetalDetailReadModel({
     asset: holding.asset,
     holdingState: holding.holdingState,
+    identitySource: holding.identitySource,
     legacyDisposalRevisionEvidence: holding.legacyDisposalRevisionEvidence,
+    legacyDisposalActionEvidence: holding.legacyDisposalActionEvidence,
     lifecycleEvents: holding.lifecycleEvents,
     metal: holding.metal,
     rateReferences: [],

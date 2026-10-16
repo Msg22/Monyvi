@@ -10,15 +10,29 @@ const mockPush = jest.fn();
 
 let mockModel: Pick<
   MetalDetailReadModel,
-  "isActiveOwnership" | "isFinancialActionLocked" | "status"
+  "isActiveOwnership" | "isFinancialActionLocked" | "status" | "timeline"
 > | null = null;
 
 let capturedActions: ReadonlyArray<{ readonly id: string }> | undefined;
 let capturedOnAction: ((action: HoldingActionId) => void) | undefined;
 
 jest.mock("expo-router", () => ({
+  useFocusEffect: jest.fn(),
   useLocalSearchParams: (): { readonly id: string } => ({ id: "holding-1" }),
   router: { push: (...args: unknown[]): unknown => mockPush(...args) },
+}));
+jest.mock("@/hooks/useUndoMetalHoldingContext", () => ({
+  useUndoMetalHoldingContext: () => ({
+    context: null,
+    userId: null,
+    isResolvingUser: false,
+    isLoading: false,
+    error: null,
+    retry: jest.fn(),
+  }),
+}));
+jest.mock("@/hooks/useRestoreMetalHolding", () => ({
+  useRestoreMetalHolding: jest.fn(),
 }));
 
 jest.mock("@/hooks/useMetalHoldingDetail", () => ({
@@ -75,9 +89,10 @@ jest.mock("react-i18next", () => ({
 
 function activeModel(): Pick<
   MetalDetailReadModel,
-  "isActiveOwnership" | "isFinancialActionLocked" | "status"
+  "isActiveOwnership" | "isFinancialActionLocked" | "status" | "timeline"
 > {
   return {
+    timeline: [],
     isActiveOwnership: true,
     isFinancialActionLocked: false,
     status: "active",
@@ -148,6 +163,7 @@ describe("metal holding detail implemented action composition", () => {
 
   it("hides Dispose and Delete for a terminal holding", () => {
     mockModel = {
+      timeline: [],
       isActiveOwnership: false,
       isFinancialActionLocked: false,
       status: "sold",

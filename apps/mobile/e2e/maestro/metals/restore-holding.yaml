@@ -1,0 +1,67 @@
+appId: com.monyvi.app
+---
+# US8 Restore journey contract — AUTHORED, BLOCKED, NOT EXECUTED.
+# Details Restore action and inline confirmation are now implemented.
+# Requires authenticated current-user complete uncredited Sold/Disposed fixture,
+# HOLDING_ID, HOLDING_NAME,
+# RESTORE_BODY and RESTORE_HISTORY_COPY. Existing harness supplies no
+# deterministic terminal fixture or runner-owned offline control. Missing seed,
+# or connectivity control blocks device coverage claims.
+- runFlow: ../helpers/setup.yaml
+- openLink: monyvi://metals/${HOLDING_ID}
+- tapOn:
+    id: metal-holding-action-undo
+- extendedWaitUntil:
+    visible:
+      id: restore-holding-modal
+    timeout: 30000
+- assertVisible: ${HOLDING_NAME}
+- assertVisible: ${RESTORE_BODY}
+- assertVisible: "What will change"
+- assertVisible:
+    id: restore-consequence-active
+- assertVisible:
+    id: restore-consequence-history
+- assertNotVisible: "Cash Wallet"
+- assertNotVisible: "This change will be saved on this device first."
+
+# Unreviewed confirmation cannot commit; cancel preserves terminal Details.
+- tapOn:
+    id: restore-holding-confirm
+- assertVisible:
+    id: restore-holding-modal
+- tapOn:
+    id: restore-holding-cancel
+- assertNotVisible:
+    id: restore-holding-modal
+- tapOn:
+    id: metal-holding-action-undo
+- tapOn:
+    id: restore-holding-reviewed
+- doubleTapOn:
+    id: restore-holding-confirm
+    delay: 25
+- extendedWaitUntil:
+    notVisible:
+      id: restore-holding-modal
+    timeout: 30000
+- assertVisible: ${HOLDING_NAME}
+- assertVisible: "Active"
+- assertVisible: ${RESTORE_HISTORY_COPY}
+
+# Restart preserves same Active holding and original reversed terminal History.
+- stopApp
+- launchApp:
+    clearState: false
+- openLink: monyvi://metals/${HOLDING_ID}
+- assertVisible: ${HOLDING_NAME}
+- assertVisible: "Active"
+- assertVisible: ${RESTORE_HISTORY_COPY}
+
+# Header and Android Back after Restore must return directly to My Metals.
+- back
+- assertVisible:
+    id: metal-portfolio-root
+# A second Dispose/Undo journey needs a fixture with exact material/rate facts.
+# Batch failure, auth mid-writer, action-hash replay and credited Sale cannot be
+# controlled honestly by this runner; see us8-undo.md coverage boundaries.

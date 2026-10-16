@@ -526,6 +526,113 @@ describe("approved pure lifecycle reduction", () => {
     expect(result.rejectedEvents).toEqual([]);
   });
 
+  it("traverses a verified legacy disposal through Undo and repeated terminal cycles", () => {
+    const disposal = event("legacy-disposed", "disposed", null, {
+      canonicalCasStatus: "accepted",
+    });
+    const undo = event("undo-1", "reversed", disposal.id, {
+      reversesEventId: disposal.id,
+      occurredAt: 2_000,
+    });
+    const secondDisposal = event("dispose-2", "disposed", undo.id, {
+      occurredAt: 3_000,
+    });
+    const secondUndo = event("undo-2", "reversed", secondDisposal.id, {
+      reversesEventId: secondDisposal.id,
+      occurredAt: 4_000,
+    });
+    const baseline = { terminalEventId: disposal.id };
+    const firstUndo = reduceMetalLifecycle([undo, disposal], baseline);
+    expect(firstUndo.projection).toMatchObject({
+      status: "active",
+      effectiveEventId: undo.id,
+    });
+    expect(firstUndo.projection?.history.map(({ id }) => id)).toEqual([
+      undo.id,
+      disposal.id,
+    ]);
+
+    const result = reduceMetalLifecycle(
+      [secondUndo, disposal, secondDisposal, undo],
+      baseline
+    );
+    expect(result.projection).toMatchObject({
+      status: "active",
+      effectiveEventId: secondUndo.id,
+    });
+    expect(result.acceptedEvents.map(({ id }) => id)).toEqual([
+      disposal.id,
+      undo.id,
+      secondDisposal.id,
+      secondUndo.id,
+    ]);
+    expect(result.rejectedEvents).toEqual([]);
+    expect(
+      reduceMetalLifecycle(
+        [undo, secondDisposal, disposal, secondUndo],
+        baseline
+      )
+    ).toEqual(result);
+  });
+
+  it("validates reversal references and CAS conflicts after a legacy disposal root", () => {
+    const disposal = event("legacy-disposed", "disposed", null, {
+      canonicalCasStatus: "accepted",
+    });
+    const invalidUndo = event("bad-undo", "reversed", disposal.id, {
+      reversesEventId: "other",
+    });
+    const undo = event("undo", "reversed", disposal.id, {
+      reversesEventId: disposal.id,
+    });
+    const competitor = event("competing-undo", "reversed", disposal.id, {
+      reversesEventId: disposal.id,
+    });
+    const baseline = { terminalEventId: disposal.id };
+    const invalid = reduceMetalLifecycle([invalidUndo, disposal], baseline);
+    expect(invalid.projection?.status).toBe("disposed");
+    expect(reasons(invalid)).toContain("invalid_reversal_target");
+    const conflict = reduceMetalLifecycle(
+      [undo, disposal, competitor],
+      baseline
+    );
+    expect(conflict.projection?.effectiveEventId).toBe(disposal.id);
+    expect(reasons(conflict)).toEqual([
+      "conflicting_effective_successors",
+      "conflicting_effective_successors",
+    ]);
+  });
+
+  it.each(["rejected", "unknown"] as const)(
+    "rejects a %s legacy root",
+    (canonicalCasStatus) => {
+      const disposal = event("legacy-disposed", "disposed", null, {
+        canonicalCasStatus,
+      });
+      const result = reduceMetalLifecycle([disposal], {
+        terminalEventId: disposal.id,
+      });
+      expect(result.projection).toBeNull();
+      expect(result.acceptedEvents).toEqual([]);
+    }
+  );
+
+  it("never admits a structurally malformed legacy root or its Undo", () => {
+    const disposal = event("legacy-disposed", "disposed", null, {
+      canonicalCasStatus: "accepted",
+    });
+    const undo = event("undo", "reversed", disposal.id, {
+      reversesEventId: disposal.id,
+    });
+    const result = reduceMetalLifecycle(
+      [{ ...disposal, fingerprint: undefined }, undo],
+      { terminalEventId: disposal.id }
+    );
+    expect(result.projection).toBeNull();
+    expect(result.acceptedEvents).toEqual([]);
+    expect(reasons(result)).toContain("incomplete_evidence");
+  });
+
   it("rejects an undeclared lone terminal root even when a different legacy baseline is supplied", () => {
     const undeclaredDisposed = event("undeclared-disposed", "disposed", null, {
       canonicalCasStatus: "accepted",
