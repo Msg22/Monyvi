@@ -556,7 +556,7 @@ describe("T044 dedicated review transport/recovery fail-closed", () => {
     expect(staged).toEqual([]);
   });
 
-  it("T044-16b a reconciled review root with ineffective effects replays without a second compensation mutation", async () => {
+  it("T044-16b generic reconciler refuses even terminal Review roots; only dedicated owned-private recovery may replay", async () => {
     const fixture = await canonicalReviewChanges();
     const rejected = reviewRejectedBundle(fixture);
     const previouslyReconciled: FinancialActionReconciliationBundle = {
@@ -572,7 +572,15 @@ describe("T044 dedicated review transport/recovery fail-closed", () => {
         return Promise.resolve();
       },
     });
-    expect(await service.reconcileRejectedAction(REVIEW_ACTION_ID)).toBe("replay");
+    // This deliberately has the old generic replay shape; terminality alone
+    // cannot authorize an unverified new Review tuple in the legacy factory.
+    // Production's owned/private dispatcher proves replay independently (D02).
+    expect(previouslyReconciled.state).toBe("reconciled");
+    expect(previouslyReconciled.effects.every(
+      (effect) => effect.isEffective === false
+    )).toBe(true);
+    await expect(service.reconcileRejectedAction(REVIEW_ACTION_ID))
+      .rejects.toThrow(FINANCIAL_ACTION_RECONCILIATION_ERROR_CODES.INCOMPLETE);
     expect(staged).toEqual([]);
   });
 

@@ -47,7 +47,7 @@ import {
   seedSavedFingerprint,
 } from "./account-review-save-sqlite-test-helpers";
 import {
-  ACTION, BANK, FINGERPRINT_A, FINGERPRINT_B, OWNER, SESSION,
+  ACTION, BANK, FINGERPRINT_B, OWNER, SESSION,
   makeSaveFixture, testUuid, type SaveFixture,
 } from "./account-review-save-test-fixtures";
 import {
@@ -431,18 +431,14 @@ describe("#395 T043 actual selected Save device-private evidence", () => {
   it("L08 an all-dedup SMS cleanup does not fabricate financial/private root", async () => {
     const fixture = makeSaveFixture("sms-all-dedup");
     await seedBoundSmsReview(fixture);
-    // The genuine all-dedup fixture SELECTS two distinct SMS fingerprints.
-    // Seed BOTH existing owned saved financial outcomes. The helper uses a
-    // fixed ID per entity kind; transaction + transfer avoids that collision
-    // without fabricating rows or weakening production fingerprint matching.
+    // The canonical sms-all-dedup fixture actually selects only B.
+    // Match the real selected source set, then seed one genuinely saved
+    // transaction; an unselected A must not be fabricated as selected.
     const selected = fixture.session.rows.flatMap((row) =>
       row.source === "SMS" && row.selected ? [row.sourceFingerprint] : []
     );
-    expect([...selected].sort()).toEqual(
-      [FINGERPRINT_A, FINGERPRINT_B].sort()
-    );
-    await seedSavedFingerprint(database, FINGERPRINT_A, "transaction");
-    await seedSavedFingerprint(database, FINGERPRINT_B, "transfer");
+    expect(selected).toEqual([FINGERPRINT_B]);
+    await seedSavedFingerprint(database, FINGERPRINT_B, "transaction");
     await expect(saveReview(fixture)).resolves.toMatchObject({ kind: "cleanup_only" });
     const fresh = await cloneRecoverySqlite();
     expect(await ownedPhysicalRows(fresh, "financial_action_groups")).toHaveLength(0);

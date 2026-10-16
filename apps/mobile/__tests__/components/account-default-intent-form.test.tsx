@@ -363,10 +363,14 @@ describe("#395 T065 Add Account approved default-control behavior", () => {
     expect(screen.queryByText(APPROVED_DEFAULT_COPY.en.replace)).toBeNull();
     const before = await mockDb.database.get("accounts").query().fetch();
     expect(before).toHaveLength(1);
-    fireEvent.press(screen.getByTestId("header-back"));
+    const back = screen.getByTestId("header-back");
+    expect(back).toHaveProp("accessibilityRole", "button");
+    fireEvent.press(back);
+    // Account default observation and navigator completion are scheduled
+    // independently; do not assert navigation before the interaction settles.
+    await waitFor(() => expect(mockGoBack).toHaveBeenCalledTimes(1));
     const after = await mockDb.database.get("accounts").query().fetch();
     expect(after).toHaveLength(1);
-    expect(mockGoBack).toHaveBeenCalledTimes(1);
   });
 
   it("existing owned account with intentionally no default starts OFF and can be turned ON without fake previous-default notice", async (): Promise<void> => {

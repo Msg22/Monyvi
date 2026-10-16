@@ -61,7 +61,7 @@ const mockLoadAccountSnapshots = jest.fn<
 // The real owned-read service has no owner argument; it obtains the current
 // authenticated scope itself. This test boundary mirrors that authenticated
 // actor at the moment each account snapshot is requested.
-let mockAuthenticatedOwnerId = T030_OWNER;
+let mockAuthenticatedOwnerId: AccountReviewSession["ownerId"] = T030_OWNER;
 
 // jest-expo's generated ExpoCrypto mock leaves randomUUID() undefined.
 // This test file needs a real canonical v4 value for the reducer's Undo lease.

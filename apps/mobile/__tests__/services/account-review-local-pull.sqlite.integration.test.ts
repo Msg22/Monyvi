@@ -238,7 +238,9 @@ describe("#395 T053 actual dedicated owned financial-root SQLite pull", () => {
     const separateAction = {
       ...canonical,
       actionId: testUuid(481),
-      domainReferenceId: testUuid(482),
+      // domainReferenceId is the minimum ORIGINAL created financial row UUID,
+      // not a newly invented root identity. P06 varies only action identity.
+      domainReferenceId: canonical.domainReferenceId,
     };
     const hashed = await hashFinancialActionEnvelope(
       separateAction, hashProvider, registry

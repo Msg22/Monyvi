@@ -346,11 +346,21 @@ describe("#395 T044 actual retention and namespace writers, not simulated snapsh
     const changed = await readPhysicalPrivateSnapshot(fresh);
     expect(changed.queuePreimage?.disposition).toBe("superseded");
     await stageRejectedRoot(fresh);
-    await expect(
-      productionFinancialActionReconciliationService.reconcileRejectedAction(ACTION)
-    ).rejects.toThrow();
+    // Approved lifecycle: supersession permanently revokes SMS restoration,
+    // but verified financial rollback still reaches a real terminal root.
+    expect(await productionFinancialActionReconciliationService
+      .reconcileRejectedAction(ACTION)).toBe("reconciled");
     expect(await fresh.get<SmsReviewQueue>("sms_review_queues").query().fetch())
       .toHaveLength(0);
+    expect(await activeActionCreatedIds(fresh, changed)).toEqual([]);
+    const effects = await fresh.get<AccountFinancialEffect>(
+      "account_financial_effects"
+    ).query(Q.where("action_id", ACTION)).fetch();
+    expect(effects.length).toBeGreaterThan(0);
+    expect(effects.every((effect) => !effect.isEffective)).toBe(true);
+    const reconciled = await freshRoot(fresh);
+    expect(reconciled.state).toBe("reconciled");
+    expect(reconciled.localRecoverySnapshotJson).toBeNull();
   });
 
   it("D07 explicit discard of a real remaining linked SMS draft redacts its owned root evidence in the SAME deletion writer", async () => {
@@ -384,12 +394,22 @@ describe("#395 T044 actual retention and namespace writers, not simulated snapsh
       (row) => row.id !== affected.id
     ));
     await stageRejectedRoot(fresh);
-    await expect(
-      productionFinancialActionReconciliationService.reconcileRejectedAction(ACTION)
-    ).rejects.toThrow();
+    // Explicit discard is irrevocable for this draft. The financial action
+    // may still compensate and terminate without resurrecting SMS content.
+    expect(await productionFinancialActionReconciliationService
+      .reconcileRejectedAction(ACTION)).toBe("reconciled");
     expect(await fresh.get<SmsReviewDraftItem>(
       "sms_review_draft_items"
     ).query(Q.where("id", affected.id)).fetch()).toHaveLength(0);
+    expect(await activeActionCreatedIds(fresh, changed)).toEqual([]);
+    const effects = await fresh.get<AccountFinancialEffect>(
+      "account_financial_effects"
+    ).query(Q.where("action_id", ACTION)).fetch();
+    expect(effects.length).toBeGreaterThan(0);
+    expect(effects.every((effect) => !effect.isEffective)).toBe(true);
+    const reconciled = await freshRoot(fresh);
+    expect(reconciled.state).toBe("reconciled");
+    expect(reconciled.localRecoverySnapshotJson).toBeNull();
   });
 
   it("D08 actual protected RPC uses only canonical public bytes; failed transport retains the private root", async () => {

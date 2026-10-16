@@ -50,7 +50,7 @@ interface SqliteModules {
   readonly __adapter: SQLiteAdapter;
   readonly __modelClasses: Array<typeof Model>;
 }
-let mockCurrentUserId = T025_IDS.owner;
+let mockCurrentUserId: AccountReviewSession["ownerId"] = T025_IDS.owner;
 let nextGeneratedId = 54600;
 type AuthCallback = Parameters<
   (typeof import("@/services/supabase"))["subscribeToCoordinatedAuthStateChange"]
@@ -449,15 +449,21 @@ describe("#395 T054 real SQLite canonical SMS filter writer", () => {
     if (!first) throw new Error("missing_real_sms_draft");
     const originalRaw: unknown = JSON.parse(first.payloadJson);
     if (!originalRaw || typeof originalRaw !== "object" ||
-        !("review" in originalRaw) || !originalRaw.review ||
-        typeof originalRaw.review !== "object")
+        Array.isArray(originalRaw) || !("review" in originalRaw))
       throw new Error("missing_stored_v2_review_header");
+    const originalReview: unknown = originalRaw.review;
+    if (!originalReview || typeof originalReview !== "object" ||
+        Array.isArray(originalReview))
+      throw new Error("missing_stored_v2_review_header");
+    // Narrow both parsed JSON objects before the asynchronous writer callback.
+    // The intentional conflicting filter remains the only changed V2 header.
+    const conflictingHeaderJson = JSON.stringify({
+      ...originalRaw,
+      review: { ...originalReview, filter: "selected" },
+    });
     await database.write(async () => {
       await database.batch(first.prepareUpdate((row) => {
-        row.payloadJson = JSON.stringify({
-          ...originalRaw,
-          review: { ...originalRaw.review, filter: "selected" },
-        });
+        row.payloadJson = conflictingHeaderJson;
       }));
     });
     const before = await rawStoredPayloads();
