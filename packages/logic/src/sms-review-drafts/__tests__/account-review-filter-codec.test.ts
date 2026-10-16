@@ -1,8 +1,9 @@
 /**
  * #395 T054 local filter header — TESTS FIRST / NOT RUN.
  * Exercise only the real v1/v2 codec and its closed schema. Historical
- * nine-field source is derived by removing the ONE unshipped tenth field
- * from genuine V2 encoded content; no production codec or parser mock.
+ * nine-field V2 review bytes are constructed independently from the original
+ * nine-field T025 fixture and real V1 stored transaction encoder, not from
+ * the future new-ten V2 writer; no production codec or parser mock.
  */
 import {
   decodeSmsReviewDraft,
@@ -43,27 +44,29 @@ function decode(encoded: Encoded | { readonly version: 2; readonly json: string 
     selectionOverride: null,
   });
 }
-function oldNineKeyHeader(
-  filter: ReviewSession["filter"] = "all"
-): { readonly version: 2; readonly json: string } {
-  const latest = encodedWithFilter(filter);
-  const parsed: unknown = JSON.parse(latest.json);
-  if (!parsed || typeof parsed !== "object" ||
-      !("review" in parsed) || !parsed.review ||
-      typeof parsed.review !== "object")
-    throw new Error("expected_actual_v2_review_header");
-  // History originally serialized exactly nine review properties. Rebuild
-  // those original bytes explicitly, without an invented legacy DTO.
-  const observed = "filter" in parsed.review
-    ? parsed.review.filter : undefined;
-  if (observed !== undefined && observed !== filter)
-    throw new Error("conflicting_actual_new_v2_filter");
-  const nineReview = Object.fromEntries(
-    Object.entries(parsed.review).filter(([key]) => key !== "filter")
+/**
+ * Independent old-nine-key positive fixture: use the authoritative existing
+ * V1 financial transaction encoder and the original T025 nine-field review
+ * fixture. Never call the future ten-field V2 encoder to construct history.
+ * JSON.stringify serializes the canonical row Date exactly as the former V2
+ * codec did; the real V2 decoder must accept these ORIGINAL raw bytes.
+ */
+function oldNineKeyHeader(): { readonly version: 2; readonly json: string } {
+  const original = makeT025SmsOriginal();
+  const storedV1: unknown = JSON.parse(encodeSmsReviewDraft(original).json);
+  if (!storedV1 || typeof storedV1 !== "object" ||
+      !("transaction" in storedV1))
+    throw new Error("missing_original_stored_sms_transaction");
+  const review = makeT025StoredReview(
+    makeT025ReviewSession(), T025_IDS.rowOne
   );
   return {
     version: 2,
-    json: JSON.stringify({ ...parsed, review: nineReview }),
+    json: JSON.stringify({
+      version: 2,
+      transaction: storedV1.transaction,
+      review,
+    }),
   };
 }
 
@@ -89,7 +92,7 @@ describe("#395 T054 SMS review V2 filter compatibility and strict closure", () =
   });
 
   it("C02 actual historical nine-key V2 decodes to all without raw JSON rewriting or generation bump", () => {
-    const old = oldNineKeyHeader("all");
+    const old = oldNineKeyHeader();
     const bytes = old.json;
     const raw: unknown = JSON.parse(bytes);
     expect(smsReviewDraftPayloadV2Schema.parse(raw)).toBeDefined();
@@ -103,7 +106,7 @@ describe("#395 T054 SMS review V2 filter compatibility and strict closure", () =
   });
 
   it("C03 historical nine-key and explicit tenth-key all share an equivalent decoded business header", () => {
-    const old = decode(oldNineKeyHeader("all"));
+    const old = decode(oldNineKeyHeader());
     const modern = decode(encodedWithFilter("all"));
     expect(old.review).toEqual(modern.review);
     expect(old.transaction).toEqual(modern.transaction);

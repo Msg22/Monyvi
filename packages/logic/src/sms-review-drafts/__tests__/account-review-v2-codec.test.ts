@@ -84,7 +84,7 @@ describe("#395 T025 real V2 codec and unchanged V1 wire compatibility", () => {
       "version",
     ]);
     expect(Object.keys(payload.review).sort()).toEqual([
-      "groups",
+      "filter", "groups",
       "operationGeneration",
       "ownerId",
       "preferredCurrency",
@@ -96,6 +96,7 @@ describe("#395 T025 real V2 codec and unchanged V1 wire compatibility", () => {
     ]);
     expect(payload.transaction.date).toBe(transaction.date.toISOString());
     expect(payload.review.sessionId).toBe(session.sessionId);
+    expect(payload.review.filter).toBe("all");
     expect(payload.review.row.sourceFingerprint).toBe(
       transaction.smsFingerprint
     );

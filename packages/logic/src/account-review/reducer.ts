@@ -20,6 +20,7 @@ import {
 import { reduceUndoRemoval } from "./reducer-undo";
 import {
   acceptReviewTransition,
+  acceptReviewFilterTransition,
   isRevisionOverflow,
   rejectReviewCommand,
   type AccountReviewCommandResult,
@@ -46,6 +47,10 @@ function routeCommand(
   command: AccountReviewCommand
 ): RoutedTransition {
   switch (command.kind) {
+    // This branch is handled before routeCommand so that it can return the
+    // navigation-only result without the business-generation increment.
+    case "set_filter":
+      return { transition: null, reason: "review_revision_stale" };
     case "confirm_group":
     case "edit_group":
     case "remove_group":
@@ -113,6 +118,11 @@ export function reduceAccountReviewCommand(
     );
   }
   try {
+    // Common ownership/source/revision/frozen-Save and actual owned-context
+    // checks above apply to navigation as strictly as to business commands.
+    if (command.kind === "set_filter") {
+      return acceptReviewFilterTransition(input.state, command.filter);
+    }
     const outcome = routeCommand(input.state, input, command);
     return outcome.transition
       ? acceptReviewTransition(input.state, outcome.transition)

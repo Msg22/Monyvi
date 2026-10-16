@@ -55,6 +55,9 @@ function decodeLegacy(
     preferredCurrency: baseline.preferredCurrency,
     reviewRevision: baseline.reviewRevision,
     operationGeneration: baseline.operationGeneration,
+    // V1 has no filter header; inherit the authentic current V2 authority
+    // in memory. Untouched V1 physical payload bytes are never rewritten.
+    filter: baseline.filter,
   });
   const reviewed = decodeSmsReviewDraftPayload({
     ...payload,
@@ -83,6 +86,7 @@ function assertSameHeader(
     current.preferredCurrency !== reference.preferredCurrency ||
     current.reviewRevision !== reference.reviewRevision ||
     current.operationGeneration !== reference.operationGeneration ||
+    current.filter !== reference.filter ||
     JSON.stringify(current.removedEvidenceKeys) !==
       JSON.stringify(reference.removedEvidenceKeys)
   ) {
@@ -146,7 +150,7 @@ export function rehydrateOwnedSmsReviewGraph(
     preferredCurrency: baseline.preferredCurrency,
     rows: views.map((view) => view.row),
     groups, removedEvidenceKeys: [...baseline.removedEvidenceKeys],
-    filter: "all", revision: baseline.reviewRevision,
+    filter: baseline.filter, revision: baseline.reviewRevision,
     operationGeneration: baseline.operationGeneration,
     saveIntent: null,
   });
@@ -168,6 +172,7 @@ export function encodeOwnedSmsReviewRow(
       preferredCurrency: state.preferredCurrency,
       reviewRevision: state.revision,
       operationGeneration: state.operationGeneration,
+      filter: state.filter,
       row,
       groups: state.groups.filter((group) =>
         group.linkedRowIds.includes(row.rowId) ||

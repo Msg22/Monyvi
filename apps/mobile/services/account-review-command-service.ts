@@ -111,6 +111,7 @@ function durableUpdates(
   readonly selectionChanged: boolean;
 }> {
   const touched = changedRowIds(result, graph);
+  const filterOnly = result.state.filter !== graph.session.filter;
   const prior = new Map(graph.session.rows.map((row) => [row.rowId, row]));
   const updated: Array<{
     readonly record: SmsReviewDraftItem;
@@ -122,7 +123,12 @@ function durableUpdates(
     const record = graph.recordsByRow.get(row.rowId);
     const original = prior.get(row.rowId);
     if (!record || !original) throw new Error("account_review_draft_missing");
+    // Filter changes rewrite EVERY V2 header atomically. Historical V1 is
+    // decode-only unless a real row/group edit touches it; its filter is
+    // projected from the shared authenticated V2 anchor on next read.
     if (record.payloadVersion !== 2 && !touched.has(row.rowId)) continue;
+    if (filterOnly && record.payloadVersion !== 2 && touched.has(row.rowId))
+      throw new Error("account_review_filter_v1_unexpected_row_change");
     updated.push({
       record,
       row,
@@ -174,13 +180,15 @@ function retainUndoAfterCommit(
   lifetime: AccountReviewUndoLifetime
 ): void {
   const lease: ReviewUndoLease | null =
-    command.kind === "remove_group" && result.undoToken
-      ? {
-          token: result.undoToken,
-          previousState: prior,
-          afterRemovalGeneration: result.state.operationGeneration,
-        }
-      : null;
+    command.kind === "set_filter"
+      ? currentAccountReviewUndo(lifetime, queue)
+      : command.kind === "remove_group" && result.undoToken
+        ? {
+            token: result.undoToken,
+            previousState: prior,
+            afterRemovalGeneration: result.state.operationGeneration,
+          }
+        : null;
   retainAccountReviewUndo(lifetime, queue, lease);
 }
 

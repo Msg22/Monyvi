@@ -639,6 +639,14 @@ export const accountReviewCommandSchema = z
         filter: z.enum(["all", "needs_review", "selected"]),
       })
       .strict(),
+    // Navigation-only canonical filter CAS, not a second UI state authority.
+    z
+      .object({
+        ...commandBase,
+        kind: z.literal("set_filter"),
+        filter: z.enum(["all", "needs_review", "selected"]),
+      })
+      .strict(),
     z
       .object({
         ...commandBase,

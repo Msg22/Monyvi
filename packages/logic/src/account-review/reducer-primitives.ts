@@ -101,6 +101,40 @@ export function rejectReviewCommand(
   };
 }
 
+/**
+ * Navigation has its own monotonic review CAS but never creates a business
+ * generation, row revision, or Undo-affecting mutation. A same-filter request
+ * remains an identity no-op with empty reason codes.
+ */
+export function acceptReviewFilterTransition(
+  session: AccountReviewSession,
+  filter: AccountReviewSession["filter"]
+): AccountReviewCommandResult {
+  if (session.filter === filter) {
+    return {
+      state: session,
+      reasonCodes: [],
+      effect: "none",
+      undoToken: null,
+      affectedRowIds: [],
+      affectedGroupIds: [],
+    };
+  }
+  const state = accountReviewSessionSchema.parse({
+    ...session,
+    filter,
+    revision: incrementReviewRevision(session.revision),
+  });
+  return {
+    state,
+    reasonCodes: [],
+    effect: session.source === "SMS" ? "persist_sms" : "session_only",
+    undoToken: null,
+    affectedRowIds: [],
+    affectedGroupIds: [],
+  };
+}
+
 export function acceptReviewTransition(
   session: AccountReviewSession,
   next: ReviewTransition

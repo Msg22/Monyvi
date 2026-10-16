@@ -290,6 +290,9 @@ const storedSmsReviewSchema = z
     preferredCurrency: currencyCode,
     reviewRevision: recordRevision,
     operationGeneration: recordRevision,
+    // Original V2 headers have exactly nine fields: only decode defaults
+    // their absent filter to all. Every NEW encode below writes this field.
+    filter: z.enum(["all", "needs_review", "selected"]).default("all"),
     row: storedReviewRowSchema,
     groups: z.array(accountReviewGroupSchema),
     removedEvidenceKeys: hashArray,
@@ -355,7 +358,7 @@ const storedSmsReviewSchema = z
     }
   });
 
-/** JSON has precisely three root properties and nine review properties. */
+/** JSON has three root properties; old nine/new ten local review keys. */
 export const smsReviewDraftPayloadV2Schema = z
   .object({
     version: z.literal(SMS_REVIEW_DRAFT_VERSION_V2),
@@ -376,6 +379,9 @@ type SmsReviewV2Input = Pick<
   | "removedEvidenceKeys"
 > & {
   readonly reviewRevision: AccountReviewSession["revision"];
+  // Optional only for existing internal T025 fixtures. New encoded V2 JSON
+  // always materializes filter explicitly; historical bytes are decode-only.
+  readonly filter?: AccountReviewSession["filter"];
   readonly row: AccountReviewRow;
 };
 
@@ -396,6 +402,7 @@ interface MigrateSmsReviewDraftV1Input extends DecodeSmsReviewDraftPayloadInput 
   readonly preferredCurrency: AccountReviewSession["preferredCurrency"];
   readonly reviewRevision: string;
   readonly operationGeneration: string;
+  readonly filter?: AccountReviewSession["filter"];
 }
 
 function storedReviewRow(row: AccountReviewRow): unknown {
@@ -449,7 +456,11 @@ export function encodeSmsReviewDraftV2(input: EncodeSmsReviewDraftV2Input): {
     const payload = parseConsistentV2({
       version: SMS_REVIEW_DRAFT_VERSION_V2,
       transaction: toStoredTransaction(input.transaction),
-      review: { ...input.review, row: storedReviewRow(input.review.row) },
+      review: {
+        ...input.review,
+        filter: input.review.filter ?? "all",
+        row: storedReviewRow(input.review.row),
+      },
     });
     return {
       version: SMS_REVIEW_DRAFT_VERSION_V2,
@@ -581,6 +592,7 @@ export function migrateSmsReviewDraftV1ToV2(
         preferredCurrency: input.preferredCurrency,
         reviewRevision: input.reviewRevision,
         operationGeneration: input.operationGeneration,
+        filter: input.filter ?? "all",
         row: legacyReviewRow(transaction, input),
         groups: [],
         removedEvidenceKeys: [],

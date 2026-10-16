@@ -167,8 +167,12 @@ export function reduceUndoRemoval(
   )
     return invalidUndo();
   const previous = undo.previousState;
+  // Filter navigation spends the review CAS revision but NOT the business
+  // generation. Only the removal may have advanced the latter. Even after
+  // All → Needs → All, a later business edit cannot forge this generation.
+  const removalRevision = incrementReviewRevision(previous.revision);
   if (
-    incrementReviewRevision(previous.revision) !== current.revision ||
+    BigInt(current.revision) < BigInt(removalRevision) ||
     incrementReviewRevision(previous.operationGeneration) !==
       current.operationGeneration
   )

@@ -13,6 +13,10 @@ import { canonicalUuid } from
   "../../../packages/logic/src/account-review/schema-primitives";
 import { mergeAccountReviewLateRows } from
   "../../../packages/logic/src/account-review/reducer-merge";
+import {
+  projectAccountReviewSession,
+  type AccountReviewReadModel,
+} from "../../../packages/logic/src/account-review/read-model";
 import type {
   AccountReviewCommandResult,
   ReviewUndoLease,
@@ -50,6 +54,7 @@ export type UseAccountReviewInput =
 
 export interface AccountReviewFacadeView {
   readonly session: AccountReviewSession | null;
+  readonly readModel: AccountReviewReadModel | null;
   readonly isBusy: boolean;
   readonly error: Error | null;
   readonly undoToken: string | null;
@@ -57,6 +62,7 @@ export interface AccountReviewFacadeView {
 
 export const EMPTY_ACCOUNT_REVIEW_FACADE: AccountReviewFacadeView = {
   session: null,
+  readModel: null,
   isBusy: false,
   error: null,
   undoToken: null,
@@ -121,6 +127,7 @@ export class AccountReviewFacadeController {
   private input: UseAccountReviewInput | null = null;
   private session: AccountReviewSession | null = null;
   private snapshots: AccountReviewAccountSnapshots | null = null;
+  private readModel: AccountReviewReadModel | null = null;
   private error: Error | null = null;
   private undo: ReviewUndoLease | null = null;
   private loading = false;
@@ -193,10 +200,34 @@ export class AccountReviewFacadeController {
     return this.generation;
   }
 
+  private refreshReadModel(): void {
+    const session = this.session;
+    const snapshots = this.snapshots;
+    const expectedOwner = this.input?.ownerId;
+    if (!session || !snapshots || !expectedOwner ||
+        session.ownerId !== expectedOwner ||
+        snapshots.ownerId !== expectedOwner) {
+      this.readModel = null;
+      return;
+    }
+    try {
+      // The owned account read service is the sole source of context.
+      // Eligibility/counts/filtered ready preview belong to pure logic.
+      this.readModel = projectAccountReviewSession({
+        session,
+        accountSnapshots: snapshots,
+      });
+    } catch {
+      this.readModel = null;
+      this.error = new Error("account_review_facade_projection_unavailable");
+    }
+  }
+
   private publish(): void {
     if (!this.mounted) return;
     this.onView({
       session: this.session,
+      readModel: this.error || this.loading ? null : this.readModel,
       isBusy: this.loading || this.running || this.queue.length > 0,
       error: this.error,
       undoToken: this.undo?.token ?? null,
@@ -225,6 +256,7 @@ export class AccountReviewFacadeController {
     this.input = null;
     this.session = null;
     this.snapshots = null;
+    this.readModel = null;
     this.error = null;
     this.undo = null;
     this.loading = false;
@@ -256,7 +288,11 @@ export class AccountReviewFacadeController {
       this.session = input.voiceSession
         ? verifySessionScope(input.voiceSession, input)
         : null;
-      this.publish();
+      if (this.session) {
+        this.beginVoiceBootstrap(input);
+      } else {
+        this.publish();
+      }
       return;
     }
     this.beginSmsBootstrap(input);
@@ -278,6 +314,36 @@ export class AccountReviewFacadeController {
     if (session && this.input === input) {
       this.session = verifySessionScope(session, input);
       this.publish();
+    }
+  }
+
+  /** Voice never persists its review; it still needs an owned read model
+   * before publishing readiness. Abort, actor and generation changes revoke
+   * any late asynchronous account read. */
+  private beginVoiceBootstrap(input: VoiceAccountReviewInput): void {
+    const generation = this.generation;
+    this.loading = true;
+    this.publish();
+    void this.loadVoice(input, generation);
+  }
+
+  private async loadVoice(
+    input: VoiceAccountReviewInput,
+    generation: number
+  ): Promise<void> {
+    try {
+      const snapshots = await loadAccountReviewAccountSnapshots();
+      if (!this.isCurrent(generation) || this.input !== input) return;
+      if (snapshots.ownerId !== input.ownerId)
+        throw new Error("account_review_facade_account_scope_changed");
+      this.snapshots = snapshots;
+      this.error = null;
+      this.loading = false;
+      this.refreshReadModel();
+      this.publish();
+      this.pump();
+    } catch (reason) {
+      this.failBootstrap(generation, reason);
     }
   }
 
@@ -306,11 +372,14 @@ export class AccountReviewFacadeController {
         }),
         loadAccountReviewAccountSnapshots(),
       ]);
-      if (!this.isCurrent(generation)) return;
+      if (!this.isCurrent(generation) || this.input !== input) return;
+      if (snapshots.ownerId !== input.ownerId)
+        throw new Error("account_review_facade_account_scope_changed");
       this.session = verifySessionScope(session, input);
       this.snapshots = snapshots;
       this.loading = false;
       this.error = null;
+      this.refreshReadModel();
       this.publish();
       this.pump();
     } catch (reason) {
@@ -323,6 +392,7 @@ export class AccountReviewFacadeController {
     this.loading = false;
     this.session = null;
     this.snapshots = null;
+    this.readModel = null;
     this.error = toReviewError(reason);
     this.queue.splice(0).forEach((task) => task.reject(this.error ?? cancelledError()));
     this.publish();
@@ -377,40 +447,62 @@ export class AccountReviewFacadeController {
     task: QueuedReviewCommand,
     prior: AccountReviewSession,
     nextUndoToken: string | null
-  ): Promise<AccountReviewCommandResult> {
+  ): Promise<{
+    readonly result: AccountReviewCommandResult;
+    readonly snapshots: AccountReviewAccountSnapshots;
+  }> {
     const input = this.input;
     if (!input || !this.isCurrent(task.generation)) throw cancelledError();
     if (input.mode === "SMS") {
       const snapshots = this.snapshots;
       if (!snapshots || snapshots.ownerId !== input.ownerId)
         throw new Error("account_review_facade_account_scope_changed");
-      return executeSmsAccountReviewCommand({
+      const result = await executeSmsAccountReviewCommand({
         queueId: input.queueId,
         command: task.command,
         accountSnapshots: snapshots,
         nextUndoToken,
       });
+      if (!this.isCurrent(task.generation)) throw cancelledError();
+      // The service uses fresh owned DB authority internally. Refresh the
+      // outward projection once after an accepted mutation, never trust a
+      // screen's old account list for newly accepted account choices.
+      const current = result.reasonCodes.length === 0 &&
+        result.effect !== "none"
+        ? await loadAccountReviewAccountSnapshots()
+        : snapshots;
+      if (!this.isCurrent(task.generation) ||
+          current.ownerId !== input.ownerId)
+        throw cancelledError();
+      return { result, snapshots: current };
     }
     const snapshots = await loadAccountReviewAccountSnapshots();
-    if (!this.isCurrent(task.generation)) throw cancelledError();
-    return executeVoiceAccountReviewCommand({
+    if (!this.isCurrent(task.generation) ||
+        snapshots.ownerId !== input.ownerId) throw cancelledError();
+    const result = await executeVoiceAccountReviewCommand({
       session: prior,
       command: task.command,
       accountSnapshots: snapshots,
       nextUndoToken,
       undo: this.undo,
     });
+    if (!this.isCurrent(task.generation)) throw cancelledError();
+    return { result, snapshots };
   }
 
   private acceptCommand(
     task: QueuedReviewCommand,
     prior: AccountReviewSession,
-    result: AccountReviewCommandResult
+    result: AccountReviewCommandResult,
+    snapshots: AccountReviewAccountSnapshots
   ): void {
     const input = this.input;
     if (!input) throw cancelledError();
     const accepted = verifySessionScope(result.state, input);
-    if (result.reasonCodes.length === 0 && result.effect !== "none") {
+    if (snapshots.ownerId !== input.ownerId)
+      throw new Error("account_review_facade_account_scope_changed");
+    if (result.reasonCodes.length === 0 && result.effect !== "none" &&
+        task.command.kind !== "set_filter") {
       this.undo =
         task.command.kind === "remove_group" && result.undoToken
           ? {
@@ -421,7 +513,9 @@ export class AccountReviewFacadeController {
           : null;
     }
     this.session = accepted;
+    this.snapshots = snapshots;
     this.error = null;
+    this.refreshReadModel();
     this.publish();
   }
 
@@ -431,10 +525,12 @@ export class AccountReviewFacadeController {
         throw cancelledError();
       const prior = this.session;
       const token = task.command.kind === "remove_group" ? randomUUID() : null;
-      const result = await this.executeCommand(task, prior, token);
+      const { result, snapshots } = await this.executeCommand(
+        task, prior, token
+      );
       if (!this.isCurrent(task.generation) || this.active !== task)
         return;
-      this.acceptCommand(task, prior, result);
+      this.acceptCommand(task, prior, result, snapshots);
       task.resolve(result);
     } catch (reason) {
       const error = toReviewError(reason);
