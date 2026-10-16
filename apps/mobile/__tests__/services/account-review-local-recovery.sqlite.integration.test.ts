@@ -47,7 +47,7 @@ import {
   seedSavedFingerprint,
 } from "./account-review-save-sqlite-test-helpers";
 import {
-  ACTION, BANK, FINGERPRINT_A, OWNER, SESSION,
+  ACTION, BANK, FINGERPRINT_A, FINGERPRINT_B, OWNER, SESSION,
   makeSaveFixture, testUuid, type SaveFixture,
 } from "./account-review-save-test-fixtures";
 import {
@@ -59,6 +59,32 @@ import {
 
 // Register real Node SQLite BEFORE Jest evaluates production service imports.
 // This is the same per-suite mock boundary as the passing Save SQLite suites.
+/**
+ * TEST-ONLY Node SHA-256 bridge for expo-crypto's Jest stub. The real Save
+ * hashProvider, reducers, reconciliation, SQLite and immutable root hashing
+ * remain intact; only the unavailable native crypto primitive is replaced.
+ * Deterministic canonical v4 IDs also avoid non-UUID native Jest randomUUIDs.
+ */
+let mockCryptoUuidCounter = 0;
+jest.mock("expo-crypto", () => {
+  const { createHash } = jest.requireActual<typeof import("node:crypto")>(
+    "node:crypto"
+  );
+  return {
+    CryptoDigestAlgorithm: { SHA256: "SHA-256" },
+    digestStringAsync: (algorithm: string, input: string): Promise<string> => {
+      if (algorithm !== "SHA-256")
+        return Promise.reject(new Error("unsupported_test_crypto_algorithm"));
+      return Promise.resolve(createHash("sha256").update(input, "utf8").digest("hex"));
+    },
+    randomUUID: (): string => {
+      mockCryptoUuidCounter += 1;
+      return "e1000000-0000-4000-8000-" +
+        String(mockCryptoUuidCounter).padStart(12, "0");
+    },
+  };
+});
+
 jest.mock("@nozbe/watermelondb/adapters/sqlite/makeDispatcher", (): unknown =>
   jest.requireActual(
     "@nozbe/watermelondb/adapters/sqlite/makeDispatcher/index.js"
@@ -217,6 +243,7 @@ async function createFailingPrivatePlan(fixture: SaveFixture): Promise<{
 }
 
 beforeEach(async (): Promise<void> => {
+  mockCryptoUuidCounter = 0;
   await resetRecoverySqlite();
 });
 
@@ -404,7 +431,18 @@ describe("#395 T043 actual selected Save device-private evidence", () => {
   it("L08 an all-dedup SMS cleanup does not fabricate financial/private root", async () => {
     const fixture = makeSaveFixture("sms-all-dedup");
     await seedBoundSmsReview(fixture);
+    // The genuine all-dedup fixture SELECTS two distinct SMS fingerprints.
+    // Seed BOTH existing owned saved financial outcomes. The helper uses a
+    // fixed ID per entity kind; transaction + transfer avoids that collision
+    // without fabricating rows or weakening production fingerprint matching.
+    const selected = fixture.session.rows.flatMap((row) =>
+      row.source === "SMS" && row.selected ? [row.sourceFingerprint] : []
+    );
+    expect([...selected].sort()).toEqual(
+      [FINGERPRINT_A, FINGERPRINT_B].sort()
+    );
     await seedSavedFingerprint(database, FINGERPRINT_A, "transaction");
+    await seedSavedFingerprint(database, FINGERPRINT_B, "transfer");
     await expect(saveReview(fixture)).resolves.toMatchObject({ kind: "cleanup_only" });
     const fresh = await cloneRecoverySqlite();
     expect(await ownedPhysicalRows(fresh, "financial_action_groups")).toHaveLength(0);

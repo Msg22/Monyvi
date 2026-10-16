@@ -53,9 +53,6 @@ import {
   type FinancialActionFoundationRepositoryDependencies,
   type FinancialActionLinkedExistingOperation,
   type FinancialActionLinkedOperationPlan,
-  type FinancialActionLinkedOperationPostimage,
-  type FinancialActionLinkedOperationPreimage,
-  type FinancialActionLinkedOperationPreparedOwnershipInput,
   type FinancialActionUserDataScope,
   resolveFinancialActionServerOutcomeState,
 } from "./financial-action-foundation-contracts";

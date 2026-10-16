@@ -69,9 +69,11 @@ function decodeLegacy(
   if (!reviewed) throw new Error("account_review_legacy_migration_incomplete");
   // An untouched V1 row has no local review revision. Its revision is
   // established at durable genesis and must never track later global edits.
+  // Rehydrate the genuine committed global header tombstones from the baseline.
   return {
     ...reviewed,
     row: { ...reviewed.row, revision: "1" },
+    removedEvidenceKeys: [...baseline.removedEvidenceKeys],
   };
 }
 
@@ -108,8 +110,10 @@ function combineReferencedGroups(
   }
   for (const view of views) {
     for (const group of byId.values()) {
-      if (group.status === "removed" &&
-          !view.removedEvidenceKeys.includes(group.evidenceKey))
+      if (
+        group.status === "removed" &&
+        !view.removedEvidenceKeys.includes(group.evidenceKey)
+      )
         throw new Error("account_review_tombstone_snapshot_conflict");
     }
   }
@@ -131,11 +135,15 @@ export function rehydrateOwnedSmsReviewGraph(
   const recordsByRow = new Map<string, SmsReviewDraftItem>();
   const fingerprints = new Set<string>();
   for (const record of records) {
-    if (record.userId !== ownerId || record.queueId !== queueId ||
-        fingerprints.has(record.smsFingerprint))
+    if (
+      record.userId !== ownerId ||
+      record.queueId !== queueId ||
+      fingerprints.has(record.smsFingerprint)
+    )
       throw new Error("account_review_source_scope_conflict");
     fingerprints.add(record.smsFingerprint);
-    const view = decodeStoredV2(record, ownerId, queueId) ??
+    const view =
+      decodeStoredV2(record, ownerId, queueId) ??
       decodeLegacy(record, ownerId, queueId, baseline);
     assertSameHeader(view, baseline);
     if (recordsByRow.has(view.row.rowId))
@@ -145,12 +153,16 @@ export function rehydrateOwnedSmsReviewGraph(
   }
   const groups = combineReferencedGroups(views);
   const session = accountReviewSessionSchema.parse({
-    ownerId, source: "SMS", sessionId: queueId,
+    ownerId,
+    source: "SMS",
+    sessionId: queueId,
     sourceRevision: baseline.sourceRevision,
     preferredCurrency: baseline.preferredCurrency,
     rows: views.map((view) => view.row),
-    groups, removedEvidenceKeys: [...baseline.removedEvidenceKeys],
-    filter: baseline.filter, revision: baseline.reviewRevision,
+    groups,
+    removedEvidenceKeys: [...baseline.removedEvidenceKeys],
+    filter: baseline.filter,
+    revision: baseline.reviewRevision,
     operationGeneration: baseline.operationGeneration,
     saveIntent: null,
   });
@@ -161,8 +173,7 @@ export function encodeOwnedSmsReviewRow(
   state: AccountReviewSession,
   row: AccountReviewRow
 ): ReturnType<typeof encodeSmsReviewDraftV2> {
-  if (row.source !== "SMS")
-    throw new Error("account_review_wrong_source");
+  if (row.source !== "SMS") throw new Error("account_review_wrong_source");
   return encodeSmsReviewDraftV2({
     transaction: row.transaction,
     review: {
@@ -174,9 +185,10 @@ export function encodeOwnedSmsReviewRow(
       operationGeneration: state.operationGeneration,
       filter: state.filter,
       row,
-      groups: state.groups.filter((group) =>
-        group.linkedRowIds.includes(row.rowId) ||
-        state.removedEvidenceKeys.includes(group.evidenceKey)
+      groups: state.groups.filter(
+        (group) =>
+          group.linkedRowIds.includes(row.rowId) ||
+          state.removedEvidenceKeys.includes(group.evidenceKey)
       ),
       removedEvidenceKeys: [...state.removedEvidenceKeys],
     },

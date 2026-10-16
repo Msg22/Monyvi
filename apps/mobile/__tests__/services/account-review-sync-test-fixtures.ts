@@ -260,14 +260,22 @@ export async function canonicalReviewChanges(
     reviewSyncRegistry
   );
   const payload = validateReviewBatchSavePayload(envelope.payload);
+  // Mirror the actual persisted new action-root header, not merely the
+  // transport tuple. Strict protected push verifies immutable domain/kind
+  // against the canonical registry envelope BEFORE reading child rows.
   const root = {
     id: REVIEW_ROOT_ID,
     user_id: envelope.userId,
     action_id: envelope.actionId,
+    domain: envelope.domain,
+    kind: envelope.kind,
+    domain_reference_id: envelope.domainReferenceId,
+    account_guards_json: JSON.stringify(envelope.accountGuards),
     payload_hash: payloadHash,
     payload_json: canonicalText,
     state: "local_complete",
     deleted: false,
+    _status: "created",
   };
   return {
     envelope,

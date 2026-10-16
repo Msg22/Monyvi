@@ -193,16 +193,29 @@ describe("#395 T054 useAccountReview canonical readModel view", () => {
 
   it("H05 a foreign account-read result cannot publish an owned SMS or Voice projection", async () => {
     const session = makeSmsReviewSession();
+    const pending = createDeferred<Awaited<ReturnType<AccountsFn>>>();
     mockBootstrap.mockResolvedValue(session);
-    mockAccounts.mockResolvedValue({
-      ...makeOwnedContext(), ownerId: T030_FOREIGN_OWNER,
-    });
+    mockAccounts.mockReturnValue(pending.promise);
     const { result } = renderHook(() => useAccountReview(makeSmsReviewInput()));
     await waitFor(() => expect(mockAccounts).toHaveBeenCalledTimes(1));
     expect(exposedProjection(result.current)).toBeNull();
-    // The facade must not silently treat a foreign context as the current
-    // owner, even if the provider account list is structurally well formed.
-    expect(result.current.isBusy).toBe(false);
+    expect(result.current.isBusy).toBe(true);
+    // The read was merely STARTED above. Its actual response must settle
+    // before we can assert that the facade released the owned-load phase.
+    await act(async () => {
+      pending.resolve({
+        ...makeOwnedContext(), ownerId: T030_FOREIGN_OWNER,
+      });
+      await pending.promise;
+    });
+    // A foreign owned-read result must be explicitly rejected, never
+    // published, and may not leave the facade indefinitely busy.
+    await waitFor(() => {
+      expect(result.current.error?.message)
+        .toBe("account_review_facade_account_scope_changed");
+      expect(exposedProjection(result.current)).toBeNull();
+      expect(result.current.isBusy).toBe(false);
+    });
   });
 
   it("H06 changed Voice filter uses the canonical reducer and publishes fresh shaped projection, not a copied session", async () => {

@@ -7,6 +7,7 @@
  * Deliberately RED against missing downstream private-root recovery behavior.
  */
 import { Q, type Database } from "@nozbe/watermelondb";
+import { setGenerator } from "@nozbe/watermelondb/utils/common/randomId";
 import type SQLiteAdapter from "@nozbe/watermelondb/adapters/sqlite";
 import type {
   AccountFinancialEffect,
@@ -35,7 +36,7 @@ import {
 import { ledgerState } from "./account-review-save-sqlite-test-helpers";
 import {
   ACTION, BANK, CASH, WALLET, FINGERPRINT_A, FINGERPRINT_B,
-  FOREIGN_OWNER, OWNER, SESSION, makeSaveFixture,
+  FOREIGN_OWNER, OWNER, SESSION, makeSaveFixture, testUuid,
 } from "./account-review-save-test-fixtures";
 import {
   database, cloneRecoverySqlite, resetRecoverySqlite,
@@ -50,6 +51,32 @@ import {
 } from "./account-review-durable-recovery-test-helpers";
 
 // This is the real Node SQLite bridge, not an in-memory stand-in for writes.
+/**
+ * TEST-ONLY Node SHA-256 bridge for expo-crypto's Jest stub. The real Save
+ * hashProvider, reducers, reconciliation, SQLite and immutable root hashing
+ * remain intact; only the unavailable native crypto primitive is replaced.
+ * Deterministic canonical v4 IDs also avoid non-UUID native Jest randomUUIDs.
+ */
+let mockCryptoUuidCounter = 0;
+jest.mock("expo-crypto", () => {
+  const { createHash } = jest.requireActual<typeof import("node:crypto")>(
+    "node:crypto"
+  );
+  return {
+    CryptoDigestAlgorithm: { SHA256: "SHA-256" },
+    digestStringAsync: (algorithm: string, input: string): Promise<string> => {
+      if (algorithm !== "SHA-256")
+        return Promise.reject(new Error("unsupported_test_crypto_algorithm"));
+      return Promise.resolve(createHash("sha256").update(input, "utf8").digest("hex"));
+    },
+    randomUUID: (): string => {
+      mockCryptoUuidCounter += 1;
+      return "e1000000-0000-4000-8000-" +
+        String(mockCryptoUuidCounter).padStart(12, "0");
+    },
+  };
+});
+
 jest.mock("@nozbe/watermelondb/adapters/sqlite/makeDispatcher", (): unknown =>
   jest.requireActual(
     "@nozbe/watermelondb/adapters/sqlite/makeDispatcher/index.js"
@@ -95,9 +122,16 @@ interface SqliteModuleRuntime {
 }
 const runtime = jest.requireMock<SqliteModuleRuntime>("@monyvi/db");
 
+let mockPhysicalQueueUuidCounter = 0;
 beforeEach(async (): Promise<void> => {
   runtime.__setActiveDatabase(runtime.__originalDatabase);
   mockActiveOwner = OWNER;
+  mockCryptoUuidCounter = 0;
+  mockPhysicalQueueUuidCounter = 0;
+  // The real Watermelon prepareCreate uses its own random-ID generator,
+  // independent of expo-crypto. T049 namespace admission requires a
+  // canonical UUID, not Jest's default non-UUID random string.
+  setGenerator(() => testUuid(30000 + ++mockPhysicalQueueUuidCounter));
   await resetRecoverySqlite();
 });
 afterEach((): void => {

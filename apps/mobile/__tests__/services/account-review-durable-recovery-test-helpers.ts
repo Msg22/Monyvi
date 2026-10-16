@@ -8,6 +8,7 @@ import type {
   SmsReviewDraftItem,
   SmsReviewQueue,
 } from "@monyvi/db";
+import { serializeCanonicalJsonValue } from "@monyvi/logic";
 import type {
   AccountReviewLocalSaveSnapshot,
 } from "../../../../packages/logic/src/financial-actions/review-local-recovery";
@@ -129,8 +130,11 @@ export async function stageRejectedRoot(db: Database): Promise<void> {
   await repository.recordFinancialActionGroupServerOutcome(
     ACTION,
     "stale",
-    JSON.stringify({
-      actionId: ACTION,
+    // Match the actual strict RPC/outcome wire canonical serializer: sorted
+    // keys, number-free JSON and exact observed created-account absence.
+    // Deliberately never invent an acceptance receipt or postimage hash.
+    serializeCanonicalJsonValue({
+      actionId: root.actionId,
       status: "stale",
       code: "REVISION_STALE",
       accountRevisions: [],

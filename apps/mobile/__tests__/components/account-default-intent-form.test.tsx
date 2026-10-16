@@ -8,7 +8,7 @@
  */
 import React from "react";
 import { act, fireEvent, render, screen, waitFor, cleanup } from "@testing-library/react-native";
-import { createInstance, type i18n } from "i18next";
+import i18next, { createInstance, type i18n } from "i18next";
 import { I18nextProvider, initReactI18next } from "react-i18next";
 import type { Database } from "@nozbe/watermelondb";
 import type SQLiteAdapter from "@nozbe/watermelondb/adapters/sqlite";
@@ -131,21 +131,8 @@ jest.mock("@/components/navigation/PageHeader", () => {
   const { router } = jest.requireMock<{
     readonly router: { readonly back: () => void };
   }>("expo-router");
-  interface ScopedHeaderProps {
-    readonly title: string;
-    readonly showBackButton?: boolean;
-    readonly onBack?: () => void;
-    readonly backAccessibilityLabel?: string;
-    readonly rightAction?: {
-      readonly label?: string;
-      readonly accessibilityLabel?: string;
-      readonly testID?: string;
-      readonly onPress: () => void;
-      readonly disabled?: boolean;
-      readonly loading?: boolean;
-    };
-    readonly children?: React.ReactNode;
-  }
+  // Inline the presentation-only prop type: Jest hoists this factory and
+  // cannot resolve its former local ScopedHeaderProps binding.
   return {
     PageHeader: ({
       title,
@@ -154,7 +141,21 @@ jest.mock("@/components/navigation/PageHeader", () => {
       backAccessibilityLabel,
       rightAction,
       children,
-    }: ScopedHeaderProps): React.ReactElement =>
+    }: {
+      readonly title: string;
+      readonly showBackButton?: boolean;
+      readonly onBack?: () => void;
+      readonly backAccessibilityLabel?: string;
+      readonly rightAction?: {
+        readonly label?: string;
+        readonly accessibilityLabel?: string;
+        readonly testID?: string;
+        readonly onPress: () => void;
+        readonly disabled?: boolean;
+        readonly loading?: boolean;
+      };
+      readonly children?: import("react").ReactNode;
+    }): import("react").ReactElement =>
       ReactActual.createElement(
         View,
         { testID: "account-form-scoped-header" },
@@ -217,6 +218,20 @@ const mockDb = jest.requireMock<{
 
 async function makeI18n(language: "en" | "ar" = "en"): Promise<i18n> {
   mockLocaleLanguage = language;
+  // CurrencyPicker and validation use the real global i18next.t, whereas
+  // rendered components use an isolated I18nextProvider instance. Initialize
+  // both with the actual matching EN/AR resources, not synthetic names.
+  await i18next.init({
+    lng: language,
+    fallbackLng: language,
+    ns: ["accounts", "common"],
+    defaultNS: "accounts",
+    resources: {
+      en: { accounts: enAccounts, common: enCommon },
+      ar: { accounts: arAccounts, common: arCommon },
+    },
+    interpolation: { escapeValue: false },
+  });
   const instance = createInstance();
   await instance.use(initReactI18next).init({
     lng: language,
@@ -387,16 +402,30 @@ describe("#395 T065 Add Account approved default-control behavior", () => {
     await seedExistingDefault();
     mockTypeParam = "BANK";
     await renderAdd();
-    fireEvent.press(screen.getByLabelText("Choose bank"));
-    fireEvent.press(screen.getByText("CIB (Commercial International Bank)"));
+    fireEvent.press(screen.getByLabelText(enAccounts.institution_bank_dropdown_accessibility));
+    // Real InstitutionPicker uses FlatList; CIB is not necessarily mounted
+    // until the catalogue has been narrowed through its supported search UI.
+    fireEvent.changeText(
+      screen.getByPlaceholderText(enAccounts.institution_search_placeholder),
+      "CIB"
+    );
+    fireEvent.press(await screen.findByText("CIB (Commercial International Bank)"));
+    expect(screen.getByTestId("institution-picker-trigger-bank"))
+      .toHaveTextContent("CIB (Commercial International Bank)");
     fireEvent.changeText(screen.getByTestId("account-name-input"), "CIB Salary");
     fireEvent.changeText(screen.getByTestId("initial-balance-input"), "50.25");
     fireEvent.press(screen.getByText(enAccounts.sms_matching_optional));
+    fireEvent.changeText(screen.getByTestId("sms-sender-input"), "SalaryCIB");
+    fireEvent.press(screen.getByTestId("sms-sender-add"));
+    expect(screen.getByText("SalaryCIB")).toBeTruthy();
     fireEvent.changeText(screen.getByLabelText(enAccounts.card_last_4_digits), "1234");
     const nameInput = screen.getByTestId("account-name-input");
     fireEvent(nameInput, "focus");
     fireEvent.press(defaultFlag());
     expect(screen.getByTestId("account-name-input")).toBe(nameInput);
+    expect(screen.getByTestId("institution-picker-trigger-bank"))
+      .toHaveTextContent("CIB (Commercial International Bank)");
+    expect(screen.getByText("SalaryCIB")).toBeTruthy();
     assertExistingFieldsUnchanged("CIB Salary", "50.25");
     expect(screen.getByLabelText(enAccounts.card_last_4_digits))
       .toHaveProp("value", "1234");
@@ -407,12 +436,12 @@ describe("#395 T065 Add Account approved default-control behavior", () => {
     await seedExistingDefault();
     mockTypeParam = "BANK";
     await renderAdd();
-    expect(screen.getByTestId("header-save")).toHaveProp("disabled", true);
+    expect(screen.getByTestId("header-save")).toBeDisabled();
     fireEvent.press(defaultFlag());
-    expect(screen.getByTestId("header-save")).toHaveProp("disabled", true);
+    expect(screen.getByTestId("header-save")).toBeDisabled();
     fireEvent.changeText(screen.getByTestId("account-name-input"), "Salary");
     fireEvent.changeText(screen.getByTestId("initial-balance-input"), "12..5");
-    expect(screen.getByTestId("header-save")).toHaveProp("disabled", true);
+    expect(screen.getByTestId("header-save")).toBeDisabled();
     expect(screen.getByTestId("account-name-input")).toHaveProp(
       "accessibilityLabel", enAccounts.account_name
     );
@@ -431,8 +460,10 @@ describe("#395 T065 Add Account approved default-control behavior", () => {
     fireEvent.changeText(screen.getByTestId("account-name-input"), "Salary Account");
     fireEvent.press(defaultFlag());
     await waitFor(() => expect(screen.getByTestId("header-save"))
-      .toHaveProp("disabled", false));
+      .toBeEnabled());
     fireEvent.press(screen.getByTestId("header-save"));
+    await waitFor(() => expect(service).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByTestId("header-save")).toBeDisabled());
     fireEvent.press(screen.getByTestId("header-save"));
     expect(service).toHaveBeenCalledTimes(1);
     expect(service).toHaveBeenCalledWith(DEFAULT_FORM_OWNER, expect.objectContaining({
@@ -441,7 +472,7 @@ describe("#395 T065 Add Account approved default-control behavior", () => {
       defaultIntent: true,
       balance: "0",
     }));
-    expect(screen.getByTestId("header-save")).toHaveProp("disabled", true);
+    expect(screen.getByTestId("header-save")).toBeDisabled();
     await act(async (): Promise<void> => {
       pending.resolve({ success: false, error: "account_core_writer_stale_account_state" });
       await pending.promise;
@@ -462,6 +493,9 @@ describe("#395 T065 Add Account approved default-control behavior", () => {
     await renderAdd();
     fireEvent.changeText(screen.getByTestId("account-name-input"), "Keep My Details");
     fireEvent.press(defaultFlag());
+    await waitFor(() =>
+      expect(screen.getByTestId("header-save")).toBeEnabled()
+    );
     fireEvent.press(screen.getByTestId("header-save"));
     await waitFor(() => expect(service).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(mockToast).toHaveBeenCalledWith(
@@ -552,7 +586,7 @@ describe("#395 T065 existing Edit default flag and unchanged account form", () =
       checked: true,
     }));
     assertExistingFieldsUnchanged("Cash", "100");
-    expect(screen.getByTestId("header-save")).toHaveProp("disabled", false);
+    expect(screen.getByTestId("header-save")).toBeEnabled();
   });
 });
 

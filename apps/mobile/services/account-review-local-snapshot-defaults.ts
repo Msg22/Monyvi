@@ -2,7 +2,9 @@
 import { Q, type Database } from "@nozbe/watermelondb";
 import type { Account, FinancialActionGroup } from "@monyvi/db";
 import {
+  hashFinancialActionEnvelope,
   parseFinancialActionEnvelopeJson,
+  type FinancialActionEnvelopeV1,
   type Sha256Provider,
 } from "@monyvi/logic";
 import {
@@ -20,7 +22,10 @@ import { createAccountReviewFinancialRegistry } from
 import type {
   FinancialActionLinkedOperationPreparedOwnershipInput,
 } from "./financial-action-foundation-contracts";
-import type { CurrentUserDataScope } from "./user-data-access";
+import {
+  assertExpectedCurrentUser,
+  type CurrentUserDataScope,
+} from "./user-data-access";
 import {
   hashAccountReviewLocalPostimage,
   physicalBoolean,
@@ -112,19 +117,124 @@ export async function captureReviewDefaultPreimages(input: {
   }));
 }
 
-function dependenciesFromPriorAdd(
+/**
+ * Snapshot the persisted owner's complete action identity before awaiting
+ * SHA-256. A Watermelon model can change while a provider promise is pending;
+ * never classify using mutable row getters after that await.
+ */
+interface StoredPredecessorRoot {
+  readonly id: string;
+  readonly actionId: string;
+  readonly userId: string;
+  readonly domain: string;
+  readonly kind: string;
+  readonly domainReferenceId: string;
+  readonly payloadJson: string;
+  readonly payloadHash: string;
+  readonly accountGuardsJson: string;
+  readonly state: string;
+  readonly serverOutcome: string | null;
+  readonly deleted: boolean;
+}
+
+function captureStoredPredecessorRoot(
+  root: FinancialActionGroup
+): StoredPredecessorRoot {
+  return Object.freeze({
+    id: root.id,
+    actionId: root.actionId,
+    userId: root.userId,
+    domain: root.domain,
+    kind: root.kind,
+    domainReferenceId: root.domainReferenceId,
+    payloadJson: root.payloadJson,
+    payloadHash: root.payloadHash,
+    accountGuardsJson: root.accountGuardsJson,
+    state: root.state,
+    serverOutcome: root.serverOutcome,
+    deleted: root.deleted,
+  });
+}
+
+function assertPredecessorRootUnchanged(
+  expected: StoredPredecessorRoot,
+  root: FinancialActionGroup
+): void {
+  const current = captureStoredPredecessorRoot(root);
+  if (
+    current.id !== expected.id ||
+    current.actionId !== expected.actionId ||
+    current.userId !== expected.userId ||
+    current.domain !== expected.domain ||
+    current.kind !== expected.kind ||
+    current.domainReferenceId !== expected.domainReferenceId ||
+    current.payloadJson !== expected.payloadJson ||
+    current.payloadHash !== expected.payloadHash ||
+    current.accountGuardsJson !== expected.accountGuardsJson ||
+    current.state !== expected.state ||
+    current.serverOutcome !== expected.serverOutcome ||
+    current.deleted !== expected.deleted
+  ) fail("predecessor_root_changed");
+}
+
+/**
+ * Verify the complete registered root BEFORE consulting stored domain/kind.
+ * Otherwise a malformed Add creator disguised as edit_balance/transactions
+ * silently disappears from the protected default-predecessor set.
+ */
+async function verifiedPriorEnvelope(
+  stored: StoredPredecessorRoot,
   root: FinancialActionGroup,
+  ownerId: string,
+  hashProvider: Sha256Provider
+): Promise<FinancialActionEnvelopeV1> {
+  if (stored.deleted || stored.userId !== ownerId)
+    fail("foreign_predecessor_root");
+  const registry = createAccountReviewFinancialRegistry();
+  let envelope: FinancialActionEnvelopeV1;
+  let canonicalText: string;
+  let payloadHash: string;
+  try {
+    envelope = parseFinancialActionEnvelopeJson(stored.payloadJson, registry);
+    const digest = await hashFinancialActionEnvelope(
+      envelope, hashProvider, registry
+    );
+    canonicalText = digest.canonicalText;
+    payloadHash = digest.payloadHash;
+  } catch {
+    fail("invalid_prior_action_identity");
+  }
+  assertPredecessorRootUnchanged(stored, root);
+  if (
+    canonicalText !== stored.payloadJson ||
+    payloadHash !== stored.payloadHash ||
+    stored.accountGuardsJson !== JSON.stringify(envelope.accountGuards)
+  ) fail("invalid_prior_action_identity");
+  if (
+    envelope.actionId !== stored.actionId ||
+    envelope.userId !== stored.userId ||
+    envelope.domain !== stored.domain ||
+    envelope.kind !== stored.kind ||
+    envelope.domainReferenceId !== stored.domainReferenceId
+  ) {
+    // Preserve the established diagnostic for unsupported owned-account
+    // tuples. This comparison still rejects them before classification.
+    if (stored.domain === "accounts" &&
+        stored.kind !== "create_with_default" &&
+        stored.kind !== "edit_balance")
+      fail("unprovable_account_predecessor");
+    fail("invalid_prior_action_identity");
+  }
+  return envelope;
+}
+
+function dependenciesFromPriorAdd(
+  envelope: FinancialActionEnvelopeV1,
   accountIds: ReadonlySet<string>
 ): boolean {
-  const envelope = parseFinancialActionEnvelopeJson(
-    root.payloadJson, createAccountReviewFinancialRegistry()
-  );
   if (envelope.domain !== "accounts" ||
       envelope.kind !== "create_with_default" ||
-      envelope.payloadVersion !== "account.create-default/v1" ||
-      envelope.actionId !== root.actionId ||
-      envelope.userId !== root.userId ||
-      envelope.domainReferenceId !== root.domainReferenceId)
+      envelope.payloadVersion !== "account.create-default/v1")
     fail("invalid_prior_action_identity");
   const prior = validateAccountCreateDefaultPayload(envelope.payload);
   const created = prior.domainMutation.records.filter(
@@ -134,28 +244,29 @@ function dependenciesFromPriorAdd(
   if (created.length !== 1 || !account ||
       account.after.id !== envelope.domainReferenceId)
     fail("unprovable_account_predecessor");
+  // The existing account_default UPDATE is only a CAS clear, never a creator.
   return accountIds.has(account.after.id);
 }
 
 function dependenciesFromPriorRoot(
-  root: FinancialActionGroup,
+  envelope: FinancialActionEnvelopeV1,
   accountIds: ReadonlySet<string>
 ): boolean {
-  if (root.domain === "accounts" && root.kind === "create_with_default")
-    return dependenciesFromPriorAdd(root, accountIds);
-  if (root.kind !== "review_batch_save") {
-    if (root.domain === "accounts" && root.kind !== "edit_balance")
+  if (envelope.domain === "accounts" &&
+      envelope.kind === "create_with_default")
+    return dependenciesFromPriorAdd(envelope, accountIds);
+  if (envelope.kind !== "review_batch_save") {
+    if (envelope.domain === "accounts" && envelope.kind !== "edit_balance")
       fail("unprovable_account_predecessor");
     return false;
   }
-  const envelope = parseFinancialActionEnvelopeJson(
-    root.payloadJson, createAccountReviewFinancialRegistry()
-  );
-  const prior = reviewBatchSaveWireSchema.parse(envelope.payload);
-  if (envelope.actionId !== root.actionId || envelope.userId !== root.userId)
+  if (envelope.domain !== "transactions" ||
+      envelope.payloadVersion !== "review.batch-save/v1")
     fail("invalid_prior_action_identity");
+  const prior = reviewBatchSaveWireSchema.parse(envelope.payload);
   return prior.domainMutation.records.some(
-    (record) => record.entity === "account" && accountIds.has(record.after.id)
+    (record) => record.entity === "account" &&
+      record.mode === "create" && accountIds.has(record.after.id)
   );
 }
 
@@ -165,6 +276,7 @@ export async function captureReviewDefaultDependencies(input: {
   readonly ownerId: string;
   readonly actionId: string;
   readonly payload: ReviewBatchSavePayload;
+  readonly hashProvider: Sha256Provider;
 }): Promise<string[]> {
   if (input.scope.userId !== input.ownerId)
     return fail("default_dependency_owner_changed");
@@ -180,18 +292,50 @@ export async function captureReviewDefaultDependencies(input: {
   const defaultId = input.payload.creationDefaultSnapshot?.defaultAccount?.accountId;
   if (defaultId) active.add(defaultId);
   if (active.size === 0) return [];
+  const collection =
+    input.database.get<FinancialActionGroup>("financial_action_groups");
   const roots = await input.scope.queryOwned(
-    input.database.get<FinancialActionGroup>("financial_action_groups"),
-    Q.where("deleted", false)
+    collection, Q.where("deleted", false)
   ).fetch();
+  const originals = roots.map((root) => ({
+    root,
+    stored: captureStoredPredecessorRoot(root),
+  }));
+  await assertExpectedCurrentUser(input.ownerId);
+  const unresolved = originals.filter(({ stored }) =>
+    stored.actionId !== input.actionId &&
+    stored.state !== "accepted" && stored.state !== "reconciled"
+  );
   const dependencies: string[] = [];
-  for (const root of roots) {
-    if (root.actionId === input.actionId ||
-        root.state === "accepted" || root.state === "reconciled") continue;
-    if (root.userId !== input.ownerId)
-      return fail("foreign_predecessor_root");
-    if (dependenciesFromPriorRoot(root, active))
-      dependencies.push(root.actionId);
+  for (const { root, stored } of unresolved) {
+    const envelope = await verifiedPriorEnvelope(
+      stored, root, input.ownerId, input.hashProvider
+    );
+    await assertExpectedCurrentUser(input.ownerId);
+    assertPredecessorRootUnchanged(stored, root);
+    if (dependenciesFromPriorRoot(envelope, active))
+      dependencies.push(stored.actionId);
+  }
+  // Hashing was asynchronous: re-read the actual owned unresolved set while
+  // still in the writer, so neither a changed root nor a new/disappeared
+  // unresolved predecessor can be silently omitted after the initial query.
+  const current = await input.scope.queryOwned(
+    collection, Q.where("deleted", false)
+  ).fetch();
+  await assertExpectedCurrentUser(input.ownerId);
+  const currentUnresolved = current.filter((root) =>
+    root.actionId !== input.actionId &&
+    root.state !== "accepted" && root.state !== "reconciled"
+  );
+  if (currentUnresolved.length !== unresolved.length)
+    fail("predecessor_root_changed");
+  const byId = new Map(currentUnresolved.map((root) => [root.id, root]));
+  if (byId.size !== currentUnresolved.length)
+    fail("predecessor_root_changed");
+  for (const { stored } of unresolved) {
+    const reloaded = byId.get(stored.id);
+    if (!reloaded) fail("predecessor_root_changed");
+    assertPredecessorRootUnchanged(stored, reloaded);
   }
   const unique = [...new Set(dependencies)].sort(ascii);
   if (unique.length !== dependencies.length)

@@ -283,8 +283,8 @@ async function seedDraftsWithVersion(
     const queue = database
       .get<SmsReviewQueue>("sms_review_queues")
       .prepareCreate((record): void => {
-        record._raw.id = testUuid(950);
-        record.userId = OWNER;
+        record._raw.id = session.sessionId;
+        record.userId = session.ownerId;
       });
     const drafts = session.rows.map((rawRow, index): SmsReviewDraftItem => {
       const row = requireSmsRow(rawRow);
@@ -296,8 +296,8 @@ async function seedDraftsWithVersion(
         .get<SmsReviewDraftItem>("sms_review_draft_items")
         .prepareCreate((record): void => {
           record._raw.id = testUuid(951 + index);
-          record.userId = OWNER;
-          record.queueId = testUuid(950);
+          record.userId = session.ownerId;
+          record.queueId = session.sessionId;
           record.smsFingerprint = row.sourceFingerprint;
           record.payloadVersion = encoded.version;
           record.payloadJson = encoded.json;

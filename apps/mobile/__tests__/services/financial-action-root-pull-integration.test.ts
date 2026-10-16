@@ -55,6 +55,17 @@ jest.mock("@monyvi/db", (): Readonly<Record<string, unknown>> => {
     ...Object.fromEntries(models.map((model) => [model.name, model])),
   };
 });
+jest.mock("expo-crypto", () => {
+  const nodeCrypto = jest.requireActual<typeof import("node:crypto")>("node:crypto");
+  return {
+    CryptoDigestAlgorithm: { SHA256: "SHA-256" },
+    digestStringAsync: (algorithm: string, input: string): Promise<string> => {
+      if (algorithm !== "SHA-256") throw new Error("unexpected_test_digest_algorithm");
+      return Promise.resolve(nodeCrypto.createHash("sha256").update(input, "utf8").digest("hex"));
+    },
+    randomUUID: (): string => nodeCrypto.randomUUID(),
+  };
+});
 jest.mock("@/services/supabase", () => ({
   getCurrentUserId: (): Promise<string | null> => mockCurrentActor(),
   supabase: {

@@ -58,6 +58,10 @@ const mockLoadAccountSnapshots = jest.fn<
   ReturnType<ReadAccountsService>,
   Parameters<ReadAccountsService>
 >();
+// The real owned-read service has no owner argument; it obtains the current
+// authenticated scope itself. This test boundary mirrors that authenticated
+// actor at the moment each account snapshot is requested.
+let mockAuthenticatedOwnerId = T030_OWNER;
 
 // jest-expo's generated ExpoCrypto mock leaves randomUUID() undefined.
 // This test file needs a real canonical v4 value for the reducer's Undo lease.
@@ -107,7 +111,13 @@ beforeEach(() => {
   mockLoadOrBootstrap.mockReset();
   mockExecuteSmsCommand.mockReset();
   mockLoadAccountSnapshots.mockReset();
-  mockLoadAccountSnapshots.mockResolvedValue(makeOwnedContext());
+  mockAuthenticatedOwnerId = T030_OWNER;
+  mockLoadAccountSnapshots.mockImplementation(
+    (): ReturnType<ReadAccountsService> => Promise.resolve({
+      ...makeOwnedContext(),
+      ownerId: mockAuthenticatedOwnerId,
+    })
+  );
 });
 
 describe("#395 T030 useAccountReview lifecycle facade", () => {
@@ -273,8 +283,13 @@ describe("#395 T030 useAccountReview lifecycle facade", () => {
         { initialProps }
       );
       await waitFor(() => expect(mockLoadOrBootstrap).toHaveBeenCalledTimes(1));
+      // A genuine owner switch changes the authenticated account-read scope,
+      // not just the SMS bootstrap session owner. Other stale/foreign negative
+      // fixtures continue to use their explicit mismatched contexts.
+      mockAuthenticatedOwnerId = T030_FOREIGN_OWNER;
       rerender({ ownerId: T030_FOREIGN_OWNER });
       await waitFor(() => expect(mockLoadOrBootstrap).toHaveBeenCalledTimes(2));
+      await waitFor(() => expect(mockLoadAccountSnapshots).toHaveBeenCalledTimes(2));
       expect(bootstrapSignal(0)?.aborted).toBe(true);
       expect(mockLoadOrBootstrap).toHaveBeenLastCalledWith(
         expect.objectContaining({

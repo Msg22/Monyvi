@@ -10,6 +10,7 @@ import type {
 import {
   accountReviewSaveIntentSchema,
   accountReviewSessionSchema,
+  serializeCanonicalJsonValue,
 } from "@monyvi/logic";
 import {
   parseAccountReviewLocalSaveSnapshot,
@@ -29,6 +30,32 @@ import {
 import {
   financialRepository,
 } from "./account-review-durable-recovery-test-helpers";
+
+/**
+ * TEST-ONLY Node SHA-256 bridge for expo-crypto's Jest stub. The real Save
+ * hashProvider, reducers, reconciliation, SQLite and immutable root hashing
+ * remain intact; only the unavailable native crypto primitive is replaced.
+ * Deterministic canonical v4 IDs also avoid non-UUID native Jest randomUUIDs.
+ */
+let mockCryptoUuidCounter = 0;
+jest.mock("expo-crypto", () => {
+  const { createHash } = jest.requireActual<typeof import("node:crypto")>(
+    "node:crypto"
+  );
+  return {
+    CryptoDigestAlgorithm: { SHA256: "SHA-256" },
+    digestStringAsync: (algorithm: string, input: string): Promise<string> => {
+      if (algorithm !== "SHA-256")
+        return Promise.reject(new Error("unsupported_test_crypto_algorithm"));
+      return Promise.resolve(createHash("sha256").update(input, "utf8").digest("hex"));
+    },
+    randomUUID: (): string => {
+      mockCryptoUuidCounter += 1;
+      return "e1000000-0000-4000-8000-" +
+        String(mockCryptoUuidCounter).padStart(12, "0");
+    },
+  };
+});
 
 jest.mock("@nozbe/watermelondb/adapters/sqlite/makeDispatcher", (): unknown =>
   jest.requireActual(
@@ -142,6 +169,7 @@ async function attemptSecondPush(): Promise<readonly FinancialRpcInput[]> {
 }
 
 beforeEach(async (): Promise<void> => {
+  mockCryptoUuidCounter = 0;
   mockActiveOwner = OWNER;
   await resetRecoverySqlite();
 });
@@ -161,7 +189,9 @@ describe("#395 T044 real SQLite predecessor-aware protected sync", () => {
     await repository.markFinancialActionGroupSyncPending(ACTION);
     await repository.recordFinancialActionGroupServerOutcome(
       ACTION, "accepted",
-      JSON.stringify({ actionId: ACTION, status: "accepted" }), null
+      serializeCanonicalJsonValue({
+        actionId: ACTION, status: "accepted",
+      }), null
     );
     expect(await attemptSecondPush()).toEqual([{
       payloadHash: secondRoot.payloadHash,
@@ -182,7 +212,7 @@ describe("#395 T044 real SQLite predecessor-aware protected sync", () => {
         await repository.markFinancialActionGroupSyncPending(ACTION);
         await repository.recordFinancialActionGroupServerOutcome(
           ACTION, "stale",
-          JSON.stringify({
+          serializeCanonicalJsonValue({
             actionId: ACTION, status: "stale", code: "REVISION_STALE",
           }),
           "REVISION_STALE"

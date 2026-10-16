@@ -1,0 +1,49 @@
+# #395 T049 — Physical recovery fixture evidence and bounded source blockers
+
+**Date:** 2026-10-16. **Exact immutable candidate parent:** `5559ae21ddab0bbc0872dc7e41ff0af741eafe4b`, tree `1b8adf3f768fd5a4c4773baa29c8a279b784e8cd`. **TESTS/HELPERS ONLY — NOT RUN.** The lead previously reported grouped recovery44 **24 PASS / 20 FAIL** and private-capture25 **14 PASS / 11 FAIL**. Those were external observations; this worker neither reran those suites nor claims improvement/Green.
+
+## Exact granted changed-only paths
+
+Seven **existing** files under `apps/mobile/__tests__/services/`:
+1. `account-review-durable-recovery-test-helpers.ts`
+2. `account-review-durable-recovery.sqlite.integration.test.ts`
+3. `account-review-durable-recovery-dependency.sqlite.integration.test.ts`
+4. `account-review-durable-recovery-guards.sqlite.integration.test.ts`
+5. `account-review-sync-test-fixtures.ts`
+6. `account-review-sync.test.ts`
+7. `account-review-local-recovery.sqlite.integration.test.ts`
+
+And only this new `specs/395-shared-account-review/validation/t049-recovery-fixture-evidence.md`. No Save SQLite helper or pull suite, business source, schema, registry, migration, provider, financial writer, UI, tasks or workflow ledger was edited.
+
+## Fixture-only corrections, with authentic production contracts
+
+| Repair | Actual prior failure / source proof | Narrow new fixture behavior |
+| --- | --- | --- |
+| **Canonical rejection outcome** | `stageRejectedRoot` previously passed insertion-order `JSON.stringify({actionId,status,code,accountRevisions,canonicalAccounts,canonicalAbsentAccountIds})` into `recordFinancialActionGroupServerOutcome`. The real `assertFinancialActionStateEvidence` in `packages/logic/src/financial-actions/action-contracts.ts:699–741` only accepts canonical-number-free outcome JSON. Actual sync canonicalization sorts all keys (`apps/mobile/services/financial-action-sync-service.ts:94–135`). | Use the existing exported **`serializeCanonicalJsonValue`** directly. The stale outcome remains `actionId` bound to the real root, `code:"REVISION_STALE"`, `accountRevisions:[]`, `canonicalAccounts:[]`, and **`canonicalAbsentAccountIds` derived from actual `createdEntityRefs` account IDs, sorted**. No synthetic postimage, fake hash, server-success claim or production evidence bypass. |
+| **Dependency acceptance/rejection outcomes** | D09/D10 manually recorded accepted/stale outcomes using insertion-order `JSON.stringify`; the same financial-action state evidence invariant rejects them before the predecessor check can prove anything. | Keep actual first/second immutable Save roots, original `privateDependencies` and RPC assertions. Serialize accepted and stale outcome objects with the same **authoritative canonical serializer**, retaining original status/actor/error-code and no artificial prior acceptance. |
+| **Expo Jest crypto boundary** | Real `productionFinancialActionHashProvider` calls `Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, bytes)` (`account-balance-command-production.ts:7–13`). The test environment's Expo native stub does not supply the same SHA-256 contract as the actual Node-SHA Save `hashProvider`; immutable predecessor/protected-push checks fail on a matching root hash, not a malformed fixture. | File-scoped Jest boundary in **D physical, predecessor, G physical, old sync, L physical suites** implements only Expo `SHA-256` via genuine Node `createHash("sha256").update(input,"utf8").digest("hex")` and a deterministic **canonical UUID** generator for its native randomUUID boundary. Reject unsupported digest algorithms. The genuine production review service, foundation, canonical registry, hash comparison, postimage verifier, SQLite database, auth-scope rules, and every invalid-hash test remain unmocked. Each physical suite resets its test-side crypto UUID counter where applicable. |
+| **D06 namespace UUID** | Actual namespace create uses `database.get<SmsReviewQueue>().prepareCreate`, then immediately `canonicalUuid.parse(queue.id)` (`sms-review-namespace-repository.ts:112–139`). Watermelon's own Jest randomId generator is separate from Expo crypto and can produce non-UUID text. | D physical suite now sets the **actual Watermelon random ID generator** with existing `setGenerator` and `testUuid(30000+n)` on each test setup. The real namespace writer still constructs the queue and checks the UUID/owner/session; no source validation relaxed, no fixed fake queue model or synthetic recovery rights. |
+| **Strict new review push root** | `inspectNewFinancialActionPushRoot` at `account-review-recovery-protected-push.ts:50–70` requires actual root `action_id,user_id,domain,kind,payload_json,payload_hash` to match the canonical envelope; the old fixture `canonicalReviewChanges` supplied no `domain` or `kind`, triggering `account_financial_action_malformed_root` before bank/ATM/Voice membership checks. | Populate `domain`, `kind`, `domain_reference_id`, actual `account_guards_json` from immutable envelope, and Watermelon `_status:"created"` alongside original validated action/hash/payload. The already-real `hashFinancialActionEnvelope`/strict payload/child/effect IDs remain unchanged. No fabricated hash or loosening malformed-root negative assertions. |
+| **L08 genuine all-dedup** | `makeSaveFixture("sms-all-dedup")` has **selected A and B**. Previous test only persisted fingerprint A; B legitimately posted a new selected action, so expecting `cleanup_only` was incorrect fixture setup, not a production dedup bug. | Assert both actual selected fingerprint IDs, seed A as saved **transaction** and B as saved **transfer** through the existing `seedSavedFingerprint` helper. This uses the helper's real physical table paths and avoids its hardcoded same-kind `testUuid(900)`/(`901`) collision. Still assert genuine `cleanup_only`, **no new financial/private root** and no draft leftovers. |
+
+## Genuine source blocker: original sync tests T044-15/16/17 MUST remain Red
+
+**Not a fixture fix, not authorized source.** At the exact parent:
+
+- `apps/mobile/services/financial-action-reconciliation-service.ts:161–165`: `readSmsReviewDraftRestore` returns `null` immediately unless the legacy `bundle.domain === "sms"`. A new `review.batch-save/v1` has `domain:"transactions"`, yet may own newly created Bank/children/transactions or transfers, exact account effects and local SMS cleanup.
+- `financial-action-reconciliation-service.ts:280–357` (`buildCompensation`): for `rejected_compensating` with apparently effective account effects, builds generic balance/effect inverse mutations; it neither requires device-only nine-key review root proof nor enforces new review-created domain/child/SMS restoration.
+- `financial-action-reconciliation-service.ts:483–515`: if `canonicalAccounts` is absent, dispatches unconditionally into that generic `buildCompensation`, then invokes `commitCompensationAtomically` and returns `"reconciled"`. No early exact `review_batch_save` refusal/routing boundary in this **generic service**. This is a real dangerous fallback if any caller exposes a rejected new review root to the generic service without first entering authenticated `account-review-recovery-commit.ts` evidence checks.
+- `account-review-sync.test.ts:490–589`: T044-15 checks Bank+child+SMS requires complete review restoration; T044-16 checks foreign actor cannot run inverse; T044-17 checks Voice zero-net review cannot use generic inverse. All original **refusal and zero staged-commit assertions are unchanged**. Do not rewrite them to accept `reconciled`, mock the new reconciliation SUT or fabricate negative evidence.
+
+**Root decision needed:** separate strict source ownership to gate/reject unshipped `review.batch-save/v1` inside `createFinancialActionReconciliationService` when no authenticated complete new-review proof is available, or demonstrate through independent call-graph evidence that the legacy constructor cannot ever receive this new tuple. This task did **not** edit that service or the three existing negative requirements. The test suite may therefore intentionally retain at least these three meaningful behavioral failures.
+
+## Residual distinct areas, no claims
+
+- D02/G01/G02 new recovery and the two pull suites still require independent physical execution, real postimage/queue/default proof, accepted DB/account boundaries and proper one-batch/cache rollback. No test assertion was removed, replaced with status-only assertions or weakened.
+- Pro/Storage own the separate `account-review-save-sqlite-test-helpers.ts` and both pull suites; Core owns predecessor15 and hook fixtures. None touched.
+- Retention D05 still verifies each `parsedAt <= cutoff` redaction, untouched siblings, original payload purging and genuine owned-root lifetime. D06 supersession, D07 explicit discard, D08 RPC privacy and all other D/G/capture/L physical tests remain present.
+- All original **12 D behavioral scenario IDs**, **24 sync cases**, **2 G physical guards**, and **L capture/migration tests** retain their assertions. No new scenarios were claimed to execute; test-only Node SHA boundary does not replace production cryptographic correctness tests for malformed payload hashes.
+
+## Handoff and execution authorization
+
+**NOT RUN:** Jest (including Root's prior grouped Red), TypeScript, ESLint/formatter, SQLite/DB, native/emulator, provider, hosted SQL/pgTAP, Git hooks, benchmark, Speckit workflow, Codex/delegation, refs/branches/push/PR. GitHub GitData only writes owned seven test/helper blobs + report and a **changed-only unreferenced commit** on exact immutable parent. Root must rerun existing suites, distinguish still-unresolved new production recovery from repaired fixture Red, and explicitly regrant any source fix. **TEST-FIXTURE OWNERSHIP RELEASED / STOP.**

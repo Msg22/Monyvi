@@ -65,7 +65,7 @@ async function capturePrivateParts(input: SnapshotInput): Promise<Parts> {
       captureReviewDefaultDependencies({
         database: input.database, scope: input.scope,
         ownerId: intent.ownerId, actionId: intent.actionId,
-        payload: input.payload,
+        payload: input.payload, hashProvider: input.hashProvider,
       }),
     ]);
   return { createdEntityRefs, ...sms, defaultPreimages,

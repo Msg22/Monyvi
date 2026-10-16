@@ -5,10 +5,21 @@ import {
   parseCanonicalDecimal,
   parseFinancialActionEnvelopeJson,
   serializeCanonicalJsonValue,
+  serializeFinancialActionEnvelope,
+  ACTION_REGISTRY_ERROR_CODES,
   serializeDecimal,
   type CanonicalJsonValue,
   type Sha256Provider,
 } from "@monyvi/logic";
+import {
+  ACCOUNT_CREATE_DEFAULT_TUPLE,
+} from "../../../packages/logic/src/financial-actions/account-create-default";
+import {
+  createAccountDefaultAndReviewRegistry,
+} from "../../../packages/logic/src/financial-actions/account-create-default-registration";
+import {
+  createReviewFinancialActionDefinitions,
+} from "../../../packages/logic/src/financial-actions/review-batch-save";
 
 export const FINANCIAL_ACTION_RECONCILIATION_ERROR_CODES = {
   INCOMPLETE: "financial_action_reconciliation_incomplete",
@@ -133,6 +144,87 @@ export interface FinancialActionReconciliationService {
 
 function fail(code: string): never {
   throw new Error(code);
+}
+
+/**
+ * The plain legacy factory has only account/effect inverse callbacks. It
+ * cannot recover a review-created Bank/child/SMS group or Add's zero-effect
+ * account/default metadata. Review uses the authenticated production
+ * dispatcher; Add stays incomplete pending its separately approved recovery.
+ * Neither tuple may fall through this generic factory.
+ *
+ * Take tuple discriminants from the approved pure registry definitions; then
+ * parse and canonically reserialize the WHOLE registered envelope before
+ * refusing direct recovery. An attacker-controlled payload kind alone is
+ * never authority to select a reconciliation path.
+ */
+const dedicatedRecoveryRegistry = createAccountDefaultAndReviewRegistry();
+const reviewRecoveryTuple = createReviewFinancialActionDefinitions(
+  ACTION_REGISTRY_ERROR_CODES.INVALID_PAYLOAD
+)[0];
+if (!reviewRecoveryTuple)
+  throw new Error(FINANCIAL_ACTION_RECONCILIATION_ERROR_CODES.INVALID_EVIDENCE);
+const dedicatedRecoveryTuples = Object.freeze([
+  reviewRecoveryTuple,
+  ACCOUNT_CREATE_DEFAULT_TUPLE,
+]);
+
+function isUntrustedRecord(
+  value: unknown
+): value is Readonly<Record<string, unknown>> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/** Reject unsupported new tuples BEFORE canonical installation, replay, or
+ * generic inverse-account/effect compensation can report completion. */
+function assertLegacyRecoveryOnly(
+  bundle: FinancialActionReconciliationBundle
+): void {
+  let untrusted: unknown;
+  try {
+    untrusted = JSON.parse(bundle.payloadJson) as unknown;
+  } catch {
+    // Preserve the legacy factory's prior malformed-envelope behavior,
+    // except when bytes clearly claim a new protected tuple.
+    if (dedicatedRecoveryTuples.some((tuple) =>
+      bundle.payloadJson.includes(tuple.payloadVersion) ||
+      bundle.payloadJson.includes(tuple.kind)
+    ))
+      fail(FINANCIAL_ACTION_RECONCILIATION_ERROR_CODES.INVALID_EVIDENCE);
+    return;
+  }
+  if (!isUntrustedRecord(untrusted)) return;
+  const claimsNewTuple = dedicatedRecoveryTuples.some((tuple) =>
+    untrusted.payloadVersion === tuple.payloadVersion ||
+    untrusted.kind === tuple.kind
+  );
+  if (!claimsNewTuple) return;
+
+  let envelope: ReturnType<typeof parseFinancialActionEnvelopeJson>;
+  try {
+    envelope = parseFinancialActionEnvelopeJson(
+      bundle.payloadJson, dedicatedRecoveryRegistry
+    );
+    if (
+      serializeFinancialActionEnvelope(
+        envelope, dedicatedRecoveryRegistry
+      ) !== bundle.payloadJson ||
+      envelope.actionId !== bundle.actionId ||
+      envelope.userId !== bundle.userId ||
+      envelope.domain !== bundle.domain ||
+      !dedicatedRecoveryTuples.some((tuple) =>
+        tuple.domain === envelope.domain &&
+        tuple.kind === envelope.kind &&
+        tuple.payloadVersion === envelope.payloadVersion
+      )
+    )
+      fail(FINANCIAL_ACTION_RECONCILIATION_ERROR_CODES.INVALID_EVIDENCE);
+  } catch {
+    fail(FINANCIAL_ACTION_RECONCILIATION_ERROR_CODES.INVALID_EVIDENCE);
+  }
+  // Stable recovery-required result; the caller must use the dedicated,
+  // owned/private-proof path. Never mark this action reconciled here.
+  fail(FINANCIAL_ACTION_RECONCILIATION_ERROR_CODES.INCOMPLETE);
 }
 
 function isObject(
@@ -491,6 +583,7 @@ export function createFinancialActionReconciliationService(
       if (bundle.actionId !== actionId) {
         fail(FINANCIAL_ACTION_RECONCILIATION_ERROR_CODES.INVALID_EVIDENCE);
       }
+      assertLegacyRecoveryOnly(bundle);
       const canonicalAccounts = await verifyCanonicalAccounts(
         bundle,
         dependencies.hashProvider
