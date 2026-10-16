@@ -27,6 +27,40 @@ import {
 import { physicalSaveLedgerSnapshot } from
   "./account-review-save-sqlite-test-helpers";
 
+
+// Register real Node SQLite BEFORE Jest evaluates production service imports.
+// This is the same per-suite mock boundary as the passing Save SQLite suites.
+jest.mock("@nozbe/watermelondb/adapters/sqlite/makeDispatcher", (): unknown =>
+  jest.requireActual(
+    "@nozbe/watermelondb/adapters/sqlite/makeDispatcher/index.js"
+  )
+);
+jest.mock("@monyvi/db", (): Readonly<Record<string, unknown>> => {
+  const wm = jest.requireActual<typeof import("@nozbe/watermelondb")>(
+    "@nozbe/watermelondb"
+  );
+  const Adapter = jest.requireActual<
+    typeof import("@nozbe/watermelondb/adapters/sqlite")
+  >("@nozbe/watermelondb/adapters/sqlite").default;
+  const { schema } = jest.requireActual<
+    typeof import("../../../../packages/db/src/schema")
+  >("../../../../packages/db/src/schema");
+  const models = jest.requireActual<
+    typeof import("./account-review-save-ledger-models")
+  >("./account-review-save-ledger-models").LEDGER_MODEL_CLASSES;
+  const adapter = new Adapter({ schema });
+  const database = new wm.Database({ adapter, modelClasses: models });
+  return {
+    database, __adapter: adapter, schema, Q: wm.Q,
+    ...Object.fromEntries(models.map((model) => [model.name, model])),
+  };
+});
+jest.mock("@/services/supabase", () => ({
+  getCurrentUserId: (): Promise<string> =>
+    Promise.resolve("018f0c7a-1234-4abc-8def-000000000001"),
+  supabase: {},
+}));
+
 const FOREIGN_PRIVATE = '{"untrusted":"raw-private-SMS-exfiltration"}';
 const CLOUD_OWNED_ID = testUuid(480);
 

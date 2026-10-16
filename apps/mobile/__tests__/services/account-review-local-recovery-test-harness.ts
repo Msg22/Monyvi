@@ -1,7 +1,7 @@
 /**
  * #395 T043/T053 physical recovery harness.
- * Only @monyvi/db is rebound to actual WatermelonDB + SQLite models;
- * the Save, foundation, parser, reconciliation and sync services are real.
+ * Jest mocks are hoisted by EACH test suite before importing this harness.
+ * Save, foundation, parser, reconciliation and sync services remain real.
  */
 import { createHash } from "node:crypto";
 import { Q, type Database, type Model } from "@nozbe/watermelondb";
@@ -42,42 +42,6 @@ interface ActualTestDb {
   readonly database: Database;
   readonly __adapter: SQLiteAdapter;
 }
-
-jest.mock("@nozbe/watermelondb/adapters/sqlite/makeDispatcher", (): unknown =>
-  jest.requireActual(
-    "@nozbe/watermelondb/adapters/sqlite/makeDispatcher/index.js"
-  )
-);
-jest.mock("@monyvi/db", (): Readonly<Record<string, unknown>> => {
-  const wm = jest.requireActual<typeof import("@nozbe/watermelondb")>(
-    "@nozbe/watermelondb"
-  );
-  const Adapter = jest.requireActual<
-    typeof import("@nozbe/watermelondb/adapters/sqlite")
-  >("@nozbe/watermelondb/adapters/sqlite").default;
-  const { schema } = jest.requireActual<
-    typeof import("../../../../packages/db/src/schema")
-  >("../../../../packages/db/src/schema");
-  const { LEDGER_MODEL_CLASSES } = jest.requireActual<
-    typeof import("./account-review-save-ledger-models")
-  >("./account-review-save-ledger-models");
-  const adapter = new Adapter({ schema });
-  const database = new wm.Database({
-    adapter,
-    modelClasses: LEDGER_MODEL_CLASSES,
-  });
-  return {
-    database, __adapter: adapter, schema, Q: wm.Q,
-    ...Object.fromEntries(
-      LEDGER_MODEL_CLASSES.map((model) => [model.name, model])
-    ),
-  };
-});
-jest.mock("@/services/supabase", () => ({
-  getCurrentUserId: (): Promise<string> =>
-    Promise.resolve("018f0c7a-1234-4abc-8def-000000000001"),
-  supabase: {},
-}));
 
 export const { database, __adapter: adapter } =
   jest.requireMock<ActualTestDb>("@monyvi/db");
