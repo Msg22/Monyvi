@@ -122,7 +122,9 @@ function localEvidence(): Record<string, unknown> {
   };
 }
 
-function remoteRoot(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+function remoteRoot(
+  overrides: Record<string, unknown> = {}
+): Record<string, unknown> {
   return {
     id: ACTION,
     action_id: ACTION,
@@ -140,7 +142,9 @@ function remoteRoot(overrides: Record<string, unknown> = {}): Record<string, unk
   };
 }
 
-function remoteEvent(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+function remoteEvent(
+  overrides: Record<string, unknown> = {}
+): Record<string, unknown> {
   return {
     id: ACTION,
     action_id: ACTION,
@@ -158,7 +162,9 @@ function remoteEvent(overrides: Record<string, unknown> = {}): Record<string, un
   };
 }
 
-function remoteEvidence(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+function remoteEvidence(
+  overrides: Record<string, unknown> = {}
+): Record<string, unknown> {
   return {
     id: ACTION,
     action_id: ACTION,
@@ -173,7 +179,9 @@ function remoteEvidence(overrides: Record<string, unknown> = {}): Record<string,
   };
 }
 
-function remoteEffect(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+function remoteEffect(
+  overrides: Record<string, unknown> = {}
+): Record<string, unknown> {
   return {
     id: EFFECT_ID,
     user_id: USER,
@@ -209,26 +217,28 @@ function localEffect(): Record<string, unknown> {
   };
 }
 
-function fakeDb(options: {
-  readonly roots?: ReadonlyArray<Record<string, unknown>>;
-  readonly events?: ReadonlyArray<Record<string, unknown>>;
-  readonly evidence?: ReadonlyArray<Record<string, unknown>>;
-  readonly effects?: ReadonlyArray<Record<string, unknown>>;
-} = {}): Database {
-  const rows: Readonly<Record<string, ReadonlyArray<Record<string, unknown>>>> = {
-    financial_action_groups: options.roots ?? [localRoot()],
-    metal_lifecycle_events: options.events ?? [localEvent()],
-    metal_action_evidence: options.evidence ?? [localEvidence()],
-    account_financial_effects: options.effects ?? [],
-  };
+function fakeDb(
+  options: {
+    readonly roots?: ReadonlyArray<Record<string, unknown>>;
+    readonly events?: ReadonlyArray<Record<string, unknown>>;
+    readonly evidence?: ReadonlyArray<Record<string, unknown>>;
+    readonly effects?: ReadonlyArray<Record<string, unknown>>;
+  } = {}
+): Database {
+  const rows: Readonly<Record<string, ReadonlyArray<Record<string, unknown>>>> =
+    {
+      financial_action_groups: options.roots ?? [localRoot()],
+      metal_lifecycle_events: options.events ?? [localEvent()],
+      metal_action_evidence: options.evidence ?? [localEvidence()],
+      account_financial_effects: options.effects ?? [],
+    };
   return {
     get: (table: string): unknown => ({
       query: (): unknown => ({
         fetch: (): Promise<ReadonlyArray<Record<string, unknown>>> =>
           Promise.resolve(rows[table] ?? []),
-        fetchCount: (): Promise<number> => Promise.resolve(
-          rows[table]?.length ?? 0
-        ),
+        fetchCount: (): Promise<number> =>
+          Promise.resolve(rows[table]?.length ?? 0),
       }),
     }),
   } as unknown as Database;
@@ -279,7 +289,12 @@ describe("PR385 recovery composed with current-main canonical Metal identity", (
 
   it.each([
     ["metal_lifecycle_events", LOCAL_EVENT, remoteEvent(), "payload_json"],
-    ["metal_action_evidence", LOCAL_EVIDENCE, remoteEvidence(), "domain_payload_json"],
+    [
+      "metal_action_evidence",
+      LOCAL_EVIDENCE,
+      remoteEvidence(),
+      "domain_payload_json",
+    ],
   ] as const)(
     "preserves a proven original %s physical ID and immutable JSON during full recovery",
     async (table, expectedLocalId, remote, payloadField): Promise<void> => {
@@ -336,7 +351,11 @@ describe("PR385 recovery composed with current-main canonical Metal identity", (
         )
       ).rejects.toThrow(FINANCIAL_PULL_SHAPING_ERROR_CODE);
 
-      const matching = await pull("account_financial_effects", [remoteEffect()], db);
+      const matching = await pull(
+        "account_financial_effects",
+        [remoteEffect()],
+        db
+      );
       expect(matching.updated).toHaveLength(1);
       expect(matching.updated[0]).toMatchObject({
         id: EFFECT_ID,
