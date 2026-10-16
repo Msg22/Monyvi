@@ -23,6 +23,10 @@ import type {
   FinancialActionLinkedOperationPreimage,
 } from "./financial-action-foundation-repository";
 import { incrementCanonicalMetalRevision } from "./metal-financial-action-adapter";
+import {
+  normalizeMetalLifecycleEvents,
+  resolveMetalLifecycleIdentity,
+} from "./metal-lifecycle-identity-service";
 import { findOwnedById, queryChildrenOfOwnedParent } from "./user-data-access";
 
 export interface DeleteMetalHoldingCommandInput {
@@ -68,6 +72,7 @@ interface DeleteProjection {
   readonly predecessor: MetalLifecycleEvent | null;
   readonly timeline: readonly MetalLifecycleEvent[];
   readonly actionGroups: readonly FinancialActionGroup[];
+  readonly actionEvidence: readonly MetalActionEvidence[];
 }
 
 const EFFECTIVE_RECONCILIATION_STATES = new Set([
@@ -127,7 +132,7 @@ async function loadProjection(
           input.predecessorEventId,
           input.userId
         );
-  const [metals, states, predecessor, timeline, actionGroups] =
+  const [metals, states, predecessor, timeline, actionGroups, actionEvidence] =
     await Promise.all([
       queryChildrenOfOwnedParent(
         database.get<AssetMetal>("asset_metals"),
@@ -163,6 +168,14 @@ async function loadProjection(
           Q.where("deleted", false)
         )
         .fetch(),
+      database
+        .get<MetalActionEvidence>("metal_action_evidence")
+        .query(
+          Q.where("holding_id", input.holdingId),
+          Q.where("user_id", input.userId),
+          Q.where("deleted", false)
+        )
+        .fetch(),
     ]);
   if (
     !metals[0] ||
@@ -179,6 +192,7 @@ async function loadProjection(
     predecessor,
     timeline,
     actionGroups,
+    actionEvidence,
   };
 }
 
@@ -220,7 +234,26 @@ function assertEffectiveActiveProjection(
   if (lifecycleEvents.some((event) => event === null)) {
     throw new Error("metal_delete_effective_active_holding_required");
   }
-  const reduced = reduceMetalLifecycle(lifecycleEvents);
+  const identity = resolveMetalLifecycleIdentity({
+    userId: input.userId,
+    holdingId: input.holdingId,
+    events: timeline,
+    groups: actionGroups,
+    evidence: projection.actionEvidence,
+  });
+  if (identity.hasUnprovenLegacyRoot) {
+    throw new Error("metal_delete_effective_active_holding_required");
+  }
+  const normalizedEvents = normalizeMetalLifecycleEvents(
+    lifecycleEvents.filter((event): event is LifecycleEvent => event !== null),
+    identity
+  );
+  const reduced = reduceMetalLifecycle(
+    normalizedEvents,
+    identity.canonicalRootActionId === null
+      ? null
+      : { terminalEventId: identity.canonicalRootActionId }
+  );
   if (
     reduced.projection?.status !== "active" ||
     !reduced.projection.isVisible ||

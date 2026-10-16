@@ -712,3 +712,41 @@ describe("approved active holding-detail fidelity", () => {
     expect(screen.getByText("EGP 162,317.87")).toBeTruthy();
   });
 });
+
+it("keeps loaded terminal Details and bottom safe area while reserving Restore eligibility action space", (): void => {
+  mockScreenWidth = 390;
+  mockFontScale = 1;
+  const model = activeDetail({ isActiveOwnership: false, status: "sold" });
+  const props = {
+    actions: [],
+    error: null,
+    isLoading: false,
+    isOffline: false,
+    model,
+    onRetry: jest.fn(),
+  } as const;
+  const { rerender } = render(
+    <MetalHoldingDetailScreen {...props} isActionLoading />
+  );
+
+  expect(screen.getByTestId("metal-holding-detail-root")).toBeTruthy();
+  expect(screen.getByText("Wedding coin")).toBeTruthy();
+  expect(
+    screen.getByTestId("metal-holding-detail-actions-loading")
+  ).toHaveStyle({
+    paddingBottom: 40,
+  });
+  expect(screen.getByTestId("metal-holding-detail-root")).toHaveProp(
+    "contentContainerStyle",
+    undefined
+  );
+
+  rerender(<MetalHoldingDetailScreen {...props} isActionLoading={false} />);
+  expect(
+    screen.queryByTestId("metal-holding-detail-actions-loading")
+  ).toBeNull();
+  expect(screen.getByTestId("metal-holding-detail-root")).toHaveProp(
+    "contentContainerStyle",
+    { paddingBottom: 40 }
+  );
+});

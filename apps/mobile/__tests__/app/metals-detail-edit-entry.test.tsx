@@ -5,9 +5,23 @@ import { router } from "expo-router";
 import MetalHoldingDetailRoute from "@/app/(private)/metals/[id]";
 
 jest.mock("expo-router", () => ({
+  useFocusEffect: jest.fn(),
   router: { push: jest.fn() },
   useRouter: () => ({ push: jest.fn() }),
   useLocalSearchParams: () => ({ id: "holding-123" }),
+}));
+jest.mock("@/hooks/useUndoMetalHoldingContext", () => ({
+  useUndoMetalHoldingContext: () => ({
+    context: null,
+    userId: null,
+    isResolvingUser: false,
+    isLoading: false,
+    error: null,
+    retry: jest.fn(),
+  }),
+}));
+jest.mock("@/hooks/useRestoreMetalHolding", () => ({
+  useRestoreMetalHolding: jest.fn(),
 }));
 jest.mock("react-i18next", () => ({
   useTranslation: () => ({ t: (key: string): string => key }),

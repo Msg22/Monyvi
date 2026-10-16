@@ -1,4 +1,10 @@
-import { Q, type Database, type Model } from "@nozbe/watermelondb";
+import type { Database } from "@nozbe/watermelondb";
+import {
+  INVALID_LEGACY_ID_PULL_ROW,
+  remapFinancialActionRootIds,
+  remapVerifiedLegacyMetalPullIds,
+  type PulledRow,
+} from "./metal-dedicated-identity-pull";
 import type {
   SyncPullResult,
   SyncTableChangeSet,
@@ -35,7 +41,7 @@ export const SYNC_PULL_ERROR_CODES = {
   AUTH_SCOPE_LOST: "sync_pull_auth_scope_lost",
   INVALID_EXACT_TEXT: "sync_invalid_exact_text",
   INVALID_METAL_OBSERVATION_PAGE: "sync_invalid_metal_observation_page",
-  INVALID_PULL_ROW: "sync_invalid_pull_row",
+  INVALID_PULL_ROW: INVALID_LEGACY_ID_PULL_ROW,
 } as const;
 
 const METAL_OBSERVATION_PAGE_SIZE = 500;
@@ -67,11 +73,6 @@ interface MetalObservationPage {
   readonly upperWatermark: string;
 }
 
-interface PulledRow extends Record<string, unknown> {
-  readonly deleted?: boolean;
-  readonly id: string;
-}
-
 const METAL_DEDICATED_PULL_TABLES = [
   "account_financial_effects",
   "financial_action_groups",
@@ -81,10 +82,6 @@ const METAL_DEDICATED_PULL_TABLES = [
   "metal_holding_states",
 ] as const;
 type MetalDedicatedPullTable = (typeof METAL_DEDICATED_PULL_TABLES)[number];
-
-interface FinancialActionRootModel extends Model {
-  readonly actionId: string;
-}
 
 export function protectMetalMetadataPullFragments(
   assetChanges: SyncTableChangeSet,
@@ -461,31 +458,6 @@ function pullSelect(
   return EXACT_TEXT_SELECTS[table as keyof typeof EXACT_TEXT_SELECTS] ?? "*";
 }
 
-async function remapFinancialActionRootIds(
-  records: readonly PulledRow[],
-  userId: string,
-  database?: Database
-): Promise<readonly PulledRow[]> {
-  if (!database || records.length === 0) return records;
-  const actionIds = records
-    .map((record) => record.action_id)
-    .filter((actionId): actionId is string => typeof actionId === "string");
-  if (actionIds.length !== records.length) {
-    throw new Error(SYNC_PULL_ERROR_CODES.INVALID_PULL_ROW);
-  }
-  const localRoots = await database
-    .get<FinancialActionRootModel>("financial_action_groups")
-    .query(Q.where("user_id", userId), Q.where("action_id", Q.oneOf(actionIds)))
-    .fetch();
-  const localIdsByAction = new Map(
-    localRoots.map((root) => [root.actionId, root.id])
-  );
-  return records.map((record) => ({
-    ...record,
-    id: localIdsByAction.get(record.action_id as string) ?? record.id,
-  }));
-}
-
 async function assertExpectedPullUser(expectedUserId: string): Promise<void> {
   const currentUserId = await getCurrentUserId();
   if (currentUserId !== expectedUserId) {
@@ -796,18 +768,32 @@ export async function pullMetalDedicatedTable(
 
   // PostgREST supports the exact-value `::text` projection above, but the
   // Supabase select-string type parser cannot infer rows containing casts.
+  // Tombstones require only their authenticated row identity; do not
+  // require exact-text columns that PostgREST may omit on deleted rows.
+  // Live records must still validate every exact text and never coerce a
+  // financial revision from a JavaScript number.
+  const normalizedRecords = records.map((record) =>
+    record.deleted === true
+      ? record
+      : (normalizeDedicatedPullRecord(table, record) as PulledRow)
+  );
   const remappedRecords =
     table === "financial_action_groups"
-      ? await remapFinancialActionRootIds(records, userId, database)
-      : records;
+      ? await remapFinancialActionRootIds(normalizedRecords, userId, database)
+      : table === "metal_action_evidence" || table === "metal_lifecycle_events"
+        ? await remapVerifiedLegacyMetalPullIds(
+            table,
+            normalizedRecords,
+            userId,
+            database
+          )
+        : normalizedRecords;
   const deleted = remappedRecords
     .filter((record) => record.deleted === true)
     .map((record) => record.id);
   const updated = remappedRecords
     .filter((record) => record.deleted !== true)
-    .map((record) =>
-      transformFromSupabase(table, normalizeDedicatedPullRecord(table, record))
-    );
+    .map((record) => transformFromSupabase(table, record));
   return { created: [], updated, deleted };
 }
 

@@ -14,19 +14,23 @@ import {
   calculateUnrealizedAttribution,
   isSupportedMetal,
   isSupportedMetalsIsoCurrencyCode,
-  parseCanonicalDecimal,
   reduceMetalLifecycle,
   resolveMetalsCurrencyMinorUnits,
-  serializeDecimal,
-  validateAndNormalizeRateReference,
-  type NormalizedRateReference,
-  type RateReferenceExpectation,
   type SupportedMetal,
 } from "@monyvi/logic";
 import { Q, type Query } from "@nozbe/watermelondb";
 import {
+  EMPTY_METAL_LIFECYCLE_IDENTITY,
+  normalizeMetalLifecycleEvents,
+  resolveMetalLifecycleIdentity,
+  resolveMetalOwnedEffectiveEvent,
+  type MetalLifecycleIdentitySource,
+} from "@/services/metal-lifecycle-identity-service";
+import {
   resolveLegacyDisposalBaseline,
   toLegacyDisposalRevisionEvidence,
+  toLegacyDisposalActionEvidence,
+  type LegacyDisposalActionEvidence,
   type LegacyDisposalRevisionEvidence,
 } from "@/services/metal-legacy-disposal-baseline-service";
 import { buildMetalDetailTerminalFacts } from "@/services/metal-terminal-display-service";
@@ -38,6 +42,10 @@ import {
 } from "@/services/metal-detail-historical-reference-service";
 import { resolveMetalDetailPurchaseCalendar } from "@/services/metal-detail-purchase-calendar-service";
 export { readMetalDetailPurchaseDateMarketReference } from "@/services/metal-detail-historical-reference-service";
+import {
+  buildCurrentReference,
+  convertDetailValueForDisplay,
+} from "./metal-detail-rate-conversion-service";
 import {
   getCurrentUserDataScope,
   queryChildrenOfOwnedParents,
@@ -130,6 +138,10 @@ export interface BuildMetalDetailReadModelInput {
   readonly asset: MetalDetailAssetInput;
   readonly currentRates?: LiveRatesTrustReadModel;
   readonly holdingState: MetalDetailHoldingStateInput;
+  readonly identitySource?: MetalLifecycleIdentitySource;
+  readonly legacyDisposalActionEvidence?:
+    | readonly LegacyDisposalActionEvidence[]
+    | null;
   readonly legacyDisposalRevisionEvidence?:
     | readonly LegacyDisposalRevisionEvidence[]
     | null;
@@ -161,6 +173,8 @@ export interface MetalDetailTimelineItem {
   readonly id: string;
   readonly kind: MetalDetailLifecycleEventInput["kind"];
   readonly occurredAt: Date;
+  // Exact accepted Undo event targeting this terminal action, if any.
+  readonly reversedByEventId?: string | null;
   // null means the event exists, but exact before/after changes cannot be read.
   readonly correctionChanges?: readonly MetalDetailCorrectionChange[] | null;
 }
@@ -322,16 +336,35 @@ export async function readMetalDetailReadModel(
     metalType,
     rateReferences,
   } = dependencies;
+  const identitySource: MetalLifecycleIdentitySource = {
+    userId: scope.userId,
+    holdingId: asset.id,
+    events,
+    groups,
+    evidence,
+  };
+  const identity = resolveMetalLifecycleIdentity(identitySource);
+  const currentTerminalEvent = resolveMetalOwnedEffectiveEvent(
+    events,
+    holdingState,
+    identity
+  );
+  const persistedState = toDetailHoldingStateInput(holdingState);
   const terminalFacts = shapeMetalTerminalFacts({
     asset,
-    event:
-      events.find((event) => event.id === holdingState.effectiveEventId) ??
-      null,
+    event: currentTerminalEvent,
+    // A proven alias may retain E as its local primary key after the server
+    // advances the holding's canonical effective event reference to D.
+    holdingState: {
+      ...persistedState,
+      effectiveActionId: persistedState.effectiveActionId ?? null,
+      effectiveEventId:
+        currentTerminalEvent?.id ?? persistedState.effectiveEventId ?? null,
+    },
     group:
       groups.find(
         (group) => group.actionId === holdingState.effectiveActionId
       ) ?? null,
-    holdingState,
     latestAllowedCalendarDate: options.latestAllowedCalendarDate,
     metal: { ...metal, metalType },
     rateReferences,
@@ -342,8 +375,13 @@ export async function readMetalDetailReadModel(
   const model = buildMetalDetailReadModel({
     asset: toDetailAssetInput(asset),
     currentRates: options.currentRates,
-    holdingState: toDetailHoldingStateInput(holdingState),
+    holdingState: persistedState,
+    identitySource,
     legacyDisposalRevisionEvidence: toLegacyDisposalRevisionEvidence(evidence),
+    legacyDisposalActionEvidence: toLegacyDisposalActionEvidence(
+      events,
+      groups
+    ),
     lifecycleEvents: shapeMetalDetailLifecycleEvents(events, evidence),
     metal: toDetailMetalInput(metal, metalType),
     preferredCurrency: options.preferredCurrency,
@@ -504,16 +542,34 @@ export function buildMetalDetailReadModel(
 ): MetalDetailReadModel | null {
   if (!isOwnedDetailInput(input)) return null;
 
+  const identity = input.identitySource
+    ? resolveMetalLifecycleIdentity(input.identitySource)
+    : EMPTY_METAL_LIFECYCLE_IDENTITY;
+  // Incomplete legacy identity must not promote an unverified old Undo into
+  // active financial ownership. Rows remain persisted for explicit recovery.
+  if (identity.hasUnprovenLegacyRoot) return null;
+  const lifecycleEvents = normalizeMetalLifecycleEvents(
+    input.lifecycleEvents,
+    identity
+  );
+  const baseline = resolveLegacyDisposalBaseline({
+    assetId: input.asset.id,
+    userId: input.userId,
+    holdingState: input.holdingState,
+    lifecycleEvents: input.lifecycleEvents,
+    terminalFacts: input.terminalFacts ?? null,
+    revisionEvidence: input.legacyDisposalRevisionEvidence ?? null,
+    actionEvidence: input.legacyDisposalActionEvidence ?? null,
+  });
+  const normalizedBaseline =
+    baseline !== null &&
+    identity.legacyRootEventId === baseline.terminalEventId &&
+    identity.canonicalRootActionId !== null
+      ? { terminalEventId: identity.canonicalRootActionId }
+      : baseline;
   const reduced = reduceMetalLifecycle(
-    input.lifecycleEvents.map(toReducerEvent),
-    resolveLegacyDisposalBaseline({
-      assetId: input.asset.id,
-      userId: input.userId,
-      holdingState: input.holdingState,
-      lifecycleEvents: input.lifecycleEvents,
-      terminalFacts: input.terminalFacts ?? null,
-      revisionEvidence: input.legacyDisposalRevisionEvidence ?? null,
-    })
+    lifecycleEvents.map(toReducerEvent),
+    normalizedBaseline
   );
   const projection = reduced.projection;
   if (
@@ -575,7 +631,7 @@ export function buildMetalDetailReadModel(
     timeline:
       projection === null
         ? []
-        : buildTimeline(reduced.acceptedEvents, input.lifecycleEvents),
+        : buildTimeline(reduced.acceptedEvents, lifecycleEvents),
     totalGainDecimal: attribution?.totalGainDecimal ?? null,
     unavailableExactFacts,
     weightGramsDecimal: input.metal.weightGramsDecimal,
@@ -679,48 +735,6 @@ function conservativeObservedAt(
   return timestamps.length > 0 && timestamps.length === rates.length
     ? new Date(Math.min(...timestamps))
     : null;
-}
-
-function convertDetailValueForDisplay(
-  valueDecimal: string,
-  input: BuildMetalDetailReadModelInput
-): { readonly currency: CurrencyType; readonly valueDecimal: string } | null {
-  const purchaseCurrency = input.asset.purchaseCurrency;
-  if (
-    purchaseCurrency === null ||
-    !isSupportedMetalsIsoCurrencyCode(purchaseCurrency)
-  ) {
-    return null;
-  }
-  const preferredCurrency = input.preferredCurrency ?? purchaseCurrency;
-  if (!isSupportedMetalsIsoCurrencyCode(preferredCurrency)) return null;
-  if (preferredCurrency === purchaseCurrency) {
-    return { currency: preferredCurrency, valueDecimal };
-  }
-
-  const purchaseRateDecimal = readCurrentCurrencyRateDecimal(
-    input.currentRates,
-    purchaseCurrency
-  );
-  const preferredRateDecimal = readCurrentCurrencyRateDecimal(
-    input.currentRates,
-    preferredCurrency
-  );
-  if (purchaseRateDecimal === null || preferredRateDecimal === null)
-    return null;
-
-  try {
-    return {
-      currency: preferredCurrency,
-      valueDecimal: serializeDecimal(
-        parseCanonicalDecimal(valueDecimal)
-          .times(purchaseRateDecimal)
-          .dividedBy(preferredRateDecimal)
-      ),
-    };
-  } catch {
-    return null;
-  }
 }
 
 function resolveCurrentValueObservedAt(
@@ -836,53 +850,6 @@ function buildActiveAttribution(
     ),
     totalGainDecimal: total.valueDecimal,
   };
-}
-
-function buildCurrentReference(
-  value: LiveRatesTrustValue | undefined,
-  expectation: RateReferenceExpectation
-): NormalizedRateReference | null {
-  if (expectation.instrumentCode === "currency:USD") {
-    return Object.freeze({
-      capturedAt: 0,
-      capturedFreshness: "unknown",
-      instrumentCode: "currency:USD",
-      kind: "currency",
-      normalizedUsdPerBaseDecimal: "1",
-      orientation: "quote_per_base",
-      providerObservedAt: null,
-      quality: "valid",
-      role: expectation.role,
-      source: null,
-      unit: "usd_per_currency_unit",
-      valueDecimal: "1",
-    });
-  }
-  if (
-    !hasTrustedCurrentRate(value) ||
-    value.capturedAt === undefined ||
-    value.capturedAt === null ||
-    value.quality !== "valid"
-  ) {
-    return null;
-  }
-  const isMetal = expectation.instrumentCode.startsWith("metal:");
-  const normalized = validateAndNormalizeRateReference(
-    {
-      capturedAt: value.capturedAt.getTime(),
-      instrumentCode: expectation.instrumentCode,
-      kind: isMetal ? "metal" : "currency",
-      orientation: "quote_per_base",
-      providerObservedAt: value.providerObservedAt?.getTime() ?? null,
-      quality: value.quality,
-      role: expectation.role,
-      source: value.source ?? null,
-      unit: isMetal ? "usd_per_pure_gram" : "usd_per_currency_unit",
-      valueDecimal: value.valueDecimal,
-    },
-    expectation
-  );
-  return normalized.available ? normalized.value : null;
 }
 
 function assertRequestedUser(

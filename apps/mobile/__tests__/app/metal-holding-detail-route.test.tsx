@@ -7,6 +7,22 @@ let mockStatus: "active" | "sold" | "disposed" = "active";
 
 jest.mock("expo-router", () => ({
   useLocalSearchParams: (): { readonly id: string } => ({ id: "holding-1" }),
+  useFocusEffect: jest.fn(),
+  router: { dismissTo: jest.fn(), push: jest.fn() },
+}));
+
+jest.mock("@/hooks/useUndoMetalHoldingContext", () => ({
+  useUndoMetalHoldingContext: () => ({
+    context: null,
+    userId: "owner",
+    isResolvingUser: false,
+    isLoading: false,
+    error: null,
+    retry: jest.fn(),
+  }),
+}));
+jest.mock("@/hooks/useRestoreMetalHolding", () => ({
+  useRestoreMetalHolding: jest.fn(),
 }));
 
 jest.mock("@/hooks/useMetalHoldingDetail", () => ({
@@ -14,13 +30,25 @@ jest.mock("@/hooks/useMetalHoldingDetail", () => ({
     readonly error: null;
     readonly isLoading: false;
     readonly isOffline: false;
-    readonly model: { readonly status: typeof mockStatus };
+    readonly model: {
+      readonly id: string;
+      readonly status: typeof mockStatus;
+      readonly isActiveOwnership: boolean;
+      readonly isFinancialActionLocked: false;
+      readonly timeline: readonly never[];
+    };
     readonly retry: jest.Mock;
   } => ({
     error: null,
     isLoading: false,
     isOffline: false,
-    model: { status: mockStatus },
+    model: {
+      id: "holding-1",
+      status: mockStatus,
+      isActiveOwnership: mockStatus === "active",
+      isFinancialActionLocked: false,
+      timeline: [],
+    },
     retry: jest.fn(),
   }),
 }));

@@ -102,23 +102,16 @@ export function reduceMetalLifecycle(
   );
 
   const selectedRoot = selectCreationRoot(withCyclesRejected, roots);
-  if (selectedRoot.event === null) {
-    const legacyRoot = selectLegacyDisposalRoot(
-      selectedRoot.state,
-      legacyDisposalBaseline
-    );
-    if (legacyRoot !== null) {
-      return finalizeReduction(
-        [legacyRoot],
-        rejectRemaining(selectedRoot.state, [legacyRoot])
-      );
-    }
+  const root =
+    selectedRoot.event ??
+    selectLegacyDisposalRoot(selectedRoot.state, legacyDisposalBaseline);
+  if (root === null) {
     return finalizeReduction([], rejectRemaining(selectedRoot.state, []));
   }
 
-  const accepted: LifecycleEvent[] = [selectedRoot.event];
+  const accepted: LifecycleEvent[] = [root];
   let state = selectedRoot.state;
-  let current = selectedRoot.event;
+  let current = root;
   for (;;) {
     const successors = [...state.candidatesById.values()].filter(
       (event) =>
@@ -236,7 +229,7 @@ function prepareCandidates(
       continue;
     }
 
-    const first = duplicates[0] as LifecycleEvent;
+    const first = duplicates[0];
     if (duplicates.length === 1) {
       candidates.set(id, first);
     } else if (duplicates.every((event) => sameLifecycleEvent(event, first))) {
@@ -412,13 +405,12 @@ function selectCreationRoot(
   roots: readonly LifecycleEvent[]
 ): { readonly event: LifecycleEvent | null; readonly state: ReductionState } {
   if (roots.length === 1) {
-    return { event: roots[0] as LifecycleEvent, state };
+    return { event: roots[0], state };
   }
   const canonical = roots.filter(
     ({ canonicalCasStatus }) => canonicalCasStatus === "accepted"
   );
-  const winner =
-    canonical.length === 1 ? (canonical[0] as LifecycleEvent) : null;
+  const winner = canonical.length === 1 ? canonical[0] : null;
   let next = state;
   if (roots.length > 1) {
     for (const root of roots) {
@@ -480,7 +472,7 @@ function selectSuccessor(
   state: ReductionState
 ): { readonly event: LifecycleEvent | null; readonly state: ReductionState } {
   if (candidates.length === 1) {
-    const only = candidates[0] as LifecycleEvent;
+    const only = candidates[0];
     return only.canonicalCasStatus === "rejected"
       ? {
           event: null,
@@ -497,8 +489,7 @@ function selectSuccessor(
   const canonical = candidates.filter(
     ({ canonicalCasStatus }) => canonicalCasStatus === "accepted"
   );
-  const winner =
-    canonical.length === 1 ? (canonical[0] as LifecycleEvent) : null;
+  const winner = canonical.length === 1 ? canonical[0] : null;
   let next = state;
   for (const candidate of candidates) {
     if (winner === null || candidate.id !== winner.id) {
