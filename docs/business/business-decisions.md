@@ -291,6 +291,68 @@ Business rules:
   exact account evidence, but if no confident account match exists they must
   return no match for user review instead of guessing.
 
+#### Approved Voice/SMS account review target — issue #395
+
+Approved specification and B1 mockups on 2026-10-14; **implementation pending**.
+These are the agreed target rules for `specs/395-shared-account-review/spec.md`,
+not a claim that the current parser/review implements them.
+
+- Use an eligible active owned default when no account is identified and the
+  known currency matches, regardless of account count. Explain this choice in
+  review and keep it editable; remove only the account blocker.
+- Ordinary SMS source accounts remain Bank/Wallet only. ATM source and Cash
+  destination resolve separately. Only genuinely absent destination evidence
+  permits eligible same-currency default Cash, then sole eligible Cash; explicit
+  or uncertain `toAccountEvidence` requires a compatible owned choice. Current
+  ATM Save uses an existing eligible Cash (default/sole/manual) or a genuine
+  already-canonical confirmed referenced destination group; it never invents a
+  new Cash destination group/account. Regular transfers require reliable proof
+  or explicit choices and distinct endpoints.
+- Proven currency omission uses the preferred currency. Ambiguous, conflicting
+  or unsupported currency requires confirmation before automatic account
+  assignment. Currency correction preserves the numeric amount without
+  conversion.
+- Explicit named unmatched accounts do not fall back to default. Suggest shared
+  drafts only with compatible explicit name/type/provider/card evidence and the
+  same known currency; ambiguous matches require a per-row choice. Similar names
+  alone cannot merge conflicting accounts/cards.
+- Each suggestion supports independent confirm/edit/replace/remove. Confirmation
+  affects account assignment, selects no other row and creates no real account.
+  Selecting an otherwise valid row may confirm its group with visible
+  disclosure; only that row becomes selected. Preserve all other review reasons.
+- Removal retains transactions and invalidates only affected
+  assignment/selection; unchanged input cannot regenerate it immediately. Undo
+  cannot overwrite later edits. SMS choices/removals survive Review
+  later/restart; Voice stays session-only.
+- Create only draft accounts referenced by valid selected financial entries at
+  final Save, with one atomic idempotent revision-guarded financial action.
+  Preserve existing financial outcomes, exact amount rules, source fingerprints
+  and owned references; no AI bank-balance inference or extra parsing call for
+  review actions. Compatible independently confirmed Voice Cash accounts in
+  different currencies may be created together; there is no one-Cash-per-Save
+  restriction. Each account has its own approved currency and exact selected
+  minor-unit effects, with zero inferred opening balance.
+- First-active default applies to **every** account created by review Save:
+  Cash, Bank and Wallet. Freeze one `creationDefaultSnapshot` (existing closed
+  DefaultSnapshot shape, sorted active owned IDs and current default or null)
+  exactly when any review account is created. If its captured active set is
+  empty, exactly the **first actual frozen created-account UUID in canonical
+  ASCII order** is default; all other new accounts are false. If the captured
+  set is nonempty, every new account is nondefault and any existing or
+  intentionally missing default remains unchanged. Validate this under one
+  owner-wide logical-state CAS with at-most-one default, action replay and
+  atomic rollback. Confirmation creates/changes no account or default; review
+  never clears a prior default separately. This does **not** change Add's
+  existing `expectedDefaultSnapshot`, user-controlled default intent, or Edit.
+- Add Account exposes Edit's Default flag: first active account ON/disabled;
+  later accounts start OFF, preserving existing/no default. ON replaces prior
+  default only after successful creation; unsaved toggle/cancel/failure changes
+  no persisted default. Helper is source/type-aware. Existing unrelated form
+  rules stay.
+- Reuse the existing currency modal with transaction context and honest
+  unconfirmed selection. Opening/cancelling applies nothing; do not build a new
+  picker.
+
 ### Bank Details And SMS Senders
 
 Bank details are child rows owned through an account. They store only bank-
@@ -640,6 +702,21 @@ Business rules:
   account effect in the same grouped action.
 - Undo uses one focused consequence confirmation before restoring ownership and
   reversing any linked effect.
+- **2026-10-15 — PR #386 legacy revision-zero Dispose identity:** For an
+  authenticated holding with one uniquely verified immutable original Dispose
+  action, its legacy device-local lifecycle/evidence row IDs may differ from the
+  server canonical `action_id`. New Undo, subsequent lifecycle commands, and
+  server CAS use the canonical action ID in their immutable predecessor/reversal
+  references. Client read-only lineage projections may interpret the legacy row
+  ID as that action ID only after binding the owned action root, event, evidence
+  payload, original occurrence, and revision-zero provenance. Canonical pull and
+  stale recovery may match the existing user/action/holding row instead of
+  inserting a duplicate; its local primary key and recorded immutable facts
+  remain unchanged. Missing, ambiguous, conflicting, or foreign proof fails
+  closed. Original Undo actions with incorrect immutable references are not
+  repaired, rewritten, or silently server-accepted. This is a client
+  compatibility rule, not a new schema, SQL/RPC, financial policy, historical
+  backfill, or account-credit capability.
 - Correcting terminal financial facts requires Undo, then a new correct terminal
   action. Gift, inheritance, dowry acquisition, partial sale, purchase-time
   account deduction, and Zakat are outside Metals V1. Zakat is a separate future
