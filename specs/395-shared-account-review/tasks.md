@@ -175,7 +175,7 @@ or checkbox completion follows from this dependency-only proposal.
       currency, preferred only for proven omission, owned eligibility, preserve
       user overrides/other blockers; no arbitrary first account or automatic
       conversion.
-- [ ] T020 [US1] Render shaped quiet default count/Why sheet in
+- [x] T020 [US1] Render shaped quiet default count/Why sheet in
       `apps/mobile/components/transaction-review/DefaultAccountInfo.tsx`; reuse
       tokens, localized approved copy, accessible actions and runtime bottom
       inset.

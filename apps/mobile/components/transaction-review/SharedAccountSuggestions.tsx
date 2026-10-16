@@ -1,0 +1,719 @@
+/**
+ * #395 T031 B1 — shaped, independent shared-account group presentation.
+ * Counts, permissions, statuses, selection and mutations are parent-owned.
+ * Local state owns only a visible menu, never account/reducer state.
+ */
+import { Ionicons } from "@expo/vector-icons";
+import React, { useState } from "react";
+import {
+  FlatList,
+  Modal,
+  ScrollView,
+  Text,
+  TouchableOpacity,
+  useWindowDimensions,
+  View,
+  type TextStyle,
+} from "react-native";
+import { useColorScheme } from "nativewind";
+import { palette } from "@/constants/colors";
+import { shouldUseDenseRowCompactLayout } from "@/constants/ui";
+import { useLocale } from "@/context/LocaleContext";
+import { useModalBottomInset } from "@/hooks/useModalBottomInset";
+import {
+  displayIdentity,
+  ReviewActionButton,
+  ReviewPointerBackdrop,
+  ReviewSheetHandle,
+  reviewCopy,
+  type ReviewDisplayLanguage,
+} from "./shared-account-presentation";
+
+export interface SharedSuggestedGroupView {
+  readonly groupId: string;
+  readonly displayName: string;
+  readonly identitySummary: string;
+  readonly currencyLabel: string;
+  readonly typeIconName: string;
+  readonly linkedCount: number;
+  readonly statusLabel: string;
+  readonly disclosureText: string;
+  readonly isConfirmed: boolean;
+  readonly isRemoved: boolean;
+  readonly isBusy: boolean;
+  readonly canConfirm: boolean;
+  readonly canEdit: boolean;
+  readonly canReplace: boolean;
+  readonly canRemove: boolean;
+  readonly canUndo: boolean;
+}
+export interface SharedReviewSummaryView {
+  readonly totalCount: number;
+  readonly distinctNeedsReviewCount: number;
+  readonly pendingGroupCount: number;
+  readonly confirmedGroupCount: number;
+  readonly defaultAssignmentCount: number;
+  readonly selectedCount: number;
+  readonly issueLabels: readonly string[];
+}
+export interface SharedAccountSuggestionsProps {
+  readonly groups: readonly SharedSuggestedGroupView[];
+  readonly summary: SharedReviewSummaryView;
+  readonly isAllGroupsSheetOpen: boolean;
+  readonly isBusy: boolean;
+  readonly onConfirm: (groupId: string) => void;
+  readonly onEdit: (groupId: string) => void;
+  readonly onReplace: (groupId: string) => void;
+  readonly onRemove: (groupId: string) => void;
+  readonly onUndo: (groupId: string) => void;
+  readonly onViewAll: () => void;
+  readonly onCloseAllGroups: () => void;
+}
+type GroupCommandAction = "edit" | "replace" | "remove";
+interface GroupCardProps {
+  readonly group: SharedSuggestedGroupView;
+  readonly language: ReviewDisplayLanguage;
+  readonly compact: boolean;
+  readonly disabled: boolean;
+  readonly onConfirm: () => void;
+  readonly onMenu: () => void;
+  readonly onUndo: () => void;
+}
+function groupIcon(
+  input: string
+): "business-outline" | "wallet-outline" | "cash-outline" {
+  if (input === "wallet-outline") return "wallet-outline";
+  if (input === "cash-outline") return "cash-outline";
+  return "business-outline";
+}
+function GroupIdentity({
+  group,
+  language,
+  compact,
+}: Pick<GroupCardProps, "group" | "language" | "compact">): React.JSX.Element {
+  const { colorScheme } = useColorScheme();
+  const rtl = language === "ar";
+  const direction: TextStyle["writingDirection"] = rtl ? "rtl" : "ltr";
+  return (
+    <View
+      className={
+        (compact ? "w-full " : "min-w-0 flex-1 ") +
+        (rtl ? "flex-row-reverse " : "flex-row ") +
+        "items-start gap-3"
+      }
+    >
+      <View className="h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-nileGreen-50 dark:bg-nileGreen-900">
+        <Ionicons
+          name={groupIcon(group.typeIconName)}
+          size={22}
+          color={
+            colorScheme === "dark"
+              ? palette.nileGreen[400]
+              : palette.nileGreen[700]
+          }
+          accessibilityElementsHidden
+          importantForAccessibility="no"
+        />
+      </View>
+      <View className="min-w-0 flex-1 gap-1">
+        <Text
+          className={
+            "text-base font-semibold leading-6 text-text-primary dark:text-text-primary-dark " +
+            (rtl ? "text-right" : "text-left")
+          }
+          style={{ writingDirection: direction }}
+        >
+          {displayIdentity(group.displayName, language)}
+        </Text>
+        <Text
+          className={
+            "text-sm leading-5 text-text-secondary dark:text-text-secondary-dark " +
+            (rtl ? "text-right" : "text-left")
+          }
+          style={{ writingDirection: direction }}
+        >
+          {displayIdentity(group.identitySummary, language)}
+        </Text>
+      </View>
+    </View>
+  );
+}
+function GroupStatus({
+  group,
+}: {
+  readonly group: SharedSuggestedGroupView;
+}): React.JSX.Element {
+  const statusColor = group.isRemoved
+    ? "text-red-600 dark:text-red-500"
+    : group.isConfirmed
+      ? "text-nileGreen-700 dark:text-nileGreen-400"
+      : "text-gold-800 dark:text-gold-400";
+  return (
+    <Text
+      testID={"account-review-group-status-" + group.groupId}
+      className={"text-xs font-semibold leading-[18px] " + statusColor}
+    >
+      {group.statusLabel}
+    </Text>
+  );
+}
+function GroupMenuTrigger({
+  group,
+  language,
+  disabled,
+  onPress,
+}: {
+  readonly group: SharedSuggestedGroupView;
+  readonly language: ReviewDisplayLanguage;
+  readonly disabled: boolean;
+  readonly onPress: () => void;
+}): React.JSX.Element {
+  return (
+    <TouchableOpacity
+      testID={"account-review-group-actions-" + group.groupId}
+      accessible
+      accessibilityRole="button"
+      accessibilityLabel={
+        reviewCopy("account_review_group_change", language) +
+        " " +
+        group.displayName +
+        ", " +
+        group.linkedCount
+      }
+      accessibilityState={{ disabled }}
+      disabled={disabled}
+      onPress={onPress}
+      activeOpacity={0.75}
+      className="h-11 w-11 items-center justify-center rounded-lg border border-border dark:border-border-dark"
+    >
+      <Ionicons
+        name="ellipsis-vertical"
+        size={22}
+        color={palette.slate[500]}
+        accessibilityElementsHidden
+        importantForAccessibility="no"
+      />
+    </TouchableOpacity>
+  );
+}
+function GroupControls(props: GroupCardProps): React.JSX.Element {
+  const { group, language, disabled } = props;
+  const rtl = language === "ar";
+  const canAct = !disabled && !group.isRemoved;
+  return (
+    <View
+      className={
+        rtl
+          ? "flex-row-reverse flex-wrap items-center gap-2"
+          : "flex-row flex-wrap items-center gap-2"
+      }
+    >
+      {!group.isRemoved && group.canConfirm && !group.isConfirmed ? (
+        <ReviewActionButton
+          testID={"account-review-group-confirm-" + group.groupId}
+          iconName="checkmark-circle-outline"
+          tone="outline"
+          label={reviewCopy("account_review_group_confirm", language)}
+          accessibilityLabel={
+            reviewCopy("account_review_group_confirm", language) +
+            " " +
+            group.displayName +
+            ", " +
+            group.linkedCount
+          }
+          disabled={disabled}
+          onPress={props.onConfirm}
+        />
+      ) : null}
+      {group.isRemoved && group.canUndo ? (
+        <ReviewActionButton
+          testID="account-review-group-undo"
+          iconName="arrow-undo-outline"
+          tone="quiet"
+          label={reviewCopy("account_review_group_undo", language)}
+          accessibilityLabel={
+            reviewCopy("account_review_group_undo", language) +
+            " " +
+            group.displayName +
+            ", " +
+            group.linkedCount
+          }
+          disabled={disabled}
+          onPress={props.onUndo}
+        />
+      ) : null}
+      {!group.isRemoved ? (
+        <GroupMenuTrigger
+          group={group}
+          language={language}
+          disabled={!canAct}
+          onPress={props.onMenu}
+        />
+      ) : null}
+    </View>
+  );
+}
+function GroupCard(props: GroupCardProps): React.JSX.Element {
+  const { group, language, compact } = props;
+  const rtl = language === "ar";
+  const direction: TextStyle["writingDirection"] = rtl ? "rtl" : "ltr";
+  return (
+    <View
+      testID={"account-review-group-card-" + group.groupId}
+      className="min-h-[68px] border-b border-border py-3 dark:border-border-dark"
+    >
+      <View
+        className={
+          compact
+            ? "gap-3"
+            : rtl
+              ? "flex-row-reverse items-center gap-3"
+              : "flex-row items-center gap-3"
+        }
+      >
+        <GroupIdentity group={group} language={language} compact={compact} />
+        <View className={compact ? "gap-2" : "items-end gap-2"}>
+          <GroupStatus group={group} />
+          <GroupControls {...props} />
+        </View>
+      </View>
+      {!group.isRemoved ? (
+        <Text
+          testID={"account-review-group-disclosure-" + group.groupId}
+          className={
+            "mt-2 text-xs leading-[18px] text-text-secondary dark:text-text-secondary-dark " +
+            (rtl ? "text-right" : "text-left")
+          }
+          style={{ writingDirection: direction }}
+        >
+          {group.disclosureText}
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+function GroupActionChoices({
+  group,
+  language,
+  disabled,
+  onAction,
+}: {
+  readonly group: SharedSuggestedGroupView;
+  readonly language: ReviewDisplayLanguage;
+  readonly disabled: boolean;
+  readonly onAction: (action: GroupCommandAction) => void;
+}): React.JSX.Element {
+  return (
+    <View className="gap-3">
+      <ReviewActionButton
+        testID="account-review-group-edit"
+        tone="outline"
+        iconName="pencil-outline"
+        label={reviewCopy("account_review_group_edit", language)}
+        disabled={disabled || !group.canEdit}
+        onPress={() => onAction("edit")}
+      />
+      <ReviewActionButton
+        testID="account-review-group-replace"
+        tone="outline"
+        iconName="swap-horizontal-outline"
+        label={reviewCopy("account_review_group_replace", language)}
+        disabled={disabled || !group.canReplace}
+        onPress={() => onAction("replace")}
+      />
+      <ReviewActionButton
+        testID="account-review-group-remove"
+        tone="danger"
+        iconName="trash-outline"
+        label={reviewCopy("account_review_group_remove", language)}
+        disabled={disabled || !group.canRemove}
+        onPress={() => onAction("remove")}
+      />
+    </View>
+  );
+}
+function GroupMenuContent({
+  group,
+  language,
+  disabled,
+  onAction,
+}: {
+  readonly group: SharedSuggestedGroupView;
+  readonly language: ReviewDisplayLanguage;
+  readonly disabled: boolean;
+  readonly onAction: (action: GroupCommandAction) => void;
+}): React.JSX.Element {
+  const rtl = language === "ar";
+  const direction: TextStyle["writingDirection"] = rtl ? "rtl" : "ltr";
+  return (
+    <View
+      testID="account-review-group-action-sheet"
+      className="w-full max-w-[350px] self-center gap-3 px-5 pb-3"
+    >
+      <Text
+        accessibilityRole="header"
+        className="text-xl font-bold leading-7 text-text-primary dark:text-text-primary-dark"
+      >
+        {reviewCopy("account_review_group_actions_title", language)}
+      </Text>
+      <Text
+        style={{ writingDirection: direction }}
+        className={
+          "text-sm leading-5 text-text-secondary dark:text-text-secondary-dark " +
+          (rtl ? "text-right" : "text-left")
+        }
+      >
+        {displayIdentity(group.displayName, language)} · {group.linkedCount}{" "}
+        {reviewCopy("account_review_group_linked", language)}
+      </Text>
+      <GroupActionChoices
+        group={group}
+        language={language}
+        disabled={disabled}
+        onAction={onAction}
+      />
+    </View>
+  );
+}
+
+interface GroupMenuModalProps {
+  readonly group: SharedSuggestedGroupView;
+  readonly language: ReviewDisplayLanguage;
+  readonly disabled: boolean;
+  readonly onAction: (action: GroupCommandAction) => void;
+  readonly onClose: () => void;
+}
+function GroupMenuModal(props: GroupMenuModalProps): React.JSX.Element {
+  const bottomInset = useModalBottomInset();
+  const { height } = useWindowDimensions();
+  return (
+    <Modal
+      visible
+      transparent
+      animationType="slide"
+      statusBarTranslucent
+      onRequestClose={props.onClose}
+    >
+      <View className="flex-1 justify-end">
+        <ReviewPointerBackdrop onPress={props.onClose} />
+        <View
+          accessibilityViewIsModal
+          importantForAccessibility="yes"
+          className="w-full rounded-t-[32px] border-t border-border bg-surface dark:border-border-dark dark:bg-surface-dark"
+          style={{
+            maxHeight: Math.max(0, (height - bottomInset) * 0.8),
+            paddingBottom: bottomInset,
+          }}
+        >
+          <ReviewSheetHandle />
+          <ScrollView keyboardShouldPersistTaps="handled">
+            <GroupMenuContent
+              group={props.group}
+              language={props.language}
+              disabled={props.disabled}
+              onAction={props.onAction}
+            />
+            <View className="mx-5 mb-3">
+              <ReviewActionButton
+                tone="quiet"
+                label={reviewCopy("account_review_group_close", props.language)}
+                onPress={props.onClose}
+              />
+            </View>
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+interface AllGroupsSheetProps {
+  readonly open: boolean;
+  readonly groups: readonly SharedSuggestedGroupView[];
+  readonly language: ReviewDisplayLanguage;
+  readonly renderGroup: (item: SharedSuggestedGroupView) => React.JSX.Element;
+  readonly onClose: () => void;
+  readonly activeMenu: SharedSuggestedGroupView | null;
+  readonly onMenuAction: (action: GroupCommandAction) => void;
+  readonly disabled: boolean;
+}
+function AllGroupsHeader({
+  language,
+  onClose,
+}: {
+  readonly language: ReviewDisplayLanguage;
+  readonly onClose: () => void;
+}): React.JSX.Element {
+  return (
+    <View
+      className={
+        language === "ar"
+          ? "mx-5 mb-2 flex-row-reverse items-center justify-between"
+          : "mx-5 mb-2 flex-row items-center justify-between"
+      }
+    >
+      <Text
+        accessibilityRole="header"
+        className="text-xl font-bold leading-7 text-text-primary dark:text-text-primary-dark"
+      >
+        {reviewCopy("account_review_group_view_all", language)}
+      </Text>
+      <ReviewActionButton
+        tone="quiet"
+        label={reviewCopy("account_review_group_close", language)}
+        onPress={onClose}
+      />
+    </View>
+  );
+}
+function FullGroupsList({
+  groups,
+  renderGroup,
+}: {
+  readonly groups: readonly SharedSuggestedGroupView[];
+  readonly renderGroup: (group: SharedSuggestedGroupView) => React.JSX.Element;
+}): React.JSX.Element {
+  return (
+    <FlatList
+      data={groups}
+      keyExtractor={(group) => group.groupId}
+      className="shrink"
+      renderItem={({ item }) => renderGroup(item)}
+      initialNumToRender={10}
+      removeClippedSubviews={false}
+      contentContainerClassName="px-5 pb-3"
+      showsVerticalScrollIndicator={false}
+    />
+  );
+}
+function AllGroupsSheet(props: AllGroupsSheetProps): React.JSX.Element | null {
+  const bottomInset = useModalBottomInset();
+  const { height } = useWindowDimensions();
+  if (!props.open) return null;
+  return (
+    <Modal
+      visible
+      transparent
+      animationType="slide"
+      statusBarTranslucent
+      onRequestClose={props.onClose}
+    >
+      <View className="flex-1 justify-end">
+        <ReviewPointerBackdrop onPress={props.onClose} />
+        <View
+          testID="account-review-group-all-sheet"
+          accessibilityViewIsModal
+          importantForAccessibility="yes"
+          className="w-full rounded-t-[32px] border-t border-border bg-surface dark:border-border-dark dark:bg-surface-dark"
+          style={{
+            maxHeight: Math.max(0, (height - bottomInset) * 0.8),
+            paddingBottom: bottomInset,
+          }}
+        >
+          <ReviewSheetHandle />
+          <AllGroupsHeader language={props.language} onClose={props.onClose} />
+          <FullGroupsList
+            groups={props.groups}
+            renderGroup={props.renderGroup}
+          />
+          {props.activeMenu ? (
+            <GroupMenuContent
+              group={props.activeMenu}
+              language={props.language}
+              disabled={props.disabled}
+              onAction={props.onMenuAction}
+            />
+          ) : null}
+        </View>
+      </View>
+    </Modal>
+  );
+}
+interface OverviewPanelProps {
+  readonly groups: readonly SharedSuggestedGroupView[];
+  readonly summary: SharedReviewSummaryView;
+  readonly language: ReviewDisplayLanguage;
+  readonly renderGroup: (group: SharedSuggestedGroupView) => React.JSX.Element;
+  readonly onViewAll: () => void;
+  readonly disabled: boolean;
+}
+function GroupIssues({
+  labels,
+  language,
+}: {
+  readonly labels: readonly string[];
+  readonly language: ReviewDisplayLanguage;
+}): React.JSX.Element | null {
+  const rtl = language === "ar";
+  if (labels.length === 0) return null;
+  return (
+    <View className="mt-3 gap-2">
+      {labels.map((label) => (
+        <View
+          key={label}
+          className={
+            rtl
+              ? "flex-row-reverse items-center gap-2"
+              : "flex-row items-center gap-2"
+          }
+        >
+          <Ionicons
+            name="alert-circle-outline"
+            size={18}
+            color={palette.gold[800]}
+            accessibilityElementsHidden
+            importantForAccessibility="no"
+          />
+          <Text
+            className={
+              "min-w-0 flex-1 text-sm leading-5 text-gold-800 dark:text-gold-400 " +
+              (rtl ? "text-right" : "text-left")
+            }
+          >
+            {label}
+          </Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+function OverviewPanel(props: OverviewPanelProps): React.JSX.Element {
+  const { summary, groups, language } = props;
+  const rtl = language === "ar";
+  return (
+    <View
+      testID="account-review-details-panel"
+      className="w-full max-w-[350px] self-center rounded-xl border border-border bg-surface p-4 dark:border-border-dark dark:bg-surface-dark"
+    >
+      <Text
+        accessibilityRole="header"
+        className="text-xl font-bold leading-7 text-text-primary dark:text-text-primary-dark"
+      >
+        {reviewCopy("account_review_details_title", language)}
+      </Text>
+      <Text
+        className={
+          "mt-1 text-sm leading-5 text-text-secondary dark:text-text-secondary-dark " +
+          (rtl ? "text-right" : "text-left")
+        }
+      >
+        {summary.distinctNeedsReviewCount}{" "}
+        {reviewCopy("account_review_group_needs_review", language)}
+        {" · "}
+        {summary.selectedCount}{" "}
+        {reviewCopy("account_review_group_selected", language)}
+      </Text>
+      <View className="mt-3">
+        {groups.slice(0, 2).map((group) => (
+          <React.Fragment key={group.groupId}>
+            {props.renderGroup(group)}
+          </React.Fragment>
+        ))}
+      </View>
+      <GroupIssues labels={summary.issueLabels} language={language} />
+      {groups.length > 1 ? (
+        <View className="mt-3">
+          <ReviewActionButton
+            testID="account-review-group-view-all"
+            tone="quiet"
+            label={reviewCopy("account_review_group_view_all", language)}
+            disabled={props.disabled}
+            onPress={props.onViewAll}
+          />
+        </View>
+      ) : null}
+    </View>
+  );
+}
+interface GroupSurfaceCompositionProps {
+  readonly source: SharedAccountSuggestionsProps;
+  readonly renderGroup: (group: SharedSuggestedGroupView) => React.JSX.Element;
+  readonly menu: SharedSuggestedGroupView | null;
+  readonly language: ReviewDisplayLanguage;
+  readonly disabled: boolean;
+  readonly onAction: (action: GroupCommandAction) => void;
+  readonly dismissMenu: () => void;
+}
+function GroupSurfaceComposition(
+  p: GroupSurfaceCompositionProps
+): React.JSX.Element {
+  const source = p.source;
+  return (
+    <>
+      <OverviewPanel
+        groups={source.groups}
+        summary={source.summary}
+        language={p.language}
+        renderGroup={p.renderGroup}
+        disabled={source.isBusy}
+        onViewAll={source.onViewAll}
+      />
+      <AllGroupsSheet
+        open={source.isAllGroupsSheetOpen}
+        groups={source.groups}
+        language={p.language}
+        renderGroup={p.renderGroup}
+        onClose={source.onCloseAllGroups}
+        activeMenu={p.menu}
+        onMenuAction={p.onAction}
+        disabled={p.disabled}
+      />
+      {p.menu && !source.isAllGroupsSheetOpen ? (
+        <GroupMenuModal
+          group={p.menu}
+          language={p.language}
+          disabled={p.disabled}
+          onAction={p.onAction}
+          onClose={p.dismissMenu}
+        />
+      ) : null}
+    </>
+  );
+}
+export function SharedAccountSuggestions(
+  props: SharedAccountSuggestionsProps
+): React.JSX.Element | null {
+  const { language } = useLocale();
+  const { width, fontScale } = useWindowDimensions();
+  const [menuGroupId, setMenuGroupId] = useState<string | null>(null);
+  const menu =
+    props.groups.find((group) => group.groupId === menuGroupId) ?? null;
+  const compact = shouldUseDenseRowCompactLayout(width, fontScale);
+  const disabled = props.isBusy || (menu?.isBusy ?? false);
+  const perform = (action: GroupCommandAction): void => {
+    if (!menu || disabled) return;
+    setMenuGroupId(null);
+    if (action === "edit" && menu.canEdit) {
+      if (props.isAllGroupsSheetOpen) props.onCloseAllGroups();
+      props.onEdit(menu.groupId);
+    }
+    if (action === "replace" && menu.canReplace) {
+      if (props.isAllGroupsSheetOpen) props.onCloseAllGroups();
+      props.onReplace(menu.groupId);
+    }
+    if (action === "remove" && menu.canRemove) props.onRemove(menu.groupId);
+  };
+  const renderGroup = (group: SharedSuggestedGroupView): React.JSX.Element => (
+    <GroupCard
+      group={group}
+      language={language}
+      compact={compact}
+      disabled={props.isBusy || group.isBusy}
+      onConfirm={() => props.onConfirm(group.groupId)}
+      onMenu={() => setMenuGroupId(group.groupId)}
+      onUndo={() => props.onUndo(group.groupId)}
+    />
+  );
+  if (props.groups.length === 0 && props.summary.issueLabels.length === 0)
+    return null;
+  return (
+    <GroupSurfaceComposition
+      source={props}
+      renderGroup={renderGroup}
+      menu={menu}
+      language={language}
+      disabled={disabled}
+      onAction={perform}
+      dismissMenu={() => setMenuGroupId(null)}
+    />
+  );
+}

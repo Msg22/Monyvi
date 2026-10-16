@@ -1,5 +1,5 @@
 {
-  "conversion_unavailable": "سعر التحويل غير متاح",
+  "conversion_unavailable": "التحويل غير متاح",
   "conversion_preview": "≈ {{amount}} بسعر {{one}} {{baseCurrency}} = {{rate}} {{quoteCurrency}}",
   "partial_sms_title": "تعذرت معالجة {{count}} رسائل",
   "partial_sms_title_zero": "لم تتم معالجة أي رسالة",
@@ -373,7 +373,6 @@
   "payment_failed": "فشلت الدفعة",
   "payment_failed_message": "فشل إنشاء المعاملة. يرجى المحاولة مرة أخرى.",
   "balance_warning": "رصيد الحساب سيكون {{balance}} بعد هذه الدفعة.",
-
   "hide_details": "إخفاء التفاصيل",
   "note": "ملاحظة",
   "note_placeholder": "إضافة ملاحظة...",
@@ -389,7 +388,6 @@
   "auto_create_transaction": "إنشاء معاملة تلقائياً",
   "auto_create_on_description": "سيتم إنشاء المعاملة تلقائياً في تاريخ الاستحقاق",
   "auto_create_off_description": "ستتلقى إشعار تذكير فقط",
-
   "from_label": "من",
   "merchant": "التاجر",
   "payee": "المستفيد",
@@ -407,7 +405,6 @@
   "select_cash_account": "اختر حساب كاش",
   "cash_account_hint": "سيتم إنشاء حساب كاش باسم \"{{name}}\" بالعملة {{currency}}.",
   "matching_accounts_label": "حسابات {{currency}}",
-
   "voice_analyzing": "جاري تحليل صوتك...",
   "voice_analyzing_hint": "قد يستغرق هذا بضع ثوانٍ",
   "voice_error_default": "حدث خطأ ما. يرجى المحاولة مرة أخرى.",
@@ -415,7 +412,6 @@
   "recording": "جاري التسجيل...",
   "recording_paused": "متوقف",
   "recording_complete": "اكتمل التسجيل",
-
   "sms_scan_header": "مسح الرسائل",
   "sms_scan_scope_last_30_days": "آخر 30 يومًا",
   "cancel_scan": "إلغاء المسح",
@@ -458,7 +454,6 @@
   "scan_error_default": "حدث خطأ غير متوقع أثناء مسح الرسائل النصية.",
   "check_permissions": "يرجى التحقق من أذونات الرسائل في الإعدادات والمحاولة مرة أخرى.",
   "try_again": "حاول مرة أخرى",
-
   "auto_track_title": "التتبع التلقائي للمعاملات",
   "auto_track_description": "اسمح لرِزقي بقراءة رسائلك المالية لتتبع إنفاقك تلقائياً",
   "feature_instant_title": "تتبع فوري",
@@ -469,10 +464,8 @@
   "feature_control_description": "راجع كل معاملة قبل حفظها. ارفض أي معاملة لا تريدها.",
   "allow_sms_access": "السماح بالوصول إلى الرسائل",
   "not_now": "ليس الآن",
-
   "edit_amount": "تعديل المبلغ",
   "edit_category": "تعديل الفئة",
-
   "select_frequency": "اختر التكرار",
   "freq_daily": "يومي",
   "freq_weekly": "أسبوعي",
@@ -494,7 +487,6 @@
   "notification_transaction_created_title": "تم إنشاء المعاملة",
   "notification_transaction_needs_account_title": "المعاملة تحتاج إلى حساب",
   "notification_no_account_configured": "لا يوجد حساب مُعدّ",
-
   "voice_resume": "استئناف",
   "voice_pause": "إيقاف مؤقت",
   "voice_done": "تم",
@@ -506,7 +498,6 @@
   "currency": "العملة",
   "new_account_default": "حساب جديد",
   "cash_default": "نقدي",
-
   "date_label": "التاريخ",
   "frequency_label": "التكرار",
   "to_label": "إلى",
@@ -604,6 +595,21 @@
   "ai_privacy_provider_body": "الشاشات المختصرة تقول مزود الذكاء الاصطناعي. هذه الصفحة توضّح اسم المزود: Google Gemini.",
   "ai_privacy_footer": "يمكنك إيقاف ميزات الذكاء الاصطناعي لاحقاً من الإعدادات.",
   "exchange_rate_unavailable": "سعر الصرف غير متاح",
-  "conversion_unavailable": "التحويل غير متاح",
-  "conversion_preview_at_rate": "≈ {{amount}} بسعر {{rate}}"
+  "conversion_preview_at_rate": "≈ {{amount}} بسعر {{rate}}",
+  "account_review_default_note_one": "تم استخدام {{defaultAccountName}} لمعاملة واحدة.",
+  "account_review_default_note_two": "تم استخدام {{defaultAccountName}} لمعاملتين.",
+  "account_review_default_note_few": "تم استخدام {{defaultAccountName}} لـ{{count}} معاملات.",
+  "account_review_default_note_many": "تم استخدام {{defaultAccountName}} لـ{{count}} معاملة.",
+  "account_review_default_note_other": "تم استخدام {{defaultAccountName}} لـ{{count}} معاملة.",
+  "account_review_default_why_trigger": "لماذا؟",
+  "account_review_default_why_title": "تم استخدام الحساب الافتراضي",
+  "account_review_default_why_body_one": "تم اختيار {{defaultAccountName}} لمعاملة واحدة لأن الحساب لم يُذكر والعملة تطابق عملة الحساب.",
+  "account_review_default_why_body_two": "تم اختيار {{defaultAccountName}} لمعاملتين لأن الحساب لم يُذكر والعملة تطابق عملة الحساب.",
+  "account_review_default_why_body_few": "تم اختيار {{defaultAccountName}} لـ{{count}} معاملات لأن الحساب لم يُذكر والعملة تطابق عملة الحساب.",
+  "account_review_default_why_body_many": "تم اختيار {{defaultAccountName}} لـ{{count}} معاملة لأن الحساب لم يُذكر والعملة تطابق عملة الحساب.",
+  "account_review_default_why_body_other": "تم اختيار {{defaultAccountName}} لـ{{count}} معاملة لأن الحساب لم يُذكر والعملة تطابق عملة الحساب.",
+  "account_review_default_edit_reminder": "يمكنك تغيير الحساب لكل معاملة قبل الحفظ.",
+  "account_review_default_why_boundary": "إذا ذُكر حساب بالاسم أو كانت العملة غير مؤكدة، فستظل المعاملة بحاجة إلى مراجعتك.",
+  "account_review_default_why_action": "فهمت",
+  "account_review_default_why_close_accessibility": "إغلاق شرح الحساب الافتراضي"
 }
