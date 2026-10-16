@@ -5,17 +5,25 @@
  * unshipped review.batch-save/v1 financial action payload.
  */
 import {
-  accountReviewSaveIntentSchema, accountReviewSessionSchema,
-  type AccountReviewSaveIntent, type AccountReviewSession,
+  accountReviewSaveIntentSchema,
+  accountReviewSessionSchema,
+  type AccountReviewSaveIntent,
+  type AccountReviewSession,
 } from "../account-review/review-schemas";
 import { hash } from "../account-review/schema-primitives";
-import { serializeCanonicalJsonValue, type Sha256Provider } from "./action-contracts";
+import {
+  serializeCanonicalJsonValue,
+  type Sha256Provider,
+} from "./action-contracts";
 import type { CanonicalJsonValue } from "./action-registry";
-import { accountDefaultSnapshotSchema, type ReviewBatchSavePayload } from
-  "./review-batch-save-shapes";
+import {
+  accountDefaultSnapshotSchema,
+  type ReviewBatchSavePayload,
+} from "./review-batch-save-shapes";
 import { projectSelectedReviewRow } from "./review-intent-digest-rows";
 import {
-  completeOriginalPlannedMembers, originalConfirmedGroups,
+  completeOriginalPlannedMembers,
+  originalConfirmedGroups,
 } from "./review-intent-digest-groups";
 
 const DOMAIN = "monyvi.account-review.frozen-intent";
@@ -24,8 +32,7 @@ const VERSION = "v1";
 export interface ComputeAccountReviewFrozenIntentDigestInput {
   readonly session: AccountReviewSession;
   readonly intent: AccountReviewSaveIntent;
-  readonly creationDefaultSnapshot:
-    ReviewBatchSavePayload["creationDefaultSnapshot"];
+  readonly creationDefaultSnapshot: ReviewBatchSavePayload["creationDefaultSnapshot"];
   readonly hashProvider: Sha256Provider;
 }
 
@@ -52,44 +59,60 @@ function intentProjection(intent: AccountReviewSaveIntent): CanonicalJsonValue {
     confirmedGroups: [...intent.confirmedGroups]
       .sort((a, b) => ascii(a.groupId, b.groupId))
       .map((item) => ({
-        groupId: item.groupId, revision: item.revision,
+        groupId: item.groupId,
+        revision: item.revision,
         evidenceKey: item.evidenceKey,
       })),
     plannedEntityIds: [...intent.plannedEntityIds]
-      .sort((a, b) => ascii(
-        a.entity + ":" + a.localRef + ":" + a.id,
-        b.entity + ":" + b.localRef + ":" + b.id
-      )).map((item) => ({
-        entity: item.entity, localRef: item.localRef, id: item.id,
+      .sort((a, b) =>
+        ascii(
+          a.entity + ":" + a.localRef + ":" + a.id,
+          b.entity + ":" + b.localRef + ":" + b.id
+        )
+      )
+      .map((item) => ({
+        entity: item.entity,
+        localRef: item.localRef,
+        id: item.id,
       })),
   };
 }
 
 function assertFrozenScope(
-  state: AccountReviewSession, intent: AccountReviewSaveIntent
+  state: AccountReviewSession,
+  intent: AccountReviewSaveIntent
 ): void {
-  if (state.saveIntent === null ||
-      state.ownerId !== intent.ownerId ||
-      state.source !== intent.source ||
-      state.sessionId !== intent.sessionId ||
-      state.revision !== intent.expectedReviewRevision ||
-      state.operationGeneration !== intent.expectedOperationGeneration ||
-      serializeCanonicalJsonValue(intentProjection(state.saveIntent)) !==
-        serializeCanonicalJsonValue(intentProjection(intent))) {
+  if (
+    state.saveIntent === null ||
+    state.ownerId !== intent.ownerId ||
+    state.source !== intent.source ||
+    state.sessionId !== intent.sessionId ||
+    state.revision !== intent.expectedReviewRevision ||
+    state.operationGeneration !== intent.expectedOperationGeneration ||
+    serializeCanonicalJsonValue(intentProjection(state.saveIntent)) !==
+      serializeCanonicalJsonValue(intentProjection(intent))
+  ) {
     refuse("intent_stale");
   }
 }
 
 function selectedOriginalRows(
-  state: AccountReviewSession, intent: AccountReviewSaveIntent
+  state: AccountReviewSession,
+  intent: AccountReviewSaveIntent
 ): AccountReviewSession["rows"] {
-  const selected = state.rows.filter((row) => row.selected)
+  const selected = state.rows
+    .filter((row) => row.selected)
     .sort((a, b) => ascii(a.rowId, b.rowId));
-  if (selected.length === 0 ||
-      selected.length !== intent.selectedRows.length ||
-      selected.some((row) => !intent.selectedRows.some(
-        (item) => item.rowId === row.rowId && item.revision === row.revision
-      ))) {
+  if (
+    selected.length === 0 ||
+    selected.length !== intent.selectedRows.length ||
+    selected.some(
+      (row) =>
+        !intent.selectedRows.some(
+          (item) => item.rowId === row.rowId && item.revision === row.revision
+        )
+    )
+  ) {
     refuse("selected_rows_changed");
   }
   return selected;
@@ -107,22 +130,28 @@ function originalDefaultSnapshot(
   if (snapshot === undefined) return null;
   const parsed = accountDefaultSnapshotSchema.parse(snapshot);
   const ids = [...parsed.activeAccountIds].sort(ascii);
-  if (new Set(ids).size !== ids.length ||
-      (parsed.defaultAccount !== null &&
-        !ids.includes(parsed.defaultAccount.accountId))) {
+  if (
+    new Set(ids).size !== ids.length ||
+    (parsed.defaultAccount !== null &&
+      !ids.includes(parsed.defaultAccount.accountId))
+  ) {
     refuse("captured_default_snapshot_invalid");
   }
   return {
     activeAccountIds: ids,
-    defaultAccount: parsed.defaultAccount === null ? null : {
-      accountId: parsed.defaultAccount.accountId,
-      isDefault: true,
-    },
+    defaultAccount:
+      parsed.defaultAccount === null
+        ? null
+        : {
+            accountId: parsed.defaultAccount.accountId,
+            isDefault: true,
+          },
   };
 }
 
 function frozenScopeProjection(
-  state: AccountReviewSession, intent: AccountReviewSaveIntent
+  state: AccountReviewSession,
+  intent: AccountReviewSaveIntent
 ): CanonicalJsonValue {
   return {
     ownerId: intent.ownerId,
@@ -147,18 +176,31 @@ export async function computeAccountReviewFrozenIntentDigest(
   const intent = accountReviewSaveIntentSchema.parse(input.intent);
   assertFrozenScope(session, intent);
   const selected = selectedOriginalRows(session, intent);
+  // Reject invalid financial rows and capture supplied historical defaults
+  // before asynchronous planned-child alias hashing invokes the provider.
+  const selectedRows = selected.map(projectSelectedReviewRow);
+  const creationDefaultSnapshot = originalDefaultSnapshot(
+    input.creationDefaultSnapshot
+  );
   const groups = originalConfirmedGroups(session, intent, selected);
   const planned = await completeOriginalPlannedMembers(
-    session, intent, selected, groups.groups, input.hashProvider
+    session,
+    intent,
+    selected,
+    groups.groups,
+    input.hashProvider
   );
   const projection: CanonicalJsonValue = {
     scope: frozenScopeProjection(session, intent),
-    selectedRows: selected.map(projectSelectedReviewRow),
+    selectedRows,
     confirmedGroups: groups.projected,
     plannedEntityIds: planned,
-    creationDefaultSnapshot:
-      originalDefaultSnapshot(input.creationDefaultSnapshot),
+    creationDefaultSnapshot,
   };
-  const canonicalText = serializeCanonicalJsonValue([DOMAIN, VERSION, projection]);
+  const canonicalText = serializeCanonicalJsonValue([
+    DOMAIN,
+    VERSION,
+    projection,
+  ]);
   return hash.parse(await input.hashProvider.digestUtf8(canonicalText));
 }

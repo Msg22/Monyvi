@@ -22,7 +22,11 @@ import {
   syntheticHashProvider,
 } from "../../account-review/__tests__/normalization-fixtures";
 import type { ReviewBatchSavePayload } from "../review-batch-save-shapes";
-import { serializeCanonicalJsonValue } from "../action-contracts";
+import {
+  serializeCanonicalJsonValue,
+  type Sha256Provider,
+} from "../action-contracts";
+import { MAX_TRANSACTION_AMOUNT } from "../../utils/amount-helpers";
 import { computeAccountReviewFrozenIntentDigest } from "../review-intent-digest";
 import {
   BANK_DETAILS_ID,
@@ -267,8 +271,8 @@ describe("#395 pure frozen-intent SHA-256 projection — module creation Red", (
     ]);
     expect(canonicalText).toBe(
       '["monyvi.account-review.frozen-intent","v1",{"scope":{"actionId":' +
-      '"11111111-1111-4111-8111-111111111111","ownerId":' +
-      '"22222222-2222-4222-8222-222222222222"},"selectedRows":[]}]'
+        '"11111111-1111-4111-8111-111111111111","ownerId":' +
+        '"22222222-2222-4222-8222-222222222222"},"selectedRows":[]}]'
     );
     expect(await syntheticHashProvider.digestUtf8(canonicalText)).toBe(
       "2a21a107282acab1369ab302548ed22135d915e22e8b149712f7e8358162ce10"
@@ -401,6 +405,77 @@ describe("#395 pure frozen-intent SHA-256 projection — module creation Red", (
     ).not.toBe(await callDigest(fixture));
   });
 
+  it("rejects a schema-valid confirmed-Bank round-trip mismatch before the first hash call", async () => {
+    const fixture = await groupedCase();
+    const selected = fixture.session.rows.find((row) => row.selected);
+    if (!selected) throw new Error("Missing confirmed Bank selected row");
+    const alteredSession = accountReviewSessionSchema.parse({
+      ...fixture.session,
+      rows: fixture.session.rows.map((row) =>
+        row.rowId === selected.rowId
+          ? {
+              ...row,
+              amountDecimal: String(row.transaction.amount + 1),
+            }
+          : row
+      ),
+    });
+    const digestedPreimages: string[] = [];
+    const hashProvider: Sha256Provider = {
+      digestUtf8: (value: string): Promise<string> => {
+        digestedPreimages.push(value);
+        return syntheticHashProvider.digestUtf8(value);
+      },
+    };
+    await expect(
+      computeAccountReviewFrozenIntentDigest({
+        ...fixture,
+        session: alteredSession,
+        hashProvider,
+      })
+    ).rejects.toThrow("account_review_intent_digest_amount_roundtrip");
+    expect(digestedPreimages).toEqual([]);
+  });
+
+  it("rejects a confirmed-Bank amount beyond the canonical maximum before any hash call", async () => {
+    const fixture = await groupedCase();
+    const selected = fixture.session.rows.find((row) => row.selected);
+    if (!selected) throw new Error("Missing confirmed Bank selected row");
+    const excessiveAmount = MAX_TRANSACTION_AMOUNT + 1;
+    // The strict review maximum makes actual 64-bit minor overflow unreachable:
+    // BTC's maximum 8-decimal amount also fits a signed 64-bit minor integer.
+    const alteredSession: AccountReviewSession = {
+      ...fixture.session,
+      rows: fixture.session.rows.map((row) =>
+        row.rowId === selected.rowId && row.source === "VOICE"
+          ? {
+              ...row,
+              amountDecimal: String(excessiveAmount),
+              transaction: { ...row.transaction, amount: excessiveAmount },
+            }
+          : row
+      ),
+    };
+    expect(accountReviewSessionSchema.safeParse(alteredSession).success).toBe(
+      false
+    );
+    const digestedPreimages: string[] = [];
+    const hashProvider: Sha256Provider = {
+      digestUtf8: (value: string): Promise<string> => {
+        digestedPreimages.push(value);
+        return syntheticHashProvider.digestUtf8(value);
+      },
+    };
+    await expect(
+      computeAccountReviewFrozenIntentDigest({
+        ...fixture,
+        session: alteredSession,
+        hashProvider,
+      })
+    ).rejects.toThrow();
+    expect(digestedPreimages).toEqual([]);
+  });
+
   it("binds the frozen Bank child ID and rejects an extra unused sender plan", async () => {
     const fixture = await groupedCase();
     const changedPlan = fixture.intent.plannedEntityIds.map((item) =>
@@ -470,6 +545,59 @@ describe("#395 pure frozen-intent SHA-256 projection — module creation Red", (
     };
     expect(await callDigest(differentHistoricalSnapshot)).not.toBe(original);
     expect(await callDigest(fixture)).toBe(original);
+  });
+
+  it("captures the supplied default snapshot at invocation despite deferred Bank-alias hashing", async () => {
+    const fixture = await groupedCase();
+    const initialSnapshot = fixture.creationDefaultSnapshot;
+    if (!initialSnapshot)
+      throw new Error("Missing genuine historical Bank snapshot");
+    const supplied = {
+      activeAccountIds: [...initialSnapshot.activeAccountIds],
+      defaultAccount: initialSnapshot.defaultAccount,
+    };
+    const immutableAtInvocation = {
+      activeAccountIds: [...supplied.activeAccountIds],
+      defaultAccount: supplied.defaultAccount,
+    };
+    const expected = await callDigest({
+      ...fixture,
+      creationDefaultSnapshot: immutableAtInvocation,
+    });
+    const gate = { entered: (): void => {}, release: (): void => {} };
+    const entered = new Promise<void>((resolve) => {
+      gate.entered = () => resolve();
+    });
+    const blocked = new Promise<void>((resolve) => {
+      gate.release = () => resolve();
+    });
+    let hashCalls = 0;
+    const hashProvider: Sha256Provider = {
+      digestUtf8: async (value: string): Promise<string> => {
+        hashCalls += 1;
+        if (hashCalls === 1) {
+          gate.entered();
+          await blocked;
+        }
+        return syntheticHashProvider.digestUtf8(value);
+      },
+    };
+    const pending = computeAccountReviewFrozenIntentDigest({
+      ...fixture,
+      creationDefaultSnapshot: supplied,
+      hashProvider,
+    });
+    await entered;
+    supplied.activeAccountIds.push(COMMAND_IDS.cibAccount);
+    gate.release();
+    expect(await pending).toBe(expected);
+    expect(hashCalls).toBeGreaterThan(1);
+    expect(
+      await callDigest({
+        ...fixture,
+        creationDefaultSnapshot: supplied,
+      })
+    ).not.toBe(expected);
   });
 
   it("normalizes equal original calendar dates without hashing time-of-day metadata", async () => {
@@ -594,9 +722,7 @@ describe("#395 pure frozen-intent SHA-256 projection — module creation Red", (
       JSON.parse(
         JSON.stringify(fixture.session),
         (key: string, value: unknown): unknown =>
-          key === "date" && typeof value === "string"
-            ? new Date(value)
-            : value
+          key === "date" && typeof value === "string" ? new Date(value) : value
       )
     );
     const restoredIntent = accountReviewSaveIntentSchema.parse(
