@@ -187,12 +187,12 @@ function assertEffectIdentity(
 async function loadCollidingEffects(
   database: Database,
   userId: string,
-  records: readonly FinancialPullRow[],
-  unresolved: ReadonlySet<string>
+  records: readonly FinancialPullRow[]
 ): Promise<ReadonlyMap<string, AccountFinancialEffect>> {
-  const ids = records
-    .filter((record) => unresolved.has(readOwnedActionId(record, userId)))
-    .map((record) => record.id);
+  const ids = records.map((record) => {
+    readOwnedActionId(record, userId);
+    return record.id;
+  });
   if (ids.length === 0) return new Map();
   const effects = await database
     .get<AccountFinancialEffect>("account_financial_effects")
@@ -218,20 +218,15 @@ export async function shapeAccountFinancialEffectPull(
       .filter((root) => isUnresolvedState(root.state))
       .map((root) => root.actionId)
   );
-  if (unresolved.size === 0) return records;
-  const localById = await loadCollidingEffects(
-    database,
-    userId,
-    records,
-    unresolved
-  );
+  const localById = await loadCollidingEffects(database, userId, records);
   return records.filter((record) => {
-    if (!unresolved.has(readOwnedActionId(record, userId))) return true;
+    const actionId = readOwnedActionId(record, userId);
     const local = localById.get(record.id);
     if (!local) return true;
     assertEffectIdentity(local, record, userId);
-    // Preserve mutable compensation/effectiveness until existing reconciliation.
-    return false;
+    // Matching unresolved effects stay local until actual reconciliation.
+    // Matching settled effects receive the canonical mutable outcome.
+    return !unresolved.has(actionId);
   });
 }
 export async function shapeFinancialPullRecords(

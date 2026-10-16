@@ -657,6 +657,72 @@ describe("#255 financial pull shaping", () => {
     }
   });
 
+  it.each(["accepted", "reconciled", "absent"] as const)(
+    "rejects immutable same-owner effect-ID collision with %s action root",
+    async (state): Promise<void> => {
+      const db = await database();
+      const action = actionId(70);
+      try {
+        if (state !== "absent") await dirtyRoot(db, 70, state);
+        await dirtyEffect(db, action);
+        const mismatches: ReadonlyArray<Record<string, unknown>> = [
+          { action_id: actionId(71) },
+          { account_id: "88888888-8888-4888-8888-888888888888" },
+          { domain: "transfers" },
+          { kind: "debit" },
+          { currency: "USD" },
+          { amount_minor_units_text: "126" },
+          { accepted_account_revision_text: "9" },
+          { reverses_effect_id: REVERSAL_ID },
+        ];
+        for (const mismatch of mismatches) {
+          await expect(
+            shapeAccountFinancialEffectPull(db, USER, [
+              serverEffect(action, mismatch),
+            ])
+          ).rejects.toThrow(FINANCIAL_PULL_SHAPING_ERROR_CODE);
+        }
+      } finally {
+        await db.write(() => db.unsafeResetDatabase());
+      }
+    }
+  );
+
+  it.each(["accepted", "reconciled", "absent"] as const)(
+    "allows matching immutable effect-ID collision under %s root to hydrate mutable server outcome",
+    async (state): Promise<void> => {
+      const db = await database();
+      const action = actionId(72);
+      const remote = serverEffect(action);
+      try {
+        if (state !== "absent") await dirtyRoot(db, 72, state);
+        const existing = await dirtyEffect(db, action);
+        await expect(
+          shapeAccountFinancialEffectPull(db, USER, [remote])
+        ).resolves.toEqual([remote]);
+        // Shape-only: the existing mutable row is never overwritten here.
+        expect(existing.isEffective).toBe(true);
+        expect(existing.compensatedAt).toBeNull();
+      } finally {
+        await db.write(() => db.unsafeResetDatabase());
+      }
+    }
+  );
+
+  it("hydrates missing effect evidence even when its owned root is unresolved", async (): Promise<void> => {
+    const db = await database();
+    const action = actionId(73);
+    const remote = serverEffect(action);
+    try {
+      await dirtyRoot(db, 73, "sync_pending");
+      await expect(
+        shapeAccountFinancialEffectPull(db, USER, [remote])
+      ).resolves.toEqual([remote]);
+    } finally {
+      await db.write(() => db.unsafeResetDatabase());
+    }
+  });
+
   it("hydrates missing/independent rows, remaps settled roots, and rejects foreign scope", async () => {
     const db = await database();
 

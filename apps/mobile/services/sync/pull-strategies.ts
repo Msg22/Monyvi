@@ -489,7 +489,7 @@ export async function pullMarketRates(
   let query = supabase
     .from("market_rates")
     .select("*")
-    .gt("created_at", retentionCutoffIso)
+    .gt("created_at", cutoffDate.toISOString())
     .order("created_at", { ascending: false });
   if (upperWatermark) {
     query = query.lte("created_at", upperWatermark);
@@ -577,14 +577,13 @@ export async function pullSnapshotTable(
   retentionCutoffIso = createSnapshotRetentionCutoffIso()
 ): Promise<SyncTableChangeSet> {
   try {
-
     const data = await pullAllKeysetPages(
       async (cursor) => {
         let query = supabase
           .from(table)
           .select("*", { count: "exact" })
           .eq("user_id", userId)
-          .gt("created_at", cutoffDate.toISOString())
+          .gt("created_at", retentionCutoffIso)
           .lte("created_at", upperWatermark)
           .order("created_at", { ascending: true })
           .order("id", { ascending: true })

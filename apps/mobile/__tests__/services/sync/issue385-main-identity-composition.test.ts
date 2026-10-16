@@ -321,6 +321,32 @@ describe("PR385 recovery composed with current-main canonical Metal identity", (
     expect(result.deleted).toHaveLength(0);
   });
 
+  it.each(["accepted", "reconciled", "absent"] as const)(
+    "rejects settled/absent-root immutable effect-ID collisions through the composed pull (%s)",
+    async (state): Promise<void> => {
+      const db = fakeDb({
+        roots: state === "absent" ? [] : [localRoot(state)],
+        effects: [localEffect()],
+      });
+      await expect(
+        pull(
+          "account_financial_effects",
+          [remoteEffect({ amount_minor_units_text: "9007199254740994" })],
+          db
+        )
+      ).rejects.toThrow(FINANCIAL_PULL_SHAPING_ERROR_CODE);
+
+      const matching = await pull("account_financial_effects", [remoteEffect()], db);
+      expect(matching.updated).toHaveLength(1);
+      expect(matching.updated[0]).toMatchObject({
+        id: EFFECT_ID,
+        amount_minor_units: "9007199254740993",
+        accepted_account_revision: "9223372036854775807",
+        compensated_at: Date.parse("2026-08-24T10:30:45.123Z"),
+      });
+    }
+  );
+
   it("refuses changed immutable effect identity and foreign-owned alias", async (): Promise<void> => {
     await expect(
       pull(
