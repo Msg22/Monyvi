@@ -1,24 +1,41 @@
 # Tasks: Shared account review for Voice and SMS
 
-**Input**: `specs/395-shared-account-review/` — approved `spec.md`, `plan.md`,
-`research.md`, `data-model.md`, four contracts and `manual-test-plan.md`.
-**Authority**: Constitution 1.7.0; exact spec/B1 receipts in `approvals/`.
-**Execution**: Main checkout `E:/Work/My Projects/Monyvi`, branch
-`codex/395-shared-account-review`; base `main@7838df64`. **Status**: Tasks
-authored; no implementation, test execution or assignments.
+**Input**: `specs/395-shared-account-review/` — approved `spec.md`,
+`plan.md`, `research.md`, `data-model.md`, the scoped contracts (including
+`contracts/local-recovery.md`) and `manual-test-plan.md`.
+**Authority**: Original spec/B1 approvals were recorded against Constitution
+**1.7.0**; their immutable receipts remain valid and unchanged. Technical
+delivery now follows Constitution **1.8.0** with the reviewed device-only
+migration exception `dd16d5440556b651cb5b6395a00c1c4d37538dcf`.
+**Execution**: ACTIVE in `codex/395-shared-account-review`: **32/80 task IDs
+checked/accepted, 48 still open** at this immutable task source. Original
+planning base `main@7838df64` is **historical**, not the current Main.
+Trusted pre-policy governance/source history: `c02a773613f9b6ebc5ca01aae02dd41863fd0e90`;
+reviewed policy exception `dd16d5440556b651cb5b6395a00c1c4d37538dcf`.
+Root reports current Main `902eee575920051112c5f1988fa0b4d9051194f4`
+includes the separately published/formatted Constitution 1.8.0 policy;
+workflow-only PR #399 remains separate, and feature PR #396 will stack on its
+policy branch. These local Main/PR facts are Root-reported, not newly verified
+by this document-only author. No Main merge, feature publish or hosted
+deployment is implied.
 
-Paths below are repository-relative. New filenames are proposed implementation
-targets, not claims that files already exist. `NNN` in SQL paths means the next
-free sequential prefix, resolved and recorded by T004 before SQL editing. All
-checkboxes remain unchecked until their own acceptance evidence exists.
+Paths below are repository-relative task targets; accepted implementation
+and remaining work are distinguished by checked task IDs and their recorded
+`workflow-status.md` evidence, not by initial planning prose. `NNN` is the
+historical generic SQL-prefix placeholder; T004 reserved **090** for review
+and **091** for Add. Checkboxes change only with their own acceptance evidence;
+32 accepted task checkboxes do not imply complete feature, device/visual,
+hosted or regression acceptance.
 
 ## Execution rules
 
-- Complete tasks then read-only analyze before production edits or assignments.
-  T001–T004 are future implementation intake gates, not retrospective claims.
-- T001 must obtain approval for the concrete local SQL/financial-action/sync
-  scope and the refined 12–18h estimate. Planning/mockup approval does not
-  authorize either new action registration or hosted deployment.
+- T001–T004 are **accepted historical intake gates** (see their checked entries
+  and evidence in `workflow-status.md`), not work to perform again. Changed
+  technical contracts still require their applicable fresh read-only analysis
+  and tests-first Red before the next bounded source grant.
+- T001 records local SQL/financial-action/sync implementation scope and delivery
+  planning, **not hosted deployment**. No subsequent task or policy amendment
+  silently authorizes a remote mutation.
 - TDD: author unit/integration and controllable E2E tests first. Run the focused
   deterministic Red batch at each dependency boundary before corresponding
   production work; record failing behavior, not missing tooling. Run Green at
@@ -64,13 +81,14 @@ checkboxes remain unchecked until their own acceptance evidence exists.
 ## Phase 2: Foundation — blocking shared contracts and fixtures
 
 **Goal**: One canonical typed source, owned snapshots and honest fixture entry.
-T016 remains INCOMPLETE and mandatory before every story route/data-domain-
-workflow hook/runtime integration, existing shared picker behavior, full SMS queue codec/stateful
-merge/writer, persistence, Save, SQL/sync, network wiring or action
-activation. Only pure T019/T027/T046 and conditional stateless component
-slices below can precede it on their stated frozen-contract and Red gates.
-None completes T016. **A separate conditional prerequisite, not
-a ready task or source grant:** if Core's published namespace plan and Root
+T016 was the **mandatory foundation gate and is now accepted** (checked below
+with its separate `workflow-status.md` evidence). This foundation acceptance
+does **not** complete story route/data-domain/hook/runtime integration,
+picker, SMS queue writer, persistence, Save, SQL/sync, network wiring or action
+activation; each still needs its own scoped tests, implementation and review.
+Historical pre-T016 pure/stateless exceptions below record their original
+dependency boundaries, not fresh source grants.
+**Historical conditional prerequisite, not a current source grant:** if Core's published namespace plan and Root
 analysis prove a T014-M ↔ T028 identity-capture cycle, an atomically owned
 queue-UUID acquisition/lease helper may be reviewed for pre-T016 implementation
 with its own Red and owner/cancellation/empty-cleanup/CAS tests. No new DB
@@ -439,7 +457,7 @@ local-writer/SQL implementation, race-proof and sync/reconciliation gates.
       lifecycle before once-only recovery. Missing evidence/newer edits
       fail closed; no Voice review persistence or remote snapshots.
 - [ ] T052 [US6] Implement approved next-prefix
-      `supabase/migrations/090_review_batch_save.sql`: strict
+      `supabase/migrations/090_shared_account_review_save.sql`: strict
       tuple/schema/owner-wide creation default snapshot/active refs/unique
       fingerprints/currency/category/expected revisions, complete server
       transaction, replay/hash conflict and old tuple compatibility; no hosted
@@ -703,7 +721,7 @@ coverage, not evidence that tests pass or behavior exists.
 | FR-002      | T018,T020,T021,T054                                                                            |
 | FR-003      | T014,T017,T019                                                                                 |
 | FR-004      | T005,T012,T013,T014,T017,T019,T034,T036                                                        |
-| FR-005      | T005,T007,T012,T013,T024,T027,T028                                                             |
+| FR-005      | T005,T007,T009,T011,T012,T013,T024,T027,T028                                                             |
 | FR-006      | T026,T027,T029,T031,T036,T038                                                                  |
 | FR-007      | T024,T026,T027,T029,T031,T043                                                                  |
 | FR-008      | T024,T026,T027,T030,T031                                                                       |
@@ -716,10 +734,10 @@ coverage, not evidence that tests pass or behavior exists.
 | FR-015      | T057,T058,T059,T061                                                                            |
 | FR-016      | T064,T065,T066,T067,T068,T069,T070                                                             |
 | FR-017      | T064,T065,T066,T068,T069,T070                                                                  |
-| FR-018      | T004,T042,T043,T045,T046,T047,T048,T049,T052,T054                                              |
-| FR-019      | T025,T028,T029,T044,T049,T051,T054,T074                                                        |
-| FR-020      | T007,T012,T013,T014,T054,T074                                                                  |
-| FR-021      | T005,T006,T007,T010,T014,T024,T034,T042,T043,T045,T048,T052,T074                               |
+| FR-018      | T004,T042,T043,T045,T046,T047,T048,T049,T052,T053,T054                                              |
+| FR-019      | T025,T028,T029,T044,T049,T051,T053,T054,T074                                                        |
+| FR-020      | T007,T011,T012,T013,T014,T054,T074                                                                  |
+| FR-021      | T005,T006,T007,T009,T010,T014,T024,T034,T042,T043,T045,T048,T052,T053,T074                               |
 | FR-022      | T018,T022,T023,T026,T032,T033,T035,T040,T041,T055,T056,T058,T062,T063,T065,T070,T071,T072,T073 |
 | FR-023      | T002,T065,T068,T070,T071,T073,T076,T077                                                        |
 | FR-024      | T001,T002,T003,T016,T076,T078,T080                                                             |
@@ -727,9 +745,9 @@ coverage, not evidence that tests pass or behavior exists.
 | SC-002      | T057,T058,T059,T060,T061,T062                                                                  |
 | SC-003      | T017,T018,T019,T043,T054                                                                       |
 | SC-004      | T007,T012,T013,T014,T054,T074                                                                  |
-| SC-005      | T042,T043,T044,T045,T046,T047,T048,T049,T050,T051,T052                                         |
+| SC-005      | T042,T043,T044,T045,T046,T047,T048,T049,T050,T051,T052,T053                                         |
 | SC-006      | T064,T065,T066,T067,T068,T069,T070                                                             |
-| SC-007      | T005–T008,T017–T018,T024–T026,T034–T035,T042–T045,T057–T058,T064–T066,T074,T075,T077,T078,T079 |
+| SC-007      | T005–T008,T015,T017–T018,T024–T026,T034–T035,T042–T045,T057–T058,T064–T066,T074,T075,T077,T078,T079 |
 | SC-008      | T003,T022,T032,T040,T055,T062,T071,T076,T078,T079                                              |
 
 ## Manual scenario / authored automation mapping
