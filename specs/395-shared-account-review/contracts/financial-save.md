@@ -6,6 +6,15 @@ approved this local action/sync/reconciliation scope for implementation;
 implementation is pending. No hosted migration, data reset, backfill or
 deployment is authorized. [Wire shapes](wire-shapes.md) defines exact closed
 fields, money, mutation/guard sets, API exports and local recovery boundaries.
+Device-local recovery is separately specified by [local recovery](local-recovery.md).
+Reserve nullable Watermelon-only `financial_action_groups.local_recovery_snapshot_json`
+(non-generated `localRecoverySnapshotJson`) and migration31, **not** a
+Supabase column/type, public payload, new `payloadHash` or
+`frozenIntentDigest`. Constitution VII 1.8.0 requires a generator-consumed
+local override, reproducible local schema/migration parity and real owned pull
+preservation before this feature can use it. Current root/model/linked-plan
+code does not yet expose this private carrier or builder.
+
 Every review-created Cash/Bank/Wallet account uses the same current logical
 active/default snapshot CAS: optional closed `creationDefaultSnapshot` is
 **required exactly when any account is created** and absent otherwise. With no
@@ -123,11 +132,19 @@ changed by this document.
    real account in the same write without selecting them. Preserve unrelated
    groups/overrides. Local rejection snapshots restore these mappings with the
    group if the complete action is rejected.
-5. Commit complete linked group atomically through foundation. No financial or
+5. For review-batch roots only, attach a typed **optional device-only
+   snapshot builder** to the linked plan. After prepared ownership validation,
+   bind immutable cached preimages to actual prepared postimages, queue
+   lifecycle, SMS drafts, created children/defaults and sorted actual default
+   dependency IDs. Prepare the private root JSON in the **same adapter batch**
+   as account/child/financial/effect and SMS cleanup/rebinding; never place it
+   in a public envelope or serialize it after commit. Old tuples keep
+   `null` and unchanged recovery behavior.
+6. Commit complete linked group atomically through foundation. No financial or
    default side effects occur before all selected validation succeeds. Restore
    prepared model/cache state on failure. Success navigation only after local
    commit.
-6. Keep stable intent on ambiguous result/double tap; resolve existing action
+7. Keep stable intent on ambiguous result/double tap; resolve existing action
    first, never issue a new action just because transport/sync status is
    uncertain.
 
@@ -182,12 +199,29 @@ mutation, following existing076 semantics.
 All affected refs reconcile together. Reject/stale restores/reconciles account
 balances, removes rejected financial rows/created accounts+children from normal
 History/reporting, and restores recoverable SMS review choices exactly once
-using local snapshots. Voice has no new durable review recovery UI; rejection
-still uses existing financial-action recovery semantics. Repeated
+using the authenticated root's historical private local snapshot.
+Automatic empty-queue pruning records `pruned_empty` for affected
+unresolved roots atomically with deletion; only this proven disposition
+permits restoring the original queue header when no owner queue exists.
+Discard/reset, expiry, or a newer owner queue cannot be resurrected.
+Every SMS entry expires at its own `parsedAt <= 30-day cutoff`
+(inclusive); redact only that entry's raw recovery data, keeping unexpired
+siblings. Verify owned prepared postimages, child/default/predecessor
+evidence before once-only compensation and refuse newer choices.
+Voice has no durable transcript, audio, session or review recovery UI;
+rejection uses existing financial-action recovery semantics. Repeated
 callbacks/restarts cannot duplicate compensation or clear foreign owner data. Do
 not automatically replay against a new revision or overwrite newer user edits.
 
 ## Migration and rollout boundary
+
+Server-owned 090 review and 091 Add SQL remain sequential local
+Supabase migrations. Private recovery is a separate versioned
+**Watermelon-only migration31** with a non-generated model property and
+durable generator-local schema override. No dummy Supabase field/type/SQL
+or automatic hosted migration is permitted. `db:sync-local` is the
+local generation path (verify private override parity); `db:migrate`
+first runs remote `db:push` and is not local-only authorization.
 
 With main `de09f76bdadb570c99a1015bbf1c680279b0d5ad` ending at
 `089_historical_metal_rate_request_limits.sql` (088 gap unavailable), reserve

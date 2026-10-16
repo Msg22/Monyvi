@@ -144,3 +144,65 @@ existing Edit semantics, app controls or B1 copy.
 
 
 Review replay commitment: the unshipped review payload also requires the single frozenIntentDigest described in contracts/wire-shapes.md. It commits to original selected financial facts, confirmed-group provenance and full planned IDs, including legitimate SMS dedup omissions. Only that hash enters the existing cloud payload_json; the digest itself adds no model/table/column or raw source persistence. The separately required device-only recovery carrier and bounded SMS preimages are specified in contracts/local-recovery.md; no raw Voice review is durable. Historical replay reuses the stored creationDefaultSnapshot or absence; actual post-dedup account creates alone determine snapshot presence.
+
+## Device-only recovery projection (technical, not yet in the DB)
+
+Review Save's root `financial_action_groups` is a synced table, but
+the proposed `local_recovery_snapshot_json: string | null` is a
+**Watermelon-only column** with non-generated model property
+`localRecoverySnapshotJson`. Pre-existing actions have `null`;
+unresolved locally committed review-batch actions retain one validated
+private snapshot, atomically clearing it on accepted/reconciled terminal
+outcomes. This is **not** a server-owned column, public Supabase type,
+wire payload, Cloud action effect, or durable Voice review table.
+
+The private closed `account-review-local-save/v1` snapshot contains
+exactly `version,actionId,ownerId,sessionId,smsDrafts,
+createdEntityRefs,defaultPreimages,defaultDependencyActionIds,
+queuePreimage` (nine keys). `queuePreimage` is null for Voice and for
+SMS carries original owned queue `id,userId,createdAt,updatedAt,
+expectedPostimageHash,disposition` with `present | pruned_empty |
+expired | superseded`. The full available SMS draft preserves the
+original physical owner/queue/fingerprint/selection/raw JSON and
+prepared postimage hash; after individual expiry or supersession keep
+**only** `retentionState,id,queueId,smsFingerprint,parsedAt,
+operation,expectedPostimageHash`. At `parsedAt <= 30-day cutoff`,
+including equality, purge only that entry's raw state; retain
+unexpired siblings. Corrupt/missing evidence is never treated as
+expiration. Queue recreation is permitted only after authenticated,
+atomically proven `pruned_empty`, no current owned queue, and
+unchanged exact preimages; explicit discard/reset/new namespace or
+expiry blocks resurrection.
+
+A private snapshot builder consumes actual immutable foundation
+cached preimages and prepared postimages after owner checks.
+`createdEntityRefs` includes every action-created domain row and
+child (effect membership separately verified). `defaultPreimages`
+binds actual prepared/default postimages. Hash explicit owned domain
+fields (omit mutable sync `_changed`/`_status`), distinguishing
+prepared SMS tombstones/rebind from missing, changed or rebound rows.
+`defaultDependencyActionIds` is sorted actual optimistic default/
+active-set predecessors: push predecessors to canonical acceptance
+before successor; on reject/unknown/unsupported hold/recover rather
+than resampling immutable defaults.
+
+Reconciliation after cold restart validates the owner/action/session,
+canonical effects, children, defaults, current postimages and queue
+disposition before exactly-once restoration. Owned dedicated root
+pull/upsert must preserve validated private data by owner/action;
+generic pull/push, outbox, RPC, `payloadJson`, `outcomeJson` and
+logs must not serialize it. `frozenIntentDigest` remains the public
+opaque original-input digest; `payloadHash` remains the separately
+canonical full action hash. Neither stores or substitutes for this
+private recovery JSON. No raw Voice transcript/audio/session is
+durable.
+
+**Migration gate:** Watermelon migration31 follows existing
+version30 with a durable generator-consumed local-only override,
+non-generated model field, regenerated schema and repeatable
+`db:sync-local` parity/pull/privacy tests committed together.
+The current model/foundation lacks this storage/builder; this is
+a feature **target**, not an implemented table field. Server-owned
+090/091 migration/RLS/CAS remain separate. See
+[local recovery](contracts/local-recovery.md) and reviewed
+Constitution VII 1.8.0 (`dd16d5440556b651cb5b6395a00c1c4d37538dcf`).

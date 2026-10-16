@@ -580,26 +580,75 @@ local review/commit. Generic metadata cannot escape these pending groups.
 
 ## Local restoration and canonical outcomes
 
-Use the new device-only financial_action_groups.local_recovery_snapshot_json
-carrier, never cloud fields; see [local recovery](local-recovery.md) for the
-verified storage gap, migration31, queue/retention variants and atomic seams. New local schema `accountReviewLocalSaveSnapshotSchema` exact keys:
-`version: "account-review-local-save/v1"`, `actionId`, `ownerId`, `sessionId`,
-`smsDrafts`, `createdEntityRefs`, `defaultPreimages`,
-`defaultDependencyActionIds: UUID[]` (sorted, empty when independent), plus
-`queuePreimage` as the ninth local-only key. Queue lifecycle and per-entry
-retention variants in local-recovery.md supersede only the earlier incomplete
-private storage assumption below. Each
-smsDraft
-`{id,queueId,smsFingerprint,createdAt,updatedAt,parsedAt, payloadVersion,position,selectionOverride,payloadJson,expectedPostimageHash, operation}`
-reuses current restoration field types; payloadVersion/position are canonical
-unsigned strings in canonical local JSON, decoded safely to existing numeric
-columns. `operation` matches SmsBookkeeping. snapshotHash binds the preimage
-using existing `serializeCanonicalJsonValue` and SHA-256 (new version only;
-legacy076 fixed JSON.stringify hash remains unchanged).
-`createdEntityRefs: {entity,id,expectedPostimageHash}[]` and
-`defaultPreimages: {accountId,isDefault,expectedPostimageHash}[]` bind only this
-action's optimistic changes. Raw SMS/payloadJson stays device-local and is never
-copied into outcomeJson, action hash, logs or outbox.
+**Device-only storage contract (not yet implemented).** See [local-recovery.md](local-recovery.md) and Constitution VII 1.8.0 (reviewed technical governing exception `dd16d5440556b651cb5b6395a00c1c4d37538dcf`). The existing generated `BaseFinancialActionGroup`, `FinancialActionLinkedOperationPlan`, and `prepareLocalRoot` do not yet contain a private snapshot field/builder. Reserve a nullable Watermelon-only `financial_action_groups.local_recovery_snapshot_json` and non-generated `localRecoverySnapshotJson`, with migration 31 after schema version 30 and a generator-consumed local override. No dummy Supabase field/type/SQL or hosted deployment; reproducible local generation and source/SQLite parity are required.
+
+The unimplemented strict private `accountReviewLocalSaveSnapshotSchema`
+has **exactly nine** top-level keys: `version:
+"account-review-local-save/v1"`, `actionId`, `ownerId`,
+`sessionId`, `smsDrafts`, `createdEntityRefs`,
+`defaultPreimages`, `defaultDependencyActionIds`, `queuePreimage`.
+The last field is the ninth new private key. The root's immutable
+action/owner/session/payload membership must validate every snapshot.
+`defaultDependencyActionIds` is a sorted, distinct set of real
+predecessor actions, empty only when independently proven.
+
+- `queuePreimage` is null for Voice. For SMS it is the actual owned
+  original `{id,userId,createdAt,updatedAt,expectedPostimageHash,
+  disposition}`, with `disposition: present | pruned_empty | expired |
+  superseded`. Only proven `pruned_empty` permits recreation of the
+  original queue header when no owned queue exists, all required
+  entries remain unexpired and every postimage/ownership guard passes.
+  A present, expired or superseded queue cannot be fabricated.
+- `smsDrafts` is a strict tagged union. An **available** entry
+  includes `retentionState:"available"` and the full
+  `{id,queueId,smsFingerprint,createdAt,updatedAt,parsedAt,
+  payloadVersion,position,selectionOverride,payloadJson,
+  expectedPostimageHash,operation}`. Expired/superseded entries have
+  **metadata only**: `{retentionState:"expired"|"superseded",id,queueId,
+  smsFingerprint,parsedAt,operation,expectedPostimageHash}`. Do not
+  keep raw review payload, selection or restorable fields after redaction.
+  `operation` is the existing `delete_saved | rebind_remaining`
+  bookkeeping. `payloadVersion` and `position` are canonical unsigned
+  strings in local JSON, strictly converted to existing numeric columns.
+- Expire each SMS entry at its own **30-day** `parsedAt <= cutoff`
+  boundary, including exact equality; do not redact its unexpired
+  siblings. Explicit discard/reset marks entries superseded, and
+  new-namespace creation invalidates any earlier pruned-empty
+  restoration right **atomically**. Queue expiry is not pruned-empty.
+  Missing/corrupt evidence cannot be reclassified as expiry.
+- `createdEntityRefs: {entity,id,expectedPostimageHash}[]` covers
+  canonical `ReviewMutation` created rows/children; check physical
+  account-effect membership separately against the immutable root.
+  `defaultPreimages: {accountId,isDefault,expectedPostimageHash}[]`
+  binds actual captured default mutations. Hash actual prepared owned
+  domain projections, excluding mutable sync `_changed`/`_status`
+  fields. SMS postimage hashes must distinguish real prepared
+  tombstone/rebind from missing, replaced or rebound records.
+  Historical `snapshotHash` uses canonical SHA-256 in this new
+  version; do not modify legacy 076 fixed JSON.stringify hashing.
+- Add only a typed **optional private snapshot builder** to the
+  linked-plan boundary. Build from actual immutable cached preimages
+  and prepared postimages **after** prepared ownership validation,
+  and persist the local JSON with the root in the **same atomic batch**
+  as accounts/children/effects and SMS cleanup/rebinding.
+  All old tuples retain null private data and their unchanged behavior.
+
+`frozenIntentDigest` is the public hash of **original frozen intent**
+(including omitted SMS duplicates); `payloadHash` is the separate
+hash of the **canonical public financial envelope**.
+Neither contains the local snapshot or replaces its historical
+`snapshotHash` and actual prepared `expectedPostimageHash`.
+Only approved opaque hashes/refs, never raw review evidence, enter
+the wire, RPC, outbox, logs, `outcomeJson` or Supabase generated types.
+
+Owned dedicated-root pull/upsert must preserve locally validated
+private evidence by exact owner/action/root binding; never trust a
+server-supplied private column or erase an unresolved local snapshot.
+Prove this in a cloned real SQLite pull test. Push predecessor actions
+from `defaultDependencyActionIds` to canonical acceptance before
+dependents; rejected, pending or unsupported predecessors cannot be
+bypassed by resampling defaults. Voice stores no transcript,
+raw audio or durable review session.
 
 Reject/stale removes this action's creates from normal reads and restores its
 SMS/delete/rebind/default mappings once, only if owner/session and current

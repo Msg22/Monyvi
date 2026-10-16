@@ -353,6 +353,35 @@ not a claim that the current parser/review implements them.
   unconfirmed selection. Opening/cancelling applies nothing; do not build a new
   picker.
 
+#### #395 technical storage decision — private local recovery (2026-10-16)
+
+**Status:** Approved implementation direction under the existing #395
+Voice/SMS review and atomic selected-Save rules above; **not yet
+implemented or deployed**. This is a **technical storage/retention and
+privacy reconciliation**, not a new product behavior or customer-visible
+choice. The feature's accepted spec/approved B1/review Save semantics remain
+unchanged. The separately reviewed Constitution VII 1.8.0 exception
+(`dd16d5440556b651cb5b6395a00c1c4d37538dcf`) authorizes strictly
+device-only Watermelon migration routing, not a hosted migration.
+
+| Storage scope | Approved target / boundary |
+| --- | --- |
+| Device-owned root extension | Existing `financial_action_groups` receives nullable **Watermelon-only** `local_recovery_snapshot_json`, accessed via non-generated `localRecoverySnapshotJson`. Old roots remain null; unresolved newly committed review roots require private recovery data. No Supabase column, public generated type, server action field or dummy SQL. |
+| Versioned local upgrade | Reserve Watermelon migration **31** after current 30; generator-consumed local-only declaration, regenerated schema/non-generated model and repeatable local migration/parity tests must be committed together. This has **not** been applied. |
+| Private evidence | Local strict `account-review-local-save/v1` has nine keys: version, action/owner/session, SMS drafts, created entity refs, default preimages, actual sorted predecessor IDs and `queuePreimage`. It binds captured owned preimages to actual prepared postimages in the same atomic writer; it is not the public financial tuple. |
+| SMS restoration boundary | Preserve recoverable unexpired draft choices. A proven automatic `pruned_empty` queue may be restored by exact original owned header only when no current owned queue exists. Explicit discard/reset, expired entries and a newer queue cannot be resurrected. At each draft's **inclusive 30-day parsedAt cutoff**, purge only that expired entry's raw recovery data; leave valid unexpired siblings. |
+| Voice and sync privacy | No durable Voice transcript/audio/review session. Private SMS evidence is excluded from Supabase payload/RPC/outbox, `payloadJson`, `outcomeJson`, logs and generic push; dedicated owned root pull must preserve validated local evidence without accepting server-supplied private fields. The opaque `frozenIntentDigest` and financial envelope `payloadHash` stay distinct from the local recovery record. |
+| Recovery ordering | A rejected grouped action reconciles at most once after authenticated root/postimage/effect/child/default verification. Restore no newer overwritten choice; unresolved optimistic default/active-set predecessor actions must reach canonical acceptance before dependent actions push. |
+
+The complete technical guard, retention variants and task coverage are
+recorded in `specs/395-shared-account-review/contracts/local-recovery.md`,
+`contracts/wire-shapes.md` and the existing
+**T043/T044/T048/T049/T050/T051/T053/T074** tasks. No new table in
+Supabase, action format, business approval, default rule or runtime fallback
+is inferred. Local storage and pull implementation still require fresh
+tests-first Red, Speckit analysis, scope-specific source authorization and
+independent database/security review.
+
 ### Bank Details And SMS Senders
 
 Bank details are child rows owned through an account. They store only bank-

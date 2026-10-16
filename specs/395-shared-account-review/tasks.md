@@ -353,11 +353,19 @@ tests consume frozen plain review fixtures and need no UI completion.
       owner/source/revision rechecks after awaits; ATM destination from eligible
       existing Cash or genuine canonical referenced group only, no invented
       destination/account.
+      Extend Red to the strict nine-key local snapshot and actual prepared
+      SMS/account/child/default postimage hashes; prove full same-batch
+      rollback, cache/fresh-SQLite restart, nullable legacy root and no
+      Voice transcript persisted. Do not claim a carrier already exists.
 - [ ] T044 [P] [US6] Author complete push/rejection/restart tests in
       `apps/mobile/__tests__/services/account-review-sync.test.ts`: missing
       group never sent, root/child generic-push isolation, stale/hash-conflict
       rejection, exactly-once compensation/SMS restoration without overwriting
       newer choices.
+      Cover private-field exclusion from RPC/outbox/push/logs and canonical
+      dependency ordering, accepted/rejected/unsupported predecessor outcomes,
+      queue pruned_empty versus discard/expiry/new-namespace races,
+      partial 30-day redaction, clone-restart and no second compensation.
 - [ ] T045 [P] [US6] Author pgTAP all-or-nothing
       CAS/replay/privacy/ownership/old-operation tests, including 090 review
       owner-wide `creationDefaultSnapshot` concurrency/first-active multi-type
@@ -399,21 +407,37 @@ local-writer/SQL implementation, race-proof and sync/reconciliation gates.
       owner-wide `creationDefaultSnapshot` iff any new account, atomically
       select exactly one first-active default by frozen actual create IDs or
       preserve existing/no default, no AI opening or default-on-confirm.
+      Create an optional typed local snapshot builder on the linked plan,
+      using immutable cached preimages and actual prepared postimages only
+      after ownership validation. Set the device-private root column in
+      the SAME adapter batch; legacy tuples remain null/unmodified.
 - [ ] T049 [US6] Adapt `apps/mobile/services/sms-review-draft-save-service.ts`
       to complete writer and local cleanup/rebind of unchanged unselected linked
       rows in same transaction; dedup-only cleanup has no fake financial action
       and no unrelated legacy caller migration. Respect independently validated
       `toAccountEvidence`; ATM destination is existing eligible Cash or truly
       canonical confirmed referenced group, never invented destination/account.
+      Update private queuePreimage disposition on proven empty-queue
+      pruning, discard/reset/expiry/replacement atomically with cleanup;
+      per-draft 30-day parsedAt cutoff is inclusive and redacts only
+      expired/superseded raw review data. Never resurrect a newer queue.
 - [ ] T050 [US6] Extend protected collector/version/entity recognition in
       `apps/mobile/services/sync/account-protected-fields.ts`; suppress every
       action-owned root/child from generic LWW and fail incomplete action push
       without marking rows synced.
+      Exclude the private root column from generic/dedicated pull mapping
+      inputs, push/RPC/outbox/outcomes/logs; preserve it by validated owned
+      action identity in the dedicated pull writer. Dispatch actual
+      unresolved default predecessors before dependent financial roots.
 - [ ] T051 [US6] Extend
       `apps/mobile/services/financial-action-reconciliation-service.ts` for
       complete account/child/financial/default effects and SMS mapping
       restoration exactly once; owner scoped, preserve newer canonical data and
       existing Voice recovery boundary.
+      Cold restart validates owner/action/session and private snapshot,
+      prepared domain/effect/default/child/postimage hashes and queue
+      lifecycle before once-only recovery. Missing evidence/newer edits
+      fail closed; no Voice review persistence or remote snapshots.
 - [ ] T052 [US6] Implement approved next-prefix
       `supabase/migrations/090_review_batch_save.sql`: strict
       tuple/schema/owner-wide creation default snapshot/active refs/unique
@@ -426,6 +450,12 @@ local-writer/SQL implementation, race-proof and sync/reconciliation gates.
       old types, record no-domain-change outcome if applicable in
       `specs/395-shared-account-review/workflow-status.md`; never use
       remote-pushing `db:migrate` in this scope.
+      Reserve versioned device-only Watermelon migration31 after max30,
+      generator-consumed local-column override, non-generated model field
+      and regenerated schema in one reviewed change. Verify fresh upgrade,
+      repeated db:sync-local parity, public type retention, owned SQLite
+      pull preservation and absence from cloud types. db:migrate runs
+      remote db:push and is NOT authorized for local-only generation.
 - [ ] T054 [US6] Wire validated Voice route boundary and selected save through
       `apps/mobile/app/(private)/voice-review.tsx` and shared SMS container
       `apps/mobile/components/transaction-review/TransactionReview.tsx` after
@@ -562,6 +592,10 @@ existing fields.
       M16/M20 zero extra transport/usage, v1/v2/provider projection,
       owner/logout, late chunks/tombstones, existing quota/empty-result and
       live-SMS boundaries.
+      Include 30-day equality/partial-expiry and discard/new-namespace
+      non-resurrection, cloned restart, owner/logout, malformed evidence,
+      dependency blocks, same-cache failure retry, private push exclusion
+      and Voice no-transcript regression vectors.
 - [ ] T075 Add synthetic 500-row/100-group projection/action benchmark in
       `packages/logic/src/account-review/__tests__/performance.test.ts`; report
       median/p95 and batched-query counts in
@@ -766,9 +800,46 @@ Replay-integrity amendment (2026-10-16): T042/T046 are reopened for the required
 
 ### Technical dependency reconciliation: device-local recovery (2026-10-16)
 
-The original80IDs are unchanged. contracts/local-recovery.md governs the newly
-verified private root carrier: T043/T044 tests first; T048 atomic capture; T049
-queue cleanup/expiry/supersession; T050 privacy/default predecessor ordering;
-T051 complete restoration; T053 generator-owned local-column/migration31 and
-pull preservation; T074 regression proof. No source grant until the amended
-read-only analysis and applicable Red. Owner device/render tasks stayNOTRUN.
+The **original 80 task IDs and existing execution checkboxes remain intact**.
+The separately reviewed Constitution VII 1.8.0 local-only migration exception
+(`dd16d5440556b651cb5b6395a00c1c4d37538dcf`) permits the private
+Watermelon carrier **without** a Supabase column/type or dummy SQL. This is not
+a grant for feature source, hosted deployment, provider, device, SQL or new
+product behavior. The full private contract is
+[local recovery](contracts/local-recovery.md), with parent
+[wire shapes](contracts/wire-shapes.md#local-restoration-and-canonical-outcomes).
+
+| Existing ID | Explicit private recovery seam / proof |
+| --- | --- |
+| T043 | Tests-first nine-key versioned snapshot, actual cached/prepared preimage/postimage hashes, same-batch rollback, clone/restart, and Voice no durable transcript |
+| T044 | Tests-first privacy exclusions, queue lifecycle and 30-day partial/equality expiry, restart, predecessor accept/reject/unsupported, new namespace and no duplicate compensation |
+| T048 | Optional private linked-plan builder after prepared ownership validation and root-local snapshot in the same atomic batch; no change to public tuple, old roots null |
+| T049 | SMS delete/rebind, auto prune `pruned_empty`, explicit discard/reset/new namespace supersession, expiry redaction and original-header recreation guards |
+| T050 | Protected action private-field exclusion from push/RPC/outbox/logs, owned dedicated pull preservation coordination, and default predecessor dispatch ordering |
+| T051 | Cold restart authenticated root lookup, once-only compensation, postimage/default/children/effect/queue proof, preservation of newer edits, no Voice durable review |
+| T053 | **Watermelon migration31** after max30, generator-consumed local override, non-generated model, schema/generator reproducibility, public Supabase type preservation, owned SQLite pull/upsert parity |
+| T074 | Final legacy/source/privacy/regression coverage for partial expiry, created queue, restart, failures, actor changes and dependency blocking |
+
+`local_recovery_snapshot_json` / `localRecoverySnapshotJson` is currently
+**not** implemented on the generated financial-action model or linked
+foundation plan. `account-review-local-save/v1` is the proposed strict
+nine-key private schema, including `queuePreimage`, per-entry available vs
+metadata-only expired/superseded variants and stable
+`defaultDependencyActionIds`. At `parsedAt <= now-30 days` redact only that
+SMS entry's raw evidence. A removed queue can be recreated **only** after
+proven `pruned_empty`, no current owned queue, and exact owned/prepared
+postimage checks. Server rejection/retry does not auto restore explicitly
+discarded, expired or replaced queues. The public
+`frozenIntentDigest` (original frozen request) and root
+`payloadHash` (canonical financial envelope) remain distinct opaque hashes,
+not private snapshot storage.
+
+The current `db:migrate` script invokes **remote `db:push` first**.
+Use reproducible `db:sync-local` only after local generator override
+implementation; do not claim it already retains the proposed field.
+090/091 are separate sequential server-owned local SQL under CAS/RLS, with
+no hosted deployment permission. Follow T043/T044 genuine Red, Root's
+fresh read-only Speckit analysis of reconciled docs, then individually
+granted source/SQL/sync lanes and independent DB/security review.
+Owner device/render/accessibility checks remain **NOT RUN**, unless and
+until separately executed.

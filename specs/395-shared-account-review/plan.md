@@ -37,7 +37,10 @@ Router, existing Supabase client/financial-action foundation. No new runtime dep
 @types/react-test-renderer19.1.0.
 **Storage**: WatermelonDB accounts/financial records and existing SMS draft
 JSON; Supabase PostgreSQL background financial-action CAS. No cloud review table
-or durable Voice session. **Testing**: Jest/RNTL, pure logic/provider contract
+or durable Voice session. Rejected review Save recovery additionally needs
+one **reserved, not-yet-implemented** nullable device-only Watermelon root
+column and migration31 (see `contracts/local-recovery.md`); no Supabase
+column/type or public financial action key is added. **Testing**: Jest/RNTL, pure logic/provider contract
 tests, pgTAP and authored Maestro fixture journeys. No emulator execution;
 device/visual QA owner-run. **Target Platform**: Existing managed Android/iOS
 app; SMS capture Android-only. **Project Type**: Offline-first mobile monorepo
@@ -70,14 +73,17 @@ Recorder/#391/live-SMS confirmation/#393 excluded.
 | IV/VI layer boundaries            | Required                    | Pure resolver/reducer in logic; service reads/writes; lifecycle hooks; shaped presentation props                                   |
 | V visual authority                | Passed before plan          | B1 owner receipt and all23 canonical binding verifier passes; CurrencyPicker exception retained                                    |
 | V visual/accessibility completion | Required later              | Layout/semantics tests plus owner-rendered baseline/variant evidence; no visual-completion claim without evidence                  |
-| VII migration                     | Design only                 | New local numbered SQL action registration needed; concrete scope approval before SQL implementation, no hosted DDL now            |
+| VII migration                     | Reviewed 1.8.0 exception   | Server-owned SQL 090/091 stays sequential local SQL; private root recovery uses versioned Watermelon-only migration31, durable generator override, no dummy Supabase field; local parity/pull/privacy tests before source acceptance; hosted deployment still separately gated |
 | Financial arithmetic              | Required                    | Shared Decimal primitive, canonical strings/minor units, once-only effects; no inferred bank opening balance                       |
 | TDD and coverage                  | Required later              | M01–M20 mapped; tests first, meaningful Red before production; batched integration checks, no emulator                             |
 
-There is no constitutional waiver. Current save debt is addressed by the
-proposed contract. Design-stage gates pass; migration implementation approval,
-tests and runtime/rendered evidence remain prerequisites for delivery. Planning
-does not authorize deployment or claim runtime support for new contracts.
+This is **no silent constitutional waiver**: the separately reviewed
+Constitution VII **1.8.0** device-only exception
+(`dd16d5440556b651cb5b6395a00c1c4d37538dcf`) authorizes the
+technical migration classification, but is not merged into Main by this
+feature contract. Server-owned SQL rules, existing owner/CAS/RLS guards and
+separate deployment approval still apply. Planning does not implement
+the private field/generator, or claim runtime/hosted support.
 
 ## Project Structure
 
@@ -144,6 +150,10 @@ remains a separate validation boundary.
 - [Financial save](contracts/financial-save.md): complete action, zero-net,
   `creationDefaultSnapshot` for all new account types, multi-Cash, default CAS,
   T043 frozen IDs/ATM bounds and SQL/sync/rejection implementation boundary.
+- [Private local recovery](contracts/local-recovery.md): unshipped strict
+  nine-key snapshot, migration31/generator ownership, prepared-postimage
+  capture, queue lifecycle/30-day redaction, owned pull preservation and
+  predecessor action ordering; no public wire change.
 - [Quickstart](quickstart.md): reproduction/checks/manual boundaries.
 - [Account default intent](contracts/account-default-intent.md): atomic
   first/later account creation/default/children/opening balance, including
@@ -278,12 +288,37 @@ captured snapshot or absence and replay reuses that stored historical value;
 the closed payload validator independently enforces actual-create presence.
 
 
-## 2026-10-16 — Verified device-local recovery carrier
+## 2026-10-16 — Reviewed private recovery carrier; implementation held
 
-contracts/local-recovery.md corrects the unimplemented existing-storage assumption.
-One private Watermelon-only root column/local migration31, generator override,
-atomic linked-plan callback, queue lifecycle/30-day redaction and owned pull
-preservation implement existingUS6. No new Supabase field, table, public tuple,
-rawVoice durability, product approval or B1 change. T043/T044Red precedes these
-T048–T051/T053 sources; existing80tasks cover all seams. Retain independent
-SQL/security review and exact canonical source types.
+[Local recovery](contracts/local-recovery.md) reconciles the verified
+**missing** `FinancialActionGroup` private snapshot field and
+`FinancialActionLinkedOperationPlan` snapshot-builder seam. The proposed
+strict nine-key `account-review-local-save/v1` includes
+`queuePreimage`, available vs expired/superseded SMS entry variants,
+actual prepared-postimage hashes, and distinct sorted
+`defaultDependencyActionIds`. Queue `pruned_empty` recreation is
+allowed only with exact positive lifecycle proof; discard/reset/expiry
+and later owned namespaces invalidate restoration. Each SMS draft
+redacts raw data at its own inclusive 30-day `parsedAt` cutoff.
+
+Reserve local Watermelon migration31, a nullable root column,
+non-generated model property and generator-owned local override.
+T053 must prove repeatable `db:sync-local` output and preservation
+of private evidence across authenticated cloud pull, plus zero private
+data in push/RPC/outbox/logs. The public review
+`frozenIntentDigest` (original intent) and root `payloadHash`
+(canonical action envelope) remain unchanged opaque wire hashes,
+not recovery storage. No raw durable Voice transcript/session.
+
+Under the reviewed Constitution VII 1.8.0 exception, the
+**device-only** migration introduces no Supabase column/table/type
+or dummy SQL; server-owned 090/091 registration and owner-wide CAS/RLS
+remain independent. `npm run db:migrate` invokes `db:push`, so it
+does not authorize local-only generation or hosted deployment.
+The original 80 task IDs provide T043/T044 Red, T048 local atomic
+capture, T049 SMS lifecycle, T050 private sync exclusion/dependency,
+T051 once-only restart reconciliation, T053 generator/pull parity
+and T074 regression acceptance. These are planned responsibilities,
+not completed checks. Fresh read-only Speckit analysis and applicable
+Red evidence must precede the separately authorized storage source
+grant; other workers own the hook/Undo/SQL lanes and B1 is unchanged.
