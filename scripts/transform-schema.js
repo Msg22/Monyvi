@@ -23,6 +23,15 @@ const ESLINT_BIN = path.join(
 const prettier = require("prettier");
 const { atomicReplaceFile } = require("./generate-local-supabase-types.cjs");
 
+require("tsx/cjs");
+const {
+  ACCOUNT_REVIEW_LOCAL_RECOVERY_ROOT_TABLE,
+  ACCOUNT_REVIEW_LOCAL_RECOVERY_COLUMNS,
+} = require("../packages/db/src/local-schema/account-review-local-recovery-schema.ts");
+const DEVICE_LOCAL_COLUMNS_BY_TABLE = {
+  [ACCOUNT_REVIEW_LOCAL_RECOVERY_ROOT_TABLE]: ACCOUNT_REVIEW_LOCAL_RECOVERY_COLUMNS,
+};
+
 async function formatContent(filePath, content, prettierModule = prettier) {
   const config = await prettierModule.resolveConfig(filePath);
   return prettierModule.format(content, {
@@ -402,13 +411,25 @@ function parseColumnType(rawType, columnName, tableName, enums) {
 // GENERATORS
 // =============================================================================
 
+function localWatermelonColumns(tableName, serverColumns) {
+  const localColumns = DEVICE_LOCAL_COLUMNS_BY_TABLE[tableName] || [];
+  for (const localColumn of localColumns) {
+    if (serverColumns.some((column) => column.name === localColumn.name)) {
+      throw new Error(
+        `Device-only column collides with Supabase: ${tableName}.${localColumn.name}`
+      );
+    }
+  }
+  return [...serverColumns, ...localColumns];
+}
+
 /**
  * Generate schema.ts content
  */
 function generateSchema(tables) {
   const tableSchemas = Object.entries(tables)
     .map(([tableName, { columns }]) => {
-      const columnDefs = columns
+      const columnDefs = localWatermelonColumns(tableName, columns)
         .map((col) => {
           const parts = [`{ name: "${col.name}", type: "${col.wmType}"`];
           if (col.isOptional) parts.push("isOptional: true");
