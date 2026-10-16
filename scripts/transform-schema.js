@@ -412,15 +412,17 @@ function parseColumnType(rawType, columnName, tableName, enums) {
 // =============================================================================
 
 function localWatermelonColumns(tableName, serverColumns) {
-  const localColumns = DEVICE_LOCAL_COLUMNS_BY_TABLE[tableName] || [];
-  for (const localColumn of localColumns) {
-    if (serverColumns.some((column) => column.name === localColumn.name)) {
-      throw new Error(
-        `Device-only column collides with Supabase: ${tableName}.${localColumn.name}`
-      );
-    }
-  }
-  return [...serverColumns, ...localColumns];
+  const local = DEVICE_LOCAL_COLUMNS_BY_TABLE[tableName] || [];
+  const names = new Set(serverColumns.map((col) => col.name));
+  const normalized = local.map(({ name, type, ...flags }) => {
+    if (names.has(name))
+      throw new Error(`Device-only column collides: ${tableName}.${name}`);
+    if (!["string", "number", "boolean"].includes(type))
+      throw new Error(`Invalid device-only column type: ${tableName}.${name}`);
+    names.add(name);
+    return { name, wmType: type, ...flags };
+  });
+  return [...serverColumns, ...normalized];
 }
 
 /**

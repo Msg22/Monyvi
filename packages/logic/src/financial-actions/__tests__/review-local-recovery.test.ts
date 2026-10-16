@@ -198,9 +198,13 @@ describe("#395 T043 account-review-local-save/v1 strict local schema", () => {
     "rejects a changed private %s against the authenticated public action root",
     (field) => {
       const snapshot = smsSnapshot();
+      const changedId = "99999999-9999-4999-8999-999999999999";
       const tampered = {
         ...snapshot,
-        [field]: "99999999-9999-4999-8999-999999999999",
+        [field]: changedId,
+        ...(field === "ownerId" && snapshot.queuePreimage !== null
+          ? { queuePreimage: { ...snapshot.queuePreimage, userId: changedId } }
+          : {}),
       };
       // Still structurally valid: the OWNER/ACTION/SESSION mismatch must
       // fail at the root-bound parser, not only the Zod field grammar.
@@ -409,6 +413,42 @@ describe("#395 T043 account-review-local-save/v1 strict local schema", () => {
       json: "{}", expectedRoot: expectedRoot(),
     })).toThrow();
   });
+
+  it("requires an SMS queue and all its drafts to belong to the authenticated review session", () => {
+    const snapshot = smsSnapshot();
+    const consistent = { ...snapshot, sessionId: UUID_QUEUE };
+    const matchingRoot = { ...expectedRoot(), sessionId: UUID_QUEUE };
+    expect(accountReviewLocalSaveSnapshotSchema.safeParse(consistent).success)
+      .toBe(true);
+    expect(decode(consistent, matchingRoot)).toEqual(consistent);
+
+    // The existing synthetic root session differs from the actual queue ID.
+    // Restore must refuse that structurally valid but unbound queue namespace.
+    // Tests-first: the current pure parser lacks this check (expected Red).
+    expect(() => decode(snapshot, expectedRoot())).toThrow();
+  });
+
+  it.each(["payloadVersion", "position"] as const)(
+    "keeps canonical %s text exact at the unsafe Number-conversion boundary",
+    (field) => {
+      const snapshot = smsSnapshot();
+      const first = snapshot.smsDrafts[0];
+      if (!first || first.retentionState !== "available")
+        throw new Error("Missing available SMS preimage");
+      const tooLargeForNumber = "9007199254740992";
+      const parsed = accountReviewLocalSaveSnapshotSchema.parse({
+        ...snapshot,
+        smsDrafts: [{ ...first, [field]: tooLargeForNumber }],
+      });
+      const available = parsed.smsDrafts[0];
+      if (!available || available.retentionState !== "available")
+        throw new Error("Missing canonical available SMS evidence");
+      expect(available[field]).toBe(tooLargeForNumber);
+      expect(Number.isSafeInteger(Number(available[field]))).toBe(false);
+      // T051 must reject an unsafe numeric SQLite conversion; there is
+      // no authorised restoration converter in this source wave.
+    }
+  );
 
   it("retains a closed public review payload with only an opaque intent digest", () => {
     const valid = smsSnapshot();
