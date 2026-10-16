@@ -3,6 +3,7 @@
 export * from "./account-review/schemas";
 export { normalizeAccountReviewParserResult } from "./account-review/normalization";
 export { resolveAccountReviewSession } from "./account-review/resolution";
+export { getAccountReviewAccountCandidates } from "./account-review/candidates";
 export type { ResolveAccountReviewSessionInput } from "./account-review/resolution";
 export {
   reduceAccountReviewCommand,

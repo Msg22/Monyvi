@@ -287,29 +287,39 @@ describe("#395 T024 isolated command safety and identity invariants", () => {
     expect(result.state.rows.every((row) => !row.selected)).toBe(true);
   });
 
-  it("T036 choice/currency/group replacement commands remain unsupported in T027", async () => {
-    const state = await qnbCibReview();
+  it("T036 choice/currency/group replacement reject stale review scope without effects", async () => {
+    const before = await qnbCibReview();
+    const advanced = apply(
+      before,
+      groupCommand(before, "CIB", "confirm_group")
+    );
+    expect(advanced.reasonCodes).toEqual([]);
+    const state = advanced.state;
     const qnb = groupByName(state, "QNB");
     const clicked = qnb.linkedRowIds[0];
     if (!clicked) throw new Error("Missing QNB row");
     const row = requireRow(state, clicked);
-    const unsupported = [
+    const staleReviewScope = {
+      ...scope(state),
+      expectedReviewRevision: before.revision,
+    };
+    const staleCommands = [
       canonicalCommand({
-        ...scope(state),
+        ...staleReviewScope,
         kind: "choose_row_account",
         rowId: clicked,
         expectedRowRevision: row.revision,
         accountId: COMMAND_IDS.cibAccount,
       }),
       canonicalCommand({
-        ...scope(state),
+        ...staleReviewScope,
         kind: "confirm_row_currency",
         rowId: clicked,
         expectedRowRevision: row.revision,
         currency: "USD",
       }),
       canonicalCommand({
-        ...scope(state),
+        ...staleReviewScope,
         kind: "replace_group_account",
         groupId: qnb.groupId,
         expectedGroupRevision: qnb.revision,
@@ -317,11 +327,11 @@ describe("#395 T024 isolated command safety and identity invariants", () => {
         disclosedLinkedRowCount: qnb.linkedRowIds.length,
       }),
     ];
-    for (const command of unsupported) {
+    for (const command of staleCommands) {
       const result = apply(state, command);
       expect(result.state).toEqual(state);
       expect(result.effect).toBe("none");
-      expect(result.reasonCodes).toContain("account_group_snapshot_conflict");
+      expect(result.reasonCodes).toContain("review_revision_stale");
       expect(result.affectedRowIds).toEqual([]);
       expect(result.affectedGroupIds).toEqual([]);
     }

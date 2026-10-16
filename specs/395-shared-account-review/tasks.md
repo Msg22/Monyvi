@@ -276,7 +276,7 @@ group replacement its disclosed count; Choose another uses existing picker.
 
 ### Tests first
 
-- [ ] T034 [P] [US3] Author scoped candidate/currency command tests in
+- [x] T034 [P] [US3] Author scoped candidate/currency command tests in
       `packages/logic/src/account-review/__tests__/account-choices.test.ts`:
       same currency/type/owner, deleted/stale candidates, per-row detach, group
       replacement, material edit reconfirm and preserved numeric amounts.
@@ -296,7 +296,7 @@ real picker: Choose another is only a callback, not navigation. Actual
 CurrencyPicker delegation and T039 remain T016-gated. No source grant,
 automatic choice, reducer or business logic is implied.
 
-- [ ] T036 [US3] Add candidate/row-account/group-replacement/currency
+- [x] T036 [US3] Add candidate/row-account/group-replacement/currency
       transitions in `packages/logic/src/account-review/reducer.ts` and
       `packages/logic/src/account-review/candidates.ts`; serialize after T027,
       enforce generation guards and no default fallback after explicit
@@ -333,7 +333,7 @@ tests consume frozen plain review fixtures and need no UI completion.
 
 ### Tests first
 
-- [x] T042 [P] [US6] Author closed payload/exact-effect tests in
+- [ ] T042 [P] [US6] Author closed payload/exact-effect tests in
       `packages/logic/src/financial-actions/__tests__/review-batch-save.test.ts`:
       selected-only descriptors, no raw evidence/PII, canonical decimal/minor
       units, zero-net guards, absent-create guards and unchanged old-operation
@@ -377,7 +377,7 @@ authorize financial writes, runtime action activation or server registration.
 T047–T053 remain behind T016, their applicable Red, and separately approved
 local-writer/SQL implementation, race-proof and sync/reconciliation gates.
 
-- [x] T046 [US6] Register canonical strict `review.batch-save/v1` schema/effect
+- [ ] T046 [US6] Register canonical strict `review.batch-save/v1` schema/effect
       mapping in `packages/logic/src/financial-actions/review-batch-save.ts` and
       `packages/logic/src/financial-actions/account-balance-effects-registry.ts`;
       minimal opaque correlation refs, persisted account fields only, no

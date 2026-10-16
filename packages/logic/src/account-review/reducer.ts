@@ -11,6 +11,7 @@ import {
 } from "./review-schemas";
 import { assertOwnedResolutionContext } from "./resolution-candidates";
 import { reduceGroupCommand } from "./reducer-groups";
+import { reduceChoiceCommand } from "./reducer-choices";
 import {
   reduceSelectRow,
   reduceDeselectRow,
@@ -63,12 +64,10 @@ function routeCommand(
     case "select_ready":
     case "clear_selection":
       return reduceSelectBatch(state, command, input.accountSnapshots);
-    // The T036 account-choice, group replacement and currency transitions
-    // have no authorization to run in this early pure T027 wave.
     case "choose_row_account":
     case "replace_group_account":
     case "confirm_row_currency":
-      return { transition: null, reason: "account_group_snapshot_conflict" };
+      return reduceChoiceCommand(state, command, input.accountSnapshots);
   }
 }
 
