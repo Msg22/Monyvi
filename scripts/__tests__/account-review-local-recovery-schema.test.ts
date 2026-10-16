@@ -99,7 +99,7 @@ test("T053 adds exactly one nullable device-local column to the actual generated
   assert.equal(matches.length, 1, "Missing or duplicated private column");
   assert.match(
     table,
-    /\{\s*name:\s*"local_recovery_snapshot_json",\s*type:\s*"string",\s*isOptional:\s*true\s*\}/,
+    /\{\s*name:\s*"local_recovery_snapshot_json",\s*type:\s*"string",\s*isOptional:\s*true,?\s*\}/,
     "Private root field must be nullable string"
   );
 });
@@ -149,7 +149,7 @@ test("T053 durable transform preserves private field without a dummy cloud colum
   const table = financialTable(generated);
   assert.match(
     table,
-    /\{\s*name:\s*"local_recovery_snapshot_json",\s*type:\s*"string",\s*isOptional:\s*true\s*\}/,
+    /\{\s*name:\s*"local_recovery_snapshot_json",\s*type:\s*"string",\s*isOptional:\s*true,?\s*\}/,
     "Transform must consume a durable device-only root-column override"
   );
   assert.equal(

@@ -146,5 +146,11 @@ export function parseAccountReviewLocalSaveSnapshot(input: {
     ? snapshot.queuePreimage !== null || snapshot.smsDrafts.length !== 0
     : snapshot.queuePreimage === null)
     throw new Error("account_review_local_recovery_source_mismatch");
+  if (
+    root.source === "SMS" &&
+    (snapshot.queuePreimage?.id !== root.sessionId ||
+      snapshot.smsDrafts.some((draft) => draft.queueId !== root.sessionId))
+  )
+    throw new Error("account_review_local_recovery_queue_session_mismatch");
   return snapshot;
 }
