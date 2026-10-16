@@ -24,7 +24,8 @@ import {
   reviewBatchSavePayload,
 } from "./review-batch-save-fixtures";
 
-const UUID_QUEUE = "55555555-5555-4555-8555-555555555555";
+const UUID_QUEUE = REVIEW_SESSION_ID;
+const UUID_OTHER_QUEUE = "55555555-5555-4555-8555-555555555555";
 const UUID_DRAFT_A = "66666666-6666-4666-8666-666666666661";
 const UUID_DRAFT_B = "66666666-6666-4666-8666-666666666662";
 const UUID_SENDER = "77777777-7777-4777-8777-777777777777";
@@ -422,10 +423,21 @@ describe("#395 T043 account-review-local-save/v1 strict local schema", () => {
       .toBe(true);
     expect(decode(consistent, matchingRoot)).toEqual(consistent);
 
-    // The existing synthetic root session differs from the actual queue ID.
-    // Restore must refuse that structurally valid but unbound queue namespace.
-    // Tests-first: the current pure parser lacks this check (expected Red).
-    expect(() => decode(snapshot, expectedRoot())).toThrow();
+    // A different, internally consistent queue is structurally valid but
+    // is never authority to restore into the authenticated SMS session.
+    const wrongQueue = snapshot.queuePreimage;
+    if (wrongQueue === null) throw new Error("Missing owned SMS queue");
+    const mismatched = {
+      ...snapshot,
+      queuePreimage: { ...wrongQueue, id: UUID_OTHER_QUEUE },
+      smsDrafts: snapshot.smsDrafts.map((draft) => ({
+        ...draft,
+        queueId: UUID_OTHER_QUEUE,
+      })),
+    };
+    expect(accountReviewLocalSaveSnapshotSchema.safeParse(mismatched).success)
+      .toBe(true);
+    expect(() => decode(mismatched, expectedRoot())).toThrow();
   });
 
   it.each(["payloadVersion", "position"] as const)(
