@@ -251,57 +251,70 @@ function assertExactPhysicalCoverage(
   );
   if ([...used].some((id) => !allowed.has(id))) reject("unplanned_created_id");
 }
+async function prepareCreatedReviewGroup(
+  db: Database,
+  frozen: FrozenReviewSave,
+  group: Group,
+  balances: ReadonlyMap<string, number>,
+  revisions: ReadonlyMap<string, string>,
+  provider: Sha256Provider,
+  firstDefaultId: string | undefined
+): Promise<{
+  readonly accountId: string;
+  readonly records: readonly ReviewMutation[];
+  readonly models: readonly Model[];
+  readonly ids: readonly string[];
+}> {
+  const id = requiredPlannedEntity(frozen, "account", group.groupId).id;
+  const balance = balances.get(id);
+  const revision = revisions.get(id);
+  if (balance === undefined || revision === undefined)
+    reject("financial_outcome_missing");
+  const account = accountModel(
+    db, frozen, group, id, balance, revision, id === firstDefaultId
+  );
+  const record = createAccountRecord(frozen, group, id, id === firstDefaultId);
+  const children = await prepareGroupChildren(
+    db, frozen, group, id, provider
+  );
+  return {
+    accountId: id,
+    records: [record, ...children.records],
+    models: [account, ...children.models],
+    ids: [id, ...children.ids],
+  };
+}
+
 export async function buildCreatedReviewAccounts(
   db: Database,
   frozen: FrozenReviewSave,
   groups: readonly Group[],
-  existing: readonly Account[],
   balances: ReadonlyMap<string, number>,
   revisions: ReadonlyMap<string, string>,
   provider: Sha256Provider,
-  financialIds: ReadonlySet<string>
+  financialIds: ReadonlySet<string>,
+  snapshot: ReviewBatchSavePayload["creationDefaultSnapshot"]
 ): Promise<CreatedReviewAccounts> {
+  if ((groups.length > 0) !== (snapshot !== undefined))
+    reject("creation_snapshot_presence");
   const ids = groups.map(
     (group) => requiredPlannedEntity(frozen, "account", group.groupId).id
   );
-  const snapshot =
-    groups.length > 0 ? ownedActiveDefaultSnapshot(existing) : undefined;
-  const firstDefault =
-    snapshot?.activeAccountIds.length === 0 ? [...ids].sort()[0] : undefined;
+  const firstDefaultId = snapshot?.activeAccountIds.length === 0
+    ? [...ids].sort()[0]
+    : undefined;
   const records: ReviewMutation[] = [];
   const prepared: Model[] = [];
   const newCurrencies = new Map<string, CurrencyType>();
   const used = new Set(financialIds);
   for (const group of groups) {
-    const id = requiredPlannedEntity(frozen, "account", group.groupId).id;
-    const balance = balances.get(id);
-    const revision = revisions.get(id);
-    if (balance === undefined || revision === undefined)
-      reject("financial_outcome_missing");
-    prepared.push(
-      accountModel(
-        db,
-        frozen,
-        group,
-        id,
-        balance,
-        revision,
-        id === firstDefault
-      )
+    const created = await prepareCreatedReviewGroup(
+      db, frozen, group, balances, revisions, provider, firstDefaultId
     );
-    records.push(createAccountRecord(frozen, group, id, id === firstDefault));
-    newCurrencies.set(id, group.currency);
-    used.add(id);
-    const children = await prepareGroupChildren(
-      db,
-      frozen,
-      group,
-      id,
-      provider
-    );
-    records.push(...children.records);
-    prepared.push(...children.models);
-    children.ids.forEach((child) => used.add(child));
+    records.push(...created.records);
+    prepared.push(...created.models);
+    created.ids.forEach((id) => used.add(id));
+    newCurrencies.set(created.accountId, group.currency);
   }
   assertExactPhysicalCoverage(frozen, used);
   return { records, prepared, newCurrencies, usedPhysicalIds: used, snapshot };

@@ -19,7 +19,6 @@ import {
   createAccountReviewFinancialRegistry,
 } from "./account-review-financial-command-service";
 import {
-  assertCompleteFrozenReviewPlan,
   assertCurrentReviewSession,
   freezeSelectedAccountReview,
   type ReviewSaveInput,
@@ -31,6 +30,7 @@ import {
 } from "./account-review-save-plan";
 import type { SmsSaveScope } from "./account-review-save-sms";
 import { assertReplayImmutableContent } from "./account-review-save-replay";
+import { computeFrozenReviewSaveDigest } from "./account-review-save-digest";
 import {
   getCurrentUserDataScope,
   type CurrentUserDataScope,
@@ -152,9 +152,17 @@ async function replayExistingAction(
 ): Promise<AccountReviewSaveResult> {
   const envelope = frozenMatchesRoot(frozen, root);
   if (root.state === "pending_local") reject("previous_action_pending");
+  const payload = validateReviewBatchSavePayload(envelope.payload);
+  // The historical ORIGINAL request, not current saved SMS/defaults, is bound
+  // to the immutable root before any foundation replay is permitted.
+  const digest = await computeFrozenReviewSaveDigest(
+    frozen, payload.creationDefaultSnapshot, dep.hashProvider
+  );
+  if (digest !== payload.frozenIntentDigest)
+    reject("replay_frozen_intent_changed");
   await assertReplayImmutableContent({
     frozen,
-    payload: validateReviewBatchSavePayload(envelope.payload),
+    payload,
     database: dep.database,
     scope,
     hashProvider: dep.hashProvider,
@@ -312,10 +320,8 @@ export function createAccountReviewSaveService(
       const frozen = freezeSelectedAccountReview(input);
       const assertOwner = ownerGuard(frozen.intent.ownerId, dep);
       await assertOwner();
-      // Complete original aliases, accounts and children must be pinned before
-      // any SMS dedup can reduce the set of actual financial creates.
-      await assertCompleteFrozenReviewPlan(frozen, dep.hashProvider);
-      await assertOwner();
+      // The pure digest authority validates the complete original plan on
+      // first write, historical replay and action-free all-dedup cleanup.
       const scope = await currentOwnedScope(frozen, dep);
       const root = await existingActionRoot(
         dep.database,

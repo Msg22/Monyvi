@@ -1,6 +1,5 @@
 /** #395 T048: immutable request-to-committed-review binding; never re-post. */
-import { Q, type Database } from "@nozbe/watermelondb";
-import type { Transaction, Transfer } from "@monyvi/db";
+import type { Database } from "@nozbe/watermelondb";
 import {
   CURRENCY_PRECISION,
   DEFAULT_PRECISION,
@@ -295,31 +294,6 @@ async function verifyConfirmedGroups(
     "unbound_created_account"
   );
 }
-async function hasPriorOwnedSms(
-  row: Row,
-  payload: ReviewBatchSavePayload,
-  db: Database,
-  scope: CurrentUserDataScope
-): Promise<boolean> {
-  if (row.source !== "SMS") return false;
-  const conditions = [
-    Q.where("sms_fingerprint", row.sourceFingerprint),
-    Q.where("deleted", false),
-  ];
-  const [transactions, transfers] = await Promise.all([
-    scope
-      .queryOwned(db.get<Transaction>("transactions"), ...conditions)
-      .fetch(),
-    scope.queryOwned(db.get<Transfer>("transfers"), ...conditions).fetch(),
-  ]);
-  const createdIds = new Set(payload.domainRecordRefs);
-  return [...transactions, ...transfers].some(
-    (record) =>
-      record.userId === scope.userId &&
-      !record.deleted &&
-      !createdIds.has(record.id)
-  );
-}
 function findFinancial(
   payload: ReviewBatchSavePayload,
   recordId: string
@@ -330,12 +304,10 @@ function findFinancial(
       record.after.id === recordId
   );
 }
-async function verifySelectedRows(
+function verifySelectedRows(
   frozen: FrozenReviewSave,
-  payload: ReviewBatchSavePayload,
-  db: Database,
-  scope: CurrentUserDataScope
-): Promise<ReadonlySet<string>> {
+  payload: ReviewBatchSavePayload
+): ReadonlySet<string> {
   const storedRefs = new Map(
     payload.selectedSourceRefs.map((ref) => [ref.rowId, ref])
   );
@@ -346,12 +318,9 @@ async function verifySelectedRows(
     const kind = selectedRecordKind(row);
     const planned = requiredPlannedEntity(frozen, kind, row.rowId);
     if (!ref) {
-      if (
-        frozen.intent.source !== "SMS" ||
-        !(await hasPriorOwnedSms(row, payload, db, scope))
-      ) {
-        refuse("unexpected_selected_row");
-      }
+      // First write already proved an independent owned, active SMS source.
+      // A matching frozen-intent digest now authenticates its historical omission.
+      if (frozen.intent.source !== "SMS") refuse("unexpected_selected_row");
       omitted.add(row.rowId);
       continue;
     }
@@ -462,10 +431,10 @@ async function verifyPlannedCoverage(
   );
 }
 /**
- * An action stores only actually posted rows. An already-saved SMS fingerprint
- * from this SAME frozen selection is a legitimate omitted member, but must be
- * proven by an independent owned active record outside this action. Never infer
- * a second financial effect or recompute current balances/default/revisions.
+ * An existing immutable root's matching original-intent digest authenticates
+ * historical SMS omissions. Only FIRST WRITE queries active independently owned
+ * SMS fingerprints; replay never consults their mutable amounts/deleted flags.
+ * Posted records and complete physical account/child coverage remain verified.
  */
 export async function assertReplayImmutableContent(input: {
   readonly frozen: FrozenReviewSave;
@@ -475,12 +444,7 @@ export async function assertReplayImmutableContent(input: {
   readonly hashProvider: Sha256Provider;
 }): Promise<void> {
   const { frozen, payload } = input;
-  const omitted = await verifySelectedRows(
-    frozen,
-    payload,
-    input.database,
-    input.scope
-  );
+  const omitted = verifySelectedRows(frozen, payload);
   await verifyConfirmedGroups(frozen, payload, input.hashProvider);
   await verifyPlannedCoverage(frozen, payload, omitted, input.hashProvider);
 }
