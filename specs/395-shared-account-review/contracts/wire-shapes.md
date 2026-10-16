@@ -580,11 +580,15 @@ local review/commit. Generic metadata cannot escape these pending groups.
 
 ## Local restoration and canonical outcomes
 
-Use existing financial_action_groups local-only recovery storage, not cloud
-payload. New local schema `accountReviewLocalSaveSnapshotSchema` exact keys:
+Use the new device-only financial_action_groups.local_recovery_snapshot_json
+carrier, never cloud fields; see [local recovery](local-recovery.md) for the
+verified storage gap, migration31, queue/retention variants and atomic seams. New local schema `accountReviewLocalSaveSnapshotSchema` exact keys:
 `version: "account-review-local-save/v1"`, `actionId`, `ownerId`, `sessionId`,
 `smsDrafts`, `createdEntityRefs`, `defaultPreimages`,
-`defaultDependencyActionIds: UUID[]` (sorted, empty when independent). Each
+`defaultDependencyActionIds: UUID[]` (sorted, empty when independent), plus
+`queuePreimage` as the ninth local-only key. Queue lifecycle and per-entry
+retention variants in local-recovery.md supersede only the earlier incomplete
+private storage assumption below. Each
 smsDraft
 `{id,queueId,smsFingerprint,createdAt,updatedAt,parsedAt, payloadVersion,position,selectionOverride,payloadJson,expectedPostimageHash, operation}`
 reuses current restoration field types; payloadVersion/position are canonical

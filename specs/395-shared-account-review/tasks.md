@@ -301,11 +301,11 @@ automatic choice, reducer or business logic is implied.
       `packages/logic/src/account-review/candidates.ts`; serialize after T027,
       enforce generation guards and no default fallback after explicit
       rejection.
-- [ ] T037 [US3] Add nullable unconfirmed selection and optional contextual
+- [x] T037 [US3] Add nullable unconfirmed selection and optional contextual
       sub-label to `apps/mobile/components/currency/CurrencyPicker.tsx`,
       preserving existing list/search/navigation and direct explicit selection
       semantics.
-- [ ] T038 [US3] Implement shaped chooser/conflict sheets in
+- [x] T038 [US3] Implement shaped chooser/conflict sheets in
       `apps/mobile/components/transaction-review/AccountChoiceSheet.tsx` and
       `apps/mobile/components/transaction-review/CurrencyConfirmationSheet.tsx`;
       distinguish row/group linked scope, meaningful masked identity and Choose
@@ -333,7 +333,7 @@ tests consume frozen plain review fixtures and need no UI completion.
 
 ### Tests first
 
-- [ ] T042 [P] [US6] Author closed payload/exact-effect tests in
+- [x] T042 [P] [US6] Author closed payload/exact-effect tests in
       `packages/logic/src/financial-actions/__tests__/review-batch-save.test.ts`:
       selected-only descriptors, no raw evidence/PII, canonical decimal/minor
       units, zero-net guards, absent-create guards and unchanged old-operation
@@ -377,7 +377,7 @@ authorize financial writes, runtime action activation or server registration.
 T047–T053 remain behind T016, their applicable Red, and separately approved
 local-writer/SQL implementation, race-proof and sync/reconciliation gates.
 
-- [ ] T046 [US6] Register canonical strict `review.batch-save/v1` schema/effect
+- [x] T046 [US6] Register canonical strict `review.batch-save/v1` schema/effect
       mapping in `packages/logic/src/financial-actions/review-batch-save.ts` and
       `packages/logic/src/financial-actions/account-balance-effects-registry.ts`;
       required frozenIntentDigest for the original frozen selection/group/plan, minimal opaque correlation refs, persisted account fields only, no
@@ -762,3 +762,13 @@ the feature visually complete or hosted-compatible without those results.
 
 
 Replay-integrity amendment (2026-10-16): T042/T046 are reopened for the required review-only frozenIntentDigest and its exact canonical projection in contracts/wire-shapes.md. T048 must bind original selected rows and confirmed provenance, including omitted SMS rows, before returning historical replay; later saved-source edits/deletion must not cause a false replay failure. T045/T052 retain strict SQL/hash parity; T053 regenerates complete artifacts. This adds no task IDs or UI approval, table/column, legacy tuple or hosted authorization. Existing T016/T034/T036 acceptance stands. Run speckit.analyze before digest implementation.
+
+
+### Technical dependency reconciliation: device-local recovery (2026-10-16)
+
+The original80IDs are unchanged. contracts/local-recovery.md governs the newly
+verified private root carrier: T043/T044 tests first; T048 atomic capture; T049
+queue cleanup/expiry/supersession; T050 privacy/default predecessor ordering;
+T051 complete restoration; T053 generator-owned local-column/migration31 and
+pull preservation; T074 regression proof. No source grant until the amended
+read-only analysis and applicable Red. Owner device/render tasks stayNOTRUN.

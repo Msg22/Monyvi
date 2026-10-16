@@ -260,8 +260,9 @@ required review-only frozenIntentDigest in the existing review.batch-save/v1
 payload. Contracts/wire-shapes.md defines the versioned canonical original-input
 projection and pure helper API. It binds all original selections, including SMS
 dedup omissions, original confirmed-group provenance and complete physical plans.
-Only the hash is persisted; no source text, new table/column, durable Voice review,
-legacy tuple or Add change.
+Only the digest hash enters the cloud payload; the digest itself adds no table/column,
+durable Voice review, legacy tuple or Add change. Separate device-local SMS
+recovery storage is reconciled below.
 
 T042/T046 reopen for contract tests/schema/helper/generated parity, followed by
 T048 first-write digest and historical replay validation and T045/T052 SQL parity.
@@ -275,3 +276,14 @@ creates after deduplication. The original full member plan can contain omitted
 groups without forcing a synthetic snapshot. Digest computation takes the
 captured snapshot or absence and replay reuses that stored historical value;
 the closed payload validator independently enforces actual-create presence.
+
+
+## 2026-10-16 — Verified device-local recovery carrier
+
+contracts/local-recovery.md corrects the unimplemented existing-storage assumption.
+One private Watermelon-only root column/local migration31, generator override,
+atomic linked-plan callback, queue lifecycle/30-day redaction and owned pull
+preservation implement existingUS6. No new Supabase field, table, public tuple,
+rawVoice durability, product approval or B1 change. T043/T044Red precedes these
+T048–T051/T053 sources; existing80tasks cover all seams. Retain independent
+SQL/security review and exact canonical source types.
