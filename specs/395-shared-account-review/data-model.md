@@ -127,7 +127,7 @@ Money boundaries use canonical decimal/minor-unit strings, no new float sums.
 
 Review creation/default: its only closed optional snapshot key is
 `creationDefaultSnapshot`, present **iff any new Cash/Bank/Wallet account is
-planned**, with sorted owned active IDs and zero/one current default. Empty
+actually created after SMS deduplication**, with sorted owned active IDs and zero/one current default. Empty
 captured active set: exactly the minimum frozen actual account-create UUID is
 `isDefault: true`; other created accounts false. Nonempty captured set: every
 new account false and any existing default/no-default state preserved. Multiple
@@ -141,3 +141,6 @@ Add Account default intent remains separate: first ON/disabled, later initially
 OFF; a successful Add command may clear the prior default atomically through
 `expectedDefaultSnapshot`. Toggle/cancel/failure is unsaved only. No changes to
 existing Edit semantics, app controls or B1 copy.
+
+
+Review replay commitment: the unshipped review payload also requires the single frozenIntentDigest described in contracts/wire-shapes.md. It commits to original selected financial facts, confirmed-group provenance and full planned IDs, including legitimate SMS dedup omissions. Only that hash enters the existing payload_json; no model/table/column or raw Voice/SMS review persistence is added. Historical replay reuses the stored creationDefaultSnapshot or absence; actual post-dedup account creates alone determine snapshot presence.

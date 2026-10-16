@@ -8,12 +8,12 @@ deployment is authorized. [Wire shapes](wire-shapes.md) defines exact closed
 fields, money, mutation/guard sets, API exports and local recovery boundaries.
 Every review-created Cash/Bank/Wallet account uses the same current logical
 active/default snapshot CAS: optional closed `creationDefaultSnapshot` is
-**required exactly when any account is created** and absent otherwise. With
-no previously active owned account, exactly the first newly created account
-by canonical frozen actual account-create UUID order is default; with active
+**required exactly when any account is created** and absent otherwise. With no
+previously active owned account, exactly the first newly created account by
+canonical frozen actual account-create UUID order is default; with active
 accounts, all review-created flags are false and existing/no default is
-preserved. SQL acceptance requires owner-wide serialization before row locks;
-no timestamp guard, default-clear mutation or new global revision counter.
+preserved. SQL acceptance requires owner-wide serialization before row locks; no
+timestamp guard, default-clear mutation or new global revision counter.
 
 ## Why legacy v1 cannot be reused
 
@@ -35,11 +35,12 @@ supported.
 
 Payload contains source/session/save identity, selected stable source refs,
 confirmed referenced draft identities, complete sorted domain mutation records,
-per-account posted minor-unit effects, minimal local SMS bookkeeping descriptors,
-and the single `creationDefaultSnapshot` field only for a Save that creates any
-account. It reuses the existing closed `DefaultSnapshot` shape, not Add's
-`expectedDefaultSnapshot`; no deployed/legacy tuple or payload version changes.
-Canonical schema/export/Edge+SQL validators must agree exactly.
+per-account posted minor-unit effects, minimal local SMS bookkeeping
+descriptors, and the sole optional `creationDefaultSnapshot` field for a Save
+that creates any account, plus the one required review-only
+`frozenIntentDigest`. It reuses the existing closed `DefaultSnapshot` shape, not
+Add's `expectedDefaultSnapshot`; no deployed/legacy tuple or payload version
+changes. Canonical schema/export/Edge+SQL validators must agree exactly.
 Existing account, transaction and transfer field vocabulary is reused; new child
 descriptors name owned AccountSmsSender/BankDetails only. No raw audio,
 transcript, SMS body, full review payload or undo snapshot in the cloud action.
@@ -50,15 +51,59 @@ timestamp winner. New account+child IDs are generated once for the save intent
 and reused on replay. Server cannot overwrite an unrelated existing
 account/child with a create ID.
 
+### Original frozen-intent equality amendment (owner-approved, unshipped 2026-10-16)
+
+For this **unshipped** `review.batch-save/v1` tuple only, add exactly one
+required root `frozenIntentDigest` field, lowercase 64-hex SHA-256. It commits
+to the complete originally selected review/confirmed group/plan, not merely the
+actual posted financial subset. Its authoritative pure API, versioned canonical
+projection, exclusions, currency rules and historical snapshot treatment are in
+[Wire shapes](wire-shapes.md#unshipped-review-only-frozen-intent-digest-amendment-2026-10-16).
+The normal root `payloadHash` remains the hash of the entire canonical financial
+action envelope; it is **not** substituted for this digest. No new DB
+columns/tables, raw Voice payload, legacy operation, Add-091 contract or
+product/UX behavior is approved.
+
+Construct the digest from the already frozen original owner/source/session/
+action/occurredAt/revisions, **all** originally selected rows (including SMS
+duplicates omitted at posting), referenced groups with original `evidenceKey`
+and account/child identity, original complete planned entity localRefs/UUIDs,
+and the first-write `creationDefaultSnapshot` iff present. Require the original
+plan to be complete, but **not** a naive 1:1 match between every planned ID and
+actually created post-dedup members. Use real currency minor units and canonical
+calendar date/normalization; no property, row/group/member/sender order
+sensitivity and no raw source text stored. The single digest is immutable once
+the local action root commits.
+
+At first write, independently validate a deduped SMS fingerprint against an
+active owned transaction or transfer outside this action. During **replay**, if
+the historical original digest matches the stored one, do not re-query a mutable
+saved duplicate solely to establish the original dedup proof; that record can
+have been edited or deleted. Continue comparing posted financial/account/child
+content and action owner, never re-post/recompute balances or resample current
+defaults. Replaying the same frozen input after cold restart/session clear is
+valid; changed selected amount, omitted-SMS financial content, selection,
+original group provenance or planned child membership rejects atomically.
+All-SMS-dedup cleanup remains local and action-free.
+
+This amendment needs coordinated **T046 strict review-only schema/registry +
+generated Edge parity**, **T048** construction and replay, reserved **090**
+PostgreSQL validation/canonical hashing, protected sync and updated valid
+fixtures/negative tests. Do not change **091**, generic foundation
+snapshot/recovery DTOs or previously deployed tuples. Owner delegates
+implementation planning to Root, but source authorization, Speckit analysis,
+SQL/security review, and deployment gates remain open. No production code is
+changed by this document.
+
 ## Local commit
 
 1. Freeze valid selected rows and confirmed referenced groups with
    owner/session/row/group revisions, stable actionID, and deterministic planned
-   entity IDs/localRefs **before awaits**. Use `row.rowId` for selected financial
-   localRef and confirmed `group.groupId` for each needed created account; the
-   actual created account UUID is distinct, frozen and ASCII-sorted for the
-   first-active default decision. Freeze `creationDefaultSnapshot` when any new
-   account is planned.
+   entity IDs/localRefs **before awaits**. Use `row.rowId` for selected
+   financial localRef and confirmed `group.groupId` for each needed created
+   account; the actual created account UUID is distinct, frozen and ASCII-sorted
+   for the first-active default decision. Freeze `creationDefaultSnapshot` when
+   any new account is planned.
 2. After async reads and inside one owned local writer, revalidate current
    owner/source, row/group/selection/currency revisions, frozen IDs/localRefs,
    active/default snapshot under the shared owner lock, account/category
@@ -74,11 +119,10 @@ account/child with a create ID.
    active sets, all new account flags are false, retaining existing/no default.
    Never derive `isDefault` separately from `activeCount===0` for each account;
    no review default-clear and no confirmation-time write. If one selected row
-   creates a shared account, rebind remaining
-   unchanged linked SMS rows to that real account in the same write without
-   selecting them. Preserve unrelated groups/overrides. Local rejection
-   snapshots restore these mappings with the group if the complete action is
-   rejected.
+   creates a shared account, rebind remaining unchanged linked SMS rows to that
+   real account in the same write without selecting them. Preserve unrelated
+   groups/overrides. Local rejection snapshots restore these mappings with the
+   group if the complete action is rejected.
 5. Commit complete linked group atomically through foundation. No financial or
    default side effects occur before all selected validation succeeds. Restore
    prepared model/cache state on failure. Success navigation only after local
@@ -103,8 +147,8 @@ balance. ATM cash destination receives the selected cash amounts once. When
 adapting legacy `initialBalanceByTempId`, do not post both that selected
 aggregate and the same transactions again. Declare account
 opening/target/effects explicitly and verify exact final balance parity fixtures
-for both sources and reused existing accounts. Independently grounded Voice
-Cash EGP and USD groups may coexist in the same Save; do not impose one-Cash-
+for both sources and reused existing accounts. Independently grounded Voice Cash
+EGP and USD groups may coexist in the same Save; do not impose one-Cash-
 per-batch or one-currency-per-batch. Each account remains one currency. Current
 ATM Save may use an eligible existing Cash destination or a genuine already-
 canonical confirmed referenced group, never an invented ungrouped Cash create;
@@ -151,12 +195,12 @@ With main `de09f76bdadb570c99a1015bbf1c680279b0d5ad` ending at
 `creationDefaultSnapshot`/payload validation, full-group apply/CAS and existing
 function dispatch/reconciliation. Add's separate reservation is
 `091_account_create_default_intent.sql`, preserving its deployed-independent
-`expectedDefaultSnapshot` field. It must retain old operations and
-RLS/ownership protections, including at-most-one active default. No schema reset
-or user-data backfill planned. Generate authoritative DB types from complete
-local migration state; never replace them with partial remote types. If no
-generated domain change occurs, document that outcome rather than fabricating
-schema edits. All function/migration and generated artifacts commit together.
+`expectedDefaultSnapshot` field. It must retain old operations and RLS/ownership
+protections, including at-most-one active default. No schema reset or user-data
+backfill planned. Generate authoritative DB types from complete local migration
+state; never replace them with partial remote types. If no generated domain
+change occurs, document that outcome rather than fabricating schema edits. All
+function/migration and generated artifacts commit together.
 
 Recorded implementation scope covers local SQL function/registry changes,
 protected sync entity/version recognition, reconciliation, and exact typed batch
@@ -172,17 +216,18 @@ M13/M14 plus M19: same-user ownership; multiple existing/new accounts and
 selected records; multiple independent EGP/USD Voice Cash groups; first-active
 Cash/Bank/Wallet default in frozen account-create UUID order; nonempty active
 set preserving any existing/no-default state; optional snapshot present iff any
-account created; stale snapshot/duplicate default rejection; different cards/uniqueness; sender/bank child ownership; SMS
-partial selected cleanup; transfer endpoints; no unused accounts;
-zero-net/overflow/rounding; repeat action/hash conflict; stale guard; mid-batch
-failure; old-operation compatibility; generic push isolation; all-or-nothing
-server apply; rejected/replayed compensation after restart. Unit/integration
-plus pgTAP; fault harness cases explicit where E2E cannot honestly drive them.
-Add Red fixtures for old tuple zero rejection; new tuple zero records and
-revision-once; wrong root/operation/effect kind; zero compensation exactly once;
-no-effect default creation; absent-ID collisions including foreign/deleted rows;
-new child parity; raw snapshot exclusion; T043 row/group localRef +
-normalized sender alias parity without new fields; no invented SMS ATM Cash
-destination; SMS remaining-row rebind restoration without overwriting newer
-edits. Independent database/security review is
-required. No runtime correctness claim from this planning text.
+account created; stale snapshot/duplicate default rejection; different
+cards/uniqueness; sender/bank child ownership; SMS partial selected cleanup;
+transfer endpoints; no unused accounts; zero-net/overflow/rounding; repeat
+action/hash conflict; stale guard; mid-batch failure; old-operation
+compatibility; generic push isolation; all-or-nothing server apply;
+rejected/replayed compensation after restart. Unit/integration plus pgTAP; fault
+harness cases explicit where E2E cannot honestly drive them. Add Red fixtures
+for old tuple zero rejection; new tuple zero records and revision-once; wrong
+root/operation/effect kind; zero compensation exactly once; no-effect default
+creation; absent-ID collisions including foreign/deleted rows; new child parity;
+raw snapshot exclusion; T043 row/group localRef + normalized sender alias parity
+without new fields; no invented SMS ATM Cash destination; SMS remaining-row
+rebind restoration without overwriting newer edits. Independent
+database/security review is required. No runtime correctness claim from this
+planning text.

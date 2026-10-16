@@ -4,8 +4,11 @@
 [spec.md](spec.md) **Input**: `specs/395-shared-account-review/spec.md`;
 approved revision
 `sha256:e012f5a7d2edadc8bc1e2fa2ce03aeea56bc0c947dc02bfc2a3f166150e2c7d0`.
-**Base**: `origin/main@7838df64eb9b3828c6e8f1a02f590b008d5435fd`. **Status**:
-Design complete; tasks/analyze and implementation authorization remain.
+**Historical planning base**: `origin/main@7838df64eb9b3828c6e8f1a02f590b008d5435fd`.
+**Execution status (2026-10-16)**: full local implementation is authorized;
+accepted slices, governing pins and remaining gates are recorded in
+[workflow-status.md](workflow-status.md). Digest amendment reanalysis and its
+tests-first gate are recorded separately.
 
 ## Summary
 
@@ -30,7 +33,8 @@ by this plan.
 **Language/Version**: TypeScript ~5.9.2 strict; Node engine >=22 <23; existing
 Edge Deno runtime. **Primary Dependencies**: Expo ~55.0.27, React19.2.0, React
 Native0.83.6, WatermelonDB ^0.28.0, NativeWind4.2.6, Zod4, Reanimated4.2.1, Expo
-Router, existing Supabase client/financial-action foundation. No new dependency.
+Router, existing Supabase client/financial-action foundation. No new runtime dependency. The accepted development-only type restoration adds
+@types/react-test-renderer19.1.0.
 **Storage**: WatermelonDB accounts/financial records and existing SMS draft
 JSON; Supabase PostgreSQL background financial-action CAS. No cloud review table
 or durable Voice session. **Testing**: Jest/RNTL, pure logic/provider contract
@@ -248,3 +252,26 @@ runtime font/safe-area differences. Contracts/manual matrix define boundaries.
 No waiver. Legacy v1 rejects the composite account/transaction/transfer/cleanup
 shape and all-zero-net batches. Splitting into existing actions violates the
 approved atomic selected-batch outcome; the strict new contract is necessary.
+
+## 2026-10-16 — Unshipped replay-integrity reconciliation
+
+The original requirement to reject a changed frozen Save input requires one
+required review-only frozenIntentDigest in the existing review.batch-save/v1
+payload. Contracts/wire-shapes.md defines the versioned canonical original-input
+projection and pure helper API. It binds all original selections, including SMS
+dedup omissions, original confirmed-group provenance and complete physical plans.
+Only the hash is persisted; no source text, new table/column, durable Voice review,
+legacy tuple or Add change.
+
+T042/T046 reopen for contract tests/schema/helper/generated parity, followed by
+T048 first-write digest and historical replay validation and T045/T052 SQL parity.
+Existing deployed operations remain exact. Source grants for this amendment wait
+for meaningful wire Red and read-only speckit.analyze. T016 and the accepted T036
+remain prerequisites already met; unrelated approved component work can overlap
+with exclusive ownership.
+
+creationDefaultSnapshot presence is still determined by actual new account
+creates after deduplication. The original full member plan can contain omitted
+groups without forcing a synthetic snapshot. Digest computation takes the
+captured snapshot or absence and replay reuses that stored historical value;
+the closed payload validator independently enforces actual-create presence.

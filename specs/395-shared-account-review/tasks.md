@@ -380,9 +380,9 @@ local-writer/SQL implementation, race-proof and sync/reconciliation gates.
 - [ ] T046 [US6] Register canonical strict `review.batch-save/v1` schema/effect
       mapping in `packages/logic/src/financial-actions/review-batch-save.ts` and
       `packages/logic/src/financial-actions/account-balance-effects-registry.ts`;
-      minimal opaque correlation refs, persisted account fields only, no
+      required frozenIntentDigest for the original frozen selection/group/plan, minimal opaque correlation refs, persisted account fields only, no
       transcript/SMS/Undo cloud payload. Exact review-only optional
-      `creationDefaultSnapshot` is required iff ANY new account; no Cash
+      `creationDefaultSnapshot` is required iff an account is created after dedup; no Cash
       singleton, first-active default by frozen actual create UUID order across
       Cash/Bank/Wallet, none when active snapshot nonempty; unchanged Add
       `expectedDefaultSnapshot` and old tuple definitions.
@@ -759,3 +759,6 @@ hosted rollout are separate statuses. No emulator testing. No deployment, hosted
 migration, account backfill, reset, main merge or new mockup generation. T080
 may publish checked code with clearly pending owner evidence; it may not mark
 the feature visually complete or hosted-compatible without those results.
+
+
+Replay-integrity amendment (2026-10-16): T042/T046 are reopened for the required review-only frozenIntentDigest and its exact canonical projection in contracts/wire-shapes.md. T048 must bind original selected rows and confirmed provenance, including omitted SMS rows, before returning historical replay; later saved-source edits/deletion must not cause a false replay failure. T045/T052 retain strict SQL/hash parity; T053 regenerates complete artifacts. This adds no task IDs or UI approval, table/column, legacy tuple or hosted authorization. Existing T016/T034/T036 acceptance stands. Run speckit.analyze before digest implementation.
