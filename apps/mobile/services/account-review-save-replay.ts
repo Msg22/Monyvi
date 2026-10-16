@@ -241,6 +241,45 @@ async function verifySenderChildren(
     );
   }
 }
+async function verifyConfirmedGroup(
+  frozen: FrozenReviewSave,
+  payload: ReviewBatchSavePayload,
+  provider: Sha256Provider,
+  accounts: readonly Created[],
+  ref: ReviewBatchSavePayload["confirmedGroupRefs"][number]
+): Promise<void> {
+  const group = frozen.neededGroups.find(
+    (item) => item.groupId === ref.groupId
+  );
+  const confirmed = frozen.intent.confirmedGroups.find(
+    (item) => item.groupId === ref.groupId
+  );
+  const account = accounts.find((item) => item.after.id === ref.accountId);
+  if (!group || !confirmed || account?.entity !== "account")
+    refuse("unrecognized_confirmed_group");
+  check(
+    ref.revision === group.revision &&
+      ref.revision === confirmed.revision &&
+      confirmed.evidenceKey === group.evidenceKey,
+    "confirmed_group_revision_changed"
+  );
+  verifyAccount(frozen, group, account);
+  await verifyBankChild(
+    frozen,
+    group,
+    payload.domainMutation.records,
+    provider,
+    account.after.id
+  );
+  await verifySenderChildren(
+    frozen,
+    group,
+    payload.domainMutation.records,
+    provider,
+    account.after.id
+  );
+}
+
 async function verifyConfirmedGroups(
   frozen: FrozenReviewSave,
   payload: ReviewBatchSavePayload,
@@ -254,36 +293,7 @@ async function verifyConfirmedGroups(
     "created_group_count_changed"
   );
   for (const ref of payload.confirmedGroupRefs) {
-    const group = frozen.neededGroups.find(
-      (item) => item.groupId === ref.groupId
-    );
-    const confirmed = frozen.intent.confirmedGroups.find(
-      (item) => item.groupId === ref.groupId
-    );
-    const account = accounts.find((item) => item.after.id === ref.accountId);
-    if (!group || !confirmed || account?.entity !== "account")
-      refuse("unrecognized_confirmed_group");
-    check(
-      ref.revision === group.revision &&
-        ref.revision === confirmed.revision &&
-        confirmed.evidenceKey === group.evidenceKey,
-      "confirmed_group_revision_changed"
-    );
-    verifyAccount(frozen, group, account);
-    await verifyBankChild(
-      frozen,
-      group,
-      payload.domainMutation.records,
-      provider,
-      account.after.id
-    );
-    await verifySenderChildren(
-      frozen,
-      group,
-      payload.domainMutation.records,
-      provider,
-      account.after.id
-    );
+    await verifyConfirmedGroup(frozen, payload, provider, accounts, ref);
   }
   check(
     accounts.every((record) =>
