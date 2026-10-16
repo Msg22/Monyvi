@@ -21,7 +21,8 @@ confirmation.
 
 Wire discriminants use snake_case (`confirm_group`, `select_row`, `edit_group`,
 `choose_row_account`, `replace_group_account`, `remove_group`, `undo_removal`,
-`confirm_row_currency`, `select_ready`, `clear_selection`, `set_row_selected`).
+`confirm_row_currency`, `select_ready`, `clear_selection`, `set_row_selected`,
+`set_filter`).
 The camelCase labels below describe interactions rather than a second wire
 schema. `saveSelected` invokes the frozen save-intent/service boundary; it is
 not a reducer DB mutation. No nullable category ID widening.
@@ -86,6 +87,7 @@ reasons.
 | undoRemoval(token)                        | Same owner/session/generation only; no overwrite of later row/group edits; invalid token withdrawn                                     |
 | confirmRowCurrency(rowID, code)           | Preserve amount, detach/regroup one row, reevaluate account; no group-wide mutation/conversion                                         |
 | selectReady(activeFilter, reviewRevision) | Eligible shown rows only; never confirms pending groups/hard invalids; if all ready selected, Clear selection                          |
+| setFilter(nextFilter, currentRevision)     | Switch canonical All/Needs review/Selected filter by owner/session/revision CAS; no business change, no row selection or Undo loss |
 | saveSelected(intent)                      | Freeze/validate eligible checked rows; complete action contract only                                                                   |
 
 Direct selection feedback names shared count but explicitly describes only
@@ -109,10 +111,78 @@ overwrites later accepted edits. Do not duplicate reducer logic in
 useTransactionReviewSelection.
 
 SMS batch command rereads current linked records, verifies
-queue/user/fingerprints/ revisions, computes next state, encodes v2 and commits
-all group snapshots plus affected selection overrides atomically. Preserve
-retention and durable Review later; failed mutation retains inputs and
+queue/user/fingerprints/revisions, computes next state, encodes v2 and commits
+all group snapshots plus affected selection overrides atomically. The
+`set_filter` command uses this SAME guarded, serialized writer, updating the
+filter in every owned V2 header, including otherwise untouched rows; it never
+writes a new source of UI-only filter truth. Old nine-key V2 headers decode
+filter `all` without rewriting their original JSON. All newly written V2
+headers explicitly carry the same tenth local-only `filter` field; mixed
+or conflicting current filter headers refuse rather than merging by last-write
+order. An unchanged filter is a true no-op with no physical write. Header-wide
+filter transition preserves original row/group business revisions and selections.
+Any touched V1 migration remains atomic and must retain genuine legacy source
+bytes, category/account choices and selection overrides; unreadable V1 input
+fails closed without discarding it. No new table/column, provider/cloud fields
+or SMS history normalization during private preimage recovery.
+Preserve retention and durable Review later; failed mutation retains inputs and
 actionable retry. No cloud review sync.
+
+## T054 technical reconciliation — filter and projection (2026-10-16)
+
+The approved All/Needs review/Selected choices are **one canonical session
+filter**, not local UI shadow state. `set_filter` carries the usual `ownerId`,
+`sessionId`, `expectedReviewRevision`, `expectedOperationGeneration` and
+a next `filter` from the closed three-value union. Both SMS and Voice dispatch
+the same canonical reducer; no second command family, business projection or
+financial-action DTO. The command is rejected without mutation for a foreign
+owner, wrong session, stale revision/generation, frozen `saveIntent`, cancelled
+generation or conflicting in-flight action. Busy controls disable conflicting
+actions, and the writer's authoritative CAS remains mandatory. Identical target
+filter is an accepted no-op: same object/revision, `effect: "none"`, empty
+affected IDs and reason codes, no Undo change. An actual transition updates
+**only** `session.filter`, increments `session.revision` exactly once,
+preserves `operationGeneration` and `sourceRevision`, and never changes
+row/group revisions, assignment, confirmation, selected bits, save readiness or
+persistent financial state. It returns `"persist_sms"` for SMS and
+`"session_only"` for Voice. All→Needs review→All increments the review
+revision twice: an old All-filter Select ready/Clear command fails stale CAS
+even though its filter label matches again. Bulk commands continue to require
+exact current filter; they cannot use an inactive filter from presentation
+state.
+
+A **valid previous Remove Undo lease survives filter-only transitions**:
+preserve its transient token/previous business snapshot and removal generation
+for both facade and SMS lifetime authority. Undo checks current owner,
+session/source, preserved business operation generation and full current
+row/group/tombstone proof with no intervening business edits or ABA; the
+separate monotonic review revision may include filter-only increments.
+Successful Undo retains the **current filter**, not the pre-removal filter,
+and remains a guarded business transition. An intervening edit, row selection,
+new source generation or changed group still invalidates that prior Undo.
+Nothing serializes Undo into SMS, RPC or local review evidence.
+
+The facade publishes `readModel: AccountReviewReadModel | null` from the
+**actual canonical** `projectAccountReviewSession({session,
+accountSnapshots})`. The account context comes from the same authenticated
+`loadAccountReviewAccountSnapshots` service used for commands (including
+Voice's asynchronous ready/bootstrap path), never a screen fetch, provider
+context or copied count formula. All projections re-check owner/session and
+the mounted cancellation generation before publication. SMS bootstraps
+session and snapshots together, refreshing owner-scoped snapshots after
+accepted commands/reload when needed; Voice loads owned snapshots before
+publishing ready projection and refreshes them after commands/reload. Pending,
+missing or stale-owner context, aborted load, failed projection or logout
+publishes `null` (and appropriate normal loading/recovery), never prior
+actor/group data. The shaped projection alone supplies the UI's global counts,
+visible row IDs, ready visible row IDs and group summaries; it calls the
+existing guarded bulk reducer for the ready preview. The `AccountReviewPanel`
+remains presentational.
+
+This is a narrow technical interpretation of already approved R3/M10–M11
+behavior, **not** a UI/copy/B1/spec change or claim of runtime admission.
+The associated docs/tests are authored first; Root performs meaningful Red,
+Speckit analysis and explicit source grants before implementation.
 
 ## UI surfaces and exact authority
 

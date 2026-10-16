@@ -136,7 +136,7 @@ financial-action tuples, database columns or logs.
 
 Every command has required `ownerId`, `sessionId`, `expectedReviewRevision`,
 `expectedOperationGeneration`, `kind`, and the keys below. Only `select_ready`
-and `clear_selection` lack a row/group target. Row/group commands use
+and `clear_selection`, and the narrow `set_filter` command, lack a row/group target. Row/group commands use
 `expectedRowRevision`/`expectedGroupRevision` respectively. Selection's pending
 group path additionally supplies `groupId`, `expectedGroupRevision` and
 `hasSharedConfirmationDisclosure: true`; a null group pair means no implicit
@@ -152,6 +152,7 @@ group confirmation.
 | `replace_group_account`            | `groupId`, `expectedGroupRevision`, `accountId: UUID`, `disclosedLinkedRowCount: nonnegative integer`                                      |
 | `confirm_row_currency`             | `rowId`, `expectedRowRevision`, `currency: Currency`                                                                                       |
 | `select_ready` / `clear_selection` | `filter: "all"\|"needs_review"\|"selected"` (must equal current filter)                                                                    |
+| `set_filter`                      | `filter: "all"\|"needs_review"\|"selected"` (new canonical filter; same filter is no-op)                                                  |
 | `undo_removal`                     | `undoToken: UUID` (lookup transient token; never client-supplied inverse state)                                                            |
 
 Immutable API names: `resolveAccountReviewSession` (input type:
@@ -182,6 +183,19 @@ SMS codec adds exports `smsReviewDraftPayloadV2Schema`,
 `migrateSmsReviewDraftV1ToV2`. Existing v1 encoder/decoder signatures remain. V2
 JSON exact root
 `{version: 2, transaction: existing stored SMS transaction, review: {ownerId, sessionId, sourceRevision, preferredCurrency, reviewRevision, operationGeneration, row, groups, removedEvidenceKeys}}`.
+For new writes only, the **review** object has an additional tenth
+local-device-only `filter: "all" | "needs_review" | "selected"` field.
+A historical exact nine-key V2 review header remains valid and **decodes** to
+`filter: "all"` without modifying or rewriting its raw stored JSON; the old
+nine fields remain byte-compatible and no version bump/table is introduced.
+New V2 encodes require all ten closed keys and materialize `filter`
+explicitly, including after a mixed old/new-V2 transition. Before command
+reduction, all current physical V2 rows' effective filters must agree
+(old-nine means `all`); mixed conflicting filters block recovery/commit.
+A genuine `set_filter` updates all owned V2 headers under one authenticated
+SMS writer and exactly one global review revision, **without changing any
+row/group revision or selection override**. In-memory Voice keeps the same
+canonical `session.filter` but never stores Voice review/transcript.
 The `groups` array contains only groups referenced by this row or its removal
 tombstones, with complete linkedRowIds; all linked rows persist identical group
 revision/identity/status. Outer `payload_version` equals inner version. Existing
@@ -198,6 +212,41 @@ confirmation. Conflicting restored group snapshots become unresolved recovery
 and cannot auto-confirm through last-write-wins. Late equivalent input may
 inherit only identical identity confirmation; it selects no new row and never
 clears an override/tombstone.
+
+**T054 canonical filter CAS amendment (unshipped):** `set_filter` is a
+strictly closed `accountReviewCommandSchema` discriminant with exactly the
+four existing common scope/revision keys, `kind` and target `filter`; no
+row/group IDs, arbitrary business fields or unvalidated facade filter
+callback. A changed filter increments **only** `session.revision` (once),
+preserving `operationGeneration`, `sourceRevision`, every row/group
+revision, finance, choices, selected state and existing transient Undo.
+Equal filter is an accepted identity no-op with `effect: "none"`, empty
+`reasonCodes` and affected lists. Stale owner/session/revisions,
+busy-conflicting/current writer and frozen Save fail closed. Old All bulk
+commands remain stale after All→Needs→All regardless equal final filter.
+`select_ready` and `clear_selection` continue checking both common
+expected revisions and exact currently stored filter.
+
+**Undo over navigation-only changes:** a removal Undo keeps its original
+transient token/previous business snapshot and exact removal
+`operationGeneration`, while the current `revision` may be higher solely
+through guarded `set_filter` transitions. It must still prove unchanged
+all original business rows/groups/tombstones, owner and source and reject
+intervening business-generation increments or ABA; on successful Undo retain
+the **current** filter rather than restoring the pre-removal filter.
+Neither Undo nor filter adds a public financial/Edge/provider field.
+
+**Facade-only shaped view:** `AccountReviewFacadeView.readModel:
+AccountReviewReadModel | null` is calculated exclusively using the existing
+logic `projectAccountReviewSession` over the accepted canonical session
+and current authenticated `loadAccountReviewAccountSnapshots` output.
+No raw provider context/account balance is exposed to presentation and no
+second count/readiness/filter engine is permitted. SMS/Voice owner and
+cancellation generation must remain current after async snapshot reads,
+commands and reloads; otherwise `readModel` is null, with no stale-actor
+published projection. The existing `AccountReviewReadModel` fields
+(`summary`, `groupSummaries`, `visibleRowIds`,
+`readyVisibleRowIds`) remain unchanged.
 
 Mobile APIs: `loadAccountReviewAccountSnapshots`,
 `executeSmsAccountReviewCommand`, `createVoiceAccountReviewSession`,

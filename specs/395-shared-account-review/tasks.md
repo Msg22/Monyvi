@@ -256,7 +256,10 @@ T028 completion claimed. No such helper is authorized here.
       commands in `packages/logic/src/account-review/identity.ts` and
       `packages/logic/src/account-review/reducer.ts`; separate confirmation from
       selection, validate nickname uniqueness, tombstones, scoped revisions and
-      safe late-chunk merges.
+      safe late-chunk merges. T054 reconciliation adds canonical `set_filter`
+      as a scoped navigation-only transition: review revision +1 only on change,
+      business generation and row/group revisions unchanged, no-op on same
+      filter, preserve valid Remove Undo, reject owner/stale/frozen Save and ABA.
 - [x] T028 [US2] Extend existing
       `packages/logic/src/sms-review-drafts/sms-review-draft-codec.ts` with v1
       reader/v2 writer; preserve existing fields/choices, unknown legacy
@@ -265,11 +268,18 @@ T028 completion claimed. No such helper is authorized here.
       `apps/mobile/services/account-review-command-service.ts` and
       `apps/mobile/services/sms-review-draft-repository.ts`; atomically migrate
       touched groups, preserve expiry/Review later and actionable rollback.
+      Include V2 nine-header legacy decode as All, explicit tenth `filter` on
+      new writes, exact owner/shared-header checks and all-live-row atomic
+      `set_filter` persistence/rollback; no Undo/private preimage rewrite.
 - [ ] T030 [US2] Add lifecycle/cancellation facade in
       `apps/mobile/hooks/useAccountReview.ts` and adapt
       `apps/mobile/hooks/useTransactionReviewSelection.ts` to the canonical
       reducer; no hook DB writes/calculations, stale callback rollback must not
-      replace newer accepted state.
+      replace newer accepted state. Publish `readModel: AccountReviewReadModel
+      | null` using the actual owned account read-service and pure T059
+      projection; protect Voice readiness/reloads and SMS command refresh with
+      owner/generation checks; filter navigation must retain Undo, not business
+      shadows or copied readiness.
 - [ ] T031 [US2] Build shaped independent action/edit/all-groups surfaces in
       `apps/mobile/components/transaction-review/SharedAccountSuggestions.tsx`
       and
@@ -477,8 +487,11 @@ local-writer/SQL implementation, race-proof and sync/reconciliation gates.
 - [ ] T054 [US6] Wire validated Voice route boundary and selected save through
       `apps/mobile/app/(private)/voice-review.tsx` and shared SMS container
       `apps/mobile/components/transaction-review/TransactionReview.tsx` after
-      T030/T039/T049–T053; successful local commit precedes navigation, honest
-      failure retains choices, zero extra provider call.
+      T027/T029/T030/T039/T049–T053 and T059 projection; bind canonical
+      filter/active-filter bulk command to the same CAS session and shaped
+      `readModel`, no UI shadow filter/counts or second account authority;
+      successful local commit precedes navigation, honest failure retains
+      choices, zero extra provider call.
 - [ ] T055 [US6] After T054/T072, obtain owner rendered baseline/variants for
       governed `TransactionReview.tsx`/`ReviewActionBar.tsx`
       save-failure/retry/Review later against R3-14; record
@@ -519,7 +532,10 @@ group readiness or filter/business state.
 - [ ] T059 [US4] Implement pure projection/filter/bulk-ready commands in
       `packages/logic/src/account-review/read-model.ts` and
       `packages/logic/src/account-review/reducer.ts` after T036; derive counts
-      from actual rows, preserve overrides and group confirmation.
+      from actual rows, preserve overrides and group confirmation. Projection
+      always consumes canonical `session.filter` and current owner snapshots;
+      do not duplicate reducer readiness, and do not mutate state/Undo or
+      invent separate filter command authority.
 - [ ] T060 [US4] Build shaped compact conditional panel/filter-empty recovery in
       `apps/mobile/components/transaction-review/AccountReviewPanel.tsx`; reuse
       T020/T031, all-group list, quiet default-only state, no empty clean
@@ -527,7 +543,9 @@ group readiness or filter/business state.
 - [ ] T061 [US4] Integrate three filters and separate Select ready/Clear toolbar
       in `apps/mobile/components/transaction-review/TransactionReview.tsx` and
       `apps/mobile/components/transaction-review/ReviewActionBar.tsx` after
-      T054; shared PageHeader/actions, memoized FlatList rows and
+      T027/T029/T030/T054/T059; route `set_filter` and bulk commands through
+      current facade CAS and `readModel` (no shadowed filter/selection/counts);
+      shared PageHeader/actions, memoized FlatList rows and
       source-specific disclaimer/recovery.
 - [ ] T062 [US4] After T060–T061/T072, obtain owner rendered baseline/variants
       for governed panel/shell/rows/footer against R2-01 concept and
@@ -679,8 +697,8 @@ control modal-visible state without granting child workflow ownership.
 | Shared state runtime      | T027 Green + T026 UI Red for static T031; T016/T025–T026 for runtime | T028 → T029 → T030 → T031 | Only shaped T031 components conditionally early; codec/writer/hooks held |
 | Choice                    | Accepted T036 + T035 UI Red for static T038; T016 for T037 | T036 → T037 / T038 → T039 | T037 existing-picker changes and T039 delegation require T016, T021/T030 |
 | Financial save runtime    | T046 Green incl. all-type `creationDefaultSnapshot`/multi-Cash Red follow-up, T016, T043–T045 Red, approved SQL/writer scope | T047 → T048 → T049 → T050 → T051 → T052 → T053                                      | No Save/writer/network activation without independent SQL/raceproof/local-writer gates         |
-| Save routes               | T030, T039, T049–T053                                   | T054                                                                                     | US1/US2 complete Save journeys require this; no legacy writer fallback                        |
-| Conditional UI            | Accepted T059 + T058 UI Red + T020/T031 for static T060 | T059 → T060 → T061 | T059 not newly released; T061 shell/filter wiring awaits T016/T054 |
+| Save routes               | T027, T029, T030, T039, T049–T053, T059                  | T054                                                                                     | Canonical filter and owned readModel before route; no legacy writer or UI shadow fallback     |
+| Conditional UI            | Accepted T059 + T058 UI Red + T020/T031 for static T060 | T059 → T060 → T061 | T061 needs T027 set_filter, T029 V2 durability, T030 shaped facade and T054; no shadow state |
 | Account intent            | US5 Red, T046–T053 (090 review before 091 Add)                                      | T067 → T068 → T069 → T070                                                                | Shared registry/foundation/sync edits serialize after US6; T002 reconciles #393 before forms  |
 | Final integration         | T061, T070                                              | T072 → T074 → T075 → T076 → T077 → T078 → T079 → T080                                    | Failures require focused corrections/rechecks, not repeated unrelated full checks             |
 | Rendered/a11y             | Each governed UI task and T072                          | T022–T023, T032–T033, T040–T041, T055–T056, T062–T063, T071/T073                         | Owner physical-device evidence; source tests never close these tasks                          |
@@ -691,6 +709,21 @@ integration; protected sync/reconciliation/SQL T050–T053 → T069; all locales
 T072 only. Generated exports/DB types have one integration owner. Do not run
 concurrent workers against these same files. T072 path discovery is technical
 reconciliation only; approved copy meaning must not change.
+
+**T054 technical reconciliation / tests-first packet (2026-10-16):**
+Keep T027's immutable reducer as the sole `set_filter` authority with
+owner/session/review/business-generation CAS and filter-only review-revision
+increments, preserving valid Remove Undo (current filter survives Undo).
+T029's V2 codec/writer must read original nine-field headers as All without
+rewriting physical bytes and persist ten-field filter headers on all owned
+drafts atomically. T030 consumes the authenticated T010 read service, calls
+T059's pure projection and exposes only `AccountReviewReadModel | null`,
+guarding Voice/SMS loads and async owner changes. T054/T061 bind those
+APIs to the existing approved panel and bulk actions, never local filtering
+of a copied session or second account read authority. New unit/SQLite/hook
+Red tests and a fresh Root Speckit analysis precede any production source
+grant. These annotations add **zero** new tasks, accepted checkmarks, source
+activation, provider/SQL changes or new R3/B1 behavior.
 
 ### Independent and parallel examples per story
 

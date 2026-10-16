@@ -84,6 +84,7 @@ intent.
 | Undo                        | Matching unchanged generation only  | Never overwrite later edit                                 | Atomic; invalidate conflicting token |
 | Currency choice             | Detach/regroup one row              | Same numeric amount, eligibility reevaluated               | Row+affected groups atomic           |
 | Select ready                | No confirmation                     | Eligible active-filter rows only                           | Selection batch                      |
+| Set filter                  | None                                | Only canonical filter changes; review revision +1, business generation/Undo unchanged | All owned V2 headers one batch |
 | Save                        | Unused groups not created           | Valid selected batch complete action                       | Financial save+local cleanup         |
 
 ## SMS payload v2
@@ -94,6 +95,37 @@ and referenced group identity/status/removal/revision snapshots. Group commands
 update all affected rows in one scoped writer; restoration requires consistent
 snapshots, otherwise unresolved recovery rather than last-write-wins
 confirmation.
+
+**Filter authority (T054 reconciliation):** session `filter` is its
+single canonical All/Needs review/Selected value, changed only by
+`set_filter` carrying current owner/session/revision/business-generation
+CAS. Changed filter increments `revision` once without increasing
+`operationGeneration`, `sourceRevision`, row/group revisions or altering
+choices, selections, default eligibility, Save facts or the volatile Remove
+Undo token. Same filter is an identity no-op. Undo after filter switches keeps
+the current filter and restores only the guarded prior business removal, never
+later edits. All→Needs→All invalidates a stale previous All bulk command through
+review revision despite identical final filter.
+
+**Local V2 compatibility:** historical nine-key `review` headers decode
+`filter: "all"` with their raw bytes left untouched. New writes use the
+strict tenth `filter` key on every affected V2 row; filter-only transitions
+serialize *all* owned V2 header rows in one scoped atomic batch and enforce
+identical current filter, otherwise reject rather than last-write-wins.
+Touching compatible V1 records follows the existing guarded atomic migration,
+never rewrites unreadable V1 or historical device-private preimage JSON.
+`filter` is not a DB column, remote payload, provider request, public
+financial-action field, Undo history or Voice durable object.
+
+**Facade projection authority:** outward
+`readModel: AccountReviewReadModel | null` is shaped by the existing pure
+`projectAccountReviewSession` using the canonical owned session and
+fresh/authenticated account-read service snapshots. The entire existing
+projection (`summary`, `groupSummaries`, `visibleRowIds`,
+`readyVisibleRowIds`) belongs to logic, not UI. SMS bootstrap/commands/reload
+and Voice bootstrap/commands/reload revalidate owner and cancellation
+generation; unavailable/stale/failed projections return `null` without
+publishing previous owner's values. No business snapshot fetch in presentation.
 
 V1 reader preserves fingerprint, explicit chosen owned account, category
 confirmation and selection override. Pending-account existence alone does not

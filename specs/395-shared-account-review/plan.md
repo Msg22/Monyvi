@@ -17,7 +17,11 @@ existing transaction shell, account fields and CurrencyPicker. Distinguish
 missing account evidence from unmatched explicit evidence, and omitted currency
 from ambiguity. Accept eligible defaults, validate shared draft groups, and
 separate confirmation from selection. SMS persists versioned review state in
-existing local payloads; Voice keeps session state only. Gemini Voice and
+existing local payloads; Voice keeps session state only. Approved T054
+technical reconciliation adds the canonical guarded `set_filter`
+revision-only transition, a backward-compatible device-only SMS V2 header
+`filter`, and the existing pure projection as a shaped facade
+`readModel`. No UI shadow authority, no SQL/provider/schema changes. Gemini Voice and
 configured DeepInfra SMS return advisory evidence/groups in the original
 request; no extra review-time provider call.
 
@@ -146,7 +150,8 @@ remains a separate validation boundary.
   extension, reference/evidence grounding, provider projections and
   compatibility.
 - [Review commands](contracts/review-commands.md): immutable scoped transitions,
-  revalidation, selection/Undo and approved UI behavior.
+  revalidation, selection/Undo and approved UI behavior, including guarded
+  `set_filter`/durable SMS filter headers and Undo-preserving revision CAS.
 - [Financial save](contracts/financial-save.md): complete action, zero-net,
   `creationDefaultSnapshot` for all new account types, multi-Cash, default CAS,
   T043 frozen IDs/ATM bounds and SQL/sync/rejection implementation boundary.
@@ -172,9 +177,12 @@ dispatches.
 2. Parallel after contract freeze: provider/source adapters; separately gated
    side-effect-free pure resolver/financial validators; SMS v2 persistence,
    financial-action SQL/save tests (090 review, 091 Add); UI fixtures/tests.
-3. Engine/persistence/parser integration before route wiring. Add/Edit default
-   intent can overlap review UI with distinct files; one owner for shared
-   hooks/shell.
+3. Engine/persistence/parser integration before route wiring. T027 canonical
+   filter/revision reducer + T029 atomic V2 codec/header service must be
+   reconciled before T030 facade's authenticated `readModel`; only then may
+   T054/T061 bind controlled filter/ready toolbar to the shared shell.
+   Add/Edit default intent can overlap review UI with distinct files; one
+   owner for shared hooks/shell.
 4. Complete action validation/sync/reconciliation before selected-save wiring.
 5. Independent review/coverage audit, one integration check batch, owner device
    validation, commit/push/PR update.
@@ -242,6 +250,25 @@ by this dependency update. Main `de09f76bdadb570c99a1015bbf1c680279b0d5ad`
 ends at `089_historical_metal_rate_request_limits.sql`; the missing 088 prefix
 is not available. Review migration reservation is **090**, Add **091**.
 Preserve 082–085 publication fence and owner-snapshot race-proof gates.
+
+### T054 filter/projection dependency note (2026-10-16)
+
+This is an **approved technical reconciliation / tests-first gate**, not a
+new task, new UI behavior, source publication or acceptance. The existing six
+IDs T027/T029/T030/T054/T059/T061 retain their historical completion markers.
+`set_filter` is the one canonical session transition; it uses review-revision
+CAS (including filter ABA) while retaining business `operationGeneration`
+and valid Remove Undo across navigation-only revisions. The existing V2 JSON
+codec must decode historical nine-header rows as `all` **without mutating
+their original bytes** and atomically encode the new tenth `filter` header on
+all live SMS rows, with exact owner/header agreement and rollback. Voice stays
+in-memory. The facade publishes only the canonical current-owner
+`projectAccountReviewSession` result or `null` during missing/stale/failed
+reads, never raw provider context or a second UI readiness/count engine.
+Tests-first Red and Root-run Speckit analysis remain required before any source
+lease. The approved spec/B1/copy/hash and the financial-action DTO/schema
+are unchanged. T049 all-dedup unresolved-root lifecycle coordination is
+separately held and unaffected.
 
 ## Effort and risks
 
