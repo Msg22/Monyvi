@@ -4,6 +4,7 @@ import {
   REVIEW_CATEGORY_ID,
   REVIEW_CREATED_AT,
   REVIEW_EFFECT_ID,
+  REVIEW_FROZEN_INTENT_DIGEST,
   REVIEW_INCOME_RECORD_ID,
   REVIEW_INCOME_ROW_ID,
   REVIEW_SESSION_ID,
@@ -20,6 +21,7 @@ const validCashPayload = {
   operationCode: "review.batch-save",
   source: "VOICE",
   sessionId: REVIEW_SESSION_ID,
+  frozenIntentDigest: REVIEW_FROZEN_INTENT_DIGEST,
   selectedSourceRefs: [
     {
       rowId: REVIEW_INCOME_ROW_ID,

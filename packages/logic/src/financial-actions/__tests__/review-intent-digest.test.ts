@@ -591,7 +591,13 @@ describe("#395 pure frozen-intent SHA-256 projection — module creation Red", (
     const fixture = await smsCase();
     const first = await callDigest(fixture);
     const restoredSession = accountReviewSessionSchema.parse(
-      structuredClone(fixture.session)
+      JSON.parse(
+        JSON.stringify(fixture.session),
+        (key: string, value: unknown): unknown =>
+          key === "date" && typeof value === "string"
+            ? new Date(value)
+            : value
+      )
     );
     const restoredIntent = accountReviewSaveIntentSchema.parse(
       JSON.parse(JSON.stringify(fixture.intent))
