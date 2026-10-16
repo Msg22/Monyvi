@@ -143,6 +143,61 @@ function verifyDomainCreate(
       reject("child_parent_mismatch");
   }
 }
+/**
+ * This is NOT another domain create kind. It admits one destructive operation
+ * on the exact original owned SMS queue, and only together with its selected
+ * draft deletions. The local preimage builder independently proves the
+ * original header and actual prepared tombstone before commit.
+ */
+function verifyOriginalQueueTombstone(
+  item: FinancialActionLinkedOperationPostimage,
+  expected: PreparedReviewOwnership
+): void {
+  const originals = expected.plannedExisting.filter((operation) =>
+    operation.model.table === "sms_review_queues"
+  );
+  const sourceDrafts = expected.plannedExisting.filter((operation) =>
+    operation.model.table === "sms_review_draft_items"
+  );
+  const header = originals[0]?.model;
+  const createdAt = field(item.raw, "created_at");
+  const updatedAt = field(item.raw, "updated_at");
+  if (
+    expected.payload.source !== "SMS" ||
+    item.kind !== "markAsDeleted" ||
+    originals.length !== 1 ||
+    originals[0]?.kind !== "markAsDeleted" ||
+    !header ||
+    header.id !== item.id ||
+    item.id !== expected.payload.sessionId ||
+    field(header._raw, "user_id") !== expected.ownerId ||
+    field(item.raw, "user_id") !== expected.ownerId ||
+    field(item.raw, "_status") !== "deleted" ||
+    field(header._raw, "created_at") !== field(item.raw, "created_at") ||
+    field(header._raw, "updated_at") !== field(item.raw, "updated_at") ||
+    typeof createdAt !== "number" ||
+    !Number.isSafeInteger(createdAt) ||
+    typeof updatedAt !== "number" ||
+    !Number.isSafeInteger(updatedAt) ||
+    sourceDrafts.length === 0 ||
+    sourceDrafts.some((operation) =>
+      operation.kind !== "markAsDeleted" ||
+      field(operation.model._raw, "user_id") !== expected.ownerId ||
+      field(operation.model._raw, "queue_id") !== expected.payload.sessionId ||
+      field(operation.model._raw, "_status") !== "deleted"
+    ) ||
+    expected.payload.localSmsBookkeeping.some((item) =>
+      item.operation === "rebind_remaining" ||
+      item.queueId !== expected.payload.sessionId
+    ) ||
+    expected.payload.localSmsBookkeeping.some((entry) =>
+      entry.operation === "delete_saved" &&
+      !sourceDrafts.some((draft) => draft.model.id === entry.draftId)
+    )
+  )
+    reject("invalid_owned_original_queue_tombstone");
+}
+
 export function assertPreparedReviewOwnership(
   input: PreparedReviewOwnership,
   postimages: readonly FinancialActionLinkedOperationPostimage[]
@@ -152,6 +207,8 @@ export function assertPreparedReviewOwnership(
     if (item.table === "accounts") verifyAccountPostimage(item, input);
     else if (item.table === "account_financial_effects")
       verifyEffectPostimage(item, input);
+    else if (item.table === "sms_review_queues")
+      verifyOriginalQueueTombstone(item, input);
     else if (item.table !== "sms_review_draft_items")
       verifyDomainCreate(item, input);
   }

@@ -1,0 +1,54 @@
+appId: com.monyvi.app
+---
+# #395 T070 Add default-intent journey — authored only; NOT RUN.
+# Preconditions (Root E2E owner):
+# - Local authenticated fixture reset, one owned active default Cash account
+#   named "Test Wallet" (the existing create-default-account helper).
+# - T068 guarded account.create-default writer and T070 form are integrated;
+#   this is not activation authorization for an incomplete server registration.
+# - No provider/remote mutation or native execution in this authoring lease.
+- runFlow: ../helpers/setup.yaml
+
+# The setup leaves Transactions active and the known Cash default owned.
+- tapOn: "Accounts"
+- extendedWaitUntil:
+    visible: "Accounts"
+    timeout: 30000
+- tapOn:
+    id: "accounts-add-button"
+- extendedWaitUntil:
+    visible:
+      id: "account-default-state-ready"
+    timeout: 30000
+- tapOn: "Bank Account"
+- assertVisible: "Default Account"
+- assertVisible: "Used for new transactions and voice or SMS entries when no account is mentioned and the currency matches."
+- tapOn:
+    id: "account-name-input"
+- inputText: "E2E New Default Bank"
+- tapOn:
+    id: "institution-picker-trigger-bank"
+- tapOn:
+    id: "institution-picker-search-bank"
+- inputText: "CIB"
+- tapOn: "CIB \\(Commercial International Bank\\)"
+- waitForAnimationToEnd
+
+# Later Add begins OFF; explicitly opt in, without affecting other fields.
+- tapOn:
+    id: "account-default-switch"
+- assertVisible: "Saving will replace Test Wallet as your default."
+- assertVisible: "E2E New Default Bank"
+- tapOn:
+    id: "header-save"
+- extendedWaitUntil:
+    visible: "Accounts"
+    timeout: 60000
+- scrollUntilVisible:
+    element: "E2E New Default Bank"
+    direction: DOWN
+    timeout: 30000
+    visibilityPercentage: 50
+
+# Actual persisted default flag, old Cash flag and balance/effect parity need
+# the Root-owned physical/model assertions; Maestro text presence is not proof.

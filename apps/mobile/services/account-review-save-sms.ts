@@ -244,11 +244,57 @@ export function rebindSiblingOperation(
   };
 }
 
+/**
+ * Prove the CURRENT owned queue is wholly consumed by this financial Save.
+ * Only this exact bounded case may add the original queue tombstone to the
+ * foundation's already-atomic review action. A surviving/rebound/unselected
+ * sibling keeps its queue, and the all-dedup action-free path never calls this.
+ */
 export function smsCleanupOperations(
   sms: SmsSaveScope
 ): readonly FinancialActionLinkedExistingOperation[] {
-  return sms.selected.map(({ draft }) => ({
-    kind: "markAsDeleted" as const,
-    model: draft,
-  }));
+  if (!sms.queue) {
+    if (sms.selected.length !== 0 || sms.allOwned.length !== 0 ||
+        sms.unsaved.length !== 0 || sms.alreadySaved.length !== 0)
+      reject("cleanup_queue_missing");
+    return [];
+  }
+  const queue = sms.queue;
+  if (queue._preparedState !== null || queue.userId.trim().length === 0)
+    reject("cleanup_queue_not_original");
+  const selectedIds = sms.selected.map(({ draft }) => draft.id);
+  const selectedSet = new Set(selectedIds);
+  if (selectedIds.length === 0 || selectedSet.size !== selectedIds.length)
+    reject("cleanup_selected_membership");
+  const ownedQueueItems = sms.allOwned.filter((draft) =>
+    draft.queueId === queue.id
+  );
+  const allOwnedIds = new Set(sms.allOwned.map((draft) => draft.id));
+  if (
+    ownedQueueItems.length === 0 ||
+    allOwnedIds.size !== sms.allOwned.length ||
+    ownedQueueItems.length !== sms.allOwned.length ||
+    sms.allOwned.some((draft) => draft.userId !== queue.userId) ||
+    sms.selected.some(({ draft, queue: sourceQueue }) =>
+      sourceQueue !== queue || draft.userId !== queue.userId ||
+      draft.queueId !== queue.id || !allOwnedIds.has(draft.id)
+    ) ||
+    sms.unsaved.length + sms.alreadySaved.length !== sms.selected.length ||
+    [...sms.unsaved, ...sms.alreadySaved].some((entry) =>
+      !selectedSet.has(entry.draft.id)
+    ) ||
+    new Set([...sms.unsaved, ...sms.alreadySaved].map(
+      ({ draft }) => draft.id
+    )).size !== selectedSet.size
+  )
+    reject("cleanup_queue_membership_changed");
+  const operations: FinancialActionLinkedExistingOperation[] =
+    sms.selected.map(({ draft }) => ({
+      kind: "markAsDeleted",
+      model: draft,
+    }));
+  if (ownedQueueItems.every((draft) => selectedSet.has(draft.id))) {
+    operations.push({ kind: "markAsDeleted", model: queue });
+  }
+  return operations;
 }

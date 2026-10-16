@@ -49,6 +49,7 @@ import {
   type FinancialActionPushCoordinator,
 } from "../financial-action-sync-service";
 import {
+  getFinancialActionGroup,
   markFinancialActionGroupSyncFailed,
   markFinancialActionGroupSyncPending,
   recordFinancialActionGroupServerOutcome,
@@ -504,6 +505,7 @@ function getProductionFinancialActionPushCoordinator(): FinancialActionPushCoord
       },
       markFinancialActionGroupSyncFailed,
       markFinancialActionGroupSyncPending,
+      getFinancialActionGroup,
       reconcileFinancialActionGroup: (actionId) =>
         productionFinancialActionReconciliationService.reconcileRejectedAction(
           actionId

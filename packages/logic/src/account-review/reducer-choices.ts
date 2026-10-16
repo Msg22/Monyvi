@@ -26,14 +26,8 @@ import {
 } from "./reducer-primitives";
 
 type RowChoice = Extract<AccountReviewCommand, { kind: "choose_row_account" }>;
-type GroupChoice = Extract<
-  AccountReviewCommand,
-  { kind: "replace_group_account" }
->;
-type CurrencyChoice = Extract<
-  AccountReviewCommand,
-  { kind: "confirm_row_currency" }
->;
+type GroupChoice = Extract<AccountReviewCommand, { kind: "replace_group_account" }>;
+type CurrencyChoice = Extract<AccountReviewCommand, { kind: "confirm_row_currency" }>;
 
 export interface ChoiceTransitionResult {
   readonly transition: ReviewTransition | null;
@@ -113,16 +107,14 @@ function oppositeIsCurrent(
   const opposite = role === "source" ? row.toAssignment : row.assignment;
   if (opposite === null || opposite.state === "unresolved") return true;
   if (opposite.state === "suggested") {
-    return state.groups.some(
-      (group) =>
-        group.groupId === opposite.groupId &&
-        group.revision === opposite.groupRevision &&
-        group.linkedRowIds.includes(row.rowId) &&
-        group.currency ===
-          (row.currency.state === "known" ? row.currency.code : null) &&
-        (role === "source"
-          ? group.status === "confirmed" && group.type === "CASH"
-          : group.status === opposite.confirmation && group.type !== "CASH")
+    return state.groups.some((group) =>
+      group.groupId === opposite.groupId &&
+      group.revision === opposite.groupRevision &&
+      group.linkedRowIds.includes(row.rowId) &&
+      group.currency === (row.currency.state === "known" ? row.currency.code : null) &&
+      (role === "source"
+        ? group.status === "confirmed" && group.type === "CASH"
+        : group.status === opposite.confirmation && group.type !== "CASH")
     );
   }
   const refreshed = resolveAccountReviewSession({
@@ -157,9 +149,7 @@ function detachSourceGroup(
     };
   }
 
-  const group = state.groups.find(
-    (item) => item.groupId === assignment.groupId
-  );
+  const group = state.groups.find((item) => item.groupId === assignment.groupId);
   if (!group || group.status === "removed") {
     throw new Error("account_review_choice_missing_reciprocal_group");
   }
@@ -211,20 +201,15 @@ function chooseRow(
   if (row.revision !== command.expectedRowRevision) {
     return blocked("review_revision_stale");
   }
-  if (row.currency.state !== "known")
-    return blocked("currency_confirmation_needed");
+  if (row.currency.state !== "known") return blocked("currency_confirmation_needed");
   const role =
-    isAtm(row) &&
-    snapshots.accounts.some(
+    isAtm(row) && snapshots.accounts.some(
       (account) => account.id === command.accountId && account.type === "CASH"
     )
       ? "destination"
       : "source";
   const account = getAccountReviewAccountCandidates({
-    session: state,
-    rowId: row.rowId,
-    role,
-    accountSnapshots: snapshots,
+    session: state, rowId: row.rowId, role, accountSnapshots: snapshots,
   }).find((item) => item.id === command.accountId);
   if (!account) return blocked("account_unavailable");
   if (!oppositeIsCurrent(state, row, role, snapshots)) {
@@ -235,20 +220,19 @@ function chooseRow(
   const chosen = explicitAssignment(account, revision);
   if (role === "destination") {
     return accepted({
-      rows: state.rows.map(
-        (item): AccountReviewRow =>
-          item.rowId === row.rowId
-            ? {
-                ...item,
-                revision,
-                toAssignment: chosen,
-                selected: false,
-                hasUserAccountOverride: true,
-                reviewReasons: item.reviewReasons.filter(
-                  (reason) => reason !== "cash_transfer_review"
-                ),
-              }
-            : item
+      rows: state.rows.map((item): AccountReviewRow =>
+        item.rowId === row.rowId
+          ? {
+              ...item,
+              revision,
+              toAssignment: chosen,
+              selected: false,
+              hasUserAccountOverride: true,
+              reviewReasons: item.reviewReasons.filter(
+                (reason) => reason !== "cash_transfer_review"
+              ),
+            }
+          : item
       ),
       groups: state.groups,
       affectedRowIds: [row.rowId],
@@ -305,10 +289,7 @@ function groupMemberIsCompatible(
   }
   if (!oppositeIsCurrent(state, row, "source", snapshots)) return false;
   return getAccountReviewAccountCandidates({
-    session: state,
-    rowId: row.rowId,
-    role: "source",
-    accountSnapshots: snapshots,
+    session: state, rowId: row.rowId, role: "source", accountSnapshots: snapshots,
   }).some((candidate) => candidate.id === account.id);
 }
 
@@ -417,22 +398,18 @@ function withCorrectedTransactionCurrency(
   >
 ): AccountReviewRow {
   const reviewCurrency: AccountReviewRow["currency"] = {
-    state: "known",
-    code: currency,
-    origin: "user",
+    state: "known", code: currency, origin: "user",
   };
   if (row.source === "VOICE") {
     return revisedRow({
-      ...row,
-      ...updates,
+      ...row, ...updates,
       currency: reviewCurrency,
       transaction: { ...row.transaction, currency },
       hasUserCurrencyOverride: true,
     });
   }
   return revisedRow({
-    ...row,
-    ...updates,
+    ...row, ...updates,
     currency: reviewCurrency,
     transaction: { ...row.transaction, currency },
     hasUserCurrencyOverride: true,
@@ -454,27 +431,23 @@ function confirmCurrency(
   const oldCode = row.currency.state === "known" ? row.currency.code : null;
   const currencyChanged = oldCode !== command.currency;
   const refreshed = resolveAccountReviewSession({
-    session: state,
-    accountSnapshots: snapshots,
+    session: state, accountSnapshots: snapshots,
   }).rows.find((item) => item.rowId === row.rowId);
   const assignment = row.assignment;
-  const sourceGroup =
-    assignment.state === "suggested"
-      ? state.groups.find((item) => item.groupId === assignment.groupId)
-      : null;
-  const keepGroup =
-    sourceGroup !== null &&
-    sourceGroup !== undefined &&
-    sourceGroup.currency === command.currency;
+  const sourceGroup = assignment.state === "suggested"
+    ? state.groups.find((item) => item.groupId === assignment.groupId)
+    : null;
+  const keepGroup = sourceGroup !== null &&
+    sourceGroup !== undefined && sourceGroup.currency === command.currency;
 
-  const source =
-    keepGroup ||
-    stillEligibleSource(row, command.currency, snapshots, refreshed)
-      ? row.assignment
-      : unresolved("account_needed");
-  const keepCash =
-    isAtm(row) &&
-    stillEligibleDestination(row, command.currency, snapshots, refreshed);
+  const source = keepGroup || stillEligibleSource(
+    row, command.currency, snapshots, refreshed
+  )
+    ? row.assignment
+    : unresolved("account_needed");
+  const keepCash = isAtm(row) && stillEligibleDestination(
+    row, command.currency, snapshots, refreshed
+  );
   const destination = !isAtm(row)
     ? row.toAssignment
     : keepCash
@@ -485,16 +458,11 @@ function confirmCurrency(
     (reason) => reason !== "currency_confirmation_needed"
   );
   if (!keepGroup) {
-    reasons = reasons.filter(
-      (reason) => reason !== "account_group_unconfirmed"
-    );
+    reasons = reasons.filter((reason) => reason !== "account_group_unconfirmed");
   }
   if (source.state === "unresolved") {
     reasons = addReason(reasons, "account_needed");
-  } else if (
-    source.state === "suggested" &&
-    source.confirmation === "pending"
-  ) {
+  } else if (source.state === "suggested" && source.confirmation === "pending") {
     reasons = addReason(reasons, "account_group_unconfirmed");
   } else {
     reasons = clearSourceBlockers(reasons);
@@ -505,28 +473,28 @@ function confirmCurrency(
     reasons = reasons.filter((reason) => reason !== "cash_transfer_review");
   }
 
-  const replacement = withCorrectedTransactionCurrency(row, command.currency, {
-    assignment: source,
-    toAssignment: destination,
-    reviewReasons: reasons,
-    selected:
-      row.selected &&
-      !currencyChanged &&
-      source.state !== "unresolved" &&
-      (!isAtm(row) || destination?.state === "existing") &&
-      reasons.length === 0,
-  });
-  const changed =
-    keepGroup || row.assignment.state !== "suggested"
-      ? {
-          rows: state.rows.map((item) =>
-            item.rowId === row.rowId ? replacement : item
-          ),
-          groups: state.groups,
-          removedEvidenceKeys: state.removedEvidenceKeys,
-          affectedGroupIds: [],
-        }
-      : detachSourceGroup(state, row, replacement);
+  const replacement = withCorrectedTransactionCurrency(
+    row, command.currency, {
+      assignment: source,
+      toAssignment: destination,
+      reviewReasons: reasons,
+      selected:
+        row.selected && !currencyChanged &&
+        source.state !== "unresolved" &&
+        (!isAtm(row) || destination?.state === "existing") &&
+        reasons.length === 0,
+    }
+  );
+  const changed = keepGroup || row.assignment.state !== "suggested"
+    ? {
+        rows: state.rows.map((item) =>
+          item.rowId === row.rowId ? replacement : item
+        ),
+        groups: state.groups,
+        removedEvidenceKeys: state.removedEvidenceKeys,
+        affectedGroupIds: [],
+      }
+    : detachSourceGroup(state, row, replacement);
   return accepted({ ...changed, affectedRowIds: [row.rowId] });
 }
 

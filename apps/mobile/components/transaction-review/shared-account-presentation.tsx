@@ -206,7 +206,15 @@ export function ReviewPointerBackdrop({
       importantForAccessibility="no-hide-descendants"
       onPress={onPress}
       activeOpacity={1}
-      className="absolute inset-0 bg-black/60"
-    />
+      className="absolute inset-0"
+    >
+      <View
+        accessible={false}
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
+        pointerEvents="none"
+        className="flex-1 bg-black/60"
+      />
+    </TouchableOpacity>
   );
 }

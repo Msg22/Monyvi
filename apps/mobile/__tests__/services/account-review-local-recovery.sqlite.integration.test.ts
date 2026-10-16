@@ -122,7 +122,10 @@ function prepareLegacyActionRoot(db: Database): FinancialActionGroup {
     });
 }
 
-async function upgradeLegacySqlite(): Promise<Database> {
+async function upgradeLegacySqlite(): Promise<{
+  readonly database: Database;
+  readonly rawAdapter: SQLiteAdapter;
+}> {
   const name = "file:account-review-local-upgrade-" +
     String(++oldDatabaseSequence) + "?mode=memory&cache=shared";
   const oldAdapter = new SQLiteAdapter({
@@ -140,9 +143,12 @@ async function upgradeLegacySqlite(): Promise<Database> {
     schema, migrations, dbName: name,
   });
   await upgradedAdapter.initializingPromise;
-  return new Database({
-    adapter: upgradedAdapter, modelClasses: LEDGER_MODEL_CLASSES,
-  });
+  return {
+    database: new Database({
+      adapter: upgradedAdapter, modelClasses: LEDGER_MODEL_CLASSES,
+    }),
+    rawAdapter: upgradedAdapter,
+  };
 }
 
 function tableForEntity(
@@ -216,7 +222,7 @@ beforeEach(async (): Promise<void> => {
 
 describe("#395 T053 actual Watermelon v30 to v31 private-column upgrade", () => {
   it("L01 preserves legacy root, account rows and null private value over actual migration and restart", async () => {
-    const upgraded = await upgradeLegacySqlite();
+    const { database: upgraded, rawAdapter } = await upgradeLegacySqlite();
     const existing = await upgraded.get<FinancialActionGroup>(
       "financial_action_groups"
     ).find(testUuid(770));
@@ -225,7 +231,8 @@ describe("#395 T053 actual Watermelon v30 to v31 private-column upgrade", () => 
     expect(existing.localRecoverySnapshotJson).toBeNull();
     const accounts = await upgraded.get<Account>("accounts").query().fetch();
     expect(accounts).toHaveLength(3);
-    const restartedAdapter = await upgraded.adapter.testClone();
+    // Database.adapter is already a compat wrapper. Clone the raw adapter.
+    const restartedAdapter = await rawAdapter.testClone();
     const reopened = new Database({
       adapter: restartedAdapter, modelClasses: LEDGER_MODEL_CLASSES,
     });

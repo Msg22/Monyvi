@@ -1,0 +1,57 @@
+appId: com.monyvi.app
+---
+# #395 T058/M10-M11 CONDITIONAL REVIEW — TESTS FIRST, AUTHORED NOT RUN.
+# Immutable test source: bde7c6285b0e5630ad8ef0ca531ed2ad8946d5bb.
+# Current T015 loadAccountReviewFixtureSession(sceneId) is an authenticated,
+# e2e-mode, non-production in-memory service. It is NOT a route, deep link,
+# Maestro command, hosted seed or provider control. T054/T061 must expose a
+# real current-owner review UI entry before this flow can run.
+#
+# INTENTIONAL CREATION BLOCKER: setup navigates only to Transactions. The
+# first panel assertion must fail until a supported scene-open action exists.
+# Do not remove this guard or classify the flow as passing on a normal list.
+# Once T054/T061 owns the real UI entry, insert its observed navigation step
+# before the guard and run against synthetic r3-combined-en.
+# No mic tap, parser, OS permission, network provider, SMS inbox, raw data,
+# financial Save, account creation, app reset or hosted mutation is scripted.
+
+- runFlow: ../helpers/setup.yaml
+- assertVisible: "Transactions"
+
+# R3-05 (7 total, 5 review, 2 checked): future current-owner fixture entry
+# must load the approved r3-combined-en descriptor through T015.
+- assertVisible:
+    id: "account-review-details-panel"
+- assertVisible:
+    id: "account-review-default-info"
+- assertVisible:
+    id: "account-review-filter-all"
+- assertVisible:
+    id: "account-review-filter-needs_review"
+- assertVisible:
+    id: "account-review-filter-selected"
+- assertVisible:
+    id: "account-review-select-ready"
+- assertVisible:
+    id: "account-review-clear-selection"
+- assertVisible:
+    id: "account-review-group-view-all"
+- tapOn:
+    id: "account-review-group-view-all"
+- assertVisible:
+    id: "account-review-group-all-sheet"
+# T031 renders a real scrollable FlatList; the parent is responsible for
+# closing the sheet, changing filters, and never confirming other groups.
+
+# R3-11 Selected-empty, R3-07 default-only, R3-08 issues-only, R3-09
+# confirmed, R3-06 removed/Undo, R3-10 clean, and R3-15 Arabic require
+# separate supported current-owner fixture scene entry/re-entry. No such route
+# exists at this parent. Those variants have deterministic T058 component
+# assertions; do NOT fake Maestro fixture selectors or conditional success.
+# Future real E2E extension:
+# - open each named descriptor via the T054/T061 observed UI action,
+# - assert exact visible counts and group/item status from that scene,
+# - switch Selected and Show all without auto-selecting/confirming,
+# - assert default-only and clean have no empty details container,
+# - exercise group actions while verifying affected row IDs,
+# - collect EN/AR, RTL, screen-reader, keyboard and rendered evidence on device.

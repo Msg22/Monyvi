@@ -1,13 +1,11 @@
 /** #395 T048: private, opt-in review-only command; no legacy registry widening. */
 import type { Database } from "@nozbe/watermelondb";
 import {
-  ACTION_REGISTRY_ERROR_CODES,
-  DEFAULT_FINANCIAL_ACTION_REGISTRY,
   canonicalizeFinancialActionEnvelope,
-  createFinancialActionRegistry,
   type FinancialActionRegistry,
 } from "@monyvi/logic";
-import { createReviewFinancialActionDefinitions } from "../../../packages/logic/src/financial-actions/review-batch-save";
+import { createAccountDefaultAndReviewRegistry } from
+  "../../../packages/logic/src/financial-actions/account-create-default-registration";
 import type {
   AccountBalanceCommandService,
   ExecuteAccountBalanceCommandInput,
@@ -19,12 +17,7 @@ import {
 } from "./user-data-access";
 
 export function createAccountReviewFinancialRegistry(): FinancialActionRegistry {
-  return createFinancialActionRegistry([
-    ...DEFAULT_FINANCIAL_ACTION_REGISTRY.definitions,
-    ...createReviewFinancialActionDefinitions(
-      ACTION_REGISTRY_ERROR_CODES.INVALID_PAYLOAD
-    ),
-  ]);
+  return createAccountDefaultAndReviewRegistry();
 }
 export function createAccountReviewFinancialCommandService(
   database: Database
@@ -48,6 +41,42 @@ export function createAccountReviewFinancialCommandService(
         envelope.payloadVersion !== "review.batch-save/v1"
       ) {
         throw new Error("account_review_financial_wrong_tuple");
+      }
+      return foundation.commitFinancialActionGroupLocally({
+        envelope,
+        hashProvider: input.hashProvider,
+        prepareLinkedOperationPlan: input.prepareDomainOperationPlan,
+      });
+    },
+  };
+}
+
+/**
+ * Dedicated Add feature route through the same approved prepared foundation.
+ * Review remains explicitly review-only; DEFAULT registry stays legacy-only.
+ */
+export function createAccountDefaultFinancialCommandService(
+  database: Database
+): Pick<AccountBalanceCommandService, "execute"> {
+  const registry = createAccountReviewFinancialRegistry();
+  const foundation = createFinancialActionFoundationRepository({
+    database,
+    getCurrentUserDataScope,
+    assertExpectedCurrentUser,
+    registry,
+  });
+  return {
+    execute: async (input: ExecuteAccountBalanceCommandInput) => {
+      const envelope = canonicalizeFinancialActionEnvelope(
+        input.envelope,
+        registry
+      );
+      if (
+        envelope.domain !== "accounts" ||
+        envelope.kind !== "create_with_default" ||
+        envelope.payloadVersion !== "account.create-default/v1"
+      ) {
+        throw new Error("account_default_financial_wrong_tuple");
       }
       return foundation.commitFinancialActionGroupLocally({
         envelope,

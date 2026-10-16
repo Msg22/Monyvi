@@ -6,7 +6,8 @@ import {
   computeAccountReviewFrozenIntentDigest,
   type Sha256Provider,
 } from "@monyvi/logic";
-import type { ReviewBatchSavePayload } from "../../../packages/logic/src/financial-actions/review-batch-save-shapes";
+import type { ReviewBatchSavePayload } from
+  "../../../packages/logic/src/financial-actions/review-batch-save-shapes";
 import type { FrozenReviewSave } from "./account-review-save-preparation";
 
 export function computeFrozenReviewSaveDigest(

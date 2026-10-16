@@ -1,4 +1,11 @@
 import type { FinancialActionFoundationRepository } from "./financial-action-foundation-repository";
+import { database } from "@monyvi/db";
+import { productionFinancialActionHashProvider } from "./account-balance-command-production";
+import {
+  assertProtectedFinancialActionEnvelopeHash,
+  assertReviewDefaultPredecessorsAccepted,
+} from "./account-review-default-predecessors";
+import { clearAcceptedAccountReviewPrivateEvidence } from "./account-review-retention-terminal";
 
 export const FINANCIAL_ACTION_SYNC_ERROR_CODES = {
   INVALID_OUTCOME: "financial_action_sync_invalid_outcome",
@@ -70,6 +77,10 @@ export interface FinancialActionPushCoordinatorDependencies extends Pick<
   readonly reconcileFinancialActionGroup?: (
     actionId: string
   ) => Promise<"incomplete" | "reconciled" | "replay">;
+  /** Production protected push always supplies the owned-root lookup. */
+  readonly getFinancialActionGroup?: FinancialActionFoundationRepository[
+    "getFinancialActionGroup"
+  ];
 }
 
 function fail(code: string): never {
@@ -147,9 +158,31 @@ export function createFinancialActionSyncService(
           actionId
         )
       );
+      await assertProtectedFinancialActionEnvelopeHash(
+        record, productionFinancialActionHashProvider
+      );
+      await assertReviewDefaultPredecessorsAccepted({
+        root: record,
+        database,
+        hashProvider: productionFinancialActionHashProvider,
+        loadOwnedRoot: dependencies.foundationRepository.getFinancialActionGroup,
+      });
       await dependencies.foundationRepository.markFinancialActionGroupSyncPending(
         actionId
       );
+      // Recheck the durable immutable action and ancestry after awaits.
+      const current = assertSyncable(
+        await dependencies.foundationRepository.getFinancialActionGroup(actionId)
+      );
+      if (current.payloadHash !== record.payloadHash ||
+          current.payloadJson !== record.payloadJson)
+        fail(FINANCIAL_ACTION_SYNC_ERROR_CODES.INVALID_OUTCOME);
+      await assertReviewDefaultPredecessorsAccepted({
+        root: current,
+        database,
+        hashProvider: productionFinancialActionHashProvider,
+        loadOwnedRoot: dependencies.foundationRepository.getFinancialActionGroup,
+      });
       let rawOutcome: unknown;
       try {
         rawOutcome = await dependencies.invokeAccountFinancialActionRpc({
@@ -170,6 +203,9 @@ export function createFinancialActionSyncService(
         outcome.outcomeJson,
         outcome.code
       );
+      if ((outcome.status === "accepted" || outcome.status === "idempotent") &&
+          record.payloadJson.includes('"review.batch-save/v1"'))
+        await clearAcceptedAccountReviewPrivateEvidence({ database, actionId });
     },
   };
 }
@@ -195,6 +231,9 @@ export function createFinancialActionPushCoordinator(
       const decisions: FinancialActionPushDecision[] = [];
       for (const candidate of candidates) {
         assertSyncable(candidate);
+        await assertProtectedFinancialActionEnvelopeHash(
+          candidate, productionFinancialActionHashProvider
+        );
         if (candidate.state === "accepted") {
           decisions.push({
             actionId: candidate.actionId,
@@ -226,10 +265,40 @@ export function createFinancialActionPushCoordinator(
           });
           continue;
         }
+        if (dependencies.getFinancialActionGroup) {
+          const owned = await dependencies.getFinancialActionGroup(
+            candidate.actionId
+          );
+          if (!owned ||
+              owned.payloadHash !== candidate.payloadHash ||
+              owned.payloadJson !== candidate.payloadJson)
+            fail(FINANCIAL_ACTION_SYNC_ERROR_CODES.INVALID_OUTCOME);
+          await assertReviewDefaultPredecessorsAccepted({
+            root: owned,
+            database,
+            hashProvider: productionFinancialActionHashProvider,
+            loadOwnedRoot: dependencies.getFinancialActionGroup,
+          });
+        }
         if (candidate.state !== "sync_pending") {
           await dependencies.markFinancialActionGroupSyncPending(
             candidate.actionId
           );
+        }
+        if (dependencies.getFinancialActionGroup) {
+          const current = await dependencies.getFinancialActionGroup(
+            candidate.actionId
+          );
+          if (!current ||
+              current.payloadHash !== candidate.payloadHash ||
+              current.payloadJson !== candidate.payloadJson)
+            fail(FINANCIAL_ACTION_SYNC_ERROR_CODES.INVALID_OUTCOME);
+          await assertReviewDefaultPredecessorsAccepted({
+            root: current,
+            database,
+            hashProvider: productionFinancialActionHashProvider,
+            loadOwnedRoot: dependencies.getFinancialActionGroup,
+          });
         }
         let rawOutcome: unknown;
         try {
@@ -251,6 +320,12 @@ export function createFinancialActionPushCoordinator(
           outcome.outcomeJson,
           outcome.code
         );
+        if (dependencies.getFinancialActionGroup &&
+            candidate.payloadJson.includes('"review.batch-save/v1"') &&
+            (outcome.status === "accepted" || outcome.status === "idempotent"))
+          await clearAcceptedAccountReviewPrivateEvidence({
+            database, actionId: candidate.actionId,
+          });
         const needsReconciliation =
           outcome.status === "stale" || outcome.status === "rejected";
         const reconciliation = needsReconciliation

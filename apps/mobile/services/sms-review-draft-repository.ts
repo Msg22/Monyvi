@@ -33,6 +33,7 @@ import { mergePublishedSmsReviewDrafts } from "./account-review-command-publicat
 import { getSavedSmsReviewFingerprints } from "./sms-review-handled-fingerprint-service";
 import { getSmsReviewDraftItemsToShiftForRestore } from "./sms-review-draft-restore-position";
 import { clearEmptySmsReviewNamespaceInWriter } from "./sms-review-namespace-repository";
+import { prepareAccountReviewPrivateLifecycle } from "./account-review-retention-lifecycle";
 import {
   assertSmsReviewNamespaceMerge,
   commitSmsReviewNamespacePublication,
@@ -550,18 +551,32 @@ export async function updateSmsReviewDraftSelections(
 async function deleteSmsReviewDraftRecordsInWriter(
   records: readonly SmsReviewDraftItem[],
   expectedUserId: string,
-  additionalOperations: readonly Model[] = []
+  additionalOperations: readonly Model[] = [],
+  isExplicitDiscard = false
 ): Promise<void> {
   const queue = assertSingleQueue(await fetchOwnedQueues(expectedUserId));
   const selectedIds = new Set(records.map((record) => record.id));
   const allItems = await fetchOwnedItems(expectedUserId, queue?.id);
+  const willRemoveQueue = queue !== null &&
+    allItems.every((item) => selectedIds.has(item.id));
+  const privateRoots = isExplicitDiscard
+    ? await prepareAccountReviewPrivateLifecycle({
+        database,
+        ownerId: expectedUserId,
+        kind: "discard",
+        queueId: queue?.id,
+        draftIds: selectedIds,
+        queueRemoved: willRemoveQueue,
+      })
+    : null;
   await commitScopedPreparedBatch(
     expectedUserId,
-    [...records, ...(queue ? [queue] : [])],
+    [...records, ...(queue ? [queue] : []), ...(privateRoots?.cachedRoots ?? [])],
     (): readonly Model[] => {
       const operations: Model[] = [
         ...additionalOperations,
         ...records.map((record) => record.prepareDestroyPermanently()),
+        ...(privateRoots?.prepareOperations() ?? []),
       ];
       if (queue && allItems.every((item) => selectedIds.has(item.id))) {
         operations.push(queue.prepareDestroyPermanently());
@@ -584,7 +599,7 @@ export async function deleteSmsReviewDraftsInWriter(
       getOwnedSmsReviewDraftItem(draftId, expectedUserId)
     )
   );
-  await deleteSmsReviewDraftRecordsInWriter(records, expectedUserId);
+  await deleteSmsReviewDraftRecordsInWriter(records, expectedUserId, [], true);
 }
 
 export async function deleteResolvedSmsReviewDraftsInWriter(
@@ -652,11 +667,19 @@ export async function discardSmsReviewDraft(
       record.smsFingerprint
     );
     const allItems = await fetchOwnedItems(expectedUserId, queue.id);
+    const privateRoots = await prepareAccountReviewPrivateLifecycle({
+      database,
+      ownerId: expectedUserId,
+      kind: "discard",
+      queueId: queue.id,
+      draftIds: new Set([record.id]),
+      queueRemoved: allItems.length === 1,
+    });
     await commitScopedPreparedBatch(
       expectedUserId,
-      [record, queue],
+      [record, queue, ...privateRoots.cachedRoots],
       (): readonly Model[] => {
-        const operations: Model[] = [];
+        const operations: Model[] = [...privateRoots.prepareOperations()];
         if (!existingDismissed) {
           operations.push(
             dismissedCollection().prepareCreate((dismissed) => {
@@ -860,11 +883,21 @@ export async function discardAllSmsReviewDrafts(
       dismissed.map((record) => record.smsFingerprint)
     );
     const now = new Date();
+    const privateRoots = await prepareAccountReviewPrivateLifecycle({
+      database,
+      ownerId: expectedUserId,
+      kind: "discard",
+      queueId: queue.id,
+      draftIds: confirmedDraftIdSet,
+      queueRemoved: !hasRemainingItems,
+    });
     await commitScopedPreparedBatch(
       expectedUserId,
-      [queue, ...confirmedItems],
+      [queue, ...confirmedItems, ...privateRoots.cachedRoots],
       (): readonly Model[] => {
-        const operations: Model[] = confirmedItems
+        const operations: Model[] = [
+          ...privateRoots.prepareOperations(),
+          ...confirmedItems
           .filter((item) => !dismissedSet.has(item.smsFingerprint))
           .map((item) =>
             dismissedCollection().prepareCreate((record) => {
@@ -872,7 +905,8 @@ export async function discardAllSmsReviewDrafts(
               record.smsFingerprint = item.smsFingerprint;
               record.updatedAt = now;
             })
-          );
+          ),
+        ];
         operations.push(
           ...confirmedItems.map((item) => item.prepareDestroyPermanently())
         );

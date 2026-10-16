@@ -32,7 +32,16 @@ import {
 import { roundForCurrency } from "@monyvi/logic";
 import { Q, type Model } from "@nozbe/watermelondb";
 import { readIntroLocaleOverride } from "./intro-flag-service";
-import { assertExpectedCurrentUser, queryOwned } from "./user-data-access";
+import {
+  assertExpectedCurrentUser,
+  getCurrentUserDataScope,
+  queryOwned,
+} from "./user-data-access";
+import * as Crypto from "expo-crypto";
+import { productionFinancialActionHashProvider } from
+  "./account-balance-command-production";
+import { createAccountDefaultIntentService } from
+  "./account-default-intent-service";
 import {
   createAccountSmsSendersWithinWriter,
   prepareCreateAccountSmsSenders,
@@ -389,7 +398,7 @@ function buildProviderIdentity(
 
 function hasDuplicateAccountIdentity(
   existingAccounts: readonly Account[],
-  data: AccountFormData
+  data: Readonly<AccountFormData>
 ): boolean {
   const trimmedName = data.name.trim().toLowerCase();
   const providerIdentity = buildProviderIdentity(
@@ -412,6 +421,34 @@ function hasDuplicateAccountIdentity(
     );
   });
 }
+
+/** Reuse the established provider/name/currency duplicate identity rule. */
+export function assertNoDuplicateAddAccountIdentity(
+  ownedAccounts: readonly Account[],
+  form: Readonly<AccountFormData>
+): void {
+  if (hasDuplicateAccountIdentity(
+    ownedAccounts.filter((account) => account.currency === form.currency),
+    form
+  )) {
+    throw new Error(CREATE_ACCOUNT_ERROR_CODES.DUPLICATE_ACCOUNT);
+  }
+}
+
+/**
+ * Only explicitly submitted new defaultIntent values use the new tuple.
+ * Unadopted legacy callers remain on their existing path until T070 UI cutover.
+ * This production factory is intentionally scoped to Add, not Edit/ensureCash.
+ */
+const defaultIntentCommandService = createAccountDefaultIntentService({
+  database,
+  getCurrentUserDataScope,
+  assertExpectedCurrentUser,
+  hashProvider: productionFinancialActionHashProvider,
+  createId: (): string => Crypto.randomUUID(),
+  now: (): Date => new Date(),
+  assertNoDuplicateAccountIdentity: assertNoDuplicateAddAccountIdentity,
+});
 
 async function readActiveAccountCount(userId: string): Promise<number> {
   return queryOwned(
@@ -560,6 +597,22 @@ export async function createAccountForUser(
   pendingCreateKeys.add(createKey);
 
   try {
+    if (validatedData.defaultIntent !== undefined) {
+      // A single immutable command holds the owner's original default set,
+      // stable action/child IDs and any durable predecessor dependencies.
+      const result = await defaultIntentCommandService.create(
+        normalizedUserId,
+        validatedData
+      );
+      return {
+        success: true,
+        accountId: result.accountId,
+        created: result.kind === "committed",
+      };
+    }
+
+    // Legacy creates without an explicit defaultIntent keep their deployed
+    // writer/tuple unchanged until the independently owned T070 cutover.
     const openingBalance = roundForCurrency(
       parseFloat(validatedData.balance),
       validatedData.currency

@@ -271,8 +271,8 @@ describe("#395 pure frozen-intent SHA-256 projection — module creation Red", (
     ]);
     expect(canonicalText).toBe(
       '["monyvi.account-review.frozen-intent","v1",{"scope":{"actionId":' +
-        '"11111111-1111-4111-8111-111111111111","ownerId":' +
-        '"22222222-2222-4222-8222-222222222222"},"selectedRows":[]}]'
+      '"11111111-1111-4111-8111-111111111111","ownerId":' +
+      '"22222222-2222-4222-8222-222222222222"},"selectedRows":[]}]'
     );
     expect(await syntheticHashProvider.digestUtf8(canonicalText)).toBe(
       "2a21a107282acab1369ab302548ed22135d915e22e8b149712f7e8358162ce10"
@@ -405,6 +405,7 @@ describe("#395 pure frozen-intent SHA-256 projection — module creation Red", (
     ).not.toBe(await callDigest(fixture));
   });
 
+
   it("rejects a schema-valid confirmed-Bank round-trip mismatch before the first hash call", async () => {
     const fixture = await groupedCase();
     const selected = fixture.session.rows.find((row) => row.selected);
@@ -456,9 +457,7 @@ describe("#395 pure frozen-intent SHA-256 projection — module creation Red", (
           : row
       ),
     };
-    expect(accountReviewSessionSchema.safeParse(alteredSession).success).toBe(
-      false
-    );
+    expect(accountReviewSessionSchema.safeParse(alteredSession).success).toBe(false);
     const digestedPreimages: string[] = [];
     const hashProvider: Sha256Provider = {
       digestUtf8: (value: string): Promise<string> => {
@@ -547,11 +546,11 @@ describe("#395 pure frozen-intent SHA-256 projection — module creation Red", (
     expect(await callDigest(fixture)).toBe(original);
   });
 
+
   it("captures the supplied default snapshot at invocation despite deferred Bank-alias hashing", async () => {
     const fixture = await groupedCase();
     const initialSnapshot = fixture.creationDefaultSnapshot;
-    if (!initialSnapshot)
-      throw new Error("Missing genuine historical Bank snapshot");
+    if (!initialSnapshot) throw new Error("Missing genuine historical Bank snapshot");
     const supplied = {
       activeAccountIds: [...initialSnapshot.activeAccountIds],
       defaultAccount: initialSnapshot.defaultAccount,
@@ -565,12 +564,8 @@ describe("#395 pure frozen-intent SHA-256 projection — module creation Red", (
       creationDefaultSnapshot: immutableAtInvocation,
     });
     const gate = { entered: (): void => {}, release: (): void => {} };
-    const entered = new Promise<void>((resolve) => {
-      gate.entered = () => resolve();
-    });
-    const blocked = new Promise<void>((resolve) => {
-      gate.release = () => resolve();
-    });
+    const entered = new Promise<void>((resolve) => { gate.entered = () => resolve(); });
+    const blocked = new Promise<void>((resolve) => { gate.release = () => resolve(); });
     let hashCalls = 0;
     const hashProvider: Sha256Provider = {
       digestUtf8: async (value: string): Promise<string> => {
@@ -592,12 +587,10 @@ describe("#395 pure frozen-intent SHA-256 projection — module creation Red", (
     gate.release();
     expect(await pending).toBe(expected);
     expect(hashCalls).toBeGreaterThan(1);
-    expect(
-      await callDigest({
-        ...fixture,
-        creationDefaultSnapshot: supplied,
-      })
-    ).not.toBe(expected);
+    expect(await callDigest({
+      ...fixture,
+      creationDefaultSnapshot: supplied,
+    })).not.toBe(expected);
   });
 
   it("normalizes equal original calendar dates without hashing time-of-day metadata", async () => {
@@ -722,7 +715,9 @@ describe("#395 pure frozen-intent SHA-256 projection — module creation Red", (
       JSON.parse(
         JSON.stringify(fixture.session),
         (key: string, value: unknown): unknown =>
-          key === "date" && typeof value === "string" ? new Date(value) : value
+          key === "date" && typeof value === "string"
+            ? new Date(value)
+            : value
       )
     );
     const restoredIntent = accountReviewSaveIntentSchema.parse(

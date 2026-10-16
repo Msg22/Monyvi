@@ -13,6 +13,7 @@ import type { SmsSaveScope } from "./account-review-save-sms";
 import {
   hashAccountReviewLocalPostimage,
   physicalDate,
+  physicalRawField,
   physicalText,
   physicalUnsigned,
   requiredPreparedPostimage,
@@ -37,8 +38,7 @@ function queueEvidence(
   input: SmsSaveScope, sessionId: string, ownerId: string
 ): NonNullable<SmsSaveScope["queue"]> {
   const queue = input.queue;
-  if (!queue || queue.id !== sessionId || queue.userId !== ownerId ||
-    queue._preparedState !== null)
+  if (!queue || queue.id !== sessionId || queue.userId !== ownerId)
     return reject("queue_session_or_ownership_changed");
   return queue;
 }
@@ -99,21 +99,109 @@ async function originalAvailableDraft(input: {
   };
 }
 
+/**
+ * Same-writer original queue header and actual prepared absence evidence.
+ * The only prunable queue is the one whose CURRENT owned drafts are ALL
+ * consumed by this action. Never infer this from a selected-row count alone.
+ */
 async function captureQueueHeader(input: {
   readonly sms: SmsSaveScope;
   readonly ownerId: string;
   readonly sessionId: string;
+  readonly evidence: FinancialActionLinkedOperationPreparedOwnershipInput;
+  readonly payload: ReviewBatchSavePayload;
   readonly hashProvider: Sha256Provider;
 }): Promise<Queue> {
   const queue = queueEvidence(input.sms, input.sessionId, input.ownerId);
+  if (input.evidence.userId !== input.ownerId ||
+      input.payload.source !== "SMS" ||
+      input.payload.sessionId !== input.sessionId)
+    reject("queue_root_or_source_mismatch");
+  const all = input.sms.allOwned;
+  const selected = input.sms.selected;
+  const selectedIds = new Set(selected.map(({ draft }) => draft.id));
+  const allIds = new Set(all.map((draft) => draft.id));
+  if (
+    selected.length === 0 ||
+    selectedIds.size !== selected.length ||
+    allIds.size !== all.length ||
+    all.some((draft) => draft.userId !== input.ownerId ||
+      draft.queueId !== queue.id) ||
+    selected.some(({ draft, queue: current }) =>
+      current !== queue || draft.userId !== input.ownerId ||
+      draft.queueId !== queue.id || !allIds.has(draft.id)
+    )
+  )
+    reject("queue_current_owned_draft_membership");
+  const fullyConsumed = all.length === selected.length &&
+    all.every((draft) => selectedIds.has(draft.id));
+  const before = input.evidence.cachedPreimages.filter((row) =>
+    row.table === "sms_review_queues"
+  );
+  const after = input.evidence.preparedPostimages.filter((row) =>
+    row.table === "sms_review_queues"
+  );
+  if (
+    before.length !== after.length ||
+    before.length > 1 ||
+    fullyConsumed !== (after.length === 1) ||
+    input.payload.localSmsBookkeeping.some((entry) =>
+      entry.queueId !== input.sessionId ||
+      (fullyConsumed && entry.operation === "rebind_remaining")
+    )
+  )
+    reject("queue_prepared_membership");
+  const prior = before[0];
+  const prepared = after[0];
+  if (fullyConsumed && (
+      !prior || !prepared ||
+      prior.id !== queue.id || prepared.id !== queue.id ||
+      prior.kind !== "markAsDeleted" ||
+      prepared.kind !== "markAsDeleted" ||
+      queue._preparedState !== "markAsDeleted" ||
+      physicalRawField(prior.raw, "_status") === "deleted" ||
+      physicalRawField(prepared.raw, "_status") !== "deleted"
+    ))
+    reject("queue_destructive_proof_missing");
+  if (!fullyConsumed && queue._preparedState !== null)
+    reject("queue_not_pruned_but_prepared");
+  const original = prior?.raw ?? queue._raw;
+  const physicalPost = prepared?.raw ?? queue._raw;
+  const createdAt = physicalDate(original, "created_at");
+  const updatedAt = physicalDate(original, "updated_at");
+  if (
+    physicalText(original, "user_id") !== input.ownerId ||
+    physicalText(physicalPost, "user_id") !== input.ownerId ||
+    physicalDate(physicalPost, "created_at") !== createdAt ||
+    physicalDate(physicalPost, "updated_at") !== updatedAt ||
+    physicalDate(queue._raw, "created_at") !== createdAt ||
+    physicalDate(queue._raw, "updated_at") !== updatedAt ||
+    queue.createdAt.toISOString() !== createdAt ||
+    queue.updatedAt.toISOString() !== updatedAt
+  )
+    reject("queue_original_header_rebound");
+  if (fullyConsumed) {
+    const physicalDrafts = input.evidence.preparedPostimages.filter((row) =>
+      row.table === "sms_review_draft_items"
+    );
+    if (
+      physicalDrafts.length !== all.length ||
+      physicalDrafts.some((row) =>
+        row.kind !== "markAsDeleted" || !selectedIds.has(row.id)
+      )
+    )
+      reject("queue_unconsumed_draft_or_rebind");
+  }
   return {
     id: queue.id,
-    userId: queue.userId,
-    createdAt: physicalDate(queue._raw, "created_at"),
-    updatedAt: physicalDate(queue._raw, "updated_at"),
-    disposition: "present",
+    userId: input.ownerId,
+    createdAt,
+    updatedAt,
+    disposition: fullyConsumed ? "pruned_empty" : "present",
     expectedPostimageHash: await hashAccountReviewLocalPostimage({
-      table: queue.table, id: queue.id, raw: queue._raw,
+      table: queue.table,
+      id: queue.id,
+      raw: physicalPost,
       hashProvider: input.hashProvider,
     }),
   };

@@ -177,9 +177,7 @@ async function replayExistingAction(
   // The historical ORIGINAL request, not current saved SMS/defaults, is bound
   // to the immutable root before any foundation replay is permitted.
   const digest = await computeFrozenReviewSaveDigest(
-    frozen,
-    payload.creationDefaultSnapshot,
-    dep.hashProvider
+    frozen, payload.creationDefaultSnapshot, dep.hashProvider
   );
   if (digest !== payload.frozenIntentDigest)
     reject("replay_frozen_intent_changed");
@@ -229,11 +227,14 @@ async function commitCleanupOnlySms(
   sms: SmsSaveScope,
   assertOwner: () => Promise<void>
 ): Promise<AccountReviewSaveResult> {
-  const selected = new Set(sms.selected.map((entry) => entry.draft.id));
+  const selected = new Set(
+    sms.selected.map((entry) => entry.draft.id)
+  );
   const drafts = sms.selected.map((entry) => entry.draft);
   const queue = sms.queue;
   const deleteQueue =
-    queue !== null && sms.allOwned.every((row) => selected.has(row.id));
+    queue !== null &&
+    sms.allOwned.every((row) => selected.has(row.id));
   const touched: Model[] = [...drafts];
   if (deleteQueue && queue) touched.push(queue);
   // prepareDestroyPermanently mutates the cached models before adapter.commit.
@@ -299,7 +300,10 @@ async function revalidateReviewPlanInsideWriter(
   const currentScope = await currentOwnedScope(frozen, dep);
   assertCurrentReviewSession(
     frozen,
-    await dep.loadCurrentSession(frozen.intent.ownerId, frozen.intent.sessionId)
+    await dep.loadCurrentSession(
+      frozen.intent.ownerId,
+      frozen.intent.sessionId
+    )
   );
   const current = await constructReviewSave(frozen, plan, currentScope);
   if (
@@ -351,12 +355,7 @@ async function commitNewReviewAction(
     hashProvider: dep.hashProvider,
     prepareDomainOperationPlan: () =>
       revalidateReviewPlanInsideWriter(
-        frozen,
-        dep,
-        plan,
-        assertOwner,
-        registry,
-        initialHashText
+        frozen, dep, plan, assertOwner, registry, initialHashText
       ),
   });
   return { kind: result.kind };

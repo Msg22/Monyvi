@@ -36,9 +36,7 @@ interface MockDb {
 }
 
 jest.mock("@nozbe/watermelondb/adapters/sqlite/makeDispatcher", (): unknown =>
-  jest.requireActual(
-    "@nozbe/watermelondb/adapters/sqlite/makeDispatcher/index.js"
-  )
+  jest.requireActual("@nozbe/watermelondb/adapters/sqlite/makeDispatcher/index.js")
 );
 jest.mock("@monyvi/db", (): Readonly<Record<string, unknown>> => {
   const wm = jest.requireActual<typeof import("@nozbe/watermelondb")>(
@@ -167,44 +165,39 @@ describe("#395 Save: real SQLite rejection and frozen membership boundaries", ()
       effects: 0,
     });
     const cached = await loadCachedModels();
-    expect(
-      cached.filter((model) => model.table === "sms_review_draft_items")
-    ).toHaveLength(1);
-    expect(
-      cached.filter((model) => model.table === "sms_review_queues")
-    ).toHaveLength(1);
+    expect(cached.filter((model) =>
+      model.table === "sms_review_draft_items"
+    )).toHaveLength(1);
+    expect(cached.filter((model) =>
+      model.table === "sms_review_queues"
+    )).toHaveLength(1);
     const beforeCache = cachedPreimages(cached);
     const deletedTables: string[] = [];
-    const precommitFailure = jest
-      .spyOn(adapter, "batch")
-      .mockImplementation((operations, callback): void => {
+    const precommitFailure = jest.spyOn(adapter, "batch").mockImplementation(
+      (operations, callback): void => {
         deletedTables.push(
-          ...operations
-            .filter((operation) => operation[0] === "destroyPermanently")
-            .map((operation) => operation[1])
+          ...operations.filter(
+            (operation) => operation[0] === "destroyPermanently"
+          ).map((operation) => operation[1])
         );
         // SQLiteAdapter.batch uses ResultCallback<void>, not a Promise return.
-        callback({
-          error: new Error("injected_review_cleanup_precommit_failure"),
-        });
-      });
+        callback({ error: new Error("injected_review_cleanup_precommit_failure") });
+      }
+    );
     try {
-      await expect(writer.saveSelectedAccountReview(fixture)).rejects.toThrow(
-        "injected_review_cleanup_precommit_failure"
-      );
+      await expect(writer.saveSelectedAccountReview(fixture))
+        .rejects.toThrow("injected_review_cleanup_precommit_failure");
     } finally {
       precommitFailure.mockRestore();
     }
     expect([...deletedTables].sort()).toEqual(
       ["sms_review_draft_items", "sms_review_queues"].sort()
     );
-    expect(
-      await physicalSaveLedgerSnapshot(await reopenSqliteLedger(ledger))
-    ).toEqual(beforeSql);
+    expect(await physicalSaveLedgerSnapshot(await reopenSqliteLedger(ledger)))
+      .toEqual(beforeSql);
     await expectCachedModelsUnchanged(cached, beforeCache);
-    expect(await ledgerState(await reopenSqliteLedger(ledger))).toEqual(
-      beforeState
-    );
+    expect(await ledgerState(await reopenSqliteLedger(ledger)))
+      .toEqual(beforeState);
 
     await expect(writer.saveSelectedAccountReview(fixture)).resolves.toEqual({
       kind: "cleanup_only",
@@ -225,9 +218,8 @@ describe("#395 Save: real SQLite rejection and frozen membership boundaries", ()
 
   it("S43 rejects an extra unused schema-valid frozen Bank sender member without any write", async (): Promise<void> => {
     const original = makeSaveFixture("sms-new-bank");
-    expect(
-      accountReviewSessionSchema.parse(original.session).saveIntent
-    ).toEqual(original.intent);
+    expect(accountReviewSessionSchema.parse(original.session).saveIntent)
+      .toEqual(original.intent);
     await seedSmsReviewDrafts(database, original.session);
     const unusedSender: AccountReviewSaveIntent["plannedEntityIds"][number] = {
       entity: "account_sms_sender",
@@ -255,16 +247,13 @@ describe("#395 Save: real SQLite rejection and frozen membership boundaries", ()
     const cached = await loadCachedModels();
     const beforeCache = cachedPreimages(cached);
 
-    await expect(
-      writer.saveSelectedAccountReview({ session, intent })
-    ).rejects.toThrow();
-    expect(
-      await physicalSaveLedgerSnapshot(await reopenSqliteLedger(ledger))
-    ).toEqual(beforeSql);
+    await expect(writer.saveSelectedAccountReview({ session, intent }))
+      .rejects.toThrow();
+    expect(await physicalSaveLedgerSnapshot(await reopenSqliteLedger(ledger)))
+      .toEqual(beforeSql);
     await expectCachedModelsUnchanged(cached, beforeCache);
-    expect(await ledgerState(await reopenSqliteLedger(ledger))).toEqual(
-      beforeState
-    );
+    expect(await ledgerState(await reopenSqliteLedger(ledger)))
+      .toEqual(beforeState);
     expect(beforeState.counts).toMatchObject({
       accounts: 3,
       bankDetails: 0,
@@ -279,9 +268,8 @@ describe("#395 Save: real SQLite rejection and frozen membership boundaries", ()
     // Positive control: reject only the extra child, not the complete
     // original frozen selected Bank plan and its legitimate physical members.
     currentSession = original.session;
-    await expect(
-      writer.saveSelectedAccountReview(original)
-    ).resolves.toMatchObject({ kind: "committed" });
+    await expect(writer.saveSelectedAccountReview(original))
+      .resolves.toMatchObject({ kind: "committed" });
     const accepted = await ledgerState(await reopenSqliteLedger(ledger));
     expect(accepted.counts).toMatchObject({
       accounts: 4,

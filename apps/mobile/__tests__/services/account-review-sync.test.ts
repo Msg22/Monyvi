@@ -66,29 +66,19 @@ function requiredChangeId(value: unknown): string {
   return value;
 }
 
-function ids(
-  changes: AppSyncDatabaseChangeSet,
-  table: string
-): readonly string[] {
+function ids(changes: AppSyncDatabaseChangeSet, table: string): readonly string[] {
   if (!isReviewSyncTableName(table)) return [];
-  return (
-    changes[table]?.created.map((record) => requiredChangeId(record.id)) ?? []
-  );
+  return changes[table]?.created.map((record) => requiredChangeId(record.id)) ?? [];
 }
 
-function protectedIds(
-  changes: AppSyncDatabaseChangeSet,
-  table: string
-): readonly string[] {
+function protectedIds(changes: AppSyncDatabaseChangeSet, table: string): readonly string[] {
   return readRejectedIdsForTable(
-    collectProtectedFinancialActionRowIds(changes),
-    table
+    collectProtectedFinancialActionRowIds(changes), table
   );
 }
 
 function expectOnlyRootAndDomainBundle(
-  candidate: ReviewSyncFixture,
-  expected: Readonly<Record<string, readonly string[]>>
+  candidate: ReviewSyncFixture, expected: Readonly<Record<string, readonly string[]>>
 ): void {
   const bundles = collectAccountFinancialActionPushBundles(candidate.changes);
   expect(bundles).toHaveLength(1);
@@ -104,11 +94,9 @@ function expectOnlyRootAndDomainBundle(
 }
 
 function changeRecord(
-  changes: AppSyncDatabaseChangeSet,
-  table: string,
-  update: (
-    record: SyncTableChangeSet["created"][number]
-  ) => SyncTableChangeSet["created"][number]
+  changes: AppSyncDatabaseChangeSet, table: string,
+  update: (record: SyncTableChangeSet["created"][number]) =>
+    SyncTableChangeSet["created"][number]
 ): AppSyncDatabaseChangeSet {
   if (!isReviewSyncTableName(table)) {
     throw new Error("Unknown canonical review sync table: " + table);
@@ -128,9 +116,7 @@ function changeRecord(
   };
 }
 
-function reviewRejectedBundle(
-  fixture: ReviewSyncFixture
-): FinancialActionReconciliationBundle {
+function reviewRejectedBundle(fixture: ReviewSyncFixture): FinancialActionReconciliationBundle {
   const first = fixture.payload.accountEffects[0];
   if (!first) throw new Error("Expected canonical affected account effect");
   return {
@@ -139,26 +125,17 @@ function reviewRejectedBundle(
     state: "rejected_compensating",
     domain: "transactions",
     payloadJson: fixture.payloadJson,
-    accounts: [
-      {
-        accountId: first.accountId,
-        currency: first.currency,
-        balance: 15,
-        financialRevision: "1",
-      },
-    ],
-    effects: [
-      {
-        accountId: first.accountId,
-        actionId: REVIEW_ACTION_ID,
-        acceptedAccountRevision: "1",
-        amountMinorUnits: first.amountMinorUnits,
-        currency: first.currency,
-        effectId: first.effectId,
-        isEffective: true,
-        reversesEffectId: null,
-      },
-    ],
+    accounts: [{
+      accountId: first.accountId, currency: first.currency,
+      balance: 15, financialRevision: "1",
+    }],
+    effects: [{
+      accountId: first.accountId, actionId: REVIEW_ACTION_ID,
+      acceptedAccountRevision: "1",
+      amountMinorUnits: first.amountMinorUnits,
+      currency: first.currency, effectId: first.effectId,
+      isEffective: true, reversesEffectId: null,
+    }],
     localSmsReviewDraftSnapshot: null,
   };
 }
@@ -168,26 +145,18 @@ describe("T044/T050 canonical protected push for selected review actions", () =>
     const fixture = await canonicalReviewChanges();
     expect(fixture.payload).toEqual(bankWithSender());
     expect(fixture.payload.creationDefaultSnapshot).toEqual({
-      activeAccountIds: [REVIEW_ACCOUNT_ID],
-      defaultAccount: null,
+      activeAccountIds: [REVIEW_ACCOUNT_ID], defaultAccount: null,
     });
-    expect(fixture.payload.accountEffects).toEqual([
-      {
-        accountId: NEW_BANK_ACCOUNT_ID,
-        amountMinorUnits: "1500",
-        currency: "EGP",
-        effectId: SMS_NET_EFFECT_ID,
-      },
-    ]);
-    expect(
-      fixture.payload.domainMutation.records
-        .filter((record) => record.entity === "account")
-        .map((record) => record.after.isDefault)
-    ).toEqual([false]);
-    expect(
-      parseFinancialActionEnvelopeJson(fixture.payloadJson, reviewSyncRegistry)
-        .payload
-    ).toEqual(fixture.payload);
+    expect(fixture.payload.accountEffects).toEqual([{
+      accountId: NEW_BANK_ACCOUNT_ID,
+      amountMinorUnits: "1500", currency: "EGP", effectId: SMS_NET_EFFECT_ID,
+    }]);
+    expect(fixture.payload.domainMutation.records.filter(
+      (record) => record.entity === "account"
+    ).map((record) => record.after.isDefault)).toEqual([false]);
+    expect(parseFinancialActionEnvelopeJson(
+      fixture.payloadJson, reviewSyncRegistry
+    ).payload).toEqual(fixture.payload);
     expectOnlyRootAndDomainBundle(fixture, {
       account_financial_effects: [SMS_NET_EFFECT_ID],
       accounts: [NEW_BANK_ACCOUNT_ID],
@@ -197,9 +166,8 @@ describe("T044/T050 canonical protected push for selected review actions", () =>
       transactions: [SMS_EXPENSE_RECORD_ID, SMS_INCOME_RECORD_ID].sort(),
     });
     expect(ids(fixture.changes, "bank_details")).toEqual([BANK_DETAILS_ID]);
-    expect(ids(fixture.changes, "account_sms_senders")).toEqual([
-      REVIEW_SENDER_ID,
-    ]);
+    expect(ids(fixture.changes, "account_sms_senders"))
+      .toEqual([REVIEW_SENDER_ID]);
   });
 
   it("T044-02 protects all review-owned account, child and financial creates from generic LWW", async () => {
@@ -215,49 +183,35 @@ describe("T044/T050 canonical protected push for selected review actions", () =>
         [...expectedIds].sort()
       );
       for (const id of expectedIds) {
-        expect(
-          isProtectedFinancialActionRow(
-            collectProtectedFinancialActionRowIds(fixture.changes),
-            table,
-            id
-          )
-        ).toBe(true);
+        expect(isProtectedFinancialActionRow(
+          collectProtectedFinancialActionRowIds(fixture.changes), table, id
+        )).toBe(true);
       }
     }
     // Roots and immutable effects remain dedicated, not generic table upserts.
-    expect(ids(fixture.changes, "financial_action_groups")).toEqual([
-      REVIEW_ROOT_ID,
-    ]);
-    expect(ids(fixture.changes, "account_financial_effects")).toEqual([
-      SMS_NET_EFFECT_ID,
-    ]);
+    expect(ids(fixture.changes, "financial_action_groups"))
+      .toEqual([REVIEW_ROOT_ID]);
+    expect(ids(fixture.changes, "account_financial_effects"))
+      .toEqual([SMS_NET_EFFECT_ID]);
   });
 
   it("T044-03 preserves an ATM transfer and BOTH owned endpoint effects without generic LWW", async () => {
     const fixture = await canonicalReviewChanges("atm");
     expectOnlyRootAndDomainBundle(fixture, {
-      account_financial_effects: [
-        ATM_SOURCE_EFFECT_ID,
-        ATM_DEST_EFFECT_ID,
-      ].sort(),
+      account_financial_effects:
+        [ATM_SOURCE_EFFECT_ID, ATM_DEST_EFFECT_ID].sort(),
       accounts: [ATM_BANK_ACCOUNT_ID, ATM_CASH_ACCOUNT_ID].sort(),
       financial_action_groups: [REVIEW_ROOT_ID],
       transfers: [ATM_TRANSFER_RECORD_ID],
     });
-    expect([...protectedIds(fixture.changes, "accounts")].sort()).toEqual(
-      [ATM_BANK_ACCOUNT_ID, ATM_CASH_ACCOUNT_ID].sort()
-    );
-    expect(protectedIds(fixture.changes, "transfers")).toContain(
-      ATM_TRANSFER_RECORD_ID
-    );
-    expect(
-      stripProtectedAccountFields("accounts", {
-        id: ATM_BANK_ACCOUNT_ID,
-        balance: 74.95,
-        financial_revision: "8",
-        name: "Bank after review",
-      })
-    ).toEqual({ id: ATM_BANK_ACCOUNT_ID, name: "Bank after review" });
+    expect([...protectedIds(fixture.changes, "accounts")].sort())
+      .toEqual([ATM_BANK_ACCOUNT_ID, ATM_CASH_ACCOUNT_ID].sort());
+    expect(protectedIds(fixture.changes, "transfers"))
+      .toContain(ATM_TRANSFER_RECORD_ID);
+    expect(stripProtectedAccountFields("accounts", {
+      id: ATM_BANK_ACCOUNT_ID, balance: 74.95,
+      financial_revision: "8", name: "Bank after review",
+    })).toEqual({ id: ATM_BANK_ACCOUNT_ID, name: "Bank after review" });
   });
 
   it("T044-04 keeps Voice zero-net effects guarded but has no SMS bookkeeping or created account", async () => {
@@ -265,41 +219,28 @@ describe("T044/T050 canonical protected push for selected review actions", () =>
     expect(fixture.payload.source).toBe("VOICE");
     expect(fixture.payload.localSmsBookkeeping).toEqual([]);
     expect(fixture.payload.creationDefaultSnapshot).toBeUndefined();
-    expect(fixture.payload.accountEffects).toEqual([
-      {
-        accountId: REVIEW_ACCOUNT_ID,
-        amountMinorUnits: "0",
-        currency: "EGP",
-        effectId: REVIEW_EFFECT_ID,
-      },
-    ]);
+    expect(fixture.payload.accountEffects).toEqual([{
+      accountId: REVIEW_ACCOUNT_ID, amountMinorUnits: "0",
+      currency: "EGP", effectId: REVIEW_EFFECT_ID,
+    }]);
     expectOnlyRootAndDomainBundle(fixture, {
       account_financial_effects: [REVIEW_EFFECT_ID],
       accounts: [REVIEW_ACCOUNT_ID],
       financial_action_groups: [REVIEW_ROOT_ID],
       transactions: [REVIEW_INCOME_RECORD_ID, REVIEW_EXPENSE_RECORD_ID].sort(),
     });
-    expect(fixture.payloadJson).not.toMatch(
-      /originalTranscript|rawSmsBody|undoToken/
-    );
+    expect(fixture.payloadJson).not.toMatch(/originalTranscript|rawSmsBody|undoToken/);
   });
 
-  it.each([
-    "bank_details",
-    "account_sms_senders",
-    "transactions",
-    "accounts",
-    "account_financial_effects",
-  ])(
+  it.each(["bank_details", "account_sms_senders", "transactions", "accounts", "account_financial_effects"])(
     "T044-05 rejects a partial review group with missing required %s rows before RPC/acknowledgement",
     async (table): Promise<void> => {
       const fixture = await canonicalReviewChanges();
       const incomplete = withoutCreatedTable(fixture.changes, table);
       expect(ids(fixture.changes, table).length).toBeGreaterThan(0);
       expect(ids(incomplete, table)).toHaveLength(0);
-      expect(() =>
-        collectAccountFinancialActionPushBundles(incomplete)
-      ).toThrow();
+      expect(() => collectAccountFinancialActionPushBundles(incomplete))
+        .toThrow();
     }
   );
 
@@ -309,9 +250,7 @@ describe("T044/T050 canonical protected push for selected review actions", () =>
       ...fixture.changes,
       financial_action_groups: { created: [], updated: [], deleted: [] },
     };
-    expect(ids(orphan, "account_financial_effects")).toEqual([
-      SMS_NET_EFFECT_ID,
-    ]);
+    expect(ids(orphan, "account_financial_effects")).toEqual([SMS_NET_EFFECT_ID]);
     expect(ids(orphan, "bank_details")).toEqual([BANK_DETAILS_ID]);
     expect(ids(orphan, "account_sms_senders")).toEqual([REVIEW_SENDER_ID]);
     expect(() => collectAccountFinancialActionPushBundles(orphan)).toThrow();
@@ -321,42 +260,35 @@ describe("T044/T050 canonical protected push for selected review actions", () =>
     const fixture = await canonicalReviewChanges();
     for (const table of ["bank_details", "account_sms_senders"]) {
       const reparented = changeRecord(fixture.changes, table, (original) => ({
-        ...original,
-        account_id: REVIEW_ACCOUNT_ID,
+        ...original, account_id: REVIEW_ACCOUNT_ID,
       }));
-      expect(() =>
-        collectAccountFinancialActionPushBundles(reparented)
-      ).toThrow();
+      expect(() => collectAccountFinancialActionPushBundles(reparented))
+        .toThrow();
     }
   });
 
   it("T044-07 refuses an incomplete review root with the original physical Bank creates still dirty", async () => {
     const fixture = await canonicalReviewChanges();
     const envelope = parseFinancialActionEnvelopeJson(
-      fixture.payloadJson,
-      reviewSyncRegistry
+      fixture.payloadJson, reviewSyncRegistry
     );
     const missingGroupJson = JSON.stringify({
-      ...envelope,
-      payload: { ...fixture.payload, confirmedGroupRefs: [] },
+      ...envelope, payload: { ...fixture.payload, confirmedGroupRefs: [] },
     });
     const missingGroup = withRoot(fixture.changes, (root) => ({
-      ...root,
-      payload_json: missingGroupJson,
+      ...root, payload_json: missingGroupJson,
     }));
-    expect(() =>
-      parseFinancialActionEnvelopeJson(missingGroupJson, reviewSyncRegistry)
-    ).toThrow();
-    expect(() =>
-      collectAccountFinancialActionPushBundles(missingGroup)
-    ).toThrow();
+    expect(() => parseFinancialActionEnvelopeJson(
+      missingGroupJson, reviewSyncRegistry
+    )).toThrow();
+    expect(() => collectAccountFinancialActionPushBundles(missingGroup))
+      .toThrow();
   });
 
   it("T044-08 rejects foreign root ownership rather than protecting or uploading foreign financial rows", async () => {
     const fixture = await canonicalReviewChanges();
     const foreign = withRoot(fixture.changes, (root) => ({
-      ...root,
-      user_id: FOREIGN_OWNER_ID,
+      ...root, user_id: FOREIGN_OWNER_ID,
     }));
     expect(() => collectAccountFinancialActionPushBundles(foreign)).toThrow();
   });
@@ -389,16 +321,10 @@ describe("T044/T050 canonical protected push for selected review actions", () =>
         return Promise.reject(new Error("unsigned_payload_sent"));
       },
     });
-    await expect(
-      coordinator.coordinatePush([
-        {
-          actionId: REVIEW_ACTION_ID,
-          payloadHash: mismatchedHash,
-          payloadJson: fixture.payloadJson,
-          state: "local_complete",
-        },
-      ])
-    ).rejects.toThrow();
+    await expect(coordinator.coordinatePush([{
+      actionId: REVIEW_ACTION_ID, payloadHash: mismatchedHash,
+      payloadJson: fixture.payloadJson, state: "local_complete",
+    }])).rejects.toThrow();
     expect(invoked).toEqual([]);
   });
 
@@ -407,29 +333,19 @@ describe("T044/T050 canonical protected push for selected review actions", () =>
     async (field): Promise<void> => {
       const fixture = await canonicalReviewChanges();
       const envelope = parseFinancialActionEnvelopeJson(
-        fixture.payloadJson,
-        reviewSyncRegistry
+        fixture.payloadJson, reviewSyncRegistry
       );
-      const invalidJson = JSON.stringify(
-        field === "source"
-          ? { ...envelope, payload: { ...fixture.payload, source: "VOICE" } }
-          : {
-              ...envelope,
-              accountGuards: [
-                {
-                  ...envelope.accountGuards[0],
-                  expectedRevision: "9",
-                },
-              ],
-            }
-      );
+      const invalidJson = JSON.stringify(field === "source"
+        ? { ...envelope, payload: { ...fixture.payload, source: "VOICE" } }
+        : { ...envelope, accountGuards: [{
+          ...envelope.accountGuards[0], expectedRevision: "9",
+        }] });
       const invalid = withRoot(fixture.changes, (root) => ({
-        ...root,
-        payload_json: invalidJson,
+        ...root, payload_json: invalidJson,
       }));
-      expect(() =>
-        parseFinancialActionEnvelopeJson(invalidJson, reviewSyncRegistry)
-      ).toThrow();
+      expect(() => parseFinancialActionEnvelopeJson(
+        invalidJson, reviewSyncRegistry
+      )).toThrow();
       expect(() => collectAccountFinancialActionPushBundles(invalid)).toThrow();
     }
   );
@@ -461,33 +377,22 @@ describe("T044 dedicated review transport/recovery fail-closed", () => {
         return Promise.resolve();
       },
       recordFinancialActionGroupServerOutcome: () => {
-        return Promise.reject(
-          new Error("No accepted/stale server receipt was returned")
-        );
+        return Promise.reject(new Error("No accepted/stale server receipt was returned"));
       },
       invokeAccountFinancialActionRpc: (request) => {
         expect(request).toEqual({
-          payloadHash: fixture.payloadHash,
-          payloadJson: fixture.payloadJson,
+          payloadHash: fixture.payloadHash, payloadJson: fixture.payloadJson,
         });
         return Promise.reject(new Error("transport_offline"));
       },
     });
-    await expect(
-      coordinator.coordinatePush([
-        {
-          actionId: REVIEW_ACTION_ID,
-          payloadHash: fixture.payloadHash,
-          payloadJson: fixture.payloadJson,
-          state: "local_complete",
-        },
-      ])
-    ).rejects.toThrow("transport_offline");
+    await expect(coordinator.coordinatePush([{
+      actionId: REVIEW_ACTION_ID, payloadHash: fixture.payloadHash,
+      payloadJson: fixture.payloadJson, state: "local_complete",
+    }])).rejects.toThrow("transport_offline");
     expect(transitions).toEqual([
       REVIEW_ACTION_ID + ":sync_pending",
-      REVIEW_ACTION_ID +
-        ":" +
-        FINANCIAL_ACTION_SYNC_ERROR_CODES.TRANSPORT_FAILED,
+      REVIEW_ACTION_ID + ":" + FINANCIAL_ACTION_SYNC_ERROR_CODES.TRANSPORT_FAILED,
     ]);
   });
 
@@ -495,9 +400,7 @@ describe("T044 dedicated review transport/recovery fail-closed", () => {
     const fixture = await canonicalReviewChanges();
     const coordinator = createFinancialActionPushCoordinator({
       markFinancialActionGroupSyncPending: () => {
-        return Promise.reject(
-          new Error("No requeue during rejected compensation")
-        );
+        return Promise.reject(new Error("No requeue during rejected compensation"));
       },
       markFinancialActionGroupSyncFailed: () => {
         return Promise.reject(new Error("No transport is attempted"));
@@ -506,80 +409,52 @@ describe("T044 dedicated review transport/recovery fail-closed", () => {
         return Promise.reject(new Error("No new canonical receipt"));
       },
       invokeAccountFinancialActionRpc: () => {
-        return Promise.reject(
-          new Error("Review root must reconcile, not repost")
-        );
+        return Promise.reject(new Error("Review root must reconcile, not repost"));
       },
       reconcileFinancialActionGroup: (): Promise<"incomplete"> =>
         Promise.resolve("incomplete"),
     });
-    const result = await coordinator.coordinatePush([
-      {
-        actionId: REVIEW_ACTION_ID,
-        payloadHash: fixture.payloadHash,
-        payloadJson: fixture.payloadJson,
-        state: "rejected_compensating",
-      },
-    ]);
-    expect(result.decisions).toEqual([
-      {
-        actionId: REVIEW_ACTION_ID,
-        disposition: "recover",
-        outcome: null,
-      },
-    ]);
+    const result = await coordinator.coordinatePush([{
+      actionId: REVIEW_ACTION_ID, payloadHash: fixture.payloadHash,
+      payloadJson: fixture.payloadJson, state: "rejected_compensating",
+    }]);
+    expect(result.decisions).toEqual([{
+      actionId: REVIEW_ACTION_ID, disposition: "recover", outcome: null,
+    }]);
   });
 
   it("T044-14 an already reconciled review root is acknowledged without a second network push", async () => {
     const fixture = await canonicalReviewChanges();
     const coordinator = createFinancialActionPushCoordinator({
       markFinancialActionGroupSyncPending: () => {
-        return Promise.reject(
-          new Error("reconciled root cannot become sync_pending")
-        );
+        return Promise.reject(new Error("reconciled root cannot become sync_pending"));
       },
       markFinancialActionGroupSyncFailed: () => {
-        return Promise.reject(
-          new Error("reconciled root cannot fail transport")
-        );
+        return Promise.reject(new Error("reconciled root cannot fail transport"));
       },
       recordFinancialActionGroupServerOutcome: () => {
         return Promise.reject(new Error("reconciled root has no new outcome"));
       },
       invokeAccountFinancialActionRpc: () => {
-        return Promise.reject(
-          new Error("reconciled root must not be submitted")
-        );
+        return Promise.reject(new Error("reconciled root must not be submitted"));
       },
     });
-    const result = await coordinator.coordinatePush([
-      {
-        actionId: REVIEW_ACTION_ID,
-        payloadHash: fixture.payloadHash,
-        payloadJson: fixture.payloadJson,
-        state: "reconciled",
-      },
-    ]);
-    expect(result.decisions).toEqual([
-      {
-        actionId: REVIEW_ACTION_ID,
-        disposition: "acknowledge",
-        outcome: null,
-      },
-    ]);
+    const result = await coordinator.coordinatePush([{
+      actionId: REVIEW_ACTION_ID, payloadHash: fixture.payloadHash,
+      payloadJson: fixture.payloadJson, state: "reconciled",
+    }]);
+    expect(result.decisions).toEqual([{
+      actionId: REVIEW_ACTION_ID, disposition: "acknowledge", outcome: null,
+    }]);
   });
 
   it("T044-15 rejects legacy generic inverse compensation for a new review Bank+child+SMS action without verified local restoration", async () => {
     const fixture = await canonicalReviewChanges();
     const bundle = reviewRejectedBundle(fixture);
-    expect(bundle.effects.map((effect) => effect.effectId)).toEqual([
-      SMS_NET_EFFECT_ID,
-    ]);
-    expect(
-      fixture.payload.domainMutation.records.some(
-        (record) => record.entity === "account_sms_sender"
-      )
-    ).toBe(true);
+    expect(bundle.effects.map((effect) => effect.effectId))
+      .toEqual([SMS_NET_EFFECT_ID]);
+    expect(fixture.payload.domainMutation.records.some((record) =>
+      record.entity === "account_sms_sender")).toBe(true);
     expect(fixture.payload.creationDefaultSnapshot).toBeDefined();
     expect(fixture.payload.localSmsBookkeeping).toHaveLength(2);
     const staged: string[] = [];
@@ -591,9 +466,8 @@ describe("T044 dedicated review transport/recovery fail-closed", () => {
         return Promise.resolve();
       },
     });
-    await expect(
-      service.reconcileRejectedAction(REVIEW_ACTION_ID)
-    ).rejects.toThrow(FINANCIAL_ACTION_RECONCILIATION_ERROR_CODES.INCOMPLETE);
+    await expect(service.reconcileRejectedAction(REVIEW_ACTION_ID))
+      .rejects.toThrow(FINANCIAL_ACTION_RECONCILIATION_ERROR_CODES.INCOMPLETE);
     expect(staged).toEqual([]);
   });
 
@@ -601,8 +475,7 @@ describe("T044 dedicated review transport/recovery fail-closed", () => {
     const fixture = await canonicalReviewChanges();
     const original = reviewRejectedBundle(fixture);
     const bundle: FinancialActionReconciliationBundle = {
-      ...original,
-      userId: FOREIGN_OWNER_ID,
+      ...original, userId: FOREIGN_OWNER_ID,
     };
     const staged: string[] = [];
     const service = createFinancialActionReconciliationService({
@@ -613,11 +486,8 @@ describe("T044 dedicated review transport/recovery fail-closed", () => {
         return Promise.resolve();
       },
     });
-    await expect(
-      service.reconcileRejectedAction(REVIEW_ACTION_ID)
-    ).rejects.toThrow(
-      FINANCIAL_ACTION_RECONCILIATION_ERROR_CODES.INVALID_EVIDENCE
-    );
+    await expect(service.reconcileRejectedAction(REVIEW_ACTION_ID))
+      .rejects.toThrow(FINANCIAL_ACTION_RECONCILIATION_ERROR_CODES.INVALID_EVIDENCE);
     expect(staged).toEqual([]);
   });
 
@@ -625,12 +495,8 @@ describe("T044 dedicated review transport/recovery fail-closed", () => {
     const fixture = await canonicalReviewChanges();
     const rejected = reviewRejectedBundle(fixture);
     const previouslyReconciled: FinancialActionReconciliationBundle = {
-      ...rejected,
-      state: "reconciled",
-      effects: rejected.effects.map((effect) => ({
-        ...effect,
-        isEffective: false,
-      })),
+      ...rejected, state: "reconciled",
+      effects: rejected.effects.map((effect) => ({ ...effect, isEffective: false })),
     };
     const staged: string[] = [];
     const service = createFinancialActionReconciliationService({
@@ -641,9 +507,7 @@ describe("T044 dedicated review transport/recovery fail-closed", () => {
         return Promise.resolve();
       },
     });
-    expect(await service.reconcileRejectedAction(REVIEW_ACTION_ID)).toBe(
-      "replay"
-    );
+    expect(await service.reconcileRejectedAction(REVIEW_ACTION_ID)).toBe("replay");
     expect(staged).toEqual([]);
   });
 
@@ -652,31 +516,20 @@ describe("T044 dedicated review transport/recovery fail-closed", () => {
     const first = fixture.payload.accountEffects[0];
     if (!first) throw new Error("Missing zero-net Voice effect");
     const bundle: FinancialActionReconciliationBundle = {
-      actionId: REVIEW_ACTION_ID,
-      userId: REVIEW_USER_ID,
-      state: "rejected_compensating",
-      domain: "transactions",
+      actionId: REVIEW_ACTION_ID, userId: REVIEW_USER_ID,
+      state: "rejected_compensating", domain: "transactions",
       payloadJson: fixture.payloadJson,
-      accounts: [
-        {
-          accountId: REVIEW_ACCOUNT_ID,
-          currency: "EGP",
-          balance: 100,
-          financialRevision: "8",
-        },
-      ],
-      effects: [
-        {
-          accountId: first.accountId,
-          actionId: REVIEW_ACTION_ID,
-          acceptedAccountRevision: "8",
-          amountMinorUnits: "0",
-          currency: "EGP",
-          effectId: REVIEW_EFFECT_ID,
-          isEffective: true,
-          reversesEffectId: null,
-        },
-      ],
+      accounts: [{
+        accountId: REVIEW_ACCOUNT_ID, currency: "EGP",
+        balance: 100, financialRevision: "8",
+      }],
+      effects: [{
+        accountId: first.accountId, actionId: REVIEW_ACTION_ID,
+        acceptedAccountRevision: "8",
+        amountMinorUnits: "0", currency: "EGP",
+        effectId: REVIEW_EFFECT_ID, isEffective: true,
+        reversesEffectId: null,
+      }],
       localSmsReviewDraftSnapshot: null,
     };
     const staged: string[] = [];
@@ -688,9 +541,8 @@ describe("T044 dedicated review transport/recovery fail-closed", () => {
         return Promise.resolve();
       },
     });
-    await expect(
-      service.reconcileRejectedAction(REVIEW_ACTION_ID)
-    ).rejects.toThrow(FINANCIAL_ACTION_RECONCILIATION_ERROR_CODES.INCOMPLETE);
+    await expect(service.reconcileRejectedAction(REVIEW_ACTION_ID))
+      .rejects.toThrow(FINANCIAL_ACTION_RECONCILIATION_ERROR_CODES.INCOMPLETE);
     expect(staged).toEqual([]);
     expect(fixture.payload.localSmsBookkeeping).toHaveLength(0);
   });

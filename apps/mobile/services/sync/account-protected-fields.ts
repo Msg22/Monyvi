@@ -4,6 +4,7 @@ import type {
   SyncTableChangeSet,
 } from "@nozbe/watermelondb/sync";
 import type { FinancialActionPushCandidate } from "../financial-action-sync-service";
+import { inspectNewFinancialActionPushRoot } from "../account-review-recovery-protected-push";
 import {
   ACCOUNT_BALANCE_WRITER_REGISTRY,
   requireGuardedAccountBalanceWriter,
@@ -44,12 +45,20 @@ function readChangeId(value: unknown): string | null {
 interface AccountBalanceEnvelope {
   readonly accountGuards: ReadonlyArray<Readonly<Record<string, unknown>>>;
   readonly payload: Readonly<Record<string, unknown>>;
+  readonly references?: ReadonlyArray<{ readonly table: string; readonly id: string }>;
 }
 
 function readAccountBalanceEnvelope(
-  record: unknown
+  record: unknown,
+  changes: SyncPushArgs["changes"]
 ): AccountBalanceEnvelope | null {
   if (!isObject(record) || typeof record.payload_json !== "string") return null;
+  const strict = inspectNewFinancialActionPushRoot(record, changes);
+  if (strict) return {
+    accountGuards: strict.accountGuards,
+    payload: strict.payload,
+    references: strict.references,
+  };
   let envelope: unknown;
   try {
     envelope = JSON.parse(record.payload_json);
@@ -67,12 +76,16 @@ function readAccountBalanceEnvelope(
   };
 }
 
-function protectedRefsFromRoot(record: unknown): ReadonlyArray<{
+function protectedRefsFromRoot(
+  record: unknown,
+  changes: SyncPushArgs["changes"]
+): ReadonlyArray<{
   readonly id: string;
   readonly table: string;
 }> {
-  const envelope = readAccountBalanceEnvelope(record);
+  const envelope = readAccountBalanceEnvelope(record, changes);
   if (!envelope) return [];
+  if (envelope.references) return envelope.references;
   const refs: Array<{ readonly id: string; readonly table: string }> = [];
   const domainMutation = envelope.payload.domainMutation;
   if (isObject(domainMutation) && Array.isArray(domainMutation.records)) {
@@ -170,6 +183,23 @@ function collectEffectIdsByAction(
   return grouped;
 }
 
+function assertEveryEffectHasOwnedRoot(
+  changes: SyncPushArgs["changes"]
+): void {
+  const roots = (changes as unknown as Readonly<
+    Record<string, SyncTableChangeSet | undefined>
+  >).financial_action_groups;
+  const rootIds = new Set(
+    [...(roots?.created ?? []), ...(roots?.updated ?? [])]
+      .filter(isObject)
+      .map((root) => root.action_id)
+      .filter((id): id is string => typeof id === "string")
+  );
+  for (const actionId of collectEffectIdsByAction(changes).keys()) {
+    if (!rootIds.has(actionId)) throw new Error(MALFORMED_ROOT_ERROR);
+  }
+}
+
 function groupRowIds(
   rootId: string,
   refs: ReadonlyArray<{ readonly id: string; readonly table: string }>,
@@ -189,8 +219,11 @@ function groupRowIds(
   return Object.freeze(Object.fromEntries([...grouped.entries()].sort()));
 }
 
-function readGuardRevisions(record: unknown): ReadonlyMap<string, string> {
-  const envelope = readAccountBalanceEnvelope(record);
+function readGuardRevisions(
+  record: unknown,
+  changes: SyncPushArgs["changes"]
+): ReadonlyMap<string, string> {
+  const envelope = readAccountBalanceEnvelope(record, changes);
   const revisions = new Map<string, string>();
   if (!envelope) return revisions;
   envelope.accountGuards.forEach((guard) => {
@@ -288,6 +321,7 @@ function orderBundlesByAccountRevision(
 export function collectAccountFinancialActionPushBundles(
   changes: SyncPushArgs["changes"]
 ): readonly AccountFinancialActionPushBundle[] {
+  assertEveryEffectHasOwnedRoot(changes);
   const roots = (
     changes as unknown as Readonly<
       Record<string, SyncTableChangeSet | undefined>
@@ -298,13 +332,13 @@ export function collectAccountFinancialActionPushBundles(
   const revisionsByAction = new Map<string, ReadonlyMap<string, string>>();
   const bundles = [...roots.created, ...roots.updated].flatMap((candidate) => {
     if (!isObject(candidate)) return [];
-    const refs = protectedRefsFromRoot(candidate);
+    const refs = protectedRefsFromRoot(candidate, changes);
     const actionId = readNonEmptyString(candidate, "action_id");
     const payloadHash = readNonEmptyString(candidate, "payload_hash");
     const payloadJson = readNonEmptyString(candidate, "payload_json");
     const rootId = readNonEmptyString(candidate, "id");
     const state = readNonEmptyString(candidate, "state");
-    const envelope = readAccountBalanceEnvelope(candidate);
+    const envelope = readAccountBalanceEnvelope(candidate, changes);
     if (!envelope) return [];
     if (!actionId || !payloadHash || !payloadJson || !rootId || !state) {
       throw new Error(MALFORMED_ROOT_ERROR);
@@ -312,7 +346,7 @@ export function collectAccountFinancialActionPushBundles(
     if (refs.length === 0 || envelope.accountGuards.length === 0) {
       throw new Error(MALFORMED_ROOT_ERROR);
     }
-    revisionsByAction.set(actionId, readGuardRevisions(candidate));
+    revisionsByAction.set(actionId, readGuardRevisions(candidate, changes));
     return [
       Object.freeze({
         candidate: Object.freeze({
@@ -336,13 +370,16 @@ export function collectProtectedFinancialActionRowIds(
   changes: SyncPushArgs["changes"]
 ): SyncRejectedIds | undefined {
   assertGenericAccountPushIsGuarded();
+  assertEveryEffectHasOwnedRoot(changes);
   const roots = (
     changes as unknown as Readonly<
       Record<string, SyncTableChangeSet | undefined>
     >
   ).financial_action_groups;
   const refs = roots
-    ? [...roots.created, ...roots.updated].flatMap(protectedRefsFromRoot)
+    ? [...roots.created, ...roots.updated].flatMap((root) =>
+        protectedRefsFromRoot(root, changes)
+      )
     : [];
   const grouped = refs.reduce<Readonly<Record<string, readonly string[]>>>(
     (result, ref) => ({

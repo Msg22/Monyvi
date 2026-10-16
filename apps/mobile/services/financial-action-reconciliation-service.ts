@@ -432,7 +432,7 @@ function assertCanonicalAccounts(
   return canonicalAccounts;
 }
 
-async function verifyCanonicalAccounts(
+export async function verifyCanonicalAccounts(
   bundle: FinancialActionReconciliationBundle,
   hashProvider: Sha256Provider
 ): Promise<readonly CanonicalAccountSnapshot[] | null> {

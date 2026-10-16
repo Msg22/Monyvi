@@ -474,7 +474,10 @@ describe("#395 T064 real SQLite Add default intent service", () => {
     // replay: immutable action-ID/hash replay still needs future writer tests.
   });
 
-  it("serializes two different first-account creates to at most one active default", async (): Promise<void> => {
+  it("serializes two different first-account creates without orphaned roots, children or two defaults", async (): Promise<void> => {
+    // Uncontrolled Promise.all scheduling permits either a later capture
+    // after the first commit (both succeed) or two empty captures (one
+    // stale-CAS loser). Neither outcome may produce partial persisted rows.
     const [first, second] = await Promise.all([
       createAccountForUser(
         ADD_DEFAULT_IDS.owner, form("First Race Bank", "0", false)
@@ -483,13 +486,60 @@ describe("#395 T064 real SQLite Add default intent service", () => {
         ADD_DEFAULT_IDS.owner, form("First Race Wallet", "0", false, "DIGITAL_WALLET")
       ),
     ]);
-    expect(first.success).toBe(true);
-    expect(second.success).toBe(true);
-    const fresh = await freshAccounts();
-    expect(fresh.filter((account) =>
-      account.userId === ADD_DEFAULT_IDS.owner &&
-      !account.deleted && account.isDefault
-    )).toHaveLength(1);
+    const results = [first, second];
+    const successful = results.filter((result) => result.success);
+    const failed = results.filter((result) => !result.success);
+    expect(successful.length).toBeGreaterThanOrEqual(1);
+    expect(successful.length).toBeLessThanOrEqual(2);
+    expect(failed.every((result) => result.accountId === undefined)).toBe(true);
+    const ids = successful.map((result) => result.accountId);
+    expect(ids.every((id): id is string => typeof id === "string")).toBe(true);
+    expect(new Set(ids).size).toBe(successful.length);
+
+    const db = await reopenSqliteLedger(ledger);
+    const accounts = await db.get<Account>("accounts").query().fetch();
+    const ownedActive = accounts.filter((account) =>
+      account.userId === ADD_DEFAULT_IDS.owner && !account.deleted
+    );
+    expect(ownedActive).toHaveLength(successful.length);
+    expect(ownedActive.map((account) => account.id).sort()).toEqual([...ids].sort());
+    expect(ownedActive.filter((account) => account.isDefault)).toHaveLength(1);
+
+    const roots = await db.get<FinancialActionGroup>(
+      "financial_action_groups"
+    ).query().fetch();
+    expect(roots).toHaveLength(successful.length);
+    expect(new Set(roots.map((root) => root.actionId)).size)
+      .toBe(successful.length);
+    expect(roots.map((root) => root.domainReferenceId).sort())
+      .toEqual([...ids].sort());
+    expect(roots.every((root) =>
+      root.userId === ADD_DEFAULT_IDS.owner &&
+      root.domain === "accounts" &&
+      root.kind === "create_with_default"
+    )).toBe(true);
+
+    const [bankDetails, senders, effects] = await Promise.all([
+      db.get<BankDetails>("bank_details").query().fetch(),
+      db.get<AccountSmsSender>("account_sms_senders").query().fetch(),
+      db.get<AccountFinancialEffect>("account_financial_effects")
+        .query().fetch(),
+    ]);
+    const persistedIds = new Set(ownedActive.map((account) => account.id));
+    expect(bankDetails).toHaveLength(
+      ownedActive.filter((account) => account.type === "BANK").length
+    );
+    expect(senders).toHaveLength(
+      ownedActive.filter((account) => account.type !== "CASH").length
+    );
+    expect(bankDetails.every((child) => persistedIds.has(child.accountId)))
+      .toBe(true);
+    expect(senders.every((child) => persistedIds.has(child.accountId)))
+      .toBe(true);
+    expect(effects).toHaveLength(0);
+    expect(ownedActive.every((account) =>
+      account.balance === 0 && account.financialRevision === "0"
+    )).toBe(true);
   });
 
 });

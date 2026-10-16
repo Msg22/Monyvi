@@ -13,9 +13,10 @@ import {
   commitScopedPreparedBatch,
   throwIfSmsReviewDraftOperationAborted,
 } from "./sms-review-draft-batch-service";
-import { clearEmptySmsReviewNamespaceInWriter } from "./sms-review-namespace-repository";
+
 import { invalidateSmsReviewNamespace } from "./sms-review-namespace-state";
 import { SMS_REVIEW_DRAFT_ERROR_CODES } from "./sms-review-draft-errors";
+import { prepareAccountReviewPrivateLifecycle } from "./account-review-retention-lifecycle";
 
 async function readExpiryRows(
   ownerId: string,
@@ -53,19 +54,29 @@ async function clearExpiredEmptyQueue(
   cutoff: Date,
   signal?: AbortSignal
 ): Promise<void> {
-  if (
-    !queue ||
-    allItems.length !== 0 ||
-    queue.updatedAt.getTime() > cutoff.getTime()
-  )
-    return;
+  const removeQueue = queue !== null && allItems.length === 0 &&
+    queue.updatedAt.getTime() <= cutoff.getTime();
+  const privateRoots = await prepareAccountReviewPrivateLifecycle({
+    database, ownerId, kind: "expire", cutoff,
+  });
+  if (!removeQueue && privateRoots.cachedRoots.length === 0) return;
   throwIfSmsReviewDraftOperationAborted(signal);
-  await clearEmptySmsReviewNamespaceInWriter(ownerId, queue.id, signal);
+  await commitScopedPreparedBatch(
+    ownerId,
+    [...privateRoots.cachedRoots, ...(removeQueue && queue ? [queue] : [])],
+    () => [
+      ...privateRoots.prepareOperations(),
+      ...(removeQueue && queue ? [queue.prepareDestroyPermanently()] : []),
+    ],
+    { signal }
+  );
+  if (removeQueue && queue) invalidateSmsReviewNamespace(ownerId, queue.id);
 }
 
 async function removeExpiredRowsInWriter(
   ownerId: string,
   rows: Awaited<ReturnType<typeof readExpiryRows>>,
+  cutoff: Date,
   signal?: AbortSignal
 ): Promise<number> {
   const { queue, expired, allItems } = rows;
@@ -74,13 +85,17 @@ async function removeExpiredRowsInWriter(
     queue !== null &&
     allItems.length > 0 &&
     allItems.every((item) => ids.has(item.id));
+  const privateRoots = await prepareAccountReviewPrivateLifecycle({
+    database, ownerId, kind: "expire", cutoff,
+  });
   await commitScopedPreparedBatch(
     ownerId,
-    [...expired, ...(queue ? [queue] : [])],
+    [...expired, ...(queue ? [queue] : []), ...privateRoots.cachedRoots],
     () => {
-      const operations: Model[] = expired.map((item) =>
-        item.prepareDestroyPermanently()
-      );
+      const operations: Model[] = [
+        ...privateRoots.prepareOperations(),
+        ...expired.map((item) => item.prepareDestroyPermanently()),
+      ];
       if (removeQueue && queue)
         operations.push(queue.prepareDestroyPermanently());
       return operations;
@@ -111,6 +126,6 @@ export async function deleteExpiredSmsReviewDrafts(
       );
       return 0;
     }
-    return removeExpiredRowsInWriter(expectedUserId, rows, signal);
+    return removeExpiredRowsInWriter(expectedUserId, rows, cutoff, signal);
   });
 }

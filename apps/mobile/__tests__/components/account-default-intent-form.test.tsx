@@ -157,6 +157,11 @@ async function renderAdd(language: "en" | "ar" = "en"): Promise<void> {
       <DatabaseProvider><AddAccount /></DatabaseProvider>
     </I18nextProvider>
   );
+  // A real owner-scoped Watermelon observation is asynchronous. Do not
+  // interpret the initial loading state as proof of an empty owned account set.
+  await waitFor(() =>
+    expect(screen.getByTestId("account-default-state-ready")).toBeTruthy()
+  );
 }
 
 async function renderEdit(language: "en" | "ar" = "en"): Promise<void> {
@@ -166,8 +171,12 @@ async function renderEdit(language: "en" | "ar" = "en"): Promise<void> {
       <DatabaseProvider><EditAccount /></DatabaseProvider>
     </I18nextProvider>
   );
-  await waitFor(() => expect(screen.getByTestId("account-name-input"))
-    .toHaveProp("value", "Cash"));
+  await waitFor(() =>
+    expect(screen.getByTestId("account-name-input")).toHaveProp("value", "Cash")
+  );
+  await waitFor(() =>
+    expect(screen.getByTestId("account-default-state-ready")).toBeTruthy()
+  );
 }
 
 function defaultFlag(): ReturnType<typeof screen.getByRole> {

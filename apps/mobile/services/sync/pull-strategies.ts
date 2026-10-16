@@ -1,4 +1,4 @@
-import { Q, type Database, type Model } from "@nozbe/watermelondb";
+import type { Database } from "@nozbe/watermelondb";
 import type {
   SyncPullResult,
   SyncTableChangeSet,
@@ -11,6 +11,9 @@ import { assertCanonicalMetalRevision } from "../metal-financial-action-adapter"
 import { getCurrentUserId, supabase } from "../supabase";
 import { SNAPSHOT_RETENTION_DAYS, SYNCABLE_TABLES } from "./config";
 import { createSyncTableError } from "./errors";
+import {
+  prepareOwnedFinancialActionRootPull,
+} from "./financial-action-root-pull";
 import {
   PULL_PAGE_SIZE,
   pullAllKeysetPages,
@@ -81,10 +84,6 @@ const METAL_DEDICATED_PULL_TABLES = [
   "metal_holding_states",
 ] as const;
 type MetalDedicatedPullTable = (typeof METAL_DEDICATED_PULL_TABLES)[number];
-
-interface FinancialActionRootModel extends Model {
-  readonly actionId: string;
-}
 
 export function protectMetalMetadataPullFragments(
   assetChanges: SyncTableChangeSet,
@@ -461,31 +460,6 @@ function pullSelect(
   return EXACT_TEXT_SELECTS[table as keyof typeof EXACT_TEXT_SELECTS] ?? "*";
 }
 
-async function remapFinancialActionRootIds(
-  records: readonly PulledRow[],
-  userId: string,
-  database?: Database
-): Promise<readonly PulledRow[]> {
-  if (!database || records.length === 0) return records;
-  const actionIds = records
-    .map((record) => record.action_id)
-    .filter((actionId): actionId is string => typeof actionId === "string");
-  if (actionIds.length !== records.length) {
-    throw new Error(SYNC_PULL_ERROR_CODES.INVALID_PULL_ROW);
-  }
-  const localRoots = await database
-    .get<FinancialActionRootModel>("financial_action_groups")
-    .query(Q.where("user_id", userId), Q.where("action_id", Q.oneOf(actionIds)))
-    .fetch();
-  const localIdsByAction = new Map(
-    localRoots.map((root) => [root.actionId, root.id])
-  );
-  return records.map((record) => ({
-    ...record,
-    id: localIdsByAction.get(record.action_id as string) ?? record.id,
-  }));
-}
-
 async function assertExpectedPullUser(expectedUserId: string): Promise<void> {
   const currentUserId = await getCurrentUserId();
   if (currentUserId !== expectedUserId) {
@@ -794,17 +768,25 @@ export async function pullMetalDedicatedTable(
     (row) => readPullCursor(row, "updated_at")
   );
 
-  // PostgREST supports the exact-value `::text` projection above, but the
-  // Supabase select-string type parser cannot infer rows containing casts.
-  const remappedRecords =
-    table === "financial_action_groups"
-      ? await remapFinancialActionRootIds(records, userId, database)
-      : records;
-  const deleted = remappedRecords
-    .filter((record) => record.deleted === true)
+  // PostgREST exact-value projections normalize JSONB bytes before checks.
+  // Root rows are validated/remapped with device-private protection BEFORE
+  // Watermelon's global synchronize() applies all tables in one atomic writer.
+  if (table === "financial_action_groups") {
+    if (!database) {
+      if (records.length === 0) return { created: [], updated: [], deleted: [] };
+      throw new Error("financial_action_root_pull_database_required");
+    }
+    const normalized = records.map((record) =>
+      transformFromSupabase(table, normalizeDedicatedPullRecord(table, record))
+    );
+    return prepareOwnedFinancialActionRootPull({
+      database, expectedOwnerId: userId,
+      changes: { created: [], updated: normalized, deleted: [] },
+    });
+  }
+  const deleted = records.filter((record) => record.deleted === true)
     .map((record) => record.id);
-  const updated = remappedRecords
-    .filter((record) => record.deleted !== true)
+  const updated = records.filter((record) => record.deleted !== true)
     .map((record) =>
       transformFromSupabase(table, normalizeDedicatedPullRecord(table, record))
     );

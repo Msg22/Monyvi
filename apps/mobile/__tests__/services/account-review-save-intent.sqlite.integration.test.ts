@@ -7,12 +7,7 @@
 import { createHash } from "node:crypto";
 import type { Database, Model } from "@nozbe/watermelondb";
 import type SQLiteAdapter from "@nozbe/watermelondb/adapters/sqlite";
-import type {
-  Account,
-  Category,
-  FinancialActionGroup,
-  Transaction,
-} from "@monyvi/db";
+import type { Account, Category, FinancialActionGroup, Transaction } from "@monyvi/db";
 import {
   accountReviewSaveIntentSchema,
   accountReviewSessionSchema,
@@ -22,36 +17,25 @@ import {
   type AccountReviewSession,
   type Sha256Provider,
 } from "@monyvi/logic";
-import { validateReviewBatchSavePayload } from "../../../../packages/logic/src/financial-actions/review-batch-save";
-import type { ReviewBatchSavePayload } from "../../../../packages/logic/src/financial-actions/review-batch-save-shapes";
-import { createAccountReviewFinancialRegistry } from "../../services/account-review-financial-command-service";
-import { createAccountReviewSaveService } from "../../services/account-review-save-service";
+import { validateReviewBatchSavePayload } from
+  "../../../../packages/logic/src/financial-actions/review-batch-save";
+import type { ReviewBatchSavePayload } from
+  "../../../../packages/logic/src/financial-actions/review-batch-save-shapes";
+import { createAccountReviewFinancialRegistry } from
+  "../../services/account-review-financial-command-service";
+import { createAccountReviewSaveService } from
+  "../../services/account-review-save-service";
 import {
-  ACTION,
-  BANK,
-  FINGERPRINT_A,
-  FINGERPRINT_B,
-  FINGERPRINT_C,
-  FOREIGN_OWNER,
-  GROUP_QNB,
-  GROUP_WALLET,
-  OWNER,
-  SESSION,
-  TEST_DATE,
-  WALLET,
-  expectedChildLocalRef,
-  makeSaveFixture,
-  testUuid,
-  type SaveFixture,
+  ACTION, BANK, FINGERPRINT_A, FINGERPRINT_B,
+  FINGERPRINT_C, FOREIGN_OWNER, GROUP_QNB, GROUP_WALLET,
+  OWNER, SESSION, TEST_DATE, WALLET, expectedChildLocalRef,
+  makeSaveFixture, testUuid, type SaveFixture,
 } from "./account-review-save-test-fixtures";
-import { smsWithDedupOnlyWalletGroup } from "./account-review-save-intent-test-fixtures";
+import { smsWithDedupOnlyWalletGroup } from
+  "./account-review-save-intent-test-fixtures";
 import {
-  clearAndSeed,
-  ledgerState,
-  physicalSaveLedgerSnapshot,
-  reopenSqliteLedger,
-  seedSavedFingerprint,
-  seedSmsReviewDrafts,
+  clearAndSeed, ledgerState, physicalSaveLedgerSnapshot,
+  reopenSqliteLedger, seedSavedFingerprint, seedSmsReviewDrafts,
   type SqliteLedger,
 } from "./account-review-save-sqlite-test-helpers";
 
@@ -102,9 +86,7 @@ const hashProvider: Sha256Provider = {
 let currentSession: AccountReviewSession | null = null;
 let sessionReads = 0;
 
-function writer(
-  db: Database
-): ReturnType<typeof createAccountReviewSaveService> {
+function writer(db: Database): ReturnType<typeof createAccountReviewSaveService> {
   return createAccountReviewSaveService({
     database: db,
     hashProvider,
@@ -118,9 +100,7 @@ function writer(
   });
 }
 
-function save(
-  fixture: SaveFixture
-): ReturnType<
+function save(fixture: SaveFixture): ReturnType<
   ReturnType<typeof createAccountReviewSaveService>["saveSelectedAccountReview"]
 > {
   currentSession = fixture.session;
@@ -132,16 +112,14 @@ interface SavedAction {
   readonly payload: ReviewBatchSavePayload;
 }
 async function storedAction(db: Database): Promise<SavedAction> {
-  const roots = await db
-    .get<FinancialActionGroup>("financial_action_groups")
-    .query()
-    .fetch();
+  const roots = await db.get<FinancialActionGroup>(
+    "financial_action_groups"
+  ).query().fetch();
   expect(roots).toHaveLength(1);
   const root = roots[0];
   if (!root) throw new Error("Expected one immutable real financial root");
   const envelope = parseFinancialActionEnvelopeJson(
-    root.payloadJson,
-    createAccountReviewFinancialRegistry()
+    root.payloadJson, createAccountReviewFinancialRegistry()
   );
   expect(envelope.actionId).toBe(ACTION);
   expect(envelope.userId).toBe(OWNER);
@@ -150,8 +128,7 @@ async function storedAction(db: Database): Promise<SavedAction> {
 }
 
 function expectedDigest(
-  fixture: SaveFixture,
-  payload: ReviewBatchSavePayload
+  fixture: SaveFixture, payload: ReviewBatchSavePayload
 ): Promise<string> {
   return computeAccountReviewFrozenIntentDigest({
     session: fixture.session,
@@ -162,99 +139,69 @@ function expectedDigest(
 }
 
 const WALLET_SENDER_ALIAS = expectedChildLocalRef(
-  OWNER,
-  SESSION,
-  GROUP_WALLET,
-  "account_sms_sender",
-  "wally pay"
+  OWNER, SESSION, GROUP_WALLET, "account_sms_sender", "wally pay"
 );
 
 const TABLES = [
-  "accounts",
-  "bank_details",
-  "account_sms_senders",
-  "categories",
-  "transactions",
-  "transfers",
-  "financial_action_groups",
-  "account_financial_effects",
-  "sms_review_queues",
-  "sms_review_draft_items",
-  "dismissed_sms_fingerprints",
+  "accounts", "bank_details", "account_sms_senders", "categories",
+  "transactions", "transfers", "financial_action_groups",
+  "account_financial_effects", "sms_review_queues",
+  "sms_review_draft_items", "dismissed_sms_fingerprints",
 ];
 
 async function expectRejectedWithoutLedgerChange(
-  candidate: SaveFixture,
-  existingRoot = true
+  candidate: SaveFixture, existingRoot = true
 ): Promise<void> {
   const fresh = await reopenSqliteLedger(ledger);
   const rawBefore = await physicalSaveLedgerSnapshot(fresh);
-  const cached = (
-    await Promise.all(
-      TABLES.map((table) => fresh.get<Model>(table).query().fetch())
-    )
-  ).flat();
-  const cachedBefore = cached.map((model) =>
-    JSON.stringify({
-      raw: model._raw,
-      prepared: model._preparedState ?? null,
-    })
-  );
+  const cached = (await Promise.all(TABLES.map((table) =>
+    fresh.get<Model>(table).query().fetch()
+  ))).flat();
+  const cachedBefore = cached.map((model) => JSON.stringify({
+    raw: model._raw, prepared: model._preparedState ?? null,
+  }));
   const summaryBefore = await ledgerState(fresh);
   expect(summaryBefore.counts.actions).toBe(existingRoot ? 1 : 0);
-  await expect(
-    writer(fresh).saveSelectedAccountReview(candidate)
-  ).rejects.toThrow();
-  expect(
-    await physicalSaveLedgerSnapshot(await reopenSqliteLedger(ledger))
-  ).toEqual(rawBefore);
-  expect(
-    cached.map((model) =>
-      JSON.stringify({
-        raw: model._raw,
-        prepared: model._preparedState ?? null,
-      })
-    )
-  ).toEqual(cachedBefore);
-  expect(await ledgerState(await reopenSqliteLedger(ledger))).toEqual(
-    summaryBefore
-  );
+  await expect(writer(fresh).saveSelectedAccountReview(candidate)).rejects.toThrow();
+  expect(await physicalSaveLedgerSnapshot(
+    await reopenSqliteLedger(ledger)
+  )).toEqual(rawBefore);
+  expect(cached.map((model) => JSON.stringify({
+    raw: model._raw, prepared: model._preparedState ?? null,
+  }))).toEqual(cachedBefore);
+  expect(await ledgerState(await reopenSqliteLedger(ledger)))
+    .toEqual(summaryBefore);
 }
 
 type SmsRow = Extract<AccountReviewRow, { source: "SMS" }>;
 function alterSelectedSms(
-  fixture: SaveFixture,
-  fingerprint: string,
+  fixture: SaveFixture, fingerprint: string,
   change: (row: SmsRow) => SmsRow
 ): SaveFixture {
   const rows = fixture.session.rows.map((row): AccountReviewRow => {
-    if (row.source !== "SMS" || row.sourceFingerprint !== fingerprint)
-      return row;
+    if (row.source !== "SMS" || row.sourceFingerprint !== fingerprint) return row;
     return change(row);
   });
   const session = accountReviewSessionSchema.parse({
-    ...fixture.session,
-    rows,
-    saveIntent: fixture.intent,
+    ...fixture.session, rows, saveIntent: fixture.intent,
   });
   return { session, intent: fixture.intent };
 }
 
-function changeGroupEvidence(
-  fixture: SaveFixture,
-  groupId: string
-): SaveFixture {
+function changeGroupEvidence(fixture: SaveFixture, groupId: string): SaveFixture {
   const changedKey = "f".repeat(64);
   const intent = accountReviewSaveIntentSchema.parse({
     ...fixture.intent,
     confirmedGroups: fixture.intent.confirmedGroups.map((group) =>
-      group.groupId === groupId ? { ...group, evidenceKey: changedKey } : group
+      group.groupId === groupId
+        ? { ...group, evidenceKey: changedKey } : group
     ),
   });
   const session = accountReviewSessionSchema.parse({
     ...fixture.session,
     groups: fixture.session.groups.map((group) =>
-      group.groupId === groupId ? { ...group, evidenceKey: changedKey } : group
+      group.groupId === groupId
+        ? { ...group, evidenceKey: changedKey } : group
     ),
     saveIntent: intent,
   });
@@ -271,23 +218,21 @@ async function seedMixed(): Promise<SaveFixture> {
 /** Actual accessible EXPENSE category, not a mismatched INCOME category. */
 async function seedAnotherExpenseCategory(): Promise<void> {
   await database.write(async (): Promise<void> => {
-    const category = database
-      .get<Category>("categories")
-      .prepareCreate((item) => {
-        item._raw.id = testUuid(990);
-        item.userId = OWNER;
-        item.type = "EXPENSE";
-        item.deleted = false;
-        item.displayName = "Transport";
-        item.systemName = "transport";
-        item.isSystem = false;
-        item.isHidden = false;
-        item.isInternal = false;
-        item.icon = "car-outline";
-        item.iconLibrary = "Ionicons";
-        item.level = 0;
-        item.usageCount = 0;
-      });
+    const category = database.get<Category>("categories").prepareCreate((item) => {
+      item._raw.id = testUuid(990);
+      item.userId = OWNER;
+      item.type = "EXPENSE";
+      item.deleted = false;
+      item.displayName = "Transport";
+      item.systemName = "transport";
+      item.isSystem = false;
+      item.isHidden = false;
+      item.isInternal = false;
+      item.icon = "car-outline";
+      item.iconLibrary = "Ionicons";
+      item.level = 0;
+      item.usageCount = 0;
+    });
     await database.batch(category);
   });
 }
@@ -305,13 +250,9 @@ describe("#395 T048 frozen original intent and historical replay, real SQLite", 
     const fixture = makeSaveFixture("sms-new-bank");
     await seedSmsReviewDrafts(database, fixture.session);
     await expect(save(fixture)).resolves.toMatchObject({ kind: "committed" });
-    const { root, payload } = await storedAction(
-      await reopenSqliteLedger(ledger)
-    );
+    const { root, payload } = await storedAction(await reopenSqliteLedger(ledger));
     expect(payload.frozenIntentDigest).toMatch(/^[0-9a-f]{64}$/);
-    expect(payload.frozenIntentDigest).toBe(
-      await expectedDigest(fixture, payload)
-    );
+    expect(payload.frozenIntentDigest).toBe(await expectedDigest(fixture, payload));
     expect(root.payloadHash).toMatch(/^[0-9a-f]{64}$/);
     expect(root.payloadHash).not.toBe(payload.frozenIntentDigest);
     expect(root.payloadJson).toContain('"frozenIntentDigest"');
@@ -329,24 +270,16 @@ describe("#395 T048 frozen original intent and historical replay, real SQLite", 
       ...original.session,
       rows: original.session.rows.map((row) =>
         row.source === "VOICE"
-          ? {
-              ...row,
-              transaction: {
-                ...row.transaction,
-                originalTranscript: sentinel,
-              },
-            }
+          ? { ...row, transaction: {
+              ...row.transaction, originalTranscript: sentinel,
+            } }
           : row
       ),
     });
     const fixture = { session, intent: original.intent };
     await expect(save(fixture)).resolves.toMatchObject({ kind: "committed" });
-    const { root, payload } = await storedAction(
-      await reopenSqliteLedger(ledger)
-    );
-    expect(payload.frozenIntentDigest).toBe(
-      await expectedDigest(fixture, payload)
-    );
+    const { root, payload } = await storedAction(await reopenSqliteLedger(ledger));
+    expect(payload.frozenIntentDigest).toBe(await expectedDigest(fixture, payload));
     expect(root.payloadJson).not.toContain(sentinel);
     expect(root.payloadJson).not.toContain('"originalTranscript"');
     expect(root.payloadJson).toContain('"note"');
@@ -359,24 +292,15 @@ describe("#395 T048 frozen original intent and historical replay, real SQLite", 
     const fresh = await reopenSqliteLedger(ledger);
     const { root, payload } = await storedAction(fresh);
     expect(payload.selectedSourceRefs).toHaveLength(1);
-    expect(payload.selectedSourceRefs[0]?.sourceFingerprint).toBe(
-      FINGERPRINT_B
-    );
-    expect(
-      payload.selectedSourceRefs.some(
-        (ref) => ref.sourceFingerprint === FINGERPRINT_A
-      )
-    ).toBe(false);
+    expect(payload.selectedSourceRefs[0]?.sourceFingerprint).toBe(FINGERPRINT_B);
+    expect(payload.selectedSourceRefs.some(
+      (ref) => ref.sourceFingerprint === FINGERPRINT_A
+    )).toBe(false);
     expect(root.payloadJson).not.toContain(FINGERPRINT_A);
     expect(payload.creationDefaultSnapshot).toBeUndefined();
-    expect(payload.frozenIntentDigest).toBe(
-      await expectedDigest(fixture, payload)
-    );
+    expect(payload.frozenIntentDigest).toBe(await expectedDigest(fixture, payload));
     expect((await ledgerState(fresh)).counts).toMatchObject({
-      actions: 1,
-      effects: 1,
-      transactions: 2,
-      draftItems: 0,
+      actions: 1, effects: 1, transactions: 2, draftItems: 0,
     });
   });
 
@@ -388,47 +312,29 @@ describe("#395 T048 frozen original intent and historical replay, real SQLite", 
       readonly field: string;
       readonly change: (row: SmsRow) => SmsRow;
     }> = [
-      {
-        field: "amount",
-        change: (row) => ({
-          ...row,
-          amountDecimal: "11",
-          transaction: { ...row.transaction, amount: 11 },
-        }),
-      },
-      {
-        field: "category",
-        change: (row) => ({
-          ...row,
-          transaction: {
-            ...row.transaction,
-            categoryId: testUuid(990),
-          },
-        }),
-      },
-      {
-        field: "local date",
-        change: (row) => ({
-          ...row,
-          transaction: {
-            ...row.transaction,
-            date: new Date(TEST_DATE.getTime() + 86400000),
-          },
-        }),
-      },
-      {
-        field: "account",
-        change: (row) => {
-          if (row.assignment.state !== "existing")
-            throw new Error("Expected owned existing Bank assignment");
-          return {
-            ...row,
-            hasUserAccountOverride: true,
-            assignment: { ...row.assignment, accountId: WALLET },
-            transaction: { ...row.transaction, accountId: WALLET },
-          };
+      { field: "amount", change: (row) => ({
+        ...row, amountDecimal: "11",
+        transaction: { ...row.transaction, amount: 11 },
+      }) },
+      { field: "category", change: (row) => ({
+        ...row, transaction: {
+          ...row.transaction, categoryId: testUuid(990),
         },
-      },
+      }) },
+      { field: "local date", change: (row) => ({
+        ...row, transaction: {
+          ...row.transaction, date: new Date(TEST_DATE.getTime() + 86400000),
+        },
+      }) },
+      { field: "account", change: (row) => {
+        if (row.assignment.state !== "existing")
+          throw new Error("Expected owned existing Bank assignment");
+        return {
+          ...row, hasUserAccountOverride: true,
+          assignment: { ...row.assignment, accountId: WALLET },
+          transaction: { ...row.transaction, accountId: WALLET },
+        };
+      } },
     ];
     currentSession = null;
     for (const variant of variants) {
@@ -448,9 +354,7 @@ describe("#395 T048 frozen original intent and historical replay, real SQLite", 
     const afterGroup = changed.intent.confirmedGroups[0];
     expect(afterGroup?.groupId).toBe(beforeGroup?.groupId);
     expect(afterGroup?.revision).toBe(beforeGroup?.revision);
-    expect(changed.intent.plannedEntityIds).toEqual(
-      original.intent.plannedEntityIds
-    );
+    expect(changed.intent.plannedEntityIds).toEqual(original.intent.plannedEntityIds);
     expect(afterGroup?.evidenceKey).not.toBe(beforeGroup?.evidenceKey);
     currentSession = null;
     await expectRejectedWithoutLedgerChange(changed);
@@ -468,8 +372,7 @@ describe("#395 T048 frozen original intent and historical replay, real SQLite", 
       (item) => item.entity === "account" && item.localRef === GROUP_WALLET
     );
     const unusedSender = original.intent.plannedEntityIds.find(
-      (item) =>
-        item.entity === "account_sms_sender" &&
+      (item) => item.entity === "account_sms_sender" &&
         item.localRef === WALLET_SENDER_ALIAS
     );
     expect(unusedAccount).toBeDefined();
@@ -480,24 +383,17 @@ describe("#395 T048 frozen original intent and historical replay, real SQLite", 
     expect(payload.domainRecordRefs).not.toContain(unusedAccount?.id);
     expect(payload.domainRecordRefs).not.toContain(unusedSender?.id);
     expect(payload.creationDefaultSnapshot).toBeDefined();
-    expect(payload.frozenIntentDigest).toBe(
-      await expectedDigest(original, payload)
-    );
-    expect(
-      (await ledgerState(await reopenSqliteLedger(ledger))).counts
-    ).toMatchObject({ accounts: 4, bankDetails: 1, senders: 1, actions: 1 });
+    expect(payload.frozenIntentDigest).toBe(await expectedDigest(original, payload));
+    expect((await ledgerState(await reopenSqliteLedger(ledger))).counts)
+      .toMatchObject({ accounts: 4, bankDetails: 1, senders: 1, actions: 1 });
     const baseline = await physicalSaveLedgerSnapshot(
       await reopenSqliteLedger(ledger)
     );
     currentSession = null;
-    await expect(
-      writer(await reopenSqliteLedger(ledger)).saveSelectedAccountReview(
-        original
-      )
-    ).resolves.toEqual({ kind: "replay" });
-    expect(
-      await physicalSaveLedgerSnapshot(await reopenSqliteLedger(ledger))
-    ).toEqual(baseline);
+    await expect(writer(await reopenSqliteLedger(ledger))
+      .saveSelectedAccountReview(original)).resolves.toEqual({ kind: "replay" });
+    expect(await physicalSaveLedgerSnapshot(await reopenSqliteLedger(ledger)))
+      .toEqual(baseline);
   });
 
   it("I06 rejects changes to a fully omitted group's evidence and original unused sender ID", async () => {
@@ -510,13 +406,12 @@ describe("#395 T048 frozen original intent and historical replay, real SQLite", 
       changeGroupEvidence(original, GROUP_WALLET)
     );
     const unused = original.intent.plannedEntityIds.find(
-      (item) =>
-        item.entity === "account_sms_sender" &&
+      (item) => item.entity === "account_sms_sender" &&
         item.localRef === WALLET_SENDER_ALIAS
     );
     if (!unused) throw new Error("Missing original sender child");
-    const unusedAccount = original.intent.plannedEntityIds.find(
-      (item) => item.entity === "account" && item.localRef === GROUP_WALLET
+    const unusedAccount = original.intent.plannedEntityIds.find((item) =>
+      item.entity === "account" && item.localRef === GROUP_WALLET
     );
     if (!unusedAccount) throw new Error("Missing original Wallet account");
     for (const [originalId, newId] of [
@@ -530,12 +425,10 @@ describe("#395 T048 frozen original intent and historical replay, real SQLite", 
         ),
       });
       const changedSession = accountReviewSessionSchema.parse({
-        ...original.session,
-        saveIntent: changedPlan,
+        ...original.session, saveIntent: changedPlan,
       });
       await expectRejectedWithoutLedgerChange({
-        session: changedSession,
-        intent: changedPlan,
+        session: changedSession, intent: changedPlan,
       });
     }
   });
@@ -544,43 +437,34 @@ describe("#395 T048 frozen original intent and historical replay, real SQLite", 
     const original = await seedMixed();
     await expect(save(original)).resolves.toMatchObject({ kind: "committed" });
     const session = accountReviewSessionSchema.parse({
-      ...original.session,
-      saveIntent: null,
+      ...original.session, saveIntent: null,
       rows: original.session.rows.map((row) =>
         row.source === "SMS" && row.sourceFingerprint === FINGERPRINT_A
-          ? { ...row, selected: false }
-          : row
+          ? { ...row, selected: false } : row
       ),
     });
-    const removed = original.session.rows.find(
-      (row) => row.source === "SMS" && row.sourceFingerprint === FINGERPRINT_A
+    const removed = original.session.rows.find((row) =>
+      row.source === "SMS" && row.sourceFingerprint === FINGERPRINT_A
     );
     if (!removed) throw new Error("Missing independently deduped selected A");
     const intent = accountReviewSaveIntentSchema.parse({
       ...original.intent,
-      selectedRows: original.intent.selectedRows.filter(
-        (item) => item.rowId !== removed.rowId
+      selectedRows: original.intent.selectedRows.filter((item) =>
+        item.rowId !== removed.rowId
       ),
-      plannedEntityIds: original.intent.plannedEntityIds.filter(
-        (item) => item.localRef !== removed.rowId
+      plannedEntityIds: original.intent.plannedEntityIds.filter((item) =>
+        item.localRef !== removed.rowId
       ),
     });
     const changed = {
-      session: accountReviewSessionSchema.parse({
-        ...session,
-        saveIntent: intent,
-      }),
+      session: accountReviewSessionSchema.parse({ ...session, saveIntent: intent }),
       intent,
     };
-    expect(
-      intent.plannedEntityIds.find(
-        (item) => item.localRef === original.session.rows[1]?.rowId
-      )
-    ).toEqual(
-      original.intent.plannedEntityIds.find(
-        (item) => item.localRef === original.session.rows[1]?.rowId
-      )
-    );
+    expect(intent.plannedEntityIds.find((item) =>
+      item.localRef === original.session.rows[1]?.rowId
+    )).toEqual(original.intent.plannedEntityIds.find((item) =>
+      item.localRef === original.session.rows[1]?.rowId
+    ));
     expect(intent.actionId).toBe(original.intent.actionId);
     expect(intent.selectedRows).toHaveLength(1);
     currentSession = null;
@@ -590,18 +474,12 @@ describe("#395 T048 frozen original intent and historical replay, real SQLite", 
   it("I08 identical partial-dedup replay survives edited THEN deleted saved A and cleared session after cold clone", async () => {
     const original = await seedMixed();
     await expect(save(original)).resolves.toMatchObject({ kind: "committed" });
-    const saved = await database
-      .get<Transaction>("transactions")
-      .find(testUuid(900));
+    const saved = await database.get<Transaction>("transactions").find(testUuid(900));
     await database.write(async (): Promise<void> => {
-      await saved.update((record) => {
-        record.amount = 73;
-      });
+      await saved.update((record) => { record.amount = 73; });
     });
     await database.write(async (): Promise<void> => {
-      await saved.update((record) => {
-        record.deleted = true;
-      });
+      await saved.update((record) => { record.deleted = true; });
     });
     const before = await physicalSaveLedgerSnapshot(
       await reopenSqliteLedger(ledger)
@@ -610,13 +488,11 @@ describe("#395 T048 frozen original intent and historical replay, real SQLite", 
     currentSession = null;
     sessionReads = 0;
     const fresh = await reopenSqliteLedger(ledger);
-    await expect(
-      writer(fresh).saveSelectedAccountReview(original)
-    ).resolves.toEqual({ kind: "replay" });
+    await expect(writer(fresh).saveSelectedAccountReview(original))
+      .resolves.toEqual({ kind: "replay" });
     expect(sessionReads).toBe(0);
-    expect(
-      await physicalSaveLedgerSnapshot(await reopenSqliteLedger(ledger))
-    ).toEqual(before);
+    expect(await physicalSaveLedgerSnapshot(await reopenSqliteLedger(ledger)))
+      .toEqual(before);
     expect(await ledgerState(await reopenSqliteLedger(ledger))).toEqual(state);
   });
 
@@ -626,17 +502,13 @@ describe("#395 T048 frozen original intent and historical replay, real SQLite", 
     await seedSavedFingerprint(database, FINGERPRINT_A, "transaction");
     await expect(save(original)).resolves.toMatchObject({ kind: "committed" });
     const { payload } = await storedAction(await reopenSqliteLedger(ledger));
-    expect(payload.creationDefaultSnapshot?.defaultAccount?.accountId).toBe(
-      BANK
-    );
+    expect(payload.creationDefaultSnapshot?.defaultAccount?.accountId).toBe(BANK);
     const newAccountId = original.intent.plannedEntityIds.find(
       (item) => item.entity === "account" && item.localRef === GROUP_QNB
     )?.id;
     if (!newAccountId) throw new Error("Missing genuine planned Bank account");
     const bank = await database.get<Account>("accounts").find(BANK);
-    const createdBank = await database
-      .get<Account>("accounts")
-      .find(newAccountId);
+    const createdBank = await database.get<Account>("accounts").find(newAccountId);
     await database.write(async (): Promise<void> => {
       await database.batch(
         bank.prepareUpdate((record) => {
@@ -653,53 +525,35 @@ describe("#395 T048 frozen original intent and historical replay, real SQLite", 
       await reopenSqliteLedger(ledger)
     );
     const historical = await storedAction(await reopenSqliteLedger(ledger));
-    expect(historical.payload.creationDefaultSnapshot).toEqual(
-      payload.creationDefaultSnapshot
-    );
-    expect(historical.payload.frozenIntentDigest).toBe(
-      await expectedDigest(original, historical.payload)
-    );
+    expect(historical.payload.creationDefaultSnapshot)
+      .toEqual(payload.creationDefaultSnapshot);
+    expect(historical.payload.frozenIntentDigest)
+      .toBe(await expectedDigest(original, historical.payload));
     currentSession = null;
     sessionReads = 0;
-    await expect(
-      writer(await reopenSqliteLedger(ledger)).saveSelectedAccountReview(
-        original
-      )
-    ).resolves.toEqual({ kind: "replay" });
+    await expect(writer(await reopenSqliteLedger(ledger))
+      .saveSelectedAccountReview(original)).resolves.toEqual({ kind: "replay" });
     expect(sessionReads).toBe(0);
-    expect(
-      await physicalSaveLedgerSnapshot(await reopenSqliteLedger(ledger))
-    ).toEqual(before);
+    expect(await physicalSaveLedgerSnapshot(await reopenSqliteLedger(ledger)))
+      .toEqual(before);
   });
 
   it("I10 a foreign-owned or deleted-only matching fingerprint cannot authorize first-write dedup", async () => {
     const priorRecords: ReadonlyArray<readonly [string, boolean]> = [
-      [FOREIGN_OWNER, false],
-      [OWNER, true],
+      [FOREIGN_OWNER, false], [OWNER, true],
     ];
     for (const [owner, deleted] of priorRecords) {
       await clearAndSeed(database);
       const fixture = makeSaveFixture("sms-existing");
       await seedSmsReviewDrafts(database, fixture.session);
-      await seedSavedFingerprint(
-        database,
-        FINGERPRINT_B,
-        "transaction",
-        owner,
-        deleted
-      );
+      await seedSavedFingerprint(database, FINGERPRINT_B, "transaction", owner, deleted);
       await expect(save(fixture)).resolves.toMatchObject({ kind: "committed" });
       const { payload } = await storedAction(await reopenSqliteLedger(ledger));
       expect(payload.selectedSourceRefs).toHaveLength(1);
-      expect(payload.selectedSourceRefs[0]?.sourceFingerprint).toBe(
-        FINGERPRINT_B
-      );
-      expect(payload.frozenIntentDigest).toBe(
-        await expectedDigest(fixture, payload)
-      );
-      expect(
-        (await ledgerState(await reopenSqliteLedger(ledger))).counts
-      ).toMatchObject({ transactions: 2, effects: 1, actions: 1 });
+      expect(payload.selectedSourceRefs[0]?.sourceFingerprint).toBe(FINGERPRINT_B);
+      expect(payload.frozenIntentDigest).toBe(await expectedDigest(fixture, payload));
+      expect((await ledgerState(await reopenSqliteLedger(ledger))).counts)
+        .toMatchObject({ transactions: 2, effects: 1, actions: 1 });
     }
   });
 
@@ -711,9 +565,8 @@ describe("#395 T048 frozen original intent and historical replay, real SQLite", 
       sourceFingerprint: FINGERPRINT_A,
       transaction: { ...row.transaction, smsFingerprint: FINGERPRINT_A },
     }));
-    expect(forged.session.rows[0]?.sourceFingerprint).toBe(
-      forged.session.rows[1]?.sourceFingerprint
-    );
+    expect(forged.session.rows[0]?.sourceFingerprint)
+      .toBe(forged.session.rows[1]?.sourceFingerprint);
     await expectRejectedWithoutLedgerChange(forged, false);
   });
 });

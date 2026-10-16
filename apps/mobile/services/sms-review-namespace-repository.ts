@@ -12,6 +12,7 @@ import {
   getCurrentUserDataScope,
 } from "./user-data-access";
 import { reportSmsNamespaceCleanupFailure } from "./sms-review-namespace-diagnostics";
+import { prepareAccountReviewPrivateLifecycle } from "./account-review-retention-lifecycle";
 import { SMS_REVIEW_DRAFT_ERROR_CODES } from "./sms-review-draft-errors";
 import {
   commitScopedPreparedBatch,
@@ -81,9 +82,17 @@ export async function pruneSmsReviewNamespaceInWriter(
   const count = await ownedItemCount(ownerId, queueId);
   await assertActor(ownerId);
   if (count > 0 || hasSmsReviewNamespacePin(ownerId, queueId)) return;
-  await commitScopedPreparedBatch(ownerId, [queue], () => [
-    queue.prepareDestroyPermanently(),
-  ]);
+  const privateRoots = await prepareAccountReviewPrivateLifecycle({
+    database, ownerId, kind: "prune_empty", queueId,
+  });
+  await commitScopedPreparedBatch(
+    ownerId,
+    [queue, ...privateRoots.cachedRoots],
+    () => [
+      queue.prepareDestroyPermanently(),
+      ...privateRoots.prepareOperations(),
+    ]
+  );
   invalidateSmsReviewNamespace(ownerId, queueId);
 }
 
@@ -118,9 +127,17 @@ export async function acquireSmsReviewNamespaceInWriter(input: {
       });
   canonicalUuid.parse(queue.id);
   if (!existing) {
-    await commitScopedPreparedBatch(input.expectedUserId, [], () => [queue], {
-      signal: input.signal,
+    // Creating any different owned queue consumes prior pruned-empty recovery
+    // rights in the same atomic writer, even if this queue is later cancelled.
+    const privateRoots = await prepareAccountReviewPrivateLifecycle({
+      database, ownerId: input.expectedUserId, kind: "supersede",
     });
+    await commitScopedPreparedBatch(
+      input.expectedUserId,
+      [...privateRoots.cachedRoots],
+      () => [queue, ...privateRoots.prepareOperations()],
+      { signal: input.signal }
+    );
   }
   const lease = registerSmsReviewNamespaceLease(input.expectedUserId, queue.id);
   try {
@@ -244,10 +261,13 @@ export async function clearEmptySmsReviewNamespaceInWriter(
   const count = await ownedItemCount(ownerId, expectedQueueId);
   await assertActor(ownerId, signal);
   if (count !== 0) return;
+  const privateRoots = await prepareAccountReviewPrivateLifecycle({
+    database, ownerId, kind: "prune_empty", queueId: expectedQueueId,
+  });
   await commitScopedPreparedBatch(
     ownerId,
-    [queue],
-    () => [queue.prepareDestroyPermanently()],
+    [queue, ...privateRoots.cachedRoots],
+    () => [queue.prepareDestroyPermanently(), ...privateRoots.prepareOperations()],
     { signal }
   );
   invalidateSmsReviewNamespace(ownerId, expectedQueueId);

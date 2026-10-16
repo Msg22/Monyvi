@@ -21,9 +21,7 @@ export function smsWithDedupOnlyWalletGroup(): SaveFixture {
   const bank = makeSaveFixture("sms-new-bank");
   const wallet = makeSaveFixture("sms-new-wallet");
   const row = wallet.session.rows[0];
-  const group = wallet.session.groups.find(
-    (item) => item.groupId === GROUP_WALLET
-  );
+  const group = wallet.session.groups.find((item) => item.groupId === GROUP_WALLET);
   if (!row || row.source !== "SMS" || !group || group.status !== "confirmed") {
     throw new Error("Expected canonical confirmed SMS Wallet source");
   }
@@ -57,10 +55,7 @@ export function smsWithDedupOnlyWalletGroup(): SaveFixture {
   });
   const intent = freezeSaveIntent(session);
   return {
-    session: accountReviewSessionSchema.parse({
-      ...session,
-      saveIntent: intent,
-    }),
+    session: accountReviewSessionSchema.parse({ ...session, saveIntent: intent }),
     intent,
   };
 }
