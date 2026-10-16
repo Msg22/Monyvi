@@ -28,21 +28,29 @@ const reviewRegistry = createFinancialActionRegistry([
   ),
 ]);
 
-function completeReviewPayload() {
+function completeReviewPayload(): typeof reviewBatchSavePayload {
   return { ...reviewBatchSavePayload, frozenIntentDigest: VALID_DIGEST };
+}
+
+function withoutFrozenIntentDigest(): Omit<
+  typeof reviewBatchSavePayload, "frozenIntentDigest"
+> {
+  const { frozenIntentDigest: _required, ...without } = reviewBatchSavePayload;
+  return without;
 }
 
 describe("#395 unshipped review.batch-save/v1 required frozenIntentDigest wire", () => {
   it("rejects the previously valid review payload when its required digest is absent", () => {
+    const missingDigest = withoutFrozenIntentDigest();
     expect(
-      reviewBatchSaveWireSchema.safeParse(reviewBatchSavePayload).success
+      reviewBatchSaveWireSchema.safeParse(missingDigest).success
     ).toBe(false);
     expect(() =>
-      validateReviewBatchSavePayload(reviewBatchSavePayload)
+      validateReviewBatchSavePayload(missingDigest)
     ).toThrow();
     expect(() =>
       canonicalizeFinancialActionEnvelope(
-        reviewBatchSaveEnvelope,
+        { ...reviewBatchSaveEnvelope, payload: missingDigest },
         reviewRegistry
       )
     ).toThrow();

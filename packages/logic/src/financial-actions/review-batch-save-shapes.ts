@@ -221,6 +221,7 @@ export const reviewBatchSaveWireSchema = z.strictObject({
   operationCode: z.literal("review.batch-save"),
   source: z.enum(["VOICE", "SMS"]),
   sessionId: uuidSchema,
+  frozenIntentDigest: z.string().regex(/^[0-9a-f]{64}$/),
   selectedSourceRefs: z.array(selectedSourceRefSchema).min(1),
   confirmedGroupRefs: z.array(confirmedGroupRefSchema),
   createGuards: z.array(createGuardSchema).min(1),

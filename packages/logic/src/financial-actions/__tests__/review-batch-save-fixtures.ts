@@ -20,10 +20,12 @@ export const REVIEW_CATEGORY_ID = "a0000000-0000-4000-8000-000000000001";
 export const REVIEW_OCCURRED_AT = "2026-10-15T12:00:00.000Z";
 export const REVIEW_CREATED_AT = "2026-10-14T00:00:00.000Z";
 export const REVIEW_TRANSACTION_DATE = "2026-10-14";
+export const REVIEW_FROZEN_INTENT_DIGEST = "ab".repeat(32);
 
 export const reviewBatchSavePayload = {
   schemaVersion: "review.batch-save/v1",
   operationCode: "review.batch-save",
+  frozenIntentDigest: REVIEW_FROZEN_INTENT_DIGEST,
   source: "VOICE",
   sessionId: REVIEW_SESSION_ID,
   selectedSourceRefs: [
@@ -164,6 +166,7 @@ export const ATM_DEST_EFFECT_ID = "69000000-0000-4000-8000-000000000001";
 export const smsNewBankPayload = {
   schemaVersion: "review.batch-save/v1",
   operationCode: "review.batch-save",
+  frozenIntentDigest: REVIEW_FROZEN_INTENT_DIGEST,
   source: "SMS",
   sessionId: SMS_QUEUE_ID,
   selectedSourceRefs: [
@@ -328,6 +331,7 @@ export const smsNewBankEnvelope = {
 export const atmTransferPayload = {
   schemaVersion: "review.batch-save/v1",
   operationCode: "review.batch-save",
+  frozenIntentDigest: REVIEW_FROZEN_INTENT_DIGEST,
   source: "SMS",
   sessionId: ATM_QUEUE_ID,
   selectedSourceRefs: [

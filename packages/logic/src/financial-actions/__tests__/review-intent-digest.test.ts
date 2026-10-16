@@ -22,11 +22,13 @@ import {
   syntheticHashProvider,
 } from "../../account-review/__tests__/normalization-fixtures";
 import type { ReviewBatchSavePayload } from "../review-batch-save-shapes";
+import { serializeCanonicalJsonValue } from "../action-contracts";
 import { computeAccountReviewFrozenIntentDigest } from "../review-intent-digest";
 import {
   BANK_DETAILS_ID,
   NEW_BANK_ACCOUNT_ID,
   REVIEW_ACTION_ID,
+  REVIEW_USER_ID,
   REVIEW_INCOME_RECORD_ID,
   REVIEW_EXPENSE_RECORD_ID,
   REVIEW_OCCURRED_AT,
@@ -254,6 +256,25 @@ function revised(
 }
 
 describe("#395 pure frozen-intent SHA-256 projection — module creation Red", () => {
+  it("pins the v1 domain prefix and canonical minimal SHA-256 preimage", async () => {
+    const canonicalText = serializeCanonicalJsonValue([
+      "monyvi.account-review.frozen-intent",
+      "v1",
+      {
+        selectedRows: [],
+        scope: { ownerId: REVIEW_USER_ID, actionId: REVIEW_ACTION_ID },
+      },
+    ]);
+    expect(canonicalText).toBe(
+      '["monyvi.account-review.frozen-intent","v1",{"scope":{"actionId":' +
+      '"11111111-1111-4111-8111-111111111111","ownerId":' +
+      '"22222222-2222-4222-8222-222222222222"},"selectedRows":[]}]'
+    );
+    expect(await syntheticHashProvider.digestUtf8(canonicalText)).toBe(
+      "2a21a107282acab1369ab302548ed22135d915e22e8b149712f7e8358162ce10"
+    );
+  });
+
   it("hashes canonical original Voice selection with a lowercase 64-hex result", async () => {
     const fixture = await voiceCase();
     const digest = await callDigest(fixture);
