@@ -19,6 +19,7 @@ import {
   type ParsedSmsTransaction,
 } from "@monyvi/logic";
 import { Q, type Collection, type Model } from "@nozbe/watermelondb";
+import type { AccountReviewSession } from "../../../packages/logic/src/account-review/review-schemas";
 import type { Observable } from "rxjs";
 
 import { SMS_REVIEW_DRAFT_ERROR_CODES } from "./sms-review-draft-errors";
@@ -28,6 +29,7 @@ import {
   getCurrentUserDataScope,
 } from "./user-data-access";
 import { commitScopedPreparedBatch } from "./sms-review-draft-batch-service";
+import { mergePublishedSmsReviewDrafts } from "./account-review-command-publication";
 import { getSavedSmsReviewFingerprints } from "./sms-review-handled-fingerprint-service";
 import { getSmsReviewDraftItemsToShiftForRestore } from "./sms-review-draft-restore-position";
 import { clearEmptySmsReviewNamespaceInWriter } from "./sms-review-namespace-repository";
@@ -48,6 +50,8 @@ export interface MergeSmsReviewDraftsInput {
   readonly expectedUserId: string;
   readonly parsedAt?: Date;
   readonly baselineTransactions?: readonly ParsedSmsTransaction[];
+  /** The EXACT published canonical session object, never caller-composed data. */
+  readonly reviewSession?: AccountReviewSession;
 }
 
 export interface MergeSmsReviewDraftsResult {
@@ -188,6 +192,9 @@ function settleSubmittedSmsReviewCandidates(
 export async function mergeSmsReviewDrafts(
   input: MergeSmsReviewDraftsInput
 ): Promise<MergeSmsReviewDraftsResult> {
+  if (input.reviewSession !== undefined) {
+    return mergePublishedSmsReviewDrafts(input, input.reviewSession);
+  }
   if (input.transactions.length === 0) {
     return {
       insertedCount: 0,

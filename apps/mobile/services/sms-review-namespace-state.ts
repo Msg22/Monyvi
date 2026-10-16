@@ -1,6 +1,9 @@
 /** Initial namespace lifetime only; this is not persisted review/edit CAS. */
 import type { ParsedSmsTransaction } from "@monyvi/logic";
-import type { AccountReviewSession } from "../../../packages/logic/src/account-review/review-schemas";
+import {
+  accountReviewSessionSchema,
+  type AccountReviewSession,
+} from "../../../packages/logic/src/account-review/review-schemas";
 import { canonicalUuid } from "../../../packages/logic/src/account-review/schema-primitives";
 
 export interface OwnedSmsReviewQueueLease {
@@ -44,11 +47,52 @@ interface LeaseReceipt {
 const MAX_PENDING_RECEIPTS = 128;
 const receipts = new WeakMap<OwnedSmsReviewQueueLease, LeaseReceipt>();
 const candidates = new WeakMap<ParsedSmsTransaction, LeaseReceipt>();
-// This is a private object-identity proof, never a persisted session revision.
-const publishedSessions = new WeakMap<AccountReviewSession, LeaseReceipt>();
+// Exact object identity AND immutable canonical contents, only for transport.
+interface PublishedSessionProof {
+  readonly receipt: LeaseReceipt;
+  readonly canonicalContent: string;
+}
+const publishedSessions = new WeakMap<
+  AccountReviewSession,
+  PublishedSessionProof
+>();
+
+function canonicalPublishedContent(
+  session: AccountReviewSession
+): string | null {
+  const parsed = accountReviewSessionSchema.safeParse(session);
+  return parsed.success ? JSON.stringify(parsed.data) : null;
+}
 let current: NamespaceState | null = null;
 let sequence = 0n;
 let lifecycleEpoch = 0n;
+
+/** Pure, owner/queue-scoped notification after explicit namespace invalidation. */
+export type SmsReviewNamespaceInvalidationListener = (
+  ownerId: string,
+  queueId: string
+) => void;
+const invalidationListeners = new Set<SmsReviewNamespaceInvalidationListener>();
+
+export function subscribeToSmsReviewNamespaceInvalidation(
+  listener: SmsReviewNamespaceInvalidationListener
+): () => void {
+  invalidationListeners.add(listener);
+  return (): void => {
+    invalidationListeners.delete(listener);
+  };
+}
+
+function notifyExplicitInvalidation(ownerId: string, queueId: string): void {
+  for (const listener of [...invalidationListeners]) {
+    try {
+      listener(ownerId, queueId);
+    } catch {
+      // Observers must not turn an already committed queue disposal into a
+      // retryable failure, or prevent another subscriber from being notified.
+    }
+  }
+}
 
 function nextIdentity(prefix: string): string {
   sequence += 1n;
@@ -92,6 +136,9 @@ export function invalidateSmsReviewNamespace(
 ): void {
   if (matches(ownerId, queueId)) invalidateCurrent();
   else lifecycleEpoch += 1n;
+  // Explicit disposal of an owner/queue is meaningful even when the parser
+  // namespace has already settled and current === null.
+  notifyExplicitInvalidation(ownerId, queueId);
 }
 export function captureSmsReviewNamespaceEpoch(): string {
   return lifecycleEpoch.toString();
@@ -343,14 +390,16 @@ export function bindSmsReviewNamespacePublishedSession(
   reviewSession: AccountReviewSession
 ): void {
   const receipt = currentReceipt(lease);
+  const canonicalContent = canonicalPublishedContent(reviewSession);
   if (
     receipt?.status !== "published" ||
     reviewSession.ownerId !== lease.expectedUserId ||
-    reviewSession.sessionId !== lease.queueId
+    reviewSession.sessionId !== lease.queueId ||
+    canonicalContent === null
   ) {
     throw new Error("sms_review_namespace_stale");
   }
-  publishedSessions.set(reviewSession, receipt);
+  publishedSessions.set(reviewSession, { receipt, canonicalContent });
 }
 
 /** A repeated completion may contain original objects from a previously
@@ -364,9 +413,17 @@ export function isolateSmsReviewNamespacePublicationCandidates(
   assertSmsReviewNamespaceOperation(lease);
   const receipt = currentReceipt(lease);
   if (!receipt) throw new Error("sms_review_namespace_stale");
-  const priorSessionReceipt = priorSession
+  const priorProof = priorSession
     ? publishedSessions.get(priorSession)
     : undefined;
+  const priorSessionReceipt = priorProof?.receipt;
+  if (
+    priorProof &&
+    priorSession &&
+    priorProof.canonicalContent !== canonicalPublishedContent(priorSession)
+  ) {
+    throw new Error("sms_review_namespace_candidate_conflict");
+  }
   if (
     priorSessionReceipt &&
     (priorSessionReceipt.status !== "published" ||
@@ -428,4 +485,53 @@ export function assertSmsReviewNamespaceCandidateCurrent(
   lease: OwnedSmsReviewQueueLease
 ): void {
   if (!currentReceipt(lease)) throw new Error("sms_review_namespace_stale");
+}
+
+/**
+ * Final-publication admission only. Neither a UUID nor a cloned reviewSession
+ * can replace the exact WeakMap receipt AND exact published candidate objects.
+ */
+export function assertPublishedSmsReviewSession(
+  session: AccountReviewSession,
+  ownerId: string,
+  queueId: string,
+  transactions: readonly ParsedSmsTransaction[]
+): void {
+  const proof = publishedSessions.get(session);
+  const receipt = proof?.receipt;
+  if (
+    !receipt ||
+    !current ||
+    receipt.status !== "published" ||
+    receipt.namespace !== current ||
+    proof?.canonicalContent !== canonicalPublishedContent(session) ||
+    current.ownerId !== ownerId ||
+    current.queueId !== queueId ||
+    session.ownerId !== ownerId ||
+    session.sessionId !== queueId ||
+    session.source !== "SMS" ||
+    session.rows.some(
+      (row) => row.source !== "SMS" || row.sourceFingerprint === null
+    )
+  ) {
+    throw new Error("sms_review_namespace_untrusted_publication");
+  }
+  const submitted = new Set(transactions.map((row) => row.smsFingerprint));
+  const expected = new Set(session.rows.map((row) => row.sourceFingerprint));
+  if (
+    submitted.size !== transactions.length ||
+    expected.size !== session.rows.length ||
+    submitted.size !== expected.size ||
+    [...submitted].some((fingerprint) => !expected.has(fingerprint))
+  ) {
+    throw new Error("sms_review_namespace_publication_scope_mismatch");
+  }
+  for (const transaction of transactions) {
+    if (
+      candidates.get(transaction) !== receipt ||
+      !receipt.pendingCandidates.has(transaction)
+    ) {
+      throw new Error("sms_review_namespace_candidate_conflict");
+    }
+  }
 }

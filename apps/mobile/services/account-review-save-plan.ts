@@ -222,28 +222,32 @@ function selectedSourceRefs(
   frozen: FrozenReviewSave,
   rows: readonly Row[]
 ): ReviewBatchSavePayload["selectedSourceRefs"] {
-  return rows.map((row) => ({
-    rowId: row.rowId,
-    recordId: requiredPlannedEntity(
-      frozen,
-      row.source === "SMS" && row.transaction.isAtmWithdrawal === true
-        ? "transfer"
-        : "transaction",
-      row.rowId
-    ).id,
-    sourceFingerprint: row.sourceFingerprint,
-  })).sort((a, b) => sortAscii(a.rowId, b.rowId));
+  return rows
+    .map((row) => ({
+      rowId: row.rowId,
+      recordId: requiredPlannedEntity(
+        frozen,
+        row.source === "SMS" && row.transaction.isAtmWithdrawal === true
+          ? "transfer"
+          : "transaction",
+        row.rowId
+      ).id,
+      sourceFingerprint: row.sourceFingerprint,
+    }))
+    .sort((a, b) => sortAscii(a.rowId, b.rowId));
 }
 
 function confirmedGroupRefs(
   frozen: FrozenReviewSave,
   groups: readonly Group[]
 ): ReviewBatchSavePayload["confirmedGroupRefs"] {
-  return groups.map((group) => ({
-    groupId: group.groupId,
-    revision: group.revision,
-    accountId: requiredPlannedEntity(frozen, "account", group.groupId).id,
-  })).sort((a, b) => sortAscii(a.groupId, b.groupId));
+  return groups
+    .map((group) => ({
+      groupId: group.groupId,
+      revision: group.revision,
+      accountId: requiredPlannedEntity(frozen, "account", group.groupId).id,
+    }))
+    .sort((a, b) => sortAscii(a.groupId, b.groupId));
 }
 
 function finalPayload(
@@ -351,18 +355,31 @@ async function prepareReviewSaveParts(
   await assertCategories(dep.database, scope, rows);
   const financial = buildSelectedFinancialRows(dep.database, frozen, rows);
   const posting = await buildFinancialPosting(
-    dep.database, frozen, financial, existing,
-    newCurrencyMap(frozen, groups), dep.hashProvider
+    dep.database,
+    frozen,
+    financial,
+    existing,
+    newCurrencyMap(frozen, groups),
+    dep.hashProvider
   );
   const financialIds = new Set(
     financial.records.map((record) => record.after.id)
   );
   const accounts = await buildCreatedReviewAccounts(
-    dep.database, frozen, groups, posting.balances, posting.revisions,
-    dep.hashProvider, financialIds, snapshot
+    dep.database,
+    frozen,
+    groups,
+    posting.balances,
+    posting.revisions,
+    dep.hashProvider,
+    financialIds,
+    snapshot
   );
   const bookkeeping = await localBookkeeping(
-    frozen, sms, new Set(groups.map((group) => group.groupId)), dep.hashProvider
+    frozen,
+    sms,
+    new Set(groups.map((group) => group.groupId)),
+    dep.hashProvider
   );
   return { financial, posting, accounts, bookkeeping };
 }
@@ -414,8 +431,13 @@ function linkedSaveConstruction(
     envelope,
     sms,
     plan: createLinkedReviewPlan(
-      frozen, dep, payload, preparedCreates, existingOperations,
-      parts.posting.balances, parts.posting.revisions
+      frozen,
+      dep,
+      payload,
+      preparedCreates,
+      existingOperations,
+      parts.posting.balances,
+      parts.posting.revisions
     ),
   };
 }
@@ -431,23 +453,38 @@ async function authorPlan(
   const owned = await readOwnedAccounts(dep.database, scope);
   // Only actual post-dedup creates need defaults; capture before preparing
   // models and never re-sample this historical snapshot downstream.
-  const snapshot = groups.length > 0
-    ? ownedActiveDefaultSnapshot(owned)
-    : undefined;
+  const snapshot =
+    groups.length > 0 ? ownedActiveDefaultSnapshot(owned) : undefined;
   const frozenIntentDigest = await computeFrozenReviewSaveDigest(
-    frozen, snapshot, dep.hashProvider
+    frozen,
+    snapshot,
+    dep.hashProvider
   );
   const parts = await prepareReviewSaveParts(
-    frozen, dep, scope, rows, groups, owned, snapshot, sms
+    frozen,
+    dep,
+    scope,
+    rows,
+    groups,
+    owned,
+    snapshot,
+    sms
   );
   const payload = finalPayload(
-    frozen, rows, groups,
+    frozen,
+    rows,
+    groups,
     [...parts.accounts.records, ...parts.financial.records],
-    parts.posting.effects, parts.bookkeeping.items,
-    snapshot, frozenIntentDigest
+    parts.posting.effects,
+    parts.bookkeeping.items,
+    snapshot,
+    frozenIntentDigest
   );
   const envelope = canonicalReviewEnvelope(
-    frozen, parts.financial, parts.posting, payload
+    frozen,
+    parts.financial,
+    parts.posting,
+    payload
   );
   return linkedSaveConstruction(frozen, dep, sms, parts, payload, envelope);
 }

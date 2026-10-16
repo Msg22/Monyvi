@@ -271,12 +271,16 @@ async function prepareCreatedReviewGroup(
   if (balance === undefined || revision === undefined)
     reject("financial_outcome_missing");
   const account = accountModel(
-    db, frozen, group, id, balance, revision, id === firstDefaultId
+    db,
+    frozen,
+    group,
+    id,
+    balance,
+    revision,
+    id === firstDefaultId
   );
   const record = createAccountRecord(frozen, group, id, id === firstDefaultId);
-  const children = await prepareGroupChildren(
-    db, frozen, group, id, provider
-  );
+  const children = await prepareGroupChildren(db, frozen, group, id, provider);
   return {
     accountId: id,
     records: [record, ...children.records],
@@ -295,21 +299,26 @@ export async function buildCreatedReviewAccounts(
   financialIds: ReadonlySet<string>,
   snapshot: ReviewBatchSavePayload["creationDefaultSnapshot"]
 ): Promise<CreatedReviewAccounts> {
-  if ((groups.length > 0) !== (snapshot !== undefined))
+  if (groups.length > 0 !== (snapshot !== undefined))
     reject("creation_snapshot_presence");
   const ids = groups.map(
     (group) => requiredPlannedEntity(frozen, "account", group.groupId).id
   );
-  const firstDefaultId = snapshot?.activeAccountIds.length === 0
-    ? [...ids].sort()[0]
-    : undefined;
+  const firstDefaultId =
+    snapshot?.activeAccountIds.length === 0 ? [...ids].sort()[0] : undefined;
   const records: ReviewMutation[] = [];
   const prepared: Model[] = [];
   const newCurrencies = new Map<string, CurrencyType>();
   const used = new Set(financialIds);
   for (const group of groups) {
     const created = await prepareCreatedReviewGroup(
-      db, frozen, group, balances, revisions, provider, firstDefaultId
+      db,
+      frozen,
+      group,
+      balances,
+      revisions,
+      provider,
+      firstDefaultId
     );
     records.push(...created.records);
     prepared.push(...created.models);
