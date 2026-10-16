@@ -50,14 +50,32 @@ jest.mock("@monyvi/db", (): Readonly<Record<string, unknown>> => {
   const { schema } = jest.requireActual<
     typeof import("../../../../packages/db/src/schema")
   >("../../../../packages/db/src/schema");
-  const models = jest.requireActual<
+  // Use the real physical Watermelon model classes, not a dynamically
+  // constructed raw namespace whose exports lose the authoritative types.
+  const physical = jest.requireActual<
     typeof import("./account-review-save-ledger-models")
-  >("./account-review-save-ledger-models").LEDGER_MODEL_CLASSES;
+  >("./account-review-save-ledger-models");
   const adapter = new Sqlite({ schema });
-  const database = new wm.Database({ adapter, modelClasses: models });
+  const database = new wm.Database({
+    adapter,
+    modelClasses: physical.LEDGER_MODEL_CLASSES,
+  });
   return {
-    database, __adapter: adapter, schema, Q: wm.Q,
-    ...Object.fromEntries(models.map((model) => [model.name, model])),
+    database,
+    __adapter: adapter,
+    schema,
+    Q: wm.Q,
+    Account: physical.Account,
+    AccountFinancialEffect: physical.AccountFinancialEffect,
+    AccountSmsSender: physical.AccountSmsSender,
+    BankDetails: physical.BankDetails,
+    Category: physical.Category,
+    FinancialActionGroup: physical.FinancialActionGroup,
+    Transaction: physical.Transaction,
+    Transfer: physical.Transfer,
+    SmsReviewQueue: physical.SmsReviewQueue,
+    SmsReviewDraftItem: physical.SmsReviewDraftItem,
+    DismissedSmsFingerprint: physical.DismissedSmsFingerprint,
   };
 });
 jest.mock("expo-crypto", () => ({

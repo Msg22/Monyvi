@@ -1,12 +1,14 @@
 /**
  * #395 T065 TESTS FIRST — actual Add/Edit routes and actual form hooks.
  * Context, Expo adapter and unrelated live-rate provider are isolated.
- * No account UI component, default-control module, form hook or business SUT
- * is mocked. Approved new UI/copy is intentionally missing at this source parent.
+ * The unrelated navigation PageHeader is represented by a thin interactive
+ * callback/disabled-state shell, avoiding AppDrawer/logout/sync imports.
+ * Actual Add/Edit routes, default control, forms, hooks, owned reads and
+ * SQLite remain real; no business/default SUT is mocked.
  */
 import React from "react";
 import { act, fireEvent, render, screen, waitFor, cleanup } from "@testing-library/react-native";
-import i18next, { type i18n } from "i18next";
+import { createInstance, type i18n } from "i18next";
 import { I18nextProvider, initReactI18next } from "react-i18next";
 import type { Database } from "@nozbe/watermelondb";
 import type SQLiteAdapter from "@nozbe/watermelondb/adapters/sqlite";
@@ -113,6 +115,85 @@ jest.mock("expo-linear-gradient", () => ({ LinearGradient: "LinearGradient" }));
 jest.mock("react-native-safe-area-context", () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 24, left: 0, right: 0 }),
 }));
+/**
+ * PageHeader is navigation chrome, tested separately. Its actual AppDrawer
+ * imports logout/sync modules which require the production DB schema that
+ * this account-form SQLite fixture deliberately does not fake.
+ *
+ * This shell forwards the real screen callbacks and disabled/busy state;
+ * it does NOT mock Add/Edit, form hooks, default control or account services.
+ */
+jest.mock("@/components/navigation/PageHeader", () => {
+  const ReactActual = jest.requireActual<typeof import("react")>("react");
+  const { Text, TouchableOpacity, View } = jest.requireActual<
+    typeof import("react-native")
+  >("react-native");
+  const { router } = jest.requireMock<{
+    readonly router: { readonly back: () => void };
+  }>("expo-router");
+  interface ScopedHeaderProps {
+    readonly title: string;
+    readonly showBackButton?: boolean;
+    readonly onBack?: () => void;
+    readonly backAccessibilityLabel?: string;
+    readonly rightAction?: {
+      readonly label?: string;
+      readonly accessibilityLabel?: string;
+      readonly testID?: string;
+      readonly onPress: () => void;
+      readonly disabled?: boolean;
+      readonly loading?: boolean;
+    };
+    readonly children?: React.ReactNode;
+  }
+  return {
+    PageHeader: ({
+      title,
+      showBackButton,
+      onBack,
+      backAccessibilityLabel,
+      rightAction,
+      children,
+    }: ScopedHeaderProps): React.ReactElement =>
+      ReactActual.createElement(
+        View,
+        { testID: "account-form-scoped-header" },
+        showBackButton
+          ? ReactActual.createElement(
+              TouchableOpacity,
+              {
+                testID: "header-back",
+                accessibilityRole: "button",
+                accessibilityLabel: backAccessibilityLabel,
+                onPress: onBack ?? router.back,
+              },
+              ReactActual.createElement(Text, null, "Back")
+            )
+          : null,
+        ReactActual.createElement(
+          Text,
+          { accessibilityRole: "header" },
+          title
+        ),
+        rightAction
+          ? ReactActual.createElement(
+              TouchableOpacity,
+              {
+                testID: rightAction.testID ?? "header-save",
+                accessibilityRole: "button",
+                accessibilityLabel:
+                  rightAction.accessibilityLabel ?? rightAction.label,
+                disabled: Boolean(rightAction.disabled || rightAction.loading),
+                onPress: rightAction.onPress,
+              },
+              ReactActual.createElement(Text, null, rightAction.label ?? "Save")
+            )
+          : null,
+        children
+      ),
+  };
+});
+
 /** Market valuations are not part of Add/Edit account-default behavior. */
 jest.mock("@/hooks/useMarketRates", () => ({
   useMarketRates: () => ({
@@ -136,7 +217,7 @@ const mockDb = jest.requireMock<{
 
 async function makeI18n(language: "en" | "ar" = "en"): Promise<i18n> {
   mockLocaleLanguage = language;
-  const instance = i18next.createInstance();
+  const instance = createInstance();
   await instance.use(initReactI18next).init({
     lng: language,
     fallbackLng: language,

@@ -68,10 +68,10 @@ function uniqueCached(models: readonly Model[]): readonly Model[] {
     return true;
   });
 }
-async function prepareOriginalQueue(
+function prepareOriginalQueue(
   db: Database,
   evidence: VerifiedReviewRecovery
-): Promise<readonly Model[]> {
+): readonly Model[] {
   const preimage = evidence.snapshot.queuePreimage;
   if (!preimage || !evidence.canRecreateOriginalQueue) refuse();
   const oldTombstone = evidence.queue;
@@ -84,7 +84,9 @@ async function prepareOriginalQueue(
   ).prepareCreate((row) => {
     row._raw.id = preimage.id;
     row.userId = preimage.userId;
-    row._raw.created_at = realTimestamp(preimage.createdAt).getTime();
+    Object.assign(row._raw, {
+      created_at: realTimestamp(preimage.createdAt).getTime(),
+    });
     row.updatedAt = realTimestamp(preimage.updatedAt);
   });
   return oldTombstone
@@ -111,7 +113,9 @@ function prepareDraftOriginal(
       row.selectionOverride = draft.selectionOverride;
       row.parsedAt = realTimestamp(draft.parsedAt);
       row.updatedAt = realTimestamp(draft.updatedAt);
-      row._raw.created_at = realTimestamp(draft.createdAt).getTime();
+      Object.assign(row._raw, {
+        created_at: realTimestamp(draft.createdAt).getTime(),
+      });
     });
 }
 function replaceDraftWithHistorical(
@@ -140,10 +144,10 @@ function replaceDraftWithHistorical(
   const restored = prepareDraftOriginal(db, ownerId, draft);
   return [prior.prepareDestroyPermanently(), restored];
 }
-async function prepareSmsRestoration(
+function prepareSmsRestoration(
   db: Database,
   evidence: VerifiedReviewRecovery
-): Promise<readonly Model[]> {
+): readonly Model[] {
   const queue = evidence.snapshot.queuePreimage;
   if (!queue || (queue.disposition !== "present" &&
       queue.disposition !== "pruned_empty")) return [];
@@ -151,7 +155,7 @@ async function prepareSmsRestoration(
       !evidence.canRecreateOriginalQueue) return [];
   const operations: Model[] = [];
   if (queue.disposition === "pruned_empty") {
-    operations.push(...await prepareOriginalQueue(db, evidence));
+    operations.push(...prepareOriginalQueue(db, evidence));
   }
   for (const entry of evidence.drafts) {
     operations.push(...replaceDraftWithHistorical(
@@ -167,8 +171,10 @@ function prepareCreatedDeletes(
   return evidence.created.map(({ model }) =>
     model.prepareUpdate((row) => {
       // All five review create kinds have the generated "deleted" domain bit.
-      row._raw.deleted = true;
-      row._raw.updated_at = when.getTime();
+      Object.assign(row._raw, {
+        deleted: true,
+        updated_at: when.getTime(),
+      });
     })
   );
 }
@@ -252,7 +258,7 @@ export async function reconcileRejectedAccountReviewInSqlite(input: {
         ...prepareCreatedDeletes(evidence, now),
         ...prepareCanonicalExisting(evidence, now),
         ...prepareEffects(evidence, now),
-        ...await prepareSmsRestoration(db, evidence),
+        ...prepareSmsRestoration(db, evidence),
         stageRootTerminal(root, now),
       ];
       await assertExpectedCurrentUser(scope.userId);

@@ -5,8 +5,6 @@
  * submits that exact immutable envelope through the feature foundation.
  * This is a narrow production DI boundary, not a debug or test-only API.
  */
-import type { Database } from "@nozbe/watermelondb";
-import type { Account } from "@monyvi/db";
 import type { Sha256Provider } from "@monyvi/logic";
 import {
   accountFormSchema,

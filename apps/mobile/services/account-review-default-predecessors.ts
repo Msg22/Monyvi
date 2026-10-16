@@ -45,6 +45,34 @@ function block(): never {
 function ascii(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
 }
+function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+/**
+ * Read canonical existing registration shapes, never iterate a broad
+ * RegisteredActionPayload's unchecked JSON arrays as implicit any.
+ * Root envelopes were verified through the approved registry first.
+ */
+function createdAccountsFromEnvelope(
+  envelope: ReturnType<typeof parseFinancialActionEnvelopeJson>
+): readonly string[] {
+  const payload: unknown = envelope.payload;
+  if (!isRecord(payload)) block();
+  const mutation = payload.domainMutation;
+  if (!isRecord(mutation)) return [];
+  const untrusted = mutation.records;
+  if (!Array.isArray(untrusted)) block();
+  const records: readonly unknown[] = untrusted;
+  const ids: string[] = [];
+  for (const value of records) {
+    if (!isRecord(value)) block();
+    if (value.entity !== "account" || value.mode !== "create") continue;
+    if (!isRecord(value.after) ||
+        typeof value.after.id !== "string") block();
+    ids.push(value.after.id);
+  }
+  return ids;
+}
 
 async function inspectImmutableRoot(
   root: LocalRootIdentity,
@@ -108,21 +136,10 @@ async function ownedCreatorActions(
     if (root.actionId === rootActionId) continue;
     const envelope = await inspectImmutableRoot(root, hashProvider);
     if (envelope.userId !== ownerId) block();
-    const mutation = envelope.payload.domainMutation;
-    if (typeof mutation !== "object" || mutation === null ||
-        !("records" in mutation) || !Array.isArray(mutation.records))
-      continue;
-    for (const record of mutation.records) {
-      if (typeof record !== "object" || record === null ||
-          !("entity" in record) || record.entity !== "account" ||
-          !("mode" in record) || record.mode !== "create" ||
-          !("after" in record) || typeof record.after !== "object" ||
-          record.after === null || !("id" in record.after) ||
-          typeof record.after.id !== "string" ||
-          !required.has(record.after.id))
-        continue;
-      if (creators.has(record.after.id)) block();
-      creators.set(record.after.id, root.actionId);
+    for (const accountId of createdAccountsFromEnvelope(envelope)) {
+      if (!required.has(accountId)) continue;
+      if (creators.has(accountId)) block();
+      creators.set(accountId, root.actionId);
     }
   }
   // Current local *created* rows must have a durable creator if an Add

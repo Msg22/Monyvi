@@ -13,6 +13,8 @@ import type {
 } from "../../../../packages/logic/src/financial-actions/review-local-recovery";
 import { createAccountReviewFinancialRegistry } from
   "../../services/account-review-financial-command-service";
+import { physicalBoolean } from
+  "../../services/account-review-local-snapshot-postimages";
 import { createFinancialActionFoundationRepository } from
   "../../services/financial-action-foundation-repository";
 import {
@@ -162,7 +164,7 @@ export async function activeActionCreatedIds(
       .query(Q.where("id", ref.id)).fetch();
     if (rows.length > 1)
       throw new Error("duplicate_physical_created_identity");
-    if (rows.some((row) => row._raw.deleted !== true))
+    if (rows.some((row) => physicalBoolean(row._raw, "deleted") !== true))
       active.push(ref.entity + ":" + ref.id);
   }
   return active.sort();

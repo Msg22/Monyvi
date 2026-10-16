@@ -33,13 +33,16 @@ import {
   watermelonRawRecordsMatch,
 } from "./watermelon-raw-integrity";
 import { commitPreparedBatch } from "./watermelon-atomic-batch";
-import {
-  reviewBatchSaveWireSchema,
-} from "../../../packages/logic/src/financial-actions/review-batch-save-shapes";
-import {
-  parseAccountReviewLocalSaveSnapshot,
-} from "../../../packages/logic/src/financial-actions/review-local-recovery";
 import { APPROVED_FINANCIAL_ACTION_REGISTRY } from "./financial-action-approved-registry";
+import {
+  captureExistingOperationExpectations,
+  captureLocalRecoverySnapshotJson,
+  capturePreparedExpectations,
+  createImmutablePostimages,
+  createImmutablePreimages,
+  type ExistingOperationExpectation,
+  type PreparedOperationExpectation,
+} from "./financial-action-local-recovery-capture";
 import {
   FINANCIAL_ACTION_FOUNDATION_ERROR_CODES,
   type CommitFinancialActionGroupLocallyInput,
@@ -85,24 +88,6 @@ interface PreparedLocalRoot {
   readonly record: FinancialActionGroup;
 }
 
-interface ExistingOperationExpectation {
-  readonly model: Model;
-  readonly table: string;
-  readonly id: string;
-  readonly kind: FinancialActionLinkedExistingOperation["kind"];
-  readonly expectedPreparedState: "update" | "markAsDeleted";
-}
-
-interface PreparedOperationExpectation {
-  readonly model: Model;
-  readonly table: string;
-  readonly id: string;
-  readonly kind: FinancialActionLinkedOperationPostimage["kind"];
-  readonly expectedPreparedState: "create" | "update" | "markAsDeleted";
-  readonly raw: Readonly<Model["_raw"]>;
-  readonly isEditing: boolean;
-}
-
 interface PreparedCreateSnapshot {
   readonly model: Model;
   readonly raw: Model["_raw"];
@@ -111,37 +96,6 @@ interface PreparedCreateSnapshot {
 }
 
 const TABLE_NAME = "financial_action_groups";
-
-/** Bind private bytes to the original validated public action, never a new DTO. */
-async function localRecoverySnapshotJson(
-  context: PreparedFinancialActionContext,
-  plan: FinancialActionLinkedOperationPlan,
-  evidence: FinancialActionLinkedOperationPreparedOwnershipInput
-): Promise<string | null> {
-  const builder = plan.buildLocalRecoverySnapshot;
-  if (builder === undefined) return null;
-  if (typeof builder !== "function" ||
-      context.envelope.kind !== "review_batch_save" ||
-      context.envelope.payloadVersion !== "review.batch-save/v1")
-    throw new Error(FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.INVALID_INPUT);
-  const payload = reviewBatchSaveWireSchema.parse(context.envelope.payload);
-  const candidate = await builder(evidence);
-  try {
-    const validated = parseAccountReviewLocalSaveSnapshot({
-      json: JSON.stringify(candidate),
-      expectedRoot: {
-        actionId: context.envelope.actionId,
-        ownerId: context.scope.userId,
-        sessionId: payload.sessionId,
-        source: payload.source,
-      },
-    });
-    return JSON.stringify(validated);
-  } catch {
-    // A failed private validation must not surface raw SMS in error messages.
-    throw new Error(FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.INVALID_INPUT);
-  }
-}
 
 function asFinancialActionState(value: string): FinancialActionState {
   if (!FINANCIAL_ACTION_STATES.includes(value as FinancialActionState)) {
@@ -341,22 +295,6 @@ export function createFinancialActionFoundationRepository(
     snapshot.model._isEditing = snapshot.isEditing;
   }
 
-  function captureExistingOperationExpectations(
-    operations: readonly FinancialActionLinkedExistingOperation[]
-  ): readonly ExistingOperationExpectation[] {
-    return Object.freeze(
-      operations.map((operation) =>
-        Object.freeze({
-          model: operation.model,
-          table: operation.model.table,
-          id: operation.model.id,
-          kind: operation.kind,
-          expectedPreparedState: operation.kind,
-        })
-      )
-    );
-  }
-
   function assertPreparedCreateIntegrity(
     models: readonly Model[],
     expectedIdentities: readonly string[]
@@ -405,44 +343,6 @@ export function createFinancialActionFoundationRepository(
     assertDisjointModelIdentities(models, preparedCreates);
   }
 
-  function capturePreparedExpectations(
-    preparedCreates: readonly Model[],
-    preparedExistingOperations: readonly Model[],
-    existingExpectations: readonly ExistingOperationExpectation[]
-  ): readonly PreparedOperationExpectation[] {
-    const createExpectations = preparedCreates.map((model) =>
-      Object.freeze({
-        model,
-        table: model.table,
-        id: model.id,
-        kind: "create" as const,
-        expectedPreparedState: "create" as const,
-        raw: Object.freeze(cloneWatermelonRaw(model._raw)),
-        isEditing: false,
-      })
-    );
-    const updateExpectations = preparedExistingOperations.map(
-      (model, index) => {
-        const existing = existingExpectations[index];
-        if (!existing || model !== existing.model) {
-          throw new Error(
-            FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.INVALID_INPUT
-          );
-        }
-        return Object.freeze({
-          model,
-          table: existing.table,
-          id: existing.id,
-          kind: existing.kind,
-          expectedPreparedState: existing.expectedPreparedState,
-          raw: Object.freeze(cloneWatermelonRaw(model._raw)),
-          isEditing: false,
-        });
-      }
-    );
-    return Object.freeze([...createExpectations, ...updateExpectations]);
-  }
-
   function assertPreparedOperationsMatch(
     operations: readonly Model[],
     expectations: readonly PreparedOperationExpectation[]
@@ -466,47 +366,6 @@ export function createFinancialActionFoundationRepository(
     }
     assertNoRootTargets(operations);
     assertUniqueModelIdentities(operations);
-  }
-
-  function immutableRaw(raw: Readonly<Model["_raw"]>): Readonly<Model["_raw"]> {
-    return Object.freeze(cloneWatermelonRaw(raw));
-  }
-
-  function createImmutablePreimages(
-    snapshots: ReadonlyArray<ReturnType<typeof captureCachedModelSnapshot>>,
-    expectations: readonly ExistingOperationExpectation[]
-  ): readonly FinancialActionLinkedOperationPreimage[] {
-    return Object.freeze(
-      snapshots.map((snapshot, index) => {
-        const expectation = expectations[index];
-        if (!expectation) {
-          throw new Error(
-            FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.INVALID_INPUT
-          );
-        }
-        return Object.freeze({
-          id: expectation.id,
-          kind: expectation.kind,
-          table: expectation.table,
-          raw: immutableRaw(snapshot.raw),
-        });
-      })
-    );
-  }
-
-  function createImmutablePostimages(
-    expectations: readonly PreparedOperationExpectation[]
-  ): readonly FinancialActionLinkedOperationPostimage[] {
-    return Object.freeze(
-      expectations.map((expectation) =>
-        Object.freeze({
-          id: expectation.id,
-          kind: expectation.kind,
-          table: expectation.table,
-          raw: immutableRaw(expectation.raw),
-        })
-      )
-    );
   }
 
   function prepareExistingOperation(
@@ -710,8 +569,8 @@ export function createFinancialActionFoundationRepository(
         FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.INVALID_INPUT
       );
       assertPreparedOperationsMatch(linkedOperations, preparedExpectations);
-      const localSnapshotJson = await localRecoverySnapshotJson(
-        context, plan, physicalEvidence
+      const localSnapshotJson = await captureLocalRecoverySnapshotJson(
+        context.envelope, context.scope.userId, plan, physicalEvidence
       );
       await reassertExpectedCurrentUser(context.scope.userId);
       assertPendingFinancialActionRootUnchanged(

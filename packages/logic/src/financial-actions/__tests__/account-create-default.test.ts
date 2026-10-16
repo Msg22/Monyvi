@@ -288,9 +288,8 @@ describe("#395 T064 account.create-default/v1 closed financial contract", () => 
     expect(payload.accountEffects).toEqual([]);
     expect(payload.domainMutation.records.map((record) => record.entity))
       .toEqual(["account", "account_default", "account_sms_sender", "bank_details"]);
-    expect(payload.domainMutation.records.filter(
-      (record) => record.entity === "transaction"
-    )).toEqual([]);
+    expect(payload.domainMutation.records.map((record) => record.entity))
+      .not.toContain("transaction");
     expect(payload.createGuards.map((guard) => guard.entity))
       .toEqual(["account", "account_sms_sender", "bank_details"]);
     expect(payload.domainMutation.records.find(
@@ -309,9 +308,8 @@ describe("#395 T064 account.create-default/v1 closed financial contract", () => 
       currency: "EGP",
       effectId: ADD_DEFAULT_IDS.effect,
     }]);
-    expect(payload.domainMutation.records.some(
-      (record) => record.entity === "transaction"
-    )).toBe(false);
+    expect(payload.domainMutation.records.map((record) => record.entity))
+      .not.toContain("transaction");
     expect(payload.domainMutation.records.find(
       (record) => record.entity === "account"
     )?.after.openingBalanceMinorUnits).toBe("1001");

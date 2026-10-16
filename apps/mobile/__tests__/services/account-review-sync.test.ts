@@ -58,6 +58,45 @@ import {
   SMS_NET_EFFECT_ID,
 } from "../../../../packages/logic/src/financial-actions/__tests__/review-batch-save-fixtures";
 
+/**
+ * Test-only native DB boundary: the newly imported financial sync service
+ * references the production @monyvi/db singleton. Use the current SQLite
+ * adapter, actual schema and generated domain Model constructors, never an
+ * undefined WMDatabaseBridge or a mocked reconciliation/business method.
+ * Sync assertions themselves remain the original pure/canonical fixtures.
+ */
+jest.mock("@nozbe/watermelondb/adapters/sqlite/makeDispatcher", (): unknown =>
+  jest.requireActual(
+    "@nozbe/watermelondb/adapters/sqlite/makeDispatcher/index.js"
+  )
+);
+jest.mock("@monyvi/db", (): Readonly<Record<string, unknown>> => {
+  const wm = jest.requireActual<typeof import("@nozbe/watermelondb")>(
+    "@nozbe/watermelondb"
+  );
+  const Adapter = jest.requireActual<
+    typeof import("@nozbe/watermelondb/adapters/sqlite")
+  >("@nozbe/watermelondb/adapters/sqlite").default;
+  const { schema } = jest.requireActual<
+    typeof import("../../../../packages/db/src/schema")
+  >("../../../../packages/db/src/schema");
+  const modelRegistry = jest.requireActual<
+    typeof import("./account-review-save-ledger-models")
+  >("./account-review-save-ledger-models");
+  const adapter = new Adapter({ schema });
+  return {
+    database: new wm.Database({
+      adapter,
+      modelClasses: modelRegistry.LEDGER_MODEL_CLASSES,
+    }),
+    schema,
+    Q: wm.Q,
+    ...Object.fromEntries(
+      modelRegistry.LEDGER_MODEL_CLASSES.map((model) => [model.name, model])
+    ),
+  };
+});
+
 /** Watermelon's DirtyRaw ID is loose: only real string IDs enter assertions. */
 function requiredChangeId(value: unknown): string {
   if (typeof value !== "string" || value.length === 0) {

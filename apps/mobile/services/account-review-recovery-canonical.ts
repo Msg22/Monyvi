@@ -1,10 +1,9 @@
 /** Shared closed canonical-account outcome decoder; no DB dependencies. */
-import type {
-  CanonicalAccountSnapshot,
-  CanonicalEffectSnapshot,
+import {
+  FINANCIAL_ACTION_RECONCILIATION_ERROR_CODES,
+  type CanonicalAccountSnapshot,
+  type CanonicalEffectSnapshot,
 } from "./financial-action-reconciliation-service";
-import { FINANCIAL_ACTION_RECONCILIATION_ERROR_CODES } from
-  "./financial-action-reconciliation-service";
 
 function fail(): never {
   throw new Error(FINANCIAL_ACTION_RECONCILIATION_ERROR_CODES.INVALID_EVIDENCE);

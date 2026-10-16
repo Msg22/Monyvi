@@ -19,7 +19,7 @@ function rows(
   changes: SyncPushArgs["changes"],
   table: string,
   which: "created" | "updated"
-): readonly Readonly<Record<string, unknown>>[] {
+): ReadonlyArray<Readonly<Record<string, unknown>>> {
   const change = (changes as unknown as Readonly<
     Record<string, SyncTableChangeSet | undefined>
   >)[table];

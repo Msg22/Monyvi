@@ -289,11 +289,11 @@ function finalPayload(
     : { ...mandatory, creationDefaultSnapshot: snapshot };
 }
 
-type ReviewPrivatePlanContext = {
+interface ReviewPrivatePlanContext {
   readonly sms: SmsSaveScope;
   readonly ownedAccounts: readonly Account[];
   readonly scope: CurrentUserDataScope;
-};
+}
 async function assertFrozenSession(
   frozen: FrozenReviewSave,
   dep: ReviewPlanDependencies

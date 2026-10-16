@@ -97,8 +97,8 @@ function rootWriteRecord(
 async function localRootMaps(
   database: Database,
   expectedOwnerId: string,
-  incoming: readonly CheckedCloudActionRoot[],
-  deletedIds: readonly string[]
+  incoming: ReadonlyArray<CheckedCloudActionRoot>,
+  deletedIds: ReadonlyArray<string>
 ): Promise<{
   readonly byAction: ReadonlyMap<string, FinancialActionGroup>;
   readonly byId: ReadonlyMap<string, FinancialActionGroup>;
@@ -125,7 +125,7 @@ async function localRootMaps(
 }
 
 function projectIncomingRoots(
-  incoming: readonly CheckedCloudActionRoot[],
+  incoming: ReadonlyArray<CheckedCloudActionRoot>,
   byAction: ReadonlyMap<string, FinancialActionGroup>,
   byId: ReadonlyMap<string, FinancialActionGroup>
 ): SyncTableChangeSet {
@@ -188,7 +188,7 @@ export async function prepareOwnedFinancialActionRootPull(input: {
     deleted.push(id);
   }
   await assertUser(input.expectedOwnerId);
-  return { ...result, deleted };
+  return { created: [], updated: result.updated, deleted };
 }
 
 async function prepareStandaloneOperations(
@@ -196,8 +196,8 @@ async function prepareStandaloneOperations(
   changes: SyncTableChangeSet,
   ownerId: string
 ): Promise<{
-  readonly operations: readonly Model[];
-  readonly originals: readonly ReturnType<typeof captureCachedModelSnapshot>[];
+  readonly operations: ReadonlyArray<Model>;
+  readonly originals: ReadonlyArray<ReturnType<typeof captureCachedModelSnapshot>>;
 }> {
   const collection = db.get<FinancialActionGroup>(ROOT_TABLE);
   const operations: Model[] = [];

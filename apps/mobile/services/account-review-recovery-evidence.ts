@@ -27,8 +27,11 @@ import {
   parseAccountReviewLocalSaveSnapshot,
   type AccountReviewLocalSaveSnapshot,
 } from "../../../packages/logic/src/financial-actions/review-local-recovery";
-import { hashAccountReviewLocalPostimage } from
-  "./account-review-local-snapshot-postimages";
+import {
+  hashAccountReviewLocalPostimage,
+  physicalBoolean,
+  physicalText,
+} from "./account-review-local-snapshot-postimages";
 import { createAccountReviewFinancialRegistry } from
   "./account-review-financial-command-service";
 import {
@@ -168,12 +171,15 @@ async function verifyCreated(
   const rows: VerifiedReviewCreatedRow[] = [];
   for (const ref of snapshot.createdEntityRefs) {
     const record = await physicalRow(db, TABLES[ref.entity], ref.id);
-    if (record._raw.deleted !== false) refuse();
-    if ("user_id" in record._raw && record._raw.user_id !== root.userId)
+    if (physicalBoolean(record._raw, "deleted") !== false) refuse();
+    if ("user_id" in record._raw &&
+        physicalText(record._raw, "user_id") !== root.userId)
       refuse();
     if (ref.entity === "bank_details" || ref.entity === "account_sms_sender") {
-      const owner = await physicalRow(db, "accounts", String(record._raw.account_id));
-      if (owner._raw.user_id !== root.userId ||
+      const owner = await physicalRow(
+        db, "accounts", physicalText(record._raw, "account_id")
+      );
+      if (physicalText(owner._raw, "user_id") !== root.userId ||
           !snapshot.createdEntityRefs.some((candidate) =>
             candidate.entity === "account" && candidate.id === owner.id))
         refuse();

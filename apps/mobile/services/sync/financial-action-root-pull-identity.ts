@@ -62,7 +62,10 @@ function requireServerOutcome(value: unknown): FinancialActionServerOutcome | nu
 }
 function canonicalGuardText(
   raw: string,
-  guards: readonly { readonly accountId: string; readonly expectedRevision: string }[]
+  guards: ReadonlyArray<{
+    readonly accountId: string;
+    readonly expectedRevision: string;
+  }>
 ): string {
   let decoded: unknown;
   try { decoded = JSON.parse(raw); }
@@ -81,7 +84,8 @@ function canonicalGuardText(
 function validatePublicProjection(
   record: Readonly<Record<string, unknown>>
 ): Record<string, unknown> {
-  const allowed = new Set(rootColumns.map((column) => column.name));
+  // Watermelon stores id implicitly, outside the declared column array.
+  const allowed = new Set(["id", ...rootColumns.map((column) => column.name)]);
   const actual: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(record)) {
     if (key === ROOT_LOCAL_ONLY) continue;

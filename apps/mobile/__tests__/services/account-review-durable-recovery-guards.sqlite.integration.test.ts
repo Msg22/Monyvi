@@ -56,7 +56,12 @@ jest.mock("@monyvi/db", (): Readonly<Record<string, unknown>> => {
   };
 });
 jest.mock("@/services/supabase", () => ({
-  getCurrentUserId: (): Promise<string> => Promise.resolve(OWNER),
+  getCurrentUserId: (): Promise<string> => {
+    const { OWNER: owner } = jest.requireActual<
+      typeof import("./account-review-save-test-fixtures")
+    >("./account-review-save-test-fixtures");
+    return Promise.resolve(owner);
+  },
   supabase: {},
 }));
 interface DbModule {

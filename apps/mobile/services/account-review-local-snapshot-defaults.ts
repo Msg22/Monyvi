@@ -5,6 +5,9 @@ import {
   parseFinancialActionEnvelopeJson,
   type Sha256Provider,
 } from "@monyvi/logic";
+import {
+  validateAccountCreateDefaultPayload,
+} from "../../../packages/logic/src/financial-actions/account-create-default";
 import type {
   AccountReviewLocalSaveSnapshot,
 } from "../../../packages/logic/src/financial-actions/review-local-recovery";
@@ -109,10 +112,37 @@ export async function captureReviewDefaultPreimages(input: {
   }));
 }
 
+function dependenciesFromPriorAdd(
+  root: FinancialActionGroup,
+  accountIds: ReadonlySet<string>
+): boolean {
+  const envelope = parseFinancialActionEnvelopeJson(
+    root.payloadJson, createAccountReviewFinancialRegistry()
+  );
+  if (envelope.domain !== "accounts" ||
+      envelope.kind !== "create_with_default" ||
+      envelope.payloadVersion !== "account.create-default/v1" ||
+      envelope.actionId !== root.actionId ||
+      envelope.userId !== root.userId ||
+      envelope.domainReferenceId !== root.domainReferenceId)
+    fail("invalid_prior_action_identity");
+  const prior = validateAccountCreateDefaultPayload(envelope.payload);
+  const created = prior.domainMutation.records.filter(
+    (record) => record.entity === "account" && record.mode === "create"
+  );
+  const account = created[0];
+  if (created.length !== 1 || !account ||
+      account.after.id !== envelope.domainReferenceId)
+    fail("unprovable_account_predecessor");
+  return accountIds.has(account.after.id);
+}
+
 function dependenciesFromPriorRoot(
   root: FinancialActionGroup,
   accountIds: ReadonlySet<string>
 ): boolean {
+  if (root.domain === "accounts" && root.kind === "create_with_default")
+    return dependenciesFromPriorAdd(root, accountIds);
   if (root.kind !== "review_batch_save") {
     if (root.domain === "accounts" && root.kind !== "edit_balance")
       fail("unprovable_account_predecessor");

@@ -9,6 +9,7 @@ import {
   roundDecimal,
   serializeDecimal,
   toMinorUnits,
+  parseCanonicalUnsignedIntegerString,
   type FinancialActionEnvelopeV1,
 } from "@monyvi/logic";
 import {
@@ -228,7 +229,10 @@ export function prepareAccountDefaultCommand(
   const envelope: FinancialActionEnvelopeV1 = {
     actionId,
     accountGuards: effectId === null
-      ? [] : [{ accountId, expectedRevision: "0" }],
+      ? [] : [{
+          accountId,
+          expectedRevision: parseCanonicalUnsignedIntegerString("0"),
+        }],
     domain: "accounts",
     domainReferenceId: accountId,
     envelopeVersion: "monyvi.financial-action/v1",
@@ -238,14 +242,24 @@ export function prepareAccountDefaultCommand(
     payloadVersion: "account.create-default/v1",
     userId: input.ownerId,
   };
-  const ids = [
-    ...domainRecordRefs,
+  // Reserve only genuinely NEW identities. domainRecordRefs also contains
+  // the legitimate captured prior-default UPDATE ID, which must already be
+  // active and is independently bound to the snapshot by the strict payload
+  // validator above. It is never a CREATE/absence-guard target.
+  const createdIds = records
+    .filter((record) => record.mode === "create")
+    .map((record) => record.after.id);
+  const plannedNewIds = [
+    ...createdIds,
     actionId,
     ...(effectId === null ? [] : [effectId]),
   ];
-  if (ids.length !== new Set(ids).size ||
-      snapshot.activeAccountIds.some((id) => ids.includes(id)))
+  if (
+    plannedNewIds.length !== new Set(plannedNewIds).size ||
+    snapshot.activeAccountIds.some((id) => plannedNewIds.includes(id))
+  ) {
     reject("duplicate_planned_identity");
+  }
   const dependencies = [...input.dependencyActionIds].sort(ascii);
   if (new Set(dependencies).size !== dependencies.length ||
       dependencies.includes(actionId))

@@ -13,6 +13,8 @@ import type {
 import {
   createAccountReviewFinancialRegistry,
 } from "../../services/account-review-financial-command-service";
+import { physicalRawField } from
+  "../../services/account-review-local-snapshot-postimages";
 import {
   createFinancialActionFoundationRepository,
 } from "../../services/financial-action-foundation-repository";
@@ -77,7 +79,12 @@ jest.mock("@monyvi/db", (): Readonly<Record<string, unknown>> => {
   };
 });
 jest.mock("@/services/supabase", () => ({
-  getCurrentUserId: (): Promise<string> => Promise.resolve(OWNER),
+  getCurrentUserId: (): Promise<string> => {
+    const { OWNER: owner } = jest.requireActual<
+      typeof import("./account-review-save-test-fixtures")
+    >("./account-review-save-test-fixtures");
+    return Promise.resolve(owner);
+  },
   supabase: {},
 }));
 
@@ -228,12 +235,12 @@ describe("#395 T049 initial selected Save prunes only proven original queue", ()
     const tamperedPlan: FinancialActionLinkedOperationPlan = {
       ...originalPlan,
       buildLocalRecoverySnapshot: async (evidence) => {
-        const updated = queue._raw.updated_at;
-        if (typeof updated !== "number")
+        const updated = physicalRawField(queue._raw, "updated_at");
+        if (typeof updated !== "number" || !Number.isSafeInteger(updated))
           throw new Error("invalid_actual_original_queue_header");
         // Fault injection only: alter a cached physical header AFTER the
         // foundation's frozen prepared postimage; never persist this value.
-        queue._raw.updated_at = updated + 1000;
+        Object.assign(queue._raw, { updated_at: updated + 1000 });
         return originalBuilder(evidence);
       },
     };

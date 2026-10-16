@@ -20,7 +20,6 @@ import {
 import {
   createFinancialActionReconciliationService,
   FINANCIAL_ACTION_RECONCILIATION_ERROR_CODES,
-  type CanonicalAccountSnapshot,
   type FinancialActionReconciliationBundle,
   type InstallCanonicalAccountSnapshotInput,
 } from "./financial-action-reconciliation-service";

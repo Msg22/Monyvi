@@ -1,0 +1,255 @@
+/** #395 T054 tests-first: actual VoiceReviewScreen, typed canonical v2 boundary. */
+import { act, render, screen } from "@testing-library/react-native";
+import React from "react";
+import type { ReviewableTransaction } from "@monyvi/logic";
+import {
+  accountReviewSessionSchema, type AccountReviewSession,
+} from "../../../../packages/logic/src/account-review/review-schemas";
+import type { UseAccountReviewInput } from "../../hooks/useAccountReview";
+import type { AccountReviewSaveResult } from
+  "../../services/account-review-save-service";
+import type { ReviewSaveInput } from
+  "../../services/account-review-save-preparation";
+import { freezeSelectedAccountReview } from
+  "../../services/account-review-save-preparation";
+import {
+  makeSaveFixture, OWNER, FOREIGN_OWNER, type SaveFixture,
+} from "../services/account-review-save-test-fixtures";
+
+interface V2ReviewBoundary {
+  readonly input: UseAccountReviewInput;
+  readonly onSaveSelected: (session: AccountReviewSession) => Promise<void>;
+}
+interface ReviewProps {
+  readonly transactions: readonly ReviewableTransaction[];
+  readonly onSave: (
+    selected: readonly ReviewableTransaction[],
+    accounts: ReadonlyMap<number, string>,
+    destinations: ReadonlyMap<number, string>
+  ) => Promise<void>;
+  readonly onDiscard: () => void;
+  readonly isSaving: boolean;
+  /** Proposed thin additive typed facade boundary, not a business-state copy. */
+  readonly accountReview?: V2ReviewBoundary;
+}
+interface RouteParams {
+  readonly transactions: string;
+  readonly transcript: string;
+  readonly originalTranscript: string;
+  readonly detectedLanguage: string;
+  readonly originTabIndex: string;
+  readonly reviewSession?: string;
+}
+const mockReplace = jest.fn();
+const mockToast = jest.fn();
+const mockLegacyBatch = jest.fn();
+const mockProvider = jest.fn();
+const mockReview = jest.fn<void, [ReviewProps]>();
+const mockSave = jest.fn<Promise<AccountReviewSaveResult>, [ReviewSaveInput]>();
+let mockUser: string | null = OWNER;
+let mockParams: RouteParams = {
+  transactions: "[]", transcript: "", originalTranscript: "",
+  detectedLanguage: "en", originTabIndex: "2",
+};
+
+jest.mock("expo-router", () => ({
+  useLocalSearchParams: (): RouteParams => mockParams,
+  useRouter: () => ({ replace: mockReplace }),
+}));
+jest.mock("@/hooks/useCurrentUser", () => ({
+  useCurrentUser: () => ({ userId: mockUser, isResolvingUser: false }),
+}));
+jest.mock("@/services/supabase", () => ({
+  getCurrentUserId: (): Promise<string | null> => Promise.resolve(mockUser),
+}));
+jest.mock("@/services/ai-voice-parser-service", () => ({
+  parseVoiceWithAi: (...args: readonly unknown[]): unknown =>
+    mockProvider(...args),
+}));
+jest.mock("@/services/batch-create-transactions", () => ({
+  batchCreateTransactions: (...args: readonly unknown[]): unknown =>
+    mockLegacyBatch(...args),
+}));
+jest.mock("@/services/account-review-save-service", () => ({
+  createAccountReviewSaveService: () => ({
+    saveSelectedAccountReview: (
+      input: ReviewSaveInput
+    ): Promise<AccountReviewSaveResult> => mockSave(input),
+  }),
+}));
+jest.mock("@/components/ui/Toast", () => ({
+  useToast: () => ({ showToast: mockToast }),
+}));
+jest.mock("@/components/navigation/PageHeader", () => ({
+  PageHeader: (): null => null,
+}));
+jest.mock("@/components/transaction-review/TransactionReview", () => ({
+  TransactionReview: (props: ReviewProps): React.JSX.Element => {
+    const { View } =
+      jest.requireActual<typeof import("react-native")>("react-native");
+    mockReview(props);
+    return <View testID={props.accountReview
+      ? "voice-canonical-v2-review" : "voice-legacy-review"} />;
+  },
+}));
+jest.mock("@/components/modals/ConfirmationModal", () => ({
+  ConfirmationModal: (): null => null,
+}));
+jest.mock("react-native-safe-area-context", () => ({
+  SafeAreaView: ({ children }: { readonly children: React.ReactNode }) => {
+    const { View } =
+      jest.requireActual<typeof import("react-native")>("react-native");
+    return <View>{children}</View>;
+  },
+}));
+jest.mock("@expo/vector-icons", () => ({ Ionicons: (): null => null }));
+jest.mock("react-i18next", () => ({
+  useTranslation: () => ({ t: (key: string): string => key }),
+}));
+
+import VoiceReviewScreen from "@/app/(private)/voice-review";
+
+function routeParams(fixture: SaveFixture): RouteParams {
+  return {
+    transactions: JSON.stringify(
+      fixture.session.rows.map((row) => row.transaction)
+    ),
+    transcript: "Voice transcript", originalTranscript: "Original speech",
+    detectedLanguage: "en", originTabIndex: "3",
+    reviewSession: JSON.stringify(fixture.session),
+  };
+}
+function lastReview(): ReviewProps {
+  const props = mockReview.mock.lastCall?.[0];
+  if (!props) throw new Error("missing_route_review");
+  return props;
+}
+function v2Boundary(): V2ReviewBoundary {
+  const boundary = lastReview().accountReview;
+  if (!boundary) throw new Error("voice_route_missing_canonical_v2_boundary");
+  return boundary;
+}
+function startV2(fixture: SaveFixture = makeSaveFixture("voice-shared")): SaveFixture {
+  mockParams = routeParams(fixture);
+  render(<VoiceReviewScreen />);
+  return fixture;
+}
+
+beforeEach(() => {
+  jest.clearAllMocks();
+  mockUser = OWNER;
+  mockLegacyBatch.mockResolvedValue({ savedCount: 1, failedCount: 0, errors: [] });
+  mockSave.mockResolvedValue({ kind: "committed" });
+});
+
+describe("#395 T054 Voice route boundary (real page, financial writer mocked)", () => {
+  it("VR01 validates unknown route JSON into the exact typed Voice facade/Date graph", () => {
+    const fixture = startV2();
+    const boundary = v2Boundary();
+    expect(boundary.input).toMatchObject({
+      mode: "VOICE", ownerId: OWNER, sessionId: fixture.session.sessionId,
+    });
+    if (boundary.input.mode !== "VOICE")
+      throw new Error("v2_voice_mode_mismatch");
+    const session = accountReviewSessionSchema.parse(boundary.input.voiceSession);
+    expect(session).toEqual(fixture.session);
+    expect(session.rows[0]?.transaction.date).toBeInstanceOf(Date);
+    expect(session.groups).toEqual(fixture.session.groups);
+    expect(screen.getByTestId("voice-canonical-v2-review")).toBeTruthy();
+    expect(mockProvider).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["malformed", "{"],
+    ["incomplete", JSON.stringify({ source: "VOICE" })],
+  ])("VR02 %s JSON refuses legacy review/save fallback", (_label, raw) => {
+    const fixture = makeSaveFixture("voice-shared");
+    mockParams = { ...routeParams(fixture), reviewSession: raw };
+    render(<VoiceReviewScreen />);
+    expect(mockReview).not.toHaveBeenCalled();
+    expect(mockLegacyBatch).not.toHaveBeenCalled();
+    expect(mockSave).not.toHaveBeenCalled();
+  });
+
+  it("VR03 rejects a structurally valid but foreign Voice owner", () => {
+    const fixture = makeSaveFixture("voice-shared");
+    const foreign = accountReviewSessionSchema.parse({
+      ...fixture.session, ownerId: FOREIGN_OWNER,
+      saveIntent: { ...fixture.intent, ownerId: FOREIGN_OWNER },
+    });
+    mockParams = { ...routeParams(fixture), reviewSession: JSON.stringify(foreign) };
+    render(<VoiceReviewScreen />);
+    expect(mockReview).not.toHaveBeenCalled();
+    expect(mockLegacyBatch).not.toHaveBeenCalled();
+    expect(mockSave).not.toHaveBeenCalled();
+  });
+
+  it("VR04 rejects wrong source/row provenance instead of rendering legacy", () => {
+    const fixture = makeSaveFixture("voice-shared");
+    mockParams = {
+      ...routeParams(fixture),
+      reviewSession: JSON.stringify({ ...fixture.session, source: "SMS" }),
+    };
+    render(<VoiceReviewScreen />);
+    expect(mockReview).not.toHaveBeenCalled();
+    expect(mockLegacyBatch).not.toHaveBeenCalled();
+  });
+
+  it("VR05 forwards exact frozen selected input and waits for local atomic commit to navigate", async () => {
+    const fixture = startV2();
+    const boundary = v2Boundary();
+    let complete!: (result: AccountReviewSaveResult) => void;
+    const pending = new Promise<AccountReviewSaveResult>(resolve => {
+      complete = resolve;
+    });
+    mockSave.mockReturnValueOnce(pending);
+    let saving!: Promise<void>;
+    act(() => { saving = boundary.onSaveSelected(fixture.session); });
+    expect(mockSave).toHaveBeenCalledTimes(1);
+    const input = mockSave.mock.calls[0]?.[0];
+    if (!input) throw new Error("canonical_save_input_missing");
+    expect(freezeSelectedAccountReview(input).session).toEqual(fixture.session);
+    expect(input.intent).toEqual(fixture.intent);
+    expect(mockReplace).not.toHaveBeenCalled();
+    expect(mockLegacyBatch).not.toHaveBeenCalled();
+    await act(async () => { complete({ kind: "committed" }); await saving; });
+    expect(mockReplace).toHaveBeenCalledWith("/(private)/(tabs)/metals");
+    expect(mockProvider).not.toHaveBeenCalled();
+  });
+
+  it("VR06 failed atomic Save retains canonical choices and never invokes legacy Save", async () => {
+    const fixture = startV2();
+    const boundary = v2Boundary();
+    mockSave.mockRejectedValueOnce(new Error("injected_atomic_rollback"));
+    await act(async () => { await boundary.onSaveSelected(fixture.session); });
+    expect(mockSave).toHaveBeenCalledTimes(1);
+    expect(mockReplace).not.toHaveBeenCalled();
+    expect(mockLegacyBatch).not.toHaveBeenCalled();
+    expect(mockToast).toHaveBeenCalled();
+    expect(v2Boundary().input).toMatchObject({
+      ownerId: OWNER, sessionId: fixture.session.sessionId,
+    });
+  });
+
+  it("VR07 retains V1 legacy Save/navigation when canonical V2 session is absent", async () => {
+    const fixture = makeSaveFixture("voice-existing");
+    const params = routeParams(fixture);
+    mockParams = {
+      transactions: params.transactions,
+      transcript: params.transcript,
+      originalTranscript: params.originalTranscript,
+      detectedLanguage: params.detectedLanguage,
+      originTabIndex: params.originTabIndex,
+    };
+    render(<VoiceReviewScreen />);
+    const route = lastReview();
+    expect(route.accountReview).toBeUndefined();
+    await act(async () => {
+      await route.onSave(fixture.session.rows.map(row => row.transaction),
+        new Map(), new Map());
+    });
+    expect(mockLegacyBatch).toHaveBeenCalledTimes(1);
+    expect(mockSave).not.toHaveBeenCalled();
+    expect(mockReplace).toHaveBeenCalledWith("/(private)/(tabs)/metals");
+  });
+});

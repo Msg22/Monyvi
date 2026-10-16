@@ -3,12 +3,14 @@
  * One observable owner-scoped query; writer-owned CAS remains authoritative.
  */
 import { Q } from "@nozbe/watermelondb";
-import type { Account } from "@monyvi/db";
-import { database } from "@monyvi/db";
-import { accountDefaultSnapshotSchema } from
-  "@monyvi/logic/src/financial-actions/review-batch-save-shapes";
-import type { AccountDefaultSnapshot } from
-  "@monyvi/logic/src/financial-actions/account-create-default-shapes";
+import { database, type Account } from "@monyvi/db";
+// This feature's closed schema and inferred type are exported together.
+// Existing mobile services use the same direct workspace-relative module path;
+// the @monyvi/logic package does not export /src deep-import subpaths.
+import {
+  accountDefaultSnapshotSchema,
+  type AccountDefaultSnapshot,
+} from "../../../packages/logic/src/financial-actions/account-create-default";
 import { useCallback, useEffect, useState } from "react";
 import { queryOwned } from "@/services/user-data-access";
 import { useCurrentUser } from "./useCurrentUser";
