@@ -4,6 +4,13 @@ export * from "./account-review/schemas";
 export { normalizeAccountReviewParserResult } from "./account-review/normalization";
 export { resolveAccountReviewSession } from "./account-review/resolution";
 export { getAccountReviewAccountCandidates } from "./account-review/candidates";
+export { projectAccountReviewSession } from "./account-review/read-model";
+export type {
+  ProjectAccountReviewSessionInput,
+  AccountReviewProjectionSummary,
+  AccountReviewLiveGroupSummary,
+  AccountReviewReadModel,
+} from "./account-review/read-model";
 export type { ResolveAccountReviewSessionInput } from "./account-review/resolution";
 export {
   reduceAccountReviewCommand,

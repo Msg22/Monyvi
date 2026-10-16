@@ -33,6 +33,12 @@ import {
   watermelonRawRecordsMatch,
 } from "./watermelon-raw-integrity";
 import { commitPreparedBatch } from "./watermelon-atomic-batch";
+import {
+  reviewBatchSaveWireSchema,
+} from "../../../packages/logic/src/financial-actions/review-batch-save-shapes";
+import {
+  parseAccountReviewLocalSaveSnapshot,
+} from "../../../packages/logic/src/financial-actions/review-local-recovery";
 import { APPROVED_FINANCIAL_ACTION_REGISTRY } from "./financial-action-approved-registry";
 import {
   FINANCIAL_ACTION_FOUNDATION_ERROR_CODES,
@@ -46,6 +52,7 @@ import {
   type FinancialActionLinkedOperationPlan,
   type FinancialActionLinkedOperationPostimage,
   type FinancialActionLinkedOperationPreimage,
+  type FinancialActionLinkedOperationPreparedOwnershipInput,
   type FinancialActionUserDataScope,
   resolveFinancialActionServerOutcomeState,
 } from "./financial-action-foundation-contracts";
@@ -104,6 +111,37 @@ interface PreparedCreateSnapshot {
 }
 
 const TABLE_NAME = "financial_action_groups";
+
+/** Bind private bytes to the original validated public action, never a new DTO. */
+async function localRecoverySnapshotJson(
+  context: PreparedFinancialActionContext,
+  plan: FinancialActionLinkedOperationPlan,
+  evidence: FinancialActionLinkedOperationPreparedOwnershipInput
+): Promise<string | null> {
+  const builder = plan.buildLocalRecoverySnapshot;
+  if (builder === undefined) return null;
+  if (typeof builder !== "function" ||
+      context.envelope.kind !== "review_batch_save" ||
+      context.envelope.payloadVersion !== "review.batch-save/v1")
+    throw new Error(FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.INVALID_INPUT);
+  const payload = reviewBatchSaveWireSchema.parse(context.envelope.payload);
+  const candidate = await builder(evidence);
+  try {
+    const validated = parseAccountReviewLocalSaveSnapshot({
+      json: JSON.stringify(candidate),
+      expectedRoot: {
+        actionId: context.envelope.actionId,
+        ownerId: context.scope.userId,
+        sessionId: payload.sessionId,
+        source: payload.source,
+      },
+    });
+    return JSON.stringify(validated);
+  } catch {
+    // A failed private validation must not surface raw SMS in error messages.
+    throw new Error(FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.INVALID_INPUT);
+  }
+}
 
 function asFinancialActionState(value: string): FinancialActionState {
   if (!FINANCIAL_ACTION_STATES.includes(value as FinancialActionState)) {
@@ -480,7 +518,8 @@ export function createFinancialActionFoundationRepository(
 
   function prepareLocalRoot(
     context: PreparedFinancialActionContext,
-    foundRecord: FinancialActionGroup | null
+    foundRecord: FinancialActionGroup | null,
+    localSnapshotJson: string | null
   ): PreparedLocalRoot {
     const now = new Date();
     const record =
@@ -489,8 +528,12 @@ export function createFinancialActionFoundationRepository(
       ? record.prepareUpdate((candidate) => {
           candidate.state = "local_complete";
           candidate.updatedAt = now;
+          if (localSnapshotJson !== null)
+            candidate.localRecoverySnapshotJson = localSnapshotJson;
         })
       : record;
+    if (!foundRecord && localSnapshotJson !== null)
+      record.localRecoverySnapshotJson = localSnapshotJson;
     return { operation, record };
   }
 
@@ -645,17 +688,26 @@ export function createFinancialActionFoundationRepository(
       assertPreparedOperationsMatch(linkedOperations, preparedExpectations);
       const preparedPostimages =
         createImmutablePostimages(preparedExpectations);
-      await assertPreparedOwnership(
-        Object.freeze({
-          userId: context.scope.userId,
-          cachedPreimages,
-          preparedPostimages,
-        })
-      );
+      const physicalEvidence = Object.freeze({
+        userId: context.scope.userId,
+        cachedPreimages,
+        preparedPostimages,
+      });
+      await assertPreparedOwnership(physicalEvidence);
       assertPendingFinancialActionRootUnchanged(
         foundRecord,
         pendingRootExpectation,
         FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.INVALID_INPUT
+      );
+      await reassertExpectedCurrentUser(context.scope.userId);
+      assertPendingFinancialActionRootUnchanged(
+        foundRecord,
+        pendingRootExpectation,
+        FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.INVALID_INPUT
+      );
+      assertPreparedOperationsMatch(linkedOperations, preparedExpectations);
+      const localSnapshotJson = await localRecoverySnapshotJson(
+        context, plan, physicalEvidence
       );
       await reassertExpectedCurrentUser(context.scope.userId);
       assertPendingFinancialActionRootUnchanged(
@@ -670,7 +722,7 @@ export function createFinancialActionFoundationRepository(
         pendingRootExpectation,
         FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.INVALID_INPUT
       );
-      const root = prepareLocalRoot(context, foundRecord);
+      const root = prepareLocalRoot(context, foundRecord, localSnapshotJson);
       const preparedRootSnapshot = foundRecord
         ? captureCachedModelSnapshot(foundRecord)
         : null;

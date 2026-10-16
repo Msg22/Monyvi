@@ -119,10 +119,35 @@ const defaultAccountSchema = z.strictObject({
   accountId: uuidSchema,
   isDefault: z.literal(true),
 });
-export const accountDefaultSnapshotSchema = z.strictObject({
-  activeAccountIds: z.array(uuidSchema),
-  defaultAccount: defaultAccountSchema.nullable(),
-});
+/** Shared Add/Review logical default snapshot: closed, sorted and owner-scoped at capture. */
+export const accountDefaultSnapshotSchema = z
+  .strictObject({
+    activeAccountIds: z.array(uuidSchema),
+    defaultAccount: defaultAccountSchema.nullable(),
+  })
+  .superRefine((snapshot, ctx) => {
+    let previous: string | null = null;
+    for (const [index, id] of snapshot.activeAccountIds.entries()) {
+      if (previous !== null && id <= previous) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["activeAccountIds", index],
+          message: "account_default_snapshot_unsorted_or_duplicate",
+        });
+      }
+      previous = id;
+    }
+    if (
+      snapshot.defaultAccount !== null &&
+      !snapshot.activeAccountIds.includes(snapshot.defaultAccount.accountId)
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["defaultAccount", "accountId"],
+        message: "account_default_snapshot_unowned_default",
+      });
+    }
+  });
 
 const accountAfterSchema = z.strictObject({
   id: uuidSchema,

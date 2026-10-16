@@ -39,6 +39,7 @@ import {
 } from "./account-review-save-sms";
 import { createAccountReviewFinancialRegistry } from "./account-review-financial-command-service";
 import { assertPreparedReviewOwnership } from "./account-review-save-ownership";
+import { buildAccountReviewLocalSnapshot } from "./account-review-local-snapshot";
 
 type Row = FrozenReviewSave["selectedRows"][number];
 type Group = FrozenReviewSave["neededGroups"][number];
@@ -288,6 +289,41 @@ function finalPayload(
     : { ...mandatory, creationDefaultSnapshot: snapshot };
 }
 
+type ReviewPrivatePlanContext = {
+  readonly sms: SmsSaveScope;
+  readonly ownedAccounts: readonly Account[];
+  readonly scope: CurrentUserDataScope;
+};
+async function assertFrozenSession(
+  frozen: FrozenReviewSave,
+  dep: ReviewPlanDependencies
+): Promise<void> {
+  await dep.assertOwner();
+  assertCurrentReviewSession(
+    frozen,
+    await dep.loadCurrentSession(frozen.intent.ownerId, frozen.intent.sessionId)
+  );
+}
+function privateSnapshotBuilder(
+  frozen: FrozenReviewSave,
+  dep: ReviewPlanDependencies,
+  payload: ReviewBatchSavePayload,
+  context: ReviewPrivatePlanContext
+): NonNullable<FinancialActionLinkedOperationPlan["buildLocalRecoverySnapshot"]> {
+  return async (evidence) => {
+    if (evidence.userId !== frozen.intent.ownerId) reject("private_owner_changed");
+    const snapshot = await buildAccountReviewLocalSnapshot({
+      frozen, payload,
+      sms: context.sms,
+      ownedAccounts: context.ownedAccounts,
+      database: dep.database,
+      scope: context.scope,
+      evidence, hashProvider: dep.hashProvider,
+    });
+    await assertFrozenSession(frozen, dep);
+    return snapshot;
+  };
+}
 function createLinkedReviewPlan(
   frozen: FrozenReviewSave,
   dep: ReviewPlanDependencies,
@@ -295,18 +331,11 @@ function createLinkedReviewPlan(
   preparedCreates: readonly Model[],
   existingOperations: FinancialActionLinkedOperationPlan["existingOperations"],
   balances: ReadonlyMap<string, number>,
-  revisions: ReadonlyMap<string, string>
+  revisions: ReadonlyMap<string, string>,
+  privateContext: ReviewPrivatePlanContext
 ): FinancialActionLinkedOperationPlan {
-  const assertSession = async (): Promise<void> => {
-    await dep.assertOwner();
-    assertCurrentReviewSession(
-      frozen,
-      await dep.loadCurrentSession(
-        frozen.intent.ownerId,
-        frozen.intent.sessionId
-      )
-    );
-  };
+  const assertSession = (): Promise<void> =>
+    assertFrozenSession(frozen, dep);
   return {
     preparedCreates,
     existingOperations,
@@ -330,6 +359,8 @@ function createLinkedReviewPlan(
       );
       await assertSession();
     },
+    buildLocalRecoverySnapshot:
+      privateSnapshotBuilder(frozen, dep, payload, privateContext),
   };
 }
 interface PreparedReviewSaveParts {
@@ -415,7 +446,9 @@ function linkedSaveConstruction(
   sms: SmsSaveScope,
   parts: PreparedReviewSaveParts,
   payload: ReviewBatchSavePayload,
-  envelope: FinancialActionEnvelopeV1
+  envelope: FinancialActionEnvelopeV1,
+  ownedAccounts: readonly Account[],
+  scope: CurrentUserDataScope
 ): SaveConstruction {
   const preparedCreates = [
     ...parts.accounts.prepared,
@@ -437,7 +470,8 @@ function linkedSaveConstruction(
       preparedCreates,
       existingOperations,
       parts.posting.balances,
-      parts.posting.revisions
+      parts.posting.revisions,
+      { sms, ownedAccounts, scope }
     ),
   };
 }
@@ -486,7 +520,9 @@ async function authorPlan(
     parts.posting,
     payload
   );
-  return linkedSaveConstruction(frozen, dep, sms, parts, payload, envelope);
+  return linkedSaveConstruction(
+    frozen, dep, sms, parts, payload, envelope, owned, scope
+  );
 }
 
 export async function constructReviewSave(

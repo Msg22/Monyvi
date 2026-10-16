@@ -254,7 +254,8 @@ export function reduceDeselectRow(
   });
 }
 
-function visibleByFilter(
+/** Shared exact filter membership for canonical bulk commands and pure views. */
+export function isAccountReviewRowVisible(
   row: AccountReviewRow,
   filter: AccountReviewSession["filter"]
 ): boolean {
@@ -295,7 +296,7 @@ export function reduceSelectBatch(
   }
   const chosen = session.rows.filter(
     (row) =>
-      visibleByFilter(row, command.filter) &&
+      isAccountReviewRowVisible(row, command.filter) &&
       (command.kind === "clear_selection"
         ? row.selected
         : !row.selected && readyIds.has(row.rowId))
