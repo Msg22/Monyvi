@@ -1,4 +1,10 @@
 import type { Database } from "@nozbe/watermelondb";
+import {
+  INVALID_LEGACY_ID_PULL_ROW,
+  remapFinancialActionRootIds,
+  remapVerifiedLegacyMetalPullIds,
+  type PulledRow,
+} from "./metal-dedicated-identity-pull";
 import type {
   SyncPullResult,
   SyncTableChangeSet,
@@ -40,7 +46,7 @@ export const SYNC_PULL_ERROR_CODES = {
   AUTH_SCOPE_LOST: "sync_pull_auth_scope_lost",
   INVALID_EXACT_TEXT: "sync_invalid_exact_text",
   INVALID_METAL_OBSERVATION_PAGE: "sync_invalid_metal_observation_page",
-  INVALID_PULL_ROW: "sync_invalid_pull_row",
+  INVALID_PULL_ROW: INVALID_LEGACY_ID_PULL_ROW,
 } as const;
 
 const METAL_OBSERVATION_PAGE_SIZE = 500;
@@ -70,11 +76,6 @@ interface MetalObservationPage {
   readonly nextCursor: MetalObservationCursor | null;
   readonly rows: readonly MetalObservationRpcRow[];
   readonly upperWatermark: string;
-}
-
-interface PulledRow extends Record<string, unknown> {
-  readonly deleted?: boolean;
-  readonly id: string;
 }
 
 const METAL_DEDICATED_PULL_TABLES = [
@@ -488,7 +489,7 @@ export async function pullMarketRates(
   let query = supabase
     .from("market_rates")
     .select("*")
-    .gt("created_at", cutoffDate.toISOString())
+    .gt("created_at", retentionCutoffIso)
     .order("created_at", { ascending: false });
   if (upperWatermark) {
     query = query.lte("created_at", upperWatermark);
@@ -526,8 +527,11 @@ export async function pullMarketRateObservations(
 
   while (shouldPullNextPage) {
     const { data, error } = await supabase.rpc(METAL_OBSERVATION_RPC, {
-      // Optional RPC arguments default to NULL. SQL requires both cursor
-      // fields together, so always omit or send the complete cursor.
+      // pull_metal_observations_page_v1 declares p_upper_watermark,
+      // p_after_created_at, and p_after_id as DEFAULT NULL, so omitting a
+      // cursor arg is equivalent to sending NULL. The SQL rejects a cursor
+      // where only one of p_after_created_at/p_after_id is present, so they are
+      // always omitted or sent together.
       ...(cursor === null
         ? {}
         : { p_after_created_at: cursor.createdAt, p_after_id: cursor.id }),
@@ -573,13 +577,14 @@ export async function pullSnapshotTable(
   retentionCutoffIso = createSnapshotRetentionCutoffIso()
 ): Promise<SyncTableChangeSet> {
   try {
+
     const data = await pullAllKeysetPages(
       async (cursor) => {
         let query = supabase
           .from(table)
           .select("*", { count: "exact" })
           .eq("user_id", userId)
-          .gt("created_at", retentionCutoffIso)
+          .gt("created_at", cutoffDate.toISOString())
           .lte("created_at", upperWatermark)
           .order("created_at", { ascending: true })
           .order("id", { ascending: true })
@@ -771,20 +776,39 @@ export async function pullMetalDedicatedTable(
 
   // PostgREST supports the exact-value `::text` projection above, but the
   // Supabase select-string type parser cannot infer rows containing casts.
-  const remappedRecords = await shapeFinancialPullRecords(
+  // PR385 retains unresolved local financial roots/effects until their
+  // existing reconciliation completes and admits missing canonical evidence.
+  // Compare immutable identity against the exact raw PostgREST text first.
+  const protectedRecords = await shapeFinancialPullRecords(
     table,
     records,
     userId,
     database
   );
+  // Current-main exact-text normalization remains strict for active rows.
+  // Tombstones may omit exact-text columns; keep their remote ID/owner facts.
+  const normalizedRecords = protectedRecords.map((record) =>
+    record.deleted === true
+      ? record
+      : (normalizeDedicatedPullRecord(table, record) as PulledRow)
+  );
+  const remappedRecords =
+    table === "financial_action_groups"
+      ? await remapFinancialActionRootIds(normalizedRecords, userId, database)
+      : table === "metal_action_evidence" || table === "metal_lifecycle_events"
+        ? await remapVerifiedLegacyMetalPullIds(
+            table,
+            normalizedRecords,
+            userId,
+            database
+          )
+        : normalizedRecords;
   const deleted = remappedRecords
     .filter((record) => record.deleted === true)
     .map((record) => record.id);
   const updated = remappedRecords
     .filter((record) => record.deleted !== true)
-    .map((record) =>
-      transformFromSupabase(table, normalizeDedicatedPullRecord(table, record))
-    );
+    .map((record) => transformFromSupabase(table, record));
   return { created: [], updated, deleted };
 }
 

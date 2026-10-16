@@ -25,7 +25,9 @@ describe("mobile package scripts", () => {
   });
 
   it("generates local migration types from local Supabase", () => {
-    expect(rootPackage.scripts["db:types:local"]).toContain("--local");
+    expect(rootPackage.scripts["db:types:local"]).toContain(
+      "generate-local-supabase-types.cjs"
+    );
     expect(rootPackage.scripts["db:sync-local"]).toContain("db:types:local");
     expect(rootPackage.scripts["db:sync-local"]).not.toMatch(
       /npm run db:sync$/

@@ -22,14 +22,20 @@ function sliceBetween(
 
 describe("PR #271 validated Metals review regressions", () => {
   it("does not truncate lifecycle evidence needed to resolve portfolio ownership", () => {
-    const value = source("services/metal-portfolio-read-model-service.ts");
-    const queryBody = sliceBetween(
-      value,
-      "export function observePortfolioRecentHistory",
-      "export function shapeMetalPortfolioHoldings"
+    const service = source("services/metal-portfolio-read-model-service.ts");
+    const lineage = source(
+      "services/metal-portfolio-legacy-lineage-service.ts"
     );
-    expect(queryBody).not.toContain("Q.take(RECENT_HISTORY_LIMIT)");
-    expect(value).toContain(".slice(0, RECENT_HISTORY_LIMIT)");
+    const queryBody = sliceBetween(
+      lineage,
+      "export function observePortfolioRecentHistory",
+      "export function observePortfolioEffectiveActionEvidence"
+    );
+    expect(service).toMatch(
+      /observePortfolioRecentHistory,[\s\S]*from "\.\/metal-portfolio-legacy-lineage-service"/
+    );
+    expect(queryBody).not.toContain("Q.take(");
+    expect(service).toContain(".slice(0, RECENT_HISTORY_LIMIT)");
   });
 
   it("observes portfolio columns that can change in place", () => {
@@ -71,13 +77,21 @@ describe("PR #271 validated Metals review regressions", () => {
     expect(service).toContain("input.accountsValueDecimal === null");
   });
 
-  it("publishes only the Delete detail action after its route is integrated", () => {
+  it("publishes only the implemented Dispose, Delete, and Undo detail actions", () => {
     const value = source("app/(private)/metals/[id].tsx");
+    expect(value).toContain("createDisposeHoldingActionDescriptor");
     expect(value).toContain("createDeleteHoldingActionDescriptor");
+    expect(value).toContain(
+      'available.some((action) => action.id === "dispose")'
+    );
     expect(value).toContain(
       'available.some((action) => action.id === "delete")'
     );
-    expect(value).toContain('if (action !== "delete" || !holdingId) return;');
+    expect(value).toContain('action.id === "undo"');
+    expect(value).toContain('if (action === "dispose")');
+    expect(value).toContain('if (action === "delete")');
+    expect(value).toContain('if (action === "undo")');
+    expect(value).not.toContain('action === "sell"');
     expect(value).toContain("actions={actions}");
   });
 
@@ -111,9 +125,13 @@ describe("PR #271 validated Metals review regressions", () => {
 
   it("converts lifecycle-backed detail values to the preferred currency", () => {
     const value = source("services/metal-detail-read-model-service.ts");
-    expect(value).toContain("convertDetailValueForDisplay");
-    expect(value).toContain("times(purchaseRateDecimal)");
-    expect(value).toContain("dividedBy(preferredRateDecimal)");
+    const conversion = source(
+      "services/metal-detail-rate-conversion-service.ts"
+    );
+    expect(value).toContain('from "./metal-detail-rate-conversion-service"');
+    expect(value).toContain("convertDetailValueForDisplay(");
+    expect(conversion).toContain("times(purchaseRateDecimal)");
+    expect(conversion).toContain("dividedBy(preferredRateDecimal)");
   });
 
   it("keeps combined gain when only detailed attribution is unavailable", () => {

@@ -84,6 +84,7 @@ export const metalsTranslationSchema = NamespaceSchema.and(
         follow_value: z.string(),
         calculation_disclosure: z.string(),
         paid: z.string(),
+        market_rate_on_purchase_date: z.string(),
         timeline_current_value: z.string(),
         fact_accessibility: z.string(),
       })
@@ -97,6 +98,7 @@ export const metalsTranslationSchema = NamespaceSchema.and(
       karat: z.string(),
       total_purchase_price: z.string(),
       purchase_price_hint: z.string(),
+      purchase_price_estimate_hint: z.string(),
       purchase_currency: z.string(),
       physical_form: z.string(),
       notes: z.string(),

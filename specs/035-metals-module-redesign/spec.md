@@ -95,6 +95,24 @@ profit/loss."
   before/after facts. This supersedes earlier required-reason wording in this
   specification and the business decisions.
 
+### Session 2026-10-08
+
+- Mohamed approved a No Longer-only rate-disclosure exception after physical
+  device testing. The No Longer form MUST NOT show terminal-rate values,
+  provenance/freshness disclosure, or stale/unknown acknowledgment, and
+  stale/unknown freshness MUST NOT block submission by itself. The action still
+  captures the same immutable terminal Metal + purchase-currency snapshot pair
+  internally when available, preserves captured values, dates, IDs, and
+  provenance in action evidence, pins that pair across ambiguous operational
+  retry, reloads it after revision conflict, and keeps genuine rate-store
+  failure/retry and missing-pair behavior unchanged. This exception supersedes
+  the No Longer portions of the older FR-075 screen-disclosure wording, the
+  Sell/No Longer state-matrix acknowledgment entry, and SC-006 acknowledgment
+  requirement only; Add, material correction, and Sell retain their approved
+  trust/acknowledgment behavior.
+- The No Longer header is `No longer owned` in English and `لم يعد لدي` in
+  Arabic, without the holding name.
+
 ### Session 2026-08-30
 
 - Q: Is the active V1 normal-flow visual approval phase complete? → A: Yes. The

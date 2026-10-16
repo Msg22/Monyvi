@@ -3,15 +3,6 @@
 Use this workflow for a large Monyvi module, epic, redesign, migration, or
 cross-layer change that benefits from specialist ownership and parallel work.
 
-OpenCode is an approved execution pool only after explicit user opt-in and only
-when every dispatch loads
-[`opencode-team-delegation.md`](./opencode-team-delegation.md), which owns
-OpenCode runtime and usage policy, model selection, limits, fallback, and
-session rules. When Mohamed explicitly requests a Codex-planned implementation
-handoff, use
-[`opencode-implementation-handoff.md`](./opencode-implementation-handoff.md) and
-still load the delegation workflow.
-
 ## 1. Trigger And Authority
 
 Explicit triggers include `$team-led-delivery`, "act as team lead", "form/manage
@@ -133,9 +124,12 @@ Before forming team:
    wall-clock start time, next checkpoint, and the evidence that will change it.
    Count worker time and waiting time when they affect delivery; parallel time
    is elapsed time, not the sum of worker hours.
-10. Classify each task by remote versus local/device requirements. Check the
-    relevant pools' runtime, authentication, tools, and ability to start the
-    task; record unavailable pools. Apply the quota policy in Section 6.
+10. Classify each task by remote versus local/device requirements. Check all
+    eligible primary pools' runtime, authentication, tools, and ability to start
+    the task; record unavailable pools. For OpenCode, separately verify the
+    chosen model's current free pricing and callability under Section 6; do not
+    precheck remaining usage/quota. Native workers require a distinct prior user
+    authorization before any assignment.
 
 If the credible total elapsed estimate exceeds four hours, tell Mohamed before
 starting substantive work. Give the task breakdown, main uncertainty, reason for
@@ -215,9 +209,9 @@ Keep role, workflow, and runtime separate:
   is not a Codex skill-discovery path. A role name does not auto-load a skill.
 - `.codex/agents/*.toml` are Codex custom-agent definitions when present and
   available in the current host. `.claude/agents/*.md` are Claude-specific
-  adapters. Neither path defines a portable role for Normal ChatGPT, OpenCode,
-  or Antigravity. Do not copy their model choices, tool lists, or permissions
-  into another runtime.
+  adapters. Neither path defines a portable role for Normal ChatGPT or
+  Antigravity. Do not copy their model choices, tool lists, or permissions into
+  another runtime.
 
 This repository is configured to track an audited set of Codex adapters:
 `frontend-developer`, `senior-graphic-designer`, `database-reviewer`,
@@ -274,11 +268,11 @@ At dispatch, name the role contract and exact path at the trusted governing
 revision, the applicable skill/workflow, and the task-specific ownership and
 acceptance criteria. Ask the worker to read those sources. For Normal ChatGPT,
 the paths must be published on GitHub at that revision and the connector must be
-able to fetch them. For OpenCode and Antigravity, include the same paths in
-their bounded brief. For Codex, select a verified `agent_type` only when its
-definition matches the role; otherwise use `worker` and the portable contract.
-The persona changes focus, not authority, tools, model availability, effort,
-data-sharing scope, or permission.
+able to fetch them. For Antigravity, include the same paths in its bounded
+brief. For Codex, only after the separate native-task authorization in Section
+6, select a verified `agent_type` when its definition matches the role;
+otherwise use `worker` and the portable contract. The persona changes focus, not
+authority, tools, model availability, effort, data-sharing scope, or permission.
 
 ## 6. Model And Effort
 
@@ -296,56 +290,92 @@ exposes the corresponding control:
 | Bounded implementation, tests, focused review                                                     | medium          | several modules or failure paths interact            |
 | Financial rules, architecture, sync, security, migrations, unclear root cause, final logic review | high            | independently checked reasoning remains inconclusive |
 
-Use xhigh or maximum only for a bounded hard question with a stated reason and
-checkpoint. Never invent a model ID, effort flag, quota, price, or capability.
-Check the current runtime's model list/help and record exact model, supported
-effort setting, and rationale. If effort cannot be selected, record the actual
-default rather than claiming an override. Set a token budget only when the user
-explicitly requests one.
+Outside the Normal ChatGPT worker preference below, use xhigh or maximum only
+for a bounded hard question with a stated reason and checkpoint. Never invent a
+model ID, effort flag, quota, price, or capability. Check the current runtime's
+model list/help and record exact model, supported effort setting, and rationale.
+For **every newly created Normal ChatGPT worker**, follow Mohamed's persistent
+preference: select **Extra High reasoning effort or Pro** based on the task's
+difficulty when the live UI supports the choice. Record the actual selected
+model and effort, and the rationale; if the controls are unavailable, record the
+observed default and limitation rather than inventing a selection. This standing
+model/effort preference requires no fresh per-chat approval; native-worker and
+source/data authorization gates remain unchanged. Set a token budget only when
+the user explicitly requests one.
 
 ### Execution Pools
 
-Default execution preference, after authorization, capability, and ownership
-checks, is Normal ChatGPT, OpenCode, then Antigravity:
+Default execution preference, after authorization, capability, source/data
+sharing, and exclusive ownership checks, is **Normal ChatGPT → verified OpenCode
+FREE models → Antigravity Gemini/Claude**. Only if those pools cannot safely
+perform the specific task may the lead **ask Mohamed for separate, explicit
+prior permission** to use a native Codex subagent. Lack of primary-pool
+capability never grants that permission.
 
-1. **Normal ChatGPT, including several independent user-created chats.** Give it
-   the largest safe slice reachable through the GitHub connector: investigation,
-   planning, complex reasoning, substantial code and test authoring, remote
-   branch/PR work, documentation, and review. Task size or reasoning difficulty
-   alone does not disqualify it. It cannot access this machine's checkout,
-   device, or unpublished files. A later need for local verification does not
-   disqualify it as implementation owner; reserve verification or integration as
-   a named successor task.
-2. **OpenCode paid or free models.** Use an available paid model for complex,
-   medium or large work needing strong reasoning; use a capable free model for
-   small to medium bounded work, routine checks, or unit tests. Choose the
-   lowest-cost model and supported effort that meets the task criteria through
-   [`opencode-team-delegation.md`](./opencode-team-delegation.md). Escalate
-   based on observed failure or insufficient capability, not file count alone.
-3. **Antigravity CLI (`agy`) with an available Gemini or Claude model.** When
-   both requested choices are available and capable, prefer the user's Gemini
-   3.8 Flash choice over Claude 4.6 for complex reasoning; Claude can own medium
-   or large bounded tasks. These are preferences, not proof of model
-   availability or measured superiority. Verify the exact model identifier,
-   tools, permissions, and supported effort at dispatch.
+1. **Normal ChatGPT, reusing suitable chats before the lead creates more.** Give
+   it the largest safe slice reachable through the GitHub connector:
+   investigation, planning, complex reasoning, substantial code and test
+   authoring, remote branch/PR work, documentation, and review. Task size or
+   reasoning difficulty alone does not disqualify it. It cannot access this
+   machine's checkout, device, or unpublished files. A later need for local
+   verification does not disqualify it as implementation owner; reserve
+   verification or integration as a named successor task.
+2. **OpenCode, verified FREE-model route only.** Paid OpenCode routes, including
+   paid Go/subscription models, are excluded. Before each new model dispatch,
+   inspect `opencode models` and the current official pricing for the exact
+   provider/model route; independently confirm it is free for the intended
+   request, not merely named "free" or similar to another model. Never guess a
+   model identifier, assume a free route has paid-route access, or select a paid
+   model as a fallback. Verify the actual executable path, authentication, exact
+   model selection, needed tools/permissions, persistent-session contact, and a
+   first non-error response before treating the worker as callable. Use one
+   visible persistent session and isolated ownership-safe worktrees. Current
+   model availability, pricing, tool access, and runtime success must be checked
+   at dispatch; documentation alone is not proof.
+3. **Antigravity CLI (`agy`) with an available Gemini or Claude model.** Do not
+   bypass this pool when a free OpenCode model is unavailable, limited, or
+   uncallable. Verify the current `agy models` output, exact model ID,
+   authentication, tools, permissions, and supported effort at dispatch. Use the
+   user's current Gemini/Claude preference when available and capable; never
+   hardcode an unverified model/version or claim comparative superiority.
 
-Native Codex subagents are a fallback, not a routine fourth pool. Use one for an
-assigned task only after checking the three primary pools and recording why none
-can start that specific task safely and capably now: unavailable runtime or
-authentication, a reported limit during attempted work, missing required
-tools/context or permissions, or inability to access needed local/device state.
-Do not use native subagents merely to fill slots or because implementation will
-need later local checks. Recheck primary pools before each new native
-assignment. A native subagent may perform trusted local verification,
-integration, or independent review when no primary pool can perform that
-specific task; this does not transfer implementation ownership.
+**Keep the free OpenCode runtime callable:** when binary/model discovery,
+authentication, tool invocation, or persistent-session contact fails, preserve
+the task/session/partial work, record the specific error, and route durable
+environment/runtime repair to the root/operator owner. Retry only after a
+concrete repair and a successful non-error call; do not silently remove free
+OpenCode from the roster, restore paid models, spin up concurrent writers, or
+loop on identical failures. If the specific task cannot proceed safely there,
+evaluate Antigravity next under its separate provider/data-sharing approval.
+This policy is not a claim that any tool, authentication, free model, or pricing
+has already been verified or repaired.
+
+**Native Codex subagents are separately permission-gated, not an automatic
+fourth pool.** Before **every new native spawn, resumed native task,
+reassignment to native, completed-native follow-up, or new native work** (even
+read-only audit, independent review, local verification, or integration), ask
+Mohamed **first** and obtain his explicit affirmative authorization. Present and
+record the exact proposed task, scope/file allowlist, intended duration, why
+Normal ChatGPT/free OpenCode/Antigravity cannot do that specific work,
+owner/worktree identity, stop conditions, and permitted continuation or
+reassignment boundaries. General full-delivery or SQL/sync approval, an earlier
+native task's approval, idle native capacity, model/tool failure, timeout, or a
+need for local checks does **not** authorize native usage. Completed native
+lanes remain closed; never silently resume, reassign, or repurpose them. Work
+only within the recorded approval; a materially different task, files, duration,
+or unapproved continuation needs renewed prior permission. If approval is not
+given or cannot be obtained, **pause the dependent lane and report
+alternatives**. No native task/tool should be invoked while this gate is
+unresolved.
 
 Do not inspect, estimate, or route by remaining model quota before assignment.
 Verify the chosen runtime, authentication, exact model, required tools, and
 permissions, then require the first non-error response before treating the
 worker as live. If a worker reports a quota or rate limit during work, stop that
-writer, preserve its session and partial artifacts, and promptly hand unfinished
-work to another capable model. Carry forward the task brief, branch/head,
+writer, preserve its session and partial artifacts, and hand unfinished work to
+the next verified, capable **authorized** pool in the order above. Native
+handoff always requires Mohamed's separate prior permission; otherwise pause if
+no primary pool can take over. Carry forward the task brief, branch/head,
 completed changes, verification, remaining work, and limit error. Confirm the
 former writer is stopped before another writer uses its worktree; keep writers
 isolated when concurrent. Update the ownership ledger and verify the successor's
@@ -355,9 +385,12 @@ print credentials or tokens.
 For each candidate, make a short capability card before assignment: accessible
 source (published GitHub versus local/dirty files), read/write tools, branch/PR
 ability, shell/test/device access, model and effort controls, data boundary, and
-observed reliability. Distinguish "connector is configured" from "this chat can
-use it." Probe the exact required tools or inspect their contracts before
-committing a lane. Match the task to demonstrated capability.
+observed reliability. For OpenCode include the current exact free-model pricing
+source/confirmation and observed first non-error call; record root-owned runtime
+repair blockers without treating availability as verified. Distinguish
+"connector is configured" from "this chat can use it." Probe the exact required
+tools or inspect their contracts before committing a lane. Match the task to
+demonstrated capability.
 
 Several Normal ChatGPT chats may run concurrently when they own different
 branches, files/artifacts, issue mutations, and dependency-safe slices. The lead
@@ -367,47 +400,94 @@ capacity and account for concurrent usage, time, and integration cost. Multiple
 sessions across or within other pools also require isolated branches/worktrees
 and exclusive artifacts.
 
-Before assigning Normal ChatGPT work, ask Mohamed to create the needed **N**
-normal chats himself. Propose N concise chat names, each lane's objective and
-owned artifact set, the reason parallel work is safe, and which GitHub connector
-access each needs. Wait for the names/identities he returns; do not create those
-chats on his behalf. Reuse an already supplied suitable chat when available and
-ask only for additional chats if the plan changes. Record exact chat IDs and
-ownership before sending any work. Resolve returned names with `list_threads` or
-another supported listing; if titles are ambiguous, ask for a chat link or ID
-instead of guessing. User-created chats and an ongoing authorized coordination
-workflow permit messages within the agreed scope; do not infer permission to
-message unrelated chats.
+#### Normal ChatGPT Browser Chat Lifecycle
 
-OpenCode is enabled only by explicit user opt-in, never by configuration alone.
-Every OpenCode dispatch must load
-[`opencode-team-delegation.md`](./opencode-team-delegation.md); that workflow
-owns model selection, limit-response fallback, and session discipline without
-re-stating team ownership, DAG, gates, or review rules from this file.
+**The lead creates and names Normal ChatGPT chats; Mohamed does not have to
+create them or supply their names/links.** This is a coordination action within
+the approved delivery, not authority to edit repository files or dispatch an
+unapproved task. First inventory and reuse suitable, usable existing Normal
+ChatGPT chats with the correct connected account, available context, exclusive
+ownership, and reliable reply path. Prefer continuing a known chat over creating
+a duplicate. Do not treat a remembered title as proof of identity: verify the
+exact chat ID/link and recent non-error status using supported listing/read
+controls or the visible browser. Never message unrelated chats.
 
-Antigravity (`agy`) is the third primary execution pool for available Gemini and
-Claude models, subject to external-provider opt-in and the approved data-sharing
-boundary. Per task, reuse one visible persistent conversation; verify the `agy`
-path, authentication, exact model with `agy models`, supported effort with
-`agy --help`, and permissions before dispatch. Distinguish an effort flag from
-an effort label embedded in a model ID. When full repository permissions are
-authorized, run with `--dangerously-skip-permissions --mode accept-edits`. On a
-reported limit, preserve work and promptly hand off unfinished work under the
-limit-response rule above. Never create a concurrent replacement writer in the
-same worktree, and independently verify all output.
+For an additional chat, the lead uses the **Codex in-app browser** to open
+Normal ChatGPT, not a Codex implementation agent. If the in-app browser fails,
+cannot access ChatGPT, or is not signed in to the required account, use an
+**external browser** instead and record that precise reason. Reuse an already
+accessible signed-in account; never invent authentication, request secrets, or
+claim a browser/tool capability from configuration alone. Verify a live
+signed-in Normal ChatGPT UI, ability to create/name/read/reply in a chat, and
+GitHub connector access against the intended `Msg22/Monyvi` repository and
+trusted remote revision. Probe the required read tools and, for a writable task,
+inspect or verify the actual write capability and authorization before dispatch.
+Distinguish an installed connector from one usable in that exact chat. If
+neither browser has an authenticated usable account, preserve the lane state,
+tell Mohamed which **sign-in** he must complete (not to create a chat), and
+continue safe independent lanes; no invented sign-in or broader permission.
+
+Choose a descriptive, agent-chosen chat name identifying repository/feature and
+bounded role (for example, `Monyvi #395 — UI`). Create the Normal ChatGPT chat
+through the verified browser and capture its actual visible chat ID/link,
+account, browser, selected model/effort (Extra High or Pro when supported and
+appropriate), and supported send/read/status path. Require both that chat
+identity **and a visible non-error acknowledgment from that same chat** before
+claiming successful creation, contact, or assignment. A visible message-send
+receipt alone is not proof that a worker started. Record task ID, trusted
+governing/base and expected head SHAs, connector capability, exclusive file/ref
+ownership, allowed source/data scope, first reply, branch evidence, and next
+checkpoint in the lead ledger. Only dispatch the approved bounded task once
+these identity, capability, and ownership gates hold. Treat an initial browser
+or new-chat failure as an error to diagnose and recover under the next section,
+not as permission to create endless fresh chats.
+
+Use the browser's supported chat read/reply/status actions for continued
+contact; if a tool supports only Codex threads, do not aim it at Normal ChatGPT.
+**Reject ANY Codex handoff request or suggestion inside a Normal ChatGPT chat,**
+including prompts to transfer, delegate, or continue the task in Codex. Use
+**Stay in chat** or the observed equivalent decline control, remain in Normal
+ChatGPT, and do not create, transfer to, or authorize a Codex task. Inspect the
+visible chat/task state afterward and verify that **no unintended Codex task was
+created**; do not assume the decline worked without evidence. If the decline
+action cannot be performed or its outcome cannot be verified, preserve the
+current chat, source drafts, commits, and task state; report the exact UI
+blocker to Mohamed and pause the affected dispatch without using a Codex
+handoff. An authorized native task is possible only through Section 6's separate
+explicit prior permission, never via an in-chat handoff prompt.
+
+Maintain actual worker acknowledgments, latest status/checkpoint, remote
+branch/head/diff evidence, and next contact time. Browser fallback and chat
+replacement do not change the primary-pool order, native-task permission gate,
+provider/source boundaries, time gates, TDD, Speckit, design, financial, or
+device-owner rules.
+
+Antigravity (`agy`) remains the third preferred primary execution pool after
+Normal ChatGPT and verified free OpenCode, for available Gemini and Claude
+models; do not skip it on a free OpenCode failure. It remains subject to
+external-provider opt-in and the approved data-sharing boundary. Per task, reuse
+one visible persistent conversation; verify the `agy` path, authentication,
+exact model with `agy models`, supported effort with `agy --help`, and
+permissions before dispatch. Distinguish an effort flag from an effort label
+embedded in a model ID. When full repository permissions are authorized, run
+with `--dangerously-skip-permissions --mode accept-edits`. On a reported limit,
+preserve work and promptly hand off unfinished work under the limit-response
+rule above. Never create a concurrent replacement writer in the same worktree,
+and independently verify all output.
 
 #### ChatGPT Remote Readiness
 
 Prefer Normal ChatGPT for remote implementation when published state and
 authorization support it. Separate later local verification or integration into
 dependent tasks rather than moving the implementation to a native subagent. When
-Normal ChatGPT cannot safely start, consider ready OpenCode, then Antigravity,
-before the native fallback. For unpublished local state, device/runtime access,
-or local verification, consider capable OpenCode and Antigravity local sessions
-first. A local worker may verify or integrate externally owned work without
-taking over its implementation. Keep independent review, trusted verification,
-integration, and merge control with the lead; verify all external output before
-acceptance.
+Normal ChatGPT cannot safely start, check a verified free OpenCode model, then
+Antigravity Gemini/Claude. For unpublished local state, device/runtime access,
+or local verification, check capable free OpenCode and Antigravity local
+sessions in that order. If none can take the task, ask Mohamed for explicit
+native-task permission under Section 6 before any native action. A local worker
+may verify or integrate externally owned work without taking over its
+implementation. Keep independent review, trusted verification, integration, and
+merge control with the lead; verify all external output before acceptance.
 
 ##### Remote Context References And Volatile Handoff Facts
 
@@ -561,6 +641,9 @@ pools within the stated task and data boundary; do not infer broader access.
 Authorization may cover later bounded dispatches only while provider, model
 pool, data class, and purpose remain inside that recorded boundary.
 Auto-triggering team-led workflow never grants third-party disclosure.
+Provider/model-pool opt-in (including free OpenCode or Antigravity) is distinct
+from the mandatory **per-native-task prior authorization** in Section 6. Broad
+team/full-delivery opt-in never waives the native approval gate.
 
 ### External Worker Checkpoints And Learning
 
@@ -590,42 +673,85 @@ continue in the same session after status is rechecked.
 
 ### Contact, Timeout, And Ownership Recovery
 
-Before dispatch, record the worker's exact chat/session ID, supported send,
-read/status, and wait mechanisms, expected first acknowledgment, next progress
-checkpoint, and branch/worktree owner. A successful dispatch call proves only
-message acceptance. Mark the lane running after a visible non-error worker
-response, process event, or branch activity tied to that task. Do not use a wait
-API for a chat type it does not support; for example, `wait_threads` is for
-Codex threads, while a Normal ChatGPT chat may need `read_thread` and its own
-supported message path. Verify the tool contract in the current host.
+Before dispatch, record exact chat/session ID, browser or supported send/read/
+status paths, accepted dispatch state, expected first acknowledgment, next
+progress checkpoint, and branch/worktree/file owner. For Normal ChatGPT, use the
+verified in-app or external browser and its actual visible chat state; do not
+assume a Codex-only `wait_threads` or other thread control supports Normal
+ChatGPT. A send acknowledgment means only message acceptance. Mark a worker
+running on a visible non-error response, task-tied process event, or confirmed
+branch activity; correlate the response with the exact assigned task.
 
-When contact or waiting times out:
+When a reply is missing or an error appears, first preserve the worker's
+ownership and inspect the chat's latest turns/dispatch state plus process,
+GitHub branch/PR head, commits, and published patches/checkpoints. Classify
+before recovery:
 
-1. Keep the same owner and session. Check the dispatch result, exact chat ID,
-   current status/recent turns, process or persistent-session state, and remote
-   branch/PR head. Separate a wait timeout, a failed send, a busy worker, and a
-   completed worker whose final message was missed.
-2. If supported, read current chat/session state directly. Wait with a bounded
-   interval suited to its checkpoint, then recheck; avoid rapid polling. If the
-   first dispatch was never accepted, resend the task once. If it was accepted,
-   send one short status request to the same chat/session through a supported
-   send path, with task ID and no duplicate implementation instruction.
-3. If one tool path fails, check a different supported read/contact path or
-   visible UI. Do not infer worker unreachability from one timeout or from a
-   tool that does not support that chat type. Ask Mohamed to relay only when
-   direct supported contact is unavailable; include the exact chat name and one
-   concise message. Continue safe independent lanes while awaiting reply.
-4. Reconcile any new commit, diff, or response before further dispatch. If still
-   silent at the agreed checkpoint, report the state and time cost to Mohamed.
-   Do not start a replacement writer on the same branch/worktree or files until
-   the old run is confirmed stopped, finished, or its write access and ownership
-   are safely transferred. If that cannot be established, pause the lane and
-   preserve the branch rather than guessing.
+- **Waiting/loading/timeout:** a timeout or stalled browser alone never proves
+  task failure. Check whether dispatch was accepted, the worker is still
+  running, or its final reply was missed; use a bounded check at the agreed
+  checkpoint, not rapid polling or a duplicate implementation dispatch.
+- **Recoverable chat UI/connection/response-load error:** make **one bounded
+  attempt in the same chat** using the supported retry, reload, or resend path
+  appropriate to the observed error. Reload or retry viewing a failed response
+  when dispatch may have succeeded. Resend the implementation task only if
+  state/evidence establishes that the first send was **not accepted**; otherwise
+  send at most one short status/receipt request that cannot restart work.
+  Recheck that same chat's non-error acknowledgment and remote evidence
+  afterward.
+- **Confirmed context/window maximum or unrecoverable chat state:** a genuine
+  hard cap differs from a transient browser error. Make one safe supported
+  same-chat recovery/verification attempt (such as reload or read/status) only
+  if that attempt has not already failed and been recorded. If a hard cap offers
+  no supported recovery path, record the evidence and count recovery as failed;
+  do not resend an accepted or potentially running implementation task or loop
+  retries. Preserve outputs and prepare a bounded successor only after the old
+  writer is safely stopped/frozen and work and ownership are reconciled.
+- **Model/account quota, rate limit, authentication, connector authorization, or
+  tool-access denial:** capture the actual error and preserve state. A new
+  chat/browser does not reset quotas, supply missing credentials, bypass
+  repository access, or override permissions. Follow Section 6's verified Normal
+  ChatGPT → OpenCode FREE → Antigravity Gemini/Claude order, account/ connector
+  repair where authorized, and Mohamed's separate prior approval before **any**
+  native assignment. Do not spin up replacement chats as a quota or access
+  workaround.
 
-Record every retry and its result in the task ledger. Repeated identical
-timeouts with evidence of a live worker call for a communication-path fix, not a
-model downgrade. A worker's missing response is not permission to rewrite its
-code, bypass a gate, or duplicate its task.
+If the single same-chat recovery fails for a genuine chat failure, reconcile all
+existing output and **freeze the old writer before transferring ownership**:
+request a stop at the next safe step when reachable; preserve commit SHAs,
+patches, test evidence, and its last reply; verify latest remote head and any
+in-flight work; record that its assignment/write ownership is ended. Never let
+two chats or pools hold live write ownership of the same branch or files. When
+safe stop/non-concurrent ownership cannot be established, pause that artifact
+lane and continue unrelated lanes instead of creating a second writer.
+
+Once safe ownership transfer is proven, create one replacement Normal ChatGPT
+chat via the browser procedure above, preferably the in-app browser and using
+the external browser only for the stated failure/sign-in reason. Give it a
+**concise sanitized handoff**, not a conversation dump: goal and stable task
+IDs; immutable trusted governance revision, base and expected branch/PR head;
+approved business/design decisions and applicable remote paths; exact read and
+exclusive write ownership, protected paths and allowed actions; completed
+commits/patches, tests/checks actually run and honest gaps; remaining steps,
+blockers, quotas/limits if relevant, and the next checkpoint. Avoid unrelated
+conversations, secrets, private data, and speculative progress. Fetch the
+current source/head before edits, verify its first non-error acknowledgment, and
+record successor chat ID, browser, model/effort, status, and file/ref owner in
+the ledger. Do not claim assignment complete on chat creation alone.
+
+A replacement chat's error also gets only one bounded same-chat recovery. After
+that, stop and reconcile rather than repeatedly creating replacements; route a
+capable authorized primary pool or report a blocked lane. If direct browser
+contact is impossible, report the exact sign-in/access/error and evidence to
+Mohamed, not a request for him to create/name/relay worker chats. Continue safe
+independent work and never treat lost contact as authorization for a new writer
+on unchanged ownership.
+
+Record the classification, recovery action and outcome, last known contact,
+branch/head/checkpoint, elapsed cost, freeze proof, and successor identity in
+the task ledger. Ordinary instruction drift may still be corrected in the same
+healthy session; after three materially identical rule failures on a model/ task
+lane use the existing reassignment rule.
 
 ## 7. Ownership Brief And Context
 
@@ -674,8 +800,10 @@ context that preserves correctness:
 
 ## 8. Concurrency And Waves
 
-Inspect live agents and the remote/local capability and start readiness of the
-primary pools before assignment; do not run quota prechecks.
+Inspect live agents and the remote/local capability and start readiness of
+Normal ChatGPT, verified OpenCode FREE models, and Antigravity Gemini/Claude
+before assignment; do not run quota prechecks or treat pricing checks as quota
+checks.
 
 ```text
 free worker capacity = maximum concurrency - currently active agents
@@ -683,11 +811,13 @@ new assignments = min(free worker capacity, ready independent items, ownership-s
 ```
 
 Native slot capacity is not the execution target. First use ready primary-pool
-sessions for ownership-safe work; use a native slot only under the fallback rule
-in Section 6. Count each active Normal ChatGPT chat and external session in the
-task graph even when it uses no native slot. Respect the selected pool's actual
-concurrency and observed limits. Keep independent review capacity for high-risk
-work. Parallelism is useful only when expected elapsed time saved exceeds setup,
+sessions for ownership-safe work; a native slot is unavailable **until Mohamed
+explicitly approves that exact task/files/duration and stop/reassignment
+boundary** under Section 6, even for a check, independent review, or follow-up.
+Count each active Normal ChatGPT chat and external session in the task graph
+even when it uses no native slot. Respect the selected pool's actual concurrency
+and observed limits. Keep independent review capacity for high-risk work.
+Parallelism is useful only when expected elapsed time saved exceeds setup,
 review, and integration cost.
 
 Multiple writers are allowed only when task/worktree ownership, artifact/file
@@ -695,11 +825,13 @@ ownership, readable/writable boundaries, state, and merge dependencies are
 genuinely independent. One writer owns each artifact per wave; stop affected
 lanes immediately when overlap is discovered.
 
-Reuse a completed worker through follow-up when context and skills fit the next
-task. Continue a recoverable external task in its same persistent session. Spawn
-replacement only for material role change or failed lane; retire finished native
-worker when slot is needed. Never start downstream work merely because capacity
-is free.
+Reuse a completed **non-native** worker through follow-up when context and
+skills fit the next task. Continue a recoverable external task in its same
+persistent session. Spawn replacement only for material role change or failed
+lane. Completed native workers remain retired; a native follow-up, resumption,
+or reassignment is a fresh Section 6 permission checkpoint, regardless of
+whether the old session/slot still exists. Never start downstream work merely
+because capacity is free.
 
 Dependency waves:
 
@@ -735,9 +867,13 @@ contact, branch/head, and next owner in the ledger or linked brief. Where a pool
 exposes per-task token/cost usage, record it at each completed wave; distinguish
 measured usage from estimates. Do not query remaining account quota before
 dispatch. If usage is unavailable, say so and use task count, retries, and
-elapsed time as practical signals. Consolidate repeated worker prompts. At an
-agreed checkpoint, pause a lane that is spending tokens without verifiable
-progress; diagnose the cause before retrying or raising effort.
+elapsed time as practical signals. For any proposed native assignment, record
+Mohamed's explicit prior answer, exact task, file/owner boundary, intended
+duration, and authorized stop/continuation/reassignment conditions in this
+ledger **before** starting it. No approval record means no native task.
+Consolidate repeated worker prompts. At an agreed checkpoint, pause a lane that
+is spending tokens without verifiable progress; diagnose the cause before
+retrying or raising effort.
 
 Maintain decision ledger in conversation before canonical requirements:
 
@@ -784,6 +920,22 @@ none overrides constitution. Material coding drift returns to approval. Preserve
 existing visual-gate ownership, but do not mark visual completion without
 side-by-side or overlay rendered screenshot evidence against the approved
 reference. Report functional readiness and visual fidelity as separate statuses.
+
+For mockup-backed UI, every dispatch brief must identify the approved references
+and the required state/shared-component/icon fidelity obligations. When the
+approved feature handoff defines a canonical manifest or state-to-surface map,
+the brief MUST reference and consume it with the verified sidecars; otherwise no
+new manifest artifact is required. Any manifest or derived map is an
+implementation/index aid and MUST NOT override approved Binding Facts, replace
+the binding verifier, or create a second approval gate. Before assigning
+governed work, inventory/read the active approved references, verify their
+bindings, and route missing or ambiguous fidelity facts through the normal
+binding clarification/approval workflow. Worker reports the exact references,
+mapping source, and comparison context at plan checkpoint. Passing source/tests
+cannot satisfy rendered proof. When owner explicitly defers
+device/render/accessibility execution, author the authorized coverage and hand
+complete manual plan to owner; mark those checks NOT RUN and retain separate
+fidelity/accessibility/readiness gaps.
 
 ### Implementation Gate
 
@@ -848,16 +1000,17 @@ and ledgers before assigning more work.
 
 Use this blocker route before selecting a replacement or workaround:
 
-| Blocker                                                           | Lead's next action                                                                                                            |
-| ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| Missing product, financial, schema, sync, or material UX decision | Pause dependent lane; collect options and evidence for Mohamed.                                                               |
-| No worker response or wait timeout                                | Use Section 6 contact recovery; keep ownership until state is known.                                                          |
-| Reported model quota/rate limit                                   | Stop writer, preserve session and artifacts, then promptly hand off unfinished work to another capable model under Section 6. |
-| Authentication or tool failure                                    | Preserve session and output; use the pool's fallback rules, then choose an authorized capable pool if needed.                 |
-| Ownership overlap or changed remote head                          | Stop affected writers; refresh state and reassign exclusive ownership before edits.                                           |
-| Failed test, CI, or device check                                  | Return evidence to owner and relevant specialist for root cause; do not mark the task done.                                   |
-| Missing local verification after remote implementation            | Execute the planned local successor lane from the pinned remote head.                                                         |
-| Time forecast crosses Section 4 threshold                         | Stop affected work, report completed and remaining work, and await direction.                                                 |
+| Blocker                                                           | Lead's next action                                                                                                             |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| Missing product, financial, schema, sync, or material UX decision | Pause dependent lane; collect options and evidence for Mohamed.                                                                |
+| No worker response or wait timeout                                | Use Section 6 contact recovery; keep ownership until state is known.                                                           |
+| Reported model quota/rate limit                                   | Stop writer and preserve state; check the next verified free/authorized capable pool in Section 6; do not silently use native. |
+| Authentication or tool failure                                    | Preserve state; record and route durable runtime repair, then try a verified eligible pool. Native still needs prior approval. |
+| Only a native worker appears capable                              | Pause and ask Mohamed first for explicit task/files/duration and stop/reassignment approval; no automatic native fallback.     |
+| Ownership overlap or changed remote head                          | Stop affected writers; refresh state and reassign exclusive ownership before edits.                                            |
+| Failed test, CI, or device check                                  | Return evidence to owner and relevant specialist for root cause; do not mark the task done.                                    |
+| Missing local verification after remote implementation            | Execute the planned local successor lane from the pinned remote head.                                                          |
+| Time forecast crosses Section 4 threshold                         | Stop affected work, report completed and remaining work, and await direction.                                                  |
 
 Pause affected lane for source conflict, material unresolved decision, missing
 gate, ownership overlap, readable/writable-boundary change, incomplete

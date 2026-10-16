@@ -25,6 +25,7 @@ import { FinancialActionGroup } from "./models/FinancialActionGroup";
 import { MarketRate } from "./models/MarketRate";
 import { MarketRateObservation } from "./models/MarketRateObservation";
 import { MetalActionEvidence } from "./models/MetalActionEvidence";
+import { MetalHistoricalRateCache } from "./models/MetalHistoricalRateCache";
 import { MetalHoldingState } from "./models/MetalHoldingState";
 import { MetalLifecycleEvent } from "./models/MetalLifecycleEvent";
 import { MetalRateReference } from "./models/MetalRateReference";
@@ -126,6 +127,7 @@ export const database = new Database({
     Debt,
     FinancialActionGroup,
     MetalActionEvidence,
+    MetalHistoricalRateCache,
     MetalHoldingState,
     MetalLifecycleEvent,
     MetalRateReference,

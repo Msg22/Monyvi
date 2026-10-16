@@ -33,7 +33,7 @@ const translations: Readonly<Record<string, string>> = {
   "form.coin": "Coin",
   "form.bar": "Bar",
   "history.title": "History",
-  "history.subtitle": "Sales and holdings no longer in your possession.",
+  "history.subtitle": "Sales and holdings no longer owned.",
   "history.all": "All",
   "history.sold": "Sold",
   "history.disposed": "Disposed",
@@ -44,7 +44,7 @@ const translations: Readonly<Record<string, string>> = {
   "history.retry": "Try again",
   "actions.sell": "Sell holding",
   "actions.edit": "Edit details",
-  "actions.dispose": "No longer in my possession",
+  "actions.dispose": "No longer owned",
   "actions.delete": "Delete holding",
   "actions.undo_sale": "Undo sale",
   "actions.undo_disposal": "Undo disposal",
@@ -394,7 +394,7 @@ describe("US3 holding experience", () => {
 
     expect(screen.queryByText("History")).toBeNull();
     expect(
-      screen.getByText("Sales and holdings no longer in your possession.")
+      screen.getByText("Sales and holdings no longer owned.")
     ).toBeTruthy();
     expect(screen.getByText("Gold · 21K · 875 · Jewelry")).toBeTruthy();
     expect(screen.getByText("22 Aug 2026")).toBeTruthy();

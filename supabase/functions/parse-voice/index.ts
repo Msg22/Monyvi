@@ -19,8 +19,25 @@
 
 import "edge-runtime";
 import { GoogleGenAI, type ContentListUnion } from "@google/genai";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+
+import type { Database } from "../../../packages/db/src/supabase-types.ts";
 import { hasActiveAiProcessingConsent } from "../_shared/ai-consent.ts";
+import {
+  voiceRequestKeySchema,
+  voiceTimeZoneSchema,
+  type VoiceEntitlementPolicy,
+  type VoiceProviderStartDecision,
+  type VoiceReservationDecision,
+} from "../_shared/voice-ai-safeguard-contract.ts";
+import { resolveVoiceEntitlementPolicy } from "../_shared/voice-ai-entitlement.ts";
+import {
+  completeVoiceAiWork,
+  getVoiceQuotaRefusal,
+  markVoiceAiProviderStarted,
+  releaseVoiceAiWork,
+  reserveVoiceAiWork,
+} from "../_shared/voice-ai-safeguard-service.ts";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -334,19 +351,25 @@ function getErrorMessage(error: unknown): string {
 /**
  * Verify the JWT from the Authorization header.
  */
+function createServiceClient(): SupabaseClient<Database> {
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+
+  if (!supabaseUrl || !supabaseServiceKey) {
+    throw new Error("Supabase environment is not configured");
+  }
+
+  return createClient<Database>(supabaseUrl, supabaseServiceKey);
+}
+
 async function verifyAuth(
+  client: SupabaseClient<Database>,
   authHeader: string | null
 ): Promise<{ userId: string } | null> {
   if (!authHeader) return null;
 
   const token = authHeader.replace("Bearer ", "");
-  const supabaseUrl = Deno.env.get("SUPABASE_URL");
-  const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-
-  if (!supabaseUrl || !supabaseServiceKey) return null;
-
-  const supabase = createClient(supabaseUrl, supabaseServiceKey);
-  const { data, error } = await supabase.auth.getUser(token);
+  const { data, error } = await client.auth.getUser(token);
 
   if (error || !data.user) return null;
   return { userId: data.user.id };
@@ -481,7 +504,12 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
   try {
     // 1. Auth
-    const auth = await verifyAuth(req.headers.get("authorization"));
+    const serviceClient = createServiceClient();
+
+    const auth = await verifyAuth(
+      serviceClient,
+      req.headers.get("authorization")
+    );
     if (!auth) {
       return errorResponse("Unauthorized", 401);
     }
@@ -495,12 +523,21 @@ Deno.serve(async (req: Request): Promise<Response> => {
     let categoriesInput: string | null = null;
     let accountsInput: AccountInfo[] = [];
     let callerLocalDate: string | null = null;
+    let requestKey: string | null = null;
+    let callerTimeZone: string | null = null;
 
     if (contentType?.includes("multipart/form-data")) {
       const formData = await req.formData();
       const audioFile = formData.get("audio");
       categoriesInput = formData.get("categories") as string | null;
       callerLocalDate = formData.get("callerLocalDate") as string | null;
+
+      const requestKeyInput = formData.get("requestKey");
+      requestKey = typeof requestKeyInput === "string" ? requestKeyInput : null;
+
+      const callerTimeZoneInput = formData.get("callerTimeZone");
+      callerTimeZone =
+        typeof callerTimeZoneInput === "string" ? callerTimeZoneInput : null;
 
       // Parse accounts from form data
       const accountsRaw = formData.get("accounts") as string | null;
@@ -541,23 +578,26 @@ Deno.serve(async (req: Request): Promise<Response> => {
       return errorResponse("Audio file is required.");
     }
 
-    // 3. Init Gemini
-    const apiKey = Deno.env.get("GEMINI_API_KEY");
-    if (!apiKey) {
-      return errorResponse("GEMINI_API_KEY not configured", 500);
+    const parsedRequestKey = voiceRequestKeySchema.safeParse(requestKey);
+    if (!parsedRequestKey.success) {
+      return errorResponse(
+        "`requestKey` must be between 1 and 160 characters.",
+        400
+      );
     }
-    const ai = new GoogleGenAI({ apiKey });
 
-    // 4. Build system prompt with dynamic category tree and accounts
-    const categoryTree =
-      typeof categoriesInput === "string" && categoriesInput.trim().length > 0
-        ? categoriesInput
-        : DEFAULT_CATEGORY_TREE;
-    const systemPrompt = buildSystemPrompt(categoryTree, accountsInput);
+    const parsedTimeZone = voiceTimeZoneSchema.safeParse(callerTimeZone);
+    if (!parsedTimeZone.success) {
+      return errorResponse(
+        "`callerTimeZone` must be a valid IANA timezone between 1 and 128 characters.",
+        400
+      );
+    }
 
-    // 5. Build content parts
+    const validatedRequestKey = parsedRequestKey.data;
+    const validatedTimeZone = parsedTimeZone.data;
 
-    // Resolve today's date: prefer client-supplied local date over UTC server time
+    // Validate optional callerLocalDate BEFORE reservation — invalid date returns 400, no quota consumed.
     const isValidIsoLocalDate = (value: string): boolean => {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
       const d = new Date(`${value}T00:00:00Z`);
@@ -571,36 +611,160 @@ Deno.serve(async (req: Request): Promise<Response> => {
       );
     }
 
-    const todayDate =
-      callerLocalDate && isValidIsoLocalDate(callerLocalDate)
-        ? callerLocalDate
-        : new Date().toISOString().split("T")[0];
-
-    // 5. Build Gemini multimodal content (audio + text prompt)
-    const mimeType = detectAudioMimeType(audioBytes);
-    // Encode in chunks to avoid call-stack limits on large buffers
-    const CHUNK_SIZE = 8192;
-    let binaryString = "";
-    for (let i = 0; i < audioBytes.length; i += CHUNK_SIZE) {
-      const chunk = audioBytes.subarray(i, i + CHUNK_SIZE);
-      binaryString += String.fromCharCode(...chunk);
+    const apiKey = Deno.env.get("GEMINI_API_KEY");
+    if (!apiKey) {
+      return errorResponse("GEMINI_API_KEY not configured", 500);
     }
-    const base64Audio = btoa(binaryString);
 
-    const contents: Array<Record<string, unknown>> = [
-      {
-        inlineData: {
-          mimeType,
-          data: base64Audio,
+    // 3. Resolve authoritative policy and reserve capacity BEFORE prompt/encoding preparation.
+    let policy: VoiceEntitlementPolicy;
+    let reservation: VoiceReservationDecision;
+
+    try {
+      policy = resolveVoiceEntitlementPolicy(Deno.env.get);
+
+      reservation = await reserveVoiceAiWork(serviceClient, {
+        userId: auth.userId,
+        requestKey: validatedRequestKey,
+        timeZone: validatedTimeZone,
+        policy,
+      });
+    } catch {
+      return errorResponse("Authoritative voice availability unavailable", 503);
+    }
+
+    if (!reservation.accepted) {
+      return jsonResponse(getVoiceQuotaRefusal(reservation), 429);
+    }
+
+    // 4. Init Gemini and prepare prompt/encoding under the accepted reservation.
+    // If local preparation fails after reservation, release the reservation to prevent stranded quota.
+    let ai: GoogleGenAI;
+    let systemPrompt: string;
+    let contents: Array<Record<string, unknown>>;
+
+    try {
+      ai = new GoogleGenAI({ apiKey });
+
+      // Build system prompt with dynamic category tree and accounts
+      const categoryTree =
+        typeof categoriesInput === "string" && categoriesInput.trim().length > 0
+          ? categoriesInput
+          : DEFAULT_CATEGORY_TREE;
+      systemPrompt = buildSystemPrompt(categoryTree, accountsInput);
+
+      // Resolve today's date: prefer validated client-supplied local date over UTC server time.
+      // callerLocalDate was validated before reservation — it is either a valid YYYY-MM-DD or absent.
+      const todayDate =
+        callerLocalDate ?? new Date().toISOString().split("T")[0];
+
+      // Build Gemini multimodal content (audio + text prompt)
+      const mimeType = detectAudioMimeType(audioBytes);
+      // Encode in chunks to avoid call-stack limits on large buffers
+      const CHUNK_SIZE = 8192;
+      let binaryString = "";
+      for (let i = 0; i < audioBytes.length; i += CHUNK_SIZE) {
+        const chunk = audioBytes.subarray(i, i + CHUNK_SIZE);
+        binaryString += String.fromCharCode(...chunk);
+      }
+      const base64Audio = btoa(binaryString);
+
+      contents = [
+        {
+          inlineData: {
+            mimeType,
+            data: base64Audio,
+          },
         },
-      },
-      {
-        text: `Parse the financial transactions from this voice recording. Today's date is ${todayDate}.`,
-      },
-    ];
+        {
+          text: `Parse the financial transactions from this voice recording. Today's date is ${todayDate}.`,
+        },
+      ];
+    } catch (prepError: unknown) {
+      const errorType =
+        prepError instanceof Error
+          ? prepError.constructor.name
+          : typeof prepError;
+      console.error(
+        "[parse-voice] Preparation failed after accepted reservation",
+        { errorType }
+      );
+      let released = false;
+      try {
+        released = await releaseVoiceAiWork(serviceClient, {
+          userId: auth.userId,
+          requestId: reservation.requestId,
+          decisionCode: "preparation_failed",
+        });
+      } catch (releaseErr: unknown) {
+        const releaseErrorType =
+          releaseErr instanceof Error
+            ? releaseErr.constructor.name
+            : typeof releaseErr;
+        console.error(
+          "[parse-voice] Failed to release reservation after prep error",
+          { errorType: releaseErrorType }
+        );
+      }
+      if (!released) {
+        console.error(
+          "[parse-voice] Release returned false after prep error; quota may be stranded"
+        );
+      }
+      return errorResponse("Internal server error", 500);
+    }
 
-    // 6. Call Gemini with retry
-    const result = await processWithRetry(ai, contents, systemPrompt);
+    // Provider start is the single usage charge for the logical request.
+    // An ambiguous start-RPC failure is never released because start may
+    // already have committed even though its response was lost.
+    let providerStart: VoiceProviderStartDecision;
+    try {
+      providerStart = await markVoiceAiProviderStarted(serviceClient, {
+        userId: auth.userId,
+        requestId: reservation.requestId,
+        timeZone: validatedTimeZone,
+        policy,
+      });
+    } catch {
+      return errorResponse("Authoritative voice availability unavailable", 503);
+    }
+
+    if (!providerStart.started) {
+      return jsonResponse(getVoiceQuotaRefusal(providerStart), 429);
+    }
+
+    // All existing Gemini retries remain inside this one started identity.
+    let result: AiResponse;
+    try {
+      result = await processWithRetry(ai, contents, systemPrompt);
+    } catch (providerError: unknown) {
+      try {
+        await completeVoiceAiWork(serviceClient, {
+          userId: auth.userId,
+          requestId: providerStart.requestId,
+          completedWithProviderError: true,
+          decisionCode: "provider_error",
+        });
+      } catch {
+        console.error("[parse-voice] Failed to finalize provider-error usage");
+      }
+
+      throw providerError;
+    }
+
+    try {
+      await completeVoiceAiWork(serviceClient, {
+        userId: auth.userId,
+        requestId: providerStart.requestId,
+        completedWithProviderError: false,
+        decisionCode: "completed",
+      });
+    } catch {
+      // Provider output already exists and the unit is already consumed.
+      // Do not discard a valid transaction result or retry Gemini merely
+      // because terminal bookkeeping failed.
+      console.error("[parse-voice] Failed to finalize successful usage");
+    }
 
     console.log(
       `[parse-voice] Parsed ${result.transactions.length} transactions`

@@ -5,9 +5,23 @@ import { router } from "expo-router";
 import MetalHoldingDetailRoute from "@/app/(private)/metals/[id]";
 
 jest.mock("expo-router", () => ({
+  useFocusEffect: jest.fn(),
   router: { push: jest.fn() },
   useRouter: () => ({ push: jest.fn() }),
   useLocalSearchParams: () => ({ id: "holding-123" }),
+}));
+jest.mock("@/hooks/useUndoMetalHoldingContext", () => ({
+  useUndoMetalHoldingContext: () => ({
+    context: null,
+    userId: null,
+    isResolvingUser: false,
+    isLoading: false,
+    error: null,
+    retry: jest.fn(),
+  }),
+}));
+jest.mock("@/hooks/useRestoreMetalHolding", () => ({
+  useRestoreMetalHolding: jest.fn(),
 }));
 jest.mock("react-i18next", () => ({
   useTranslation: () => ({ t: (key: string): string => key }),
@@ -66,10 +80,19 @@ jest.mock("@/components/metals/MetalHoldingDetailScreen", () => {
   };
 });
 
-it("keeps Delete as the only body action while Edit remains the header action", () => {
+it("keeps Dispose and Delete as body actions while Edit remains the header action", () => {
   render(<MetalHoldingDetailRoute />);
 
   expect(mockCapturedActions).toEqual([
+    {
+      id: "dispose",
+      labelKey: "actions.dispose",
+      tone: "secondary",
+      href: {
+        pathname: "/(private)/metals/[holdingId]/dispose",
+        params: { holdingId: "holding-123" },
+      },
+    },
     {
       id: "delete",
       labelKey: "actions.delete",
@@ -81,9 +104,6 @@ it("keeps Delete as the only body action while Edit remains the header action", 
     },
   ]);
   expect(mockCapturedActions.some((action) => action.id === "sell")).toBe(
-    false
-  );
-  expect(mockCapturedActions.some((action) => action.id === "dispose")).toBe(
     false
   );
   expect(mockCapturedActions.some((action) => action.id === "undo")).toBe(

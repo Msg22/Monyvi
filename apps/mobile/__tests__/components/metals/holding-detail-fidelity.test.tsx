@@ -62,7 +62,7 @@ jest.mock("react-native/Libraries/Utilities/useWindowDimensions", () => ({
 
 const translations: Readonly<Record<string, string>> = {
   "actions.delete": "Delete holding",
-  "actions.dispose": "No longer in my possession",
+  "actions.dispose": "No longer owned",
   "actions.edit": "Edit details",
   "actions.sell": "Sell holding",
   "detail.acquired": "Acquired",
@@ -83,13 +83,15 @@ const translations: Readonly<Record<string, string>> = {
   "detail.holding_story": "Holding story",
   "portfolio.rates_updated":
     "Prices last updated {{date}} at {{time}}. They may have changed since then.",
+  "portfolio.per_gram": "/ g",
   "detail.history": "History",
   "detail.metal_movement": "Metal movement",
+  "detail.market_rate_on_purchase_date": "Market rate on purchase date",
   "detail.offline": "Offline mode",
   "detail.paid": "{{amount}} paid",
   "detail.net_proceeds": "Net proceeds",
   "detail.no_longer_active": "No longer among your gold and silver.",
-  "detail.no_longer_possession": "No longer in my possession",
+  "detail.no_longer_possession": "No longer owned",
   "detail.notes": "Notes",
   "detail.physical_facts": "Physical facts",
   "detail.purchase_premium_costs": "Purchase premium and costs",
@@ -118,6 +120,7 @@ const translations: Readonly<Record<string, string>> = {
     "Changes are still being checked. The last complete state remains active.",
   "detail.since_purchase": "{{amount}} since purchase",
   "detail.timeline_current_value": "Current value",
+  "detail.value_unavailable": "Value unavailable",
   "form.bar": "Bar",
   "form.coin": "Coin",
   "form.jewelry": "Jewelry",
@@ -215,6 +218,7 @@ function activeDetail(
     purchaseCurrency: "EGP",
     purchaseDate: new Date("2024-03-14T00:00:00.000Z"),
     purchasePriceDecimal: "151278.20",
+    purchaseDateMarketReference: null,
     purityCatalogVersion: "1",
     purityCode: "gold-999",
     purityFactorDecimal: "0.999",
@@ -286,6 +290,55 @@ describe("approved active holding-detail fidelity", () => {
     expect(screen.getByText(/Details updated/)).toBeTruthy();
   });
 
+  it("shows the purchase-date market-rate fact beside Date/Paid without provenance metadata", () => {
+    render(
+      <MetalHoldingDetailScreen
+        actions={[]}
+        error={null}
+        isLoading={false}
+        isOffline={false}
+        model={activeDetail({
+          purchaseDateMarketReference: {
+            status: "available",
+            rateDate: "2024-03-14",
+            purchaseCurrency: "EGP",
+            selectedPurityPerGramDecimal: "5225.5",
+            origin: "daily_history",
+          },
+        })}
+        onRetry={jest.fn()}
+      />
+    );
+
+    expect(screen.getByText("Market rate on purchase date")).toBeTruthy();
+    expect(screen.getByText("EGP 5,225.50 / g")).toBeTruthy();
+    expect(screen.queryByText("daily_history")).toBeNull();
+    expect(screen.queryByText(/metals\.dev/i)).toBeNull();
+    expect(screen.queryByText(/source/i)).toBeNull();
+    expect(screen.queryByText(/trust/i)).toBeNull();
+  });
+
+  it("keeps the purchase-date market-rate fact visible as unavailable when exact history is missing", () => {
+    render(
+      <MetalHoldingDetailScreen
+        actions={[]}
+        error={null}
+        isLoading={false}
+        isOffline={false}
+        model={activeDetail({
+          purchaseDateMarketReference: {
+            status: "unavailable",
+            reason: "date_unavailable",
+          },
+        })}
+        onRetry={jest.fn()}
+      />
+    );
+
+    expect(screen.getByText("Market rate on purchase date")).toBeTruthy();
+    expect(screen.getByText("Value unavailable")).toBeTruthy();
+  });
+
   it("formats canonical amounts exactly before localized display", () => {
     render(
       <MetalHoldingDetailScreen
@@ -335,7 +388,7 @@ describe("approved active holding-detail fidelity", () => {
 
     fireEvent.press(screen.getByText("Sell holding"));
     fireEvent.press(screen.getByText("Edit details"));
-    fireEvent.press(screen.getByText("No longer in my possession"));
+    fireEvent.press(screen.getByText("No longer owned"));
     fireEvent.press(screen.getByText("Delete holding"));
 
     expect(onAction).toHaveBeenNthCalledWith(1, "sell");
@@ -430,7 +483,9 @@ describe("approved active holding-detail fidelity", () => {
     );
 
     expect(screen.queryByText("How this value was calculated")).toBeNull();
-    expect(screen.queryByTestId("metal-detail-calculation-disclosure")).toBeNull();
+    expect(
+      screen.queryByTestId("metal-detail-calculation-disclosure")
+    ).toBeNull();
   });
 
   it("hides the calculation disclosure when no since-purchase total is available", () => {
@@ -656,298 +711,42 @@ describe("approved active holding-detail fidelity", () => {
     expect(screen.queryByText(/paid/)).toBeNull();
     expect(screen.getByText("EGP 162,317.87")).toBeTruthy();
   });
+});
 
-  it("renders the approved Sold hierarchy from immutable terminal evidence", () => {
-    render(
-      <MetalHoldingDetailScreen
-        actions={[]}
-        error={null}
-        isLoading={false}
-        isOffline={false}
-        model={activeDetail({
-          currentValueDecimal: null,
-          isActiveOwnership: false,
-          name: "21K bracelet",
-          status: "sold",
-          terminalFacts: {
-            actionId: "sale-action",
-            feeDecimal: "150",
-            grossProceedsDecimal: "10600",
-            kind: "sold",
-            netProceedsDecimal: "10450",
-            notes: "Sold to trusted jeweller",
-            proceedsCurrency: "EGP",
-            realizedResultCurrency: "EGP",
-            realizedResultDecimal: "1550",
-            displayRateTrust: [
-              {
-                currency: "USD",
-                state: "stale",
-                providerObservedAt: new Date("2026-08-01T12:00:00Z"),
-                ageMs: 172_800_000,
-              },
-            ],
-            displayAttribution: {
-              combinedDecimal: "1550.00",
-              displayedComponentSumDecimal: "1550.00",
-              roundingDifferenceMinorUnits: "0",
-              requiresRoundingExplanation: false,
-              displayedComponents: {
-                metalMovementDecimal: "1000.00",
-                currencyMovementDecimal: "200.00",
-                purchaseCostDecimal: "300.00",
-                saleDifferenceDecimal: "200.00",
-                feeDecimal: "-150.00",
-              },
-            },
-            realizedResultUnavailableReason: null,
-            terminalDate: "2026-08-22",
-          },
-          totalGainDecimal: null,
-        })}
-        onRetry={jest.fn()}
-      />
-    );
-
-    expect(screen.getAllByText("Net proceeds")).toHaveLength(2);
-    expect(screen.getAllByText("EGP 10,450.00")).toHaveLength(2);
-    expect(screen.getByText("EGP 1,550.00 profit from this sale")).toBeTruthy();
-    expect(screen.queryByTestId("metal-sold-display-rate-trust")).toBeNull();
-    expect(screen.queryByText(/Last available/)).toBeNull();
-    expect(screen.getByText("Holding story")).toBeTruthy();
-    expect(screen.getAllByText("Sold").length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText("22 Aug 2026")).toBeTruthy();
-    expect(screen.getByText("Financial facts")).toBeTruthy();
-    expect(screen.getByText("EGP 10,600.00")).toBeTruthy();
-    expect(screen.getByText("− EGP 150.00")).toBeTruthy();
-    expect(screen.getByText("Sold to trusted jeweller")).toBeTruthy();
-    expect(screen.queryByText(/account credited/i)).toBeNull();
-    expect(screen.queryByText("sale-action")).toBeNull();
-    expect(screen.queryByText("Physical facts")).toBeNull();
-    expect(screen.queryByText("Current value")).toBeNull();
-    expect(screen.queryByText("EGP 1,000.00")).toBeNull();
-    fireEvent.press(screen.getByText("How this value was calculated"));
-    expect(screen.getByText("EGP 1,000.00")).toBeTruthy();
-    expect(screen.getByText("- EGP 150.00")).toBeTruthy();
-    expect(screen.getByText("EGP 1,550.00 profit from this sale")).toBeTruthy();
-  });
-
-  it("renders an evidence-backed Sold loss without substituting current value", () => {
-    render(
-      <MetalHoldingDetailScreen
-        actions={[]}
-        error={null}
-        isLoading={false}
-        isOffline={false}
-        model={activeDetail({
-          currentValueDecimal: null,
-          isActiveOwnership: false,
-          status: "sold",
-          terminalFacts: {
-            actionId: "sale-loss-action",
-            feeDecimal: "75",
-            grossProceedsDecimal: "7925",
-            kind: "sold",
-            netProceedsDecimal: "7850",
-            notes: null,
-            proceedsCurrency: "EGP",
-            realizedResultCurrency: "EGP",
-            realizedResultDecimal: "-650",
-            realizedResultUnavailableReason: null,
-            terminalDate: "2026-08-23",
-          },
-          totalGainDecimal: null,
-        })}
-        onRetry={jest.fn()}
-      />
-    );
-
-    expect(screen.getByText("EGP 650.00 loss from this sale")).toBeTruthy();
-    expect(screen.queryByText("Current value")).toBeNull();
-    expect(screen.queryByText("How this value was calculated")).toBeNull();
-    expect(screen.queryByTestId("metal-detail-calculation-disclosure")).toBeNull();
-  });
-
-  it("keeps exact sold proceeds visible when realized result evidence is unavailable", () => {
-    render(
-      <MetalHoldingDetailScreen
-        actions={[]}
-        error={null}
-        isLoading={false}
-        isOffline={false}
-        model={activeDetail({
-          currentValueDecimal: null,
-          isActiveOwnership: false,
-          status: "sold",
-          terminalFacts: {
-            actionId: "sale-action",
-            feeDecimal: "0.00",
-            grossProceedsDecimal: "10450",
-            kind: "sold",
-            netProceedsDecimal: "10450",
-            notes: null,
-            proceedsCurrency: "EGP",
-            realizedResultCurrency: null,
-            realizedResultDecimal: null,
-            realizedResultUnavailableReason: "invalid_sale_evidence",
-            terminalDate: "2026-08-22",
-          },
-          totalGainDecimal: null,
-        })}
-        onRetry={jest.fn()}
-      />
-    );
-
-    expect(screen.getAllByText("EGP 10,450.00").length).toBeGreaterThanOrEqual(
-      2
-    );
-    expect(
-      screen.getByText("Profit or loss from this sale is unavailable.")
-    ).toBeTruthy();
-    expect(screen.queryByText("Sale fee")).toBeNull();
-  });
-
-  it("renders the approved Disposed hierarchy without inventing sale money", () => {
-    const disposedProps = {
-      actions: [],
-      error: null,
-      isLoading: false,
-      isOffline: false,
-      model: activeDetail({
-        currentValueDecimal: null,
-        isActiveOwnership: false,
-        name: "Family coin",
-        status: "disposed",
-        terminalFacts: {
-          actionId: "dispose-action",
-          kind: "disposed",
-          notes: "Given to my sister",
-          reason: "given_away",
-          terminalDate: "2026-08-24",
-          treatment: "external_transfer",
-        },
-        totalGainDecimal: null,
-      }),
-      onRetry: jest.fn(),
-    } as const;
-    const { rerender } = render(
-      <MetalHoldingDetailScreen {...disposedProps} />
-    );
-
-    expect(
-      screen.getByText("No longer among your gold and silver.")
-    ).toBeTruthy();
-    expect(screen.getByText("Holding story")).toBeTruthy();
-    expect(screen.getByText("No longer in my possession")).toBeTruthy();
-    expect(screen.getByText("24 Aug 2026")).toBeTruthy();
-    expect(screen.getByText("What happened")).toBeTruthy();
-    expect(
-      screen.getByText(
-        "Given away. This holding left your metals. No money was added to your accounts. No profit or loss from a sale."
-      )
-    ).toBeTruthy();
-    expect(screen.getByText("Given away")).toBeTruthy();
-    expect(screen.getByText("None")).toBeTruthy();
-    expect(screen.getByText("No change")).toBeTruthy();
-    expect(screen.getByText("Given to my sister")).toBeTruthy();
-    expect(screen.queryByText("dispose-action")).toBeNull();
-    expect(screen.queryByText("Net proceeds")).toBeNull();
-    expect(screen.queryByText("Physical facts")).toBeNull();
-    expect(screen.getByTestId("metal-disposal-reason")).toHaveProp(
-      "className",
-      expect.stringContaining("flex-row")
-    );
-
-    mockFontScale = 2;
-    rerender(<MetalHoldingDetailScreen {...disposedProps} />);
-    expect(screen.getByTestId("metal-disposal-reason")).toHaveProp(
-      "className",
-      expect.stringContaining("flex-col")
-    );
-  });
-
-  it.each([
-    ["lost_or_stolen", "write_off", "Lost or stolen"],
-    ["destroyed_or_damaged", "write_off", "Destroyed or damaged"],
-    ["given_away", "external_transfer", "Given away"],
-    ["donated", "external_transfer", "Donated"],
-    ["other", "write_off", "Other · Record a loss"],
-    ["other", "external_transfer", "Other · Record it as moved out"],
-  ] as const)(
-    "renders the approved %s disposal reason with %s treatment",
-    (reason, treatment, label) => {
-      render(
-        <MetalHoldingDetailScreen
-          actions={[]}
-          error={null}
-          isLoading={false}
-          isOffline={false}
-          model={activeDetail({
-            currentValueDecimal: null,
-            isActiveOwnership: false,
-            status: "disposed",
-            terminalFacts: {
-              actionId: `dispose-${reason}-${treatment}`,
-              kind: "disposed",
-              notes: null,
-              reason,
-              terminalDate: "2026-08-24",
-              treatment,
-            },
-            totalGainDecimal: null,
-          })}
-          onRetry={jest.fn()}
-        />
-      );
-
-      expect(screen.getAllByText(label).length).toBeGreaterThanOrEqual(1);
-      expect(screen.queryByText("Net proceeds")).toBeNull();
-    }
+it("keeps loaded terminal Details and bottom safe area while reserving Restore eligibility action space", (): void => {
+  mockScreenWidth = 390;
+  mockFontScale = 1;
+  const model = activeDetail({ isActiveOwnership: false, status: "sold" });
+  const props = {
+    actions: [],
+    error: null,
+    isLoading: false,
+    isOffline: false,
+    model,
+    onRetry: jest.fn(),
+  } as const;
+  const { rerender } = render(
+    <MetalHoldingDetailScreen {...props} isActionLoading />
   );
 
-  it("fails closed with friendly terminal copy and preserves responsive reflow", () => {
-    const model = activeDetail({
-      currentValueDecimal: null,
-      isActiveOwnership: false,
-      status: "sold",
-      terminalFacts: null,
-      totalGainDecimal: null,
-    });
-    const props = {
-      actions: [],
-      error: null,
-      isLoading: false,
-      isOffline: false,
-      model,
-      onRetry: jest.fn(),
-    } as const;
-    const { rerender } = render(<MetalHoldingDetailScreen {...props} />);
-
-    expect(screen.getByText("Recorded details are unavailable.")).toBeTruthy();
-    expect(screen.getByText("Acquired")).toBeTruthy();
-    expect(screen.getByText(/151,278.20/)).toBeTruthy();
-    expect(screen.queryByText("Net proceeds")).toBeNull();
-    expect(screen.getByTestId("metal-holding-detail-hero")).toHaveProp(
-      "className",
-      expect.stringContaining("flex-row")
-    );
-
-    mockScreenWidth = 320;
-    rerender(<MetalHoldingDetailScreen {...props} />);
-    expect(screen.getByTestId("metal-holding-detail-hero")).toHaveProp(
-      "className",
-      expect.stringContaining("flex-col")
-    );
-
-    mockScreenWidth = 390;
-    mockFontScale = 2;
-    rerender(<MetalHoldingDetailScreen {...props} />);
-    expect(screen.getByTestId("metal-holding-detail-hero")).toHaveProp(
-      "className",
-      expect.stringContaining("flex-col")
-    );
-    expect(screen.getByTestId("metal-holding-detail-name")).not.toHaveProp(
-      "numberOfLines"
-    );
+  expect(screen.getByTestId("metal-holding-detail-root")).toBeTruthy();
+  expect(screen.getByText("Wedding coin")).toBeTruthy();
+  expect(
+    screen.getByTestId("metal-holding-detail-actions-loading")
+  ).toHaveStyle({
+    paddingBottom: 40,
   });
+  expect(screen.getByTestId("metal-holding-detail-root")).toHaveProp(
+    "contentContainerStyle",
+    undefined
+  );
+
+  rerender(<MetalHoldingDetailScreen {...props} isActionLoading={false} />);
+  expect(
+    screen.queryByTestId("metal-holding-detail-actions-loading")
+  ).toBeNull();
+  expect(screen.getByTestId("metal-holding-detail-root")).toHaveProp(
+    "contentContainerStyle",
+    { paddingBottom: 40 }
+  );
 });

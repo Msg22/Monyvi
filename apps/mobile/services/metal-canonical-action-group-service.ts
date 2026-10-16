@@ -6,6 +6,10 @@ import type {
   MetalRateReference,
 } from "@monyvi/db";
 import type { Sha256Provider } from "@monyvi/logic";
+import {
+  areEquivalentLegacyMetalPayloads,
+  resolveMetalLifecycleIdentity,
+} from "./metal-lifecycle-identity-service";
 
 import {
   captureCachedModelSnapshot,
@@ -227,7 +231,7 @@ function canonicalRateSnapshot(
 
 function payloadRateSnapshots(
   payload: Readonly<Record<string, unknown>>
-): readonly Readonly<Record<string, unknown>>[] {
+): ReadonlyArray<Readonly<Record<string, unknown>>> {
   const candidate = Array.isArray(payload.rateSnapshots)
     ? payload.rateSnapshots
     : isCanonicalMetalRecord(payload.materialCorrection) &&
@@ -448,16 +452,24 @@ function assertExistingCanonicalRoot(
 
 function assertExistingCanonicalEvidence(
   row: MetalActionEvidence,
-  value: CanonicalMetalActionEvidence
+  value: CanonicalMetalActionEvidence,
+  provenLegacyAlias: boolean
 ): void {
   if (
-    row.id !== value.id ||
+    (row.id !== value.id && !provenLegacyAlias) ||
     row.actionId !== value.actionId ||
     row.userId !== value.userId ||
     row.holdingId !== value.holdingId ||
     row.kind !== value.kind ||
     row.expectedHoldingRevision !== value.expectedHoldingRevision ||
-    row.domainPayloadJson !== value.domainPayloadJson ||
+    (row.domainPayloadJson !== value.domainPayloadJson &&
+      !(
+        provenLegacyAlias &&
+        areEquivalentLegacyMetalPayloads(
+          row.domainPayloadJson,
+          value.domainPayloadJson
+        )
+      )) ||
     row.deleted
   ) {
     throw new Error("incomplete_metal_action_group");
@@ -466,16 +478,21 @@ function assertExistingCanonicalEvidence(
 
 function assertExistingCanonicalEvent(
   row: MetalLifecycleEvent,
-  value: CanonicalMetalLifecycleEvent
+  value: CanonicalMetalLifecycleEvent,
+  provenLegacyAlias: boolean
 ): void {
   if (
-    row.id !== value.id ||
+    (row.id !== value.id && !provenLegacyAlias) ||
     row.actionId !== value.actionId ||
     row.userId !== value.userId ||
     row.holdingId !== value.holdingId ||
     row.kind !== value.kind ||
     row.occurredAt.getTime() !== Date.parse(value.occurredAt) ||
-    row.payloadJson !== value.payloadJson ||
+    (row.payloadJson !== value.payloadJson &&
+      !(
+        provenLegacyAlias &&
+        areEquivalentLegacyMetalPayloads(row.payloadJson, value.payloadJson)
+      )) ||
     row.predecessorEventId !== value.predecessorEventId ||
     row.reversesEventId !== value.reversesEventId ||
     row.deleted
@@ -548,9 +565,34 @@ export async function prepareCanonicalActionGroupInstall(
     ]);
 
   if (existingRoot) assertExistingCanonicalRoot(existingRoot, group.root);
+  // The server group/fingerprint was verified separately before this install.
+  // Preserve a distinct legacy local primary key ONLY when the original
+  // revision-zero Dispose has one matching immutable owned root/event/evidence.
+  const identity =
+    existingRoot && existingEvidence && existingEvent
+      ? resolveMetalLifecycleIdentity({
+          userId,
+          holdingId: group.root.domainReferenceId,
+          events: [existingEvent],
+          groups: [existingRoot],
+          evidence: [existingEvidence],
+        })
+      : null;
+  const provenLegacyAlias =
+    identity !== null &&
+    identity.legacyRootEventId === existingEvent?.id &&
+    identity.canonicalRootActionId === group.root.actionId &&
+    group.root.kind === "dispose" &&
+    group.event.id === group.root.actionId &&
+    group.evidence.id === group.root.actionId;
   if (existingEvidence)
-    assertExistingCanonicalEvidence(existingEvidence, group.evidence);
-  if (existingEvent) assertExistingCanonicalEvent(existingEvent, group.event);
+    assertExistingCanonicalEvidence(
+      existingEvidence,
+      group.evidence,
+      provenLegacyAlias
+    );
+  if (existingEvent)
+    assertExistingCanonicalEvent(existingEvent, group.event, provenLegacyAlias);
 
   const canonicalRatesById = new Map(
     group.rates.map((rate) => [rate.id, rate] as const)
@@ -613,7 +655,8 @@ export async function prepareCanonicalActionGroupInstall(
     if (existingEvidence) {
       operations.push(
         existingEvidence.prepareUpdate((row) => {
-          row.canonicalHoldingRevision = group.evidence.canonicalHoldingRevision;
+          row.canonicalHoldingRevision =
+            group.evidence.canonicalHoldingRevision;
           row.updatedAt = now;
         })
       );
@@ -628,7 +671,8 @@ export async function prepareCanonicalActionGroupInstall(
               group.evidence.canonicalHoldingRevision;
             row.deleted = false;
             row.domainPayloadJson = group.evidence.domainPayloadJson;
-            row.expectedHoldingRevision = group.evidence.expectedHoldingRevision;
+            row.expectedHoldingRevision =
+              group.evidence.expectedHoldingRevision;
             row.holdingId = group.evidence.holdingId;
             row.kind = group.evidence.kind;
             row.updatedAt = new Date(group.evidence.updatedAt);

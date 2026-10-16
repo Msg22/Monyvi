@@ -33,6 +33,7 @@ import type {
   HoldingActionId,
 } from "@/components/metals/holding-actions/registry";
 import { MetalHoldingTimelineItem } from "./MetalHoldingTimelineItem";
+import { PurchaseDateMarketRateFact } from "./PurchaseDateMarketRateFact";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { palette } from "@/constants/colors";
 import { shouldUseCompactLayout } from "@/constants/ui";
@@ -43,12 +44,14 @@ import { formatLocalizedMoneyAmount } from "@/utils/localized-money-display";
 
 interface MetalHoldingDetailScreenProps {
   readonly actions: readonly HoldingActionDescriptor[];
+  readonly isActionLoading?: boolean;
   readonly error: Error | null;
   readonly isLoading: boolean;
   readonly isOffline: boolean;
   readonly model: MetalDetailReadModel | null;
   readonly onAction?: (action: HoldingActionId) => void;
   readonly onRetry: () => void;
+  readonly onRetryHistoricalReference?: () => void;
 }
 
 export function MetalHoldingDetailScreen(
@@ -78,7 +81,7 @@ export function MetalHoldingDetailScreen(
       showsVerticalScrollIndicator={false}
       contentContainerClassName="pt-1"
       contentContainerStyle={
-        props.actions.length === 0
+        props.actions.length === 0 && !props.isActionLoading
           ? { paddingBottom: insets.bottom + 16 }
           : undefined
       }
@@ -86,8 +89,10 @@ export function MetalHoldingDetailScreen(
         <DetailHeader
           error={props.error}
           hasMoreHistory={model.timeline.length > 2}
+          isOffline={props.isOffline}
           model={model}
           onRetry={props.onRetry}
+          onRetryHistoricalReference={props.onRetryHistoricalReference}
           onToggleCalculation={() => setShowCalculation((value) => !value)}
           onViewAllHistory={() => setShowAllHistory(true)}
           showAllHistory={showAllHistory}
@@ -105,6 +110,7 @@ export function MetalHoldingDetailScreen(
         <ActionRegion
           actions={props.actions}
           bottomInset={insets.bottom}
+          isLoading={props.isActionLoading === true}
           onAction={props.onAction}
         />
       }
@@ -135,8 +141,10 @@ function DetailSkeleton(): React.JSX.Element {
 function DetailHeader({
   error,
   hasMoreHistory,
+  isOffline,
   model,
   onRetry,
+  onRetryHistoricalReference,
   onToggleCalculation,
   onViewAllHistory,
   showAllHistory,
@@ -144,8 +152,10 @@ function DetailHeader({
 }: {
   readonly error: Error | null;
   readonly hasMoreHistory: boolean;
+  readonly isOffline?: boolean;
   readonly model: MetalDetailReadModel;
   readonly onRetry: () => void;
+  readonly onRetryHistoricalReference?: () => void;
   readonly onToggleCalculation: () => void;
   readonly onViewAllHistory: () => void;
   readonly showAllHistory: boolean;
@@ -179,7 +189,13 @@ function DetailHeader({
         <MetalTerminalDetail model={model} />
       )}
       {error === null ? null : <Retry onRetry={onRetry} />}
-      {model.isActiveOwnership ? <ValueJourney model={model} /> : null}
+      {model.isActiveOwnership ? (
+        <ValueJourney
+          isOffline={isOffline}
+          model={model}
+          onRetryHistoricalReference={onRetryHistoricalReference}
+        />
+      ) : null}
       {canExplainCalculation ? (
         <>
           <CalculationDisclosure
@@ -408,9 +424,13 @@ function ValueSummary({
 }
 
 function ValueJourney({
+  isOffline,
   model,
+  onRetryHistoricalReference,
 }: {
+  readonly isOffline?: boolean;
   readonly model: MetalDetailReadModel;
+  readonly onRetryHistoricalReference?: () => void;
 }): React.JSX.Element | null {
   const { t, i18n } = useTranslation("metals");
   const locale = resolveLocale(i18n.resolvedLanguage);
@@ -477,6 +497,12 @@ function ValueJourney({
                   })}
                 </Text>
               )}
+              <PurchaseDateMarketRateFact
+                isOffline={isOffline}
+                locale={locale}
+                model={model}
+                onRetryHistoricalReference={onRetryHistoricalReference}
+              />
             </View>
           ) : null}
           {hasCurrentValue ? (
@@ -687,22 +713,32 @@ function FactRow({
 function ActionRegion({
   actions,
   bottomInset,
+  isLoading,
   onAction,
 }: {
   readonly actions: readonly HoldingActionDescriptor[];
   readonly bottomInset: number;
+  readonly isLoading: boolean;
   readonly onAction?: (action: HoldingActionId) => void;
 }): React.JSX.Element | null {
-  if (actions.length === 0) return null;
+  if (!isLoading && actions.length === 0) return null;
   return (
     <View
-      testID="metal-holding-detail-actions"
+      testID={
+        isLoading
+          ? "metal-holding-detail-actions-loading"
+          : "metal-holding-detail-actions"
+      }
       className="mt-5 gap-3 border-t border-slate-200 bg-background px-5 pt-4 dark:border-slate-800 dark:bg-background-dark"
       style={{ paddingBottom: bottomInset + 16 }}
     >
-      {actions.map((action) => (
-        <ActionButton key={action.id} action={action} onAction={onAction} />
-      ))}
+      {isLoading ? (
+        <Skeleton width="100%" height={56} borderRadius={12} />
+      ) : (
+        actions.map((action) => (
+          <ActionButton key={action.id} action={action} onAction={onAction} />
+        ))
+      )}
     </View>
   );
 }

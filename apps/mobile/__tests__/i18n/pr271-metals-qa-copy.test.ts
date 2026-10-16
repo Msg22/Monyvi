@@ -8,6 +8,13 @@ describe("PR #271 Metals QA copy", () => {
     expect(JSON.stringify(en)).not.toMatch(/Active portfolio/i);
   });
 
+  it("uses the approved No Longer title and avoids Active portfolio in success copy", () => {
+    expect(en.dispose.title).toBe("No longer owned");
+    expect(ar.dispose.title).toBe("لم يعد لدي");
+    expect(en.dispose.success).toContain("your metals");
+    expect(en.dispose.success).not.toMatch(/Active portfolio/i);
+  });
+
   it("uses the exact selected-observation last-updated sentence", () => {
     expect(en.portfolio.rates_updated).toBe(
       "Prices last updated {{date}} at {{time}}. They may have changed since then."
