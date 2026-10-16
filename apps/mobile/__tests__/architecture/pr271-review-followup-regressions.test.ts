@@ -53,9 +53,14 @@ describe("PR #271 review follow-up regressions", () => {
   });
 
   it("uses exact USD identity for current detail attribution without a redundant observation", () => {
-    const value = source(
+    const detail = source(
       "apps/mobile/services/metal-detail-read-model-service.ts"
     );
+    const value = source(
+      "apps/mobile/services/metal-detail-rate-conversion-service.ts"
+    );
+    expect(detail).toContain('from "./metal-detail-rate-conversion-service"');
+    expect(detail).toContain("buildCurrentReference(");
     expect(value).toContain('instrumentCode === "currency:USD"');
     expect(value).toContain('valueDecimal: "1"');
     expect(value).toContain("source: null");
@@ -63,7 +68,7 @@ describe("PR #271 review follow-up regressions", () => {
 
   it("keeps nullable current-rate source usable for attribution", () => {
     const value = source(
-      "apps/mobile/services/metal-detail-read-model-service.ts"
+      "apps/mobile/services/metal-detail-rate-conversion-service.ts"
     );
     expect(value).not.toContain('typeof value.source !== "string"');
     expect(value).toContain("source: value.source ?? null");
@@ -157,8 +162,19 @@ describe("PR #271 review follow-up regressions", () => {
     const service = source(
       "apps/mobile/services/metal-portfolio-read-model-service.ts"
     );
+    const lineage = source(
+      "apps/mobile/services/metal-portfolio-legacy-lineage-service.ts"
+    );
     const hook = source("apps/mobile/hooks/useMetalPortfolio.ts");
-    expect(service).toContain("MetalActionEvidence");
+    expect(lineage).toContain(
+      'database.get<MetalActionEvidence>("metal_action_evidence")'
+    );
+    expect(lineage).toMatch(
+      /observePortfolioEffectiveActionEvidence[\s\S]*queryOwned\(/
+    );
+    expect(service).toContain(
+      'from "./metal-portfolio-legacy-lineage-service"'
+    );
     expect(service).toContain("observePortfolioEffectiveActionEvidence");
     expect(service).toContain("hasBoundEffectiveActionEvidence");
     expect(hook).toContain("observePortfolioEffectiveActionEvidence");
